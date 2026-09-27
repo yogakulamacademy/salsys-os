@@ -22,6 +22,7 @@ import {
   Tags,
   Target,
   Megaphone,
+  ClipboardCheck,
 } from 'lucide-react';
 import { ReactNode, useState } from 'react';
 import { signOutAction } from '@/app/actions/auth';
@@ -59,6 +60,11 @@ const nav = [
   href: '/paid-media-leads',
   label: 'Paid Media Leads',
   icon: Megaphone,
+},
+{
+  href: '/admissions',
+  label: 'Admissions Desk',
+  icon: ClipboardCheck,
 },
   { href: '/settings', label: 'Settings', icon: Settings },
   
