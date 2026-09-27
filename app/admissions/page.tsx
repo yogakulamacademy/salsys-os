@@ -14,6 +14,10 @@ import {
 
 import { PageHeader } from '@/components/ui';
 import { createClient } from '@/lib/supabase/server';
+import {
+  completeAdmissionFollowUpAction,
+  snoozeAdmissionFollowUpAction,
+} from '@/app/admissions/actions';
 
 type FollowUpRow = {
   task_id: string;
@@ -84,7 +88,21 @@ type NewLeadRow = {
   created_at: string | null;
 };
 
-export default async function AdmissionsDeskPage() {
+type SearchParams = {
+  notice?: string | string[];
+  error?: string | string[];
+};
+
+export default async function AdmissionsDeskPage({
+  searchParams,
+}: {
+  searchParams?: Promise<SearchParams>;
+}) {
+  const resolved =
+    (await searchParams) ?? {};
+
+  const notice = one(resolved.notice);
+  const error = one(resolved.error);
   const supabase = await createClient();
 
   const {
@@ -278,6 +296,22 @@ export default async function AdmissionsDeskPage() {
         }
       />
 
+      {error && (
+        <div className="mt-4 rounded-xl border border-red-100 bg-red-50 px-4 py-3 text-sm font-semibold text-red-700">
+          {error}
+        </div>
+      )}
+
+      {notice && (
+        <div className="mt-4 rounded-xl border border-emerald-100 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-700">
+          {notice === 'followup-completed'
+            ? 'Follow-up completed.'
+            : notice === 'followup-snoozed'
+              ? 'Follow-up snoozed until tomorrow at 10:00 AM.'
+              : 'Admissions Desk updated.'}
+        </div>
+      )}
+
       <section className="mt-6 grid gap-3 sm:grid-cols-2 xl:grid-cols-6">
         <MetricCard
           icon={<AlarmClock size={17} />}
@@ -344,22 +378,9 @@ export default async function AdmissionsDeskPage() {
           }
         >
           {overdue.slice(0, 10).map((row) => (
-            <LeadQueueRow
+            <FollowUpActionRow
               key={row.task_id}
-              leadId={row.lead_id}
-              leadName={row.lead_name}
-              leadCode={row.lead_code}
-              primary={row.title || 'Follow up'}
-              secondary={`${pretty(
-                row.current_stage || 'new'
-              )} · ${pretty(
-                row.current_contact_channel || 'other'
-              )}`}
-              meta={
-                row.due_at
-                  ? `Due ${formatDateTime(row.due_at)}`
-                  : 'Due date unavailable'
-              }
+              row={row}
               tone="urgent"
             />
           ))}
@@ -371,22 +392,9 @@ export default async function AdmissionsDeskPage() {
           empty="Nothing else due today."
         >
           {dueToday.slice(0, 10).map((row) => (
-            <LeadQueueRow
+            <FollowUpActionRow
               key={row.task_id}
-              leadId={row.lead_id}
-              leadName={row.lead_name}
-              leadCode={row.lead_code}
-              primary={row.title || 'Follow up'}
-              secondary={`${pretty(
-                row.current_stage || 'new'
-              )} · ${pretty(
-                row.current_contact_channel || 'other'
-              )}`}
-              meta={
-                row.due_at
-                  ? formatDateTime(row.due_at)
-                  : '—'
-              }
+              row={row}
             />
           ))}
         </QueueCard>
@@ -609,6 +617,100 @@ export default async function AdmissionsDeskPage() {
         </div>
       </section>
     </>
+  );
+}
+
+function FollowUpActionRow({
+  row,
+  tone = 'default',
+}: {
+  row: FollowUpRow;
+  tone?: 'default' | 'urgent';
+}) {
+  const toneClasses =
+    tone === 'urgent'
+      ? 'border-red-100 bg-red-50/60'
+      : 'border-slate-100 bg-slate-50/70';
+
+  return (
+    <div className={`rounded-xl border px-4 py-3 ${toneClasses}`}>
+      <div className="flex items-start justify-between gap-4">
+        <Link
+          href={`/leads/${row.lead_id}`}
+          className="group min-w-0 flex-1"
+        >
+          <div className="truncate text-sm font-bold text-slate-800 group-hover:text-brand">
+            {row.lead_name || row.lead_code || 'Lead'}
+          </div>
+
+          <div className="mt-0.5 text-[10px] font-medium text-slate-400">
+            {row.lead_code || '—'}
+          </div>
+
+          <div className="mt-2 text-xs font-semibold text-slate-600">
+            {row.title || 'Follow up'}
+          </div>
+
+          <div className="mt-0.5 text-[11px] text-slate-500">
+            {pretty(row.current_stage || 'new')} ·{' '}
+            {pretty(row.current_contact_channel || 'other')}
+          </div>
+
+          <div
+            className={`mt-1 text-[10px] ${
+              tone === 'urgent'
+                ? 'font-bold text-red-500'
+                : 'text-slate-400'
+            }`}
+          >
+            {row.due_at
+              ? `Due ${formatDateTime(row.due_at)}`
+              : 'Due date unavailable'}
+          </div>
+        </Link>
+
+        <Link
+          href={`/leads/${row.lead_id}`}
+          className="mt-1 shrink-0 text-slate-300 hover:text-brand"
+          aria-label="Open lead"
+        >
+          <ArrowRight size={15} />
+        </Link>
+      </div>
+
+      <div className="mt-3 flex flex-wrap gap-2 border-t border-black/5 pt-3">
+        <form action={completeAdmissionFollowUpAction}>
+          <input type="hidden" name="task_id" value={row.task_id} />
+          <input type="hidden" name="lead_id" value={row.lead_id} />
+
+          <button
+            type="submit"
+            className="inline-flex rounded-lg bg-slate-900 px-3 py-1.5 text-[11px] font-bold text-white transition-colors hover:bg-slate-700"
+          >
+            Complete
+          </button>
+        </form>
+
+        <form action={snoozeAdmissionFollowUpAction}>
+          <input type="hidden" name="task_id" value={row.task_id} />
+          <input type="hidden" name="lead_id" value={row.lead_id} />
+
+          <button
+            type="submit"
+            className="inline-flex rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-[11px] font-bold text-slate-600 transition-colors hover:bg-slate-50"
+          >
+            Snooze to tomorrow
+          </button>
+        </form>
+
+        <Link
+          href={`/conversations?lead=${row.lead_id}`}
+          className="inline-flex rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-[11px] font-bold text-slate-600 transition-colors hover:bg-slate-50"
+        >
+          Conversation
+        </Link>
+      </div>
+    </div>
   );
 }
 
@@ -945,6 +1047,16 @@ function formatDateTime(
       timeZone: 'Asia/Kolkata',
     }
   ).format(date);
+}
+
+function one(
+  value: string | string[] | undefined
+) {
+  if (Array.isArray(value)) {
+    return value[0] ?? '';
+  }
+
+  return value ?? '';
 }
 
 function pretty(value: string) {
