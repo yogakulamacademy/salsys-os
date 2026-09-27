@@ -113,11 +113,6 @@ export async function GET(
               accessToken
             ),
 
-          tokenLength:
-            accessToken
-              ?.length ??
-            0,
-
           apiVersion,
         },
       },
@@ -154,6 +149,44 @@ export async function GET(
     '2026-09-25';
 
 
+  // ----------------------------------------------------------
+  // 1. Which ad accounts can this exact token see?
+  // ----------------------------------------------------------
+
+  const accessibleAccountsUrl =
+    new URL(
+      `https://graph.facebook.com/${apiVersion}/me/adaccounts`
+    );
+
+  accessibleAccountsUrl
+    .searchParams
+    .set(
+      'fields',
+      [
+        'id',
+        'account_id',
+        'name',
+        'account_status',
+        'currency',
+        'timezone_name',
+      ].join(
+        ','
+      )
+    );
+
+  accessibleAccountsUrl
+    .searchParams
+    .set(
+      'limit',
+      '100'
+    );
+
+
+  // ----------------------------------------------------------
+  // 2. Read the configured account
+  // business field intentionally removed.
+  // ----------------------------------------------------------
+
   const accountUrl =
     new URL(
       `https://graph.facebook.com/${apiVersion}/${adAccountResource}`
@@ -172,12 +205,15 @@ export async function GET(
         'timezone_name',
         'timezone_offset_hours_utc',
         'amount_spent',
-        'business',
       ].join(
         ','
       )
     );
 
+
+  // ----------------------------------------------------------
+  // 3. Campaigns
+  // ----------------------------------------------------------
 
   const campaignsUrl =
     new URL(
@@ -210,6 +246,10 @@ export async function GET(
       '100'
     );
 
+
+  // ----------------------------------------------------------
+  // 4. Campaign-level insights
+  // ----------------------------------------------------------
 
   const insightsUrl =
     new URL(
@@ -268,11 +308,17 @@ export async function GET(
 
 
   const [
+    accessibleAccountsResult,
     accountResult,
     campaignsResult,
     insightsResult,
   ] =
     await Promise.all([
+      metaGet(
+        accessibleAccountsUrl,
+        accessToken
+      ),
+
       metaGet(
         accountUrl,
         accessToken
@@ -290,23 +336,60 @@ export async function GET(
     ]);
 
 
-  const accountError =
-    accountResult
-      .json
-      ?.error ??
-    null;
+  const accessibleAccounts =
+    Array.isArray(
+      accessibleAccountsResult
+        .json
+        ?.data
+    )
+      ? accessibleAccountsResult
+          .json
+          .data
+      : [];
 
-  const campaignsError =
-    campaignsResult
-      .json
-      ?.error ??
-    null;
 
-  const insightsError =
-    insightsResult
-      .json
-      ?.error ??
-    null;
+  const configuredAccountVisible =
+    accessibleAccounts
+      .some(
+        (
+          account:
+            any
+        ) =>
+          String(
+            account.account_id ??
+            ''
+          ) ===
+            accountId ||
+          String(
+            account.id ??
+            ''
+          ) ===
+            adAccountResource
+      );
+
+
+  const campaigns =
+    Array.isArray(
+      campaignsResult
+        .json
+        ?.data
+    )
+      ? campaignsResult
+          .json
+          .data
+      : [];
+
+
+  const insights =
+    Array.isArray(
+      insightsResult
+        .json
+        ?.data
+    )
+      ? insightsResult
+          .json
+          .data
+      : [];
 
 
   return NextResponse.json({
@@ -314,6 +397,23 @@ export async function GET(
       accountResult.ok &&
       campaignsResult.ok &&
       insightsResult.ok,
+
+    diagnosis: {
+      configuredAccount:
+        adAccountResource,
+
+      configuredAccountVisibleToToken:
+        configuredAccountVisible,
+
+      accessibleAdAccounts:
+        accessibleAccounts.length,
+
+      campaignsVisible:
+        campaigns.length,
+
+      insightRowsVisible:
+        insights.length,
+    },
 
     env: {
       adAccountId:
@@ -323,9 +423,6 @@ export async function GET(
 
       tokenConfigured:
         true,
-
-      tokenLength:
-        accessToken.length,
     },
 
     requestedRange: {
@@ -333,42 +430,52 @@ export async function GET(
       until,
     },
 
-    account: accountResult.ok
-      ? accountResult.json
-      : null,
+    accessibleAccounts: {
+      httpStatus:
+        accessibleAccountsResult
+          .status,
 
-    accountError,
+      count:
+        accessibleAccounts.length,
+
+      accounts:
+        accessibleAccounts,
+
+      error:
+        accessibleAccountsResult
+          .json
+          ?.error ??
+        null,
+    },
+
+    account: {
+      httpStatus:
+        accountResult.status,
+
+      data:
+        accountResult.ok
+          ? accountResult.json
+          : null,
+
+      error:
+        accountResult
+          .json
+          ?.error ??
+        null,
+    },
 
     campaigns: {
       httpStatus:
         campaignsResult.status,
 
       count:
-        Array.isArray(
-          campaignsResult
-            .json
-            ?.data
-        )
-          ? campaignsResult
-              .json
-              .data
-              .length
-          : 0,
+        campaigns.length,
 
       sample:
-        Array.isArray(
-          campaignsResult
-            .json
-            ?.data
-        )
-          ? campaignsResult
-              .json
-              .data
-              .slice(
-                0,
-                10
-              )
-          : [],
+        campaigns.slice(
+          0,
+          10
+        ),
 
       pagingAvailable:
         Boolean(
@@ -379,7 +486,10 @@ export async function GET(
         ),
 
       error:
-        campaignsError,
+        campaignsResult
+          .json
+          ?.error ??
+        null,
     },
 
     insights: {
@@ -387,31 +497,13 @@ export async function GET(
         insightsResult.status,
 
       count:
-        Array.isArray(
-          insightsResult
-            .json
-            ?.data
-        )
-          ? insightsResult
-              .json
-              .data
-              .length
-          : 0,
+        insights.length,
 
       sample:
-        Array.isArray(
-          insightsResult
-            .json
-            ?.data
-        )
-          ? insightsResult
-              .json
-              .data
-              .slice(
-                0,
-                10
-              )
-          : [],
+        insights.slice(
+          0,
+          10
+        ),
 
       pagingAvailable:
         Boolean(
@@ -422,7 +514,10 @@ export async function GET(
         ),
 
       error:
-        insightsError,
+        insightsResult
+          .json
+          ?.error ??
+        null,
     },
   });
 }
