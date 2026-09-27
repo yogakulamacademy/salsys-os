@@ -21,11 +21,13 @@ import {
   Sparkles,
   Tags,
   Target,
+  Megaphone,
 } from 'lucide-react';
 import { ReactNode, useState } from 'react';
 import { signOutAction } from '@/app/actions/auth';
 import { LiveRefresh } from '@/components/live-refresh';
 import { ThemeToggle } from '@/components/theme-toggle';
+
 
 const nav = [
   { href: '/dashboard', label: 'Dashboard', icon: Gauge },
@@ -53,8 +55,13 @@ const nav = [
   { href: '/seo', label: 'SEO', icon: FileSearch },
 
   { href: '/revenue', label: 'Revenue Forecast', icon: CircleDollarSign },
-
+  {
+  href: '/paid-media-leads',
+  label: 'Paid Media Leads',
+  icon: Megaphone,
+},
   { href: '/settings', label: 'Settings', icon: Settings },
+  
 ];
 
 function BrandMark() {

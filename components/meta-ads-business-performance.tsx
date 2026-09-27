@@ -1,410 +1,497 @@
 import type { ReactNode } from 'react';
 
 import {
-  BarChart3,
-  Eye,
-  Globe2,
+  BadgeIndianRupee,
+  CircleDollarSign,
+  Coins,
+  Link2,
   MousePointerClick,
-  Smartphone,
+  ReceiptIndianRupee,
   Target,
   TrendingUp,
+  Users,
 } from 'lucide-react';
 
 import { createClient } from '@/lib/supabase/server';
 
-type AnyRow = Record<string, unknown>;
+type MetaOverviewRow = {
+  start_date: string | null;
+  end_date: string | null;
+  currency_code: string | null;
+  spend: number | string | null;
+  impressions: number | string | null;
+  clicks: number | string | null;
+  inline_link_clicks: number | string | null;
+  crm_leads: number | string | null;
+  qualified_leads: number | string | null;
+  high_intent_leads: number | string | null;
+  payment_pending_leads: number | string | null;
+  paid_leads: number | string | null;
+  enrolled_leads: number | string | null;
+  crm_revenue_inr: number | string | null;
+  crm_revenue_usd: number | string | null;
+  avg_cpc: number | string | null;
+  cpl: number | string | null;
+  cost_per_qualified_lead: number | string | null;
+  cost_per_paid_lead: number | string | null;
+  cac: number | string | null;
+  roas: number | string | null;
+  click_to_lead_rate: number | string | null;
+  lead_to_enrollment_rate: number | string | null;
+};
 
-function numberValue(value: unknown) {
-  if (typeof value === 'number' && Number.isFinite(value)) {
-    return value;
-  }
+type CoverageRow = {
+  meta_paid_touchpoints: number | string | null;
+  touchpoints_with_fbclid: number | string | null;
+  touchpoints_with_campaign_id: number | string | null;
+  touchpoints_with_adset_id: number | string | null;
+  touchpoints_with_ad_id: number | string | null;
+  meta_paid_leads: number | string | null;
+  leads_with_campaign_id: number | string | null;
+  leads_with_adset_id: number | string | null;
+  leads_with_ad_id: number | string | null;
+  captured_campaign_ids: number | string | null;
+  captured_adset_ids: number | string | null;
+  captured_ad_ids: number | string | null;
+  matched_campaign_ids: number | string | null;
+  matched_adset_ids: number | string | null;
+  matched_ad_ids: number | string | null;
+};
 
-  if (typeof value === 'string') {
-    const parsed = Number(value);
-    return Number.isFinite(parsed) ? parsed : 0;
-  }
+type CampaignRow = {
+  ad_account_id: string;
+  campaign_id: string;
+  campaign_name: string | null;
+  objective: string | null;
+  currency_code: string | null;
+  start_date: string | null;
+  end_date: string | null;
+  spend: number | string | null;
+  impressions: number | string | null;
+  clicks: number | string | null;
+  inline_link_clicks: number | string | null;
+  ctr: number | string | null;
+  avg_cpc: number | string | null;
+  crm_leads: number | string | null;
+  qualified_leads: number | string | null;
+  high_intent_leads: number | string | null;
+  payment_pending_leads: number | string | null;
+  paid_leads: number | string | null;
+  enrolled_leads: number | string | null;
+  crm_revenue_inr: number | string | null;
+  crm_revenue_usd: number | string | null;
+  cpl: number | string | null;
+  cost_per_qualified_lead: number | string | null;
+  cost_per_paid_lead: number | string | null;
+  cac: number | string | null;
+  roas: number | string | null;
+  click_to_lead_rate: number | string | null;
+  lead_to_enrollment_rate: number | string | null;
+};
 
-  return 0;
-}
+type AdsetRow = {
+  ad_account_id: string;
+  campaign_id: string;
+  campaign_name: string | null;
+  adset_id: string;
+  adset_name: string | null;
+  currency_code: string | null;
+  spend: number | string | null;
+  impressions: number | string | null;
+  clicks: number | string | null;
+  inline_link_clicks: number | string | null;
+  crm_leads: number | string | null;
+  qualified_leads: number | string | null;
+  paid_leads: number | string | null;
+  enrolled_leads: number | string | null;
+  crm_revenue_inr: number | string | null;
+  crm_revenue_usd: number | string | null;
+  cpl: number | string | null;
+  cost_per_qualified_lead: number | string | null;
+  cac: number | string | null;
+  roas: number | string | null;
+};
 
-function textValue(value: unknown) {
-  if (value == null) return '';
-  return String(value);
-}
-
-function formatNumber(value: unknown) {
-  return new Intl.NumberFormat('en-IN', {
-    maximumFractionDigits: 0,
-  }).format(numberValue(value));
-}
-
-function formatMoney(value: unknown, currency = 'INR') {
-  const amount = numberValue(value);
-
-  try {
-    return new Intl.NumberFormat('en-IN', {
-      style: 'currency',
-      currency,
-      maximumFractionDigits: 0,
-    }).format(amount);
-  } catch {
-    return `${currency} ${amount.toFixed(0)}`;
-  }
-}
-
-function formatDecimal(value: unknown, digits = 2) {
-  return numberValue(value).toLocaleString('en-IN', {
-    minimumFractionDigits: digits,
-    maximumFractionDigits: digits,
-  });
-}
-
-function formatPercent(value: unknown) {
-  const numeric = numberValue(value);
-
-  // Meta's CTR is commonly already returned as a percentage value.
-  return `${numeric.toFixed(2)}%`;
-}
-
-function formatDate(value: unknown) {
-  const raw = textValue(value);
-  if (!raw) return '—';
-
-  const date = new Date(`${raw}T00:00:00`);
-  if (Number.isNaN(date.getTime())) return raw;
-
-  return new Intl.DateTimeFormat('en-IN', {
-    day: '2-digit',
-    month: 'short',
-    year: 'numeric',
-  }).format(date);
-}
-
-function pick(row: AnyRow | null | undefined, ...keys: string[]) {
-  if (!row) return null;
-
-  for (const key of keys) {
-    if (row[key] !== undefined && row[key] !== null) {
-      return row[key];
-    }
-  }
-
-  return null;
-}
-
-function MetricCard({
-  label,
-  value,
-  helper,
-  icon,
-}: {
-  label: string;
-  value: string;
-  helper?: string;
-  icon: ReactNode;
-}) {
-  return (
-    <div className="rounded-2xl border border-slate-100 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900/70">
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <div className="text-[11px] font-bold uppercase tracking-[0.14em] text-slate-400">
-            {label}
-          </div>
-          <div className="mt-2 text-2xl font-black tracking-tight text-slate-900 dark:text-slate-100">
-            {value}
-          </div>
-          {helper ? (
-            <div className="mt-1 text-xs text-slate-400">{helper}</div>
-          ) : null}
-        </div>
-        <div className="rounded-xl bg-slate-50 p-2 text-slate-500 dark:bg-slate-800 dark:text-slate-300">
-          {icon}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function EmptyRow({ colSpan, text }: { colSpan: number; text: string }) {
-  return (
-    <tr>
-      <td colSpan={colSpan} className="px-3 py-8 text-center text-sm text-slate-400">
-        {text}
-      </td>
-    </tr>
-  );
-}
+type AdRow = {
+  ad_account_id: string;
+  campaign_id: string;
+  campaign_name: string | null;
+  adset_id: string;
+  adset_name: string | null;
+  ad_id: string;
+  ad_name: string | null;
+  currency_code: string | null;
+  spend: number | string | null;
+  impressions: number | string | null;
+  clicks: number | string | null;
+  inline_link_clicks: number | string | null;
+  crm_leads: number | string | null;
+  qualified_leads: number | string | null;
+  paid_leads: number | string | null;
+  enrolled_leads: number | string | null;
+  crm_revenue_inr: number | string | null;
+  crm_revenue_usd: number | string | null;
+  cpl: number | string | null;
+  cost_per_qualified_lead: number | string | null;
+  cac: number | string | null;
+  roas: number | string | null;
+};
 
 export async function MetaAdsBusinessPerformance() {
   const supabase = await createClient();
 
   const [
     overviewResult,
+    coverageResult,
     campaignsResult,
     adsetsResult,
     adsResult,
-    publishersResult,
-    countriesResult,
-    devicesResult,
   ] = await Promise.all([
-    supabase.from('v_meta_ads_30d_overview').select('*').maybeSingle(),
-    supabase.from('v_meta_ads_campaign_30d').select('*').order('spend', { ascending: false }),
-    supabase.from('v_meta_ads_adset_30d').select('*').order('spend', { ascending: false }).limit(12),
-    supabase.from('v_meta_ads_ad_30d').select('*').order('spend', { ascending: false }).limit(12),
-    supabase.from('v_meta_ads_publisher_30d').select('*').order('spend', { ascending: false }),
-    supabase.from('v_meta_ads_country_30d').select('*').order('spend', { ascending: false }).limit(12),
-    supabase.from('v_meta_ads_device_30d').select('*').order('spend', { ascending: false }),
+    supabase
+      .from('v_meta_ads_crm_overview_30d')
+      .select('*')
+      .maybeSingle(),
+
+    supabase
+      .from('v_meta_ads_attribution_coverage')
+      .select('*')
+      .maybeSingle(),
+
+    supabase
+      .from('v_meta_ads_campaign_crm_30d')
+      .select('*')
+      .order('spend', { ascending: false }),
+
+    supabase
+      .from('v_meta_ads_adset_crm_30d')
+      .select('*')
+      .order('spend', { ascending: false })
+      .limit(12),
+
+    supabase
+      .from('v_meta_ads_ad_crm_30d')
+      .select('*')
+      .order('spend', { ascending: false })
+      .limit(12),
   ]);
 
   const errors = [
     overviewResult.error,
+    coverageResult.error,
     campaignsResult.error,
     adsetsResult.error,
     adsResult.error,
-    publishersResult.error,
-    countriesResult.error,
-    devicesResult.error,
   ].filter(Boolean);
 
   if (errors.length > 0) {
     throw new Error(
-      `Unable to load Meta Ads performance: ${errors
+      `Unable to load Meta Ads business attribution: ${errors
         .map((error) => error?.message)
-        .filter(Boolean)
         .join(' | ')}`
     );
   }
 
-  const overview = (overviewResult.data ?? {}) as AnyRow;
-  const campaigns = (campaignsResult.data ?? []) as AnyRow[];
-  const adsets = (adsetsResult.data ?? []) as AnyRow[];
-  const ads = (adsResult.data ?? []) as AnyRow[];
-  const publishers = (publishersResult.data ?? []) as AnyRow[];
-  const countries = (countriesResult.data ?? []) as AnyRow[];
-  const devices = (devicesResult.data ?? []) as AnyRow[];
+  const overview = (overviewResult.data ?? {}) as MetaOverviewRow;
+  const coverage = (coverageResult.data ?? {}) as CoverageRow;
+  const campaigns = (campaignsResult.data ?? []) as CampaignRow[];
+  const adsets = (adsetsResult.data ?? []) as AdsetRow[];
+  const ads = (adsResult.data ?? []) as AdRow[];
 
-  const currency =
-    textValue(pick(overview, 'currency_code', 'currency')) ||
-    textValue(pick(campaigns[0], 'currency_code', 'currency')) ||
+  const adsCurrency =
+    overview.currency_code ||
+    campaigns[0]?.currency_code ||
     'INR';
 
-  const startDate = pick(overview, 'start_date', 'date_start', 'min_date');
-  const endDate = pick(overview, 'end_date', 'date_end', 'max_date');
-
-  const spend = pick(overview, 'spend', 'total_spend');
-  const impressions = pick(overview, 'impressions', 'total_impressions');
-  const reach = pick(overview, 'reach', 'total_reach');
-  const clicks = pick(overview, 'clicks', 'total_clicks');
-  const linkClicks = pick(
-    overview,
-    'inline_link_clicks',
-    'link_clicks',
-    'total_inline_link_clicks'
+  const leadIdCoverage = percentOf(
+    coverage.leads_with_campaign_id,
+    coverage.meta_paid_leads
   );
-  const ctr = pick(overview, 'ctr');
-  const cpc = pick(overview, 'cpc', 'avg_cpc');
-  const cpm = pick(overview, 'cpm', 'avg_cpm');
+
+  const campaignMatchCoverage = percentOf(
+    coverage.matched_campaign_ids,
+    coverage.captured_campaign_ids
+  );
 
   return (
     <section className="card-pad mt-4">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <div className="eyebrow">Paid media performance</div>
-          <div className="section-title mt-1">Meta Ads · Facebook + Instagram</div>
+          <div className="eyebrow">
+            Paid media business attribution
+          </div>
+
+          <div className="section-title mt-1">
+            Meta Ads → CRM → Revenue
+          </div>
+
           <p className="mt-2 max-w-3xl text-xs leading-5 text-slate-400">
-            Live Meta Marketing API data from campaign, ad set, ad, publisher/placement,
-            country and device reporting. CRM lead/revenue attribution will be joined in
-            the next layer using captured Meta campaign, ad set and ad IDs.
+            Facebook and Instagram ad spend is joined to CRM leads using the exact
+            campaign, ad-set and ad IDs captured by first-party website tracking.
+            Test IDs stay unmatched instead of being guessed into real Meta campaigns.
           </p>
         </div>
 
-        <div className="rounded-full bg-slate-100 px-3 py-1.5 text-xs font-bold text-slate-600 dark:bg-slate-800 dark:text-slate-300">
-          {formatDate(startDate)} {' → '} {formatDate(endDate)}
+        <div className="rounded-full bg-slate-100 px-3 py-1.5 text-xs font-bold text-slate-600">
+          {formatDate(overview.start_date)}
+          {' → '}
+          {formatDate(overview.end_date)}
         </div>
       </div>
 
       <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <MetricCard
-          label="Spend"
-          value={formatMoney(spend, currency)}
-          helper={currency}
-          icon={<TrendingUp size={18} />}
+          icon={<BadgeIndianRupee size={17} />}
+          label="Meta ad spend"
+          value={formatCurrency(overview.spend, adsCurrency)}
+          sub={`${formatNumber(overview.clicks)} clicks · ${formatNumber(
+            overview.inline_link_clicks
+          )} link clicks`}
         />
+
         <MetricCard
-          label="Impressions"
-          value={formatNumber(impressions)}
-          helper={`Reach ${formatNumber(reach)}`}
-          icon={<Eye size={18} />}
+          icon={<Users size={17} />}
+          label="CRM leads"
+          value={formatNumber(overview.crm_leads)}
+          sub={`${formatNumber(overview.high_intent_leads)} high intent`}
         />
+
         <MetricCard
-          label="Clicks"
-          value={formatNumber(clicks)}
-          helper={`Link clicks ${formatNumber(linkClicks)}`}
-          icon={<MousePointerClick size={18} />}
+          icon={<Target size={17} />}
+          label="Qualified"
+          value={formatNumber(overview.qualified_leads)}
+          sub={
+            overview.cost_per_qualified_lead == null
+              ? 'Cost / qualified unavailable'
+              : `${formatCurrency(
+                  overview.cost_per_qualified_lead,
+                  adsCurrency
+                )} / qualified`
+          }
         />
+
         <MetricCard
-          label="CTR"
-          value={formatPercent(ctr)}
-          helper={`CPC ${formatMoney(cpc, currency)} · CPM ${formatMoney(cpm, currency)}`}
-          icon={<Target size={18} />}
+          icon={<Coins size={17} />}
+          label="Paid leads"
+          value={formatNumber(overview.paid_leads)}
+          sub={`${formatNumber(overview.enrolled_leads)} enrolled`}
+        />
+
+        <MetricCard
+          icon={<ReceiptIndianRupee size={17} />}
+          label="CRM revenue · INR"
+          value={formatCurrency(overview.crm_revenue_inr, 'INR')}
+          sub="Net recorded CRM payments"
+        />
+
+        <MetricCard
+          icon={<CircleDollarSign size={17} />}
+          label="CRM revenue · USD"
+          value={formatCurrency(overview.crm_revenue_usd, 'USD')}
+          sub="Kept separate from INR"
+        />
+
+        <MetricCard
+          icon={<MousePointerClick size={17} />}
+          label="CRM CPL"
+          value={
+            overview.cpl == null
+              ? '—'
+              : formatCurrency(overview.cpl, adsCurrency)
+          }
+          sub="Spend ÷ attributed CRM leads"
+        />
+
+        <MetricCard
+          icon={<TrendingUp size={17} />}
+          label="CRM ROAS"
+          value={
+            overview.roas == null
+              ? '—'
+              : `${formatDecimal(overview.roas, 2)}×`
+          }
+          sub={
+            overview.cac == null
+              ? 'CAC unavailable'
+              : `CAC ${formatCurrency(overview.cac, adsCurrency)}`
+          }
         />
       </div>
 
-      <div className="mt-6 grid gap-4 xl:grid-cols-2">
-        <div className="rounded-2xl border border-slate-100 p-4 dark:border-slate-800">
-          <div className="flex items-center justify-between gap-3">
-            <div>
-              <div className="text-sm font-bold text-slate-800 dark:text-slate-100">
-                Facebook vs Instagram
-              </div>
-              <div className="mt-1 text-xs text-slate-400">Publisher + placement performance</div>
+      <div className="mt-5 grid gap-4 xl:grid-cols-[.75fr_1.25fr]">
+        <div className="rounded-xl border border-slate-100 bg-slate-50 p-4">
+          <div className="flex items-center gap-2">
+            <Link2 size={16} className="text-slate-400" />
+            <div className="text-sm font-bold text-slate-800">
+              Attribution coverage
             </div>
-            <BarChart3 size={18} className="text-slate-400" />
           </div>
 
-          <div className="mt-4 overflow-x-auto">
-            <table className="min-w-[680px] text-left text-sm">
-              <thead>
-                <tr className="border-b border-slate-100 text-[11px] uppercase tracking-wide text-slate-400 dark:border-slate-800">
-                  <th className="px-3 py-3">Publisher</th>
-                  <th className="px-3 py-3">Placement</th>
-                  <th className="px-3 py-3 text-right">Spend</th>
-                  <th className="px-3 py-3 text-right">Impr.</th>
-                  <th className="px-3 py-3 text-right">Clicks</th>
-                  <th className="px-3 py-3 text-right">CTR</th>
-                </tr>
-              </thead>
-              <tbody>
-                {publishers.length === 0 ? (
-                  <EmptyRow colSpan={6} text="No publisher/placement data available." />
-                ) : (
-                  publishers.map((row, index) => (
-                    <tr
-                      key={`${textValue(pick(row, 'publisher_platform'))}-${textValue(
-                        pick(row, 'platform_position')
-                      )}-${index}`}
-                      className="border-b border-slate-50 last:border-0 dark:border-slate-800/70"
-                    >
-                      <td className="px-3 py-3 font-semibold text-slate-700 dark:text-slate-200">
-                        {textValue(pick(row, 'publisher_platform')) || 'Unknown'}
-                      </td>
-                      <td className="px-3 py-3 text-slate-500 dark:text-slate-400">
-                        {textValue(pick(row, 'platform_position')) || 'Unknown'}
-                      </td>
-                      <td className="px-3 py-3 text-right font-semibold">
-                        {formatMoney(pick(row, 'spend'), currency)}
-                      </td>
-                      <td className="px-3 py-3 text-right">{formatNumber(pick(row, 'impressions'))}</td>
-                      <td className="px-3 py-3 text-right">{formatNumber(pick(row, 'clicks'))}</td>
-                      <td className="px-3 py-3 text-right">{formatPercent(pick(row, 'ctr'))}</td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
+          <div className="mt-4 space-y-2">
+            <CoverageLine
+              label="Meta paid touchpoints"
+              value={coverage.meta_paid_touchpoints}
+            />
+            <CoverageLine
+              label="Touchpoints with FBCLID"
+              value={coverage.touchpoints_with_fbclid}
+            />
+            <CoverageLine
+              label="Touchpoints with campaign ID"
+              value={coverage.touchpoints_with_campaign_id}
+            />
+            <CoverageLine
+              label="Meta paid leads"
+              value={coverage.meta_paid_leads}
+            />
+            <CoverageLine
+              label="Leads with campaign ID"
+              value={coverage.leads_with_campaign_id}
+            />
+            <CoverageLine
+              label="Leads with ad-set ID"
+              value={coverage.leads_with_adset_id}
+            />
+            <CoverageLine
+              label="Leads with ad ID"
+              value={coverage.leads_with_ad_id}
+            />
+          </div>
+
+          <div className="mt-4 rounded-lg bg-white px-3 py-2.5 text-xs leading-5 text-slate-500">
+            Paid-lead campaign-ID coverage:{' '}
+            <strong className="font-bold text-slate-700">
+              {leadIdCoverage}
+            </strong>
+            . Real campaign-ID match coverage:{' '}
+            <strong className="font-bold text-slate-700">
+              {campaignMatchCoverage}
+            </strong>
+            .
           </div>
         </div>
 
-        <div className="rounded-2xl border border-slate-100 p-4 dark:border-slate-800">
-          <div className="flex items-center justify-between gap-3">
-            <div>
-              <div className="text-sm font-bold text-slate-800 dark:text-slate-100">
-                Device performance
-              </div>
-              <div className="mt-1 text-xs text-slate-400">Meta impression-device breakdown</div>
-            </div>
-            <Smartphone size={18} className="text-slate-400" />
+        <div className="rounded-xl border border-slate-100 bg-white p-4">
+          <div className="text-sm font-bold text-slate-800">
+            Captured ID matching
           </div>
 
-          <div className="mt-4 overflow-x-auto">
-            <table className="min-w-full text-left text-sm">
-              <thead>
-                <tr className="border-b border-slate-100 text-[11px] uppercase tracking-wide text-slate-400 dark:border-slate-800">
-                  <th className="px-3 py-3">Device</th>
-                  <th className="px-3 py-3 text-right">Spend</th>
-                  <th className="px-3 py-3 text-right">Impr.</th>
-                  <th className="px-3 py-3 text-right">Clicks</th>
-                </tr>
-              </thead>
-              <tbody>
-                {devices.length === 0 ? (
-                  <EmptyRow colSpan={4} text="No device data available." />
-                ) : (
-                  devices.map((row, index) => (
-                    <tr
-                      key={`${textValue(pick(row, 'impression_device', 'device'))}-${index}`}
-                      className="border-b border-slate-50 last:border-0 dark:border-slate-800/70"
-                    >
-                      <td className="px-3 py-3 font-semibold text-slate-700 dark:text-slate-200">
-                        {textValue(pick(row, 'impression_device', 'device')) || 'Unknown'}
-                      </td>
-                      <td className="px-3 py-3 text-right font-semibold">
-                        {formatMoney(pick(row, 'spend'), currency)}
-                      </td>
-                      <td className="px-3 py-3 text-right">{formatNumber(pick(row, 'impressions'))}</td>
-                      <td className="px-3 py-3 text-right">{formatNumber(pick(row, 'clicks'))}</td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
+          <p className="mt-1 text-xs leading-5 text-slate-400">
+            Test campaign IDs will remain unmatched. New real Meta clicks should
+            begin matching automatically after the URL parameters you configured
+            start receiving traffic.
+          </p>
+
+          <div className="mt-4 grid gap-3 sm:grid-cols-3">
+            <MatchCard
+              label="Campaign IDs"
+              captured={coverage.captured_campaign_ids}
+              matched={coverage.matched_campaign_ids}
+            />
+            <MatchCard
+              label="Ad-set IDs"
+              captured={coverage.captured_adset_ids}
+              matched={coverage.matched_adset_ids}
+            />
+            <MatchCard
+              label="Ad IDs"
+              captured={coverage.captured_ad_ids}
+              matched={coverage.matched_ad_ids}
+            />
           </div>
         </div>
       </div>
 
       <div className="mt-6">
-        <div className="text-sm font-bold text-slate-800 dark:text-slate-100">Campaign performance</div>
+        <div className="text-sm font-bold text-slate-800">
+          Campaign business performance
+        </div>
+
         <p className="mt-1 text-xs leading-5 text-slate-400">
-          Top Meta campaigns in the current reporting window. CRM lead, enrollment and revenue
-          columns will be added after deterministic Meta attribution is created.
+          Spend comes from the Meta Marketing API. Leads, payments, enrollments
+          and revenue come from the CRM.
         </p>
 
-        <div className="mt-4 overflow-x-auto">
-          <table className="min-w-[1100px] text-left text-sm">
+        <div className="mt-3 overflow-x-auto">
+          <table className="min-w-[1180px] text-left text-xs">
             <thead>
-              <tr className="border-b border-slate-100 text-[11px] uppercase tracking-wide text-slate-400 dark:border-slate-800">
-                <th className="px-3 py-3">Campaign</th>
-                <th className="px-3 py-3">Objective</th>
-                <th className="px-3 py-3 text-right">Spend</th>
-                <th className="px-3 py-3 text-right">Impressions</th>
-                <th className="px-3 py-3 text-right">Reach</th>
-                <th className="px-3 py-3 text-right">Clicks</th>
-                <th className="px-3 py-3 text-right">CTR</th>
-                <th className="px-3 py-3 text-right">CPC</th>
-                <th className="px-3 py-3 text-right">CPM</th>
+              <tr className="border-b border-slate-100 uppercase tracking-wide text-slate-400">
+                <th className="px-2 py-2.5">Campaign</th>
+                <th className="px-2 py-2.5 text-right">Spend</th>
+                <th className="px-2 py-2.5 text-right">Clicks</th>
+                <th className="px-2 py-2.5 text-right">Leads</th>
+                <th className="px-2 py-2.5 text-right">Qualified</th>
+                <th className="px-2 py-2.5 text-right">Paid</th>
+                <th className="px-2 py-2.5 text-right">Enrolled</th>
+                <th className="px-2 py-2.5 text-right">CPL</th>
+                <th className="px-2 py-2.5 text-right">CAC</th>
+                <th className="px-2 py-2.5 text-right">INR revenue</th>
+                <th className="px-2 py-2.5 text-right">USD revenue</th>
+                <th className="px-2 py-2.5 text-right">ROAS</th>
               </tr>
             </thead>
+
             <tbody>
               {campaigns.length === 0 ? (
-                <EmptyRow colSpan={9} text="No Meta campaign data available." />
+                <tr>
+                  <td colSpan={12} className="px-3 py-8 text-center text-slate-400">
+                    No Meta campaign rows available for this reporting window.
+                  </td>
+                </tr>
               ) : (
-                campaigns.map((row, index) => (
+                campaigns.map((row) => (
                   <tr
-                    key={`${textValue(pick(row, 'ad_account_id'))}-${textValue(
-                      pick(row, 'campaign_id')
-                    )}-${index}`}
-                    className="border-b border-slate-50 last:border-0 dark:border-slate-800/70"
+                    key={`${row.ad_account_id}-${row.campaign_id}`}
+                    className="border-b border-slate-50 last:border-0"
                   >
-                    <td className="max-w-[320px] px-3 py-3">
-                      <div className="truncate font-bold text-slate-800 dark:text-slate-100">
-                        {textValue(pick(row, 'campaign_name')) || textValue(pick(row, 'campaign_id'))}
+                    <td className="max-w-[320px] px-2 py-3">
+                      <div className="truncate font-semibold text-slate-800">
+                        {row.campaign_name || row.campaign_id}
                       </div>
                       <div className="mt-0.5 truncate text-[10px] text-slate-400">
-                        ID {textValue(pick(row, 'campaign_id')) || '—'}
+                        ID {row.campaign_id}
+                        {row.objective ? ` · ${pretty(row.objective)}` : ''}
                       </div>
                     </td>
-                    <td className="px-3 py-3 text-xs font-semibold text-slate-500 dark:text-slate-400">
-                      {textValue(pick(row, 'objective')) || '—'}
+
+                    <td className="px-2 py-3 text-right font-semibold text-slate-700">
+                      {formatCurrency(row.spend, row.currency_code || adsCurrency)}
                     </td>
-                    <td className="px-3 py-3 text-right font-semibold">
-                      {formatMoney(pick(row, 'spend'), currency)}
+                    <td className="px-2 py-3 text-right">
+                      {formatNumber(row.clicks)}
                     </td>
-                    <td className="px-3 py-3 text-right">{formatNumber(pick(row, 'impressions'))}</td>
-                    <td className="px-3 py-3 text-right">{formatNumber(pick(row, 'reach'))}</td>
-                    <td className="px-3 py-3 text-right">{formatNumber(pick(row, 'clicks'))}</td>
-                    <td className="px-3 py-3 text-right">{formatPercent(pick(row, 'ctr'))}</td>
-                    <td className="px-3 py-3 text-right">{formatMoney(pick(row, 'cpc'), currency)}</td>
-                    <td className="px-3 py-3 text-right">{formatMoney(pick(row, 'cpm'), currency)}</td>
+                    <td className="px-2 py-3 text-right font-bold text-slate-800">
+                      {formatNumber(row.crm_leads)}
+                    </td>
+                    <td className="px-2 py-3 text-right">
+                      {formatNumber(row.qualified_leads)}
+                    </td>
+                    <td className="px-2 py-3 text-right">
+                      {formatNumber(row.paid_leads)}
+                    </td>
+                    <td className="px-2 py-3 text-right">
+                      {formatNumber(row.enrolled_leads)}
+                    </td>
+                    <td className="px-2 py-3 text-right">
+                      {row.cpl == null
+                        ? '—'
+                        : formatCurrency(row.cpl, row.currency_code || adsCurrency)}
+                    </td>
+                    <td className="px-2 py-3 text-right">
+                      {row.cac == null
+                        ? '—'
+                        : formatCurrency(row.cac, row.currency_code || adsCurrency)}
+                    </td>
+                    <td className="px-2 py-3 text-right">
+                      {formatCurrency(row.crm_revenue_inr, 'INR')}
+                    </td>
+                    <td className="px-2 py-3 text-right">
+                      {formatCurrency(row.crm_revenue_usd, 'USD')}
+                    </td>
+                    <td className="px-2 py-3 text-right font-bold text-slate-800">
+                      {row.roas == null
+                        ? '—'
+                        : `${formatDecimal(row.roas, 2)}×`}
+                    </td>
                   </tr>
                 ))
               )}
@@ -414,138 +501,274 @@ export async function MetaAdsBusinessPerformance() {
       </div>
 
       <div className="mt-6 grid gap-4 xl:grid-cols-2">
-        <div className="rounded-2xl border border-slate-100 p-4 dark:border-slate-800">
-          <div className="text-sm font-bold text-slate-800 dark:text-slate-100">Top ad sets</div>
-          <div className="mt-4 overflow-x-auto">
-            <table className="min-w-[720px] text-left text-sm">
-              <thead>
-                <tr className="border-b border-slate-100 text-[11px] uppercase tracking-wide text-slate-400 dark:border-slate-800">
-                  <th className="px-3 py-3">Ad set</th>
-                  <th className="px-3 py-3 text-right">Spend</th>
-                  <th className="px-3 py-3 text-right">Clicks</th>
-                  <th className="px-3 py-3 text-right">CTR</th>
-                </tr>
-              </thead>
-              <tbody>
-                {adsets.length === 0 ? (
-                  <EmptyRow colSpan={4} text="No ad-set data available." />
-                ) : (
-                  adsets.map((row, index) => (
-                    <tr
-                      key={`${textValue(pick(row, 'adset_id'))}-${index}`}
-                      className="border-b border-slate-50 last:border-0 dark:border-slate-800/70"
-                    >
-                      <td className="max-w-[340px] px-3 py-3">
-                        <div className="truncate font-semibold text-slate-700 dark:text-slate-200">
-                          {textValue(pick(row, 'adset_name')) || textValue(pick(row, 'adset_id'))}
-                        </div>
-                        <div className="mt-0.5 truncate text-[10px] text-slate-400">
-                          {textValue(pick(row, 'campaign_name')) || '—'}
-                        </div>
-                      </td>
-                      <td className="px-3 py-3 text-right font-semibold">
-                        {formatMoney(pick(row, 'spend'), currency)}
-                      </td>
-                      <td className="px-3 py-3 text-right">{formatNumber(pick(row, 'clicks'))}</td>
-                      <td className="px-3 py-3 text-right">{formatPercent(pick(row, 'ctr'))}</td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
-        </div>
+        <SmallPerformanceTable
+          title="Top ad sets by spend"
+          empty="No Meta ad-set rows available."
+          rows={adsets.map((row) => ({
+            id: row.adset_id,
+            primary: row.adset_name || row.adset_id,
+            secondary: row.campaign_name || row.campaign_id,
+            spend: row.spend,
+            currency: row.currency_code || adsCurrency,
+            leads: row.crm_leads,
+            enrolled: row.enrolled_leads,
+            roas: row.roas,
+          }))}
+        />
 
-        <div className="rounded-2xl border border-slate-100 p-4 dark:border-slate-800">
-          <div className="text-sm font-bold text-slate-800 dark:text-slate-100">Top ads / creatives</div>
-          <div className="mt-4 overflow-x-auto">
-            <table className="min-w-[720px] text-left text-sm">
-              <thead>
-                <tr className="border-b border-slate-100 text-[11px] uppercase tracking-wide text-slate-400 dark:border-slate-800">
-                  <th className="px-3 py-3">Ad</th>
-                  <th className="px-3 py-3 text-right">Spend</th>
-                  <th className="px-3 py-3 text-right">Clicks</th>
-                  <th className="px-3 py-3 text-right">CTR</th>
-                </tr>
-              </thead>
-              <tbody>
-                {ads.length === 0 ? (
-                  <EmptyRow colSpan={4} text="No ad-level data available." />
-                ) : (
-                  ads.map((row, index) => (
-                    <tr
-                      key={`${textValue(pick(row, 'ad_id'))}-${index}`}
-                      className="border-b border-slate-50 last:border-0 dark:border-slate-800/70"
-                    >
-                      <td className="max-w-[340px] px-3 py-3">
-                        <div className="truncate font-semibold text-slate-700 dark:text-slate-200">
-                          {textValue(pick(row, 'ad_name')) || textValue(pick(row, 'ad_id'))}
-                        </div>
-                        <div className="mt-0.5 truncate text-[10px] text-slate-400">
-                          {textValue(pick(row, 'adset_name')) || textValue(pick(row, 'campaign_name')) || '—'}
-                        </div>
-                      </td>
-                      <td className="px-3 py-3 text-right font-semibold">
-                        {formatMoney(pick(row, 'spend'), currency)}
-                      </td>
-                      <td className="px-3 py-3 text-right">{formatNumber(pick(row, 'clicks'))}</td>
-                      <td className="px-3 py-3 text-right">{formatPercent(pick(row, 'ctr'))}</td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      </div>
-
-      <div className="mt-6 rounded-2xl border border-slate-100 p-4 dark:border-slate-800">
-        <div className="flex items-center justify-between gap-3">
-          <div>
-            <div className="text-sm font-bold text-slate-800 dark:text-slate-100">Top countries</div>
-            <div className="mt-1 text-xs text-slate-400">Where Meta spend and traffic are being delivered</div>
-          </div>
-          <Globe2 size={18} className="text-slate-400" />
-        </div>
-
-        <div className="mt-4 overflow-x-auto">
-          <table className="min-w-[760px] text-left text-sm">
-            <thead>
-              <tr className="border-b border-slate-100 text-[11px] uppercase tracking-wide text-slate-400 dark:border-slate-800">
-                <th className="px-3 py-3">Country</th>
-                <th className="px-3 py-3 text-right">Spend</th>
-                <th className="px-3 py-3 text-right">Impressions</th>
-                <th className="px-3 py-3 text-right">Reach</th>
-                <th className="px-3 py-3 text-right">Clicks</th>
-                <th className="px-3 py-3 text-right">CPC</th>
-              </tr>
-            </thead>
-            <tbody>
-              {countries.length === 0 ? (
-                <EmptyRow colSpan={6} text="No country data available." />
-              ) : (
-                countries.map((row, index) => (
-                  <tr
-                    key={`${textValue(pick(row, 'country'))}-${index}`}
-                    className="border-b border-slate-50 last:border-0 dark:border-slate-800/70"
-                  >
-                    <td className="px-3 py-3 font-semibold text-slate-700 dark:text-slate-200">
-                      {textValue(pick(row, 'country')) || 'Unknown'}
-                    </td>
-                    <td className="px-3 py-3 text-right font-semibold">
-                      {formatMoney(pick(row, 'spend'), currency)}
-                    </td>
-                    <td className="px-3 py-3 text-right">{formatNumber(pick(row, 'impressions'))}</td>
-                    <td className="px-3 py-3 text-right">{formatNumber(pick(row, 'reach'))}</td>
-                    <td className="px-3 py-3 text-right">{formatNumber(pick(row, 'clicks'))}</td>
-                    <td className="px-3 py-3 text-right">{formatMoney(pick(row, 'cpc'), currency)}</td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
+        <SmallPerformanceTable
+          title="Top ads by spend"
+          empty="No Meta ad rows available."
+          rows={ads.map((row) => ({
+            id: row.ad_id,
+            primary: row.ad_name || row.ad_id,
+            secondary: row.adset_name || row.campaign_name || row.adset_id,
+            spend: row.spend,
+            currency: row.currency_code || adsCurrency,
+            leads: row.crm_leads,
+            enrolled: row.enrolled_leads,
+            roas: row.roas,
+          }))}
+        />
       </div>
     </section>
   );
+}
+
+function MetricCard({
+  icon,
+  label,
+  value,
+  sub,
+}: {
+  icon: ReactNode;
+  label: string;
+  value: string;
+  sub: string;
+}) {
+  return (
+    <div className="rounded-xl border border-slate-100 bg-white p-4">
+      <div className="flex items-center gap-2 text-xs font-semibold text-slate-400">
+        {icon}
+        {label}
+      </div>
+
+      <div className="mt-2 text-xl font-bold text-slate-800">
+        {value}
+      </div>
+
+      <div className="mt-1 text-[11px] text-slate-400">
+        {sub}
+      </div>
+    </div>
+  );
+}
+
+function CoverageLine({
+  label,
+  value,
+}: {
+  label: string;
+  value: number | string | null;
+}) {
+  return (
+    <div className="flex items-center justify-between gap-4 rounded-lg bg-white px-3 py-2.5">
+      <span className="text-xs font-medium text-slate-500">
+        {label}
+      </span>
+
+      <span className="text-xs font-bold text-slate-800">
+        {formatNumber(value)}
+      </span>
+    </div>
+  );
+}
+
+function MatchCard({
+  label,
+  captured,
+  matched,
+}: {
+  label: string;
+  captured: number | string | null;
+  matched: number | string | null;
+}) {
+  const capturedNumber = numberValue(captured);
+  const matchedNumber = numberValue(matched);
+
+  return (
+    <div className="rounded-xl bg-slate-50 p-4">
+      <div className="text-xs font-semibold text-slate-400">
+        {label}
+      </div>
+
+      <div className="mt-2 text-lg font-bold text-slate-800">
+        {matchedNumber}
+        <span className="text-sm font-semibold text-slate-400">
+          {' / '}
+          {capturedNumber}
+        </span>
+      </div>
+
+      <div className="mt-1 text-[11px] text-slate-400">
+        {percentOf(matchedNumber, capturedNumber)} matched
+      </div>
+    </div>
+  );
+}
+
+function SmallPerformanceTable({
+  title,
+  empty,
+  rows,
+}: {
+  title: string;
+  empty: string;
+  rows: Array<{
+    id: string;
+    primary: string;
+    secondary: string;
+    spend: number | string | null;
+    currency: string;
+    leads: number | string | null;
+    enrolled: number | string | null;
+    roas: number | string | null;
+  }>;
+}) {
+  return (
+    <div className="rounded-xl border border-slate-100 bg-white p-4">
+      <div className="text-sm font-bold text-slate-800">
+        {title}
+      </div>
+
+      <div className="mt-3 overflow-x-auto">
+        <table className="min-w-full text-left text-xs">
+          <thead>
+            <tr className="border-b border-slate-100 uppercase tracking-wide text-slate-400">
+              <th className="px-2 py-2.5">Name</th>
+              <th className="px-2 py-2.5 text-right">Spend</th>
+              <th className="px-2 py-2.5 text-right">Leads</th>
+              <th className="px-2 py-2.5 text-right">Enrolled</th>
+              <th className="px-2 py-2.5 text-right">ROAS</th>
+            </tr>
+          </thead>
+
+          <tbody>
+            {rows.length === 0 ? (
+              <tr>
+                <td colSpan={5} className="px-2 py-8 text-center text-slate-400">
+                  {empty}
+                </td>
+              </tr>
+            ) : (
+              rows.map((row) => (
+                <tr
+                  key={row.id}
+                  className="border-b border-slate-50 last:border-0"
+                >
+                  <td className="max-w-[260px] px-2 py-2.5">
+                    <div className="truncate font-semibold text-slate-700">
+                      {row.primary}
+                    </div>
+                    <div className="mt-0.5 truncate text-[10px] text-slate-400">
+                      {row.secondary}
+                    </div>
+                  </td>
+
+                  <td className="px-2 py-2.5 text-right">
+                    {formatCurrency(row.spend, row.currency)}
+                  </td>
+                  <td className="px-2 py-2.5 text-right">
+                    {formatNumber(row.leads)}
+                  </td>
+                  <td className="px-2 py-2.5 text-right">
+                    {formatNumber(row.enrolled)}
+                  </td>
+                  <td className="px-2 py-2.5 text-right font-bold text-slate-700">
+                    {row.roas == null
+                      ? '—'
+                      : `${formatDecimal(row.roas, 2)}×`}
+                  </td>
+                </tr>
+              ))
+            )}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+function numberValue(
+  value: number | string | null | undefined
+) {
+  const parsed = Number(value ?? 0);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function formatNumber(
+  value: number | string | null | undefined
+) {
+  return new Intl.NumberFormat('en-IN', {
+    maximumFractionDigits: 0,
+  }).format(numberValue(value));
+}
+
+function formatCurrency(
+  value: number | string | null | undefined,
+  currency: string
+) {
+  try {
+    return new Intl.NumberFormat(
+      currency === 'INR' ? 'en-IN' : 'en-US',
+      {
+        style: 'currency',
+        currency,
+        maximumFractionDigits: 2,
+      }
+    ).format(numberValue(value));
+  } catch {
+    return `${currency} ${numberValue(value).toFixed(2)}`;
+  }
+}
+
+function formatDecimal(
+  value: number | string | null | undefined,
+  digits: number
+) {
+  return numberValue(value).toFixed(digits);
+}
+
+function percentOf(
+  numerator: number | string | null | undefined,
+  denominator: number | string | null | undefined
+) {
+  const n = numberValue(numerator);
+  const d = numberValue(denominator);
+
+  if (d <= 0) return '0%';
+
+  return `${((n / d) * 100).toFixed(1)}%`;
+}
+
+function formatDate(value: string | null | undefined) {
+  if (!value) return '—';
+
+  const date = new Date(`${value}T00:00:00`);
+
+  if (Number.isNaN(date.getTime())) {
+    return value;
+  }
+
+  return new Intl.DateTimeFormat('en-IN', {
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+  }).format(date);
+}
+
+function pretty(value: string) {
+  return value
+    .replaceAll('_', ' ')
+    .replace(/\b\w/g, (letter) => letter.toUpperCase());
 }
