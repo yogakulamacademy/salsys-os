@@ -26,6 +26,7 @@ type SearchParams = {
   campaign?: string | string[];
   from?: string | string[];
   to?: string | string[];
+  lead?: string | string[];
   page?: string | string[];
 };
 
@@ -108,9 +109,7 @@ export default async function PaidMediaLeadsPage({
   searchParams?: Promise<SearchParams>;
 }) {
   const resolved =
-    searchParams instanceof Promise
-      ? await searchParams
-      : searchParams ?? {};
+    (await searchParams) ?? {};
 
   const q = one(resolved.q);
   const platform = one(resolved.platform);
@@ -123,6 +122,7 @@ export default async function PaidMediaLeadsPage({
   const campaign = one(resolved.campaign);
   const from = one(resolved.from);
   const to = one(resolved.to);
+  const selectedLeadId = one(resolved.lead);
 
   const page = Math.max(
     1,
@@ -246,6 +246,67 @@ export default async function PaidMediaLeadsPage({
   const total =
     leadsResult.count ?? leads.length;
 
+  let selectedLead: PaidLead | null = null;
+  let selectedTouchpoints: Array<{
+    id: string;
+    event_type: string | null;
+    source: string | null;
+    medium: string | null;
+    campaign_name: string | null;
+    landing_page: string | null;
+    occurred_at: string | null;
+  }> = [];
+
+  if (selectedLeadId) {
+    const [
+      selectedLeadResult,
+      selectedTouchpointsResult,
+    ] = await Promise.all([
+      supabase
+        .from('v_paid_media_leads_ui')
+        .select('*')
+        .eq('lead_id', selectedLeadId)
+        .maybeSingle(),
+
+      supabase
+        .from('touchpoints')
+        .select(
+          'id,event_type,source,medium,campaign_name,landing_page,occurred_at'
+        )
+        .eq('lead_id', selectedLeadId)
+        .order('occurred_at', {
+          ascending: false,
+        })
+        .limit(8),
+    ]);
+
+    if (selectedLeadResult.error) {
+      throw new Error(
+        `Unable to load selected paid-media lead: ${selectedLeadResult.error.message}`
+      );
+    }
+
+    if (selectedTouchpointsResult.error) {
+      throw new Error(
+        `Unable to load selected lead journey: ${selectedTouchpointsResult.error.message}`
+      );
+    }
+
+    selectedLead =
+      (selectedLeadResult.data ?? null) as PaidLead | null;
+
+    selectedTouchpoints =
+      (selectedTouchpointsResult.data ?? []) as Array<{
+        id: string;
+        event_type: string | null;
+        source: string | null;
+        medium: string | null;
+        campaign_name: string | null;
+        landing_page: string | null;
+        occurred_at: string | null;
+      }>;
+  }
+
   const totalPages = Math.max(
     1,
     Math.ceil(total / PAGE_SIZE)
@@ -256,6 +317,55 @@ export default async function PaidMediaLeadsPage({
     toNumber(overview.facebook_leads) +
     toNumber(overview.meta_unspecified_leads);
 
+  const matchCoverage = percentOf(
+    overview.campaign_matched_leads,
+    overview.paid_media_leads
+  );
+
+  const allocatedCostCoverage = percentOf(
+    overview.leads_with_allocated_cost,
+    overview.paid_media_leads
+  );
+
+  const activeFilters = [
+    q
+      ? { key: 'q', label: `Search: ${q}` }
+      : null,
+    platform && platform !== 'all'
+      ? { key: 'platform', label: `Platform: ${pretty(platform)}` }
+      : null,
+    stage && stage !== 'all'
+      ? { key: 'stage', label: `Stage: ${pretty(stage)}` }
+      : null,
+    temperature && temperature !== 'all'
+      ? { key: 'temperature', label: `Temperature: ${pretty(temperature)}` }
+      : null,
+    payment && payment !== 'all'
+      ? { key: 'payment', label: `Payment: ${pretty(payment)}` }
+      : null,
+    match && match !== 'all'
+      ? { key: 'match', label: `Match: ${pretty(match)}` }
+      : null,
+    course
+      ? { key: 'course', label: `Course: ${course}` }
+      : null,
+    country
+      ? { key: 'country', label: `Country: ${country}` }
+      : null,
+    campaign
+      ? { key: 'campaign', label: `Campaign: ${campaign}` }
+      : null,
+    from
+      ? { key: 'from', label: `From: ${from}` }
+      : null,
+    to
+      ? { key: 'to', label: `To: ${to}` }
+      : null,
+  ].filter(Boolean) as Array<{
+    key: keyof SearchParams;
+    label: string;
+  }>;
+
   return (
     <>
       <PageHeader
@@ -263,7 +373,116 @@ export default async function PaidMediaLeadsPage({
         description="Individual Google, Facebook, Instagram and Meta leads connected to campaign attribution, CRM stage, payments, enrollment, revenue and allocated acquisition cost."
       />
 
-      <section className="mt-6 grid gap-3 sm:grid-cols-2 xl:grid-cols-6">
+      <section className="mt-6 overflow-x-auto">
+        <div className="inline-flex min-w-full gap-2 rounded-2xl border border-slate-100 bg-white p-2 shadow-sm">
+          <PlatformTab
+            href={platformHref(resolved, 'all')}
+            active={!platform || platform === 'all'}
+            label="All"
+            count={overview.paid_media_leads}
+          />
+
+          <PlatformTab
+            href={platformHref(resolved, 'google')}
+            active={platform === 'google'}
+            label="Google Ads"
+            count={overview.google_leads}
+          />
+
+          <PlatformTab
+            href={platformHref(resolved, 'instagram')}
+            active={platform === 'instagram'}
+            label="Instagram"
+            count={overview.instagram_leads}
+          />
+
+          <PlatformTab
+            href={platformHref(resolved, 'facebook')}
+            active={platform === 'facebook'}
+            label="Facebook"
+            count={overview.facebook_leads}
+          />
+
+          <PlatformTab
+            href={platformHref(resolved, 'meta')}
+            active={platform === 'meta'}
+            label="Meta"
+            count={overview.meta_unspecified_leads}
+          />
+        </div>
+      </section>
+
+      <section className="mt-4">
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="mr-1 text-xs font-bold uppercase tracking-wide text-slate-400">
+            Quick filters
+          </span>
+
+          <QuickFilter
+            href={quickHref(resolved, { temperature: 'hot' })}
+            active={temperature === 'hot'}
+            label="Hot"
+          />
+
+          <QuickFilter
+            href={quickHref(resolved, { payment: 'unpaid' })}
+            active={payment === 'unpaid'}
+            label="Unpaid"
+          />
+
+          <QuickFilter
+            href={quickHref(resolved, { stage: 'payment_pending' })}
+            active={stage === 'payment_pending'}
+            label="Payment Pending"
+          />
+
+          <QuickFilter
+            href={quickHref(resolved, { stage: 'enrolled' })}
+            active={stage === 'enrolled'}
+            label="Enrolled"
+          />
+
+          <QuickFilter
+            href={quickHref(resolved, { match: 'matched' })}
+            active={match === 'matched'}
+            label="Matched"
+          />
+
+          <QuickFilter
+            href={quickHref(resolved, { match: 'unmatched' })}
+            active={match === 'unmatched'}
+            label="Unmatched"
+          />
+        </div>
+
+        {activeFilters.length > 0 && (
+          <div className="mt-3 flex flex-wrap items-center gap-2">
+            <span className="mr-1 text-xs font-semibold text-slate-400">
+              Active:
+            </span>
+
+            {activeFilters.map((filter) => (
+              <ActiveFilterChip
+                key={`${filter.key}-${filter.label}`}
+                label={filter.label}
+                href={removeFilterHref(
+                  resolved,
+                  filter.key
+                )}
+              />
+            ))}
+
+            <Link
+              href="/paid-media-leads"
+              className="text-xs font-bold text-brand hover:underline"
+            >
+              Clear all
+            </Link>
+          </div>
+        )}
+      </section>
+
+      <section className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <SummaryCard
           icon={<Users size={17} />}
           label="Paid media leads"
@@ -300,6 +519,24 @@ export default async function PaidMediaLeadsPage({
           sub={`${formatNumber(
             overview.paid_leads
           )} with payment`}
+        />
+
+        <SummaryCard
+          icon={<Target size={17} />}
+          label="Campaign matched"
+          value={matchCoverage}
+          sub={`${formatNumber(
+            overview.campaign_matched_leads
+          )} deterministically matched`}
+        />
+
+        <SummaryCard
+          icon={<Filter size={17} />}
+          label="Allocated cost coverage"
+          value={allocatedCostCoverage}
+          sub={`${formatNumber(
+            overview.leads_with_allocated_cost
+          )} leads with campaign CPL`}
         />
 
         <SummaryCard
@@ -495,9 +732,9 @@ export default async function PaidMediaLeadsPage({
           </div>
         </div>
 
-        <div className="mt-4 overflow-x-auto">
+        <div className="mt-4 max-h-[720px] overflow-auto rounded-xl border border-slate-100">
           <table className="min-w-[1500px] text-left text-xs">
-            <thead>
+            <thead className="sticky top-0 z-10 bg-white/95 backdrop-blur">
               <tr className="border-b border-slate-100 uppercase tracking-wide text-slate-400">
                 <th className="px-3 py-2.5">Lead</th>
                 <th className="px-3 py-2.5">Platform</th>
@@ -529,7 +766,7 @@ export default async function PaidMediaLeadsPage({
                 leads.map((lead) => (
                   <tr
                     key={lead.lead_id}
-                    className="border-b border-slate-50 last:border-0"
+                    className="border-b border-slate-50 transition-colors duration-150 hover:bg-slate-50/80 last:border-0"
                   >
                     <td className="px-3 py-3">
                       <div className="font-semibold text-slate-800">
@@ -638,13 +875,25 @@ export default async function PaidMediaLeadsPage({
                     </td>
 
                     <td className="px-3 py-3 text-right">
-                      <Link
-                        href={`/leads/${lead.lead_id}`}
-                        className="inline-flex items-center gap-1 font-bold text-brand"
-                      >
-                        View
-                        <ArrowRight size={13} />
-                      </Link>
+                      <div className="flex items-center justify-end gap-2">
+                        <Link
+                          href={quickViewHref(
+                            resolved,
+                            lead.lead_id
+                          )}
+                          className="inline-flex rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-[11px] font-bold text-slate-600 transition-colors hover:bg-slate-50"
+                        >
+                          Quick view
+                        </Link>
+
+                        <Link
+                          href={`/leads/${lead.lead_id}`}
+                          className="inline-flex items-center gap-1 font-bold text-brand"
+                        >
+                          Open
+                          <ArrowRight size={13} />
+                        </Link>
+                      </div>
                     </td>
                   </tr>
                 ))
@@ -684,7 +933,412 @@ export default async function PaidMediaLeadsPage({
           </div>
         </div>
       </section>
+
+      {selectedLead && (
+        <>
+          <Link
+            href={closeQuickViewHref(resolved)}
+            aria-label="Close quick view"
+            className="fixed inset-0 z-40 bg-slate-950/20 backdrop-blur-[1px]"
+          />
+
+          <aside className="fixed inset-y-0 right-0 z-50 w-full max-w-[520px] overflow-y-auto border-l border-slate-200 bg-white shadow-2xl">
+            <div className="sticky top-0 z-10 border-b border-slate-100 bg-white/95 px-5 py-4 backdrop-blur">
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <div className="eyebrow">
+                    Paid media lead
+                  </div>
+
+                  <div className="mt-1 text-xl font-bold text-slate-900">
+                    {selectedLead.lead_name ||
+                      selectedLead.lead_code ||
+                      'Lead'}
+                  </div>
+
+                  <div className="mt-1 text-xs text-slate-400">
+                    {selectedLead.lead_code || '—'}
+                    {selectedLead.email
+                      ? ` · ${selectedLead.email}`
+                      : ''}
+                  </div>
+                </div>
+
+                <Link
+                  href={closeQuickViewHref(resolved)}
+                  className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-slate-200 text-lg font-medium text-slate-500 transition-colors hover:bg-slate-50"
+                  aria-label="Close"
+                >
+                  ×
+                </Link>
+              </div>
+
+              <div className="mt-4 flex flex-wrap gap-2">
+                <PlatformBadge
+                  platform={selectedLead.platform}
+                  label={selectedLead.platform_label}
+                />
+
+                <TemperatureBadge
+                  value={selectedLead.behaviour_temperature}
+                />
+
+                <PaymentBadge
+                  value={selectedLead.payment_status}
+                />
+
+                <span className="inline-flex rounded-full bg-slate-100 px-2 py-1 text-[10px] font-bold text-slate-600">
+                  {pretty(
+                    selectedLead.current_stage || '—'
+                  )}
+                </span>
+              </div>
+            </div>
+
+            <div className="space-y-4 p-5">
+              <DrawerSection title="Acquisition">
+                <DrawerRow
+                  label="Campaign"
+                  value={
+                    selectedLead.campaign_name || '—'
+                  }
+                />
+
+                <DrawerRow
+                  label="Campaign ID"
+                  value={
+                    selectedLead.campaign_id || '—'
+                  }
+                  mono
+                />
+
+                <DrawerRow
+                  label={
+                    selectedLead.group_type === 'ad_group'
+                      ? 'Ad group ID'
+                      : 'Ad set ID'
+                  }
+                  value={
+                    selectedLead.ad_group_or_adset_id ||
+                    '—'
+                  }
+                  mono
+                />
+
+                <DrawerRow
+                  label="Ad ID"
+                  value={selectedLead.ad_id || '—'}
+                  mono
+                />
+
+                <DrawerRow
+                  label="Campaign match"
+                  value={
+                    selectedLead.campaign_matched
+                      ? 'Matched'
+                      : 'Unmatched'
+                  }
+                />
+
+                <DrawerRow
+                  label="First paid visit"
+                  value={formatDateTime(
+                    selectedLead.first_paid_touch_at
+                  )}
+                />
+
+                <DrawerRow
+                  label="Landing page"
+                  value={
+                    selectedLead.landing_page || '—'
+                  }
+                />
+              </DrawerSection>
+
+              <DrawerSection title="Admissions">
+                <DrawerRow
+                  label="Course"
+                  value={
+                    selectedLead.course_name || '—'
+                  }
+                />
+
+                <DrawerRow
+                  label="Preferred location"
+                  value={
+                    selectedLead.preferred_location ||
+                    '—'
+                  }
+                />
+
+                <DrawerRow
+                  label="Preferred month"
+                  value={
+                    selectedLead.preferred_month ||
+                    '—'
+                  }
+                />
+
+                <DrawerRow
+                  label="Country"
+                  value={
+                    selectedLead.country || '—'
+                  }
+                />
+
+                <DrawerRow
+                  label="Engagement score"
+                  value={String(
+                    toNumber(
+                      selectedLead.engagement_score
+                    )
+                  )}
+                />
+              </DrawerSection>
+
+              <DrawerSection title="Revenue & acquisition cost">
+                <DrawerRow
+                  label="Revenue · INR"
+                  value={formatMoney(
+                    selectedLead.revenue_inr,
+                    'INR'
+                  )}
+                />
+
+                <DrawerRow
+                  label="Revenue · USD"
+                  value={formatMoney(
+                    selectedLead.revenue_usd,
+                    'USD'
+                  )}
+                />
+
+                <DrawerRow
+                  label="Allocated acquisition cost"
+                  value={
+                    selectedLead.allocated_acquisition_cost ==
+                    null
+                      ? '—'
+                      : formatMoney(
+                          selectedLead.allocated_acquisition_cost,
+                          selectedLead.acquisition_currency ||
+                            'INR'
+                        )
+                  }
+                />
+
+                <DrawerRow
+                  label="Cost method"
+                  value={pretty(
+                    selectedLead.acquisition_cost_method ||
+                      'unavailable'
+                  )}
+                />
+
+                <DrawerRow
+                  label="Campaign ROAS · 30d"
+                  value={
+                    selectedLead.campaign_roas_30d ==
+                    null
+                      ? '—'
+                      : `${toNumber(
+                          selectedLead.campaign_roas_30d
+                        ).toFixed(2)}×`
+                  }
+                />
+              </DrawerSection>
+
+              <DrawerSection title="Recent journey">
+                {selectedTouchpoints.length === 0 ? (
+                  <div className="rounded-lg bg-slate-50 px-3 py-4 text-xs text-slate-400">
+                    No recent touchpoints available.
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    {selectedTouchpoints.map(
+                      (point) => (
+                        <div
+                          key={point.id}
+                          className="rounded-xl border border-slate-100 bg-slate-50 px-3 py-3"
+                        >
+                          <div className="flex items-start justify-between gap-3">
+                            <div>
+                              <div className="text-xs font-bold text-slate-700">
+                                {pretty(
+                                  point.event_type ||
+                                    'activity'
+                                )}
+                              </div>
+
+                              <div className="mt-1 text-[11px] text-slate-500">
+                                {[
+                                  point.source,
+                                  point.medium,
+                                  point.campaign_name,
+                                ]
+                                  .filter(Boolean)
+                                  .join(' · ') || '—'}
+                              </div>
+
+                              {point.landing_page && (
+                                <div className="mt-1 max-w-[340px] truncate text-[10px] text-slate-400">
+                                  {point.landing_page}
+                                </div>
+                              )}
+                            </div>
+
+                            <div className="shrink-0 text-[10px] text-slate-400">
+                              {formatDateTime(
+                                point.occurred_at
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      )
+                    )}
+                  </div>
+                )}
+              </DrawerSection>
+
+              <Link
+                href={`/leads/${selectedLead.lead_id}`}
+                className="btn-primary w-full justify-center"
+              >
+                Open full lead
+                <ArrowRight size={15} />
+              </Link>
+            </div>
+          </aside>
+        </>
+      )}
     </>
+  );
+}
+
+function DrawerSection({
+  title,
+  children,
+}: {
+  title: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <section className="rounded-2xl border border-slate-100 bg-white p-4 shadow-sm">
+      <div className="text-sm font-bold text-slate-800">
+        {title}
+      </div>
+
+      <div className="mt-3 space-y-2">
+        {children}
+      </div>
+    </section>
+  );
+}
+
+function DrawerRow({
+  label,
+  value,
+  mono = false,
+}: {
+  label: string;
+  value: string;
+  mono?: boolean;
+}) {
+  return (
+    <div className="flex items-start justify-between gap-4 border-b border-slate-50 py-2 last:border-0">
+      <span className="text-xs text-slate-400">
+        {label}
+      </span>
+
+      <span
+        className={`max-w-[280px] text-right text-xs font-semibold text-slate-700 ${
+          mono ? 'font-mono text-[11px]' : ''
+        }`}
+      >
+        {value}
+      </span>
+    </div>
+  );
+}
+
+function QuickFilter({
+  href,
+  active,
+  label,
+}: {
+  href: string;
+  active: boolean;
+  label: string;
+}) {
+  return (
+    <Link
+      href={href}
+      className={`inline-flex rounded-full border px-3 py-1.5 text-xs font-bold transition-all duration-150 ${
+        active
+          ? 'border-slate-900 bg-slate-900 text-white shadow-sm'
+          : 'border-slate-200 bg-white text-slate-600 hover:-translate-y-0.5 hover:border-slate-300 hover:bg-slate-50'
+      }`}
+    >
+      {label}
+    </Link>
+  );
+}
+
+function ActiveFilterChip({
+  label,
+  href,
+}: {
+  label: string;
+  href: string;
+}) {
+  return (
+    <Link
+      href={href}
+      title={`Remove ${label}`}
+      className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-3 py-1.5 text-xs font-semibold text-slate-600 transition-colors hover:bg-slate-200"
+    >
+      <span>{label}</span>
+      <span
+        aria-hidden="true"
+        className="text-slate-400"
+      >
+        ×
+      </span>
+    </Link>
+  );
+}
+
+function PlatformTab({
+  href,
+  active,
+  label,
+  count,
+}: {
+  href: string;
+  active: boolean;
+  label: string;
+  count: number | string | null;
+}) {
+  return (
+    <Link
+      href={href}
+      className={`inline-flex min-w-[132px] items-center justify-between gap-3 rounded-xl px-4 py-3 text-xs font-bold transition-all duration-200 ${
+        active
+          ? 'bg-slate-900 text-white shadow-sm'
+          : 'bg-slate-50 text-slate-600 hover:-translate-y-0.5 hover:bg-slate-100'
+      }`}
+    >
+      <span>{label}</span>
+      <span
+        className={`rounded-full px-2 py-0.5 text-[10px] ${
+          active
+            ? 'bg-white/15 text-white'
+            : 'bg-white text-slate-500'
+        }`}
+      >
+        {formatNumber(count)}
+      </span>
+    </Link>
   );
 }
 
@@ -700,7 +1354,7 @@ function SummaryCard({
   sub: string;
 }) {
   return (
-    <div className="rounded-xl border border-slate-100 bg-white p-4">
+    <div className="rounded-xl border border-slate-100 bg-white p-4 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md">
       <div className="flex items-center gap-2 text-xs font-semibold text-slate-400">
         {icon}
         {label}
@@ -998,6 +1652,161 @@ function pretty(value: string) {
     );
 }
 
+function quickViewHref(
+  params: SearchParams,
+  leadId: string
+) {
+  const next = new URLSearchParams();
+
+  for (const [key, raw] of Object.entries(params)) {
+    if (key === 'lead') continue;
+
+    const value = one(raw);
+
+    if (value) {
+      next.set(key, value);
+    }
+  }
+
+  next.set('lead', leadId);
+
+  return `/paid-media-leads?${next.toString()}`;
+}
+
+function closeQuickViewHref(
+  params: SearchParams
+) {
+  const next = new URLSearchParams();
+
+  for (const [key, raw] of Object.entries(params)) {
+    if (key === 'lead') continue;
+
+    const value = one(raw);
+
+    if (value) {
+      next.set(key, value);
+    }
+  }
+
+  const query = next.toString();
+
+  return query
+    ? `/paid-media-leads?${query}`
+    : '/paid-media-leads';
+}
+
+function quickHref(
+  params: SearchParams,
+  patch: Partial<Record<keyof SearchParams, string>>
+) {
+  const next = new URLSearchParams();
+
+  for (const [key, raw] of Object.entries(params)) {
+    if (
+      key === 'page' ||
+      key === 'lead'
+    ) {
+      continue;
+    }
+
+    const value = one(raw);
+
+    if (value) {
+      next.set(key, value);
+    }
+  }
+
+  for (const [key, value] of Object.entries(patch)) {
+    if (value) {
+      next.set(key, value);
+    } else {
+      next.delete(key);
+    }
+  }
+
+  next.delete('page');
+
+  const query = next.toString();
+
+  return query
+    ? `/paid-media-leads?${query}`
+    : '/paid-media-leads';
+}
+
+function removeFilterHref(
+  params: SearchParams,
+  keyToRemove: keyof SearchParams
+) {
+  const next = new URLSearchParams();
+
+  for (const [key, raw] of Object.entries(params)) {
+    if (
+      key === keyToRemove ||
+      key === 'page' ||
+      key === 'lead'
+    ) {
+      continue;
+    }
+
+    const value = one(raw);
+
+    if (value) {
+      next.set(key, value);
+    }
+  }
+
+  const query = next.toString();
+
+  return query
+    ? `/paid-media-leads?${query}`
+    : '/paid-media-leads';
+}
+
+function percentOf(
+  numerator: number | string | null | undefined,
+  denominator: number | string | null | undefined
+) {
+  const n = toNumber(numerator);
+  const d = toNumber(denominator);
+
+  if (d <= 0) return '0%';
+
+  return `${((n / d) * 100).toFixed(1)}%`;
+}
+
+function platformHref(
+  params: SearchParams,
+  platform: string
+) {
+  const next = new URLSearchParams();
+
+  for (const [key, raw] of Object.entries(params)) {
+    if (
+      key === 'platform' ||
+      key === 'page' ||
+      key === 'lead'
+    ) {
+      continue;
+    }
+
+    const value = one(raw);
+
+    if (value) {
+      next.set(key, value);
+    }
+  }
+
+  if (platform !== 'all') {
+    next.set('platform', platform);
+  }
+
+  const query = next.toString();
+
+  return query
+    ? `/paid-media-leads?${query}`
+    : '/paid-media-leads';
+}
+
 function pageHref(
   params: SearchParams,
   page: number
@@ -1006,7 +1815,12 @@ function pageHref(
     new URLSearchParams();
 
   for (const [key, raw] of Object.entries(params)) {
-    if (key === 'page') continue;
+    if (
+      key === 'page' ||
+      key === 'lead'
+    ) {
+      continue;
+    }
 
     const value = one(raw);
 
