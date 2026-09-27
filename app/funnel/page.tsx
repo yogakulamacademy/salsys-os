@@ -23,6 +23,9 @@ import {
   GoogleAdsBusinessPerformance,
 } from '@/components/google-ads-business-performance';
 
+import {
+  MetaAdsBusinessPerformance,
+} from '@/components/meta-ads-business-performance';
 
 type FunnelOverview = {
   visitors: number | string | null;
@@ -640,6 +643,7 @@ export default async function FunnelPage() {
 
 
       <GoogleAdsBusinessPerformance />
+      <MetaAdsBusinessPerformance />
 
 
       <section
