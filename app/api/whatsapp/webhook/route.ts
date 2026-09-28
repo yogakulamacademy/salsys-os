@@ -135,16 +135,23 @@ export async function POST(
         appSecret
       )
     ) {
-      return NextResponse.json(
-        {
-          ok: false,
-          error:
-            'Invalid webhook signature',
-        },
-        {
-          status: 401,
-        }
-      );
+      const bodyHash = crypto
+  .createHash('sha256')
+  .update(rawBody, 'utf8')
+  .digest('hex');
+
+return NextResponse.json(
+  {
+    ok: false,
+    error: 'Invalid webhook signature',
+    debug: {
+      bodyHash,
+      bodyLength: Buffer.byteLength(rawBody, 'utf8'),
+      receivedSignatureLength: signature?.length ?? 0,
+    },
+  },
+  { status: 401 }
+);
     }
 
     const payload =
