@@ -82,6 +82,10 @@ import {
 
 
 
+  logAdmissionContactAction,
+
+
+
   snoozeAdmissionFollowUpAction,
 
 
@@ -1893,7 +1897,15 @@ export default async function AdmissionsDeskPage({
 
 
 
-              : 'Admissions Desk updated.'}
+              : notice === 'contact-logged'
+
+
+
+                ? 'Outbound contact logged. Response SLA and lead history were updated.'
+
+
+
+                : 'Admissions Desk updated.'}
 
 
 
@@ -3636,6 +3648,11 @@ function ResponseSlaPanel({
                       contact={contact}
                       compact
                     />
+
+                    <ContactLogActions
+                      leadId={row.lead_id}
+                      contact={contact}
+                    />
                   </div>
                 </div>
               );
@@ -4090,6 +4107,114 @@ function ContactActions({
           <Phone size={13} />
           Call
         </a>
+      )}
+    </div>
+  );
+}
+
+
+function ContactLogActions({
+  leadId,
+  contact,
+}: {
+  leadId: string;
+  contact: LeadContactRow | null;
+}) {
+  const canWhatsApp =
+    Boolean(
+      contact?.whatsapp ||
+      contact?.phone
+    );
+
+  const canEmail =
+    Boolean(
+      contact?.email
+    );
+
+  const canCall =
+    Boolean(
+      contact?.phone ||
+      contact?.whatsapp
+    );
+
+  if (
+    !canWhatsApp &&
+    !canEmail &&
+    !canCall
+  ) {
+    return null;
+  }
+
+  return (
+    <div className="flex flex-wrap items-center gap-1.5">
+      <span className="text-[9px] font-semibold uppercase tracking-wide text-slate-400">
+        After sending
+      </span>
+
+      {canWhatsApp && (
+        <form action={logAdmissionContactAction}>
+          <input
+            type="hidden"
+            name="lead_id"
+            value={leadId}
+          />
+          <input
+            type="hidden"
+            name="channel"
+            value="whatsapp"
+          />
+          <button
+            type="submit"
+            className="inline-flex rounded-lg border border-emerald-200 bg-white px-2 py-1 text-[9px] font-bold text-emerald-700 transition-colors hover:bg-emerald-50"
+            title="Log a WhatsApp reply after you have actually sent it"
+          >
+            Log WA sent
+          </button>
+        </form>
+      )}
+
+      {canEmail && (
+        <form action={logAdmissionContactAction}>
+          <input
+            type="hidden"
+            name="lead_id"
+            value={leadId}
+          />
+          <input
+            type="hidden"
+            name="channel"
+            value="email"
+          />
+          <button
+            type="submit"
+            className="inline-flex rounded-lg border border-sky-200 bg-white px-2 py-1 text-[9px] font-bold text-sky-700 transition-colors hover:bg-sky-50"
+            title="Log an email reply after you have actually sent it"
+          >
+            Log email sent
+          </button>
+        </form>
+      )}
+
+      {canCall && (
+        <form action={logAdmissionContactAction}>
+          <input
+            type="hidden"
+            name="lead_id"
+            value={leadId}
+          />
+          <input
+            type="hidden"
+            name="channel"
+            value="phone"
+          />
+          <button
+            type="submit"
+            className="inline-flex rounded-lg border border-slate-200 bg-white px-2 py-1 text-[9px] font-bold text-slate-600 transition-colors hover:bg-slate-50"
+            title="Log the call after it was actually completed"
+          >
+            Log call
+          </button>
+        </form>
       )}
     </div>
   );
@@ -4769,6 +4894,17 @@ function PriorityLeadCard({
           <ContactActions
             contact={contact}
             compact
+          />
+
+
+
+
+
+
+
+          <ContactLogActions
+            leadId={row.lead_id}
+            contact={contact}
           />
 
 
