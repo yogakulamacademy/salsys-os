@@ -14,66 +14,80 @@ import {
   GitBranch,
   LineChart,
   ListTodo,
+  Menu,
   MessageSquareText,
   RefreshCw,
   Search,
   Settings,
-  Sparkles,
   Tags,
   Target,
   Megaphone,
   ClipboardCheck,
+  X,
 } from 'lucide-react';
-import { ReactNode, useState } from 'react';
+import { type ComponentType, type ReactNode, useEffect, useMemo, useState } from 'react';
 import { signOutAction } from '@/app/actions/auth';
 import { LiveRefresh } from '@/components/live-refresh';
 import { ThemeToggle } from '@/components/theme-toggle';
 
+type NavItem = {
+  href: string;
+  label: string;
+  icon: ComponentType<{
+    size?: number | string;
+    strokeWidth?: number;
+    className?: string;
+  }>;
+};
 
-const nav = [
-  { href: '/dashboard', label: 'Dashboard', icon: Gauge },
+type NavGroup = {
+  label: string;
+  items: NavItem[];
+};
 
-  { href: '/leads', label: 'Leads', icon: ContactRound },
-
-  { href: '/pipeline', label: 'Pipeline', icon: Boxes },
-
-  { href: '/conversations', label: 'Conversations', icon: MessageSquareText },
-
-  { href: '/follow-ups', label: 'Follow-ups', icon: ListTodo },
-
-  { href: '/campaigns', label: 'Campaigns', icon: Target },
-
-  { href: '/attribution', label: 'Attribution', icon: LineChart },
-
-  { href: '/tracking', label: 'Tracking', icon: Tags },
-
-  { href: '/analytics', label: 'Analytics', icon: BarChart3 },
-
-  { href: '/funnel', label: 'Funnel', icon: GitBranch },
-
-  { href: '/re-engaged', label: 'Re-engaged Leads', icon: RefreshCw },
-
-  { href: '/seo', label: 'SEO', icon: FileSearch },
-
-  { href: '/revenue', label: 'Revenue Forecast', icon: CircleDollarSign },
+const navGroups: NavGroup[] = [
   {
-  href: '/paid-media-leads',
-  label: 'Paid Media Leads',
-  icon: Megaphone,
-},
-{
-  href: '/admissions',
-  label: 'Admissions Desk',
-  icon: ClipboardCheck,
-},
-  { href: '/settings', label: 'Settings', icon: Settings },
-  
+    label: 'Workspace',
+    items: [
+      { href: '/dashboard', label: 'Dashboard', icon: Gauge },
+      { href: '/admissions', label: 'Admissions Desk', icon: ClipboardCheck },
+      { href: '/leads', label: 'Leads', icon: ContactRound },
+      { href: '/pipeline', label: 'Pipeline', icon: Boxes },
+      { href: '/conversations', label: 'Conversations', icon: MessageSquareText },
+      { href: '/follow-ups', label: 'Follow-ups', icon: ListTodo },
+    ],
+  },
+  {
+    label: 'Growth',
+    items: [
+      { href: '/campaigns', label: 'Campaigns', icon: Target },
+      { href: '/paid-media-leads', label: 'Paid Media Leads', icon: Megaphone },
+      { href: '/attribution', label: 'Attribution', icon: LineChart },
+      { href: '/re-engaged', label: 'Re-engaged Leads', icon: RefreshCw },
+      { href: '/seo', label: 'SEO', icon: FileSearch },
+    ],
+  },
+  {
+    label: 'Intelligence',
+    items: [
+      { href: '/analytics', label: 'Analytics', icon: BarChart3 },
+      { href: '/funnel', label: 'Funnel', icon: GitBranch },
+      { href: '/revenue', label: 'Revenue Forecast', icon: CircleDollarSign },
+      { href: '/tracking', label: 'Tracking', icon: Tags },
+    ],
+  },
+  {
+    label: 'System',
+    items: [{ href: '/settings', label: 'Settings', icon: Settings }],
+  },
 ];
+
+const nav = navGroups.flatMap((group) => group.items);
 
 function BrandMark() {
   return (
-    <div className="grid h-10 w-10 place-items-center rounded-2xl bg-brand text-white shadow-sm">
-      <span className="text-sm font-black tracking-tight">YK</span>
+    <div className="brand-mark">
+      <span>YK</span>
     </div>
   );
 }
@@ -81,41 +95,78 @@ function BrandMark() {
 export function AppShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const [mobileOpen, setMobileOpen] = useState(false);
-  const current =
-    nav.find((item) => pathname.startsWith(item.href))?.label ??
-    'Growth CRM';
+
+  const current = useMemo(
+    () =>
+      nav.find((item) => pathname.startsWith(item.href))?.label ??
+      'Growth CRM',
+    [pathname]
+  );
+
   const mock = process.env.NEXT_PUBLIC_USE_MOCK_DATA !== 'false';
 
-  if (pathname.startsWith('/login')) return <>{children}</>;
+  useEffect(() => {
+    setMobileOpen(false);
+  }, [pathname]);
+
+  useEffect(() => {
+    if (!mobileOpen) return;
+
+    const previous = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+
+    return () => {
+      document.body.style.overflow = previous;
+    };
+  }, [mobileOpen]);
+
+  if (pathname.startsWith('/login')) {
+    return <>{children}</>;
+  }
 
   return (
-    <div className="min-h-screen lg:grid lg:grid-cols-[250px_1fr]">
+    <div className="app-shell">
       <LiveRefresh enabled={!mock} />
 
+      {mobileOpen && (
+        <button
+          type="button"
+          className="shell-backdrop lg:hidden"
+          aria-label="Close navigation"
+          onClick={() => setMobileOpen(false)}
+        />
+      )}
+
       <aside
-        className={`${
-          mobileOpen ? 'flex' : 'hidden'
-        } fixed inset-y-0 left-0 z-40 h-screen w-[250px] flex-col border-r border-slate-200 bg-white p-4 lg:sticky lg:top-0 lg:flex lg:w-auto`}
+        className={`shell-sidebar ${
+          mobileOpen ? 'shell-sidebar-open' : ''
+        }`}
       >
-        <div className="flex items-center gap-3 px-2 py-2">
+        <div className="sidebar-brand">
           <BrandMark />
 
-          <div>
-            <div className="font-bold leading-tight text-slate-900">
+          <div className="min-w-0">
+            <div className="truncate text-sm font-bold text-slate-950">
               Yogakulam
             </div>
-
-            <div className="text-xs font-medium text-slate-400">
+            <div className="mt-0.5 text-[11px] font-medium text-slate-400">
               Growth CRM · v0.7
             </div>
           </div>
+
+          <button
+            type="button"
+            className="sidebar-close lg:hidden"
+            onClick={() => setMobileOpen(false)}
+            aria-label="Close navigation"
+          >
+            <X size={17} />
+          </button>
         </div>
 
         <div
-          className={`mt-6 rounded-2xl border p-3 ${
-            mock
-              ? 'border-orange-100 bg-orange-50/70'
-              : 'border-emerald-100 bg-emerald-50/70'
+          className={`sidebar-status ${
+            mock ? 'sidebar-status-dev' : 'sidebar-status-live'
           }`}
         >
           <div
@@ -123,136 +174,141 @@ export function AppShell({ children }: { children: ReactNode }) {
               mock ? 'text-orange-700' : 'text-emerald-700'
             }`}
           >
-            <Sparkles size={14} />
+            <span className="relative flex h-2 w-2">
+              <span
+                className={`absolute inline-flex h-full w-full animate-ping rounded-full opacity-50 ${
+                  mock ? 'bg-orange-400' : 'bg-emerald-400'
+                }`}
+              />
+              <span
+                className={`relative inline-flex h-2 w-2 rounded-full ${
+                  mock ? 'bg-orange-500' : 'bg-emerald-500'
+                }`}
+              />
+            </span>
 
             {mock ? 'Development mode' : 'Supabase live'}
           </div>
 
           <p
-            className={`mt-1.5 text-xs leading-5 ${
-              mock ? 'text-orange-700/75' : 'text-emerald-700/75'
+            className={`mt-1.5 text-[11px] leading-5 ${
+              mock
+                ? 'text-orange-700/75'
+                : 'text-emerald-700/75'
             }`}
           >
             {mock
               ? 'Using fictional CRM data until Supabase is connected.'
-              : 'Authenticated CRM data is persistent and live-synced.'}
+              : 'Authenticated data is persistent and live-synced.'}
           </p>
         </div>
 
-        <nav className="mt-5 min-h-0 flex-1 space-y-1 overflow-y-auto pb-2">
-          {nav.map((item) => {
-            const Icon = item.icon;
-            const active = pathname.startsWith(item.href);
+        <nav className="sidebar-nav">
+          {navGroups.map((group) => (
+            <div key={group.label} className="sidebar-group">
+              <div className="sidebar-group-label">{group.label}</div>
 
-            return (
-              <Link
-                key={item.href}
-                href={item.href}
-                onClick={() => setMobileOpen(false)}
-                className={`flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold transition ${
-                  active
-                    ? 'bg-brand text-white shadow-sm'
-                    : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
-                }`}
-              >
-                <Icon size={18} strokeWidth={1.9} />
+              <div className="space-y-1">
+                {group.items.map((item) => {
+                  const Icon = item.icon;
+                  const active = pathname.startsWith(item.href);
 
-                {item.label}
-              </Link>
-            );
-          })}
+                  return (
+                    <Link
+                      key={item.href}
+                      href={item.href}
+                      className={`nav-item ${active ? 'nav-item-active' : ''}`}
+                    >
+                      <span className="nav-icon-wrap">
+                        <Icon size={17} strokeWidth={1.9} />
+                      </span>
+
+                      <span className="min-w-0 flex-1 truncate">
+                        {item.label}
+                      </span>
+
+                      {active && <span className="nav-active-dot" />}
+                    </Link>
+                  );
+                })}
+              </div>
+            </div>
+          ))}
         </nav>
 
-        <div className="mt-4 shrink-0 rounded-2xl border border-slate-200 bg-white p-3">
-          <div className="flex items-center gap-3">
-            <div className="grid h-9 w-9 place-items-center rounded-full bg-slate-100 text-xs font-bold text-slate-700">
-              AD
+        <div className="sidebar-user">
+          <div className="user-avatar">AD</div>
+
+          <div className="min-w-0 flex-1">
+            <div className="truncate text-sm font-semibold text-slate-800">
+              CRM User
             </div>
-
-            <div className="min-w-0 flex-1">
-              <div className="truncate text-sm font-semibold text-slate-800">
-                CRM User
-              </div>
-
-              <div className="text-xs text-slate-400">
-                {mock ? 'Development access' : 'Authenticated'}
-              </div>
+            <div className="mt-0.5 text-[11px] text-slate-400">
+              {mock ? 'Development access' : 'Authenticated'}
             </div>
-
-            {mock ? (
-              <ChevronDown size={16} className="text-slate-400" />
-            ) : (
-              <form action={signOutAction}>
-                <button
-                  type="submit"
-                  className="text-xs font-semibold text-slate-500 hover:text-brand"
-                >
-                  Sign out
-                </button>
-              </form>
-            )}
           </div>
+
+          {mock ? (
+            <ChevronDown size={16} className="text-slate-400" />
+          ) : (
+            <form action={signOutAction}>
+              <button type="submit" className="sidebar-signout">
+                Sign out
+              </button>
+            </form>
+          )}
         </div>
       </aside>
 
-      <div className="min-w-0">
-        <header className="sticky top-0 z-30 flex h-16 items-center gap-3 border-b border-slate-200/80 bg-white/90 px-4 backdrop-blur lg:px-7">
+      <div className="shell-content">
+        <header className="shell-header">
           <button
-            className="btn-secondary !px-3 lg:hidden"
-            onClick={() => setMobileOpen((v) => !v)}
+            type="button"
+            className="header-icon-btn lg:hidden"
+            onClick={() => setMobileOpen((value) => !value)}
             aria-label="Toggle navigation"
           >
-            ☰
+            <Menu size={18} />
           </button>
 
           <div className="min-w-0">
-            <div className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-400">
-              Yogakulam Academy
-            </div>
-
-            <div className="truncate text-sm font-bold text-slate-800">
-              {current}
-            </div>
+            <div className="header-eyebrow">Yogakulam Academy</div>
+            <div className="header-title">{current}</div>
           </div>
 
-          <form
-            action="/leads"
-            method="get"
-            className="ml-auto hidden w-full max-w-[360px] items-center rounded-xl border border-slate-200 bg-slate-50 px-3 sm:flex"
-          >
-            <Search size={16} className="text-slate-400" />
-
+          <form action="/leads" method="get" className="global-search">
+            <Search size={15} className="text-slate-400" />
             <input
               name="q"
-              className="w-full bg-transparent px-2 py-2.5 text-sm outline-none placeholder:text-slate-400"
-              placeholder="Search lead, course or country…"
+              placeholder="Search lead, course or country..."
+              aria-label="Search leads"
             />
-
-            <kbd className="rounded border border-slate-200 bg-white px-1.5 py-0.5 text-[10px] text-slate-400">
-              Enter
-            </kbd>
+            <kbd>Enter</kbd>
           </form>
 
-          <ThemeToggle />
+          <div className="header-actions">
+            <ThemeToggle />
 
-          <button
-            className="grid h-10 w-10 place-items-center rounded-xl border border-slate-200 bg-white text-slate-500 hover:bg-slate-50"
-            aria-label="Notifications"
-          >
-            <Bell size={18} />
-          </button>
+            <button
+              type="button"
+              className="header-icon-btn"
+              aria-label="Notifications"
+            >
+              <Bell size={17} />
+              <span className="notification-dot" />
+            </button>
 
-          <Link
-            href="/leads/new"
-            className="btn-primary hidden sm:inline-flex"
-          >
-            <ContactRound size={16} />
-            Add lead
-          </Link>
+            <Link href="/leads/new" className="btn-primary hidden sm:inline-flex">
+              <ContactRound size={16} />
+              Add lead
+            </Link>
+          </div>
         </header>
 
-        <main className="mx-auto w-full max-w-[1600px] p-4 sm:p-6 lg:p-7">
-          {children}
+        <main className="shell-main">
+          <div key={pathname} className="page-transition">
+            {children}
+          </div>
         </main>
       </div>
     </div>

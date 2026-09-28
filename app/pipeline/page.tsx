@@ -1,34 +1,159 @@
 import Link from 'next/link';
-import { PageHeader, StageBadge } from '@/components/ui';
+import {
+  ArrowRight,
+  BadgeCheck,
+  CircleDollarSign,
+  ContactRound,
+  Flame,
+} from 'lucide-react';
+import { PipelineBoard } from '@/components/pipeline-board';
+import { PipelineInsights } from '@/components/pipeline-insights';
+import { PageHeader, StatCard } from '@/components/ui';
 import { getLeads } from '@/lib/data';
-import { LeadStage } from '@/types/crm';
-
-const columns: Array<{ stage: LeadStage; label: string }> = [
-  { stage: 'new', label: 'New' },
-  { stage: 'contacted', label: 'Contacted' },
-  { stage: 'engaged', label: 'Engaged' },
-  { stage: 'qualified', label: 'Qualified' },
-  { stage: 'high_intent', label: 'High Intent' },
-  { stage: 'payment_pending', label: 'Payment Pending' },
-];
 
 export default async function PipelinePage() {
   const leads = await getLeads();
-  return <>
-    <PageHeader eyebrow="Admissions funnel" title="Pipeline" description="A stage-based view of active leads. Open a lead to move stages through the audited Supabase stage function." actions={<button className="btn-secondary">Active leads only</button>} />
-    <div className="overflow-x-auto pb-4">
-      <div className="grid min-w-[1420px] grid-cols-6 gap-3">
-        {columns.map(({ stage, label }) => {
-          const items = leads.filter((l) => l.stage === stage);
-          return <div key={stage} className="rounded-2xl border border-slate-200 bg-slate-100/70 p-3">
-            <div className="mb-3 flex items-center justify-between"><div className="text-sm font-bold text-slate-800">{label}</div><span className="rounded-full bg-white px-2 py-0.5 text-xs font-bold text-slate-500">{items.length}</span></div>
-            <div className="space-y-2.5">
-              {items.length === 0 && <div className="rounded-xl border border-dashed border-slate-300 bg-white/60 p-4 text-center text-xs text-slate-400">No lead</div>}
-              {items.map((lead) => <Link key={lead.id} href={`/leads/${lead.id}`} className="block rounded-xl border border-slate-200 bg-white p-3.5 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md"><div className="flex items-start justify-between gap-2"><div className="font-semibold text-slate-900">{lead.name}</div><div className="h-2 w-2 shrink-0 rounded-full bg-orange-400" /></div><div className="mt-1 text-xs text-slate-400">{lead.country} · {lead.location}</div><div className="mt-3 line-clamp-2 text-xs font-medium leading-5 text-slate-600">{lead.course}</div><div className="mt-3 flex items-center justify-between"><span className="text-[11px] font-semibold text-slate-400">{lead.currentContactChannel}</span><StageBadge stage={lead.stage} /></div></Link>)}
-            </div>
-          </div>;
-        })}
+
+  const activeStages = [
+    'new',
+    'contacted',
+    'engaged',
+    'qualified',
+    'high_intent',
+    'payment_pending',
+  ];
+
+  const activeLeads = leads.filter((lead) =>
+    activeStages.includes(lead.stage)
+  );
+
+  const qualifiedPlus = leads.filter((lead) =>
+    ['qualified', 'high_intent', 'payment_pending', 'enrolled'].includes(
+      lead.stage
+    )
+  ).length;
+
+  const highIntent = leads.filter(
+    (lead) => lead.stage === 'high_intent'
+  ).length;
+
+  const paymentPending = leads.filter(
+    (lead) => lead.stage === 'payment_pending'
+  ).length;
+
+  const enrolled = leads.filter(
+    (lead) => lead.stage === 'enrolled'
+  ).length;
+
+  const insightData = [
+    {
+      stage: 'New',
+      leads: leads.filter((lead) => lead.stage === 'new').length,
+    },
+    {
+      stage: 'Contacted',
+      leads: leads.filter((lead) => lead.stage === 'contacted').length,
+    },
+    {
+      stage: 'Engaged',
+      leads: leads.filter((lead) => lead.stage === 'engaged').length,
+    },
+    {
+      stage: 'Qualified',
+      leads: leads.filter((lead) => lead.stage === 'qualified').length,
+    },
+    {
+      stage: 'High intent',
+      leads: highIntent,
+    },
+    {
+      stage: 'Payment',
+      leads: paymentPending,
+    },
+  ];
+
+  const boardLeads = activeLeads.map((lead) => ({
+    id: lead.id,
+    name: lead.name,
+    stage: lead.stage,
+    country: lead.country ?? '',
+    location: lead.location ?? '',
+    course: lead.course ?? '',
+    currentContactChannel: lead.currentContactChannel ?? 'unknown',
+  }));
+
+  return (
+    <>
+      <PageHeader
+        eyebrow="Admissions funnel"
+        title="Pipeline"
+        description="A live operational view of active leads. Use the board to find opportunities quickly, then open a lead to move stages through the audited stage workflow."
+        actions={
+          <>
+            <Link href="/funnel" className="btn-secondary">
+              Funnel analytics
+            </Link>
+
+            <Link href="/admissions" className="btn-primary">
+              Admissions Desk
+              <ArrowRight size={15} />
+            </Link>
+          </>
+        }
+      />
+
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
+        <div className="animate-rise stagger-1">
+          <StatCard
+            label="Active pipeline"
+            value={activeLeads.length.toLocaleString()}
+            note="open admissions opportunities"
+            icon={<ContactRound size={19} />}
+          />
+        </div>
+
+        <div className="animate-rise stagger-2">
+          <StatCard
+            label="Qualified+"
+            value={qualifiedPlus.toLocaleString()}
+            note="qualified through enrolled"
+            icon={<BadgeCheck size={19} />}
+          />
+        </div>
+
+        <div className="animate-rise stagger-3">
+          <StatCard
+            label="High intent"
+            value={highIntent.toLocaleString()}
+            note="strong buying intent"
+            icon={<Flame size={19} />}
+          />
+        </div>
+
+        <div className="animate-rise stagger-4">
+          <StatCard
+            label="Payment pending"
+            value={paymentPending.toLocaleString()}
+            note="closest active stage to enrollment"
+            icon={<CircleDollarSign size={19} />}
+          />
+        </div>
+
+        <div className="animate-rise stagger-5">
+          <StatCard
+            label="Enrolled"
+            value={enrolled.toLocaleString()}
+            note="closed successful enrollments"
+            icon={<BadgeCheck size={19} />}
+          />
+        </div>
       </div>
-    </div>
-  </>;
+
+      <div className="mt-4 animate-rise stagger-2">
+        <PipelineInsights data={insightData} />
+      </div>
+
+      <PipelineBoard leads={boardLeads} />
+    </>
+  );
 }
