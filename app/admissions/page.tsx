@@ -30,7 +30,19 @@ import {
 
 
 
+  Mail,
+
+
+
   Megaphone,
+
+
+
+  MessageCircle,
+
+
+
+  Phone,
 
 
 
@@ -552,6 +564,16 @@ type RecentAutoTaskRow = {
 };
 
 
+type LeadContactRow = {
+  lead_id: string;
+  lead_code: string | null;
+  lead_name: string | null;
+  email: string | null;
+  whatsapp: string | null;
+  phone: string | null;
+};
+
+
 type SlaOverviewRow = {
   leads_7d: number | string | null;
   responded_7d: number | string | null;
@@ -736,6 +758,10 @@ export default async function AdmissionsDeskPage({
 
 
     slaQueueResult,
+
+
+
+    leadContactsResult,
 
 
 
@@ -1091,6 +1117,26 @@ export default async function AdmissionsDeskPage({
 
 
 
+
+
+
+
+    supabase
+
+
+
+      .from('v_admissions_lead_contacts')
+
+
+
+      .select('*')
+
+
+
+      .limit(1000),
+
+
+
   ]);
 
 
@@ -1144,6 +1190,10 @@ export default async function AdmissionsDeskPage({
 
 
     slaQueueResult.error,
+
+
+
+    leadContactsResult.error,
 
 
 
@@ -1312,6 +1362,34 @@ export default async function AdmissionsDeskPage({
 
 
     (slaQueueResult.data ?? []) as SlaQueueRow[];
+
+
+
+
+
+
+
+  const leadContacts =
+
+
+
+    (leadContactsResult.data ?? []) as LeadContactRow[];
+
+
+
+
+
+
+
+  const contactsByLeadId = new Map(
+
+
+
+    leadContacts.map((row) => [row.lead_id, row] as const)
+
+
+
+  );
 
 
 
@@ -2049,6 +2127,7 @@ export default async function AdmissionsDeskPage({
       <ResponseSlaPanel
         overview={slaOverview}
         queue={slaQueue}
+        contactsByLeadId={contactsByLeadId}
       />
 
 
@@ -2266,6 +2345,10 @@ export default async function AdmissionsDeskPage({
 
 
                 row={row}
+
+
+
+                contact={contactsByLeadId.get(row.lead_id) ?? null}
 
 
 
@@ -3326,9 +3409,11 @@ export default async function AdmissionsDeskPage({
 function ResponseSlaPanel({
   overview,
   queue,
+  contactsByLeadId,
 }: {
   overview: SlaOverviewRow | null;
   queue: SlaQueueRow[];
+  contactsByLeadId: Map<string, LeadContactRow>;
 }) {
   const breached = toNumber(overview?.breached_now);
   const open = toNumber(overview?.open_now);
@@ -3470,72 +3555,89 @@ function ResponseSlaPanel({
               const humanBreached =
                 row.human_sla_status === 'human_breached';
 
+              const contact =
+                contactsByLeadId.get(row.lead_id) ?? null;
+
               return (
-                <Link
+                <div
                   key={row.lead_id}
-                  href={`/leads/${row.lead_id}`}
-                  className={`group flex items-start justify-between gap-4 rounded-xl border px-4 py-3 transition-all duration-150 hover:-translate-y-0.5 hover:shadow-sm ${
+                  className={`group rounded-xl border px-4 py-3 transition-all duration-150 hover:-translate-y-0.5 hover:shadow-sm ${
                     breachedRow || humanBreached
                       ? 'border-red-100 bg-red-50/60'
                       : 'border-amber-100 bg-amber-50/40'
                   }`}
                 >
-                  <div className="min-w-0 flex-1">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <div className="truncate text-sm font-bold text-slate-800 group-hover:text-brand">
-                        {row.lead_name ||
-                          row.lead_code ||
-                          'Lead'}
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="min-w-0 flex-1">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <Link
+                          href={`/leads/${row.lead_id}`}
+                          className="truncate text-sm font-bold text-slate-800 group-hover:text-brand"
+                        >
+                          {row.lead_name ||
+                            row.lead_code ||
+                            'Lead'}
+                        </Link>
+
+                        <span
+                          className={`rounded-full px-2 py-0.5 text-[9px] font-bold uppercase ${slaBadgeClass(
+                            status
+                          )}`}
+                        >
+                          {pretty(status)}
+                        </span>
                       </div>
 
-                      <span
-                        className={`rounded-full px-2 py-0.5 text-[9px] font-bold uppercase ${slaBadgeClass(
-                          status
-                        )}`}
-                      >
-                        {pretty(status)}
-                      </span>
-                    </div>
+                      <div className="mt-0.5 text-[10px] font-medium text-slate-400">
+                        {row.lead_code || '—'} ·{' '}
+                        {pretty(row.current_stage || 'new')} ·{' '}
+                        {pretty(
+                          row.current_contact_channel || 'other'
+                        )}
+                      </div>
 
-                    <div className="mt-0.5 text-[10px] font-medium text-slate-400">
-                      {row.lead_code || '—'} ·{' '}
-                      {pretty(row.current_stage || 'new')} ·{' '}
-                      {pretty(
-                        row.current_contact_channel || 'other'
-                      )}
-                    </div>
-
-                    <div className="mt-2 text-xs font-semibold text-slate-600">
-                      {row.awaiting_first_response
-                        ? `Awaiting first response · age ${formatMinutesDuration(
-                            row.lead_age_minutes
-                          )}`
-                        : `First response ${formatMinutesDuration(
-                            row.response_minutes
-                          )}`}
-                    </div>
-
-                    <div className="mt-1 text-[10px] text-slate-400">
-                      {row.sla_due_at
-                        ? `SLA due ${formatDateTime(
-                            row.sla_due_at
-                          )}`
-                        : 'SLA deadline unavailable'}
-                      {row.awaiting_human_response
-                        ? ' · Human reply still pending'
-                        : row.human_response_minutes != null
-                          ? ` · Human ${formatMinutesDuration(
-                              row.human_response_minutes
+                      <div className="mt-2 text-xs font-semibold text-slate-600">
+                        {row.awaiting_first_response
+                          ? `Awaiting first response · age ${formatMinutesDuration(
+                              row.lead_age_minutes
                             )}`
-                          : ''}
+                          : `First response ${formatMinutesDuration(
+                              row.response_minutes
+                            )}`}
+                      </div>
+
+                      <div className="mt-1 text-[10px] text-slate-400">
+                        {row.sla_due_at
+                          ? `SLA due ${formatDateTime(
+                              row.sla_due_at
+                            )}`
+                          : 'SLA deadline unavailable'}
+                        {row.awaiting_human_response
+                          ? ' · Human reply still pending'
+                          : row.human_response_minutes != null
+                            ? ` · Human ${formatMinutesDuration(
+                                row.human_response_minutes
+                              )}`
+                            : ''}
+                      </div>
                     </div>
+
+                    <Link
+                      href={`/leads/${row.lead_id}`}
+                      className="mt-1 shrink-0 text-slate-300 transition-transform duration-150 hover:translate-x-0.5 hover:text-brand"
+                      aria-label="Open lead"
+                    >
+                      <ArrowRight size={15} />
+                    </Link>
                   </div>
 
-                  <ArrowRight
-                    size={15}
-                    className="mt-1 shrink-0 text-slate-300 transition-transform duration-150 group-hover:translate-x-0.5 group-hover:text-brand"
-                  />
-                </Link>
+                  <div className="mt-3 border-t border-black/5 pt-3">
+                    <ContactActions
+                      contact={contact}
+                      compact
+                    />
+                  </div>
+                </div>
               );
             })
           )}
@@ -3909,6 +4011,125 @@ function automationHealthState(
   };
 }
 
+function ContactActions({
+  contact,
+  compact = false,
+}: {
+  contact: LeadContactRow | null;
+  compact?: boolean;
+}) {
+  const whatsapp =
+    contact?.whatsapp ||
+    contact?.phone ||
+    null;
+
+  const whatsappUrl =
+    whatsappHref(whatsapp);
+
+  const emailUrl =
+    contact?.email
+      ? `mailto:${contact.email}`
+      : null;
+
+  const phoneUrl =
+    contact?.phone
+      ? `tel:${contact.phone}`
+      : contact?.whatsapp
+        ? `tel:${contact.whatsapp}`
+        : null;
+
+  const baseClass =
+    compact
+      ? 'inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-[10px] font-bold transition-colors'
+      : 'inline-flex items-center gap-2 rounded-lg border px-3 py-2 text-xs font-bold transition-colors';
+
+  if (
+    !whatsappUrl &&
+    !emailUrl &&
+    !phoneUrl
+  ) {
+    return (
+      <span className="text-[10px] font-semibold text-slate-400">
+        No direct contact details
+      </span>
+    );
+  }
+
+  return (
+    <div className="flex flex-wrap items-center gap-2">
+      {whatsappUrl && (
+        <a
+          href={whatsappUrl}
+          target="_blank"
+          rel="noreferrer"
+          className={`${baseClass} border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100`}
+          title="Open WhatsApp"
+        >
+          <MessageCircle size={13} />
+          WhatsApp
+        </a>
+      )}
+
+      {emailUrl && (
+        <a
+          href={emailUrl}
+          className={`${baseClass} border-sky-200 bg-sky-50 text-sky-700 hover:bg-sky-100`}
+          title="Send email"
+        >
+          <Mail size={13} />
+          Email
+        </a>
+      )}
+
+      {phoneUrl && (
+        <a
+          href={phoneUrl}
+          className={`${baseClass} border-slate-200 bg-white text-slate-600 hover:bg-slate-50`}
+          title="Call lead"
+        >
+          <Phone size={13} />
+          Call
+        </a>
+      )}
+    </div>
+  );
+}
+
+
+function whatsappHref(
+  value:
+    | string
+    | null
+    | undefined
+) {
+  if (!value) {
+    return null;
+  }
+
+  const trimmed =
+    value.trim();
+
+  const digits =
+    trimmed.replace(/\D/g, '');
+
+  if (digits.length < 10) {
+    return null;
+  }
+
+  // WhatsApp wa.me needs a country code.
+  // We only use a plain 10-digit number when the
+  // stored value explicitly contains a leading + country code.
+  if (
+    digits.length === 10 &&
+    !trimmed.startsWith('+')
+  ) {
+    return null;
+  }
+
+  return `https://wa.me/${digits}`;
+}
+
+
 function PriorityLeadCard({
 
 
@@ -3917,11 +4138,19 @@ function PriorityLeadCard({
 
 
 
+  contact,
+
+
+
 }: {
 
 
 
   row: PriorityRow;
+
+
+
+  contact: LeadContactRow | null;
 
 
 
@@ -4530,6 +4759,17 @@ function PriorityLeadCard({
 
 
           )}
+
+
+
+
+
+
+
+          <ContactActions
+            contact={contact}
+            compact
+          />
 
 
 
