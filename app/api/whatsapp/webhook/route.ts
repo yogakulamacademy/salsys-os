@@ -22,36 +22,6 @@ export async function GET(request: NextRequest) {
   const token = request.nextUrl.searchParams.get('hub.verify_token');
   const challenge = request.nextUrl.searchParams.get('hub.challenge');
   const verifyToken = process.env.WA_VERIFY_TOKEN?.trim();
-  const debug = request.nextUrl.searchParams.get('debug');
-
-  // Temporary protected debug endpoint. Remove after webhook validation is stable.
-  if (
-    debug === 'secret-fingerprint' &&
-    verifyToken &&
-    token === verifyToken
-  ) {
-    const appSecret = process.env.WA_APP_SECRET?.trim();
-
-    if (!appSecret) {
-      return NextResponse.json(
-        {
-          ok: false,
-          error: 'WA_APP_SECRET is not configured',
-        },
-        { status: 500 }
-      );
-    }
-
-    const fingerprint = crypto
-      .createHash('sha256')
-      .update(appSecret, 'utf8')
-      .digest('hex');
-
-    return NextResponse.json({
-      ok: true,
-      fingerprint,
-    });
-  }
 
   if (
     mode === 'subscribe' &&
@@ -78,7 +48,7 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    // IMPORTANT: validate Meta's signature against the exact bytes received.
+    // Meta signs the exact raw request bytes, so validate before parsing JSON.
     const rawBytes = Buffer.from(await request.arrayBuffer());
     const rawBody = rawBytes.toString('utf8');
 
@@ -102,21 +72,10 @@ export async function POST(request: NextRequest) {
     );
 
     if (!signatureValid) {
-      // Temporary non-secret diagnostics. Remove after validation is confirmed.
-      const bodyHash = crypto
-        .createHash('sha256')
-        .update(rawBytes)
-        .digest('hex');
-
       return NextResponse.json(
         {
           ok: false,
           error: 'Invalid webhook signature',
-          debug: {
-            bodyHash,
-            bodyLength: rawBytes.length,
-            receivedSignatureLength: signatureHeader.trim().length,
-          },
         },
         { status: 401 }
       );
@@ -128,22 +87,75 @@ export async function POST(request: NextRequest) {
 
     let inserted = 0;
     let duplicates = 0;
+    let processed = 0;
+    let alreadyProcessed = 0;
+    let ignored = 0;
 
     for (const event of events) {
-      const { error } = await supabase
-        .from('whatsapp_webhook_events')
-        .insert(event);
+      const eventKey = stringValue(event.event_key);
 
-      if (error) {
-        if (error.code === '23505') {
-          duplicates += 1;
-          continue;
-        }
-
-        throw error;
+      if (!eventKey) {
+        throw new Error('Webhook event_key could not be generated.');
       }
 
-      inserted += 1;
+      let eventId: string | null = null;
+
+      const {
+        data: insertedEvent,
+        error: insertError,
+      } = await supabase
+        .from('whatsapp_webhook_events')
+        .insert(event)
+        .select('id')
+        .single();
+
+      if (insertError) {
+        if (insertError.code !== '23505') {
+          throw insertError;
+        }
+
+        duplicates += 1;
+
+        // Meta retries webhooks. On a duplicate, recover the existing raw
+        // event and run the processor again. Processed events are idempotent;
+        // failed/received events can safely retry.
+        const {
+          data: existingEvent,
+          error: existingError,
+        } = await supabase
+          .from('whatsapp_webhook_events')
+          .select('id')
+          .eq('event_key', eventKey)
+          .maybeSingle();
+
+        if (existingError) {
+          throw existingError;
+        }
+
+        eventId = stringValue(existingEvent?.id);
+      } else {
+        inserted += 1;
+        eventId = stringValue(insertedEvent?.id);
+      }
+
+      if (!eventId) {
+        throw new Error(
+          `Unable to resolve stored webhook event for ${eventKey}.`
+        );
+      }
+
+      const result = await processStoredWebhookEvent(
+        supabase,
+        eventId
+      );
+
+      if (result.already_processed === true) {
+        alreadyProcessed += 1;
+      } else if (result.ignored === true) {
+        ignored += 1;
+      } else if (result.processed === true) {
+        processed += 1;
+      }
     }
 
     return NextResponse.json(
@@ -152,6 +164,9 @@ export async function POST(request: NextRequest) {
         received: events.length,
         inserted,
         duplicates,
+        processed,
+        already_processed: alreadyProcessed,
+        ignored,
       },
       { status: 200 }
     );
@@ -161,6 +176,8 @@ export async function POST(request: NextRequest) {
 
     console.error('WhatsApp webhook error:', message);
 
+    // Returning 500 is intentional here. Meta may retry the webhook.
+    // The raw-event unique key + CRM idempotency layer make retries safe.
     return NextResponse.json(
       {
         ok: false,
@@ -169,6 +186,34 @@ export async function POST(request: NextRequest) {
       { status: 500 }
     );
   }
+}
+
+async function processStoredWebhookEvent(
+  supabase: ReturnType<typeof createAdminClient>,
+  eventId: string
+) {
+  const { data, error } = await supabase.rpc(
+    'ingest_whatsapp_webhook_event',
+    {
+      p_event_id: eventId,
+    }
+  );
+
+  if (error) {
+    throw error;
+  }
+
+  const result = objectValue(data);
+
+  if (result.ok !== true) {
+    const processorError =
+      stringValue(result.error) ||
+      'WhatsApp CRM ingestion failed.';
+
+    throw new Error(processorError);
+  }
+
+  return result;
 }
 
 function verifyMetaSignature(
@@ -220,10 +265,15 @@ function extractWebhookEvents(payload: JsonObject) {
       const metadata = objectValue(value.metadata);
 
       const phoneNumberId = stringValue(metadata.phone_number_id);
-      const displayPhoneNumber = stringValue(metadata.display_phone_number);
+      const displayPhoneNumber = stringValue(
+        metadata.display_phone_number
+      );
 
       const contacts = arrayValue(value.contacts);
-      const defaultContactWaId = firstString(contacts, 'wa_id');
+      const defaultContactWaId = firstString(
+        contacts,
+        'wa_id'
+      );
 
       const messages = arrayValue(value.messages);
 
@@ -231,12 +281,18 @@ function extractWebhookEvents(payload: JsonObject) {
         const message = objectValue(messageRaw);
         const messageId = stringValue(message.id);
         const from = stringValue(message.from);
-        const messageType = stringValue(message.type) || 'message';
+        const messageType =
+          stringValue(message.type) || 'message';
 
         rows.push({
           event_key: messageId
             ? `message:${messageId}`
-            : stableEventKey(objectType, entryId, fieldName, message),
+            : stableEventKey(
+                objectType,
+                entryId,
+                fieldName,
+                message
+              ),
           object_type: objectType,
           entry_id: entryId,
           field_name: fieldName,
@@ -263,13 +319,21 @@ function extractWebhookEvents(payload: JsonObject) {
       for (const statusRaw of statuses) {
         const status = objectValue(statusRaw);
         const messageId = stringValue(status.id);
-        const statusName = stringValue(status.status) || 'unknown';
-        const recipientId = stringValue(status.recipient_id);
+        const statusName =
+          stringValue(status.status) || 'unknown';
+        const recipientId = stringValue(
+          status.recipient_id
+        );
 
         rows.push({
           event_key: messageId
             ? `status:${messageId}:${statusName}`
-            : stableEventKey(objectType, entryId, fieldName, status),
+            : stableEventKey(
+                objectType,
+                entryId,
+                fieldName,
+                status
+              ),
           object_type: objectType,
           entry_id: entryId,
           field_name: fieldName,
@@ -277,7 +341,8 @@ function extractWebhookEvents(payload: JsonObject) {
           display_phone_number: displayPhoneNumber,
           event_type: `status:${statusName}`,
           external_message_id: messageId,
-          contact_wa_id: recipientId || defaultContactWaId,
+          contact_wa_id:
+            recipientId || defaultContactWaId,
           signature_valid: true,
           payload: {
             object: objectType,
@@ -290,7 +355,10 @@ function extractWebhookEvents(payload: JsonObject) {
         });
       }
 
-      if (messages.length === 0 && statuses.length === 0) {
+      if (
+        messages.length === 0 &&
+        statuses.length === 0
+      ) {
         const unknownPayload = {
           object: objectType,
           entry_id: entryId,
@@ -345,7 +413,11 @@ function stableEventKey(
 }
 
 function objectValue(value: unknown): JsonObject {
-  if (value && typeof value === 'object' && !Array.isArray(value)) {
+  if (
+    value &&
+    typeof value === 'object' &&
+    !Array.isArray(value)
+  ) {
     return value as JsonObject;
   }
 
@@ -365,7 +437,10 @@ function stringValue(value: unknown): string | null {
   return trimmed || null;
 }
 
-function firstString(values: unknown[], key: string) {
+function firstString(
+  values: unknown[],
+  key: string
+) {
   for (const value of values) {
     const object = objectValue(value);
     const result = stringValue(object[key]);
