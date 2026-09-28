@@ -551,6 +551,46 @@ type RecentAutoTaskRow = {
   created_at: string | null;
 };
 
+
+type SlaOverviewRow = {
+  leads_7d: number | string | null;
+  responded_7d: number | string | null;
+  responded_on_time_7d: number | string | null;
+  responded_late_7d: number | string | null;
+  breached_now: number | string | null;
+  open_now: number | string | null;
+  awaiting_human_response: number | string | null;
+  avg_response_minutes: number | string | null;
+  median_response_minutes: number | string | null;
+  p90_response_minutes: number | string | null;
+  on_time_response_rate_percent: number | string | null;
+};
+
+type SlaQueueRow = {
+  lead_id: string;
+  lead_code: string | null;
+  lead_name: string | null;
+  current_stage: string | null;
+  current_contact_channel: string | null;
+  first_touch_source: string | null;
+  preferred_location: string | null;
+  created_at: string | null;
+  sla_due_at: string | null;
+  first_outbound_at: string | null;
+  first_outbound_sender_type: string | null;
+  first_human_outbound_at: string | null;
+  first_action_at: string | null;
+  first_progress_stage: string | null;
+  response_minutes: number | string | null;
+  human_response_minutes: number | string | null;
+  first_action_minutes: number | string | null;
+  lead_age_minutes: number | string | null;
+  sla_status: string | null;
+  human_sla_status: string | null;
+  awaiting_first_response: boolean | null;
+  awaiting_human_response: boolean | null;
+};
+
 type SearchParams = {
 
 
@@ -688,6 +728,14 @@ export default async function AdmissionsDeskPage({
 
 
     recentAutoTasksResult,
+
+
+
+    slaOverviewResult,
+
+
+
+    slaQueueResult,
 
 
 
@@ -999,6 +1047,50 @@ export default async function AdmissionsDeskPage({
 
 
 
+
+
+
+
+    supabase
+
+
+
+      .from('v_admissions_sla_overview')
+
+
+
+      .select('*')
+
+
+
+      .maybeSingle(),
+
+
+
+
+
+
+
+    supabase
+
+
+
+      .from('v_admissions_sla_queue')
+
+
+
+      .select('*')
+
+
+
+      .order('sla_due_at', { ascending: true })
+
+
+
+      .limit(12),
+
+
+
   ]);
 
 
@@ -1044,6 +1136,14 @@ export default async function AdmissionsDeskPage({
 
 
     recentAutoTasksResult.error,
+
+
+
+    slaOverviewResult.error,
+
+
+
+    slaQueueResult.error,
 
 
 
@@ -1188,6 +1288,30 @@ export default async function AdmissionsDeskPage({
 
 
     (recentAutoTasksResult.data ?? []) as RecentAutoTaskRow[];
+
+
+
+
+
+
+
+  const slaOverview =
+
+
+
+    (slaOverviewResult.data ?? null) as SlaOverviewRow | null;
+
+
+
+
+
+
+
+  const slaQueue =
+
+
+
+    (slaQueueResult.data ?? []) as SlaQueueRow[];
 
 
 
@@ -1914,6 +2038,17 @@ export default async function AdmissionsDeskPage({
       <AutomationHealthPanel
         health={automationHealth}
         recentTasks={recentAutoTasks}
+      />
+
+
+
+
+
+
+
+      <ResponseSlaPanel
+        overview={slaOverview}
+        queue={slaQueue}
       />
 
 
@@ -3185,6 +3320,303 @@ export default async function AdmissionsDeskPage({
 
 
 
+
+
+
+function ResponseSlaPanel({
+  overview,
+  queue,
+}: {
+  overview: SlaOverviewRow | null;
+  queue: SlaQueueRow[];
+}) {
+  const breached = toNumber(overview?.breached_now);
+  const open = toNumber(overview?.open_now);
+  const awaitingHuman = toNumber(
+    overview?.awaiting_human_response
+  );
+  const onTimeRate = toNumber(
+    overview?.on_time_response_rate_percent
+  );
+
+  const hasRisk =
+    breached > 0 ||
+    awaitingHuman > 0;
+
+  return (
+    <section className="mt-4 grid gap-4 xl:grid-cols-[0.9fr_1.1fr]">
+      <div className="card-pad">
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div>
+            <div className="eyebrow">
+              Response SLA
+            </div>
+            <div className="section-title mt-1">
+              First-response speed
+            </div>
+            <p className="mt-1 max-w-xl text-xs leading-5 text-slate-400">
+              30-minute admissions SLA during 8:00 AM–8:00 PM IST.
+              Response timing uses outbound messages logged in the CRM, while
+              human response is tracked separately for future AI-assisted
+              conversations.
+            </p>
+          </div>
+
+          <span
+            className={`inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-xs font-bold ${
+              hasRisk
+                ? 'bg-red-100 text-red-700'
+                : 'bg-emerald-100 text-emerald-700'
+            }`}
+          >
+            <span
+              className={`h-2 w-2 rounded-full ${
+                hasRisk
+                  ? 'bg-red-500'
+                  : 'bg-emerald-500'
+              }`}
+            />
+            {hasRisk ? 'Needs attention' : 'Within SLA'}
+          </span>
+        </div>
+
+        <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          <AutomationMiniMetric
+            label="On-time rate"
+            value={`${formatDecimalValue(onTimeRate, 1)}%`}
+            sub="Responded leads · 7d"
+          />
+          <AutomationMiniMetric
+            label="Median response"
+            value={formatMinutesDuration(
+              overview?.median_response_minutes
+            )}
+            sub="First outbound · 7d"
+          />
+          <AutomationMiniMetric
+            label="P90 response"
+            value={formatMinutesDuration(
+              overview?.p90_response_minutes
+            )}
+            sub="Slowest response band"
+          />
+          <AutomationMiniMetric
+            label="Breached now"
+            value={formatNumber(breached)}
+            sub="No response by deadline"
+            alert={breached > 0}
+          />
+        </div>
+
+        <div className="mt-4 grid gap-3 sm:grid-cols-4">
+          <AutomationInfoLine
+            label="Leads · 7d"
+            value={formatNumber(overview?.leads_7d)}
+          />
+          <AutomationInfoLine
+            label="Responded"
+            value={formatNumber(overview?.responded_7d)}
+          />
+          <AutomationInfoLine
+            label="Open SLA"
+            value={formatNumber(open)}
+            alert={open > 0}
+          />
+          <AutomationInfoLine
+            label="Awaiting human"
+            value={formatNumber(awaitingHuman)}
+            alert={awaitingHuman > 0}
+          />
+        </div>
+      </div>
+
+      <div className="card-pad">
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <div className="eyebrow">
+              Response queue
+            </div>
+            <div className="section-title mt-1">
+              Leads approaching or past SLA
+            </div>
+            <p className="mt-1 text-xs leading-5 text-slate-400">
+              Active admissions leads with an open or breached first-response
+              or human-response SLA.
+            </p>
+          </div>
+
+          <div
+            className={`rounded-full px-2.5 py-1 text-[10px] font-bold ${
+              breached > 0
+                ? 'bg-red-100 text-red-700'
+                : 'bg-slate-100 text-slate-500'
+            }`}
+          >
+            {formatNumber(queue.length)} visible
+          </div>
+        </div>
+
+        <div className="mt-4 space-y-2">
+          {queue.length === 0 ? (
+            <div className="rounded-xl bg-slate-50 px-4 py-8 text-center text-sm text-slate-400">
+              No leads currently waiting on the response SLA.
+            </div>
+          ) : (
+            queue.slice(0, 8).map((row) => {
+              const status =
+                row.sla_status || 'open';
+              const breachedRow =
+                status === 'breached';
+              const humanBreached =
+                row.human_sla_status === 'human_breached';
+
+              return (
+                <Link
+                  key={row.lead_id}
+                  href={`/leads/${row.lead_id}`}
+                  className={`group flex items-start justify-between gap-4 rounded-xl border px-4 py-3 transition-all duration-150 hover:-translate-y-0.5 hover:shadow-sm ${
+                    breachedRow || humanBreached
+                      ? 'border-red-100 bg-red-50/60'
+                      : 'border-amber-100 bg-amber-50/40'
+                  }`}
+                >
+                  <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <div className="truncate text-sm font-bold text-slate-800 group-hover:text-brand">
+                        {row.lead_name ||
+                          row.lead_code ||
+                          'Lead'}
+                      </div>
+
+                      <span
+                        className={`rounded-full px-2 py-0.5 text-[9px] font-bold uppercase ${slaBadgeClass(
+                          status
+                        )}`}
+                      >
+                        {pretty(status)}
+                      </span>
+                    </div>
+
+                    <div className="mt-0.5 text-[10px] font-medium text-slate-400">
+                      {row.lead_code || '—'} ·{' '}
+                      {pretty(row.current_stage || 'new')} ·{' '}
+                      {pretty(
+                        row.current_contact_channel || 'other'
+                      )}
+                    </div>
+
+                    <div className="mt-2 text-xs font-semibold text-slate-600">
+                      {row.awaiting_first_response
+                        ? `Awaiting first response · age ${formatMinutesDuration(
+                            row.lead_age_minutes
+                          )}`
+                        : `First response ${formatMinutesDuration(
+                            row.response_minutes
+                          )}`}
+                    </div>
+
+                    <div className="mt-1 text-[10px] text-slate-400">
+                      {row.sla_due_at
+                        ? `SLA due ${formatDateTime(
+                            row.sla_due_at
+                          )}`
+                        : 'SLA deadline unavailable'}
+                      {row.awaiting_human_response
+                        ? ' · Human reply still pending'
+                        : row.human_response_minutes != null
+                          ? ` · Human ${formatMinutesDuration(
+                              row.human_response_minutes
+                            )}`
+                          : ''}
+                    </div>
+                  </div>
+
+                  <ArrowRight
+                    size={15}
+                    className="mt-1 shrink-0 text-slate-300 transition-transform duration-150 group-hover:translate-x-0.5 group-hover:text-brand"
+                  />
+                </Link>
+              );
+            })
+          )}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function slaBadgeClass(
+  status: string
+) {
+  if (
+    status === 'breached' ||
+    status === 'responded_late'
+  ) {
+    return 'bg-red-100 text-red-700';
+  }
+
+  if (status === 'open') {
+    return 'bg-amber-100 text-amber-700';
+  }
+
+  if (status === 'responded_on_time') {
+    return 'bg-emerald-100 text-emerald-700';
+  }
+
+  return 'bg-slate-100 text-slate-600';
+}
+
+function formatMinutesDuration(
+  value:
+    | number
+    | string
+    | null
+    | undefined
+) {
+  if (
+    value === null ||
+    value === undefined ||
+    value === ''
+  ) {
+    return '—';
+  }
+
+  const minutes = Number(value);
+
+  if (!Number.isFinite(minutes)) {
+    return '—';
+  }
+
+  if (minutes < 60) {
+    return `${Math.round(minutes)}m`;
+  }
+
+  const hours =
+    Math.floor(minutes / 60);
+
+  const remaining =
+    Math.round(minutes % 60);
+
+  return remaining > 0
+    ? `${hours}h ${remaining}m`
+    : `${hours}h`;
+}
+
+function formatDecimalValue(
+  value:
+    | number
+    | string
+    | null
+    | undefined,
+  digits = 1
+) {
+  const parsed =
+    Number(value ?? 0);
+
+  return Number.isFinite(parsed)
+    ? parsed.toFixed(digits)
+    : '0.0';
+}
 
 
 function AutomationHealthPanel({
