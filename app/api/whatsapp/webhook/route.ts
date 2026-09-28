@@ -39,6 +39,47 @@ export async function GET(
   const verifyToken =
     process.env.WA_VERIFY_TOKEN?.trim();
 
+  const debug =
+    request.nextUrl.searchParams.get(
+      'debug'
+    );
+
+  if (
+    debug === 'secret-fingerprint' &&
+    verifyToken &&
+    token === verifyToken
+  ) {
+    const appSecret =
+      process.env.WA_APP_SECRET?.trim();
+
+    if (!appSecret) {
+      return NextResponse.json(
+        {
+          ok: false,
+          error:
+            'WA_APP_SECRET is not configured',
+        },
+        {
+          status: 500,
+        }
+      );
+    }
+
+    const fingerprint =
+      crypto
+        .createHash('sha256')
+        .update(
+          appSecret,
+          'utf8'
+        )
+        .digest('hex');
+
+    return NextResponse.json({
+      ok: true,
+      fingerprint,
+    });
+  }
+
   if (
     mode === 'subscribe' &&
     verifyToken &&
