@@ -1,12 +1,34 @@
-import { NextRequest, NextResponse } from 'next/server';
+import {
+  NextRequest,
+  NextResponse,
+} from 'next/server';
 
-import { createAdminClient } from '@/lib/supabase/admin';
+import {
+  createAdminClient,
+} from '@/lib/supabase/admin';
 
-export const dynamic = 'force-dynamic';
+export const dynamic =
+  'force-dynamic';
 
-function isAuthorized(request: NextRequest) {
+
+type RunnerRow = {
+  lead_id?: string | null;
+  lead_code?: string | null;
+  lead_name?: string | null;
+  rule_key?: string | null;
+  task_title?: string | null;
+  due_at?: string | null;
+  result?: string | null;
+};
+
+
+function isAuthorized(
+  request: NextRequest
+) {
   const cronSecret =
-    process.env.CRON_SECRET?.trim();
+    process.env
+      .CRON_SECRET
+      ?.trim();
 
   if (!cronSecret) {
     return false;
@@ -23,6 +45,7 @@ function isAuthorized(request: NextRequest) {
   );
 }
 
+
 async function runAutoTasks(
   request: NextRequest
 ) {
@@ -38,9 +61,36 @@ async function runAutoTasks(
     );
   }
 
+  const supabase =
+    createAdminClient();
+
+  let runId:
+    | string
+    | null = null;
+
   try {
-    const supabase =
-      createAdminClient();
+    const {
+      data: run,
+      error: runError,
+    } = await supabase
+      .from(
+        'admissions_auto_task_runs'
+      )
+      .insert({
+        trigger_source:
+          'cron',
+        status:
+          'running',
+      })
+      .select('id')
+      .single();
+
+    if (runError) {
+      throw runError;
+    }
+
+    runId =
+      run.id;
 
     const {
       data,
@@ -57,35 +107,80 @@ async function runAutoTasks(
     }
 
     const rows =
-      Array.isArray(data)
-        ? data
-        : [];
+      (
+        Array.isArray(data)
+          ? data
+          : []
+      ) as RunnerRow[];
 
     const created =
       rows.filter(
-        (row: any) =>
-          row?.result === 'created'
+        (row) =>
+          row.result ===
+          'created'
       ).length;
 
     const failed =
       rows.filter(
-        (row: any) =>
-          typeof row?.result ===
+        (row) =>
+          typeof row.result ===
             'string' &&
           row.result.startsWith(
             'failed:'
           )
       ).length;
 
+    const status =
+      failed === 0
+        ? 'success'
+        : created > 0
+          ? 'partial'
+          : 'failed';
+
+    const {
+      error:
+        updateError,
+    } = await supabase
+      .from(
+        'admissions_auto_task_runs'
+      )
+      .update({
+        status,
+        processed_count:
+          rows.length,
+        created_count:
+          created,
+        failed_count:
+          failed,
+        result_rows:
+          rows,
+        completed_at:
+          new Date()
+            .toISOString(),
+      })
+      .eq(
+        'id',
+        runId
+      );
+
+    if (updateError) {
+      throw updateError;
+    }
+
     return NextResponse.json({
-      ok: failed === 0,
-      trigger: 'cron',
-      processed: rows.length,
+      ok:
+        failed === 0,
+      trigger:
+        'cron',
+      runId,
+      processed:
+        rows.length,
       created,
       failed,
       rows,
       ranAt:
-        new Date().toISOString(),
+        new Date()
+          .toISOString(),
     });
   } catch (error) {
     const message =
@@ -93,10 +188,32 @@ async function runAutoTasks(
         ? error.message
         : 'Automatic admissions task run failed';
 
+    if (runId) {
+      await supabase
+        .from(
+          'admissions_auto_task_runs'
+        )
+        .update({
+          status:
+            'failed',
+          error_message:
+            message,
+          completed_at:
+            new Date()
+              .toISOString(),
+        })
+        .eq(
+          'id',
+          runId
+        );
+    }
+
     return NextResponse.json(
       {
         ok: false,
-        error: message,
+        runId,
+        error:
+          message,
       },
       {
         status: 500,
@@ -105,14 +222,20 @@ async function runAutoTasks(
   }
 }
 
+
 export async function GET(
   request: NextRequest
 ) {
-  return runAutoTasks(request);
+  return runAutoTasks(
+    request
+  );
 }
+
 
 export async function POST(
   request: NextRequest
 ) {
-  return runAutoTasks(request);
+  return runAutoTasks(
+    request
+  );
 }
