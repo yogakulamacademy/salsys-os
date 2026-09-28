@@ -13,6 +13,7 @@ const PUBLIC_EXACT_PATHS =
     '/api/analytics/gsc/sync',
     '/api/analytics/google-ads/sync',
     '/api/analytics/meta-ads/sync',
+    '/api/admissions/auto-tasks',
   ]);
 
 
