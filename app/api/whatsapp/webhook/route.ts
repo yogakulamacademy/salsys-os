@@ -1,13 +1,6 @@
 import crypto from 'crypto';
-
-import {
-  NextRequest,
-  NextResponse,
-} from 'next/server';
-
-import {
-  createAdminClient,
-} from '@/lib/supabase/admin';
+import { NextRequest, NextResponse } from 'next/server';
+import { createAdminClient } from '@/lib/supabase/admin';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -24,55 +17,35 @@ function requireEnv(name: string) {
   return value;
 }
 
-export async function GET(
-  request: NextRequest
-) {
-  const mode =
-    request.nextUrl.searchParams.get('hub.mode');
+export async function GET(request: NextRequest) {
+  const mode = request.nextUrl.searchParams.get('hub.mode');
+  const token = request.nextUrl.searchParams.get('hub.verify_token');
+  const challenge = request.nextUrl.searchParams.get('hub.challenge');
+  const verifyToken = process.env.WA_VERIFY_TOKEN?.trim();
+  const debug = request.nextUrl.searchParams.get('debug');
 
-  const token =
-    request.nextUrl.searchParams.get('hub.verify_token');
-
-  const challenge =
-    request.nextUrl.searchParams.get('hub.challenge');
-
-  const verifyToken =
-    process.env.WA_VERIFY_TOKEN?.trim();
-
-  const debug =
-    request.nextUrl.searchParams.get(
-      'debug'
-    );
-
+  // Temporary protected debug endpoint. Remove after webhook validation is stable.
   if (
     debug === 'secret-fingerprint' &&
     verifyToken &&
     token === verifyToken
   ) {
-    const appSecret =
-      process.env.WA_APP_SECRET?.trim();
+    const appSecret = process.env.WA_APP_SECRET?.trim();
 
     if (!appSecret) {
       return NextResponse.json(
         {
           ok: false,
-          error:
-            'WA_APP_SECRET is not configured',
+          error: 'WA_APP_SECRET is not configured',
         },
-        {
-          status: 500,
-        }
+        { status: 500 }
       );
     }
 
-    const fingerprint =
-      crypto
-        .createHash('sha256')
-        .update(
-          appSecret,
-          'utf8'
-        )
-        .digest('hex');
+    const fingerprint = crypto
+      .createHash('sha256')
+      .update(appSecret, 'utf8')
+      .digest('hex');
 
     return NextResponse.json({
       ok: true,
@@ -86,103 +59,83 @@ export async function GET(
     token === verifyToken &&
     challenge
   ) {
-    return new NextResponse(
-      challenge,
-      {
-        status: 200,
-        headers: {
-          'Content-Type':
-            'text/plain; charset=utf-8',
-        },
-      }
-    );
+    return new NextResponse(challenge, {
+      status: 200,
+      headers: {
+        'Content-Type': 'text/plain; charset=utf-8',
+      },
+    });
   }
 
   return NextResponse.json(
     {
       ok: false,
-      error:
-        'Webhook verification failed',
+      error: 'Webhook verification failed',
     },
-    {
-      status: 403,
-    }
+    { status: 403 }
   );
 }
 
-export async function POST(
-  request: NextRequest
-) {
+export async function POST(request: NextRequest) {
   try {
-    const rawBody =
-      await request.text();
+    // IMPORTANT: validate Meta's signature against the exact bytes received.
+    const rawBytes = Buffer.from(await request.arrayBuffer());
+    const rawBody = rawBytes.toString('utf8');
 
-    const signature =
-      request.headers.get(
-        'x-hub-signature-256'
+    const signatureHeader = request.headers.get('x-hub-signature-256');
+    const appSecret = requireEnv('WA_APP_SECRET');
+
+    if (!signatureHeader) {
+      return NextResponse.json(
+        {
+          ok: false,
+          error: 'Missing webhook signature',
+        },
+        { status: 401 }
       );
-
-    const appSecret =
-      requireEnv(
-        'WA_APP_SECRET'
-      );
-
-    if (
-      !signature ||
-      !verifyMetaSignature(
-        rawBody,
-        signature,
-        appSecret
-      )
-    ) {
-      const bodyHash = crypto
-  .createHash('sha256')
-  .update(rawBody, 'utf8')
-  .digest('hex');
-
-return NextResponse.json(
-  {
-    ok: false,
-    error: 'Invalid webhook signature',
-    debug: {
-      bodyHash,
-      bodyLength: Buffer.byteLength(rawBody, 'utf8'),
-      receivedSignatureLength: signature?.length ?? 0,
-    },
-  },
-  { status: 401 }
-);
     }
 
-    const payload =
-      JSON.parse(
-        rawBody
-      ) as JsonObject;
+    const signatureValid = verifyMetaSignature(
+      rawBytes,
+      signatureHeader,
+      appSecret
+    );
 
-    const events =
-      extractWebhookEvents(
-        payload
+    if (!signatureValid) {
+      // Temporary non-secret diagnostics. Remove after validation is confirmed.
+      const bodyHash = crypto
+        .createHash('sha256')
+        .update(rawBytes)
+        .digest('hex');
+
+      return NextResponse.json(
+        {
+          ok: false,
+          error: 'Invalid webhook signature',
+          debug: {
+            bodyHash,
+            bodyLength: rawBytes.length,
+            receivedSignatureLength: signatureHeader.trim().length,
+          },
+        },
+        { status: 401 }
       );
+    }
 
-    const supabase =
-      createAdminClient();
+    const payload = JSON.parse(rawBody) as JsonObject;
+    const events = extractWebhookEvents(payload);
+    const supabase = createAdminClient();
 
     let inserted = 0;
     let duplicates = 0;
 
     for (const event of events) {
-      const { error } =
-        await supabase
-          .from(
-            'whatsapp_webhook_events'
-          )
-          .insert(event);
+      const { error } = await supabase
+        .from('whatsapp_webhook_events')
+        .insert(event);
 
       if (error) {
-        if (
-          error.code ===
-          '23505'
-        ) {
+        if (error.code === '23505') {
           duplicates += 1;
           continue;
         }
@@ -196,398 +149,173 @@ return NextResponse.json(
     return NextResponse.json(
       {
         ok: true,
-        received:
-          events.length,
+        received: events.length,
         inserted,
         duplicates,
       },
-      {
-        status: 200,
-      }
+      { status: 200 }
     );
   } catch (error) {
     const message =
-      error instanceof Error
-        ? error.message
-        : 'WhatsApp webhook failed';
+      error instanceof Error ? error.message : 'WhatsApp webhook failed';
 
-    console.error(
-      'WhatsApp webhook error:',
-      message
-    );
+    console.error('WhatsApp webhook error:', message);
 
     return NextResponse.json(
       {
         ok: false,
         error: message,
       },
-      {
-        status: 500,
-      }
+      { status: 500 }
     );
   }
 }
 
 function verifyMetaSignature(
-  rawBody: string,
+  rawBody: Buffer,
   signatureHeader: string,
   appSecret: string
 ) {
-  if (
-    !signatureHeader.startsWith(
-      'sha256='
-    )
-  ) {
+  const signature = signatureHeader.trim();
+
+  if (!signature.startsWith('sha256=')) {
     return false;
   }
 
-  const receivedHex =
-    signatureHeader.slice(
-      'sha256='.length
-    );
+  const receivedHex = signature.slice('sha256='.length);
 
-  if (
-    !/^[a-f0-9]{64}$/i.test(
-      receivedHex
-    )
-  ) {
+  if (!/^[a-f0-9]{64}$/i.test(receivedHex)) {
     return false;
   }
 
-  const expectedHex =
-    crypto
-      .createHmac(
-        'sha256',
-        appSecret
-      )
-      .update(
-        rawBody,
-        'utf8'
-      )
-      .digest(
-        'hex'
-      );
+  const expected = crypto
+    .createHmac('sha256', Buffer.from(appSecret, 'utf8'))
+    .update(rawBody)
+    .digest();
 
-  const received =
-    Buffer.from(
-      receivedHex,
-      'hex'
-    );
+  const received = Buffer.from(receivedHex, 'hex');
 
-  const expected =
-    Buffer.from(
-      expectedHex,
-      'hex'
-    );
-
-  if (
-    received.length !==
-    expected.length
-  ) {
+  if (received.length !== expected.length) {
     return false;
   }
 
-  return crypto.timingSafeEqual(
-    received,
-    expected
-  );
+  return crypto.timingSafeEqual(received, expected);
 }
 
-function extractWebhookEvents(
-  payload: JsonObject
-) {
-  const rows: Array<
-    Record<string, unknown>
-  > = [];
+function extractWebhookEvents(payload: JsonObject) {
+  const rows: Array<Record<string, unknown>> = [];
 
-  const objectType =
-    stringValue(
-      payload.object
-    );
+  const objectType = stringValue(payload.object);
+  const entries = arrayValue(payload.entry);
 
-  const entries =
-    arrayValue(
-      payload.entry
-    );
+  for (const entryRaw of entries) {
+    const entry = objectValue(entryRaw);
+    const entryId = stringValue(entry.id);
+    const changes = arrayValue(entry.changes);
 
-  for (
-    const entryRaw of entries
-  ) {
-    const entry =
-      objectValue(
-        entryRaw
-      );
+    for (const changeRaw of changes) {
+      const change = objectValue(changeRaw);
+      const fieldName = stringValue(change.field);
+      const value = objectValue(change.value);
+      const metadata = objectValue(value.metadata);
 
-    const entryId =
-      stringValue(
-        entry.id
-      );
+      const phoneNumberId = stringValue(metadata.phone_number_id);
+      const displayPhoneNumber = stringValue(metadata.display_phone_number);
 
-    const changes =
-      arrayValue(
-        entry.changes
-      );
+      const contacts = arrayValue(value.contacts);
+      const defaultContactWaId = firstString(contacts, 'wa_id');
 
-    for (
-      const changeRaw of changes
-    ) {
-      const change =
-        objectValue(
-          changeRaw
-        );
+      const messages = arrayValue(value.messages);
 
-      const fieldName =
-        stringValue(
-          change.field
-        );
-
-      const value =
-        objectValue(
-          change.value
-        );
-
-      const metadata =
-        objectValue(
-          value.metadata
-        );
-
-      const phoneNumberId =
-        stringValue(
-          metadata.phone_number_id
-        );
-
-      const displayPhoneNumber =
-        stringValue(
-          metadata.display_phone_number
-        );
-
-      const contacts =
-        arrayValue(
-          value.contacts
-        );
-
-      const defaultContactWaId =
-        firstString(
-          contacts,
-          'wa_id'
-        );
-
-      const messages =
-        arrayValue(
-          value.messages
-        );
-
-      for (
-        const messageRaw of messages
-      ) {
-        const message =
-          objectValue(
-            messageRaw
-          );
-
-        const messageId =
-          stringValue(
-            message.id
-          );
-
-        const from =
-          stringValue(
-            message.from
-          );
-
-        const messageType =
-          stringValue(
-            message.type
-          ) ||
-          'message';
+      for (const messageRaw of messages) {
+        const message = objectValue(messageRaw);
+        const messageId = stringValue(message.id);
+        const from = stringValue(message.from);
+        const messageType = stringValue(message.type) || 'message';
 
         rows.push({
-          event_key:
-            messageId
-              ? `message:${messageId}`
-              : stableEventKey(
-                  objectType,
-                  entryId,
-                  fieldName,
-                  message
-                ),
-
-          object_type:
-            objectType,
-          entry_id:
-            entryId,
-          field_name:
-            fieldName,
-
-          phone_number_id:
-            phoneNumberId,
-          display_phone_number:
-            displayPhoneNumber,
-
-          event_type:
-            `message:${messageType}`,
-
-          external_message_id:
-            messageId,
-
-          contact_wa_id:
-            from ||
-            defaultContactWaId,
-
-          signature_valid:
-            true,
-
+          event_key: messageId
+            ? `message:${messageId}`
+            : stableEventKey(objectType, entryId, fieldName, message),
+          object_type: objectType,
+          entry_id: entryId,
+          field_name: fieldName,
+          phone_number_id: phoneNumberId,
+          display_phone_number: displayPhoneNumber,
+          event_type: `message:${messageType}`,
+          external_message_id: messageId,
+          contact_wa_id: from || defaultContactWaId,
+          signature_valid: true,
           payload: {
-            object:
-              objectType,
-            entry_id:
-              entryId,
-            field:
-              fieldName,
+            object: objectType,
+            entry_id: entryId,
+            field: fieldName,
             metadata,
             contacts,
             message,
           },
-
-          processing_status:
-            'received',
+          processing_status: 'received',
         });
       }
 
-      const statuses =
-        arrayValue(
-          value.statuses
-        );
+      const statuses = arrayValue(value.statuses);
 
-      for (
-        const statusRaw of statuses
-      ) {
-        const status =
-          objectValue(
-            statusRaw
-          );
-
-        const messageId =
-          stringValue(
-            status.id
-          );
-
-        const statusName =
-          stringValue(
-            status.status
-          ) ||
-          'unknown';
-
-        const recipientId =
-          stringValue(
-            status.recipient_id
-          );
+      for (const statusRaw of statuses) {
+        const status = objectValue(statusRaw);
+        const messageId = stringValue(status.id);
+        const statusName = stringValue(status.status) || 'unknown';
+        const recipientId = stringValue(status.recipient_id);
 
         rows.push({
-          event_key:
-            messageId
-              ? `status:${messageId}:${statusName}`
-              : stableEventKey(
-                  objectType,
-                  entryId,
-                  fieldName,
-                  status
-                ),
-
-          object_type:
-            objectType,
-          entry_id:
-            entryId,
-          field_name:
-            fieldName,
-
-          phone_number_id:
-            phoneNumberId,
-          display_phone_number:
-            displayPhoneNumber,
-
-          event_type:
-            `status:${statusName}`,
-
-          external_message_id:
-            messageId,
-
-          contact_wa_id:
-            recipientId ||
-            defaultContactWaId,
-
-          signature_valid:
-            true,
-
+          event_key: messageId
+            ? `status:${messageId}:${statusName}`
+            : stableEventKey(objectType, entryId, fieldName, status),
+          object_type: objectType,
+          entry_id: entryId,
+          field_name: fieldName,
+          phone_number_id: phoneNumberId,
+          display_phone_number: displayPhoneNumber,
+          event_type: `status:${statusName}`,
+          external_message_id: messageId,
+          contact_wa_id: recipientId || defaultContactWaId,
+          signature_valid: true,
           payload: {
-            object:
-              objectType,
-            entry_id:
-              entryId,
-            field:
-              fieldName,
+            object: objectType,
+            entry_id: entryId,
+            field: fieldName,
             metadata,
             status,
           },
-
-          processing_status:
-            'received',
+          processing_status: 'received',
         });
       }
 
-      if (
-        messages.length === 0 &&
-        statuses.length === 0
-      ) {
+      if (messages.length === 0 && statuses.length === 0) {
         const unknownPayload = {
-          object:
-            objectType,
-          entry_id:
-            entryId,
-          field:
-            fieldName,
+          object: objectType,
+          entry_id: entryId,
+          field: fieldName,
           value,
         };
 
         rows.push({
-          event_key:
-            stableEventKey(
-              objectType,
-              entryId,
-              fieldName,
-              unknownPayload
-            ),
-
-          object_type:
+          event_key: stableEventKey(
             objectType,
-          entry_id:
             entryId,
-          field_name:
             fieldName,
-
-          phone_number_id:
-            phoneNumberId,
-          display_phone_number:
-            displayPhoneNumber,
-
-          event_type:
-            fieldName ||
-            'unknown',
-
-          external_message_id:
-            null,
-
-          contact_wa_id:
-            defaultContactWaId,
-
-          signature_valid:
-            true,
-
-          payload:
-            unknownPayload,
-
-          processing_status:
-            'received',
+            unknownPayload
+          ),
+          object_type: objectType,
+          entry_id: entryId,
+          field_name: fieldName,
+          phone_number_id: phoneNumberId,
+          display_phone_number: displayPhoneNumber,
+          event_type: fieldName || 'unknown',
+          external_message_id: null,
+          contact_wa_id: defaultContactWaId,
+          signature_valid: true,
+          payload: unknownPayload,
+          processing_status: 'received',
         });
       }
     }
@@ -602,19 +330,10 @@ function stableEventKey(
   fieldName: string | null,
   payload: unknown
 ) {
-  const hash =
-    crypto
-      .createHash(
-        'sha256'
-      )
-      .update(
-        JSON.stringify(
-          payload
-        )
-      )
-      .digest(
-        'hex'
-      );
+  const hash = crypto
+    .createHash('sha256')
+    .update(JSON.stringify(payload))
+    .digest('hex');
 
   return [
     'event',
@@ -625,66 +344,31 @@ function stableEventKey(
   ].join(':');
 }
 
-function objectValue(
-  value: unknown
-): JsonObject {
-  if (
-    value &&
-    typeof value ===
-      'object' &&
-    !Array.isArray(
-      value
-    )
-  ) {
+function objectValue(value: unknown): JsonObject {
+  if (value && typeof value === 'object' && !Array.isArray(value)) {
     return value as JsonObject;
   }
 
   return {};
 }
 
-function arrayValue(
-  value: unknown
-): unknown[] {
-  return Array.isArray(
-    value
-  )
-    ? value
-    : [];
+function arrayValue(value: unknown): unknown[] {
+  return Array.isArray(value) ? value : [];
 }
 
-function stringValue(
-  value: unknown
-): string | null {
-  if (
-    typeof value !==
-    'string'
-  ) {
+function stringValue(value: unknown): string | null {
+  if (typeof value !== 'string') {
     return null;
   }
 
-  const trimmed =
-    value.trim();
-
-  return trimmed ||
-    null;
+  const trimmed = value.trim();
+  return trimmed || null;
 }
 
-function firstString(
-  values: unknown[],
-  key: string
-) {
-  for (
-    const value of values
-  ) {
-    const object =
-      objectValue(
-        value
-      );
-
-    const result =
-      stringValue(
-        object[key]
-      );
+function firstString(values: unknown[], key: string) {
+  for (const value of values) {
+    const object = objectValue(value);
+    const result = stringValue(object[key]);
 
     if (result) {
       return result;
