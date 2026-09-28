@@ -14,6 +14,7 @@ const PUBLIC_EXACT_PATHS =
     '/api/analytics/google-ads/sync',
     '/api/analytics/meta-ads/sync',
     '/api/admissions/auto-tasks',
+    '/api/whatsapp/webhook',
   ]);
 
 
