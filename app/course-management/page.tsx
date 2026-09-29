@@ -30,6 +30,16 @@ import {
   BatchAccommodationAssignments,
   type EnrollmentAccommodationRosterRow,
 } from '@/components/batch-accommodation-assignments';
+import {
+  BatchPhysicalRoomPool,
+  type BatchPhysicalRoomInventoryRow,
+  type EnrollmentPhysicalRoomAssignmentRow,
+} from '@/components/batch-physical-room-pool';
+import {
+  PhysicalRoomMaster,
+  type AccommodationPropertyRow,
+  type AccommodationRoomRow,
+} from '@/components/physical-room-master';
 import { PageHeader } from '@/components/ui';
 import { createClient } from '@/lib/supabase/server';
 
@@ -133,6 +143,10 @@ export default async function CourseManagementPage({
     auditResult,
     accommodationResult,
     rosterResult,
+    propertiesResult,
+    roomsResult,
+    roomPoolResult,
+    physicalAssignmentsResult,
   ] = await Promise.all([
     supabase
       .from(
@@ -202,6 +216,72 @@ export default async function CourseManagementPage({
         }
       )
       .limit(2000),
+
+    supabase
+      .from(
+        'accommodation_properties'
+      )
+      .select('*')
+      .order(
+        'name',
+        {
+          ascending: true,
+        }
+      )
+      .limit(200),
+
+    supabase
+      .from(
+        'accommodation_rooms'
+      )
+      .select('*')
+      .order(
+        'sort_order',
+        {
+          ascending: true,
+        }
+      )
+      .order(
+        'room_code',
+        {
+          ascending: true,
+        }
+      )
+      .limit(1000),
+
+    supabase
+      .from(
+        'v_batch_physical_room_inventory'
+      )
+      .select('*')
+      .order(
+        'start_date',
+        {
+          ascending: true,
+          nullsFirst: false,
+        }
+      )
+      .order(
+        'sort_order',
+        {
+          ascending: true,
+        }
+      )
+      .limit(3000),
+
+    supabase
+      .from(
+        'v_enrollment_physical_room_assignments'
+      )
+      .select('*')
+      .order(
+        'assigned_at',
+        {
+          ascending: false,
+          nullsFirst: false,
+        }
+      )
+      .limit(3000),
   ]);
 
   if (batchesResult.error) {
@@ -228,6 +308,30 @@ export default async function CourseManagementPage({
     );
   }
 
+  if (propertiesResult.error) {
+    throw new Error(
+      `Unable to load accommodation properties: ${propertiesResult.error.message}`
+    );
+  }
+
+  if (roomsResult.error) {
+    throw new Error(
+      `Unable to load physical rooms: ${roomsResult.error.message}`
+    );
+  }
+
+  if (roomPoolResult.error) {
+    throw new Error(
+      `Unable to load batch physical room inventory: ${roomPoolResult.error.message}`
+    );
+  }
+
+  if (physicalAssignmentsResult.error) {
+    throw new Error(
+      `Unable to load physical room assignments: ${physicalAssignmentsResult.error.message}`
+    );
+  }
+
   const batches =
     (batchesResult.data ??
       []) as BatchRow[];
@@ -243,6 +347,31 @@ export default async function CourseManagementPage({
   const rosterRows =
     (rosterResult.data ??
       []) as EnrollmentAccommodationRosterRow[];
+
+  const properties =
+    (propertiesResult.data ??
+      []) as AccommodationPropertyRow[];
+
+  const physicalRooms =
+    (roomsResult.data ??
+      []) as AccommodationRoomRow[];
+
+  const roomPoolRows =
+    (roomPoolResult.data ??
+      []) as BatchPhysicalRoomInventoryRow[];
+
+  const physicalRoomAssignments =
+    (physicalAssignmentsResult.data ??
+      []) as EnrollmentPhysicalRoomAssignmentRow[];
+
+  const activePhysicalRoomAssignments =
+    physicalRoomAssignments.filter(
+      (assignment) =>
+        assignment.room_assignment_status ===
+          'reserved' ||
+        assignment.room_assignment_status ===
+          'confirmed'
+    );
 
   const accommodationByBatch =
     new Map<
@@ -289,6 +418,56 @@ export default async function CourseManagementPage({
     );
 
     rosterByBatch.set(
+      item.batch_id,
+      current
+    );
+  }
+
+  const roomPoolByBatch =
+    new Map<
+      string,
+      BatchPhysicalRoomInventoryRow[]
+    >();
+
+  for (
+    const item
+    of roomPoolRows
+  ) {
+    const current =
+      roomPoolByBatch.get(
+        item.batch_id
+      ) ?? [];
+
+    current.push(
+      item
+    );
+
+    roomPoolByBatch.set(
+      item.batch_id,
+      current
+    );
+  }
+
+  const physicalAssignmentsByBatch =
+    new Map<
+      string,
+      EnrollmentPhysicalRoomAssignmentRow[]
+    >();
+
+  for (
+    const item
+    of activePhysicalRoomAssignments
+  ) {
+    const current =
+      physicalAssignmentsByBatch.get(
+        item.batch_id
+      ) ?? [];
+
+    current.push(
+      item
+    );
+
+    physicalAssignmentsByBatch.set(
       item.batch_id,
       current
     );
@@ -643,6 +822,18 @@ export default async function CourseManagementPage({
         </form>
       </section>
 
+      <PhysicalRoomMaster
+        properties={
+          properties
+        }
+        rooms={
+          physicalRooms
+        }
+        returnTo={
+          returnTo
+        }
+      />
+
       <section className="mt-4 grid gap-4 2xl:grid-cols-[1fr_320px]">
         <div className="space-y-4">
           {filtered.length ===
@@ -677,6 +868,19 @@ export default async function CourseManagementPage({
                   }
                   rosterRows={
                     rosterByBatch.get(
+                      row.batch_id
+                    ) ?? []
+                  }
+                  roomMasterRows={
+                    physicalRooms
+                  }
+                  roomPoolRows={
+                    roomPoolByBatch.get(
+                      row.batch_id
+                    ) ?? []
+                  }
+                  physicalRoomAssignments={
+                    physicalAssignmentsByBatch.get(
                       row.batch_id
                     ) ?? []
                   }
@@ -790,11 +994,17 @@ function BatchAdminCard({
   returnTo,
   accommodationRows,
   rosterRows,
+  roomMasterRows,
+  roomPoolRows,
+  physicalRoomAssignments,
 }: {
   row: BatchRow;
   returnTo: string;
   accommodationRows: AccommodationInventoryRow[];
   rosterRows: EnrollmentAccommodationRosterRow[];
+  roomMasterRows: AccommodationRoomRow[];
+  roomPoolRows: BatchPhysicalRoomInventoryRow[];
+  physicalRoomAssignments: EnrollmentPhysicalRoomAssignmentRow[];
 }) {
   const capacity =
     nullableNumber(
@@ -1388,7 +1598,9 @@ function BatchAdminCard({
       {(row.mode === 'residential' ||
         row.mode === 'hybrid' ||
         accommodationRows.length > 0 ||
-        rosterRows.length > 0) && (
+        rosterRows.length > 0 ||
+        roomPoolRows.length > 0 ||
+        physicalRoomAssignments.length > 0) && (
         <>
           <BatchAccommodationInventory
             batchId={
@@ -1402,12 +1614,36 @@ function BatchAdminCard({
             }
           />
 
+          <BatchPhysicalRoomPool
+            batchId={
+              row.batch_id
+            }
+            accommodationRows={
+              accommodationRows
+            }
+            roomMasterRows={
+              roomMasterRows
+            }
+            poolRows={
+              roomPoolRows
+            }
+            returnTo={
+              returnTo
+            }
+          />
+
           <BatchAccommodationAssignments
             rosterRows={
               rosterRows
             }
             accommodationRows={
               accommodationRows
+            }
+            roomPoolRows={
+              roomPoolRows
+            }
+            physicalRoomAssignments={
+              physicalRoomAssignments
             }
             returnTo={
               returnTo
@@ -2071,6 +2307,41 @@ function noticeText(
     'student-accommodation-released'
   ) {
     return 'Student accommodation assignment released.';
+  }
+
+  if (
+    notice ===
+    'property-saved'
+  ) {
+    return 'Accommodation property saved.';
+  }
+
+  if (
+    notice ===
+    'room-saved'
+  ) {
+    return 'Physical room saved.';
+  }
+
+  if (
+    notice ===
+    'batch-room-saved'
+  ) {
+    return 'Physical room pool updated for this batch.';
+  }
+
+  if (
+    notice ===
+    'physical-room-assigned'
+  ) {
+    return 'Student physical room assignment saved.';
+  }
+
+  if (
+    notice ===
+    'physical-room-released'
+  ) {
+    return 'Student physical room assignment released.';
   }
 
   return 'Course management updated.';

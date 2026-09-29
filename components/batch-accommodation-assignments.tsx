@@ -17,6 +17,11 @@ import {
 import type {
   AccommodationInventoryRow,
 } from '@/components/batch-accommodation-inventory';
+import {
+  StudentPhysicalRoomAssignment,
+  type BatchPhysicalRoomInventoryRow,
+  type EnrollmentPhysicalRoomAssignmentRow,
+} from '@/components/batch-physical-room-pool';
 
 
 export type EnrollmentAccommodationRosterRow = {
@@ -58,10 +63,14 @@ export type EnrollmentAccommodationRosterRow = {
 export function BatchAccommodationAssignments({
   rosterRows,
   accommodationRows,
+  roomPoolRows,
+  physicalRoomAssignments,
   returnTo,
 }: {
   rosterRows: EnrollmentAccommodationRosterRow[];
   accommodationRows: AccommodationInventoryRow[];
+  roomPoolRows: BatchPhysicalRoomInventoryRow[];
+  physicalRoomAssignments: EnrollmentPhysicalRoomAssignmentRow[];
   returnTo: string;
 }) {
   const operationalRows =
@@ -165,6 +174,22 @@ export function BatchAccommodationAssignments({
                 accommodationRows={
                   activeAccommodationTypes
                 }
+                roomPoolRows={
+                  roomPoolRows
+                }
+                currentPhysicalRoom={
+                  physicalRoomAssignments.find(
+                    (assignment) =>
+                      assignment.enrollment_id ===
+                        row.enrollment_id &&
+                      (
+                        assignment.room_assignment_status ===
+                          'reserved' ||
+                        assignment.room_assignment_status ===
+                          'confirmed'
+                      )
+                  ) ?? null
+                }
                 returnTo={
                   returnTo
                 }
@@ -181,10 +206,16 @@ export function BatchAccommodationAssignments({
 function EnrollmentAccommodationRow({
   row,
   accommodationRows,
+  roomPoolRows,
+  currentPhysicalRoom,
   returnTo,
 }: {
   row: EnrollmentAccommodationRosterRow;
   accommodationRows: AccommodationInventoryRow[];
+  roomPoolRows: BatchPhysicalRoomInventoryRow[];
+  currentPhysicalRoom:
+    | EnrollmentPhysicalRoomAssignmentRow
+    | null;
   returnTo: string;
 }) {
   const assigned =
@@ -477,6 +508,29 @@ function EnrollmentAccommodationRow({
             </button>
           </div>
         </form>
+      )}
+
+      {assigned && (
+        <StudentPhysicalRoomAssignment
+          enrollmentId={
+            row.enrollment_id
+          }
+          accommodationTypeId={
+            row.accommodation_type_id
+          }
+          accommodationName={
+            row.accommodation_name
+          }
+          currentRoom={
+            currentPhysicalRoom
+          }
+          poolRows={
+            roomPoolRows
+          }
+          returnTo={
+            returnTo
+          }
+        />
       )}
 
       {assigned && (

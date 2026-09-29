@@ -1197,3 +1197,683 @@ export async function releaseEnrollmentAccommodationAction(
     )
   );
 }
+
+
+export async function upsertAccommodationPropertyAction(
+  formData: FormData
+) {
+  const id =
+    textValue(
+      formData,
+      'id'
+    );
+
+  const code =
+    textValue(
+      formData,
+      'code'
+    );
+
+  const name =
+    textValue(
+      formData,
+      'name'
+    );
+
+  const location =
+    textValue(
+      formData,
+      'location'
+    );
+
+  const notes =
+    textValue(
+      formData,
+      'notes'
+    );
+
+  const returnTo =
+    safeReturnPath(
+      textValue(
+        formData,
+        'return_to'
+      )
+    );
+
+  if (!code) {
+    redirect(
+      withMessage(
+        returnTo,
+        'error',
+        'Property code is required'
+      )
+    );
+  }
+
+  if (!name) {
+    redirect(
+      withMessage(
+        returnTo,
+        'error',
+        'Property name is required'
+      )
+    );
+  }
+
+  const active =
+    id
+      ? booleanValue(
+          formData,
+          'active'
+        )
+      : true;
+
+  const supabase =
+    await createClient();
+
+  const {
+    error,
+  } = await supabase.rpc(
+    'upsert_accommodation_property',
+    {
+      p_id:
+        id,
+      p_code:
+        code,
+      p_name:
+        name,
+      p_location:
+        location,
+      p_notes:
+        notes,
+      p_active:
+        active,
+    }
+  );
+
+  if (error) {
+    redirect(
+      withMessage(
+        returnTo,
+        'error',
+        error.message
+      )
+    );
+  }
+
+  revalidateBatchPages();
+
+  redirect(
+    withMessage(
+      returnTo,
+      'notice',
+      'property-saved'
+    )
+  );
+}
+
+
+export async function upsertAccommodationRoomAction(
+  formData: FormData
+) {
+  const id =
+    textValue(
+      formData,
+      'id'
+    );
+
+  const propertyId =
+    textValue(
+      formData,
+      'property_id'
+    );
+
+  const roomCode =
+    textValue(
+      formData,
+      'room_code'
+    );
+
+  const roomName =
+    textValue(
+      formData,
+      'room_name'
+    );
+
+  const floorOrArea =
+    textValue(
+      formData,
+      'floor_or_area'
+    );
+
+  const operationalStatus =
+    textValue(
+      formData,
+      'operational_status'
+    ) ||
+    'available';
+
+  const notes =
+    textValue(
+      formData,
+      'notes'
+    );
+
+  const returnTo =
+    safeReturnPath(
+      textValue(
+        formData,
+        'return_to'
+      )
+    );
+
+  if (!propertyId) {
+    redirect(
+      withMessage(
+        returnTo,
+        'error',
+        'Property is required'
+      )
+    );
+  }
+
+  if (!roomCode) {
+    redirect(
+      withMessage(
+        returnTo,
+        'error',
+        'Room code is required'
+      )
+    );
+  }
+
+  let capacitySpaces:
+    number;
+
+  let sortOrder:
+    number;
+
+  try {
+    capacitySpaces =
+      requiredInteger(
+        formData,
+        'capacity_spaces',
+        1
+      );
+
+    sortOrder =
+      nullableInteger(
+        formData,
+        'sort_order'
+      ) ?? 0;
+  } catch (error) {
+    redirect(
+      withMessage(
+        returnTo,
+        'error',
+        error instanceof Error
+          ? error.message
+          : 'Invalid room value'
+      )
+    );
+  }
+
+  if (
+    ![
+      'available',
+      'held',
+      'maintenance',
+      'out_of_service',
+    ].includes(
+      operationalStatus
+    )
+  ) {
+    redirect(
+      withMessage(
+        returnTo,
+        'error',
+        'Invalid room operational status'
+      )
+    );
+  }
+
+  const active =
+    id
+      ? booleanValue(
+          formData,
+          'active'
+        )
+      : true;
+
+  const supabase =
+    await createClient();
+
+  const {
+    error,
+  } = await supabase.rpc(
+    'upsert_accommodation_room',
+    {
+      p_id:
+        id,
+      p_property_id:
+        propertyId,
+      p_room_code:
+        roomCode,
+      p_room_name:
+        roomName,
+      p_capacity_spaces:
+        capacitySpaces,
+      p_floor_or_area:
+        floorOrArea,
+      p_operational_status:
+        operationalStatus,
+      p_notes:
+        notes,
+      p_sort_order:
+        sortOrder,
+      p_active:
+        active,
+    }
+  );
+
+  if (error) {
+    redirect(
+      withMessage(
+        returnTo,
+        'error',
+        error.message
+      )
+    );
+  }
+
+  revalidateBatchPages();
+
+  redirect(
+    withMessage(
+      returnTo,
+      'notice',
+      'room-saved'
+    )
+  );
+}
+
+
+export async function upsertBatchAccommodationRoomPoolAction(
+  formData: FormData
+) {
+  const id =
+    textValue(
+      formData,
+      'id'
+    );
+
+  const batchId =
+    textValue(
+      formData,
+      'batch_id'
+    );
+
+  const accommodationTypeId =
+    textValue(
+      formData,
+      'accommodation_type_id'
+    );
+
+  const roomId =
+    textValue(
+      formData,
+      'room_id'
+    );
+
+  const notes =
+    textValue(
+      formData,
+      'notes'
+    );
+
+  const returnTo =
+    safeReturnPath(
+      textValue(
+        formData,
+        'return_to'
+      )
+    );
+
+  if (!batchId) {
+    redirect(
+      withMessage(
+        returnTo,
+        'error',
+        'Batch is missing'
+      )
+    );
+  }
+
+  if (!accommodationTypeId) {
+    redirect(
+      withMessage(
+        returnTo,
+        'error',
+        'Accommodation type is required'
+      )
+    );
+  }
+
+  if (!roomId) {
+    redirect(
+      withMessage(
+        returnTo,
+        'error',
+        'Physical room is required'
+      )
+    );
+  }
+
+  let sortOrder:
+    number;
+
+  try {
+    sortOrder =
+      nullableInteger(
+        formData,
+        'sort_order'
+      ) ?? 0;
+  } catch (error) {
+    redirect(
+      withMessage(
+        returnTo,
+        'error',
+        error instanceof Error
+          ? error.message
+          : 'Invalid room pool value'
+      )
+    );
+  }
+
+  const active =
+    id
+      ? booleanValue(
+          formData,
+          'active'
+        )
+      : true;
+
+  const supabase =
+    await createClient();
+
+  const {
+    error,
+  } = await supabase.rpc(
+    'upsert_batch_accommodation_room_pool',
+    {
+      p_id:
+        id,
+      p_batch_id:
+        batchId,
+      p_accommodation_type_id:
+        accommodationTypeId,
+      p_room_id:
+        roomId,
+      p_notes:
+        notes,
+      p_sort_order:
+        sortOrder,
+      p_active:
+        active,
+    }
+  );
+
+  if (error) {
+    redirect(
+      withMessage(
+        returnTo,
+        'error',
+        error.message
+      )
+    );
+  }
+
+  revalidateBatchPages();
+
+  redirect(
+    withMessage(
+      returnTo,
+      'notice',
+      'batch-room-saved'
+    )
+  );
+}
+
+
+export async function assignEnrollmentPhysicalRoomAction(
+  formData: FormData
+) {
+  const enrollmentId =
+    textValue(
+      formData,
+      'enrollment_id'
+    );
+
+  const roomId =
+    textValue(
+      formData,
+      'room_id'
+    );
+
+  const returnTo =
+    safeReturnPath(
+      textValue(
+        formData,
+        'return_to'
+      )
+    );
+
+  if (!enrollmentId) {
+    redirect(
+      withMessage(
+        returnTo,
+        'error',
+        'Enrollment is missing'
+      )
+    );
+  }
+
+  if (!roomId) {
+    redirect(
+      withMessage(
+        returnTo,
+        'error',
+        'Select a physical room'
+      )
+    );
+  }
+
+  let occupantSpaces:
+    number;
+
+  try {
+    occupantSpaces =
+      requiredInteger(
+        formData,
+        'occupant_spaces',
+        1
+      );
+  } catch (error) {
+    redirect(
+      withMessage(
+        returnTo,
+        'error',
+        error instanceof Error
+          ? error.message
+          : 'Invalid physical room spaces'
+      )
+    );
+  }
+
+  const assignmentStatus =
+    textValue(
+      formData,
+      'assignment_status'
+    ) ||
+    'reserved';
+
+  if (
+    ![
+      'reserved',
+      'confirmed',
+    ].includes(
+      assignmentStatus
+    )
+  ) {
+    redirect(
+      withMessage(
+        returnTo,
+        'error',
+        'Invalid physical room assignment status'
+      )
+    );
+  }
+
+  const notes =
+    textValue(
+      formData,
+      'notes'
+    );
+
+  const supabase =
+    await createClient();
+
+  const {
+    error,
+  } = await supabase.rpc(
+    'assign_enrollment_physical_room',
+    {
+      p_enrollment_id:
+        enrollmentId,
+      p_room_id:
+        roomId,
+      p_occupant_spaces:
+        occupantSpaces,
+      p_status:
+        assignmentStatus,
+      p_notes:
+        notes,
+    }
+  );
+
+  if (error) {
+    redirect(
+      withMessage(
+        returnTo,
+        'error',
+        error.message
+      )
+    );
+  }
+
+  revalidateBatchPages();
+
+  redirect(
+    withMessage(
+      returnTo,
+      'notice',
+      'physical-room-assigned'
+    )
+  );
+}
+
+
+export async function releaseEnrollmentPhysicalRoomAction(
+  formData: FormData
+) {
+  const enrollmentId =
+    textValue(
+      formData,
+      'enrollment_id'
+    );
+
+  const returnTo =
+    safeReturnPath(
+      textValue(
+        formData,
+        'return_to'
+      )
+    );
+
+  if (!enrollmentId) {
+    redirect(
+      withMessage(
+        returnTo,
+        'error',
+        'Enrollment is missing'
+      )
+    );
+  }
+
+  const releaseStatus =
+    textValue(
+      formData,
+      'release_status'
+    ) ||
+    'released';
+
+  if (
+    ![
+      'released',
+      'cancelled',
+    ].includes(
+      releaseStatus
+    )
+  ) {
+    redirect(
+      withMessage(
+        returnTo,
+        'error',
+        'Invalid physical room release status'
+      )
+    );
+  }
+
+  const notes =
+    textValue(
+      formData,
+      'notes'
+    );
+
+  const supabase =
+    await createClient();
+
+  const {
+    error,
+  } = await supabase.rpc(
+    'release_enrollment_physical_room',
+    {
+      p_enrollment_id:
+        enrollmentId,
+      p_status:
+        releaseStatus,
+      p_notes:
+        notes,
+    }
+  );
+
+  if (error) {
+    redirect(
+      withMessage(
+        returnTo,
+        'error',
+        error.message
+      )
+    );
+  }
+
+  revalidateBatchPages();
+
+  redirect(
+    withMessage(
+      returnTo,
+      'notice',
+      'physical-room-released'
+    )
+  );
+}
