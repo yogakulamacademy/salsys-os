@@ -1,19 +1,145 @@
 import Link from 'next/link';
-import { Filter, Plus, Search } from 'lucide-react';
-import { LeadsTable } from '@/components/leads-table';
-import { PageHeader } from '@/components/ui';
-import { getLeads, isMockMode } from '@/lib/data';
+import {
+  Plus,
+} from 'lucide-react';
 
-export default async function LeadsPage({ searchParams }: { searchParams: Promise<{ notice?: string }> }) {
-  const [leads, params] = await Promise.all([getLeads(), searchParams]);
-  const mock = isMockMode();
-  return <>
-    <PageHeader eyebrow="CRM" title="Leads" description="Every prospect across website, Instagram, WhatsApp and paid media in one place." actions={<Link href="/leads/new" className="btn-primary"><Plus size={16} /> Add lead</Link>} />
-    {params.notice === 'mock-create' && <div className="mb-4 rounded-xl border border-orange-100 bg-orange-50 px-4 py-3 text-sm font-medium text-orange-700">Mock mode is active, so the test lead was not saved. Switch to Supabase mode when you are ready for persistence.</div>}
-    <div className="card overflow-hidden">
-      <div className="flex flex-col gap-3 border-b border-slate-100 p-4 lg:flex-row lg:items-center"><div className="flex flex-1 items-center rounded-xl border border-slate-200 bg-slate-50 px-3"><Search size={16} className="text-slate-400" /><input className="w-full bg-transparent px-2 py-2.5 text-sm outline-none" placeholder="Search by name, country, course or lead ID" /></div><select className="input lg:w-44"><option>All stages</option><option>Qualified</option><option>High intent</option><option>Payment pending</option></select><select className="input lg:w-44"><option>All sources</option><option>Instagram</option><option>Google Ads</option><option>Meta Ads</option><option>Website / SEO</option></select><button className="btn-secondary"><Filter size={15} /> More filters</button></div>
-      <div className="flex items-center justify-between bg-slate-50/60 px-5 py-3 text-xs text-slate-500"><span><strong className="text-slate-700">{leads.length}</strong> {mock ? 'sample' : 'loaded'} leads</span><span>{mock ? 'Mock-data mode' : 'Supabase live mode'}</span></div>
-      <LeadsTable leads={leads} />
-    </div>
-  </>;
+import {
+  LeadsWorkspace,
+  type LeadListIntelligence,
+} from '@/components/leads-workspace';
+import {
+  PageHeader,
+} from '@/components/ui';
+import {
+  getLeads,
+  isMockMode,
+} from '@/lib/data';
+import {
+  createClient,
+} from '@/lib/supabase/server';
+
+
+type LeadsPageProps = {
+  searchParams: Promise<{
+    notice?: string;
+  }>;
+};
+
+
+export default async function LeadsPage({
+  searchParams,
+}: LeadsPageProps) {
+  const supabase =
+    await createClient();
+
+  const [
+    leads,
+    params,
+    intelligenceResult,
+  ] = await Promise.all([
+    getLeads(),
+    searchParams,
+
+    supabase
+      .from(
+        'v_pipeline_stage_aging'
+      )
+      .select(`
+        lead_id,
+        owner_user_id,
+        owner_name,
+        aging_status,
+        stage_entered_at,
+        stage_age_hours,
+        stage_age_days,
+        warning_after_days,
+        stuck_after_days,
+        days_over_stuck_threshold,
+        days_since_last_contact,
+        preferred_batch_id,
+        batch_code,
+        batch_location,
+        batch_start_date,
+        batch_end_date
+      `)
+      .order(
+        'stage_age_days',
+        {
+          ascending: false,
+        }
+      )
+      .limit(
+        5000
+      ),
+  ]);
+
+  const mock =
+    isMockMode();
+
+  let intelligence: LeadListIntelligence[] =
+    [];
+
+  let intelligenceError:
+    string |
+    null =
+    null;
+
+  if (
+    intelligenceResult.error
+  ) {
+    intelligenceError =
+      intelligenceResult.error.message;
+  } else {
+    intelligence =
+      (
+        intelligenceResult.data ??
+        []
+      ) as LeadListIntelligence[];
+  }
+
+  return (
+    <>
+      <PageHeader
+        eyebrow="CRM"
+        title="Leads"
+        description="Find, filter and triage every prospect across website, Instagram, WhatsApp, paid media and other acquisition channels."
+        actions={
+          <Link
+            href="/leads/new"
+            className="btn-primary"
+          >
+            <Plus
+              size={16}
+            />
+            Add lead
+          </Link>
+        }
+      />
+
+      {params.notice ===
+        'mock-create' && (
+        <div className="mb-4 rounded-xl border border-orange-100 bg-orange-50 px-4 py-3 text-sm font-medium text-orange-700">
+          Mock mode is active, so the test lead was not saved. Switch to Supabase mode when you are ready for persistence.
+        </div>
+      )}
+
+      {intelligenceError && (
+        <div className="mb-4 rounded-xl border border-amber-100 bg-amber-50 px-4 py-3 text-sm font-medium text-amber-700">
+          Lead list loaded, but owner / stage-aging intelligence could not be loaded: {intelligenceError}
+        </div>
+      )}
+
+      <LeadsWorkspace
+        leads={
+          leads
+        }
+        intelligence={
+          intelligence
+        }
+        mock={
+          mock
+        }
+      />
+    </>
+  );
 }
