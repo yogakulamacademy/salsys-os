@@ -488,6 +488,48 @@ export async function sendWhatsAppMessageAction(
     );
   }
 
+/*
+ * Attach Meta's WhatsApp message ID
+ * to the CRM message we just logged.
+ *
+ * This allows later webhook events:
+ * sent → delivered → read / failed
+ * to update this exact message.
+ */
+if (externalMessageId) {
+  const {
+    error: attachError,
+  } =
+    await supabase.rpc(
+      'attach_whatsapp_outbound_message_id',
+      {
+        p_lead_id:
+          leadId,
+
+        p_conversation_id:
+          conversation.id,
+
+        p_body:
+          body,
+
+        p_external_message_id:
+          externalMessageId,
+      }
+    );
+
+  if (attachError) {
+    redirect(
+      conversationUrl(
+        leadId,
+        {
+          error:
+            `WhatsApp was sent and logged, but its Meta message ID could not be attached: ${attachError.message}. Do not resend this message.`,
+        }
+      )
+    );
+  }
+}
+
   revalidatePath(
     '/conversations'
   );
@@ -1345,6 +1387,49 @@ export async function sendWhatsAppTemplateAction(
       )
     );
   }
+
+  /*
+ * Attach Meta's WhatsApp message ID
+ * to the outbound template message.
+ *
+ * This lets Meta webhook status events
+ * update this exact CRM message:
+ *
+ * sent → delivered → read / failed
+ */
+if (externalMessageId) {
+  const {
+    error: attachError,
+  } =
+    await supabase.rpc(
+      'attach_whatsapp_outbound_message_id',
+      {
+        p_lead_id:
+          leadId,
+
+        p_conversation_id:
+          conversationId,
+
+        p_body:
+          crmBody,
+
+        p_external_message_id:
+          externalMessageId,
+      }
+    );
+
+  if (attachError) {
+    redirect(
+      conversationUrl(
+        leadId,
+        {
+          error:
+            `WhatsApp template was sent and logged, but its Meta message ID could not be attached: ${attachError.message}. Do not resend this template.`,
+        }
+      )
+    );
+  }
+}
 
   /* =====================================================
      SWITCH CURRENT COMMUNICATION CHANNEL
