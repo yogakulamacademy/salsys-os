@@ -714,6 +714,45 @@ type AdmissionsOwnerWorkloadRow = {
 };
 
 
+type AdmissionsBatchCapacityRow = {
+  batch_id: string;
+  course_id: string | null;
+  course_code: string | null;
+  course_name: string | null;
+  batch_code: string | null;
+  location: string | null;
+  mode: string | null;
+  start_date: string | null;
+  end_date: string | null;
+  start_time: string | null;
+  end_time: string | null;
+  timezone: string | null;
+  capacity: number | string | null;
+  stored_seats_remaining: number | string | null;
+  active: boolean | null;
+  enrolled_count: number | string | null;
+  active_prospects: number | string | null;
+  new_prospects: number | string | null;
+  qualified_prospects: number | string | null;
+  hot_prospects: number | string | null;
+  payment_pending: number | string | null;
+  paid_or_partial_prospects: number | string | null;
+  needs_reply: number | string | null;
+  critical_prospects: number | string | null;
+  high_priority_prospects: number | string | null;
+  unassigned_prospects: number | string | null;
+  calculated_seats_remaining: number | string | null;
+  overbooked_by: number | string | null;
+  enrolled_plus_payment_pending: number | string | null;
+  total_live_demand: number | string | null;
+  projected_seats_after_payment_pending: number | string | null;
+  enrolled_capacity_percent: number | string | null;
+  live_demand_capacity_percent: number | string | null;
+  days_to_start: number | string | null;
+  capacity_status: string | null;
+};
+
+
 
 
 
@@ -905,6 +944,10 @@ export default async function AdmissionsDeskPage({
 
 
     ownerWorkloadResult,
+
+
+
+    batchCapacityResult,
 
 
 
@@ -1342,6 +1385,13 @@ export default async function AdmissionsDeskPage({
 
 
 
+    supabase
+      .from('v_admissions_upcoming_batch_capacity')
+      .select('*')
+      .limit(40),
+
+
+
   ]);
 
 
@@ -1433,6 +1483,10 @@ export default async function AdmissionsDeskPage({
 
 
     ownerWorkloadResult.error,
+
+
+
+    batchCapacityResult.error,
 
 
 
@@ -1647,6 +1701,11 @@ export default async function AdmissionsDeskPage({
 
   const ownerWorkload =
     (ownerWorkloadResult.data ?? []) as AdmissionsOwnerWorkloadRow[];
+
+
+
+  const batchCapacity =
+    (batchCapacityResult.data ?? []) as AdmissionsBatchCapacityRow[];
 
 
 
@@ -2094,6 +2153,41 @@ export default async function AdmissionsDeskPage({
 
 
 
+
+
+
+  const orderedBatchCapacity =
+    [...batchCapacity].sort(
+      (a, b) => {
+        const statusDelta =
+          batchCapacityStatusRank(
+            a.capacity_status
+          ) -
+          batchCapacityStatusRank(
+            b.capacity_status
+          );
+
+        if (statusDelta !== 0) {
+          return statusDelta;
+        }
+
+        const aStart =
+          a.start_date
+            ? new Date(
+                `${a.start_date}T00:00:00Z`
+              ).getTime()
+            : Number.POSITIVE_INFINITY;
+
+        const bStart =
+          b.start_date
+            ? new Date(
+                `${b.start_date}T00:00:00Z`
+              ).getTime()
+            : Number.POSITIVE_INFINITY;
+
+        return aStart - bStart;
+      }
+    );
 
 
 
@@ -2546,6 +2640,12 @@ export default async function AdmissionsDeskPage({
         rows={ownerWorkload}
         currentUserId={user?.id ?? null}
         band={band || 'all'}
+      />
+
+
+
+      <AdmissionsBatchCapacityPanel
+        rows={orderedBatchCapacity}
       />
 
 
@@ -3843,6 +3943,783 @@ export default async function AdmissionsDeskPage({
 
 
 
+
+
+
+function AdmissionsBatchCapacityPanel({
+  rows,
+}: {
+  rows: AdmissionsBatchCapacityRow[];
+}) {
+  const visibleRows =
+    rows.slice(0, 12);
+
+  const totalEnrolled =
+    rows.reduce(
+      (total, row) =>
+        total +
+        toNumber(
+          row.enrolled_count
+        ),
+      0
+    );
+
+  const totalPaymentPending =
+    rows.reduce(
+      (total, row) =>
+        total +
+        toNumber(
+          row.payment_pending
+        ),
+      0
+    );
+
+  const totalHot =
+    rows.reduce(
+      (total, row) =>
+        total +
+        toNumber(
+          row.hot_prospects
+        ),
+      0
+    );
+
+  const totalNeedsReply =
+    rows.reduce(
+      (total, row) =>
+        total +
+        toNumber(
+          row.needs_reply
+        ),
+      0
+    );
+
+  const knownOpenSeats =
+    rows.reduce(
+      (total, row) =>
+        row.calculated_seats_remaining == null
+          ? total
+          : total +
+            toNumber(
+              row.calculated_seats_remaining
+            ),
+      0
+    );
+
+  const attentionBatches =
+    rows.filter(
+      (row) =>
+        batchCapacityNeedsAttention(
+          row.capacity_status
+        ) ||
+        toNumber(
+          row.needs_reply
+        ) > 0 ||
+        toNumber(
+          row.critical_prospects
+        ) > 0 ||
+        toNumber(
+          row.unassigned_prospects
+        ) > 0
+    ).length;
+
+  return (
+    <section className="card-pad mt-4">
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div>
+          <div className="eyebrow">
+            Batch capacity
+          </div>
+
+          <div className="section-title mt-1">
+            Upcoming enrollment & demand
+          </div>
+
+          <p className="mt-1 max-w-3xl text-xs leading-5 text-slate-400">
+            Confirmed enrollments are kept separate from sales demand. Payment
+            pending, hot prospects and active enquiries show pressure on the
+            remaining seats without being counted as confirmed students.
+          </p>
+        </div>
+
+        <Link
+          href="/pipeline"
+          className="inline-flex items-center gap-1.5 text-xs font-bold text-brand"
+        >
+          Open pipeline
+          <ArrowRight size={13} />
+        </Link>
+      </div>
+
+      <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-6">
+        <BatchSummaryMetric
+          label="Upcoming batches"
+          value={rows.length}
+          sub="Active or ongoing"
+        />
+        <BatchSummaryMetric
+          label="Confirmed enrolled"
+          value={totalEnrolled}
+          sub="Across upcoming batches"
+        />
+        <BatchSummaryMetric
+          label="Known open seats"
+          value={knownOpenSeats}
+          sub="Capacity-set batches"
+        />
+        <BatchSummaryMetric
+          label="Payment pending"
+          value={totalPaymentPending}
+          sub="Near-conversion demand"
+          alert={totalPaymentPending > 0}
+        />
+        <BatchSummaryMetric
+          label="Hot prospects"
+          value={totalHot}
+          sub="Strong admissions demand"
+        />
+        <BatchSummaryMetric
+          label="Attention batches"
+          value={attentionBatches}
+          sub="Capacity or lead pressure"
+          alert={attentionBatches > 0}
+        />
+      </div>
+
+      {rows.length === 0 ? (
+        <div className="mt-4 rounded-xl bg-slate-50 px-4 py-10 text-center text-sm text-slate-400">
+          No upcoming active batches found.
+        </div>
+      ) : (
+        <div className="mt-4 grid gap-3 xl:grid-cols-2">
+          {visibleRows.map((row) => {
+            const capacity =
+              row.capacity == null
+                ? null
+                : toNumber(
+                    row.capacity
+                  );
+
+            const enrolled =
+              toNumber(
+                row.enrolled_count
+              );
+
+            const seatsLeft =
+              row.calculated_seats_remaining == null
+                ? null
+                : toNumber(
+                    row.calculated_seats_remaining
+                  );
+
+            const paymentPressure =
+              toNumber(
+                row.payment_pending
+              );
+
+            const hot =
+              toNumber(
+                row.hot_prospects
+              );
+
+            const needsReply =
+              toNumber(
+                row.needs_reply
+              );
+
+            const activeProspects =
+              toNumber(
+                row.active_prospects
+              );
+
+            const critical =
+              toNumber(
+                row.critical_prospects
+              );
+
+            const unassigned =
+              toNumber(
+                row.unassigned_prospects
+              );
+
+            const percent =
+              capacity &&
+              capacity > 0
+                ? Math.max(
+                    0,
+                    Math.min(
+                      100,
+                      toNumber(
+                        row.enrolled_capacity_percent
+                      )
+                    )
+                  )
+                : 0;
+
+            const status =
+              row.capacity_status ||
+              'healthy';
+
+            return (
+              <article
+                key={row.batch_id}
+                className={`rounded-2xl border p-4 transition-all duration-150 hover:-translate-y-0.5 hover:shadow-md ${batchCapacityCardClass(
+                  status
+                )}`}
+              >
+                <div className="flex items-start justify-between gap-4">
+                  <div className="min-w-0">
+                    <div className="truncate text-sm font-black text-slate-900">
+                      {row.course_name ||
+                        row.course_code ||
+                        'Course'}
+                    </div>
+
+                    <div className="mt-0.5 text-[10px] font-semibold text-slate-400">
+                      {row.batch_code ||
+                        'Batch code unavailable'}
+                    </div>
+
+                    <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-[10px] font-medium text-slate-500">
+                      <span>
+                        {formatBatchDateRange(
+                          row.start_date,
+                          row.end_date
+                        )}
+                      </span>
+
+                      {row.location && (
+                        <span>
+                          {row.location}
+                        </span>
+                      )}
+
+                      {row.mode && (
+                        <span>
+                          {pretty(
+                            row.mode
+                          )}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+
+                  <span
+                    className={`shrink-0 rounded-full px-2.5 py-1 text-[9px] font-bold uppercase ${batchCapacityBadgeClass(
+                      status
+                    )}`}
+                  >
+                    {batchCapacityStatusLabel(
+                      status
+                    )}
+                  </span>
+                </div>
+
+                {capacity != null &&
+                capacity > 0 ? (
+                  <>
+                    <div className="mt-4 flex items-end justify-between gap-4">
+                      <div>
+                        <div className="text-[9px] font-bold uppercase tracking-wide text-slate-400">
+                          Confirmed seats
+                        </div>
+                        <div className="mt-0.5 text-xl font-black text-slate-900">
+                          {formatNumber(
+                            enrolled
+                          )}{' '}
+                          <span className="text-sm font-bold text-slate-400">
+                            /{' '}
+                            {formatNumber(
+                              capacity
+                            )}
+                          </span>
+                        </div>
+                      </div>
+
+                      <div className="text-right">
+                        <div className="text-[9px] font-bold uppercase tracking-wide text-slate-400">
+                          Seats open
+                        </div>
+                        <div
+                          className={`mt-0.5 text-xl font-black ${
+                            seatsLeft === 0
+                              ? 'text-red-600'
+                              : seatsLeft != null &&
+                                  seatsLeft <= 2
+                                ? 'text-amber-600'
+                                : 'text-slate-900'
+                          }`}
+                        >
+                          {formatNumber(
+                            seatsLeft
+                          )}
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="mt-3 h-2 overflow-hidden rounded-full bg-white ring-1 ring-black/5">
+                      <div
+                        className={`h-full rounded-full transition-all duration-500 ${batchCapacityProgressClass(
+                          status
+                        )}`}
+                        style={{
+                          width: `${percent}%`,
+                        }}
+                      />
+                    </div>
+
+                    <div className="mt-1 flex items-center justify-between text-[9px] font-semibold text-slate-400">
+                      <span>
+                        {formatDecimalValue(
+                          row.enrolled_capacity_percent,
+                          0
+                        )}
+                        % confirmed
+                      </span>
+                      <span>
+                        {row.days_to_start == null
+                          ? 'Start date unavailable'
+                          : batchStartCountdown(
+                              row.days_to_start
+                            )}
+                      </span>
+                    </div>
+                  </>
+                ) : (
+                  <div className="mt-4 rounded-xl border border-amber-100 bg-white/80 px-3 py-3">
+                    <div className="text-xs font-black text-amber-700">
+                      Capacity not set
+                    </div>
+                    <div className="mt-0.5 text-[10px] leading-4 text-amber-600">
+                      Demand is visible, but seat availability cannot be calculated
+                      until this batch has a capacity.
+                    </div>
+                  </div>
+                )}
+
+                <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-4">
+                  <BatchMiniMetric
+                    label="Active"
+                    value={activeProspects}
+                  />
+                  <BatchMiniMetric
+                    label="Hot"
+                    value={hot}
+                    alert={hot > 0}
+                  />
+                  <BatchMiniMetric
+                    label="Payment"
+                    value={paymentPressure}
+                    alert={
+                      paymentPressure > 0
+                    }
+                  />
+                  <BatchMiniMetric
+                    label="Needs reply"
+                    value={needsReply}
+                    alert={
+                      needsReply > 0
+                    }
+                  />
+                </div>
+
+                <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 border-t border-black/5 pt-3 text-[10px] font-semibold text-slate-500">
+                  <span>
+                    Qualified{' '}
+                    {formatNumber(
+                      row.qualified_prospects
+                    )}
+                  </span>
+
+                  <span>
+                    Critical{' '}
+                    {formatNumber(
+                      critical
+                    )}
+                  </span>
+
+                  <span>
+                    Unassigned{' '}
+                    {formatNumber(
+                      unassigned
+                    )}
+                  </span>
+
+                  {row.projected_seats_after_payment_pending != null && (
+                    <span
+                      className={
+                        toNumber(
+                          row.projected_seats_after_payment_pending
+                        ) <= 0
+                          ? 'text-red-600'
+                          : ''
+                      }
+                    >
+                      After pending{' '}
+                      {formatNumber(
+                        row.projected_seats_after_payment_pending
+                      )}{' '}
+                      seats
+                    </span>
+                  )}
+
+                  {toNumber(
+                    row.overbooked_by
+                  ) > 0 && (
+                    <span className="font-black text-red-600">
+                      Overbooked by{' '}
+                      {formatNumber(
+                        row.overbooked_by
+                      )}
+                    </span>
+                  )}
+                </div>
+              </article>
+            );
+          })}
+        </div>
+      )}
+
+      {rows.length > visibleRows.length && (
+        <div className="mt-3 text-center text-[10px] font-semibold text-slate-400">
+          Showing the 12 highest-priority upcoming batches out of{' '}
+          {formatNumber(rows.length)}.
+        </div>
+      )}
+
+      {totalNeedsReply > 0 && (
+        <div className="mt-4 rounded-xl border border-amber-100 bg-amber-50/70 px-4 py-3 text-xs text-amber-700">
+          <span className="font-black">
+            {formatNumber(
+              totalNeedsReply
+            )}{' '}
+            batch-linked prospect
+            {totalNeedsReply === 1
+              ? ''
+              : 's'}{' '}
+            need a reply.
+          </span>{' '}
+          Prioritize those leads before using demand counts for planning.
+        </div>
+      )}
+    </section>
+  );
+}
+
+
+function BatchSummaryMetric({
+  label,
+  value,
+  sub,
+  alert = false,
+}: {
+  label: string;
+  value: number;
+  sub: string;
+  alert?: boolean;
+}) {
+  return (
+    <div
+      className={`rounded-xl border p-3 ${
+        alert
+          ? 'border-red-100 bg-red-50/55'
+          : 'border-slate-100 bg-slate-50/70'
+      }`}
+    >
+      <div
+        className={`text-[9px] font-bold uppercase tracking-wide ${
+          alert
+            ? 'text-red-500'
+            : 'text-slate-400'
+        }`}
+      >
+        {label}
+      </div>
+
+      <div
+        className={`mt-1 text-xl font-black ${
+          alert
+            ? 'text-red-700'
+            : 'text-slate-900'
+        }`}
+      >
+        {formatNumber(
+          value
+        )}
+      </div>
+
+      <div className="mt-0.5 text-[9px] text-slate-400">
+        {sub}
+      </div>
+    </div>
+  );
+}
+
+
+function BatchMiniMetric({
+  label,
+  value,
+  alert = false,
+}: {
+  label: string;
+  value: number;
+  alert?: boolean;
+}) {
+  return (
+    <div className="rounded-xl border border-black/5 bg-white/80 px-2.5 py-2">
+      <div className="text-[9px] font-bold uppercase tracking-wide text-slate-400">
+        {label}
+      </div>
+      <div
+        className={`mt-0.5 text-sm font-black ${
+          alert
+            ? 'text-red-600'
+            : 'text-slate-800'
+        }`}
+      >
+        {formatNumber(
+          value
+        )}
+      </div>
+    </div>
+  );
+}
+
+
+function batchCapacityStatusRank(
+  value:
+    | string
+    | null
+    | undefined
+) {
+  const ranks: Record<string, number> = {
+    overbooked: 0,
+    full: 1,
+    near_full: 2,
+    payment_pressure: 3,
+    demand_exceeds_open_seats: 4,
+    capacity_not_set: 5,
+    healthy: 6,
+  };
+
+  return ranks[
+    value || 'healthy'
+  ] ?? 7;
+}
+
+
+function batchCapacityNeedsAttention(
+  value:
+    | string
+    | null
+    | undefined
+) {
+  return (
+    value === 'overbooked' ||
+    value === 'full' ||
+    value === 'near_full' ||
+    value === 'payment_pressure' ||
+    value === 'demand_exceeds_open_seats'
+  );
+}
+
+
+function batchCapacityStatusLabel(
+  value: string
+) {
+  if (
+    value === 'demand_exceeds_open_seats'
+  ) {
+    return 'Demand > seats';
+  }
+
+  if (
+    value === 'payment_pressure'
+  ) {
+    return 'Payment pressure';
+  }
+
+  if (
+    value === 'capacity_not_set'
+  ) {
+    return 'Capacity not set';
+  }
+
+  return pretty(
+    value
+  );
+}
+
+
+function batchCapacityBadgeClass(
+  value: string
+) {
+  if (
+    value === 'overbooked' ||
+    value === 'full'
+  ) {
+    return 'bg-red-100 text-red-700';
+  }
+
+  if (
+    value === 'near_full' ||
+    value === 'payment_pressure' ||
+    value === 'demand_exceeds_open_seats'
+  ) {
+    return 'bg-amber-100 text-amber-700';
+  }
+
+  if (
+    value === 'capacity_not_set'
+  ) {
+    return 'bg-slate-200 text-slate-600';
+  }
+
+  return 'bg-emerald-100 text-emerald-700';
+}
+
+
+function batchCapacityCardClass(
+  value: string
+) {
+  if (
+    value === 'overbooked' ||
+    value === 'full'
+  ) {
+    return 'border-red-200 bg-red-50/50';
+  }
+
+  if (
+    value === 'near_full' ||
+    value === 'payment_pressure' ||
+    value === 'demand_exceeds_open_seats'
+  ) {
+    return 'border-amber-200 bg-amber-50/35';
+  }
+
+  if (
+    value === 'capacity_not_set'
+  ) {
+    return 'border-slate-200 bg-slate-50/70';
+  }
+
+  return 'border-slate-100 bg-white';
+}
+
+
+function batchCapacityProgressClass(
+  value: string
+) {
+  if (
+    value === 'overbooked' ||
+    value === 'full'
+  ) {
+    return 'bg-red-500';
+  }
+
+  if (
+    value === 'near_full' ||
+    value === 'payment_pressure' ||
+    value === 'demand_exceeds_open_seats'
+  ) {
+    return 'bg-amber-500';
+  }
+
+  return 'bg-emerald-500';
+}
+
+
+function formatBatchDateRange(
+  startDate:
+    | string
+    | null
+    | undefined,
+  endDate:
+    | string
+    | null
+    | undefined
+) {
+  if (!startDate) {
+    return 'Dates not set';
+  }
+
+  const start =
+    formatShortDate(
+      startDate
+    );
+
+  if (
+    !endDate ||
+    endDate === startDate
+  ) {
+    return start;
+  }
+
+  return `${start} – ${formatShortDate(
+    endDate
+  )}`;
+}
+
+
+function formatShortDate(
+  value: string
+) {
+  const date =
+    new Date(
+      `${value.slice(
+        0,
+        10
+      )}T00:00:00Z`
+    );
+
+  if (
+    Number.isNaN(
+      date.getTime()
+    )
+  ) {
+    return value;
+  }
+
+  return new Intl.DateTimeFormat(
+    'en-IN',
+    {
+      day: 'numeric',
+      month: 'short',
+      year: 'numeric',
+      timeZone: 'UTC',
+    }
+  ).format(date);
+}
+
+
+function batchStartCountdown(
+  value:
+    | number
+    | string
+    | null
+    | undefined
+) {
+  const days =
+    Math.round(
+      toNumber(
+        value
+      )
+    );
+
+  if (days < 0) {
+    return 'Already started';
+  }
+
+  if (days === 0) {
+    return 'Starts today';
+  }
+
+  if (days === 1) {
+    return 'Starts tomorrow';
+  }
+
+  return `Starts in ${days} days`;
+}
 
 
 function AdmissionsTeamWorkloadPanel({
