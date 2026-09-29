@@ -3,7 +3,7 @@ import {
   mockFollowUps,
   mockLeadDetails,
   mockLeads,
-} from './mock-data';
+} from "./mock-data";
 
 import type {
   CampaignPerformance,
@@ -13,11 +13,10 @@ import type {
   LeadOverview,
   LeadStage,
   Touchpoint,
-} from '@/types/crm';
+} from "@/types/crm";
 
-import { createClient } from '@/lib/supabase/server';
-import { useMockData } from '@/lib/config';
-
+import { createClient } from "@/lib/supabase/server";
+import { useMockData } from "@/lib/config";
 
 /* =========================================================
    TYPES
@@ -28,7 +27,6 @@ export type CourseOption = {
   name: string;
   code: string;
 };
-
 
 export type CourseBatchOption = {
   id: string;
@@ -53,21 +51,10 @@ export type CourseBatchOption = {
   currency?: string;
 };
 
-
 export type LeadPayment = {
   id: string;
-  paymentKind:
-    | 'deposit'
-    | 'balance'
-    | 'full'
-    | 'refund'
-    | 'other';
-  status:
-    | 'pending'
-    | 'paid'
-    | 'failed'
-    | 'refunded'
-    | 'partially_refunded';
+  paymentKind: "deposit" | "balance" | "full" | "refund" | "other";
+  status: "pending" | "paid" | "failed" | "refunded" | "partially_refunded";
   amount: number;
   currency: string;
   provider?: string;
@@ -77,51 +64,43 @@ export type LeadPayment = {
   notes?: string;
 };
 
-
 /*
  * Extended lead data used by the Lead Detail page.
  * These fields come from the new CRM enrichment columns.
  */
-export type EnrichedLeadDetail =
-  LeadDetail & {
+export type EnrichedLeadDetail = LeadDetail & {
+  preferredLocation?: string;
 
-    preferredLocation?: string;
+  potentialValue?: number;
+  potentialCurrency?: string;
 
-    potentialValue?: number;
-    potentialCurrency?: string;
+  potentialValueSource?: string;
 
-    potentialValueSource?: string;
+  geoCountry?: string;
+  geoRegion?: string;
+  geoCity?: string;
+  geoTimezone?: string;
 
-    geoCountry?: string;
-    geoRegion?: string;
-    geoCity?: string;
-    geoTimezone?: string;
+  leadOrigin?: string;
+  landingPage?: string;
 
-    leadOrigin?: string;
-    landingPage?: string;
+  firstTouchSource?: string;
+  firstTouchMedium?: string;
+  firstTouchCampaign?: string;
 
-    firstTouchSource?: string;
-    firstTouchMedium?: string;
-    firstTouchCampaign?: string;
-
-    lastTouchSource?: string;
-    lastTouchMedium?: string;
-    lastTouchCampaign?: string;
-  };
-
+  lastTouchSource?: string;
+  lastTouchMedium?: string;
+  lastTouchCampaign?: string;
+};
 
 /* =========================================================
    HELPERS
 ========================================================= */
 
-function monthLabel(
-  value?: string | null
-) {
-
+function monthLabel(value?: string | null) {
   if (!value) {
     return undefined;
   }
-
 
   /*
    * Existing database values may contain either:
@@ -130,212 +109,112 @@ function monthLabel(
    *
    * or other stored month/date representations.
    */
-  const date = new Date(
-    `${value.slice(0, 10)}T00:00:00Z`
-  );
+  const date = new Date(`${value.slice(0, 10)}T00:00:00Z`);
 
-
-  if (
-    Number.isNaN(
-      date.getTime()
-    )
-  ) {
+  if (Number.isNaN(date.getTime())) {
     return value;
   }
 
-
-  return new Intl.DateTimeFormat(
-    'en',
-    {
-      month: 'long',
-      year: 'numeric',
-      timeZone: 'UTC',
-    }
-  ).format(date);
+  return new Intl.DateTimeFormat("en", {
+    month: "long",
+    year: "numeric",
+    timeZone: "UTC",
+  }).format(date);
 }
-
 
 /* =========================================================
    MAP LEAD ROW
 ========================================================= */
 
-function mapLeadRow(
-  row: any
-): LeadOverview {
-
+function mapLeadRow(row: any): LeadOverview {
   return {
+    id: row.id,
 
-    id:
-      row.id,
+    leadCode: row.lead_code,
 
-    leadCode:
-      row.lead_code,
+    name: row.lead_name || row.display_name || row.lead_code,
 
-    name:
-      row.lead_name ||
-      row.display_name ||
-      row.lead_code,
+    email: row.email ?? undefined,
 
-    email:
-      row.email ??
-      undefined,
+    phone: row.phone ?? undefined,
 
-    phone:
-      row.phone ??
-      undefined,
+    course: row.course_name ?? "Not selected",
 
-    course:
-      row.course_name ??
-      'Not selected',
+    location: row.preferred_location ?? "—",
 
-    location:
-      row.preferred_location ??
-      '—',
+    country: row.country ?? "—",
 
-    country:
-      row.country ??
-      '—',
+    stage: row.current_stage,
 
-    stage:
-      row.current_stage,
+    intent: row.intent,
 
-    intent:
-      row.intent,
+    firstTouchSource: row.first_touch_source ?? "Unknown",
 
-    firstTouchSource:
-      row.first_touch_source ??
-      'Unknown',
+    firstTouchMedium: row.first_touch_medium ?? "Unknown",
 
-    firstTouchMedium:
-      row.first_touch_medium ??
-      'Unknown',
+    firstTouchCampaign: row.first_touch_campaign ?? "Unattributed",
 
-    firstTouchCampaign:
-      row.first_touch_campaign ??
-      'Unattributed',
+    leadCreationChannel: row.lead_creation_channel ?? "other",
 
-    leadCreationChannel:
-      row.lead_creation_channel ??
-      'other',
+    currentContactChannel: row.current_contact_channel ?? "other",
 
-    currentContactChannel:
-      row.current_contact_channel ??
-      'other',
+    owner: row.owner_name ?? (row.owner_user_id ? "Assigned" : "Unassigned"),
 
-    owner:
-      row.owner_name ??
-      (
-        row.owner_user_id
-          ? 'Assigned'
-          : 'Unassigned'
-      ),
+    lastContactedAt: row.last_contacted_at ?? undefined,
 
-    lastContactedAt:
-      row.last_contacted_at ??
-      undefined,
+    nextFollowupAt: row.next_followup_at ?? undefined,
 
-    nextFollowupAt:
-      row.next_followup_at ??
-      undefined,
-
-    createdAt:
-      row.created_at,
+    createdAt: row.created_at,
 
     value:
-      row.enrollment_value == null
-        ? undefined
-        : Number(
-            row.enrollment_value
-          ),
+      row.enrollment_value == null ? undefined : Number(row.enrollment_value),
 
-    currency:
-      row.enrollment_currency ??
-      undefined,
-
+    currency: row.enrollment_currency ?? undefined,
   };
 }
-
 
 /* =========================================================
    GET LEADS
 ========================================================= */
 
-export async function getLeads():
-Promise<LeadOverview[]> {
-
+export async function getLeads(): Promise<LeadOverview[]> {
   if (useMockData) {
     return mockLeads;
   }
 
+  const supabase = await createClient();
 
-  const supabase =
-    await createClient();
-
-
-  const {
-    data,
-    error,
-  } = await supabase
-    .from('v_leads_overview')
-    .select('*')
-    .order(
-      'created_at',
-      {
-        ascending: false,
-      }
-    )
+  const { data, error } = await supabase
+    .from("v_leads_overview")
+    .select("*")
+    .order("created_at", {
+      ascending: false,
+    })
     .limit(500);
 
-
   if (error) {
-
-    throw new Error(
-      `Unable to load leads: ${error.message}`
-    );
-
+    throw new Error(`Unable to load leads: ${error.message}`);
   }
 
-
-  return (
-    data ?? []
-  ).map(
-    mapLeadRow
-  );
+  return (data ?? []).map(mapLeadRow);
 }
-
 
 /* =========================================================
    GET SINGLE LEAD
 ========================================================= */
 
-export async function getLead(
-  id: string
-):
-
-
-
-Promise<EnrichedLeadDetail | null> {
-
+export async function getLead(id: string): Promise<EnrichedLeadDetail | null> {
   if (useMockData) {
-
-    return (
-      mockLeadDetails[id] ??
-      null
-    ) as EnrichedLeadDetail | null;
-
+    return (mockLeadDetails[id] ?? null) as EnrichedLeadDetail | null;
   }
 
-
-  const supabase =
-    await createClient();
-
+  const supabase = await createClient();
 
   /* =======================================================
      LOAD ALL LEAD DATA
   ======================================================= */
 
   const [
-
     leadResult,
 
     enrichmentResult,
@@ -349,23 +228,12 @@ Promise<EnrichedLeadDetail | null> {
     messagesResult,
 
     enrollmentResult,
-
   ] = await Promise.all([
-
-
     /* -----------------------------------------------------
        EXISTING LEAD VIEW
     ----------------------------------------------------- */
 
-    supabase
-      .from('v_leads_overview')
-      .select('*')
-      .eq(
-        'id',
-        id
-      )
-      .maybeSingle(),
-
+    supabase.from("v_leads_overview").select("*").eq("id", id).maybeSingle(),
 
     /* -----------------------------------------------------
        NEW LEAD INTELLIGENCE
@@ -377,8 +245,9 @@ Promise<EnrichedLeadDetail | null> {
     ----------------------------------------------------- */
 
     supabase
-      .from('leads')
-      .select(`
+      .from("leads")
+      .select(
+        `
         preferred_location,
         preferred_month,
         preferred_mode,
@@ -402,44 +271,37 @@ Promise<EnrichedLeadDetail | null> {
         last_touch_source,
         last_touch_medium,
         last_touch_campaign
-      `)
-      .eq(
-        'id',
-        id
+      `,
       )
+      .eq("id", id)
       .maybeSingle(),
-
 
     /* -----------------------------------------------------
        CONTACT INFORMATION
     ----------------------------------------------------- */
 
     supabase
-      .from('lead_contacts')
-      .select(`
+      .from("lead_contacts")
+      .select(
+        `
         contact_type,
         value,
         is_primary
-      `)
-      .eq(
-        'lead_id',
-        id
+      `,
       )
-      .order(
-        'is_primary',
-        {
-          ascending: false,
-        }
-      ),
-
+      .eq("lead_id", id)
+      .order("is_primary", {
+        ascending: false,
+      }),
 
     /* -----------------------------------------------------
        WEBSITE / MARKETING TOUCHPOINTS
     ----------------------------------------------------- */
 
     supabase
-      .from('touchpoints')
-      .select(`
+      .from("touchpoints")
+      .select(
+        `
         id,
         event_type,
         source,
@@ -452,537 +314,281 @@ Promise<EnrichedLeadDetail | null> {
         geo_region,
         geo_city,
         metadata
-      `)
-      .eq(
-        'lead_id',
-        id
+      `,
       )
-      .order(
-        'occurred_at',
-        {
-          ascending: true,
-        }
-      )
+      .eq("lead_id", id)
+      .order("occurred_at", {
+        ascending: true,
+      })
       .limit(100),
-
 
     /* -----------------------------------------------------
        LEAD STAGE HISTORY
     ----------------------------------------------------- */
 
     supabase
-      .from('lead_stage_history')
-      .select(`
+      .from("lead_stage_history")
+      .select(
+        `
         id,
         to_stage,
         changed_at,
         reason,
         changed_by_type
-      `)
-      .eq(
-        'lead_id',
-        id
+      `,
       )
-      .order(
-        'changed_at',
-        {
-          ascending: true,
-        }
-      )
+      .eq("lead_id", id)
+      .order("changed_at", {
+        ascending: true,
+      })
       .limit(100),
-
 
     /* -----------------------------------------------------
        RECENT MESSAGES
     ----------------------------------------------------- */
 
     supabase
-      .from('messages')
-      .select(`
+      .from("messages")
+      .select(
+        `
         id,
         direction,
         sender_type,
         body,
         created_at,
         conversations(channel)
-      `)
-      .eq(
-        'lead_id',
-        id
+      `,
       )
-      .order(
-        'created_at',
-        {
-          ascending: false,
-        }
-      )
+      .eq("lead_id", id)
+      .order("created_at", {
+        ascending: false,
+      })
       .limit(12),
-
 
     /* -----------------------------------------------------
        ENROLLMENT VALUE
     ----------------------------------------------------- */
 
     supabase
-      .from('enrollments')
-      .select(`
+      .from("enrollments")
+      .select(
+        `
         total_value,
         currency
-      `)
-      .eq(
-        'lead_id',
-        id
+      `,
       )
-      .order(
-        'created_at',
-        {
-          ascending: false,
-        }
-      )
+      .eq("lead_id", id)
+      .order("created_at", {
+        ascending: false,
+      })
       .limit(1)
       .maybeSingle(),
-
   ]);
-
 
   /* =======================================================
      MAIN LEAD ERROR
   ======================================================= */
 
-  if (
-    leadResult.error
-  ) {
-
-    throw new Error(
-      `Unable to load lead: ${leadResult.error.message}`
-    );
-
+  if (leadResult.error) {
+    throw new Error(`Unable to load lead: ${leadResult.error.message}`);
   }
 
-
-  if (
-    !leadResult.data
-  ) {
-
+  if (!leadResult.data) {
     return null;
-
   }
-
 
   /* =======================================================
      ENRICHMENT ERROR
   ======================================================= */
 
-  if (
-    enrichmentResult.error
-  ) {
-
+  if (enrichmentResult.error) {
     throw new Error(
-      `Unable to load lead intelligence: ${enrichmentResult.error.message}`
+      `Unable to load lead intelligence: ${enrichmentResult.error.message}`,
     );
-
   }
-
 
   /* =======================================================
      MERGE VIEW + LEADS TABLE
   ======================================================= */
 
   const row: any = {
-
     ...leadResult.data,
 
-    ...(
-      enrichmentResult.data ??
-      {}
-    ),
-
+    ...(enrichmentResult.data ?? {}),
   };
-
 
   /* =======================================================
      BUILD BASE LEAD
   ======================================================= */
 
-  const base =
-    mapLeadRow({
+  const base = mapLeadRow({
+    ...row,
 
-      ...row,
+    enrollment_value: enrollmentResult.data?.total_value,
 
-      enrollment_value:
-        enrollmentResult.data
-          ?.total_value,
-
-      enrollment_currency:
-        enrollmentResult.data
-          ?.currency,
-
-    });
-
+    enrollment_currency: enrollmentResult.data?.currency,
+  });
 
   /* =======================================================
      CONTACT DETAILS
   ======================================================= */
 
-  const contacts =
-    contactsResult.data ??
-    [];
+  const contacts = contactsResult.data ?? [];
 
+  const email = contacts.find(
+    (contact: any) => contact.contact_type === "email",
+  )?.value;
 
-  const email =
-    contacts.find(
-      (contact: any) =>
-        contact.contact_type ===
-        'email'
-    )?.value;
-
-
-  const phone =
-    contacts.find(
-      (contact: any) =>
-        [
-          'phone',
-          'whatsapp',
-        ].includes(
-          contact.contact_type
-        )
-    )?.value;
-
+  const phone = contacts.find((contact: any) =>
+    ["phone", "whatsapp"].includes(contact.contact_type),
+  )?.value;
 
   /* =======================================================
      WEBSITE / MARKETING JOURNEY
   ======================================================= */
 
-  const touchpoints:
-    Touchpoint[] = [
+  const touchpoints: Touchpoint[] = [
+    ...((touchpointsResult.data ?? []).map((point: any) => {
+      /*
+       * Geographic location
+       * associated with this event.
+       */
+      const pointLocation = [
+        point.geo_city,
 
-    ...(
-      (
-        touchpointsResult.data ??
-        []
-      ).map(
-        (point: any) => {
+        point.geo_region,
 
-          /*
-           * Geographic location
-           * associated with this event.
-           */
-          const pointLocation = [
+        point.geo_country,
+      ]
+        .filter(Boolean)
+        .join(", ");
 
-            point.geo_city,
+      /*
+       * Build richer detail line.
+       */
+      const detailParts = [
+        point.campaign_name ? `Campaign: ${point.campaign_name}` : null,
 
-            point.geo_region,
+        point.landing_page ? `Page: ${point.landing_page}` : null,
 
-            point.geo_country,
+        pointLocation ? `Location: ${pointLocation}` : null,
 
-          ]
-            .filter(Boolean)
-            .join(', ');
+        point.metadata?.detail ? String(point.metadata.detail) : null,
+      ].filter(Boolean);
 
+      /*
+       * Detect event category.
+       */
+      let kind: Touchpoint["kind"];
 
-          /*
-           * Build richer detail line.
-           */
-          const detailParts = [
+      if (point.event_type?.includes("message")) {
+        kind = "message";
+      } else if (point.event_type?.includes("payment")) {
+        kind = "payment";
+      } else if (
+        point.channel === "website" ||
+        point.event_type?.includes("page") ||
+        point.event_type?.includes("form") ||
+        point.event_type?.includes("whatsapp")
+      ) {
+        kind = "website";
+      } else {
+        kind = "marketing";
+      }
 
-            point.campaign_name
-              ? `Campaign: ${point.campaign_name}`
-              : null,
+      return {
+        id: `touch-${point.id}`,
 
-            point.landing_page
-              ? `Page: ${point.landing_page}`
-              : null,
+        label: point.event_type?.replaceAll("_", " ") || "Touchpoint",
 
-            pointLocation
-              ? `Location: ${pointLocation}`
-              : null,
+        source: point.source || point.channel || "Tracking",
 
-            point.metadata?.detail
-              ? String(
-                  point.metadata.detail
-                )
-              : null,
+        medium: point.medium || undefined,
 
-          ].filter(Boolean);
+        timestamp: point.occurred_at,
 
+        detail: detailParts.length ? detailParts.join(" · ") : undefined,
 
-          /*
-           * Detect event category.
-           */
-          let kind:
-            Touchpoint['kind'];
-
-
-          if (
-            point.event_type
-              ?.includes(
-                'message'
-              )
-          ) {
-
-            kind =
-              'message';
-
-          } else if (
-            point.event_type
-              ?.includes(
-                'payment'
-              )
-          ) {
-
-            kind =
-              'payment';
-
-          } else if (
-            point.channel ===
-              'website' ||
-
-            point.event_type
-              ?.includes(
-                'page'
-              ) ||
-
-            point.event_type
-              ?.includes(
-                'form'
-              ) ||
-
-            point.event_type
-              ?.includes(
-                'whatsapp'
-              )
-          ) {
-
-            kind =
-              'website';
-
-          } else {
-
-            kind =
-              'marketing';
-
-          }
-
-
-          return {
-
-            id:
-              `touch-${point.id}`,
-
-            label:
-              point.event_type
-                ?.replaceAll(
-                  '_',
-                  ' '
-                ) ||
-              'Touchpoint',
-
-            source:
-              point.source ||
-              point.channel ||
-              'Tracking',
-
-            medium:
-              point.medium ||
-              undefined,
-
-            timestamp:
-              point.occurred_at,
-
-            detail:
-              detailParts.length
-                ? detailParts.join(
-                    ' · '
-                  )
-                : undefined,
-
-            kind,
-
-          };
-
-        }
-      )
-    ) as Touchpoint[],
-
+        kind,
+      };
+    }) as Touchpoint[]),
 
     /* -----------------------------------------------------
        CRM STAGE HISTORY
     ----------------------------------------------------- */
 
-    ...(
-      (
-        stagesResult.data ??
-        []
-      ).map(
-        (stage: any) => ({
+    ...((stagesResult.data ?? []).map((stage: any) => ({
+      id: `stage-${stage.id}`,
 
-          id:
-            `stage-${stage.id}`,
+      label: `Moved to ${String(stage.to_stage).replaceAll("_", " ")}`,
 
-          label:
-            `Moved to ${String(
-              stage.to_stage
-            ).replaceAll(
-              '_',
-              ' '
-            )}`,
+      source: stage.changed_by_type === "ai" ? "AI" : "CRM",
 
-          source:
-            stage.changed_by_type ===
-              'ai'
-              ? 'AI'
-              : 'CRM',
+      timestamp: stage.changed_at,
 
-          timestamp:
-            stage.changed_at,
+      detail: stage.reason || undefined,
 
-          detail:
-            stage.reason ||
-            undefined,
-
-          kind:
-            'stage' as const,
-
-        })
-      )
-    ) as Touchpoint[],
-
-  ]
-    .sort(
-      (
-        a,
-        b
-      ) =>
-        new Date(
-          a.timestamp
-        ).getTime() -
-        new Date(
-          b.timestamp
-        ).getTime()
-    );
-
+      kind: "stage" as const,
+    })) as Touchpoint[]),
+  ].sort(
+    (a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime(),
+  );
 
   /* =======================================================
      MESSAGES
   ======================================================= */
 
-  const lastMessages =
-    (
-      messagesResult.data ??
-      []
-    )
-      .reverse()
-      .map(
-        (message: any) => ({
+  const lastMessages = (messagesResult.data ?? [])
+    .reverse()
+    .map((message: any) => ({
+      id: message.id,
 
-          id:
-            message.id,
+      direction: message.direction as "inbound" | "outbound",
 
-          direction:
-            message.direction as
-              | 'inbound'
-              | 'outbound',
+      sender:
+        message.sender_type === "lead"
+          ? base.name
+          : message.sender_type === "ai"
+            ? "AI Agent"
+            : "Admissions",
 
-          sender:
-            message.sender_type ===
-              'lead'
-              ? base.name
+      body: message.body || "[Non-text message]",
 
-              : message.sender_type ===
-                  'ai'
-                ? 'AI Agent'
+      timestamp: message.created_at,
 
-                : 'Admissions',
-
-          body:
-            message.body ||
-            '[Non-text message]',
-
-          timestamp:
-            message.created_at,
-
-          channel: (
-
-            (
-              Array.isArray(
-                message.conversations
-              )
-                ? message
-                    .conversations[0]
-                    ?.channel
-
-                : message
-                    .conversations
-                    ?.channel
-            ) ||
-
-            base.currentContactChannel ||
-
-            'other'
-
-          ) as Channel,
-
-        })
-      );
-
+      channel: ((Array.isArray(message.conversations)
+        ? message.conversations[0]?.channel
+        : message.conversations?.channel) ||
+        base.currentContactChannel ||
+        "other") as Channel,
+    }));
 
   /* =======================================================
      POTENTIAL VALUE
   ======================================================= */
 
-  let potentialValue:
-    number | undefined;
+  let potentialValue: number | undefined;
 
-
-  if (
-    row.potential_value != null
-  ) {
-
-    potentialValue =
-      Number(
-        row.potential_value
-      );
-
-  } else if (
-    enrollmentResult.data
-      ?.total_value != null
-  ) {
-
-    potentialValue =
-      Number(
-        enrollmentResult.data
-          .total_value
-      );
-
+  if (row.potential_value != null) {
+    potentialValue = Number(row.potential_value);
+  } else if (enrollmentResult.data?.total_value != null) {
+    potentialValue = Number(enrollmentResult.data.total_value);
   } else {
-
-    potentialValue =
-      base.value ??
-      undefined;
-
+    potentialValue = base.value ?? undefined;
   }
 
-
   const potentialCurrency =
-
     row.potential_currency ||
-
-    enrollmentResult.data
-      ?.currency ||
-
+    enrollmentResult.data?.currency ||
     base.currency ||
-
     undefined;
-
 
   /* =======================================================
      RETURN FINAL LEAD
   ======================================================= */
 
   return {
-
     ...base,
-
 
     /* -----------------------------------------------------
        PERSON
@@ -992,121 +598,66 @@ Promise<EnrichedLeadDetail | null> {
    PERSON
 --------------------------------------------------------- */
 
+    firstName: row.first_name ?? undefined,
 
+    lastName: row.last_name ?? undefined,
 
-
-firstName:
-  row.first_name ??
-  undefined,
-
-lastName:
-  row.last_name ??
-  undefined,
-
-
-/* ---------------------------------------------------------
+    /* ---------------------------------------------------------
    COURSE
 --------------------------------------------------------- */
 
-interestedCourseId:
-  row.interested_course_id ??
-  undefined,
+    interestedCourseId: row.interested_course_id ?? undefined,
 
-preferredBatchId:
-  row.preferred_batch_id ??
-  undefined,
+    preferredBatchId: row.preferred_batch_id ?? undefined,
 
-
-
-
-/* ---------------------------------------------------------
+    /* ---------------------------------------------------------
    REVENUE FORECAST
 --------------------------------------------------------- */
 
-potentialValue:
-  row.potential_value == null
-    ? undefined
-    : Number(
-        row.potential_value
-      ),
+    potentialValue:
+      row.potential_value == null ? undefined : Number(row.potential_value),
 
-
-potentialValueSource:
-  row.potential_value_source ??
-  undefined,
-
-
-
+    potentialValueSource: row.potential_value_source ?? undefined,
 
     /* -----------------------------------------------------
        CONTACT
     ----------------------------------------------------- */
 
-    email:
-      email ??
-      row.email ??
-      undefined,
+    email: email ?? row.email ?? undefined,
 
-    phone:
-      phone ??
-      row.phone ??
-      undefined,
-
+    phone: phone ?? row.phone ?? undefined,
 
     /* -----------------------------------------------------
        PREFERRED LOCATION
     ----------------------------------------------------- */
 
-    location:
-      row.preferred_location ??
-      base.location ??
-      '—',
+    location: row.preferred_location ?? base.location ?? "—",
 
-    preferredLocation:
-      row.preferred_location ??
-      undefined,
-
+    preferredLocation: row.preferred_location ?? undefined,
 
     /* -----------------------------------------------------
        PREFERRED MONTH
     ----------------------------------------------------- */
 
-    preferredMonthRaw:
-      row.preferred_month
-        ? String(
-            row.preferred_month
-          ).slice(
-            0,
-            7
-          )
-        : undefined,
+    preferredMonthRaw: row.preferred_month
+      ? String(row.preferred_month).slice(0, 7)
+      : undefined,
 
-    preferredMonth:
-      monthLabel(
-        row.preferred_month
-      ),
-
+    preferredMonth: monthLabel(row.preferred_month),
 
     /* -----------------------------------------------------
        MODE
     ----------------------------------------------------- */
 
-    preferredMode:
-      row.preferred_mode ??
-      undefined,
-
+    preferredMode: row.preferred_mode ?? undefined,
 
     /* -----------------------------------------------------
        VALUE
     ----------------------------------------------------- */
 
-    value:
-      potentialValue,
+    value: potentialValue,
 
-    currency:
-      potentialCurrency,
-
-
+    currency: potentialCurrency,
 
     /* -----------------------------------------------------
        VISITOR LOCATION
@@ -1115,94 +666,58 @@ potentialValueSource:
        NOT the manually selected country.
     ----------------------------------------------------- */
 
-    geoCountry:
-      row.geo_country ??
-      undefined,
+    geoCountry: row.geo_country ?? undefined,
 
-    geoRegion:
-      row.geo_region ??
-      undefined,
+    geoRegion: row.geo_region ?? undefined,
 
-    geoCity:
-      row.geo_city ??
-      undefined,
+    geoCity: row.geo_city ?? undefined,
 
-    geoTimezone:
-      row.geo_timezone ??
-      undefined,
-
+    geoTimezone: row.geo_timezone ?? undefined,
 
     /* -----------------------------------------------------
        EXISTING MANUAL TIMEZONE
     ----------------------------------------------------- */
 
-    timezone:
-      row.timezone ??
-      undefined,
-
+    timezone: row.timezone ?? undefined,
 
     /* -----------------------------------------------------
        LEAD ORIGIN
     ----------------------------------------------------- */
 
-    leadOrigin:
-      row.lead_origin ??
-      undefined,
+    leadOrigin: row.lead_origin ?? undefined,
 
-    landingPage:
-      row.landing_page ??
-      undefined,
-
+    landingPage: row.landing_page ?? undefined,
 
     /* -----------------------------------------------------
        FIRST TOUCH
     ----------------------------------------------------- */
 
     firstTouchSource:
-      row.first_touch_source ??
-      base.firstTouchSource ??
-      undefined,
+      row.first_touch_source ?? base.firstTouchSource ?? undefined,
 
     firstTouchMedium:
-      row.first_touch_medium ??
-      base.firstTouchMedium ??
-      undefined,
+      row.first_touch_medium ?? base.firstTouchMedium ?? undefined,
 
     firstTouchCampaign:
-      row.first_touch_campaign ??
-      base.firstTouchCampaign ??
-      undefined,
-
+      row.first_touch_campaign ?? base.firstTouchCampaign ?? undefined,
 
     /* -----------------------------------------------------
        LAST TOUCH
     ----------------------------------------------------- */
 
-    lastTouchSource:
-      row.last_touch_source ??
-      undefined,
+    lastTouchSource: row.last_touch_source ?? undefined,
 
-    lastTouchMedium:
-      row.last_touch_medium ??
-      undefined,
+    lastTouchMedium: row.last_touch_medium ?? undefined,
 
-    lastTouchCampaign:
-      row.last_touch_campaign ??
-      undefined,
-
+    lastTouchCampaign: row.last_touch_campaign ?? undefined,
 
     /* -----------------------------------------------------
        CRM SUMMARY
     ----------------------------------------------------- */
 
-    summary:
-      row.summary ??
-      'No CRM summary yet.',
+    summary: row.summary ?? "No CRM summary yet.",
 
-    notes:
-      row.notes ??
-      'No internal notes yet.',
-
+    notes: row.notes ?? "No internal notes yet.",
 
     /* -----------------------------------------------------
        JOURNEY
@@ -1210,41 +725,29 @@ potentialValueSource:
 
     touchpoints,
 
-
     /* -----------------------------------------------------
        CONVERSATIONS
     ----------------------------------------------------- */
 
     lastMessages,
-
   };
-
 }
-
 
 /* =========================================================
    LEAD PAYMENTS
 ========================================================= */
 
-export async function getLeadPayments(
-  leadId: string
-): Promise<LeadPayment[]> {
-
+export async function getLeadPayments(leadId: string): Promise<LeadPayment[]> {
   if (useMockData) {
     return [];
   }
 
+  const supabase = await createClient();
 
-  const supabase =
-    await createClient();
-
-
-  const {
-    data,
-    error,
-  } = await supabase
-    .from('payments')
-    .select(`
+  const { data, error } = await supabase
+    .from("payments")
+    .select(
+      `
       id,
       payment_kind,
       status,
@@ -1255,275 +758,137 @@ export async function getLeadPayments(
       paid_at,
       metadata,
       created_at
-    `)
-    .eq(
-      'lead_id',
-      leadId
+    `,
     )
-    .order(
-      'created_at',
-      {
-        ascending: false,
-      }
-    );
-
+    .eq("lead_id", leadId)
+    .order("created_at", {
+      ascending: false,
+    });
 
   if (error) {
-
-    throw new Error(
-      `Unable to load payments: ${error.message}`
-    );
-
+    throw new Error(`Unable to load payments: ${error.message}`);
   }
 
+  return (data ?? []).map((row: any) => ({
+    id: row.id,
 
-  return (
-    data ?? []
-  ).map(
-    (row: any) => ({
+    paymentKind: row.payment_kind,
 
-      id:
-        row.id,
+    status: row.status,
 
-      paymentKind:
-        row.payment_kind,
+    amount: Number(row.amount ?? 0),
 
-      status:
-        row.status,
+    currency: String(row.currency ?? "").toUpperCase(),
 
-      amount:
-        Number(
-          row.amount ?? 0
-        ),
+    provider: row.provider ?? undefined,
 
-      currency:
-        String(
-          row.currency ?? ''
-        ).toUpperCase(),
+    externalPaymentId: row.external_payment_id ?? undefined,
 
-      provider:
-        row.provider ??
-        undefined,
+    paidAt: row.paid_at ?? undefined,
 
-      externalPaymentId:
-        row.external_payment_id ??
-        undefined,
+    createdAt: row.created_at,
 
-      paidAt:
-        row.paid_at ??
-        undefined,
-
-      createdAt:
-        row.created_at,
-
-      notes:
-        row.metadata?.notes ??
-        undefined,
-
-    })
-  );
+    notes: row.metadata?.notes ?? undefined,
+  }));
 }
-
 
 /* =========================================================
    FOLLOW UPS
 ========================================================= */
 
-export async function getFollowUps():
-Promise<FollowUp[]> {
-
+export async function getFollowUps(): Promise<FollowUp[]> {
   if (useMockData) {
     return mockFollowUps;
   }
 
+  const supabase = await createClient();
 
-  const supabase =
-    await createClient();
-
-
-  const {
-    data,
-    error,
-  } = await supabase
-    .from(
-      'v_followups_due'
-    )
-    .select('*')
-    .order(
-      'due_at',
-      {
-        ascending: true,
-      }
-    )
+  const { data, error } = await supabase
+    .from("v_followups_due")
+    .select("*")
+    .order("due_at", {
+      ascending: true,
+    })
     .limit(250);
 
-
   if (error) {
-
-    throw new Error(
-      `Unable to load follow-ups: ${error.message}`
-    );
-
+    throw new Error(`Unable to load follow-ups: ${error.message}`);
   }
 
+  return (data ?? []).map((row: any) => ({
+    id: row.task_id,
 
-  return (
-    data ?? []
-  ).map(
-    (row: any) => ({
+    leadId: row.lead_id,
 
-      id:
-        row.task_id,
+    leadCode: row.lead_code,
 
-      leadId:
-        row.lead_id,
+    leadName: row.lead_name,
 
-      leadCode:
-        row.lead_code,
+    title: row.title,
 
-      leadName:
-        row.lead_name,
+    dueAt: row.due_at,
 
-      title:
-        row.title,
+    stage: row.current_stage as LeadStage,
 
-      dueAt:
-        row.due_at,
+    intent: row.intent,
 
-      stage:
-        row.current_stage as LeadStage,
-
-      intent:
-        row.intent,
-
-      channel:
-        (
-          row.current_contact_channel ??
-          'other'
-        ) as Channel,
-
-    })
-  );
-
+    channel: (row.current_contact_channel ?? "other") as Channel,
+  }));
 }
-
 
 /* =========================================================
    COURSES
 ========================================================= */
 
-export async function getCourses():
-Promise<CourseOption[]> {
-
+export async function getCourses(): Promise<CourseOption[]> {
   if (useMockData) {
+    const unique = new Map<string, CourseOption>();
 
-    const unique =
-      new Map<
-        string,
-        CourseOption
-      >();
+    mockLeads.forEach((lead, index) => {
+      if (!unique.has(lead.course)) {
+        unique.set(lead.course, {
+          id: `mock-course-${index}`,
 
+          code: `MOCK-${index}`,
 
-    mockLeads.forEach(
-      (
-        lead,
-        index
-      ) => {
-
-        if (
-          !unique.has(
-            lead.course
-          )
-        ) {
-
-          unique.set(
-            lead.course,
-            {
-
-              id:
-                `mock-course-${index}`,
-
-              code:
-                `MOCK-${index}`,
-
-              name:
-                lead.course,
-
-            }
-          );
-
-        }
-
+          name: lead.course,
+        });
       }
-    );
+    });
 
-
-    return [
-      ...unique.values(),
-    ];
-
+    return [...unique.values()];
   }
 
+  const supabase = await createClient();
 
-  const supabase =
-    await createClient();
-
-
-  const {
-    data,
-    error,
-  } = await supabase
-    .from('courses')
-    .select(
-      'id,code,name'
-    )
-    .eq(
-      'active',
-      true
-    )
-    .order(
-      'name'
-    );
-
+  const { data, error } = await supabase
+    .from("courses")
+    .select("id,code,name")
+    .eq("active", true)
+    .order("name");
 
   if (error) {
-
-    throw new Error(
-      `Unable to load courses: ${error.message}`
-    );
-
+    throw new Error(`Unable to load courses: ${error.message}`);
   }
 
-
-  return (
-    data ??
-    []
-  );
-
+  return data ?? [];
 }
-
 
 /* =========================================================
    COURSE BATCHES
 ========================================================= */
 
-export async function getCourseBatches():
-Promise<CourseBatchOption[]> {
-
+export async function getCourseBatches(): Promise<CourseBatchOption[]> {
   if (useMockData) {
     return [];
   }
 
-  const supabase =
-    await createClient();
+  const supabase = await createClient();
 
-
-  const {
-    data,
-    error,
-  } = await supabase
-    .from('course_batches')
-    .select(`
+  const { data, error } = await supabase
+    .from("course_batches")
+    .select(
+      `
       id,
       course_id,
       batch_code,
@@ -1538,141 +903,77 @@ Promise<CourseBatchOption[]> {
       seats_remaining,
       expected_value,
       currency
-    `)
-    .eq(
-      'active',
-      true
+    `,
     )
-    .order(
-      'start_date',
-      {
-        ascending: true,
-      }
-    );
-
+    .eq("active", true)
+    .order("start_date", {
+      ascending: true,
+    });
 
   if (error) {
-
-    throw new Error(
-      `Unable to load course batches: ${error.message}`
-    );
-
+    throw new Error(`Unable to load course batches: ${error.message}`);
   }
 
+  return (data ?? []).map((row: any) => ({
+    id: row.id,
 
-  return (
-    data ?? []
-  ).map(
-    (row: any) => ({
+    courseId: row.course_id,
 
-      id:
-        row.id,
+    batchCode: row.batch_code,
 
-      courseId:
-        row.course_id,
+    location: row.location ?? undefined,
 
-      batchCode:
-        row.batch_code,
+    mode: row.mode ?? undefined,
 
-      location:
-        row.location ??
-        undefined,
+    startDate: row.start_date ?? undefined,
 
-      mode:
-        row.mode ??
-        undefined,
+    endDate: row.end_date ?? undefined,
 
-      startDate:
-        row.start_date ??
-        undefined,
+    startTime: row.start_time ?? undefined,
 
-      endDate:
-        row.end_date ??
-        undefined,
+    endTime: row.end_time ?? undefined,
 
-      startTime:
-        row.start_time ??
-        undefined,
+    timezone: row.timezone ?? undefined,
 
-      endTime:
-        row.end_time ??
-        undefined,
+    capacity: row.capacity == null ? undefined : Number(row.capacity),
 
-      timezone:
-        row.timezone ??
-        undefined,
+    seatsRemaining:
+      row.seats_remaining == null ? undefined : Number(row.seats_remaining),
 
-      capacity:
-        row.capacity == null
-          ? undefined
-          : Number(row.capacity),
+    expectedValue:
+      row.expected_value == null ? undefined : Number(row.expected_value),
 
-      seatsRemaining:
-        row.seats_remaining == null
-          ? undefined
-          : Number(row.seats_remaining),
-
-      expectedValue:
-        row.expected_value == null
-          ? undefined
-          : Number(row.expected_value),
-
-      currency:
-        row.currency ??
-        undefined,
-
-    })
-  );
-
+    currency: row.currency ?? undefined,
+  }));
 }
-
 
 /* =========================================================
    CAMPAIGNS
 ========================================================= */
 
-export async function getCampaigns():
-Promise<CampaignPerformance[]> {
-
+export async function getCampaigns(): Promise<CampaignPerformance[]> {
   /*
    * Campaign spend ingestion
    * will be connected later
    * to Google Ads / Meta Ads.
    */
   return mockCampaigns;
-
 }
-
 
 /* =========================================================
    MOCK MODE
 ========================================================= */
 
 export function isMockMode() {
-
   return useMockData;
-
 }
-
 
 /* =========================================================
    PIPELINE COUNTS
 ========================================================= */
 
-export async function getPipelineCounts():
-Promise<
-  Record<
-    LeadStage,
-    number
-  >
-> {
-
-  const empty:
-    Record<
-      LeadStage,
-      number
-    > = {
-
+export async function getPipelineCounts(): Promise<Record<LeadStage, number>> {
+  const empty: Record<LeadStage, number> = {
     new: 0,
 
     contacted: 0,
@@ -1696,77 +997,36 @@ Promise<
     unqualified: 0,
 
     duplicate: 0,
-
   };
 
-
   if (useMockData) {
+    const { dashboardStageCounts } = await import("./mock-data");
 
-    const {
-      dashboardStageCounts,
-    } = await import(
-      './mock-data'
-    );
-
-
-    return (
-      dashboardStageCounts
-    );
-
+    return dashboardStageCounts;
   }
 
+  const supabase = await createClient();
 
-  const supabase =
-    await createClient();
-
-
-  const {
-    data,
-    error,
-  } = await supabase
-    .from(
-      'v_pipeline_counts'
-    )
-    .select(
-      'current_stage,lead_count'
-    );
-
+  const { data, error } = await supabase
+    .from("v_pipeline_counts")
+    .select("current_stage,lead_count");
 
   if (error) {
-
-    throw new Error(
-      `Unable to load pipeline counts: ${error.message}`
-    );
-
+    throw new Error(`Unable to load pipeline counts: ${error.message}`);
   }
 
-
-  for (
-    const row of
-    data ?? []
-  ) {
-
-    empty[
-      row.current_stage as LeadStage
-    ] =
-      Number(
-        row.lead_count
-      );
-
+  for (const row of data ?? []) {
+    empty[row.current_stage as LeadStage] = Number(row.lead_count);
   }
-
 
   return empty;
-
 }
-
 
 /* =========================================================
    DASHBOARD SOURCE BREAKDOWN
 ========================================================= */
 
-export async function getDashboardSourceBreakdown():
-Promise<
+export async function getDashboardSourceBreakdown(): Promise<
   Array<{
     source: string;
     leads: number;
@@ -1774,146 +1034,70 @@ Promise<
     qualified: number;
   }>
 > {
-
   if (useMockData) {
-
-    const {
-      sourceBreakdown,
-    } = await import(
-      './mock-data'
-    );
-
+    const { sourceBreakdown } = await import("./mock-data");
 
     return sourceBreakdown;
-
   }
 
+  const leads = await getLeads();
 
-  const leads =
-    await getLeads();
+  const grouped = new Map<
+    string,
+    {
+      source: string;
+      leads: number;
+      qualified: number;
+    }
+  >();
 
+  const qualifiedStages: LeadStage[] = [
+    "qualified",
 
-  const grouped =
-    new Map<
-      string,
-      {
-        source: string;
-        leads: number;
-        qualified: number;
-      }
-    >();
+    "high_intent",
 
+    "payment_pending",
 
-  const qualifiedStages:
-    LeadStage[] = [
-
-    'qualified',
-
-    'high_intent',
-
-    'payment_pending',
-
-    'enrolled',
-
+    "enrolled",
   ];
 
+  for (const lead of leads) {
+    const key = lead.firstTouchSource || "Unknown";
 
-  for (
-    const lead of
-    leads
-  ) {
+    const item = grouped.get(key) ?? {
+      source: key,
 
-    const key =
-      lead.firstTouchSource ||
-      'Unknown';
+      leads: 0,
 
-
-    const item =
-      grouped.get(
-        key
-      ) ?? {
-
-        source:
-          key,
-
-        leads:
-          0,
-
-        qualified:
-          0,
-
-      };
-
+      qualified: 0,
+    };
 
     item.leads += 1;
 
-
-    if (
-      qualifiedStages.includes(
-        lead.stage
-      )
-    ) {
-
+    if (qualifiedStages.includes(lead.stage)) {
       item.qualified += 1;
-
     }
 
-
-    grouped.set(
-      key,
-      item
-    );
-
+    grouped.set(key, item);
   }
 
+  const total = Math.max(1, leads.length);
 
-  const total =
-    Math.max(
-      1,
-      leads.length
-    );
+  return [...grouped.values()]
+    .sort((a, b) => b.leads - a.leads)
+    .slice(0, 5)
+    .map((item) => ({
+      ...item,
 
-
-  return [
-    ...grouped.values(),
-  ]
-    .sort(
-      (
-        a,
-        b
-      ) =>
-        b.leads -
-        a.leads
-    )
-    .slice(
-      0,
-      5
-    )
-    .map(
-      (item) => ({
-
-        ...item,
-
-        share:
-          Math.round(
-            (
-              item.leads /
-              total
-            ) * 100
-          ),
-
-      })
-    );
-
+      share: Math.round((item.leads / total) * 100),
+    }));
 }
-
 
 /* =========================================================
    TRACKING HEALTH
 ========================================================= */
 
 export type TrackingHealth = {
-
   events24h: number;
 
   visitors24h: number;
@@ -1925,116 +1109,58 @@ export type TrackingHealth = {
   fbclidEvents7d: number;
 
   lastEventAt?: string;
-
 };
 
-
-export async function getTrackingHealth():
-Promise<TrackingHealth> {
-
+export async function getTrackingHealth(): Promise<TrackingHealth> {
   if (useMockData) {
-
     return {
+      events24h: 1842,
 
-      events24h:
-        1842,
+      visitors24h: 391,
 
-      visitors24h:
-        391,
+      identifiedEvents24h: 286,
 
-      identifiedEvents24h:
-        286,
+      gclidEvents7d: 742,
 
-      gclidEvents7d:
-        742,
+      fbclidEvents7d: 519,
 
-      fbclidEvents7d:
-        519,
-
-      lastEventAt:
-        new Date()
-          .toISOString(),
-
+      lastEventAt: new Date().toISOString(),
     };
-
   }
 
+  const supabase = await createClient();
 
-  const supabase =
-    await createClient();
-
-
-  const {
-    data,
-    error,
-  } = await supabase
-    .from(
-      'v_tracking_health'
-    )
-    .select('*')
+  const { data, error } = await supabase
+    .from("v_tracking_health")
+    .select("*")
     .maybeSingle();
 
-
   if (error) {
-
-    throw new Error(
-      `Unable to load tracking health: ${error.message}`
-    );
-
+    throw new Error(`Unable to load tracking health: ${error.message}`);
   }
 
-
-  const row: any =
-    data ?? {};
-
+  const row: any = data ?? {};
 
   return {
+    events24h: Number(row.events_24h || 0),
 
-    events24h:
-      Number(
-        row.events_24h ||
-        0
-      ),
+    visitors24h: Number(row.visitors_24h || 0),
 
-    visitors24h:
-      Number(
-        row.visitors_24h ||
-        0
-      ),
+    identifiedEvents24h: Number(row.identified_events_24h || 0),
 
-    identifiedEvents24h:
-      Number(
-        row.identified_events_24h ||
-        0
-      ),
+    gclidEvents7d: Number(row.gclid_events_7d || 0),
 
-    gclidEvents7d:
-      Number(
-        row.gclid_events_7d ||
-        0
-      ),
+    fbclidEvents7d: Number(row.fbclid_events_7d || 0),
 
-    fbclidEvents7d:
-      Number(
-        row.fbclid_events_7d ||
-        0
-      ),
-
-    lastEventAt:
-      row.last_event_at ||
-      undefined,
-
+    lastEventAt: row.last_event_at || undefined,
   };
-
 }
-
 
 /* =========================================================
    WEBSITE CAPTURE HEALTH
 ========================================================= */
 
 export type WebsiteCaptureHealth = {
-
   submissions24h: number;
 
   newLeads24h: number;
@@ -2044,16 +1170,13 @@ export type WebsiteCaptureHealth = {
   submissions7d: number;
 
   lastSubmissionAt?: string;
-
 };
-
 
 /* =========================================================
    WEB FUNNEL
 ========================================================= */
 
 export type WebFunnel7d = {
-
   pageViews: number;
 
   visitors: number;
@@ -2065,205 +1188,98 @@ export type WebFunnel7d = {
   contactCtaClicks: number;
 
   identifiedTouchpoints: number;
-
 };
-
 
 /* =========================================================
    WEBSITE CAPTURE HEALTH
 ========================================================= */
 
-export async function getWebsiteCaptureHealth():
-Promise<WebsiteCaptureHealth> {
-
+export async function getWebsiteCaptureHealth(): Promise<WebsiteCaptureHealth> {
   if (useMockData) {
-
     return {
+      submissions24h: 17,
 
-      submissions24h:
-        17,
+      newLeads24h: 14,
 
-      newLeads24h:
-        14,
+      matchedExisting24h: 3,
 
-      matchedExisting24h:
-        3,
+      submissions7d: 91,
 
-      submissions7d:
-        91,
-
-      lastSubmissionAt:
-        new Date()
-          .toISOString(),
-
+      lastSubmissionAt: new Date().toISOString(),
     };
-
   }
 
+  const supabase = await createClient();
 
-  const supabase =
-    await createClient();
-
-
-  const {
-    data,
-    error,
-  } = await supabase
-    .from(
-      'v_website_capture_health'
-    )
-    .select('*')
+  const { data, error } = await supabase
+    .from("v_website_capture_health")
+    .select("*")
     .maybeSingle();
 
-
   if (error) {
-
-    throw new Error(
-      `Unable to load website capture health: ${error.message}`
-    );
-
+    throw new Error(`Unable to load website capture health: ${error.message}`);
   }
 
-
-  const row: any =
-    data ?? {};
-
+  const row: any = data ?? {};
 
   return {
+    submissions24h: Number(row.submissions_24h || 0),
 
-    submissions24h:
-      Number(
-        row.submissions_24h ||
-        0
-      ),
+    newLeads24h: Number(row.new_leads_24h || 0),
 
-    newLeads24h:
-      Number(
-        row.new_leads_24h ||
-        0
-      ),
+    matchedExisting24h: Number(row.matched_existing_24h || 0),
 
-    matchedExisting24h:
-      Number(
-        row.matched_existing_24h ||
-        0
-      ),
+    submissions7d: Number(row.submissions_7d || 0),
 
-    submissions7d:
-      Number(
-        row.submissions_7d ||
-        0
-      ),
-
-    lastSubmissionAt:
-      row.last_submission_at ||
-      undefined,
-
+    lastSubmissionAt: row.last_submission_at || undefined,
   };
-
 }
-
 
 /* =========================================================
    WEB FUNNEL 7 DAYS
 ========================================================= */
 
-export async function getWebFunnel7d():
-Promise<WebFunnel7d> {
-
+export async function getWebFunnel7d(): Promise<WebFunnel7d> {
   if (useMockData) {
-
     return {
+      pageViews: 4318,
 
-      pageViews:
-        4318,
+      visitors: 1290,
 
-      visitors:
-        1290,
+      formStarts: 301,
 
-      formStarts:
-        301,
+      browserFormSubmits: 106,
 
-      browserFormSubmits:
-        106,
+      contactCtaClicks: 412,
 
-      contactCtaClicks:
-        412,
-
-      identifiedTouchpoints:
-        682,
-
+      identifiedTouchpoints: 682,
     };
-
   }
 
+  const supabase = await createClient();
 
-  const supabase =
-    await createClient();
-
-
-  const {
-    data,
-    error,
-  } = await supabase
-    .from(
-      'v_web_funnel_7d'
-    )
-    .select('*')
+  const { data, error } = await supabase
+    .from("v_web_funnel_7d")
+    .select("*")
     .maybeSingle();
 
-
   if (error) {
-
-    throw new Error(
-      `Unable to load website funnel: ${error.message}`
-    );
-
+    throw new Error(`Unable to load website funnel: ${error.message}`);
   }
 
-
-  const row: any =
-    data ?? {};
-
+  const row: any = data ?? {};
 
   return {
+    pageViews: Number(row.page_views || 0),
 
-    pageViews:
-      Number(
-        row.page_views ||
-        0
-      ),
+    visitors: Number(row.visitors || 0),
 
-    visitors:
-      Number(
-        row.visitors ||
-        0
-      ),
+    formStarts: Number(row.form_starts || 0),
 
-    formStarts:
-      Number(
-        row.form_starts ||
-        0
-      ),
+    browserFormSubmits: Number(row.browser_form_submits || 0),
 
-    browserFormSubmits:
-      Number(
-        row.browser_form_submits ||
-        0
-      ),
+    contactCtaClicks: Number(row.contact_cta_clicks || 0),
 
-    contactCtaClicks:
-      Number(
-        row.contact_cta_clicks ||
-        0
-      ),
-
-    identifiedTouchpoints:
-      Number(
-        row.identified_touchpoints ||
-        0
-      ),
-
+    identifiedTouchpoints: Number(row.identified_touchpoints || 0),
   };
-
 }
