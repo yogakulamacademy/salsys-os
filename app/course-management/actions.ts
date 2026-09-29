@@ -964,3 +964,236 @@ export async function setBatchAccommodationActiveStateAction(
   );
 }
 
+
+export async function assignEnrollmentAccommodationAction(
+  formData: FormData
+) {
+  const enrollmentId =
+    textValue(
+      formData,
+      'enrollment_id'
+    );
+
+  const accommodationTypeId =
+    textValue(
+      formData,
+      'accommodation_type_id'
+    );
+
+  const returnTo =
+    safeReturnPath(
+      textValue(
+        formData,
+        'return_to'
+      )
+    );
+
+  if (!enrollmentId) {
+    redirect(
+      withMessage(
+        returnTo,
+        'error',
+        'Enrollment is missing'
+      )
+    );
+  }
+
+  if (!accommodationTypeId) {
+    redirect(
+      withMessage(
+        returnTo,
+        'error',
+        'Select an accommodation type'
+      )
+    );
+  }
+
+  let occupantSpaces:
+    number;
+
+  try {
+    occupantSpaces =
+      requiredInteger(
+        formData,
+        'occupant_spaces',
+        1
+      );
+  } catch (error) {
+    redirect(
+      withMessage(
+        returnTo,
+        'error',
+        error instanceof Error
+          ? error.message
+          : 'Invalid accommodation spaces'
+      )
+    );
+  }
+
+  const assignmentStatus =
+    textValue(
+      formData,
+      'assignment_status'
+    ) ||
+    'reserved';
+
+  if (
+    ![
+      'reserved',
+      'confirmed',
+    ].includes(
+      assignmentStatus
+    )
+  ) {
+    redirect(
+      withMessage(
+        returnTo,
+        'error',
+        'Invalid accommodation assignment status'
+      )
+    );
+  }
+
+  const notes =
+    textValue(
+      formData,
+      'notes'
+    );
+
+  const supabase =
+    await createClient();
+
+  const {
+    error,
+  } = await supabase.rpc(
+    'assign_enrollment_accommodation',
+    {
+      p_enrollment_id:
+        enrollmentId,
+      p_accommodation_type_id:
+        accommodationTypeId,
+      p_occupant_spaces:
+        occupantSpaces,
+      p_status:
+        assignmentStatus,
+      p_notes:
+        notes,
+    }
+  );
+
+  if (error) {
+    redirect(
+      withMessage(
+        returnTo,
+        'error',
+        error.message
+      )
+    );
+  }
+
+  revalidateBatchPages();
+
+  redirect(
+    withMessage(
+      returnTo,
+      'notice',
+      'student-accommodation-assigned'
+    )
+  );
+}
+
+
+export async function releaseEnrollmentAccommodationAction(
+  formData: FormData
+) {
+  const enrollmentId =
+    textValue(
+      formData,
+      'enrollment_id'
+    );
+
+  const returnTo =
+    safeReturnPath(
+      textValue(
+        formData,
+        'return_to'
+      )
+    );
+
+  if (!enrollmentId) {
+    redirect(
+      withMessage(
+        returnTo,
+        'error',
+        'Enrollment is missing'
+      )
+    );
+  }
+
+  const releaseStatus =
+    textValue(
+      formData,
+      'release_status'
+    ) ||
+    'released';
+
+  if (
+    ![
+      'released',
+      'cancelled',
+    ].includes(
+      releaseStatus
+    )
+  ) {
+    redirect(
+      withMessage(
+        returnTo,
+        'error',
+        'Invalid accommodation release status'
+      )
+    );
+  }
+
+  const notes =
+    textValue(
+      formData,
+      'notes'
+    );
+
+  const supabase =
+    await createClient();
+
+  const {
+    error,
+  } = await supabase.rpc(
+    'release_enrollment_accommodation',
+    {
+      p_enrollment_id:
+        enrollmentId,
+      p_status:
+        releaseStatus,
+      p_notes:
+        notes,
+    }
+  );
+
+  if (error) {
+    redirect(
+      withMessage(
+        returnTo,
+        'error',
+        error.message
+      )
+    );
+  }
+
+  revalidateBatchPages();
+
+  redirect(
+    withMessage(
+      returnTo,
+      'notice',
+      'student-accommodation-released'
+    )
+  );
+}

@@ -35,8 +35,36 @@ export type AccommodationInventoryRow = {
   occupants_per_unit: number | string | null;
 
   student_capacity: number | string | null;
-  available_student_spaces: number | string | null;
-  occupied_or_reserved_student_spaces:
+
+  // Legacy/manual inventory view compatibility.
+  available_student_spaces?: number | string | null;
+  occupied_or_reserved_student_spaces?:
+    | number
+    | string
+    | null;
+
+  // Live assignment-aware inventory fields.
+  manual_available_student_spaces?:
+    | number
+    | string
+    | null;
+  assigned_student_spaces?:
+    | number
+    | string
+    | null;
+  reserved_student_spaces?:
+    | number
+    | string
+    | null;
+  confirmed_student_spaces?:
+    | number
+    | string
+    | null;
+  active_assignments?:
+    | number
+    | string
+    | null;
+  calculated_available_student_spaces?:
     | number
     | string
     | null;
@@ -115,8 +143,18 @@ export function BatchAccommodationInventory({
     activeRows.reduce(
       (sum, row) =>
         sum +
+        calculatedOpen(
+          row
+        ),
+      0
+    );
+
+  const assignedStudentSpaces =
+    activeRows.reduce(
+      (sum, row) =>
+        sum +
         toNumber(
-          row.available_student_spaces
+          row.assigned_student_spaces
         ),
       0
     );
@@ -148,11 +186,15 @@ export function BatchAccommodationInventory({
             value={totalUnits}
           />
           <InventorySummary
-            label="Available"
+            label="Manual units"
             value={availableUnits}
           />
           <InventorySummary
-            label="Student spaces"
+            label="Assigned"
+            value={assignedStudentSpaces}
+          />
+          <InventorySummary
+            label="Calculated open"
             value={availableStudentSpaces}
             suffix={` / ${formatNumber(
               totalStudentCapacity
@@ -343,9 +385,23 @@ function AccommodationTypeCard({
     );
 
   const availableSpaces =
-    toNumber(
-      row.available_student_spaces
+    calculatedOpen(
+      row
     );
+
+  const assignedSpaces =
+    toNumber(
+      row.assigned_student_spaces
+    );
+
+  const manualStudentSpaces =
+    row.manual_available_student_spaces !=
+    null
+      ? toNumber(
+          row.manual_available_student_spaces
+        )
+      : availableUnits *
+        occupantsPerUnit;
 
   return (
     <article
@@ -478,22 +534,30 @@ function AccommodationTypeCard({
         </form>
       </div>
 
-      <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
+      <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-6">
         <SmallMetric
           label="Total units"
           value={totalUnits}
         />
         <SmallMetric
-          label="Available units"
+          label="Manual open units"
           value={availableUnits}
         />
         <SmallMetric
-          label="Capacity"
+          label="Student capacity"
           value={studentCapacity}
         />
         <SmallMetric
-          label="Open spaces"
+          label="Assigned"
+          value={assignedSpaces}
+        />
+        <SmallMetric
+          label="Calculated open"
           value={availableSpaces}
+        />
+        <SmallMetric
+          label="Manual open spaces"
+          value={manualStudentSpaces}
         />
       </div>
 
@@ -805,6 +869,41 @@ function toNumber(
   )
     ? number
     : 0;
+}
+
+
+function calculatedOpen(
+  row: AccommodationInventoryRow
+) {
+  if (
+    row.calculated_available_student_spaces !=
+    null
+  ) {
+    return toNumber(
+      row.calculated_available_student_spaces
+    );
+  }
+
+  if (
+    row.available_student_spaces !=
+    null
+  ) {
+    return toNumber(
+      row.available_student_spaces
+    );
+  }
+
+  return (
+    toNumber(
+      row.available_units
+    ) *
+    Math.max(
+      1,
+      toNumber(
+        row.occupants_per_unit
+      )
+    )
+  );
 }
 
 

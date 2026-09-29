@@ -26,6 +26,10 @@ import {
   BatchAccommodationInventory,
   type AccommodationInventoryRow,
 } from '@/components/batch-accommodation-inventory';
+import {
+  BatchAccommodationAssignments,
+  type EnrollmentAccommodationRosterRow,
+} from '@/components/batch-accommodation-assignments';
 import { PageHeader } from '@/components/ui';
 import { createClient } from '@/lib/supabase/server';
 
@@ -128,6 +132,7 @@ export default async function CourseManagementPage({
     batchesResult,
     auditResult,
     accommodationResult,
+    rosterResult,
   ] = await Promise.all([
     supabase
       .from(
@@ -160,7 +165,7 @@ export default async function CourseManagementPage({
 
     supabase
       .from(
-        'v_batch_accommodation_inventory'
+        'v_batch_accommodation_live_inventory'
       )
       .select('*')
       .order(
@@ -176,6 +181,27 @@ export default async function CourseManagementPage({
         }
       )
       .limit(1000),
+
+    supabase
+      .from(
+        'v_batch_enrollment_accommodation_roster'
+      )
+      .select('*')
+      .order(
+        'start_date',
+        {
+          ascending: true,
+          nullsFirst: false,
+        }
+      )
+      .order(
+        'lead_name',
+        {
+          ascending: true,
+          nullsFirst: false,
+        }
+      )
+      .limit(2000),
   ]);
 
   if (batchesResult.error) {
@@ -196,6 +222,12 @@ export default async function CourseManagementPage({
     );
   }
 
+  if (rosterResult.error) {
+    throw new Error(
+      `Unable to load enrollment accommodation roster: ${rosterResult.error.message}`
+    );
+  }
+
   const batches =
     (batchesResult.data ??
       []) as BatchRow[];
@@ -207,6 +239,10 @@ export default async function CourseManagementPage({
   const accommodationRows =
     (accommodationResult.data ??
       []) as AccommodationInventoryRow[];
+
+  const rosterRows =
+    (rosterResult.data ??
+      []) as EnrollmentAccommodationRosterRow[];
 
   const accommodationByBatch =
     new Map<
@@ -228,6 +264,31 @@ export default async function CourseManagementPage({
     );
 
     accommodationByBatch.set(
+      item.batch_id,
+      current
+    );
+  }
+
+  const rosterByBatch =
+    new Map<
+      string,
+      EnrollmentAccommodationRosterRow[]
+    >();
+
+  for (
+    const item
+    of rosterRows
+  ) {
+    const current =
+      rosterByBatch.get(
+        item.batch_id
+      ) ?? [];
+
+    current.push(
+      item
+    );
+
+    rosterByBatch.set(
       item.batch_id,
       current
     );
@@ -614,6 +675,11 @@ export default async function CourseManagementPage({
                       row.batch_id
                     ) ?? []
                   }
+                  rosterRows={
+                    rosterByBatch.get(
+                      row.batch_id
+                    ) ?? []
+                  }
                 />
               )
             )
@@ -723,10 +789,12 @@ function BatchAdminCard({
   row,
   returnTo,
   accommodationRows,
+  rosterRows,
 }: {
   row: BatchRow;
   returnTo: string;
   accommodationRows: AccommodationInventoryRow[];
+  rosterRows: EnrollmentAccommodationRosterRow[];
 }) {
   const capacity =
     nullableNumber(
@@ -1319,18 +1387,33 @@ function BatchAdminCard({
 
       {(row.mode === 'residential' ||
         row.mode === 'hybrid' ||
-        accommodationRows.length > 0) && (
-        <BatchAccommodationInventory
-          batchId={
-            row.batch_id
-          }
-          rows={
-            accommodationRows
-          }
-          returnTo={
-            returnTo
-          }
-        />
+        accommodationRows.length > 0 ||
+        rosterRows.length > 0) && (
+        <>
+          <BatchAccommodationInventory
+            batchId={
+              row.batch_id
+            }
+            rows={
+              accommodationRows
+            }
+            returnTo={
+              returnTo
+            }
+          />
+
+          <BatchAccommodationAssignments
+            rosterRows={
+              rosterRows
+            }
+            accommodationRows={
+              accommodationRows
+            }
+            returnTo={
+              returnTo
+            }
+          />
+        </>
       )}
 
       {(row.enrollment_note ||
@@ -1974,6 +2057,20 @@ function noticeText(
     'accommodation-deactivated'
   ) {
     return 'Accommodation type disabled. Historical information is preserved.';
+  }
+
+  if (
+    notice ===
+    'student-accommodation-assigned'
+  ) {
+    return 'Student accommodation assignment saved.';
+  }
+
+  if (
+    notice ===
+    'student-accommodation-released'
+  ) {
+    return 'Student accommodation assignment released.';
   }
 
   return 'Course management updated.';
