@@ -49,6 +49,39 @@ function nullableInteger(
 }
 
 
+function requiredInteger(
+  formData: FormData,
+  key: string,
+  minimum = 0
+) {
+  const raw =
+    textValue(
+      formData,
+      key
+    );
+
+  if (!raw) {
+    throw new Error(
+      `${key} is required`
+    );
+  }
+
+  const value =
+    Number(raw);
+
+  if (
+    !Number.isInteger(value) ||
+    value < minimum
+  ) {
+    throw new Error(
+      `${key} must be a whole number of ${minimum} or more`
+    );
+  }
+
+  return value;
+}
+
+
 function nullableNumber(
   formData: FormData,
   key: string
@@ -464,3 +497,470 @@ export async function setCourseBatchActiveStateAction(
     )
   );
 }
+
+export async function upsertBatchAccommodationTypeAction(
+  formData: FormData
+) {
+  const id =
+    textValue(
+      formData,
+      'id'
+    );
+
+  const batchId =
+    textValue(
+      formData,
+      'batch_id'
+    );
+
+  const returnTo =
+    safeReturnPath(
+      textValue(
+        formData,
+        'return_to'
+      )
+    );
+
+  if (!batchId) {
+    redirect(
+      withMessage(
+        returnTo,
+        'error',
+        'Batch is missing'
+      )
+    );
+  }
+
+  const name =
+    textValue(
+      formData,
+      'name'
+    );
+
+  const inventoryUnit =
+    textValue(
+      formData,
+      'inventory_unit'
+    ) ||
+    'room';
+
+  if (!name) {
+    redirect(
+      withMessage(
+        returnTo,
+        'error',
+        'Accommodation type name is required'
+      )
+    );
+  }
+
+  if (
+    ![
+      'room',
+      'bed',
+      'space',
+    ].includes(
+      inventoryUnit
+    )
+  ) {
+    redirect(
+      withMessage(
+        returnTo,
+        'error',
+        'Invalid accommodation inventory unit'
+      )
+    );
+  }
+
+  let totalUnits:
+    number;
+
+  let availableUnits:
+    number;
+
+  let occupantsPerUnit:
+    number;
+
+  let sortOrder:
+    number;
+
+  try {
+    totalUnits =
+      requiredInteger(
+        formData,
+        'total_units'
+      );
+
+    availableUnits =
+      requiredInteger(
+        formData,
+        'available_units'
+      );
+
+    occupantsPerUnit =
+      requiredInteger(
+        formData,
+        'occupants_per_unit',
+        1
+      );
+
+    sortOrder =
+      nullableInteger(
+        formData,
+        'sort_order'
+      ) ?? 0;
+  } catch (error) {
+    redirect(
+      withMessage(
+        returnTo,
+        'error',
+        error instanceof Error
+          ? error.message
+          : 'Invalid accommodation value'
+      )
+    );
+  }
+
+  if (
+    availableUnits >
+    totalUnits
+  ) {
+    redirect(
+      withMessage(
+        returnTo,
+        'error',
+        'Available units cannot exceed total units'
+      )
+    );
+  }
+
+  const notes =
+    textValue(
+      formData,
+      'notes'
+    );
+
+  const active =
+    id
+      ? booleanValue(
+          formData,
+          'active'
+        )
+      : true;
+
+  const supabase =
+    await createClient();
+
+  const {
+    error,
+  } = await supabase.rpc(
+    'upsert_batch_accommodation_type',
+    {
+      p_id:
+        id,
+      p_batch_id:
+        batchId,
+      p_name:
+        name,
+      p_inventory_unit:
+        inventoryUnit,
+      p_total_units:
+        totalUnits,
+      p_available_units:
+        availableUnits,
+      p_occupants_per_unit:
+        occupantsPerUnit,
+      p_notes:
+        notes,
+      p_sort_order:
+        sortOrder,
+      p_active:
+        active,
+    }
+  );
+
+  if (error) {
+    redirect(
+      withMessage(
+        returnTo,
+        'error',
+        error.message
+      )
+    );
+  }
+
+  revalidateBatchPages();
+
+  redirect(
+    withMessage(
+      returnTo,
+      'notice',
+      id
+        ? 'accommodation-updated'
+        : 'accommodation-created'
+    )
+  );
+}
+
+
+export async function setBatchAccommodationAvailabilityAction(
+  formData: FormData
+) {
+  const id =
+    textValue(
+      formData,
+      'id'
+    );
+
+  const returnTo =
+    safeReturnPath(
+      textValue(
+        formData,
+        'return_to'
+      )
+    );
+
+  if (!id) {
+    redirect(
+      withMessage(
+        returnTo,
+        'error',
+        'Accommodation type is missing'
+      )
+    );
+  }
+
+  let availableUnits:
+    number;
+
+  try {
+    availableUnits =
+      requiredInteger(
+        formData,
+        'available_units'
+      );
+  } catch (error) {
+    redirect(
+      withMessage(
+        returnTo,
+        'error',
+        error instanceof Error
+          ? error.message
+          : 'Invalid availability'
+      )
+    );
+  }
+
+  const supabase =
+    await createClient();
+
+  const {
+    error,
+  } = await supabase.rpc(
+    'set_batch_accommodation_availability',
+    {
+      p_id:
+        id,
+      p_available_units:
+        availableUnits,
+    }
+  );
+
+  if (error) {
+    redirect(
+      withMessage(
+        returnTo,
+        'error',
+        error.message
+      )
+    );
+  }
+
+  revalidateBatchPages();
+
+  redirect(
+    withMessage(
+      returnTo,
+      'notice',
+      'accommodation-availability-updated'
+    )
+  );
+}
+
+
+export async function setBatchAccommodationActiveStateAction(
+  formData: FormData
+) {
+  const id =
+    textValue(
+      formData,
+      'id'
+    );
+
+  const batchId =
+    textValue(
+      formData,
+      'batch_id'
+    );
+
+  const returnTo =
+    safeReturnPath(
+      textValue(
+        formData,
+        'return_to'
+      )
+    );
+
+  if (
+    !id ||
+    !batchId
+  ) {
+    redirect(
+      withMessage(
+        returnTo,
+        'error',
+        'Accommodation type is missing'
+      )
+    );
+  }
+
+  const name =
+    textValue(
+      formData,
+      'name'
+    );
+
+  const inventoryUnit =
+    textValue(
+      formData,
+      'inventory_unit'
+    );
+
+  if (
+    !name ||
+    !inventoryUnit
+  ) {
+    redirect(
+      withMessage(
+        returnTo,
+        'error',
+        'Accommodation details are incomplete'
+      )
+    );
+  }
+
+  let totalUnits:
+    number;
+
+  let availableUnits:
+    number;
+
+  let occupantsPerUnit:
+    number;
+
+  let sortOrder:
+    number;
+
+  try {
+    totalUnits =
+      requiredInteger(
+        formData,
+        'total_units'
+      );
+
+    availableUnits =
+      requiredInteger(
+        formData,
+        'available_units'
+      );
+
+    occupantsPerUnit =
+      requiredInteger(
+        formData,
+        'occupants_per_unit',
+        1
+      );
+
+    sortOrder =
+      nullableInteger(
+        formData,
+        'sort_order'
+      ) ?? 0;
+  } catch (error) {
+    redirect(
+      withMessage(
+        returnTo,
+        'error',
+        error instanceof Error
+          ? error.message
+          : 'Invalid accommodation value'
+      )
+    );
+  }
+
+  const active =
+    booleanValue(
+      formData,
+      'active'
+    );
+
+  const notes =
+    textValue(
+      formData,
+      'notes'
+    );
+
+  const supabase =
+    await createClient();
+
+  const {
+    error,
+  } = await supabase.rpc(
+    'upsert_batch_accommodation_type',
+    {
+      p_id:
+        id,
+      p_batch_id:
+        batchId,
+      p_name:
+        name,
+      p_inventory_unit:
+        inventoryUnit,
+      p_total_units:
+        totalUnits,
+      p_available_units:
+        availableUnits,
+      p_occupants_per_unit:
+        occupantsPerUnit,
+      p_notes:
+        notes,
+      p_sort_order:
+        sortOrder,
+      p_active:
+        active,
+    }
+  );
+
+  if (error) {
+    redirect(
+      withMessage(
+        returnTo,
+        'error',
+        error.message
+      )
+    );
+  }
+
+  revalidateBatchPages();
+
+  redirect(
+    withMessage(
+      returnTo,
+      'notice',
+      active
+        ? 'accommodation-activated'
+        : 'accommodation-deactivated'
+    )
+  );
+}
+

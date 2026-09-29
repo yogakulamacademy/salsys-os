@@ -22,6 +22,10 @@ import {
   setCourseBatchEnrollmentStateAction,
   updateCourseBatchAdminAction,
 } from '@/app/course-management/actions';
+import {
+  BatchAccommodationInventory,
+  type AccommodationInventoryRow,
+} from '@/components/batch-accommodation-inventory';
 import { PageHeader } from '@/components/ui';
 import { createClient } from '@/lib/supabase/server';
 
@@ -123,6 +127,7 @@ export default async function CourseManagementPage({
   const [
     batchesResult,
     auditResult,
+    accommodationResult,
   ] = await Promise.all([
     supabase
       .from(
@@ -152,6 +157,25 @@ export default async function CourseManagementPage({
         }
       )
       .limit(20),
+
+    supabase
+      .from(
+        'v_batch_accommodation_inventory'
+      )
+      .select('*')
+      .order(
+        'sort_order',
+        {
+          ascending: true,
+        }
+      )
+      .order(
+        'name',
+        {
+          ascending: true,
+        }
+      )
+      .limit(1000),
   ]);
 
   if (batchesResult.error) {
@@ -166,6 +190,12 @@ export default async function CourseManagementPage({
     );
   }
 
+  if (accommodationResult.error) {
+    throw new Error(
+      `Unable to load accommodation inventory: ${accommodationResult.error.message}`
+    );
+  }
+
   const batches =
     (batchesResult.data ??
       []) as BatchRow[];
@@ -173,6 +203,35 @@ export default async function CourseManagementPage({
   const audits =
     (auditResult.data ??
       []) as AuditRow[];
+
+  const accommodationRows =
+    (accommodationResult.data ??
+      []) as AccommodationInventoryRow[];
+
+  const accommodationByBatch =
+    new Map<
+      string,
+      AccommodationInventoryRow[]
+    >();
+
+  for (
+    const item
+    of accommodationRows
+  ) {
+    const current =
+      accommodationByBatch.get(
+        item.batch_id
+      ) ?? [];
+
+    current.push(
+      item
+    );
+
+    accommodationByBatch.set(
+      item.batch_id,
+      current
+    );
+  }
 
   const locations =
     [
@@ -550,6 +609,11 @@ export default async function CourseManagementPage({
                   returnTo={
                     returnTo
                   }
+                  accommodationRows={
+                    accommodationByBatch.get(
+                      row.batch_id
+                    ) ?? []
+                  }
                 />
               )
             )
@@ -658,9 +722,11 @@ export default async function CourseManagementPage({
 function BatchAdminCard({
   row,
   returnTo,
+  accommodationRows,
 }: {
   row: BatchRow;
   returnTo: string;
+  accommodationRows: AccommodationInventoryRow[];
 }) {
   const capacity =
     nullableNumber(
@@ -1116,7 +1182,7 @@ function BatchAdminCard({
               <BedDouble
                 size={14}
               />
-              Accommodation
+              Accommodation summary
             </legend>
 
             <div className="mt-3 grid grid-cols-2 gap-3">
@@ -1155,6 +1221,10 @@ function BatchAdminCard({
                 className="input"
               />
             </label>
+
+            <div className="mt-2 text-[10px] leading-4 text-slate-400">
+              Optional overall summary. Detailed room-type inventory is managed below for residential batches.
+            </div>
           </fieldset>
 
           <fieldset>
@@ -1246,6 +1316,22 @@ function BatchAdminCard({
           </button>
         </div>
       </form>
+
+      {(row.mode === 'residential' ||
+        row.mode === 'hybrid' ||
+        accommodationRows.length > 0) && (
+        <BatchAccommodationInventory
+          batchId={
+            row.batch_id
+          }
+          rows={
+            accommodationRows
+          }
+          returnTo={
+            returnTo
+          }
+        />
+      )}
 
       {(row.enrollment_note ||
         row.accommodation_note) && (
@@ -1853,6 +1939,41 @@ function noticeText(
     'batch-deactivated'
   ) {
     return 'Batch deactivated. Historical lead links are preserved.';
+  }
+
+  if (
+    notice ===
+    'accommodation-created'
+  ) {
+    return 'Accommodation type added to the batch.';
+  }
+
+  if (
+    notice ===
+    'accommodation-updated'
+  ) {
+    return 'Accommodation inventory updated.';
+  }
+
+  if (
+    notice ===
+    'accommodation-availability-updated'
+  ) {
+    return 'Accommodation availability updated.';
+  }
+
+  if (
+    notice ===
+    'accommodation-activated'
+  ) {
+    return 'Accommodation type enabled.';
+  }
+
+  if (
+    notice ===
+    'accommodation-deactivated'
+  ) {
+    return 'Accommodation type disabled. Historical information is preserved.';
   }
 
   return 'Course management updated.';

@@ -5,6 +5,7 @@ import { usePathname } from 'next/navigation';
 import {
   BarChart3,
   Bell,
+  BookOpen,
   Boxes,
   ChevronDown,
   CircleDollarSign,
@@ -25,7 +26,13 @@ import {
   ClipboardCheck,
   X,
 } from 'lucide-react';
-import { type ComponentType, type ReactNode, useEffect, useMemo, useState } from 'react';
+import {
+  type ComponentType,
+  type ReactNode,
+  useEffect,
+  useMemo,
+  useState,
+} from 'react';
 import { signOutAction } from '@/app/actions/auth';
 import { LiveRefresh } from '@/components/live-refresh';
 import { ThemeToggle } from '@/components/theme-toggle';
@@ -55,6 +62,16 @@ const navGroups: NavGroup[] = [
       { href: '/pipeline', label: 'Pipeline', icon: Boxes },
       { href: '/conversations', label: 'Conversations', icon: MessageSquareText },
       { href: '/follow-ups', label: 'Follow-ups', icon: ListTodo },
+    ],
+  },
+  {
+    label: 'Operations',
+    items: [
+      {
+        href: '/course-management',
+        label: 'Course Management',
+        icon: BookOpen,
+      },
     ],
   },
   {
