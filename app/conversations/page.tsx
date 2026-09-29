@@ -1,201 +1,72 @@
-import type { ReactNode } from 'react';
+import type { ReactNode } from "react";
 
-import Link from 'next/link';
-
-
+import Link from "next/link";
 
 import {
-
   ArrowUpRight,
-
   BookOpen,
-
   CalendarClock,
-
   ContactRound,
-
   Instagram,
-
   Mail,
-
   MapPin,
-
   MessageCircle,
-
   Phone,
-
   Save,
+} from "lucide-react";
 
-} from 'lucide-react';
+import { ConversationReadMarker } from "@/components/conversation-read-marker";
 
-
-
-import {
-
-  ConversationReadMarker,
-
-} from '@/components/conversation-read-marker';
-
-
+import { logLeadInteractionAction } from "@/app/actions/crm";
 
 import {
-
-  logLeadInteractionAction,
-
-} from '@/app/actions/crm';
-
-
-
-import {
-
   sendWhatsAppMessageAction,
-
   sendWhatsAppTemplateAction,
-
   updateConversationLeadContextAction,
+} from "@/app/conversations/actions";
 
-} from '@/app/conversations/actions';
+import { ConversationThread } from "@/components/conversation-thread";
 
+import { ConversationsSidebar } from "@/components/conversations-sidebar";
 
+import { WhatsAppComposer } from "@/components/conversation-composer";
 
-import {
+import { PageHeader, StageBadge } from "@/components/ui";
 
-  ConversationThread,
+import { getCourses, isMockMode } from "@/lib/data";
 
-} from '@/components/conversation-thread';
+import { getConversationsWorkspace } from "@/lib/conversations-data";
 
+import { formatDateTime } from "@/lib/format";
 
+import type { Channel } from "@/types/crm";
 
-import {
+import { WhatsAppTemplateComposer } from "@/components/whatsapp-template-composer";
 
-  ConversationsSidebar,
+import { getApprovedWhatsAppTemplates } from "@/lib/whatsapp-templates";
 
-  type ConversationLeadSummary,
+import { ConversationsRealtime } from "@/components/conversations-realtime";
 
-} from '@/components/conversations-sidebar';
+const channels: Array<[Channel, string]> = [
+  ["instagram", "Instagram"],
 
+  ["whatsapp", "WhatsApp"],
 
+  ["website", "Website"],
 
-import {
+  ["email", "Email"],
 
-  WhatsAppComposer,
+  ["phone", "Phone"],
 
-} from '@/components/conversation-composer';
+  ["meta_lead_form", "Meta Lead Form"],
 
-
-
-import {
-
-  PageHeader,
-
-  StageBadge,
-
-} from '@/components/ui';
-
-
-
-import {
-
-  getCourses,
-
-  getLead,
-
-  getLeads,
-
-  isMockMode,
-
-} from '@/lib/data';
-
-
-
-import {
-
-  createClient,
-
-} from '@/lib/supabase/server';
-
-
-
-import {
-
-  formatDateTime,
-
-} from '@/lib/format';
-
-
-
-import type {
-
-  Channel,
-
-} from '@/types/crm';
-
-
-
-import {
-
-  WhatsAppTemplateComposer,
-
-} from '@/components/whatsapp-template-composer';
-
-
-
-import {
-
-  getApprovedWhatsAppTemplates,
-
-} from '@/lib/whatsapp-templates';
-
-
-import {
-  ConversationsRealtime,
-} from '@/components/conversations-realtime';
-
-
-const CUSTOMER_SERVICE_WINDOW_MS =
-
-  24 * 60 * 60 * 1000;
-
-
-
-const channels: Array<
-
-  [Channel, string]
-
-> = [
-
-  ['instagram', 'Instagram'],
-
-  ['whatsapp', 'WhatsApp'],
-
-  ['website', 'Website'],
-
-  ['email', 'Email'],
-
-  ['phone', 'Phone'],
-
-  [
-
-    'meta_lead_form',
-
-    'Meta Lead Form',
-
-  ],
-
-  ['other', 'Other'],
-
+  ["other", "Other"],
 ];
 
-
-
 export default async function ConversationsPage({
-
   searchParams,
-
 }: {
-
   searchParams: Promise<{
-
     lead?: string;
 
     notice?: string;
@@ -203,3373 +74,1167 @@ export default async function ConversationsPage({
     error?: string;
 
     wamid?: string;
-
   }>;
-
 }) {
-
-  const [
-
-    allLeads,
-
-    query,
-
-    courses,
-
-  ] =
-
-    await Promise.all([
-
-      getLeads(),
-
-      searchParams,
-
-      getCourses(),
-
-    ]);
-
-
-
-  /*
-
-   * Show every conversation returned by
-
-   * getLeads(), rather than cutting the
-
-   * inbox off at 100.
-
-   *
-
-   * Newest activity appears first.
-
-   */
-
-  const conversationCandidates =
-
-  allLeads
-
-    .filter(
-
-      (lead) =>
-
-        Boolean(
-
-          lead.lastContactedAt
-
-        ) ||
-
-        lead.leadCreationChannel ===
-
-          'website' ||
-
-        lead.currentContactChannel ===
-
-          'website'
-
-    )
-
-    .slice(
-
-      0,
-
-      300
-
-    );
-
-
-
-const inboxStateMap =
-
-  isMockMode()
-
-    ? new Map<
-
-        string,
-
-        InboxState
-
-      >()
-
-    : await getInboxStateMap();
-
-
-
-const conversationLeads =
-
-  [
-
-    ...conversationCandidates,
-
-  ].sort(
-
-    (a, b) =>
-
-      compareConversationLeads(
-
-        a,
-
-        b,
-
-        inboxStateMap
-
-      )
-
-  );
-
-
-
-  const selectedId =
-
-    query.lead &&
-
-    allLeads.some(
-
-      (lead) =>
-
-        lead.id === query.lead
-
-    )
-
-      ? query.lead
-
-      : conversationLeads[0]?.id;
-
-
-
-  const selected =
-
-    selectedId
-
-      ? await getLead(
-
-          selectedId
-
-        )
-
-      : null;
-
-
+  const query = await searchParams;
+
+  const [workspace, courses] = await Promise.all([
+    getConversationsWorkspace(query.lead),
+    getCourses(),
+  ]);
+
+  const { conversationSummary, selectedId, selected, whatsappWindow, metrics } =
+    workspace;
 
   const canStartWhatsApp =
+    Boolean(selected?.phone) && selected?.currentContactChannel !== "whatsapp";
 
-  Boolean(
-
-    selected?.phone
-
-  ) &&
-
-  selected?.currentContactChannel !==
-
-    'whatsapp';
-
-
-
-
-
-
-
-  const interactionAction =
-
-    selectedId
-
-      ? logLeadInteractionAction.bind(
-
-          null,
-
-          selectedId
-
-        )
-
-      : undefined;
-
-
-
-  const whatsappAction =
-
-    selectedId
-
-      ? sendWhatsAppMessageAction.bind(
-
-          null,
-
-          selectedId
-
-        )
-
-      : undefined;
-
-
-
-  const whatsappTemplateAction =
-
-  selectedId
-
-    ? sendWhatsAppTemplateAction.bind(
-
-        null,
-
-        selectedId
-
-      )
-
+  const interactionAction = selectedId
+    ? logLeadInteractionAction.bind(null, selectedId)
     : undefined;
 
+  const whatsappAction = selectedId
+    ? sendWhatsAppMessageAction.bind(null, selectedId)
+    : undefined;
 
+  const whatsappTemplateAction = selectedId
+    ? sendWhatsAppTemplateAction.bind(null, selectedId)
+    : undefined;
 
-  const leadContextAction =
+  const leadContextAction = selectedId
+    ? updateConversationLeadContextAction.bind(null, selectedId)
+    : undefined;
 
-    selectedId
-
-      ? updateConversationLeadContextAction.bind(
-
-          null,
-
-          selectedId
-
-        )
-
-      : undefined;
-
-
-
-  const mock =
-
-    isMockMode();
-
-
-
-
+  const mock = isMockMode();
 
   const noticeText =
-
-  query.notice ===
-
-  'whatsapp-sent'
-
-    ? 'WhatsApp message sent and logged in the CRM.'
-
-    : query.notice ===
-
-        'whatsapp-template-sent'
-
-      ? 'WhatsApp template sent successfully.'
-
-      : query.notice ===
-
-          'whatsapp-started'
-
-        ? 'WhatsApp conversation started from the lead’s submitted phone number.'
-
-        : query.notice ===
-
-            'lead-context-updated'
-
-          ? 'Lead course and country updated.'
-
-          : query.notice
-
-            ? 'Interaction logged.'
-
-            : null;
-
-
-
-
-
-  const conversationSummary:
-
-  ConversationLeadSummary[] =
-
-    conversationLeads.map(
-
-      (lead) => {
-
-        const state =
-
-          inboxStateMap.get(
-
-            lead.id
-
-          );
-
-
-
-        const attention =
-
-          getConversationAttention(
-
-            lead,
-
-            state
-
-          );
-
-
-
-        return {
-
-          id:
-
-            lead.id,
-
-
-
-          name:
-
-            lead.name,
-
-
-
-          course:
-
-            lead.course ||
-
-            '',
-
-
-
-          country:
-
-            lead.country ||
-
-            '',
-
-
-
-          stage:
-
-            lead.stage,
-
-
-
-          currentContactChannel:
-
-            lead.currentContactChannel,
-
-
-
-          lastContactedAt:
-
-            state
-
-              ?.latestMessageAt ||
-
-            lead.lastContactedAt ||
-
-            lead.createdAt ||
-
-            null,
-
-
-
-          /*
-
-           * The selected conversation
-
-           * is visually considered read
-
-           * immediately.
-
-           *
-
-           * ConversationReadMarker
-
-           * persists that state.
-
-           */
-
-          unread:
-
-            lead.id ===
-
-            selectedId
-
-              ? false
-
-              : attention.unread,
-
-
-
-          needsReply:
-
-            attention.needsReply,
-
-
-
-          needsFirstContact:
-
-            attention.needsFirstContact,
-
-
-
-          priority:
-
-            attention.priority,
-
-
-
-          waitingSince:
-
-            attention.waitingSince,
-
-        };
-
-      }
-
-    );
-
-
-
-  const whatsappWindow =
-
-    selected &&
-
-    selected.currentContactChannel ===
-
-      'whatsapp'
-
-      ? await getWhatsAppWindow(
-
-          selected.id
-
-        )
-
-      : null;
-
-
-
-  const shouldLoadWhatsAppTemplates =
-
-  Boolean(
-
-    selected &&
-
-      (
-
-        canStartWhatsApp ||
-
-        (
-
-          whatsappWindow &&
-
-          !whatsappWindow.open
-
-        )
-
-      )
-
+    query.notice === "whatsapp-sent"
+      ? "WhatsApp message sent and logged in the CRM."
+      : query.notice === "whatsapp-template-sent"
+        ? "WhatsApp template sent successfully."
+        : query.notice === "whatsapp-started"
+          ? "WhatsApp conversation started from the lead’s submitted phone number."
+          : query.notice === "lead-context-updated"
+            ? "Lead course and country updated."
+            : query.notice
+              ? "Interaction logged."
+              : null;
+
+  const shouldLoadWhatsAppTemplates = Boolean(
+    selected && (canStartWhatsApp || (whatsappWindow && !whatsappWindow.open)),
   );
 
-
-
-const whatsappTemplateCatalog =
-
-  shouldLoadWhatsAppTemplates
-
+  const whatsappTemplateCatalog = shouldLoadWhatsAppTemplates
     ? await getApprovedWhatsAppTemplates()
-
     : {
-
         templates: [],
-
         error: null,
-
       };
 
+  const whatsappCount = metrics.whatsappCount;
 
-
-  const whatsappCount =
-
-    conversationLeads.filter(
-
-      (lead) =>
-
-        lead.currentContactChannel ===
-
-        'whatsapp'
-
-    ).length;
-
-
-
-  const highIntentCount =
-
-    conversationLeads.filter(
-
-      (lead) =>
-
-        lead.stage ===
-
-          'high_intent' ||
-
-        lead.stage ===
-
-          'payment_pending'
-
-    ).length;
-
-
+  const highIntentCount = metrics.highIntentCount;
 
   return (
-
     <>
-     <ConversationsRealtime />
+      <ConversationsRealtime />
 
       <PageHeader
-
         eyebrow="Unified inbox"
-
         title="Conversations"
-
         description="Handle WhatsApp, Instagram and CRM conversations from one admissions workspace."
-
         actions={
-
           <span
-
             className={`
+
+
 
               rounded-xl
 
+
+
               px-3
+
+
 
               py-2
 
+
+
               text-xs
+
+
 
               font-bold
 
+
+
               ${
-
                 mock
-
-                  ? 'bg-orange-50 text-orange-700'
-
-                  : 'bg-emerald-50 text-emerald-700'
-
+                  ? "bg-orange-50 text-orange-700"
+                  : "bg-emerald-50 text-emerald-700"
               }
 
+
+
             `}
-
           >
-
-            {mock
-
-              ? 'Mock inbox'
-
-              : 'Live messaging'}
-
+            {mock ? "Mock inbox" : "Live messaging"}
           </span>
-
         }
-
       />
 
-
-
       {/* ===================================================
+
+
 
           INBOX METRICS
 
+
+
       =================================================== */}
 
-
-
       <div className="mb-4 grid gap-3 sm:grid-cols-3">
-
         <InboxMetric
-
           label="Active conversations"
-
-          value={
-
-            conversationLeads.length
-
-          }
-
+          value={metrics.activeConversations}
         />
 
+        <InboxMetric label="WhatsApp" value={whatsappCount} />
 
-
-        <InboxMetric
-
-          label="WhatsApp"
-
-          value={
-
-            whatsappCount
-
-          }
-
-        />
-
-
-
-        <InboxMetric
-
-          label="High intent + payment"
-
-          value={
-
-            highIntentCount
-
-          }
-
-        />
-
+        <InboxMetric label="High intent + payment" value={highIntentCount} />
       </div>
 
-
-
       {/* ===================================================
+
+
 
           NOTICES
 
+
+
       =================================================== */}
 
-
-
       {query.error && (
-
         <div className="mb-4 animate-rise rounded-xl border border-red-100 bg-red-50 px-4 py-3 text-sm font-medium text-red-700">
-
           {query.error}
-
         </div>
-
       )}
-
-
 
       {noticeText && (
-
         <div className="mb-4 animate-rise rounded-xl border border-emerald-100 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-700">
-
           {noticeText}
-
         </div>
-
       )}
 
-
-
       {/* ===================================================
+
+
 
           CONVERSATION WORKSPACE
 
 
 
+
+
+
+
           Desktop:
+
+
 
           - fixed viewport height
 
+
+
           - contacts scroll independently
+
+
 
           - messages scroll independently
 
+
+
           - context scrolls independently
+
+
 
       =================================================== */}
 
-
-
       <div
-
         className="
+
+
 
           grid
 
+
+
           overflow-hidden
+
+
 
           rounded-2xl
 
+
+
           border
+
+
 
           border-slate-200
 
+
+
           bg-white
+
+
 
           shadow-card
 
 
 
+
+
+
+
           lg:h-[calc(100dvh-270px)]
+
+
 
           lg:min-h-[560px]
 
+
+
           lg:grid-cols-[320px_minmax(0,1fr)_300px]
 
+
+
         "
-
       >
-
         {/* ===============================================
+
+
 
             LEFT — CONVERSATION LIST
 
+
+
         =============================================== */}
 
-
-
         <div
-
           className="
+
+
 
             min-h-0
 
+
+
             overflow-y-auto
+
+
 
             overscroll-contain
 
+
+
             border-r
+
+
 
             border-slate-200
 
+
+
             bg-slate-50/40
 
+
+
           "
-
         >
-
           <ConversationsSidebar
-
-            leads={
-
-              conversationSummary
-
-            }
-
-            selectedId={
-
-              selectedId
-
-            }
-
+            leads={conversationSummary}
+            selectedId={selectedId}
           />
-
         </div>
 
-
-
         {!selected ? (
-
           <section className="col-span-2 grid min-h-[560px] place-items-center p-8 text-center">
-
             <div>
-
               <div className="mx-auto grid h-14 w-14 place-items-center rounded-2xl bg-brand/10 text-brand">
-
-                <MessageCircle
-
-                  size={23}
-
-                />
-
+                <MessageCircle size={23} />
               </div>
-
-
 
               <div className="mt-4 text-lg font-bold text-slate-800">
-
                 No conversation selected
-
               </div>
 
-
-
               <p className="mt-2 max-w-md text-sm leading-6 text-slate-500">
-
-                Incoming WhatsApp
-
-                messages and CRM
-
-                interactions will appear
-
+                Incoming WhatsApp messages and CRM interactions will appear
                 here.
-
               </p>
 
-
-
-              <Link
-
-                href="/leads"
-
-                className="btn-primary mt-4"
-
-              >
-
+              <Link href="/leads" className="btn-primary mt-4">
                 Open leads
-
               </Link>
-
             </div>
-
           </section>
-
         ) : (
-
           <>
-
             {/* ===========================================
+
+
 
                 CENTER — CHAT
 
+
+
             =========================================== */}
 
-
-
             <section
-
               className="
+
+
 
                 flex
 
+
+
                 min-h-0
+
+
 
                 min-w-0
 
+
+
                 flex-col
+
+
 
                 overflow-hidden
 
+
+
                 bg-white
 
+
+
               "
-
             >
-
-              <ConversationReadMarker
-                leadId={selected.id}
-              />
+              <ConversationReadMarker leadId={selected.id} />
 
               {/* CHAT HEADER */}
 
-
-
               <div
-
                 className="
+
+
 
                   shrink-0
 
+
+
                   border-b
+
+
 
                   border-slate-100
 
+
+
                   bg-white
+
+
 
                   px-4
 
+
+
                   py-3
 
+
+
                 "
-
               >
-
                 <div className="flex items-start justify-between gap-4">
-
                   <div className="flex min-w-0 items-center gap-3">
-
                     <div className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-brand/10 text-xs font-black text-brand">
-
-                      {initials(
-
-                        selected.name
-
-                      )}
-
+                      {initials(selected.name)}
                     </div>
-
-
 
                     <div className="min-w-0">
-
                       <div className="truncate text-sm font-black text-slate-900">
-
                         {selected.name}
-
                       </div>
-
-
 
                       <div className="mt-2 flex flex-wrap items-center gap-1.5">
-
                         <ChannelBadge
-
-                          channel={
-
-                            selected.currentContactChannel
-
-                          }
-
+                          channel={selected.currentContactChannel}
                         />
 
+                        <StageBadge stage={selected.stage} />
 
+                        <ContextBadge tone="course">
+                          <BookOpen size={11} />
 
-                        <StageBadge
-
-                          stage={
-
-                            selected.stage
-
-                          }
-
-                        />
-
-
-
-                        <ContextBadge
-
-                          tone="course"
-
-                        >
-
-                          <BookOpen
-
-                            size={11}
-
-                          />
-
-
-
-                          {selected.course ||
-
-                            'Course not selected'}
-
+                          {selected.course || "Course not selected"}
                         </ContextBadge>
 
+                        <ContextBadge tone="country">
+                          <MapPin size={11} />
 
-
-                        <ContextBadge
-
-                          tone="country"
-
-                        >
-
-                          <MapPin
-
-                            size={11}
-
-                          />
-
-
-
-                          {selected.country ||
-
-                            'Country not set'}
-
+                          {selected.country || "Country not set"}
                         </ContextBadge>
-
                       </div>
-
                     </div>
-
                   </div>
 
-
-
                   <Link
-
                     href={`/leads/${selected.id}`}
-
                     className="btn-secondary !px-3 !py-2"
-
                   >
-
                     Lead profile
-
-
-
-                    <ArrowUpRight
-
-                      size={13}
-
-                    />
-
+                    <ArrowUpRight size={13} />
                   </Link>
-
                 </div>
-
               </div>
-
-
 
               {/* WHATSAPP WINDOW STATUS */}
 
-
-
               {whatsappWindow && (
-
                 <div
-
                   className={`
+
+
 
                     shrink-0
 
+
+
                     border-b
+
+
 
                     px-4
 
+
+
                     py-2
 
+
+
                     text-[10px]
+
+
 
                     font-semibold
 
 
 
+
+
+
+
                     ${
-
                       whatsappWindow.open
-
-                        ? 'border-emerald-100 bg-emerald-50/70 text-emerald-700'
-
-                        : 'border-amber-100 bg-amber-50/70 text-amber-700'
-
+                        ? "border-emerald-100 bg-emerald-50/70 text-emerald-700"
+                        : "border-amber-100 bg-amber-50/70 text-amber-700"
                     }
 
+
+
                   `}
-
                 >
-
-                  {
-
-                    whatsappWindow.label
-
-                  }
-
+                  {whatsappWindow.label}
                 </div>
-
               )}
 
-
-
-            {canStartWhatsApp && (
-
-            <div className="border-b border-sky-100 bg-sky-50/70 px-4 py-2 text-[10px] font-semibold text-sky-700">
-
-              Website/form lead · phone
-
-              number available · start
-
-              WhatsApp using an approved
-
-              template.
-
-            </div>
-
-          )}
-
-
+              {canStartWhatsApp && (
+                <div className="border-b border-sky-100 bg-sky-50/70 px-4 py-2 text-[10px] font-semibold text-sky-700">
+                  Website/form lead · phone number available · start WhatsApp
+                  using an approved template.
+                </div>
+              )}
 
               {/* MESSAGE HISTORY */}
 
-
-
               <div
-
                 className="
+
+
 
                   min-h-0
 
+
+
                   flex-1
+
+
 
                   overflow-y-auto
 
+
+
                   overscroll-contain
+
+
 
                   px-4
 
+
+
                   py-5
+
+
 
                   sm:px-6
 
+
+
                 "
-
                 style={{
-
                   background:
-
-                    'radial-gradient(circle at 20% 10%, rgba(16,56,89,.025), transparent 20rem), radial-gradient(circle at 90% 90%, rgba(236,131,22,.035), transparent 20rem), rgba(248,250,252,.72)',
-
+                    "radial-gradient(circle at 20% 10%, rgba(16,56,89,.025), transparent 20rem), radial-gradient(circle at 90% 90%, rgba(236,131,22,.035), transparent 20rem), rgba(248,250,252,.72)",
                 }}
-
               >
-
-
-
-              <ConversationThread
-
-  messages={
-
-    selected.lastMessages
-
-  }
-
-  originChannel={
-
-    selected.leadCreationChannel
-
-  }
-
-  originTimestamp={
-
-    selected.createdAt
-
-  }
-
-  originCourse={
-
-    selected.course
-
-  }
-
-  originDetail={
-
-    selected.leadCreationChannel ===
-
-      'website'
-
-      ? 'Form enquiry received and added to the CRM.'
-
-      : undefined
-
-  }
-
-/>
-
+                <ConversationThread
+                  messages={selected.lastMessages}
+                  originChannel={selected.leadCreationChannel}
+                  originTimestamp={selected.createdAt}
+                  originCourse={selected.course}
+                  originDetail={
+                    selected.leadCreationChannel === "website"
+                      ? "Form enquiry received and added to the CRM."
+                      : undefined
+                  }
+                />
               </div>
-
-
 
               {/* COMPOSER */}
 
-
-
               <div className="shrink-0">
-
-                {selected.currentContactChannel ===
-
-  'whatsapp' ? (
-
-  whatsappWindow?.open &&
-
-  whatsappAction ? (
-
-    <WhatsAppComposer
-
-      action={
-
-        whatsappAction
-
-      }
-
-      windowOpen
-
-      windowLabel={
-
-        whatsappWindow.label
-
-      }
-
-    />
-
-  ) : whatsappTemplateAction ? (
-
-    <WhatsAppTemplateComposer
-
-      action={
-
-        whatsappTemplateAction
-
-      }
-
-      templates={
-
-        whatsappTemplateCatalog.templates
-
-      }
-
-      loadError={
-
-        whatsappTemplateCatalog.error
-
-      }
-
-      windowLabel={
-
-        whatsappWindow?.label ??
-
-        'Use an approved WhatsApp template to continue the conversation.'
-
-      }
-
-      mode="followup"
-
-      phone={
-
-        selected.phone
-
-      }
-
-    />
-
-  ) : null
-
-) : canStartWhatsApp &&
-
-  whatsappTemplateAction ? (
-
-  <WhatsAppTemplateComposer
-
-    action={
-
-      whatsappTemplateAction
-
-    }
-
-    templates={
-
-      whatsappTemplateCatalog.templates
-
-    }
-
-    loadError={
-
-      whatsappTemplateCatalog.error
-
-    }
-
-    mode="start"
-
-    phone={
-
-      selected.phone
-
-    }
-
-  />
-
-) : interactionAction ? (
-
-  <form
-
-    action={
-
-      interactionAction
-
-    }
-
-    className="border-t border-slate-100 bg-white p-4"
-
-  >
-
-    <div className="grid gap-2 sm:grid-cols-[125px_145px_minmax(0,1fr)_auto]">
-
-      <select
-
-        className="input"
-
-        name="direction"
-
-        defaultValue="outbound"
-
-      >
-
-        <option value="outbound">
-
-          Outbound
-
-        </option>
-
-
-
-        <option value="inbound">
-
-          Inbound
-
-        </option>
-
-      </select>
-
-
-
-      <select
-
-        className="input"
-
-        name="channel"
-
-        defaultValue={
-
-          selected.currentContactChannel
-
-        }
-
-      >
-
-        {channels.map(
-
-          ([value, label]) => (
-
-            <option
-
-              key={value}
-
-              value={value}
-
-            >
-
-              {label}
-
-            </option>
-
-          )
-
-        )}
-
-      </select>
-
-
-
-      <input
-
-        className="input"
-
-        name="body"
-
-        required
-
-        placeholder="Log a message, email or call note..."
-
-      />
-
-
-
-      <button
-
-        className="btn-primary"
-
-        type="submit"
-
-      >
-
-        Log
-
-      </button>
-
-    </div>
-
-
-
-    <div className="mt-2 text-[10px] font-semibold text-slate-400">
-
-      Non-WhatsApp channels
-
-      are logged manually for
-
-      now.
-
-    </div>
-
-  </form>
-
-) : null}
-
+                {selected.currentContactChannel === "whatsapp" ? (
+                  whatsappWindow?.open && whatsappAction ? (
+                    <WhatsAppComposer
+                      action={whatsappAction}
+                      windowOpen
+                      windowLabel={whatsappWindow.label}
+                    />
+                  ) : whatsappTemplateAction ? (
+                    <WhatsAppTemplateComposer
+                      action={whatsappTemplateAction}
+                      templates={whatsappTemplateCatalog.templates}
+                      loadError={whatsappTemplateCatalog.error}
+                      windowLabel={
+                        whatsappWindow?.label ??
+                        "Use an approved WhatsApp template to continue the conversation."
+                      }
+                      mode="followup"
+                      phone={selected.phone}
+                    />
+                  ) : null
+                ) : canStartWhatsApp && whatsappTemplateAction ? (
+                  <WhatsAppTemplateComposer
+                    action={whatsappTemplateAction}
+                    templates={whatsappTemplateCatalog.templates}
+                    loadError={whatsappTemplateCatalog.error}
+                    mode="start"
+                    phone={selected.phone}
+                  />
+                ) : interactionAction ? (
+                  <form
+                    action={interactionAction}
+                    className="border-t border-slate-100 bg-white p-4"
+                  >
+                    <div className="grid gap-2 sm:grid-cols-[125px_145px_minmax(0,1fr)_auto]">
+                      <select
+                        className="input"
+                        name="direction"
+                        defaultValue="outbound"
+                      >
+                        <option value="outbound">Outbound</option>
+
+                        <option value="inbound">Inbound</option>
+                      </select>
+
+                      <select
+                        className="input"
+                        name="channel"
+                        defaultValue={selected.currentContactChannel}
+                      >
+                        {channels.map(([value, label]) => (
+                          <option key={value} value={value}>
+                            {label}
+                          </option>
+                        ))}
+                      </select>
+
+                      <input
+                        className="input"
+                        name="body"
+                        required
+                        placeholder="Log a message, email or call note..."
+                      />
+
+                      <button className="btn-primary" type="submit">
+                        Log
+                      </button>
+                    </div>
+
+                    <div className="mt-2 text-[10px] font-semibold text-slate-400">
+                      Non-WhatsApp channels are logged manually for now.
+                    </div>
+                  </form>
+                ) : null}
               </div>
-
             </section>
-
-
 
             {/* ===========================================
 
+
+
                 RIGHT — LEAD CONTEXT
+
+
 
             =========================================== */}
 
-
-
             <aside
-
               className="
+
+
 
                 hidden
 
+
+
                 min-h-0
+
+
 
                 overflow-y-auto
 
+
+
                 overscroll-contain
+
+
 
                 border-l
 
+
+
                 border-slate-200
+
+
 
                 bg-slate-50/55
 
+
+
                 p-4
+
+
 
                 lg:block
 
+
+
               "
-
             >
-
               <div>
-
-                <div className="eyebrow">
-
-                  Lead context
-
-                </div>
-
-
+                <div className="eyebrow">Lead context</div>
 
                 <div className="mt-3 flex items-start justify-between gap-3">
-
                   <div className="min-w-0">
-
                     <div className="truncate text-sm font-black text-slate-900">
-
                       {selected.name}
-
                     </div>
-
-
 
                     <div className="mt-1 text-[10px] font-semibold text-slate-400">
-
-                      Update the important
-
-                      admissions details
-
-                      without leaving the
-
-                      conversation.
-
+                      Update the important admissions details without leaving
+                      the conversation.
                     </div>
-
                   </div>
 
-
-
-                  <StageBadge
-
-                    stage={
-
-                      selected.stage
-
-                    }
-
-                  />
-
+                  <StageBadge stage={selected.stage} />
                 </div>
-
               </div>
-
-
 
               {/* QUICK EDIT */}
 
-
-
               {leadContextAction && (
-
                 <div className="mt-5 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-
                   <div className="text-[10px] font-bold uppercase tracking-[.12em] text-slate-400">
-
                     Quick edit
-
                   </div>
-
-
 
                   <div className="mt-1 text-sm font-black text-slate-800">
-
                     Admissions details
-
                   </div>
 
-
-
-                  <form
-
-                    action={
-
-                      leadContextAction
-
-                    }
-
-                    className="mt-4 space-y-4"
-
-                  >
-
+                  <form action={leadContextAction} className="mt-4 space-y-4">
                     <label className="block">
-
                       <span className="mb-1.5 flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-[.1em] text-sky-700">
-
-                        <BookOpen
-
-                          size={12}
-
-                        />
-
-
-
+                        <BookOpen size={12} />
                         Course
-
                       </span>
-
-
 
                       <select
-
                         className="input"
-
                         name="course_id"
-
-                        defaultValue={
-
-                          selected.interestedCourseId ??
-
-                          ''
-
-                        }
-
+                        defaultValue={selected.interestedCourseId ?? ""}
                       >
+                        <option value="">Not selected</option>
 
-                        <option value="">
-
-                          Not selected
-
-                        </option>
-
-
-
-                        {courses.map(
-
-                          (
-
-                            course
-
-                          ) => (
-
-                            <option
-
-                              key={
-
-                                course.id
-
-                              }
-
-                              value={
-
-                                course.id
-
-                              }
-
-                            >
-
-                              {
-
-                                course.name
-
-                              }
-
-                            </option>
-
-                          )
-
-                        )}
-
+                        {courses.map((course) => (
+                          <option key={course.id} value={course.id}>
+                            {course.name}
+                          </option>
+                        ))}
                       </select>
-
                     </label>
-
-
 
                     <label className="block">
-
                       <span className="mb-1.5 flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-[.1em] text-violet-700">
-
-                        <MapPin
-
-                          size={12}
-
-                        />
-
-
-
+                        <MapPin size={12} />
                         Country
-
                       </span>
 
-
-
                       <input
-
                         className="input"
-
                         name="country"
-
-                        defaultValue={
-
-                          selected.country ||
-
-                          ''
-
-                        }
-
+                        defaultValue={selected.country || ""}
                         placeholder="e.g. Germany"
-
                       />
-
                     </label>
 
-
-
                     <button
-
                       className="btn-primary flex w-full items-center justify-center gap-2"
-
                       type="submit"
-
                     >
-
-                      <Save
-
-                        size={14}
-
-                      />
-
-
-
+                      <Save size={14} />
                       Save details
-
                     </button>
-
                   </form>
-
                 </div>
-
               )}
-
-
 
               {/* CURRENT DETAILS */}
 
-
-
               <div className="mt-5 space-y-3">
-
                 <ContextRow
-
                   label="Course"
-
-                  value={
-
-                    selected.course ||
-
-                    'Not selected'
-
-                  }
-
+                  value={selected.course || "Not selected"}
                   tone="blue"
-
                 />
 
-
-
                 <ContextRow
-
                   label="Country"
-
-                  value={
-
-                    selected.country ||
-
-                    'Not set'
-
-                  }
-
+                  value={selected.country || "Not set"}
                   tone="violet"
-
                 />
 
-
-
                 <ContextRow
-
                   label="Current channel"
-
                   value={selected.currentContactChannel.replaceAll(
+                    "_",
 
-                    '_',
-
-                    ' '
-
+                    " ",
                   )}
-
                   tone={
-
-                    selected.currentContactChannel ===
-
-                    'whatsapp'
-
-                      ? 'green'
-
-                      : selected.currentContactChannel ===
-
-                          'instagram'
-
-                        ? 'pink'
-
-                        : 'slate'
-
+                    selected.currentContactChannel === "whatsapp"
+                      ? "green"
+                      : selected.currentContactChannel === "instagram"
+                        ? "pink"
+                        : "slate"
                   }
-
                 />
-
-
 
                 <ContextRow
-
                   label="Last contacted"
-
                   value={
-
                     selected.lastContactedAt
-
-                      ? formatDateTime(
-
-                          selected.lastContactedAt
-
-                        )
-
-                      : 'Not contacted'
-
+                      ? formatDateTime(selected.lastContactedAt)
+                      : "Not contacted"
                   }
-
                   tone="amber"
-
                 />
-
               </div>
-
-
 
               {/* QUICK ACTIONS */}
 
-
-
               <div className="mt-5 border-t border-slate-200 pt-4">
-
                 <div className="text-[10px] font-bold uppercase tracking-[.12em] text-slate-400">
-
                   Quick actions
-
                 </div>
-
-
 
                 <div className="mt-3 space-y-2">
-
                   <Link
-
                     href={`/leads/${selected.id}`}
-
                     className="flex items-center justify-between rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-xs font-bold text-slate-700 transition duration-150 hover:-translate-y-0.5 hover:border-brand/20 hover:shadow-sm"
-
                   >
-
                     Open full lead
-
-
-
-                    <ArrowUpRight
-
-                      size={13}
-
-                    />
-
+                    <ArrowUpRight size={13} />
                   </Link>
-
-
 
                   <Link
-
                     href="/follow-ups"
-
                     className="flex items-center justify-between rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-xs font-bold text-slate-700 transition duration-150 hover:-translate-y-0.5 hover:border-brand/20 hover:shadow-sm"
-
                   >
-
                     Follow-up queue
-
-
-
-                    <CalendarClock
-
-                      size={13}
-
-                    />
-
+                    <CalendarClock size={13} />
                   </Link>
-
                 </div>
-
               </div>
-
-
 
               {/* AI PLACEHOLDER */}
 
-
-
               <div className="mt-5 rounded-2xl border border-brand/10 bg-brand/[0.045] p-4">
-
                 <div className="text-[10px] font-bold uppercase tracking-[.12em] text-brand/60">
-
                   AI layer next
-
                 </div>
-
-
 
                 <div className="mt-2 text-sm font-bold text-slate-800">
-
                   Reply suggestions
-
                 </div>
 
-
-
                 <p className="mt-1 text-[11px] leading-5 text-slate-500">
-
-                  AI qualification,
-
-                  conversation summaries,
-
-                  next-best action and
-
-                  suggested replies will
-
-                  appear here after the
-
-                  messaging workspace is
-
-                  finalized.
-
+                  AI qualification, conversation summaries, next-best action and
+                  suggested replies will appear here after the messaging
+                  workspace is finalized.
                 </p>
-
               </div>
-
             </aside>
-
           </>
-
         )}
-
       </div>
-
     </>
-
-  );
-
-}
-
-
-
-/* =========================================================
-
-   WHATSAPP WINDOW
-
-========================================================= */
-
-
-
-type InboxState = {
-
-  latestMessageAt:
-
-    | string
-
-    | null;
-
-
-
-  latestDirection:
-
-    | string
-
-    | null;
-
-
-
-  latestChannel:
-
-    | string
-
-    | null;
-
-
-
-  lastInboundAt:
-
-    | string
-
-    | null;
-
-
-
-  lastOutboundAt:
-
-    | string
-
-    | null;
-
-
-
-  needsReply:
-
-    boolean;
-
-
-
-  lastReadAt:
-
-    | string
-
-    | null;
-
-};
-
-
-
-type ConversationPriority =
-
-  | 'urgent'
-
-  | 'high'
-
-  | 'normal'
-
-  | 'waiting';
-
-
-
-async function getInboxStateMap() {
-
-  const supabase =
-
-    await createClient();
-
-
-
-  const {
-
-    data: { user },
-
-  } =
-
-    await supabase.auth.getUser();
-
-
-
-  const {
-
-    data:
-
-      attentionRows,
-
-    error:
-
-      attentionError,
-
-  } =
-
-    await supabase
-
-      .from(
-
-        'v_lead_inbox_attention'
-
-      )
-
-      .select(`
-
-        lead_id,
-
-        latest_direction,
-
-        latest_message_at,
-
-        latest_channel,
-
-        last_inbound_at,
-
-        last_outbound_at,
-
-        needs_reply
-
-      `)
-
-      .limit(1000);
-
-
-
-  if (attentionError) {
-
-    throw new Error(
-
-      `Unable to load conversation attention state: ${attentionError.message}`
-
-    );
-
-  }
-
-
-
-  let readRows:
-
-    Array<{
-
-      lead_id: string;
-
-      last_read_at:
-
-        | string
-
-        | null;
-
-    }> = [];
-
-
-
-  if (user) {
-
-    const {
-
-      data,
-
-      error,
-
-    } =
-
-      await supabase
-
-        .from(
-
-          'lead_inbox_reads'
-
-        )
-
-        .select(
-
-          `
-
-          lead_id,
-
-          last_read_at
-
-          `
-
-        )
-
-        .eq(
-
-          'user_id',
-
-          user.id
-
-        )
-
-        .limit(1000);
-
-
-
-    if (error) {
-
-      throw new Error(
-
-        `Unable to load inbox read state: ${error.message}`
-
-      );
-
-    }
-
-
-
-    readRows =
-
-      data ?? [];
-
-  }
-
-
-
-  const readMap =
-
-    new Map<
-
-      string,
-
-      string | null
-
-    >(
-
-      readRows.map(
-
-        (row) => [
-
-          row.lead_id,
-
-          row.last_read_at,
-
-        ]
-
-      )
-
-    );
-
-
-
-  const result =
-
-    new Map<
-
-      string,
-
-      InboxState
-
-    >();
-
-
-
-  for (
-
-    const row of
-
-      attentionRows ?? []
-
-  ) {
-
-    result.set(
-
-      row.lead_id,
-
-      {
-
-        latestMessageAt:
-
-          row.latest_message_at ??
-
-          null,
-
-
-
-        latestDirection:
-
-          row.latest_direction ??
-
-          null,
-
-
-
-        latestChannel:
-
-          row.latest_channel ??
-
-          null,
-
-
-
-        lastInboundAt:
-
-          row.last_inbound_at ??
-
-          null,
-
-
-
-        lastOutboundAt:
-
-          row.last_outbound_at ??
-
-          null,
-
-
-
-        needsReply:
-
-          Boolean(
-
-            row.needs_reply
-
-          ),
-
-
-
-        lastReadAt:
-
-          readMap.get(
-
-            row.lead_id
-
-          ) ??
-
-          null,
-
-      }
-
-    );
-
-  }
-
-
-
-  return result;
-
-}
-
-
-
-function getConversationAttention(
-
-  lead: {
-    stage: string;
-    createdAt?: string;
-    lastContactedAt?: string;
-  },
-
-
-
-  state:
-
-    | InboxState
-
-    | undefined
-
-) {
-
-  const needsReply =
-
-    Boolean(
-
-      state?.needsReply
-
-    );
-
-
-
-  /*
-
-   * A completely fresh website/form
-
-   * lead also needs attention even
-
-   * though there is no message yet.
-
-   */
-
-  const needsFirstContact =
-
-    !state?.latestMessageAt &&
-
-    !lead.lastContactedAt;
-
-
-
-  const unread =
-
-    Boolean(
-
-      state?.lastInboundAt &&
-
-        (
-
-          !state.lastReadAt ||
-
-          new Date(
-
-            state.lastInboundAt
-
-          ).getTime() >
-
-            new Date(
-
-              state.lastReadAt
-
-            ).getTime()
-
-        )
-
-    );
-
-
-
-  const waitingSince =
-
-    needsReply
-
-      ? state
-
-          ?.lastInboundAt ??
-
-        state
-
-          ?.latestMessageAt ??
-
-        null
-
-      : needsFirstContact
-
-        ? lead.createdAt ??
-
-          null
-
-        : null;
-
-
-
-  const waitingMinutes =
-
-    waitingSince
-
-      ? Math.max(
-
-          0,
-
-          Math.floor(
-
-            (
-
-              Date.now() -
-
-              new Date(
-
-                waitingSince
-
-              ).getTime()
-
-            ) /
-
-              60000
-
-          )
-
-        )
-
-      : 0;
-
-
-
-  let priority:
-
-    ConversationPriority =
-
-      'waiting';
-
-
-
-  if (
-
-    needsReply ||
-
-    needsFirstContact
-
-  ) {
-
-    if (
-
-      waitingMinutes >=
-
-        240 ||
-
-      (
-
-        (
-
-          lead.stage ===
-
-            'payment_pending' ||
-
-          lead.stage ===
-
-            'high_intent'
-
-        ) &&
-
-        waitingMinutes >=
-
-          60
-
-      )
-
-    ) {
-
-      priority =
-
-        'urgent';
-
-    } else if (
-
-      waitingMinutes >=
-
-        60 ||
-
-      lead.stage ===
-
-        'payment_pending' ||
-
-      lead.stage ===
-
-        'high_intent' ||
-
-      lead.stage ===
-
-        'qualified' ||
-
-      needsFirstContact
-
-    ) {
-
-      priority =
-
-        'high';
-
-    } else {
-
-      priority =
-
-        'normal';
-
-    }
-
-  }
-
-
-
-  return {
-
-    unread,
-
-    needsReply,
-
-    needsFirstContact,
-
-    waitingSince,
-
-    waitingMinutes,
-
-    priority,
-
-    needsAttention:
-
-      needsReply ||
-
-      needsFirstContact,
-
-  };
-
-}
-
-
-
-function compareConversationLeads(
-  a: {
-    id: string;
-    stage: string;
-    createdAt?: string;
-    lastContactedAt?: string;
-  },
-
-  b: {
-    id: string;
-    stage: string;
-    createdAt?: string;
-    lastContactedAt?: string;
-  },
-
-  stateMap: Map<
-    string,
-    InboxState
-  >
-) {
-  const attentionA =
-    getConversationAttention(
-      a,
-      stateMap.get(
-        a.id
-      )
-    );
-
-  const attentionB =
-    getConversationAttention(
-      b,
-      stateMap.get(
-        b.id
-      )
-    );
-
-  /*
-   * Leads requiring action always
-   * appear before waiting leads.
-   */
-  if (
-    attentionA.needsAttention !==
-    attentionB.needsAttention
-  ) {
-    return attentionA.needsAttention
-      ? -1
-      : 1;
-  }
-
-  /*
-   * Within attention leads:
-   * urgent → high → normal.
-   */
-  const priorityRank: Record<
-    ConversationPriority,
-    number
-  > = {
-    urgent: 3,
-    high: 2,
-    normal: 1,
-    waiting: 0,
-  };
-
-  const rankDifference =
-    priorityRank[
-      attentionB.priority
-    ] -
-    priorityRank[
-      attentionA.priority
-    ];
-
-  if (
-    rankDifference !== 0
-  ) {
-    return rankDifference;
-  }
-
-  /*
-   * Unread customer messages
-   * before already-read messages.
-   */
-  if (
-    attentionA.unread !==
-    attentionB.unread
-  ) {
-    return attentionA.unread
-      ? -1
-      : 1;
-  }
-
-  /*
-   * If both need attention,
-   * longest-waiting goes first.
-   */
-  if (
-    attentionA.needsAttention &&
-    attentionB.needsAttention
-  ) {
-    return (
-      attentionB.waitingMinutes -
-      attentionA.waitingMinutes
-    );
-  }
-
-  /*
-   * Otherwise newest activity first.
-   */
-  const activityA =
-    stateMap.get(
-      a.id
-    )?.latestMessageAt ||
-    a.lastContactedAt ||
-    a.createdAt ||
-    '';
-
-  const activityB =
-    stateMap.get(
-      b.id
-    )?.latestMessageAt ||
-    b.lastContactedAt ||
-    b.createdAt ||
-    '';
-
-  return (
-    new Date(
-      activityB
-    ).getTime() -
-    new Date(
-      activityA
-    ).getTime()
   );
 }
 
-async function getWhatsAppWindow(
-
-  leadId: string
-
-) {
-
-  const supabase =
-
-    await createClient();
-
-
-
-  const {
-
-    data: conversation,
-
-  } = await supabase
-
-    .from('conversations')
-
-    .select('id')
-
-    .eq('lead_id', leadId)
-
-    .eq('channel', 'whatsapp')
-
-    .order('last_message_at', {
-
-      ascending: false,
-
-      nullsFirst: false,
-
-    })
-
-    .limit(1)
-
-    .maybeSingle();
-
-
-
-  if (!conversation?.id) {
-
-    return {
-
-      open: false,
-
-
-
-      label:
-
-        'No WhatsApp conversation yet — an approved template is required to start one.',
-
-    };
-
-  }
-
-
-
-  const {
-
-    data: lastInbound,
-
-  } = await supabase
-
-    .from('messages')
-
-    .select('created_at')
-
-    .eq(
-
-      'conversation_id',
-
-      conversation.id
-
-    )
-
-    .eq(
-
-      'direction',
-
-      'inbound'
-
-    )
-
-    .order('created_at', {
-
-      ascending: false,
-
-    })
-
-    .limit(1)
-
-    .maybeSingle();
-
-
-
-  if (!lastInbound?.created_at) {
-
-    return {
-
-      open: false,
-
-
-
-      label:
-
-        'No inbound WhatsApp message found — use an approved template.',
-
-    };
-
-  }
-
-
-
-  const inboundAt =
-
-    new Date(
-
-      lastInbound.created_at
-
-    ).getTime();
-
-
-
-  const age =
-
-    Date.now() - inboundAt;
-
-
-
-  if (
-
-    !Number.isFinite(
-
-      inboundAt
-
-    ) ||
-
-    age >
-
-      CUSTOMER_SERVICE_WINDOW_MS
-
-  ) {
-
-    return {
-
-      open: false,
-
-
-
-      label:
-
-        '24-hour customer-service window expired — approved template required.',
-
-    };
-
-  }
-
-
-
-  const remaining =
-
-    CUSTOMER_SERVICE_WINDOW_MS -
-
-    age;
-
-
-
-  return {
-
-    open: true,
-
-
-
-    label:
-
-      `WhatsApp customer-service window open · ${formatRemaining(
-
-        remaining
-
-      )} remaining`,
-
-  };
-
-}
-
-
-
 /* =========================================================
 
-   FORMAT WINDOW
 
-========================================================= */
-
-
-
-function formatRemaining(
-
-  milliseconds: number
-
-) {
-
-  const totalMinutes =
-
-    Math.max(
-
-      0,
-
-      Math.floor(
-
-        milliseconds /
-
-          60000
-
-      )
-
-    );
-
-
-
-  const hours =
-
-    Math.floor(
-
-      totalMinutes / 60
-
-    );
-
-
-
-  const minutes =
-
-    totalMinutes % 60;
-
-
-
-  if (hours > 0) {
-
-    return `${hours}h ${minutes}m`;
-
-  }
-
-
-
-  return `${minutes}m`;
-
-}
-
-
-
-/* =========================================================
 
    METRIC
 
+
+
 ========================================================= */
 
-
-
 function InboxMetric({
-
   label,
 
   value,
-
 }: {
-
   label: string;
 
   value: number;
-
 }) {
-
   return (
-
     <div className="card flex items-center justify-between px-4 py-3.5 animate-rise">
-
-      <div className="text-xs font-semibold text-slate-500">
-
-        {label}
-
-      </div>
-
-
+      <div className="text-xs font-semibold text-slate-500">{label}</div>
 
       <div className="text-lg font-black tracking-tight text-slate-900">
-
         {value.toLocaleString()}
-
       </div>
-
     </div>
-
   );
-
 }
-
-
 
 /* =========================================================
 
+
+
    CONTEXT ROW
+
+
 
 ========================================================= */
 
-
-
 function ContextRow({
-
   label,
 
   value,
 
-  tone = 'slate',
-
+  tone = "slate",
 }: {
-
   label: string;
 
   value: string;
 
-  tone?:
-
-    | 'blue'
-
-    | 'violet'
-
-    | 'green'
-
-    | 'pink'
-
-    | 'amber'
-
-    | 'slate';
-
+  tone?: "blue" | "violet" | "green" | "pink" | "amber" | "slate";
 }) {
-
   const tones = {
+    blue: "border-sky-100 bg-sky-50/70 text-sky-800",
 
-    blue:
+    violet: "border-violet-100 bg-violet-50/70 text-violet-800",
 
-      'border-sky-100 bg-sky-50/70 text-sky-800',
+    green: "border-emerald-100 bg-emerald-50/70 text-emerald-800",
 
+    pink: "border-pink-100 bg-pink-50/70 text-pink-800",
 
+    amber: "border-amber-100 bg-amber-50/70 text-amber-800",
 
-    violet:
-
-      'border-violet-100 bg-violet-50/70 text-violet-800',
-
-
-
-    green:
-
-      'border-emerald-100 bg-emerald-50/70 text-emerald-800',
-
-
-
-    pink:
-
-      'border-pink-100 bg-pink-50/70 text-pink-800',
-
-
-
-    amber:
-
-      'border-amber-100 bg-amber-50/70 text-amber-800',
-
-
-
-    slate:
-
-      'border-slate-100 bg-white text-slate-700',
-
+    slate: "border-slate-100 bg-white text-slate-700",
   };
 
-
-
   return (
-
     <div
-
       className={`
+
+
 
         rounded-xl
 
+
+
         border
+
+
 
         p-3
 
+
+
         ${tones[tone]}
 
+
+
       `}
-
     >
-
       <div className="text-[9px] font-bold uppercase tracking-[.12em] opacity-60">
-
         {label}
-
       </div>
-
-
 
       <div className="mt-1.5 break-words text-xs font-bold capitalize">
-
         {value}
-
       </div>
-
     </div>
-
   );
-
 }
 
-
-
 /* =========================================================
+
+
 
    HEADER CONTEXT BADGE
 
+
+
 ========================================================= */
 
-
-
 function ContextBadge({
-
   tone,
 
   children,
-
 }: {
+  tone: "course" | "country";
 
-  tone:
-
-    | 'course'
-
-    | 'country';
-
-
-
-  children:
-
-    ReactNode;
-
+  children: ReactNode;
 }) {
-
   const className =
-
-    tone === 'course'
-
-      ? 'border-sky-100 bg-sky-50 text-sky-700'
-
-      : 'border-violet-100 bg-violet-50 text-violet-700';
-
-
+    tone === "course"
+      ? "border-sky-100 bg-sky-50 text-sky-700"
+      : "border-violet-100 bg-violet-50 text-violet-700";
 
   return (
-
     <span
-
       className={`
+
+
 
         inline-flex
 
+
+
         items-center
+
+
 
         gap-1
 
+
+
         rounded-full
+
+
 
         border
 
+
+
         px-2
+
+
 
         py-1
 
+
+
         text-[9px]
 
+
+
         font-bold
+
+
 
         ${className}
 
+
+
       `}
-
     >
-
       {children}
-
     </span>
-
   );
-
 }
 
-
-
 /* =========================================================
+
+
 
    CHANNEL BADGE
 
+
+
 ========================================================= */
 
-
-
-function ChannelBadge({
-
-  channel,
-
-}: {
-
-  channel: string;
-
-}) {
-
+function ChannelBadge({ channel }: { channel: string }) {
   const classes =
-
-    channel === 'whatsapp'
-
-      ? 'border-emerald-100 bg-emerald-50 text-emerald-700'
-
-      : channel ===
-
-          'instagram'
-
-        ? 'border-pink-100 bg-pink-50 text-pink-700'
-
-        : channel ===
-
-            'email'
-
-          ? 'border-sky-100 bg-sky-50 text-sky-700'
-
-          : channel ===
-
-              'phone'
-
-            ? 'border-amber-100 bg-amber-50 text-amber-700'
-
-            : channel ===
-
-                'website'
-
-              ? 'border-indigo-100 bg-indigo-50 text-indigo-700'
-
-              : 'border-slate-200 bg-slate-50 text-slate-600';
-
-
+    channel === "whatsapp"
+      ? "border-emerald-100 bg-emerald-50 text-emerald-700"
+      : channel === "instagram"
+        ? "border-pink-100 bg-pink-50 text-pink-700"
+        : channel === "email"
+          ? "border-sky-100 bg-sky-50 text-sky-700"
+          : channel === "phone"
+            ? "border-amber-100 bg-amber-50 text-amber-700"
+            : channel === "website"
+              ? "border-indigo-100 bg-indigo-50 text-indigo-700"
+              : "border-slate-200 bg-slate-50 text-slate-600";
 
   return (
-
     <span
-
       className={`
+
+
 
         inline-flex
 
+
+
         items-center
+
+
 
         gap-1
 
+
+
         rounded-full
+
+
 
         border
 
+
+
         px-2
+
+
 
         py-1
 
+
+
         text-[9px]
+
+
 
         font-bold
 
+
+
         capitalize
+
+
 
         ${classes}
 
+
+
       `}
-
     >
-
-      <ChannelIcon
-
-        channel={
-
-          channel
-
-        }
-
-      />
-
-
+      <ChannelIcon channel={channel} />
 
       {channel.replaceAll(
+        "_",
 
-        '_',
-
-        ' '
-
+        " ",
       )}
-
     </span>
-
   );
-
 }
 
-
-
 /* =========================================================
+
+
 
    CHANNEL ICON
 
+
+
 ========================================================= */
 
-
-
-function ChannelIcon({
-
-  channel,
-
-}: {
-
-  channel: string;
-
-}) {
-
-  if (
-
-    channel === 'instagram'
-
-  ) {
-
-    return (
-
-      <Instagram
-
-        size={11}
-
-      />
-
-    );
-
+function ChannelIcon({ channel }: { channel: string }) {
+  if (channel === "instagram") {
+    return <Instagram size={11} />;
   }
 
-
-
-  if (
-
-    channel === 'whatsapp'
-
-  ) {
-
-    return (
-
-      <MessageCircle
-
-        size={11}
-
-      />
-
-    );
-
+  if (channel === "whatsapp") {
+    return <MessageCircle size={11} />;
   }
 
-
-
-  if (
-
-    channel === 'email'
-
-  ) {
-
-    return (
-
-      <Mail
-
-        size={11}
-
-      />
-
-    );
-
+  if (channel === "email") {
+    return <Mail size={11} />;
   }
 
-
-
-  if (
-
-    channel === 'phone'
-
-  ) {
-
-    return (
-
-      <Phone
-
-        size={11}
-
-      />
-
-    );
-
+  if (channel === "phone") {
+    return <Phone size={11} />;
   }
 
-
-
-  return (
-
-    <ContactRound
-
-      size={11}
-
-    />
-
-  );
-
+  return <ContactRound size={11} />;
 }
-
-
 
 /* =========================================================
 
+
+
    INITIALS
+
+
 
 ========================================================= */
 
-
-
-function initials(
-
-  name: string
-
-) {
-
+function initials(name: string) {
   return (
-
     name
 
-      .split(' ')
+      .split(" ")
 
       .filter(Boolean)
 
-      .map(
-
-        (part) =>
-
-          part[0]
-
-      )
+      .map((part) => part[0])
 
       .slice(0, 2)
 
-      .join('')
+      .join("")
 
-      .toUpperCase() ||
-
-    '?'
-
+      .toUpperCase() || "?"
   );
-
 }
