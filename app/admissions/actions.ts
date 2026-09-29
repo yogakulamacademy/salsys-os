@@ -37,6 +37,86 @@ function revalidateAdmissionsLead(
 }
 
 
+export async function assignAdmissionOwnerAction(
+  formData: FormData
+) {
+  const leadId =
+    textValue(
+      formData,
+      'lead_id'
+    );
+
+  const ownerRaw =
+    textValue(
+      formData,
+      'owner_user_id'
+    );
+
+  const returnTo =
+    safeAdmissionsReturnPath(
+      textValue(
+        formData,
+        'return_to'
+      )
+    );
+
+  if (!leadId) {
+    redirect(
+      withAdmissionsNotice(
+        returnTo,
+        'error',
+        'Lead is missing'
+      )
+    );
+  }
+
+  const ownerUserId =
+    !ownerRaw ||
+    ownerRaw === 'unassigned'
+      ? null
+      : ownerRaw;
+
+  const supabase =
+    await createClient();
+
+  const {
+    error,
+  } = await supabase.rpc(
+    'assign_lead_owner',
+    {
+      p_lead_id:
+        leadId,
+      p_owner_user_id:
+        ownerUserId,
+      p_sync_open_work:
+        true,
+    }
+  );
+
+  if (error) {
+    redirect(
+      withAdmissionsNotice(
+        returnTo,
+        'error',
+        error.message
+      )
+    );
+  }
+
+  revalidateAdmissionsLead(
+    leadId
+  );
+
+  redirect(
+    withAdmissionsNotice(
+      returnTo,
+      'notice',
+      'owner-updated'
+    )
+  );
+}
+
+
 export async function completeAdmissionFollowUpAction(
   formData: FormData
 ) {
@@ -230,6 +310,37 @@ export async function logAdmissionContactAction(
   redirect(
     '/admissions?notice=contact-logged'
   );
+}
+
+
+function safeAdmissionsReturnPath(
+  value?: string | null
+) {
+  if (
+    !value ||
+    !value.startsWith('/admissions') ||
+    value.startsWith('//')
+  ) {
+    return '/admissions';
+  }
+
+  return value;
+}
+
+
+function withAdmissionsNotice(
+  path: string,
+  key: 'notice' | 'error',
+  value: string
+) {
+  const separator =
+    path.includes('?')
+      ? '&'
+      : '?';
+
+  return `${path}${separator}${key}=${encodeURIComponent(
+    value
+  )}`;
 }
 
 

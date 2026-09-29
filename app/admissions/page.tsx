@@ -90,6 +90,10 @@ import {
 
 
 
+  assignAdmissionOwnerAction,
+
+
+
   completeAdmissionFollowUpAction,
 
 
@@ -538,6 +542,18 @@ type PriorityRow = {
 
 
 
+  owner_user_id: string | null;
+
+
+
+  owner_name: string | null;
+
+
+
+  owner_role: string | null;
+
+
+
 };
 
 
@@ -673,6 +689,31 @@ type CourseBatchRow = {
 };
 
 
+type AdmissionsTeamMemberRow = {
+  user_id: string;
+  full_name: string | null;
+  role: string | null;
+};
+
+
+type AdmissionsOwnerWorkloadRow = {
+  owner_user_id: string | null;
+  owner_name: string | null;
+  owner_role: string | null;
+  active_leads: number | string | null;
+  new_leads: number | string | null;
+  needs_reply: number | string | null;
+  overdue_followups: number | string | null;
+  followups_next_24h: number | string | null;
+  critical_priority: number | string | null;
+  high_priority: number | string | null;
+  high_intent: number | string | null;
+  payment_pending: number | string | null;
+  never_contacted: number | string | null;
+  action_load: number | string | null;
+};
+
+
 
 
 
@@ -691,6 +732,10 @@ type SearchParams = {
 
 
   band?: string | string[];
+
+
+
+  owner?: string | string[];
 
 
 
@@ -743,6 +788,11 @@ export default async function AdmissionsDeskPage({
 
 
   const band = one(resolved.band);
+
+
+
+  const ownerFilter =
+    one(resolved.owner) || 'all';
 
 
 
@@ -847,6 +897,14 @@ export default async function AdmissionsDeskPage({
 
 
     courseBatchesResult,
+
+
+
+    teamMembersResult,
+
+
+
+    ownerWorkloadResult,
 
 
 
@@ -1082,7 +1140,7 @@ export default async function AdmissionsDeskPage({
 
 
 
-      .from('v_admissions_priority_queue')
+      .from('v_admissions_priority_queue_owned')
 
 
 
@@ -1267,6 +1325,23 @@ export default async function AdmissionsDeskPage({
 
 
 
+    supabase
+      .from('v_admissions_team_members')
+      .select('*')
+      .order('full_name', { ascending: true }),
+
+
+
+    supabase
+      .from('v_admissions_owner_workload')
+      .select('*')
+      .order('action_load', {
+        ascending: false,
+        nullsFirst: false,
+      }),
+
+
+
   ]);
 
 
@@ -1350,6 +1425,14 @@ export default async function AdmissionsDeskPage({
 
 
     courseBatchesResult.error,
+
+
+
+    teamMembersResult.error,
+
+
+
+    ownerWorkloadResult.error,
 
 
 
@@ -1557,6 +1640,16 @@ export default async function AdmissionsDeskPage({
 
 
 
+  const teamMembers =
+    (teamMembersResult.data ?? []) as AdmissionsTeamMemberRow[];
+
+
+
+  const ownerWorkload =
+    (ownerWorkloadResult.data ?? []) as AdmissionsOwnerWorkloadRow[];
+
+
+
 
 
 
@@ -1658,27 +1751,45 @@ export default async function AdmissionsDeskPage({
 
 
 
-  const filteredPriorityQueue =
-
-
-
-    band && band !== 'all'
-
-
-
+  const ownerBasePriorityQueue =
+    ownerFilter === 'mine'
       ? priorityQueue.filter(
-
-
-
-          (row) => row.priority_band === band
-
-
-
+          (row) =>
+            Boolean(user?.id) &&
+            row.owner_user_id === user?.id
         )
+      : ownerFilter === 'unassigned'
+        ? priorityQueue.filter(
+            (row) =>
+              !row.owner_user_id
+          )
+        : ownerFilter === 'all'
+          ? priorityQueue
+          : priorityQueue.filter(
+              (row) =>
+                row.owner_user_id ===
+                ownerFilter
+            );
 
 
 
-      : priorityQueue;
+  const filteredPriorityQueue =
+    band && band !== 'all'
+      ? ownerBasePriorityQueue.filter(
+          (row) =>
+            row.priority_band === band
+        )
+      : ownerBasePriorityQueue;
+
+
+
+  const currentOwnerReturnPath =
+    admissionsFilterHref({
+      band:
+        band || 'all',
+      owner:
+        ownerFilter,
+    });
 
 
 
@@ -1690,7 +1801,7 @@ export default async function AdmissionsDeskPage({
 
 
 
-    priorityQueue.filter(
+    ownerBasePriorityQueue.filter(
 
 
 
@@ -1710,7 +1821,7 @@ export default async function AdmissionsDeskPage({
 
 
 
-    priorityQueue.filter(
+    ownerBasePriorityQueue.filter(
 
 
 
@@ -1730,7 +1841,7 @@ export default async function AdmissionsDeskPage({
 
 
 
-    priorityQueue.filter(
+    ownerBasePriorityQueue.filter(
 
 
 
@@ -1750,7 +1861,7 @@ export default async function AdmissionsDeskPage({
 
 
 
-    priorityQueue.filter(
+    ownerBasePriorityQueue.filter(
 
 
 
@@ -2190,7 +2301,15 @@ export default async function AdmissionsDeskPage({
 
 
 
-                : 'Admissions Desk updated.'}
+                : notice === 'owner-updated'
+
+
+
+                  ? 'Lead owner updated. Open follow-ups and conversations were synchronized.'
+
+
+
+                  : 'Admissions Desk updated.'}
 
 
 
@@ -2423,6 +2542,14 @@ export default async function AdmissionsDeskPage({
 
 
 
+      <AdmissionsTeamWorkloadPanel
+        rows={ownerWorkload}
+        currentUserId={user?.id ?? null}
+        band={band || 'all'}
+      />
+
+
+
 
 
 
@@ -2506,110 +2633,107 @@ export default async function AdmissionsDeskPage({
 
 
 
-          <div className="flex flex-wrap gap-2">
-
-
-
-            <PriorityTab
-
-
-
-              href="/admissions"
-
-
-
-              active={!band || band === 'all'}
-
-
-
-              label={`All ${priorityQueue.length}`}
-
-
-
-            />
-
-
-
-            <PriorityTab
-
-
-
-              href="/admissions?band=critical"
-
-
-
-              active={band === 'critical'}
-
-
-
-              label={`Critical ${criticalPriorityCount}`}
-
-
-
-            />
-
-
-
-            <PriorityTab
-
-
-
-              href="/admissions?band=high"
-
-
-
-              active={band === 'high'}
-
-
-
-              label={`High ${highPriorityCount}`}
-
-
-
-            />
-
-
-
-            <PriorityTab
-
-
-
-              href="/admissions?band=medium"
-
-
-
-              active={band === 'medium'}
-
-
-
-              label={`Medium ${mediumPriorityCount}`}
-
-
-
-            />
-
-
-
-            <PriorityTab
-
-
-
-              href="/admissions?band=low"
-
-
-
-              active={band === 'low'}
-
-
-
-              label={`Low ${lowPriorityCount}`}
-
-
-
-            />
-
-
-
+          <div className="flex max-w-4xl flex-col items-end gap-2">
+            <div className="flex flex-wrap justify-end gap-2">
+              <PriorityTab
+                href={admissionsFilterHref({
+                  band: 'all',
+                  owner: ownerFilter,
+                })}
+                active={!band || band === 'all'}
+                label={`All ${ownerBasePriorityQueue.length}`}
+              />
+
+              <PriorityTab
+                href={admissionsFilterHref({
+                  band: 'critical',
+                  owner: ownerFilter,
+                })}
+                active={band === 'critical'}
+                label={`Critical ${criticalPriorityCount}`}
+              />
+
+              <PriorityTab
+                href={admissionsFilterHref({
+                  band: 'high',
+                  owner: ownerFilter,
+                })}
+                active={band === 'high'}
+                label={`High ${highPriorityCount}`}
+              />
+
+              <PriorityTab
+                href={admissionsFilterHref({
+                  band: 'medium',
+                  owner: ownerFilter,
+                })}
+                active={band === 'medium'}
+                label={`Medium ${mediumPriorityCount}`}
+              />
+
+              <PriorityTab
+                href={admissionsFilterHref({
+                  band: 'low',
+                  owner: ownerFilter,
+                })}
+                active={band === 'low'}
+                label={`Low ${lowPriorityCount}`}
+              />
+            </div>
+
+            <div className="flex flex-wrap justify-end gap-2 border-t border-slate-100 pt-2">
+              <OwnerQueueTab
+                href={admissionsFilterHref({
+                  band: band || 'all',
+                  owner: 'all',
+                })}
+                active={ownerFilter === 'all'}
+                label="Team queue"
+              />
+
+              {user?.id && (
+                <OwnerQueueTab
+                  href={admissionsFilterHref({
+                    band: band || 'all',
+                    owner: 'mine',
+                  })}
+                  active={ownerFilter === 'mine'}
+                  label="My queue"
+                />
+              )}
+
+              <OwnerQueueTab
+                href={admissionsFilterHref({
+                  band: band || 'all',
+                  owner: 'unassigned',
+                })}
+                active={ownerFilter === 'unassigned'}
+                label="Unassigned"
+              />
+
+              {teamMembers
+                .filter(
+                  (member) =>
+                    member.user_id !== user?.id
+                )
+                .map((member) => (
+                  <OwnerQueueTab
+                    key={member.user_id}
+                    href={admissionsFilterHref({
+                      band: band || 'all',
+                      owner: member.user_id,
+                    })}
+                    active={
+                      ownerFilter ===
+                      member.user_id
+                    }
+                    label={
+                      member.full_name ||
+                      'Team member'
+                    }
+                  />
+                ))}
+            </div>
           </div>
 
 
@@ -2634,7 +2758,7 @@ export default async function AdmissionsDeskPage({
 
 
 
-              No leads match this priority filter.
+              No leads match the selected priority and owner filters.
 
 
 
@@ -2666,6 +2790,8 @@ export default async function AdmissionsDeskPage({
                   sla={slaByLeadId.get(row.lead_id) ?? null}
                   operational={operational}
                   batch={batch}
+                  teamMembers={teamMembers}
+                  returnTo={currentOwnerReturnPath}
                 />
               );
             })
@@ -3716,6 +3842,379 @@ export default async function AdmissionsDeskPage({
 
 
 
+
+
+
+function AdmissionsTeamWorkloadPanel({
+  rows,
+  currentUserId,
+  band,
+}: {
+  rows: AdmissionsOwnerWorkloadRow[];
+  currentUserId: string | null;
+  band: string;
+}) {
+  const assignedRows =
+    rows.filter(
+      (row) =>
+        Boolean(row.owner_user_id)
+    );
+
+  const unassigned =
+    rows.find(
+      (row) =>
+        !row.owner_user_id
+    ) ?? null;
+
+  const assignableStaff =
+    assignedRows.length;
+
+  const totalNeedsReply =
+    rows.reduce(
+      (total, row) =>
+        total +
+        toNumber(
+          row.needs_reply
+        ),
+      0
+    );
+
+  const totalOverdue =
+    rows.reduce(
+      (total, row) =>
+        total +
+        toNumber(
+          row.overdue_followups
+        ),
+      0
+    );
+
+  const totalCritical =
+    rows.reduce(
+      (total, row) =>
+        total +
+        toNumber(
+          row.critical_priority
+        ),
+      0
+    );
+
+  return (
+    <section className="card-pad mt-4">
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div>
+          <div className="eyebrow">
+            Lead ownership
+          </div>
+
+          <div className="section-title mt-1">
+            Admissions team workload
+          </div>
+
+          <p className="mt-1 max-w-3xl text-xs leading-5 text-slate-400">
+            Ownership now follows the lead across its active follow-up tasks and
+            open conversations. Use this view to spot unassigned work and
+            overloaded queues before leads are missed.
+          </p>
+        </div>
+
+        <div className="flex flex-wrap gap-2">
+          <OwnerWorkloadSummary
+            label="Assignable staff"
+            value={assignableStaff}
+          />
+          <OwnerWorkloadSummary
+            label="Needs reply"
+            value={totalNeedsReply}
+            alert={totalNeedsReply > 0}
+          />
+          <OwnerWorkloadSummary
+            label="Overdue"
+            value={totalOverdue}
+            alert={totalOverdue > 0}
+          />
+          <OwnerWorkloadSummary
+            label="Critical"
+            value={totalCritical}
+            alert={totalCritical > 0}
+          />
+          <OwnerWorkloadSummary
+            label="Unassigned"
+            value={toNumber(
+              unassigned?.active_leads
+            )}
+            alert={
+              toNumber(
+                unassigned?.active_leads
+              ) > 0
+            }
+          />
+        </div>
+      </div>
+
+      <div className="mt-4 grid gap-3 lg:grid-cols-2 2xl:grid-cols-3">
+        {rows.map((row) => {
+          const isMine =
+            Boolean(
+              currentUserId &&
+              row.owner_user_id ===
+                currentUserId
+            );
+
+          const filterOwner =
+            row.owner_user_id
+              ? isMine
+                ? 'mine'
+                : row.owner_user_id
+              : 'unassigned';
+
+          const load =
+            toNumber(
+              row.action_load
+            );
+
+          const urgent =
+            toNumber(
+              row.needs_reply
+            ) +
+            toNumber(
+              row.overdue_followups
+            ) +
+            toNumber(
+              row.critical_priority
+            );
+
+          return (
+            <Link
+              key={
+                row.owner_user_id ||
+                'unassigned'
+              }
+              href={admissionsFilterHref({
+                band,
+                owner: filterOwner,
+              })}
+              className={`group rounded-2xl border p-4 transition-all duration-150 hover:-translate-y-0.5 hover:shadow-md ${
+                !row.owner_user_id &&
+                toNumber(
+                  row.active_leads
+                ) > 0
+                  ? 'border-amber-200 bg-amber-50/55'
+                  : urgent > 0
+                    ? 'border-red-100 bg-red-50/35'
+                    : 'border-slate-100 bg-slate-50/60'
+              }`}
+            >
+              <div className="flex items-start justify-between gap-4">
+                <div className="min-w-0">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <div className="truncate text-sm font-black text-slate-900 group-hover:text-brand">
+                      {row.owner_name ||
+                        'Unassigned'}
+                    </div>
+
+                    {isMine && (
+                      <span className="rounded-full bg-brand/10 px-2 py-0.5 text-[9px] font-bold uppercase text-brand">
+                        You
+                      </span>
+                    )}
+
+                    {!row.owner_user_id && (
+                      <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[9px] font-bold uppercase text-amber-700">
+                        Needs owner
+                      </span>
+                    )}
+                  </div>
+
+                  <div className="mt-0.5 text-[10px] font-semibold uppercase tracking-wide text-slate-400">
+                    {pretty(
+                      row.owner_role ||
+                        'unassigned'
+                    )}
+                  </div>
+                </div>
+
+                <div className="rounded-xl bg-white px-3 py-2 text-right shadow-sm ring-1 ring-slate-100">
+                  <div className="text-[9px] font-bold uppercase tracking-wide text-slate-400">
+                    Action load
+                  </div>
+                  <div className="mt-0.5 text-xl font-black text-slate-900">
+                    {formatNumber(
+                      load
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-4">
+                <OwnerWorkloadMetric
+                  label="Active"
+                  value={row.active_leads}
+                />
+                <OwnerWorkloadMetric
+                  label="Needs reply"
+                  value={row.needs_reply}
+                  alert={
+                    toNumber(
+                      row.needs_reply
+                    ) > 0
+                  }
+                />
+                <OwnerWorkloadMetric
+                  label="Overdue"
+                  value={row.overdue_followups}
+                  alert={
+                    toNumber(
+                      row.overdue_followups
+                    ) > 0
+                  }
+                />
+                <OwnerWorkloadMetric
+                  label="Critical"
+                  value={row.critical_priority}
+                  alert={
+                    toNumber(
+                      row.critical_priority
+                    ) > 0
+                  }
+                />
+              </div>
+
+              <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-[10px] font-semibold text-slate-500">
+                <span>
+                  High {formatNumber(
+                    row.high_priority
+                  )}
+                </span>
+                <span>
+                  Payment {formatNumber(
+                    row.payment_pending
+                  )}
+                </span>
+                <span>
+                  High intent {formatNumber(
+                    row.high_intent
+                  )}
+                </span>
+                <span>
+                  Never contacted {formatNumber(
+                    row.never_contacted
+                  )}
+                </span>
+                <span>
+                  Next 24h {formatNumber(
+                    row.followups_next_24h
+                  )}
+                </span>
+              </div>
+
+              <div className="mt-3 flex items-center justify-end gap-1 text-[10px] font-bold text-brand">
+                Open queue
+                <ArrowRight size={12} />
+              </div>
+            </Link>
+          );
+        })}
+      </div>
+    </section>
+  );
+}
+
+
+function OwnerWorkloadSummary({
+  label,
+  value,
+  alert = false,
+}: {
+  label: string;
+  value: number;
+  alert?: boolean;
+}) {
+  return (
+    <div
+      className={`rounded-xl border px-3 py-2 ${
+        alert
+          ? 'border-red-100 bg-red-50'
+          : 'border-slate-100 bg-slate-50'
+      }`}
+    >
+      <div
+        className={`text-[9px] font-bold uppercase tracking-wide ${
+          alert
+            ? 'text-red-500'
+            : 'text-slate-400'
+        }`}
+      >
+        {label}
+      </div>
+      <div
+        className={`mt-0.5 text-lg font-black ${
+          alert
+            ? 'text-red-700'
+            : 'text-slate-800'
+        }`}
+      >
+        {formatNumber(value)}
+      </div>
+    </div>
+  );
+}
+
+
+function OwnerWorkloadMetric({
+  label,
+  value,
+  alert = false,
+}: {
+  label: string;
+  value:
+    | number
+    | string
+    | null
+    | undefined;
+  alert?: boolean;
+}) {
+  return (
+    <div className="rounded-xl border border-black/5 bg-white/80 px-2.5 py-2">
+      <div className="text-[9px] font-bold uppercase tracking-wide text-slate-400">
+        {label}
+      </div>
+      <div
+        className={`mt-0.5 text-sm font-black ${
+          alert
+            ? 'text-red-600'
+            : 'text-slate-800'
+        }`}
+      >
+        {formatNumber(value)}
+      </div>
+    </div>
+  );
+}
+
+
+function OwnerQueueTab({
+  href,
+  active,
+  label,
+}: {
+  href: string;
+  active: boolean;
+  label: string;
+}) {
+  return (
+    <Link
+      href={href}
+      className={`rounded-full border px-3 py-1.5 text-[10px] font-bold transition-all duration-150 ${
+        active
+          ? 'border-brand bg-brand text-white'
+          : 'border-slate-200 bg-slate-50 text-slate-600 hover:bg-slate-100'
+      }`}
+    >
+      {label}
+    </Link>
+  );
+}
 
 
 function AdmissionsOperationsPanel({
@@ -4848,6 +5347,8 @@ function PriorityLeadCard({
   sla,
   operational,
   batch,
+  teamMembers,
+  returnTo,
 }: {
   row: PriorityRow;
   contact: LeadContactRow | null;
@@ -4855,6 +5356,8 @@ function PriorityLeadCard({
   sla: SlaQueueRow | null;
   operational: LeadOperationalRow | null;
   batch: CourseBatchRow | null;
+  teamMembers: AdmissionsTeamMemberRow[];
+  returnTo: string;
 }) {
   const score = toNumber(row.priority_score);
   const band = row.priority_band || 'low';
@@ -5091,6 +5594,14 @@ function PriorityLeadCard({
           />
 
           <InfoLine
+            label="Owner"
+            value={
+              row.owner_name ||
+              'Unassigned'
+            }
+          />
+
+          <InfoLine
             label="Last contact"
             value={lastContact}
           />
@@ -5133,6 +5644,56 @@ function PriorityLeadCard({
         </div>
 
         <div className="flex flex-wrap items-center gap-2 xl:justify-end">
+          <form
+            action={assignAdmissionOwnerAction}
+            className="flex flex-wrap items-center gap-1.5 rounded-xl border border-slate-200 bg-white/80 p-1.5"
+          >
+            <input
+              type="hidden"
+              name="lead_id"
+              value={row.lead_id}
+            />
+
+            <input
+              type="hidden"
+              name="return_to"
+              value={returnTo}
+            />
+
+            <select
+              name="owner_user_id"
+              defaultValue={
+                row.owner_user_id ||
+                'unassigned'
+              }
+              className="min-w-[135px] rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-[10px] font-bold text-slate-600 outline-none focus:border-brand"
+              aria-label="Lead owner"
+            >
+              <option value="unassigned">
+                Unassigned
+              </option>
+
+              {teamMembers.map(
+                (member) => (
+                  <option
+                    key={member.user_id}
+                    value={member.user_id}
+                  >
+                    {member.full_name ||
+                      'CRM User'}
+                  </option>
+                )
+              )}
+            </select>
+
+            <button
+              type="submit"
+              className="inline-flex rounded-lg bg-brand px-2.5 py-1.5 text-[10px] font-bold text-white transition-opacity hover:opacity-90"
+            >
+              Assign
+            </button>
+          </form>
+
           {row.next_followup_task_id && (
             <>
               <form
@@ -7412,6 +7973,46 @@ function formatRelativeTime(
 
   return `${days} day${days === 1 ? '' : 's'} ago`;
 }
+
+
+function admissionsFilterHref({
+  band,
+  owner,
+}: {
+  band?: string;
+  owner?: string;
+}) {
+  const params =
+    new URLSearchParams();
+
+  if (
+    band &&
+    band !== 'all'
+  ) {
+    params.set(
+      'band',
+      band
+    );
+  }
+
+  if (
+    owner &&
+    owner !== 'all'
+  ) {
+    params.set(
+      'owner',
+      owner
+    );
+  }
+
+  const query =
+    params.toString();
+
+  return query
+    ? `/admissions?${query}`
+    : '/admissions';
+}
+
 
 function one(
 
