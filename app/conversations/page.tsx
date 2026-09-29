@@ -147,6 +147,10 @@ import {
 } from '@/lib/whatsapp-templates';
 
 
+import {
+  ConversationsRealtime,
+} from '@/components/conversations-realtime';
+
 
 const CUSTOMER_SERVICE_WINDOW_MS =
 
@@ -709,6 +713,7 @@ const whatsappTemplateCatalog =
   return (
 
     <>
+     <ConversationsRealtime />
 
       <PageHeader
 
