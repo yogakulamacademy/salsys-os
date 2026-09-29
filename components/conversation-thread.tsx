@@ -4,6 +4,12 @@ import {
 
   ArrowDown,
 
+  Check,
+
+  CheckCheck,
+
+  CircleAlert,
+
   ContactRound,
 
   Globe2,
@@ -23,6 +29,10 @@ import {
   useRef,
   useState,
 } from 'react';
+
+import {
+  createClient,
+} from '@/lib/supabase/browser';
 
 import type {
 
@@ -65,6 +75,12 @@ type ConversationMessage = {
 
   externalMessageId?: string | null;
 
+  sentAt?: string | null;
+
+  deliveredAt?: string | null;
+
+  readAt?: string | null;
+
   local?: boolean;
 
 };
@@ -81,6 +97,15 @@ type WhatsAppSentEventDetail = {
   status: 'sent';
   externalMessageId: string | null;
   createdAt: string;
+};
+
+type WhatsAppStatusRow = {
+  id?: string;
+  status?: string | null;
+  external_message_id?: string | null;
+  sent_at?: string | null;
+  delivered_at?: string | null;
+  read_at?: string | null;
 };
 
 type ConversationThreadProps = {
@@ -202,6 +227,12 @@ export function ConversationThread({
               detail.status,
             externalMessageId:
               detail.externalMessageId,
+            sentAt:
+              detail.createdAt,
+            deliveredAt:
+              null,
+            readAt:
+              null,
             local:
               true,
           };
@@ -236,6 +267,217 @@ export function ConversationThread({
         'crm:whatsapp-sent',
         handleSentMessage
       );
+    };
+  }, []);
+
+  /*
+   * Hydrate the persisted WhatsApp status for messages
+   * that were loaded from the server. This means Sent /
+   * Delivered / Read remains visible after reopening or
+   * refreshing a conversation even though the server
+   * lead payload does not currently include those fields.
+   */
+  useEffect(() => {
+    const ids =
+      messages
+        .filter(
+          (message) =>
+            message.direction ===
+              'outbound' &&
+            message.channel ===
+              'whatsapp'
+        )
+        .map(
+          (message) =>
+            message.id
+        )
+        .filter(Boolean);
+
+    if (
+      ids.length === 0
+    ) {
+      return;
+    }
+
+    let cancelled =
+      false;
+
+    const loadStatuses =
+      async () => {
+        const supabase =
+          createClient();
+
+        const {
+          data,
+          error,
+        } =
+          await supabase
+            .from('messages')
+            .select(
+              `
+              id,
+              status,
+              external_message_id,
+              sent_at,
+              delivered_at,
+              read_at
+              `
+            )
+            .in(
+              'id',
+              ids
+            );
+
+        if (
+          cancelled
+        ) {
+          return;
+        }
+
+        if (error) {
+          console.error(
+            'Unable to load WhatsApp message statuses:',
+            error
+          );
+          return;
+        }
+
+        const statusMap =
+          new Map<
+            string,
+            WhatsAppStatusRow
+          >(
+            (
+              data ?? []
+            ).map(
+              (
+                row: WhatsAppStatusRow
+              ) => [
+                String(
+                  row.id
+                ),
+                row,
+              ]
+            )
+          );
+
+        setThreadMessages(
+          (current) =>
+            current.map(
+              (message) => {
+                const row =
+                  statusMap.get(
+                    message.id
+                  );
+
+                if (!row) {
+                  return message;
+                }
+
+                return mergeStatusRow(
+                  message,
+                  row
+                );
+              }
+            )
+        );
+      };
+
+    void loadStatuses();
+
+    return () => {
+      cancelled =
+        true;
+    };
+  }, [
+    messages,
+  ]);
+
+  /*
+   * Meta status webhooks update the existing messages row.
+   * Listen for those UPDATEs directly so the tick/status
+   * changes without router.refresh() or a page reload.
+   */
+  useEffect(() => {
+    const supabase =
+      createClient();
+
+    const channel =
+      supabase
+        .channel(
+          'crm-whatsapp-message-status'
+        )
+        .on(
+          'postgres_changes',
+          {
+            event:
+              'UPDATE',
+            schema:
+              'public',
+            table:
+              'messages',
+          },
+          (
+            payload: unknown
+          ) => {
+            const event =
+              payload as {
+                new?:
+                  WhatsAppStatusRow;
+              };
+
+            const row =
+              event.new;
+
+            if (
+              !row?.id
+            ) {
+              return;
+            }
+
+            setThreadMessages(
+              (current) =>
+                current.map(
+                  (message) => {
+                    const sameId =
+                      message.id ===
+                      row.id;
+
+                    const sameExternalId =
+                      Boolean(
+                        message
+                          .externalMessageId &&
+                        row
+                          .external_message_id &&
+                        message
+                          .externalMessageId ===
+                          row
+                            .external_message_id
+                      );
+
+                    if (
+                      !sameId &&
+                      !sameExternalId
+                    ) {
+                      return message;
+                    }
+
+                    return mergeStatusRow(
+                      message,
+                      row
+                    );
+                  }
+                )
+            );
+          }
+        )
+        .subscribe();
+
+    return () => {
+      void supabase
+        .removeChannel(
+          channel
+        );
     };
   }, []);
 
@@ -590,9 +832,54 @@ function mergeServerMessages(
   serverMessages: ConversationMessage[],
   currentMessages: ConversationMessage[]
 ) {
+  const hydratedServerMessages =
+    serverMessages.map(
+      (serverMessage) => {
+        const currentMessage =
+          currentMessages.find(
+            (message) =>
+              message.id ===
+                serverMessage.id ||
+              likelySameMessage(
+                serverMessage,
+                message
+              )
+          );
+
+        if (
+          !currentMessage
+        ) {
+          return serverMessage;
+        }
+
+        return {
+          ...serverMessage,
+          status:
+            serverMessage.status ??
+            currentMessage.status,
+          externalMessageId:
+            serverMessage
+              .externalMessageId ??
+            currentMessage
+              .externalMessageId,
+          sentAt:
+            serverMessage.sentAt ??
+            currentMessage.sentAt,
+          deliveredAt:
+            serverMessage
+              .deliveredAt ??
+            currentMessage
+              .deliveredAt,
+          readAt:
+            serverMessage.readAt ??
+            currentMessage.readAt,
+        };
+      }
+    );
+
   const serverIds =
     new Set(
-      serverMessages.map(
+      hydratedServerMessages.map(
         (message) =>
           message.id
       )
@@ -605,7 +892,7 @@ function mergeServerMessages(
         !serverIds.has(
           message.id
         ) &&
-        !serverMessages.some(
+        !hydratedServerMessages.some(
           (serverMessage) =>
             likelySameMessage(
               serverMessage,
@@ -615,9 +902,35 @@ function mergeServerMessages(
     );
 
   return [
-    ...serverMessages,
+    ...hydratedServerMessages,
     ...pendingLocal,
   ];
+}
+
+function mergeStatusRow(
+  message: ConversationMessage,
+  row: WhatsAppStatusRow
+): ConversationMessage {
+  return {
+    ...message,
+    status:
+      row.status ??
+      message.status,
+    externalMessageId:
+      row.external_message_id ??
+      message.externalMessageId,
+    sentAt:
+      row.sent_at ??
+      message.sentAt,
+    deliveredAt:
+      row.delivered_at ??
+      message.deliveredAt,
+    readAt:
+      row.read_at ??
+      message.readAt,
+    local:
+      false,
+  };
 }
 
 function likelySameMessage(
@@ -1177,6 +1490,21 @@ function MessageBubble({
 
           </span>
 
+          {outbound &&
+            isWhatsApp && (
+              <>
+                <span className="text-slate-300">
+                  ·
+                </span>
+
+                <MessageStatusIndicator
+                  message={
+                    message
+                  }
+                />
+              </>
+            )}
+
         </div>
 
       </div>
@@ -1185,6 +1513,130 @@ function MessageBubble({
 
   );
 
+}
+
+
+
+function MessageStatusIndicator({
+  message,
+}: {
+  message: ConversationMessage;
+}) {
+  const status =
+    normalizedMessageStatus(
+      message
+    );
+
+  if (!status) {
+    return null;
+  }
+
+  if (
+    status ===
+    'failed'
+  ) {
+    return (
+      <span className="inline-flex items-center gap-1 text-red-500">
+        <CircleAlert
+          size={10}
+        />
+        Failed
+      </span>
+    );
+  }
+
+  if (
+    status ===
+    'read'
+  ) {
+    return (
+      <span className="inline-flex items-center gap-1 text-sky-500">
+        <CheckCheck
+          size={11}
+        />
+        Read
+      </span>
+    );
+  }
+
+  if (
+    status ===
+    'delivered'
+  ) {
+    return (
+      <span className="inline-flex items-center gap-1 text-slate-400">
+        <CheckCheck
+          size={11}
+        />
+        Delivered
+      </span>
+    );
+  }
+
+  if (
+    status ===
+      'sent' ||
+    status ===
+      'queued'
+  ) {
+    return (
+      <span className="inline-flex items-center gap-1 text-slate-400">
+        <Check
+          size={11}
+        />
+        {status ===
+        'queued'
+          ? 'Sending'
+          : 'Sent'}
+      </span>
+    );
+  }
+
+  return null;
+}
+
+function normalizedMessageStatus(
+  message: ConversationMessage
+) {
+  if (
+    message.status ===
+    'failed'
+  ) {
+    return 'failed';
+  }
+
+  if (
+    message.status ===
+      'read' ||
+    message.readAt
+  ) {
+    return 'read';
+  }
+
+  if (
+    message.status ===
+      'delivered' ||
+    message.deliveredAt
+  ) {
+    return 'delivered';
+  }
+
+  if (
+    message.status ===
+      'sent' ||
+    message.sentAt
+  ) {
+    return 'sent';
+  }
+
+  if (
+    message.status ===
+    'queued'
+  ) {
+    return 'queued';
+  }
+
+  return null;
 }
 
 
