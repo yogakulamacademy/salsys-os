@@ -437,17 +437,50 @@ export async function sendWhatsAppMessageAction(
   }
 
   if (!response.ok) {
-    const metaMessage =
-      meta.error?.message ||
-      `Meta returned HTTP ${response.status}.`;
+  const metaMessage =
+    meta.error?.message ||
+    `Meta returned HTTP ${response.status}.`;
 
-    redirect(
-      conversationUrl(leadId, {
+  const metaCode =
+    meta.error?.code ??
+    'unknown';
+
+  const metaSubcode =
+    meta.error?.error_subcode ??
+    'none';
+
+  const metaType =
+    meta.error?.type ??
+    'unknown';
+
+  console.error(
+    'WhatsApp Meta API error',
+    {
+      status:
+        response.status,
+      message:
+        metaMessage,
+      code:
+        metaCode,
+      subcode:
+        metaSubcode,
+      type:
+        metaType,
+      fbtraceId:
+        meta.error?.fbtrace_id,
+    }
+  );
+
+  redirect(
+    conversationUrl(
+      leadId,
+      {
         error:
-          `WhatsApp send failed: ${metaMessage}`,
-      })
-    );
-  }
+          `WhatsApp send failed: ${metaMessage} · Code ${metaCode} · Subcode ${metaSubcode}`,
+      }
+    )
+  );
+}
 
   const externalMessageId =
     meta.messages?.[0]?.id?.trim() ||
