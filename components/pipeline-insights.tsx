@@ -1,9 +1,6 @@
-'use client';
+"use client";
 
-import {
-  useMemo,
-  useState,
-} from 'react';
+import { useMemo, useState } from "react";
 
 import {
   Bar,
@@ -14,20 +11,14 @@ import {
   Tooltip,
   XAxis,
   YAxis,
-} from 'recharts';
+} from "recharts";
 
-import {
-  BarChart3,
-  Clock3,
-  Percent,
-} from 'lucide-react';
-
+import { BarChart3, Clock3, Percent } from "lucide-react";
 
 export type PipelineInsightPoint = {
   stage: string;
   leads: number;
 };
-
 
 export type PipelineAgingPoint = {
   stage: string;
@@ -40,7 +31,6 @@ export type PipelineAgingPoint = {
   oldestDays: number;
 };
 
-
 export function PipelineInsights({
   data,
   agingData,
@@ -48,113 +38,42 @@ export function PipelineInsights({
   data: PipelineInsightPoint[];
   agingData: PipelineAgingPoint[];
 }) {
-  const [
-    view,
-    setView,
-  ] = useState<
-    'distribution' |
-    'aging'
-  >(
-    'distribution'
+  const [view, setView] = useState<"distribution" | "aging">("distribution");
+
+  const [mode, setMode] = useState<"count" | "share">("count");
+
+  const total = useMemo(
+    () => data.reduce((sum, item) => sum + item.leads, 0),
+    [data],
   );
 
-  const [
-    mode,
-    setMode,
-  ] = useState<
-    'count' |
-    'share'
-  >(
-    'count'
+  const chartData = useMemo(
+    () =>
+      data.map((item) => ({
+        ...item,
+        share: total > 0 ? Math.round((item.leads / total) * 1000) / 10 : 0,
+      })),
+    [data, total],
   );
 
-  const total =
-    useMemo(
-      () =>
-        data.reduce(
-          (
-            sum,
-            item
-          ) =>
-            sum +
-            item.leads,
-          0
-        ),
-      [
-        data,
-      ]
-    );
+  const totalStuck = agingData.reduce((sum, item) => sum + item.stuck, 0);
 
-  const chartData =
-    useMemo(
-      () =>
-        data.map(
-          (
-            item
-          ) => ({
-            ...item,
-            share:
-              total >
-              0
-                ? Math.round(
-                    (
-                      item.leads /
-                      total
-                    ) *
-                      1000
-                  ) /
-                  10
-                : 0,
-          })
-        ),
-      [
-        data,
-        total,
-      ]
-    );
-
-  const totalStuck =
-    agingData.reduce(
-      (
-        sum,
-        item
-      ) =>
-        sum +
-        item.stuck,
-      0
-    );
-
-  const totalWarning =
-    agingData.reduce(
-      (
-        sum,
-        item
-      ) =>
-        sum +
-        item.warning,
-      0
-    );
+  const totalWarning = agingData.reduce((sum, item) => sum + item.warning, 0);
 
   return (
     <section className="card-pad overflow-hidden">
       <div className="mb-5 flex flex-wrap items-start justify-between gap-4">
         <div>
-          <div className="eyebrow">
-            Pipeline intelligence
-          </div>
+          <div className="eyebrow">Pipeline intelligence</div>
 
           <div className="section-title mt-1">
-            {view ===
-            'distribution'
-              ? 'Stage distribution'
-              : 'Stage aging'}
+            {view === "distribution" ? "Stage distribution" : "Stage aging"}
           </div>
 
           <p className="mt-1 text-xs leading-5 text-slate-400">
-            {view ===
-            'distribution'
-              ? 'Current lead distribution across the active funnel. Hover for exact values.'
-              : 'Median and oldest time currently spent in each stage, backed by audited stage history.'}
+            {view === "distribution"
+              ? "Current lead distribution across the active funnel. Hover for exact values."
+              : "Median and oldest time currently spent in each stage, backed by audited stage history."}
           </p>
         </div>
 
@@ -162,89 +81,56 @@ export function PipelineInsights({
           <div className="inline-flex rounded-xl border border-slate-200 bg-slate-50 p-1">
             <button
               type="button"
-              onClick={
-                () =>
-                  setView(
-                    'distribution'
-                  )
-              }
+              onClick={() => setView("distribution")}
               className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-bold transition ${
-                view ===
-                'distribution'
-                  ? 'bg-white text-brand shadow-sm'
-                  : 'text-slate-500 hover:text-slate-800'
+                view === "distribution"
+                  ? "bg-white text-brand shadow-sm"
+                  : "text-slate-500 hover:text-slate-800"
               }`}
             >
-              <BarChart3
-                size={14}
-              />
+              <BarChart3 size={14} />
               Distribution
             </button>
 
             <button
               type="button"
-              onClick={
-                () =>
-                  setView(
-                    'aging'
-                  )
-              }
+              onClick={() => setView("aging")}
               className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-bold transition ${
-                view ===
-                'aging'
-                  ? 'bg-white text-brand shadow-sm'
-                  : 'text-slate-500 hover:text-slate-800'
+                view === "aging"
+                  ? "bg-white text-brand shadow-sm"
+                  : "text-slate-500 hover:text-slate-800"
               }`}
             >
-              <Clock3
-                size={14}
-              />
+              <Clock3 size={14} />
               Stage aging
             </button>
           </div>
 
-          {view ===
-            'distribution' && (
+          {view === "distribution" && (
             <div className="inline-flex rounded-xl border border-slate-200 bg-slate-50 p-1">
               <button
                 type="button"
-                onClick={
-                  () =>
-                    setMode(
-                      'count'
-                    )
-                }
+                onClick={() => setMode("count")}
                 className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-bold transition ${
-                  mode ===
-                  'count'
-                    ? 'bg-white text-brand shadow-sm'
-                    : 'text-slate-500 hover:text-slate-800'
+                  mode === "count"
+                    ? "bg-white text-brand shadow-sm"
+                    : "text-slate-500 hover:text-slate-800"
                 }`}
               >
-                <BarChart3
-                  size={14}
-                />
+                <BarChart3 size={14} />
                 Count
               </button>
 
               <button
                 type="button"
-                onClick={
-                  () =>
-                    setMode(
-                      'share'
-                    )
-                }
+                onClick={() => setMode("share")}
                 className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-bold transition ${
-                  mode ===
-                  'share'
-                    ? 'bg-white text-brand shadow-sm'
-                    : 'text-slate-500 hover:text-slate-800'
+                  mode === "share"
+                    ? "bg-white text-brand shadow-sm"
+                    : "text-slate-500 hover:text-slate-800"
                 }`}
               >
-                <Percent
-                  size={14}
-                />
+                <Percent size={14} />
                 Share
               </button>
             </div>
@@ -252,18 +138,12 @@ export function PipelineInsights({
         </div>
       </div>
 
-      {view ===
-      'distribution' ? (
+      {view === "distribution" ? (
         <>
           <div className="h-[310px] w-full">
-            <ResponsiveContainer
-              width="100%"
-              height="100%"
-            >
+            <ResponsiveContainer width="100%" height="100%">
               <BarChart
-                data={
-                  chartData
-                }
+                data={chartData}
                 margin={{
                   top: 8,
                   right: 8,
@@ -273,95 +153,55 @@ export function PipelineInsights({
               >
                 <CartesianGrid
                   strokeDasharray="3 3"
-                  vertical={
-                    false
-                  }
+                  vertical={false}
                   stroke="rgba(148,163,184,.18)"
                 />
 
                 <XAxis
                   dataKey="stage"
-                  tickLine={
-                    false
-                  }
-                  axisLine={
-                    false
-                  }
+                  tickLine={false}
+                  axisLine={false}
                   interval={0}
                   height={48}
                   tick={{
                     fontSize: 10,
-                    fill: '#7c8aa0',
+                    fill: "#7c8aa0",
                   }}
                 />
 
                 <YAxis
-                  allowDecimals={
-                    mode ===
-                    'share'
-                  }
-                  tickLine={
-                    false
-                  }
-                  axisLine={
-                    false
-                  }
-                  unit={
-                    mode ===
-                    'share'
-                      ? '%'
-                      : undefined
-                  }
+                  allowDecimals={mode === "share"}
+                  tickLine={false}
+                  axisLine={false}
+                  unit={mode === "share" ? "%" : undefined}
                   tick={{
                     fontSize: 11,
-                    fill: '#7c8aa0',
+                    fill: "#7c8aa0",
                   }}
                 />
 
                 <Tooltip
                   cursor={{
-                    fill:
-                      'rgba(148,163,184,.08)',
+                    fill: "rgba(148,163,184,.08)",
                   }}
-                  content={
-                    <PipelineDistributionTooltip />
-                  }
+                  content={<PipelineDistributionTooltip />}
                 />
 
                 <Bar
-                  dataKey={
-                    mode ===
-                    'count'
-                      ? 'leads'
-                      : 'share'
-                  }
-                  name={
-                    mode ===
-                    'count'
-                      ? 'Leads'
-                      : 'Share'
-                  }
+                  dataKey={mode === "count" ? "leads" : "share"}
+                  name={mode === "count" ? "Leads" : "Share"}
                   fill="#103859"
-                  radius={[
-                    7,
-                    7,
-                    3,
-                    3,
-                  ]}
-                  animationDuration={
-                    650
-                  }
+                  radius={[7, 7, 3, 3]}
+                  animationDuration={650}
                 />
               </BarChart>
             </ResponsiveContainer>
           </div>
 
           <div className="mt-4 border-t border-slate-100 pt-4 text-[11px] leading-5 text-slate-400">
-            This chart shows where leads are{' '}
-            <strong>
-              currently
-            </strong>{' '}
-            sitting. It does not calculate true stage-to-stage conversion; use the Funnel page for audited conversion analysis.
+            This chart shows where leads are <strong>currently</strong> sitting.
+            It does not calculate true stage-to-stage conversion; use the Funnel
+            page for audited conversion analysis.
           </div>
         </>
       ) : (
@@ -373,9 +213,7 @@ export function PipelineInsights({
               </div>
 
               <div className="mt-1 text-xl font-black text-amber-800">
-                {
-                  totalWarning
-                }
+                {totalWarning}
               </div>
 
               <div className="mt-1 text-[10px] text-amber-600">
@@ -389,9 +227,7 @@ export function PipelineInsights({
               </div>
 
               <div className="mt-1 text-xl font-black text-red-800">
-                {
-                  totalStuck
-                }
+                {totalStuck}
               </div>
 
               <div className="mt-1 text-[10px] text-red-600">
@@ -401,14 +237,9 @@ export function PipelineInsights({
           </div>
 
           <div className="h-[310px] w-full">
-            <ResponsiveContainer
-              width="100%"
-              height="100%"
-            >
+            <ResponsiveContainer width="100%" height="100%">
               <BarChart
-                data={
-                  agingData
-                }
+                data={agingData}
                 margin={{
                   top: 8,
                   right: 8,
@@ -418,56 +249,42 @@ export function PipelineInsights({
               >
                 <CartesianGrid
                   strokeDasharray="3 3"
-                  vertical={
-                    false
-                  }
+                  vertical={false}
                   stroke="rgba(148,163,184,.18)"
                 />
 
                 <XAxis
                   dataKey="stage"
-                  tickLine={
-                    false
-                  }
-                  axisLine={
-                    false
-                  }
+                  tickLine={false}
+                  axisLine={false}
                   interval={0}
                   height={48}
                   tick={{
                     fontSize: 10,
-                    fill: '#7c8aa0',
+                    fill: "#7c8aa0",
                   }}
                 />
 
                 <YAxis
-                  tickLine={
-                    false
-                  }
-                  axisLine={
-                    false
-                  }
+                  tickLine={false}
+                  axisLine={false}
                   unit="d"
                   tick={{
                     fontSize: 11,
-                    fill: '#7c8aa0',
+                    fill: "#7c8aa0",
                   }}
                 />
 
                 <Tooltip
                   cursor={{
-                    fill:
-                      'rgba(148,163,184,.08)',
+                    fill: "rgba(148,163,184,.08)",
                   }}
-                  content={
-                    <PipelineAgingTooltip />
-                  }
+                  content={<PipelineAgingTooltip />}
                 />
 
                 <Legend
                   wrapperStyle={{
-                    fontSize:
-                      '11px',
+                    fontSize: "11px",
                   }}
                 />
 
@@ -475,114 +292,72 @@ export function PipelineInsights({
                   dataKey="medianDays"
                   name="Median days"
                   fill="#103859"
-                  radius={[
-                    6,
-                    6,
-                    2,
-                    2,
-                  ]}
-                  animationDuration={
-                    650
-                  }
+                  radius={[6, 6, 2, 2]}
+                  animationDuration={650}
                 />
 
                 <Bar
                   dataKey="oldestDays"
                   name="Oldest days"
                   fill="#ec8316"
-                  radius={[
-                    6,
-                    6,
-                    2,
-                    2,
-                  ]}
-                  animationDuration={
-                    750
-                  }
+                  radius={[6, 6, 2, 2]}
+                  animationDuration={750}
                 />
               </BarChart>
             </ResponsiveContainer>
           </div>
 
           <div className="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
-            {agingData.map(
-              (
-                stage
-              ) => (
-                <div
-                  key={
-                    stage.stage
-                  }
-                  className="rounded-xl border border-slate-100 bg-slate-50/70 p-3"
-                >
-                  <div className="text-[10px] font-black text-slate-700">
-                    {
-                      stage.stage
-                    }
-                  </div>
-
-                  <div className="mt-2 flex items-center justify-between text-[9px] font-semibold text-slate-400">
-                    <span>
-                      Median
-                    </span>
-                    <strong className="text-slate-700">
-                      {formatAge(
-                        stage.medianDays
-                      )}
-                    </strong>
-                  </div>
-
-                  <div className="mt-1 flex items-center justify-between text-[9px] font-semibold text-slate-400">
-                    <span>
-                      Oldest
-                    </span>
-                    <strong className="text-slate-700">
-                      {formatAge(
-                        stage.oldestDays
-                      )}
-                    </strong>
-                  </div>
-
-                  <div className="mt-2 flex flex-wrap gap-1">
-                    {stage.warning >
-                      0 && (
-                      <span className="rounded-md bg-amber-100 px-1.5 py-0.5 text-[8px] font-black text-amber-700">
-                        {
-                          stage.warning
-                        }{' '}
-                        warning
-                      </span>
-                    )}
-
-                    {stage.stuck >
-                      0 && (
-                      <span className="rounded-md bg-red-100 px-1.5 py-0.5 text-[8px] font-black text-red-700">
-                        {
-                          stage.stuck
-                        }{' '}
-                        stuck
-                      </span>
-                    )}
-
-                    {stage.warning ===
-                      0 &&
-                      stage.stuck ===
-                        0 && (
-                      <span className="rounded-md bg-emerald-100 px-1.5 py-0.5 text-[8px] font-black text-emerald-700">
-                        Healthy
-                      </span>
-                    )}
-                  </div>
+            {agingData.map((stage) => (
+              <div
+                key={stage.stage}
+                className="rounded-xl border border-slate-100 bg-slate-50/70 p-3"
+              >
+                <div className="text-[10px] font-black text-slate-700">
+                  {stage.stage}
                 </div>
-              )
-            )}
+
+                <div className="mt-2 flex items-center justify-between text-[9px] font-semibold text-slate-400">
+                  <span>Median</span>
+                  <strong className="text-slate-700">
+                    {formatAge(stage.medianDays)}
+                  </strong>
+                </div>
+
+                <div className="mt-1 flex items-center justify-between text-[9px] font-semibold text-slate-400">
+                  <span>Oldest</span>
+                  <strong className="text-slate-700">
+                    {formatAge(stage.oldestDays)}
+                  </strong>
+                </div>
+
+                <div className="mt-2 flex flex-wrap gap-1">
+                  {stage.warning > 0 && (
+                    <span className="rounded-md bg-amber-100 px-1.5 py-0.5 text-[8px] font-black text-amber-700">
+                      {stage.warning} warning
+                    </span>
+                  )}
+
+                  {stage.stuck > 0 && (
+                    <span className="rounded-md bg-red-100 px-1.5 py-0.5 text-[8px] font-black text-red-700">
+                      {stage.stuck} stuck
+                    </span>
+                  )}
+
+                  {stage.warning === 0 && stage.stuck === 0 && (
+                    <span className="rounded-md bg-emerald-100 px-1.5 py-0.5 text-[8px] font-black text-emerald-700">
+                      Healthy
+                    </span>
+                  )}
+                </div>
+              </div>
+            ))}
           </div>
         </>
       )}
     </section>
   );
 }
-
 
 function PipelineDistributionTooltip({
   active,
@@ -597,17 +372,11 @@ function PipelineDistributionTooltip({
     };
   }>;
 }) {
-  if (
-    !active ||
-    !payload?.length
-  ) {
+  if (!active || !payload?.length) {
     return null;
   }
 
-  const point =
-    payload[
-      0
-    ]?.payload;
+  const point = payload[0]?.payload;
 
   if (!point) {
     return null;
@@ -616,26 +385,19 @@ function PipelineDistributionTooltip({
   return (
     <div className="min-w-[150px] rounded-xl border border-slate-200 bg-white px-3 py-2.5 shadow-lg">
       <div className="text-[10px] font-bold uppercase tracking-[.12em] text-slate-400">
-        {
-          point.stage
-        }
+        {point.stage}
       </div>
 
       <div className="mt-1 text-sm font-bold text-slate-900">
-        {point.leads.toLocaleString()}{' '}
-        leads
+        {point.leads.toLocaleString()} leads
       </div>
 
       <div className="mt-0.5 text-xs text-slate-500">
-        {
-          point.share
-        }
-        % of active pipeline
+        {point.share}% of active pipeline
       </div>
     </div>
   );
 }
-
 
 function PipelineAgingTooltip({
   active,
@@ -646,17 +408,11 @@ function PipelineAgingTooltip({
     payload?: PipelineAgingPoint;
   }>;
 }) {
-  if (
-    !active ||
-    !payload?.length
-  ) {
+  if (!active || !payload?.length) {
     return null;
   }
 
-  const point =
-    payload[
-      0
-    ]?.payload;
+  const point = payload[0]?.payload;
 
   if (!point) {
     return null;
@@ -665,102 +421,42 @@ function PipelineAgingTooltip({
   return (
     <div className="min-w-[180px] rounded-xl border border-slate-200 bg-white px-3 py-2.5 shadow-lg">
       <div className="text-[10px] font-bold uppercase tracking-[.12em] text-slate-400">
-        {
-          point.stage
-        }
+        {point.stage}
       </div>
 
       <div className="mt-2 space-y-1 text-xs">
-        <TooltipRow
-          label="Median"
-          value={
-            formatAge(
-              point.medianDays
-            )
-          }
-        />
+        <TooltipRow label="Median" value={formatAge(point.medianDays)} />
 
-        <TooltipRow
-          label="Oldest"
-          value={
-            formatAge(
-              point.oldestDays
-            )
-          }
-        />
+        <TooltipRow label="Oldest" value={formatAge(point.oldestDays)} />
 
-        <TooltipRow
-          label="Healthy"
-          value={String(
-            point.healthy
-          )}
-        />
+        <TooltipRow label="Healthy" value={String(point.healthy)} />
 
-        <TooltipRow
-          label="Warning"
-          value={String(
-            point.warning
-          )}
-        />
+        <TooltipRow label="Warning" value={String(point.warning)} />
 
-        <TooltipRow
-          label="Stuck"
-          value={String(
-            point.stuck
-          )}
-        />
+        <TooltipRow label="Stuck" value={String(point.stuck)} />
       </div>
     </div>
   );
 }
 
-
-function TooltipRow({
-  label,
-  value,
-}: {
-  label: string;
-  value: string;
-}) {
+function TooltipRow({ label, value }: { label: string; value: string }) {
   return (
     <div className="flex items-center justify-between gap-6">
-      <span className="text-slate-400">
-        {label}
-      </span>
+      <span className="text-slate-400">{label}</span>
 
-      <strong className="text-slate-800">
-        {value}
-      </strong>
+      <strong className="text-slate-800">{value}</strong>
     </div>
   );
 }
 
-
-function formatAge(
-  days: number
-) {
-  if (
-    days <
-    1
-  ) {
-    return `${Math.max(
-      0,
-      Math.round(
-        days * 24
-      )
-    )}h`;
+function formatAge(days: number) {
+  if (days < 1) {
+    return `${Math.max(0, Math.round(days * 24))}h`;
   }
 
-  if (
-    days <
-    10
-  ) {
-    return `${days.toFixed(
-      1
-    )}d`;
+  if (days < 10) {
+    return `${days.toFixed(1)}d`;
   }
 
-  return `${Math.round(
-    days
-  )}d`;
+  return `${Math.round(days)}d`;
 }
