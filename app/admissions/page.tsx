@@ -22,6 +22,18 @@ import {
 
 
 
+  Clock3,
+
+
+
+  Inbox,
+
+
+
+  Layers3,
+
+
+
   CalendarClock,
 
 
@@ -617,6 +629,55 @@ type SlaQueueRow = {
   awaiting_human_response: boolean | null;
 };
 
+
+type InboxAttentionRow = {
+  lead_id: string;
+  latest_message_at: string | null;
+  latest_direction: string | null;
+  last_inbound_at: string | null;
+  last_outbound_at: string | null;
+  needs_reply: boolean | null;
+};
+
+
+type InboxReadRow = {
+  lead_id: string;
+  last_read_at: string | null;
+};
+
+
+type InboxLeadState = InboxAttentionRow & {
+  unread: boolean;
+};
+
+
+type LeadOperationalRow = {
+  id: string;
+  preferred_batch_id: string | null;
+  preferred_month: string | null;
+  last_contacted_at: string | null;
+  expected_close_date: string | null;
+};
+
+
+type CourseBatchRow = {
+  id: string;
+  batch_code: string | null;
+  start_date: string | null;
+  end_date: string | null;
+  location: string | null;
+  mode: string | null;
+  capacity: number | string | null;
+  seats_remaining: number | string | null;
+  active: boolean | null;
+};
+
+
+
+
+
+
+
 type SearchParams = {
 
 
@@ -686,6 +747,14 @@ export default async function AdmissionsDeskPage({
 
 
   const supabase = await createClient();
+
+
+
+  const {
+    data: {
+      user,
+    },
+  } = await supabase.auth.getUser();
 
 
 
@@ -766,6 +835,18 @@ export default async function AdmissionsDeskPage({
 
 
     leadContactsResult,
+
+
+
+    inboxAttentionResult,
+
+
+
+    leadOperationalResult,
+
+
+
+    courseBatchesResult,
 
 
 
@@ -1141,7 +1222,66 @@ export default async function AdmissionsDeskPage({
 
 
 
+    supabase
+      .from('v_lead_inbox_attention')
+      .select(`
+        lead_id,
+        latest_message_at,
+        latest_direction,
+        last_inbound_at,
+        last_outbound_at,
+        needs_reply
+      `)
+      .limit(1000),
+
+
+
+    supabase
+      .from('leads')
+      .select(`
+        id,
+        preferred_batch_id,
+        preferred_month,
+        last_contacted_at,
+        expected_close_date
+      `)
+      .limit(1000),
+
+
+
+    supabase
+      .from('course_batches')
+      .select(`
+        id,
+        batch_code,
+        start_date,
+        end_date,
+        location,
+        mode,
+        capacity,
+        seats_remaining,
+        active
+      `)
+      .eq('active', true)
+      .order('start_date', { ascending: true }),
+
+
+
   ]);
+
+
+
+  const inboxReadResult =
+    user
+      ? await supabase
+          .from('lead_inbox_reads')
+          .select('lead_id,last_read_at')
+          .eq('user_id', user.id)
+          .limit(1000)
+      : {
+          data: [] as InboxReadRow[],
+          error: null,
+        };
 
 
 
@@ -1198,6 +1338,22 @@ export default async function AdmissionsDeskPage({
 
 
     leadContactsResult.error,
+
+
+
+    inboxAttentionResult.error,
+
+
+
+    leadOperationalResult.error,
+
+
+
+    courseBatchesResult.error,
+
+
+
+    inboxReadResult.error,
 
 
 
@@ -1381,6 +1537,26 @@ export default async function AdmissionsDeskPage({
 
 
 
+  const inboxAttention =
+    (inboxAttentionResult.data ?? []) as InboxAttentionRow[];
+
+
+
+  const inboxReads =
+    (inboxReadResult.data ?? []) as InboxReadRow[];
+
+
+
+  const leadOperational =
+    (leadOperationalResult.data ?? []) as LeadOperationalRow[];
+
+
+
+  const courseBatches =
+    (courseBatchesResult.data ?? []) as CourseBatchRow[];
+
+
+
 
 
 
@@ -1394,6 +1570,87 @@ export default async function AdmissionsDeskPage({
 
 
   );
+
+
+
+  const inboxReadByLeadId =
+    new Map(
+      inboxReads.map(
+        (row) => [
+          row.lead_id,
+          row.last_read_at,
+        ] as const
+      )
+    );
+
+
+
+  const inboxByLeadId =
+    new Map<string, InboxLeadState>(
+      inboxAttention.map((row) => {
+        const inboundAt =
+          row.last_inbound_at
+            ? new Date(row.last_inbound_at).getTime()
+            : 0;
+
+        const readValue =
+          inboxReadByLeadId.get(row.lead_id);
+
+        const readAt =
+          readValue
+            ? new Date(readValue).getTime()
+            : 0;
+
+        return [
+          row.lead_id,
+          {
+            ...row,
+            unread:
+              inboundAt > 0 &&
+              (
+                !readAt ||
+                inboundAt > readAt
+              ),
+          },
+        ] as const;
+      })
+    );
+
+
+
+  const leadOperationalById =
+    new Map(
+      leadOperational.map(
+        (row) => [
+          row.id,
+          row,
+        ] as const
+      )
+    );
+
+
+
+  const batchesById =
+    new Map(
+      courseBatches.map(
+        (row) => [
+          row.id,
+          row,
+        ] as const
+      )
+    );
+
+
+
+  const slaByLeadId =
+    new Map(
+      slaQueue.map(
+        (row) => [
+          row.lead_id,
+          row,
+        ] as const
+      )
+    );
 
 
 
@@ -1502,6 +1759,34 @@ export default async function AdmissionsDeskPage({
 
 
     ).length;
+
+
+
+  const needsReplyCount =
+    inboxAttention.filter(
+      (row) => Boolean(row.needs_reply)
+    ).length;
+
+
+
+  const unreadCount =
+    [...inboxByLeadId.values()].filter(
+      (row) => row.unread
+    ).length;
+
+
+
+  const breachedSlaCount =
+    toNumber(
+      slaOverview?.breached_now
+    );
+
+
+
+  const awaitingHumanCount =
+    toNumber(
+      slaOverview?.awaiting_human_response
+    );
 
 
 
@@ -2121,6 +2406,23 @@ export default async function AdmissionsDeskPage({
 
 
 
+      <AdmissionsOperationsPanel
+        needsReply={needsReplyCount}
+        unread={unreadCount}
+        breached={breachedSlaCount}
+        awaitingHuman={awaitingHumanCount}
+        overdue={overdue.length}
+        dueToday={dueToday.length}
+        critical={criticalPriorityCount}
+        high={highPriorityCount}
+        medium={mediumPriorityCount}
+        low={lowPriorityCount}
+        paymentPending={paymentPending.length}
+        hot={hotJourney.length}
+      />
+
+
+
 
 
 
@@ -2344,31 +2646,29 @@ export default async function AdmissionsDeskPage({
 
 
 
-            filteredPriorityQueue.map((row) => (
+            filteredPriorityQueue.map((row) => {
+              const operational =
+                leadOperationalById.get(row.lead_id) ?? null;
 
+              const batch =
+                operational?.preferred_batch_id
+                  ? batchesById.get(
+                      operational.preferred_batch_id
+                    ) ?? null
+                  : null;
 
-
-              <PriorityLeadCard
-
-
-
-                key={row.lead_id}
-
-
-
-                row={row}
-
-
-
-                contact={contactsByLeadId.get(row.lead_id) ?? null}
-
-
-
-              />
-
-
-
-            ))
+              return (
+                <PriorityLeadCard
+                  key={row.lead_id}
+                  row={row}
+                  contact={contactsByLeadId.get(row.lead_id) ?? null}
+                  inbox={inboxByLeadId.get(row.lead_id) ?? null}
+                  sla={slaByLeadId.get(row.lead_id) ?? null}
+                  operational={operational}
+                  batch={batch}
+                />
+              );
+            })
 
 
 
@@ -3418,6 +3718,292 @@ export default async function AdmissionsDeskPage({
 
 
 
+function AdmissionsOperationsPanel({
+  needsReply,
+  unread,
+  breached,
+  awaitingHuman,
+  overdue,
+  dueToday,
+  critical,
+  high,
+  medium,
+  low,
+  paymentPending,
+  hot,
+}: {
+  needsReply: number;
+  unread: number;
+  breached: number;
+  awaitingHuman: number;
+  overdue: number;
+  dueToday: number;
+  critical: number;
+  high: number;
+  medium: number;
+  low: number;
+  paymentPending: number;
+  hot: number;
+}) {
+  const responseMax = Math.max(
+    1,
+    needsReply,
+    unread,
+    breached,
+    awaitingHuman
+  );
+
+  const priorityMax = Math.max(
+    1,
+    critical,
+    high,
+    medium,
+    low
+  );
+
+  const actionMax = Math.max(
+    1,
+    overdue,
+    dueToday,
+    paymentPending,
+    hot
+  );
+
+  const responseRisk =
+    needsReply +
+    breached +
+    awaitingHuman;
+
+  return (
+    <section className="card-pad mt-4">
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div>
+          <div className="eyebrow">
+            Operations intelligence
+          </div>
+          <div className="section-title mt-1">
+            Where the admissions team should focus now
+          </div>
+          <p className="mt-1 max-w-3xl text-xs leading-5 text-slate-400">
+            Live conversation pressure, SLA risk, priority workload and conversion
+            signals are shown together so the team can decide what to work first.
+          </p>
+        </div>
+
+        <Link
+          href="/conversations"
+          className="inline-flex items-center gap-1.5 text-xs font-bold text-brand hover:underline"
+        >
+          Open inbox
+          <ArrowRight size={13} />
+        </Link>
+      </div>
+
+      <div className="mt-5 grid gap-4 xl:grid-cols-3">
+        <div
+          className={`rounded-2xl border p-4 ${
+            responseRisk > 0
+              ? 'border-red-100 bg-red-50/35'
+              : 'border-slate-100 bg-slate-50/60'
+          }`}
+        >
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <div className="flex items-center gap-2 text-[10px] font-black uppercase tracking-[.14em] text-slate-400">
+                <Inbox size={14} />
+                Response pressure
+              </div>
+              <div className="mt-1 text-sm font-black text-slate-800">
+                Conversations needing attention
+              </div>
+            </div>
+
+            <div
+              className={`rounded-full px-2.5 py-1 text-[10px] font-black ${
+                responseRisk > 0
+                  ? 'bg-red-100 text-red-700'
+                  : 'bg-emerald-100 text-emerald-700'
+              }`}
+            >
+              {responseRisk > 0
+                ? `${formatNumber(responseRisk)} signals`
+                : 'Clear'}
+            </div>
+          </div>
+
+          <div className="mt-4 space-y-3">
+            <OperationalBar
+              label="Needs reply"
+              value={needsReply}
+              max={responseMax}
+              tone="red"
+            />
+            <OperationalBar
+              label="Unread"
+              value={unread}
+              max={responseMax}
+              tone="sky"
+            />
+            <OperationalBar
+              label="SLA breached"
+              value={breached}
+              max={responseMax}
+              tone="red"
+            />
+            <OperationalBar
+              label="Awaiting human"
+              value={awaitingHuman}
+              max={responseMax}
+              tone="amber"
+            />
+          </div>
+        </div>
+
+        <div className="rounded-2xl border border-slate-100 bg-slate-50/60 p-4">
+          <div className="flex items-center gap-2 text-[10px] font-black uppercase tracking-[.14em] text-slate-400">
+            <Layers3 size={14} />
+            Priority workload
+          </div>
+          <div className="mt-1 text-sm font-black text-slate-800">
+            Ranked queue distribution
+          </div>
+
+          <div className="mt-4 space-y-3">
+            <OperationalBar
+              label="Critical"
+              value={critical}
+              max={priorityMax}
+              tone="red"
+            />
+            <OperationalBar
+              label="High"
+              value={high}
+              max={priorityMax}
+              tone="orange"
+            />
+            <OperationalBar
+              label="Medium"
+              value={medium}
+              max={priorityMax}
+              tone="amber"
+            />
+            <OperationalBar
+              label="Low"
+              value={low}
+              max={priorityMax}
+              tone="slate"
+            />
+          </div>
+        </div>
+
+        <div className="rounded-2xl border border-slate-100 bg-slate-50/60 p-4">
+          <div className="flex items-center gap-2 text-[10px] font-black uppercase tracking-[.14em] text-slate-400">
+            <Clock3 size={14} />
+            Action pressure
+          </div>
+          <div className="mt-1 text-sm font-black text-slate-800">
+            Follow-up and conversion workload
+          </div>
+
+          <div className="mt-4 space-y-3">
+            <OperationalBar
+              label="Overdue"
+              value={overdue}
+              max={actionMax}
+              tone="red"
+            />
+            <OperationalBar
+              label="Due today"
+              value={dueToday}
+              max={actionMax}
+              tone="sky"
+            />
+            <OperationalBar
+              label="Payment pending"
+              value={paymentPending}
+              max={actionMax}
+              tone="orange"
+            />
+            <OperationalBar
+              label="Hot leads"
+              value={hot}
+              max={actionMax}
+              tone="amber"
+            />
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+
+function OperationalBar({
+  label,
+  value,
+  max,
+  tone,
+}: {
+  label: string;
+  value: number;
+  max: number;
+  tone:
+    | 'red'
+    | 'orange'
+    | 'amber'
+    | 'sky'
+    | 'slate';
+}) {
+  const tones = {
+    red: 'bg-red-500',
+    orange: 'bg-orange-500',
+    amber: 'bg-amber-500',
+    sky: 'bg-sky-500',
+    slate: 'bg-slate-400',
+  };
+
+  const width =
+    value <= 0
+      ? 0
+      : Math.max(
+          7,
+          Math.min(
+            100,
+            Math.round(
+              (value / Math.max(1, max)) * 100
+            )
+          )
+        );
+
+  return (
+    <div>
+      <div className="flex items-center justify-between gap-3">
+        <span className="text-[11px] font-semibold text-slate-500">
+          {label}
+        </span>
+        <span className="text-xs font-black text-slate-800">
+          {formatNumber(value)}
+        </span>
+      </div>
+
+      <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-white ring-1 ring-slate-100">
+        <div
+          className={`h-full rounded-full ${tones[tone]} transition-all duration-500`}
+          style={{
+            width: `${width}%`,
+          }}
+        />
+      </div>
+    </div>
+  );
+}
+
+
+
+
+
+
+
 function ResponseSlaPanel({
   overview,
   queue,
@@ -4256,735 +4842,381 @@ function whatsappHref(
 
 
 function PriorityLeadCard({
-
-
-
   row,
-
-
-
   contact,
-
-
-
+  inbox,
+  sla,
+  operational,
+  batch,
 }: {
-
-
-
   row: PriorityRow;
-
-
-
   contact: LeadContactRow | null;
-
-
-
+  inbox: InboxLeadState | null;
+  sla: SlaQueueRow | null;
+  operational: LeadOperationalRow | null;
+  batch: CourseBatchRow | null;
 }) {
-
-
-
   const score = toNumber(row.priority_score);
-
-
-
   const band = row.priority_band || 'low';
 
+  const slaBreached =
+    sla?.sla_status === 'breached' ||
+    sla?.human_sla_status === 'human_breached';
 
+  const needsReply =
+    Boolean(inbox?.needs_reply);
 
+  const unread =
+    Boolean(inbox?.unread);
 
+  const waitingValue =
+    sla?.awaiting_first_response
+      ? formatMinutesDuration(
+          sla.lead_age_minutes
+        )
+      : needsReply
+        ? waitingDurationSince(
+            inbox?.last_inbound_at
+          )
+        : null;
 
+  const batchLabel =
+    batch
+      ? [
+          batch.batch_code || 'Batch',
+          batch.start_date
+            ? formatDateOnly(
+                batch.start_date
+              )
+            : null,
+          batch.seats_remaining != null
+            ? `${formatNumber(
+                batch.seats_remaining
+              )} seats left`
+            : null,
+        ]
+          .filter(Boolean)
+          .join(' · ')
+      : operational?.preferred_month
+        ? formatMonthValue(
+            operational.preferred_month
+          )
+        : '—';
 
+  const location =
+    batch?.location ||
+    row.preferred_location ||
+    '—';
+
+  const lastContact =
+    operational?.last_contacted_at
+      ? formatRelativeTime(
+          operational.last_contacted_at
+        )
+      : 'Not contacted';
 
   const bandClasses: Record<string, string> = {
-
-
-
     critical:
-
-
-
       'border-red-200 bg-red-50/50',
-
-
-
     high:
-
-
-
       'border-orange-200 bg-orange-50/40',
-
-
-
     medium:
-
-
-
       'border-amber-100 bg-amber-50/35',
-
-
-
     low:
-
-
-
       'border-slate-100 bg-white',
-
-
-
   };
 
-
-
-
-
-
-
   return (
-
-
-
     <article
-
-
-
       className={`rounded-2xl border p-4 shadow-sm transition-all duration-150 hover:-translate-y-0.5 hover:shadow-md ${
-
-
-
-        bandClasses[band] || bandClasses.low
-
-
-
+        slaBreached
+          ? 'ring-1 ring-red-200'
+          : ''
+      } ${
+        bandClasses[band] ||
+        bandClasses.low
       }`}
-
-
-
     >
-
-
-
-      <div className="grid gap-4 xl:grid-cols-[88px_1.2fr_1fr_1fr_auto] xl:items-center">
-
-
-
+      <div className="grid gap-4 xl:grid-cols-[88px_1.1fr_1.15fr_1.15fr_auto] xl:items-start">
         <div>
-
-
-
           <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
-
-
-
             Priority
-
-
-
           </div>
-
-
 
           <div className="mt-1 text-3xl font-black text-slate-900">
-
-
-
             {score}
-
-
-
           </div>
-
-
 
           <span
-
-
-
             className={`mt-1 inline-flex rounded-full px-2 py-1 text-[10px] font-bold uppercase ${priorityBadgeClass(
-
-
-
               band
-
-
-
             )}`}
-
-
-
           >
-
-
-
             {band}
-
-
-
           </span>
-
-
-
         </div>
-
-
-
-
-
-
 
         <div className="min-w-0">
-
-
-
           <Link
-
-
-
             href={`/leads/${row.lead_id}`}
-
-
-
             className="truncate text-sm font-bold text-slate-900 hover:text-brand"
-
-
-
           >
-
-
-
-            {row.lead_name || row.lead_code || 'Lead'}
-
-
-
+            {row.lead_name ||
+              row.lead_code ||
+              'Lead'}
           </Link>
 
-
-
           <div className="mt-0.5 text-[10px] font-medium text-slate-400">
-
-
-
             {row.lead_code || '—'}
-
-
-
           </div>
-
-
 
           <div className="mt-2 flex flex-wrap gap-1.5">
-
-
-
             <SmallBadge
-
-
-
-              label={pretty(row.current_stage || 'new')}
-
-
-
+              label={pretty(
+                row.current_stage ||
+                  'new'
+              )}
             />
-
-
 
             {row.behaviour_temperature && (
-
-
-
               <SmallBadge
-
-
-
-                label={pretty(row.behaviour_temperature)}
-
-
-
+                label={pretty(
+                  row.behaviour_temperature
+                )}
               />
-
-
-
             )}
-
-
 
             {row.is_reengaged && (
-
-
-
               <SmallBadge label="Re-engaged" />
-
-
-
             )}
-
-
 
             {row.is_paid_media_lead && (
-
-
-
               <SmallBadge
-
-
-
-                label={row.paid_media_platform || 'Paid media'}
-
-
-
+                label={
+                  row.paid_media_platform ||
+                  'Paid media'
+                }
               />
-
-
-
             )}
 
+            {needsReply && (
+              <SignalBadge
+                label="Needs reply"
+                tone="red"
+              />
+            )}
 
+            {unread && (
+              <SignalBadge
+                label="Unread"
+                tone="sky"
+              />
+            )}
 
+            {slaBreached && (
+              <SignalBadge
+                label="SLA breached"
+                tone="red"
+              />
+            )}
+
+            {row.followup_overdue && (
+              <SignalBadge
+                label="Follow-up overdue"
+                tone="amber"
+              />
+            )}
           </div>
-
-
-
         </div>
-
-
-
-
-
-
 
         <div>
-
-
-
           <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
-
-
-
             Next best action
-
-
-
           </div>
-
-
 
           <div className="mt-1 text-sm font-bold text-slate-800">
-
-
-
-            {row.next_best_action || 'Review lead'}
-
-
-
+            {row.next_best_action ||
+              'Review lead'}
           </div>
-
-
 
           <div className="mt-1 text-[11px] leading-5 text-slate-500">
-
-
-
-            {row.priority_reason || 'No strong priority signal yet.'}
-
-
-
+            {row.priority_reason ||
+              'No strong priority signal yet.'}
           </div>
 
-
-
+          {(needsReply ||
+            slaBreached ||
+            row.followup_overdue) && (
+            <div className="mt-2 rounded-lg border border-red-100 bg-white/70 px-2.5 py-2 text-[10px] font-semibold leading-4 text-red-600">
+              {slaBreached
+                ? 'SLA is already breached — respond before lower-priority work.'
+                : row.followup_overdue
+                  ? 'Scheduled follow-up is overdue.'
+                  : 'Latest customer message is waiting for a reply.'}
+            </div>
+          )}
         </div>
-
-
-
-
-
-
 
         <div className="space-y-1.5 text-xs">
-
-
-
           <InfoLine
-
-
-
             label="Course"
-
-
-
-            value={row.course_name || '—'}
-
-
-
+            value={
+              row.course_name || '—'
+            }
           />
 
-
+          <InfoLine
+            label="Batch"
+            value={batchLabel}
+          />
 
           <InfoLine
+            label="Location"
+            value={location}
+          />
 
-
-
+          <InfoLine
             label="Payment"
-
-
-
-            value={pretty(row.payment_status || 'unvalued')}
-
-
-
+            value={pretty(
+              row.payment_status ||
+                'unvalued'
+            )}
           />
-
-
 
           <InfoLine
-
-
-
             label="Engagement"
-
-
-
-            value={`${formatNumber(row.engagement_score)}/100`}
-
-
-
+            value={`${formatNumber(
+              row.engagement_score
+            )}/100`}
           />
 
+          <InfoLine
+            label="Last contact"
+            value={lastContact}
+          />
 
-
-          {row.outstanding_balance != null && row.currency && (
-
-
-
+          {waitingValue && (
             <InfoLine
-
-
-
-              label="Outstanding"
-
-
-
-              value={formatMoney(
-
-
-
-                row.outstanding_balance,
-
-
-
-                row.currency
-
-
-
-              )}
-
-
-
+              label="Waiting"
+              value={waitingValue}
             />
-
-
-
           )}
 
-
+          {row.outstanding_balance != null &&
+            row.currency && (
+              <InfoLine
+                label="Outstanding"
+                value={formatMoney(
+                  row.outstanding_balance,
+                  row.currency
+                )}
+              />
+            )}
 
           {row.next_followup_due_at && (
-
-
-
             <InfoLine
-
-
-
               label="Follow-up"
-
-
-
-              value={formatDateTime(row.next_followup_due_at)}
-
-
-
+              value={formatDateTime(
+                row.next_followup_due_at
+              )}
             />
-
-
-
           )}
 
-
-
+          {operational?.expected_close_date && (
+            <InfoLine
+              label="Expected close"
+              value={formatDateOnly(
+                operational.expected_close_date
+              )}
+            />
+          )}
         </div>
 
-
-
-
-
-
-
         <div className="flex flex-wrap items-center gap-2 xl:justify-end">
-
-
-
           {row.next_followup_task_id && (
-
-
-
             <>
-
-
-
-              <form action={completeAdmissionFollowUpAction}>
-
-
-
+              <form
+                action={
+                  completeAdmissionFollowUpAction
+                }
+              >
                 <input
-
-
-
                   type="hidden"
-
-
-
                   name="task_id"
-
-
-
-                  value={row.next_followup_task_id}
-
-
-
+                  value={
+                    row.next_followup_task_id
+                  }
                 />
-
-
-
                 <input
-
-
-
                   type="hidden"
-
-
-
                   name="lead_id"
-
-
-
                   value={row.lead_id}
-
-
-
                 />
-
-
 
                 <button
-
-
-
                   type="submit"
-
-
-
                   className="inline-flex rounded-lg bg-slate-900 px-3 py-2 text-[11px] font-bold text-white transition-colors hover:bg-slate-700"
-
-
-
                 >
-
-
-
                   Complete
-
-
-
                 </button>
-
-
-
               </form>
 
-
-
-
-
-
-
-              <form action={snoozeAdmissionFollowUpAction}>
-
-
-
+              <form
+                action={
+                  snoozeAdmissionFollowUpAction
+                }
+              >
                 <input
-
-
-
                   type="hidden"
-
-
-
                   name="task_id"
-
-
-
-                  value={row.next_followup_task_id}
-
-
-
+                  value={
+                    row.next_followup_task_id
+                  }
                 />
-
-
-
                 <input
-
-
-
                   type="hidden"
-
-
-
                   name="lead_id"
-
-
-
                   value={row.lead_id}
-
-
-
                 />
-
-
 
                 <button
-
-
-
                   type="submit"
-
-
-
                   className="inline-flex rounded-lg border border-slate-200 bg-white px-3 py-2 text-[11px] font-bold text-slate-600 transition-colors hover:bg-slate-50"
-
-
-
                 >
-
-
-
                   Snooze
-
-
-
                 </button>
-
-
-
               </form>
-
-
-
             </>
-
-
-
           )}
-
-
-
-
-
-
 
           <ContactActions
             contact={contact}
             compact
           />
 
-
-
-
-
-
-
           <ContactLogActions
             leadId={row.lead_id}
             contact={contact}
           />
 
-
-
-
-
-
-
           <Link
-
-
-
             href={`/conversations?lead=${row.lead_id}`}
-
-
-
             className="inline-flex rounded-lg border border-slate-200 bg-white px-3 py-2 text-[11px] font-bold text-slate-600 transition-colors hover:bg-slate-50"
-
-
-
           >
-
-
-
             Conversation
-
-
-
           </Link>
-
-
-
-
-
-
 
           <Link
-
-
-
             href={`/leads/${row.lead_id}`}
-
-
-
             className="inline-flex items-center gap-1 text-xs font-bold text-brand"
-
-
-
           >
-
-
-
             Open
-
-
-
             <ArrowRight size={13} />
-
-
-
           </Link>
-
-
-
         </div>
-
-
-
       </div>
-
-
-
     </article>
-
-
-
   );
-
-
-
 }
 
 
@@ -5125,6 +5357,40 @@ function SmallBadge({
 
 
 
+}
+
+
+
+
+
+
+
+function SignalBadge({
+  label,
+  tone,
+}: {
+  label: string;
+  tone:
+    | 'red'
+    | 'amber'
+    | 'sky';
+}) {
+  const tones = {
+    red:
+      'bg-red-100 text-red-700 ring-red-200',
+    amber:
+      'bg-amber-100 text-amber-700 ring-amber-200',
+    sky:
+      'bg-sky-100 text-sky-700 ring-sky-200',
+  };
+
+  return (
+    <span
+      className={`inline-flex rounded-full px-2 py-1 text-[10px] font-black shadow-sm ring-1 ${tones[tone]}`}
+    >
+      {label}
+    </span>
+  );
 }
 
 
@@ -6991,6 +7257,117 @@ function formatDateTime(
 
 }
 
+
+
+
+
+
+
+
+function formatDateOnly(
+  value:
+    | string
+    | null
+    | undefined
+) {
+  if (!value) {
+    return '—';
+  }
+
+  const date =
+    new Date(
+      `${value.slice(0, 10)}T00:00:00Z`
+    );
+
+  if (
+    Number.isNaN(
+      date.getTime()
+    )
+  ) {
+    return value;
+  }
+
+  return new Intl.DateTimeFormat(
+    'en-IN',
+    {
+      day: 'numeric',
+      month: 'short',
+      year: 'numeric',
+      timeZone: 'UTC',
+    }
+  ).format(date);
+}
+
+
+function formatMonthValue(
+  value:
+    | string
+    | null
+    | undefined
+) {
+  if (!value) {
+    return '—';
+  }
+
+  const date =
+    new Date(
+      `${value.slice(0, 10)}T00:00:00Z`
+    );
+
+  if (
+    Number.isNaN(
+      date.getTime()
+    )
+  ) {
+    return value;
+  }
+
+  return new Intl.DateTimeFormat(
+    'en-IN',
+    {
+      month: 'short',
+      year: 'numeric',
+      timeZone: 'UTC',
+    }
+  ).format(date);
+}
+
+
+function waitingDurationSince(
+  value:
+    | string
+    | null
+    | undefined
+) {
+  if (!value) {
+    return null;
+  }
+
+  const time =
+    new Date(value).getTime();
+
+  if (
+    Number.isNaN(time)
+  ) {
+    return null;
+  }
+
+  const minutes =
+    Math.max(
+      0,
+      Math.floor(
+        (
+          Date.now() -
+          time
+        ) /
+          60000
+      )
+    );
+
+  return formatMinutesDuration(
+    minutes
+  );
+}
 
 
 
