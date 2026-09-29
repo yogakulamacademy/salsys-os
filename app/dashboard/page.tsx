@@ -6,6 +6,8 @@ import {
 
   ArrowRight,
 
+  CalendarDays,
+
   CheckCircle2,
 
   ClipboardCheck,
@@ -14,9 +16,13 @@ import {
 
   CreditCard,
 
+  CircleDollarSign,
+
   Flame,
 
   ListTodo,
+
+  MapPin,
 
   MessageSquareMore,
 
@@ -29,6 +35,8 @@ import {
   UserCheck,
 
   UserRoundPlus,
+
+  UsersRound,
 
 } from 'lucide-react';
 
@@ -188,6 +196,146 @@ type LeadAttention = {
 
 
 
+type DashboardRevenueSummary = {
+
+  currency: string;
+
+  pipeline: number;
+
+  weighted: number;
+
+  collected: number;
+
+  outstanding: number;
+
+  opportunities: number;
+
+};
+
+
+
+type DashboardBatchDemand = {
+
+  id: string;
+
+  batchCode: string;
+
+  courseName: string;
+
+  location: string;
+
+  mode: string;
+
+  startDate: string | null;
+
+  endDate: string | null;
+
+  activeDemand: number;
+
+  hotDemand: number;
+
+  paymentPending: number;
+
+  enrolled: number;
+
+  capacity: number | null;
+
+  seatsRemaining: number | null;
+
+};
+
+
+
+type DashboardCommercialPulse = {
+
+  revenueSummary: DashboardRevenueSummary[];
+
+  upcomingBatches: DashboardBatchDemand[];
+
+  unvaluedOpenLeads: number;
+
+};
+
+
+
+type DashboardForecastRow = {
+
+  current_stage: string | null;
+
+  potential_value: number | string | null;
+
+  currency: string | null;
+
+  weighted_value: number | string | null;
+
+};
+
+
+
+type DashboardActualRevenueRow = {
+
+  currency: string | null;
+
+  actual_revenue: number | string | null;
+
+};
+
+
+
+type DashboardOutstandingRevenueRow = {
+
+  currency: string | null;
+
+  outstanding_revenue: number | string | null;
+
+};
+
+
+
+type DashboardBatchRow = {
+
+  id: string;
+
+  course_id: string | null;
+
+  batch_code: string | null;
+
+  location: string | null;
+
+  mode: string | null;
+
+  start_date: string | null;
+
+  end_date: string | null;
+
+  capacity: number | string | null;
+
+  seats_remaining: number | string | null;
+
+};
+
+
+
+type DashboardCourseRow = {
+
+  id: string;
+
+  name: string | null;
+
+};
+
+
+
+type DashboardLeadBatchRow = {
+
+  preferred_batch_id: string | null;
+
+  current_stage: string | null;
+
+};
+
+
+
 
 
 /* =========================================================
@@ -214,6 +362,8 @@ export default async function DashboardPage() {
 
     inboxStateMap,
 
+    commercialPulse,
+
   ] = await Promise.all([
 
     getLeads(),
@@ -225,6 +375,8 @@ export default async function DashboardPage() {
     getFollowUps(),
 
     getDashboardInboxStateMap(),
+
+    getDashboardCommercialPulse(),
 
   ]);
 
@@ -801,6 +953,18 @@ export default async function DashboardPage() {
       );
 
 
+
+
+
+  const {
+
+    revenueSummary,
+
+    upcomingBatches,
+
+    unvaluedOpenLeads,
+
+  } = commercialPulse;
 
 
 
@@ -2406,6 +2570,304 @@ export default async function DashboardPage() {
 
       {/* ===================================================
 
+          COMMERCIAL PULSE
+
+      =================================================== */}
+
+
+
+      <div
+
+        className="
+
+          mt-4
+
+          grid
+
+          gap-4
+
+          xl:grid-cols-[.82fr_1.18fr]
+
+        "
+
+      >
+
+
+
+        <section
+
+          className="
+
+            card-pad
+
+            animate-rise
+
+            stagger-3
+
+          "
+
+        >
+
+
+
+          <div
+
+            className="
+
+              flex
+
+              items-start
+
+              justify-between
+
+              gap-4
+
+            "
+
+          >
+
+
+
+            <div>
+
+
+
+              <div className="eyebrow">
+
+                Commercial pulse
+
+              </div>
+
+
+
+              <div className="section-title mt-1">
+
+                Revenue at a glance
+
+              </div>
+
+
+
+              <p className="mt-1 text-xs leading-5 text-slate-400">
+
+                Live pipeline, weighted forecast, collected revenue and outstanding balances.
+
+              </p>
+
+
+
+            </div>
+
+
+
+            <Link
+
+              href="/revenue"
+
+              className="inline-flex shrink-0 items-center gap-1 text-xs font-bold text-brand hover:underline"
+
+            >
+
+              Full revenue
+
+              <ArrowRight size={13} />
+
+            </Link>
+
+
+
+          </div>
+
+
+
+          <div className="mt-5 space-y-3">
+
+            {revenueSummary.map(
+
+              (group) => (
+
+                <RevenuePulseRow
+
+                  key={group.currency}
+
+                  group={group}
+
+                />
+
+              )
+
+            )}
+
+          </div>
+
+
+
+          {unvaluedOpenLeads > 0 && (
+
+            <div className="mt-4 rounded-xl border border-amber-100 bg-amber-50/70 px-4 py-3">
+
+              <div className="flex items-center justify-between gap-3">
+
+                <div>
+
+                  <div className="text-xs font-bold text-amber-800">
+
+                    {unvaluedOpenLeads.toLocaleString()} open lead{unvaluedOpenLeads === 1 ? '' : 's'} without forecast value
+
+                  </div>
+
+                  <div className="mt-0.5 text-[10px] font-medium text-amber-600">
+
+                    Assign a batch or manual potential value to include them in revenue forecasting.
+
+                  </div>
+
+                </div>
+
+
+
+                <CircleDollarSign
+
+                  size={18}
+
+                  className="shrink-0 text-amber-600"
+
+                />
+
+              </div>
+
+            </div>
+
+          )}
+
+
+
+        </section>
+
+
+
+        <section
+
+          className="
+
+            card
+
+            overflow-hidden
+
+            animate-rise
+
+            stagger-4
+
+          "
+
+        >
+
+
+
+          <div className="flex items-start justify-between gap-4 border-b border-slate-100 px-5 py-4">
+
+            <div>
+
+              <div className="eyebrow">
+
+                Upcoming batches
+
+              </div>
+
+
+
+              <div className="section-title mt-1">
+
+                Demand by batch
+
+              </div>
+
+
+
+              <p className="mt-1 text-xs leading-5 text-slate-400">
+
+                Active prospects, hot leads and enrollments linked to each upcoming course batch.
+
+              </p>
+
+            </div>
+
+
+
+            <UsersRound
+
+              size={19}
+
+              className="mt-1 shrink-0 text-brand"
+
+            />
+
+          </div>
+
+
+
+          <div className="divide-y divide-slate-100">
+
+            {upcomingBatches.length ? (
+
+              upcomingBatches.map(
+
+                (batch) => (
+
+                  <BatchDemandRow
+
+                    key={batch.id}
+
+                    batch={batch}
+
+                  />
+
+                )
+
+              )
+
+            ) : (
+
+              <div className="px-5 py-10 text-center">
+
+                <CalendarDays
+
+                  size={22}
+
+                  className="mx-auto text-slate-300"
+
+                />
+
+
+
+                <div className="mt-2 text-sm font-bold text-slate-700">
+
+                  No upcoming batches found
+
+                </div>
+
+
+
+                <div className="mt-1 text-xs text-slate-400">
+
+                  Upcoming active course batches will appear here automatically.
+
+                </div>
+
+              </div>
+
+            )}
+
+          </div>
+
+        </section>
+
+      </div>
+
+
+
+      {/* ===================================================
+
           PRIORITY LEADS
 
       =================================================== */}
@@ -2643,6 +3105,980 @@ export default async function DashboardPage() {
 }
 
 
+
+
+
+/* =========================================================
+
+   COMMERCIAL PULSE DATA
+
+========================================================= */
+
+
+
+async function getDashboardCommercialPulse(): Promise<DashboardCommercialPulse> {
+
+  if (
+
+    isMockMode()
+
+  ) {
+
+    return {
+
+      revenueSummary: [],
+
+      upcomingBatches: [],
+
+      unvaluedOpenLeads: 0,
+
+    };
+
+  }
+
+
+
+  const supabase =
+
+    await createClient();
+
+
+
+  const today =
+
+    new Date()
+
+      .toISOString()
+
+      .slice(0, 10);
+
+
+
+  const [
+
+    forecastResult,
+
+    actualRevenueResult,
+
+    outstandingResult,
+
+    batchesResult,
+
+    coursesResult,
+
+    leadBatchResult,
+
+  ] = await Promise.all([
+
+    supabase
+
+      .from('v_revenue_forecast')
+
+      .select(`
+
+        current_stage,
+
+        potential_value,
+
+        currency,
+
+        weighted_value
+
+      `)
+
+      .limit(5000),
+
+
+
+    supabase
+
+      .from('v_actual_revenue_by_currency')
+
+      .select(`
+
+        currency,
+
+        actual_revenue
+
+      `),
+
+
+
+    supabase
+
+      .from('v_outstanding_revenue_by_currency')
+
+      .select(`
+
+        currency,
+
+        outstanding_revenue
+
+      `),
+
+
+
+    supabase
+
+      .from('course_batches')
+
+      .select(`
+
+        id,
+
+        course_id,
+
+        batch_code,
+
+        location,
+
+        mode,
+
+        start_date,
+
+        end_date,
+
+        capacity,
+
+        seats_remaining
+
+      `)
+
+      .eq('active', true)
+
+      .gte('end_date', today)
+
+      .order(
+
+        'start_date',
+
+        {
+
+          ascending: true,
+
+        }
+
+      )
+
+      .limit(50),
+
+
+
+    supabase
+
+      .from('courses')
+
+      .select('id,name')
+
+      .eq('active', true)
+
+      .limit(200),
+
+
+
+    supabase
+
+      .from('leads')
+
+      .select(`
+
+        preferred_batch_id,
+
+        current_stage
+
+      `)
+
+      .neq('status', 'archived')
+
+      .not('preferred_batch_id', 'is', null)
+
+      .limit(5000),
+
+  ]);
+
+
+
+  if (forecastResult.error) {
+
+    console.error(
+
+      'Unable to load dashboard revenue forecast:',
+
+      forecastResult.error
+
+    );
+
+  }
+
+
+
+  if (actualRevenueResult.error) {
+
+    console.error(
+
+      'Unable to load dashboard actual revenue:',
+
+      actualRevenueResult.error
+
+    );
+
+  }
+
+
+
+  if (outstandingResult.error) {
+
+    console.error(
+
+      'Unable to load dashboard outstanding revenue:',
+
+      outstandingResult.error
+
+    );
+
+  }
+
+
+
+  if (batchesResult.error) {
+
+    console.error(
+
+      'Unable to load dashboard course batches:',
+
+      batchesResult.error
+
+    );
+
+  }
+
+
+
+  if (coursesResult.error) {
+
+    console.error(
+
+      'Unable to load dashboard courses:',
+
+      coursesResult.error
+
+    );
+
+  }
+
+
+
+  if (leadBatchResult.error) {
+
+    console.error(
+
+      'Unable to load dashboard batch demand:',
+
+      leadBatchResult.error
+
+    );
+
+  }
+
+
+
+  const forecasts =
+
+    (
+
+      forecastResult.data ??
+
+      []
+
+    ) as DashboardForecastRow[];
+
+
+
+  const actualRevenue =
+
+    (
+
+      actualRevenueResult.data ??
+
+      []
+
+    ) as DashboardActualRevenueRow[];
+
+
+
+  const outstanding =
+
+    (
+
+      outstandingResult.data ??
+
+      []
+
+    ) as DashboardOutstandingRevenueRow[];
+
+
+
+  const closedStages =
+
+    new Set([
+
+      'enrolled',
+
+      'lost',
+
+      'unqualified',
+
+      'duplicate',
+
+    ]);
+
+
+
+  const currencies =
+
+    Array.from(
+
+      new Set([
+
+        'USD',
+
+        'INR',
+
+        ...forecasts
+
+          .map(
+
+            (row) =>
+
+              String(
+
+                row.currency ??
+
+                ''
+
+              ).toUpperCase()
+
+          )
+
+          .filter(Boolean),
+
+        ...actualRevenue
+
+          .map(
+
+            (row) =>
+
+              String(
+
+                row.currency ??
+
+                ''
+
+              ).toUpperCase()
+
+          )
+
+          .filter(Boolean),
+
+      ])
+
+    );
+
+
+
+  const revenueSummary: DashboardRevenueSummary[] =
+
+    currencies.map(
+
+      (currency) => {
+
+        const valuedRows =
+
+          forecasts.filter(
+
+            (row) =>
+
+              String(
+
+                row.currency ??
+
+                ''
+
+              ).toUpperCase() ===
+
+                currency &&
+
+              toDashboardNumber(
+
+                row.potential_value
+
+              ) > 0
+
+          );
+
+
+
+        const openRows =
+
+          valuedRows.filter(
+
+            (row) =>
+
+              !closedStages.has(
+
+                String(
+
+                  row.current_stage ??
+
+                  ''
+
+                )
+
+              )
+
+          );
+
+
+
+        const actualRow =
+
+          actualRevenue.find(
+
+            (row) =>
+
+              String(
+
+                row.currency ??
+
+                ''
+
+              ).toUpperCase() ===
+
+              currency
+
+          );
+
+
+
+        const outstandingRow =
+
+          outstanding.find(
+
+            (row) =>
+
+              String(
+
+                row.currency ??
+
+                ''
+
+              ).toUpperCase() ===
+
+              currency
+
+          );
+
+
+
+        return {
+
+          currency,
+
+          pipeline:
+
+            dashboardSum(
+
+              openRows.map(
+
+                (row) =>
+
+                  row.potential_value
+
+              )
+
+            ),
+
+          weighted:
+
+            dashboardSum(
+
+              openRows.map(
+
+                (row) =>
+
+                  row.weighted_value
+
+              )
+
+            ),
+
+          collected:
+
+            toDashboardNumber(
+
+              actualRow
+
+                ?.actual_revenue
+
+            ),
+
+          outstanding:
+
+            toDashboardNumber(
+
+              outstandingRow
+
+                ?.outstanding_revenue
+
+            ),
+
+          opportunities:
+
+            openRows.length,
+
+        };
+
+      }
+
+    );
+
+
+
+  const unvaluedOpenLeads =
+
+    forecasts.filter(
+
+      (row) =>
+
+        !closedStages.has(
+
+          String(
+
+            row.current_stage ??
+
+            ''
+
+          )
+
+        ) &&
+
+        toDashboardNumber(
+
+          row.potential_value
+
+        ) <= 0
+
+    ).length;
+
+
+
+  const batches =
+
+    (
+
+      batchesResult.data ??
+
+      []
+
+    ) as DashboardBatchRow[];
+
+
+
+  const courses =
+
+    (
+
+      coursesResult.data ??
+
+      []
+
+    ) as DashboardCourseRow[];
+
+
+
+  const leadBatchRows =
+
+    (
+
+      leadBatchResult.data ??
+
+      []
+
+    ) as DashboardLeadBatchRow[];
+
+
+
+  const courseNames =
+
+    new Map(
+
+      courses.map(
+
+        (course) => [
+
+          course.id,
+
+          course.name ??
+
+            'Course',
+
+        ]
+
+      )
+
+    );
+
+
+
+  const leadsByBatch =
+
+    new Map<
+
+      string,
+
+      DashboardLeadBatchRow[]
+
+    >();
+
+
+
+  for (
+
+    const lead of leadBatchRows
+
+  ) {
+
+    if (
+
+      !lead.preferred_batch_id
+
+    ) {
+
+      continue;
+
+    }
+
+
+
+    const existing =
+
+      leadsByBatch.get(
+
+        lead.preferred_batch_id
+
+      ) ??
+
+      [];
+
+
+
+    existing.push(lead);
+
+
+
+    leadsByBatch.set(
+
+      lead.preferred_batch_id,
+
+      existing
+
+    );
+
+  }
+
+
+
+  const activeDemandStages =
+
+    new Set([
+
+      'new',
+
+      'contacted',
+
+      'engaged',
+
+      'qualified',
+
+      'high_intent',
+
+      'payment_pending',
+
+    ]);
+
+
+
+  const hotDemandStages =
+
+    new Set([
+
+      'qualified',
+
+      'high_intent',
+
+      'payment_pending',
+
+    ]);
+
+
+
+  const upcomingBatches =
+
+    batches.map(
+
+      (batch) => {
+
+        const assignedLeads =
+
+          leadsByBatch.get(
+
+            batch.id
+
+          ) ??
+
+          [];
+
+
+
+        const activeDemand =
+
+          assignedLeads.filter(
+
+            (lead) =>
+
+              activeDemandStages.has(
+
+                String(
+
+                  lead.current_stage ??
+
+                  ''
+
+                )
+
+              )
+
+          ).length;
+
+
+
+        const hotDemand =
+
+          assignedLeads.filter(
+
+            (lead) =>
+
+              hotDemandStages.has(
+
+                String(
+
+                  lead.current_stage ??
+
+                  ''
+
+                )
+
+              )
+
+          ).length;
+
+
+
+        const paymentPending =
+
+          assignedLeads.filter(
+
+            (lead) =>
+
+              lead.current_stage ===
+
+              'payment_pending'
+
+          ).length;
+
+
+
+        const enrolled =
+
+          assignedLeads.filter(
+
+            (lead) =>
+
+              lead.current_stage ===
+
+              'enrolled'
+
+          ).length;
+
+
+
+        return {
+
+          id:
+
+            batch.id,
+
+          batchCode:
+
+            batch.batch_code ??
+
+            'Batch',
+
+          courseName:
+
+            batch.course_id
+
+              ? courseNames.get(
+
+                  batch.course_id
+
+                ) ??
+
+                'Course'
+
+              : 'Course',
+
+          location:
+
+            batch.location ??
+
+            '—',
+
+          mode:
+
+            batch.mode ??
+
+            '—',
+
+          startDate:
+
+            batch.start_date ??
+
+            null,
+
+          endDate:
+
+            batch.end_date ??
+
+            null,
+
+          activeDemand,
+
+          hotDemand,
+
+          paymentPending,
+
+          enrolled,
+
+          capacity:
+
+            batch.capacity == null
+
+              ? null
+
+              : toDashboardNumber(
+
+                  batch.capacity
+
+                ),
+
+          seatsRemaining:
+
+            batch.seats_remaining == null
+
+              ? null
+
+              : toDashboardNumber(
+
+                  batch.seats_remaining
+
+                ),
+
+        } satisfies DashboardBatchDemand;
+
+      }
+
+    )
+
+    .sort(
+
+      (
+
+        a,
+
+        b
+
+      ) => {
+
+        const aDate =
+
+          a.startDate
+
+            ? new Date(
+
+                `${a.startDate}T00:00:00Z`
+
+              ).getTime()
+
+            : Number.MAX_SAFE_INTEGER;
+
+
+
+        const bDate =
+
+          b.startDate
+
+            ? new Date(
+
+                `${b.startDate}T00:00:00Z`
+
+              ).getTime()
+
+            : Number.MAX_SAFE_INTEGER;
+
+
+
+        if (
+
+          aDate !==
+
+          bDate
+
+        ) {
+
+          return aDate - bDate;
+
+        }
+
+
+
+        return (
+
+          b.activeDemand -
+
+          a.activeDemand
+
+        );
+
+      }
+
+    )
+
+    .slice(0, 6);
+
+
+
+  return {
+
+    revenueSummary,
+
+    upcomingBatches,
+
+    unvaluedOpenLeads,
+
+  };
+
+}
 
 
 
@@ -3201,6 +4637,772 @@ function getLeadAttention(
 }
 
 
+
+
+
+/* =========================================================
+
+   REVENUE PULSE ROW
+
+========================================================= */
+
+
+
+function RevenuePulseRow({
+
+  group,
+
+}: {
+
+  group: DashboardRevenueSummary;
+
+}) {
+
+  return (
+
+    <div className="rounded-2xl border border-slate-100 bg-slate-50/70 p-4">
+
+      <div className="flex items-center justify-between gap-4">
+
+        <div className="flex items-center gap-2">
+
+          <div className="grid h-9 w-9 place-items-center rounded-xl bg-white text-brand shadow-sm">
+
+            <CircleDollarSign size={17} />
+
+          </div>
+
+
+
+          <div>
+
+            <div className="text-sm font-black text-slate-900">
+
+              {group.currency}
+
+            </div>
+
+
+
+            <div className="text-[10px] font-semibold text-slate-400">
+
+              {group.opportunities.toLocaleString()} valued open opportunit{group.opportunities === 1 ? 'y' : 'ies'}
+
+            </div>
+
+          </div>
+
+        </div>
+
+
+
+        <div className="text-right">
+
+          <div className="text-[10px] font-black uppercase tracking-[.12em] text-slate-400">
+
+            Collected
+
+          </div>
+
+
+
+          <div className="mt-0.5 text-lg font-black tracking-tight text-emerald-700">
+
+            {formatDashboardMoney(
+
+              group.collected,
+
+              group.currency
+
+            )}
+
+          </div>
+
+        </div>
+
+      </div>
+
+
+
+      <div className="mt-4 grid grid-cols-3 gap-2">
+
+        <RevenueMiniMetric
+
+          label="Pipeline"
+
+          value={formatDashboardMoney(
+
+            group.pipeline,
+
+            group.currency
+
+          )}
+
+        />
+
+
+
+        <RevenueMiniMetric
+
+          label="Weighted"
+
+          value={formatDashboardMoney(
+
+            group.weighted,
+
+            group.currency
+
+          )}
+
+        />
+
+
+
+        <RevenueMiniMetric
+
+          label="Outstanding"
+
+          value={formatDashboardMoney(
+
+            group.outstanding,
+
+            group.currency
+
+          )}
+
+        />
+
+      </div>
+
+    </div>
+
+  );
+
+}
+
+
+
+function RevenueMiniMetric({
+
+  label,
+
+  value,
+
+}: {
+
+  label: string;
+
+  value: string;
+
+}) {
+
+  return (
+
+    <div className="rounded-xl border border-slate-100 bg-white px-3 py-2.5">
+
+      <div className="text-[9px] font-black uppercase tracking-[.1em] text-slate-400">
+
+        {label}
+
+      </div>
+
+
+
+      <div className="mt-1 truncate text-sm font-black tracking-tight text-slate-800">
+
+        {value}
+
+      </div>
+
+    </div>
+
+  );
+
+}
+
+
+
+/* =========================================================
+
+   BATCH DEMAND ROW
+
+========================================================= */
+
+
+
+function BatchDemandRow({
+
+  batch,
+
+}: {
+
+  batch: DashboardBatchDemand;
+
+}) {
+
+  const hasCapacity =
+
+    batch.capacity != null &&
+
+    batch.capacity > 0 &&
+
+    batch.seatsRemaining != null;
+
+
+
+  const filledSeats =
+
+    hasCapacity
+
+      ? Math.max(
+
+          0,
+
+          batch.capacity! -
+
+          batch.seatsRemaining!
+
+        )
+
+      : 0;
+
+
+
+  const filledPercent =
+
+    hasCapacity
+
+      ? Math.min(
+
+          100,
+
+          Math.round(
+
+            (
+
+              filledSeats /
+
+              batch.capacity!
+
+            ) *
+
+              100
+
+          )
+
+        )
+
+      : 0;
+
+
+
+  return (
+
+    <div className="px-5 py-4 transition hover:bg-slate-50/70">
+
+      <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+
+        <div className="min-w-0 flex-1">
+
+          <div className="flex min-w-0 items-start gap-3">
+
+            <div className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-brand/10 text-brand">
+
+              <CalendarDays size={17} />
+
+            </div>
+
+
+
+            <div className="min-w-0">
+
+              <div className="truncate text-sm font-black text-slate-900">
+
+                {batch.courseName}
+
+              </div>
+
+
+
+              <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-[10px] font-semibold text-slate-400">
+
+                <span>
+
+                  {formatBatchDateRange(
+
+                    batch.startDate,
+
+                    batch.endDate
+
+                  )}
+
+                </span>
+
+
+
+                <span className="inline-flex items-center gap-1">
+
+                  <MapPin size={11} />
+
+                  {batch.location}
+
+                </span>
+
+
+
+                <span className="uppercase tracking-[.08em]">
+
+                  {formatModeLabel(
+
+                    batch.mode
+
+                  )}
+
+                </span>
+
+              </div>
+
+            </div>
+
+          </div>
+
+        </div>
+
+
+
+        <div className="grid grid-cols-4 gap-2 lg:w-[390px]">
+
+          <DemandMetric
+
+            label="Active"
+
+            value={batch.activeDemand}
+
+          />
+
+
+
+          <DemandMetric
+
+            label="Hot"
+
+            value={batch.hotDemand}
+
+            emphasis={batch.hotDemand > 0}
+
+          />
+
+
+
+          <DemandMetric
+
+            label="Payment"
+
+            value={batch.paymentPending}
+
+            emphasis={batch.paymentPending > 0}
+
+          />
+
+
+
+          <DemandMetric
+
+            label="Enrolled"
+
+            value={batch.enrolled}
+
+          />
+
+        </div>
+
+      </div>
+
+
+
+      {hasCapacity && (
+
+        <div className="mt-3 flex items-center gap-3 pl-[52px]">
+
+          <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-slate-100">
+
+            <div
+
+              className="h-full rounded-full bg-brand transition-all duration-700"
+
+              style={{
+
+                width: `${filledPercent}%`,
+
+              }}
+
+            />
+
+          </div>
+
+
+
+          <div className="shrink-0 text-[10px] font-bold text-slate-400">
+
+            {batch.seatsRemaining} seats remaining
+
+          </div>
+
+        </div>
+
+      )}
+
+    </div>
+
+  );
+
+}
+
+
+
+function DemandMetric({
+
+  label,
+
+  value,
+
+  emphasis = false,
+
+}: {
+
+  label: string;
+
+  value: number;
+
+  emphasis?: boolean;
+
+}) {
+
+  return (
+
+    <div
+
+      className={`rounded-xl border px-2.5 py-2 text-center ${
+
+        emphasis
+
+          ? 'border-orange-100 bg-orange-50'
+
+          : 'border-slate-100 bg-slate-50'
+
+      }`}
+
+    >
+
+      <div
+
+        className={`text-base font-black ${
+
+          emphasis
+
+            ? 'text-orange-700'
+
+            : 'text-slate-800'
+
+        }`}
+
+      >
+
+        {value.toLocaleString()}
+
+      </div>
+
+
+
+      <div className="mt-0.5 text-[9px] font-black uppercase tracking-[.08em] text-slate-400">
+
+        {label}
+
+      </div>
+
+    </div>
+
+  );
+
+}
+
+
+
+/* =========================================================
+
+   COMMERCIAL HELPERS
+
+========================================================= */
+
+
+
+function toDashboardNumber(
+
+  value:
+
+    | number
+
+    | string
+
+    | null
+
+    | undefined
+
+) {
+
+  const parsed =
+
+    Number(
+
+      value ??
+
+      0
+
+    );
+
+
+
+  return Number.isFinite(
+
+    parsed
+
+  )
+
+    ? parsed
+
+    : 0;
+
+}
+
+
+
+function dashboardSum(
+
+  values: Array<
+
+    number |
+
+    string |
+
+    null |
+
+    undefined
+
+  >
+
+): number {
+
+  return values.reduce<number>(
+
+    (
+
+      total,
+
+      value
+
+    ) =>
+
+      total +
+
+      toDashboardNumber(
+
+        value
+
+      ),
+
+    0
+
+  );
+
+}
+
+
+
+function formatDashboardMoney(
+
+  value: number,
+
+  currency: string
+
+) {
+
+  try {
+
+    return new Intl.NumberFormat(
+
+      currency === 'INR'
+
+        ? 'en-IN'
+
+        : 'en-US',
+
+      {
+
+        style: 'currency',
+
+        currency,
+
+        maximumFractionDigits: 0,
+
+      }
+
+    ).format(value);
+
+  } catch {
+
+    return `${currency} ${Math.round(
+
+      value
+
+    ).toLocaleString()}`;
+
+  }
+
+}
+
+
+
+function formatBatchDateRange(
+
+  startDate: string | null,
+
+  endDate: string | null
+
+) {
+
+  if (!startDate) {
+
+    return 'Date to be confirmed';
+
+  }
+
+
+
+  const start =
+
+    new Date(
+
+      `${startDate}T00:00:00Z`
+
+    );
+
+
+
+  const end =
+
+    endDate
+
+      ? new Date(
+
+          `${endDate}T00:00:00Z`
+
+        )
+
+      : null;
+
+
+
+  if (
+
+    Number.isNaN(
+
+      start.getTime()
+
+    )
+
+  ) {
+
+    return startDate;
+
+  }
+
+
+
+  const startLabel =
+
+    new Intl.DateTimeFormat(
+
+      'en',
+
+      {
+
+        day: 'numeric',
+
+        month: 'short',
+
+        year: 'numeric',
+
+        timeZone: 'UTC',
+
+      }
+
+    ).format(start);
+
+
+
+  if (
+
+    !end ||
+
+    Number.isNaN(
+
+      end.getTime()
+
+    )
+
+  ) {
+
+    return startLabel;
+
+  }
+
+
+
+  const endLabel =
+
+    new Intl.DateTimeFormat(
+
+      'en',
+
+      {
+
+        day: 'numeric',
+
+        month: 'short',
+
+        year: 'numeric',
+
+        timeZone: 'UTC',
+
+      }
+
+    ).format(end);
+
+
+
+  return `${startLabel} – ${endLabel}`;
+
+}
+
+
+
+function formatModeLabel(
+
+  mode: string
+
+) {
+
+  return mode
+
+    .replaceAll('_', ' ')
+
+    .replace(/\b\w/g, (character) =>
+
+      character.toUpperCase()
+
+    );
+
+}
 
 
 
