@@ -30,6 +30,11 @@ import { PageHeader, StatCard } from "@/components/ui";
 import { isMockMode } from "@/lib/data";
 import { createClient } from "@/lib/supabase/server";
 
+import {
+  completeDashboardFollowUpAction,
+  snoozeDashboardFollowUpAction,
+} from "@/app/dashboard/actions";
+
 import { getDashboardSnapshot } from "@/lib/dashboard-data";
 
 import type {
@@ -106,16 +111,25 @@ type EmployeeTodayItem = {
   action: string;
   reason: string;
   tone: "rose" | "amber" | "violet" | "orange" | "sky" | "slate";
+  taskId: string | null;
   dueAt: string | null;
   needsReply: boolean;
   unread: boolean;
 };
 
-export default async function DashboardPage() {
+export default async function DashboardPage({
+  searchParams,
+}: {
+  searchParams: Promise<{
+    notice?: string;
+    error?: string;
+  }>;
+}) {
   if (isMockMode()) {
     return <AdminDashboardPage />;
   }
 
+  const query = await searchParams;
   const supabase = await createClient();
   const {
     data: { user },
@@ -141,6 +155,8 @@ export default async function DashboardPage() {
       <EmployeeDashboard
         userId={user.id}
         fullName={profile.full_name?.trim() || "Employee"}
+        notice={query.notice ?? null}
+        error={query.error ?? null}
       />
     );
   }
@@ -151,9 +167,13 @@ export default async function DashboardPage() {
 async function EmployeeDashboard({
   userId,
   fullName,
+  notice,
+  error,
 }: {
   userId: string;
   fullName: string;
+  notice: string | null;
+  error: string | null;
 }) {
   const supabase = await createClient();
 
@@ -397,6 +417,18 @@ async function EmployeeDashboard({
         }
       />
 
+      {notice ? (
+        <div className="mb-4 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-xs font-semibold text-emerald-800">
+          {dashboardNoticeLabel(notice)}
+        </div>
+      ) : null}
+
+      {error ? (
+        <div className="mb-4 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-xs font-semibold text-rose-800">
+          {error}
+        </div>
+      ) : null}
+
       {(attentionResult.error || readResult.error) && (
         <div className="mb-4 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs font-semibold text-amber-800">
           Conversation attention is temporarily unavailable. Lead and follow-up
@@ -631,42 +663,91 @@ async function EmployeeDashboard({
               const isOverdue = employeeTimestamp(task.due_at) < now;
 
               return (
-                <Link
+                <div
                   key={task.id}
-                  href={`/leads/${task.lead_id}`}
-                  className="flex items-center gap-4 px-5 py-4 transition hover:bg-slate-50/70"
+                  className="flex flex-col gap-3 px-5 py-4 transition hover:bg-slate-50/70 lg:flex-row lg:items-center"
                 >
-                  <div
-                    className={`grid h-10 w-10 shrink-0 place-items-center rounded-xl ${
-                      isOverdue
-                        ? "bg-rose-50 text-rose-700"
-                        : "bg-amber-50 text-amber-700"
-                    }`}
+                  <Link
+                    href={`/leads/${task.lead_id}`}
+                    className="flex min-w-0 flex-1 items-center gap-4"
                   >
-                    <ListTodo size={17} />
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <div className="truncate text-sm font-bold text-slate-800">
-                      {lead?.display_name || lead?.lead_code || "Assigned lead"}
-                    </div>
-                    <div className="mt-0.5 truncate text-xs text-slate-500">
-                      {task.title}
-                    </div>
-                  </div>
-                  <div className="shrink-0 text-right">
                     <div
-                      className={`text-xs font-bold ${
-                        isOverdue ? "text-rose-600" : "text-amber-700"
+                      className={`grid h-10 w-10 shrink-0 place-items-center rounded-xl ${
+                        isOverdue
+                          ? "bg-rose-50 text-rose-700"
+                          : "bg-amber-50 text-amber-700"
                       }`}
                     >
-                      {isOverdue ? "Overdue · " : "Due · "}
-                      {formatEmployeeDateTime(task.due_at)}
+                      <ListTodo size={17} />
                     </div>
-                    <div className="mt-0.5 text-[10px] font-semibold uppercase tracking-[.08em] text-slate-400">
-                      {employeeStageLabel(lead?.current_stage || "new")}
+
+                    <div className="min-w-0 flex-1">
+                      <div className="truncate text-sm font-bold text-slate-800">
+                        {lead?.display_name ||
+                          lead?.lead_code ||
+                          "Assigned lead"}
+                      </div>
+
+                      <div className="mt-0.5 truncate text-xs text-slate-500">
+                        {task.title}
+                      </div>
                     </div>
+
+                    <div className="shrink-0 text-right">
+                      <div
+                        className={`text-xs font-bold ${
+                          isOverdue ? "text-rose-600" : "text-amber-700"
+                        }`}
+                      >
+                        {isOverdue ? "Overdue · " : "Due · "}
+                        {formatEmployeeDateTime(task.due_at)}
+                      </div>
+
+                      <div className="mt-0.5 text-[10px] font-semibold uppercase tracking-[.08em] text-slate-400">
+                        {employeeStageLabel(lead?.current_stage || "new")}
+                      </div>
+                    </div>
+                  </Link>
+
+                  <div className="flex shrink-0 flex-wrap items-center gap-2 lg:justify-end">
+                    <form action={completeDashboardFollowUpAction}>
+                      <input type="hidden" name="task_id" value={task.id} />
+                      <input
+                        type="hidden"
+                        name="lead_id"
+                        value={task.lead_id}
+                      />
+                      <button
+                        type="submit"
+                        className="inline-flex rounded-lg bg-slate-900 px-3 py-2 text-[11px] font-bold text-white transition hover:bg-slate-700"
+                      >
+                        Complete
+                      </button>
+                    </form>
+
+                    <form action={snoozeDashboardFollowUpAction}>
+                      <input type="hidden" name="task_id" value={task.id} />
+                      <input
+                        type="hidden"
+                        name="lead_id"
+                        value={task.lead_id}
+                      />
+                      <button
+                        type="submit"
+                        className="inline-flex rounded-lg border border-slate-200 bg-white px-3 py-2 text-[11px] font-bold text-slate-600 transition hover:bg-slate-50"
+                      >
+                        Snooze
+                      </button>
+                    </form>
+
+                    <Link
+                      href={`/conversations?lead=${task.lead_id}`}
+                      className="inline-flex rounded-lg border border-slate-200 bg-white px-3 py-2 text-[11px] font-bold text-brand transition hover:bg-slate-50"
+                    >
+                      Conversation
+                    </Link>
                   </div>
-                </Link>
+                </div>
               );
             })
           ) : (
@@ -756,7 +837,33 @@ function EmployeeTodayLead({
           </div>
         </div>
 
-        <div className="flex shrink-0 items-center gap-2">
+        <div className="flex shrink-0 flex-wrap items-center gap-2">
+          {item.taskId ? (
+            <>
+              <form action={completeDashboardFollowUpAction}>
+                <input type="hidden" name="task_id" value={item.taskId} />
+                <input type="hidden" name="lead_id" value={lead.id} />
+                <button
+                  type="submit"
+                  className="inline-flex items-center rounded-xl bg-slate-900 px-3 py-2 text-xs font-bold text-white transition hover:bg-slate-700"
+                >
+                  Complete
+                </button>
+              </form>
+
+              <form action={snoozeDashboardFollowUpAction}>
+                <input type="hidden" name="task_id" value={item.taskId} />
+                <input type="hidden" name="lead_id" value={lead.id} />
+                <button
+                  type="submit"
+                  className="inline-flex items-center rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-600 transition hover:bg-slate-50"
+                >
+                  Snooze
+                </button>
+              </form>
+            </>
+          ) : null}
+
           <Link
             href={`/conversations?lead=${lead.id}`}
             className="btn-secondary"
@@ -764,6 +871,7 @@ function EmployeeTodayLead({
             <MessagesSquare size={15} />
             Conversation
           </Link>
+
           <Link href={`/leads/${lead.id}`} className="btn-primary">
             Open lead
             <ArrowRight size={14} />
@@ -896,6 +1004,7 @@ function buildEmployeeTodayItem(
           ? `Customer has been waiting ${employeeWaitLabel(waitMinutes)} for a response.`
           : "Latest customer message needs a response.",
       tone: "rose",
+      taskId: task?.id ?? null,
       dueAt: task?.due_at ?? null,
       needsReply,
       unread,
@@ -911,6 +1020,7 @@ function buildEmployeeTodayItem(
         ? `Follow-up was due ${formatEmployeeDateTime(task.due_at)}.`
         : "Assigned follow-up is overdue.",
       tone: "amber",
+      taskId: task?.id ?? null,
       dueAt: task?.due_at ?? null,
       needsReply,
       unread,
@@ -924,6 +1034,7 @@ function buildEmployeeTodayItem(
       action: "First contact",
       reason: "New assigned enquiry has not been contacted yet.",
       tone: "sky",
+      taskId: task?.id ?? null,
       dueAt: task?.due_at ?? null,
       needsReply,
       unread,
@@ -937,6 +1048,7 @@ function buildEmployeeTodayItem(
       action: "Payment follow-up",
       reason: "Payment is pending; this lead is closest to enrollment.",
       tone: "violet",
+      taskId: task?.id ?? null,
       dueAt: task?.due_at ?? null,
       needsReply,
       unread,
@@ -952,6 +1064,7 @@ function buildEmployeeTodayItem(
         ? `Scheduled for ${formatEmployeeDateTime(task.due_at)}.`
         : "Assigned follow-up is due today.",
       tone: "amber",
+      taskId: task?.id ?? null,
       dueAt: task?.due_at ?? null,
       needsReply,
       unread,
@@ -966,6 +1079,7 @@ function buildEmployeeTodayItem(
       reason:
         "Strong enrollment intent; continue the conversation toward a decision.",
       tone: "orange",
+      taskId: task?.id ?? null,
       dueAt: task?.due_at ?? null,
       needsReply,
       unread,
@@ -979,6 +1093,7 @@ function buildEmployeeTodayItem(
       action: "Qualified",
       reason: "Qualified opportunity ready for focused follow-up.",
       tone: "slate",
+      taskId: task?.id ?? null,
       dueAt: task?.due_at ?? null,
       needsReply,
       unread,
@@ -991,10 +1106,23 @@ function buildEmployeeTodayItem(
     action: "Continue",
     reason: "Active assigned opportunity.",
     tone: "slate",
+    taskId: task?.id ?? null,
     dueAt: task?.due_at ?? null,
     needsReply,
     unread,
   };
+}
+
+function dashboardNoticeLabel(notice: string) {
+  if (notice === "followup-completed") {
+    return "Follow-up completed.";
+  }
+
+  if (notice === "followup-snoozed") {
+    return "Follow-up snoozed to tomorrow at 10:00 AM IST.";
+  }
+
+  return notice;
 }
 
 function employeeStageLabel(stage: string) {
