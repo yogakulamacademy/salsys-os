@@ -26,13 +26,16 @@ const PUBLIC_EXACT_PATHS = new Set([
 
 /*
 |--------------------------------------------------------------------------
-| Employee routes
+| Admissions employee routes
 |--------------------------------------------------------------------------
 |
 | Admissions employees should only have access to conversion-focused pages.
 |
-| Admin / Manager:
+| Admin:
 |   Full CRM
+|
+| Manager:
+|   Full operational CRM, except Admin-only team intelligence pages
 |
 | Admissions Employee:
 |   Dashboard
@@ -51,6 +54,21 @@ const EMPLOYEE_EXACT_PATHS = new Set([
   "/pipeline",
   "/conversations",
   "/follow-ups",
+]);
+
+/*
+|--------------------------------------------------------------------------
+| Admin-only pages
+|--------------------------------------------------------------------------
+|
+| These pages remain Admin-only even though the legacy Manager role keeps
+| broad operational CRM access elsewhere.
+|
+*/
+
+const ADMIN_ONLY_EXACT_PATHS = new Set([
+  "/team-performance",
+  "/contact-intelligence",
 ]);
 
 /*
@@ -76,6 +94,25 @@ function isPublicPath(pathname: string) {
 
   if (normalizedPath.startsWith("/api/tracking/")) {
     return true;
+  }
+
+  return false;
+}
+
+function isAdminOnlyPage(pathname: string) {
+  const normalizedPath = normalizePathname(pathname);
+
+  if (ADMIN_ONLY_EXACT_PATHS.has(normalizedPath)) {
+    return true;
+  }
+
+  /*
+   * Future nested routes under these sections stay Admin-only automatically.
+   */
+  for (const adminPath of ADMIN_ONLY_EXACT_PATHS) {
+    if (normalizedPath.startsWith(`${adminPath}/`)) {
+      return true;
+    }
   }
 
   return false;
@@ -144,7 +181,6 @@ function redirectWithAuthCookies(
   const redirectUrl = request.nextUrl.clone();
 
   redirectUrl.pathname = pathname;
-
   redirectUrl.search = "";
 
   if (searchParams) {
@@ -167,15 +203,53 @@ function redirectWithAuthCookies(
 
 /*
 |--------------------------------------------------------------------------
+| Configuration failure helper
+|--------------------------------------------------------------------------
+|
+| Protected CRM routes must fail closed if Supabase auth configuration is
+| missing. Public integration routes were already handled before this point.
+|
+*/
+
+function authConfigurationError(pathname: string) {
+  if (pathname.startsWith("/api/")) {
+    return NextResponse.json(
+      {
+        ok: false,
+        error: "CRM authentication is not configured.",
+      },
+      {
+        status: 503,
+      },
+    );
+  }
+
+  return new NextResponse("CRM authentication is not configured.", {
+    status: 503,
+    headers: {
+      "Content-Type": "text/plain; charset=utf-8",
+    },
+  });
+}
+
+/*
+|--------------------------------------------------------------------------
 | Middleware
 |--------------------------------------------------------------------------
 */
 
 export async function middleware(request: NextRequest) {
   /*
-   * Mock mode keeps the existing development behaviour.
+   * Mock-mode auth bypass is allowed only during local development.
+   *
+   * Production must never become public merely because
+   * NEXT_PUBLIC_USE_MOCK_DATA is missing or misconfigured.
    */
-  if (process.env.NEXT_PUBLIC_USE_MOCK_DATA !== "false") {
+  const localMockMode =
+    process.env.NODE_ENV !== "production" &&
+    process.env.NEXT_PUBLIC_USE_MOCK_DATA !== "false";
+
+  if (localMockMode) {
     return NextResponse.next();
   }
 
@@ -198,11 +272,10 @@ export async function middleware(request: NextRequest) {
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
   /*
-   * Preserve the existing behaviour if environment configuration
-   * is unavailable.
+   * Fail closed for protected CRM routes if auth configuration is missing.
    */
   if (!url || !key) {
-    return NextResponse.next();
+    return authConfigurationError(pathname);
   }
 
   let response = NextResponse.next({
@@ -232,35 +305,30 @@ export async function middleware(request: NextRequest) {
   });
 
   /*
-   |--------------------------------------------------------------------------
-   | Authentication
-   |--------------------------------------------------------------------------
-   */
+  |--------------------------------------------------------------------------
+  | Authentication
+  |--------------------------------------------------------------------------
+  */
 
   const { data: claimsResult } = await supabase.auth.getClaims();
 
   const userId = claimsResult?.claims?.sub ?? null;
 
   /*
-   |--------------------------------------------------------------------------
-   | Login page
-   |--------------------------------------------------------------------------
-   |
-   | Unlike the previous middleware, /login is intentionally handled here
-   | rather than bypassed before authentication.
-   |
-   | This means:
-   |
-   | Not logged in
-   |   -> login page
-   |
-   | Active CRM user
-   |   -> dashboard
-   |
-   | Disabled user
-   |   -> login page remains available
-   |
-   */
+  |--------------------------------------------------------------------------
+  | Login page
+  |--------------------------------------------------------------------------
+  |
+  | Not logged in
+  |   -> login page
+  |
+  | Active CRM user
+  |   -> dashboard
+  |
+  | Disabled user
+  |   -> login page remains available
+  |
+  */
 
   if (pathname === "/login") {
     if (!userId) {
@@ -285,10 +353,10 @@ export async function middleware(request: NextRequest) {
   }
 
   /*
-   |--------------------------------------------------------------------------
-   | Require authentication
-   |--------------------------------------------------------------------------
-   */
+  |--------------------------------------------------------------------------
+  | Require authentication
+  |--------------------------------------------------------------------------
+  */
 
   if (!userId) {
     return redirectWithAuthCookies(request, response, "/login", {
@@ -297,10 +365,10 @@ export async function middleware(request: NextRequest) {
   }
 
   /*
-   |--------------------------------------------------------------------------
-   | Load CRM profile
-   |--------------------------------------------------------------------------
-   */
+  |--------------------------------------------------------------------------
+  | Load CRM profile
+  |--------------------------------------------------------------------------
+  */
 
   const { data: profile, error: profileError } = await supabase
     .from("profiles")
@@ -339,37 +407,63 @@ export async function middleware(request: NextRequest) {
   const role = String(profile.role ?? "");
 
   /*
-   |--------------------------------------------------------------------------
-   | Admin / legacy Manager
-   |--------------------------------------------------------------------------
-   |
-   | Preserve existing Manager behaviour until we intentionally redesign
-   | that role.
-   */
+  |--------------------------------------------------------------------------
+  | Admin
+  |--------------------------------------------------------------------------
+  */
 
-  const hasFullAccess = role === "admin" || role === "manager";
-
-  if (hasFullAccess) {
+  if (role === "admin") {
     return response;
   }
 
   /*
-   |--------------------------------------------------------------------------
-   | Admissions Employee
-   |--------------------------------------------------------------------------
-   */
+  |--------------------------------------------------------------------------
+  | Legacy Manager
+  |--------------------------------------------------------------------------
+  |
+  | Keep broad operational access for the legacy Manager role, while enforcing
+  | the two Admin-only team intelligence sections at middleware level too.
+  |
+  */
+
+  if (role === "manager") {
+    if (isAdminOnlyPage(pathname)) {
+      return redirectWithAuthCookies(request, response, "/dashboard", {
+        restricted: "1",
+      });
+    }
+
+    return response;
+  }
+
+  /*
+  |--------------------------------------------------------------------------
+  | Admissions Employee
+  |--------------------------------------------------------------------------
+  */
 
   if (role === "admissions") {
     /*
-     * Authenticated API routes are not silently redirected.
+     * All public integration endpoints were already handled above.
      *
-     * Their database access is already governed by the employee RLS/RPC
-     * security we implemented.
+     * The current API audit found no private API route required by the
+     * Admissions employee workspace. Therefore every remaining /api/*
+     * endpoint is denied for Admissions users at middleware level.
      *
-     * Known public integration APIs were already handled above.
+     * This prevents direct access to analytics health/debug endpoints while
+     * leaving server actions, Supabase RLS/RPC access and public integrations
+     * unchanged.
      */
     if (pathname.startsWith("/api/")) {
-      return response;
+      return NextResponse.json(
+        {
+          ok: false,
+          error: "This API route is not available to Admissions users.",
+        },
+        {
+          status: 403,
+        },
+      );
     }
 
     if (isEmployeeAllowedPage(pathname)) {
@@ -377,7 +471,7 @@ export async function middleware(request: NextRequest) {
     }
 
     /*
-     * Employee manually enters:
+     * Employee manually enters an Admin/Manager URL:
      *
      * /settings
      * /revenue
@@ -391,6 +485,8 @@ export async function middleware(request: NextRequest) {
      * /seo
      * /course-management
      * /admissions
+     * /team-performance
+     * /contact-intelligence
      * /leads/new
      * etc.
      *
@@ -402,15 +498,16 @@ export async function middleware(request: NextRequest) {
   }
 
   /*
-   |--------------------------------------------------------------------------
-   | Undefined legacy roles
-   |--------------------------------------------------------------------------
-   |
-   | analyst / viewer / unknown roles do NOT automatically inherit
-   | Admin permissions.
-   |
-   | We can create intentional access rules for them later if needed.
-   */
+  |--------------------------------------------------------------------------
+  | Undefined legacy roles
+  |--------------------------------------------------------------------------
+  |
+  | analyst / viewer / unknown roles do NOT automatically inherit
+  | Admin permissions.
+  |
+  | We can create intentional access rules for them later if needed.
+  |
+  */
 
   if (pathname.startsWith("/api/")) {
     return NextResponse.json(
