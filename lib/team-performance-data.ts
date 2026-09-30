@@ -97,6 +97,76 @@ export type TeamAssignmentQueue = {
   leads: TeamUnassignedLead[];
 };
 
+
+export type TeamAssignmentFairnessSummary = {
+  comparisonEmployeeCount: number;
+  activeEmployeeCount: number;
+  recordedAssignmentEvents: number;
+  uniqueLeadsAssigned: number;
+  transferEvents: number;
+  unassignmentEvents: number;
+  currentUnassignedOpen: number;
+};
+
+export type TeamAssignmentFairnessEmployee = {
+  userId: string;
+  employeeName: string;
+  active: boolean;
+  currentOwnedTotal: number;
+  currentActiveOwned: number;
+  assignmentsReceived: number;
+  uniqueLeadsReceived: number;
+  initialAssignmentsReceived: number;
+  transfersIn: number;
+  transfersOut: number;
+  unassignmentsFrom: number;
+  sameOwnerEvents: number;
+  assignmentSharePct: number;
+  equalShareBaselinePct: number;
+  differenceFromEqualSharePctPoints: number;
+};
+
+export type TeamAssignmentTransferPair = {
+  fromOwnerId: string;
+  fromOwnerName: string;
+  toOwnerId: string;
+  toOwnerName: string;
+  transferCount: number;
+};
+
+export type TeamAssignmentHistoryItem = {
+  activityId: string;
+  occurredAt: string;
+  leadId: string;
+  leadCode: string;
+  leadName: string;
+  actorId: string | null;
+  actorName: string;
+  fromOwnerId: string | null;
+  fromOwnerName: string;
+  toOwnerId: string | null;
+  toOwnerName: string;
+  eventKind: string;
+};
+
+export type TeamAssignmentFairnessSnapshot = {
+  range: {
+    startDate: string;
+    endDate: string;
+    timezone: string;
+  };
+  summary: TeamAssignmentFairnessSummary;
+  employees: TeamAssignmentFairnessEmployee[];
+  transferPairs: TeamAssignmentTransferPair[];
+  history: TeamAssignmentHistoryItem[];
+  methodology: {
+    assignmentSource: string;
+    currentOwnershipSource: string;
+    equalShareDefinition: string;
+    historicalLimitation: string;
+  };
+};
+
 export type TeamPerformanceSnapshot = {
   range: {
     startDate: string;
@@ -828,4 +898,576 @@ export async function getTeamAssignmentQueue(
       count ?? leads.length,
     leads,
   };
+}
+
+
+function booleanValue(
+  value: unknown
+) {
+  if (
+    value === true ||
+    value === 'true'
+  ) {
+    return true;
+  }
+
+  return false;
+}
+
+function mapAssignmentEmployee(
+  value: unknown
+): TeamAssignmentFairnessEmployee {
+  const row =
+    asRecord(
+      value
+    );
+
+  return {
+    userId:
+      textValue(
+        row.user_id
+      ),
+
+    employeeName:
+      textValue(
+        row.employee_name,
+        'Admissions Employee'
+      ),
+
+    active:
+      booleanValue(
+        row.active
+      ),
+
+    currentOwnedTotal:
+      numberValue(
+        row.current_owned_total
+      ),
+
+    currentActiveOwned:
+      numberValue(
+        row.current_active_owned
+      ),
+
+    assignmentsReceived:
+      numberValue(
+        row.assignments_received
+      ),
+
+    uniqueLeadsReceived:
+      numberValue(
+        row.unique_leads_received
+      ),
+
+    initialAssignmentsReceived:
+      numberValue(
+        row.initial_assignments_received
+      ),
+
+    transfersIn:
+      numberValue(
+        row.transfers_in
+      ),
+
+    transfersOut:
+      numberValue(
+        row.transfers_out
+      ),
+
+    unassignmentsFrom:
+      numberValue(
+        row.unassignments_from
+      ),
+
+    sameOwnerEvents:
+      numberValue(
+        row.same_owner_events
+      ),
+
+    assignmentSharePct:
+      numberValue(
+        row.assignment_share_pct
+      ),
+
+    equalShareBaselinePct:
+      numberValue(
+        row.equal_share_baseline_pct
+      ),
+
+    differenceFromEqualSharePctPoints:
+      numberValue(
+        row.difference_from_equal_share_pct_points
+      ),
+  };
+}
+
+function mapTransferPair(
+  value: unknown
+): TeamAssignmentTransferPair {
+  const row =
+    asRecord(
+      value
+    );
+
+  return {
+    fromOwnerId:
+      textValue(
+        row.from_owner_id
+      ),
+
+    fromOwnerName:
+      textValue(
+        row.from_owner_name,
+        'CRM User'
+      ),
+
+    toOwnerId:
+      textValue(
+        row.to_owner_id
+      ),
+
+    toOwnerName:
+      textValue(
+        row.to_owner_name,
+        'CRM User'
+      ),
+
+    transferCount:
+      numberValue(
+        row.transfer_count
+      ),
+  };
+}
+
+function mapAssignmentHistoryItem(
+  value: unknown
+): TeamAssignmentHistoryItem {
+  const row =
+    asRecord(
+      value
+    );
+
+  return {
+    activityId:
+      textValue(
+        row.activity_id
+      ),
+
+    occurredAt:
+      textValue(
+        row.occurred_at
+      ),
+
+    leadId:
+      textValue(
+        row.lead_id
+      ),
+
+    leadCode:
+      textValue(
+        row.lead_code,
+        'Lead'
+      ),
+
+    leadName:
+      textValue(
+        row.lead_name,
+        textValue(
+          row.lead_code,
+          'Lead'
+        )
+      ),
+
+    actorId:
+      textValue(
+        row.actor_id
+      ) ||
+      null,
+
+    actorName:
+      textValue(
+        row.actor_name,
+        'CRM User'
+      ),
+
+    fromOwnerId:
+      textValue(
+        row.from_owner_id
+      ) ||
+      null,
+
+    fromOwnerName:
+      textValue(
+        row.from_owner_name,
+        'Unassigned'
+      ),
+
+    toOwnerId:
+      textValue(
+        row.to_owner_id
+      ) ||
+      null,
+
+    toOwnerName:
+      textValue(
+        row.to_owner_name,
+        'Unassigned'
+      ),
+
+    eventKind:
+      textValue(
+        row.event_kind,
+        'assignment'
+      ),
+  };
+}
+
+function emptyAssignmentSummary(): TeamAssignmentFairnessSummary {
+  return {
+    comparisonEmployeeCount: 0,
+    activeEmployeeCount: 0,
+    recordedAssignmentEvents: 0,
+    uniqueLeadsAssigned: 0,
+    transferEvents: 0,
+    unassignmentEvents: 0,
+    currentUnassignedOpen: 0,
+  };
+}
+
+function mapAssignmentFairnessSnapshot(
+  value: unknown
+): TeamAssignmentFairnessSnapshot {
+  const root =
+    asRecord(
+      value
+    );
+
+  const range =
+    asRecord(
+      root.range
+    );
+
+  const summary =
+    asRecord(
+      root.summary
+    );
+
+  const methodology =
+    asRecord(
+      root.methodology
+    );
+
+  return {
+    range: {
+      startDate:
+        textValue(
+          range.startDate
+        ),
+
+      endDate:
+        textValue(
+          range.endDate
+        ),
+
+      timezone:
+        textValue(
+          range.timezone,
+          'Asia/Kolkata'
+        ),
+    },
+
+    summary: {
+      comparisonEmployeeCount:
+        numberValue(
+          summary.comparison_employee_count
+        ),
+
+      activeEmployeeCount:
+        numberValue(
+          summary.active_employee_count
+        ),
+
+      recordedAssignmentEvents:
+        numberValue(
+          summary.recorded_assignment_events
+        ),
+
+      uniqueLeadsAssigned:
+        numberValue(
+          summary.unique_leads_assigned
+        ),
+
+      transferEvents:
+        numberValue(
+          summary.transfer_events
+        ),
+
+      unassignmentEvents:
+        numberValue(
+          summary.unassignment_events
+        ),
+
+      currentUnassignedOpen:
+        numberValue(
+          summary.current_unassigned_open
+        ),
+    },
+
+    employees:
+      asArray(
+        root.employees
+      ).map(
+        mapAssignmentEmployee
+      ),
+
+    transferPairs:
+      asArray(
+        root.transferPairs
+      ).map(
+        mapTransferPair
+      ),
+
+    history:
+      asArray(
+        root.history
+      ).map(
+        mapAssignmentHistoryItem
+      ),
+
+    methodology: {
+      assignmentSource:
+        textValue(
+          methodology.assignmentSource
+        ),
+
+      currentOwnershipSource:
+        textValue(
+          methodology.currentOwnershipSource
+        ),
+
+      equalShareDefinition:
+        textValue(
+          methodology.equalShareDefinition
+        ),
+
+      historicalLimitation:
+        textValue(
+          methodology.historicalLimitation
+        ),
+    },
+  };
+}
+
+function mockAssignmentFairnessSnapshot(
+  startDate: string,
+  endDate: string
+): TeamAssignmentFairnessSnapshot {
+  return {
+    range: {
+      startDate,
+      endDate,
+      timezone:
+        'Asia/Kolkata',
+    },
+
+    summary: {
+      ...emptyAssignmentSummary(),
+      comparisonEmployeeCount:
+        3,
+      activeEmployeeCount:
+        3,
+      recordedAssignmentEvents:
+        42,
+      uniqueLeadsAssigned:
+        40,
+      transferEvents:
+        3,
+      unassignmentEvents:
+        1,
+      currentUnassignedOpen:
+        4,
+    },
+
+    employees: [
+      {
+        userId:
+          'mock-employee-a',
+        employeeName:
+          'Employee A',
+        active:
+          true,
+        currentOwnedTotal:
+          18,
+        currentActiveOwned:
+          16,
+        assignmentsReceived:
+          15,
+        uniqueLeadsReceived:
+          15,
+        initialAssignmentsReceived:
+          14,
+        transfersIn:
+          1,
+        transfersOut:
+          0,
+        unassignmentsFrom:
+          0,
+        sameOwnerEvents:
+          0,
+        assignmentSharePct:
+          35.7,
+        equalShareBaselinePct:
+          33.3,
+        differenceFromEqualSharePctPoints:
+          2.4,
+      },
+      {
+        userId:
+          'mock-employee-b',
+        employeeName:
+          'Employee B',
+        active:
+          true,
+        currentOwnedTotal:
+          14,
+        currentActiveOwned:
+          13,
+        assignmentsReceived:
+          14,
+        uniqueLeadsReceived:
+          13,
+        initialAssignmentsReceived:
+          12,
+        transfersIn:
+          2,
+        transfersOut:
+          1,
+        unassignmentsFrom:
+          0,
+        sameOwnerEvents:
+          0,
+        assignmentSharePct:
+          33.3,
+        equalShareBaselinePct:
+          33.3,
+        differenceFromEqualSharePctPoints:
+          0,
+      },
+      {
+        userId:
+          'mock-employee-c',
+        employeeName:
+          'Employee C',
+        active:
+          true,
+        currentOwnedTotal:
+          12,
+        currentActiveOwned:
+          11,
+        assignmentsReceived:
+          13,
+        uniqueLeadsReceived:
+          12,
+        initialAssignmentsReceived:
+          12,
+        transfersIn:
+          1,
+        transfersOut:
+          2,
+        unassignmentsFrom:
+          1,
+        sameOwnerEvents:
+          0,
+        assignmentSharePct:
+          31,
+        equalShareBaselinePct:
+          33.3,
+        differenceFromEqualSharePctPoints:
+          -2.3,
+      },
+    ],
+
+    transferPairs: [
+      {
+        fromOwnerId:
+          'mock-employee-c',
+        fromOwnerName:
+          'Employee C',
+        toOwnerId:
+          'mock-employee-b',
+        toOwnerName:
+          'Employee B',
+        transferCount:
+          2,
+      },
+      {
+        fromOwnerId:
+          'mock-employee-b',
+        fromOwnerName:
+          'Employee B',
+        toOwnerId:
+          'mock-employee-a',
+        toOwnerName:
+          'Employee A',
+        transferCount:
+          1,
+      },
+    ],
+
+    history: [],
+
+    methodology: {
+      assignmentSource:
+        'activities.activity_type = owner_assignment',
+
+      currentOwnershipSource:
+        'leads.owner_user_id',
+
+      equalShareDefinition:
+        'Recorded assignment events divided equally across Admissions employees included in the comparison period',
+
+      historicalLimitation:
+        'Assignments that happened before owner_assignment audit logging existed are not reconstructed or guessed.',
+    },
+  };
+}
+
+export async function getTeamAssignmentFairnessSnapshot(
+  startDate: string,
+  endDate: string
+): Promise<TeamAssignmentFairnessSnapshot> {
+  if (useMockData) {
+    return mockAssignmentFairnessSnapshot(
+      startDate,
+      endDate
+    );
+  }
+
+  const supabase =
+    await createClient();
+
+  const {
+    data,
+    error,
+  } =
+    await supabase.rpc(
+      'get_team_assignment_fairness_snapshot',
+      {
+        p_start_date:
+          startDate,
+
+        p_end_date:
+          endDate,
+      }
+    );
+
+  if (error) {
+    throw new Error(
+      `Unable to load assignment distribution: ${error.message}`
+    );
+  }
+
+  return mapAssignmentFairnessSnapshot(
+    data
+  );
 }

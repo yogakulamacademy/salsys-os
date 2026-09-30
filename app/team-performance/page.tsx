@@ -3,10 +3,12 @@ import { redirect } from 'next/navigation';
 
 import {
   Activity,
+  ArrowLeftRight,
   ArrowRight,
   CheckCircle2,
   Clock3,
   ContactRound,
+  History,
   Inbox,
   MessageSquareText,
   Scale,
@@ -21,14 +23,20 @@ import {
 } from '@/app/team-performance/actions';
 
 import {
+  TeamAssignmentInsights,
+} from '@/components/team-assignment-insights';
+
+import {
   TeamPerformanceInsights,
 } from '@/components/team-performance-insights';
 
 import { useMockData } from '@/lib/config';
 
 import {
+  getTeamAssignmentFairnessSnapshot,
   getTeamAssignmentQueue,
   getTeamPerformanceSnapshot,
+  type TeamAssignmentHistoryItem,
   type TeamPerformanceEmployee,
   type TeamRecentWork,
 } from '@/lib/team-performance-data';
@@ -473,6 +481,65 @@ function formatDateTime(
         true,
     }
   ).format(date);
+}
+
+
+function signedPercentagePoints(
+  value: number
+) {
+  if (
+    value >
+    0
+  ) {
+    return `+${value.toFixed(
+      1
+    )} pp`;
+  }
+
+  if (
+    value <
+    0
+  ) {
+    return `${value.toFixed(
+      1
+    )} pp`;
+  }
+
+  return '0.0 pp';
+}
+
+function assignmentEventLabel(
+  item: TeamAssignmentHistoryItem
+) {
+  if (
+    item.eventKind ===
+    'initial_assignment'
+  ) {
+    return 'Assigned';
+  }
+
+  if (
+    item.eventKind ===
+    'transfer'
+  ) {
+    return 'Transferred';
+  }
+
+  if (
+    item.eventKind ===
+    'unassignment'
+  ) {
+    return 'Unassigned';
+  }
+
+  if (
+    item.eventKind ===
+    'same_owner'
+  ) {
+    return 'Owner reconfirmed';
+  }
+
+  return 'Assignment updated';
 }
 
 function MetricCard({
@@ -970,6 +1037,7 @@ export default async function TeamPerformancePage({
   const [
     snapshot,
     assignmentQueue,
+    assignmentFairness,
   ] =
     await Promise.all([
       getTeamPerformanceSnapshot(
@@ -979,6 +1047,11 @@ export default async function TeamPerformancePage({
 
       getTeamAssignmentQueue(
         12
+      ),
+
+      getTeamAssignmentFairnessSnapshot(
+        range.startDate,
+        range.endDate
       ),
     ]);
 
@@ -1006,6 +1079,21 @@ export default async function TeamPerformancePage({
             selectedEmployee.userId
         )
       : snapshot.recentWork;
+
+  const assignmentHistory =
+    selectedEmployee
+      ? assignmentFairness
+          .history
+          .filter(
+            (
+              item
+            ) =>
+              item.fromOwnerId ===
+                selectedEmployee.userId ||
+              item.toOwnerId ===
+                selectedEmployee.userId
+          )
+      : assignmentFairness.history;
 
   const workloadBalance =
     buildWorkloadBalance(
@@ -1700,6 +1788,439 @@ export default async function TeamPerformancePage({
         )}
       </section>
 
+      <section className="space-y-5">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <div className="flex items-center gap-2">
+              <ArrowLeftRight
+                size={17}
+                className="text-brand"
+              />
+
+              <h2 className="text-sm font-black text-slate-950">
+                Assignment distribution
+              </h2>
+            </div>
+
+            <p className="mt-1 max-w-3xl text-xs leading-5 text-slate-500">
+              See how recorded lead assignments were distributed and how often
+              leads moved between employees. This is separate from employee
+              conversion performance.
+            </p>
+          </div>
+
+          <div className="text-xs font-bold text-slate-400">
+            {assignmentFairness.summary.recordedAssignmentEvents.toLocaleString()}
+            {' '}
+            recorded assignments ·
+            {' '}
+            {assignmentFairness.summary.transferEvents.toLocaleString()}
+            {' '}
+            transfers
+          </div>
+        </div>
+
+        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
+          <MetricCard
+            label="Recorded assignments"
+            value={
+              assignmentFairness.summary.recordedAssignmentEvents
+            }
+            note="Meaningful owner-assignment events recorded during this reporting period."
+            icon={
+              <UserPlus
+                size={19}
+              />
+            }
+          />
+
+          <MetricCard
+            label="Unique leads assigned"
+            value={
+              assignmentFairness.summary.uniqueLeadsAssigned
+            }
+            note="Distinct leads that were assigned to an Admissions employee in the period."
+            icon={
+              <ContactRound
+                size={19}
+              />
+            }
+          />
+
+          <MetricCard
+            label="Transfers"
+            value={
+              assignmentFairness.summary.transferEvents
+            }
+            note="Recorded owner-to-owner transfers involving Admissions employees."
+            icon={
+              <ArrowLeftRight
+                size={19}
+              />
+            }
+          />
+
+          <MetricCard
+            label="Unassignments"
+            value={
+              assignmentFairness.summary.unassignmentEvents
+            }
+            note="Leads moved from an Admissions employee back to unassigned."
+            icon={
+              <Inbox
+                size={19}
+              />
+            }
+          />
+
+          <MetricCard
+            label="Unassigned now"
+            value={
+              assignmentFairness.summary.currentUnassignedOpen
+            }
+            note="Open CRM leads that currently have no owner."
+            icon={
+              <UsersRound
+                size={19}
+              />
+            }
+          />
+        </div>
+
+        <TeamAssignmentInsights
+          employees={
+            assignmentFairness.employees
+          }
+          recordedAssignments={
+            assignmentFairness.summary.recordedAssignmentEvents
+          }
+        />
+
+        <section className="rounded-2xl border border-slate-200 bg-white shadow-sm">
+          <div className="border-b border-slate-100 px-5 py-4">
+            <div className="text-sm font-black text-slate-950">
+              Distribution by employee
+            </div>
+
+            <p className="mt-1 text-xs leading-5 text-slate-500">
+              Equal-share comparison is a simple reference point only. It does
+              not account for shift length, language, course specialization,
+              availability or deliberate assignment decisions.
+            </p>
+          </div>
+
+          {assignmentFairness.employees.length ? (
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[980px] border-collapse">
+                <thead>
+                  <tr className="border-b border-slate-100 bg-slate-50/70 text-left">
+                    <th className="px-5 py-3 text-[10px] font-black uppercase tracking-[0.12em] text-slate-400">
+                      Employee
+                    </th>
+
+                    <th className="px-4 py-3 text-[10px] font-black uppercase tracking-[0.12em] text-slate-400">
+                      Received
+                    </th>
+
+                    <th className="px-4 py-3 text-[10px] font-black uppercase tracking-[0.12em] text-slate-400">
+                      First assignments
+                    </th>
+
+                    <th className="px-4 py-3 text-[10px] font-black uppercase tracking-[0.12em] text-slate-400">
+                      Transfers in
+                    </th>
+
+                    <th className="px-4 py-3 text-[10px] font-black uppercase tracking-[0.12em] text-slate-400">
+                      Transfers out
+                    </th>
+
+                    <th className="px-4 py-3 text-[10px] font-black uppercase tracking-[0.12em] text-slate-400">
+                      Active owned now
+                    </th>
+
+                    <th className="px-4 py-3 text-[10px] font-black uppercase tracking-[0.12em] text-slate-400">
+                      Share
+                    </th>
+
+                    <th className="px-5 py-3 text-[10px] font-black uppercase tracking-[0.12em] text-slate-400">
+                      vs equal baseline
+                    </th>
+                  </tr>
+                </thead>
+
+                <tbody className="divide-y divide-slate-100">
+                  {assignmentFairness.employees.map(
+                    (
+                      employee
+                    ) => (
+                      <tr
+                        key={
+                          employee.userId
+                        }
+                        className="text-sm"
+                      >
+                        <td className="px-5 py-4">
+                          <div className="font-black text-slate-900">
+                            {employee.employeeName}
+                          </div>
+
+                          <div className="mt-0.5 text-[11px] text-slate-400">
+                            {employee.active
+                              ? 'Active employee'
+                              : 'Inactive · historical activity'}
+                          </div>
+                        </td>
+
+                        <td className="px-4 py-4 font-bold text-slate-800">
+                          {employee.assignmentsReceived.toLocaleString()}
+                        </td>
+
+                        <td className="px-4 py-4 text-slate-600">
+                          {employee.initialAssignmentsReceived.toLocaleString()}
+                        </td>
+
+                        <td className="px-4 py-4 text-slate-600">
+                          {employee.transfersIn.toLocaleString()}
+                        </td>
+
+                        <td className="px-4 py-4 text-slate-600">
+                          {employee.transfersOut.toLocaleString()}
+                        </td>
+
+                        <td className="px-4 py-4 font-bold text-slate-800">
+                          {employee.currentActiveOwned.toLocaleString()}
+                        </td>
+
+                        <td className="px-4 py-4">
+                          <div className="font-black text-slate-900">
+                            {percentage(
+                              employee.assignmentSharePct
+                            )}
+                          </div>
+
+                          <div className="mt-0.5 text-[11px] text-slate-400">
+                            baseline{' '}
+                            {percentage(
+                              employee.equalShareBaselinePct
+                            )}
+                          </div>
+                        </td>
+
+                        <td className="px-5 py-4">
+                          <span
+                            className={`inline-flex rounded-full px-2.5 py-1 text-[11px] font-black ${
+                              employee.differenceFromEqualSharePctPoints >
+                              0
+                                ? 'bg-orange-50 text-orange-700'
+                                : employee.differenceFromEqualSharePctPoints <
+                                    0
+                                  ? 'bg-blue-50 text-blue-700'
+                                  : 'bg-slate-100 text-slate-600'
+                            }`}
+                          >
+                            {signedPercentagePoints(
+                              employee.differenceFromEqualSharePctPoints
+                            )}
+                          </span>
+                        </td>
+                      </tr>
+                    )
+                  )}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <div className="px-5 py-10 text-center text-sm text-slate-500">
+              No recorded Admissions assignment data for this reporting period.
+            </div>
+          )}
+        </section>
+
+        <div className="grid gap-5 xl:grid-cols-[0.7fr_1.3fr]">
+          <section className="rounded-2xl border border-slate-200 bg-white shadow-sm">
+            <div className="border-b border-slate-100 px-5 py-4">
+              <div className="text-sm font-black text-slate-950">
+                Transfer paths
+              </div>
+
+              <p className="mt-1 text-xs leading-5 text-slate-500">
+                Owner-to-owner transfers recorded in the selected period.
+              </p>
+            </div>
+
+            {assignmentFairness.transferPairs.length ? (
+              <div className="divide-y divide-slate-100">
+                {assignmentFairness.transferPairs
+                  .slice(
+                    0,
+                    12
+                  )
+                  .map(
+                    (
+                      pair
+                    ) => (
+                      <div
+                        key={`${pair.fromOwnerId}-${pair.toOwnerId}`}
+                        className="flex items-center gap-3 px-5 py-4"
+                      >
+                        <div className="min-w-0 flex-1">
+                          <div className="flex flex-wrap items-center gap-2 text-sm font-bold text-slate-800">
+                            <span>
+                              {pair.fromOwnerName}
+                            </span>
+
+                            <ArrowRight
+                              size={13}
+                              className="text-slate-300"
+                            />
+
+                            <span>
+                              {pair.toOwnerName}
+                            </span>
+                          </div>
+                        </div>
+
+                        <div className="rounded-xl bg-slate-100 px-3 py-1.5 text-xs font-black text-slate-700">
+                          {pair.transferCount.toLocaleString()}
+                        </div>
+                      </div>
+                    )
+                  )}
+              </div>
+            ) : (
+              <div className="px-5 py-10 text-center">
+                <ArrowLeftRight
+                  size={22}
+                  className="mx-auto text-slate-300"
+                />
+
+                <div className="mt-3 text-sm font-bold text-slate-700">
+                  No employee-to-employee transfers
+                </div>
+
+                <p className="mt-1 text-xs text-slate-400">
+                  Transfer paths will appear once a lead moves from one employee
+                  to another.
+                </p>
+              </div>
+            )}
+          </section>
+
+          <section className="rounded-2xl border border-slate-200 bg-white shadow-sm">
+            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 px-5 py-4">
+              <div>
+                <div className="flex items-center gap-2">
+                  <History
+                    size={16}
+                    className="text-brand"
+                  />
+
+                  <div className="text-sm font-black text-slate-950">
+                    Assignment history
+                  </div>
+                </div>
+
+                <p className="mt-1 text-xs leading-5 text-slate-500">
+                  {selectedEmployee
+                    ? `Showing assignment changes involving ${selectedEmployee.employeeName}.`
+                    : 'Showing recorded assignment changes across the Admissions team.'}
+                </p>
+              </div>
+
+              <div className="text-xs font-bold text-slate-400">
+                {assignmentHistory.length.toLocaleString()}
+                {' '}
+                events
+              </div>
+            </div>
+
+            {assignmentHistory.length ? (
+              <div className="divide-y divide-slate-100">
+                {assignmentHistory
+                  .slice(
+                    0,
+                    50
+                  )
+                  .map(
+                    (
+                      item
+                    ) => (
+                      <div
+                        key={
+                          item.activityId
+                        }
+                        className="grid gap-3 px-5 py-4 lg:grid-cols-[135px_minmax(0,1fr)_auto] lg:items-center"
+                      >
+                        <div className="text-xs font-medium text-slate-400">
+                          {formatDateTime(
+                            item.occurredAt
+                          )}
+                        </div>
+
+                        <div className="min-w-0">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span className="text-sm font-black text-slate-800">
+                              {assignmentEventLabel(
+                                item
+                              )}
+                            </span>
+
+                            <span className="text-xs text-slate-400">
+                              {item.fromOwnerName}
+                              {' → '}
+                              {item.toOwnerName}
+                            </span>
+                          </div>
+
+                          <div className="mt-1 truncate text-xs text-slate-400">
+                            {item.leadCode}
+                            {' · '}
+                            {item.leadName}
+                            {' · '}
+                            by {item.actorName}
+                          </div>
+                        </div>
+
+                        <Link
+                          href={`/leads/${item.leadId}`}
+                          className="inline-flex items-center gap-1 text-xs font-black text-brand hover:underline"
+                        >
+                          Open lead
+                          <ArrowRight
+                            size={12}
+                          />
+                        </Link>
+                      </div>
+                    )
+                  )}
+              </div>
+            ) : (
+              <div className="px-5 py-10 text-center">
+                <History
+                  size={22}
+                  className="mx-auto text-slate-300"
+                />
+
+                <div className="mt-3 text-sm font-bold text-slate-700">
+                  No assignment events in this period
+                </div>
+
+                <p className="mt-1 text-xs text-slate-400">
+                  Only recorded owner-assignment audit events are shown.
+                </p>
+              </div>
+            )}
+          </section>
+        </div>
+
+        <div className="rounded-2xl border border-blue-200 bg-blue-50/60 px-4 py-3 text-xs leading-5 text-blue-800">
+          Historical note:
+          {' '}
+          {assignmentFairness.methodology.historicalLimitation ||
+            'Older assignments created before assignment audit logging are not reconstructed.'}
+        </div>
+      </section>
+
       <section>
         <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
           <div>
@@ -1969,8 +2490,10 @@ export default async function TeamPerformancePage({
               Enrollment and pipeline movement measure outcomes. Current
               needs-reply, overdue and never-contacted figures show operational
               backlog. The workload suggestion uses only current operational load,
-              not conversion performance. Median first response is raw elapsed time
-              and is not yet adjusted for working hours.
+              not conversion performance. Assignment-share comparisons describe
+              recorded distribution only; they are not a fairness grade or employee
+              performance score. Median first response is raw elapsed time and is not
+              yet adjusted for working hours.
             </p>
           </div>
         </div>
