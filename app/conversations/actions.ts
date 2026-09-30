@@ -1,179 +1,91 @@
-'use server';
+"use server";
 
+import { revalidatePath } from "next/cache";
 
+import { redirect } from "next/navigation";
 
-import { revalidatePath } from 'next/cache';
+import { createClient } from "@/lib/supabase/server";
 
-import { redirect } from 'next/navigation';
+import { createAdminClient } from "@/lib/supabase/admin";
 
-import { createClient } from '@/lib/supabase/server';
-
-import { useMockData } from '@/lib/config';
+import { useMockData } from "@/lib/config";
 
 import {
-
   getApprovedWhatsAppTemplates,
-
   renderTemplateText,
+} from "@/lib/whatsapp-templates";
 
-} from '@/lib/whatsapp-templates';
-
-
-
-
-
-
-
-const DEFAULT_WHATSAPP_API_VERSION = 'v26.0';
+const DEFAULT_WHATSAPP_API_VERSION = "v26.0";
 
 const MAX_TEXT_LENGTH = 4096;
 
-const CUSTOMER_SERVICE_WINDOW_MS =
-
-  24 * 60 * 60 * 1000;
-
-
+const CUSTOMER_SERVICE_WINDOW_MS = 24 * 60 * 60 * 1000;
 
 function textValue(
-
   formData: FormData,
 
-  key: string
-
+  key: string,
 ) {
-
-  const value = String(
-
-    formData.get(key) ?? ''
-
-  ).trim();
-
-
+  const value = String(formData.get(key) ?? "").trim();
 
   return value || null;
-
 }
-
-
 
 function requireEnv(name: string) {
-
-  const value =
-
-    process.env[name]?.trim();
-
-
+  const value = process.env[name]?.trim();
 
   if (!value) {
-
-    throw new Error(
-
-      `${name} is not configured.`
-
-    );
-
+    throw new Error(`${name} is not configured.`);
   }
 
-
-
   return value;
-
 }
-
-
 
 function whatsappApiVersion() {
-
   const value =
+    process.env.WA_API_VERSION?.trim() || DEFAULT_WHATSAPP_API_VERSION;
 
-    process.env.WA_API_VERSION?.trim() ||
-
-    DEFAULT_WHATSAPP_API_VERSION;
-
-
-
-  return /^v\d+\.\d+$/.test(value)
-
-    ? value
-
-    : DEFAULT_WHATSAPP_API_VERSION;
-
+  return /^v\d+\.\d+$/.test(value) ? value : DEFAULT_WHATSAPP_API_VERSION;
 }
 
-
-
-function normalizeWaId(
-
-  value: string | null | undefined
-
-) {
-
-  return String(value ?? '').replace(
-
+function normalizeWaId(value: string | null | undefined) {
+  return String(value ?? "").replace(
     /\D/g,
 
-    ''
-
+    "",
   );
-
 }
-
-
 
 function conversationUrl(
-
   leadId: string,
 
-  params: Record<string, string>
-
+  params: Record<string, string>,
 ) {
+  const search = new URLSearchParams({
+    lead: leadId,
 
-  const search =
-
-    new URLSearchParams({
-
-      lead: leadId,
-
-      ...params,
-
-    });
-
-
+    ...params,
+  });
 
   return `/conversations?${search.toString()}`;
-
 }
 
-
-
 type MetaSendResponse = {
-
   messaging_product?: string;
 
-
-
   contacts?: Array<{
-
     input?: string;
 
     wa_id?: string;
-
   }>;
 
-
-
   messages?: Array<{
-
     id?: string;
 
     message_status?: string;
-
   }>;
 
-
-
   error?: {
-
     message?: string;
 
     type?: string;
@@ -183,2937 +95,1835 @@ type MetaSendResponse = {
     error_subcode?: number;
 
     fbtrace_id?: string;
-
   };
-
 };
 
+/* =========================================================
 
+   LEAD ACCESS GATE
+
+   Important:
+   - Uses the signed-in user's Supabase session.
+   - Verifies can_work_lead() BEFORE any service-role
+     contact lookup happens.
+   - Raw phone / WhatsApp values stay server-side.
+
+========================================================= */
+
+async function requireLeadWorkAccess(leadId: string) {
+  const supabase = await createClient();
+
+  const {
+    data: { user },
+    error: authError,
+  } = await supabase.auth.getUser();
+
+  if (authError || !user) {
+    redirect("/login");
+  }
+
+  const { data: canWorkLead, error: accessError } = await supabase.rpc(
+    "can_work_lead",
+    {
+      p_lead_id: leadId,
+    },
+  );
+
+  if (accessError) {
+    redirect(
+      conversationUrl(leadId, {
+        error: `Unable to verify lead access: ${accessError.message}`,
+      }),
+    );
+  }
+
+  if (canWorkLead !== true) {
+    redirect(
+      conversationUrl(leadId, {
+        error: "You do not have access to this lead.",
+      }),
+    );
+  }
+
+  return supabase;
+}
 
 /* =========================================================
+
+
 
    QUICK LEAD CONTEXT UPDATE
 
 
 
+
+
+
+
    Used directly from Conversations to update:
+
+
 
    - Interested course
 
+
+
    - Country
+
+
 
 ========================================================= */
 
-
-
 export async function updateConversationLeadContextAction(
-
   leadId: string,
 
-  formData: FormData
-
+  formData: FormData,
 ) {
-
   if (useMockData) {
-
     redirect(
-
       conversationUrl(leadId, {
-
-        notice: 'lead-context-updated',
-
-      })
-
+        notice: "lead-context-updated",
+      }),
     );
-
   }
 
+  const courseId = textValue(
+    formData,
 
+    "course_id",
+  );
 
-  const courseId =
+  const country = textValue(
+    formData,
 
-    textValue(
+    "country",
+  );
 
-      formData,
-
-      'course_id'
-
-    );
-
-
-
-  const country =
-
-    textValue(
-
-      formData,
-
-      'country'
-
-    );
-
-
-
-  const supabase =
-
-    await createClient();
-
-
+  const supabase = await createClient();
 
   const {
-
     data: { user },
 
     error: authError,
-
   } = await supabase.auth.getUser();
 
-
-
   if (authError || !user) {
-
-    redirect('/login');
-
+    redirect("/login");
   }
 
+  const { error } = await supabase
 
+    .from("leads")
 
-  const { error } =
+    .update({
+      interested_course_id: courseId,
 
-    await supabase
-
-      .from('leads')
-
-      .update({
-
-        interested_course_id:
-
-          courseId,
-
-        country,
-
-      })
-
-      .eq('id', leadId);
-
-
-
-  if (error) {
-
-    redirect(
-
-      conversationUrl(leadId, {
-
-        error:
-
-          `Unable to update lead details: ${error.message}`,
-
-      })
-
-    );
-
-  }
-
-
-
-  revalidatePath('/conversations');
-
-  revalidatePath(
-
-    `/leads/${leadId}`
-
-  );
-
-  revalidatePath('/leads');
-
-  revalidatePath('/dashboard');
-
-  revalidatePath('/pipeline');
-
-  revalidatePath('/funnel');
-
-  revalidatePath('/revenue');
-
-
-
-  redirect(
-
-    conversationUrl(leadId, {
-
-      notice: 'lead-context-updated',
-
+      country,
     })
 
+    .eq("id", leadId);
+
+  if (error) {
+    redirect(
+      conversationUrl(leadId, {
+        error: `Unable to update lead details: ${error.message}`,
+      }),
+    );
+  }
+
+  revalidatePath("/conversations");
+
+  revalidatePath(`/leads/${leadId}`);
+
+  revalidatePath("/leads");
+
+  revalidatePath("/dashboard");
+
+  revalidatePath("/pipeline");
+
+  revalidatePath("/funnel");
+
+  revalidatePath("/revenue");
+
+  redirect(
+    conversationUrl(leadId, {
+      notice: "lead-context-updated",
+    }),
   );
-
 }
-
-
 
 /* =========================================================
 
+
+
    WHATSAPP SEND
+
+
 
 ========================================================= */
 
-
-
 export async function sendWhatsAppMessageAction(
-
   leadId: string,
 
-  formData: FormData
-
+  formData: FormData,
 ) {
+  const body = textValue(
+    formData,
 
-  const body =
-
-    textValue(
-
-      formData,
-
-      'body'
-
-    );
-
-
+    "body",
+  );
 
   if (!body) {
-
     redirect(
-
       conversationUrl(leadId, {
-
-        error:
-
-          'Message text is required.',
-
-      })
-
+        error: "Message text is required.",
+      }),
     );
-
   }
 
-
-
-  if (
-
-    body.length >
-
-    MAX_TEXT_LENGTH
-
-  ) {
-
+  if (body.length > MAX_TEXT_LENGTH) {
     redirect(
-
       conversationUrl(leadId, {
-
-        error:
-
-          `WhatsApp text messages are limited to ${MAX_TEXT_LENGTH} characters.`,
-
-      })
-
+        error: `WhatsApp text messages are limited to ${MAX_TEXT_LENGTH} characters.`,
+      }),
     );
-
   }
 
+  const supabase = await requireLeadWorkAccess(leadId);
 
-
-  const supabase =
-
-    await createClient();
-
-
+  /*
+   * Raw contact data is deliberately loaded with the
+   * server-only service-role client only AFTER the
+   * signed-in user has passed can_work_lead().
+   *
+   * Never return this row to the browser.
+   */
+  const adminSupabase = createAdminClient();
 
   const {
-
-    data: { user },
-
-    error: authError,
-
-  } = await supabase.auth.getUser();
-
-
-
-  if (authError || !user) {
-
-    redirect('/login');
-
-  }
-
-
-
-  const {
-
     data: contact,
 
     error: contactError,
+  } = await adminSupabase
 
-  } =
+    .from("lead_contacts")
 
-    await supabase
+    .select("value, normalized_value, is_primary")
 
-      .from('lead_contacts')
+    .eq("lead_id", leadId)
 
-      .select(
+    .eq(
+      "contact_type",
 
-        'value, normalized_value, is_primary'
+      "whatsapp",
+    )
 
-      )
+    .order("is_primary", {
+      ascending: false,
+    })
 
-      .eq('lead_id', leadId)
+    .limit(1)
 
-      .eq(
-
-        'contact_type',
-
-        'whatsapp'
-
-      )
-
-      .order('is_primary', {
-
-        ascending: false,
-
-      })
-
-      .limit(1)
-
-      .maybeSingle();
-
-
+    .maybeSingle();
 
   if (contactError) {
-
     redirect(
-
       conversationUrl(leadId, {
-
-        error:
-
-          `Unable to load WhatsApp contact: ${contactError.message}`,
-
-      })
-
+        error: `Unable to load WhatsApp contact: ${contactError.message}`,
+      }),
     );
-
   }
 
-
-
-  const to =
-
-    normalizeWaId(
-
-      contact?.normalized_value ||
-
-        contact?.value
-
-    );
-
-
+  const to = normalizeWaId(contact?.normalized_value || contact?.value);
 
   if (!to) {
-
     redirect(
-
       conversationUrl(leadId, {
-
-        error:
-
-          'This lead does not have a WhatsApp contact.',
-
-      })
-
+        error: "This lead does not have a WhatsApp contact.",
+      }),
     );
-
   }
 
-
-
   const {
-
     data: conversation,
 
     error: conversationError,
+  } = await supabase
 
-  } =
+    .from("conversations")
 
-    await supabase
+    .select(
+      `
 
-      .from('conversations')
 
-      .select(
-
-        `
 
         id,
 
+
+
         external_conversation_id,
+
+
 
         external_account_id,
 
+
+
         last_message_at
 
-        `
-
-      )
-
-      .eq('lead_id', leadId)
-
-      .eq('channel', 'whatsapp')
-
-      .order('last_message_at', {
-
-        ascending: false,
-
-        nullsFirst: false,
-
-      })
-
-      .limit(1)
-
-      .maybeSingle();
 
 
+        `,
+    )
+
+    .eq("lead_id", leadId)
+
+    .eq("channel", "whatsapp")
+
+    .order("last_message_at", {
+      ascending: false,
+
+      nullsFirst: false,
+    })
+
+    .limit(1)
+
+    .maybeSingle();
 
   if (conversationError) {
-
     redirect(
-
       conversationUrl(leadId, {
-
-        error:
-
-          `Unable to load WhatsApp conversation: ${conversationError.message}`,
-
-      })
-
+        error: `Unable to load WhatsApp conversation: ${conversationError.message}`,
+      }),
     );
-
   }
-
-
 
   if (!conversation?.id) {
-
     redirect(
-
       conversationUrl(leadId, {
-
         error:
-
-          'No WhatsApp conversation exists for this lead yet. Receive an inbound message first.',
-
-      })
-
+          "No WhatsApp conversation exists for this lead yet. Receive an inbound message first.",
+      }),
     );
-
   }
 
-
-
   /*
+
+
 
    * Free-form WhatsApp messages are
 
+
+
    * allowed only inside the active
+
+
 
    * customer-service window.
 
+
+
    */
 
-
-
   const {
-
     data: lastInbound,
 
     error: inboundError,
+  } = await supabase
 
-  } =
+    .from("messages")
 
-    await supabase
+    .select("created_at")
 
-      .from('messages')
+    .eq(
+      "conversation_id",
 
-      .select('created_at')
-
-      .eq(
-
-        'conversation_id',
-
-        conversation.id
-
-      )
-
-      .eq(
-
-        'direction',
-
-        'inbound'
-
-      )
-
-      .order('created_at', {
-
-        ascending: false,
-
-      })
-
-      .limit(1)
-
-      .maybeSingle();
-
-
-
-  if (inboundError) {
-
-    redirect(
-
-      conversationUrl(leadId, {
-
-        error:
-
-          `Unable to check the last inbound WhatsApp message: ${inboundError.message}`,
-
-      })
-
-    );
-
-  }
-
-
-
-  if (!lastInbound?.created_at) {
-
-    redirect(
-
-      conversationUrl(leadId, {
-
-        error:
-
-          'No inbound WhatsApp message was found. Use an approved WhatsApp template to start a conversation.',
-
-      })
-
-    );
-
-  }
-
-
-
-  const lastInboundAt =
-
-    new Date(
-
-      lastInbound.created_at
-
-    ).getTime();
-
-
-
-  if (
-
-    !Number.isFinite(
-
-      lastInboundAt
-
-    ) ||
-
-    Date.now() -
-
-      lastInboundAt >
-
-      CUSTOMER_SERVICE_WINDOW_MS
-
-  ) {
-
-    redirect(
-
-      conversationUrl(leadId, {
-
-        error:
-
-          'The 24-hour WhatsApp customer-service window has expired. An approved template is required.',
-
-      })
-
-    );
-
-  }
-
-
-
-  const accessToken =
-
-    requireEnv(
-
-      'WA_ACCESS_TOKEN'
-
-    );
-
-
-
-  const phoneNumberId =
-
-    requireEnv(
-
-      'WA_PHONE_NUMBER_ID'
-
-    );
-
-
-
-  const version =
-
-    whatsappApiVersion();
-
-
-
-  const response =
-
-    await fetch(
-
-      `https://graph.facebook.com/${version}/${phoneNumberId}/messages`,
-
-      {
-
-        method: 'POST',
-
-
-
-        headers: {
-
-          Authorization:
-
-            `Bearer ${accessToken}`,
-
-
-
-          'Content-Type':
-
-            'application/json',
-
-        },
-
-
-
-        body: JSON.stringify({
-
-          messaging_product:
-
-            'whatsapp',
-
-
-
-          recipient_type:
-
-            'individual',
-
-
-
-          to,
-
-
-
-          type: 'text',
-
-
-
-          text: {
-
-            preview_url: false,
-
-            body,
-
-          },
-
-        }),
-
-
-
-        cache: 'no-store',
-
-      }
-
-    );
-
-
-
-  const responseText =
-
-    await response.text();
-
-
-
-  let meta:
-
-    MetaSendResponse = {};
-
-
-
-  try {
-
-    meta = responseText
-
-      ? (
-
-          JSON.parse(
-
-            responseText
-
-          ) as MetaSendResponse
-
-        )
-
-      : {};
-
-  } catch {
-
-    meta = {};
-
-  }
-
-
-
-  if (!response.ok) {
-
-  const metaMessage =
-
-    meta.error?.message ||
-
-    `Meta returned HTTP ${response.status}.`;
-
-
-
-  const metaCode =
-
-    meta.error?.code ??
-
-    'unknown';
-
-
-
-  const metaSubcode =
-
-    meta.error?.error_subcode ??
-
-    'none';
-
-
-
-  const metaType =
-
-    meta.error?.type ??
-
-    'unknown';
-
-
-
-  console.error(
-
-    'WhatsApp Meta API error',
-
-    {
-
-      status:
-
-        response.status,
-
-      message:
-
-        metaMessage,
-
-      code:
-
-        metaCode,
-
-      subcode:
-
-        metaSubcode,
-
-      type:
-
-        metaType,
-
-      fbtraceId:
-
-        meta.error?.fbtrace_id,
-
-    }
-
-  );
-
-
-
-  redirect(
-
-    conversationUrl(
-
-      leadId,
-
-      {
-
-        error:
-
-          `WhatsApp send failed: ${metaMessage} · Code ${metaCode} · Subcode ${metaSubcode}`,
-
-      }
-
+      conversation.id,
     )
 
+    .eq(
+      "direction",
+
+      "inbound",
+    )
+
+    .order("created_at", {
+      ascending: false,
+    })
+
+    .limit(1)
+
+    .maybeSingle();
+
+  if (inboundError) {
+    redirect(
+      conversationUrl(leadId, {
+        error: `Unable to check the last inbound WhatsApp message: ${inboundError.message}`,
+      }),
+    );
+  }
+
+  if (!lastInbound?.created_at) {
+    redirect(
+      conversationUrl(leadId, {
+        error:
+          "No inbound WhatsApp message was found. Use an approved WhatsApp template to start a conversation.",
+      }),
+    );
+  }
+
+  const lastInboundAt = new Date(lastInbound.created_at).getTime();
+
+  if (
+    !Number.isFinite(lastInboundAt) ||
+    Date.now() - lastInboundAt > CUSTOMER_SERVICE_WINDOW_MS
+  ) {
+    redirect(
+      conversationUrl(leadId, {
+        error:
+          "The 24-hour WhatsApp customer-service window has expired. An approved template is required.",
+      }),
+    );
+  }
+
+  const accessToken = requireEnv("WA_ACCESS_TOKEN");
+
+  const phoneNumberId = requireEnv("WA_PHONE_NUMBER_ID");
+
+  const version = whatsappApiVersion();
+
+  const response = await fetch(
+    `https://graph.facebook.com/${version}/${phoneNumberId}/messages`,
+
+    {
+      method: "POST",
+
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+
+        "Content-Type": "application/json",
+      },
+
+      body: JSON.stringify({
+        messaging_product: "whatsapp",
+
+        recipient_type: "individual",
+
+        to,
+
+        type: "text",
+
+        text: {
+          preview_url: false,
+
+          body,
+        },
+      }),
+
+      cache: "no-store",
+    },
   );
 
-}
+  const responseText = await response.text();
 
+  let meta: MetaSendResponse = {};
 
+  try {
+    meta = responseText ? (JSON.parse(responseText) as MetaSendResponse) : {};
+  } catch {
+    meta = {};
+  }
 
-  const externalMessageId =
-    meta.messages?.[0]?.id?.trim() ||
-    null;
+  if (!response.ok) {
+    const metaMessage =
+      meta.error?.message || `Meta returned HTTP ${response.status}.`;
+
+    const metaCode = meta.error?.code ?? "unknown";
+
+    const metaSubcode = meta.error?.error_subcode ?? "none";
+
+    const metaType = meta.error?.type ?? "unknown";
+
+    console.error(
+      "WhatsApp Meta API error",
+
+      {
+        status: response.status,
+
+        message: metaMessage,
+
+        code: metaCode,
+
+        subcode: metaSubcode,
+
+        type: metaType,
+
+        fbtraceId: meta.error?.fbtrace_id,
+      },
+    );
+
+    redirect(
+      conversationUrl(
+        leadId,
+
+        {
+          error: `WhatsApp send failed: ${metaMessage} · Code ${metaCode} · Subcode ${metaSubcode}`,
+        },
+      ),
+    );
+  }
+
+  const externalMessageId = meta.messages?.[0]?.id?.trim() || null;
 
   /*
+
    * Continue using the canonical
+
    * CRM interaction logger.
+
    */
-  const {
-    error: logError,
-  } =
-    await supabase.rpc(
-      'log_lead_interaction',
-      {
-        p_lead_id:
-          leadId,
 
-        p_channel:
-          'whatsapp',
+  const { error: logError } = await supabase.rpc(
+    "log_lead_interaction",
 
-        p_direction:
-          'outbound',
+    {
+      p_lead_id: leadId,
 
-        p_body:
-          body,
+      p_channel: "whatsapp",
 
-        p_conversation_id:
-          conversation.id,
-      }
-    );
+      p_direction: "outbound",
+
+      p_body: body,
+
+      p_conversation_id: conversation.id,
+    },
+  );
 
   if (logError) {
     redirect(
       conversationUrl(
         leadId,
+
         {
-          error:
-            `WhatsApp was sent, but CRM logging failed: ${logError.message}. Do not resend this message until the CRM record is checked.`,
-        }
-      )
+          error: `WhatsApp was sent, but CRM logging failed: ${logError.message}. Do not resend this message until the CRM record is checked.`,
+        },
+      ),
     );
   }
 
   /*
+
    * Attach Meta's WhatsApp message ID
+
    * to the CRM message we just logged.
+
    *
+
    * This allows later webhook events:
+
    * sent → delivered → read / failed
+
    * to update this exact message.
+
    */
-  let attachedMessageId:
-    string | null = null;
+
+  let attachedMessageId: string | null = null;
 
   if (externalMessageId) {
     const {
       data,
+
       error: attachError,
-    } =
-      await supabase.rpc(
-        'attach_whatsapp_outbound_message_id',
-        {
-          p_lead_id:
-            leadId,
+    } = await supabase.rpc(
+      "attach_whatsapp_outbound_message_id",
 
-          p_conversation_id:
-            conversation.id,
+      {
+        p_lead_id: leadId,
 
-          p_body:
-            body,
+        p_conversation_id: conversation.id,
 
-          p_external_message_id:
-            externalMessageId,
-        }
-      );
+        p_body: body,
+
+        p_external_message_id: externalMessageId,
+      },
+    );
 
     if (attachError) {
       redirect(
         conversationUrl(
           leadId,
+
           {
-            error:
-              `WhatsApp was sent and logged, but its Meta message ID could not be attached: ${attachError.message}. Do not resend this message.`,
-          }
-        )
+            error: `WhatsApp was sent and logged, but its Meta message ID could not be attached: ${attachError.message}. Do not resend this message.`,
+          },
+        ),
       );
     }
 
-    attachedMessageId =
-      typeof data === 'string'
-        ? data
-        : null;
+    attachedMessageId = typeof data === "string" ? data : null;
   }
 
   /*
-   * Do not revalidate /conversations here.
-   *
-   * The client composer handles the successful
-   * outbound message locally so the chat does
-   * not reload after every send.
-   */
-  revalidatePath(
-    `/leads/${leadId}`
-  );
 
-  revalidatePath('/leads');
-  revalidatePath('/dashboard');
-  revalidatePath('/admissions');
+   * Do not revalidate /conversations here.
+
+   *
+
+   * The client composer handles the successful
+
+   * outbound message locally so the chat does
+
+   * not reload after every send.
+
+   */
+
+  revalidatePath(`/leads/${leadId}`);
+
+  revalidatePath("/leads");
+
+  revalidatePath("/dashboard");
+
+  revalidatePath("/admissions");
 
   return {
     ok: true as const,
 
     message: {
-      id:
-        attachedMessageId,
+      id: attachedMessageId,
 
       body,
 
-      direction:
-        'outbound' as const,
+      direction: "outbound" as const,
 
-      senderType:
-        'human' as const,
+      senderType: "human" as const,
 
-      channel:
-        'whatsapp' as const,
+      channel: "whatsapp" as const,
 
-      status:
-        'sent' as const,
+      status: "sent" as const,
 
       externalMessageId,
 
-      createdAt:
-        new Date().toISOString(),
+      createdAt: new Date().toISOString(),
     },
   };
 }
 
-
 export async function sendWhatsAppTemplateAction(
-
   leadId: string,
 
-  formData: FormData
-
+  formData: FormData,
 ) {
+  const templateName = textValue(
+    formData,
 
-  const templateName =
+    "template_name",
+  );
 
-    textValue(
+  const language = textValue(
+    formData,
 
-      formData,
+    "template_language",
+  );
 
-      'template_name'
-
-    );
-
-
-
-  const language =
-
-    textValue(
-
-      formData,
-
-      'template_language'
-
-    );
-
-
-
-  if (
-
-    !templateName ||
-
-    !language
-
-  ) {
-
+  if (!templateName || !language) {
     redirect(
-
       conversationUrl(
-
         leadId,
 
         {
-
-          error:
-
-            'Select an approved WhatsApp template.',
-
-        }
-
-      )
-
+          error: "Select an approved WhatsApp template.",
+        },
+      ),
     );
-
   }
 
+  const supabase = await requireLeadWorkAccess(leadId);
 
-
-  const supabase =
-
-    await createClient();
-
-
-
-  const {
-
-    data: { user },
-
-    error: authError,
-
-  } =
-
-    await supabase.auth.getUser();
-
-
-
-  if (
-
-    authError ||
-
-    !user
-
-  ) {
-
-    redirect('/login');
-
-  }
-
-
+  /*
+   * This client is server-only and bypasses lead_contacts RLS.
+   * It is created only after can_work_lead() has approved the
+   * current signed-in user for this specific lead.
+   *
+   * Raw contact values are never returned from this action.
+   */
+  const adminSupabase = createAdminClient();
 
   /* =====================================================
+
+
 
      LOAD PHONE / WHATSAPP CONTACT
 
 
 
+
+
+
+
      A website lead may only have:
+
+
 
      contact_type = phone
 
 
 
+
+
+
+
      An existing WhatsApp lead may already have:
+
+
 
      contact_type = whatsapp
 
+
+
   ===================================================== */
 
-
-
   const {
-
     data: contacts,
 
     error: contactsError,
+  } = await adminSupabase
 
-  } =
+    .from("lead_contacts")
 
-    await supabase
+    .select(
+      `
 
-      .from(
 
-        'lead_contacts'
-
-      )
-
-      .select(
-
-        `
 
         lead_id,
 
+
+
         contact_type,
+
+
 
         value,
 
+
+
         normalized_value,
+
+
 
         is_primary,
 
+
+
         verified
 
-        `
-
-      )
-
-      .eq(
-
-        'lead_id',
-
-        leadId
-
-      )
-
-      .in(
-
-        'contact_type',
-
-        [
-
-          'whatsapp',
-
-          'phone',
-
-        ]
-
-      )
-
-      .order(
-
-        'is_primary',
-
-        {
-
-          ascending: false,
-
-        }
-
-      );
 
 
+        `,
+    )
+
+    .eq(
+      "lead_id",
+
+      leadId,
+    )
+
+    .in(
+      "contact_type",
+
+      ["whatsapp", "phone"],
+    )
+
+    .order(
+      "is_primary",
+
+      {
+        ascending: false,
+      },
+    );
 
   if (contactsError) {
-
     redirect(
-
       conversationUrl(
-
         leadId,
 
         {
-
-          error:
-
-            `Unable to load contact number: ${contactsError.message}`,
-
-        }
-
-      )
-
+          error: `Unable to load contact number: ${contactsError.message}`,
+        },
+      ),
     );
-
   }
 
+  const whatsappContact = contacts?.find(
+    (contact) => contact.contact_type === "whatsapp",
+  );
 
-
-  const whatsappContact =
-
-    contacts?.find(
-
-      (contact) =>
-
-        contact.contact_type ===
-
-        'whatsapp'
-
-    );
-
-
-
-  const phoneContact =
-
-    contacts?.find(
-
-      (contact) =>
-
-        contact.contact_type ===
-
-        'phone'
-
-    );
-
-
+  const phoneContact = contacts?.find(
+    (contact) => contact.contact_type === "phone",
+  );
 
   /*
+
+
 
    * Prefer the existing WhatsApp number.
 
+
+
    * Otherwise use the number supplied
+
+
 
    * through the website/form.
 
+
+
    */
 
-  const sourceContact =
+  const sourceContact = whatsappContact || phoneContact;
 
-    whatsappContact ||
-
-    phoneContact;
-
-
-
-  const to =
-
-    normalizeWaId(
-
-      sourceContact?.normalized_value ||
-
-        sourceContact?.value
-
-    );
-
-
+  const to = normalizeWaId(
+    sourceContact?.normalized_value || sourceContact?.value,
+  );
 
   if (!to) {
-
     redirect(
-
       conversationUrl(
-
         leadId,
 
         {
-
-          error:
-
-            'This lead does not have a usable phone number for WhatsApp.',
-
-        }
-
-      )
-
+          error: "This lead does not have a usable phone number for WhatsApp.",
+        },
+      ),
     );
-
   }
-
-
 
   /*
 
+
+
    * E.164 international phone numbers
+
+
 
    * can contain at most 15 digits.
 
+
+
    *
+
+
 
    * Do not automatically guess a
 
+
+
    * missing country code.
+
+
 
    */
 
-  if (
-
-    to.length < 8 ||
-
-    to.length > 15
-
-  ) {
-
+  if (to.length < 8 || to.length > 15) {
     redirect(
-
       conversationUrl(
-
         leadId,
 
         {
-
           error:
-
-            'The phone number does not look complete. Add the international country code before starting WhatsApp.',
-
-        }
-
-      )
-
+            "The phone number does not look complete. Add the international country code before starting WhatsApp.",
+        },
+      ),
     );
-
   }
 
-
-
   /* =====================================================
+
+
 
      DUPLICATE SAFETY
 
 
 
+
+
+
+
      If this number is already attached as
 
+
+
      WhatsApp to ANOTHER lead, do not silently
+
+
 
      move it.
 
 
 
+
+
+
+
      We should merge duplicate leads separately.
+
+
 
   ===================================================== */
 
-
-
   const {
-
     data: existingWaOwner,
 
     error: ownerError,
+  } = await adminSupabase
 
-  } =
+    .from("lead_contacts")
 
-    await supabase
+    .select(
+      `
 
-      .from(
 
-        'lead_contacts'
-
-      )
-
-      .select(
-
-        `
 
         lead_id,
 
+
+
         normalized_value
 
-        `
-
-      )
-
-      .eq(
-
-        'contact_type',
-
-        'whatsapp'
-
-      )
-
-      .eq(
-
-        'normalized_value',
-
-        to
-
-      )
-
-      .limit(1)
-
-      .maybeSingle();
 
 
+        `,
+    )
+
+    .eq(
+      "contact_type",
+
+      "whatsapp",
+    )
+
+    .eq(
+      "normalized_value",
+
+      to,
+    )
+
+    .limit(1)
+
+    .maybeSingle();
 
   if (ownerError) {
-
     redirect(
-
       conversationUrl(
-
         leadId,
 
         {
-
-          error:
-
-            `Unable to check existing WhatsApp identity: ${ownerError.message}`,
-
-        }
-
-      )
-
+          error: `Unable to check existing WhatsApp identity: ${ownerError.message}`,
+        },
+      ),
     );
-
   }
 
-
-
-  if (
-
-    existingWaOwner?.lead_id &&
-
-    existingWaOwner.lead_id !==
-
-      leadId
-
-  ) {
-
+  if (existingWaOwner?.lead_id && existingWaOwner.lead_id !== leadId) {
     redirect(
-
       conversationUrl(
-
         leadId,
 
         {
-
           error:
-
-            'This WhatsApp number already belongs to another CRM lead. Merge the duplicate lead before starting a new WhatsApp conversation.',
-
-        }
-
-      )
-
+            "This WhatsApp number already belongs to another CRM lead. Merge the duplicate lead before starting a new WhatsApp conversation.",
+        },
+      ),
     );
-
   }
-
-
 
   /* =====================================================
+
+
 
      VERIFY TEMPLATE AGAINST META
 
+
+
   ===================================================== */
 
-
-
-  const catalog =
-
-    await getApprovedWhatsAppTemplates();
-
-
+  const catalog = await getApprovedWhatsAppTemplates();
 
   if (catalog.error) {
-
     redirect(
-
       conversationUrl(
-
         leadId,
 
         {
-
-          error:
-
-            `Unable to load WhatsApp templates: ${catalog.error}`,
-
-        }
-
-      )
-
+          error: `Unable to load WhatsApp templates: ${catalog.error}`,
+        },
+      ),
     );
-
   }
 
-
-
-  const template =
-
-    catalog.templates.find(
-
-      (item) =>
-
-        item.name ===
-
-          templateName &&
-
-        item.language ===
-
-          language
-
-    );
-
-
+  const template = catalog.templates.find(
+    (item) => item.name === templateName && item.language === language,
+  );
 
   if (!template) {
-
     redirect(
-
       conversationUrl(
-
         leadId,
 
         {
-
           error:
-
-            'That WhatsApp template is not currently approved or available.',
-
-        }
-
-      )
-
+            "That WhatsApp template is not currently approved or available.",
+        },
+      ),
     );
-
   }
-
-
 
   if (!template.supported) {
-
     redirect(
-
       conversationUrl(
-
         leadId,
 
         {
-
           error:
-
             template.unsupportedReason ||
-
-            'This template type is not supported yet.',
-
-        }
-
-      )
-
+            "This template type is not supported yet.",
+        },
+      ),
     );
-
   }
 
-
-
   /* =====================================================
+
+
 
      TEMPLATE VARIABLES
 
+
+
   ===================================================== */
 
+  const headerValues = Array.from(
+    {
+      length: template.headerVariableCount,
+    },
 
+    (_, index) =>
+      textValue(
+        formData,
 
-  const headerValues =
+        `header_param_${index + 1}`,
+      ) ?? "",
+  );
 
-    Array.from(
+  const bodyValues = Array.from(
+    {
+      length: template.bodyVariableCount,
+    },
 
-      {
+    (_, index) =>
+      textValue(
+        formData,
 
-        length:
-
-          template.headerVariableCount,
-
-      },
-
-      (_, index) =>
-
-        textValue(
-
-          formData,
-
-          `header_param_${index + 1}`
-
-        ) ?? ''
-
-    );
-
-
-
-  const bodyValues =
-
-    Array.from(
-
-      {
-
-        length:
-
-          template.bodyVariableCount,
-
-      },
-
-      (_, index) =>
-
-        textValue(
-
-          formData,
-
-          `body_param_${index + 1}`
-
-        ) ?? ''
-
-    );
-
-
+        `body_param_${index + 1}`,
+      ) ?? "",
+  );
 
   if (
-
-    headerValues.some(
-
-      (value) =>
-
-        !value.trim()
-
-    ) ||
-
-    bodyValues.some(
-
-      (value) =>
-
-        !value.trim()
-
-    )
-
+    headerValues.some((value) => !value.trim()) ||
+    bodyValues.some((value) => !value.trim())
   ) {
-
     redirect(
-
       conversationUrl(
-
         leadId,
 
         {
-
-          error:
-
-            'Complete all required WhatsApp template fields.',
-
-        }
-
-      )
-
+          error: "Complete all required WhatsApp template fields.",
+        },
+      ),
     );
-
   }
 
+  const components: Array<{
+    type: "header" | "body";
 
+    parameters: Array<{
+      type: "text";
 
-  const components:
+      text: string;
+    }>;
+  }> = [];
 
-    Array<{
-
-      type:
-
-        | 'header'
-
-        | 'body';
-
-
-
-      parameters: Array<{
-
-        type: 'text';
-
-        text: string;
-
-      }>;
-
-    }> = [];
-
-
-
-  if (
-
-    headerValues.length >
-
-    0
-
-  ) {
-
+  if (headerValues.length > 0) {
     components.push({
+      type: "header",
 
-      type: 'header',
+      parameters: headerValues.map((value) => ({
+        type: "text",
 
-
-
-      parameters:
-
-        headerValues.map(
-
-          (value) => ({
-
-            type: 'text',
-
-            text: value,
-
-          })
-
-        ),
-
+        text: value,
+      })),
     });
-
   }
 
-
-
-  if (
-
-    bodyValues.length >
-
-    0
-
-  ) {
-
+  if (bodyValues.length > 0) {
     components.push({
+      type: "body",
 
-      type: 'body',
+      parameters: bodyValues.map((value) => ({
+        type: "text",
 
-
-
-      parameters:
-
-        bodyValues.map(
-
-          (value) => ({
-
-            type: 'text',
-
-            text: value,
-
-          })
-
-        ),
-
+        text: value,
+      })),
     });
-
   }
-
-
 
   /* =====================================================
 
+
+
      SEND TEMPLATE THROUGH META
+
+
 
   ===================================================== */
 
+  const accessToken = requireEnv("WA_ACCESS_TOKEN");
 
+  const phoneNumberId = requireEnv("WA_PHONE_NUMBER_ID");
 
-  const accessToken =
+  const version = whatsappApiVersion();
 
-    requireEnv(
+  const response = await fetch(
+    `https://graph.facebook.com/${version}/${phoneNumberId}/messages`,
 
-      'WA_ACCESS_TOKEN'
+    {
+      method: "POST",
 
-    );
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
 
+        "Content-Type": "application/json",
+      },
 
+      body: JSON.stringify({
+        messaging_product: "whatsapp",
 
-  const phoneNumberId =
+        recipient_type: "individual",
 
-    requireEnv(
+        to,
 
-      'WA_PHONE_NUMBER_ID'
+        type: "template",
 
-    );
+        template: {
+          name: template.name,
 
+          language: {
+            code: template.language,
+          },
 
-
-  const version =
-
-    whatsappApiVersion();
-
-
-
-  const response =
-
-    await fetch(
-
-      `https://graph.facebook.com/${version}/${phoneNumberId}/messages`,
-
-      {
-
-        method: 'POST',
-
-
-
-        headers: {
-
-          Authorization:
-
-            `Bearer ${accessToken}`,
-
-
-
-          'Content-Type':
-
-            'application/json',
-
+          ...(components.length
+            ? {
+                components,
+              }
+            : {}),
         },
+      }),
 
+      cache: "no-store",
+    },
+  );
 
+  const responseText = await response.text();
 
-        body:
-
-          JSON.stringify({
-
-            messaging_product:
-
-              'whatsapp',
-
-
-
-            recipient_type:
-
-              'individual',
-
-
-
-            to,
-
-
-
-            type:
-
-              'template',
-
-
-
-            template: {
-
-              name:
-
-                template.name,
-
-
-
-              language: {
-
-                code:
-
-                  template.language,
-
-              },
-
-
-
-              ...(components.length
-
-                ? {
-
-                    components,
-
-                  }
-
-                : {}),
-
-            },
-
-          }),
-
-
-
-        cache:
-
-          'no-store',
-
-      }
-
-    );
-
-
-
-  const responseText =
-
-    await response.text();
-
-
-
-  let meta:
-
-    MetaSendResponse = {};
-
-
+  let meta: MetaSendResponse = {};
 
   try {
-
-    meta =
-
-      responseText
-
-        ? JSON.parse(
-
-            responseText
-
-          )
-
-        : {};
-
+    meta = responseText ? JSON.parse(responseText) : {};
   } catch {
-
     meta = {};
-
   }
 
-
-
   if (!response.ok) {
-
     const metaMessage =
-
-      meta.error?.message ||
-
-      `Meta returned HTTP ${response.status}.`;
-
-
+      meta.error?.message || `Meta returned HTTP ${response.status}.`;
 
     /*
 
+
+
      * IMPORTANT:
 
+
+
      *
+
+
 
      * Nothing in the CRM is converted to
 
+
+
      * WhatsApp when Meta rejects the number.
+
+
 
      *
 
+
+
      * The lead remains a website/form lead.
+
+
 
      */
 
     redirect(
-
       conversationUrl(
-
         leadId,
 
         {
-
-          error:
-
-            `Unable to start WhatsApp: ${metaMessage}`,
-
-        }
-
-      )
-
+          error: `Unable to start WhatsApp: ${metaMessage}`,
+        },
+      ),
     );
-
   }
 
+  const externalMessageId = meta.messages?.[0]?.id?.trim() || null;
 
-
-  const externalMessageId =
-
-    meta.messages?.[0]
-
-      ?.id?.trim() ||
-
-    null;
-
-
-
-  const returnedWaId =
-
-    normalizeWaId(
-
-      meta.contacts?.[0]
-
-        ?.wa_id
-
-    );
-
-
+  const returnedWaId = normalizeWaId(meta.contacts?.[0]?.wa_id);
 
   /*
+
+
 
    * Meta normally returns wa_id when it
 
+
+
    * accepts the recipient.
+
+
 
    *
 
+
+
    * Fall back to the submitted normalized
+
+
 
    * number so a successful API send is not
 
+
+
    * lost if contacts[] is absent.
+
+
 
    */
 
-  const resolvedWaId =
+  const resolvedWaId = returnedWaId || to;
 
-    returnedWaId ||
-
-    to;
-
-
-
-  const whatsappVerified =
-
-    Boolean(
-
-      returnedWaId
-
-    );
-
-
+  const whatsappVerified = Boolean(returnedWaId);
 
   /* =====================================================
+
+
 
      SECOND DUPLICATE CHECK USING RETURNED WA_ID
 
+
+
   ===================================================== */
 
-
-
   const {
-
     data: resolvedOwner,
 
-    error:
+    error: resolvedOwnerError,
+  } = await adminSupabase
 
-      resolvedOwnerError,
+    .from("lead_contacts")
 
-  } =
+    .select(
+      `
 
-    await supabase
 
-      .from(
-
-        'lead_contacts'
-
-      )
-
-      .select(
-
-        `
 
         lead_id,
+
+
 
         normalized_value
 
-        `
-
-      )
-
-      .eq(
-
-        'contact_type',
-
-        'whatsapp'
-
-      )
-
-      .eq(
-
-        'normalized_value',
-
-        resolvedWaId
-
-      )
-
-      .limit(1)
-
-      .maybeSingle();
 
 
+        `,
+    )
+
+    .eq(
+      "contact_type",
+
+      "whatsapp",
+    )
+
+    .eq(
+      "normalized_value",
+
+      resolvedWaId,
+    )
+
+    .limit(1)
+
+    .maybeSingle();
 
   if (resolvedOwnerError) {
-
     redirect(
-
       conversationUrl(
-
         leadId,
 
         {
-
-          error:
-
-            `WhatsApp was sent, but CRM identity checking failed: ${resolvedOwnerError.message}. Do not resend the template.`,
-
-        }
-
-      )
-
+          error: `WhatsApp was sent, but CRM identity checking failed: ${resolvedOwnerError.message}. Do not resend the template.`,
+        },
+      ),
     );
-
   }
 
-
-
-  if (
-
-    resolvedOwner?.lead_id &&
-
-    resolvedOwner.lead_id !==
-
-      leadId
-
-  ) {
-
+  if (resolvedOwner?.lead_id && resolvedOwner.lead_id !== leadId) {
     redirect(
-
       conversationUrl(
-
         leadId,
 
         {
-
           error:
-
-            'WhatsApp was sent, but Meta resolved this number to a WhatsApp identity already attached to another CRM lead. Do not resend. The two lead records need to be merged.',
-
-        }
-
-      )
-
+            "WhatsApp was sent, but Meta resolved this number to a WhatsApp identity already attached to another CRM lead. Do not resend. The two lead records need to be merged.",
+        },
+      ),
     );
-
   }
-
-
 
   /* =====================================================
+
+
 
      CREATE WHATSAPP CONTACT ON EXISTING LEAD
 
+
+
   ===================================================== */
 
-
-
   if (!whatsappContact) {
+    const { error: whatsappContactError } = await adminSupabase
 
-    const {
+      .from("lead_contacts")
 
-      error:
+      .insert({
+        lead_id: leadId,
 
-        whatsappContactError,
+        contact_type: "whatsapp",
 
-    } =
-
-      await supabase
-
-        .from(
-
-          'lead_contacts'
-
-        )
-
-        .insert({
-
-          lead_id:
-
-            leadId,
+        /*
 
 
-
-          contact_type:
-
-            'whatsapp',
-
-
-
-          /*
 
            * Keep the original submitted
 
+
+
            * number for human display.
+
+
 
            */
 
-          value:
+        value: sourceContact?.value || resolvedWaId,
 
-            sourceContact?.value ||
+        normalized_value: resolvedWaId,
 
-            resolvedWaId,
+        is_primary: true,
 
+        verified: whatsappVerified,
+      });
 
-
-          normalized_value:
-
-            resolvedWaId,
-
-
-
-          is_primary:
-
-            true,
-
-
-
-          verified:
-
-            whatsappVerified,
-
-        });
-
-
-
-    if (
-
-      whatsappContactError
-
-    ) {
-
+    if (whatsappContactError) {
       redirect(
-
         conversationUrl(
-
           leadId,
 
           {
-
-            error:
-
-              `WhatsApp was sent, but the CRM could not attach the WhatsApp number: ${whatsappContactError.message}. Do not resend the template.`,
-
-          }
-
-        )
-
+            error: `WhatsApp was sent, but the CRM could not attach the WhatsApp number: ${whatsappContactError.message}. Do not resend the template.`,
+          },
+        ),
       );
-
     }
-
   }
 
-
-
   /* =====================================================
+
+
 
      FIND EXISTING WHATSAPP CONVERSATION
 
+
+
   ===================================================== */
 
-
-
   const {
+    data: existingConversation,
 
-    data:
+    error: existingConversationError,
+  } = await supabase
 
-      existingConversation,
+    .from("conversations")
 
-    error:
+    .select(
+      `
 
-      existingConversationError,
 
-  } =
-
-    await supabase
-
-      .from(
-
-        'conversations'
-
-      )
-
-      .select(
-
-        `
 
         id,
 
+
+
         lead_id,
+
+
 
         channel,
 
+
+
         last_message_at
 
-        `
-
-      )
-
-      .eq(
-
-        'lead_id',
-
-        leadId
-
-      )
-
-      .eq(
-
-        'channel',
-
-        'whatsapp'
-
-      )
-
-      .order(
-
-        'last_message_at',
-
-        {
-
-          ascending:
-
-            false,
 
 
+        `,
+    )
 
-          nullsFirst:
+    .eq(
+      "lead_id",
 
-            false,
+      leadId,
+    )
 
-        }
+    .eq(
+      "channel",
 
-      )
+      "whatsapp",
+    )
 
-      .limit(1)
+    .order(
+      "last_message_at",
 
-      .maybeSingle();
+      {
+        ascending: false,
 
+        nullsFirst: false,
+      },
+    )
 
+    .limit(1)
 
-  if (
+    .maybeSingle();
 
-    existingConversationError
-
-  ) {
-
+  if (existingConversationError) {
     redirect(
-
       conversationUrl(
-
         leadId,
 
         {
-
-          error:
-
-            `WhatsApp was sent, but the CRM could not check the conversation: ${existingConversationError.message}. Do not resend the template.`,
-
-        }
-
-      )
-
+          error: `WhatsApp was sent, but the CRM could not check the conversation: ${existingConversationError.message}. Do not resend the template.`,
+        },
+      ),
     );
-
   }
 
-
-
-  let conversationId =
-
-    existingConversation?.id ??
-
-    null;
-
-
+  let conversationId = existingConversation?.id ?? null;
 
   /* =====================================================
+
+
 
      CREATE WHATSAPP CONVERSATION IF NEEDED
 
+
+
   ===================================================== */
 
-
-
   if (!conversationId) {
-
-    const now =
-
-      new Date().toISOString();
-
-
+    const now = new Date().toISOString();
 
     const {
+      data: createdConversation,
 
-      data:
+      error: createConversationError,
+    } = await supabase
 
-        createdConversation,
+      .from("conversations")
 
-      error:
+      .insert({
+        lead_id: leadId,
 
-        createConversationError,
+        channel: "whatsapp",
 
-    } =
-
-      await supabase
-
-        .from(
-
-          'conversations'
-
-        )
-
-        .insert({
-
-          lead_id:
-
-            leadId,
+        /*
 
 
-
-          channel:
-
-            'whatsapp',
-
-
-
-          /*
 
            * Your inbound WhatsApp system
 
+
+
            * identifies the contact using
+
+
 
            * their WhatsApp ID.
 
+
+
            */
 
-          external_conversation_id:
+        external_conversation_id: resolvedWaId,
 
-            resolvedWaId,
+        /*
 
 
-
-          /*
 
            * Business-side WhatsApp phone
 
+
+
            * number ID.
+
+
 
            */
 
-          external_account_id:
+        external_account_id: phoneNumberId,
 
-            phoneNumberId,
+        status: "open",
 
+        started_at: now,
 
+        last_message_at: now,
+      })
 
-          status:
+      .select("id")
 
-            'open',
+      .single();
 
-
-
-          started_at:
-
-            now,
-
-
-
-          last_message_at:
-
-            now,
-
-        })
-
-        .select('id')
-
-        .single();
-
-
-
-    if (
-
-      createConversationError ||
-
-      !createdConversation?.id
-
-    ) {
-
+    if (createConversationError || !createdConversation?.id) {
       redirect(
-
         conversationUrl(
-
           leadId,
 
           {
-
-            error:
-
-              `WhatsApp was sent, but the CRM conversation could not be created: ${
-
-                createConversationError
-
-                  ?.message ||
-
-                'Unknown conversation error'
-
-              }. Do not resend the template.`,
-
-          }
-
-        )
-
+            error: `WhatsApp was sent, but the CRM conversation could not be created: ${
+              createConversationError?.message || "Unknown conversation error"
+            }. Do not resend the template.`,
+          },
+        ),
       );
-
     }
 
-
-
-    conversationId =
-
-      createdConversation.id;
-
+    conversationId = createdConversation.id;
   }
 
-
-
   /* =====================================================
+
+
 
      RENDER READABLE MESSAGE FOR CRM HISTORY
 
+
+
   ===================================================== */
 
+  const renderedHeader = renderTemplateText(
+    template.headerText,
 
+    headerValues,
+  );
 
-  const renderedHeader =
+  const renderedBody = renderTemplateText(
+    template.bodyText,
 
-    renderTemplateText(
-
-      template.headerText,
-
-      headerValues
-
-    );
-
-
-
-  const renderedBody =
-
-    renderTemplateText(
-
-      template.bodyText,
-
-      bodyValues
-
-    );
-
-
+    bodyValues,
+  );
 
   const crmBody =
-
-    [
-
-      renderedHeader,
-
-      renderedBody,
-
-      template.footerText,
-
-    ]
+    [renderedHeader, renderedBody, template.footerText]
 
       .filter(Boolean)
 
-      .join('\n\n') ||
-
-    `WhatsApp template: ${template.name}`;
-
-
+      .join("\n\n") || `WhatsApp template: ${template.name}`;
 
   /* =====================================================
+
+
 
      LOG WHATSAPP MESSAGE
 
+
+
   ===================================================== */
 
+  const { error: logError } = await supabase.rpc(
+    "log_lead_interaction",
 
+    {
+      p_lead_id: leadId,
 
-  const {
+      p_channel: "whatsapp",
 
-    error: logError,
+      p_direction: "outbound",
 
-  } =
+      p_body: crmBody,
 
-    await supabase.rpc(
-
-      'log_lead_interaction',
-
-      {
-
-        p_lead_id:
-
-          leadId,
-
-
-
-        p_channel:
-
-          'whatsapp',
-
-
-
-        p_direction:
-
-          'outbound',
-
-
-
-        p_body:
-
-          crmBody,
-
-
-
-        p_conversation_id:
-
-          conversationId,
-
-      }
-
-    );
-
-
+      p_conversation_id: conversationId,
+    },
+  );
 
   if (logError) {
-
     redirect(
-
       conversationUrl(
-
         leadId,
 
         {
-
-          error:
-
-            `WhatsApp was sent, but CRM message logging failed: ${logError.message}. Do not resend this template.`,
-
-        }
-
-      )
-
+          error: `WhatsApp was sent, but CRM message logging failed: ${logError.message}. Do not resend this template.`,
+        },
+      ),
     );
-
   }
-
-
 
   /*
 
+
+
  * Attach Meta's WhatsApp message ID
+
+
 
  * to the outbound template message.
 
+
+
  *
+
+
 
  * This lets Meta webhook status events
 
+
+
  * update this exact CRM message:
+
+
 
  *
 
+
+
  * sent → delivered → read / failed
+
+
 
  */
 
-if (externalMessageId) {
-
-  const {
-
-    error: attachError,
-
-  } =
-
-    await supabase.rpc(
-
-      'attach_whatsapp_outbound_message_id',
+  if (externalMessageId) {
+    const { error: attachError } = await supabase.rpc(
+      "attach_whatsapp_outbound_message_id",
 
       {
+        p_lead_id: leadId,
 
-        p_lead_id:
+        p_conversation_id: conversationId,
 
+        p_body: crmBody,
+
+        p_external_message_id: externalMessageId,
+      },
+    );
+
+    if (attachError) {
+      redirect(
+        conversationUrl(
           leadId,
 
-
-
-        p_conversation_id:
-
-          conversationId,
-
-
-
-        p_body:
-
-          crmBody,
-
-
-
-        p_external_message_id:
-
-          externalMessageId,
-
-      }
-
-    );
-
-
-
-  if (attachError) {
-
-    redirect(
-
-      conversationUrl(
-
-        leadId,
-
-        {
-
-          error:
-
-            `WhatsApp template was sent and logged, but its Meta message ID could not be attached: ${attachError.message}. Do not resend this template.`,
-
-        }
-
-      )
-
-    );
-
+          {
+            error: `WhatsApp template was sent and logged, but its Meta message ID could not be attached: ${attachError.message}. Do not resend this template.`,
+          },
+        ),
+      );
+    }
   }
 
-}
-
-
-
   /* =====================================================
+
+
 
      SWITCH CURRENT COMMUNICATION CHANNEL
 
 
 
+
+
+
+
      IMPORTANT:
+
+
 
      We DO NOT change:
 
+
+
      - first touch
+
+
 
      - lead creation source
 
+
+
      - website attribution
+
+
 
      - campaign attribution
 
 
 
+
+
+
+
      Only the current conversation channel
+
+
 
      becomes WhatsApp.
 
+
+
   ===================================================== */
 
+  const { error: leadUpdateError } = await supabase
 
+    .from("leads")
 
-  const {
+    .update({
+      current_contact_channel: "whatsapp",
+    })
 
-    error:
+    .eq(
+      "id",
 
-      leadUpdateError,
-
-  } =
-
-    await supabase
-
-      .from('leads')
-
-      .update({
-
-        current_contact_channel:
-
-          'whatsapp',
-
-      })
-
-      .eq(
-
-        'id',
-
-        leadId
-
-      );
-
-
+      leadId,
+    );
 
   if (leadUpdateError) {
-
     redirect(
-
       conversationUrl(
-
         leadId,
 
         {
-
-          error:
-
-            `WhatsApp was sent and logged, but the lead channel could not be updated: ${leadUpdateError.message}. Do not resend.`,
-
-        }
-
-      )
-
+          error: `WhatsApp was sent and logged, but the lead channel could not be updated: ${leadUpdateError.message}. Do not resend.`,
+        },
+      ),
     );
-
   }
 
+  revalidatePath("/conversations");
 
+  revalidatePath(`/leads/${leadId}`);
 
-  revalidatePath(
-    '/conversations'
-  );
+  revalidatePath("/leads");
 
-  revalidatePath(
-    `/leads/${leadId}`
-  );
+  revalidatePath("/dashboard");
 
-  revalidatePath('/leads');
-  revalidatePath('/dashboard');
-  revalidatePath('/admissions');
-  revalidatePath('/pipeline');
-  revalidatePath('/funnel');
+  revalidatePath("/admissions");
+
+  revalidatePath("/pipeline");
+
+  revalidatePath("/funnel");
 
   redirect(
     conversationUrl(
       leadId,
+
       {
-        notice:
-          'whatsapp-started',
+        notice: "whatsapp-started",
 
         ...(externalMessageId
           ? {
-              wamid:
-                externalMessageId,
+              wamid: externalMessageId,
             }
           : {}),
-      }
-    )
+      },
+    ),
   );
 }
 
-
-export async function markConversationReadAction(
-
-  leadId: string
-
-) {
-
+export async function markConversationReadAction(leadId: string) {
   if (useMockData) {
-
     return {
-
       ok: true,
-
     };
-
   }
 
-
-
-  const supabase =
-
-    await createClient();
-
-
+  const supabase = await createClient();
 
   const {
-
     data: { user },
 
     error: authError,
+  } = await supabase.auth.getUser();
 
-  } =
-
-    await supabase.auth.getUser();
-
-
-
-  if (
-
-    authError ||
-
-    !user
-
-  ) {
-
+  if (authError || !user) {
     return {
-
       ok: false,
 
-      error:
-
-        'Not authenticated.',
-
+      error: "Not authenticated.",
     };
-
   }
 
+  const now = new Date().toISOString();
 
+  const { error } = await supabase
 
-  const now =
+    .from("lead_inbox_reads")
 
-    new Date().toISOString();
+    .upsert(
+      {
+        user_id: user.id,
 
+        lead_id: leadId,
 
+        last_read_at: now,
 
-  const {
+        updated_at: now,
+      },
 
-    error,
-
-  } =
-
-    await supabase
-
-      .from(
-
-        'lead_inbox_reads'
-
-      )
-
-      .upsert(
-
-        {
-
-          user_id:
-
-            user.id,
-
-
-
-          lead_id:
-
-            leadId,
-
-
-
-          last_read_at:
-
-            now,
-
-
-
-          updated_at:
-
-            now,
-
-        },
-
-        {
-
-          onConflict:
-
-            'user_id,lead_id',
-
-        }
-
-      );
-
-
-
-  if (error) {
-
-    console.error(
-
-      'Unable to mark conversation as read:',
-
-      error
-
+      {
+        onConflict: "user_id,lead_id",
+      },
     );
 
+  if (error) {
+    console.error(
+      "Unable to mark conversation as read:",
 
+      error,
+    );
 
     return {
-
       ok: false,
 
-      error:
-
-        error.message,
-
+      error: error.message,
     };
-
   }
 
-
-
   return {
-
     ok: true,
-
   };
-
 }
