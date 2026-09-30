@@ -1,4 +1,4 @@
-"use client";
+'use client';
 
 import {
   Bar,
@@ -9,9 +9,11 @@ import {
   Tooltip,
   XAxis,
   YAxis,
-} from "recharts";
+} from 'recharts';
 
-import type { TeamPerformanceEmployee } from "@/lib/team-performance-data";
+import type {
+  TeamPerformanceEmployee,
+} from '@/lib/team-performance-data';
 
 function shortName(name: string) {
   const parts = name.trim().split(/\s+/).filter(Boolean);
@@ -41,7 +43,9 @@ function TooltipCard({
 
   return (
     <div className="min-w-[180px] rounded-2xl border border-slate-200 bg-white px-4 py-3 shadow-xl">
-      <div className="text-xs font-bold text-slate-900">{label}</div>
+      <div className="text-xs font-bold text-slate-900">
+        {label}
+      </div>
 
       <div className="mt-2 space-y-1.5">
         {payload.map((item) => (
@@ -49,7 +53,9 @@ function TooltipCard({
             key={item.name}
             className="flex items-center justify-between gap-6 text-xs"
           >
-            <span className="text-slate-500">{item.name}</span>
+            <span className="text-slate-500">
+              {item.name}
+            </span>
 
             <span className="font-bold text-slate-900">
               {Number(item.value ?? 0).toLocaleString()}
@@ -95,8 +101,8 @@ export function TeamPerformanceInsights({
           </div>
 
           <p className="mt-1 text-xs leading-5 text-slate-500">
-            Current active portfolio compared with leads worked, outbound
-            interactions and completed follow-ups in the selected period.
+            Current active portfolio compared with leads worked,
+            outbound interactions and completed follow-ups in the selected period.
           </p>
         </div>
 
@@ -121,7 +127,7 @@ export function TeamPerformanceInsights({
                 dataKey="name"
                 tick={{
                   fontSize: 11,
-                  fill: "#64748b",
+                  fill: '#64748b',
                 }}
                 axisLine={false}
                 tickLine={false}
@@ -131,7 +137,7 @@ export function TeamPerformanceInsights({
                 allowDecimals={false}
                 tick={{
                   fontSize: 11,
-                  fill: "#94a3b8",
+                  fill: '#94a3b8',
                 }}
                 axisLine={false}
                 tickLine={false}
@@ -211,7 +217,7 @@ export function TeamPerformanceInsights({
                 dataKey="name"
                 tick={{
                   fontSize: 11,
-                  fill: "#64748b",
+                  fill: '#64748b',
                 }}
                 axisLine={false}
                 tickLine={false}
@@ -221,7 +227,7 @@ export function TeamPerformanceInsights({
                 allowDecimals={false}
                 tick={{
                   fontSize: 11,
-                  fill: "#94a3b8",
+                  fill: '#94a3b8',
                 }}
                 axisLine={false}
                 tickLine={false}

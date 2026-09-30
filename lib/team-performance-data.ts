@@ -1,5 +1,5 @@
-import { useMockData } from "@/lib/config";
-import { createClient } from "@/lib/supabase/server";
+import { useMockData } from '@/lib/config';
+import { createClient } from '@/lib/supabase/server';
 
 export type TeamPerformanceSummary = {
   teamMembers: number;
@@ -74,6 +74,29 @@ export type TeamRecentWork = {
   toStage: string | null;
 };
 
+
+export type TeamUnassignedLead = {
+  id: string;
+  leadCode: string;
+  leadName: string;
+  currentStage: string;
+  intent: string;
+  courseName: string | null;
+  preferredLocation: string | null;
+  country: string | null;
+  leadCreationChannel: string | null;
+  nextFollowupAt: string | null;
+  lastContactedAt: string | null;
+  createdAt: string;
+  priorityScore: number;
+  priorityReason: string;
+};
+
+export type TeamAssignmentQueue = {
+  total: number;
+  leads: TeamUnassignedLead[];
+};
+
 export type TeamPerformanceSnapshot = {
   range: {
     startDate: string;
@@ -88,7 +111,9 @@ export type TeamPerformanceSnapshot = {
 type UnknownRecord = Record<string, unknown>;
 
 function asRecord(value: unknown): UnknownRecord {
-  return value && typeof value === "object" ? (value as UnknownRecord) : {};
+  return value && typeof value === 'object'
+    ? (value as UnknownRecord)
+    : {};
 }
 
 function asArray(value: unknown): unknown[] {
@@ -101,7 +126,7 @@ function numberValue(value: unknown) {
 }
 
 function nullableNumber(value: unknown): number | null {
-  if (value === null || value === undefined || value === "") {
+  if (value === null || value === undefined || value === '') {
     return null;
   }
 
@@ -109,8 +134,10 @@ function nullableNumber(value: unknown): number | null {
   return Number.isFinite(parsed) ? parsed : null;
 }
 
-function textValue(value: unknown, fallback = "") {
-  return typeof value === "string" && value.trim() ? value.trim() : fallback;
+function textValue(value: unknown, fallback = '') {
+  return typeof value === 'string' && value.trim()
+    ? value.trim()
+    : fallback;
 }
 
 function mapEmployee(value: unknown): TeamPerformanceEmployee {
@@ -118,8 +145,8 @@ function mapEmployee(value: unknown): TeamPerformanceEmployee {
 
   return {
     userId: textValue(row.user_id),
-    employeeName: textValue(row.employee_name, "CRM User"),
-    role: textValue(row.role, "unknown"),
+    employeeName: textValue(row.employee_name, 'CRM User'),
+    role: textValue(row.role, 'unknown'),
 
     currentAssignedTotal: numberValue(row.current_assigned_total),
     currentActiveLeads: numberValue(row.current_active_leads),
@@ -155,13 +182,13 @@ function mapEmployee(value: unknown): TeamPerformanceEmployee {
 
     assignedCohortEnrolled: numberValue(row.assigned_cohort_enrolled),
     assignedCohortEnrollmentRate: numberValue(
-      row.assigned_cohort_enrollment_rate,
+      row.assigned_cohort_enrollment_rate
     ),
     workedToEnrolledRate: numberValue(row.worked_to_enrolled_rate),
 
     firstResponses: numberValue(row.first_responses),
     medianFirstResponseMinutes: nullableNumber(
-      row.median_first_response_minutes,
+      row.median_first_response_minutes
     ),
     firstResponseOver60m: numberValue(row.first_response_over_60m),
   };
@@ -173,13 +200,13 @@ function mapRecentWork(value: unknown): TeamRecentWork {
   return {
     occurredAt: textValue(row.occurred_at),
     userId: textValue(row.user_id),
-    employeeName: textValue(row.employee_name, "CRM User"),
-    role: textValue(row.role, "unknown"),
-    eventType: textValue(row.event_type, "activity"),
+    employeeName: textValue(row.employee_name, 'CRM User'),
+    role: textValue(row.role, 'unknown'),
+    eventType: textValue(row.event_type, 'activity'),
     channel: textValue(row.channel) || null,
     leadId: textValue(row.lead_id),
-    leadCode: textValue(row.lead_code, "Lead"),
-    leadName: textValue(row.lead_name, textValue(row.lead_code, "Lead")),
+    leadCode: textValue(row.lead_code, 'Lead'),
+    leadName: textValue(row.lead_name, textValue(row.lead_code, 'Lead')),
     fromStage: textValue(row.from_stage) || null,
     toStage: textValue(row.to_stage) || null,
   };
@@ -209,7 +236,7 @@ function mapSnapshot(value: unknown): TeamPerformanceSnapshot {
     range: {
       startDate: textValue(range.startDate),
       endDate: textValue(range.endDate),
-      timezone: textValue(range.timezone, "Asia/Kolkata"),
+      timezone: textValue(range.timezone, 'Asia/Kolkata'),
     },
     summary: {
       teamMembers: numberValue(summary.team_members),
@@ -230,13 +257,13 @@ function mapSnapshot(value: unknown): TeamPerformanceSnapshot {
 
 function mockSnapshot(
   startDate: string,
-  endDate: string,
+  endDate: string
 ): TeamPerformanceSnapshot {
   return {
     range: {
       startDate,
       endDate,
-      timezone: "Asia/Kolkata",
+      timezone: 'Asia/Kolkata',
     },
     summary: {
       ...emptySummary(),
@@ -253,9 +280,9 @@ function mockSnapshot(
     },
     employees: [
       {
-        userId: "mock-admin",
-        employeeName: "Arun",
-        role: "admin",
+        userId: 'mock-admin',
+        employeeName: 'Arun',
+        role: 'admin',
         currentAssignedTotal: 12,
         currentActiveLeads: 10,
         needsReplyNow: 2,
@@ -292,9 +319,9 @@ function mockSnapshot(
         firstResponseOver60m: 1,
       },
       {
-        userId: "mock-employee",
-        employeeName: "Admissions Employee",
-        role: "admissions",
+        userId: 'mock-employee',
+        employeeName: 'Admissions Employee',
+        role: 'admissions',
         currentAssignedTotal: 24,
         currentActiveLeads: 23,
         needsReplyNow: 3,
@@ -337,7 +364,7 @@ function mockSnapshot(
 
 export async function getTeamPerformanceSnapshot(
   startDate: string,
-  endDate: string,
+  endDate: string
 ): Promise<TeamPerformanceSnapshot> {
   if (useMockData) {
     return mockSnapshot(startDate, endDate);
@@ -345,14 +372,460 @@ export async function getTeamPerformanceSnapshot(
 
   const supabase = await createClient();
 
-  const { data, error } = await supabase.rpc("get_team_performance_snapshot", {
-    p_start_date: startDate,
-    p_end_date: endDate,
-  });
+  const { data, error } = await supabase.rpc(
+    'get_team_performance_snapshot',
+    {
+      p_start_date: startDate,
+      p_end_date: endDate,
+    }
+  );
 
   if (error) {
-    throw new Error(`Unable to load team performance: ${error.message}`);
+    throw new Error(
+      `Unable to load team performance: ${error.message}`
+    );
   }
 
   return mapSnapshot(data);
+}
+
+
+function unassignedPriority(
+  row: UnknownRecord
+) {
+  const stage =
+    textValue(
+      row.current_stage,
+      'new'
+    );
+
+  const intent =
+    textValue(
+      row.intent,
+      'unknown'
+    );
+
+  const lastContactedAt =
+    textValue(
+      row.last_contacted_at
+    ) || null;
+
+  const nextFollowupAt =
+    textValue(
+      row.next_followup_at
+    ) || null;
+
+  const createdAt =
+    textValue(
+      row.created_at
+    );
+
+  const stageWeight: Record<
+    string,
+    number
+  > = {
+    payment_pending: 100,
+    high_intent: 90,
+    qualified: 80,
+    new: 70,
+    engaged: 60,
+    contacted: 50,
+    nurture: 30,
+    not_now: 20,
+    lost: 0,
+    unqualified: 0,
+    duplicate: 0,
+    enrolled: 0,
+  };
+
+  const intentWeight: Record<
+    string,
+    number
+  > = {
+    very_high: 18,
+    high: 12,
+    medium: 6,
+    low: 2,
+    unknown: 0,
+  };
+
+  let score =
+    (
+      stageWeight[
+        stage
+      ] ?? 25
+    ) +
+    (
+      intentWeight[
+        intent
+      ] ?? 0
+    );
+
+  const reasons: string[] =
+    [];
+
+  if (
+    stage ===
+    'payment_pending'
+  ) {
+    reasons.push(
+      'Payment pending'
+    );
+  } else if (
+    stage ===
+    'high_intent'
+  ) {
+    reasons.push(
+      'High intent'
+    );
+  } else if (
+    stage ===
+    'qualified'
+  ) {
+    reasons.push(
+      'Qualified'
+    );
+  }
+
+  if (
+    stage === 'new' &&
+    !lastContactedAt
+  ) {
+    score += 18;
+
+    reasons.push(
+      'Needs first contact'
+    );
+  }
+
+  if (
+    intent ===
+      'very_high' ||
+    intent ===
+      'high'
+  ) {
+    reasons.push(
+      `${intent.replace(
+        '_',
+        ' '
+      )} intent`
+    );
+  }
+
+  if (
+    nextFollowupAt
+  ) {
+    const due =
+      new Date(
+        nextFollowupAt
+      ).getTime();
+
+    if (
+      Number.isFinite(
+        due
+      ) &&
+      due <
+        Date.now()
+    ) {
+      score += 15;
+
+      reasons.push(
+        'Follow-up overdue'
+      );
+    }
+  }
+
+  if (
+    createdAt
+  ) {
+    const created =
+      new Date(
+        createdAt
+      ).getTime();
+
+    const ageHours =
+      (
+        Date.now() -
+        created
+      ) /
+      3600000;
+
+    if (
+      Number.isFinite(
+        ageHours
+      ) &&
+      ageHours >= 0 &&
+      ageHours <= 2
+    ) {
+      score += 10;
+
+      reasons.push(
+        'Fresh enquiry'
+      );
+    }
+  }
+
+  return {
+    score,
+    reason:
+      reasons
+        .slice(
+          0,
+          3
+        )
+        .join(
+          ' · '
+        ) ||
+      'Unassigned open lead',
+  };
+}
+
+export async function getTeamAssignmentQueue(
+  limit = 12
+): Promise<TeamAssignmentQueue> {
+  if (useMockData) {
+    return {
+      total: 2,
+      leads: [
+        {
+          id: 'mock-unassigned-1',
+          leadCode: 'LD-000901',
+          leadName: 'New enquiry',
+          currentStage: 'new',
+          intent: 'high',
+          courseName: '200 Hour YTT',
+          preferredLocation: 'Mysore',
+          country: 'Germany',
+          leadCreationChannel: 'website',
+          nextFollowupAt: null,
+          lastContactedAt: null,
+          createdAt:
+            new Date()
+              .toISOString(),
+          priorityScore: 110,
+          priorityReason:
+            'Needs first contact · high intent · Fresh enquiry',
+        },
+        {
+          id: 'mock-unassigned-2',
+          leadCode: 'LD-000902',
+          leadName: 'Payment enquiry',
+          currentStage: 'payment_pending',
+          intent: 'very_high',
+          courseName: '300 Hour YTT',
+          preferredLocation: 'Kerala',
+          country: 'United Kingdom',
+          leadCreationChannel: 'whatsapp',
+          nextFollowupAt: null,
+          lastContactedAt:
+            new Date()
+              .toISOString(),
+          createdAt:
+            new Date()
+              .toISOString(),
+          priorityScore: 118,
+          priorityReason:
+            'Payment pending · very high intent',
+        },
+      ],
+    };
+  }
+
+  const supabase =
+    await createClient();
+
+  const {
+    data,
+    error,
+    count,
+  } =
+    await supabase
+      .from(
+        'v_leads_overview'
+      )
+      .select(
+        `
+          id,
+          lead_code,
+          lead_name,
+          current_stage,
+          status,
+          intent,
+          course_name,
+          preferred_location,
+          country,
+          lead_creation_channel,
+          owner_user_id,
+          next_followup_at,
+          last_contacted_at,
+          created_at
+        `,
+        {
+          count:
+            'exact',
+        }
+      )
+      .eq(
+        'status',
+        'open'
+      )
+      .is(
+        'owner_user_id',
+        null
+      )
+      .order(
+        'created_at',
+        {
+          ascending:
+            false,
+        }
+      )
+      .limit(
+        100
+      );
+
+  if (error) {
+    throw new Error(
+      `Unable to load unassigned leads: ${error.message}`
+    );
+  }
+
+  const leads =
+    (
+      data ?? []
+    )
+      .map(
+        (
+          value
+        ): TeamUnassignedLead => {
+          const row =
+            asRecord(
+              value
+            );
+
+          const priority =
+            unassignedPriority(
+              row
+            );
+
+          return {
+            id:
+              textValue(
+                row.id
+              ),
+
+            leadCode:
+              textValue(
+                row.lead_code,
+                'Lead'
+              ),
+
+            leadName:
+              textValue(
+                row.lead_name,
+                textValue(
+                  row.lead_code,
+                  'Lead'
+                )
+              ),
+
+            currentStage:
+              textValue(
+                row.current_stage,
+                'new'
+              ),
+
+            intent:
+              textValue(
+                row.intent,
+                'unknown'
+              ),
+
+            courseName:
+              textValue(
+                row.course_name
+              ) ||
+              null,
+
+            preferredLocation:
+              textValue(
+                row.preferred_location
+              ) ||
+              null,
+
+            country:
+              textValue(
+                row.country
+              ) ||
+              null,
+
+            leadCreationChannel:
+              textValue(
+                row.lead_creation_channel
+              ) ||
+              null,
+
+            nextFollowupAt:
+              textValue(
+                row.next_followup_at
+              ) ||
+              null,
+
+            lastContactedAt:
+              textValue(
+                row.last_contacted_at
+              ) ||
+              null,
+
+            createdAt:
+              textValue(
+                row.created_at
+              ),
+
+            priorityScore:
+              priority.score,
+
+            priorityReason:
+              priority.reason,
+          };
+        }
+      )
+      .sort(
+        (
+          a,
+          b
+        ) => {
+          if (
+            a.priorityScore !==
+            b.priorityScore
+          ) {
+            return (
+              b.priorityScore -
+              a.priorityScore
+            );
+          }
+
+          return (
+            new Date(
+              b.createdAt
+            ).getTime() -
+            new Date(
+              a.createdAt
+            ).getTime()
+          );
+        }
+      )
+      .slice(
+        0,
+        Math.max(
+          1,
+          limit
+        )
+      );
+
+  return {
+    total:
+      count ?? leads.length,
+    leads,
+  };
 }
