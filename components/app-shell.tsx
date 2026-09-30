@@ -36,6 +36,7 @@ import {
 import { signOutAction } from '@/app/actions/auth';
 import { LiveRefresh } from '@/components/live-refresh';
 import { ThemeToggle } from '@/components/theme-toggle';
+import { createClient as createBrowserClient } from '@/lib/supabase/browser';
 
 type NavItem = {
   href: string;
@@ -52,7 +53,13 @@ type NavGroup = {
   items: NavItem[];
 };
 
-const navGroups: NavGroup[] = [
+type ShellProfile = {
+  fullName: string;
+  role: string | null;
+  active: boolean;
+};
+
+const adminNavGroups: NavGroup[] = [
   {
     label: 'Workspace',
     items: [
@@ -99,7 +106,26 @@ const navGroups: NavGroup[] = [
   },
 ];
 
-const nav = navGroups.flatMap((group) => group.items);
+/*
+ * Employee navigation is intentionally small.
+ * Staff should spend their time on assigned leads and conversion work,
+ * not marketing/analytics/administrative screens.
+ */
+const employeeNavGroups: NavGroup[] = [
+  {
+    label: 'My Workspace',
+    items: [
+      { href: '/dashboard', label: 'My Dashboard', icon: Gauge },
+      { href: '/leads', label: 'My Leads', icon: ContactRound },
+      { href: '/pipeline', label: 'My Pipeline', icon: Boxes },
+      { href: '/conversations', label: 'Conversations', icon: MessageSquareText },
+      { href: '/follow-ups', label: 'Follow-ups', icon: ListTodo },
+    ],
+  },
+];
+
+const adminNav = adminNavGroups.flatMap((group) => group.items);
+const employeeNav = employeeNavGroups.flatMap((group) => group.items);
 
 function BrandMark() {
   return (
@@ -109,18 +135,104 @@ function BrandMark() {
   );
 }
 
+function initials(name: string) {
+  const value = name
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((part) => part[0])
+    .slice(0, 2)
+    .join('')
+    .toUpperCase();
+
+  return value || 'YK';
+}
+
 export function AppShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [profile, setProfile] = useState<ShellProfile | null>(null);
+  const [profileLoading, setProfileLoading] = useState(true);
+
+  const mock = process.env.NEXT_PUBLIC_USE_MOCK_DATA !== 'false';
+  const employee = !mock && profile?.role === 'admissions';
+  const explicitAdmin =
+    mock || profile?.role === 'admin' || profile?.role === 'manager';
+
+  /*
+   * Admin navigation is shown only after an explicit admin/manager role is
+   * confirmed. Unknown/loading roles stay on the smaller workspace menu.
+   */
+  const visibleNavGroups = explicitAdmin
+    ? adminNavGroups
+    : employeeNavGroups;
+
+  const visibleNav = explicitAdmin ? adminNav : employeeNav;
 
   const current = useMemo(
     () =>
-      nav.find((item) => pathname.startsWith(item.href))?.label ??
-      'Growth CRM',
-    [pathname]
+      visibleNav.find((item) => pathname.startsWith(item.href))?.label ??
+      (employee ? 'Admissions Workspace' : 'Growth CRM'),
+    [pathname, visibleNav, employee],
   );
 
-  const mock = process.env.NEXT_PUBLIC_USE_MOCK_DATA !== 'false';
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadProfile() {
+      if (mock) {
+        if (!cancelled) {
+          setProfile({
+            fullName: 'CRM User',
+            role: 'admin',
+            active: true,
+          });
+          setProfileLoading(false);
+        }
+        return;
+      }
+
+      try {
+        const supabase = createBrowserClient();
+        const {
+          data: { user },
+        } = await supabase.auth.getUser();
+
+        if (!user) {
+          if (!cancelled) {
+            setProfile(null);
+            setProfileLoading(false);
+          }
+          return;
+        }
+
+        const { data } = await supabase
+          .from('profiles')
+          .select('full_name,role,active')
+          .eq('id', user.id)
+          .maybeSingle();
+
+        if (!cancelled) {
+          setProfile({
+            fullName: data?.full_name?.trim() || 'CRM User',
+            role: data?.role ?? null,
+            active: data?.active === true,
+          });
+          setProfileLoading(false);
+        }
+      } catch {
+        if (!cancelled) {
+          setProfile(null);
+          setProfileLoading(false);
+        }
+      }
+    }
+
+    void loadProfile();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [mock]);
 
   useEffect(() => {
     setMobileOpen(false);
@@ -140,6 +252,15 @@ export function AppShell({ children }: { children: ReactNode }) {
   if (pathname.startsWith('/login')) {
     return <>{children}</>;
   }
+
+  const displayName = profile?.fullName || 'CRM User';
+  const roleLabel = employee
+    ? 'Employee'
+    : profile?.role === 'admin'
+      ? 'Admin'
+      : mock
+        ? 'Development access'
+        : 'Authenticated';
 
   return (
     <div className="app-shell">
@@ -167,7 +288,7 @@ export function AppShell({ children }: { children: ReactNode }) {
               Yogakulam
             </div>
             <div className="mt-0.5 text-[11px] font-medium text-slate-400">
-              Growth CRM · v0.7
+              {employee ? 'Admissions CRM' : 'Growth CRM · v0.7'}
             </div>
           </div>
 
@@ -204,7 +325,11 @@ export function AppShell({ children }: { children: ReactNode }) {
               />
             </span>
 
-            {mock ? 'Development mode' : 'Supabase live'}
+            {mock
+              ? 'Development mode'
+              : employee
+                ? 'My assigned leads'
+                : 'Supabase live'}
           </div>
 
           <p
@@ -216,12 +341,14 @@ export function AppShell({ children }: { children: ReactNode }) {
           >
             {mock
               ? 'Using fictional CRM data until Supabase is connected.'
-              : 'Authenticated data is persistent and live-synced.'}
+              : employee
+                ? 'Focused workspace for your assigned leads and conversions.'
+                : 'Authenticated data is persistent and live-synced.'}
           </p>
         </div>
 
         <nav className="sidebar-nav">
-          {navGroups.map((group) => (
+          {visibleNavGroups.map((group) => (
             <div key={group.label} className="sidebar-group">
               <div className="sidebar-group-label">{group.label}</div>
 
@@ -254,14 +381,14 @@ export function AppShell({ children }: { children: ReactNode }) {
         </nav>
 
         <div className="sidebar-user">
-          <div className="user-avatar">AD</div>
+          <div className="user-avatar">{initials(displayName)}</div>
 
           <div className="min-w-0 flex-1">
             <div className="truncate text-sm font-semibold text-slate-800">
-              CRM User
+              {displayName}
             </div>
             <div className="mt-0.5 text-[11px] text-slate-400">
-              {mock ? 'Development access' : 'Authenticated'}
+              {profileLoading ? 'Loading access…' : roleLabel}
             </div>
           </div>
 
@@ -289,7 +416,9 @@ export function AppShell({ children }: { children: ReactNode }) {
           </button>
 
           <div className="min-w-0">
-            <div className="header-eyebrow">Yogakulam Academy</div>
+            <div className="header-eyebrow">
+              {employee ? 'Yogakulam Admissions' : 'Yogakulam Academy'}
+            </div>
             <div className="header-title">{current}</div>
           </div>
 
@@ -297,7 +426,11 @@ export function AppShell({ children }: { children: ReactNode }) {
             <Search size={15} className="text-slate-400" />
             <input
               name="q"
-              placeholder="Search lead, course or country..."
+              placeholder={
+                employee
+                  ? 'Search my leads...'
+                  : 'Search lead, course or country...'
+              }
               aria-label="Search leads"
             />
             <kbd>Enter</kbd>
@@ -315,10 +448,15 @@ export function AppShell({ children }: { children: ReactNode }) {
               <span className="notification-dot" />
             </button>
 
-            <Link href="/leads/new" className="btn-primary hidden sm:inline-flex">
-              <ContactRound size={16} />
-              Add lead
-            </Link>
+            {!employee && !profileLoading && (
+              <Link
+                href="/leads/new"
+                className="btn-primary hidden sm:inline-flex"
+              >
+                <ContactRound size={16} />
+                Add lead
+              </Link>
+            )}
           </div>
         </header>
 

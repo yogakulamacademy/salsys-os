@@ -1,4 +1,5 @@
-import Link from 'next/link';
+import Link from "next/link";
+import { redirect } from "next/navigation";
 
 
 
@@ -38,49 +39,28 @@ import {
 
   UsersRound,
 
-} from 'lucide-react';
+} from "lucide-react";
 
 
 
-import {
-
-  DashboardInsights,
-
-} from '@/components/dashboard-insights';
+import { DashboardInsights } from "@/components/dashboard-insights";
 
 
 
-import {
-
-  LeadsTable,
-
-} from '@/components/leads-table';
+import { LeadsTable } from "@/components/leads-table";
 
 
 
-import {
-
-  PageHeader,
-
-  StatCard,
-
-} from '@/components/ui';
+import { PageHeader, StatCard } from "@/components/ui";
 
 
 
-import {
-
-  isMockMode,
-
-} from '@/lib/data';
+import { isMockMode } from "@/lib/data";
+import { createClient } from "@/lib/supabase/server";
 
 
 
-import {
-
-  getDashboardSnapshot,
-
-} from '@/lib/dashboard-data';
+import { getDashboardSnapshot } from "@/lib/dashboard-data";
 
 
 
@@ -90,133 +70,752 @@ import type {
 
   DashboardRevenueSummary,
 
-} from '@/lib/dashboard-data';
-
-
+} from "@/lib/dashboard-data";
 
 
 
 /* =========================================================
 
+
+
    DASHBOARD
+
+
 
 ========================================================= */
 
 
 
+
+
+type EmployeeLeadRow = {
+  id: string;
+  lead_code: string | null;
+  display_name: string | null;
+  current_stage: string;
+  intent: string | null;
+  current_contact_channel: string | null;
+  preferred_location: string | null;
+  created_at: string;
+  last_contacted_at: string | null;
+};
+
+type EmployeeTaskRow = {
+  id: string;
+  lead_id: string;
+  title: string;
+  due_at: string | null;
+  status: string;
+};
+
+type EmployeeContactRow = {
+  lead_id: string;
+  email: string | null;
+  phone: string | null;
+  whatsapp: string | null;
+  pii_masked: boolean;
+};
+
 export default async function DashboardPage() {
+  if (isMockMode()) {
+    return <AdminDashboardPage />;
+  }
 
+  const supabase = await createClient();
+  const {
+    data: { user },
+    error: authError,
+  } = await supabase.auth.getUser();
 
+  if (authError || !user) {
+    redirect("/login");
+  }
 
-  const snapshot =
-    await getDashboardSnapshot();
+  const { data: profile, error: profileError } = await supabase
+    .from("profiles")
+    .select("full_name,role,active")
+    .eq("id", user.id)
+    .maybeSingle();
+
+  if (profileError || !profile || profile.active !== true) {
+    redirect("/login");
+  }
+
+  if (profile.role === "admissions") {
+    return (
+      <EmployeeDashboard
+        userId={user.id}
+        fullName={profile.full_name?.trim() || "Employee"}
+      />
+    );
+  }
+
+  return <AdminDashboardPage />;
+}
+
+async function EmployeeDashboard({
+  userId,
+  fullName,
+}: {
+  userId: string;
+  fullName: string;
+}) {
+  const supabase = await createClient();
+
+  const [leadResult, taskResult] = await Promise.all([
+    supabase
+      .from("leads")
+      .select(
+        `
+        id,
+        lead_code,
+        display_name,
+        current_stage,
+        intent,
+        current_contact_channel,
+        preferred_location,
+        created_at,
+        last_contacted_at
+      `,
+      )
+      .eq("owner_user_id", userId)
+      .order("created_at", { ascending: false })
+      .limit(250),
+
+    supabase
+      .from("tasks")
+      .select("id,lead_id,title,due_at,status")
+      .eq("assigned_to", userId)
+      .in("status", ["open", "snoozed"])
+      .order("due_at", {
+        ascending: true,
+        nullsFirst: false,
+      })
+      .limit(100),
+  ]);
+
+  if (leadResult.error) {
+    throw new Error(`Unable to load assigned leads: ${leadResult.error.message}`);
+  }
+
+  const leads = (leadResult.data ?? []) as EmployeeLeadRow[];
+  const tasks = taskResult.error
+    ? []
+    : ((taskResult.data ?? []) as EmployeeTaskRow[]);
+
+  const activeStages = new Set([
+    "new",
+    "contacted",
+    "engaged",
+    "qualified",
+    "high_intent",
+    "payment_pending",
+  ]);
+
+  const stageOrder = [
+    "new",
+    "contacted",
+    "engaged",
+    "qualified",
+    "high_intent",
+    "payment_pending",
+    "enrolled",
+  ];
+
+  const stageCounts = new Map<string, number>();
+  for (const stage of stageOrder) {
+    stageCounts.set(stage, 0);
+  }
+
+  for (const lead of leads) {
+    stageCounts.set(
+      lead.current_stage,
+      (stageCounts.get(lead.current_stage) ?? 0) + 1,
+    );
+  }
+
+  const activeLeads = leads.filter((lead) => activeStages.has(lead.current_stage));
+  const newUntouched = leads.filter(
+    (lead) => lead.current_stage === "new" && !lead.last_contacted_at,
+  );
+  const highIntent = leads.filter((lead) => lead.current_stage === "high_intent");
+  const paymentPending = leads.filter(
+    (lead) => lead.current_stage === "payment_pending",
+  );
+  const enrolled = leads.filter((lead) => lead.current_stage === "enrolled");
+
+  const now = Date.now();
+  const dueTasks = tasks.filter((task) => {
+    if (!task.due_at) return false;
+    const due = new Date(task.due_at).getTime();
+    return Number.isFinite(due) && due <= now;
+  });
+
+  const conversionRate = leads.length
+    ? Math.round((enrolled.length / leads.length) * 100)
+    : 0;
+
+  const priorityLeads = [...leads]
+    .filter((lead) => activeStages.has(lead.current_stage))
+    .sort((a, b) => employeeLeadPriority(b) - employeeLeadPriority(a))
+    .slice(0, 8);
+
+  let secureContacts: EmployeeContactRow[] = [];
+
+  if (priorityLeads.length > 0) {
+    const { data, error } = await supabase.rpc(
+      "get_admissions_lead_contacts_secure",
+      {
+        p_lead_ids: priorityLeads.map((lead) => lead.id),
+      },
+    );
+
+    if (error) {
+      throw new Error(`Unable to load masked contacts: ${error.message}`);
+    }
+
+    secureContacts = (data ?? []) as EmployeeContactRow[];
+  }
+
+  const contactByLead = new Map(
+    secureContacts.map((contact) => [contact.lead_id, contact]),
+  );
+
+  const leadById = new Map(leads.map((lead) => [lead.id, lead]));
+  const firstName = fullName.split(/\s+/).filter(Boolean)[0] || "there";
+
+  return (
+    <div className="dashboard-polish">
+      <PageHeader
+        eyebrow="My admissions workspace"
+        title={`Welcome, ${firstName}`}
+        description="Focus on the assigned leads closest to the next conversation, follow-up, payment, and enrollment."
+        actions={
+          <Link className="btn-primary" href="/leads">
+            My leads
+            <ArrowRight size={15} />
+          </Link>
+        }
+      />
+
+      <section className="mb-4 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+        <div className="flex flex-col gap-3 border-b border-slate-100 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <div className="flex items-center gap-2 text-[10px] font-black uppercase tracking-[.14em] text-brand">
+              <Sparkles size={13} />
+              Today&apos;s conversion focus
+            </div>
+            <div className="mt-1 text-lg font-black tracking-tight text-slate-900">
+              Work the leads that can move forward today
+            </div>
+          </div>
+
+          <div className="text-xs font-semibold text-slate-400">
+            {activeLeads.length.toLocaleString()} active assigned lead
+            {activeLeads.length === 1 ? "" : "s"}
+          </div>
+        </div>
+
+        <div className="grid divide-y divide-slate-100 sm:grid-cols-2 sm:divide-x sm:divide-y-0 xl:grid-cols-4">
+          <EmployeeFocusMetric
+            icon={<UserRoundPlus size={17} />}
+            label="Needs first touch"
+            value={newUntouched.length}
+            note="new assigned leads not contacted"
+            href="/leads"
+            tone="amber"
+          />
+
+          <EmployeeFocusMetric
+            icon={<ListTodo size={17} />}
+            label="Follow-ups due"
+            value={dueTasks.length}
+            note="open follow-ups due now"
+            href="/follow-ups"
+            tone="slate"
+          />
+
+          <EmployeeFocusMetric
+            icon={<Flame size={17} />}
+            label="High intent"
+            value={highIntent.length}
+            note="strong enrollment intent"
+            href="/pipeline"
+            tone="orange"
+          />
+
+          <EmployeeFocusMetric
+            icon={<CreditCard size={17} />}
+            label="Payment pending"
+            value={paymentPending.length}
+            note="closest to enrollment"
+            href="/pipeline"
+            tone="violet"
+          />
+        </div>
+      </section>
+
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <StatCard
+          label="Assigned leads"
+          value={leads.length.toLocaleString()}
+          note={`${activeLeads.length} active opportunities`}
+          icon={<ContactRound size={19} />}
+        />
+
+        <StatCard
+          label="High intent"
+          value={highIntent.length.toLocaleString()}
+          note="ready for focused follow-up"
+          icon={<Flame size={19} />}
+        />
+
+        <StatCard
+          label="Enrolled"
+          value={enrolled.length.toLocaleString()}
+          note="converted assigned leads"
+          icon={<CheckCircle2 size={19} />}
+        />
+
+        <StatCard
+          label="My conversion"
+          value={leads.length ? `${conversionRate}%` : "—"}
+          note="assigned leads → enrolled"
+          icon={<TrendingUp size={19} />}
+        />
+      </div>
+
+      <div className="mt-4 grid gap-4 xl:grid-cols-[1.35fr_.65fr]">
+        <section className="card overflow-hidden">
+          <div className="flex items-start justify-between gap-4 border-b border-slate-100 px-5 py-4">
+            <div>
+              <div className="eyebrow">Priority leads</div>
+              <div className="section-title mt-1">Who to work next</div>
+              <p className="mt-1 text-xs leading-5 text-slate-400">
+                Your assigned payment-pending, high-intent, qualified, and untouched new leads first.
+              </p>
+            </div>
+
+            <Link
+              href="/leads"
+              className="inline-flex shrink-0 items-center gap-1 text-xs font-bold text-brand hover:underline"
+            >
+              My leads
+              <ArrowRight size={13} />
+            </Link>
+          </div>
+
+          <div className="divide-y divide-slate-100">
+            {priorityLeads.length ? (
+              priorityLeads.map((lead) => (
+                <EmployeePriorityLead
+                  key={lead.id}
+                  lead={lead}
+                  contact={contactByLead.get(lead.id)}
+                />
+              ))
+            ) : (
+              <div className="px-5 py-12 text-center">
+                <CheckCircle2 size={23} className="mx-auto text-emerald-400" />
+                <div className="mt-2 text-sm font-bold text-slate-700">
+                  No active assigned leads
+                </div>
+                <div className="mt-1 text-xs text-slate-400">
+                  New assignments will appear here automatically.
+                </div>
+              </div>
+            )}
+          </div>
+        </section>
+
+        <section className="card-pad self-start">
+          <div className="eyebrow">My pipeline</div>
+          <div className="section-title mt-1">Conversion progress</div>
+          <p className="mt-1 text-xs leading-5 text-slate-400">
+            Only your assigned leads are included.
+          </p>
+
+          <div className="mt-5 space-y-3">
+            {stageOrder.map((stage) => {
+              const count = stageCounts.get(stage) ?? 0;
+              const percent = leads.length
+                ? Math.round((count / leads.length) * 100)
+                : 0;
+
+              return (
+                <div key={stage}>
+                  <div className="flex items-center justify-between gap-3 text-xs">
+                    <span className="font-bold text-slate-600">
+                      {employeeStageLabel(stage)}
+                    </span>
+                    <span className="font-black text-slate-900">{count}</span>
+                  </div>
+                  <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-slate-100">
+                    <div
+                      className="h-full rounded-full bg-brand transition-all duration-700"
+                      style={{ width: `${Math.min(100, percent)}%` }}
+                    />
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          <div className="mt-5 rounded-2xl border border-emerald-100 bg-emerald-50/60 p-4">
+            <div className="text-[10px] font-black uppercase tracking-[.12em] text-emerald-600">
+              Enrollment conversion
+            </div>
+            <div className="mt-2 flex items-end justify-between gap-4">
+              <div className="text-3xl font-black tracking-tight text-slate-900">
+                {leads.length ? `${conversionRate}%` : "—"}
+              </div>
+              <div className="text-right text-[10px] font-semibold text-slate-500">
+                {enrolled.length} enrolled
+              </div>
+            </div>
+          </div>
+        </section>
+      </div>
+
+      <section className="card mt-4 overflow-hidden">
+        <div className="flex items-start justify-between gap-4 border-b border-slate-100 px-5 py-4">
+          <div>
+            <div className="eyebrow">Follow-ups</div>
+            <div className="section-title mt-1">Due and overdue</div>
+            <p className="mt-1 text-xs leading-5 text-slate-400">
+              Follow-ups assigned to you, ordered by due time.
+            </p>
+          </div>
+
+          <Link
+            href="/follow-ups"
+            className="inline-flex shrink-0 items-center gap-1 text-xs font-bold text-brand hover:underline"
+          >
+            All follow-ups
+            <ArrowRight size={13} />
+          </Link>
+        </div>
+
+        <div className="divide-y divide-slate-100">
+          {dueTasks.slice(0, 8).length ? (
+            dueTasks.slice(0, 8).map((task) => {
+              const lead = leadById.get(task.lead_id);
+              return (
+                <Link
+                  key={task.id}
+                  href={`/leads/${task.lead_id}`}
+                  className="flex items-center gap-4 px-5 py-4 transition hover:bg-slate-50/70"
+                >
+                  <div className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-amber-50 text-amber-700">
+                    <ListTodo size={17} />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <div className="truncate text-sm font-bold text-slate-800">
+                      {lead?.display_name || lead?.lead_code || "Assigned lead"}
+                    </div>
+                    <div className="mt-0.5 truncate text-xs text-slate-500">
+                      {task.title}
+                    </div>
+                  </div>
+                  <div className="shrink-0 text-right">
+                    <div className="text-xs font-bold text-rose-600">
+                      {formatEmployeeDateTime(task.due_at)}
+                    </div>
+                    <div className="mt-0.5 text-[10px] font-semibold uppercase tracking-[.08em] text-slate-400">
+                      {employeeStageLabel(lead?.current_stage || "new")}
+                    </div>
+                  </div>
+                </Link>
+              );
+            })
+          ) : (
+            <div className="px-5 py-10 text-center">
+              <CheckCircle2 size={22} className="mx-auto text-emerald-400" />
+              <div className="mt-2 text-sm font-bold text-slate-700">
+                No follow-ups due
+              </div>
+              <div className="mt-1 text-xs text-slate-400">
+                Your next assigned follow-up will appear here.
+              </div>
+            </div>
+          )}
+        </div>
+      </section>
+    </div>
+  );
+}
+
+function EmployeePriorityLead({
+  lead,
+  contact,
+}: {
+  lead: EmployeeLeadRow;
+  contact?: EmployeeContactRow;
+}) {
+  return (
+    <div className="px-5 py-4 transition hover:bg-slate-50/70">
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center gap-2">
+            <Link
+              href={`/leads/${lead.id}`}
+              className="truncate text-sm font-black text-slate-900 hover:text-brand"
+            >
+              {lead.display_name || lead.lead_code || "Lead"}
+            </Link>
+            <EmployeeStageBadge stage={lead.current_stage} />
+          </div>
+
+          <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-[10px] font-semibold text-slate-400">
+            <span>{lead.lead_code || "—"}</span>
+            <span>{lead.preferred_location || "Location not selected"}</span>
+            {lead.intent ? <span>{employeeIntentLabel(lead.intent)} intent</span> : null}
+          </div>
+
+          <div className="mt-3 flex flex-wrap gap-x-5 gap-y-1 text-xs text-slate-600">
+            <span>
+              <strong className="font-bold text-slate-700">Phone:</strong>{" "}
+              {contact?.phone || contact?.whatsapp || "Not captured"}
+            </span>
+            <span>
+              <strong className="font-bold text-slate-700">Email:</strong>{" "}
+              {contact?.email || "Not captured"}
+            </span>
+          </div>
+        </div>
+
+        <div className="flex shrink-0 items-center gap-2">
+          <Link href={`/conversations?lead=${lead.id}`} className="btn-secondary">
+            <MessagesSquare size={15} />
+            Conversation
+          </Link>
+          <Link href={`/leads/${lead.id}`} className="btn-primary">
+            Open lead
+            <ArrowRight size={14} />
+          </Link>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function EmployeeFocusMetric({
+  icon,
+  label,
+  value,
+  note,
+  href,
+  tone,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  value: number;
+  note: string;
+  href: string;
+  tone: "amber" | "slate" | "orange" | "violet";
+}) {
+  const tones = {
+    amber: "bg-amber-50 text-amber-600",
+    slate: "bg-slate-100 text-slate-600",
+    orange: "bg-orange-50 text-orange-600",
+    violet: "bg-violet-50 text-violet-600",
+  };
+
+  return (
+    <Link
+      href={href}
+      className="group flex items-center gap-3 px-5 py-4 transition hover:bg-slate-50"
+    >
+      <div className={`grid h-10 w-10 shrink-0 place-items-center rounded-xl ${tones[tone]}`}>
+        {icon}
+      </div>
+      <div className="min-w-0 flex-1">
+        <div className="text-xs font-bold text-slate-700">{label}</div>
+        <div className="mt-0.5 truncate text-[10px] font-medium text-slate-400">
+          {note}
+        </div>
+      </div>
+      <div className="text-2xl font-black tracking-tight text-slate-900">
+        {value.toLocaleString()}
+      </div>
+      <ArrowRight
+        size={14}
+        className="text-slate-300 transition group-hover:translate-x-0.5 group-hover:text-brand"
+      />
+    </Link>
+  );
+}
+
+function EmployeeStageBadge({ stage }: { stage: string }) {
+  const className =
+    stage === "payment_pending"
+      ? "border-violet-100 bg-violet-50 text-violet-700"
+      : stage === "high_intent"
+        ? "border-orange-100 bg-orange-50 text-orange-700"
+        : stage === "enrolled"
+          ? "border-emerald-100 bg-emerald-50 text-emerald-700"
+          : stage === "qualified"
+            ? "border-sky-100 bg-sky-50 text-sky-700"
+            : "border-slate-200 bg-slate-50 text-slate-600";
+
+  return (
+    <span className={`inline-flex rounded-full border px-2 py-0.5 text-[9px] font-black uppercase tracking-[.06em] ${className}`}>
+      {employeeStageLabel(stage)}
+    </span>
+  );
+}
+
+function employeeLeadPriority(lead: EmployeeLeadRow) {
+  if (lead.current_stage === "payment_pending") return 100;
+  if (lead.current_stage === "high_intent") return 90;
+  if (lead.current_stage === "new" && !lead.last_contacted_at) return 80;
+  if (lead.current_stage === "qualified") return 70;
+  if (lead.current_stage === "engaged") return 50;
+  if (lead.current_stage === "contacted") return 40;
+  return 10;
+}
+
+function employeeStageLabel(stage: string) {
+  return stage
+    .replaceAll("_", " ")
+    .replace(/\b\w/g, (character) => character.toUpperCase());
+}
+
+function employeeIntentLabel(intent: string) {
+  return intent
+    .replaceAll("_", " ")
+    .replace(/\b\w/g, (character) => character.toUpperCase());
+}
+
+function formatEmployeeDateTime(value?: string | null) {
+  if (!value) return "Due now";
+
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "Due now";
+
+  return new Intl.DateTimeFormat("en-IN", {
+    day: "numeric",
+    month: "short",
+    hour: "numeric",
+    minute: "2-digit",
+    hour12: true,
+    timeZone: "Asia/Kolkata",
+  }).format(date);
+}
+
+async function AdminDashboardPage() {
+
+  const snapshot = await getDashboardSnapshot();
 
 
 
   const {
+
     metrics,
+
+
+
     counts,
+
+
+
     sources,
+
+
+
     priorityLeads,
+
+
+
     revenueSummary,
+
+
+
     upcomingBatches,
+
+
+
     unvaluedOpenLeads,
+
   } = snapshot;
 
 
 
   /* =======================================================
 
+
+
      CORE METRICS
+
+
 
   ======================================================= */
 
 
 
-  const total =
-    metrics.total;
+  const total = metrics.total;
 
 
 
-  const activePipeline =
-    metrics.activePipeline;
+  const activePipeline = metrics.activePipeline;
 
 
 
-  const qualified =
-    metrics.qualifiedPlus;
+  const qualified = metrics.qualifiedPlus;
 
 
 
-  const needsReplyCount =
-    metrics.needsReply;
+  const needsReplyCount = metrics.needsReply;
 
 
 
-  const unreadCount =
-    metrics.unread;
+  const unreadCount = metrics.unread;
 
 
 
-  const needsFirstTouchCount =
-    metrics.needsFirstTouch;
+  const needsFirstTouchCount = metrics.needsFirstTouch;
 
 
 
-  const waitingOverHourCount =
-    metrics.waitingOverHour;
+  const waitingOverHourCount = metrics.waitingOverHour;
 
 
 
-  const priorityCount =
-    metrics.priority;
+  const priorityCount = metrics.priority;
 
 
 
-  const newLast24Hours =
-    metrics.newLast24h;
+  const newLast24Hours = metrics.newLast24h;
 
 
 
-  const followupsDue =
-    metrics.followupsDue;
+  const followupsDue = metrics.followupsDue;
 
 
 
-  const qualificationRate =
-    total
-      ? Math.round(
-          (
-            qualified /
-            total
-          ) *
-            100
-        )
-      : 0;
+  const qualificationRate = total ? Math.round((qualified / total) * 100) : 0;
 
 
 
-  const enrollmentRate =
-    total
-      ? Math.round(
-          (
-            counts.enrolled /
-            total
-          ) *
-            100
-        )
-      : 0;
+  const enrollmentRate = total
+
+    ? Math.round((counts.enrolled / total) * 100)
+
+    : 0;
 
 
 
-  const mock =
-    isMockMode();
+  const mock = isMockMode();
 
 
 
   /* =======================================================
 
+
+
      PIPELINE CHART DATA
+
+
 
   ======================================================= */
 
@@ -226,85 +825,83 @@ export default async function DashboardPage() {
 
     {
 
-      stage:
+      stage: "New",
 
-        'New',
 
-      leads:
 
-        counts.new,
+      leads: counts.new,
 
     },
 
+
+
     {
 
-      stage:
+      stage: "Contacted",
 
-        'Contacted',
 
-      leads:
 
-        counts.contacted,
+      leads: counts.contacted,
 
     },
 
+
+
     {
 
-      stage:
+      stage: "Engaged",
 
-        'Engaged',
 
-      leads:
 
-        counts.engaged,
+      leads: counts.engaged,
 
     },
 
+
+
     {
 
-      stage:
+      stage: "Qualified",
 
-        'Qualified',
 
-      leads:
 
-        counts.qualified,
+      leads: counts.qualified,
 
     },
 
+
+
     {
 
-      stage:
+      stage: "High intent",
 
-        'High intent',
 
-      leads:
 
-        counts.high_intent,
+      leads: counts.high_intent,
 
     },
 
+
+
     {
 
-      stage:
+      stage: "Payment",
 
-        'Payment',
 
-      leads:
 
-        counts.payment_pending,
+      leads: counts.payment_pending,
 
     },
 
+
+
     {
 
-      stage:
+      stage: "Enrolled",
 
-        'Enrolled',
 
-      leads:
 
-        counts.enrolled,
+      leads: counts.enrolled,
 
     },
 
@@ -312,17 +909,17 @@ export default async function DashboardPage() {
 
 
 
-
-
   return (
 
-    <>
-
-
+    <div className="dashboard-polish">
 
       {/* ===================================================
 
+
+
           HEADER
+
+
 
       =================================================== */}
 
@@ -330,37 +927,37 @@ export default async function DashboardPage() {
 
       <PageHeader
 
-
-
         eyebrow="Growth command center"
-
-
 
         title="Admissions command center"
 
-
-
         description="See what needs attention, where leads are moving, and which opportunities are closest to enrollment."
-
-
 
         actions={
 
           <>
 
-
-
             <span
 
               className={`
 
+
+
                 rounded-xl
+
+
 
                 px-3
 
+
+
                 py-2
 
+
+
                 text-xs
+
+
 
                 font-bold
 
@@ -370,65 +967,47 @@ export default async function DashboardPage() {
 
                   mock
 
-                    ? 'bg-orange-50 text-orange-700'
+                    ? "bg-orange-50 text-orange-700"
 
-                    : 'bg-emerald-50 text-emerald-700'
+                    : "bg-emerald-50 text-emerald-700"
 
                 }
+
+
 
               `}
 
             >
 
-              {mock
-
-                ? 'Mock data'
-
-                : 'Supabase live'}
+              {mock ? "Mock data" : "Supabase live"}
 
             </span>
 
 
 
-
-
-            <Link
-
-              className="btn-primary"
-
-              href="/leads"
-
-            >
+            <Link className="btn-primary" href="/leads">
 
               View all leads
 
-
-
-              <ArrowRight
-
-                size={15}
-
-              />
+              <ArrowRight size={15} />
 
             </Link>
-
-
 
           </>
 
         }
 
-
-
       />
-
-
 
 
 
       {/* ===================================================
 
+
+
           ATTENTION STRIP
+
+
 
       =================================================== */}
 
@@ -438,101 +1017,139 @@ export default async function DashboardPage() {
 
         className="
 
+
+
           mb-4
+
+
 
           overflow-hidden
 
+
+
           rounded-2xl
+
+
 
           border
 
+
+
           border-slate-200
+
+
 
           bg-white
 
+
+
           shadow-sm
+
+
 
         "
 
       >
 
-
-
         <div
 
           className="
 
+
+
             flex
+
+
 
             flex-col
 
+
+
             gap-4
+
+
 
             border-b
 
+
+
             border-slate-100
+
+
 
             px-5
 
+
+
             py-4
+
+
 
             sm:flex-row
 
+
+
             sm:items-center
 
+
+
             sm:justify-between
+
+
 
           "
 
         >
 
-
-
           <div>
-
-
 
             <div
 
               className="
 
+
+
                 flex
+
+
 
                 items-center
 
+
+
                 gap-2
+
+
 
                 text-[10px]
 
+
+
                 font-black
+
+
 
                 uppercase
 
+
+
                 tracking-[.14em]
 
+
+
                 text-brand
+
+
 
               "
 
             >
 
-
-
-              <Sparkles
-
-                size={13}
-
-              />
-
-
+              <Sparkles size={13} />
 
               Today's attention
 
-
-
             </div>
-
-
 
 
 
@@ -540,15 +1157,27 @@ export default async function DashboardPage() {
 
               className="
 
+
+
                 mt-1
+
+
 
                 text-lg
 
+
+
                 font-black
+
+
 
                 tracking-tight
 
+
+
                 text-slate-900
+
+
 
               "
 
@@ -558,11 +1187,7 @@ export default async function DashboardPage() {
 
             </div>
 
-
-
           </div>
-
-
 
 
 
@@ -572,19 +1197,35 @@ export default async function DashboardPage() {
 
             className="
 
+
+
               inline-flex
+
+
 
               items-center
 
+
+
               gap-2
+
+
 
               text-xs
 
+
+
               font-bold
+
+
 
               text-brand
 
+
+
               hover:underline
+
+
 
             "
 
@@ -592,21 +1233,11 @@ export default async function DashboardPage() {
 
             Open Admissions Desk
 
-
-
-            <ArrowRight
-
-              size={14}
-
-            />
+            <ArrowRight size={14} />
 
           </Link>
 
-
-
         </div>
-
-
 
 
 
@@ -614,45 +1245,47 @@ export default async function DashboardPage() {
 
           className="
 
+
+
             grid
+
+
 
             divide-y
 
+
+
             divide-slate-100
+
+
 
             sm:grid-cols-2
 
+
+
             sm:divide-x
+
+
 
             sm:divide-y-0
 
+
+
             xl:grid-cols-6
+
+
 
           "
 
         >
 
-
-
           <AttentionMetric
 
-            icon={
-
-              <MessagesSquare
-
-                size={17}
-
-              />
-
-            }
+            icon={<MessagesSquare size={17} />}
 
             label="Needs reply"
 
-            value={
-
-              needsReplyCount
-
-            }
+            value={needsReplyCount}
 
             note={
 
@@ -660,7 +1293,7 @@ export default async function DashboardPage() {
 
                 ? `${waitingOverHourCount} waiting over 1 hour`
 
-                : 'latest message is from the lead'
+                : "latest message is from the lead"
 
             }
 
@@ -672,27 +1305,13 @@ export default async function DashboardPage() {
 
 
 
-
-
           <AttentionMetric
 
-            icon={
-
-              <MessageSquareMore
-
-                size={17}
-
-              />
-
-            }
+            icon={<MessageSquareMore size={17} />}
 
             label="Unread"
 
-            value={
-
-              unreadCount
-
-            }
+            value={unreadCount}
 
             note="customer messages not opened yet"
 
@@ -704,27 +1323,13 @@ export default async function DashboardPage() {
 
 
 
-
-
           <AttentionMetric
 
-            icon={
-
-              <UserRoundPlus
-
-                size={17}
-
-              />
-
-            }
+            icon={<UserRoundPlus size={17} />}
 
             label="Needs first touch"
 
-            value={
-
-              needsFirstTouchCount
-
-            }
+            value={needsFirstTouchCount}
 
             note="new leads not contacted"
 
@@ -736,27 +1341,13 @@ export default async function DashboardPage() {
 
 
 
-
-
           <AttentionMetric
 
-            icon={
-
-              <Flame
-
-                size={17}
-
-              />
-
-            }
+            icon={<Flame size={17} />}
 
             label="High intent"
 
-            value={
-
-              counts.high_intent
-
-            }
+            value={counts.high_intent}
 
             note="strong enrollment intent"
 
@@ -768,27 +1359,13 @@ export default async function DashboardPage() {
 
 
 
-
-
           <AttentionMetric
 
-            icon={
-
-              <CreditCard
-
-                size={17}
-
-              />
-
-            }
+            icon={<CreditCard size={17} />}
 
             label="Payment pending"
 
-            value={
-
-              counts.payment_pending
-
-            }
+            value={counts.payment_pending}
 
             note="closest to enrollment"
 
@@ -800,27 +1377,13 @@ export default async function DashboardPage() {
 
 
 
-
-
           <AttentionMetric
 
-            icon={
-
-              <ListTodo
-
-                size={17}
-
-              />
-
-            }
+            icon={<ListTodo size={17} />}
 
             label="Follow-ups due"
 
-            value={
-
-              followupsDue
-
-            }
+            value={followupsDue}
 
             note="open tasks requiring action"
 
@@ -830,21 +1393,19 @@ export default async function DashboardPage() {
 
           />
 
-
-
         </div>
-
-
 
       </section>
 
 
 
-
-
       {/* ===================================================
 
+
+
           KPI ROW
+
+
 
       =================================================== */}
 
@@ -854,27 +1415,41 @@ export default async function DashboardPage() {
 
         className="
 
+
+
           grid
+
+
 
           gap-4
 
+
+
           sm:grid-cols-2
 
+
+
           xl:grid-cols-5
+
+
 
         "
 
       >
 
-
-
         <div
 
           className="
 
+
+
             animate-rise
 
+
+
             stagger-1
+
+
 
           "
 
@@ -884,25 +1459,11 @@ export default async function DashboardPage() {
 
             label="Last 24 hours"
 
-            value={
-
-              newLast24Hours
-
-                .toLocaleString()
-
-            }
+            value={newLast24Hours.toLocaleString()}
 
             note="new leads created"
 
-            icon={
-
-              <UserRoundPlus
-
-                size={19}
-
-              />
-
-            }
+            icon={<UserRoundPlus size={19} />}
 
           />
 
@@ -910,15 +1471,19 @@ export default async function DashboardPage() {
 
 
 
-
-
         <div
 
           className="
 
+
+
             animate-rise
 
+
+
             stagger-2
+
+
 
           "
 
@@ -928,25 +1493,11 @@ export default async function DashboardPage() {
 
             label="Active pipeline"
 
-            value={
-
-              activePipeline
-
-                .toLocaleString()
-
-            }
+            value={activePipeline.toLocaleString()}
 
             note="open admissions opportunities"
 
-            icon={
-
-              <ContactRound
-
-                size={19}
-
-              />
-
-            }
+            icon={<ContactRound size={19} />}
 
           />
 
@@ -954,15 +1505,19 @@ export default async function DashboardPage() {
 
 
 
-
-
         <div
 
           className="
 
+
+
             animate-rise
 
+
+
             stagger-3
+
+
 
           "
 
@@ -972,33 +1527,11 @@ export default async function DashboardPage() {
 
             label="Qualified+"
 
-            value={
+            value={qualified.toLocaleString()}
 
-              qualified
+            note={total ? `${qualificationRate}% of all leads` : "No leads yet"}
 
-                .toLocaleString()
-
-            }
-
-            note={
-
-              total
-
-                ? `${qualificationRate}% of all leads`
-
-                : 'No leads yet'
-
-            }
-
-            icon={
-
-              <UserCheck
-
-                size={19}
-
-              />
-
-            }
+            icon={<UserCheck size={19} />}
 
           />
 
@@ -1006,15 +1539,19 @@ export default async function DashboardPage() {
 
 
 
-
-
         <div
 
           className="
 
+
+
             animate-rise
 
+
+
             stagger-4
+
+
 
           "
 
@@ -1024,13 +1561,7 @@ export default async function DashboardPage() {
 
             label="Enrolled"
 
-            value={
-
-              counts.enrolled
-
-                .toLocaleString()
-
-            }
+            value={counts.enrolled.toLocaleString()}
 
             note={
 
@@ -1038,19 +1569,11 @@ export default async function DashboardPage() {
 
                 ? `${enrollmentRate}% overall conversion`
 
-                : 'No enrollments yet'
+                : "No enrollments yet"
 
             }
 
-            icon={
-
-              <CheckCircle2
-
-                size={19}
-
-              />
-
-            }
+            icon={<CheckCircle2 size={19} />}
 
           />
 
@@ -1058,15 +1581,19 @@ export default async function DashboardPage() {
 
 
 
-
-
         <div
 
           className="
 
+
+
             animate-rise
 
+
+
             stagger-5
+
+
 
           "
 
@@ -1076,41 +1603,27 @@ export default async function DashboardPage() {
 
             label="Priority"
 
-            value={
-
-              priorityCount
-
-                .toLocaleString()
-
-            }
+            value={priorityCount.toLocaleString()}
 
             note="high intent + payment"
 
-            icon={
-
-              <Flame
-
-                size={19}
-
-              />
-
-            }
+            icon={<Flame size={19} />}
 
           />
 
         </div>
 
-
-
       </div>
-
-
 
 
 
       {/* ===================================================
 
+
+
           INSIGHTS + ACTION CENTER
+
+
 
       =================================================== */}
 
@@ -1120,55 +1633,49 @@ export default async function DashboardPage() {
 
         className="
 
+
+
           mt-4
+
+
 
           grid
 
+
+
           gap-4
 
+
+
           xl:grid-cols-[1.4fr_.6fr]
+
+
 
         "
 
       >
 
-
-
         <div
 
           className="
 
+
+
             animate-rise
 
+
+
             stagger-2
+
+
 
           "
 
         >
 
-
-
-          <DashboardInsights
-
-            pipeline={
-
-              pipeline
-
-            }
-
-            sources={
-
-              sources
-
-            }
-
-          />
-
-
+          <DashboardInsights pipeline={pipeline} sources={sources} />
 
         </div>
-
-
 
 
 
@@ -1176,33 +1683,27 @@ export default async function DashboardPage() {
 
           className="
 
+
+
             card-pad
+
+
 
             animate-rise
 
+
+
             stagger-3
+
+
 
           "
 
         >
 
-
-
           <div>
 
-
-
-            <div
-
-              className="eyebrow"
-
-            >
-
-              Action center
-
-            </div>
-
-
+            <div className="eyebrow">Action center</div>
 
 
 
@@ -1210,9 +1711,15 @@ export default async function DashboardPage() {
 
               className="
 
+
+
                 section-title
 
+
+
                 mt-1
+
+
 
               "
 
@@ -1224,19 +1731,27 @@ export default async function DashboardPage() {
 
 
 
-
-
             <p
 
               className="
 
+
+
                 mt-1
+
+
 
                 text-xs
 
+
+
                 leading-5
 
+
+
                 text-slate-400
+
+
 
               "
 
@@ -1246,11 +1761,7 @@ export default async function DashboardPage() {
 
             </p>
 
-
-
           </div>
-
-
 
 
 
@@ -1258,37 +1769,29 @@ export default async function DashboardPage() {
 
             className="
 
+
+
               mt-5
 
+
+
               space-y-3
+
+
 
             "
 
           >
 
-
-
             <ActionLink
 
               href="/conversations"
 
-              icon={
-
-                <MessagesSquare
-
-                  size={17}
-
-                />
-
-              }
+              icon={<MessagesSquare size={17} />}
 
               label="Needs reply"
 
-              value={
-
-                needsReplyCount
-
-              }
+              value={needsReplyCount}
 
               note={
 
@@ -1296,13 +1799,11 @@ export default async function DashboardPage() {
 
                   ? `${unreadCount} unread conversations`
 
-                  : 'no unread conversations'
+                  : "no unread conversations"
 
               }
 
             />
-
-
 
 
 
@@ -1310,23 +1811,11 @@ export default async function DashboardPage() {
 
               href="/admissions"
 
-              icon={
-
-                <ClipboardCheck
-
-                  size={17}
-
-                />
-
-              }
+              icon={<ClipboardCheck size={17} />}
 
               label="Priority admissions"
 
-              value={
-
-                priorityCount
-
-              }
+              value={priorityCount}
 
               note="high intent + payment pending"
 
@@ -1334,45 +1823,31 @@ export default async function DashboardPage() {
 
 
 
-
-
             <ActionLink
 
               href="/follow-ups"
 
-              icon={
-
-                <ListTodo
-
-                  size={17}
-
-                />
-
-              }
+              icon={<ListTodo size={17} />}
 
               label="Follow-ups due"
 
-              value={
-
-                followupsDue
-
-              }
+              value={followupsDue}
 
               note="open admissions tasks"
 
             />
 
-
-
           </div>
-
-
 
 
 
           {/* -----------------------------------------------
 
+
+
               QUALIFICATION
+
+
 
           ----------------------------------------------- */}
 
@@ -1382,59 +1857,89 @@ export default async function DashboardPage() {
 
             className="
 
+
+
               mt-5
+
+
 
               rounded-2xl
 
+
+
               border
+
+
 
               border-slate-100
 
+
+
               bg-slate-50
 
+
+
               p-4
+
+
 
             "
 
           >
 
-
-
             <div
 
               className="
 
+
+
                 flex
+
+
 
                 items-start
 
+
+
                 justify-between
 
+
+
                 gap-4
+
+
 
               "
 
             >
 
-
-
               <div>
-
-
 
                 <div
 
                   className="
 
+
+
                     text-[10px]
+
+
 
                     font-black
 
+
+
                     uppercase
+
+
 
                     tracking-[.14em]
 
+
+
                     text-slate-400
+
+
 
                   "
 
@@ -1446,39 +1951,41 @@ export default async function DashboardPage() {
 
 
 
-
-
                 <div
 
                   className="
 
+
+
                     mt-2
+
+
 
                     text-3xl
 
+
+
                     font-black
+
+
 
                     tracking-tight
 
+
+
                     text-slate-900
+
+
 
                   "
 
                 >
 
-                  {total
-
-                    ? `${qualificationRate}%`
-
-                    : '—'}
+                  {total ? `${qualificationRate}%` : "—"}
 
                 </div>
 
-
-
               </div>
-
-
 
 
 
@@ -1486,39 +1993,49 @@ export default async function DashboardPage() {
 
                 className="
 
+
+
                   grid
+
+
 
                   h-10
 
+
+
                   w-10
+
+
 
                   place-items-center
 
+
+
                   rounded-xl
+
+
 
                   bg-white
 
+
+
                   text-brand
 
+
+
                   shadow-sm
+
+
 
                 "
 
               >
 
-                <TrendingUp
-
-                  size={18}
-
-                />
+                <TrendingUp size={18} />
 
               </div>
 
-
-
             </div>
-
-
 
 
 
@@ -1526,59 +2043,77 @@ export default async function DashboardPage() {
 
               className="
 
+
+
                 mt-4
+
+
 
                 h-2
 
+
+
                 overflow-hidden
+
+
 
                 rounded-full
 
+
+
                 bg-slate-200
+
+
 
               "
 
             >
-
-
 
               <div
 
                 className="
 
+
+
                   h-full
+
+
 
                   rounded-full
 
+
+
                   bg-brand
+
+
 
                   transition-all
 
+
+
                   duration-700
+
+
 
                 "
 
                 style={{
 
-                  width:
+                  width: `${Math.min(
 
-                    `${Math.min(
+                    100,
 
-                      100,
 
-                      qualificationRate
 
-                    )}%`,
+                    qualificationRate,
+
+                  )}%`,
 
                 }}
 
               />
 
-
-
             </div>
-
-
 
 
 
@@ -1586,31 +2121,49 @@ export default async function DashboardPage() {
 
               className="
 
+
+
                 mt-3
+
+
 
                 flex
 
+
+
                 items-center
+
+
 
                 justify-between
 
+
+
                 gap-3
+
+
 
               "
 
             >
 
-
-
               <span
 
                 className="
 
+
+
                   text-[10px]
+
+
 
                   font-semibold
 
+
+
                   text-slate-400
+
+
 
                 "
 
@@ -1622,21 +2175,29 @@ export default async function DashboardPage() {
 
 
 
-
-
               <Link
 
                 href="/funnel"
 
                 className="
 
+
+
                   text-xs
+
+
 
                   font-bold
 
+
+
                   text-brand
 
+
+
                   hover:underline
+
+
 
                 "
 
@@ -1646,21 +2207,19 @@ export default async function DashboardPage() {
 
               </Link>
 
-
-
             </div>
-
-
 
           </div>
 
 
 
-
-
           {/* -----------------------------------------------
 
+
+
               ENROLLMENT CONVERSION
+
+
 
           ----------------------------------------------- */}
 
@@ -1670,37 +2229,61 @@ export default async function DashboardPage() {
 
             className="
 
+
+
               mt-3
+
+
 
               rounded-2xl
 
+
+
               border
+
+
 
               border-emerald-100
 
+
+
               bg-emerald-50/60
 
+
+
               p-4
+
+
 
             "
 
           >
 
-
-
             <div
 
               className="
 
+
+
                 text-[10px]
+
+
 
                 font-black
 
+
+
                 uppercase
+
+
 
                 tracking-[.14em]
 
+
+
                 text-emerald-600
+
+
 
               "
 
@@ -1712,53 +2295,65 @@ export default async function DashboardPage() {
 
 
 
-
-
             <div
 
               className="
 
+
+
                 mt-2
+
+
 
                 flex
 
+
+
                 items-end
+
+
 
                 justify-between
 
+
+
                 gap-4
+
+
 
               "
 
             >
 
-
-
               <div
 
                 className="
+
+
 
                   text-2xl
 
+
+
                   font-black
+
+
 
                   tracking-tight
 
+
+
                   text-slate-900
+
+
 
                 "
 
               >
 
-                {total
-
-                  ? `${enrollmentRate}%`
-
-                  : '—'}
+                {total ? `${enrollmentRate}%` : "—"}
 
               </div>
-
-
 
 
 
@@ -1766,49 +2361,49 @@ export default async function DashboardPage() {
 
                 className="
 
+
+
                   text-right
+
+
 
                   text-[10px]
 
+
+
                   font-semibold
 
+
+
                   text-slate-500
+
+
 
                 "
 
               >
 
-                {counts.enrolled}
-
-                {' '}
-
-                enrolled
+                {counts.enrolled} enrolled
 
               </div>
 
-
-
             </div>
-
-
 
           </div>
 
-
-
         </section>
-
-
 
       </div>
 
 
 
-
-
       {/* ===================================================
 
+
+
           COMMERCIAL PULSE
+
+
 
       =================================================== */}
 
@@ -1818,81 +2413,93 @@ export default async function DashboardPage() {
 
         className="
 
+
+
           mt-4
+
+
 
           grid
 
+
+
           gap-4
 
+
+
           xl:grid-cols-[.82fr_1.18fr]
+
+
 
         "
 
       >
 
-
-
         <section
 
           className="
 
+
+
             card-pad
+
+
 
             animate-rise
 
+
+
             stagger-3
+
+
 
           "
 
         >
 
-
-
           <div
 
             className="
 
+
+
               flex
+
+
 
               items-start
 
+
+
               justify-between
 
+
+
               gap-4
+
+
 
             "
 
           >
 
-
-
             <div>
 
-
-
-              <div className="eyebrow">
-
-                Commercial pulse
-
-              </div>
+              <div className="eyebrow">Commercial pulse</div>
 
 
 
-              <div className="section-title mt-1">
-
-                Revenue at a glance
-
-              </div>
+              <div className="section-title mt-1">Revenue at a glance</div>
 
 
 
               <p className="mt-1 text-xs leading-5 text-slate-400">
 
-                Live pipeline, weighted forecast, collected revenue and outstanding balances.
+                Live pipeline, weighted forecast, collected revenue and
+
+                outstanding balances.
 
               </p>
-
-
 
             </div>
 
@@ -1912,29 +2519,17 @@ export default async function DashboardPage() {
 
             </Link>
 
-
-
           </div>
 
 
 
           <div className="mt-5 space-y-3">
 
-            {revenueSummary.map(
+            {revenueSummary.map((group) => (
 
-              (group) => (
+              <RevenuePulseRow key={group.currency} group={group} />
 
-                <RevenuePulseRow
-
-                  key={group.currency}
-
-                  group={group}
-
-                />
-
-              )
-
-            )}
+            ))}
 
           </div>
 
@@ -1950,13 +2545,19 @@ export default async function DashboardPage() {
 
                   <div className="text-xs font-bold text-amber-800">
 
-                    {unvaluedOpenLeads.toLocaleString()} open lead{unvaluedOpenLeads === 1 ? '' : 's'} without forecast value
+                    {unvaluedOpenLeads.toLocaleString()} open lead
+
+                    {unvaluedOpenLeads === 1 ? "" : "s"} without forecast value
 
                   </div>
 
+
+
                   <div className="mt-0.5 text-[10px] font-medium text-amber-600">
 
-                    Assign a batch or manual potential value to include them in revenue forecasting.
+                    Assign a batch or manual potential value to include them in
+
+                    revenue forecasting.
 
                   </div>
 
@@ -1978,8 +2579,6 @@ export default async function DashboardPage() {
 
           )}
 
-
-
         </section>
 
 
@@ -1988,43 +2587,45 @@ export default async function DashboardPage() {
 
           className="
 
+
+
             card
+
+
 
             overflow-hidden
 
+
+
             animate-rise
 
+
+
             stagger-4
+
+
 
           "
 
         >
 
-
-
           <div className="flex items-start justify-between gap-4 border-b border-slate-100 px-5 py-4">
 
             <div>
 
-              <div className="eyebrow">
-
-                Upcoming batches
-
-              </div>
+              <div className="eyebrow">Upcoming batches</div>
 
 
 
-              <div className="section-title mt-1">
-
-                Demand by batch
-
-              </div>
+              <div className="section-title mt-1">Demand by batch</div>
 
 
 
               <p className="mt-1 text-xs leading-5 text-slate-400">
 
-                Active prospects, hot leads and enrollments linked to each upcoming course batch.
+                Active prospects, hot leads and enrollments linked to each
+
+                upcoming course batch.
 
               </p>
 
@@ -2032,13 +2633,7 @@ export default async function DashboardPage() {
 
 
 
-            <UsersRound
-
-              size={19}
-
-              className="mt-1 shrink-0 text-brand"
-
-            />
+            <UsersRound size={19} className="mt-1 shrink-0 text-brand" />
 
           </div>
 
@@ -2048,33 +2643,17 @@ export default async function DashboardPage() {
 
             {upcomingBatches.length ? (
 
-              upcomingBatches.map(
+              upcomingBatches.map((batch) => (
 
-                (batch) => (
+                <BatchDemandRow key={batch.id} batch={batch} />
 
-                  <BatchDemandRow
-
-                    key={batch.id}
-
-                    batch={batch}
-
-                  />
-
-                )
-
-              )
+              ))
 
             ) : (
 
               <div className="px-5 py-10 text-center">
 
-                <CalendarDays
-
-                  size={22}
-
-                  className="mx-auto text-slate-300"
-
-                />
+                <CalendarDays size={22} className="mx-auto text-slate-300" />
 
 
 
@@ -2106,7 +2685,11 @@ export default async function DashboardPage() {
 
       {/* ===================================================
 
+
+
           PRIORITY LEADS
+
+
 
       =================================================== */}
 
@@ -2116,67 +2699,85 @@ export default async function DashboardPage() {
 
         className="
 
+
+
           card
+
+
 
           mt-4
 
+
+
           overflow-hidden
+
+
 
           animate-rise
 
+
+
           stagger-4
+
+
 
         "
 
       >
 
-
-
         <div
 
           className="
 
+
+
             flex
+
+
 
             flex-col
 
+
+
             gap-3
+
+
 
             border-b
 
+
+
             border-slate-100
+
+
 
             px-5
 
+
+
             py-4
+
+
 
             sm:flex-row
 
+
+
             sm:items-center
 
+
+
             sm:justify-between
+
+
 
           "
 
         >
 
-
-
           <div>
 
-
-
-            <div
-
-              className="eyebrow"
-
-            >
-
-              Admissions priority
-
-            </div>
-
-
+            <div className="eyebrow">Admissions priority</div>
 
 
 
@@ -2184,9 +2785,15 @@ export default async function DashboardPage() {
 
               className="
 
+
+
                 section-title
 
+
+
                 mt-1
+
+
 
               "
 
@@ -2198,31 +2805,35 @@ export default async function DashboardPage() {
 
 
 
-
-
             <p
 
               className="
 
+
+
                 mt-1
+
+
 
                 text-xs
 
+
+
                 text-slate-400
+
+
 
               "
 
             >
 
-              Reply state, unread messages, first-touch gaps and funnel stage are combined to surface the most actionable leads.
+              Reply state, unread messages, first-touch gaps and funnel stage
+
+              are combined to surface the most actionable leads.
 
             </p>
 
-
-
           </div>
-
-
 
 
 
@@ -2230,17 +2841,23 @@ export default async function DashboardPage() {
 
             className="
 
+
+
               flex
+
+
 
               items-center
 
+
+
               gap-3
+
+
 
             "
 
           >
-
-
 
             <Link
 
@@ -2248,13 +2865,23 @@ export default async function DashboardPage() {
 
               className="
 
+
+
                 text-xs
+
+
 
                 font-bold
 
+
+
                 text-slate-500
 
+
+
                 hover:text-brand
+
+
 
               "
 
@@ -2266,27 +2893,41 @@ export default async function DashboardPage() {
 
 
 
-
-
             <Link
 
               href="/leads"
 
               className="
 
+
+
                 inline-flex
+
+
 
                 items-center
 
+
+
                 gap-1
+
+
 
                 text-sm
 
+
+
                 font-bold
+
+
 
                 text-brand
 
+
+
                 hover:underline
+
+
 
               "
 
@@ -2294,55 +2935,25 @@ export default async function DashboardPage() {
 
               All leads
 
-
-
-              <ArrowRight
-
-                size={14}
-
-              />
+              <ArrowRight size={14} />
 
             </Link>
 
-
-
           </div>
-
-
 
         </div>
 
 
 
-
-
-        <LeadsTable
-
-          leads={
-
-            priorityLeads
-
-          }
-
-          compact
-
-        />
-
-
+        <LeadsTable leads={priorityLeads} compact />
 
       </section>
 
-
-
-    </>
+    </div>
 
   );
 
-
-
 }
-
-
 
 
 
@@ -2350,19 +2961,13 @@ export default async function DashboardPage() {
 
    REVENUE PULSE ROW
 
+
+
 ========================================================= */
 
 
 
-function RevenuePulseRow({
-
-  group,
-
-}: {
-
-  group: DashboardRevenueSummary;
-
-}) {
+function RevenuePulseRow({ group }: { group: DashboardRevenueSummary }) {
 
   return (
 
@@ -2392,7 +2997,9 @@ function RevenuePulseRow({
 
             <div className="text-[10px] font-semibold text-slate-400">
 
-              {group.opportunities.toLocaleString()} valued open opportunit{group.opportunities === 1 ? 'y' : 'ies'}
+              {group.opportunities.toLocaleString()} valued open opportunit
+
+              {group.opportunities === 1 ? "y" : "ies"}
 
             </div>
 
@@ -2418,7 +3025,9 @@ function RevenuePulseRow({
 
               group.collected,
 
-              group.currency
+
+
+              group.currency,
 
             )}
 
@@ -2440,7 +3049,9 @@ function RevenuePulseRow({
 
             group.pipeline,
 
-            group.currency
+
+
+            group.currency,
 
           )}
 
@@ -2456,7 +3067,9 @@ function RevenuePulseRow({
 
             group.weighted,
 
-            group.currency
+
+
+            group.currency,
 
           )}
 
@@ -2472,7 +3085,9 @@ function RevenuePulseRow({
 
             group.outstanding,
 
-            group.currency
+
+
+            group.currency,
 
           )}
 
@@ -2492,11 +3107,15 @@ function RevenueMiniMetric({
 
   label,
 
+
+
   value,
 
 }: {
 
   label: string;
+
+
 
   value: string;
 
@@ -2530,21 +3149,17 @@ function RevenueMiniMetric({
 
 /* =========================================================
 
+
+
    BATCH DEMAND ROW
+
+
 
 ========================================================= */
 
 
 
-function BatchDemandRow({
-
-  batch,
-
-}: {
-
-  batch: DashboardBatchDemand;
-
-}) {
+function BatchDemandRow({ batch }: { batch: DashboardBatchDemand }) {
 
   const hasCapacity =
 
@@ -2556,49 +3171,35 @@ function BatchDemandRow({
 
 
 
-  const filledSeats =
+  const filledSeats = hasCapacity
 
-    hasCapacity
+    ? Math.max(
 
-      ? Math.max(
-
-          0,
-
-          batch.capacity! -
-
-          batch.seatsRemaining!
-
-        )
-
-      : 0;
+        0,
 
 
 
-  const filledPercent =
+        batch.capacity! - batch.seatsRemaining!,
 
-    hasCapacity
+      )
 
-      ? Math.min(
+    : 0;
 
-          100,
 
-          Math.round(
 
-            (
+  const filledPercent = hasCapacity
 
-              filledSeats /
+    ? Math.min(
 
-              batch.capacity!
+        100,
 
-            ) *
 
-              100
 
-          )
+        Math.round((filledSeats / batch.capacity!) * 100),
 
-        )
+      )
 
-      : 0;
+    : 0;
 
 
 
@@ -2638,7 +3239,9 @@ function BatchDemandRow({
 
                     batch.startDate,
 
-                    batch.endDate
+
+
+                    batch.endDate,
 
                   )}
 
@@ -2650,6 +3253,8 @@ function BatchDemandRow({
 
                   <MapPin size={11} />
 
+
+
                   {batch.location}
 
                 </span>
@@ -2658,11 +3263,7 @@ function BatchDemandRow({
 
                 <span className="uppercase tracking-[.08em]">
 
-                  {formatModeLabel(
-
-                    batch.mode
-
-                  )}
+                  {formatModeLabel(batch.mode)}
 
                 </span>
 
@@ -2678,13 +3279,7 @@ function BatchDemandRow({
 
         <div className="grid grid-cols-4 gap-2 lg:w-[390px]">
 
-          <DemandMetric
-
-            label="Active"
-
-            value={batch.activeDemand}
-
-          />
+          <DemandMetric label="Active" value={batch.activeDemand} />
 
 
 
@@ -2712,13 +3307,7 @@ function BatchDemandRow({
 
 
 
-          <DemandMetric
-
-            label="Enrolled"
-
-            value={batch.enrolled}
-
-          />
+          <DemandMetric label="Enrolled" value={batch.enrolled} />
 
         </div>
 
@@ -2770,7 +3359,11 @@ function DemandMetric({
 
   label,
 
+
+
   value,
+
+
 
   emphasis = false,
 
@@ -2778,7 +3371,11 @@ function DemandMetric({
 
   label: string;
 
+
+
   value: number;
+
+
 
   emphasis?: boolean;
 
@@ -2792,9 +3389,9 @@ function DemandMetric({
 
         emphasis
 
-          ? 'border-orange-100 bg-orange-50'
+          ? "border-orange-100 bg-orange-50"
 
-          : 'border-slate-100 bg-slate-50'
+          : "border-slate-100 bg-slate-50"
 
       }`}
 
@@ -2804,11 +3401,7 @@ function DemandMetric({
 
         className={`text-base font-black ${
 
-          emphasis
-
-            ? 'text-orange-700'
-
-            : 'text-slate-800'
+          emphasis ? "text-orange-700" : "text-slate-800"
 
         }`}
 
@@ -2836,7 +3429,11 @@ function DemandMetric({
 
 /* =========================================================
 
+
+
    COMMERCIAL FORMAT HELPERS
+
+
 
 ========================================================= */
 
@@ -2846,7 +3443,9 @@ function formatDashboardMoney(
 
   value: number,
 
-  currency: string
+
+
+  currency: string,
 
 ) {
 
@@ -2854,31 +3453,29 @@ function formatDashboardMoney(
 
     return new Intl.NumberFormat(
 
-      currency === 'INR'
+      currency === "INR" ? "en-IN" : "en-US",
 
-        ? 'en-IN'
 
-        : 'en-US',
 
       {
 
-        style: 'currency',
+        style: "currency",
+
+
 
         currency,
 
+
+
         maximumFractionDigits: 0,
 
-      }
+      },
 
     ).format(value);
 
   } catch {
 
-    return `${currency} ${Math.round(
-
-      value
-
-    ).toLocaleString()}`;
+    return `${currency} ${Math.round(value).toLocaleString()}`;
 
   }
 
@@ -2890,51 +3487,29 @@ function formatBatchDateRange(
 
   startDate: string | null,
 
-  endDate: string | null
+
+
+  endDate: string | null,
 
 ) {
 
   if (!startDate) {
 
-    return 'Date to be confirmed';
+    return "Date to be confirmed";
 
   }
 
 
 
-  const start =
-
-    new Date(
-
-      `${startDate}T00:00:00Z`
-
-    );
+  const start = new Date(`${startDate}T00:00:00Z`);
 
 
 
-  const end =
-
-    endDate
-
-      ? new Date(
-
-          `${endDate}T00:00:00Z`
-
-        )
-
-      : null;
+  const end = endDate ? new Date(`${endDate}T00:00:00Z`) : null;
 
 
 
-  if (
-
-    Number.isNaN(
-
-      start.getTime()
-
-    )
-
-  ) {
+  if (Number.isNaN(start.getTime())) {
 
     return startDate;
 
@@ -2942,39 +3517,35 @@ function formatBatchDateRange(
 
 
 
-  const startLabel =
+  const startLabel = new Intl.DateTimeFormat(
 
-    new Intl.DateTimeFormat(
-
-      'en',
-
-      {
-
-        day: 'numeric',
-
-        month: 'short',
-
-        year: 'numeric',
-
-        timeZone: 'UTC',
-
-      }
-
-    ).format(start);
+    "en",
 
 
 
-  if (
+    {
 
-    !end ||
+      day: "numeric",
 
-    Number.isNaN(
 
-      end.getTime()
 
-    )
+      month: "short",
 
-  ) {
+
+
+      year: "numeric",
+
+
+
+      timeZone: "UTC",
+
+    },
+
+  ).format(start);
+
+
+
+  if (!end || Number.isNaN(end.getTime())) {
 
     return startLabel;
 
@@ -2982,25 +3553,31 @@ function formatBatchDateRange(
 
 
 
-  const endLabel =
+  const endLabel = new Intl.DateTimeFormat(
 
-    new Intl.DateTimeFormat(
+    "en",
 
-      'en',
 
-      {
 
-        day: 'numeric',
+    {
 
-        month: 'short',
+      day: "numeric",
 
-        year: 'numeric',
 
-        timeZone: 'UTC',
 
-      }
+      month: "short",
 
-    ).format(end);
+
+
+      year: "numeric",
+
+
+
+      timeZone: "UTC",
+
+    },
+
+  ).format(end);
 
 
 
@@ -3010,21 +3587,17 @@ function formatBatchDateRange(
 
 
 
-function formatModeLabel(
-
-  mode: string
-
-) {
+function formatModeLabel(mode: string) {
 
   return mode
 
-    .replaceAll('_', ' ')
 
-    .replace(/\b\w/g, (character) =>
 
-      character.toUpperCase()
+    .replaceAll("_", " ")
 
-    );
+
+
+    .replace(/\b\w/g, (character) => character.toUpperCase());
 
 }
 
@@ -3032,7 +3605,11 @@ function formatModeLabel(
 
 /* =========================================================
 
+
+
    ATTENTION METRIC
+
+
 
 ========================================================= */
 
@@ -3042,115 +3619,81 @@ function AttentionMetric({
 
   icon,
 
+
+
   label,
+
+
 
   value,
 
+
+
   note,
 
+
+
   href,
+
+
 
   tone,
 
 }: {
 
-  icon:
-
-    React.ReactNode;
+  icon: React.ReactNode;
 
 
 
-  label:
-
-    string;
+  label: string;
 
 
 
-  value:
-
-    number;
+  value: number;
 
 
 
-  note:
-
-    string;
+  note: string;
 
 
 
-  href:
-
-    string;
+  href: string;
 
 
 
-  tone:
-
-    'rose' |
-
-    'orange' |
-
-    'violet' |
-
-    'sky' |
-
-    'amber' |
-
-    'slate';
+  tone: "rose" | "orange" | "violet" | "sky" | "amber" | "slate";
 
 }) {
 
-
-
   const tones = {
 
-
-
-    rose:
-
-      'bg-rose-50 text-rose-600',
+    rose: "bg-rose-50 text-rose-600",
 
 
 
-    orange:
-
-      'bg-orange-50 text-orange-600',
+    orange: "bg-orange-50 text-orange-600",
 
 
 
-    violet:
-
-      'bg-violet-50 text-violet-600',
+    violet: "bg-violet-50 text-violet-600",
 
 
 
-    sky:
-
-      'bg-sky-50 text-sky-600',
+    sky: "bg-sky-50 text-sky-600",
 
 
 
-    amber:
-
-      'bg-amber-50 text-amber-600',
+    amber: "bg-amber-50 text-amber-600",
 
 
 
-    slate:
-
-      'bg-slate-100 text-slate-600',
-
-
+    slate: "bg-slate-100 text-slate-600",
 
   };
 
 
 
-
-
   return (
-
-
 
     <Link
 
@@ -3158,47 +3701,77 @@ function AttentionMetric({
 
       className="
 
+
+
         group
+
+
 
         flex
 
+
+
         items-center
+
+
 
         gap-3
 
+
+
         px-5
+
+
 
         py-4
 
+
+
         transition
 
+
+
         hover:bg-slate-50
+
+
 
       "
 
     >
 
-
-
       <div
 
         className={`
 
+
+
           grid
+
+
 
           h-10
 
+
+
           w-10
+
+
 
           shrink-0
 
+
+
           place-items-center
+
+
 
           rounded-xl
 
 
 
           ${tones[tone]}
+
+
 
         `}
 
@@ -3210,31 +3783,41 @@ function AttentionMetric({
 
 
 
-
-
       <div
 
         className="
 
+
+
           min-w-0
 
+
+
           flex-1
+
+
 
         "
 
       >
 
-
-
         <div
 
           className="
 
+
+
             text-xs
+
+
 
             font-bold
 
+
+
             text-slate-700
+
+
 
           "
 
@@ -3246,21 +3829,31 @@ function AttentionMetric({
 
 
 
-
-
         <div
 
           className="
 
+
+
             mt-0.5
+
+
 
             truncate
 
+
+
             text-[10px]
+
+
 
             font-medium
 
+
+
             text-slate-400
+
+
 
           "
 
@@ -3270,11 +3863,7 @@ function AttentionMetric({
 
         </div>
 
-
-
       </div>
-
-
 
 
 
@@ -3282,25 +3871,31 @@ function AttentionMetric({
 
         className="
 
+
+
           text-2xl
+
+
 
           font-black
 
+
+
           tracking-tight
 
+
+
           text-slate-900
+
+
 
         "
 
       >
 
-        {value
-
-          .toLocaleString()}
+        {value.toLocaleString()}
 
       </div>
-
-
 
 
 
@@ -3310,37 +3905,43 @@ function AttentionMetric({
 
         className="
 
+
+
           text-slate-300
+
+
 
           transition
 
+
+
           group-hover:translate-x-0.5
 
+
+
           group-hover:text-brand
+
+
 
         "
 
       />
 
-
-
     </Link>
 
-
-
   );
-
-
 
 }
 
 
 
-
-
 /* =========================================================
 
+
+
    ACTION LINK
+
+
 
 ========================================================= */
 
@@ -3350,51 +3951,45 @@ function ActionLink({
 
   href,
 
+
+
   icon,
+
+
 
   label,
 
+
+
   value,
+
+
 
   note,
 
 }: {
 
-  href:
-
-    string;
+  href: string;
 
 
 
-  icon:
-
-    React.ReactNode;
+  icon: React.ReactNode;
 
 
 
-  label:
-
-    string;
+  label: string;
 
 
 
-  value:
-
-    number;
+  value: number;
 
 
 
-  note:
-
-    string;
+  note: string;
 
 }) {
 
-
-
   return (
-
-
 
     <Link
 
@@ -3402,63 +3997,113 @@ function ActionLink({
 
       className="
 
+
+
         group
+
+
 
         flex
 
+
+
         items-center
+
+
 
         gap-3
 
+
+
         rounded-xl
+
+
 
         border
 
+
+
         border-slate-100
+
+
 
         bg-white
 
+
+
         p-3.5
+
+
 
         transition
 
+
+
         hover:-translate-y-0.5
+
+
 
         hover:border-slate-200
 
+
+
         hover:shadow-md
+
+
 
       "
 
     >
 
-
-
       <div
 
         className="
 
+
+
           grid
+
+
 
           h-9
 
+
+
           w-9
+
+
 
           shrink-0
 
+
+
           place-items-center
+
+
 
           rounded-xl
 
+
+
           bg-brand/10
+
+
 
           text-brand
 
+
+
           transition
+
+
 
           group-hover:bg-brand
 
+
+
           group-hover:text-white
+
+
 
         "
 
@@ -3470,31 +4115,41 @@ function ActionLink({
 
 
 
-
-
       <div
 
         className="
 
+
+
           min-w-0
 
+
+
           flex-1
+
+
 
         "
 
       >
 
-
-
         <div
 
           className="
 
+
+
             text-sm
+
+
 
             font-bold
 
+
+
             text-slate-800
+
+
 
           "
 
@@ -3506,19 +4161,27 @@ function ActionLink({
 
 
 
-
-
         <div
 
           className="
 
+
+
             mt-0.5
+
+
 
             truncate
 
+
+
             text-[11px]
 
+
+
             text-slate-400
+
+
 
           "
 
@@ -3528,11 +4191,7 @@ function ActionLink({
 
         </div>
 
-
-
       </div>
-
-
 
 
 
@@ -3540,25 +4199,31 @@ function ActionLink({
 
         className="
 
+
+
           text-lg
+
+
 
           font-black
 
+
+
           tracking-tight
 
+
+
           text-slate-900
+
+
 
         "
 
       >
 
-        {value
-
-          .toLocaleString()}
+        {value.toLocaleString()}
 
       </div>
-
-
 
 
 
@@ -3568,26 +4233,30 @@ function ActionLink({
 
         className="
 
+
+
           text-slate-300
+
+
 
           transition
 
+
+
           group-hover:translate-x-0.5
 
+
+
           group-hover:text-brand
+
+
 
         "
 
       />
 
-
-
     </Link>
 
-
-
   );
-
-
 
 }
