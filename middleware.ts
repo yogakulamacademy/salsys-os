@@ -22,6 +22,8 @@ const PUBLIC_EXACT_PATHS = new Set([
   "/api/admissions/auto-tasks",
   "/api/whatsapp/webhook",
   "/api/sync/course-batches",
+    "/api/tracking/collect",
+  "/api/tracking/identify",
 ]);
 
 /*
@@ -92,9 +94,9 @@ function isPublicPath(pathname: string) {
     return true;
   }
 
-  if (normalizedPath.startsWith("/api/tracking/")) {
-    return true;
-  }
+  // if (normalizedPath.startsWith("/api/tracking/")) {
+  //   return true;
+  // }
 
   return false;
 }
