@@ -398,7 +398,7 @@ export function AppShell({ children }: { children: ReactNode }) {
             </div>
 
             <div className="mt-0.5 text-[11px] font-medium text-slate-400">
-              {employee ? "Admissions CRM" : "Growth CRM · v0.7"}
+              {employee ? "Admissions CRM" : "Growth CRM · v0.9 Beta"}
             </div>
           </div>
 
