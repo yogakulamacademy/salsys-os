@@ -100,13 +100,23 @@ type MetaSendResponse = {
 
 /* =========================================================
 
+
+
    LEAD ACCESS GATE
 
+
+
    Important:
+
    - Uses the signed-in user's Supabase session.
+
    - Verifies can_work_lead() BEFORE any service-role
+
      contact lookup happens.
+
    - Raw phone / WhatsApp values stay server-side.
+
+
 
 ========================================================= */
 
@@ -115,6 +125,7 @@ async function requireLeadWorkAccess(leadId: string) {
 
   const {
     data: { user },
+
     error: authError,
   } = await supabase.auth.getUser();
 
@@ -124,6 +135,7 @@ async function requireLeadWorkAccess(leadId: string) {
 
   const { data: canWorkLead, error: accessError } = await supabase.rpc(
     "can_work_lead",
+
     {
       p_lead_id: leadId,
     },
@@ -152,7 +164,19 @@ async function requireLeadWorkAccess(leadId: string) {
 
 
 
+
+
+
+
    QUICK LEAD CONTEXT UPDATE
+
+
+
+
+
+
+
+
 
 
 
@@ -164,11 +188,23 @@ async function requireLeadWorkAccess(leadId: string) {
 
 
 
+
+
+
+
    - Interested course
 
 
 
+
+
+
+
    - Country
+
+
+
+
 
 
 
@@ -199,29 +235,21 @@ export async function updateConversationLeadContextAction(
     "country",
   );
 
-  const supabase = await createClient();
+  const supabase = await requireLeadWorkAccess(leadId);
 
-  const {
-    data: { user },
+  const { error } = await supabase.rpc(
+    "update_crm_lead_fields",
 
-    error: authError,
-  } = await supabase.auth.getUser();
+    {
+      p_lead_id: leadId,
 
-  if (authError || !user) {
-    redirect("/login");
-  }
+      p_patch: {
+        interested_course_id: courseId,
 
-  const { error } = await supabase
-
-    .from("leads")
-
-    .update({
-      interested_course_id: courseId,
-
-      country,
-    })
-
-    .eq("id", leadId);
+        country,
+      },
+    },
+  );
 
   if (error) {
     redirect(
@@ -256,7 +284,15 @@ export async function updateConversationLeadContextAction(
 
 
 
+
+
+
+
    WHATSAPP SEND
+
+
+
+
 
 
 
@@ -292,12 +328,19 @@ export async function sendWhatsAppMessageAction(
   const supabase = await requireLeadWorkAccess(leadId);
 
   /*
+
    * Raw contact data is deliberately loaded with the
+
    * server-only service-role client only AFTER the
+
    * signed-in user has passed can_work_lead().
+
    *
+
    * Never return this row to the browser.
+
    */
+
   const adminSupabase = createAdminClient();
 
   const {
@@ -357,7 +400,15 @@ export async function sendWhatsAppMessageAction(
 
 
 
+
+
+
+
         id,
+
+
+
+
 
 
 
@@ -365,11 +416,23 @@ export async function sendWhatsAppMessageAction(
 
 
 
+
+
+
+
         external_account_id,
 
 
 
+
+
+
+
         last_message_at
+
+
+
+
 
 
 
@@ -411,7 +474,15 @@ export async function sendWhatsAppMessageAction(
 
 
 
+
+
+
+
    * Free-form WhatsApp messages are
+
+
+
+
 
 
 
@@ -419,7 +490,15 @@ export async function sendWhatsAppMessageAction(
 
 
 
+
+
+
+
    * customer-service window.
+
+
+
+
 
 
 
@@ -577,9 +656,15 @@ export async function sendWhatsAppMessageAction(
 
   /*
 
+
+
    * Continue using the canonical
 
+
+
    * CRM interaction logger.
+
+
 
    */
 
@@ -613,17 +698,31 @@ export async function sendWhatsAppMessageAction(
 
   /*
 
+
+
    * Attach Meta's WhatsApp message ID
+
+
 
    * to the CRM message we just logged.
 
+
+
    *
+
+
 
    * This allows later webhook events:
 
+
+
    * sent → delivered → read / failed
 
+
+
    * to update this exact message.
+
+
 
    */
 
@@ -665,15 +764,27 @@ export async function sendWhatsAppMessageAction(
 
   /*
 
+
+
    * Do not revalidate /conversations here.
+
+
 
    *
 
+
+
    * The client composer handles the successful
+
+
 
    * outbound message locally so the chat does
 
+
+
    * not reload after every send.
+
+
 
    */
 
@@ -740,15 +851,26 @@ export async function sendWhatsAppTemplateAction(
   const supabase = await requireLeadWorkAccess(leadId);
 
   /*
+
    * This client is server-only and bypasses lead_contacts RLS.
+
    * It is created only after can_work_lead() has approved the
+
    * current signed-in user for this specific lead.
+
    *
+
    * Raw contact values are never returned from this action.
+
    */
+
   const adminSupabase = createAdminClient();
 
   /* =====================================================
+
+
+
+
 
 
 
@@ -760,7 +882,19 @@ export async function sendWhatsAppTemplateAction(
 
 
 
+
+
+
+
+
+
+
+
      A website lead may only have:
+
+
+
+
 
 
 
@@ -772,11 +906,27 @@ export async function sendWhatsAppTemplateAction(
 
 
 
+
+
+
+
+
+
+
+
      An existing WhatsApp lead may already have:
 
 
 
+
+
+
+
      contact_type = whatsapp
+
+
+
+
 
 
 
@@ -795,7 +945,15 @@ export async function sendWhatsAppTemplateAction(
 
 
 
+
+
+
+
         lead_id,
+
+
+
+
 
 
 
@@ -803,7 +961,15 @@ export async function sendWhatsAppTemplateAction(
 
 
 
+
+
+
+
         value,
+
+
+
+
 
 
 
@@ -811,11 +977,23 @@ export async function sendWhatsAppTemplateAction(
 
 
 
+
+
+
+
         is_primary,
 
 
 
+
+
+
+
         verified
+
+
+
+
 
 
 
@@ -866,7 +1044,15 @@ export async function sendWhatsAppTemplateAction(
 
 
 
+
+
+
+
    * Prefer the existing WhatsApp number.
+
+
+
+
 
 
 
@@ -874,7 +1060,15 @@ export async function sendWhatsAppTemplateAction(
 
 
 
+
+
+
+
    * through the website/form.
+
+
+
+
 
 
 
@@ -902,7 +1096,15 @@ export async function sendWhatsAppTemplateAction(
 
 
 
+
+
+
+
    * E.164 international phone numbers
+
+
+
+
 
 
 
@@ -910,7 +1112,15 @@ export async function sendWhatsAppTemplateAction(
 
 
 
+
+
+
+
    *
+
+
+
+
 
 
 
@@ -918,7 +1128,15 @@ export async function sendWhatsAppTemplateAction(
 
 
 
+
+
+
+
    * missing country code.
+
+
+
+
 
 
 
@@ -941,7 +1159,19 @@ export async function sendWhatsAppTemplateAction(
 
 
 
+
+
+
+
      DUPLICATE SAFETY
+
+
+
+
+
+
+
+
 
 
 
@@ -953,7 +1183,15 @@ export async function sendWhatsAppTemplateAction(
 
 
 
+
+
+
+
      WhatsApp to ANOTHER lead, do not silently
+
+
+
+
 
 
 
@@ -965,7 +1203,19 @@ export async function sendWhatsAppTemplateAction(
 
 
 
+
+
+
+
+
+
+
+
      We should merge duplicate leads separately.
+
+
+
+
 
 
 
@@ -984,11 +1234,23 @@ export async function sendWhatsAppTemplateAction(
 
 
 
+
+
+
+
         lead_id,
 
 
 
+
+
+
+
         normalized_value
+
+
+
+
 
 
 
@@ -1040,7 +1302,15 @@ export async function sendWhatsAppTemplateAction(
 
 
 
+
+
+
+
      VERIFY TEMPLATE AGAINST META
+
+
+
+
 
 
 
@@ -1095,7 +1365,15 @@ export async function sendWhatsAppTemplateAction(
 
 
 
+
+
+
+
      TEMPLATE VARIABLES
+
+
+
+
 
 
 
@@ -1180,7 +1458,15 @@ export async function sendWhatsAppTemplateAction(
 
 
 
+
+
+
+
      SEND TEMPLATE THROUGH META
+
+
+
+
 
 
 
@@ -1250,11 +1536,23 @@ export async function sendWhatsAppTemplateAction(
 
 
 
+
+
+
+
      * IMPORTANT:
 
 
 
+
+
+
+
      *
+
+
+
+
 
 
 
@@ -1262,7 +1560,15 @@ export async function sendWhatsAppTemplateAction(
 
 
 
+
+
+
+
      * WhatsApp when Meta rejects the number.
+
+
+
+
 
 
 
@@ -1270,7 +1576,15 @@ export async function sendWhatsAppTemplateAction(
 
 
 
+
+
+
+
      * The lead remains a website/form lead.
+
+
+
+
 
 
 
@@ -1295,7 +1609,15 @@ export async function sendWhatsAppTemplateAction(
 
 
 
+
+
+
+
    * Meta normally returns wa_id when it
+
+
+
+
 
 
 
@@ -1303,7 +1625,15 @@ export async function sendWhatsAppTemplateAction(
 
 
 
+
+
+
+
    *
+
+
+
+
 
 
 
@@ -1311,11 +1641,23 @@ export async function sendWhatsAppTemplateAction(
 
 
 
+
+
+
+
    * number so a successful API send is not
 
 
 
+
+
+
+
    * lost if contacts[] is absent.
+
+
+
+
 
 
 
@@ -1329,7 +1671,15 @@ export async function sendWhatsAppTemplateAction(
 
 
 
+
+
+
+
      SECOND DUPLICATE CHECK USING RETURNED WA_ID
+
+
+
+
 
 
 
@@ -1348,11 +1698,23 @@ export async function sendWhatsAppTemplateAction(
 
 
 
+
+
+
+
         lead_id,
 
 
 
+
+
+
+
         normalized_value
+
+
+
+
 
 
 
@@ -1404,7 +1766,15 @@ export async function sendWhatsAppTemplateAction(
 
 
 
+
+
+
+
      CREATE WHATSAPP CONTACT ON EXISTING LEAD
+
+
+
+
 
 
 
@@ -1424,11 +1794,23 @@ export async function sendWhatsAppTemplateAction(
 
 
 
+
+
+
+
            * Keep the original submitted
 
 
 
+
+
+
+
            * number for human display.
+
+
+
+
 
 
 
@@ -1460,7 +1842,15 @@ export async function sendWhatsAppTemplateAction(
 
 
 
+
+
+
+
      FIND EXISTING WHATSAPP CONVERSATION
+
+
+
+
 
 
 
@@ -1479,7 +1869,15 @@ export async function sendWhatsAppTemplateAction(
 
 
 
+
+
+
+
         id,
+
+
+
+
 
 
 
@@ -1487,11 +1885,23 @@ export async function sendWhatsAppTemplateAction(
 
 
 
+
+
+
+
         channel,
 
 
 
+
+
+
+
         last_message_at
+
+
+
+
 
 
 
@@ -1542,7 +1952,15 @@ export async function sendWhatsAppTemplateAction(
 
 
 
+
+
+
+
      CREATE WHATSAPP CONVERSATION IF NEEDED
+
+
+
+
 
 
 
@@ -1568,7 +1986,15 @@ export async function sendWhatsAppTemplateAction(
 
 
 
+
+
+
+
            * Your inbound WhatsApp system
+
+
+
+
 
 
 
@@ -1576,7 +2002,15 @@ export async function sendWhatsAppTemplateAction(
 
 
 
+
+
+
+
            * their WhatsApp ID.
+
+
+
+
 
 
 
@@ -1588,11 +2022,23 @@ export async function sendWhatsAppTemplateAction(
 
 
 
+
+
+
+
            * Business-side WhatsApp phone
 
 
 
+
+
+
+
            * number ID.
+
+
+
+
 
 
 
@@ -1632,7 +2078,15 @@ export async function sendWhatsAppTemplateAction(
 
 
 
+
+
+
+
      RENDER READABLE MESSAGE FOR CRM HISTORY
+
+
+
+
 
 
 
@@ -1661,7 +2115,15 @@ export async function sendWhatsAppTemplateAction(
 
 
 
+
+
+
+
      LOG WHATSAPP MESSAGE
+
+
+
+
 
 
 
@@ -1699,7 +2161,15 @@ export async function sendWhatsAppTemplateAction(
 
 
 
+
+
+
+
  * Attach Meta's WhatsApp message ID
+
+
+
+
 
 
 
@@ -1707,7 +2177,15 @@ export async function sendWhatsAppTemplateAction(
 
 
 
+
+
+
+
  *
+
+
+
+
 
 
 
@@ -1715,7 +2193,15 @@ export async function sendWhatsAppTemplateAction(
 
 
 
+
+
+
+
  * update this exact CRM message:
+
+
+
+
 
 
 
@@ -1723,7 +2209,15 @@ export async function sendWhatsAppTemplateAction(
 
 
 
+
+
+
+
  * sent → delivered → read / failed
+
+
+
+
 
 
 
@@ -1761,7 +2255,19 @@ export async function sendWhatsAppTemplateAction(
 
 
 
+
+
+
+
      SWITCH CURRENT COMMUNICATION CHANNEL
+
+
+
+
+
+
+
+
 
 
 
@@ -1773,7 +2279,15 @@ export async function sendWhatsAppTemplateAction(
 
 
 
+
+
+
+
      We DO NOT change:
+
+
+
+
 
 
 
@@ -1781,11 +2295,23 @@ export async function sendWhatsAppTemplateAction(
 
 
 
+
+
+
+
      - lead creation source
 
 
 
+
+
+
+
      - website attribution
+
+
+
+
 
 
 
@@ -1797,7 +2323,19 @@ export async function sendWhatsAppTemplateAction(
 
 
 
+
+
+
+
+
+
+
+
      Only the current conversation channel
+
+
+
+
 
 
 
@@ -1805,21 +2343,23 @@ export async function sendWhatsAppTemplateAction(
 
 
 
+
+
+
+
   ===================================================== */
 
-  const { error: leadUpdateError } = await supabase
+  const { error: leadUpdateError } = await supabase.rpc(
+    "update_crm_lead_fields",
 
-    .from("leads")
+    {
+      p_lead_id: leadId,
 
-    .update({
-      current_contact_channel: "whatsapp",
-    })
-
-    .eq(
-      "id",
-
-      leadId,
-    );
+      p_patch: {
+        current_contact_channel: "whatsapp",
+      },
+    },
+  );
 
   if (leadUpdateError) {
     redirect(

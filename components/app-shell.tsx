@@ -1,152 +1,222 @@
-"use client";
+'use client';
 
-import Link from "next/link";
 
-import { usePathname } from "next/navigation";
+
+import Link from 'next/link';
+
+import { usePathname } from 'next/navigation';
 
 import {
+
+  Activity,
+
   BarChart3,
+
   Bell,
+
   BookOpen,
+
   Boxes,
+
   ChevronDown,
+
   CircleDollarSign,
+
   ContactRound,
+
   FileSearch,
+
   Gauge,
+
   GitBranch,
+
   LineChart,
+
   ListTodo,
+
   Menu,
+
   MessageSquareText,
+
   RefreshCw,
+
   Search,
+
   Settings,
+
   Tags,
+
   Target,
+
   Megaphone,
+
   ClipboardCheck,
+
   UsersRound,
+
   X,
-} from "lucide-react";
+
+} from 'lucide-react';
 
 import {
+
   type ComponentType,
+
   type ReactNode,
+
   useEffect,
+
   useMemo,
+
   useState,
-} from "react";
 
-import { signOutAction } from "@/app/actions/auth";
+} from 'react';
 
-import { LiveRefresh } from "@/components/live-refresh";
+import { signOutAction } from '@/app/actions/auth';
 
-import { ThemeToggle } from "@/components/theme-toggle";
+import { LiveRefresh } from '@/components/live-refresh';
 
-import { createClient as createBrowserClient } from "@/lib/supabase/browser";
+import { ThemeToggle } from '@/components/theme-toggle';
+
+import { createClient as createBrowserClient } from '@/lib/supabase/browser';
+
+
 
 type NavItem = {
+
   href: string;
 
   label: string;
 
   icon: ComponentType<{
+
     size?: number | string;
 
     strokeWidth?: number;
 
     className?: string;
+
   }>;
+
 };
 
+
+
 type NavGroup = {
+
   label: string;
 
   items: NavItem[];
+
 };
 
+
+
 type ShellProfile = {
+
   fullName: string;
 
   role: string | null;
 
   active: boolean;
+
 };
 
+
+
 const adminNavGroups: NavGroup[] = [
+
   {
-    label: "Workspace",
+
+    label: 'Workspace',
 
     items: [
-      { href: "/dashboard", label: "Dashboard", icon: Gauge },
 
-      { href: "/admissions", label: "Admissions Desk", icon: ClipboardCheck },
+      { href: '/dashboard', label: 'Dashboard', icon: Gauge },
 
-      { href: "/leads", label: "Leads", icon: ContactRound },
+      { href: '/admissions', label: 'Admissions Desk', icon: ClipboardCheck },
 
-      { href: "/pipeline", label: "Pipeline", icon: Boxes },
+      { href: '/leads', label: 'Leads', icon: ContactRound },
 
-      {
-        href: "/conversations",
-        label: "Conversations",
-        icon: MessageSquareText,
-      },
+      { href: '/pipeline', label: 'Pipeline', icon: Boxes },
 
-      { href: "/follow-ups", label: "Follow-ups", icon: ListTodo },
+      { href: '/conversations', label: 'Conversations', icon: MessageSquareText },
+
+      { href: '/follow-ups', label: 'Follow-ups', icon: ListTodo },
+
     ],
+
   },
 
   {
-    label: "Operations",
+
+    label: 'Operations',
 
     items: [
-      {
-        href: "/course-management",
 
-        label: "Course Management",
+      {
+
+        href: '/course-management',
+
+        label: 'Course Management',
 
         icon: BookOpen,
+
       },
+
     ],
+
   },
 
   {
-    label: "Growth",
+
+    label: 'Growth',
 
     items: [
-      { href: "/campaigns", label: "Campaigns", icon: Target },
 
-      { href: "/paid-media-leads", label: "Paid Media Leads", icon: Megaphone },
+      { href: '/campaigns', label: 'Campaigns', icon: Target },
 
-      { href: "/attribution", label: "Attribution", icon: LineChart },
+      { href: '/paid-media-leads', label: 'Paid Media Leads', icon: Megaphone },
 
-      { href: "/re-engaged", label: "Re-engaged Leads", icon: RefreshCw },
+      { href: '/attribution', label: 'Attribution', icon: LineChart },
 
-      { href: "/seo", label: "SEO", icon: FileSearch },
+      { href: '/re-engaged', label: 'Re-engaged Leads', icon: RefreshCw },
+
+      { href: '/seo', label: 'SEO', icon: FileSearch },
+
     ],
+
   },
 
   {
-    label: "Intelligence",
+
+    label: 'Intelligence',
 
     items: [
-      { href: "/analytics", label: "Analytics", icon: BarChart3 },
 
-      { href: "/funnel", label: "Funnel", icon: GitBranch },
+      { href: '/analytics', label: 'Analytics', icon: BarChart3 },
 
-      { href: "/revenue", label: "Revenue Forecast", icon: CircleDollarSign },
+      { href: '/funnel', label: 'Funnel', icon: GitBranch },
 
-      { href: "/tracking", label: "Tracking", icon: Tags },
+      { href: '/revenue', label: 'Revenue Forecast', icon: CircleDollarSign },
+
+      { href: '/tracking', label: 'Tracking', icon: Tags },
+
     ],
+
   },
 
   {
-    label: "System",
 
-    items: [{ href: "/settings", label: "Settings", icon: Settings }],
+    label: 'System',
+
+    items: [{ href: '/settings', label: 'Settings', icon: Settings }],
+
   },
+
 ];
+
+
 
 /*
 
@@ -159,49 +229,71 @@ const adminNavGroups: NavGroup[] = [
  */
 
 const adminOnlyTeamNavGroup: NavGroup = {
-  label: "Team",
+  label: 'Team',
   items: [
     {
-      href: "/team-performance",
-      label: "Team Performance",
+      href: '/team-performance',
+      label: 'Team Performance',
       icon: UsersRound,
+    },
+    {
+      href: '/contact-intelligence',
+      label: 'Contact Intelligence',
+      icon: Activity,
     },
   ],
 };
 
+
+
 const employeeNavGroups: NavGroup[] = [
+
   {
-    label: "My Workspace",
+
+    label: 'My Workspace',
 
     items: [
-      { href: "/dashboard", label: "My Dashboard", icon: Gauge },
 
-      { href: "/leads", label: "My Leads", icon: ContactRound },
+      { href: '/dashboard', label: 'My Dashboard', icon: Gauge },
 
-      { href: "/pipeline", label: "My Pipeline", icon: Boxes },
+      { href: '/leads', label: 'My Leads', icon: ContactRound },
 
-      {
-        href: "/conversations",
-        label: "Conversations",
-        icon: MessageSquareText,
-      },
+      { href: '/pipeline', label: 'My Pipeline', icon: Boxes },
 
-      { href: "/follow-ups", label: "Follow-ups", icon: ListTodo },
+      { href: '/conversations', label: 'Conversations', icon: MessageSquareText },
+
+      { href: '/follow-ups', label: 'Follow-ups', icon: ListTodo },
+
     ],
+
   },
+
 ];
+
+
 
 const employeeNav = employeeNavGroups.flatMap((group) => group.items);
 
+
+
 function BrandMark() {
+
   return (
+
     <div className="brand-mark">
+
       <span>YK</span>
+
     </div>
+
   );
+
 }
 
+
+
 function initials(name: string) {
+
   const value = name
 
     .split(/\s+/)
@@ -212,14 +304,20 @@ function initials(name: string) {
 
     .slice(0, 2)
 
-    .join("")
+    .join('')
 
     .toUpperCase();
 
-  return value || "YK";
+
+
+  return value || 'YK';
+
 }
 
+
+
 export function AppShell({ children }: { children: ReactNode }) {
+
   const pathname = usePathname();
 
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -228,13 +326,18 @@ export function AppShell({ children }: { children: ReactNode }) {
 
   const [profileLoading, setProfileLoading] = useState(true);
 
-  const mock = process.env.NEXT_PUBLIC_USE_MOCK_DATA !== "false";
 
-  const employee = !mock && profile?.role === "admissions";
 
-  const admin = mock || profile?.role === "admin";
+  const mock = process.env.NEXT_PUBLIC_USE_MOCK_DATA !== 'false';
 
-  const explicitAdmin = admin || profile?.role === "manager";
+  const employee = !mock && profile?.role === 'admissions';
+
+  const admin = mock || profile?.role === 'admin';
+
+  const explicitAdmin =
+    admin || profile?.role === 'manager';
+
+
 
   /*
 
@@ -261,326 +364,606 @@ export function AppShell({ children }: { children: ReactNode }) {
     ? visibleNavGroups.flatMap((group) => group.items)
     : employeeNav;
 
+
+
   const current = useMemo(
+
     () =>
+
       visibleNav.find((item) => pathname.startsWith(item.href))?.label ??
-      (employee ? "Admissions Workspace" : "Growth CRM"),
+
+      (employee ? 'Admissions Workspace' : 'Growth CRM'),
 
     [pathname, visibleNav, employee],
+
   );
 
+
+
   useEffect(() => {
+
     let cancelled = false;
 
-    async function loadProfile() {
-      if (mock) {
-        if (!cancelled) {
-          setProfile({
-            fullName: "CRM User",
 
-            role: "admin",
+
+    async function loadProfile() {
+
+      if (mock) {
+
+        if (!cancelled) {
+
+          setProfile({
+
+            fullName: 'CRM User',
+
+            role: 'admin',
 
             active: true,
+
           });
 
           setProfileLoading(false);
+
         }
 
         return;
+
       }
 
+
+
       try {
+
         const supabase = createBrowserClient();
 
         const {
+
           data: { user },
+
         } = await supabase.auth.getUser();
 
+
+
         if (!user) {
+
           if (!cancelled) {
+
             setProfile(null);
 
             setProfileLoading(false);
+
           }
 
           return;
+
         }
+
+
 
         const { data } = await supabase
 
-          .from("profiles")
+          .from('profiles')
 
-          .select("full_name,role,active")
+          .select('full_name,role,active')
 
-          .eq("id", user.id)
+          .eq('id', user.id)
 
           .maybeSingle();
 
+
+
         if (!cancelled) {
+
           setProfile({
-            fullName: data?.full_name?.trim() || "CRM User",
+
+            fullName: data?.full_name?.trim() || 'CRM User',
 
             role: data?.role ?? null,
 
             active: data?.active === true,
+
           });
 
           setProfileLoading(false);
+
         }
+
       } catch {
+
         if (!cancelled) {
+
           setProfile(null);
 
           setProfileLoading(false);
+
         }
+
       }
+
     }
+
+
 
     void loadProfile();
 
+
+
     return () => {
+
       cancelled = true;
+
     };
+
   }, [mock]);
 
-  useEffect(() => {
-    setMobileOpen(false);
-  }, [pathname]);
+
 
   useEffect(() => {
+
+    setMobileOpen(false);
+
+  }, [pathname]);
+
+
+
+  useEffect(() => {
+
     if (!mobileOpen) return;
+
+
 
     const previous = document.body.style.overflow;
 
-    document.body.style.overflow = "hidden";
+    document.body.style.overflow = 'hidden';
+
+
 
     return () => {
+
       document.body.style.overflow = previous;
+
     };
+
   }, [mobileOpen]);
 
-  if (pathname.startsWith("/login")) {
+
+
+  if (pathname.startsWith('/login')) {
+
     return <>{children}</>;
+
   }
 
-  const displayName = profile?.fullName || "CRM User";
+
+
+  const displayName = profile?.fullName || 'CRM User';
 
   const roleLabel = employee
-    ? "Employee"
-    : profile?.role === "admin"
-      ? "Admin"
+
+    ? 'Employee'
+
+    : profile?.role === 'admin'
+
+      ? 'Admin'
+
       : mock
-        ? "Development access"
-        : "Authenticated";
+
+        ? 'Development access'
+
+        : 'Authenticated';
+
+
 
   return (
+
     <div className="app-shell">
+
       <LiveRefresh enabled={!mock} />
 
+
+
       {mobileOpen && (
+
         <button
+
           type="button"
+
           className="shell-backdrop lg:hidden"
+
           aria-label="Close navigation"
+
           onClick={() => setMobileOpen(false)}
+
         />
+
       )}
 
+
+
       <aside
-        className={`shell-sidebar ${mobileOpen ? "shell-sidebar-open" : ""}`}
+
+        className={`shell-sidebar ${
+
+          mobileOpen ? 'shell-sidebar-open' : ''
+
+        }`}
+
       >
+
         <div className="sidebar-brand">
+
           <BrandMark />
 
+
+
           <div className="min-w-0">
+
             <div className="truncate text-sm font-bold text-slate-950">
+
               Yogakulam
+
             </div>
 
             <div className="mt-0.5 text-[11px] font-medium text-slate-400">
-              {employee ? "Admissions CRM" : "Growth CRM · v0.9 Beta"}
+
+              {employee ? 'Admissions CRM' : 'Growth CRM · v0.9 Beta'}
+
             </div>
+
           </div>
+
+
 
           <button
+
             type="button"
+
             className="sidebar-close lg:hidden"
+
             onClick={() => setMobileOpen(false)}
+
             aria-label="Close navigation"
+
           >
+
             <X size={17} />
+
           </button>
+
         </div>
+
+
 
         <div
+
           className={`sidebar-status ${
-            mock ? "sidebar-status-dev" : "sidebar-status-live"
+
+            mock ? 'sidebar-status-dev' : 'sidebar-status-live'
+
           }`}
+
         >
+
           <div
+
             className={`flex items-center gap-2 text-xs font-semibold ${
-              mock ? "text-orange-700" : "text-emerald-700"
+
+              mock ? 'text-orange-700' : 'text-emerald-700'
+
             }`}
+
           >
+
             <span className="relative flex h-2 w-2">
+
               <span
+
                 className={`absolute inline-flex h-full w-full animate-ping rounded-full opacity-50 ${
-                  mock ? "bg-orange-400" : "bg-emerald-400"
+
+                  mock ? 'bg-orange-400' : 'bg-emerald-400'
+
                 }`}
+
               />
 
               <span
+
                 className={`relative inline-flex h-2 w-2 rounded-full ${
-                  mock ? "bg-orange-500" : "bg-emerald-500"
+
+                  mock ? 'bg-orange-500' : 'bg-emerald-500'
+
                 }`}
+
               />
+
             </span>
 
+
+
             {mock
-              ? "Development mode"
+
+              ? 'Development mode'
+
               : employee
-                ? "My assigned leads"
-                : "Supabase live"}
+
+                ? 'My assigned leads'
+
+                : 'Supabase live'}
+
           </div>
 
+
+
           <p
+
             className={`mt-1.5 text-[11px] leading-5 ${
-              mock ? "text-orange-700/75" : "text-emerald-700/75"
+
+              mock
+
+                ? 'text-orange-700/75'
+
+                : 'text-emerald-700/75'
+
             }`}
+
           >
+
             {mock
-              ? "Using fictional CRM data until Supabase is connected."
+
+              ? 'Using fictional CRM data until Supabase is connected.'
+
               : employee
-                ? "Focused workspace for your assigned leads and conversions."
-                : "Authenticated data is persistent and live-synced."}
+
+                ? 'Focused workspace for your assigned leads and conversions.'
+
+                : 'Authenticated data is persistent and live-synced.'}
+
           </p>
+
         </div>
 
+
+
         <nav className="sidebar-nav">
+
           {visibleNavGroups.map((group) => (
+
             <div key={group.label} className="sidebar-group">
+
               <div className="sidebar-group-label">{group.label}</div>
 
+
+
               <div className="space-y-1">
+
                 {group.items.map((item) => {
+
                   const Icon = item.icon;
 
                   const active = pathname.startsWith(item.href);
 
+
+
                   return (
+
                     <Link
+
                       key={item.href}
+
                       href={item.href}
-                      className={`nav-item ${active ? "nav-item-active" : ""}`}
+
+                      className={`nav-item ${active ? 'nav-item-active' : ''}`}
+
                     >
+
                       <span className="nav-icon-wrap">
+
                         <Icon size={17} strokeWidth={1.9} />
+
                       </span>
+
+
 
                       <span className="min-w-0 flex-1 truncate">
+
                         {item.label}
+
                       </span>
 
+
+
                       {active && <span className="nav-active-dot" />}
+
                     </Link>
+
                   );
+
                 })}
+
               </div>
+
             </div>
+
           ))}
+
         </nav>
 
+
+
         <div className="sidebar-user">
+
           <div className="user-avatar">{initials(displayName)}</div>
 
+
+
           <div className="min-w-0 flex-1">
+
             <div className="truncate text-sm font-semibold text-slate-800">
+
               {displayName}
+
             </div>
 
             <div className="mt-0.5 text-[11px] text-slate-400">
-              {profileLoading ? "Loading access…" : roleLabel}
+
+              {profileLoading ? 'Loading access…' : roleLabel}
+
             </div>
+
           </div>
 
+
+
           {mock ? (
+
             <ChevronDown size={16} className="text-slate-400" />
+
           ) : (
+
             <form action={signOutAction}>
+
               <button type="submit" className="sidebar-signout">
+
                 Sign out
+
               </button>
+
             </form>
+
           )}
+
         </div>
+
       </aside>
 
+
+
       <div className="shell-content">
+
         <header className="shell-header">
+
           <button
+
             type="button"
+
             className="header-icon-btn lg:hidden"
+
             onClick={() => setMobileOpen((value) => !value)}
+
             aria-label="Toggle navigation"
+
           >
+
             <Menu size={18} />
+
           </button>
 
+
+
           <div className="min-w-0">
+
             <div className="header-eyebrow">
-              {employee ? "Yogakulam Admissions" : "Yogakulam Academy"}
+
+              {employee ? 'Yogakulam Admissions' : 'Yogakulam Academy'}
+
             </div>
 
             <div className="header-title">{current}</div>
+
           </div>
 
+
+
           <form action="/leads" method="get" className="global-search">
+
             <Search size={15} className="text-slate-400" />
 
             <input
+
               name="q"
+
               placeholder={
+
                 employee
-                  ? "Search my leads..."
-                  : "Search lead, course or country..."
+
+                  ? 'Search my leads...'
+
+                  : 'Search lead, course or country...'
+
               }
+
               aria-label="Search leads"
+
             />
 
             <kbd>Enter</kbd>
+
           </form>
 
+
+
           <div className="header-actions">
+
             <ThemeToggle />
 
+
+
             <button
+
               type="button"
+
               className="header-icon-btn"
+
               aria-label="Notifications"
+
             >
+
               <Bell size={17} />
 
               <span className="notification-dot" />
+
             </button>
 
+
+
             {!employee && !profileLoading && (
+
               <Link
+
                 href="/leads/new"
+
                 className="btn-primary hidden sm:inline-flex"
+
               >
+
                 <ContactRound size={16} />
+
                 Add lead
+
               </Link>
+
             )}
+
           </div>
+
         </header>
 
+
+
         <main className="shell-main">
+
           <div key={pathname} className="page-transition">
+
             {children}
+
           </div>
+
         </main>
+
       </div>
+
     </div>
+
   );
+
 }
