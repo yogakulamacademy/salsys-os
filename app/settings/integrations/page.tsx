@@ -40,8 +40,8 @@ import {
 } from '@/lib/supabase/server';
 
 import {
-  getIntegrationWorkspace,
-} from '@/lib/integrations/data';
+  createAdminClient,
+} from '@/lib/supabase/admin';
 
 import type {
   IntegrationAsset,
@@ -109,7 +109,7 @@ function formatDate(
     | undefined,
 ) {
   if (!value) {
-    return '—';
+    return 'â€”';
   }
 
   const date =
@@ -120,7 +120,7 @@ function formatDate(
       date.getTime(),
     )
   ) {
-    return '—';
+    return 'â€”';
   }
 
   return new Intl.DateTimeFormat(
@@ -246,6 +246,7 @@ export default async function IntegrationsPage({
     Promise<{
       notice?: string;
       error?: string;
+      organization_id?: string;
     }>;
 }) {
   const query =
@@ -276,7 +277,7 @@ export default async function IntegrationsPage({
     await supabase
       .from('profiles')
       .select(
-        'id, role, active',
+        'id, active',
       )
       .eq(
         'id',
@@ -287,14 +288,188 @@ export default async function IntegrationsPage({
   if (
     profileError ||
     !profile ||
-    profile.active !== true ||
-    profile.role !== 'admin'
+    profile.active !== true
   ) {
     redirect('/dashboard');
   }
 
-  const workspace =
-    await getIntegrationWorkspace();
+  const admin =
+    createAdminClient();
+
+  const requestedOrganizationId =
+    query.organization_id?.trim() ||
+    null;
+
+  let membershipQuery =
+    admin
+      .from(
+        'organization_members',
+      )
+      .select(
+        'organization_id, role',
+      )
+      .eq(
+        'user_id',
+        user.id,
+      )
+      .eq(
+        'active',
+        true,
+      )
+      .in(
+        'role',
+        [
+          'owner',
+          'admin',
+        ],
+      );
+
+  if (
+    requestedOrganizationId
+  ) {
+    membershipQuery =
+      membershipQuery.eq(
+        'organization_id',
+        requestedOrganizationId,
+      );
+  }
+
+  const {
+    data:
+      rawMemberships,
+    error:
+      membershipError,
+  } =
+    await membershipQuery;
+
+  const memberships =
+    (
+      rawMemberships ??
+      []
+    ) as Array<{
+      organization_id:
+        string;
+      role:
+        string;
+    }>;
+
+  if (
+    membershipError ||
+    memberships.length ===
+      0
+  ) {
+    redirect('/dashboard');
+  }
+
+  /*
+   * Today the account has one manageable workspace.
+   * When the SalsysOS workspace switcher is added it will pass
+   * organization_id explicitly. Until then, the first manageable
+   * workspace is used only when no workspace was supplied.
+   */
+  const organizationId =
+    requestedOrganizationId ??
+    memberships[0]
+      .organization_id;
+
+  const {
+    data:
+      organization,
+    error:
+      organizationError,
+  } =
+    await admin
+      .from(
+        'organizations',
+      )
+      .select(
+        'id, name, status',
+      )
+      .eq(
+        'id',
+        organizationId,
+      )
+      .eq(
+        'status',
+        'active',
+      )
+      .maybeSingle();
+
+  if (
+    organizationError ||
+    !organization
+  ) {
+    redirect('/dashboard');
+  }
+
+  const [
+    connectionsResult,
+    assetsResult,
+  ] =
+    await Promise.all([
+      admin
+        .from(
+          'integration_connections',
+        )
+        .select('*')
+        .eq(
+          'organization_id',
+          organizationId,
+        )
+        .order(
+          'created_at',
+          {
+            ascending: true,
+          },
+        ),
+
+      admin
+        .from(
+          'integration_assets',
+        )
+        .select('*')
+        .eq(
+          'organization_id',
+          organizationId,
+        )
+        .order(
+          'asset_type',
+          {
+            ascending: true,
+          },
+        ),
+    ]);
+
+  const foundationMissing =
+    connectionsResult.error
+      ?.code === '42P01' ||
+    assetsResult.error
+      ?.code === '42P01';
+
+  const workspace = {
+    installed:
+      !foundationMissing,
+    error:
+      foundationMissing
+        ? null
+        : connectionsResult.error
+            ?.message ??
+          assetsResult.error
+            ?.message ??
+          null,
+    connections:
+      (
+        connectionsResult.data ??
+        []
+      ) as unknown as
+        IntegrationConnection[],
+    assets:
+      (
+        assetsResult.data ??
+        []
+      ) as unknown as
+        IntegrationAsset[],
+  };
 
   const encryptionConfigured =
     Boolean(
@@ -448,7 +623,7 @@ export default async function IntegrationsPage({
                       <span className="max-w-[65%] truncate text-right font-semibold text-slate-700">
                         {connection?.account_name ??
                           connection?.account_email ??
-                          '—'}
+                          'â€”'}
                       </span>
                     </div>
 
@@ -459,7 +634,7 @@ export default async function IntegrationsPage({
 
                       <span className="text-right font-medium text-slate-700">
                         {connection?.auth_mode ??
-                          '—'}
+                          'â€”'}
                       </span>
                     </div>
 
@@ -589,7 +764,7 @@ export default async function IntegrationsPage({
                     {definition.provider ===
                     'google'
                       ? 'OAuth authorization ready'
-                      : `${definition.futureAction} · next step`}
+                      : `${definition.futureAction} Â· next step`}
                   </span>
                 </div>
               </section>

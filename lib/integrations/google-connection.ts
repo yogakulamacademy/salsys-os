@@ -15,6 +15,8 @@ import {
 
 type GoogleConnectionRow = {
   id: string;
+  organization_id:
+    string;
   provider: string;
   status: string;
   access_token_ciphertext:
@@ -28,28 +30,40 @@ type GoogleConnectionRow = {
     | null;
 };
 
+type GoogleConnectionTokenOptions = {
+  organizationId?:
+    string;
+};
+
 const REFRESH_EARLY_MS =
   5 * 60 * 1000;
 
+/*
+ * Trusted low-level token loader.
+ *
+ * Background sync code currently calls this with only connectionId.
+ * User-triggered integration actions MUST pass organizationId or use
+ * getGoogleAccessTokenForOrganizationConnection().
+ *
+ * Phase 1D will make scheduled GA4/GSC/Ads syncs organization-aware too.
+ */
 export async function getGoogleAccessTokenForConnection(
   connectionId: string,
+  options:
+    GoogleConnectionTokenOptions = {},
 ) {
   const admin =
     createAdminClient();
 
-  const {
-    data:
-      rawConnection,
-    error:
-      connectionError,
-  } =
-    await admin
+  let connectionQuery =
+    admin
       .from(
         'integration_connections',
       )
       .select(
         [
           'id',
+          'organization_id',
           'provider',
           'status',
           'access_token_ciphertext',
@@ -60,7 +74,25 @@ export async function getGoogleAccessTokenForConnection(
       .eq(
         'id',
         connectionId,
-      )
+      );
+
+  if (
+    options.organizationId
+  ) {
+    connectionQuery =
+      connectionQuery.eq(
+        'organization_id',
+        options.organizationId,
+      );
+  }
+
+  const {
+    data:
+      rawConnection,
+    error:
+      connectionError,
+  } =
+    await connectionQuery
       .maybeSingle();
 
   if (
@@ -76,6 +108,24 @@ export async function getGoogleAccessTokenForConnection(
   const connection =
     rawConnection as unknown as
       GoogleConnectionRow;
+
+  if (
+    !connection.organization_id
+  ) {
+    throw new Error(
+      'Google connection is not assigned to an organization.',
+    );
+  }
+
+  if (
+    options.organizationId &&
+    connection.organization_id !==
+      options.organizationId
+  ) {
+    throw new Error(
+      'Google connection not found.',
+    );
+  }
 
   if (
     connection.provider !==
@@ -201,6 +251,10 @@ export async function getGoogleAccessTokenForConnection(
       .eq(
         'id',
         connectionId,
+      )
+      .eq(
+        'organization_id',
+        connection.organization_id,
       );
 
   if (updateError) {
@@ -210,4 +264,21 @@ export async function getGoogleAccessTokenForConnection(
   }
 
   return accessToken;
+}
+
+/*
+ * Use this helper for user-triggered actions.
+ * It guarantees that token retrieval is scoped to the organization
+ * already authorized by the server action.
+ */
+export async function getGoogleAccessTokenForOrganizationConnection(
+  connectionId: string,
+  organizationId: string,
+) {
+  return getGoogleAccessTokenForConnection(
+    connectionId,
+    {
+      organizationId,
+    },
+  );
 }
