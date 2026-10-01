@@ -33,6 +33,8 @@ export const dynamic =
 type OAuthStateRow = {
   id: string;
   created_by: string;
+  organization_id:
+    string;
   return_to: string;
   expires_at: string;
   used_at: string | null;
@@ -90,7 +92,6 @@ function redirectToIntegrations(
   );
 }
 
-
 function isPopupReturn(
   returnTo:
     | string
@@ -127,6 +128,11 @@ function popupResponse(
     message: string;
   },
 ) {
+  /*
+   * Keep the current event name for compatibility with the
+   * existing IntegrationConnectButton. We can rebrand this
+   * event later together with the UI.
+   */
   const message =
     JSON.stringify({
       type:
@@ -301,7 +307,7 @@ export async function GET(
     await supabase
       .from('profiles')
       .select(
-        'id, role, active',
+        'id, active',
       )
       .eq(
         'id',
@@ -312,8 +318,7 @@ export async function GET(
   if (
     profileError ||
     !profile ||
-    profile.active !== true ||
-    profile.role !== 'admin'
+    profile.active !== true
   ) {
     return NextResponse.redirect(
       new URL(
@@ -355,7 +360,7 @@ export async function GET(
         'integration_oauth_states',
       )
       .select(
-        'id, created_by, return_to, expires_at, used_at',
+        'id, created_by, organization_id, return_to, expires_at, used_at',
       )
       .eq(
         'provider',
@@ -375,6 +380,7 @@ export async function GET(
   if (
     stateReadError ||
     !stateRow ||
+    !stateRow.organization_id ||
     stateRow.created_by !==
       user.id ||
     stateRow.used_at ||
@@ -387,6 +393,83 @@ export async function GET(
       request,
       'error',
       'Google authorization session is invalid or expired. Please connect again.',
+    );
+  }
+
+  /*
+   * Re-check workspace authorization at callback time.
+   * A user who lost admin/owner access after starting OAuth
+   * must not be allowed to complete the connection.
+   */
+  const {
+    data:
+      membership,
+    error:
+      membershipError,
+  } =
+    await admin
+      .from(
+        'organization_members',
+      )
+      .select(
+        'id, role, active',
+      )
+      .eq(
+        'organization_id',
+        stateRow.organization_id,
+      )
+      .eq(
+        'user_id',
+        user.id,
+      )
+      .eq(
+        'active',
+        true,
+      )
+      .in(
+        'role',
+        [
+          'owner',
+          'admin',
+        ],
+      )
+      .maybeSingle();
+
+  const {
+    data:
+      organization,
+    error:
+      organizationError,
+  } =
+    await admin
+      .from(
+        'organizations',
+      )
+      .select(
+        'id, status',
+      )
+      .eq(
+        'id',
+        stateRow.organization_id,
+      )
+      .maybeSingle();
+
+  if (
+    membershipError ||
+    !membership ||
+    organizationError ||
+    !organization ||
+    organization.status !==
+      'active'
+  ) {
+    return finishOAuth(
+      request,
+      stateRow.return_to,
+      {
+        ok: false,
+        message:
+          'You no longer have permission to manage integrations for this workspace.',
+      },
     );
   }
 
@@ -443,6 +526,8 @@ export async function GET(
         'integration_audit_log',
       )
       .insert({
+        organization_id:
+          stateRow.organization_id,
         provider:
           'google',
         event_type:
@@ -500,6 +585,11 @@ export async function GET(
         tokens.access_token!,
       );
 
+    /*
+     * Critical tenant boundary:
+     * the same Google account may legitimately be connected
+     * to different LeadOS organizations.
+     */
     const {
       data:
         rawExisting,
@@ -512,6 +602,10 @@ export async function GET(
         )
         .select(
           'id, refresh_token_ciphertext',
+        )
+        .eq(
+          'organization_id',
+          stateRow.organization_id,
         )
         .eq(
           'provider',
@@ -547,7 +641,7 @@ export async function GET(
       !refreshTokenCiphertext
     ) {
       throw new Error(
-        'Google did not return an offline refresh token. Reconnect after removing the existing Yogakulam CRM grant from your Google Account.',
+        'Google did not return an offline refresh token. Remove the existing Google authorization for this app and reconnect.',
       );
     }
 
@@ -581,6 +675,8 @@ export async function GET(
       new Date().toISOString();
 
     const payload = {
+      organization_id:
+        stateRow.organization_id,
       provider:
         'google',
       auth_mode:
@@ -652,6 +748,10 @@ export async function GET(
           .eq(
             'id',
             existing.id,
+          )
+          .eq(
+            'organization_id',
+            stateRow.organization_id,
           );
 
       if (updateError) {
@@ -694,11 +794,19 @@ export async function GET(
         null;
     }
 
+    if (!connectionId) {
+      throw new Error(
+        'Google connection could not be saved.',
+      );
+    }
+
     await admin
       .from(
         'integration_audit_log',
       )
       .insert({
+        organization_id:
+          stateRow.organization_id,
         connection_id:
           connectionId,
         provider:
@@ -742,6 +850,8 @@ export async function GET(
         'integration_audit_log',
       )
       .insert({
+        organization_id:
+          stateRow.organization_id,
         provider:
           'google',
         event_type:

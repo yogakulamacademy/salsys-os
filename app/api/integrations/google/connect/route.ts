@@ -90,7 +90,7 @@ export async function GET(
     await supabase
       .from('profiles')
       .select(
-        'id, role, active',
+        'id, active',
       )
       .eq(
         'id',
@@ -101,8 +101,7 @@ export async function GET(
   if (
     profileError ||
     !profile ||
-    profile.active !== true ||
-    profile.role !== 'admin'
+    profile.active !== true
   ) {
     return NextResponse.redirect(
       new URL(
@@ -113,6 +112,156 @@ export async function GET(
   }
 
   try {
+    const admin =
+      createAdminClient();
+
+    /*
+     * Future workspace switcher:
+     *
+     * /api/integrations/google/connect
+     *   ?organization_id=<workspace uuid>
+     *
+     * For the current single-workspace account we resolve the
+     * user's only manageable organization automatically.
+     */
+    const requestedOrganizationId =
+      request.nextUrl.searchParams
+        .get(
+          'organization_id',
+        )
+        ?.trim() ||
+      null;
+
+    let membershipQuery =
+      admin
+        .from(
+          'organization_members',
+        )
+        .select(
+          'organization_id, role',
+        )
+        .eq(
+          'user_id',
+          user.id,
+        )
+        .eq(
+          'active',
+          true,
+        )
+        .in(
+          'role',
+          [
+            'owner',
+            'admin',
+          ],
+        );
+
+    if (
+      requestedOrganizationId
+    ) {
+      membershipQuery =
+        membershipQuery.eq(
+          'organization_id',
+          requestedOrganizationId,
+        );
+    }
+
+    const {
+      data:
+        rawMemberships,
+      error:
+        membershipsError,
+    } =
+      await membershipQuery;
+
+    if (membershipsError) {
+      return NextResponse.redirect(
+        pageUrl(
+          request,
+          'error',
+          `Unable to resolve workspace access: ${membershipsError.message}`,
+        ),
+      );
+    }
+
+    const memberships =
+      (
+        rawMemberships ??
+        []
+      ) as Array<{
+        organization_id:
+          string;
+        role:
+          string;
+      }>;
+
+    if (
+      memberships.length ===
+      0
+    ) {
+      return NextResponse.redirect(
+        pageUrl(
+          request,
+          'error',
+          'You do not have permission to manage integrations for this workspace.',
+        ),
+      );
+    }
+
+    if (
+      !requestedOrganizationId &&
+      memberships.length !==
+        1
+    ) {
+      return NextResponse.redirect(
+        pageUrl(
+          request,
+          'error',
+          'Select a workspace before connecting Google.',
+        ),
+      );
+    }
+
+    const organizationId =
+      memberships[0]
+        .organization_id;
+
+    const {
+      data:
+        organization,
+      error:
+        organizationError,
+    } =
+      await admin
+        .from(
+          'organizations',
+        )
+        .select(
+          'id, status',
+        )
+        .eq(
+          'id',
+          organizationId,
+        )
+        .maybeSingle();
+
+    if (
+      organizationError ||
+      !organization ||
+      organization.status !==
+        'active'
+    ) {
+      return NextResponse.redirect(
+        pageUrl(
+          request,
+          'error',
+          organizationError
+            ?.message ??
+            'This workspace is not active.',
+        ),
+      );
+    }
+
     const {
       clientId,
     } =
@@ -147,9 +296,6 @@ export async function GET(
         ? '/settings/integrations?oauth_popup=1'
         : '/settings/integrations';
 
-    const admin =
-      createAdminClient();
-
     // Housekeeping only. It is okay if there is nothing to delete.
     await admin
       .from(
@@ -159,6 +305,10 @@ export async function GET(
       .eq(
         'created_by',
         user.id,
+      )
+      .eq(
+        'provider',
+        'google',
       )
       .lt(
         'expires_at',
@@ -180,6 +330,8 @@ export async function GET(
             stateHash,
           created_by:
             user.id,
+          organization_id:
+            organizationId,
           return_to:
             returnTo,
           expires_at:
