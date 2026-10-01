@@ -5,7 +5,7 @@ import {
 
 import {
   createGscAdminClient,
-  getGscSiteUrl,
+  resolveGscRuntime,
   syncGscToSupabase,
 } from '@/lib/gsc';
 
@@ -234,8 +234,27 @@ async function executeSync(
     endDate
   );
 
+  /*
+   * Prefer the selected Search Console asset + Google OAuth
+   * connection. During migration, lib/gsc.ts safely falls
+   * back to the existing Vercel OIDC / WIF configuration.
+   */
+  const gscRuntime =
+    await resolveGscRuntime();
+
   const siteUrl =
-    getGscSiteUrl();
+    gscRuntime.siteUrl;
+
+  if (
+    gscRuntime.authSource ===
+      'legacy_wif' &&
+    gscRuntime.fallbackReason
+  ) {
+    console.warn(
+      'GSC integration fallback:',
+      gscRuntime.fallbackReason
+    );
+  }
 
   const supabase =
     createGscAdminClient();
@@ -287,12 +306,15 @@ async function executeSync(
 
   try {
     const counts =
-      await syncGscToSupabase({
-        startDate,
-        endDate,
-        syncRunId:
-          syncRun.id,
-      });
+      await syncGscToSupabase(
+        {
+          startDate,
+          endDate,
+          syncRunId:
+            syncRun.id,
+        },
+        gscRuntime
+      );
 
     const {
       error:
@@ -352,6 +374,14 @@ async function executeSync(
     return {
       ok: true,
       siteUrl,
+      authSource:
+        gscRuntime.authSource,
+      fallbackReason:
+        gscRuntime.authSource ===
+          'legacy_wif'
+          ? gscRuntime.fallbackReason ??
+            'Unknown integration fallback reason.'
+          : null,
       startDate,
       endDate,
       counts,
