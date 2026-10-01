@@ -186,6 +186,10 @@ export async function discoverGoogleAssetsAction(formData: FormData) {
     );
   }
 
+  let successMessage: string | null = null;
+
+  let failureMessage: string | null = null;
+
   try {
     const accessToken = await getGoogleAccessTokenForConnection(connectionId);
 
@@ -234,26 +238,33 @@ export async function discoverGoogleAssetsAction(formData: FormData) {
       },
     });
 
-    revalidatePath("/settings/integrations");
-
-    const message = discovery.warnings.length
+    successMessage = discovery.warnings.length
       ? `Discovered ${discovery.assets.length} Google assets. ${discovery.warnings.join(" ")}`
       : `Discovered ${discovery.assets.length} Google assets.`;
-
-    redirect(integrationsUrl("notice", message));
   } catch (error) {
-    const message =
+    failureMessage =
       error instanceof Error ? error.message : "Google asset discovery failed.";
 
     await admin
       .from("integration_connections")
       .update({
-        last_error: message.slice(0, 1000),
+        last_error: failureMessage.slice(0, 1000),
       })
       .eq("id", connectionId);
-
-    redirect(integrationsUrl("error", message));
   }
+
+  revalidatePath("/settings/integrations");
+
+  if (failureMessage) {
+    redirect(integrationsUrl("error", failureMessage));
+  }
+
+  redirect(
+    integrationsUrl(
+      "notice",
+      successMessage ?? "Google asset discovery completed.",
+    ),
+  );
 }
 
 export async function selectGoogleAssetAction(formData: FormData) {
