@@ -22,7 +22,7 @@ function textValue(formData: FormData, key: string) {
   return value || null;
 }
 
-async function requireAdmin() {
+async function requireActiveUser() {
   const supabase = await createClient();
 
   const {
@@ -36,16 +36,11 @@ async function requireAdmin() {
 
   const { data: profile, error: profileError } = await supabase
     .from("profiles")
-    .select("id, role, active")
+    .select("id, active")
     .eq("id", user.id)
     .maybeSingle();
 
-  if (
-    profileError ||
-    !profile ||
-    profile.active !== true ||
-    profile.role !== "admin"
-  ) {
+  if (profileError || !profile || profile.active !== true) {
     redirect("/dashboard");
   }
 
@@ -60,8 +55,94 @@ function integrationsUrl(key: "notice" | "error", value: string) {
   return "/settings/integrations?" + params.toString();
 }
 
+type ManagedConnection = {
+  id: string;
+  organization_id: string;
+  provider: string;
+  status: string;
+  account_name: string | null;
+  access_token_ciphertext: string | null;
+  refresh_token_ciphertext: string | null;
+};
+
+async function getManagedConnection({
+  userId,
+  connectionId,
+  provider,
+  requireConnected = false,
+}: {
+  userId: string;
+  connectionId: string;
+  provider?: string;
+  requireConnected?: boolean;
+}) {
+  const admin = createAdminClient();
+
+  const { data: rawConnection, error: connectionError } = await admin
+    .from("integration_connections")
+    .select(
+      "id, organization_id, provider, status, account_name, access_token_ciphertext, refresh_token_ciphertext",
+    )
+    .eq("id", connectionId)
+    .maybeSingle();
+
+  const connection = rawConnection as unknown as ManagedConnection | null;
+
+  /*
+   * Use the same generic failure for missing connections and
+   * unauthorized cross-organization IDs. This avoids leaking
+   * whether another tenant's connection exists.
+   */
+  if (connectionError || !connection || !connection.organization_id) {
+    return {
+      admin,
+      connection: null,
+      error: connectionError?.message ?? "Connection not found.",
+    };
+  }
+
+  const { data: membership, error: membershipError } = await admin
+    .from("organization_members")
+    .select("id, role, active")
+    .eq("organization_id", connection.organization_id)
+    .eq("user_id", userId)
+    .eq("active", true)
+    .in("role", ["owner", "admin"])
+    .maybeSingle();
+
+  if (membershipError || !membership) {
+    return {
+      admin,
+      connection: null,
+      error: "Connection not found.",
+    };
+  }
+
+  if (provider && connection.provider !== provider) {
+    return {
+      admin,
+      connection: null,
+      error: "Connection not found.",
+    };
+  }
+
+  if (requireConnected && connection.status !== "connected") {
+    return {
+      admin,
+      connection: null,
+      error: "Active connection not found.",
+    };
+  }
+
+  return {
+    admin,
+    connection,
+    error: null,
+  };
+}
+
 export async function disconnectIntegrationAction(formData: FormData) {
-  const user = await requireAdmin();
+  const user = await requireActiveUser();
 
   const connectionId = textValue(formData, "connection_id");
 
@@ -69,24 +150,20 @@ export async function disconnectIntegrationAction(formData: FormData) {
     redirect(integrationsUrl("error", "Connection is missing."));
   }
 
-  const admin = createAdminClient();
+  const {
+    admin,
+    connection,
+    error: managedError,
+  } = await getManagedConnection({
+    userId: user.id,
+    connectionId,
+  });
 
-  const { data: connection, error: connectionError } = await admin
-    .from("integration_connections")
-    .select(
-      "id, provider, account_name, access_token_ciphertext, refresh_token_ciphertext",
-    )
-    .eq("id", connectionId)
-    .maybeSingle();
-
-  if (connectionError || !connection) {
-    redirect(
-      integrationsUrl(
-        "error",
-        connectionError?.message ?? "Connection not found.",
-      ),
-    );
+  if (managedError || !connection) {
+    redirect(integrationsUrl("error", managedError ?? "Connection not found."));
   }
+
+  const organizationId = connection.organization_id;
 
   let providerRevocationConfirmed = true;
 
@@ -114,7 +191,8 @@ export async function disconnectIntegrationAction(formData: FormData) {
       token_expires_at: null,
       last_error: null,
     })
-    .eq("id", connectionId);
+    .eq("id", connectionId)
+    .eq("organization_id", organizationId);
 
   if (updateError) {
     redirect(integrationsUrl("error", updateError.message));
@@ -123,9 +201,11 @@ export async function disconnectIntegrationAction(formData: FormData) {
   await admin
     .from("integration_assets")
     .delete()
-    .eq("connection_id", connectionId);
+    .eq("connection_id", connectionId)
+    .eq("organization_id", organizationId);
 
   await admin.from("integration_audit_log").insert({
+    organization_id: organizationId,
     connection_id: connectionId,
     provider: connection.provider,
     event_type: "disconnected",
@@ -149,7 +229,7 @@ export async function disconnectIntegrationAction(formData: FormData) {
 }
 
 export async function discoverGoogleAssetsAction(formData: FormData) {
-  const user = await requireAdmin();
+  const user = await requireActiveUser();
 
   const connectionId = textValue(formData, "connection_id");
 
@@ -157,46 +237,45 @@ export async function discoverGoogleAssetsAction(formData: FormData) {
     redirect(integrationsUrl("error", "Google connection is missing."));
   }
 
-  const admin = createAdminClient();
+  const {
+    admin,
+    connection,
+    error: managedError,
+  } = await getManagedConnection({
+    userId: user.id,
+    connectionId,
+    provider: "google",
+    requireConnected: true,
+  });
 
-  const { data: rawConnection, error: connectionError } = await admin
-    .from("integration_connections")
-    .select("id, provider, status, account_name")
-    .eq("id", connectionId)
-    .maybeSingle();
-
-  const connection = rawConnection as unknown as {
-    id: string;
-    provider: string;
-    status: string;
-    account_name: string | null;
-  } | null;
-
-  if (
-    connectionError ||
-    !connection ||
-    connection.provider !== "google" ||
-    connection.status !== "connected"
-  ) {
+  if (managedError || !connection) {
     redirect(
       integrationsUrl(
         "error",
-        connectionError?.message ?? "Active Google connection not found.",
+        managedError ?? "Active Google connection not found.",
       ),
     );
   }
+
+  const organizationId = connection.organization_id;
 
   let successMessage: string | null = null;
 
   let failureMessage: string | null = null;
 
   try {
+    /*
+     * The token helper receives a connection ID only after this
+     * action has verified that the authenticated user owns/admins
+     * the connection's organization.
+     */
     const accessToken = await getGoogleAccessTokenForConnection(connectionId);
 
     const discovery = await discoverGoogleAssets(accessToken);
 
     if (discovery.assets.length) {
       const rows = discovery.assets.map((asset) => ({
+        organization_id: organizationId,
         connection_id: connectionId,
         asset_type: asset.asset_type,
         external_id: asset.external_id,
@@ -225,9 +304,11 @@ export async function discoverGoogleAssetsAction(formData: FormData) {
           ? discovery.warnings.join(" | ")
           : null,
       })
-      .eq("id", connectionId);
+      .eq("id", connectionId)
+      .eq("organization_id", organizationId);
 
     await admin.from("integration_audit_log").insert({
+      organization_id: organizationId,
       connection_id: connectionId,
       provider: "google",
       event_type: "assets_discovered",
@@ -250,7 +331,8 @@ export async function discoverGoogleAssetsAction(formData: FormData) {
       .update({
         last_error: failureMessage.slice(0, 1000),
       })
-      .eq("id", connectionId);
+      .eq("id", connectionId)
+      .eq("organization_id", organizationId);
   }
 
   revalidatePath("/settings/integrations");
@@ -268,7 +350,7 @@ export async function discoverGoogleAssetsAction(formData: FormData) {
 }
 
 export async function selectGoogleAssetAction(formData: FormData) {
-  const user = await requireAdmin();
+  const user = await requireActiveUser();
 
   const connectionId = textValue(formData, "connection_id");
 
@@ -278,17 +360,39 @@ export async function selectGoogleAssetAction(formData: FormData) {
     redirect(integrationsUrl("error", "Google asset selection is incomplete."));
   }
 
-  const admin = createAdminClient();
+  const {
+    admin,
+    connection,
+    error: managedError,
+  } = await getManagedConnection({
+    userId: user.id,
+    connectionId,
+    provider: "google",
+    requireConnected: true,
+  });
+
+  if (managedError || !connection) {
+    redirect(
+      integrationsUrl(
+        "error",
+        managedError ?? "Active Google connection not found.",
+      ),
+    );
+  }
+
+  const organizationId = connection.organization_id;
 
   const { data: rawAsset, error: assetError } = await admin
     .from("integration_assets")
-    .select("id, connection_id, asset_type, external_id, name")
+    .select("id, organization_id, connection_id, asset_type, external_id, name")
     .eq("id", assetId)
     .eq("connection_id", connectionId)
+    .eq("organization_id", organizationId)
     .maybeSingle();
 
   const asset = rawAsset as unknown as {
     id: string;
+    organization_id: string;
     connection_id: string;
     asset_type: string;
     external_id: string;
@@ -316,6 +420,7 @@ export async function selectGoogleAssetAction(formData: FormData) {
       is_selected: false,
       status: "available",
     })
+    .eq("organization_id", organizationId)
     .eq("connection_id", connectionId)
     .eq("asset_type", asset.asset_type);
 
@@ -329,13 +434,15 @@ export async function selectGoogleAssetAction(formData: FormData) {
       is_selected: true,
       status: "selected",
     })
-    .eq("id", asset.id);
+    .eq("id", asset.id)
+    .eq("organization_id", organizationId);
 
   if (selectError) {
     redirect(integrationsUrl("error", selectError.message));
   }
 
   await admin.from("integration_audit_log").insert({
+    organization_id: organizationId,
     connection_id: connectionId,
     provider: "google",
     event_type: "asset_selected",
