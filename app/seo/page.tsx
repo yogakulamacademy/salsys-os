@@ -184,14 +184,23 @@ export default async function SeoPage() {
 
   const {
     overview,
+
     daily,
+
     queries,
+
     pages,
+
     countries,
+
     devices,
+
     appearances,
+
     opportunities,
+
     health,
+
     syncRuns,
   } = workspace;
 
@@ -217,35 +226,52 @@ export default async function SeoPage() {
   );
 
   return (
-    <>
+    <div className="seo-polish">
       <PageHeader
+        eyebrow="Organic growth"
         title="SEO"
         description="Google Search Console performance, organic-search opportunities, CRM leads, enrollments and revenue."
       />
 
       {workspace.warning && (
-        <div className="mt-4 rounded-xl border border-amber-100 bg-amber-50 px-4 py-3 text-sm font-medium text-amber-700">
+        <div className="seo-warning mt-4 rounded-xl border border-amber-100 bg-amber-50 px-4 py-3 text-sm font-medium text-amber-700">
           SEO loaded through the legacy fallback. {workspace.warning}
         </div>
       )}
 
-      <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-slate-400">
+      <div className="seo-range-meta mt-3 flex flex-wrap items-center gap-2 text-xs text-slate-400">
         <span
           className="
 
+
+
             rounded-full
+
+
 
             border
 
+
+
             border-slate-200
+
+
 
             bg-white
 
+
+
             px-3
+
+
 
             py-1.5
 
+
+
             font-semibold
+
+
 
           "
         >
@@ -262,11 +288,15 @@ export default async function SeoPage() {
 
       {/* ===================================================
 
+
+
           SEARCH PERFORMANCE
+
+
 
       =================================================== */}
 
-      <section className="card-pad mt-6">
+      <section className="seo-search-performance card-pad mt-6">
         <div className="eyebrow">Google Search Console</div>
 
         <div className="section-title mt-1">Organic search performance</div>
@@ -274,15 +304,27 @@ export default async function SeoPage() {
         <div
           className="
 
+
+
             mt-5
+
+
 
             grid
 
+
+
             gap-3
+
+
 
             sm:grid-cols-2
 
+
+
             xl:grid-cols-4
+
+
 
           "
         >
@@ -326,11 +368,15 @@ export default async function SeoPage() {
 
       {/* ===================================================
 
+
+
           ORGANIC → CRM
+
+
 
       =================================================== */}
 
-      <section className="card-pad mt-4">
+      <section className="seo-crm-attribution card-pad mt-4">
         <div className="eyebrow">Search → CRM</div>
 
         <div className="section-title mt-1">
@@ -340,15 +386,27 @@ export default async function SeoPage() {
         <div
           className="
 
+
+
             mt-5
+
+
 
             grid
 
+
+
             gap-3
+
+
 
             sm:grid-cols-2
 
+
+
             xl:grid-cols-4
+
+
 
           "
         >
@@ -392,25 +450,47 @@ export default async function SeoPage() {
         <div
           className="
 
+
+
             mt-5
+
+
 
             rounded-xl
 
+
+
             border
+
+
 
             border-slate-100
 
+
+
             bg-slate-50
+
+
 
             px-4
 
+
+
             py-3
+
+
 
             text-xs
 
+
+
             leading-5
 
+
+
             text-slate-500
+
+
 
           "
         >
@@ -423,11 +503,15 @@ export default async function SeoPage() {
 
       {/* ===================================================
 
+
+
           DAILY TREND
+
+
 
       =================================================== */}
 
-      <section className="card-pad mt-4">
+      <section className="seo-trend-card card-pad mt-4">
         <div className="flex items-start justify-between gap-4">
           <div>
             <div className="eyebrow">Trend</div>
@@ -449,13 +533,23 @@ export default async function SeoPage() {
                 key={row.date}
                 className="
 
+
+
                     grid
+
+
 
                     grid-cols-[92px_minmax(0,1fr)_72px_86px]
 
+
+
                     items-center
 
+
+
                     gap-3
+
+
 
                   "
               >
@@ -474,7 +568,7 @@ export default async function SeoPage() {
                 </div>
 
                 <div className="text-right">
-                  <div className="text-xs font-bold text-slate-700">
+                  <div className="text-xs font-semibold text-slate-700">
                     {formatNumber(clicks)}
                   </div>
 
@@ -482,7 +576,7 @@ export default async function SeoPage() {
                 </div>
 
                 <div className="text-right">
-                  <div className="text-xs font-bold text-slate-700">
+                  <div className="text-xs font-semibold text-slate-700">
                     {formatNumber(impressions)}
                   </div>
 
@@ -496,11 +590,15 @@ export default async function SeoPage() {
 
       {/* ===================================================
 
+
+
           TOP QUERIES
+
+
 
       =================================================== */}
 
-      <section className="card-pad mt-4">
+      <section className="seo-table-card seo-query-card card-pad mt-4">
         <div className="flex items-start justify-between gap-4">
           <div>
             <div className="eyebrow">Keywords</div>
@@ -511,8 +609,8 @@ export default async function SeoPage() {
           <Search size={20} className="text-slate-400" />
         </div>
 
-        <div className="mt-5 overflow-x-auto">
-          <table className="min-w-full text-left text-sm">
+        <div className="seo-table-wrap mt-5 overflow-x-auto">
+          <table className="seo-data-table min-w-full text-left text-sm">
             <thead>
               <tr className="border-b border-slate-100 text-xs uppercase tracking-wide text-slate-400">
                 <th className="px-3 py-3">Query</th>
@@ -537,7 +635,7 @@ export default async function SeoPage() {
                     {row.query}
                   </td>
 
-                  <td className="px-3 py-3 text-right font-bold text-slate-800">
+                  <td className="px-3 py-3 text-right font-semibold text-slate-800">
                     {formatNumber(row.clicks)}
                   </td>
 
@@ -561,11 +659,15 @@ export default async function SeoPage() {
 
       {/* ===================================================
 
+
+
           SEO OPPORTUNITIES
+
+
 
       =================================================== */}
 
-      <section className="card-pad mt-4">
+      <section className="seo-opportunities-card card-pad mt-4">
         <div className="flex items-start justify-between gap-4">
           <div>
             <div className="eyebrow">Opportunities</div>
@@ -580,46 +682,80 @@ export default async function SeoPage() {
           <div
             className="
 
+
+
               mt-5
+
+
 
               rounded-xl
 
+
+
               border
+
+
 
               border-dashed
 
+
+
               border-slate-200
+
+
 
               px-5
 
+
+
               py-10
+
+
 
               text-center
 
+
+
               text-sm
 
+
+
               text-slate-400
+
+
 
             "
           >
             No queries currently match the opportunity thresholds.
           </div>
         ) : (
-          <div className="mt-5 space-y-3">
+          <div className="seo-opportunity-list mt-5 space-y-3">
             {opportunities.slice(0, 20).map((row) => (
               <div
                 key={`${row.opportunity_type}-${row.query}`}
                 className="
 
+
+
                       rounded-xl
+
+
 
                       border
 
+
+
                       border-slate-100
+
+
 
                       bg-slate-50
 
+
+
                       p-4
+
+
 
                     "
               >
@@ -633,7 +769,7 @@ export default async function SeoPage() {
                       </span>
                     </div>
 
-                    <div className="mt-2 font-bold text-slate-800">
+                    <div className="mt-2 font-semibold text-slate-800">
                       {row.query}
                     </div>
 
@@ -645,15 +781,27 @@ export default async function SeoPage() {
                   <div
                     className="
 
+
+
                           grid
+
+
 
                           shrink-0
 
+
+
                           grid-cols-3
+
+
 
                           gap-5
 
+
+
                           text-right
+
+
 
                         "
                   >
@@ -678,11 +826,15 @@ export default async function SeoPage() {
 
       {/* ===================================================
 
+
+
           TOP PAGES
+
+
 
       =================================================== */}
 
-      <section className="card-pad mt-4">
+      <section className="seo-table-card seo-pages-card card-pad mt-4">
         <div className="flex items-start justify-between gap-4">
           <div>
             <div className="eyebrow">Content</div>
@@ -693,8 +845,8 @@ export default async function SeoPage() {
           <FileSearch size={20} className="text-slate-400" />
         </div>
 
-        <div className="mt-5 overflow-x-auto">
-          <table className="min-w-full text-left text-sm">
+        <div className="seo-table-wrap mt-5 overflow-x-auto">
+          <table className="seo-data-table min-w-full text-left text-sm">
             <thead>
               <tr className="border-b border-slate-100 text-xs uppercase tracking-wide text-slate-400">
                 <th className="px-3 py-3">Page</th>
@@ -721,7 +873,7 @@ export default async function SeoPage() {
                     </div>
                   </td>
 
-                  <td className="px-3 py-3 text-right font-bold text-slate-800">
+                  <td className="px-3 py-3 text-right font-semibold text-slate-800">
                     {formatNumber(row.clicks)}
                   </td>
 
@@ -745,20 +897,34 @@ export default async function SeoPage() {
 
       {/* ===================================================
 
+
+
           COUNTRY / DEVICE
+
+
 
       =================================================== */}
 
       <div
-        className="
+        className="seo-breakdown-grid 
+
+
 
           mt-4
 
+
+
           grid
+
+
 
           gap-4
 
+
+
           xl:grid-cols-2
+
+
 
         "
       >
@@ -801,11 +967,15 @@ export default async function SeoPage() {
 
       {/* ===================================================
 
+
+
           SEARCH APPEARANCE
+
+
 
       =================================================== */}
 
-      <section className="card-pad mt-4">
+      <section className="seo-appearance-card card-pad mt-4">
         <div className="flex items-start justify-between gap-4">
           <div>
             <div className="eyebrow">SERP features</div>
@@ -819,15 +989,27 @@ export default async function SeoPage() {
         <div
           className="
 
+
+
             mt-5
+
+
 
             grid
 
+
+
             gap-3
+
+
 
             sm:grid-cols-2
 
+
+
             xl:grid-cols-3
+
+
 
           "
         >
@@ -841,19 +1023,31 @@ export default async function SeoPage() {
                 key={row.search_appearance}
                 className="
 
+
+
                     rounded-xl
+
+
 
                     border
 
+
+
                     border-slate-100
+
+
 
                     bg-slate-50
 
+
+
                     p-4
+
+
 
                   "
               >
-                <div className="text-xs font-bold uppercase tracking-wide text-slate-400">
+                <div className="text-xs font-semibold uppercase tracking-wide text-slate-400">
                   {pretty(row.search_appearance)}
                 </div>
 
@@ -883,11 +1077,15 @@ export default async function SeoPage() {
 
       {/* ===================================================
 
+
+
           SYNC HEALTH
+
+
 
       =================================================== */}
 
-      <section className="card-pad mt-4">
+      <section className="seo-sync-card card-pad mt-4">
         <div className="flex items-start justify-between gap-4">
           <div>
             <div className="eyebrow">Data health</div>
@@ -901,15 +1099,27 @@ export default async function SeoPage() {
         <div
           className="
 
+
+
             mt-5
+
+
 
             grid
 
+
+
             gap-3
+
+
 
             sm:grid-cols-2
 
+
+
             xl:grid-cols-4
+
+
 
           "
         >
@@ -944,8 +1154,8 @@ export default async function SeoPage() {
           />
         </div>
 
-        <div className="mt-5 overflow-x-auto">
-          <table className="min-w-full text-left text-sm">
+        <div className="seo-table-wrap mt-5 overflow-x-auto">
+          <table className="seo-data-table min-w-full text-left text-sm">
             <thead>
               <tr className="border-b border-slate-100 text-xs uppercase tracking-wide text-slate-400">
                 <th className="px-3 py-3">Status</th>
@@ -1001,15 +1211,19 @@ export default async function SeoPage() {
           </table>
         </div>
       </section>
-    </>
+    </div>
   );
 }
 
 /* =========================================================
 
+
+
    COMPONENTS
 
-\========================================================= */
+
+
+\\========================================================= */
 
 function MetricCard({
   icon,
@@ -1029,14 +1243,14 @@ function MetricCard({
   sub?: string;
 }) {
   return (
-    <div className="rounded-xl bg-slate-50 p-4">
+    <div className="seo-metric-card rounded-xl bg-slate-50 p-4">
       <div className="flex items-center gap-2 text-xs font-semibold text-slate-400">
         {icon}
 
         {label}
       </div>
 
-      <div className="mt-2 text-xl font-bold text-slate-800">{value}</div>
+      <div className="mt-2 text-xl font-semibold text-slate-800">{value}</div>
 
       {sub && (
         <div className="mt-1 text-[11px] leading-4 text-slate-400">{sub}</div>
@@ -1048,11 +1262,11 @@ function MetricCard({
 function MiniStat({ label, value }: { label: string; value: string }) {
   return (
     <div>
-      <div className="text-[10px] uppercase tracking-wide text-slate-400">
+      <div className="seo-mini-label text-[10px] uppercase tracking-wide text-slate-400">
         {label}
       </div>
 
-      <div className="mt-1 text-sm font-bold text-slate-700">{value}</div>
+      <div className="mt-1 text-sm font-semibold text-slate-700">{value}</div>
     </div>
   );
 }
@@ -1073,12 +1287,12 @@ function ProgressBar({
   const width = Math.max(1, Math.min(100, (value / Math.max(max, 1)) * 100));
 
   return (
-    <div className="h-1.5 overflow-hidden rounded-full bg-slate-100">
+    <div className="seo-progress-track h-1.5 overflow-hidden rounded-full bg-slate-100">
       <div
         className={
           muted
-            ? "h-full rounded-full bg-slate-300"
-            : "h-full rounded-full bg-slate-700"
+            ? "seo-progress-fill seo-progress-fill-muted h-full rounded-full bg-slate-300"
+            : "seo-progress-fill h-full rounded-full bg-slate-700"
         }
         style={{
           width: `${width}%`,
@@ -1104,27 +1318,55 @@ function OpportunityBadge({ type }: { type: string }) {
     <span
       className="
 
+
+
+        seo-opportunity-badge
+
+
+
         inline-flex
+
+
 
         rounded-full
 
+
+
         bg-white
+
+
 
         px-2.5
 
+
+
         py-1
+
+
 
         text-[11px]
 
-        font-bold
+
+
+        font-semibold
+
+
 
         text-slate-600
 
+
+
         ring-1
+
+
 
         ring-inset
 
+
+
         ring-slate-200
+
+
 
       "
     >
@@ -1147,19 +1389,35 @@ function SyncStatusBadge({ status }: { status: string }) {
     <span
       className={`
 
+
+
         inline-flex
+
+
 
         rounded-full
 
+
+
         px-2.5
+
+
 
         py-1
 
+
+
         text-xs
 
-        font-bold
+
+
+        font-semibold
+
+
 
         ${className}
+
+
 
       `}
     >
@@ -1200,7 +1458,7 @@ function PerformanceTableCard({
   }>;
 }) {
   return (
-    <section className="card-pad">
+    <section className="seo-performance-card card-pad">
       <div className="flex items-start justify-between gap-4">
         <div>
           <div className="eyebrow">{eyebrow}</div>
@@ -1211,8 +1469,8 @@ function PerformanceTableCard({
         <div className="text-slate-400">{icon}</div>
       </div>
 
-      <div className="mt-5 overflow-x-auto">
-        <table className="min-w-full text-left text-sm">
+      <div className="seo-table-wrap mt-5 overflow-x-auto">
+        <table className="seo-data-table min-w-full text-left text-sm">
           <thead>
             <tr className="border-b border-slate-100 text-xs uppercase tracking-wide text-slate-400">
               <th className="px-3 py-3">{labelHeader}</th>
@@ -1237,7 +1495,7 @@ function PerformanceTableCard({
                   {row.label}
                 </td>
 
-                <td className="px-3 py-3 text-right font-bold text-slate-800">
+                <td className="px-3 py-3 text-right font-semibold text-slate-800">
                   {formatNumber(row.clicks)}
                 </td>
 
@@ -1263,9 +1521,13 @@ function PerformanceTableCard({
 
 /* =========================================================
 
+
+
    PERIOD COMPARISON
 
-\========================================================= */
+
+
+\\========================================================= */
 
 function calculatePeriodComparison(rows: DailyRow[]) {
   const sorted = [...rows].sort((a, b) => a.date.localeCompare(b.date));
@@ -1305,9 +1567,15 @@ function calculatePeriodComparison(rows: DailyRow[]) {
 
     /*
 
+
+
      * Negative is improvement because a lower average
 
+
+
      * Search Console position is better.
+
+
 
      */
 
@@ -1349,9 +1617,13 @@ function summarizePeriod(rows: DailyRow[]) {
 
 /* =========================================================
 
+
+
    HELPERS
 
-\========================================================= */
+
+
+\\========================================================= */
 
 function toNumber(value: number | string | null | undefined) {
   const number = Number(value ?? 0);
@@ -1521,11 +1793,19 @@ function countryLabel(value: string) {
 
       /*
 
+
+
        * GSC usually stores ISO alpha-3 country codes.
+
+
 
        * Intl.DisplayNames expects alpha-2, so keep alpha-3 readable
 
+
+
        * instead of presenting an incorrect country name.
+
+
 
        */
 

@@ -37,7 +37,7 @@ export default async function AttributionPage({
   const { workspace, warning } = await getAttributionWorkspace(filters);
 
   return (
-    <>
+    <div className="attribution-polish">
       <PageHeader
         eyebrow="Customer journey"
         title="Attribution"
@@ -64,6 +64,6 @@ export default async function AttributionPage({
         loadError={null}
         warning={warning}
       />
-    </>
+    </div>
   );
 }

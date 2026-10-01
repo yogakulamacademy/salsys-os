@@ -17,6 +17,7 @@ import { BarChart3, Clock3, Percent } from "lucide-react";
 
 export type PipelineInsightPoint = {
   stage: string;
+
   leads: number;
 };
 
@@ -24,18 +25,23 @@ export type PipelineAgingPoint = {
   stage: string;
 
   healthy: number;
+
   warning: number;
+
   stuck: number;
 
   medianDays: number;
+
   oldestDays: number;
 };
 
 export function PipelineInsights({
   data,
+
   agingData,
 }: {
   data: PipelineInsightPoint[];
+
   agingData: PipelineAgingPoint[];
 }) {
   const [view, setView] = useState<"distribution" | "aging">("distribution");
@@ -44,6 +50,7 @@ export function PipelineInsights({
 
   const total = useMemo(
     () => data.reduce((sum, item) => sum + item.leads, 0),
+
     [data],
   );
 
@@ -51,8 +58,10 @@ export function PipelineInsights({
     () =>
       data.map((item) => ({
         ...item,
+
         share: total > 0 ? Math.round((item.leads / total) * 1000) / 10 : 0,
       })),
+
     [data, total],
   );
 
@@ -61,7 +70,7 @@ export function PipelineInsights({
   const totalWarning = agingData.reduce((sum, item) => sum + item.warning, 0);
 
   return (
-    <section className="card-pad overflow-hidden">
+    <section className="pipeline-insights-polish card-pad overflow-hidden">
       <div className="mb-5 flex flex-wrap items-start justify-between gap-4">
         <div>
           <div className="eyebrow">Pipeline intelligence</div>
@@ -82,7 +91,7 @@ export function PipelineInsights({
             <button
               type="button"
               onClick={() => setView("distribution")}
-              className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-bold transition ${
+              className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-semibold transition ${
                 view === "distribution"
                   ? "bg-white text-brand shadow-sm"
                   : "text-slate-500 hover:text-slate-800"
@@ -95,7 +104,7 @@ export function PipelineInsights({
             <button
               type="button"
               onClick={() => setView("aging")}
-              className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-bold transition ${
+              className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-semibold transition ${
                 view === "aging"
                   ? "bg-white text-brand shadow-sm"
                   : "text-slate-500 hover:text-slate-800"
@@ -111,7 +120,7 @@ export function PipelineInsights({
               <button
                 type="button"
                 onClick={() => setMode("count")}
-                className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-bold transition ${
+                className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-semibold transition ${
                   mode === "count"
                     ? "bg-white text-brand shadow-sm"
                     : "text-slate-500 hover:text-slate-800"
@@ -124,7 +133,7 @@ export function PipelineInsights({
               <button
                 type="button"
                 onClick={() => setMode("share")}
-                className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-bold transition ${
+                className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-semibold transition ${
                   mode === "share"
                     ? "bg-white text-brand shadow-sm"
                     : "text-slate-500 hover:text-slate-800"
@@ -146,8 +155,11 @@ export function PipelineInsights({
                 data={chartData}
                 margin={{
                   top: 8,
+
                   right: 8,
+
                   left: -14,
+
                   bottom: 10,
                 }}
               >
@@ -165,6 +177,7 @@ export function PipelineInsights({
                   height={48}
                   tick={{
                     fontSize: 10,
+
                     fill: "#7c8aa0",
                   }}
                 />
@@ -176,6 +189,7 @@ export function PipelineInsights({
                   unit={mode === "share" ? "%" : undefined}
                   tick={{
                     fontSize: 11,
+
                     fill: "#7c8aa0",
                   }}
                 />
@@ -190,7 +204,7 @@ export function PipelineInsights({
                 <Bar
                   dataKey={mode === "count" ? "leads" : "share"}
                   name={mode === "count" ? "Leads" : "Share"}
-                  fill="#103859"
+                  fill="#6D4CFF"
                   radius={[7, 7, 3, 3]}
                   animationDuration={650}
                 />
@@ -212,7 +226,7 @@ export function PipelineInsights({
                 Warning
               </div>
 
-              <div className="mt-1 text-xl font-black text-amber-800">
+              <div className="mt-1 text-xl font-semibold text-amber-800">
                 {totalWarning}
               </div>
 
@@ -226,7 +240,7 @@ export function PipelineInsights({
                 Stuck
               </div>
 
-              <div className="mt-1 text-xl font-black text-red-800">
+              <div className="mt-1 text-xl font-semibold text-red-800">
                 {totalStuck}
               </div>
 
@@ -242,8 +256,11 @@ export function PipelineInsights({
                 data={agingData}
                 margin={{
                   top: 8,
+
                   right: 8,
+
                   left: -10,
+
                   bottom: 10,
                 }}
               >
@@ -261,6 +278,7 @@ export function PipelineInsights({
                   height={48}
                   tick={{
                     fontSize: 10,
+
                     fill: "#7c8aa0",
                   }}
                 />
@@ -271,6 +289,7 @@ export function PipelineInsights({
                   unit="d"
                   tick={{
                     fontSize: 11,
+
                     fill: "#7c8aa0",
                   }}
                 />
@@ -291,7 +310,7 @@ export function PipelineInsights({
                 <Bar
                   dataKey="medianDays"
                   name="Median days"
-                  fill="#103859"
+                  fill="#6D4CFF"
                   radius={[6, 6, 2, 2]}
                   animationDuration={650}
                 />
@@ -299,7 +318,7 @@ export function PipelineInsights({
                 <Bar
                   dataKey="oldestDays"
                   name="Oldest days"
-                  fill="#ec8316"
+                  fill="#A78BFA"
                   radius={[6, 6, 2, 2]}
                   animationDuration={750}
                 />
@@ -313,12 +332,13 @@ export function PipelineInsights({
                 key={stage.stage}
                 className="rounded-xl border border-slate-100 bg-slate-50/70 p-3"
               >
-                <div className="text-[10px] font-black text-slate-700">
+                <div className="text-[10px] font-semibold text-slate-700">
                   {stage.stage}
                 </div>
 
                 <div className="mt-2 flex items-center justify-between text-[9px] font-semibold text-slate-400">
                   <span>Median</span>
+
                   <strong className="text-slate-700">
                     {formatAge(stage.medianDays)}
                   </strong>
@@ -326,6 +346,7 @@ export function PipelineInsights({
 
                 <div className="mt-1 flex items-center justify-between text-[9px] font-semibold text-slate-400">
                   <span>Oldest</span>
+
                   <strong className="text-slate-700">
                     {formatAge(stage.oldestDays)}
                   </strong>
@@ -333,19 +354,19 @@ export function PipelineInsights({
 
                 <div className="mt-2 flex flex-wrap gap-1">
                   {stage.warning > 0 && (
-                    <span className="rounded-md bg-amber-100 px-1.5 py-0.5 text-[8px] font-black text-amber-700">
+                    <span className="rounded-md bg-amber-100 px-1.5 py-0.5 text-[8px] font-semibold text-amber-700">
                       {stage.warning} warning
                     </span>
                   )}
 
                   {stage.stuck > 0 && (
-                    <span className="rounded-md bg-red-100 px-1.5 py-0.5 text-[8px] font-black text-red-700">
+                    <span className="rounded-md bg-red-100 px-1.5 py-0.5 text-[8px] font-semibold text-red-700">
                       {stage.stuck} stuck
                     </span>
                   )}
 
                   {stage.warning === 0 && stage.stuck === 0 && (
-                    <span className="rounded-md bg-emerald-100 px-1.5 py-0.5 text-[8px] font-black text-emerald-700">
+                    <span className="rounded-md bg-emerald-100 px-1.5 py-0.5 text-[8px] font-semibold text-emerald-700">
                       Healthy
                     </span>
                   )}
@@ -361,13 +382,17 @@ export function PipelineInsights({
 
 function PipelineDistributionTooltip({
   active,
+
   payload,
 }: {
   active?: boolean;
+
   payload?: Array<{
     payload?: {
       stage: string;
+
       leads: number;
+
       share: number;
     };
   }>;
@@ -383,7 +408,7 @@ function PipelineDistributionTooltip({
   }
 
   return (
-    <div className="min-w-[150px] rounded-xl border border-slate-200 bg-white px-3 py-2.5 shadow-lg">
+    <div className="pipeline-tooltip min-w-[150px] rounded-xl border border-slate-200 bg-white px-3 py-2.5 shadow-lg">
       <div className="text-[10px] font-bold uppercase tracking-[.12em] text-slate-400">
         {point.stage}
       </div>
@@ -401,9 +426,11 @@ function PipelineDistributionTooltip({
 
 function PipelineAgingTooltip({
   active,
+
   payload,
 }: {
   active?: boolean;
+
   payload?: Array<{
     payload?: PipelineAgingPoint;
   }>;
@@ -419,7 +446,7 @@ function PipelineAgingTooltip({
   }
 
   return (
-    <div className="min-w-[180px] rounded-xl border border-slate-200 bg-white px-3 py-2.5 shadow-lg">
+    <div className="pipeline-tooltip min-w-[180px] rounded-xl border border-slate-200 bg-white px-3 py-2.5 shadow-lg">
       <div className="text-[10px] font-bold uppercase tracking-[.12em] text-slate-400">
         {point.stage}
       </div>

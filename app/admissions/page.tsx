@@ -665,7 +665,7 @@ export default async function AdmissionsDeskPage({
     );
 
   return (
-    <>
+    <div className="admissions-polish">
       <PageHeader
         title="Admissions Desk"
         description={`Your daily admissions workspace for ${todayLabel}: follow-ups, hot leads, paid-media opportunities, payment-pending prospects and re-engaged visitors.`}
@@ -704,7 +704,7 @@ export default async function AdmissionsDeskPage({
         </div>
       )}
 
-      <section className="mt-6 grid gap-3 sm:grid-cols-2 xl:grid-cols-6">
+      <section className="admissions-metric-grid mt-6 grid gap-3 sm:grid-cols-2 xl:grid-cols-6">
         <MetricCard
           icon={<AlarmClock size={17} />}
           label="Overdue follow-ups"
@@ -791,7 +791,7 @@ export default async function AdmissionsDeskPage({
         contactsByLeadId={contactsByLeadId}
       />
 
-      <section className="card-pad mt-4">
+      <section className="admissions-priority-panel card-pad mt-4">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div>
             <div className="eyebrow">Priority intelligence</div>
@@ -1102,7 +1102,7 @@ export default async function AdmissionsDeskPage({
         </QueueCard>
       </section>
 
-      <section className="card-pad mt-4">
+      <section className="admissions-fresh-panel card-pad mt-4">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
             <div className="eyebrow">Fresh enquiries</div>
@@ -1149,7 +1149,7 @@ export default async function AdmissionsDeskPage({
           )}
         </div>
       </section>
-    </>
+    </div>
   );
 }
 
@@ -1197,7 +1197,7 @@ function AdmissionsBatchCapacityPanel({
   ).length;
 
   return (
-    <section className="card-pad mt-4">
+    <section className="admissions-batch-panel card-pad mt-4">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
           <div className="eyebrow">Batch capacity</div>
@@ -1297,7 +1297,7 @@ function AdmissionsBatchCapacityPanel({
             return (
               <article
                 key={row.batch_id}
-                className={`rounded-2xl border p-4 transition-all duration-150 hover:-translate-y-0.5 hover:shadow-md ${batchCapacityCardClass(
+                className={`admissions-batch-card rounded-2xl border p-4 transition-all duration-150 hover:-translate-y-0.5 hover:shadow-md ${batchCapacityCardClass(
                   status,
                 )}`}
               >
@@ -1480,7 +1480,7 @@ function BatchSummaryMetric({
 }) {
   return (
     <div
-      className={`rounded-xl border p-3 ${
+      className={`admissions-summary-metric rounded-xl border p-3 ${
         alert
           ? "border-red-100 bg-red-50/55"
           : "border-slate-100 bg-slate-50/70"
@@ -1517,7 +1517,7 @@ function BatchMiniMetric({
   alert?: boolean;
 }) {
   return (
-    <div className="rounded-xl border border-black/5 bg-white/80 px-2.5 py-2">
+    <div className="admissions-mini-metric rounded-xl border border-black/5 bg-white/80 px-2.5 py-2">
       <div className="text-[9px] font-bold uppercase tracking-wide text-slate-400">
         {label}
       </div>
@@ -1709,7 +1709,7 @@ function AdmissionsTeamWorkloadPanel({
   );
 
   return (
-    <section className="card-pad mt-4">
+    <section className="admissions-team-panel card-pad mt-4">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
           <div className="eyebrow">Lead ownership</div>
@@ -1777,7 +1777,7 @@ function AdmissionsTeamWorkloadPanel({
                 band,
                 owner: filterOwner,
               })}
-              className={`group rounded-2xl border p-4 transition-all duration-150 hover:-translate-y-0.5 hover:shadow-md ${
+              className={`admissions-owner-card group rounded-2xl border p-4 transition-all duration-150 hover:-translate-y-0.5 hover:shadow-md ${
                 !row.owner_user_id && toNumber(row.active_leads) > 0
                   ? "border-amber-200 bg-amber-50/55"
                   : urgent > 0
@@ -1870,7 +1870,7 @@ function OwnerWorkloadSummary({
 }) {
   return (
     <div
-      className={`rounded-xl border px-3 py-2 ${
+      className={`admissions-owner-summary rounded-xl border px-3 py-2 ${
         alert ? "border-red-100 bg-red-50" : "border-slate-100 bg-slate-50"
       }`}
     >
@@ -1902,7 +1902,7 @@ function OwnerWorkloadMetric({
   alert?: boolean;
 }) {
   return (
-    <div className="rounded-xl border border-black/5 bg-white/80 px-2.5 py-2">
+    <div className="admissions-owner-metric rounded-xl border border-black/5 bg-white/80 px-2.5 py-2">
       <div className="text-[9px] font-bold uppercase tracking-wide text-slate-400">
         {label}
       </div>
@@ -1929,7 +1929,7 @@ function OwnerQueueTab({
   return (
     <Link
       href={href}
-      className={`rounded-full border px-3 py-1.5 text-[10px] font-bold transition-all duration-150 ${
+      className={`admissions-owner-tab rounded-full border px-3 py-1.5 text-[10px] font-bold transition-all duration-150 ${
         active
           ? "border-brand bg-brand text-white"
           : "border-slate-200 bg-slate-50 text-slate-600 hover:bg-slate-100"
@@ -1976,7 +1976,7 @@ function AdmissionsOperationsPanel({
   const responseRisk = needsReply + breached + awaitingHuman;
 
   return (
-    <section className="card-pad mt-4">
+    <section className="admissions-operations-panel card-pad mt-4">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
           <div className="eyebrow">Operations intelligence</div>
@@ -2001,7 +2001,7 @@ function AdmissionsOperationsPanel({
 
       <div className="mt-5 grid gap-4 xl:grid-cols-3">
         <div
-          className={`rounded-2xl border p-4 ${
+          className={`admissions-ops-card rounded-2xl border p-4 ${
             responseRisk > 0
               ? "border-red-100 bg-red-50/35"
               : "border-slate-100 bg-slate-50/60"
@@ -2059,7 +2059,7 @@ function AdmissionsOperationsPanel({
           </div>
         </div>
 
-        <div className="rounded-2xl border border-slate-100 bg-slate-50/60 p-4">
+        <div className="admissions-ops-card rounded-2xl border border-slate-100 bg-slate-50/60 p-4">
           <div className="flex items-center gap-2 text-[10px] font-black uppercase tracking-[.14em] text-slate-400">
             <Layers3 size={14} />
             Priority workload
@@ -2096,7 +2096,7 @@ function AdmissionsOperationsPanel({
           </div>
         </div>
 
-        <div className="rounded-2xl border border-slate-100 bg-slate-50/60 p-4">
+        <div className="admissions-ops-card rounded-2xl border border-slate-100 bg-slate-50/60 p-4">
           <div className="flex items-center gap-2 text-[10px] font-black uppercase tracking-[.14em] text-slate-400">
             <Clock3 size={14} />
             Action pressure
@@ -2204,8 +2204,8 @@ function ResponseSlaPanel({
   const hasRisk = breached > 0 || awaitingHuman > 0;
 
   return (
-    <section className="mt-4 grid gap-4 xl:grid-cols-[0.9fr_1.1fr]">
-      <div className="card-pad">
+    <section className="admissions-sla-panel mt-4 grid gap-4 xl:grid-cols-[0.9fr_1.1fr]">
+      <div className="admissions-sla-summary card-pad">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div>
             <div className="eyebrow">Response SLA</div>
@@ -2280,7 +2280,7 @@ function ResponseSlaPanel({
         </div>
       </div>
 
-      <div className="card-pad">
+      <div className="admissions-sla-queue card-pad">
         <div className="flex items-start justify-between gap-4">
           <div>
             <div className="eyebrow">Response queue</div>
@@ -2320,7 +2320,7 @@ function ResponseSlaPanel({
               return (
                 <div
                   key={row.lead_id}
-                  className={`group rounded-xl border px-4 py-3 transition-all duration-150 hover:-translate-y-0.5 hover:shadow-sm ${
+                  className={`admissions-sla-row group rounded-xl border px-4 py-3 transition-all duration-150 hover:-translate-y-0.5 hover:shadow-sm ${
                     breachedRow || humanBreached
                       ? "border-red-100 bg-red-50/60"
                       : "border-amber-100 bg-amber-50/40"
@@ -2458,8 +2458,8 @@ function AutomationHealthPanel({
     health?.last_completed_at || health?.last_started_at || null;
 
   return (
-    <section className="mt-4 grid gap-4 xl:grid-cols-[0.9fr_1.1fr]">
-      <div className="card-pad">
+    <section className="admissions-automation-panel mt-4 grid gap-4 xl:grid-cols-[0.9fr_1.1fr]">
+      <div className="admissions-automation-health card-pad">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div>
             <div className="eyebrow">Automation</div>
@@ -2537,7 +2537,7 @@ function AutomationHealthPanel({
         )}
       </div>
 
-      <div className="card-pad">
+      <div className="admissions-auto-tasks card-pad">
         <div className="flex items-start justify-between gap-4">
           <div>
             <div className="eyebrow">Recent automatic work</div>
@@ -2564,7 +2564,7 @@ function AutomationHealthPanel({
               <Link
                 key={task.id}
                 href={`/leads/${task.lead_id}`}
-                className="group flex items-start justify-between gap-4 rounded-xl border border-slate-100 bg-slate-50/70 px-4 py-3 transition-all duration-150 hover:-translate-y-0.5 hover:shadow-sm"
+                className="admissions-auto-task group flex items-start justify-between gap-4 rounded-xl border border-slate-100 bg-slate-50/70 px-4 py-3 transition-all duration-150 hover:-translate-y-0.5 hover:shadow-sm"
               >
                 <div className="min-w-0">
                   <div className="truncate text-sm font-bold text-slate-800 group-hover:text-brand">
@@ -2946,7 +2946,7 @@ function PriorityLeadCard({
 
   return (
     <article
-      className={`rounded-2xl border p-4 shadow-sm transition-all duration-150 hover:-translate-y-0.5 hover:shadow-md ${
+      className={`admissions-priority-card rounded-2xl border p-4 shadow-sm transition-all duration-150 hover:-translate-y-0.5 hover:shadow-md ${
         slaBreached ? "ring-1 ring-red-200" : ""
       } ${bandClasses[band] || bandClasses.low}`}
     >
@@ -3181,7 +3181,7 @@ function PriorityTab({
   return (
     <Link
       href={href}
-      className={`rounded-full border px-3 py-1.5 text-xs font-bold transition-all duration-150 ${
+      className={`admissions-priority-tab rounded-full border px-3 py-1.5 text-xs font-bold transition-all duration-150 ${
         active
           ? "border-slate-900 bg-slate-900 text-white"
           : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
@@ -3273,7 +3273,9 @@ function FollowUpActionRow({
       : "border-slate-100 bg-slate-50/70";
 
   return (
-    <div className={`rounded-xl border px-4 py-3 ${toneClasses}`}>
+    <div
+      className={`admissions-followup-row rounded-xl border px-4 py-3 ${toneClasses}`}
+    >
       <div className="flex items-start justify-between gap-4">
         <Link href={`/leads/${row.lead_id}`} className="group min-w-0 flex-1">
           <div className="truncate text-sm font-bold text-slate-800 group-hover:text-brand">
@@ -3374,7 +3376,7 @@ function MetricCard({
 }) {
   return (
     <div
-      className={`rounded-xl border p-4 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md ${
+      className={`admissions-metric-card rounded-xl border p-4 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md ${
         emphasis ? "border-red-100 bg-red-50/60" : "border-slate-100 bg-white"
       }`}
     >
@@ -3427,7 +3429,7 @@ function QueueCard({
   const hasItems = items.some(Boolean);
 
   return (
-    <section className="card-pad">
+    <section className="admissions-queue-card card-pad">
       <div className="flex items-start justify-between gap-4">
         <div>
           <div className="section-title">{title}</div>
@@ -3497,7 +3499,7 @@ function LeadQueueRow({
   return (
     <Link
       href={`/leads/${leadId}`}
-      className={`group flex items-start justify-between gap-4 rounded-xl border px-4 py-3 transition-all duration-150 hover:-translate-y-0.5 hover:shadow-sm ${
+      className={`admissions-lead-row group flex items-start justify-between gap-4 rounded-xl border px-4 py-3 transition-all duration-150 hover:-translate-y-0.5 hover:shadow-sm ${
         toneClasses[tone]
       }`}
     >

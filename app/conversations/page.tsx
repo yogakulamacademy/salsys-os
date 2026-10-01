@@ -80,6 +80,7 @@ export default async function ConversationsPage({
 
   const [workspace, courses] = await Promise.all([
     getConversationsWorkspace(query.lead),
+
     getCourses(),
   ]);
 
@@ -128,6 +129,7 @@ export default async function ConversationsPage({
     ? await getApprovedWhatsAppTemplates()
     : {
         templates: [],
+
         error: null,
       };
 
@@ -136,7 +138,7 @@ export default async function ConversationsPage({
   const highIntentCount = metrics.highIntentCount;
 
   return (
-    <>
+    <div className="conversations-polish">
       <ConversationsRealtime />
 
       <PageHeader
@@ -149,7 +151,15 @@ export default async function ConversationsPage({
 
 
 
+
+
+
+
               rounded-xl
+
+
+
+
 
 
 
@@ -157,7 +167,15 @@ export default async function ConversationsPage({
 
 
 
+
+
+
+
               py-2
+
+
+
+
 
 
 
@@ -165,7 +183,15 @@ export default async function ConversationsPage({
 
 
 
+
+
+
+
               font-bold
+
+
+
+
 
 
 
@@ -174,6 +200,10 @@ export default async function ConversationsPage({
                   ? "bg-orange-50 text-orange-700"
                   : "bg-emerald-50 text-emerald-700"
               }
+
+
+
+
 
 
 
@@ -188,13 +218,21 @@ export default async function ConversationsPage({
 
 
 
+
+
+
+
           INBOX METRICS
+
+
+
+
 
 
 
       =================================================== */}
 
-      <div className="mb-4 grid gap-3 sm:grid-cols-3">
+      <div className="conversation-metrics mb-4 grid gap-3 sm:grid-cols-3">
         <InboxMetric
           label="Active conversations"
           value={metrics.activeConversations}
@@ -209,7 +247,15 @@ export default async function ConversationsPage({
 
 
 
+
+
+
+
           NOTICES
+
+
+
+
 
 
 
@@ -231,7 +277,19 @@ export default async function ConversationsPage({
 
 
 
+
+
+
+
           CONVERSATION WORKSPACE
+
+
+
+
+
+
+
+
 
 
 
@@ -243,7 +301,15 @@ export default async function ConversationsPage({
 
 
 
+
+
+
+
           - fixed viewport height
+
+
+
+
 
 
 
@@ -251,11 +317,23 @@ export default async function ConversationsPage({
 
 
 
+
+
+
+
           - messages scroll independently
 
 
 
+
+
+
+
           - context scrolls independently
+
+
+
+
 
 
 
@@ -266,7 +344,23 @@ export default async function ConversationsPage({
 
 
 
+
+
+
+
+          conversation-workspace
+
+
+
+
+
+
+
           grid
+
+
+
+
 
 
 
@@ -274,7 +368,15 @@ export default async function ConversationsPage({
 
 
 
+
+
+
+
           rounded-2xl
+
+
+
+
 
 
 
@@ -282,11 +384,23 @@ export default async function ConversationsPage({
 
 
 
+
+
+
+
           border-slate-200
 
 
 
+
+
+
+
           bg-white
+
+
+
+
 
 
 
@@ -298,7 +412,19 @@ export default async function ConversationsPage({
 
 
 
+
+
+
+
+
+
+
+
           lg:h-[calc(100dvh-270px)]
+
+
+
+
 
 
 
@@ -306,7 +432,15 @@ export default async function ConversationsPage({
 
 
 
+
+
+
+
           lg:grid-cols-[320px_minmax(0,1fr)_300px]
+
+
+
+
 
 
 
@@ -316,7 +450,15 @@ export default async function ConversationsPage({
 
 
 
+
+
+
+
             LEFT — CONVERSATION LIST
+
+
+
+
 
 
 
@@ -327,7 +469,23 @@ export default async function ConversationsPage({
 
 
 
+
+
+
+
+            conversation-list-pane
+
+
+
+
+
+
+
             min-h-0
+
+
+
+
 
 
 
@@ -335,7 +493,15 @@ export default async function ConversationsPage({
 
 
 
+
+
+
+
             overscroll-contain
+
+
+
+
 
 
 
@@ -343,11 +509,23 @@ export default async function ConversationsPage({
 
 
 
+
+
+
+
             border-slate-200
 
 
 
+
+
+
+
             bg-slate-50/40
+
+
+
+
 
 
 
@@ -386,7 +564,15 @@ export default async function ConversationsPage({
 
 
 
+
+
+
+
                 CENTER — CHAT
+
+
+
+
 
 
 
@@ -397,7 +583,23 @@ export default async function ConversationsPage({
 
 
 
+
+
+
+
+                conversation-chat-pane
+
+
+
+
+
+
+
                 flex
+
+
+
+
 
 
 
@@ -405,7 +607,15 @@ export default async function ConversationsPage({
 
 
 
+
+
+
+
                 min-w-0
+
+
+
+
 
 
 
@@ -413,11 +623,23 @@ export default async function ConversationsPage({
 
 
 
+
+
+
+
                 overflow-hidden
 
 
 
+
+
+
+
                 bg-white
+
+
+
+
 
 
 
@@ -432,7 +654,23 @@ export default async function ConversationsPage({
 
 
 
+
+
+
+
+                  conversation-chat-header
+
+
+
+
+
+
+
                   shrink-0
+
+
+
+
 
 
 
@@ -440,7 +678,15 @@ export default async function ConversationsPage({
 
 
 
+
+
+
+
                   border-slate-100
+
+
+
+
 
 
 
@@ -448,7 +694,15 @@ export default async function ConversationsPage({
 
 
 
+
+
+
+
                   px-4
+
+
+
+
 
 
 
@@ -456,16 +710,20 @@ export default async function ConversationsPage({
 
 
 
+
+
+
+
                 "
               >
                 <div className="flex items-start justify-between gap-4">
                   <div className="flex min-w-0 items-center gap-3">
-                    <div className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-brand/10 text-xs font-black text-brand">
+                    <div className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-brand/10 text-xs font-semibold text-brand">
                       {initials(selected.name)}
                     </div>
 
                     <div className="min-w-0">
-                      <div className="truncate text-sm font-black text-slate-900">
+                      <div className="truncate text-sm font-semibold text-slate-900">
                         {selected.name}
                       </div>
 
@@ -509,7 +767,15 @@ export default async function ConversationsPage({
 
 
 
+
+
+
+
                     shrink-0
+
+
+
+
 
 
 
@@ -517,7 +783,15 @@ export default async function ConversationsPage({
 
 
 
+
+
+
+
                     px-4
+
+
+
+
 
 
 
@@ -525,11 +799,27 @@ export default async function ConversationsPage({
 
 
 
+
+
+
+
                     text-[10px]
 
 
 
+
+
+
+
                     font-semibold
+
+
+
+
+
+
+
+
 
 
 
@@ -542,6 +832,10 @@ export default async function ConversationsPage({
                         ? "border-emerald-100 bg-emerald-50/70 text-emerald-700"
                         : "border-amber-100 bg-amber-50/70 text-amber-700"
                     }
+
+
+
+
 
 
 
@@ -565,7 +859,23 @@ export default async function ConversationsPage({
 
 
 
+
+
+
+
+                  conversation-message-area
+
+
+
+
+
+
+
                   min-h-0
+
+
+
+
 
 
 
@@ -573,7 +883,15 @@ export default async function ConversationsPage({
 
 
 
+
+
+
+
                   overflow-y-auto
+
+
+
+
 
 
 
@@ -581,7 +899,15 @@ export default async function ConversationsPage({
 
 
 
+
+
+
+
                   px-4
+
+
+
+
 
 
 
@@ -589,15 +915,19 @@ export default async function ConversationsPage({
 
 
 
+
+
+
+
                   sm:px-6
 
 
 
+
+
+
+
                 "
-                style={{
-                  background:
-                    "radial-gradient(circle at 20% 10%, rgba(16,56,89,.025), transparent 20rem), radial-gradient(circle at 90% 90%, rgba(236,131,22,.035), transparent 20rem), rgba(248,250,252,.72)",
-                }}
               >
                 <ConversationThread
                   messages={selected.lastMessages}
@@ -695,7 +1025,15 @@ export default async function ConversationsPage({
 
 
 
+
+
+
+
                 RIGHT — LEAD CONTEXT
+
+
+
+
 
 
 
@@ -706,7 +1044,23 @@ export default async function ConversationsPage({
 
 
 
+
+
+
+
+                conversation-context-pane
+
+
+
+
+
+
+
                 hidden
+
+
+
+
 
 
 
@@ -714,7 +1068,15 @@ export default async function ConversationsPage({
 
 
 
+
+
+
+
                 overflow-y-auto
+
+
+
+
 
 
 
@@ -722,7 +1084,15 @@ export default async function ConversationsPage({
 
 
 
+
+
+
+
                 border-l
+
+
+
+
 
 
 
@@ -730,7 +1100,15 @@ export default async function ConversationsPage({
 
 
 
+
+
+
+
                 bg-slate-50/55
+
+
+
+
 
 
 
@@ -738,7 +1116,15 @@ export default async function ConversationsPage({
 
 
 
+
+
+
+
                 lg:block
+
+
+
+
 
 
 
@@ -749,7 +1135,7 @@ export default async function ConversationsPage({
 
                 <div className="mt-3 flex items-start justify-between gap-3">
                   <div className="min-w-0">
-                    <div className="truncate text-sm font-black text-slate-900">
+                    <div className="truncate text-sm font-semibold text-slate-900">
                       {selected.name}
                     </div>
 
@@ -766,12 +1152,12 @@ export default async function ConversationsPage({
               {/* QUICK EDIT */}
 
               {leadContextAction && (
-                <div className="mt-5 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+                <div className="conversation-context-card mt-5 rounded-2xl border border-slate-200 bg-white p-4">
                   <div className="text-[10px] font-bold uppercase tracking-[.12em] text-slate-400">
                     Quick edit
                   </div>
 
-                  <div className="mt-1 text-sm font-black text-slate-800">
+                  <div className="mt-1 text-sm font-semibold text-slate-800">
                     Admissions details
                   </div>
 
@@ -866,7 +1252,7 @@ export default async function ConversationsPage({
 
               {/* QUICK ACTIONS */}
 
-              <div className="mt-5 border-t border-slate-200 pt-4">
+              <div className="conversation-quick-actions mt-5 border-t border-slate-200 pt-4">
                 <div className="text-[10px] font-bold uppercase tracking-[.12em] text-slate-400">
                   Quick actions
                 </div>
@@ -892,12 +1278,12 @@ export default async function ConversationsPage({
 
               {/* AI PLACEHOLDER */}
 
-              <div className="mt-5 rounded-2xl border border-brand/10 bg-brand/[0.045] p-4">
+              <div className="conversation-ai-note mt-5 rounded-2xl border border-brand/10 bg-brand/[0.045] p-4">
                 <div className="text-[10px] font-bold uppercase tracking-[.12em] text-brand/60">
                   AI layer next
                 </div>
 
-                <div className="mt-2 text-sm font-bold text-slate-800">
+                <div className="mt-2 text-sm font-semibold text-slate-800">
                   Reply suggestions
                 </div>
 
@@ -911,7 +1297,7 @@ export default async function ConversationsPage({
           </>
         )}
       </div>
-    </>
+    </div>
   );
 }
 
@@ -919,11 +1305,19 @@ export default async function ConversationsPage({
 
 
 
+
+
+
+
    METRIC
 
 
 
-========================================================= */
+
+
+
+
+\========================================================= */
 
 function InboxMetric({
   label,
@@ -935,10 +1329,10 @@ function InboxMetric({
   value: number;
 }) {
   return (
-    <div className="card flex items-center justify-between px-4 py-3.5 animate-rise">
+    <div className="conversation-metric card flex items-center justify-between px-4 py-3.5 animate-rise">
       <div className="text-xs font-semibold text-slate-500">{label}</div>
 
-      <div className="text-lg font-black tracking-tight text-slate-900">
+      <div className="text-lg font-semibold tracking-tight text-slate-900">
         {value.toLocaleString()}
       </div>
     </div>
@@ -949,11 +1343,19 @@ function InboxMetric({
 
 
 
+
+
+
+
    CONTEXT ROW
 
 
 
-========================================================= */
+
+
+
+
+\========================================================= */
 
 function ContextRow({
   label,
@@ -988,7 +1390,23 @@ function ContextRow({
 
 
 
+
+
+
+
+        conversation-context-row
+
+
+
+
+
+
+
         rounded-xl
+
+
+
+
 
 
 
@@ -996,11 +1414,23 @@ function ContextRow({
 
 
 
+
+
+
+
         p-3
 
 
 
+
+
+
+
         ${tones[tone]}
+
+
+
+
 
 
 
@@ -1021,11 +1451,19 @@ function ContextRow({
 
 
 
+
+
+
+
    HEADER CONTEXT BADGE
 
 
 
-========================================================= */
+
+
+
+
+\========================================================= */
 
 function ContextBadge({
   tone,
@@ -1047,7 +1485,15 @@ function ContextBadge({
 
 
 
+
+
+
+
         inline-flex
+
+
+
+
 
 
 
@@ -1055,7 +1501,15 @@ function ContextBadge({
 
 
 
+
+
+
+
         gap-1
+
+
+
+
 
 
 
@@ -1063,7 +1517,15 @@ function ContextBadge({
 
 
 
+
+
+
+
         border
+
+
+
+
 
 
 
@@ -1071,7 +1533,15 @@ function ContextBadge({
 
 
 
+
+
+
+
         py-1
+
+
+
+
 
 
 
@@ -1079,11 +1549,23 @@ function ContextBadge({
 
 
 
+
+
+
+
         font-bold
 
 
 
+
+
+
+
         ${className}
+
+
+
+
 
 
 
@@ -1098,11 +1580,19 @@ function ContextBadge({
 
 
 
+
+
+
+
    CHANNEL BADGE
 
 
 
-========================================================= */
+
+
+
+
+\========================================================= */
 
 function ChannelBadge({ channel }: { channel: string }) {
   const classes =
@@ -1124,7 +1614,15 @@ function ChannelBadge({ channel }: { channel: string }) {
 
 
 
+
+
+
+
         inline-flex
+
+
+
+
 
 
 
@@ -1132,7 +1630,15 @@ function ChannelBadge({ channel }: { channel: string }) {
 
 
 
+
+
+
+
         gap-1
+
+
+
+
 
 
 
@@ -1140,7 +1646,15 @@ function ChannelBadge({ channel }: { channel: string }) {
 
 
 
+
+
+
+
         border
+
+
+
+
 
 
 
@@ -1148,7 +1662,15 @@ function ChannelBadge({ channel }: { channel: string }) {
 
 
 
+
+
+
+
         py-1
+
+
+
+
 
 
 
@@ -1156,7 +1678,15 @@ function ChannelBadge({ channel }: { channel: string }) {
 
 
 
+
+
+
+
         font-bold
+
+
+
+
 
 
 
@@ -1164,7 +1694,15 @@ function ChannelBadge({ channel }: { channel: string }) {
 
 
 
+
+
+
+
         ${classes}
+
+
+
+
 
 
 
@@ -1185,11 +1723,19 @@ function ChannelBadge({ channel }: { channel: string }) {
 
 
 
+
+
+
+
    CHANNEL ICON
 
 
 
-========================================================= */
+
+
+
+
+\========================================================= */
 
 function ChannelIcon({ channel }: { channel: string }) {
   if (channel === "instagram") {
@@ -1215,11 +1761,19 @@ function ChannelIcon({ channel }: { channel: string }) {
 
 
 
+
+
+
+
    INITIALS
 
 
 
-========================================================= */
+
+
+
+
+\========================================================= */
 
 function initials(name: string) {
   return (
@@ -1229,12 +1783,12 @@ function initials(name: string) {
 
       .filter(Boolean)
 
-      .map((part) => part[0])
+      .map((part) => Array.from(part)[0] ?? "")
 
       .slice(0, 2)
 
       .join("")
 
-      .toUpperCase() || "?"
+      .toLocaleUpperCase("en-IN") || "?"
   );
 }

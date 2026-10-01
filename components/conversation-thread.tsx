@@ -109,13 +109,23 @@ export function ConversationThread({
 
   /*
 
+
+
    * Keep server-provided messages in sync after
+
+
 
    * an inbound realtime refresh, while preserving
 
+
+
    * a just-sent local outbound bubble until the
 
+
+
    * server copy becomes visible.
+
+
 
    */
 
@@ -131,13 +141,23 @@ export function ConversationThread({
 
   /*
 
+
+
    * The WhatsApp composer emits this event after
+
+
 
    * Meta accepts the message and the CRM logs it.
 
+
+
    * Append the bubble locally instead of navigating
 
+
+
    * or refreshing the Conversations page.
+
+
 
    */
 
@@ -208,15 +228,27 @@ export function ConversationThread({
 
   /*
 
+
+
    * Hydrate the persisted WhatsApp status for messages
+
+
 
    * that were loaded from the server. This means Sent /
 
+
+
    * Delivered / Read remains visible after reopening or
+
+
 
    * refreshing a conversation even though the server
 
+
+
    * lead payload does not currently include those fields.
+
+
 
    */
 
@@ -257,17 +289,31 @@ export function ConversationThread({
         .select(
           `
 
+
+
               id,
+
+
 
               status,
 
+
+
               external_message_id,
+
+
 
               sent_at,
 
+
+
               delivered_at,
 
+
+
               read_at
+
+
 
               `,
         )
@@ -322,11 +368,19 @@ export function ConversationThread({
 
   /*
 
+
+
    * Meta status webhooks update the existing messages row.
+
+
 
    * Listen for those UPDATEs directly so the tick/status
 
+
+
    * changes without router.refresh() or a page reload.
+
+
 
    */
 
@@ -392,9 +446,15 @@ export function ConversationThread({
 
   /*
 
+
+
    * Smoothly reveal the newest message without
 
+
+
    * forcing a page navigation.
+
+
 
    */
 
@@ -443,12 +503,20 @@ export function ConversationThread({
   let previousChannel: string | null = originChannel || null;
 
   return (
-    <div className="space-y-4">
+    <div className="conversation-thread space-y-4">
       {/* =============================================
 
 
 
+
+
+
+
           LEAD / CHANNEL ORIGIN
+
+
+
+
 
 
 
@@ -474,7 +542,15 @@ export function ConversationThread({
 
 
 
+
+
+
+
           MESSAGES
+
+
+
+
 
 
 
@@ -640,11 +716,19 @@ function likelySameMessage(
 
 
 
+
+
+
+
    ORIGIN EVENT
 
 
 
-========================================================= */
+
+
+
+
+\========================================================= */
 
 function OriginEvent({
   channel,
@@ -667,7 +751,7 @@ function OriginEvent({
 
   return (
     <div className="relative mx-auto max-w-[88%]">
-      <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3 shadow-sm">
+      <div className="conversation-origin-event rounded-2xl border border-slate-200 bg-white px-4 py-3">
         <div className="flex items-start gap-3">
           <div
             className={`grid h-9 w-9 shrink-0 place-items-center rounded-xl ${
@@ -680,7 +764,7 @@ function OriginEvent({
           </div>
 
           <div className="min-w-0 flex-1">
-            <div className="text-[10px] font-black uppercase tracking-[.12em] text-slate-400">
+            <div className="text-[10px] font-semibold uppercase tracking-[.12em] text-slate-400">
               Lead origin
             </div>
 
@@ -716,11 +800,19 @@ function OriginEvent({
 
 
 
+
+
+
+
    CHANNEL HEADER
 
 
 
-========================================================= */
+
+
+
+
+\========================================================= */
 
 function ChannelSectionHeader({
   channel,
@@ -734,11 +826,11 @@ function ChannelSectionHeader({
   const tone = channelTone(channel);
 
   return (
-    <div className="flex items-center gap-3 py-1">
+    <div className="conversation-channel-header flex items-center gap-3 py-1">
       <div className="h-px flex-1 bg-slate-200" />
 
       <div
-        className={`inline-flex shrink-0 items-center gap-1.5 rounded-full border px-3 py-1 text-[9px] font-black uppercase tracking-[.12em] ${tone}`}
+        className={`inline-flex shrink-0 items-center gap-1.5 rounded-full border px-3 py-1 text-[9px] font-semibold uppercase tracking-[.12em] ${tone}`}
       >
         <ChannelIcon channel={channel} />
 
@@ -760,11 +852,19 @@ function ChannelSectionHeader({
 
 
 
+
+
+
+
    HANDOFF
 
 
 
-========================================================= */
+
+
+
+
+\========================================================= */
 
 function ChannelHandoff({
   from,
@@ -776,7 +876,7 @@ function ChannelHandoff({
   to: string;
 }) {
   return (
-    <div className="py-2">
+    <div className="conversation-handoff py-2">
       <div className="mx-auto flex max-w-sm flex-col items-center">
         <div className="h-3 w-px bg-slate-200" />
 
@@ -785,8 +885,8 @@ function ChannelHandoff({
         </div>
 
         <div className="mt-2 rounded-full border border-slate-200 bg-white px-3 py-1 text-[9px] font-bold text-slate-500 shadow-sm">
-          Moved from <span className="font-black">{channelLabel(from)}</span> to{" "}
-          <span className="font-black">{channelLabel(to)}</span>
+          Moved from <span className="font-semibold">{channelLabel(from)}</span>{" "}
+          to <span className="font-semibold">{channelLabel(to)}</span>
         </div>
       </div>
     </div>
@@ -797,11 +897,19 @@ function ChannelHandoff({
 
 
 
+
+
+
+
    MESSAGE
 
 
 
-========================================================= */
+
+
+
+
+\========================================================= */
 
 function MessageBubble({ message }: { message: ConversationMessage }) {
   const outbound = message.direction === "outbound";
@@ -809,7 +917,9 @@ function MessageBubble({ message }: { message: ConversationMessage }) {
   const isWhatsApp = message.channel === "whatsapp";
 
   return (
-    <div className={`flex ${outbound ? "justify-end" : "justify-start"}`}>
+    <div
+      className={`conversation-message-row flex ${outbound ? "justify-end" : "justify-start"}`}
+    >
       <div
         className={`max-w-[84%] sm:max-w-[72%] ${
           outbound ? "items-end" : "items-start"
@@ -830,14 +940,14 @@ function MessageBubble({ message }: { message: ConversationMessage }) {
         </div>
 
         <div
-          className={`rounded-2xl px-4 py-3 text-sm leading-6 shadow-sm ${
+          className={`conversation-message-bubble rounded-2xl px-4 py-3 text-sm leading-6 ${
             outbound
               ? isWhatsApp
-                ? "rounded-br-md bg-emerald-600 text-white"
-                : "rounded-br-md bg-brand text-white"
+                ? "conversation-message-outbound is-whatsapp rounded-br-md bg-emerald-600 text-white"
+                : "conversation-message-outbound rounded-br-md bg-brand text-white"
               : isWhatsApp
-                ? "rounded-bl-md border border-emerald-100 bg-white text-slate-800"
-                : "rounded-bl-md border border-slate-200 bg-white text-slate-800"
+                ? "conversation-message-inbound is-whatsapp rounded-bl-md border border-emerald-100 bg-white text-slate-800"
+                : "conversation-message-inbound rounded-bl-md border border-slate-200 bg-white text-slate-800"
           }`}
         >
           <div className="whitespace-pre-wrap break-words">{message.body}</div>
@@ -940,11 +1050,19 @@ function normalizedMessageStatus(message: ConversationMessage) {
 
 
 
+
+
+
+
    ICON
 
 
 
-========================================================= */
+
+
+
+
+\========================================================= */
 
 function ChannelIcon({ channel }: { channel: string }) {
   if (channel === "whatsapp") {
@@ -974,11 +1092,19 @@ function ChannelIcon({ channel }: { channel: string }) {
 
 
 
+
+
+
+
    CHANNEL LABEL
 
 
 
-========================================================= */
+
+
+
+
+\========================================================= */
 
 function channelLabel(channel: string) {
   if (channel === "meta_lead_form") {
@@ -1000,11 +1126,19 @@ function channelLabel(channel: string) {
 
 
 
+
+
+
+
    CHANNEL COLORS
 
 
 
-========================================================= */
+
+
+
+
+\========================================================= */
 
 function channelTone(channel: string) {
   if (channel === "whatsapp") {
@@ -1062,11 +1196,19 @@ function channelTextTone(channel: string) {
 
 
 
+
+
+
+
    DATE FORMAT
 
 
 
-========================================================= */
+
+
+
+
+\========================================================= */
 
 function formatCompactTime(value: string) {
   const date = new Date(value);
@@ -1086,6 +1228,8 @@ function formatCompactTime(value: string) {
       hour: "numeric",
 
       minute: "2-digit",
+
+      timeZone: "Asia/Kolkata",
     },
   ).format(date);
 }
@@ -1110,6 +1254,8 @@ function formatTimelineTime(value: string) {
       hour: "numeric",
 
       minute: "2-digit",
+
+      timeZone: "Asia/Kolkata",
     },
   ).format(date);
 }

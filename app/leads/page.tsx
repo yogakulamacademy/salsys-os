@@ -27,21 +27,17 @@ type LeadsPageProps = {
 
 export default async function LeadsPage({ searchParams }: LeadsPageProps) {
   const params = await searchParams;
-
   const filters = parseLeadsWorkspaceParams(params);
-
   const workspace = await getLeadsWorkspacePage(filters);
-
   const mock = isMockMode();
-
   const notice = one(params.notice);
 
   return (
-    <>
+    <div className="leads-premium-page">
       <PageHeader
-        eyebrow="CRM"
+        eyebrow="Admissions workspace"
         title="Leads"
-        description="Find, filter and triage every prospect across website, Instagram, WhatsApp, paid media and other acquisition channels."
+        description="Find, filter and triage prospects across every acquisition channel from one focused workspace."
         actions={
           <Link href="/leads/new" className="btn-primary">
             <Plus size={16} />
@@ -72,7 +68,7 @@ export default async function LeadsPage({ searchParams }: LeadsPageProps) {
         summary={workspace.summary}
         pagination={workspace.pagination}
       />
-    </>
+    </div>
   );
 }
 

@@ -1,11 +1,15 @@
+import type { ReactNode } from "react";
+
 import Link from "next/link";
 
 import {
   Check,
+  CheckCircle2,
   ChevronLeft,
   ChevronRight,
   Clock,
   RotateCcw,
+  Sparkles,
 } from "lucide-react";
 
 import {
@@ -14,11 +18,8 @@ import {
 } from "@/app/actions/crm";
 
 import { ChannelBadge, PageHeader, StageBadge } from "@/components/ui";
-
 import { getFollowUpsWorkspace } from "@/lib/followups-data";
-
 import { isMockMode } from "@/lib/data";
-
 import { formatDateTime } from "@/lib/format";
 
 type FollowUpsPageProps = {
@@ -35,51 +36,46 @@ export default async function FollowUpsPage({
   searchParams,
 }: FollowUpsPageProps) {
   const query = await searchParams;
-
   const requestedPage = parsePage(query.page);
 
-  const [workspace] = await Promise.all([
-    getFollowUpsWorkspace({
-      page: requestedPage,
-      pageSize: PAGE_SIZE,
-    }),
-  ]);
+  const workspace = await getFollowUpsWorkspace({
+    page: requestedPage,
+    pageSize: PAGE_SIZE,
+  });
 
   const { tasks, summary, pagination } = workspace;
-
   const mock = isMockMode();
 
   return (
-    <>
+    <div className="followups-polish">
       <PageHeader
         eyebrow="Task queue"
         title="Follow-ups"
-        description="Track every promised response, payment check and scheduled lead touch so no enquiry disappears from the funnel."
+        description="Keep every promised response, payment check and scheduled lead touch visible until it is completed."
         actions={
           <span
-            className={`rounded-xl px-3 py-2 text-xs font-bold ${
-              mock
-                ? "bg-orange-50 text-orange-700"
-                : "bg-emerald-50 text-emerald-700"
+            className={`followups-live-badge ${
+              mock ? "followups-live-badge-mock" : "followups-live-badge-active"
             }`}
           >
-            {mock ? "Mock mode" : "Live task queue"}
+            <span className="followups-live-dot" />
+            {mock ? "Mock mode" : "Live queue"}
           </span>
         }
       />
 
       {query.error && (
-        <div className="mb-4 rounded-xl border border-red-100 bg-red-50 px-4 py-3 text-sm font-medium text-red-700">
+        <div className="followups-notice followups-notice-error">
           {query.error}
         </div>
       )}
 
       {query.notice && (
         <div
-          className={`mb-4 rounded-xl border px-4 py-3 text-sm font-medium ${
+          className={`followups-notice ${
             query.notice.startsWith("mock-")
-              ? "border-orange-100 bg-orange-50 text-orange-700"
-              : "border-emerald-100 bg-emerald-50 text-emerald-700"
+              ? "followups-notice-warning"
+              : "followups-notice-success"
           }`}
         >
           {noticeText(query.notice)}
@@ -87,164 +83,177 @@ export default async function FollowUpsPage({
       )}
 
       {workspace.warning && (
-        <div className="mb-4 rounded-xl border border-amber-100 bg-amber-50 px-4 py-3 text-sm font-medium text-amber-700">
+        <div className="followups-notice followups-notice-warning">
           Follow-ups loaded using the legacy fallback. {workspace.warning}
         </div>
       )}
 
-      <div className="grid gap-4 lg:grid-cols-3">
-        <div className="card-pad">
-          <div className="text-sm text-slate-500">Due now</div>
+      <section className="followups-summary-grid">
+        <FollowUpSummaryCard
+          label="Due now"
+          value={summary.dueNow.toLocaleString()}
+          note="Open or snoozed tasks at or after their due time"
+          tone="urgent"
+          icon={<Clock size={17} />}
+        />
 
-          <div className="mt-2 text-3xl font-bold text-slate-950">
-            {summary.dueNow.toLocaleString()}
-          </div>
+        <FollowUpSummaryCard
+          label="High-intent queue"
+          value={summary.highIntentQueue.toLocaleString()}
+          note="Priority opportunities that need admissions attention"
+          tone="priority"
+          icon={<Sparkles size={17} />}
+        />
 
-          <div className="mt-2 text-xs text-orange-600">
-            Open or snoozed tasks at/after due time
-          </div>
-        </div>
+        <FollowUpSummaryCard
+          label="Queue status"
+          value={mock ? "Testing" : "Live"}
+          note={
+            mock
+              ? "Changes are not persisted in mock mode"
+              : "Tasks are stored in Supabase and refreshed live"
+          }
+          tone="healthy"
+          icon={<CheckCircle2 size={17} />}
+        />
+      </section>
 
-        <div className="card-pad">
-          <div className="text-sm text-slate-500">High-intent queue</div>
-
-          <div className="mt-2 text-3xl font-bold text-slate-950">
-            {summary.highIntentQueue.toLocaleString()}
-          </div>
-
-          <div className="mt-2 text-xs text-slate-400">
-            Needs admissions attention
-          </div>
-        </div>
-
-        <div className="card-pad">
-          <div className="text-sm text-slate-500">System state</div>
-
-          <div className="mt-2 text-lg font-bold text-slate-950">
-            {mock ? "Testing" : "Persistent + live"}
-          </div>
-
-          <div className="mt-2 text-xs text-emerald-600">
-            Follow-ups are{" "}
-            {mock ? "fictional" : "stored in Supabase and live-refreshed"}
-          </div>
-        </div>
-      </div>
-
-      <div className="mt-4 card overflow-hidden">
-        <div className="flex flex-col gap-2 border-b border-slate-100 px-5 py-4 sm:flex-row sm:items-end sm:justify-between">
+      <section className="followups-queue">
+        <header className="followups-queue-header">
           <div>
             <div className="eyebrow">Priority queue</div>
-
             <div className="section-title mt-1">Scheduled actions</div>
+            <p className="followups-queue-description">
+              Work the most time-sensitive tasks first, then reschedule anything
+              that genuinely needs a later touch.
+            </p>
           </div>
 
-          <div className="text-xs font-semibold text-slate-400">
+          <div className="followups-count-pill">
             {pagination.total === 0
               ? "No due follow-ups"
-              : `Showing ${pagination.from.toLocaleString()}–${pagination.to.toLocaleString()} of ${pagination.total.toLocaleString()}`}
+              : `${pagination.from.toLocaleString()}–${pagination.to.toLocaleString()} of ${pagination.total.toLocaleString()}`}
           </div>
-        </div>
+        </header>
 
-        <div className="divide-y divide-slate-100">
-          {tasks.length === 0 && (
-            <div className="p-8 text-center text-sm text-slate-400">
-              No due follow-ups.
-            </div>
-          )}
-
-          {tasks.map((task) => (
-            <div key={task.id} className="flex flex-col gap-4 p-4 sm:px-5">
-              <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
-                <form action={completeFollowUpAction}>
-                  <input type="hidden" name="task_id" value={task.id} />
-
-                  <input type="hidden" name="lead_id" value={task.leadId} />
-
-                  <button
-                    type="submit"
-                    title="Complete follow-up"
-                    className="grid h-9 w-9 shrink-0 place-items-center rounded-xl border border-slate-200 text-slate-400 hover:border-emerald-300 hover:text-emerald-600"
-                  >
-                    <Check size={16} />
-                  </button>
-                </form>
-
-                <div className="min-w-0 flex-1">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <Link
-                      href={`/leads/${task.leadId}`}
-                      className="font-semibold text-slate-900 hover:text-brand"
-                    >
-                      {task.leadName}
-                    </Link>
-
-                    <span className="text-xs text-slate-400">
-                      {task.leadCode}
-                    </span>
-
-                    <StageBadge stage={task.stage} />
-                  </div>
-
-                  <div className="mt-1 text-sm text-slate-600">
-                    {task.title}
-                  </div>
-                </div>
-
-                <div className="flex flex-wrap items-center gap-3">
-                  <ChannelBadge channel={task.channel} />
-
-                  <div className="flex min-w-[170px] items-center gap-2 text-sm font-medium text-slate-600">
-                    <Clock size={15} className="text-slate-400" />
-
-                    {formatDateTime(task.dueAt)}
-                  </div>
-                </div>
+        <div className="followups-task-list">
+          {tasks.length === 0 ? (
+            <div className="followups-empty-state">
+              <div className="followups-empty-icon">
+                <CheckCircle2 size={20} />
               </div>
-
-              <form
-                action={snoozeFollowUpAction}
-                className="flex flex-col gap-2 rounded-xl bg-slate-50 p-3 sm:flex-row sm:items-center"
-              >
-                <input type="hidden" name="task_id" value={task.id} />
-
-                <div className="flex items-center gap-2 text-xs font-semibold text-slate-500">
-                  <RotateCcw size={14} />
-                  Reschedule
-                </div>
-
-                <input
-                  className="input sm:ml-auto sm:max-w-[250px]"
-                  type="datetime-local"
-                  name="due_at"
-                  required
-                />
-
-                <button type="submit" className="btn-secondary">
-                  Snooze
-                </button>
-              </form>
+              <div className="followups-empty-title">You’re caught up</div>
+              <p>No due follow-ups are waiting in the queue.</p>
             </div>
-          ))}
+          ) : (
+            tasks.map((task) => (
+              <article key={task.id} className="followup-task-row">
+                <div className="followup-task-main">
+                  <form action={completeFollowUpAction}>
+                    <input type="hidden" name="task_id" value={task.id} />
+                    <input type="hidden" name="lead_id" value={task.leadId} />
+
+                    <button
+                      type="submit"
+                      title="Complete follow-up"
+                      aria-label={`Complete follow-up for ${task.leadName}`}
+                      className="followup-complete-button"
+                    >
+                      <Check size={16} />
+                    </button>
+                  </form>
+
+                  <div className="followup-task-content">
+                    <div className="followup-task-title-row">
+                      <div className="min-w-0">
+                        <div className="followup-task-lead-row">
+                          <Link
+                            href={`/leads/${task.leadId}`}
+                            className="followup-task-lead"
+                          >
+                            {task.leadName}
+                          </Link>
+
+                          {task.leadCode ? (
+                            <span className="followup-lead-code">
+                              {task.leadCode}
+                            </span>
+                          ) : null}
+
+                          <StageBadge stage={task.stage} />
+                        </div>
+
+                        <div className="followup-task-title">{task.title}</div>
+                      </div>
+
+                      <div className="followup-task-meta">
+                        <ChannelBadge channel={task.channel} />
+                        <span className="followup-due-time">
+                          <Clock size={14} />
+                          {formatDateTime(task.dueAt)}
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="followup-task-actions">
+                      <Link
+                        href={`/conversations?lead=${task.leadId}`}
+                        className="followup-conversation-link"
+                      >
+                        Open conversation
+                      </Link>
+
+                      <form
+                        action={snoozeFollowUpAction}
+                        className="followup-reschedule-form"
+                      >
+                        <input type="hidden" name="task_id" value={task.id} />
+
+                        <span className="followup-reschedule-label">
+                          <RotateCcw size={13} />
+                          Reschedule
+                        </span>
+
+                        <input
+                          className="followup-reschedule-input"
+                          type="datetime-local"
+                          name="due_at"
+                          required
+                          aria-label={`New follow-up time for ${task.leadName}`}
+                        />
+
+                        <button
+                          type="submit"
+                          className="followup-snooze-button"
+                        >
+                          Snooze
+                        </button>
+                      </form>
+                    </div>
+                  </div>
+                </div>
+              </article>
+            ))
+          )}
         </div>
 
         {pagination.totalPages > 1 && (
-          <div className="flex flex-col gap-3 border-t border-slate-100 bg-slate-50/60 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
-            <div className="text-xs font-semibold text-slate-500">
+          <footer className="followups-pagination">
+            <div className="followups-pagination-copy">
               Page {pagination.page} of {pagination.totalPages}
             </div>
 
-            <div className="flex items-center gap-2">
+            <div className="followups-pagination-actions">
               {pagination.page > 1 ? (
                 <Link
                   href={pageHref(pagination.page - 1)}
-                  className="btn-secondary !px-3 !py-2"
+                  className="followups-page-button"
                 >
                   <ChevronLeft size={14} />
                   Previous
                 </Link>
               ) : (
-                <span className="btn-secondary pointer-events-none !px-3 !py-2 opacity-40">
+                <span className="followups-page-button followups-page-button-disabled">
                   <ChevronLeft size={14} />
                   Previous
                 </span>
@@ -253,28 +262,53 @@ export default async function FollowUpsPage({
               {pagination.page < pagination.totalPages ? (
                 <Link
                   href={pageHref(pagination.page + 1)}
-                  className="btn-secondary !px-3 !py-2"
+                  className="followups-page-button"
                 >
                   Next
                   <ChevronRight size={14} />
                 </Link>
               ) : (
-                <span className="btn-secondary pointer-events-none !px-3 !py-2 opacity-40">
+                <span className="followups-page-button followups-page-button-disabled">
                   Next
                   <ChevronRight size={14} />
                 </span>
               )}
             </div>
-          </div>
+          </footer>
         )}
+      </section>
+    </div>
+  );
+}
+
+function FollowUpSummaryCard({
+  label,
+  value,
+  note,
+  tone,
+  icon,
+}: {
+  label: string;
+  value: string;
+  note: string;
+  tone: "urgent" | "priority" | "healthy";
+  icon: ReactNode;
+}) {
+  return (
+    <div className={`followups-summary-card followups-summary-card-${tone}`}>
+      <div className="followups-summary-topline">
+        <span className="followups-summary-icon">{icon}</span>
+        <span className="followups-summary-label">{label}</span>
       </div>
-    </>
+
+      <div className="followups-summary-value">{value}</div>
+      <div className="followups-summary-note">{note}</div>
+    </div>
   );
 }
 
 function parsePage(value: string | undefined) {
   const parsed = Number.parseInt(value ?? "1", 10);
-
   return Number.isFinite(parsed) && parsed > 0 ? parsed : 1;
 }
 

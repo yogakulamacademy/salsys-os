@@ -1,7 +1,9 @@
 "use client";
 
 import Link from "next/link";
+
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
+
 import {
   AlertTriangle,
   ArrowLeft,
@@ -17,6 +19,7 @@ import {
   UserRoundX,
   X,
 } from "lucide-react";
+
 import {
   useCallback,
   useEffect,
@@ -27,7 +30,9 @@ import {
 } from "react";
 
 import type { LeadOverview } from "@/types/crm";
+
 import { ChannelBadge, IntentLabel, StageBadge } from "@/components/ui";
+
 import type {
   LeadListIntelligence,
   LeadsQuickView,
@@ -40,26 +45,39 @@ import type {
 
 type EnrichedLead = {
   lead: LeadOverview;
+
   intel: LeadListIntelligence | null;
 };
 
 type LeadsWorkspaceProps = {
   leads: LeadOverview[];
+
   intelligence: LeadListIntelligence[];
+
   mock: boolean;
+
   filters: LeadsWorkspaceFilters;
+
   options: LeadsWorkspaceOptions;
+
   summary: LeadsWorkspaceSummary;
+
   pagination: LeadsWorkspacePagination;
 };
 
 export function LeadsWorkspace({
   leads,
+
   intelligence,
+
   mock,
+
   filters,
+
   options,
+
   summary,
+
   pagination,
 }: LeadsWorkspaceProps) {
   const router = useRouter();
@@ -80,6 +98,7 @@ export function LeadsWorkspace({
 
   const intelligenceByLead = useMemo(
     () => new Map(intelligence.map((row) => [row.lead_id, row])),
+
     [intelligence],
   );
 
@@ -87,12 +106,26 @@ export function LeadsWorkspace({
     () =>
       leads.map((lead) => ({
         lead,
+
         intel: intelligenceByLead.get(lead.id) ?? null,
       })),
+
     [leads, intelligenceByLead],
   );
 
-  const now = Date.now();
+  // Keep the initial server and client render identical to avoid hydration mismatches.
+  // The real current time is applied after hydration and refreshed once per minute.
+  const [now, setNow] = useState(0);
+
+  useEffect(() => {
+    const refreshNow = () => setNow(Date.now());
+
+    refreshNow();
+
+    const timer = window.setInterval(refreshNow, 60_000);
+
+    return () => window.clearInterval(timer);
+  }, []);
 
   const updateUrl = useCallback(
     (updates: Record<string, string | number | null | undefined>) => {
@@ -122,6 +155,7 @@ export function LeadsWorkspace({
         });
       });
     },
+
     [pathname, router, searchParams],
   );
 
@@ -139,6 +173,7 @@ export function LeadsWorkspace({
     const timer = window.setTimeout(() => {
       updateUrl({
         q: normalized,
+
         page: 1,
       });
     }, 350);
@@ -155,6 +190,16 @@ export function LeadsWorkspace({
     filters.aging,
   );
 
+  const moreFilterCount = [
+    filters.channel,
+
+    filters.owner,
+
+    filters.course,
+
+    filters.aging,
+  ].filter(Boolean).length;
+
   const hasAnyFilters = Boolean(
     filters.query || hasAdvancedFilters || filters.quickView !== "all",
   );
@@ -162,6 +207,7 @@ export function LeadsWorkspace({
   function setFilter(key: string, value: string) {
     updateUrl({
       [key]: value,
+
       page: 1,
     });
   }
@@ -169,6 +215,7 @@ export function LeadsWorkspace({
   function setQuickView(value: LeadsQuickView) {
     updateUrl({
       view: value,
+
       page: 1,
     });
   }
@@ -176,6 +223,7 @@ export function LeadsWorkspace({
   function setSortMode(value: LeadsSortMode) {
     updateUrl({
       sort: value,
+
       page: 1,
     });
   }
@@ -185,26 +233,35 @@ export function LeadsWorkspace({
 
     updateUrl({
       q: null,
+
       stage: null,
+
       source: null,
+
       channel: null,
+
       owner: null,
+
       course: null,
+
       aging: null,
+
       view: null,
+
       sort: null,
+
       page: null,
     });
   }
 
   return (
     <div
-      className={`card overflow-hidden transition-opacity ${
+      className={`leads-premium card overflow-hidden transition-opacity ${
         isPending ? "opacity-70" : "opacity-100"
       }`}
     >
-      <div className="border-b border-slate-100 p-4">
-        <div className="flex flex-wrap items-center gap-2">
+      <div className="leads-workspace-toolbar border-b border-slate-100 p-4">
+        <div className="leads-quickviews flex flex-wrap items-center gap-2">
           <QuickViewButton
             active={filters.quickView === "all"}
             onClick={() => setQuickView("all")}
@@ -245,8 +302,8 @@ export function LeadsWorkspace({
           />
         </div>
 
-        <div className="mt-4 flex flex-col gap-3 xl:flex-row xl:items-center">
-          <div className="flex min-w-0 flex-1 items-center rounded-xl border border-slate-200 bg-slate-50 px-3 transition focus-within:border-brand/30 focus-within:bg-white focus-within:ring-4 focus-within:ring-brand/5">
+        <div className="leads-primary-filters mt-4 flex flex-col gap-3 xl:flex-row xl:items-center">
+          <div className="leads-search-box flex min-w-0 flex-1 items-center rounded-xl border border-slate-200 bg-slate-50 px-3 transition focus-within:border-brand/30 focus-within:bg-white focus-within:ring-4 focus-within:ring-brand/5">
             <Search size={16} className="shrink-0 text-slate-400" />
 
             <input
@@ -288,7 +345,7 @@ export function LeadsWorkspace({
           <button
             type="button"
             onClick={() => setShowMoreFilters((current) => !current)}
-            className={`btn-secondary ${
+            className={`leads-more-filter-button btn-secondary ${
               showMoreFilters || hasAdvancedFilters
                 ? "!border-brand/20 !bg-brand/[0.04] !text-brand"
                 : ""
@@ -296,11 +353,14 @@ export function LeadsWorkspace({
           >
             <Filter size={15} />
             More filters
+            {moreFilterCount > 0 && (
+              <span className="leads-filter-count">{moreFilterCount}</span>
+            )}
           </button>
         </div>
 
         {showMoreFilters && (
-          <div className="mt-3 grid gap-3 rounded-xl border border-slate-100 bg-slate-50/60 p-3 sm:grid-cols-2 xl:grid-cols-4">
+          <div className="leads-advanced-filters mt-3 grid gap-3 rounded-xl border border-slate-100 bg-slate-50/60 p-3 sm:grid-cols-2 xl:grid-cols-4">
             <FilterSelect
               label="Current channel"
               value={filters.channel || "all"}
@@ -316,6 +376,7 @@ export function LeadsWorkspace({
               extraOptions={[
                 {
                   value: "__unassigned__",
+
                   label: "Unassigned only",
                 },
               ]}
@@ -337,16 +398,20 @@ export function LeadsWorkspace({
                 className="input"
               >
                 <option value="all">All aging</option>
+
                 <option value="healthy">Healthy</option>
+
                 <option value="warning">Warning</option>
+
                 <option value="stuck">Stuck</option>
+
                 <option value="untracked">Untracked</option>
               </select>
             </label>
           </div>
         )}
 
-        <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
+        <div className="leads-list-meta mt-3 flex flex-wrap items-center justify-between gap-3">
           <div className="flex flex-wrap items-center gap-2 text-xs text-slate-500">
             <span>
               {pagination.total > 0 ? (
@@ -373,6 +438,7 @@ export function LeadsWorkspace({
             {isPending && (
               <>
                 <span>·</span>
+
                 <span className="font-bold text-brand">Updating…</span>
               </>
             )}
@@ -400,26 +466,37 @@ export function LeadsWorkspace({
               className="input !w-auto min-w-[170px] !py-2"
             >
               <option value="stage_age_desc">Oldest in stage</option>
+
               <option value="followup_asc">Next follow-up</option>
+
               <option value="name">Name A–Z</option>
             </select>
           </div>
         </div>
       </div>
 
-      <div className="overflow-x-auto">
-        <table className="min-w-[1320px] w-full text-left">
+      <div className="leads-table-wrap overflow-x-auto">
+        <table className="leads-table min-w-[1240px] w-full text-left">
           <thead>
-            <tr className="border-b border-slate-200 bg-slate-50/60 text-[10px] uppercase tracking-[0.1em] text-slate-400">
+            <tr className="leads-table-head border-b border-slate-200 bg-slate-50/60 text-[10px] uppercase tracking-[0.08em] text-slate-400">
               <th className="px-4 py-3 font-bold">Lead</th>
+
               <th className="px-4 py-3 font-bold">Course / Batch</th>
+
               <th className="px-4 py-3 font-bold">Stage</th>
+
               <th className="px-4 py-3 font-bold">Owner</th>
+
               <th className="px-4 py-3 font-bold">Source</th>
+
               <th className="px-4 py-3 font-bold">Channel</th>
+
               <th className="px-4 py-3 font-bold">Stage age</th>
+
               <th className="px-4 py-3 font-bold">Next follow-up</th>
+
               <th className="px-4 py-3 font-bold">Attention</th>
+
               <th className="px-4 py-3 font-bold" />
             </tr>
           </thead>
@@ -465,11 +542,15 @@ export function LeadsWorkspace({
 
 function PaginationBar({
   pagination,
+
   pending,
+
   onPageChange,
 }: {
   pagination: LeadsWorkspacePagination;
+
   pending: boolean;
+
   onPageChange: (page: number) => void;
 }) {
   if (pagination.totalPages <= 1) {
@@ -477,7 +558,7 @@ function PaginationBar({
   }
 
   return (
-    <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 bg-slate-50/40 px-4 py-3">
+    <div className="leads-pagination flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 bg-slate-50/40 px-4 py-3">
       <div className="text-xs font-medium text-slate-500">
         Page{" "}
         <strong className="text-slate-800">
@@ -526,14 +607,26 @@ function LeadRow({ item, now }: { item: EnrichedLead; now: number }) {
   const paymentPending = lead.stage === "payment_pending";
 
   return (
-    <tr className="border-b border-slate-100 last:border-0 hover:bg-slate-50/70">
+    <tr className="leads-table-row border-b border-slate-100 last:border-0 hover:bg-slate-50/70">
       <td className="px-4 py-3.5">
-        <div className="font-semibold text-slate-900">{lead.name}</div>
+        <div className="flex items-center gap-3">
+          <div className="lead-avatar" aria-hidden="true">
+            {leadInitials(lead.name)}
+          </div>
 
-        <div className="mt-0.5 flex items-center gap-2 text-xs text-slate-400">
-          <span>{lead.leadCode}</span>
-          <span>•</span>
-          <span>{lead.country || "—"}</span>
+          <div className="min-w-0">
+            <div className="truncate font-medium text-slate-900">
+              {lead.name}
+            </div>
+
+            <div className="mt-0.5 flex items-center gap-2 text-xs text-slate-400">
+              <span>{lead.leadCode}</span>
+
+              <span>•</span>
+
+              <span className="truncate">{lead.country || "—"}</span>
+            </div>
+          </div>
         </div>
       </td>
 
@@ -559,6 +652,7 @@ function LeadRow({ item, now }: { item: EnrichedLead; now: number }) {
         {intel?.owner_name ? (
           <div className="inline-flex items-center gap-1.5 text-sm font-medium text-slate-700">
             <UserRoundCheck size={13} className="text-slate-400" />
+
             {intel.owner_name}
           </div>
         ) : (
@@ -597,7 +691,7 @@ function LeadRow({ item, now }: { item: EnrichedLead; now: number }) {
         </div>
 
         {overdue && (
-          <div className="mt-0.5 text-[9px] font-black uppercase text-red-500">
+          <div className="mt-0.5 text-[9px] font-semibold uppercase tracking-[0.06em] text-red-500">
             Overdue
           </div>
         )}
@@ -658,7 +752,7 @@ function AgingCell({ intel }: { intel: LeadListIntelligence | null }) {
   return (
     <div>
       <span
-        className={`inline-flex items-center gap-1 rounded-lg px-2 py-1 text-[9px] font-black uppercase ${agingBadgeClass(
+        className={`inline-flex items-center gap-1 rounded-lg px-2 py-1 text-[9px] font-semibold uppercase tracking-[0.04em] ${agingBadgeClass(
           status,
         )}`}
       >
@@ -678,22 +772,30 @@ function AgingCell({ intel }: { intel: LeadListIntelligence | null }) {
 
 function QuickViewButton({
   active,
+
   onClick,
+
   label,
+
   count,
+
   icon,
 }: {
   active: boolean;
+
   onClick: () => void;
+
   label: string;
+
   count: number;
+
   icon?: ReactNode;
 }) {
   return (
     <button
       type="button"
       onClick={onClick}
-      className={`inline-flex items-center gap-1.5 rounded-xl border px-3 py-2 text-xs font-bold transition ${
+      className={`leads-quickview inline-flex items-center gap-1.5 rounded-xl border px-3 py-2 text-xs font-medium transition ${
         active
           ? "border-brand/20 bg-brand/[0.06] text-brand shadow-sm"
           : "border-slate-200 bg-white text-slate-500 hover:border-slate-300 hover:text-slate-800"
@@ -704,7 +806,7 @@ function QuickViewButton({
       {label}
 
       <span
-        className={`rounded-full px-1.5 py-0.5 text-[9px] font-black ${
+        className={`leads-quickview-count rounded-full px-1.5 py-0.5 text-[9px] font-semibold ${
           active ? "bg-white text-brand" : "bg-slate-100 text-slate-500"
         }`}
       >
@@ -716,17 +818,26 @@ function QuickViewButton({
 
 function FilterSelect({
   label,
+
   value,
+
   onChange,
+
   options,
+
   extraOptions = [],
 }: {
   label: string;
+
   value: string;
+
   onChange: (value: string) => void;
+
   options: string[];
+
   extraOptions?: Array<{
     value: string;
+
     label: string;
   }>;
 }) {
@@ -759,16 +870,20 @@ function FilterSelect({
 
 function AttentionBadge({
   tone,
+
   icon,
+
   children,
 }: {
   tone: "danger" | "warning";
+
   icon: ReactNode;
+
   children: ReactNode;
 }) {
   return (
     <span
-      className={`inline-flex items-center gap-1 rounded-md px-1.5 py-1 text-[8px] font-black uppercase ${
+      className={`inline-flex items-center gap-1 rounded-md px-1.5 py-1 text-[8px] font-semibold uppercase tracking-[0.04em] ${
         tone === "danger"
           ? "bg-red-50 text-red-600"
           : "bg-amber-50 text-amber-700"
@@ -804,9 +919,14 @@ function formatDateTimeLocal(value: string | null | undefined) {
 
   return new Intl.DateTimeFormat("en-IN", {
     day: "2-digit",
+
     month: "short",
+
     hour: "2-digit",
+
     minute: "2-digit",
+
+    timeZone: "Asia/Kolkata",
   }).format(date);
 }
 
@@ -844,8 +964,32 @@ function toNumber(value: number | string | null | undefined) {
   return Number.isFinite(number) ? number : 0;
 }
 
+function leadInitials(name: string) {
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+
+  if (parts.length === 0) {
+    return "?";
+  }
+
+  return parts
+
+    .slice(0, 2)
+
+    .map((part) => {
+      // Array.from is Unicode-safe; part[0] can split emoji/non-BMP characters
+      // and produce the replacement character shown in the hydration error.
+      const firstCharacter = Array.from(part)[0] ?? "";
+
+      return firstCharacter.toLocaleUpperCase("en-IN");
+    })
+
+    .join("");
+}
+
 function pretty(value: string) {
   return value
+
     .replaceAll("_", " ")
+
     .replace(/\b\w/g, (letter) => letter.toUpperCase());
 }

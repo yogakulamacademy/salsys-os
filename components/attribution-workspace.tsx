@@ -32,62 +32,95 @@ export type AttributionSortMode = "leads" | "qualified" | "enrolled" | "name";
 
 export type AttributionWorkspaceFilters = {
   query: string;
+
   course: string;
+
   location: string;
+
   country: string;
+
   stage: string;
 };
 
 export type AttributionPerformanceRow = {
   modelName: AttributionModelName;
+
   value: string;
+
   leads: number;
+
   qualified: number;
+
   enrolled: number;
+
   revenueInr: number;
+
   revenueUsd: number;
 };
 
 export type AttributionMetricsRow = {
   modelName: AttributionModelName;
+
   total: number;
+
   known: number;
+
   unknown: number;
+
   coverage: number;
+
   qualified: number;
+
   enrolled: number;
+
   revenueInr: number;
+
   revenueUsd: number;
 };
 
 export type AttributionComparisonRow = {
   value: string;
+
   firstTouch: number;
+
   leadCreation: number;
+
   lastTouch: number;
+
   currentChannel: number;
 };
 
 export type AttributionWorkspaceOptions = {
   courses: string[];
+
   locations: string[];
+
   countries: string[];
+
   stages: string[];
 };
 
 export type AttributionWorkspacePayload = {
   metricsByModel: AttributionMetricsRow[];
+
   performanceRows: AttributionPerformanceRow[];
+
   comparison: AttributionComparisonRow[];
+
   options: AttributionWorkspaceOptions;
 };
 
 type PerformanceRow = {
   value: string;
+
   leads: number;
+
   qualified: number;
+
   enrolled: number;
+
   revenueInr: number;
+
   revenueUsd: number;
 };
 
@@ -95,46 +128,70 @@ type ComparisonRow = AttributionComparisonRow;
 
 const models: Array<{
   value: AttributionModelName;
+
   label: string;
+
   shortLabel: string;
+
   description: string;
 }> = [
   {
     value: "first_touch",
+
     label: "First Touch",
+
     shortLabel: "First",
+
     description: "The source that originally acquired the lead.",
   },
+
   {
     value: "lead_creation",
+
     label: "Lead Creation",
+
     shortLabel: "Creation",
+
     description: "The channel where the CRM lead was actually created.",
   },
+
   {
     value: "last_touch",
+
     label: "Last Marketing Touch",
+
     shortLabel: "Last",
+
     description:
       "The most recent recorded marketing source before the current CRM state.",
   },
+
   {
     value: "current_channel",
+
     label: "Current Channel",
+
     shortLabel: "Current",
+
     description: "Where admissions is communicating with the lead now.",
   },
 ];
 
 export function AttributionWorkspace({
   workspace,
+
   filters,
+
   loadError,
+
   warning,
 }: {
   workspace: AttributionWorkspacePayload;
+
   filters: AttributionWorkspaceFilters;
+
   loadError: string | null;
+
   warning: string | null;
 }) {
   const router = useRouter();
@@ -195,6 +252,7 @@ export function AttributionWorkspace({
         scroll: false,
       });
     },
+
     [pathname, router, searchParams],
   );
 
@@ -266,26 +324,41 @@ export function AttributionWorkspace({
     (item) => item.modelName === model,
   ) ?? {
     modelName: model,
+
     total: 0,
+
     known: 0,
+
     unknown: 0,
+
     coverage: 0,
+
     qualified: 0,
+
     enrolled: 0,
+
     revenueInr: 0,
+
     revenueUsd: 0,
   };
 
   const performance = useMemo(() => {
     const result = workspace.performanceRows
+
       .filter((row) => row.modelName === model)
+
       .map(
         (row): PerformanceRow => ({
           value: row.value,
+
           leads: row.leads,
+
           qualified: row.qualified,
+
           enrolled: row.enrolled,
+
           revenueInr: row.revenueInr,
+
           revenueUsd: row.revenueUsd,
         }),
       );
@@ -314,9 +387,13 @@ export function AttributionWorkspace({
 
     return {
       ...item,
+
       total: row?.total ?? 0,
+
       known: row?.known ?? 0,
+
       unknown: row?.unknown ?? 0,
+
       coverage: row?.coverage ?? 0,
     };
   });
@@ -332,16 +409,24 @@ export function AttributionWorkspace({
 
   const clearFilters = () => {
     setQuery("");
+
     setCourseState("all");
+
     setLocationState("all");
+
     setCountryState("all");
+
     setStageState("all");
 
     replaceParams({
       q: null,
+
       course: null,
+
       location: null,
+
       country: null,
+
       stage: null,
     });
   };
@@ -362,7 +447,7 @@ export function AttributionWorkspace({
         </div>
       )}
 
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-6">
+      <div className="attribution-kpis grid gap-4 sm:grid-cols-2 xl:grid-cols-6">
         <Metric
           label="Leads"
           value={metrics.total.toLocaleString("en-IN")}
@@ -430,8 +515,8 @@ export function AttributionWorkspace({
         />
       </div>
 
-      <section className="card mt-4 overflow-hidden">
-        <div className="border-b border-slate-100 p-4">
+      <section className="attribution-workbench card mt-4 overflow-hidden">
+        <div className="attribution-workbench-head border-b border-slate-100 p-4">
           <div className="flex flex-wrap gap-2">
             {models.map((item) => {
               const coverage = coverageByModel.find(
@@ -443,13 +528,13 @@ export function AttributionWorkspace({
                   key={item.value}
                   type="button"
                   onClick={() => setModel(item.value)}
-                  className={`rounded-xl border px-3 py-2 text-left transition ${
+                  className={`attribution-model-tab rounded-xl border px-3 py-2 text-left transition ${
                     model === item.value
                       ? "border-brand/20 bg-brand/[0.06] text-brand shadow-sm"
                       : "border-slate-200 bg-white text-slate-600 hover:border-slate-300"
                   }`}
                 >
-                  <div className="text-xs font-black">{item.label}</div>
+                  <div className="text-xs font-semibold">{item.label}</div>
 
                   <div className="mt-0.5 text-[9px] font-semibold opacity-70">
                     {coverage
@@ -461,8 +546,8 @@ export function AttributionWorkspace({
             })}
           </div>
 
-          <div className="mt-4 rounded-xl border border-slate-100 bg-slate-50 px-4 py-3">
-            <div className="text-xs font-black uppercase tracking-[.08em] text-slate-400">
+          <div className="attribution-model-note mt-4 rounded-xl border border-slate-100 bg-slate-50 px-4 py-3">
+            <div className="text-xs font-semibold uppercase tracking-[.08em] text-slate-400">
               {activeModel.label}
             </div>
 
@@ -471,7 +556,7 @@ export function AttributionWorkspace({
             </div>
           </div>
 
-          <div className="mt-4 flex flex-col gap-3 xl:flex-row xl:items-center">
+          <div className="attribution-filterbar mt-4 flex flex-col gap-3 xl:flex-row xl:items-center">
             <div className="flex min-w-0 flex-1 items-center rounded-xl border border-slate-200 bg-slate-50 px-3 transition focus-within:border-brand/30 focus-within:bg-white focus-within:ring-4 focus-within:ring-brand/5">
               <Search size={15} className="shrink-0 text-slate-400" />
 
@@ -552,9 +637,9 @@ export function AttributionWorkspace({
           </div>
         </div>
 
-        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 px-4 py-3">
+        <div className="attribution-table-toolbar flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 px-4 py-3">
           <div>
-            <div className="text-sm font-black text-slate-900">
+            <div className="text-sm font-semibold text-slate-900">
               Attribution performance
             </div>
 
@@ -581,7 +666,7 @@ export function AttributionWorkspace({
         </div>
 
         <div className="overflow-x-auto">
-          <table className="min-w-[1100px] w-full text-left">
+          <table className="attribution-performance-table min-w-[1100px] w-full text-left">
             <thead>
               <tr className="border-b border-slate-200 bg-slate-50/70 text-[10px] uppercase tracking-[0.1em] text-slate-400">
                 <Header>Source / Channel</Header>
@@ -691,8 +776,8 @@ export function AttributionWorkspace({
         </div>
       </section>
 
-      <div className="mt-4 grid gap-4 xl:grid-cols-[1.15fr_.85fr]">
-        <section className="card overflow-hidden">
+      <div className="attribution-insights-grid mt-4 grid gap-4 xl:grid-cols-[1.15fr_.85fr]">
+        <section className="attribution-comparison-card card overflow-hidden">
           <div className="border-b border-slate-100 px-5 py-4">
             <div className="eyebrow">Model comparison</div>
 
@@ -747,7 +832,7 @@ export function AttributionWorkspace({
           </div>
         </section>
 
-        <section className="card-pad">
+        <section className="attribution-coverage-card card-pad">
           <div className="eyebrow">Attribution coverage</div>
 
           <div className="section-title mt-1">How complete is the data?</div>
@@ -765,7 +850,7 @@ export function AttributionWorkspace({
           </div>
 
           <div className="mt-5 rounded-xl border border-amber-100 bg-amber-50 px-4 py-3">
-            <div className="text-xs font-black uppercase tracking-[.08em] text-amber-700">
+            <div className="text-xs font-semibold uppercase tracking-[.08em] text-amber-700">
               Unknown stays unknown
             </div>
 
@@ -777,7 +862,7 @@ export function AttributionWorkspace({
         </section>
       </div>
 
-      <section className="card-pad mt-4">
+      <section className="attribution-journey-card card-pad mt-4">
         <div className="eyebrow">How attribution works</div>
 
         <div className="section-title mt-1">
@@ -815,7 +900,9 @@ export function AttributionWorkspace({
         </div>
 
         <div className="mt-5 rounded-xl border border-brand/10 bg-brand/[.04] p-4">
-          <div className="text-sm font-black text-brand">Attribution rule</div>
+          <div className="text-sm font-semibold text-brand">
+            Attribution rule
+          </div>
 
           <p className="mt-1 text-sm leading-6 text-slate-600">
             A later WhatsApp conversation, Instagram DM, or direct website visit
@@ -847,7 +934,7 @@ function Metric({
   icon: ReactNode;
 }) {
   return (
-    <div className="card-pad transition hover:-translate-y-0.5 hover:shadow-sm">
+    <div className="attribution-metric card-pad transition">
       <div className="flex items-center justify-between gap-3">
         <div className="text-xs font-bold uppercase tracking-[.08em] text-slate-400">
           {label}
@@ -856,7 +943,7 @@ function Metric({
         <span className="text-slate-400">{icon}</span>
       </div>
 
-      <div className="mt-2 text-xl font-black text-slate-950">{value}</div>
+      <div className="mt-2 text-xl font-semibold text-slate-950">{value}</div>
 
       <div className="mt-1 text-[10px] text-slate-400">{note}</div>
     </div>
@@ -869,7 +956,7 @@ function Header({ children }: { children: ReactNode }) {
 
 function MatrixNumber({ value }: { value: number }) {
   return (
-    <td className="px-4 py-3 text-sm font-semibold text-slate-700">
+    <td className="attribution-matrix-number px-4 py-3 text-sm font-semibold text-slate-700">
       {value.toLocaleString("en-IN")}
     </td>
   );
@@ -913,14 +1000,14 @@ function CoverageRow({
           </div>
         </div>
 
-        <div className="text-sm font-black text-slate-800">
+        <div className="text-sm font-semibold text-slate-800">
           {coverage.toFixed(1)}%
         </div>
       </div>
 
-      <div className="h-2 overflow-hidden rounded-full bg-slate-100">
+      <div className="attribution-coverage-track h-2 overflow-hidden rounded-full bg-slate-100">
         <div
-          className="h-full rounded-full bg-brand transition-all duration-500"
+          className="attribution-coverage-fill h-full rounded-full bg-brand transition-all duration-500"
           style={{
             width: `${width}%`,
           }}
@@ -948,16 +1035,16 @@ function JourneyStep({
   note: string;
 }) {
   return (
-    <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+    <div className="attribution-journey-step rounded-2xl border border-slate-200 bg-slate-50 p-4">
       <div className="grid h-10 w-10 place-items-center rounded-xl bg-brand/10 text-brand">
         {icon}
       </div>
 
-      <div className="mt-4 text-[10px] font-black uppercase tracking-[.08em] text-slate-400">
+      <div className="mt-4 text-[10px] font-semibold uppercase tracking-[.08em] text-slate-400">
         {title}
       </div>
 
-      <div className="mt-1 text-base font-black text-slate-900">{value}</div>
+      <div className="mt-1 text-base font-semibold text-slate-900">{value}</div>
 
       <p className="mt-1 text-xs leading-5 text-slate-500">{note}</p>
     </div>

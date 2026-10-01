@@ -1,4 +1,5 @@
 import Link from "next/link";
+import type { ReactNode } from "react";
 
 import {
   AlertTriangle,
@@ -8,6 +9,7 @@ import {
   Clock3,
   ContactRound,
   Flame,
+  ShieldAlert,
 } from "lucide-react";
 
 import { PipelineBoard } from "@/components/pipeline-board";
@@ -15,7 +17,7 @@ import {
   PipelineInsights,
   type PipelineAgingPoint,
 } from "@/components/pipeline-insights";
-import { PageHeader, StatCard } from "@/components/ui";
+import { PageHeader } from "@/components/ui";
 import { getPipelineSnapshot } from "@/lib/pipeline-data";
 
 const activeStages = [
@@ -41,16 +43,13 @@ export default async function PipelinePage() {
 
   const boardLeads = snapshot.boardLeads;
   const activePipeline = snapshot.metrics.activePipeline;
-
   const qualifiedPlus = snapshot.metrics.qualifiedPlus;
   const highIntent = snapshot.metrics.highIntent;
   const paymentPending = snapshot.metrics.paymentPending;
   const enrolled = snapshot.metrics.enrolled;
-
   const stuckLeadCount = snapshot.metrics.stuckLeads;
   const warningLeadCount = snapshot.metrics.warningLeads;
   const medianStageAge = snapshot.metrics.medianStageAgeDays;
-
   const stuckLeads = snapshot.stuckLeads;
 
   const stageCountByStage = new Map(
@@ -80,11 +79,11 @@ export default async function PipelinePage() {
   });
 
   return (
-    <>
+    <div className="pipeline-polish">
       <PageHeader
         eyebrow="Admissions funnel"
         title="Pipeline"
-        description="A live operational view of active leads, including how long each opportunity has remained in its current stage. Drag cards to move stages through the audited workflow."
+        description="Move active opportunities through the admissions journey, watch stage aging, and surface leads that need intervention before they go cold."
         actions={
           <>
             <Link href="/funnel" className="btn-secondary">
@@ -100,175 +99,202 @@ export default async function PipelinePage() {
       />
 
       {snapshot.warning && (
-        <div className="mb-4 rounded-xl border border-amber-100 bg-amber-50 px-4 py-3 text-sm font-medium text-amber-700">
+        <div className="pipeline-warning mb-4">
           Pipeline loaded using the fallback read path: {snapshot.warning}
         </div>
       )}
 
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4 2xl:grid-cols-7">
-        <div className="animate-rise stagger-1">
-          <StatCard
-            label="Active pipeline"
-            value={activePipeline.toLocaleString()}
-            note="open admissions opportunities"
-            icon={<ContactRound size={19} />}
-          />
-        </div>
+      <section className="pipeline-primary-metrics">
+        <PipelineMetricCard
+          icon={<ContactRound size={18} />}
+          label="Active pipeline"
+          value={activePipeline.toLocaleString()}
+          note="Open admissions opportunities"
+        />
 
-        <div className="animate-rise stagger-2">
-          <StatCard
-            label="Qualified+"
-            value={qualifiedPlus.toLocaleString()}
-            note="qualified through enrolled"
-            icon={<BadgeCheck size={19} />}
-          />
-        </div>
+        <PipelineMetricCard
+          icon={<BadgeCheck size={18} />}
+          label="Qualified+"
+          value={qualifiedPlus.toLocaleString()}
+          note="Qualified through enrolled"
+        />
 
-        <div className="animate-rise stagger-3">
-          <StatCard
-            label="High intent"
-            value={highIntent.toLocaleString()}
-            note="strong buying intent"
-            icon={<Flame size={19} />}
-          />
-        </div>
+        <PipelineMetricCard
+          icon={<Flame size={18} />}
+          label="High intent"
+          value={highIntent.toLocaleString()}
+          note="Strong enrollment intent"
+          accent
+        />
 
-        <div className="animate-rise stagger-4">
-          <StatCard
-            label="Payment pending"
-            value={paymentPending.toLocaleString()}
-            note="closest active stage to enrollment"
-            icon={<CircleDollarSign size={19} />}
-          />
-        </div>
+        <PipelineMetricCard
+          icon={<CircleDollarSign size={18} />}
+          label="Payment pending"
+          value={paymentPending.toLocaleString()}
+          note="Closest active stage to enrollment"
+        />
 
-        <div className="animate-rise stagger-5">
-          <StatCard
-            label="Stuck leads"
-            value={stuckLeadCount.toLocaleString()}
-            note={`${warningLeadCount.toLocaleString()} more in warning`}
-            icon={<AlertTriangle size={19} />}
-          />
-        </div>
+        <PipelineMetricCard
+          icon={<BadgeCheck size={18} />}
+          label="Enrolled"
+          value={enrolled.toLocaleString()}
+          note="Successful enrollments"
+        />
+      </section>
 
-        <div className="animate-rise stagger-5">
-          <StatCard
-            label="Median stage age"
-            value={formatAge(medianStageAge)}
-            note="across active pipeline"
-            icon={<Clock3 size={19} />}
-          />
-        </div>
+      <section className="pipeline-health-strip">
+        <PipelineHealthMetric
+          icon={<AlertTriangle size={16} />}
+          label="Stuck leads"
+          value={stuckLeadCount.toLocaleString()}
+          note="Beyond stage threshold"
+          tone={stuckLeadCount > 0 ? "danger" : "neutral"}
+        />
 
-        <div className="animate-rise stagger-5">
-          <StatCard
-            label="Enrolled"
-            value={enrolled.toLocaleString()}
-            note="closed successful enrollments"
-            icon={<BadgeCheck size={19} />}
-          />
-        </div>
-      </div>
+        <PipelineHealthMetric
+          icon={<ShieldAlert size={16} />}
+          label="Warning"
+          value={warningLeadCount.toLocaleString()}
+          note="Approaching threshold"
+          tone={warningLeadCount > 0 ? "warning" : "neutral"}
+        />
 
-      <div className="mt-4 animate-rise stagger-2">
+        <PipelineHealthMetric
+          icon={<Clock3 size={16} />}
+          label="Median stage age"
+          value={formatAge(medianStageAge)}
+          note="Across active pipeline"
+          tone="neutral"
+        />
+      </section>
+
+      <div className="mt-4">
         <PipelineInsights data={insightData} agingData={agingInsightData} />
       </div>
 
       {stuckLeadCount > 0 && (
-        <section className="card-pad mt-4">
-          <div className="flex flex-wrap items-start justify-between gap-3">
+        <section className="pipeline-stuck-section mt-4">
+          <div className="pipeline-section-heading">
             <div>
               <div className="eyebrow">Needs attention</div>
-
               <div className="section-title mt-1">Most stuck leads</div>
-
               <p className="mt-1 text-xs leading-5 text-slate-400">
                 Leads furthest beyond the configured aging threshold for their
                 current stage.
               </p>
             </div>
 
-            <div className="rounded-xl border border-amber-100 bg-amber-50 px-3 py-2 text-xs font-bold text-amber-700">
-              {stuckLeadCount} stuck
-            </div>
+            <span className="pipeline-stuck-count">
+              {stuckLeadCount.toLocaleString()} stuck
+            </span>
           </div>
 
-          <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-            {stuckLeads
-
-              .slice(
-                0,
-
-                6,
-              )
-
-              .map((lead) => (
-                <Link
-                  key={lead.lead_id}
-                  href={`/leads/${lead.lead_id}`}
-                  className="group rounded-xl border border-slate-100 bg-slate-50/70 p-4 transition hover:-translate-y-0.5 hover:border-amber-200 hover:bg-white hover:shadow-sm"
-                >
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="min-w-0">
-                      <div className="truncate text-sm font-black text-slate-900">
-                        {lead.lead_name || lead.lead_code || "Lead"}
-                      </div>
-
-                      <div className="mt-1 truncate text-[10px] font-semibold text-slate-400">
-                        {lead.course_name || "Course not set"}
-                      </div>
+          <div className="pipeline-stuck-grid">
+            {stuckLeads.slice(0, 6).map((lead) => (
+              <Link
+                key={lead.lead_id}
+                href={`/leads/${lead.lead_id}`}
+                className="pipeline-stuck-card group"
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <div className="pipeline-stuck-name">
+                      {lead.lead_name || lead.lead_code || "Lead"}
                     </div>
-
-                    <span className="rounded-full bg-red-100 px-2 py-1 text-[9px] font-black uppercase text-red-700">
-                      Stuck
-                    </span>
+                    <div className="pipeline-stuck-course">
+                      {lead.course_name || "Course not set"}
+                    </div>
                   </div>
 
-                  <div className="mt-3 flex flex-wrap gap-2 text-[10px] font-bold">
-                    <span className="rounded-lg bg-white px-2 py-1 text-slate-600 ring-1 ring-black/5">
-                      {prettyStage(lead.current_stage)}
+                  <span className="pipeline-danger-badge">Stuck</span>
+                </div>
+
+                <div className="pipeline-stuck-meta">
+                  <span>{prettyStage(lead.current_stage)}</span>
+                  <span className="pipeline-stuck-age">
+                    {formatAge(toNumber(lead.stage_age_days))} in stage
+                  </span>
+
+                  {toNumber(lead.days_over_stuck_threshold) > 0 && (
+                    <span className="pipeline-over-limit">
+                      +{formatAge(toNumber(lead.days_over_stuck_threshold))}{" "}
+                      over limit
                     </span>
+                  )}
+                </div>
 
-                    <span className="rounded-lg bg-red-50 px-2 py-1 text-red-600">
-                      {formatAge(toNumber(lead.stage_age_days))} in stage
-                    </span>
-
-                    {toNumber(lead.days_over_stuck_threshold) > 0 && (
-                      <span className="rounded-lg bg-amber-50 px-2 py-1 text-amber-700">
-                        +{formatAge(toNumber(lead.days_over_stuck_threshold))}{" "}
-                        over limit
-                      </span>
-                    )}
-                  </div>
-
-                  <div className="mt-3 text-[10px] font-bold text-brand opacity-70 transition group-hover:opacity-100">
-                    Open lead →
-                  </div>
-                </Link>
-              ))}
+                <div className="pipeline-open-link">
+                  Open lead <ArrowRight size={12} />
+                </div>
+              </Link>
+            ))}
           </div>
         </section>
       )}
 
       <PipelineBoard leads={boardLeads} />
-    </>
+    </div>
+  );
+}
+
+function PipelineMetricCard({
+  icon,
+  label,
+  value,
+  note,
+  accent = false,
+}: {
+  icon: ReactNode;
+  label: string;
+  value: string;
+  note: string;
+  accent?: boolean;
+}) {
+  return (
+    <div className={`pipeline-metric-card ${accent ? "is-accent" : ""}`}>
+      <div className="pipeline-metric-top">
+        <span className="pipeline-metric-label">{label}</span>
+        <span className="pipeline-metric-icon">{icon}</span>
+      </div>
+      <div className="pipeline-metric-value">{value}</div>
+      <div className="pipeline-metric-note">{note}</div>
+    </div>
+  );
+}
+
+function PipelineHealthMetric({
+  icon,
+  label,
+  value,
+  note,
+  tone,
+}: {
+  icon: ReactNode;
+  label: string;
+  value: string;
+  note: string;
+  tone: "neutral" | "warning" | "danger";
+}) {
+  return (
+    <div className={`pipeline-health-item is-${tone}`}>
+      <span className="pipeline-health-icon">{icon}</span>
+      <div className="min-w-0">
+        <div className="pipeline-health-label">{label}</div>
+        <div className="pipeline-health-note">{note}</div>
+      </div>
+      <div className="pipeline-health-value">{value}</div>
+    </div>
   );
 }
 
 function toNumber(value: number | string | null | undefined) {
   const number = Number(value ?? 0);
-
   return Number.isFinite(number) ? number : 0;
 }
 
 function formatAge(days: number) {
   if (days < 1) {
-    const hours = Math.max(
-      0,
-
-      Math.round(days * 24),
-    );
-
+    const hours = Math.max(0, Math.round(days * 24));
     return `${hours}h`;
   }
 
@@ -281,16 +307,6 @@ function formatAge(days: number) {
 
 function prettyStage(value: string) {
   return value
-
-    .replaceAll(
-      "_",
-
-      " ",
-    )
-
-    .replace(
-      /\b\w/g,
-
-      (letter) => letter.toUpperCase(),
-    );
+    .replaceAll("_", " ")
+    .replace(/\b\w/g, (letter) => letter.toUpperCase());
 }

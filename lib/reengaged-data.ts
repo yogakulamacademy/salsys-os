@@ -62,13 +62,46 @@ type RpcPayload = {
 export async function getReEngagedWorkspace(): Promise<ReEngagedWorkspace> {
   const supabase = await createClient();
 
-  const { data, error } = await supabase.rpc("get_reengaged_workspace");
+  /*
+   * Primary path:
+   * one compact RPC returning recently active CRM leads
+   * + temperature summary
+   * + conversion visit distribution.
+   */
+  const v2Result = await supabase.rpc("get_reengaged_workspace_v2");
 
-  if (!error) {
-    const payload = (data ?? {}) as RpcPayload;
+  if (!v2Result.error) {
+    const payload = (v2Result.data ?? {}) as RpcPayload;
 
     return {
       leads: Array.isArray(payload.leads) ? payload.leads : [],
+      summary: Array.isArray(payload.summary) ? payload.summary : [],
+      distribution: Array.isArray(payload.distribution)
+        ? payload.distribution
+        : [],
+      fallback: false,
+      warning: null,
+    };
+  }
+
+  /*
+   * Compatibility path:
+   * preserve the current working optimized RPC if v2 has not been
+   * installed yet or becomes temporarily unavailable.
+   */
+  const legacyRpcResult = await supabase.rpc("get_reengaged_workspace");
+
+  if (!legacyRpcResult.error) {
+    const payload = (legacyRpcResult.data ?? {}) as RpcPayload;
+
+    const activeResult = await getRecentlyActiveLeads(supabase);
+
+    return {
+      leads: activeResult.error
+        ? Array.isArray(payload.leads)
+          ? payload.leads
+          : []
+        : ((activeResult.data ?? []) as JourneyLeadRow[]),
 
       summary: Array.isArray(payload.summary) ? payload.summary : [],
 
@@ -76,22 +109,67 @@ export async function getReEngagedWorkspace(): Promise<ReEngagedWorkspace> {
         ? payload.distribution
         : [],
 
-      fallback: false,
-      warning: null,
+      fallback: true,
+
+      warning: activeResult.error
+        ? `Recently active lead read unavailable: ${activeResult.error.message}. Showing the existing strict re-engaged queue.`
+        : `Recently active leads are using the compatibility read because get_reengaged_workspace_v2 is unavailable: ${v2Result.error.message}`,
     };
   }
 
   /*
-   * Safe fallback:
-   * preserve the current three-query read path if the new
-   * compact workspace RPC is temporarily unavailable.
+   * Final safe fallback:
+   * use the existing reporting views directly.
    */
-  const [reengagedResult, summaryResult, distributionResult] =
-    await Promise.all([
-      supabase
-        .from("v_reengaged_leads")
-        .select(
-          `
+  const [activeResult, summaryResult, distributionResult] = await Promise.all([
+    getRecentlyActiveLeads(supabase),
+
+    supabase.from("v_lead_temperature_summary").select(`
+      behaviour_temperature,
+      lead_count,
+      reengaged_count,
+      active_7d_count,
+      avg_engagement_score
+    `),
+
+    supabase.from("v_conversion_visit_distribution").select(`
+      visit_bucket,
+      lead_count,
+      avg_visit_number,
+      avg_days_to_lead
+    `),
+  ]);
+
+  const errors = [
+    activeResult.error,
+    summaryResult.error,
+    distributionResult.error,
+  ].filter(Boolean);
+
+  if (errors.length > 0) {
+    throw new Error(
+      `Unable to load lead activity workspace: ${errors
+        .map((item) => item?.message)
+        .join(" | ")}`,
+    );
+  }
+
+  return {
+    leads: (activeResult.data ?? []) as JourneyLeadRow[],
+    summary: (summaryResult.data ?? []) as TemperatureSummaryRow[],
+    distribution: (distributionResult.data ?? []) as VisitDistributionRow[],
+    fallback: true,
+    warning: `Optimized lead activity read models unavailable: ${v2Result.error.message} | ${legacyRpcResult.error.message}`,
+  };
+}
+
+function getRecentlyActiveLeads(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+) {
+  return supabase
+    .from("v_lead_journey_intelligence")
+    .select(
+      `
         lead_id,
         lead_code,
         lead_name,
@@ -115,47 +193,18 @@ export async function getReEngagedWorkspace(): Promise<ReEngagedWorkspace> {
         is_reengaged,
         has_returned_after_becoming_lead
       `,
-        )
-        .limit(250),
-
-      supabase.from("v_lead_temperature_summary").select(`
-        behaviour_temperature,
-        lead_count,
-        reengaged_count,
-        active_7d_count,
-        avg_engagement_score
-      `),
-
-      supabase.from("v_conversion_visit_distribution").select(`
-        visit_bucket,
-        lead_count,
-        avg_visit_number,
-        avg_days_to_lead
-      `),
-    ]);
-
-  const errors = [
-    reengagedResult.error,
-    summaryResult.error,
-    distributionResult.error,
-  ].filter(Boolean);
-
-  if (errors.length > 0) {
-    throw new Error(
-      `Unable to load re-engaged leads: ${errors
-        .map((item) => item?.message)
-        .join(" | ")}`,
-    );
-  }
-
-  return {
-    leads: (reengagedResult.data ?? []) as JourneyLeadRow[],
-
-    summary: (summaryResult.data ?? []) as TemperatureSummaryRow[],
-
-    distribution: (distributionResult.data ?? []) as VisitDistributionRow[],
-
-    fallback: true,
-    warning: `Optimized re-engaged read model unavailable: ${error.message}`,
-  };
+    )
+    .or(
+      [
+        "sessions_7d.gt.0",
+        "page_views_7d.gt.0",
+        "high_intent_events_7d.gt.0",
+        "is_reengaged.eq.true",
+      ].join(","),
+    )
+    .order("last_visit_at", {
+      ascending: false,
+      nullsFirst: false,
+    })
+    .limit(250);
 }

@@ -45,14 +45,14 @@ export default async function TrackingPage() {
     : 0;
 
   return (
-    <>
+    <div className="tracking-polish">
       <PageHeader
         eyebrow="First-party measurement"
         title="Tracking"
         description="Monitor the first-party tracking layer, verify anonymous visitor → CRM lead linking, and keep the installation, consent and CTA snippets in one operational reference."
       />
 
-      <section className="mb-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+      <section className="tracking-status-card mb-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
         <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
           <div>
             <div className="eyebrow">Tracking status</div>
@@ -106,7 +106,7 @@ export default async function TrackingPage() {
         </div>
       </section>
 
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+      <div className="tracking-stat-grid grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         <StatCard
           label="Events · 24h"
           value={health.events24h.toLocaleString()}
@@ -136,7 +136,7 @@ export default async function TrackingPage() {
         />
       </div>
 
-      <div className="mt-4 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+      <div className="tracking-stat-grid mt-4 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         <StatCard
           label="Website enquiries · 24h"
           value={capture.submissions24h.toLocaleString()}
@@ -168,7 +168,7 @@ export default async function TrackingPage() {
         />
       </div>
 
-      <section className="card-pad mt-4">
+      <section className="tracking-journey-card card-pad mt-4">
         <div className="flex flex-col gap-3 xl:flex-row xl:items-end xl:justify-between">
           <div>
             <div className="eyebrow">7-day browser journey</div>
@@ -184,12 +184,12 @@ export default async function TrackingPage() {
             </p>
           </div>
 
-          <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
-            <div className="text-[10px] font-black uppercase tracking-[.08em] text-slate-400">
+          <div className="tracking-completion-card rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
+            <div className="text-[10px] font-semibold uppercase tracking-[.08em] text-slate-400">
               Form completion
             </div>
 
-            <div className="mt-1 text-xl font-black text-slate-900">
+            <div className="mt-1 text-xl font-semibold text-slate-900">
               {formCompletionRate.toFixed(1)}%
             </div>
           </div>
@@ -229,7 +229,7 @@ export default async function TrackingPage() {
       </section>
 
       <div className="mt-4 grid gap-4 xl:grid-cols-[1.08fr_.92fr]">
-        <div className="card-pad">
+        <div className="tracking-install-card card-pad">
           <div className="flex items-start justify-between gap-4">
             <div>
               <div className="eyebrow">Website installation</div>
@@ -271,7 +271,7 @@ export default async function TrackingPage() {
           </div>
         </div>
 
-        <div className="card-pad">
+        <div className="tracking-capture-card card-pad">
           <div className="eyebrow">Capture model</div>
 
           <div className="section-title mt-1">What gets recorded</div>
@@ -316,9 +316,11 @@ export default async function TrackingPage() {
             ].map(([title, text]) => (
               <div
                 key={title}
-                className="rounded-xl border border-slate-200 p-4 transition hover:border-slate-300 hover:bg-slate-50/50"
+                className="tracking-capture-item rounded-xl border border-slate-200 p-4 transition"
               >
-                <div className="text-sm font-bold text-slate-800">{title}</div>
+                <div className="text-sm font-semibold text-slate-800">
+                  {title}
+                </div>
 
                 <div className="mt-1 text-xs leading-5 text-slate-500">
                   {text}
@@ -343,13 +345,11 @@ export default async function TrackingPage() {
             </>
           }
           code={`<form method="post" data-yk-lead-form>
-
   ...your existing fields...
-
 </form>`}
         />
 
-        <div className="card-pad">
+        <div className="tracking-server-card card-pad">
           <div className="flex items-start justify-between gap-4">
             <div>
               <div className="eyebrow">Server endpoint</div>
@@ -371,18 +371,18 @@ export default async function TrackingPage() {
             secret in JavaScript, GTM or HTML.
           </p>
 
-          <div className="mt-4 rounded-xl bg-emerald-50 p-4 text-xs leading-5 text-emerald-800">
+          <div className="tracking-server-note mt-4 rounded-xl bg-emerald-50 p-4 text-xs leading-5 text-emerald-800">
             Duplicate submissions are idempotent, and repeat enquiries with the
             same email/phone are matched to the existing CRM lead instead of
             creating another lead.
           </div>
 
-          <div className="mt-4 rounded-xl border border-slate-200 p-4">
-            <div className="text-xs font-black uppercase tracking-[.08em] text-slate-400">
+          <div className="tracking-handoff-card mt-4 rounded-xl border border-slate-200 p-4">
+            <div className="text-xs font-semibold uppercase tracking-[.08em] text-slate-400">
               Identity handoff
             </div>
 
-            <div className="mt-3 flex flex-wrap items-center gap-2 text-xs font-bold text-slate-700">
+            <div className="mt-3 flex flex-wrap items-center gap-2 text-xs font-semibold text-slate-700">
               <Pill>Anonymous visitor</Pill>
 
               <span className="text-slate-300">→</span>
@@ -408,15 +408,10 @@ export default async function TrackingPage() {
           title="Track important CTA clicks"
           description="Add data attributes to important links. The tracker records the click and keeps the destination/contact channel in metadata."
           code={`<a href="https://wa.me/..."
-
    data-yk-event="whatsapp_click"
-
    data-yk-channel="whatsapp"
-
    data-yk-label="200H Course WhatsApp">
-
   Enquire on WhatsApp
-
 </a>`}
         />
 
@@ -426,13 +421,9 @@ export default async function TrackingPage() {
           title="Grant analytics consent"
           description="When your cookie-consent system receives analytics consent, dispatch the tracker consent event. Keep the tracker in required-consent mode for production unless your legal/privacy setup intentionally uses another approach."
           code={`window.dispatchEvent(
-
   new CustomEvent('yk:consent', {
-
     detail: { analytics: true }
-
   })
-
 );`}
         />
       </div>
@@ -444,39 +435,24 @@ export default async function TrackingPage() {
           title="Browser debugging helpers"
           description="Use these in DevTools when checking whether the tracker is loaded once, consent is active, and the current visitor/session context exists."
           code={`// Tracker status
-
 window.YKTracking?.status?.();
 
-
-
 // Current visitor + attribution context
-
 window.YKTracking?.context?.();
 
-
-
 // Confirm only one tracker script is installed
-
 [...document.querySelectorAll(
-
   'script[src*="yogakulam-tracker.js"]'
-
 )].map((script) => ({
-
   src: script.src,
-
   endpoint: script.dataset.endpoint,
-
   site: script.dataset.site,
-
   consentMode: script.dataset.consentMode,
-
   debug: script.dataset.debug
-
 }));`}
         />
 
-        <div className="card-pad">
+        <div className="tracking-guardrails-card card-pad">
           <div className="eyebrow">Production guardrails</div>
 
           <div className="section-title mt-1">
@@ -510,7 +486,7 @@ window.YKTracking?.context?.();
           </div>
         </div>
       </div>
-    </>
+    </div>
   );
 }
 
@@ -538,7 +514,9 @@ function HealthBadge({
       : "border-amber-100 bg-amber-50 text-amber-800";
 
   return (
-    <div className={`rounded-xl border px-3 py-2.5 ${stateClass}`}>
+    <div
+      className={`tracking-health-badge rounded-xl border px-3 py-2.5 ${stateClass}`}
+    >
       <div className="flex items-center gap-2">
         {ok ? (
           <CheckCircle2 size={14} />
@@ -548,12 +526,12 @@ function HealthBadge({
           <AlertTriangle size={14} />
         )}
 
-        <span className="text-[10px] font-black uppercase tracking-[.08em]">
+        <span className="text-[10px] font-semibold uppercase tracking-[.08em]">
           {title}
         </span>
       </div>
 
-      <div className="mt-1 text-xs font-bold">{value}</div>
+      <div className="mt-1 text-xs font-semibold">{value}</div>
     </div>
   );
 }
@@ -572,12 +550,12 @@ function JourneyMetric({
   note: string;
 }) {
   return (
-    <div className="rounded-xl border border-slate-200 bg-slate-50/60 p-4">
-      <div className="text-[10px] font-black uppercase tracking-[.08em] text-slate-400">
+    <div className="tracking-journey-metric rounded-xl border border-slate-200 bg-slate-50/60 p-4">
+      <div className="text-[10px] font-semibold uppercase tracking-[.08em] text-slate-400">
         {label}
       </div>
 
-      <div className="mt-2 text-2xl font-black text-slate-900">
+      <div className="mt-2 text-2xl font-semibold text-slate-900">
         {value.toLocaleString("en-IN")}
       </div>
 
@@ -608,7 +586,7 @@ function SnippetCard({
   code: string;
 }) {
   return (
-    <div className="card-pad overflow-hidden">
+    <div className="tracking-snippet-card card-pad overflow-hidden">
       <div className="flex items-start justify-between gap-4">
         <div>
           <div className="eyebrow">{eyebrow}</div>
@@ -623,7 +601,7 @@ function SnippetCard({
 
       <p className="mt-2 text-sm leading-6 text-slate-500">{description}</p>
 
-      <pre className="mt-4 overflow-x-auto rounded-2xl border border-slate-800 bg-slate-950 p-4 text-xs leading-6 text-slate-100 shadow-inner">
+      <pre className="tracking-code-block mt-4 overflow-x-auto rounded-2xl border border-slate-800 bg-slate-950 p-4 text-xs leading-6 text-slate-100">
         <code>{code}</code>
       </pre>
     </div>
@@ -632,7 +610,7 @@ function SnippetCard({
 
 function InlineCode({ children }: { children: React.ReactNode }) {
   return (
-    <code className="rounded bg-slate-100 px-1.5 py-0.5 text-[.9em] font-semibold text-slate-700">
+    <code className="tracking-inline-code rounded bg-slate-100 px-1.5 py-0.5 text-[.9em] font-semibold text-slate-700">
       {children}
     </code>
   );
@@ -640,7 +618,7 @@ function InlineCode({ children }: { children: React.ReactNode }) {
 
 function Pill({ children }: { children: React.ReactNode }) {
   return (
-    <span className="rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-1.5">
+    <span className="tracking-pill rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-1.5">
       {children}
     </span>
   );
@@ -660,8 +638,8 @@ function Guardrail({
   text: string;
 }) {
   return (
-    <div className="rounded-xl border border-slate-200 p-4">
-      <div className="flex items-center gap-2 text-sm font-bold text-slate-800">
+    <div className="tracking-guardrail rounded-xl border border-slate-200 p-4">
+      <div className="flex items-center gap-2 text-sm font-semibold text-slate-800">
         <span className="text-brand">{icon}</span>
 
         {title}
@@ -686,8 +664,8 @@ function Mini({
   text: string;
 }) {
   return (
-    <div className="rounded-xl bg-slate-50 p-4">
-      <div className="flex items-center gap-2 text-sm font-bold text-slate-800">
+    <div className="tracking-mini rounded-xl bg-slate-50 p-4">
+      <div className="flex items-center gap-2 text-sm font-semibold text-slate-800">
         {icon}
 
         {title}

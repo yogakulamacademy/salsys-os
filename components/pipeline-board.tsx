@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+
 import {
   AlertTriangle,
   CheckCircle2,
@@ -10,19 +11,26 @@ import {
   Search,
   SlidersHorizontal,
 } from "lucide-react";
+
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
+
 import { useRouter } from "next/navigation";
 
 import { movePipelineLeadStage } from "@/app/pipeline/actions";
+
 import type { LeadStage } from "@/types/crm";
 
 export type PipelineBoardLead = {
   id: string;
+
   name: string;
+
   stage: LeadStage;
 
   country: string;
+
   location: string;
+
   course: string;
 
   currentContactChannel: string;
@@ -32,6 +40,7 @@ export type PipelineBoardLead = {
   stageEnteredAt: string | null;
 
   stageAgeHours: number;
+
   stageAgeDays: number;
 
   warningAfterDays: number | null;
@@ -45,30 +54,42 @@ export type PipelineBoardLead = {
 
 const columns: Array<{
   stage: LeadStage;
+
   label: string;
 }> = [
   {
     stage: "new",
+
     label: "New",
   },
+
   {
     stage: "contacted",
+
     label: "Contacted",
   },
+
   {
     stage: "engaged",
+
     label: "Engaged",
   },
+
   {
     stage: "qualified",
+
     label: "Qualified",
   },
+
   {
     stage: "high_intent",
+
     label: "High Intent",
   },
+
   {
     stage: "payment_pending",
+
     label: "Payment Pending",
   },
 ];
@@ -78,10 +99,12 @@ type AgingFilter = "all" | "healthy" | "warning" | "stuck" | "untracked";
 type Toast =
   | {
       type: "success";
+
       message: string;
     }
   | {
       type: "error";
+
       message: string;
     };
 
@@ -119,6 +142,7 @@ export function PipelineBoard({ leads }: { leads: PipelineBoardLead[] }) {
           items.map((lead) => lead.currentContactChannel).filter(Boolean),
         ),
       ).sort(),
+
     [items],
   );
 
@@ -145,14 +169,22 @@ export function PipelineBoard({ leads }: { leads: PipelineBoardLead[] }) {
 
       return [
         lead.name,
+
         lead.course,
+
         lead.country,
+
         lead.location,
+
         lead.currentContactChannel,
+
         lead.agingStatus,
       ]
+
         .join(" ")
+
         .toLowerCase()
+
         .includes(needle);
     });
   }, [items, query, channel, aging]);
@@ -171,6 +203,7 @@ export function PipelineBoard({ leads }: { leads: PipelineBoardLead[] }) {
 
   function handleDragStart(
     event: React.DragEvent<HTMLDivElement>,
+
     leadId: string,
   ) {
     setDraggingId(leadId);
@@ -188,6 +221,7 @@ export function PipelineBoard({ leads }: { leads: PipelineBoardLead[] }) {
 
   function handleDrop(
     event: React.DragEvent<HTMLDivElement>,
+
     newStage: LeadStage,
   ) {
     event.preventDefault();
@@ -219,11 +253,17 @@ export function PipelineBoard({ leads }: { leads: PipelineBoardLead[] }) {
         item.id === leadId
           ? {
               ...item,
+
               stage: newStage,
+
               agingStatus: "healthy",
+
               stageEnteredAt: enteredAt,
+
               stageAgeHours: 0,
+
               stageAgeDays: 0,
+
               daysOverStuckThreshold: 0,
             }
           : item,
@@ -244,6 +284,7 @@ export function PipelineBoard({ leads }: { leads: PipelineBoardLead[] }) {
 
         showToast({
           type: "error",
+
           message: result.error || "Unable to move lead.",
         });
 
@@ -252,6 +293,7 @@ export function PipelineBoard({ leads }: { leads: PipelineBoardLead[] }) {
 
       showToast({
         type: "success",
+
         message: result.mock
           ? "Mock mode: lead moved locally only."
           : `Lead moved to ${formatStage(newStage)}.`,
@@ -264,8 +306,8 @@ export function PipelineBoard({ leads }: { leads: PipelineBoardLead[] }) {
   }
 
   return (
-    <section className="mt-4">
-      <div className="card mb-4 flex flex-col gap-3 p-3 xl:flex-row xl:items-center">
+    <section className="pipeline-board-polish mt-4">
+      <div className="pipeline-board-toolbar card mb-4 flex flex-col gap-3 p-3 xl:flex-row xl:items-center">
         <div className="flex min-w-0 flex-1 items-center rounded-xl border border-slate-200 bg-slate-50 px-3 transition focus-within:border-brand/30 focus-within:bg-white focus-within:ring-4 focus-within:ring-brand/5">
           <Search size={15} className="shrink-0 text-slate-400" />
 
@@ -300,9 +342,13 @@ export function PipelineBoard({ leads }: { leads: PipelineBoardLead[] }) {
             className="input min-w-[150px] !py-2.5"
           >
             <option value="all">All aging</option>
+
             <option value="healthy">Healthy</option>
+
             <option value="warning">Warning</option>
+
             <option value="stuck">Stuck</option>
+
             <option value="untracked">Untracked</option>
           </select>
         </div>
@@ -312,7 +358,7 @@ export function PipelineBoard({ leads }: { leads: PipelineBoardLead[] }) {
         </div>
       </div>
 
-      <div className="mb-3 flex flex-wrap items-center justify-between gap-2 px-1 text-[11px] font-semibold text-slate-400">
+      <div className="pipeline-board-hint mb-3 flex flex-wrap items-center justify-between gap-2 px-1 text-[11px] font-medium text-slate-400">
         <div className="flex items-center gap-2">
           <GripVertical size={14} />
           Drag a lead card to another stage to update it instantly.
@@ -336,7 +382,7 @@ export function PipelineBoard({ leads }: { leads: PipelineBoardLead[] }) {
         </div>
       </div>
 
-      <div className="overflow-x-auto pb-5">
+      <div className="pipeline-board-scroll overflow-x-auto pb-5">
         <div className="grid min-w-[1420px] grid-cols-6 gap-3">
           {columns.map(({ stage, label }, index) => {
             const stageItems = filtered.filter((lead) => lead.stage === stage);
@@ -356,6 +402,7 @@ export function PipelineBoard({ leads }: { leads: PipelineBoardLead[] }) {
                 key={stage}
                 onDragOver={(event) => {
                   event.preventDefault();
+
                   event.dataTransfer.dropEffect = "move";
 
                   setOverStage(stage);
@@ -374,8 +421,9 @@ export function PipelineBoard({ leads }: { leads: PipelineBoardLead[] }) {
                   }
                 }}
                 onDrop={(event) => handleDrop(event, stage)}
-                className={`min-h-[460px] rounded-2xl border p-3 transition-all duration-200 animate-rise stagger-${Math.min(
+                className={`pipeline-stage-column min-h-[460px] rounded-2xl border p-3 transition-all duration-200 animate-rise stagger-${Math.min(
                   index + 1,
+
                   5,
                 )} ${
                   isOver
@@ -396,13 +444,13 @@ export function PipelineBoard({ leads }: { leads: PipelineBoardLead[] }) {
                     {(stageStuck > 0 || stageWarning > 0) && (
                       <div className="mt-1.5 flex flex-wrap gap-1">
                         {stageWarning > 0 && (
-                          <span className="rounded-md bg-amber-100 px-1.5 py-0.5 text-[8px] font-black text-amber-700">
+                          <span className="rounded-md bg-amber-100 px-1.5 py-0.5 text-[8px] font-semibold text-amber-700">
                             {stageWarning} warning
                           </span>
                         )}
 
                         {stageStuck > 0 && (
-                          <span className="rounded-md bg-red-100 px-1.5 py-0.5 text-[8px] font-black text-red-700">
+                          <span className="rounded-md bg-red-100 px-1.5 py-0.5 text-[8px] font-semibold text-red-700">
                             {stageStuck} stuck
                           </span>
                         )}
@@ -410,7 +458,7 @@ export function PipelineBoard({ leads }: { leads: PipelineBoardLead[] }) {
                     )}
                   </div>
 
-                  <span className="rounded-full border border-slate-200 bg-white px-2.5 py-1 text-xs font-black text-slate-600 shadow-sm">
+                  <span className="pipeline-stage-count rounded-full border border-slate-200 bg-white px-2.5 py-1 text-xs font-semibold text-slate-600">
                     {stageItems.length}
                   </span>
                 </div>
@@ -439,7 +487,7 @@ export function PipelineBoard({ leads }: { leads: PipelineBoardLead[] }) {
                         draggable={!isSaving}
                         onDragStart={(event) => handleDragStart(event, lead.id)}
                         onDragEnd={handleDragEnd}
-                        className={`group relative cursor-grab rounded-xl border bg-white p-3.5 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md active:cursor-grabbing ${agingBorderClass(
+                        className={`pipeline-lead-card group relative cursor-grab rounded-xl border bg-white p-3.5 transition-all duration-200 active:cursor-grabbing ${agingBorderClass(
                           lead.agingStatus,
                         )} ${isDragging ? "scale-[.985] opacity-45" : ""}`}
                       >
@@ -461,7 +509,7 @@ export function PipelineBoard({ leads }: { leads: PipelineBoardLead[] }) {
                         >
                           <div className="flex items-start justify-between gap-2">
                             <div className="min-w-0">
-                              <div className="truncate font-semibold text-slate-900">
+                              <div className="pipeline-lead-name truncate font-medium text-slate-900">
                                 {lead.name}
                               </div>
 
@@ -477,7 +525,7 @@ export function PipelineBoard({ leads }: { leads: PipelineBoardLead[] }) {
                             />
                           </div>
 
-                          <div className="mt-3 line-clamp-2 text-xs font-medium leading-5 text-slate-600">
+                          <div className="pipeline-lead-course mt-3 line-clamp-2 text-xs font-normal leading-5 text-slate-600">
                             {lead.course || "Course not set"}
                           </div>
 
@@ -488,6 +536,7 @@ export function PipelineBoard({ leads }: { leads: PipelineBoardLead[] }) {
                               <Clock3 size={10} />
                               {formatStageAge(
                                 lead.stageAgeDays,
+
                                 lead.stageAgeHours,
                               )}{" "}
                               in stage
@@ -495,10 +544,11 @@ export function PipelineBoard({ leads }: { leads: PipelineBoardLead[] }) {
 
                             {lead.agingStatus === "stuck" &&
                               lead.daysOverStuckThreshold > 0 && (
-                                <span className="rounded-lg bg-red-50 px-2 py-1 text-[9px] font-black text-red-600">
+                                <span className="rounded-lg bg-red-50 px-2 py-1 text-[9px] font-semibold text-red-600">
                                   +
                                   {formatStageAge(
                                     lead.daysOverStuckThreshold,
+
                                     lead.daysOverStuckThreshold * 24,
                                   )}{" "}
                                   over
@@ -511,6 +561,7 @@ export function PipelineBoard({ leads }: { leads: PipelineBoardLead[] }) {
                               Last contacted{" "}
                               {formatStageAge(
                                 lead.daysSinceLastContact,
+
                                 lead.daysSinceLastContact * 24,
                               )}{" "}
                               ago
@@ -521,6 +572,7 @@ export function PipelineBoard({ leads }: { leads: PipelineBoardLead[] }) {
                             <span className="rounded-lg bg-slate-50 px-2 py-1 text-[10px] font-bold capitalize text-slate-500">
                               {lead.currentContactChannel?.replaceAll(
                                 "_",
+
                                 " ",
                               ) || "unknown"}
                             </span>
@@ -542,7 +594,7 @@ export function PipelineBoard({ leads }: { leads: PipelineBoardLead[] }) {
 
       {toast && (
         <div
-          className={`fixed bottom-5 right-5 z-[80] flex max-w-sm items-center gap-3 rounded-2xl border px-4 py-3 text-sm font-semibold shadow-xl animate-rise ${
+          className={`pipeline-board-toast fixed bottom-5 right-5 z-[80] flex max-w-sm items-center gap-3 rounded-2xl border px-4 py-3 text-sm font-medium shadow-xl animate-rise ${
             toast.type === "success"
               ? "border-emerald-200 bg-white text-emerald-700"
               : "border-rose-200 bg-white text-rose-700"
@@ -566,7 +618,7 @@ export function PipelineBoard({ leads }: { leads: PipelineBoardLead[] }) {
 function AgingBadge({ lead }: { lead: PipelineBoardLead }) {
   if (lead.agingStatus === "stuck") {
     return (
-      <span className="inline-flex items-center gap-1 rounded-lg bg-red-100 px-2 py-1 text-[9px] font-black uppercase text-red-700">
+      <span className="inline-flex items-center gap-1 rounded-lg bg-red-100 px-2 py-1 text-[9px] font-semibold uppercase text-red-700">
         <AlertTriangle size={10} />
         Stuck
       </span>
@@ -575,7 +627,7 @@ function AgingBadge({ lead }: { lead: PipelineBoardLead }) {
 
   if (lead.agingStatus === "warning") {
     return (
-      <span className="inline-flex items-center gap-1 rounded-lg bg-amber-100 px-2 py-1 text-[9px] font-black uppercase text-amber-700">
+      <span className="inline-flex items-center gap-1 rounded-lg bg-amber-100 px-2 py-1 text-[9px] font-semibold uppercase text-amber-700">
         <AlertTriangle size={10} />
         Warning
       </span>
@@ -584,7 +636,7 @@ function AgingBadge({ lead }: { lead: PipelineBoardLead }) {
 
   if (lead.agingStatus === "healthy") {
     return (
-      <span className="inline-flex items-center gap-1 rounded-lg bg-emerald-100 px-2 py-1 text-[9px] font-black uppercase text-emerald-700">
+      <span className="inline-flex items-center gap-1 rounded-lg bg-emerald-100 px-2 py-1 text-[9px] font-semibold uppercase text-emerald-700">
         <CheckCircle2 size={10} />
         Healthy
       </span>
@@ -592,7 +644,7 @@ function AgingBadge({ lead }: { lead: PipelineBoardLead }) {
   }
 
   return (
-    <span className="rounded-lg bg-slate-100 px-2 py-1 text-[9px] font-black uppercase text-slate-500">
+    <span className="rounded-lg bg-slate-100 px-2 py-1 text-[9px] font-semibold uppercase text-slate-500">
       Untracked
     </span>
   );
@@ -644,6 +696,8 @@ function formatStageAge(days: number, hours: number) {
 
 function formatStage(stage: string) {
   return stage
+
     .replaceAll("_", " ")
+
     .replace(/\b\w/g, (character) => character.toUpperCase());
 }

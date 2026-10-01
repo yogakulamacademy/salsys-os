@@ -21,7 +21,7 @@ import {
   UsersRound,
 } from "lucide-react";
 
-import { DashboardInsights } from "@/components/dashboard-insights";
+import { DashboardVisuals } from "@/components/dashboard-visuals";
 
 import { LeadsTable } from "@/components/leads-table";
 
@@ -1871,7 +1871,15 @@ async function AdminDashboardPage() {
 
           "
         >
-          <DashboardInsights pipeline={pipeline} sources={sources} />
+          <DashboardVisuals
+            pipeline={pipeline}
+            sources={sources}
+            total={total}
+            activePipeline={activePipeline}
+            qualified={qualified}
+            enrolled={counts.enrolled}
+            priority={priorityCount}
+          />
         </div>
 
         <section

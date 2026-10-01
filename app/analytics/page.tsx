@@ -24,12 +24,19 @@ export default async function AnalyticsPage() {
 
   const {
     overview,
+
     sourceRows,
+
     landingRows,
+
     campaignRows,
+
     countryRows,
+
     reconciliation,
+
     health,
+
     syncRuns,
   } = workspace;
 
@@ -55,35 +62,52 @@ export default async function AnalyticsPage() {
       : "Latest 30 synced GA4 days";
 
   return (
-    <>
+    <div className="analytics-polish">
       <PageHeader
+        eyebrow="Website intelligence"
         title="Analytics"
         description="GA4 traffic, first-party CRM tracking, lead conversion and acquisition performance in one view."
       />
 
       {workspace.warning && (
-        <div className="mt-4 rounded-xl border border-amber-100 bg-amber-50 px-4 py-3 text-sm font-medium text-amber-700">
+        <div className="analytics-warning mt-4 rounded-xl border border-amber-100 bg-amber-50 px-4 py-3 text-sm font-medium text-amber-700">
           Analytics loaded through the legacy fallback. {workspace.warning}
         </div>
       )}
 
-      <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-slate-400">
+      <div className="analytics-range-meta mt-3 flex flex-wrap items-center gap-2 text-xs text-slate-400">
         <span
           className="
 
+
+
             rounded-full
+
+
 
             border
 
+
+
             border-slate-200
+
+
 
             bg-white
 
+
+
             px-3
+
+
 
             py-1.5
 
+
+
             font-semibold
+
+
 
           "
         >
@@ -102,11 +126,15 @@ export default async function AnalyticsPage() {
 
       {/* ===================================================
 
+
+
           GA4 OVERVIEW
+
+
 
       =================================================== */}
 
-      <section className="card-pad mt-6">
+      <section className="analytics-ga4-card card-pad mt-6">
         <div className="eyebrow">Website performance</div>
 
         <div className="section-title mt-1">GA4 overview</div>
@@ -114,15 +142,27 @@ export default async function AnalyticsPage() {
         <div
           className="
 
+
+
             mt-5
+
+
 
             grid
 
+
+
             gap-3
+
+
 
             sm:grid-cols-2
 
+
+
             xl:grid-cols-4
+
+
 
           "
         >
@@ -183,11 +223,15 @@ export default async function AnalyticsPage() {
 
       {/* ===================================================
 
+
+
           CRM FUNNEL
+
+
 
       =================================================== */}
 
-      <section className="card-pad mt-4">
+      <section className="analytics-crm-card card-pad mt-4">
         <div className="eyebrow">First-party tracking</div>
 
         <div className="section-title mt-1">CRM website funnel</div>
@@ -195,15 +239,27 @@ export default async function AnalyticsPage() {
         <div
           className="
 
+
+
             mt-5
+
+
 
             grid
 
+
+
             gap-3
+
+
 
             sm:grid-cols-2
 
+
+
             xl:grid-cols-4
+
+
 
           "
         >
@@ -259,11 +315,15 @@ export default async function AnalyticsPage() {
 
       {/* ===================================================
 
+
+
           RECONCILIATION
+
+
 
       =================================================== */}
 
-      <section className="card-pad mt-4">
+      <section className="analytics-reconciliation-card card-pad mt-4">
         <div className="flex items-start justify-between gap-4">
           <div>
             <div className="eyebrow">Reconciliation</div>
@@ -277,13 +337,23 @@ export default async function AnalyticsPage() {
         <div
           className="
 
+
+
             mt-5
+
+
 
             grid
 
+
+
             gap-3
 
+
+
             md:grid-cols-3
+
+
 
           "
         >
@@ -319,8 +389,8 @@ export default async function AnalyticsPage() {
           />
         </div>
 
-        <div className="mt-5 overflow-x-auto">
-          <table className="min-w-full text-left text-sm">
+        <div className="analytics-table-wrap mt-5 overflow-x-auto">
+          <table className="analytics-data-table min-w-full text-left text-sm">
             <thead>
               <tr className="border-b border-slate-100 text-xs uppercase tracking-wide text-slate-400">
                 <th className="px-3 py-3">Date</th>
@@ -379,7 +449,7 @@ export default async function AnalyticsPage() {
                       {formatNumber(row.crm_form_submits)}
                     </td>
 
-                    <td className="px-3 py-3 text-right font-bold text-slate-800">
+                    <td className="px-3 py-3 text-right font-semibold text-slate-800">
                       {formatNumber(row.crm_web_leads)}
                     </td>
                   </tr>
@@ -391,19 +461,23 @@ export default async function AnalyticsPage() {
 
       {/* ===================================================
 
+
+
           SOURCE / MEDIUM
+
+
 
       =================================================== */}
 
-      <section className="card-pad mt-4">
+      <section className="analytics-table-card analytics-source-card card-pad mt-4">
         <div>
           <div className="eyebrow">Acquisition</div>
 
           <div className="section-title mt-1">Source / medium performance</div>
         </div>
 
-        <div className="mt-5 overflow-x-auto">
-          <table className="min-w-full text-left text-sm">
+        <div className="analytics-table-wrap mt-5 overflow-x-auto">
+          <table className="analytics-data-table min-w-full text-left text-sm">
             <thead>
               <tr className="border-b border-slate-100 text-xs uppercase tracking-wide text-slate-400">
                 <th className="px-3 py-3">Source / medium</th>
@@ -450,7 +524,7 @@ export default async function AnalyticsPage() {
                     {formatNumber(row.engaged)}
                   </td>
 
-                  <td className="px-3 py-3 text-right font-bold text-slate-800">
+                  <td className="px-3 py-3 text-right font-semibold text-slate-800">
                     {formatNumber(row.leads)}
                   </td>
 
@@ -492,19 +566,23 @@ export default async function AnalyticsPage() {
 
       {/* ===================================================
 
+
+
           LANDING PAGES
+
+
 
       =================================================== */}
 
-      <section className="card-pad mt-4">
+      <section className="analytics-table-card analytics-landing-card card-pad mt-4">
         <div>
           <div className="eyebrow">Content</div>
 
           <div className="section-title mt-1">Landing page performance</div>
         </div>
 
-        <div className="mt-5 overflow-x-auto">
-          <table className="min-w-full text-left text-sm">
+        <div className="analytics-table-wrap mt-5 overflow-x-auto">
+          <table className="analytics-data-table min-w-full text-left text-sm">
             <thead>
               <tr className="border-b border-slate-100 text-xs uppercase tracking-wide text-slate-400">
                 <th className="px-3 py-3">Landing page</th>
@@ -543,7 +621,7 @@ export default async function AnalyticsPage() {
                     {formatNumber(row.engaged)}
                   </td>
 
-                  <td className="px-3 py-3 text-right font-bold text-slate-800">
+                  <td className="px-3 py-3 text-right font-semibold text-slate-800">
                     {formatNumber(row.leads)}
                   </td>
 
@@ -569,20 +647,34 @@ export default async function AnalyticsPage() {
 
       {/* ===================================================
 
+
+
           CAMPAIGNS / COUNTRIES
+
+
 
       =================================================== */}
 
       <div
         className="
 
+
+
           mt-4
+
+
 
           grid
 
+
+
           gap-4
 
+
+
           xl:grid-cols-2
+
+
 
         "
       >
@@ -621,11 +713,15 @@ export default async function AnalyticsPage() {
 
       {/* ===================================================
 
+
+
           SYNC HEALTH
+
+
 
       =================================================== */}
 
-      <section className="card-pad mt-4">
+      <section className="analytics-sync-card card-pad mt-4">
         <div className="flex items-start justify-between gap-4">
           <div>
             <div className="eyebrow">Data health</div>
@@ -639,15 +735,27 @@ export default async function AnalyticsPage() {
         <div
           className="
 
+
+
             mt-5
+
+
 
             grid
 
+
+
             gap-3
+
+
 
             sm:grid-cols-2
 
+
+
             xl:grid-cols-4
+
+
 
           "
         >
@@ -684,8 +792,8 @@ export default async function AnalyticsPage() {
           />
         </div>
 
-        <div className="mt-5 overflow-x-auto">
-          <table className="min-w-full text-left text-sm">
+        <div className="analytics-table-wrap mt-5 overflow-x-auto">
+          <table className="analytics-data-table min-w-full text-left text-sm">
             <thead>
               <tr className="border-b border-slate-100 text-xs uppercase tracking-wide text-slate-400">
                 <th className="px-3 py-3">Status</th>
@@ -739,25 +847,47 @@ export default async function AnalyticsPage() {
       <div
         className="
 
+
+
           mt-4
+
+
 
           rounded-xl
 
+
+
           border
+
+
 
           border-slate-100
 
+
+
           bg-slate-50
+
+
 
           px-4
 
+
+
           py-3
+
+
 
           text-xs
 
+
+
           leading-5
 
+
+
           text-slate-500
+
+
 
         "
       >
@@ -766,15 +896,19 @@ export default async function AnalyticsPage() {
         can create legitimate differences. Use reconciliation to identify
         meaningful gaps rather than expecting a 100% match.
       </div>
-    </>
+    </div>
   );
 }
 
 /* =========================================================
 
+
+
    COMPONENTS
 
-========================================================= */
+
+
+\========================================================= */
 
 function MetricCard({
   icon,
@@ -794,14 +928,14 @@ function MetricCard({
   sub?: string;
 }) {
   return (
-    <div className="rounded-xl bg-slate-50 p-4">
+    <div className="analytics-metric-card rounded-xl bg-slate-50 p-4">
       <div className="flex items-center gap-2 text-xs font-semibold text-slate-400">
         {icon}
 
         {label}
       </div>
 
-      <div className="mt-2 text-xl font-bold text-slate-800">{value}</div>
+      <div className="mt-2 text-xl font-semibold text-slate-800">{value}</div>
 
       {sub && (
         <div className="mt-1 text-[11px] leading-4 text-slate-400">{sub}</div>
@@ -839,19 +973,31 @@ function ComparisonCard({
     <div
       className="
 
+
+
         rounded-xl
+
+
 
         border
 
+
+
         border-slate-100
+
+
 
         bg-slate-50
 
+
+
         p-4
+
+
 
       "
     >
-      <div className="text-xs font-bold uppercase tracking-wide text-slate-400">
+      <div className="text-xs font-semibold uppercase tracking-wide text-slate-400">
         {label}
       </div>
 
@@ -859,7 +1005,7 @@ function ComparisonCard({
         <div>
           <div className="text-[11px] text-slate-400">{leftLabel}</div>
 
-          <div className="mt-1 text-lg font-bold text-slate-800">
+          <div className="mt-1 text-lg font-semibold text-slate-800">
             {leftValue}
           </div>
         </div>
@@ -867,7 +1013,7 @@ function ComparisonCard({
         <div>
           <div className="text-[11px] text-slate-400">{rightLabel}</div>
 
-          <div className="mt-1 text-lg font-bold text-slate-800">
+          <div className="mt-1 text-lg font-semibold text-slate-800">
             {rightValue}
           </div>
         </div>
@@ -900,7 +1046,7 @@ function CompactTableCard({
   rows: string[][];
 }) {
   return (
-    <section className="card-pad">
+    <section className="analytics-compact-card card-pad">
       <div className="flex items-start justify-between gap-4">
         <div>
           <div className="eyebrow">{eyebrow}</div>
@@ -911,8 +1057,8 @@ function CompactTableCard({
         <div className="text-slate-400">{icon}</div>
       </div>
 
-      <div className="mt-5 overflow-x-auto">
-        <table className="min-w-full text-left text-sm">
+      <div className="analytics-table-wrap mt-5 overflow-x-auto">
+        <table className="analytics-data-table min-w-full text-left text-sm">
           <thead>
             <tr className="border-b border-slate-100 text-xs uppercase tracking-wide text-slate-400">
               {headers.map(
@@ -998,19 +1144,37 @@ function StatusBadge({ status }: { status: string }) {
     <span
       className={`
 
+
+
+        analytics-status-badge
+
         inline-flex
+
+
 
         rounded-full
 
+
+
         px-2.5
+
+
 
         py-1
 
+
+
         text-xs
 
-        font-bold
+
+
+        font-semibold
+
+
 
         ${className}
+
+
 
       `}
     >
@@ -1021,9 +1185,13 @@ function StatusBadge({ status }: { status: string }) {
 
 /* =========================================================
 
+
+
    HELPERS
 
-========================================================= */
+
+
+\========================================================= */
 
 function toNumber(value: number | string | null | undefined) {
   const number = Number(value ?? 0);

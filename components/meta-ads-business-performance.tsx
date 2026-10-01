@@ -271,7 +271,7 @@ export function MetaAdsBusinessPerformance({
   );
 
   return (
-    <section className="card-pad mt-4">
+    <section className="funnel-paid-card funnel-meta-card card-pad mt-4">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <div className="eyebrow">Paid media business attribution</div>
@@ -286,7 +286,7 @@ export function MetaAdsBusinessPerformance({
           </p>
         </div>
 
-        <div className="rounded-full bg-slate-100 px-3 py-1.5 text-xs font-bold text-slate-600">
+        <div className="funnel-paid-range rounded-full bg-slate-100 px-3 py-1.5 text-xs font-semibold text-slate-600">
           {formatDate(overview.start_date)}
 
           {" → "}
@@ -374,11 +374,11 @@ export function MetaAdsBusinessPerformance({
       </div>
 
       <div className="mt-5 grid gap-4 xl:grid-cols-[.75fr_1.25fr]">
-        <div className="rounded-xl border border-slate-100 bg-slate-50 p-4">
+        <div className="funnel-paid-coverage rounded-xl border border-slate-100 bg-slate-50 p-4">
           <div className="flex items-center gap-2">
             <Link2 size={16} className="text-slate-400" />
 
-            <div className="text-sm font-bold text-slate-800">
+            <div className="text-sm font-semibold text-slate-800">
               Attribution coverage
             </div>
           </div>
@@ -422,19 +422,19 @@ export function MetaAdsBusinessPerformance({
 
           <div className="mt-4 rounded-lg bg-white px-3 py-2.5 text-xs leading-5 text-slate-500">
             Paid-lead campaign-ID coverage:{" "}
-            <strong className="font-bold text-slate-700">
+            <strong className="font-semibold text-slate-700">
               {leadIdCoverage}
             </strong>
             . Real campaign-ID match coverage:{" "}
-            <strong className="font-bold text-slate-700">
+            <strong className="font-semibold text-slate-700">
               {campaignMatchCoverage}
             </strong>
             .
           </div>
         </div>
 
-        <div className="rounded-xl border border-slate-100 bg-white p-4">
-          <div className="text-sm font-bold text-slate-800">
+        <div className="funnel-paid-match rounded-xl border border-slate-100 bg-white p-4">
+          <div className="text-sm font-semibold text-slate-800">
             Captured ID matching
           </div>
 
@@ -467,7 +467,7 @@ export function MetaAdsBusinessPerformance({
       </div>
 
       <div className="mt-6">
-        <div className="text-sm font-bold text-slate-800">
+        <div className="text-sm font-semibold text-slate-800">
           Campaign business performance
         </div>
 
@@ -476,8 +476,8 @@ export function MetaAdsBusinessPerformance({
           and revenue come from the CRM.
         </p>
 
-        <div className="mt-3 overflow-x-auto">
-          <table className="min-w-[1180px] text-left text-xs">
+        <div className="funnel-paid-table-wrap mt-3 overflow-x-auto">
+          <table className="funnel-paid-table min-w-[1180px] text-left text-xs">
             <thead>
               <tr className="border-b border-slate-100 uppercase tracking-wide text-slate-400">
                 <th className="px-2 py-2.5">Campaign</th>
@@ -536,6 +536,7 @@ export function MetaAdsBusinessPerformance({
                     <td className="px-2 py-3 text-right font-semibold text-slate-700">
                       {formatCurrency(
                         row.spend,
+
                         row.currency_code || adsCurrency,
                       )}
                     </td>
@@ -544,7 +545,7 @@ export function MetaAdsBusinessPerformance({
                       {formatNumber(row.clicks)}
                     </td>
 
-                    <td className="px-2 py-3 text-right font-bold text-slate-800">
+                    <td className="px-2 py-3 text-right font-semibold text-slate-800">
                       {formatNumber(row.crm_leads)}
                     </td>
 
@@ -565,6 +566,7 @@ export function MetaAdsBusinessPerformance({
                         ? "—"
                         : formatCurrency(
                             row.cpl,
+
                             row.currency_code || adsCurrency,
                           )}
                     </td>
@@ -574,6 +576,7 @@ export function MetaAdsBusinessPerformance({
                         ? "—"
                         : formatCurrency(
                             row.cac,
+
                             row.currency_code || adsCurrency,
                           )}
                     </td>
@@ -586,7 +589,7 @@ export function MetaAdsBusinessPerformance({
                       {formatCurrency(row.crm_revenue_usd, "USD")}
                     </td>
 
-                    <td className="px-2 py-3 text-right font-bold text-slate-800">
+                    <td className="px-2 py-3 text-right font-semibold text-slate-800">
                       {row.roas == null
                         ? "—"
                         : `${formatDecimal(row.roas, 2)}×`}
@@ -666,14 +669,14 @@ function MetricCard({
   sub: string;
 }) {
   return (
-    <div className="rounded-xl border border-slate-100 bg-white p-4">
+    <div className="funnel-paid-metric rounded-xl border border-slate-100 bg-white p-4">
       <div className="flex items-center gap-2 text-xs font-semibold text-slate-400">
         {icon}
 
         {label}
       </div>
 
-      <div className="mt-2 text-xl font-bold text-slate-800">{value}</div>
+      <div className="mt-2 text-xl font-semibold text-slate-800">{value}</div>
 
       <div className="mt-1 text-[11px] text-slate-400">{sub}</div>
     </div>
@@ -690,10 +693,10 @@ function CoverageLine({
   value: number | string | null;
 }) {
   return (
-    <div className="flex items-center justify-between gap-4 rounded-lg bg-white px-3 py-2.5">
+    <div className="funnel-coverage-line flex items-center justify-between gap-4 rounded-lg bg-white px-3 py-2.5">
       <span className="text-xs font-medium text-slate-500">{label}</span>
 
-      <span className="text-xs font-bold text-slate-800">
+      <span className="text-xs font-semibold text-slate-800">
         {formatNumber(value)}
       </span>
     </div>
@@ -718,10 +721,10 @@ function MatchCard({
   const matchedNumber = numberValue(matched);
 
   return (
-    <div className="rounded-xl bg-slate-50 p-4">
+    <div className="funnel-match-card rounded-xl bg-slate-50 p-4">
       <div className="text-xs font-semibold text-slate-400">{label}</div>
 
-      <div className="mt-2 text-lg font-bold text-slate-800">
+      <div className="mt-2 text-lg font-semibold text-slate-800">
         {matchedNumber}
 
         <span className="text-sm font-semibold text-slate-400">
@@ -768,11 +771,11 @@ function SmallPerformanceTable({
   }>;
 }) {
   return (
-    <div className="rounded-xl border border-slate-100 bg-white p-4">
-      <div className="text-sm font-bold text-slate-800">{title}</div>
+    <div className="funnel-small-table-card rounded-xl border border-slate-100 bg-white p-4">
+      <div className="text-sm font-semibold text-slate-800">{title}</div>
 
-      <div className="mt-3 overflow-x-auto">
-        <table className="min-w-full text-left text-xs">
+      <div className="funnel-paid-table-wrap mt-3 overflow-x-auto">
+        <table className="funnel-paid-table min-w-full text-left text-xs">
           <thead>
             <tr className="border-b border-slate-100 uppercase tracking-wide text-slate-400">
               <th className="px-2 py-2.5">Name</th>
@@ -825,7 +828,7 @@ function SmallPerformanceTable({
                     {formatNumber(row.enrolled)}
                   </td>
 
-                  <td className="px-2 py-2.5 text-right font-bold text-slate-700">
+                  <td className="px-2 py-2.5 text-right font-semibold text-slate-700">
                     {row.roas == null ? "—" : `${formatDecimal(row.roas, 2)}×`}
                   </td>
                 </tr>

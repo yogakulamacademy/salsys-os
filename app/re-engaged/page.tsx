@@ -4,6 +4,8 @@ import Link from "next/link";
 
 import { ArrowRight, Flame, RefreshCw, Target, Users } from "lucide-react";
 
+import { LeadJourneyIntelligence } from "@/components/lead-journey-intelligence";
+
 import { PageHeader } from "@/components/ui";
 
 import { getReEngagedWorkspace } from "@/lib/reengaged-data";
@@ -76,10 +78,57 @@ type VisitDistributionRow = {
   avg_days_to_lead: number | string | null;
 };
 
-export default async function ReEngagedPage() {
+type SearchParams = {
+  lead?: string | string[];
+
+  view?: string | string[];
+};
+
+export default async function ReEngagedPage({
+  searchParams,
+}: {
+  searchParams?: Promise<SearchParams>;
+}) {
+  const resolved = (await searchParams) ?? {};
+
+  const selectedLeadId = one(resolved.lead);
+
   const workspace = await getReEngagedWorkspace();
 
   const { leads, summary, distribution } = workspace;
+
+  const selectedLead = selectedLeadId
+    ? (leads.find((lead) => lead.lead_id === selectedLeadId) ?? null)
+    : null;
+
+  const requestedView = one(resolved.view);
+
+  const activeView = ["all", "reengaged", "hot", "high_intent"].includes(
+    requestedView,
+  )
+    ? requestedView
+    : "all";
+
+  const visibleLeads = leads.filter((lead) => {
+    if (activeView === "reengaged") {
+      return Boolean(lead.is_reengaged);
+    }
+
+    if (activeView === "hot") {
+      return String(lead.behaviour_temperature || "").toLowerCase() === "hot";
+    }
+
+    if (activeView === "high_intent") {
+      return toNumber(lead.high_intent_events_7d) > 0;
+    }
+
+    return true;
+  });
+
+  const totalReengaged = summary.reduce(
+    (total, row) => total + toNumber(row.reengaged_count),
+    0,
+  );
 
   const hot = summary.find((row) => row.behaviour_temperature === "hot");
 
@@ -87,18 +136,16 @@ export default async function ReEngagedPage() {
 
   const cold = summary.find((row) => row.behaviour_temperature === "cold");
 
-  const closed = summary.find((row) => row.behaviour_temperature === "closed");
-
   return (
     <>
       <PageHeader
         title="Re-engaged Leads"
-        description="Old and existing leads who have returned to the website, with behavioural temperature and repeat-visit intent signals."
+        description="Recently active CRM leads, including re-engaged visitors, with website behaviour, repeat visits and high-intent signals."
       />
 
       {workspace.warning && (
         <div className="mt-4 rounded-xl border border-amber-100 bg-amber-50 px-4 py-3 text-sm font-medium text-amber-700">
-          Re-engaged leads loaded through the legacy fallback.{" "}
+          Lead activity workspace loaded through a compatibility fallback.{" "}
           {workspace.warning}
         </div>
       )}
@@ -106,15 +153,27 @@ export default async function ReEngagedPage() {
       <div
         className="
 
+
+
           mt-6
+
+
 
           grid
 
+
+
           gap-3
+
+
 
           sm:grid-cols-2
 
+
+
           xl:grid-cols-4
+
+
 
         "
       >
@@ -141,9 +200,9 @@ export default async function ReEngagedPage() {
 
         <SummaryCard
           icon={<RefreshCw size={18} />}
-          label="Closed"
-          value={formatNumber(closed?.lead_count)}
-          sub={`${formatNumber(closed?.reengaged_count)} showing activity`}
+          label="Re-engaged"
+          value={formatNumber(totalReengaged)}
+          sub="Returned after becoming a lead"
         />
       </div>
 
@@ -157,15 +216,27 @@ export default async function ReEngagedPage() {
         <div
           className="
 
+
+
             mt-5
+
+
 
             grid
 
+
+
             gap-3
+
+
 
             sm:grid-cols-2
 
+
+
             xl:grid-cols-4
+
+
 
           "
         >
@@ -174,15 +245,27 @@ export default async function ReEngagedPage() {
               key={row.visit_bucket}
               className="
 
+
+
                   rounded-xl
+
+
 
                   border
 
+
+
                   border-slate-100
+
+
 
                   bg-slate-50
 
+
+
                   p-4
+
+
 
                 "
             >
@@ -217,61 +300,137 @@ export default async function ReEngagedPage() {
       <section className="card-pad mt-4">
         <div className="flex items-start justify-between gap-4">
           <div>
-            <div className="eyebrow">Priority queue</div>
+            <div className="eyebrow">Behaviour intelligence</div>
 
-            <div className="section-title mt-1">Leads active again</div>
+            <div className="section-title mt-1">Recently active leads</div>
           </div>
 
           <span
             className="
 
+
+
               rounded-full
+
+
 
               bg-slate-100
 
+
+
               px-3
+
+
 
               py-1.5
 
+
+
               text-xs
+
+
 
               font-bold
 
+
+
               text-slate-600
+
+
 
             "
           >
-            {formatNumber(leads.length)} leads
+            {formatNumber(visibleLeads.length)} of {formatNumber(leads.length)}{" "}
+            leads
           </span>
         </div>
 
-        {leads.length === 0 ? (
+        <div className="mt-4 flex flex-wrap gap-2">
+          <ActivityViewTab
+            href={activityViewHref("all")}
+            active={activeView === "all"}
+            label={`All active ${leads.length}`}
+          />
+
+          <ActivityViewTab
+            href={activityViewHref("reengaged")}
+            active={activeView === "reengaged"}
+            label={`Re-engaged ${
+              leads.filter((lead) => Boolean(lead.is_reengaged)).length
+            }`}
+          />
+
+          <ActivityViewTab
+            href={activityViewHref("hot")}
+            active={activeView === "hot"}
+            label={`Hot ${
+              leads.filter(
+                (lead) =>
+                  String(lead.behaviour_temperature || "").toLowerCase() ===
+                  "hot",
+              ).length
+            }`}
+          />
+
+          <ActivityViewTab
+            href={activityViewHref("high_intent")}
+            active={activeView === "high_intent"}
+            label={`High intent ${
+              leads.filter((lead) => toNumber(lead.high_intent_events_7d) > 0)
+                .length
+            }`}
+          />
+        </div>
+
+        {visibleLeads.length === 0 ? (
           <div
             className="
 
+
+
               mt-5
+
+
 
               rounded-xl
 
+
+
               border
+
+
 
               border-dashed
 
+
+
               border-slate-200
+
+
 
               px-5
 
+
+
               py-12
+
+
 
               text-center
 
+
+
               text-sm
+
+
 
               text-slate-400
 
+
+
             "
           >
-            No re-engaged leads currently match the rules.
+            No recently active leads match this view.
           </div>
         ) : (
           <div className="mt-5 overflow-x-auto">
@@ -301,7 +460,7 @@ export default async function ReEngagedPage() {
               </thead>
 
               <tbody>
-                {leads.map((lead) => (
+                {visibleLeads.map((lead) => (
                   <tr
                     key={lead.lead_id}
                     className="border-b border-slate-50 last:border-0"
@@ -355,27 +514,24 @@ export default async function ReEngagedPage() {
                     </td>
 
                     <td className="px-3 py-3">
-                      <Link
-                        href={`/leads/${lead.lead_id}`}
-                        className="
+                      <div className="flex items-center justify-end gap-2">
+                        <Link
+                          href={`/re-engaged?view=${encodeURIComponent(
+                            activeView,
+                          )}&lead=${encodeURIComponent(lead.lead_id)}`}
+                          className="inline-flex rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-[11px] font-semibold text-slate-600 transition-colors hover:border-violet-200 hover:bg-violet-50 hover:text-violet-700"
+                        >
+                          Activity
+                        </Link>
 
-                            inline-flex
-
-                            items-center
-
-                            gap-1
-
-                            font-bold
-
-                            text-brand
-
-                            hover:underline
-
-                          "
-                      >
-                        Open
-                        <ArrowRight size={14} />
-                      </Link>
+                        <Link
+                          href={`/leads/${lead.lead_id}`}
+                          className="inline-flex items-center gap-1 font-semibold text-brand hover:underline"
+                        >
+                          Open
+                          <ArrowRight size={14} />
+                        </Link>
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -385,28 +541,130 @@ export default async function ReEngagedPage() {
         )}
       </section>
 
+      {selectedLead && (
+        <>
+          <Link
+            href={activityViewHref(activeView)}
+            aria-label="Close lead activity"
+            className="fixed inset-0 z-40 bg-slate-950/25 backdrop-blur-[1px]"
+          />
+
+          <aside className="fixed inset-y-0 right-0 z-50 w-full max-w-[640px] overflow-y-auto border-l border-slate-200 bg-slate-50 shadow-2xl">
+            <div className="sticky top-0 z-10 border-b border-slate-200 bg-white/95 px-5 py-4 backdrop-blur">
+              <div className="flex items-start justify-between gap-4">
+                <div className="min-w-0">
+                  <div className="eyebrow">Re-engagement intelligence</div>
+
+                  <div className="mt-1 truncate text-xl font-semibold text-slate-900">
+                    {selectedLead.lead_name || selectedLead.lead_code || "Lead"}
+                  </div>
+
+                  <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-slate-500">
+                    <span>{selectedLead.lead_code}</span>
+
+                    <span>·</span>
+
+                    <span>{pretty(selectedLead.current_stage)}</span>
+
+                    <span>·</span>
+
+                    <span>
+                      Last visit {formatDateTime(selectedLead.last_visit_at)}
+                    </span>
+                  </div>
+                </div>
+
+                <Link
+                  href={activityViewHref(activeView)}
+                  className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-slate-200 bg-white text-lg text-slate-500 transition-colors hover:bg-slate-50"
+                  aria-label="Close"
+                >
+                  ×
+                </Link>
+              </div>
+
+              <div className="mt-4 flex flex-wrap gap-2">
+                <TemperatureBadge value={selectedLead.behaviour_temperature} />
+
+                <span className="inline-flex rounded-full bg-violet-50 px-2.5 py-1 text-xs font-semibold text-violet-700">
+                  Score {formatNumber(selectedLead.engagement_score)}/100
+                </span>
+
+                <span className="inline-flex rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-600">
+                  {formatNumber(selectedLead.sessions_after_lead)} post-lead
+                  visits
+                </span>
+              </div>
+            </div>
+
+            <div className="space-y-4 p-4">
+              <LeadJourneyIntelligence leadId={selectedLead.lead_id} />
+
+              <div className="grid gap-2 sm:grid-cols-2">
+                <Link
+                  href={`/conversations?lead=${selectedLead.lead_id}`}
+                  className="btn-secondary justify-center"
+                >
+                  Open conversation
+                </Link>
+
+                <Link
+                  href={`/leads/${selectedLead.lead_id}`}
+                  className="btn-primary justify-center"
+                >
+                  Open full lead
+                  <ArrowRight size={14} />
+                </Link>
+              </div>
+            </div>
+          </aside>
+        </>
+      )}
+
       <section
         className="
 
+
+
           mt-4
+
+
 
           rounded-xl
 
+
+
           border
+
+
 
           border-slate-100
 
+
+
           bg-slate-50
+
+
 
           px-4
 
+
+
           py-3
+
+
 
           text-xs
 
+
+
           leading-5
 
+
+
           text-slate-500
+
+
 
         "
       >
@@ -475,27 +733,51 @@ function TemperatureBadge({ value }: { value: string }) {
     <span
       className={`
 
+
+
         inline-flex
+
+
 
         items-center
 
+
+
         gap-1.5
+
+
 
         rounded-full
 
+
+
         px-2.5
+
+
 
         py-1
 
+
+
         text-xs
+
+
 
         font-bold
 
+
+
         ring-1
+
+
 
         ring-inset
 
+
+
         ${className}
+
+
 
       `}
     >
@@ -504,6 +786,47 @@ function TemperatureBadge({ value }: { value: string }) {
       {pretty(normalized)}
     </span>
   );
+}
+
+function activityViewHref(view: string) {
+  return view && view !== "all"
+    ? `/re-engaged?view=${encodeURIComponent(view)}`
+    : "/re-engaged";
+}
+
+function ActivityViewTab({
+  href,
+
+  active,
+
+  label,
+}: {
+  href: string;
+
+  active: boolean;
+
+  label: string;
+}) {
+  return (
+    <Link
+      href={href}
+      className={
+        active
+          ? "inline-flex rounded-full bg-violet-50 px-3 py-1.5 text-xs font-semibold text-violet-700 ring-1 ring-inset ring-violet-100"
+          : "inline-flex rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-500 transition-colors hover:border-violet-200 hover:bg-violet-50 hover:text-violet-700"
+      }
+    >
+      {label}
+    </Link>
+  );
+}
+
+function one(value: string | string[] | undefined) {
+  if (Array.isArray(value)) {
+    return value[0] ?? "";
+  }
+
+  return value ?? "";
 }
 
 function toNumber(value: number | string | null | undefined) {

@@ -272,20 +272,21 @@ export default async function FunnelPage() {
   );
 
   return (
-    <>
+    <div className="funnel-polish">
       <PageHeader
+        eyebrow="Conversion intelligence"
         title="End-to-End Funnel"
         description="Website traffic → repeat visits → lead → qualified → payment → enrollment, with source, landing-page, country and re-engagement intelligence."
         actions={
           <Link href="/re-engaged" className="btn-secondary">
             <RefreshCw size={16} />
-            Re-engaged leads
+            Lead Activity
           </Link>
         }
       />
 
       {workspace.warning && (
-        <div className="mt-4 rounded-xl border border-amber-100 bg-amber-50 px-4 py-3 text-sm font-medium text-amber-700">
+        <div className="funnel-warning mt-4 rounded-xl border border-amber-100 bg-amber-50 px-4 py-3 text-sm font-medium text-amber-700">
           Funnel loaded through the legacy fallback. {workspace.warning}
         </div>
       )}
@@ -293,15 +294,27 @@ export default async function FunnelPage() {
       <section
         className="
 
+
+
           mt-6
+
+
 
           grid
 
+
+
           gap-3
+
+
 
           sm:grid-cols-2
 
+
+
           xl:grid-cols-6
+
+
 
         "
       >
@@ -352,22 +365,32 @@ export default async function FunnelPage() {
         />
       </section>
 
-      <section className="card-pad mt-4">
+      <section className="funnel-path-card card-pad mt-4">
         <div className="eyebrow">Funnel</div>
 
         <div className="section-title mt-1">30-day conversion path</div>
 
-        <div className="mt-5 overflow-x-auto">
+        <div className="funnel-path-scroll mt-5 overflow-x-auto">
           <div
             className="
 
+
+
               grid
+
+
 
               min-w-[980px]
 
+
+
               grid-cols-12
 
+
+
               gap-2
+
+
 
             "
           >
@@ -409,13 +432,23 @@ export default async function FunnelPage() {
         <div
           className="
 
+
+
             mt-5
+
+
 
             grid
 
+
+
             gap-3
 
+
+
             sm:grid-cols-3
+
+
 
           "
         >
@@ -443,17 +476,29 @@ export default async function FunnelPage() {
       <section
         className="
 
+          funnel-intelligence-grid
+
+
+
           mt-4
+
+
 
           grid
 
+
+
           gap-4
+
+
 
           xl:grid-cols-[1.35fr_.65fr]
 
+
+
         "
       >
-        <div className="card-pad">
+        <div className="funnel-trend-card card-pad">
           <div className="eyebrow">Daily trend</div>
 
           <div className="section-title mt-1">Sessions and leads</div>
@@ -464,15 +509,27 @@ export default async function FunnelPage() {
                 key={row.date}
                 className="
 
+
+
                     grid
+
+
 
                     grid-cols-[72px_1fr_64px_1fr_54px]
 
+
+
                     items-center
+
+
 
                     gap-2
 
+
+
                     text-xs
+
+
 
                   "
               >
@@ -505,7 +562,7 @@ export default async function FunnelPage() {
           </div>
         </div>
 
-        <div className="card-pad">
+        <div className="funnel-journey-card card-pad">
           <div className="eyebrow">Repeat behaviour</div>
 
           <div className="section-title mt-1">Website journey</div>
@@ -551,25 +608,43 @@ export default async function FunnelPage() {
             href="/re-engaged"
             className="
 
+
+
               mt-5
+
+
 
               inline-flex
 
+
+
               items-center
+
+
 
               gap-1.5
 
+
+
               text-sm
 
-              font-bold
+
+
+              font-semibold
+
+
 
               text-brand
 
+
+
               hover:underline
+
+
 
             "
           >
-            Open re-engaged queue
+            Open Lead Activity
             <ArrowRight size={14} />
           </Link>
         </div>
@@ -578,17 +653,29 @@ export default async function FunnelPage() {
       <section
         className="
 
+          funnel-behaviour-grid
+
+
+
           mt-4
+
+
 
           grid
 
+
+
           gap-4
+
+
 
           xl:grid-cols-2
 
+
+
         "
       >
-        <div className="card-pad">
+        <div className="funnel-visitor-card card-pad">
           <div className="eyebrow">Visitor type</div>
 
           <div className="section-title mt-1">New vs returning</div>
@@ -599,24 +686,36 @@ export default async function FunnelPage() {
                 key={row.visitor_type}
                 className="
 
+
+
                     rounded-xl
+
+
 
                     border
 
+
+
                     border-slate-100
+
+
 
                     bg-slate-50
 
+
+
                     p-4
+
+
 
                   "
               >
                 <div className="flex items-center justify-between gap-3">
-                  <div className="font-bold text-slate-800">
+                  <div className="font-semibold text-slate-800">
                     {pretty(row.visitor_type)}
                   </div>
 
-                  <div className="text-sm font-black text-slate-800">
+                  <div className="text-sm font-semibold text-slate-800">
                     {formatNumber(row.visitors)} visitors
                   </div>
                 </div>
@@ -624,15 +723,27 @@ export default async function FunnelPage() {
                 <div
                   className="
 
+
+
                       mt-3
+
+
 
                       grid
 
+
+
                       grid-cols-3
+
+
 
                       gap-3
 
+
+
                       text-xs
+
+
 
                     "
                 >
@@ -651,7 +762,7 @@ export default async function FunnelPage() {
           </div>
         </div>
 
-        <div className="card-pad">
+        <div className="funnel-visit-card card-pad">
           <div className="eyebrow">Lead conversion visit</div>
 
           <div className="section-title mt-1">
@@ -661,13 +772,23 @@ export default async function FunnelPage() {
           <div
             className="
 
+
+
               mt-5
+
+
 
               grid
 
+
+
               gap-3
 
+
+
               sm:grid-cols-2
+
+
 
             "
           >
@@ -676,23 +797,35 @@ export default async function FunnelPage() {
                 key={row.visit_bucket}
                 className="
 
+
+
                     rounded-xl
+
+
 
                     border
 
+
+
                     border-slate-100
+
+
 
                     bg-slate-50
 
+
+
                     p-4
+
+
 
                   "
               >
-                <div className="text-xs font-bold uppercase tracking-wide text-slate-400">
+                <div className="text-xs font-semibold uppercase tracking-wide text-slate-400">
                   {row.visit_bucket}
                 </div>
 
-                <div className="mt-2 text-2xl font-black text-slate-800">
+                <div className="mt-2 text-2xl font-semibold text-slate-800">
                   {formatNumber(row.lead_count)}
                 </div>
 
@@ -717,7 +850,7 @@ export default async function FunnelPage() {
         </div>
       </section>
 
-      <section className="card-pad mt-4">
+      <section className="funnel-table-card funnel-source-card card-pad mt-4">
         <div className="eyebrow">Assisted acquisition</div>
 
         <div className="section-title mt-1">
@@ -729,8 +862,8 @@ export default async function FunnelPage() {
           if they returned through different sources before or after enquiry.
         </p>
 
-        <div className="mt-5 overflow-x-auto">
-          <table className="min-w-full text-left text-sm">
+        <div className="funnel-table-wrap mt-5 overflow-x-auto">
+          <table className="funnel-data-table min-w-full text-left text-sm">
             <thead>
               <tr className="border-b border-slate-100 text-xs uppercase tracking-wide text-slate-400">
                 <th className="px-3 py-3">Source</th>
@@ -757,7 +890,7 @@ export default async function FunnelPage() {
                   key={`${row.source}-${row.medium}`}
                   className="border-b border-slate-50 last:border-0"
                 >
-                  <td className="px-3 py-3 font-bold text-slate-800">
+                  <td className="px-3 py-3 font-semibold text-slate-800">
                     {pretty(row.source)}
                   </td>
 
@@ -773,7 +906,7 @@ export default async function FunnelPage() {
                     {formatNumber(row.sessions)}
                   </td>
 
-                  <td className="px-3 py-3 text-right font-bold">
+                  <td className="px-3 py-3 text-right font-semibold">
                     {formatNumber(row.linked_leads)}
                   </td>
 
@@ -795,7 +928,7 @@ export default async function FunnelPage() {
         </div>
       </section>
 
-      <section className="card-pad mt-4">
+      <section className="funnel-table-card funnel-first-touch-card card-pad mt-4">
         <div className="eyebrow">Canonical attribution</div>
 
         <div className="section-title mt-1">
@@ -808,8 +941,8 @@ export default async function FunnelPage() {
           days.
         </p>
 
-        <div className="mt-5 overflow-x-auto">
-          <table className="min-w-[1100px] text-left text-sm">
+        <div className="funnel-table-wrap mt-5 overflow-x-auto">
+          <table className="funnel-data-table min-w-[1100px] text-left text-sm">
             <thead>
               <tr className="border-b border-slate-100 text-xs uppercase tracking-wide text-slate-400">
                 <th className="px-3 py-3">First source</th>
@@ -841,7 +974,7 @@ export default async function FunnelPage() {
                   className="border-b border-slate-50 last:border-0"
                 >
                   <td className="px-3 py-3">
-                    <div className="font-bold text-slate-800">
+                    <div className="font-semibold text-slate-800">
                       {pretty(row.source)}
                     </div>
 
@@ -850,7 +983,7 @@ export default async function FunnelPage() {
                     </div>
                   </td>
 
-                  <td className="px-3 py-3 text-right font-bold">
+                  <td className="px-3 py-3 text-right font-semibold">
                     {formatNumber(row.leads)}
                   </td>
 
@@ -911,23 +1044,35 @@ export default async function FunnelPage() {
       <section
         className="
 
+          funnel-breakdown-grid
+
+
+
           mt-4
+
+
 
           grid
 
+
+
           gap-4
+
+
 
           xl:grid-cols-2
 
+
+
         "
       >
-        <div className="card-pad">
+        <div className="funnel-breakdown-card card-pad">
           <div className="eyebrow">Landing pages</div>
 
           <div className="section-title mt-1">Entry-page performance</div>
 
-          <div className="mt-5 overflow-x-auto">
-            <table className="min-w-full text-left text-sm">
+          <div className="funnel-table-wrap mt-5 overflow-x-auto">
+            <table className="funnel-data-table min-w-full text-left text-sm">
               <thead>
                 <tr className="border-b border-slate-100 text-xs uppercase tracking-wide text-slate-400">
                   <th className="px-3 py-3">Page</th>
@@ -978,13 +1123,13 @@ export default async function FunnelPage() {
           </div>
         </div>
 
-        <div className="card-pad">
+        <div className="funnel-breakdown-card card-pad">
           <div className="eyebrow">Geography</div>
 
           <div className="section-title mt-1">Country performance</div>
 
-          <div className="mt-5 overflow-x-auto">
-            <table className="min-w-full text-left text-sm">
+          <div className="funnel-table-wrap mt-5 overflow-x-auto">
+            <table className="funnel-data-table min-w-full text-left text-sm">
               <thead>
                 <tr className="border-b border-slate-100 text-xs uppercase tracking-wide text-slate-400">
                   <th className="px-3 py-3">Country</th>
@@ -1043,17 +1188,29 @@ export default async function FunnelPage() {
       <section
         className="
 
+          funnel-intent-grid
+
+
+
           mt-4
+
+
 
           grid
 
+
+
           gap-4
+
+
 
           xl:grid-cols-[.8fr_1.2fr]
 
+
+
         "
       >
-        <div className="card-pad">
+        <div className="funnel-temperature-card card-pad">
           <div className="eyebrow">Behaviour</div>
 
           <div className="section-title mt-1">Lead temperature</div>
@@ -1081,7 +1238,7 @@ export default async function FunnelPage() {
           </div>
         </div>
 
-        <div className="card-pad">
+        <div className="funnel-events-card card-pad">
           <div className="eyebrow">Micro-conversions</div>
 
           <div className="section-title mt-1">CTA and intent events</div>
@@ -1089,15 +1246,27 @@ export default async function FunnelPage() {
           <div
             className="
 
+
+
               mt-5
+
+
 
               grid
 
+
+
               gap-3
+
+
 
               sm:grid-cols-2
 
+
+
               lg:grid-cols-3
+
+
 
             "
           >
@@ -1106,15 +1275,27 @@ export default async function FunnelPage() {
                 key={row.event_type}
                 className="
 
+
+
                     rounded-xl
+
+
 
                     border
 
+
+
                     border-slate-100
+
+
 
                     bg-slate-50
 
+
+
                     p-4
+
+
 
                   "
               >
@@ -1122,7 +1303,7 @@ export default async function FunnelPage() {
                   {pretty(row.event_type)}
                 </div>
 
-                <div className="mt-2 text-xl font-black text-slate-800">
+                <div className="mt-2 text-xl font-semibold text-slate-800">
                   {formatNumber(row.event_count)}
                 </div>
 
@@ -1139,25 +1320,49 @@ export default async function FunnelPage() {
       <div
         className="
 
+          funnel-method-note
+
+
+
           mt-4
+
+
 
           rounded-xl
 
+
+
           border
+
+
 
           border-slate-100
 
+
+
           bg-slate-50
+
+
 
           px-4
 
+
+
           py-3
+
+
 
           text-xs
 
+
+
           leading-5
 
+
+
           text-slate-500
+
+
 
         "
       >
@@ -1167,7 +1372,7 @@ export default async function FunnelPage() {
         context and should not be interpreted as the exact keyword typed by an
         individual lead.
       </div>
-    </>
+    </div>
   );
 }
 
@@ -1189,14 +1394,14 @@ function StatCard({
   sub: string;
 }) {
   return (
-    <div className="card-pad">
+    <div className="funnel-stat-card card-pad">
       <div className="flex items-center gap-2 text-xs font-semibold text-slate-400">
         {icon}
 
         {label}
       </div>
 
-      <div className="mt-2 text-2xl font-black text-slate-800">{value}</div>
+      <div className="mt-2 text-2xl font-semibold text-slate-800">{value}</div>
 
       <div className="mt-1 text-xs text-slate-400">{sub}</div>
     </div>
@@ -1213,12 +1418,12 @@ function FunnelStep({
   value: number | string | null;
 }) {
   return (
-    <div className="col-span-1 rounded-xl border border-slate-100 bg-slate-50 p-3 text-center">
-      <div className="text-[10px] font-bold uppercase tracking-wide text-slate-400">
+    <div className="funnel-step col-span-1 rounded-xl border border-slate-100 bg-slate-50 p-3 text-center">
+      <div className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">
         {label}
       </div>
 
-      <div className="mt-1 text-lg font-black text-slate-800">
+      <div className="mt-1 text-lg font-semibold text-slate-800">
         {formatNumber(value)}
       </div>
     </div>
@@ -1243,10 +1448,10 @@ function RateCard({
   value: number | string | null;
 }) {
   return (
-    <div className="rounded-xl bg-slate-50 p-4">
+    <div className="funnel-rate-card rounded-xl bg-slate-50 p-4">
       <div className="text-xs font-semibold text-slate-400">{label}</div>
 
-      <div className="mt-2 text-xl font-black text-slate-800">
+      <div className="mt-2 text-xl font-semibold text-slate-800">
         {formatPercent(value)}
       </div>
     </div>
@@ -1267,10 +1472,10 @@ function MiniMetric({
   raw?: boolean;
 }) {
   return (
-    <div className="flex items-center justify-between gap-3 rounded-xl bg-slate-50 px-4 py-3">
+    <div className="funnel-mini-metric flex items-center justify-between gap-3 rounded-xl bg-slate-50 px-4 py-3">
       <div className="text-xs font-semibold text-slate-500">{label}</div>
 
-      <div className="text-sm font-black text-slate-800">
+      <div className="text-sm font-semibold text-slate-800">
         {raw ? String(value ?? "—") : formatNumber(value)}
       </div>
     </div>
@@ -1292,7 +1497,7 @@ function SmallStat({
 }) {
   return (
     <div>
-      <div className="font-bold text-slate-700">
+      <div className="font-semibold text-slate-700">
         {raw ? String(value ?? "—") : formatNumber(value)}
       </div>
 
@@ -1327,9 +1532,9 @@ function ProgressBar({
   );
 
   return (
-    <div className="h-2 overflow-hidden rounded-full bg-slate-100">
+    <div className="funnel-progress-track h-2 overflow-hidden rounded-full bg-slate-100">
       <div
-        className="h-full rounded-full bg-slate-500"
+        className="funnel-progress-fill h-full rounded-full bg-slate-500"
         style={{
           width: `${width}%`,
         }}
@@ -1352,14 +1557,14 @@ function TemperatureCard({
   value: number | string | null;
 }) {
   return (
-    <div className="rounded-xl bg-slate-50 p-4">
+    <div className="funnel-temperature-item rounded-xl bg-slate-50 p-4">
       <div className="flex items-center gap-2 text-xs font-semibold text-slate-400">
         <span>{emoji}</span>
 
         {label}
       </div>
 
-      <div className="mt-2 text-xl font-black text-slate-800">
+      <div className="mt-2 text-xl font-semibold text-slate-800">
         {formatNumber(value)}
       </div>
     </div>

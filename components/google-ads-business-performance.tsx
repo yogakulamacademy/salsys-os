@@ -178,7 +178,7 @@ export function GoogleAdsBusinessPerformance({
   );
 
   return (
-    <section className="card-pad mt-4">
+    <section className="funnel-paid-card funnel-google-card card-pad mt-4">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <div className="eyebrow">Paid media business attribution</div>
@@ -192,7 +192,7 @@ export function GoogleAdsBusinessPerformance({
           </p>
         </div>
 
-        <div className="rounded-full bg-slate-100 px-3 py-1.5 text-xs font-bold text-slate-600">
+        <div className="funnel-paid-range rounded-full bg-slate-100 px-3 py-1.5 text-xs font-semibold text-slate-600">
           {formatDate(overview.start_date)}
 
           {" → "}
@@ -204,15 +204,27 @@ export function GoogleAdsBusinessPerformance({
       <div
         className="
 
+
+
           mt-5
+
+
 
           grid
 
+
+
           gap-3
+
+
 
           sm:grid-cols-2
 
+
+
           xl:grid-cols-4
+
+
 
         "
       >
@@ -320,21 +332,31 @@ export function GoogleAdsBusinessPerformance({
       <div
         className="
 
+
+
           mt-5
+
+
 
           grid
 
+
+
           gap-4
+
+
 
           xl:grid-cols-[.72fr_1.28fr]
 
+
+
         "
       >
-        <div className="rounded-xl border border-slate-100 bg-slate-50 p-4">
+        <div className="funnel-paid-coverage rounded-xl border border-slate-100 bg-slate-50 p-4">
           <div className="flex items-center gap-2">
             <Link2 size={16} className="text-slate-400" />
 
-            <div className="text-sm font-bold text-slate-800">
+            <div className="text-sm font-semibold text-slate-800">
               Attribution coverage
             </div>
           </div>
@@ -370,7 +392,7 @@ export function GoogleAdsBusinessPerformance({
 
           <div className="mt-4 rounded-lg bg-white px-3 py-2.5 text-xs leading-5 text-slate-500">
             Exact campaign-ID coverage:{" "}
-            <strong className="font-bold text-slate-700">
+            <strong className="font-semibold text-slate-700">
               {matchingLeadRate}
             </strong>
             . Leads with only a GCLID are kept separate rather than guessed into
@@ -378,13 +400,13 @@ export function GoogleAdsBusinessPerformance({
           </div>
         </div>
 
-        <div className="rounded-xl border border-slate-100 bg-white p-4">
-          <div className="text-sm font-bold text-slate-800">
+        <div className="funnel-paid-match rounded-xl border border-slate-100 bg-white p-4">
+          <div className="text-sm font-semibold text-slate-800">
             Captured campaign ID matching
           </div>
 
-          <div className="mt-3 overflow-x-auto">
-            <table className="min-w-full text-left text-xs">
+          <div className="funnel-paid-table-wrap mt-3 overflow-x-auto">
+            <table className="funnel-paid-table min-w-full text-left text-xs">
               <thead>
                 <tr className="border-b border-slate-100 uppercase tracking-wide text-slate-400">
                   <th className="px-2 py-2.5">Campaign</th>
@@ -437,8 +459,8 @@ export function GoogleAdsBusinessPerformance({
                         <span
                           className={
                             row.matched_to_google_ads
-                              ? "font-bold text-emerald-600"
-                              : "font-bold text-orange-600"
+                              ? "font-semibold text-emerald-600"
+                              : "font-semibold text-orange-600"
                           }
                         >
                           {row.matched_to_google_ads ? "Matched" : "Unmatched"}
@@ -454,7 +476,7 @@ export function GoogleAdsBusinessPerformance({
       </div>
 
       <div className="mt-6">
-        <div className="text-sm font-bold text-slate-800">
+        <div className="text-sm font-semibold text-slate-800">
           Campaign business performance
         </div>
 
@@ -464,8 +486,8 @@ export function GoogleAdsBusinessPerformance({
           captured on your website.
         </p>
 
-        <div className="mt-4 overflow-x-auto">
-          <table className="min-w-[1380px] text-left text-sm">
+        <div className="funnel-paid-table-wrap mt-4 overflow-x-auto">
+          <table className="funnel-paid-table min-w-[1380px] text-left text-sm">
             <thead>
               <tr className="border-b border-slate-100 text-xs uppercase tracking-wide text-slate-400">
                 <th className="px-3 py-3">Campaign</th>
@@ -514,7 +536,7 @@ export function GoogleAdsBusinessPerformance({
                     className="border-b border-slate-50 last:border-0"
                   >
                     <td className="max-w-[300px] px-3 py-3">
-                      <div className="truncate font-bold text-slate-800">
+                      <div className="truncate font-semibold text-slate-800">
                         {row.campaign_name || row.campaign_id}
                       </div>
 
@@ -539,7 +561,7 @@ export function GoogleAdsBusinessPerformance({
                       {formatNumber(row.clicks)}
                     </td>
 
-                    <td className="px-3 py-3 text-right font-bold">
+                    <td className="px-3 py-3 text-right font-semibold">
                       {formatNumber(row.crm_leads)}
                     </td>
 
@@ -591,7 +613,7 @@ export function GoogleAdsBusinessPerformance({
                       )}
                     </td>
 
-                    <td className="px-3 py-3 text-right font-black text-brand">
+                    <td className="px-3 py-3 text-right font-semibold text-brand">
                       {row.roas_inr == null
                         ? "—"
                         : `${formatDecimal(
@@ -608,7 +630,7 @@ export function GoogleAdsBusinessPerformance({
         </div>
       </div>
 
-      <div className="mt-4 rounded-xl border border-slate-100 bg-slate-50 px-4 py-3 text-xs leading-5 text-slate-500">
+      <div className="funnel-paid-note mt-4 rounded-xl border border-slate-100 bg-slate-50 px-4 py-3 text-xs leading-5 text-slate-500">
         Campaign revenue attribution is deterministic only when the website
         captured Google&apos;s campaign ID for the visitor. GCLID-only leads
         remain visible as unmatched until we add the optional click-ID
@@ -636,14 +658,14 @@ function AdsMetricCard({
   sub: string;
 }) {
   return (
-    <div className="rounded-xl border border-slate-100 bg-slate-50 p-4">
+    <div className="funnel-paid-metric rounded-xl border border-slate-100 bg-slate-50 p-4">
       <div className="flex items-center gap-2 text-xs font-semibold text-slate-400">
         {icon}
 
         {label}
       </div>
 
-      <div className="mt-2 text-xl font-black text-slate-800">{value}</div>
+      <div className="mt-2 text-xl font-semibold text-slate-800">{value}</div>
 
       <div className="mt-1 text-xs text-slate-400">{sub}</div>
     </div>
@@ -660,10 +682,10 @@ function CoverageLine({
   value: number | string | null | undefined;
 }) {
   return (
-    <div className="flex items-center justify-between gap-4 rounded-lg bg-white px-3 py-2.5">
+    <div className="funnel-coverage-line flex items-center justify-between gap-4 rounded-lg bg-white px-3 py-2.5">
       <span className="text-xs font-semibold text-slate-500">{label}</span>
 
-      <span className="text-sm font-black text-slate-800">
+      <span className="text-sm font-semibold text-slate-800">
         {formatNumber(value)}
       </span>
     </div>

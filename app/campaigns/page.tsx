@@ -8,9 +8,7 @@ import {
 } from "@/components/campaigns-workspace";
 
 import { PageHeader } from "@/components/ui";
-
 import { getCampaignsWorkspace } from "@/lib/campaigns-data";
-
 import { isMockMode } from "@/lib/data";
 
 type CampaignsPageProps = {
@@ -29,15 +27,12 @@ export default async function CampaignsPage({
   searchParams,
 }: CampaignsPageProps) {
   const query = await searchParams;
-
   const filters = parseFilters(query);
-
   const workspace = await getCampaignsWorkspace(filters);
-
   const mock = isMockMode();
 
   return (
-    <>
+    <div className="campaigns-page">
       <PageHeader
         eyebrow="Paid acquisition"
         title="Campaigns"
@@ -57,8 +52,8 @@ export default async function CampaignsPage({
       />
 
       {(workspace.googleError || workspace.metaError) && (
-        <div className="mb-4 rounded-xl border border-amber-100 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-          <div className="flex items-center gap-2 font-bold">
+        <div className="campaigns-alert campaigns-alert-warning mb-4">
+          <div className="flex items-center gap-2 font-semibold">
             <BarChart3 size={15} />
             Some campaign data could not be loaded
           </div>
@@ -76,7 +71,7 @@ export default async function CampaignsPage({
       )}
 
       {workspace.warning && (
-        <div className="mb-4 rounded-xl border border-amber-100 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+        <div className="campaigns-alert campaigns-alert-warning mb-4">
           Campaigns loaded through the legacy fallback. {workspace.warning}
         </div>
       )}
@@ -89,7 +84,7 @@ export default async function CampaignsPage({
         filters={filters}
         mock={mock}
       />
-    </>
+    </div>
   );
 }
 

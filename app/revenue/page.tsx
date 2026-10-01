@@ -15,18 +15,27 @@ export default async function RevenuePage() {
 
   const [workspace, fxRate] = await Promise.all([
     getRevenueWorkspace(currentMonth),
+
     getUsdInrRate(),
   ]);
 
   const {
     totalsByCurrency,
+
     stages,
+
     monthly,
+
     sources,
+
     locations,
+
     actualMonthly,
+
     unvaluedLeads,
+
     topOpportunities,
+
     closingThisMonth,
   } = workspace;
 
@@ -156,14 +165,15 @@ export default async function RevenuePage() {
     .filter((row) => row.gross !== 0 || row.refunds !== 0 || row.net !== 0);
 
   return (
-    <>
+    <div className="revenue-polish">
       <PageHeader
+        eyebrow="Financial intelligence"
         title="Revenue Forecast"
         description="Pipeline, weighted forecast, real payment revenue, refunds and outstanding balances from Yogakulam CRM."
       />
 
       {workspace.warning && (
-        <div className="mt-4 rounded-xl border border-amber-100 bg-amber-50 px-4 py-3 text-sm font-medium text-amber-700">
+        <div className="revenue-warning mt-4 rounded-xl border border-amber-100 bg-amber-50 px-4 py-3 text-sm font-medium text-amber-700">
           Revenue loaded through the legacy fallback. {workspace.warning}
         </div>
       )}
@@ -174,7 +184,15 @@ export default async function RevenuePage() {
 
 
 
+
+
+
+
             mt-6
+
+
+
+
 
 
 
@@ -182,7 +200,15 @@ export default async function RevenuePage() {
 
 
 
+
+
+
+
             border
+
+
+
+
 
 
 
@@ -190,7 +216,15 @@ export default async function RevenuePage() {
 
 
 
+
+
+
+
             bg-amber-50
+
+
+
+
 
 
 
@@ -198,13 +232,25 @@ export default async function RevenuePage() {
 
 
 
+
+
+
+
             py-3
+
+
+
+
 
 
 
           "
         >
-          <div className="text-sm font-bold text-amber-800">
+          <div
+            className="
+
+            revenue-unvalued-warningtext-sm font-semibold text-amber-800"
+          >
             {unvaluedLeads} unvalued lead
             {unvaluedLeads === 1 ? "" : "s"}
           </div>
@@ -220,7 +266,15 @@ export default async function RevenuePage() {
 
 
 
+
+
+
+
           INTERACTIVE REVENUE INTELLIGENCE
+
+
+
+
 
 
 
@@ -242,21 +296,29 @@ export default async function RevenuePage() {
 
 
 
+
+
+
+
           PIPELINE BY STAGE
+
+
+
+
 
 
 
       =================================================== */}
 
-      <section className="card-pad mt-4">
+      <section className="revenue-table-card revenue-stage-card card-pad mt-4">
         <div>
           <div className="eyebrow">Pipeline</div>
 
           <div className="section-title mt-1">Forecast by stage</div>
         </div>
 
-        <div className="mt-5 overflow-x-auto">
-          <table className="min-w-full text-left text-sm">
+        <div className="revenue-table-wrap mt-5 overflow-x-auto">
+          <table className="revenue-data-table min-w-full text-left text-sm">
             <thead>
               <tr className="border-b border-slate-100 text-xs uppercase tracking-wide text-slate-400">
                 <th className="px-3 py-3">Stage</th>
@@ -322,7 +384,7 @@ export default async function RevenuePage() {
                         )}
                       </td>
 
-                      <td className="px-3 py-3 text-right font-bold text-slate-800">
+                      <td className="px-3 py-3 text-right font-semibold text-slate-800">
                         {formatMoney(
                           row.weighted_forecast,
 
@@ -349,13 +411,21 @@ export default async function RevenuePage() {
 
 
 
+
+
+
+
           MONTHLY FORECAST
+
+
+
+
 
 
 
       =================================================== */}
 
-      <section className="card-pad mt-4">
+      <section className="revenue-monthly-card card-pad mt-4">
         <div>
           <div className="eyebrow">Forecast</div>
 
@@ -367,7 +437,15 @@ export default async function RevenuePage() {
 
 
 
+
+
+
+
             mt-5
+
+
+
+
 
 
 
@@ -375,7 +453,15 @@ export default async function RevenuePage() {
 
 
 
+
+
+
+
             gap-3
+
+
+
+
 
 
 
@@ -383,7 +469,15 @@ export default async function RevenuePage() {
 
 
 
+
+
+
+
             xl:grid-cols-3
+
+
+
+
 
 
 
@@ -415,7 +509,15 @@ export default async function RevenuePage() {
 
 
 
+
+
+
+
                       rounded-xl
+
+
+
+
 
 
 
@@ -423,7 +525,15 @@ export default async function RevenuePage() {
 
 
 
+
+
+
+
                       border-slate-100
+
+
+
+
 
 
 
@@ -431,7 +541,15 @@ export default async function RevenuePage() {
 
 
 
+
+
+
+
                       p-4
+
+
+
+
 
 
 
@@ -439,7 +557,7 @@ export default async function RevenuePage() {
                 >
                   <div className="flex items-start justify-between gap-4">
                     <div>
-                      <div className="text-sm font-bold text-slate-800">
+                      <div className="text-sm font-semibold text-slate-800">
                         {formatMonth(row.forecast_month)}
                       </div>
 
@@ -453,7 +571,15 @@ export default async function RevenuePage() {
 
 
 
+
+
+
+
                           rounded-lg
+
+
+
+
 
 
 
@@ -461,7 +587,15 @@ export default async function RevenuePage() {
 
 
 
+
+
+
+
                           px-2
+
+
+
+
 
 
 
@@ -469,15 +603,31 @@ export default async function RevenuePage() {
 
 
 
+
+
+
+
                           text-xs
 
 
 
-                          font-bold
+
+
+
+
+                          font-semibold
+
+
+
+
 
 
 
                           text-slate-500
+
+
+
+
 
 
 
@@ -525,13 +675,21 @@ export default async function RevenuePage() {
 
 
 
+
+
+
+
           ACTUAL CASH REVENUE BY PAYMENT MONTH
+
+
+
+
 
 
 
       =================================================== */}
 
-      <section className="card-pad mt-4">
+      <section className="revenue-cash-card card-pad mt-4">
         <div>
           <div className="eyebrow">Payments</div>
 
@@ -548,7 +706,15 @@ export default async function RevenuePage() {
 
 
 
+
+
+
+
             mt-5
+
+
+
+
 
 
 
@@ -556,7 +722,15 @@ export default async function RevenuePage() {
 
 
 
+
+
+
+
             gap-3
+
+
+
+
 
 
 
@@ -564,7 +738,15 @@ export default async function RevenuePage() {
 
 
 
+
+
+
+
             xl:grid-cols-3
+
+
+
+
 
 
 
@@ -586,7 +768,15 @@ export default async function RevenuePage() {
 
 
 
+
+
+
+
                     rounded-xl
+
+
+
+
 
 
 
@@ -594,7 +784,15 @@ export default async function RevenuePage() {
 
 
 
+
+
+
+
                     border-slate-100
+
+
+
+
 
 
 
@@ -602,7 +800,15 @@ export default async function RevenuePage() {
 
 
 
+
+
+
+
                     p-4
+
+
+
+
 
 
 
@@ -610,7 +816,7 @@ export default async function RevenuePage() {
               >
                 <div className="flex items-start justify-between gap-4">
                   <div>
-                    <div className="text-sm font-bold text-slate-800">
+                    <div className="text-sm font-semibold text-slate-800">
                       {formatMonth(row.revenue_month)}
                     </div>
 
@@ -624,7 +830,15 @@ export default async function RevenuePage() {
 
 
 
+
+
+
+
                         rounded-lg
+
+
+
+
 
 
 
@@ -632,7 +846,15 @@ export default async function RevenuePage() {
 
 
 
+
+
+
+
                         px-2
+
+
+
+
 
 
 
@@ -640,15 +862,31 @@ export default async function RevenuePage() {
 
 
 
+
+
+
+
                         text-xs
 
 
 
-                        font-bold
+
+
+
+
+                        font-semibold
+
+
+
+
 
 
 
                         text-slate-500
+
+
+
+
 
 
 
@@ -696,7 +934,15 @@ export default async function RevenuePage() {
 
 
 
+
+
+
+
           SOURCE + LOCATION
+
+
+
+
 
 
 
@@ -705,9 +951,19 @@ export default async function RevenuePage() {
       <div
         className="
 
+          revenue-breakdown-grid
+
+
+
+
+
 
 
           mt-4
+
+
+
+
 
 
 
@@ -715,11 +971,23 @@ export default async function RevenuePage() {
 
 
 
+
+
+
+
           gap-4
 
 
 
+
+
+
+
           xl:grid-cols-2
+
+
+
+
 
 
 
@@ -776,14 +1044,22 @@ export default async function RevenuePage() {
 
 
 
+
+
+
+
           TOP OPPORTUNITIES
+
+
+
+
 
 
 
       =================================================== */}
 
-      <section className="card-pad mt-4">
-        <div className="flex items-center justify-between gap-4">
+      <section className="revenue-table-card revenue-opportunities-card card-pad mt-4">
+        <div className="revenue-mini-value flex items-center justify-between gap-4">
           <div>
             <div className="eyebrow">Opportunities</div>
 
@@ -793,8 +1069,8 @@ export default async function RevenuePage() {
           <Users size={20} className="text-slate-400" />
         </div>
 
-        <div className="mt-5 overflow-x-auto">
-          <table className="min-w-full text-left text-sm">
+        <div className="revenue-table-wrap mt-5 overflow-x-auto">
+          <table className="revenue-data-table min-w-full text-left text-sm">
             <thead>
               <tr className="border-b border-slate-100 text-xs uppercase tracking-wide text-slate-400">
                 <th className="px-3 py-3">Lead</th>
@@ -862,7 +1138,7 @@ export default async function RevenuePage() {
                     )}
                   </td>
 
-                  <td className="px-3 py-3 text-right font-bold text-slate-800">
+                  <td className="px-3 py-3 text-right font-semibold text-slate-800">
                     {formatMoney(
                       row.weighted_value,
 
@@ -881,7 +1157,7 @@ export default async function RevenuePage() {
                   <td className="px-3 py-3 text-right">
                     <Link
                       href={`/leads/${row.id}`}
-                      className="inline-flex items-center gap-1 text-xs font-bold text-brand"
+                      className="inline-flex items-center gap-1 text-xs font-semibold text-brand"
                     >
                       View
                       <ArrowRight size={13} />
@@ -898,13 +1174,21 @@ export default async function RevenuePage() {
 
 
 
+
+
+
+
           CLOSING THIS MONTH
+
+
+
+
 
 
 
       =================================================== */}
 
-      <section className="card-pad mt-4">
+      <section className="revenue-closing-card card-pad mt-4">
         <div>
           <div className="eyebrow">Closing</div>
 
@@ -927,7 +1211,15 @@ export default async function RevenuePage() {
 
 
 
+
+
+
+
                   flex
+
+
+
+
 
 
 
@@ -935,7 +1227,15 @@ export default async function RevenuePage() {
 
 
 
+
+
+
+
                   justify-between
+
+
+
+
 
 
 
@@ -943,7 +1243,15 @@ export default async function RevenuePage() {
 
 
 
+
+
+
+
                   rounded-xl
+
+
+
+
 
 
 
@@ -951,7 +1259,15 @@ export default async function RevenuePage() {
 
 
 
+
+
+
+
                   border-slate-100
+
+
+
+
 
 
 
@@ -959,7 +1275,15 @@ export default async function RevenuePage() {
 
 
 
+
+
+
+
                   py-3
+
+
+
+
 
 
 
@@ -967,7 +1291,15 @@ export default async function RevenuePage() {
 
 
 
+
+
+
+
                   hover:bg-slate-50
+
+
+
+
 
 
 
@@ -992,7 +1324,7 @@ export default async function RevenuePage() {
               </div>
 
               <div className="text-right">
-                <div className="font-bold text-slate-800">
+                <div className="font-semibold text-slate-800">
                   {formatMoney(
                     row.weighted_value,
 
@@ -1006,7 +1338,7 @@ export default async function RevenuePage() {
           ))}
         </div>
       </section>
-    </>
+    </div>
   );
 }
 
@@ -1014,11 +1346,19 @@ export default async function RevenuePage() {
 
 
 
+
+
+
+
    COMPONENTS
 
 
 
-\========================================================= */
+
+
+
+
+\\========================================================= */
 
 function MetricCard({
   icon,
@@ -1038,14 +1378,14 @@ function MetricCard({
   sub?: string;
 }) {
   return (
-    <div className="rounded-xl bg-slate-50 p-4">
+    <div className="revenue-metric-card rounded-xl bg-slate-50 p-4">
       <div className="flex items-center gap-2 text-xs font-semibold text-slate-400">
         {icon}
 
         {label}
       </div>
 
-      <div className="mt-2 text-xl font-bold text-slate-800">{value}</div>
+      <div className="mt-2 text-xl font-semibold text-slate-800">{value}</div>
 
       {sub && <div className="mt-1 text-[11px] text-slate-400">{sub}</div>}
     </div>
@@ -1062,10 +1402,10 @@ function MiniValue({
   value: string;
 }) {
   return (
-    <div className="flex items-center justify-between gap-4">
+    <div className="revenue-mini-value flex items-center justify-between gap-4">
       <span className="text-xs text-slate-400">{label}</span>
 
-      <span className="text-sm font-bold text-slate-700">{value}</span>
+      <span className="text-sm font-semibold text-slate-700">{value}</span>
     </div>
   );
 }
@@ -1114,7 +1454,7 @@ function BreakdownCard({
     );
 
   return (
-    <section className="card-pad">
+    <section className="revenue-breakdown-card card-pad">
       <div className="flex items-center justify-between">
         <div>
           <div className="eyebrow">{eyebrow}</div>
@@ -1142,7 +1482,15 @@ function BreakdownCard({
 
 
 
+
+
+
+
                 rounded-xl
+
+
+
+
 
 
 
@@ -1150,11 +1498,23 @@ function BreakdownCard({
 
 
 
+
+
+
+
                 border-slate-100
 
 
 
+
+
+
+
                 p-3
+
+
+
+
 
 
 
@@ -1174,7 +1534,7 @@ function BreakdownCard({
                 </div>
 
                 <div className="text-right">
-                  <div className="text-sm font-bold text-slate-800">
+                  <div className="text-sm font-semibold text-slate-800">
                     {formatMoney(
                       row.weighted,
 
@@ -1219,11 +1579,19 @@ function BreakdownCard({
 
 
 
+
+
+
+
    HELPERS
 
 
 
-\========================================================= */
+
+
+
+
+\\========================================================= */
 
 type FxRateResult = {
   rate: number | null;
@@ -1236,7 +1604,7 @@ type FxRateResult = {
 async function getUsdInrRate(): Promise<FxRateResult> {
   try {
     const response = await fetch(
-      "https://api.frankfurter.dev/v2/rate/usd/inr",
+      "https\://api.frankfurter.dev/v2/rate/usd/inr",
 
       {
         next: {
@@ -1275,9 +1643,15 @@ async function getUsdInrRate(): Promise<FxRateResult> {
   } catch {
     /*
 
+
+
      * Optional fallback for production/local development.
 
+
+
      * Set USD_INR_FALLBACK_RATE in .env.local and Vercel if desired.
+
+
 
      */
 

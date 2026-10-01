@@ -20,24 +20,35 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 
 export type CampaignWorkspaceRow = {
   id: string;
+
   externalId: string;
+
   name: string;
+
   platform: string;
 
   spend: number;
+
   spendCurrency: string;
 
   impressions: number;
+
   clicks: number;
 
   leads: number;
+
   qualified: number;
+
   highIntent: number;
+
   paymentPending: number;
+
   paid: number;
+
   enrolled: number;
 
   revenueInr: number;
+
   revenueUsd: number;
 
   cpl: number | null;
@@ -70,51 +81,79 @@ export type CampaignSortMode =
 
 export type CampaignWorkspaceFilters = {
   query: string;
+
   platform: string;
+
   outcome: CampaignOutcomeFilter;
+
   sortMode: CampaignSortMode;
+
   page: number;
+
   pageSize: number;
 };
 
 export type CampaignWorkspaceSummary = {
   campaigns: number;
+
   spendByCurrency: Record<string, number>;
+
   clicks: number;
+
   leads: number;
+
   qualified: number;
+
   enrolled: number;
+
   revenueInr: number;
+
   revenueUsd: number;
 };
 
 export type CampaignWorkspacePlatform = {
   platform: string;
+
   count: number;
 };
 
 export type CampaignWorkspacePagination = {
   page: number;
+
   pageSize: number;
+
   total: number;
+
   totalPages: number;
+
   from: number;
+
   to: number;
 };
 
 export function CampaignsWorkspace({
   campaigns,
+
   summary,
+
   platforms,
+
   pagination,
+
   filters,
+
   mock,
 }: {
   campaigns: CampaignWorkspaceRow[];
+
   summary: CampaignWorkspaceSummary;
+
   platforms: CampaignWorkspacePlatform[];
+
   pagination: CampaignWorkspacePagination;
+
   filters: CampaignWorkspaceFilters;
+
   mock: boolean;
 }) {
   const router = useRouter();
@@ -147,6 +186,7 @@ export function CampaignsWorkspace({
         scroll: false,
       });
     },
+
     [pathname, router, searchParams],
   );
 
@@ -160,6 +200,7 @@ export function CampaignsWorkspace({
     const timer = window.setTimeout(() => {
       replaceParams({
         q: next || null,
+
         page: null,
       });
     }, 350);
@@ -169,6 +210,7 @@ export function CampaignsWorkspace({
 
   const allCampaignCount = useMemo(
     () => platforms.reduce((total, item) => total + item.count, 0),
+
     [platforms],
   );
 
@@ -182,16 +224,20 @@ export function CampaignsWorkspace({
 
     replaceParams({
       q: null,
+
       platform: null,
+
       outcome: null,
+
       sort: null,
+
       page: null,
     });
   };
 
   return (
-    <>
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-6">
+    <div className="campaigns-polish">
+      <div className="campaigns-metric-grid grid gap-3 sm:grid-cols-2 xl:grid-cols-6">
         <Metric
           label="Campaigns"
           value={summary.campaigns.toLocaleString("en-IN")}
@@ -227,6 +273,7 @@ export function CampaignsWorkspace({
             summary.leads > 0
               ? `${percent(
                   summary.qualified,
+
                   summary.leads,
                 )} of attributed leads`
               : "no attributed leads"
@@ -246,14 +293,15 @@ export function CampaignsWorkspace({
         />
       </div>
 
-      <section className="card mt-4 overflow-hidden">
-        <div className="border-b border-slate-100 p-4">
+      <section className="campaigns-table-shell card mt-4 overflow-hidden">
+        <div className="campaigns-toolbar border-b border-slate-100 p-4">
           <div className="flex flex-wrap items-center gap-2">
             <PlatformButton
               active={filters.platform === "all"}
               onClick={() =>
                 replaceParams({
                   platform: null,
+
                   page: null,
                 })
               }
@@ -268,6 +316,7 @@ export function CampaignsWorkspace({
                 onClick={() =>
                   replaceParams({
                     platform: item.platform,
+
                     page: null,
                   })
                 }
@@ -277,8 +326,8 @@ export function CampaignsWorkspace({
             ))}
           </div>
 
-          <div className="mt-4 flex flex-col gap-3 xl:flex-row xl:items-center">
-            <div className="flex min-w-0 flex-1 items-center rounded-xl border border-slate-200 bg-slate-50 px-3 transition focus-within:border-brand/30 focus-within:bg-white focus-within:ring-4 focus-within:ring-brand/5">
+          <div className="campaigns-filter-row mt-4 flex flex-col gap-3 xl:flex-row xl:items-center">
+            <div className="campaigns-search flex min-w-0 flex-1 items-center rounded-xl border border-slate-200 bg-slate-50 px-3 transition focus-within:border-brand/30 focus-within:bg-white focus-within:ring-4 focus-within:ring-brand/5">
               <Search size={15} className="shrink-0 text-slate-400" />
 
               <input
@@ -295,6 +344,7 @@ export function CampaignsWorkspace({
                 replaceParams({
                   outcome:
                     event.target.value === "all" ? null : event.target.value,
+
                   page: null,
                 })
               }
@@ -321,6 +371,7 @@ export function CampaignsWorkspace({
                     event.target.value === "spend_desc"
                       ? null
                       : event.target.value,
+
                   page: null,
                 })
               }
@@ -349,7 +400,7 @@ export function CampaignsWorkspace({
             )}
           </div>
 
-          <div className="mt-3 flex flex-wrap items-center justify-between gap-3 text-xs text-slate-500">
+          <div className="campaigns-result-meta mt-3 flex flex-wrap items-center justify-between gap-3 text-xs text-slate-500">
             <span>
               <strong className="text-slate-800">{summary.campaigns}</strong>{" "}
               campaigns shown
@@ -363,22 +414,34 @@ export function CampaignsWorkspace({
           </div>
         </div>
 
-        <div className="overflow-x-auto">
-          <table className="min-w-[1600px] w-full text-left">
+        <div className="campaigns-table-scroll overflow-x-auto">
+          <table className="campaigns-table min-w-[1600px] w-full text-left">
             <thead>
-              <tr className="border-b border-slate-200 bg-slate-50/60 text-[10px] uppercase tracking-[0.1em] text-slate-400">
+              <tr className="campaigns-table-head border-b border-slate-200 bg-slate-50/60 text-[10px] uppercase tracking-[0.1em] text-slate-400">
                 <Header>Campaign</Header>
+
                 <Header>Platform</Header>
+
                 <Header>Spend</Header>
+
                 <Header>Clicks</Header>
+
                 <Header>Leads</Header>
+
                 <Header>Qualified</Header>
+
                 <Header>Enrolled</Header>
+
                 <Header>CPL</Header>
+
                 <Header>CPQL</Header>
+
                 <Header>CAC</Header>
+
                 <Header>CRM Revenue</Header>
+
                 <Header>ROAS</Header>
+
                 <Header>Funnel</Header>
               </tr>
             </thead>
@@ -409,7 +472,7 @@ export function CampaignsWorkspace({
           </table>
         </div>
 
-        <div className="border-t border-slate-100 bg-slate-50/50 px-5 py-3 text-[10px] leading-5 text-slate-400">
+        <div className="campaigns-footnote border-t border-slate-100 bg-slate-50/50 px-5 py-3 text-[10px] leading-5 text-slate-400">
           Campaign outcomes are based on deterministic CRM attribution from
           captured advertising identifiers. Revenue currencies are kept
           separate. ROAS is shown only when the reporting view provides a valid
@@ -417,7 +480,7 @@ export function CampaignsWorkspace({
         </div>
 
         {pagination.totalPages > 1 && (
-          <div className="flex flex-col gap-3 border-t border-slate-100 bg-white px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="campaigns-pagination flex flex-col gap-3 border-t border-slate-100 bg-white px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
             <div className="text-xs font-semibold text-slate-500">
               Showing {pagination.from}–{pagination.to} of {pagination.total} ·
               Page {pagination.page} of {pagination.totalPages}
@@ -459,7 +522,7 @@ export function CampaignsWorkspace({
           </div>
         )}
       </section>
-    </>
+    </div>
   );
 }
 
@@ -479,8 +542,8 @@ function pageHref(current: ReturnType<typeof useSearchParams>, page: number) {
 
 function CampaignRow({ campaign }: { campaign: CampaignWorkspaceRow }) {
   return (
-    <tr className="border-b border-slate-100 last:border-0 hover:bg-slate-50/70">
-      <td className="max-w-[310px] px-4 py-4">
+    <tr className="campaigns-row border-b border-slate-100 last:border-0 hover:bg-slate-50/70">
+      <td className="campaigns-name-cell max-w-[310px] px-4 py-4">
         <div className="truncate font-semibold text-slate-900">
           {campaign.name}
         </div>
@@ -492,7 +555,12 @@ function CampaignRow({ campaign }: { campaign: CampaignWorkspaceRow }) {
 
       <td className="px-4 py-4">
         <span
-          className={`rounded-lg px-2 py-1 text-[10px] font-black ${
+          data-platform={
+            campaign.platform.toLowerCase().includes("google")
+              ? "google"
+              : "meta"
+          }
+          className={`campaigns-platform-badge rounded-lg px-2 py-1 text-[10px] font-black ${
             campaign.platform.toLowerCase().includes("google")
               ? "bg-blue-50 text-blue-700"
               : "bg-violet-50 text-violet-700"
@@ -575,7 +643,7 @@ function CampaignRow({ campaign }: { campaign: CampaignWorkspaceRow }) {
           <span className="text-xs text-slate-400">—</span>
         ) : (
           <span
-            className={`text-sm font-black ${
+            className={`campaigns-roas text-sm font-black ${
               campaign.roas >= 1 ? "text-emerald-600" : "text-amber-600"
             }`}
           >
@@ -599,17 +667,23 @@ function CampaignRow({ campaign }: { campaign: CampaignWorkspaceRow }) {
 
 function Metric({
   label,
+
   value,
+
   note,
+
   icon,
 }: {
   label: string;
+
   value: string;
+
   note: string;
+
   icon: React.ReactNode;
 }) {
   return (
-    <div className="card-pad transition hover:-translate-y-0.5 hover:shadow-sm">
+    <div className="campaigns-metric card-pad transition">
       <div className="flex items-center justify-between gap-3">
         <div className="text-xs font-bold uppercase tracking-[.08em] text-slate-400">
           {label}
@@ -627,20 +701,27 @@ function Metric({
 
 function PlatformButton({
   active,
+
   onClick,
+
   label,
+
   count,
 }: {
   active: boolean;
+
   onClick: () => void;
+
   label: string;
+
   count: number;
 }) {
   return (
     <button
       type="button"
+      data-active={active ? "true" : "false"}
       onClick={onClick}
-      className={`inline-flex items-center gap-1.5 rounded-xl border px-3 py-2 text-xs font-bold transition ${
+      className={`campaigns-platform-tab inline-flex items-center gap-1.5 rounded-xl border px-3 py-2 text-xs font-bold transition ${
         active
           ? "border-brand/20 bg-brand/[0.06] text-brand shadow-sm"
           : "border-slate-200 bg-white text-slate-500 hover:border-slate-300 hover:text-slate-800"
@@ -660,20 +741,26 @@ function PlatformButton({
 }
 
 function Header({ children }: { children: React.ReactNode }) {
-  return <th className="px-4 py-3 font-bold">{children}</th>;
+  return (
+    <th className="campaigns-header-cell px-4 py-3 font-bold">{children}</th>
+  );
 }
 
 function CountWithRate({
   count,
+
   rate,
+
   label,
 }: {
   count: number;
+
   rate: string | null;
+
   label: string;
 }) {
   return (
-    <div>
+    <div className="campaigns-count-rate">
       <div className="text-sm font-bold text-slate-800">
         {count.toLocaleString("en-IN")}
       </div>
@@ -689,7 +776,7 @@ function CountWithRate({
 
 function MiniPill({ label, value }: { label: string; value: number }) {
   return (
-    <span className="rounded-md bg-slate-100 px-1.5 py-1 text-[8px] font-black text-slate-600">
+    <span className="campaigns-funnel-pill rounded-md bg-slate-100 px-1.5 py-1 text-[8px] font-black text-slate-600">
       {label} {value}
     </span>
   );
@@ -717,7 +804,9 @@ function formatMoney(value: number, currency: string) {
   try {
     return new Intl.NumberFormat(currency === "INR" ? "en-IN" : "en-US", {
       style: "currency",
+
       currency: currency || "INR",
+
       maximumFractionDigits: safe >= 1000 ? 0 : 2,
     }).format(safe);
   } catch {
@@ -733,6 +822,8 @@ function formatCurrencyRecord(values: Record<string, number>) {
   }
 
   return entries
+
     .map(([currency, amount]) => formatMoney(amount, currency))
+
     .join(" · ");
 }

@@ -84,18 +84,31 @@ export default async function PaidMediaLeadsPage({
 
   const workspace = await getPaidMediaLeadsWorkspace({
     query: q,
+
     platform,
+
     stage,
+
     temperature,
+
     payment,
+
     match,
+
     course,
+
     country,
+
     campaign,
+
     from,
+
     to,
+
     selectedLeadId,
+
     page,
+
     pageSize: PAGE_SIZE,
   });
 
@@ -171,14 +184,34 @@ export default async function PaidMediaLeadsPage({
   }>;
 
   return (
-    <>
+    <div className="paid-media-polish">
       <PageHeader
+        eyebrow="Paid acquisition"
         title="Paid Media Leads"
         description="Individual Google, Facebook, Instagram and Meta leads connected to campaign attribution, CRM stage, payments, enrollment, revenue and allocated acquisition cost."
+        actions={
+          <div className="flex flex-wrap gap-2">
+            <Link href="/campaigns" className="btn-secondary">
+              Campaigns
+            </Link>
+
+            <Link href="/funnel" className="btn-primary">
+              Funnel analytics
+              <ArrowRight size={15} />
+            </Link>
+          </div>
+        }
       />
 
-      <section className="mt-6 overflow-x-auto">
-        <div className="inline-flex min-w-full gap-2 rounded-2xl border border-slate-100 bg-white p-2 shadow-sm">
+      {workspace.warning && (
+        <div className="paid-media-warning">
+          Paid Media Leads loaded through the legacy fallback.{" "}
+          {workspace.warning}
+        </div>
+      )}
+
+      <section className="paid-media-platforms mt-6 overflow-x-auto">
+        <div className="paid-media-platform-shell inline-flex min-w-full gap-2">
           <PlatformTab
             href={platformHref(resolved, "all")}
             active={!platform || platform === "all"}
@@ -216,8 +249,8 @@ export default async function PaidMediaLeadsPage({
         </div>
       </section>
 
-      <section className="mt-4">
-        <div className="flex flex-wrap items-center gap-2">
+      <section className="paid-media-quickbar mt-4">
+        <div className="paid-media-quickbar-row flex flex-wrap items-center gap-2">
           <span className="mr-1 text-xs font-bold uppercase tracking-wide text-slate-400">
             Quick filters
           </span>
@@ -260,7 +293,7 @@ export default async function PaidMediaLeadsPage({
         </div>
 
         {activeFilters.length > 0 && (
-          <div className="mt-3 flex flex-wrap items-center gap-2">
+          <div className="paid-media-active-filters mt-3 flex flex-wrap items-center gap-2">
             <span className="mr-1 text-xs font-semibold text-slate-400">
               Active:
             </span>
@@ -287,7 +320,7 @@ export default async function PaidMediaLeadsPage({
         )}
       </section>
 
-      <section className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+      <section className="paid-media-metrics mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <SummaryCard
           icon={<Users size={17} />}
           label="Paid media leads"
@@ -359,7 +392,7 @@ export default async function PaidMediaLeadsPage({
         />
       </section>
 
-      <section className="card-pad mt-4">
+      <section className="paid-media-filter-panel card-pad mt-4">
         <div className="flex items-center gap-2">
           <Filter size={16} className="text-slate-400" />
 
@@ -368,7 +401,7 @@ export default async function PaidMediaLeadsPage({
 
         <form
           method="get"
-          className="mt-4 grid gap-3 lg:grid-cols-4 xl:grid-cols-6"
+          className="paid-media-filter-grid mt-4 grid gap-3 lg:grid-cols-4 xl:grid-cols-6"
         >
           <div className="lg:col-span-2">
             <label className="mb-1 block text-xs font-semibold text-slate-500">
@@ -520,7 +553,7 @@ export default async function PaidMediaLeadsPage({
         </form>
       </section>
 
-      <section className="card-pad mt-4">
+      <section className="paid-media-results card-pad mt-4">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
             <div className="eyebrow">Individual acquisition records</div>
@@ -535,9 +568,9 @@ export default async function PaidMediaLeadsPage({
           </div>
         </div>
 
-        <div className="mt-4 max-h-[720px] overflow-auto rounded-xl border border-slate-100">
-          <table className="min-w-[1500px] text-left text-xs">
-            <thead className="sticky top-0 z-10 bg-white/95 backdrop-blur">
+        <div className="paid-media-table-wrap mt-4 max-h-[720px] overflow-auto">
+          <table className="paid-media-table min-w-[1500px] text-left text-xs">
+            <thead className="paid-media-table-head sticky top-0 z-10 backdrop-blur">
               <tr className="border-b border-slate-100 uppercase tracking-wide text-slate-400">
                 <th className="px-3 py-2.5">Lead</th>
 
@@ -581,7 +614,7 @@ export default async function PaidMediaLeadsPage({
                 leads.map((lead) => (
                   <tr
                     key={lead.lead_id}
-                    className="border-b border-slate-50 transition-colors duration-150 hover:bg-slate-50/80 last:border-0"
+                    className="paid-media-row border-b transition-colors duration-150 last:border-0"
                   >
                     <td className="px-3 py-3">
                       <div className="font-semibold text-slate-800">
@@ -691,14 +724,14 @@ export default async function PaidMediaLeadsPage({
 
                             lead.lead_id,
                           )}
-                          className="inline-flex rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-[11px] font-bold text-slate-600 transition-colors hover:bg-slate-50"
+                          className="paid-media-quick-view inline-flex rounded-lg px-2.5 py-1.5 text-[11px] font-semibold transition-colors"
                         >
                           Quick view
                         </Link>
 
                         <Link
                           href={`/leads/${lead.lead_id}`}
-                          className="inline-flex items-center gap-1 font-bold text-brand"
+                          className="paid-media-open-link inline-flex items-center gap-1 font-semibold text-brand"
                         >
                           Open
                           <ArrowRight size={13} />
@@ -712,7 +745,7 @@ export default async function PaidMediaLeadsPage({
           </table>
         </div>
 
-        <div className="mt-4 flex items-center justify-between gap-3 border-t border-slate-100 pt-4">
+        <div className="paid-media-pagination mt-4 flex items-center justify-between gap-3 border-t pt-4">
           <div className="text-xs text-slate-400">
             Showing {total === 0 ? 0 : fromIndex + 1}
             {"–"}
@@ -748,11 +781,11 @@ export default async function PaidMediaLeadsPage({
           <Link
             href={closeQuickViewHref(resolved)}
             aria-label="Close quick view"
-            className="fixed inset-0 z-40 bg-slate-950/20 backdrop-blur-[1px]"
+            className="paid-media-drawer-backdrop fixed inset-0 z-40"
           />
 
-          <aside className="fixed inset-y-0 right-0 z-50 w-full max-w-[520px] overflow-y-auto border-l border-slate-200 bg-white shadow-2xl">
-            <div className="sticky top-0 z-10 border-b border-slate-100 bg-white/95 px-5 py-4 backdrop-blur">
+          <aside className="paid-media-drawer fixed inset-y-0 right-0 z-50 w-full max-w-[520px] overflow-y-auto">
+            <div className="paid-media-drawer-header sticky top-0 z-10 px-5 py-4 backdrop-blur">
               <div className="flex items-start justify-between gap-4">
                 <div>
                   <div className="eyebrow">Paid media lead</div>
@@ -770,7 +803,7 @@ export default async function PaidMediaLeadsPage({
 
                 <Link
                   href={closeQuickViewHref(resolved)}
-                  className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-slate-200 text-lg font-medium text-slate-500 transition-colors hover:bg-slate-50"
+                  className="paid-media-drawer-close inline-flex h-9 w-9 items-center justify-center rounded-lg text-lg font-medium transition-colors"
                   aria-label="Close"
                 >
                   ×
@@ -793,7 +826,7 @@ export default async function PaidMediaLeadsPage({
               </div>
             </div>
 
-            <div className="space-y-4 p-5">
+            <div className="paid-media-drawer-body space-y-4 p-5">
               <DrawerSection title="Acquisition">
                 <DrawerRow
                   label="Campaign"
@@ -972,7 +1005,7 @@ export default async function PaidMediaLeadsPage({
           </aside>
         </>
       )}
-    </>
+    </div>
   );
 }
 
@@ -986,7 +1019,7 @@ function DrawerSection({
   children: React.ReactNode;
 }) {
   return (
-    <section className="rounded-2xl border border-slate-100 bg-white p-4 shadow-sm">
+    <section className="paid-media-drawer-section">
       <div className="text-sm font-bold text-slate-800">{title}</div>
 
       <div className="mt-3 space-y-2">{children}</div>
@@ -1008,7 +1041,7 @@ function DrawerRow({
   mono?: boolean;
 }) {
   return (
-    <div className="flex items-start justify-between gap-4 border-b border-slate-50 py-2 last:border-0">
+    <div className="paid-media-drawer-row flex items-start justify-between gap-4 py-2">
       <span className="text-xs text-slate-400">{label}</span>
 
       <span
@@ -1038,10 +1071,8 @@ function QuickFilter({
   return (
     <Link
       href={href}
-      className={`inline-flex rounded-full border px-3 py-1.5 text-xs font-bold transition-all duration-150 ${
-        active
-          ? "border-slate-900 bg-slate-900 text-white shadow-sm"
-          : "border-slate-200 bg-white text-slate-600 hover:-translate-y-0.5 hover:border-slate-300 hover:bg-slate-50"
+      className={`paid-media-quick-filter inline-flex rounded-full border px-3 py-1.5 text-xs font-semibold transition ${
+        active ? "is-active" : ""
       }`}
     >
       {label}
@@ -1062,7 +1093,7 @@ function ActiveFilterChip({
     <Link
       href={href}
       title={`Remove ${label}`}
-      className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-3 py-1.5 text-xs font-semibold text-slate-600 transition-colors hover:bg-slate-200"
+      className="paid-media-filter-chip inline-flex items-center gap-1 rounded-full px-3 py-1.5 text-xs font-semibold transition-colors"
     >
       <span>{label}</span>
 
@@ -1093,17 +1124,15 @@ function PlatformTab({
   return (
     <Link
       href={href}
-      className={`inline-flex min-w-[132px] items-center justify-between gap-3 rounded-xl px-4 py-3 text-xs font-bold transition-all duration-200 ${
-        active
-          ? "bg-slate-900 text-white shadow-sm"
-          : "bg-slate-50 text-slate-600 hover:-translate-y-0.5 hover:bg-slate-100"
+      className={`paid-media-platform-tab inline-flex min-w-[132px] items-center justify-between gap-3 rounded-xl px-4 py-3 text-xs font-semibold transition ${
+        active ? "is-active" : ""
       }`}
     >
       <span>{label}</span>
 
       <span
-        className={`rounded-full px-2 py-0.5 text-[10px] ${
-          active ? "bg-white/15 text-white" : "bg-white text-slate-500"
+        className={`paid-media-platform-count rounded-full px-2 py-0.5 text-[10px] ${
+          active ? "is-active" : ""
         }`}
       >
         {formatNumber(count)}
@@ -1130,16 +1159,16 @@ function SummaryCard({
   sub: string;
 }) {
   return (
-    <div className="rounded-xl border border-slate-100 bg-white p-4 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md">
-      <div className="flex items-center gap-2 text-xs font-semibold text-slate-400">
+    <div className="paid-media-metric">
+      <div className="paid-media-metric-label flex items-center gap-2 text-xs font-semibold">
         {icon}
 
         {label}
       </div>
 
-      <div className="mt-2 text-xl font-bold text-slate-800">{value}</div>
+      <div className="paid-media-metric-value mt-2 text-xl">{value}</div>
 
-      <div className="mt-1 text-[11px] text-slate-400">{sub}</div>
+      <div className="paid-media-metric-note mt-1 text-[11px]">{sub}</div>
     </div>
   );
 }
@@ -1162,10 +1191,8 @@ function FilterSelect({
   options: Array<[string, string]>;
 }) {
   return (
-    <div>
-      <label className="mb-1 block text-xs font-semibold text-slate-500">
-        {label}
-      </label>
+    <div className="paid-media-filter-field">
+      <label className="mb-1 block text-xs font-semibold">{label}</label>
 
       <select name={name} defaultValue={value} className="input">
         {options.map(([optionValue, optionLabel]) => (
@@ -1200,10 +1227,8 @@ function TextFilter({
   type?: string;
 }) {
   return (
-    <div>
-      <label className="mb-1 block text-xs font-semibold text-slate-500">
-        {label}
-      </label>
+    <div className="paid-media-filter-field">
+      <label className="mb-1 block text-xs font-semibold">{label}</label>
 
       <input
         type={type}
@@ -1239,7 +1264,7 @@ function PlatformBadge({
 
   return (
     <span
-      className={`inline-flex rounded-full px-2 py-1 text-[10px] font-bold ${
+      className={`paid-media-platform-badge inline-flex rounded-full px-2 py-1 text-[10px] font-semibold ${
         classes[key] || "bg-slate-100 text-slate-600"
       }`}
     >
@@ -1263,7 +1288,7 @@ function TemperatureBadge({ value }: { value: string | null }) {
 
   return (
     <span
-      className={`inline-flex rounded-full px-2 py-1 text-[10px] font-bold capitalize ${
+      className={`paid-media-temperature-badge inline-flex rounded-full px-2 py-1 text-[10px] font-semibold capitalize ${
         classes[key] || "bg-slate-100 text-slate-500"
       }`}
     >
@@ -1287,7 +1312,7 @@ function PaymentBadge({ value }: { value: string | null }) {
 
   return (
     <span
-      className={`inline-flex rounded-full px-2 py-1 text-[10px] font-bold ${
+      className={`paid-media-payment-badge inline-flex rounded-full px-2 py-1 text-[10px] font-semibold ${
         classes[key] || "bg-slate-100 text-slate-500"
       }`}
     >
