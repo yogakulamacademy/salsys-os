@@ -5,7 +5,7 @@ import {
 
 import {
   createGoogleAdsAdminClient,
-  getGoogleAdsCustomerId,
+  resolveGoogleAdsRuntime,
   syncGoogleAdsToSupabase,
 } from '@/lib/google-ads';
 
@@ -194,8 +194,27 @@ async function runSync({
     endDate
   );
 
+  /*
+   * Prefer the selected Google Ads customer + Google OAuth
+   * connection. During migration, lib/google-ads.ts safely
+   * falls back to the existing Vercel OIDC / WIF configuration.
+   */
+  const googleAdsRuntime =
+    await resolveGoogleAdsRuntime();
+
   const customerId =
-    getGoogleAdsCustomerId();
+    googleAdsRuntime.customerId;
+
+  if (
+    googleAdsRuntime.authSource ===
+      'legacy_wif' &&
+    googleAdsRuntime.fallbackReason
+  ) {
+    console.warn(
+      'Google Ads integration fallback:',
+      googleAdsRuntime.fallbackReason
+    );
+  }
 
   const supabase =
     createGoogleAdsAdminClient();
@@ -244,12 +263,15 @@ async function runSync({
 
   try {
     const counts =
-      await syncGoogleAdsToSupabase({
-        startDate,
-        endDate,
-        syncRunId:
-          run.id,
-      });
+      await syncGoogleAdsToSupabase(
+        {
+          startDate,
+          endDate,
+          syncRunId:
+            run.id,
+        },
+        googleAdsRuntime
+      );
 
 
     const {
@@ -320,6 +342,14 @@ async function runSync({
         true,
 
       customerId,
+      authSource:
+        googleAdsRuntime.authSource,
+      fallbackReason:
+        googleAdsRuntime.authSource ===
+          'legacy_wif'
+          ? googleAdsRuntime.fallbackReason ??
+            'Unknown integration fallback reason.'
+          : null,
       startDate,
       endDate,
       counts,
