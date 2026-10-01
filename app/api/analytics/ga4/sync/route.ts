@@ -5,6 +5,7 @@ import {
 
 import {
   createGa4AdminClient,
+  resolveGa4Runtime,
   syncGa4ToSupabase,
 } from '@/lib/ga4';
 
@@ -233,17 +234,29 @@ async function executeSync(
   );
 
 
+  /*
+   * Resolve the selected GA4 property + Google credential.
+   *
+   * During migration this prefers Account Integrations OAuth,
+   * but lib/ga4.ts retains the legacy Vercel OIDC/WIF path as
+   * a safe fallback until production OAuth has been verified.
+   */
+  const ga4Runtime =
+    await resolveGa4Runtime();
+
+
   const propertyId =
-    process.env
-      .GA4_PROPERTY_ID
-      ?.trim();
+    ga4Runtime.propertyId;
 
 
   if (
-    !propertyId
+    ga4Runtime.authSource ===
+      'legacy_wif' &&
+    ga4Runtime.fallbackReason
   ) {
-    throw new Error(
-      'GA4_PROPERTY_ID is not configured.'
+    console.warn(
+      'GA4 integration fallback:',
+      ga4Runtime.fallbackReason
     );
   }
 
@@ -298,10 +311,13 @@ async function executeSync(
   try {
 
     const counts =
-      await syncGa4ToSupabase({
-        startDate,
-        endDate,
-      });
+      await syncGa4ToSupabase(
+        {
+          startDate,
+          endDate,
+        },
+        ga4Runtime
+      );
 
 
     const {
@@ -359,6 +375,8 @@ async function executeSync(
     return {
       ok: true,
       propertyId,
+      authSource:
+        ga4Runtime.authSource,
       startDate,
       endDate,
       counts,
