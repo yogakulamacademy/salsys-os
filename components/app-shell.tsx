@@ -1,4 +1,4 @@
-'use client';
+"use client";
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -22,9 +22,11 @@ import {
   Menu,
   MessageSquareText,
   Plus,
+  PlugZap,
   RefreshCw,
   Search,
   Settings,
+  ShieldCheck,
   Tags,
   Target,
   UsersRound,
@@ -95,16 +97,16 @@ const adminNavGroups: NavGroup[] = [
     items: [
       { href: "/campaigns", label: "Campaigns", icon: Target },
       { href: "/paid-media-leads", label: "Paid Media Leads", icon: Megaphone },
-      { href: "/attribution", label: "Attribution", icon: LineChart },
       { href: "/re-engaged", label: "Lead Activity", icon: RefreshCw },
-      { href: "/seo", label: "SEO", icon: FileSearch },
     ],
   },
   {
-    label: "Intelligence",
+    label: "Insights",
     items: [
       { href: "/analytics", label: "Analytics", icon: BarChart3 },
       { href: "/funnel", label: "Funnel", icon: GitBranch },
+      { href: "/attribution", label: "Attribution", icon: LineChart },
+      { href: "/seo", label: "SEO", icon: FileSearch },
       { href: "/revenue", label: "Revenue Forecast", icon: CircleDollarSign },
       { href: "/tracking", label: "Tracking", icon: Tags },
     ],
@@ -128,14 +130,24 @@ const adminOnlyTeamNavGroup: NavGroup = {
       label: "Contact Intelligence",
       icon: Activity,
     },
+    {
+      href: "/settings/team",
+      label: "Team & Access",
+      icon: ShieldCheck,
+    },
   ],
 };
 
 const adminOnlySystemNavGroup: NavGroup = {
   label: "System",
   items: [
-    { href: "/system-health", label: "System Health", icon: Activity },
     { href: "/settings", label: "Settings", icon: Settings },
+    {
+      href: "/settings/integrations",
+      label: "Integrations",
+      icon: PlugZap,
+    },
+    { href: "/system-health", label: "System Health", icon: Activity },
   ],
 };
 
@@ -155,6 +167,14 @@ const employeeNavGroups: NavGroup[] = [
     ],
   },
 ];
+
+function isNavActive(pathname: string, href: string) {
+  if (href === "/settings") {
+    return pathname === "/settings";
+  }
+
+  return pathname === href || pathname.startsWith(`${href}/`);
+}
 
 function BrandMark() {
   return (
@@ -214,7 +234,7 @@ export function AppShell({ children }: { children: ReactNode }) {
 
   const current = useMemo(
     () =>
-      visibleNav.find((item) => pathname.startsWith(item.href))?.label ??
+      visibleNav.find((item) => isNavActive(pathname, item.href))?.label ??
       (employee ? "Admissions Workspace" : "Growth CRM"),
     [pathname, visibleNav, employee],
   );
@@ -583,6 +603,16 @@ export function AppShell({ children }: { children: ReactNode }) {
                 )}
 
                 {admin && (
+                  <Link
+                    href="/settings/integrations"
+                    className="topbar-account-row"
+                  >
+                    <PlugZap size={17} />
+                    <span>Integrations</span>
+                  </Link>
+                )}
+
+                {admin && (
                   <Link href="/settings/team" className="topbar-account-row">
                     <UsersRound size={17} />
                     <span>Team &amp; access</span>
@@ -684,7 +714,7 @@ export function AppShell({ children }: { children: ReactNode }) {
                 <div className="sidebar-group-items">
                   {group.items.map((item) => {
                     const Icon = item.icon;
-                    const active = pathname.startsWith(item.href);
+                    const active = isNavActive(pathname, item.href);
 
                     return (
                       <Link
