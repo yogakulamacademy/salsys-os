@@ -19,7 +19,7 @@ import {
 
 import {
 
-  getGoogleAccessTokenForConnection,
+  getGoogleAccessTokenForOrganizationConnection,
 
 } from '@/lib/integrations/google-connection';
 
@@ -252,17 +252,22 @@ type SyncGoogleAdsOptions = {
 
 export type GoogleAdsRuntime = {
 
+  organizationId: string;
+
+  connectionId: string;
+
+  assetId: string;
+
   customerId: string;
 
-  authSource:
-    | 'google_oauth'
-    | 'legacy_wif';
-
-  accessToken?: string;
-
-  fallbackReason?:
+  assetName?:
     | string
     | null;
+
+  authSource:
+    'google_oauth';
+
+  accessToken?: string;
 
 };
 
@@ -460,191 +465,160 @@ SupabaseClient {
 
 
 
-export async function resolveGoogleAdsRuntime():
-Promise<GoogleAdsRuntime> {
+export async function resolveGoogleAdsRuntimes(
+  options: {
+    organizationId?: string;
+    assetId?: string;
+  } = {}
+): Promise<GoogleAdsRuntime[]> {
 
   const supabase =
     createGoogleAdsAdminClient();
 
-  let integrationReason:
-    string | null =
-    null;
-
-  try {
-
-    const {
-      data:
-        selectedRows,
-      error:
-        assetError,
-    } =
-      await supabase
-        .from(
-          'integration_assets'
-        )
-        .select(
-          'id,connection_id,external_id,name'
-        )
-        .eq(
-          'asset_type',
-          'google_ads_customer'
-        )
-        .eq(
-          'is_selected',
-          true
-        )
-        .limit(
-          2
-        );
-
-    if (
-      assetError
-    ) {
-      throw new Error(
-        assetError.message
+  let query =
+    supabase
+      .from(
+        'integration_assets'
+      )
+      .select(
+        'id,organization_id,connection_id,external_id,name'
+      )
+      .eq(
+        'asset_type',
+        'google_ads_customer'
+      )
+      .eq(
+        'is_selected',
+        true
       );
-    }
 
-    const selected =
-      (
-        selectedRows ??
-        []
-      ) as Array<{
-        id: string;
-        connection_id:
-          string;
-        external_id:
-          string;
-        name:
-          | string
-          | null;
-      }>;
-
-    if (
-      selected.length >
-      1
-    ) {
-      throw new Error(
-        'More than one Google Ads customer is selected. Keep only one selected Google Ads customer.'
+  if (
+    options.organizationId
+  ) {
+    query =
+      query.eq(
+        'organization_id',
+        options.organizationId
       );
-    }
+  }
 
-    if (
-      selected.length ===
-      1
-    ) {
-      const asset =
-        selected[0];
+  if (
+    options.assetId
+  ) {
+    query =
+      query.eq(
+        'id',
+        options.assetId
+      );
+  }
 
-      const {
-        data:
-          connectionRow,
-        error:
-          connectionError,
-      } =
-        await supabase
-          .from(
-            'integration_connections'
-          )
-          .select(
-            'id,provider,status'
-          )
-          .eq(
-            'id',
-            asset.connection_id
-          )
-          .maybeSingle();
+  const {
+    data:
+      selectedRows,
+    error:
+      assetError,
+  } =
+    await query.order(
+      'discovered_at',
+      {
+        ascending:
+          true,
+      }
+    );
+
+  if (
+    assetError
+  ) {
+    throw new Error(
+      assetError.message
+    );
+  }
+
+  const selected =
+    (
+      selectedRows ??
+      []
+    ) as Array<{
+      id: string;
+      organization_id:
+        | string
+        | null;
+      connection_id:
+        string;
+      external_id:
+        string;
+      name:
+        | string
+        | null;
+    }>;
+
+  return selected.map(
+    (asset) => {
 
       if (
-        connectionError
+        !asset.organization_id
       ) {
         throw new Error(
-          connectionError.message
+          `Selected Google Ads asset ${asset.id} is not assigned to an organization.`
         );
       }
-
-      const connection =
-        connectionRow as
-          | {
-              id: string;
-              provider: string;
-              status: string;
-            }
-          | null;
-
-      if (
-        !connection ||
-        connection.provider !==
-          'google' ||
-        connection.status !==
-          'connected'
-      ) {
-        throw new Error(
-          'The selected Google Ads customer is not attached to an active Google connection.'
-        );
-      }
-
-      const accessToken =
-        await getGoogleAccessTokenForConnection(
-          connection.id
-        );
 
       return {
+        organizationId:
+          asset.organization_id,
+        connectionId:
+          asset.connection_id,
+        assetId:
+          asset.id,
         customerId:
           normalizeCustomerId(
             asset.external_id
           ),
+        assetName:
+          asset.name,
         authSource:
-          'google_oauth',
-        accessToken,
-        fallbackReason:
-          null,
+          'google_oauth' as const,
       };
+
     }
-
-    integrationReason =
-      'No selected Google Ads customer was found in Account integrations.';
-
-  } catch (
-    error
-  ) {
-    integrationReason =
-      error instanceof Error
-        ? error.message
-        : 'Google account integration could not be resolved.';
-  }
-
-  /*
-   * Safe migration fallback:
-   * keep the existing Vercel OIDC / WIF path available
-   * until the OAuth-backed production sync has been verified.
-   */
-  const legacyCustomerId =
-    process.env
-      .GOOGLE_ADS_CUSTOMER_ID
-      ?.trim();
-
-  if (
-    legacyCustomerId
-  ) {
-    return {
-      customerId:
-        normalizeCustomerId(
-          legacyCustomerId
-        ),
-      authSource:
-        'legacy_wif',
-      fallbackReason:
-        integrationReason,
-    };
-  }
-
-  throw new Error(
-    integrationReason ||
-      'No Google Ads integration or legacy GOOGLE_ADS_CUSTOMER_ID is configured.'
   );
+
 }
 
+
+export async function resolveGoogleAdsRuntime(
+  options: {
+    organizationId?: string;
+    assetId?: string;
+  } = {}
+): Promise<GoogleAdsRuntime> {
+
+  const runtimes =
+    await resolveGoogleAdsRuntimes(
+      options
+    );
+
+  if (
+    runtimes.length ===
+    0
+  ) {
+    throw new Error(
+      'No selected Google Ads customer is configured in Account integrations.'
+    );
+  }
+
+  if (
+    runtimes.length >
+    1
+  ) {
+    throw new Error(
+      'More than one Google Ads customer is selected. Specify an organization or integration asset.'
+    );
+  }
+
+  return runtimes[0]!;
+
+}
 
 
 class VercelOidcSubjectTokenSupplier
@@ -1229,6 +1203,8 @@ async function clearRange(
 
   table: string,
 
+  organizationId: string,
+
   customerId: string,
 
   startDate: string,
@@ -1252,6 +1228,11 @@ async function clearRange(
       )
 
       .delete()
+
+      .eq(
+        'organization_id',
+        organizationId
+      )
 
       .eq(
 
@@ -1662,28 +1643,12 @@ export async function syncGoogleAdsToSupabase(
   const customerId =
     resolvedRuntime.customerId;
 
-  let accessToken:
-    string;
-
-  if (
-    resolvedRuntime.authSource ===
-      'google_oauth'
-  ) {
-    if (
-      !resolvedRuntime.accessToken
-    ) {
-      throw new Error(
-        'Google OAuth access token is missing.'
-      );
-    }
-
-    accessToken =
-      resolvedRuntime.accessToken;
-
-  } else {
-    accessToken =
-      await getGoogleAdsAccessToken();
-  }
+  const accessToken =
+    resolvedRuntime.accessToken ??
+    await getGoogleAccessTokenForOrganizationConnection(
+      resolvedRuntime.connectionId,
+      resolvedRuntime.organizationId
+    );
 
 
 
@@ -2073,6 +2038,9 @@ export async function syncGoogleAdsToSupabase(
 
         ) => ({
 
+          organization_id:
+            resolvedRuntime.organizationId,
+
           customer_id:
 
             customerId,
@@ -2278,6 +2246,9 @@ export async function syncGoogleAdsToSupabase(
           row
 
         ) => ({
+
+          organization_id:
+            resolvedRuntime.organizationId,
 
           customer_id:
 
@@ -2498,6 +2469,9 @@ export async function syncGoogleAdsToSupabase(
           row
 
         ) => ({
+
+          organization_id:
+            resolvedRuntime.organizationId,
 
           customer_id:
 
@@ -2721,6 +2695,9 @@ export async function syncGoogleAdsToSupabase(
 
         ) => ({
 
+          organization_id:
+            resolvedRuntime.organizationId,
+
           customer_id:
 
             customerId,
@@ -2933,6 +2910,9 @@ export async function syncGoogleAdsToSupabase(
 
           return {
 
+            organization_id:
+              resolvedRuntime.organizationId,
+
             customer_id:
 
               customerId,
@@ -3090,6 +3070,9 @@ export async function syncGoogleAdsToSupabase(
           row
 
         ) => ({
+
+          organization_id:
+            resolvedRuntime.organizationId,
 
           customer_id:
 
@@ -3263,6 +3246,8 @@ export async function syncGoogleAdsToSupabase(
 
       table,
 
+      resolvedRuntime.organizationId,
+
       customerId,
 
       startDate,
@@ -3285,7 +3270,7 @@ export async function syncGoogleAdsToSupabase(
 
     campaignRows,
 
-    'customer_id,date,campaign_id'
+    'organization_id,customer_id,date,campaign_id'
 
   );
 
@@ -3299,7 +3284,7 @@ export async function syncGoogleAdsToSupabase(
 
     adGroupRows,
 
-    'customer_id,date,campaign_id,ad_group_id'
+    'organization_id,customer_id,date,campaign_id,ad_group_id'
 
   );
 
@@ -3313,7 +3298,7 @@ export async function syncGoogleAdsToSupabase(
 
     keywordRows,
 
-    'customer_id,date,campaign_id,ad_group_id,criterion_id'
+    'organization_id,customer_id,date,campaign_id,ad_group_id,criterion_id'
 
   );
 
@@ -3327,7 +3312,7 @@ export async function syncGoogleAdsToSupabase(
 
     searchTermRows,
 
-    'customer_id,date,campaign_id,ad_group_id,search_term'
+    'organization_id,customer_id,date,campaign_id,ad_group_id,search_term'
 
   );
 
@@ -3341,7 +3326,7 @@ export async function syncGoogleAdsToSupabase(
 
     geoRows,
 
-    'customer_id,date,country_criterion_id,location_type'
+    'organization_id,customer_id,date,country_criterion_id,location_type'
 
   );
 
@@ -3355,7 +3340,7 @@ export async function syncGoogleAdsToSupabase(
 
     deviceRows,
 
-    'customer_id,date,device'
+    'organization_id,customer_id,date,device'
 
   );
 

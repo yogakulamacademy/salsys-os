@@ -20,7 +20,7 @@ import {
 
 import {
 
-  getGoogleAccessTokenForConnection,
+  getGoogleAccessTokenForOrganizationConnection,
 
 } from '@/lib/integrations/google-connection';
 
@@ -122,17 +122,22 @@ type SyncGscOptions = {
 
 export type GscRuntime = {
 
+  organizationId: string;
+
+  connectionId: string;
+
+  assetId: string;
+
   siteUrl: string;
 
-  authSource:
-    | 'google_oauth'
-    | 'legacy_wif';
-
-  accessToken?: string;
-
-  fallbackReason?:
+  assetName?:
     | string
     | null;
+
+  authSource:
+    'google_oauth';
+
+  accessToken?: string;
 
 };
 
@@ -232,277 +237,158 @@ SupabaseClient {
 
 
 
-export async function resolveGscRuntime():
-
-Promise<GscRuntime> {
+export async function resolveGscRuntimes(
+  options: {
+    organizationId?: string;
+    assetId?: string;
+  } = {}
+): Promise<GscRuntime[]> {
 
   const supabase =
-
     createGscAdminClient();
 
-
-
-  let integrationReason:
-    string | null =
-    null;
-
-
-
-  try {
-
-    const {
-
-      data:
-        selectedRows,
-
-      error:
-        assetError,
-
-    } =
-
-      await supabase
-
-        .from(
-          'integration_assets'
-        )
-
-        .select(
-          'id,connection_id,external_id,name'
-        )
-
-        .eq(
-          'asset_type',
-          'search_console_site'
-        )
-
-        .eq(
-          'is_selected',
-          true
-        )
-
-        .limit(
-          2
-        );
-
-
-
-    if (
-      assetError
-    ) {
-
-      throw new Error(
-        assetError.message
+  let query =
+    supabase
+      .from(
+        'integration_assets'
+      )
+      .select(
+        'id,organization_id,connection_id,external_id,name'
+      )
+      .eq(
+        'asset_type',
+        'search_console_site'
+      )
+      .eq(
+        'is_selected',
+        true
       );
 
-    }
-
-
-
-    const selected =
-
-      (
-        selectedRows ??
-        []
-      ) as Array<{
-
-        id: string;
-
-        connection_id:
-          string;
-
-        external_id:
-          string;
-
-        name:
-          | string
-          | null;
-
-      }>;
-
-
-
-    if (
-      selected.length >
-      1
-    ) {
-
-      throw new Error(
-        'More than one Search Console site is selected. Keep only one selected Search Console site.'
+  if (
+    options.organizationId
+  ) {
+    query =
+      query.eq(
+        'organization_id',
+        options.organizationId
       );
+  }
 
-    }
+  if (
+    options.assetId
+  ) {
+    query =
+      query.eq(
+        'id',
+        options.assetId
+      );
+  }
 
+  const {
+    data:
+      selectedRows,
+    error:
+      assetError,
+  } =
+    await query.order(
+      'discovered_at',
+      {
+        ascending:
+          true,
+      }
+    );
 
+  if (
+    assetError
+  ) {
+    throw new Error(
+      assetError.message
+    );
+  }
 
-    if (
-      selected.length ===
-      1
-    ) {
+  const selected =
+    (
+      selectedRows ??
+      []
+    ) as Array<{
+      id: string;
+      organization_id:
+        | string
+        | null;
+      connection_id:
+        string;
+      external_id:
+        string;
+      name:
+        | string
+        | null;
+    }>;
 
-      const asset =
-        selected[0];
-
-
-
-      const {
-
-        data:
-          connectionRow,
-
-        error:
-          connectionError,
-
-      } =
-
-        await supabase
-
-          .from(
-            'integration_connections'
-          )
-
-          .select(
-            'id,provider,status'
-          )
-
-          .eq(
-            'id',
-            asset.connection_id
-          )
-
-          .maybeSingle();
-
-
+  return selected.map(
+    (asset) => {
 
       if (
-        connectionError
+        !asset.organization_id
       ) {
-
         throw new Error(
-          connectionError.message
+          `Selected Search Console asset ${asset.id} is not assigned to an organization.`
         );
-
       }
-
-
-
-      const connection =
-
-        connectionRow as
-          | {
-              id: string;
-              provider: string;
-              status: string;
-            }
-          | null;
-
-
-
-      if (
-        !connection ||
-        connection.provider !==
-          'google' ||
-        connection.status !==
-          'connected'
-      ) {
-
-        throw new Error(
-          'The selected Search Console site is not attached to an active Google connection.'
-        );
-
-      }
-
-
-
-      const accessToken =
-
-        await getGoogleAccessTokenForConnection(
-          connection.id
-        );
-
-
 
       return {
-
+        organizationId:
+          asset.organization_id,
+        connectionId:
+          asset.connection_id,
+        assetId:
+          asset.id,
         siteUrl:
           asset.external_id,
-
+        assetName:
+          asset.name,
         authSource:
-          'google_oauth',
-
-        accessToken,
-
-        fallbackReason:
-          null,
-
+          'google_oauth' as const,
       };
 
     }
-
-
-
-    integrationReason =
-      'No selected Search Console site was found in Account integrations.';
-
-
-
-  } catch (
-    error
-  ) {
-
-    integrationReason =
-
-      error instanceof Error
-        ? error.message
-        : 'Google account integration could not be resolved.';
-
-  }
-
-
-
-  /*
-   * Safe migration fallback:
-   * keep the existing Vercel OIDC / WIF path available
-   * until the OAuth-backed production sync has been verified.
-   */
-
-  const legacySiteUrl =
-
-    process.env
-      .GSC_SITE_URL
-      ?.trim();
-
-
-
-  if (
-    legacySiteUrl
-  ) {
-
-    return {
-
-      siteUrl:
-        legacySiteUrl,
-
-      authSource:
-        'legacy_wif',
-
-      fallbackReason:
-        integrationReason,
-
-    };
-
-  }
-
-
-
-  throw new Error(
-
-    integrationReason ||
-      'No Search Console integration or legacy GSC_SITE_URL is configured.'
-
   );
 
 }
 
+
+export async function resolveGscRuntime(
+  options: {
+    organizationId?: string;
+    assetId?: string;
+  } = {}
+): Promise<GscRuntime> {
+
+  const runtimes =
+    await resolveGscRuntimes(
+      options
+    );
+
+  if (
+    runtimes.length ===
+    0
+  ) {
+    throw new Error(
+      'No selected Search Console site is configured in Account integrations.'
+    );
+  }
+
+  if (
+    runtimes.length >
+    1
+  ) {
+    throw new Error(
+      'More than one Search Console site is selected. Specify an organization or integration asset.'
+    );
+  }
+
+  return runtimes[0]!;
+
+}
 
 
 class VercelOidcSubjectTokenSupplier
@@ -1041,6 +927,8 @@ async function clearRange(
 
   table: string,
 
+  organizationId: string,
+
   siteUrl: string,
 
   startDate: string,
@@ -1064,6 +952,11 @@ async function clearRange(
       )
 
       .delete()
+
+      .eq(
+        'organization_id',
+        organizationId
+      )
 
       .eq(
 
@@ -1357,40 +1250,12 @@ Promise<GscSyncCounts> {
 
 
 
-  let accessToken:
-    string;
-
-
-
-  if (
-    resolvedRuntime.authSource ===
-      'google_oauth'
-  ) {
-
-    if (
-      !resolvedRuntime.accessToken
-    ) {
-
-      throw new Error(
-        'Google OAuth access token is unavailable.'
-      );
-
-    }
-
-
-
-    accessToken =
-      resolvedRuntime.accessToken;
-
-
-
-  } else {
-
-    accessToken =
-
-      await getLegacyGoogleAccessToken();
-
-  }
+  const accessToken =
+    resolvedRuntime.accessToken ??
+    await getGoogleAccessTokenForOrganizationConnection(
+      resolvedRuntime.connectionId,
+      resolvedRuntime.organizationId
+    );
 
 
 
@@ -1570,6 +1435,9 @@ Promise<GscSyncCounts> {
 
       (row) => ({
 
+        organization_id:
+          resolvedRuntime.organizationId,
+
         site_url:
 
           siteUrl,
@@ -1613,6 +1481,9 @@ Promise<GscSyncCounts> {
     queryApiRows.map(
 
       (row) => ({
+
+        organization_id:
+          resolvedRuntime.organizationId,
 
         site_url:
 
@@ -1670,6 +1541,9 @@ Promise<GscSyncCounts> {
 
       (row) => ({
 
+        organization_id:
+          resolvedRuntime.organizationId,
+
         site_url:
 
           siteUrl,
@@ -1726,6 +1600,9 @@ Promise<GscSyncCounts> {
 
       (row) => ({
 
+        organization_id:
+          resolvedRuntime.organizationId,
+
         site_url:
 
           siteUrl,
@@ -1781,6 +1658,9 @@ Promise<GscSyncCounts> {
     deviceApiRows.map(
 
       (row) => ({
+
+        organization_id:
+          resolvedRuntime.organizationId,
 
         site_url:
 
@@ -1843,6 +1723,9 @@ Promise<GscSyncCounts> {
         row,
 
       }) => ({
+
+        organization_id:
+          resolvedRuntime.organizationId,
 
         site_url:
 
@@ -1922,6 +1805,8 @@ Promise<GscSyncCounts> {
 
       table,
 
+      resolvedRuntime.organizationId,
+
       siteUrl,
 
       startDate,
@@ -1942,7 +1827,7 @@ Promise<GscSyncCounts> {
 
     dailyRows,
 
-    'site_url,date,search_type'
+    'organization_id,site_url,date,search_type'
 
   );
 
@@ -1956,7 +1841,7 @@ Promise<GscSyncCounts> {
 
     queryRows,
 
-    'site_url,date,search_type,query'
+    'organization_id,site_url,date,search_type,query'
 
   );
 
@@ -1970,7 +1855,7 @@ Promise<GscSyncCounts> {
 
     pageRows,
 
-    'site_url,date,search_type,page'
+    'organization_id,site_url,date,search_type,page'
 
   );
 
@@ -1984,7 +1869,7 @@ Promise<GscSyncCounts> {
 
     countryRows,
 
-    'site_url,date,search_type,country'
+    'organization_id,site_url,date,search_type,country'
 
   );
 
@@ -1998,7 +1883,7 @@ Promise<GscSyncCounts> {
 
     deviceRows,
 
-    'site_url,date,search_type,device'
+    'organization_id,site_url,date,search_type,device'
 
   );
 
@@ -2012,7 +1897,7 @@ Promise<GscSyncCounts> {
 
     searchAppearanceRows,
 
-    'site_url,date,search_type,search_appearance'
+    'organization_id,site_url,date,search_type,search_appearance'
 
   );
 

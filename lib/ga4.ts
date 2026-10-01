@@ -24,7 +24,7 @@ import {
 
 
 import {
-  getGoogleAccessTokenForConnection,
+  getGoogleAccessTokenForOrganizationConnection,
 } from '@/lib/integrations/google-connection';
 
 
@@ -83,12 +83,13 @@ type SyncRange = {
 
 
 export type Ga4Runtime = {
+  organizationId: string;
+  connectionId: string;
+  assetId: string;
   propertyId: string;
-  authSource:
-    | 'google_oauth'
-    | 'legacy_wif';
+  assetName?: string | null;
+  authSource: 'google_oauth';
   accessToken?: string;
-  fallbackReason?: string | null;
 };
 
 
@@ -235,175 +236,148 @@ export function createGa4AdminClient() {
 
 
 
-export async function resolveGa4Runtime():
-Promise<Ga4Runtime> {
+export async function resolveGa4Runtimes(
+  options: {
+    organizationId?: string;
+    assetId?: string;
+  } = {}
+): Promise<Ga4Runtime[]> {
   const supabase =
     createGa4AdminClient();
 
-  let integrationReason:
-    string | null =
-    null;
-
-  try {
-    const {
-      data:
-        selectedRows,
-      error:
-        assetError,
-    } =
-      await supabase
-        .from(
-          'integration_assets'
-        )
-        .select(
-          'id, connection_id, external_id, name'
-        )
-        .eq(
-          'asset_type',
-          'ga4_property'
-        )
-        .eq(
-          'is_selected',
-          true
-        )
-        .limit(2);
-
-    if (assetError) {
-      throw new Error(
-        assetError.message
+  let query =
+    supabase
+      .from(
+        'integration_assets'
+      )
+      .select(
+        'id, organization_id, connection_id, external_id, name'
+      )
+      .eq(
+        'asset_type',
+        'ga4_property'
+      )
+      .eq(
+        'is_selected',
+        true
       );
-    }
 
-    const selected =
-      (
-        selectedRows ??
-        []
-      ) as Array<{
-        id: string;
-        connection_id: string;
-        external_id: string;
-        name:
-          | string
-          | null;
-      }>;
-
-    if (
-      selected.length >
-      1
-    ) {
-      throw new Error(
-        'More than one GA4 property is selected. Keep only one selected GA4 property.'
+  if (
+    options.organizationId
+  ) {
+    query =
+      query.eq(
+        'organization_id',
+        options.organizationId
       );
-    }
+  }
 
-    if (
-      selected.length ===
-      1
-    ) {
-      const asset =
-        selected[0];
+  if (
+    options.assetId
+  ) {
+    query =
+      query.eq(
+        'id',
+        options.assetId
+      );
+  }
 
-      const {
-        data:
-          connectionRow,
-        error:
-          connectionError,
-      } =
-        await supabase
-          .from(
-            'integration_connections'
-          )
-          .select(
-            'id, provider, status'
-          )
-          .eq(
-            'id',
-            asset.connection_id
-          )
-          .maybeSingle();
+  const {
+    data:
+      selectedRows,
+    error:
+      assetError,
+  } =
+    await query.order(
+      'discovered_at',
+      {
+        ascending:
+          true,
+      }
+    );
 
+  if (assetError) {
+    throw new Error(
+      assetError.message
+    );
+  }
+
+  const selected =
+    (
+      selectedRows ??
+      []
+    ) as Array<{
+      id: string;
+      organization_id:
+        | string
+        | null;
+      connection_id: string;
+      external_id: string;
+      name:
+        | string
+        | null;
+    }>;
+
+  return selected.map(
+    (asset) => {
       if (
-        connectionError
+        !asset.organization_id
       ) {
         throw new Error(
-          connectionError.message
+          `Selected GA4 asset ${asset.id} is not assigned to an organization.`
         );
       }
-
-      const connection =
-        connectionRow as
-          | {
-              id: string;
-              provider: string;
-              status: string;
-            }
-          | null;
-
-      if (
-        !connection ||
-        connection.provider !==
-          'google' ||
-        connection.status !==
-          'connected'
-      ) {
-        throw new Error(
-          'The selected GA4 property is not attached to an active Google connection.'
-        );
-      }
-
-      const accessToken =
-        await getGoogleAccessTokenForConnection(
-          connection.id
-        );
 
       return {
+        organizationId:
+          asset.organization_id,
+        connectionId:
+          asset.connection_id,
+        assetId:
+          asset.id,
         propertyId:
           asset.external_id,
+        assetName:
+          asset.name,
         authSource:
-          'google_oauth',
-        accessToken,
-        fallbackReason:
-          null,
+          'google_oauth' as const,
       };
     }
-
-    integrationReason =
-      'No selected GA4 property was found in Account integrations.';
-
-  } catch (error) {
-    integrationReason =
-      error instanceof Error
-        ? error.message
-        : 'Google account integration could not be resolved.';
-  }
-
-  /*
-   * Safe migration fallback:
-   * keep the existing Vercel OIDC / WIF path available
-   * until the OAuth-backed production sync has been verified.
-   */
-  const legacyPropertyId =
-    process.env
-      .GA4_PROPERTY_ID
-      ?.trim();
-
-  if (legacyPropertyId) {
-    return {
-      propertyId:
-        legacyPropertyId,
-      authSource:
-        'legacy_wif',
-      fallbackReason:
-        integrationReason,
-    };
-  }
-
-  throw new Error(
-    integrationReason ||
-      'No GA4 integration or legacy GA4_PROPERTY_ID is configured.'
   );
 }
 
+
+export async function resolveGa4Runtime(
+  options: {
+    organizationId?: string;
+    assetId?: string;
+  } = {}
+): Promise<Ga4Runtime> {
+  const runtimes =
+    await resolveGa4Runtimes(
+      options
+    );
+
+  if (
+    runtimes.length ===
+    0
+  ) {
+    throw new Error(
+      'No selected GA4 property is configured in Account integrations.'
+    );
+  }
+
+  if (
+    runtimes.length >
+    1
+  ) {
+    throw new Error(
+      'More than one GA4 property is selected. Specify an organization or integration asset.'
+    );
+  }
+
+  return runtimes[0]!;
+}
 
 
 class VercelSubjectTokenSupplier
@@ -816,6 +790,8 @@ async function clearRange(
 
   table: string,
 
+  organizationId: string,
+
   propertyId: string,
 
   range: SyncRange
@@ -829,6 +805,11 @@ async function clearRange(
       .from(table)
 
       .delete()
+
+      .eq(
+        'organization_id',
+        organizationId
+      )
 
       .eq(
 
@@ -977,6 +958,18 @@ export async function syncGa4ToSupabase(
 
   const supabase = createGa4AdminClient();
 
+  const accessToken =
+    resolvedRuntime.accessToken ??
+    await getGoogleAccessTokenForOrganizationConnection(
+      resolvedRuntime.connectionId,
+      resolvedRuntime.organizationId
+    );
+
+  const runtimeWithToken: Ga4Runtime = {
+    ...resolvedRuntime,
+    accessToken,
+  };
+
 
 
   const [
@@ -1023,7 +1016,7 @@ export async function syncGa4ToSupabase(
 
         range,
 
-        resolvedRuntime
+        runtimeWithToken
 
       ),
 
@@ -1057,7 +1050,7 @@ export async function syncGa4ToSupabase(
 
         range,
 
-        resolvedRuntime
+        runtimeWithToken
 
       ),
 
@@ -1089,7 +1082,7 @@ export async function syncGa4ToSupabase(
 
         range,
 
-        resolvedRuntime
+        runtimeWithToken
 
       ),
 
@@ -1123,7 +1116,7 @@ export async function syncGa4ToSupabase(
 
         range,
 
-        resolvedRuntime
+        runtimeWithToken
 
       ),
 
@@ -1155,7 +1148,7 @@ export async function syncGa4ToSupabase(
 
         range,
 
-        resolvedRuntime
+        runtimeWithToken
 
       ),
 
@@ -1174,6 +1167,9 @@ export async function syncGa4ToSupabase(
     overviewReport.map(
 
       (row) => ({
+
+        organization_id:
+          resolvedRuntime.organizationId,
 
         property_id:
 
@@ -1239,6 +1235,9 @@ export async function syncGa4ToSupabase(
 
       (row) => ({
 
+        organization_id:
+          resolvedRuntime.organizationId,
+
         property_id:
 
           config.propertyId,
@@ -1295,6 +1294,9 @@ export async function syncGa4ToSupabase(
 
       (row) => ({
 
+        organization_id:
+          resolvedRuntime.organizationId,
+
         property_id:
 
           config.propertyId,
@@ -1346,6 +1348,9 @@ export async function syncGa4ToSupabase(
     campaignReport.map(
 
       (row) => ({
+
+        organization_id:
+          resolvedRuntime.organizationId,
 
         property_id:
 
@@ -1403,6 +1408,9 @@ export async function syncGa4ToSupabase(
 
       (row) => ({
 
+        organization_id:
+          resolvedRuntime.organizationId,
+
         property_id:
 
           config.propertyId,
@@ -1455,6 +1463,8 @@ export async function syncGa4ToSupabase(
 
     'ga4_daily',
 
+    resolvedRuntime.organizationId,
+
     config.propertyId,
 
     range
@@ -1468,6 +1478,8 @@ export async function syncGa4ToSupabase(
     supabase,
 
     'ga4_source_medium_daily',
+
+    resolvedRuntime.organizationId,
 
     config.propertyId,
 
@@ -1483,6 +1495,8 @@ export async function syncGa4ToSupabase(
 
     'ga4_landing_page_daily',
 
+    resolvedRuntime.organizationId,
+
     config.propertyId,
 
     range
@@ -1497,6 +1511,8 @@ export async function syncGa4ToSupabase(
 
     'ga4_campaign_daily',
 
+    resolvedRuntime.organizationId,
+
     config.propertyId,
 
     range
@@ -1510,6 +1526,8 @@ export async function syncGa4ToSupabase(
     supabase,
 
     'ga4_country_daily',
+
+    resolvedRuntime.organizationId,
 
     config.propertyId,
 
@@ -1527,7 +1545,7 @@ export async function syncGa4ToSupabase(
 
     overviewRows,
 
-    'property_id,analytics_date'
+    'organization_id,property_id,analytics_date'
 
   );
 
@@ -1541,7 +1559,7 @@ export async function syncGa4ToSupabase(
 
     sourceRows,
 
-    'property_id,analytics_date,source,medium'
+    'organization_id,property_id,analytics_date,source,medium'
 
   );
 
@@ -1555,7 +1573,7 @@ export async function syncGa4ToSupabase(
 
     landingPageRows,
 
-    'property_id,analytics_date,landing_page'
+    'organization_id,property_id,analytics_date,landing_page'
 
   );
 
@@ -1569,7 +1587,7 @@ export async function syncGa4ToSupabase(
 
     campaignRows,
 
-    'property_id,analytics_date,campaign,source,medium'
+    'organization_id,property_id,analytics_date,campaign,source,medium'
 
   );
 
@@ -1583,7 +1601,7 @@ export async function syncGa4ToSupabase(
 
     countryRows,
 
-    'property_id,analytics_date,country'
+    'organization_id,property_id,analytics_date,country'
 
   );
 

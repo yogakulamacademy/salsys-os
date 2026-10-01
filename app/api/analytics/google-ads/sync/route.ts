@@ -5,10 +5,13 @@ import {
 
 import {
   createGoogleAdsAdminClient,
-  resolveGoogleAdsRuntime,
+  resolveGoogleAdsRuntimes,
   syncGoogleAdsToSupabase,
+  type GoogleAdsRuntime,
 } from '@/lib/google-ads';
 
+export const runtime =
+  'nodejs';
 
 export const dynamic =
   'force-dynamic';
@@ -16,80 +19,105 @@ export const dynamic =
 export const maxDuration =
   300;
 
-
 const ISO_DATE =
   /^\d{4}-\d{2}-\d{2}$/;
 
+type RuntimeFilter = {
+  organizationId?: string;
+  assetId?: string;
+};
+
+type SyncResult =
+  | {
+      ok: true;
+      organizationId: string;
+      connectionId: string;
+      integrationAssetId: string;
+      customerId: string;
+      startDate: string;
+      endDate: string;
+      counts: Awaited<
+        ReturnType<
+          typeof syncGoogleAdsToSupabase
+        >
+      >;
+    }
+  | {
+      ok: false;
+      organizationId: string;
+      connectionId: string;
+      integrationAssetId: string;
+      customerId: string;
+      error: string;
+    };
 
 function isoDate(
-  value: Date
+  value: Date,
 ) {
   return value
     .toISOString()
     .slice(
       0,
-      10
+      10,
     );
 }
 
-
 function addUtcDays(
   dateValue: string,
-  days: number
+  days: number,
 ) {
   const date =
     new Date(
-      `${dateValue}T00:00:00Z`
+      `${dateValue}T00:00:00Z`,
     );
 
   date.setUTCDate(
     date.getUTCDate() +
-    days
+    days,
   );
 
   return isoDate(
-    date
+    date,
   );
 }
 
-
 function validateRange(
   startDate: string,
-  endDate: string
+  endDate: string,
 ) {
   if (
     !ISO_DATE.test(
-      startDate
+      startDate,
     ) ||
     !ISO_DATE.test(
-      endDate
+      endDate,
     )
   ) {
     throw new Error(
-      'Dates must use YYYY-MM-DD.'
+      'Dates must use YYYY-MM-DD.',
     );
   }
 
   const start =
     new Date(
-      `${startDate}T00:00:00Z`
+      `${startDate}T00:00:00Z`,
     );
 
   const end =
     new Date(
-      `${endDate}T00:00:00Z`
+      `${endDate}T00:00:00Z`,
     );
 
   if (
     Number.isNaN(
-      start.getTime()
+      start.getTime(),
     ) ||
     Number.isNaN(
-      end.getTime()
+      end.getTime(),
     )
   ) {
     throw new Error(
-      'Invalid date range.'
+      'Invalid date range.',
     );
   }
 
@@ -98,7 +126,7 @@ function validateRange(
     end
   ) {
     throw new Error(
-      'startDate must be before or equal to endDate.'
+      'startDate must be before or equal to endDate.',
     );
   }
 
@@ -108,7 +136,7 @@ function validateRange(
         end.getTime() -
         start.getTime()
       ) /
-      86400000
+      86400000,
     ) +
     1;
 
@@ -117,15 +145,15 @@ function validateRange(
     93
   ) {
     throw new Error(
-      'A single Google Ads sync can cover at most 93 days.'
+      'A single Google Ads sync can cover at most 93 days.',
     );
   }
 }
 
-
 function isAuthorized(
   request: NextRequest,
-  allowCron = false
+  allowCron =
+    false,
 ) {
   const manualSecret =
     process.env
@@ -140,14 +168,14 @@ function isAuthorized(
   const headerSecret =
     request.headers
       .get(
-        'x-google-ads-sync-secret'
+        'x-google-ads-sync-secret',
       )
       ?.trim();
 
   const authorization =
     request.headers
       .get(
-        'authorization'
+        'authorization',
       )
       ?.trim();
 
@@ -179,87 +207,78 @@ function isAuthorized(
   return false;
 }
 
+/* =========================================================
+   ONE TENANT + ONE SELECTED ASSET
+========================================================= */
 
-async function runSync({
+async function executeRuntimeSync({
   startDate,
   endDate,
   triggeredBy,
+  runtimeConfig,
 }: {
   startDate: string;
   endDate: string;
-  triggeredBy: string;
-}) {
-  validateRange(
-    startDate,
-    endDate
-  );
-
-  /*
-   * Prefer the selected Google Ads customer + Google OAuth
-   * connection. During migration, lib/google-ads.ts safely
-   * falls back to the existing Vercel OIDC / WIF configuration.
-   */
-  const googleAdsRuntime =
-    await resolveGoogleAdsRuntime();
-
-  const customerId =
-    googleAdsRuntime.customerId;
-
-  if (
-    googleAdsRuntime.authSource ===
-      'legacy_wif' &&
-    googleAdsRuntime.fallbackReason
-  ) {
-    console.warn(
-      'Google Ads integration fallback:',
-      googleAdsRuntime.fallbackReason
-    );
-  }
-
+  triggeredBy:
+    | 'manual'
+    | 'cron';
+  runtimeConfig:
+    GoogleAdsRuntime;
+}): Promise<
+  Extract<
+    SyncResult,
+    {
+      ok: true;
+    }
+  >
+> {
   const supabase =
     createGoogleAdsAdminClient();
 
-
   const {
-    data: run,
+    data:
+      run,
     error:
       runError,
   } =
     await supabase
       .from(
-        'google_ads_sync_runs'
+        'google_ads_sync_runs',
       )
       .insert({
+        organization_id:
+          runtimeConfig.organizationId,
+        connection_id:
+          runtimeConfig.connectionId,
+        integration_asset_id:
+          runtimeConfig.assetId,
         customer_id:
-          customerId,
-
+          runtimeConfig.customerId,
         start_date:
           startDate,
-
         end_date:
           endDate,
-
         status:
           'running',
-
         triggered_by:
           triggeredBy,
       })
       .select(
-        'id'
+        'id',
       )
       .single();
-
 
   if (
     runError ||
     !run
   ) {
     throw new Error(
-      `Unable to create Google Ads sync run: ${runError?.message ?? 'Unknown error'}`
+      `Unable to create Google Ads sync run: ${
+        runError?.message ??
+        'Unknown error'
+      }`,
     );
   }
-
 
   try {
     const counts =
@@ -270,9 +289,8 @@ async function runSync({
           syncRunId:
             run.id,
         },
-        googleAdsRuntime
+        runtimeConfig,
       );
-
 
     const {
       error:
@@ -280,83 +298,65 @@ async function runSync({
     } =
       await supabase
         .from(
-          'google_ads_sync_runs'
+          'google_ads_sync_runs',
         )
         .update({
           status:
             'success',
-
           campaign_rows:
-            counts
-              .campaignRows,
-
+            counts.campaignRows,
           ad_group_rows:
-            counts
-              .adGroupRows,
-
+            counts.adGroupRows,
           keyword_rows:
-            counts
-              .keywordRows,
-
+            counts.keywordRows,
           search_term_rows:
-            counts
-              .searchTermRows,
-
+            counts.searchTermRows,
           geo_rows:
-            counts
-              .geoRows,
-
+            counts.geoRows,
           device_rows:
-            counts
-              .deviceRows,
-
+            counts.deviceRows,
           total_rows:
-            counts
-              .totalRows,
-
+            counts.totalRows,
           request_ids:
-            counts
-              .requestIds,
-
+            counts.requestIds,
           completed_at:
             new Date()
               .toISOString(),
+          error_message:
+            null,
         })
         .eq(
           'id',
-          run.id
+          run.id,
+        )
+        .eq(
+          'organization_id',
+          runtimeConfig.organizationId,
         );
-
 
     if (
       updateError
     ) {
       throw new Error(
-        `Google Ads data synced, but sync-run status could not be updated: ${updateError.message}`
+        `Google Ads data synced, but sync-run status could not be updated: ${updateError.message}`,
       );
     }
-
 
     return {
       ok:
         true,
-
-      customerId,
-      authSource:
-        googleAdsRuntime.authSource,
-      fallbackReason:
-        googleAdsRuntime.authSource ===
-          'legacy_wif'
-          ? googleAdsRuntime.fallbackReason ??
-            'Unknown integration fallback reason.'
-          : null,
+      organizationId:
+        runtimeConfig.organizationId,
+      connectionId:
+        runtimeConfig.connectionId,
+      integrationAssetId:
+        runtimeConfig.assetId,
+      customerId:
+        runtimeConfig.customerId,
       startDate,
       endDate,
       counts,
-      trigger:
-        triggeredBy,
     };
-
   } catch (
     error
   ) {
@@ -365,91 +365,187 @@ async function runSync({
         ? error.message
         : 'Unknown Google Ads sync error';
 
-
     await supabase
       .from(
-        'google_ads_sync_runs'
+        'google_ads_sync_runs',
       )
       .update({
         status:
           'failed',
-
         error_message:
           message,
-
         completed_at:
           new Date()
             .toISOString(),
       })
       .eq(
         'id',
-        run.id
+        run.id,
+      )
+      .eq(
+        'organization_id',
+        runtimeConfig.organizationId,
       );
-
 
     throw error;
   }
 }
 
+/* =========================================================
+   ALL MATCHING TENANTS / ASSETS
+========================================================= */
+
+async function runSync({
+  startDate,
+  endDate,
+  triggeredBy,
+  filter = {},
+}: {
+  startDate: string;
+  endDate: string;
+  triggeredBy:
+    | 'manual'
+    | 'cron';
+  filter?:
+    RuntimeFilter;
+}) {
+  validateRange(
+    startDate,
+    endDate,
+  );
+
+  const runtimes =
+    await resolveGoogleAdsRuntimes({
+      organizationId:
+        filter.organizationId,
+      assetId:
+        filter.assetId,
+    });
+
+  const results:
+    SyncResult[] =
+    [];
+
+  for (
+    const runtimeConfig
+    of runtimes
+  ) {
+    try {
+      results.push(
+        await executeRuntimeSync({
+          startDate,
+          endDate,
+          triggeredBy,
+          runtimeConfig,
+        }),
+      );
+    } catch (
+      error
+    ) {
+      results.push({
+        ok:
+          false,
+        organizationId:
+          runtimeConfig.organizationId,
+        connectionId:
+          runtimeConfig.connectionId,
+        integrationAssetId:
+          runtimeConfig.assetId,
+        customerId:
+          runtimeConfig.customerId,
+        error:
+          error instanceof Error
+            ? error.message
+            : 'Unknown Google Ads sync error',
+      });
+    }
+  }
+
+  const successful =
+    results.filter(
+      (
+        result,
+      ) =>
+        result.ok,
+    ).length;
+
+  const failed =
+    results.length -
+    successful;
+
+  return {
+    ok:
+      failed === 0,
+    startDate,
+    endDate,
+    selectedAssets:
+      runtimes.length,
+    successful,
+    failed,
+    results,
+    trigger:
+      triggeredBy,
+  };
+}
+
+/* =========================================================
+   POST — MANUAL / BACKFILL
+========================================================= */
 
 export async function POST(
-  request: NextRequest
+  request: NextRequest,
 ) {
   if (
     !isAuthorized(
       request,
-      true
+      true,
     )
   ) {
     return NextResponse.json(
       {
         ok:
           false,
-
         error:
           'Unauthorized.',
       },
       {
         status:
           401,
-      }
+      },
     );
   }
-
 
   try {
     const body =
       await request
         .json()
         .catch(
-          () => ({})
+          () => ({}),
         ) as {
           startDate?: string;
           endDate?: string;
+          organizationId?: string;
+          integrationAssetId?: string;
         };
-
 
     const yesterday =
       isoDate(
         new Date(
           Date.now() -
-          86400000
-        )
+          86400000,
+        ),
       );
-
 
     const endDate =
       body.endDate ??
       yesterday;
 
-
     const startDate =
       body.startDate ??
       addUtcDays(
         endDate,
-        -6
+        -6,
       );
-
 
     const result =
       await runSync({
@@ -457,13 +553,17 @@ export async function POST(
         endDate,
         triggeredBy:
           'manual',
+        filter: {
+          organizationId:
+            body.organizationId,
+          assetId:
+            body.integrationAssetId,
+        },
       });
 
-
     return NextResponse.json(
-      result
+      result,
     );
-
   } catch (
     error
   ) {
@@ -472,75 +572,71 @@ export async function POST(
         ? error.message
         : 'Unknown Google Ads sync error';
 
-
     console.error(
       'Google Ads manual sync failed:',
-      error
+      error,
     );
-
 
     return NextResponse.json(
       {
         ok:
           false,
-
         error:
           message,
       },
       {
         status:
           500,
-      }
+      },
     );
   }
 }
 
+/* =========================================================
+   GET — VERCEL CRON
+========================================================= */
 
 export async function GET(
-  request: NextRequest
+  request: NextRequest,
 ) {
   if (
     !isAuthorized(
       request,
-      true
+      true,
     )
   ) {
     return NextResponse.json(
       {
         ok:
           false,
-
         error:
           'Unauthorized.',
       },
       {
         status:
           401,
-      }
+      },
     );
   }
 
-
   try {
     /*
-     * Re-sync the latest seven completed days because Google Ads
-     * conversion attribution can update after the original click date.
+     * Re-sync the latest seven completed days because
+     * conversion attribution can update after the click date.
      */
     const endDate =
       isoDate(
         new Date(
           Date.now() -
-          86400000
-        )
+          86400000,
+        ),
       );
-
 
     const startDate =
       addUtcDays(
         endDate,
-        -6
+        -6,
       );
-
 
     const result =
       await runSync({
@@ -550,11 +646,9 @@ export async function GET(
           'cron',
       });
 
-
     return NextResponse.json(
-      result
+      result,
     );
-
   } catch (
     error
   ) {
@@ -563,25 +657,22 @@ export async function GET(
         ? error.message
         : 'Unknown Google Ads cron error';
 
-
     console.error(
       'Google Ads cron sync failed:',
-      error
+      error,
     );
-
 
     return NextResponse.json(
       {
         ok:
           false,
-
         error:
           message,
       },
       {
         status:
           500,
-      }
+      },
     );
   }
 }
