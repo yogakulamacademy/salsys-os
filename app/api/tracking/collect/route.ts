@@ -284,8 +284,7 @@ export async function POST(request: NextRequest) {
         throw updateError;
       }
     } else {
-
-    /* ========================================================
+      /* ========================================================
        8. CREATE NEW SESSION
        ======================================================== */
       const sessionRow = {
@@ -502,7 +501,7 @@ export async function POST(request: NextRequest) {
     const { error: eventError } = await supabase
       .from("touchpoints")
       .upsert(eventRow, {
-        onConflict: "event_id",
+        onConflict: "organization_id,event_id",
 
         ignoreDuplicates: true,
       });
