@@ -233,6 +233,57 @@ export async function createLeadAction(formData: FormData) {
 
   const supabase = await createClient();
 
+    const {
+    data: {
+      user,
+    },
+    error: userError,
+  } = await supabase.auth.getUser();
+
+  if (userError || !user) {
+    redirect(
+      "/leads/new?error=" +
+        encodeURIComponent(
+          "Your session has expired. Please sign in again.",
+        ),
+    );
+  }
+
+  const {
+    data: memberships,
+    error: membershipError,
+  } = await supabase
+    .from("organization_members")
+    .select("organization_id")
+    .eq("user_id", user.id)
+    .eq("active", true)
+    .limit(2);
+
+  if (
+    membershipError ||
+    !memberships ||
+    memberships.length === 0
+  ) {
+    redirect(
+      "/leads/new?error=" +
+        encodeURIComponent(
+          "No active organization is assigned to your account.",
+        ),
+    );
+  }
+
+  if (memberships.length !== 1) {
+    redirect(
+      "/leads/new?error=" +
+        encodeURIComponent(
+          "Multiple organizations are assigned to your account. Select a workspace before creating a lead.",
+        ),
+    );
+  }
+
+  const organizationId =
+    memberships[0].organization_id;
+
   const {
     data,
 
@@ -241,6 +292,8 @@ export async function createLeadAction(formData: FormData) {
     "create_crm_lead",
 
     {
+
+      p_organization_id: organizationId,
       p_first_name: firstName,
 
       p_last_name: textValue(
