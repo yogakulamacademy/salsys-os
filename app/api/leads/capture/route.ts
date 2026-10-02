@@ -661,7 +661,13 @@ export async function POST(request: NextRequest) {
         : null;
 
 
-
+    const organizationId =
+  result &&
+  typeof result === 'object'
+    ? (
+        result as Record<string, unknown>
+      ).organization_id
+    : null;
 
 
     /*
@@ -684,7 +690,19 @@ export async function POST(request: NextRequest) {
 
     }
 
+  if (
+  !organizationId ||
+  typeof organizationId !== 'string'
+) {
+  console.error(
+    'Website lead ingestion succeeded without organization_id.'
+  );
 
+  return NextResponse.json(
+    data ?? { ok: true },
+    { headers: cors }
+  );
+}
 
 
 
@@ -759,14 +777,14 @@ export async function POST(request: NextRequest) {
         `)
 
         .eq(
-
-          'session_key',
-
-          payload.sessionKey
-
-        )
-
-        .maybeSingle();
+  'organization_id',
+  organizationId
+)
+.eq(
+  'session_key',
+  payload.sessionKey
+)
+.maybeSingle();
 
 
 
@@ -859,20 +877,17 @@ export async function POST(request: NextRequest) {
         `)
 
         .eq(
-
-          'anonymous_visitor_id',
-
-          payload.anonymousVisitorId
-
-        )
-
-        .order(
-
-          'last_seen_at',
-
-          { ascending: false }
-
-        )
+  'organization_id',
+  organizationId
+)
+.eq(
+  'anonymous_visitor_id',
+  payload.anonymousVisitorId
+)
+.order(
+  'last_seen_at',
+  { ascending: false }
+)
 
         .limit(1)
 
@@ -956,18 +971,16 @@ export async function POST(request: NextRequest) {
       } = await supabase
 
         .from('visitor_identity_links')
-
-        .select('lead_id')
-
-        .eq(
-
-          'anonymous_visitor_id',
-
-          visitorId
-
-        )
-
-        .maybeSingle();
+.select('lead_id')
+.eq(
+  'organization_id',
+  organizationId
+)
+.eq(
+  'anonymous_visitor_id',
+  visitorId
+)
+.maybeSingle();
 
 
 
@@ -1041,16 +1054,15 @@ export async function POST(request: NextRequest) {
           .from('visitor_identity_links')
 
           .upsert(
+  {
+    organization_id:
+      organizationId,
 
-            {
+    anonymous_visitor_id:
+      visitorId,
 
-              anonymous_visitor_id:
-
-                visitorId,
-
-              lead_id:
-
-                leadId,
+    lead_id:
+      leadId,
 
               last_session_key:
 
@@ -1107,30 +1119,22 @@ export async function POST(request: NextRequest) {
         } = await supabase
 
           .from('web_sessions')
-
-          .update({
-
-            lead_id:
-
-              leadId,
-
-          })
-
-          .eq(
-
-            'anonymous_visitor_id',
-
-            visitorId
-
-          )
-
-          .is(
-
-            'lead_id',
-
-            null
-
-          );
+.update({
+  lead_id:
+    leadId,
+})
+.eq(
+  'organization_id',
+  organizationId
+)
+.eq(
+  'anonymous_visitor_id',
+  visitorId
+)
+.is(
+  'lead_id',
+  null
+);
 
 
 
@@ -1159,30 +1163,22 @@ export async function POST(request: NextRequest) {
         } = await supabase
 
           .from('touchpoints')
-
-          .update({
-
-            lead_id:
-
-              leadId,
-
-          })
-
-          .eq(
-
-            'anonymous_visitor_id',
-
-            visitorId
-
-          )
-
-          .is(
-
-            'lead_id',
-
-            null
-
-          );
+.update({
+  lead_id:
+    leadId,
+})
+.eq(
+  'organization_id',
+  organizationId
+)
+.eq(
+  'anonymous_visitor_id',
+  visitorId
+)
+.is(
+  'lead_id',
+  null
+);
 
 
 
@@ -1218,30 +1214,22 @@ export async function POST(request: NextRequest) {
       } = await supabase
 
         .from('web_sessions')
-
-        .update({
-
-          lead_id:
-
-            leadId,
-
-        })
-
-        .eq(
-
-          'id',
-
-          session.id
-
-        )
-
-        .is(
-
-          'lead_id',
-
-          null
-
-        );
+.update({
+  lead_id:
+    leadId,
+})
+.eq(
+  'organization_id',
+  organizationId
+)
+.eq(
+  'id',
+  session.id
+)
+.is(
+  'lead_id',
+  null
+);
 
 
 
