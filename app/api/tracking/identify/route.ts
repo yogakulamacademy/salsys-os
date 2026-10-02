@@ -24,14 +24,39 @@ export async function POST(request: NextRequest) {
 
     const supabase = createAdminClient();
 
-    const { error: linkError } = await supabase.from('visitor_identity_links').upsert({
+const {
+  data: lead,
+  error: leadError,
+} = await supabase
+  .from('leads')
+  .select('organization_id')
+  .eq('id', leadId)
+  .maybeSingle();
+
+if (leadError) throw leadError;
+
+if (!lead?.organization_id) {
+  throw new Error('Lead organization could not be resolved.');
+}
+
+const organizationId = lead.organization_id;
+
+const { error: linkError } = await supabase
+  .from('visitor_identity_links')
+  .upsert(
+    {
+      organization_id: organizationId,
       anonymous_visitor_id: visitorId,
       lead_id: leadId,
       last_session_key: sessionKey,
       source_system: 'tracking-identify',
       linked_at: new Date().toISOString(),
       metadata: {},
-    }, { onConflict: 'anonymous_visitor_id' });
+    },
+    {
+      onConflict: 'organization_id,anonymous_visitor_id',
+    }
+  );
     if (linkError) throw linkError;
 
     const { data, error } = await supabase.rpc('attach_visitor_journey_to_lead', {

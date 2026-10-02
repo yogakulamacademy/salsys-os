@@ -1,26 +1,16 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from "next/server";
 
-import { createAdminClient } from '@/lib/supabase/admin';
+import { createAdminClient } from "@/lib/supabase/admin";
 
 import {
-
   isTrackingOriginAllowed,
-
   trackingCorsHeaders,
-
-} from '@/lib/tracking/server';
+} from "@/lib/tracking/server";
 
 import {
-
   isWebsiteCaptureAuthorized,
-
   sanitizeWebsiteLeadPayload,
-
-} from '@/lib/website-leads/server';
-
-
-
-
+} from "@/lib/website-leads/server";
 
 /* =========================================================
 
@@ -28,229 +18,97 @@ import {
 
 ========================================================= */
 
-
-
 function inferCoursePreferences(course: string | null | undefined) {
-
-  const value = (course || '').toLowerCase();
-
-
+  const value = (course || "").toLowerCase();
 
   let preferredLocation: string | null = null;
 
   let preferredMode: string | null = null;
 
-
-
-  if (value.includes('mysore') || value.includes('mysuru')) {
-
-    preferredLocation = 'Mysore';
-
+  if (value.includes("mysore") || value.includes("mysuru")) {
+    preferredLocation = "Mysore";
   } else if (
-
-    value.includes('kerala') ||
-
-    value.includes('varkala') ||
-
-    value.includes('paravur')
-
+    value.includes("kerala") ||
+    value.includes("varkala") ||
+    value.includes("paravur")
   ) {
-
-    preferredLocation = 'Kerala';
-
-  } else if (
-
-    value.includes('bengaluru') ||
-
-    value.includes('bangalore')
-
-  ) {
-
-    preferredLocation = 'Bengaluru';
-
-  } else if (value.includes('goa')) {
-
-    preferredLocation = 'Goa';
-
-  } else if (value.includes('nepal')) {
-
-    preferredLocation = 'Nepal';
-
-  } else if (value.includes('online')) {
-
-    preferredLocation = 'Online';
-
+    preferredLocation = "Kerala";
+  } else if (value.includes("bengaluru") || value.includes("bangalore")) {
+    preferredLocation = "Bengaluru";
+  } else if (value.includes("goa")) {
+    preferredLocation = "Goa";
+  } else if (value.includes("nepal")) {
+    preferredLocation = "Nepal";
+  } else if (value.includes("online")) {
+    preferredLocation = "Online";
   }
 
-
-
-  if (value.includes('online')) {
-
-    preferredMode = 'Online';
-
-  } else if (preferredLocation && preferredLocation !== 'Online') {
-
-    preferredMode = 'Offline';
-
+  if (value.includes("online")) {
+    preferredMode = "Online";
+  } else if (preferredLocation && preferredLocation !== "Online") {
+    preferredMode = "Offline";
   }
-
-
 
   return {
-
     preferredLocation,
 
     preferredMode,
-
   };
-
 }
-
-
-
-
 
 function getLeadOrigin(formName?: string | null) {
+  const name = (formName || "").toLowerCase();
 
-  const name = (formName || '').toLowerCase();
-
-
-
-  if (name.includes('contact')) {
-
-    return 'Website Contact Form';
-
+  if (name.includes("contact")) {
+    return "Website Contact Form";
   }
 
-
-
-  if (
-
-    name.includes('brochure') ||
-
-    name.includes('leadpopup')
-
-  ) {
-
-    return 'Website Brochure Form';
-
+  if (name.includes("brochure") || name.includes("leadpopup")) {
+    return "Website Brochure Form";
   }
 
-
-
-  if (
-
-    name.includes('reservation') ||
-
-    name.includes('booking')
-
-  ) {
-
-    return 'Website Reservation Form';
-
+  if (name.includes("reservation") || name.includes("booking")) {
+    return "Website Reservation Form";
   }
 
-
-
-  if (name.includes('enroll')) {
-
-    return 'Website Enrollment Form';
-
+  if (name.includes("enroll")) {
+    return "Website Enrollment Form";
   }
 
-
-
-  return 'Website';
-
+  return "Website";
 }
 
-
-
-
-
 function metadataValue(
-
   metadata: unknown,
 
-  key: string
-
+  key: string,
 ): string | null {
-
-  if (
-
-    !metadata ||
-
-    typeof metadata !== 'object' ||
-
-    Array.isArray(metadata)
-
-  ) {
-
+  if (!metadata || typeof metadata !== "object" || Array.isArray(metadata)) {
     return null;
-
   }
-
-
 
   const value = (metadata as Record<string, unknown>)[key];
 
-
-
-  if (
-
-    value === null ||
-
-    value === undefined ||
-
-    value === ''
-
-  ) {
-
+  if (value === null || value === undefined || value === "") {
     return null;
-
   }
 
-
-
   return String(value);
-
 }
 
-
-
-
-
 function metadataNumber(
-
   metadata: unknown,
 
-  key: string
-
+  key: string,
 ): number | null {
-
   const value = metadataValue(metadata, key);
-
-
 
   if (!value) return null;
 
-
-
   const parsed = Number(value);
 
-
-
-  return Number.isFinite(parsed)
-
-    ? parsed
-
-    : null;
-
+  return Number.isFinite(parsed) ? parsed : null;
 }
-
-
-
-
 
 /* =========================================================
 
@@ -258,35 +116,17 @@ function metadataNumber(
 
 ========================================================= */
 
-
-
 export async function OPTIONS(request: NextRequest) {
-
   return new NextResponse(null, {
-
     status: 204,
 
     headers: {
+      ...trackingCorsHeaders(request.headers.get("origin")),
 
-      ...trackingCorsHeaders(
-
-        request.headers.get('origin')
-
-      ),
-
-      'Access-Control-Allow-Headers':
-
-        'Content-Type, X-Website-Secret',
-
+      "Access-Control-Allow-Headers": "Content-Type, X-Website-Secret",
     },
-
   });
-
 }
-
-
-
-
 
 /* =========================================================
 
@@ -294,31 +134,14 @@ export async function OPTIONS(request: NextRequest) {
 
 ========================================================= */
 
-
-
 export async function POST(request: NextRequest) {
-
-
-
-  const origin =
-
-    request.headers.get('origin');
-
-
+  const origin = request.headers.get("origin");
 
   const cors = {
-
     ...trackingCorsHeaders(origin),
 
-    'Access-Control-Allow-Headers':
-
-      'Content-Type, X-Website-Secret',
-
+    "Access-Control-Allow-Headers": "Content-Type, X-Website-Secret",
   };
-
-
-
-
 
   /* -------------------------------------------------------
 
@@ -326,125 +149,62 @@ export async function POST(request: NextRequest) {
 
   ------------------------------------------------------- */
 
-
-
-  if (
-
-    origin &&
-
-    !isTrackingOriginAllowed(origin)
-
-  ) {
-
+  if (origin && !isTrackingOriginAllowed(origin)) {
     return NextResponse.json(
-
       {
-
         ok: false,
 
-        error: 'Origin not allowed',
-
+        error: "Origin not allowed",
       },
 
       {
-
         status: 403,
 
         headers: cors,
-
-      }
-
+      },
     );
-
   }
 
-
-
-
-
-  if (
-
-    !isWebsiteCaptureAuthorized(
-
-      request.headers.get('x-website-secret')
-
-    )
-
-  ) {
-
+  if (!isWebsiteCaptureAuthorized(request.headers.get("x-website-secret"))) {
     return NextResponse.json(
-
       {
-
         ok: false,
 
-        error: 'Unauthorized',
-
+        error: "Unauthorized",
       },
 
       {
-
         status: 401,
 
         headers: cors,
-
-      }
-
+      },
     );
-
   }
 
-
-
-
-
   try {
-
-
-
     /* -----------------------------------------------------
 
        SIZE LIMIT
 
     ----------------------------------------------------- */
 
-
-
-    const length = Number(
-
-      request.headers.get('content-length') || '0'
-
-    );
-
-
+    const length = Number(request.headers.get("content-length") || "0");
 
     if (length > 48_000) {
-
       return NextResponse.json(
-
         {
-
           ok: false,
 
-          error: 'Payload too large',
-
+          error: "Payload too large",
         },
 
         {
-
           status: 413,
 
           headers: cors,
-
-        }
-
+        },
       );
-
     }
-
-
-
-
 
     /* -----------------------------------------------------
 
@@ -452,25 +212,9 @@ export async function POST(request: NextRequest) {
 
     ----------------------------------------------------- */
 
+    const payload = sanitizeWebsiteLeadPayload(await request.json());
 
-
-    const payload =
-
-      sanitizeWebsiteLeadPayload(
-
-        await request.json()
-
-      );
-
-
-
-    const supabase =
-
-      createAdminClient();
-
-
-
-
+    const supabase = createAdminClient();
 
     /* =====================================================
 
@@ -482,151 +226,57 @@ export async function POST(request: NextRequest) {
 
     ===================================================== */
 
+    const { data, error } = await supabase.rpc(
+      "ingest_website_lead",
 
+      {
+        p_external_event_id: payload.externalEventId,
 
-    const { data, error } =
+        p_site: payload.site ?? null,
 
-      await supabase.rpc(
+        p_form_name: payload.formName ?? null,
 
-        'ingest_website_lead',
+        p_first_name: payload.firstName ?? null,
 
-        {
+        p_last_name: payload.lastName ?? null,
 
-          p_external_event_id:
+        p_email: payload.email ?? null,
 
-            payload.externalEventId,
+        p_phone: payload.phone ?? null,
 
+        p_course_code: payload.courseCode ?? null,
 
+        p_preferred_location: payload.preferredLocation ?? null,
 
-          p_site:
+        p_preferred_month: payload.preferredMonth ?? null,
 
-            payload.site ?? null,
+        p_preferred_mode: payload.preferredMode ?? null,
 
+        p_country: payload.country ?? null,
 
+        p_timezone: payload.timezone ?? null,
 
-          p_form_name:
+        p_message: payload.message ?? null,
 
-            payload.formName ?? null,
+        p_anonymous_visitor_id: payload.anonymousVisitorId ?? null,
 
+        p_session_key: payload.sessionKey ?? null,
 
+        p_first_touch: payload.firstTouch ?? {},
 
-          p_first_name:
+        p_session_touch: payload.sessionTouch ?? {},
 
-            payload.firstName ?? null,
+        p_metadata: {
+          ...(payload.metadata ?? {}),
 
-
-
-          p_last_name:
-
-            payload.lastName ?? null,
-
-
-
-          p_email:
-
-            payload.email ?? null,
-
-
-
-          p_phone:
-
-            payload.phone ?? null,
-
-
-
-          p_course_code:
-
-            payload.courseCode ?? null,
-
-
-
-          p_preferred_location:
-
-            payload.preferredLocation ?? null,
-
-
-
-          p_preferred_month:
-
-            payload.preferredMonth ?? null,
-
-
-
-          p_preferred_mode:
-
-            payload.preferredMode ?? null,
-
-
-
-          p_country:
-
-            payload.country ?? null,
-
-
-
-          p_timezone:
-
-            payload.timezone ?? null,
-
-
-
-          p_message:
-
-            payload.message ?? null,
-
-
-
-          p_anonymous_visitor_id:
-
-            payload.anonymousVisitorId ?? null,
-
-
-
-          p_session_key:
-
-            payload.sessionKey ?? null,
-
-
-
-          p_first_touch:
-
-            payload.firstTouch ?? {},
-
-
-
-          p_session_touch:
-
-            payload.sessionTouch ?? {},
-
-
-
-          p_metadata: {
-
-            ...(payload.metadata ?? {}),
-
-
-
-            request_user_agent:
-
-              request.headers.get('user-agent'),
-
-          },
-
-        }
-
-      );
-
-
+          request_user_agent: request.headers.get("user-agent"),
+        },
+      },
+    );
 
     if (error) {
-
       throw error;
-
     }
-
-
-
-
 
     /* =====================================================
 
@@ -634,41 +284,17 @@ export async function POST(request: NextRequest) {
 
     ===================================================== */
 
-
-
-    const result =
-
-      Array.isArray(data)
-
-        ? data[0]
-
-        : data;
-
-
+    const result = Array.isArray(data) ? data[0] : data;
 
     const leadId =
-
-      result &&
-
-      typeof result === 'object'
-
-        ? (
-
-            result as Record<string, unknown>
-
-          ).lead_id
-
+      result && typeof result === "object"
+        ? (result as Record<string, unknown>).lead_id
         : null;
 
-
     const organizationId =
-  result &&
-  typeof result === 'object'
-    ? (
-        result as Record<string, unknown>
-      ).organization_id
-    : null;
-
+      result && typeof result === "object"
+        ? (result as Record<string, unknown>).organization_id
+        : null;
 
     /*
 
@@ -678,33 +304,21 @@ export async function POST(request: NextRequest) {
 
      */
 
-    if (!leadId || typeof leadId !== 'string') {
-
+    if (!leadId || typeof leadId !== "string") {
       return NextResponse.json(
-
         data ?? { ok: true },
 
-        { headers: cors }
-
+        { headers: cors },
       );
-
     }
 
-  if (
-  !organizationId ||
-  typeof organizationId !== 'string'
-) {
-  console.error(
-    'Website lead ingestion succeeded without organization_id.'
-  );
+    if (!organizationId || typeof organizationId !== "string") {
+      console.error(
+        "Website lead ingestion succeeded without organization_id.",
+      );
 
-  return NextResponse.json(
-    data ?? { ok: true },
-    { headers: cors }
-  );
-}
-
-
+      return NextResponse.json(data ?? { ok: true }, { headers: cors });
+    }
 
     /* =====================================================
 
@@ -714,33 +328,19 @@ export async function POST(request: NextRequest) {
 
     ===================================================== */
 
-
-
-    let session:
-
-      | Record<string, any>
-
-      | null = null;
-
-
-
-
+    let session: Record<string, any> | null = null;
 
     if (payload.sessionKey) {
-
-
-
       const {
-
         data: sessionData,
 
         error: sessionError,
-
       } = await supabase
 
-        .from('web_sessions')
+        .from("web_sessions")
 
-        .select(`
+        .select(
+          `
 
           id,
 
@@ -774,43 +374,23 @@ export async function POST(request: NextRequest) {
 
           last_seen_at
 
-        `)
+        `,
+        )
 
-        .eq(
-  'organization_id',
-  organizationId
-)
-.eq(
-  'session_key',
-  payload.sessionKey
-)
-.maybeSingle();
-
-
+        .eq("organization_id", organizationId)
+        .eq("session_key", payload.sessionKey)
+        .maybeSingle();
 
       if (sessionError) {
-
         console.error(
+          "Lead enrichment session lookup failed:",
 
-          'Lead enrichment session lookup failed:',
-
-          sessionError
-
+          sessionError,
         );
-
       } else {
-
         session = sessionData;
-
       }
-
-
-
     }
-
-
-
-
 
     /*
 
@@ -820,27 +400,17 @@ export async function POST(request: NextRequest) {
 
      */
 
-    if (
-
-      !session &&
-
-      payload.anonymousVisitorId
-
-    ) {
-
-
-
+    if (!session && payload.anonymousVisitorId) {
       const {
-
         data: visitorSession,
 
         error: visitorSessionError,
-
       } = await supabase
 
-        .from('web_sessions')
+        .from("web_sessions")
 
-        .select(`
+        .select(
+          `
 
           id,
 
@@ -874,48 +444,27 @@ export async function POST(request: NextRequest) {
 
           last_seen_at
 
-        `)
+        `,
+        )
 
-        .eq(
-  'organization_id',
-  organizationId
-)
-.eq(
-  'anonymous_visitor_id',
-  payload.anonymousVisitorId
-)
-.order(
-  'last_seen_at',
-  { ascending: false }
-)
+        .eq("organization_id", organizationId)
+        .eq("anonymous_visitor_id", payload.anonymousVisitorId)
+        .order("last_seen_at", { ascending: false })
 
         .limit(1)
 
         .maybeSingle();
 
-
-
       if (visitorSessionError) {
-
         console.error(
+          "Visitor session lookup failed:",
 
-          'Visitor session lookup failed:',
-
-          visitorSessionError
-
+          visitorSessionError,
         );
-
       } else {
-
         session = visitorSession;
-
       }
-
     }
-
-
-
-
 
     /* =====================================================
 
@@ -928,27 +477,11 @@ export async function POST(request: NextRequest) {
 
     ===================================================== */
 
-
-
     const visitorId =
-
-      payload.anonymousVisitorId ??
-
-      session?.anonymous_visitor_id ??
-
-      null;
-
-
+      payload.anonymousVisitorId ?? session?.anonymous_visitor_id ?? null;
 
     const resolvedSessionKey =
-
-      payload.sessionKey ??
-
-      session?.session_key ??
-
-      null;
-
-
+      payload.sessionKey ?? session?.session_key ?? null;
 
     let identityLinked = false;
 
@@ -958,62 +491,30 @@ export async function POST(request: NextRequest) {
 
     let identityConflict = false;
 
-
-
     if (visitorId) {
-
       const {
-
         data: existingIdentity,
 
         error: existingIdentityError,
-
       } = await supabase
 
-        .from('visitor_identity_links')
-.select('lead_id')
-.eq(
-  'organization_id',
-  organizationId
-)
-.eq(
-  'anonymous_visitor_id',
-  visitorId
-)
-.maybeSingle();
-
-
+        .from("visitor_identity_links")
+        .select("lead_id")
+        .eq("organization_id", organizationId)
+        .eq("anonymous_visitor_id", visitorId)
+        .maybeSingle();
 
       if (existingIdentityError) {
-
         console.error(
+          "Visitor identity lookup failed:",
 
-          'Visitor identity lookup failed:',
-
-          existingIdentityError
-
+          existingIdentityError,
         );
-
       }
 
+      const existingLeadId = existingIdentity?.lead_id ?? null;
 
-
-      const existingLeadId =
-
-        existingIdentity?.lead_id ??
-
-        null;
-
-
-
-      if (
-
-        existingLeadId &&
-
-        existingLeadId !== leadId
-
-      ) {
-
+      if (existingLeadId && existingLeadId !== leadId) {
         /*
          * Protect against accidentally reassigning a visitor's
          * historical journey to a different CRM lead.
@@ -1022,290 +523,151 @@ export async function POST(request: NextRequest) {
         identityConflict = true;
 
         console.warn(
-
-          'Visitor is already linked to a different lead; preserving the existing identity link.',
+          "Visitor is already linked to a different lead; preserving the existing identity link.",
 
           {
-
             visitorId,
 
             existingLeadId,
 
             attemptedLeadId: leadId,
-
-          }
-
+          },
         );
-
       } else {
+        const now = new Date().toISOString();
 
-        const now =
+        const { error: identityLinkError } = await supabase
 
-          new Date().toISOString();
-
-
-
-        const {
-
-          error: identityLinkError,
-
-        } = await supabase
-
-          .from('visitor_identity_links')
+          .from("visitor_identity_links")
 
           .upsert(
-  {
-    organization_id:
-      organizationId,
+            {
+              organization_id: organizationId,
 
-    anonymous_visitor_id:
-      visitorId,
+              anonymous_visitor_id: visitorId,
 
-    lead_id:
-      leadId,
+              lead_id: leadId,
 
-              last_session_key:
+              last_session_key: resolvedSessionKey,
 
-                resolvedSessionKey,
+              source_system: "website",
 
-              source_system:
+              linked_at: now,
 
-                'website',
-
-              linked_at:
-
-                now,
-
-              updated_at:
-
-                now,
-
+              updated_at: now,
             },
 
             {
-
-              onConflict:
-
-                'anonymous_visitor_id',
-
-            }
-
+              onConflict: "organization_id,anonymous_visitor_id",
+            },
           );
-
-
 
         if (identityLinkError) {
-
           console.error(
+            "Visitor identity link failed:",
 
-            'Visitor identity link failed:',
-
-            identityLinkError
-
+            identityLinkError,
           );
-
         } else {
-
           identityLinked = true;
-
         }
 
+        const { error: sessionLinkError } = await supabase
 
-
-        const {
-
-          error: sessionLinkError,
-
-        } = await supabase
-
-          .from('web_sessions')
-.update({
-  lead_id:
-    leadId,
-})
-.eq(
-  'organization_id',
-  organizationId
-)
-.eq(
-  'anonymous_visitor_id',
-  visitorId
-)
-.is(
-  'lead_id',
-  null
-);
-
-
+          .from("web_sessions")
+          .update({
+            lead_id: leadId,
+          })
+          .eq("organization_id", organizationId)
+          .eq("anonymous_visitor_id", visitorId)
+          .is("lead_id", null);
 
         if (sessionLinkError) {
-
           console.error(
+            "Visitor session linking failed:",
 
-            'Visitor session linking failed:',
-
-            sessionLinkError
-
+            sessionLinkError,
           );
-
         } else {
-
           sessionsLinked = true;
-
         }
 
+        const { error: touchpointLinkError } = await supabase
 
-
-        const {
-
-          error: touchpointLinkError,
-
-        } = await supabase
-
-          .from('touchpoints')
-.update({
-  lead_id:
-    leadId,
-})
-.eq(
-  'organization_id',
-  organizationId
-)
-.eq(
-  'anonymous_visitor_id',
-  visitorId
-)
-.is(
-  'lead_id',
-  null
-);
-
-
+          .from("touchpoints")
+          .update({
+            lead_id: leadId,
+          })
+          .eq("organization_id", organizationId)
+          .eq("anonymous_visitor_id", visitorId)
+          .is("lead_id", null);
 
         if (touchpointLinkError) {
-
           console.error(
+            "Visitor touchpoint linking failed:",
 
-            'Visitor touchpoint linking failed:',
-
-            touchpointLinkError
-
+            touchpointLinkError,
           );
-
         } else {
-
           touchpointsLinked = true;
-
         }
-
       }
-
     } else if (session?.id) {
-
       /*
        * Fallback for an unusual request where the session is known
        * but anonymous_visitor_id was not included in the lead payload.
        */
 
-      const {
+      const { error: sessionLinkError } = await supabase
 
-        error: sessionLinkError,
-
-      } = await supabase
-
-        .from('web_sessions')
-.update({
-  lead_id:
-    leadId,
-})
-.eq(
-  'organization_id',
-  organizationId
-)
-.eq(
-  'id',
-  session.id
-)
-.is(
-  'lead_id',
-  null
-);
-
-
+        .from("web_sessions")
+        .update({
+          lead_id: leadId,
+        })
+        .eq("organization_id", organizationId)
+        .eq("id", session.id)
+        .is("lead_id", null);
 
       if (sessionLinkError) {
-
         console.error(
+          "Current session linking failed:",
 
-          'Current session linking failed:',
-
-          sessionLinkError
-
+          sessionLinkError,
         );
-
       } else {
-
         sessionsLinked = true;
-
       }
 
+      const { error: touchpointLinkError } = await supabase
 
-
-      const {
-
-        error: touchpointLinkError,
-
-      } = await supabase
-
-        .from('touchpoints')
+        .from("touchpoints")
 
         .update({
-
-          lead_id:
-
-            leadId,
-
+          lead_id: leadId,
         })
 
         .eq(
+          "web_session_id",
 
-          'web_session_id',
-
-          session.id
-
+          session.id,
         )
 
         .is(
+          "lead_id",
 
-          'lead_id',
-
-          null
-
+          null,
         );
-
-
 
       if (touchpointLinkError) {
-
         console.error(
+          "Current-session touchpoint linking failed:",
 
-          'Current-session touchpoint linking failed:',
-
-          touchpointLinkError
-
+          touchpointLinkError,
         );
-
       } else {
-
         touchpointsLinked = true;
-
       }
-
     }
-
-
-
-
 
     /* =====================================================
 
@@ -1315,55 +677,20 @@ export async function POST(request: NextRequest) {
 
     ===================================================== */
 
-
-
-    const inferred =
-
-      inferCoursePreferences(
-
-        payload.courseCode
-
-      );
-
-
-
-
+    const inferred = inferCoursePreferences(payload.courseCode);
 
     const preferredLocation =
+      payload.preferredLocation ?? inferred.preferredLocation;
 
-      payload.preferredLocation ??
-
-      inferred.preferredLocation;
-
-
-
-
-
-    const preferredMode =
-
-      payload.preferredMode ??
-
-      inferred.preferredMode;
-
-
-
-
+    const preferredMode = payload.preferredMode ?? inferred.preferredMode;
 
     const preferredMonth =
-
       payload.preferredMonth ??
-
       metadataValue(
-
         payload.metadata,
 
-        'preferred_month'
-
+        "preferred_month",
       );
-
-
-
-
 
     /*
 
@@ -1387,33 +714,17 @@ export async function POST(request: NextRequest) {
 
      */
 
-    const potentialValue =
+    const potentialValue = metadataNumber(
+      payload.metadata,
 
-      metadataNumber(
+      "potential_value",
+    );
 
-        payload.metadata,
+    const potentialCurrency = metadataValue(
+      payload.metadata,
 
-        'potential_value'
-
-      );
-
-
-
-
-
-    const potentialCurrency =
-
-      metadataValue(
-
-        payload.metadata,
-
-        'potential_currency'
-
-      );
-
-
-
-
+      "potential_currency",
+    );
 
     /* =====================================================
 
@@ -1423,99 +734,27 @@ export async function POST(request: NextRequest) {
 
     ===================================================== */
 
+    const firstTouch = payload.firstTouch ?? {};
 
-
-    const firstTouch =
-
-      payload.firstTouch ?? {};
-
-
-
-    const lastTouch =
-
-      payload.sessionTouch ?? {};
-
-
-
-
+    const lastTouch = payload.sessionTouch ?? {};
 
     const firstSource =
-
-      firstTouch.source ??
-
-      session?.utm_source ??
-
-      session?.source ??
-
-      null;
-
-
-
-
+      firstTouch.source ?? session?.utm_source ?? session?.source ?? null;
 
     const firstMedium =
-
-      firstTouch.medium ??
-
-      session?.utm_medium ??
-
-      session?.medium ??
-
-      null;
-
-
-
-
+      firstTouch.medium ?? session?.utm_medium ?? session?.medium ?? null;
 
     const firstCampaign =
-
       firstTouch.campaign ??
-
       session?.utm_campaign ??
-
       session?.campaign_name ??
-
       null;
 
+    const lastSource = lastTouch.source ?? session?.source ?? null;
 
+    const lastMedium = lastTouch.medium ?? session?.medium ?? null;
 
-
-
-    const lastSource =
-
-      lastTouch.source ??
-
-      session?.source ??
-
-      null;
-
-
-
-
-
-    const lastMedium =
-
-      lastTouch.medium ??
-
-      session?.medium ??
-
-      null;
-
-
-
-
-
-    const lastCampaign =
-
-      lastTouch.campaign ??
-
-      session?.campaign_name ??
-
-      null;
-
-
-
-
+    const lastCampaign = lastTouch.campaign ?? session?.campaign_name ?? null;
 
     /* =====================================================
 
@@ -1525,171 +764,61 @@ export async function POST(request: NextRequest) {
 
     ===================================================== */
 
-
-
     const leadUpdate: Record<string, unknown> = {
-
-
-
       /* Course intent */
 
+      preferred_location: preferredLocation ?? null,
 
+      preferred_month: preferredMonth ?? null,
 
-      preferred_location:
-
-        preferredLocation ?? null,
-
-
-
-      preferred_month:
-
-        preferredMonth ?? null,
-
-
-
-      preferred_mode:
-
-        preferredMode ?? null,
-
-
-
-
+      preferred_mode: preferredMode ?? null,
 
       /* Revenue */
 
+      potential_value: potentialValue,
 
-
-      potential_value:
-
-        potentialValue,
-
-
-
-      potential_currency:
-
-        potentialCurrency,
-
-
-
-
+      potential_currency: potentialCurrency,
 
       /* Approx visitor geography */
 
+      geo_country: session?.geo_country ?? null,
 
+      geo_region: session?.geo_region ?? null,
 
-      geo_country:
+      geo_city: session?.geo_city ?? null,
 
-        session?.geo_country ?? null,
-
-
-
-      geo_region:
-
-        session?.geo_region ?? null,
-
-
-
-      geo_city:
-
-        session?.geo_city ?? null,
-
-
-
-      geo_timezone:
-
-        session?.geo_timezone ?? null,
-
-
-
-
+      geo_timezone: session?.geo_timezone ?? null,
 
       /* Journey */
 
+      landing_page: session?.landing_page ?? null,
 
-
-      landing_page:
-
-        session?.landing_page ?? null,
-
-
-
-      lead_origin:
-
-        getLeadOrigin(
-
-          payload.formName
-
-        ),
-
-
-
-
+      lead_origin: getLeadOrigin(payload.formName),
 
       /* First attribution */
 
+      first_touch_source: firstSource,
 
+      first_touch_medium: firstMedium,
 
-      first_touch_source:
-
-        firstSource,
-
-
-
-      first_touch_medium:
-
-        firstMedium,
-
-
-
-      first_touch_campaign:
-
-        firstCampaign,
-
-
-
-
+      first_touch_campaign: firstCampaign,
 
       /* Last attribution */
 
+      last_touch_source: lastSource,
 
+      last_touch_medium: lastMedium,
 
-      last_touch_source:
-
-        lastSource,
-
-
-
-      last_touch_medium:
-
-        lastMedium,
-
-
-
-      last_touch_campaign:
-
-        lastCampaign,
-
+      last_touch_campaign: lastCampaign,
     };
 
+    const { error: leadUpdateError } = await supabase
 
-
-
-
-    const {
-
-      error: leadUpdateError,
-
-    } = await supabase
-
-      .from('leads')
+      .from("leads")
 
       .update(leadUpdate)
 
-      .eq('id', leadId);
-
-
-
-
+      .eq("id", leadId);
 
     /*
 
@@ -1700,20 +829,12 @@ export async function POST(request: NextRequest) {
      */
 
     if (leadUpdateError) {
-
       console.error(
+        "Lead enrichment update failed:",
 
-        'Lead enrichment update failed:',
-
-        leadUpdateError
-
+        leadUpdateError,
       );
-
     }
-
-
-
-
 
     /* =====================================================
 
@@ -1721,132 +842,55 @@ export async function POST(request: NextRequest) {
 
     ===================================================== */
 
-
-
     return NextResponse.json(
-
       {
-
         ...(result ?? { ok: true }),
 
-
-
         enrichment: {
+          applied: !leadUpdateError,
 
-          applied:
+          geo: Boolean(session?.geo_country || session?.geo_city),
 
-            !leadUpdateError,
+          attribution: Boolean(firstSource || firstCampaign),
 
+          preferred_location: preferredLocation,
 
-
-          geo:
-
-            Boolean(
-
-              session?.geo_country ||
-
-              session?.geo_city
-
-            ),
-
-
-
-          attribution:
-
-            Boolean(
-
-              firstSource ||
-
-              firstCampaign
-
-            ),
-
-
-
-          preferred_location:
-
-            preferredLocation,
-
-
-
-          preferred_mode:
-
-            preferredMode,
-
+          preferred_mode: preferredMode,
         },
 
         linking: {
+          visitor_id_present: Boolean(visitorId),
 
-          visitor_id_present:
+          identity_linked: identityLinked,
 
-            Boolean(visitorId),
+          sessions_linked: sessionsLinked,
 
-          identity_linked:
+          touchpoints_linked: touchpointsLinked,
 
-            identityLinked,
-
-          sessions_linked:
-
-            sessionsLinked,
-
-          touchpoints_linked:
-
-            touchpointsLinked,
-
-          identity_conflict:
-
-            identityConflict,
-
+          identity_conflict: identityConflict,
         },
-
       },
 
       {
-
         headers: cors,
-
-      }
-
+      },
     );
-
-
-
-
-
   } catch (error) {
-
-
-
     const message =
-
-      error instanceof Error
-
-        ? error.message
-
-        : 'Website lead capture failed';
-
-
+      error instanceof Error ? error.message : "Website lead capture failed";
 
     return NextResponse.json(
-
       {
-
         ok: false,
 
         error: message,
-
       },
 
       {
-
         status: 400,
 
         headers: cors,
-
-      }
-
+      },
     );
-
   }
-
 }

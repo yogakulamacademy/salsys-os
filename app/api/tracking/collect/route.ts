@@ -176,10 +176,11 @@ export async function POST(request: NextRequest) {
        ======================================================== */
 
     const { data: identity, error: identityError } = await supabase
-      .from("visitor_identity_links")
-      .select("lead_id")
-      .eq("anonymous_visitor_id", payload.anonymousVisitorId)
-      .maybeSingle();
+  .from("visitor_identity_links")
+  .select("lead_id")
+  .eq("organization_id", organizationId)
+  .eq("anonymous_visitor_id", payload.anonymousVisitorId)
+  .maybeSingle();
 
     if (identityError) {
       throw identityError;
