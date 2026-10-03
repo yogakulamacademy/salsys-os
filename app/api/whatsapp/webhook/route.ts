@@ -186,17 +186,54 @@ export async function POST(request: NextRequest) {
 
     for (const event of events) {
 
-      const eventKey = stringValue(event.event_key);
-
-
+            const eventKey = stringValue(event.event_key);
 
       if (!eventKey) {
-
         throw new Error('Webhook event_key could not be generated.');
-
       }
 
+      const phoneNumberId = stringValue(
+        event.phone_number_id
+      );
 
+      if (!phoneNumberId) {
+        throw new Error(
+          'Webhook phone_number_id is missing.'
+        );
+      }
+
+      const {
+        data: whatsappAccount,
+        error: whatsappAccountError,
+      } = await supabase
+        .from('whatsapp_accounts')
+        .select('organization_id')
+        .eq(
+          'phone_number_id',
+          phoneNumberId
+        )
+        .eq(
+          'active',
+          true
+        )
+        .maybeSingle();
+
+      if (whatsappAccountError) {
+        throw whatsappAccountError;
+      }
+
+      const organizationId = stringValue(
+        whatsappAccount?.organization_id
+      );
+
+      if (!organizationId) {
+        throw new Error(
+          `No active organization mapping found for WhatsApp phone_number_id ${phoneNumberId}.`
+        );
+      }
+
+      event.organization_id =
+        organizationId;
 
       let eventId: string | null = null;
 
@@ -248,12 +285,16 @@ export async function POST(request: NextRequest) {
 
         } = await supabase
 
-          .from('whatsapp_webhook_events')
-
+                    .from('whatsapp_webhook_events')
           .select('id')
-
-          .eq('event_key', eventKey)
-
+          .eq(
+            'organization_id',
+            organizationId
+          )
+          .eq(
+            'event_key',
+            eventKey
+          )
           .maybeSingle();
 
 
