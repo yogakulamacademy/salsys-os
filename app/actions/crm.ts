@@ -722,6 +722,23 @@ export async function recordPaymentAction(
 
   const supabase = await createClient();
 
+  const { data: leadTenant, error: leadTenantError } = await supabase
+    .from("leads")
+    .select("organization_id")
+    .eq("id", leadId)
+    .maybeSingle();
+
+  if (leadTenantError || !leadTenant?.organization_id) {
+    redirect(
+      `/leads/${leadId}?error=${encodeURIComponent(
+        leadTenantError?.message ??
+          "Unable to determine the organization for this lead.",
+      )}`,
+    );
+  }
+
+  const organizationId = leadTenant.organization_id;
+
   const {
     data: payment,
 
@@ -731,6 +748,8 @@ export async function recordPaymentAction(
     .from("payments")
 
     .insert({
+      organization_id: organizationId,
+
       lead_id: leadId,
 
       payment_kind: paymentKind,

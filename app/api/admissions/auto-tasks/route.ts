@@ -1,15 +1,8 @@
-import {
-  NextRequest,
-  NextResponse,
-} from 'next/server';
+import { NextRequest, NextResponse } from "next/server";
 
-import {
-  createAdminClient,
-} from '@/lib/supabase/admin';
+import { createAdminClient } from "@/lib/supabase/admin";
 
-export const dynamic =
-  'force-dynamic';
-
+export const dynamic = "force-dynamic";
 
 type RunnerRow = {
   lead_id?: string | null;
@@ -21,221 +14,241 @@ type RunnerRow = {
   result?: string | null;
 };
 
+type OrganizationRow = {
+  id: string;
+};
 
-function isAuthorized(
-  request: NextRequest
-) {
-  const cronSecret =
-    process.env
-      .CRON_SECRET
-      ?.trim();
+type RunSummary = {
+  organizationId: string;
+  runId: string | null;
+  status: "success" | "partial" | "failed";
+  processed: number;
+  created: number;
+  failed: number;
+  rows: RunnerRow[];
+  error?: string;
+};
+
+function isAuthorized(request: NextRequest) {
+  const cronSecret = process.env.CRON_SECRET?.trim();
 
   if (!cronSecret) {
     return false;
   }
 
-  const authorization =
-    request.headers
-      .get('authorization')
-      ?.trim();
+  const authorization = request.headers.get("authorization")?.trim();
 
-  return (
-    authorization ===
-    `Bearer ${cronSecret}`
-  );
+  return authorization === `Bearer ${cronSecret}`;
 }
 
+function errorMessage(error: unknown) {
+  return error instanceof Error
+    ? error.message
+    : "Automatic admissions task run failed";
+}
 
-async function runAutoTasks(
-  request: NextRequest
-) {
+async function runAutoTasks(request: NextRequest) {
   if (!isAuthorized(request)) {
     return NextResponse.json(
       {
         ok: false,
-        error: 'Unauthorized',
+        error: "Unauthorized",
       },
       {
         status: 401,
-      }
+      },
     );
   }
 
-  const supabase =
-    createAdminClient();
-
-  let runId:
-    | string
-    | null = null;
+  const supabase = createAdminClient();
+  const ranAt = new Date().toISOString();
 
   try {
-    const {
-      data: run,
-      error: runError,
-    } = await supabase
-      .from(
-        'admissions_auto_task_runs'
-      )
-      .insert({
-        trigger_source:
-          'cron',
-        status:
-          'running',
-      })
-      .select('id')
-      .single();
+    const { data: organizationRows, error: organizationsError } = await supabase
+      .from("organizations")
+      .select("id")
+      .eq("status", "active");
 
-    if (runError) {
-      throw runError;
+    if (organizationsError) {
+      throw organizationsError;
     }
 
-    runId =
-      run.id;
+    const organizations = (organizationRows ?? []) as OrganizationRow[];
 
-    const {
-      data,
-      error,
-    } = await supabase.rpc(
-      'run_admissions_auto_tasks',
-      {
-        p_dry_run: false,
-      }
-    );
-
-    if (error) {
-      throw error;
+    if (organizations.length === 0) {
+      return NextResponse.json({
+        ok: true,
+        trigger: "cron",
+        runId: null,
+        processed: 0,
+        created: 0,
+        failed: 0,
+        runFailures: 0,
+        rows: [],
+        runs: [],
+        ranAt,
+      });
     }
 
-    const rows =
-      (
-        Array.isArray(data)
-          ? data
-          : []
-      ) as RunnerRow[];
+    const runs: RunSummary[] = [];
+    let hardFailure = false;
 
-    const created =
-      rows.filter(
-        (row) =>
-          row.result ===
-          'created'
-      ).length;
+    for (const organization of organizations) {
+      const organizationId = organization.id;
 
-    const failed =
-      rows.filter(
-        (row) =>
-          typeof row.result ===
-            'string' &&
-          row.result.startsWith(
-            'failed:'
-          )
-      ).length;
+      let runId: string | null = null;
+      let rows: RunnerRow[] = [];
+      let processed = 0;
+      let created = 0;
+      let failed = 0;
 
-    const status =
-      failed === 0
-        ? 'success'
-        : created > 0
-          ? 'partial'
-          : 'failed';
+      try {
+        const { data: run, error: runError } = await supabase
+          .from("admissions_auto_task_runs")
+          .insert({
+            organization_id: organizationId,
+            trigger_source: "cron",
+            status: "running",
+          })
+          .select("id")
+          .single();
 
-    const {
-      error:
-        updateError,
-    } = await supabase
-      .from(
-        'admissions_auto_task_runs'
-      )
-      .update({
-        status,
-        processed_count:
-          rows.length,
-        created_count:
-          created,
-        failed_count:
-          failed,
-        result_rows:
-          rows,
-        completed_at:
-          new Date()
-            .toISOString(),
-      })
-      .eq(
-        'id',
-        runId
-      );
+        if (runError) {
+          throw runError;
+        }
 
-    if (updateError) {
-      throw updateError;
-    }
+        runId = run.id;
 
-    return NextResponse.json({
-      ok:
-        failed === 0,
-      trigger:
-        'cron',
-      runId,
-      processed:
-        rows.length,
-      created,
-      failed,
-      rows,
-      ranAt:
-        new Date()
-          .toISOString(),
-    });
-  } catch (error) {
-    const message =
-      error instanceof Error
-        ? error.message
-        : 'Automatic admissions task run failed';
-
-    if (runId) {
-      await supabase
-        .from(
-          'admissions_auto_task_runs'
-        )
-        .update({
-          status:
-            'failed',
-          error_message:
-            message,
-          completed_at:
-            new Date()
-              .toISOString(),
-        })
-        .eq(
-          'id',
-          runId
+        const { data, error } = await supabase.rpc(
+          "run_admissions_auto_tasks",
+          {
+            p_organization_id: organizationId,
+            p_dry_run: false,
+          },
         );
+
+        if (error) {
+          throw error;
+        }
+
+        rows = (Array.isArray(data) ? data : []) as RunnerRow[];
+        processed = rows.length;
+
+        created = rows.filter((row) => row.result === "created").length;
+
+        failed = rows.filter(
+          (row) =>
+            typeof row.result === "string" && row.result.startsWith("failed:"),
+        ).length;
+
+        const status: RunSummary["status"] =
+          failed === 0 ? "success" : created > 0 ? "partial" : "failed";
+
+        const { error: updateError } = await supabase
+          .from("admissions_auto_task_runs")
+          .update({
+            status,
+            processed_count: processed,
+            created_count: created,
+            failed_count: failed,
+            result_rows: rows,
+            completed_at: new Date().toISOString(),
+          })
+          .eq("id", runId)
+          .eq("organization_id", organizationId);
+
+        if (updateError) {
+          throw updateError;
+        }
+
+        runs.push({
+          organizationId,
+          runId,
+          status,
+          processed,
+          created,
+          failed,
+          rows,
+        });
+      } catch (error) {
+        hardFailure = true;
+
+        const message = errorMessage(error);
+
+        if (runId) {
+          await supabase
+            .from("admissions_auto_task_runs")
+            .update({
+              status: "failed",
+              processed_count: processed,
+              created_count: created,
+              failed_count: failed,
+              result_rows: rows,
+              error_message: message,
+              completed_at: new Date().toISOString(),
+            })
+            .eq("id", runId)
+            .eq("organization_id", organizationId);
+        }
+
+        runs.push({
+          organizationId,
+          runId,
+          status: "failed",
+          processed,
+          created,
+          failed,
+          rows,
+          error: message,
+        });
+      }
     }
+
+    const processed = runs.reduce((sum, run) => sum + run.processed, 0);
+    const created = runs.reduce((sum, run) => sum + run.created, 0);
+    const failed = runs.reduce((sum, run) => sum + run.failed, 0);
+    const runFailures = runs.filter((run) => Boolean(run.error)).length;
+    const rows = runs.flatMap((run) => run.rows);
+
+    const ok = !hardFailure && failed === 0;
+
+    return NextResponse.json(
+      {
+        ok,
+        trigger: "cron",
+        runId: runs.length === 1 ? runs[0].runId : null,
+        processed,
+        created,
+        failed,
+        runFailures,
+        rows,
+        runs,
+        ranAt,
+      },
+      {
+        status: hardFailure ? 500 : 200,
+      },
+    );
+  } catch (error) {
+    const message = errorMessage(error);
 
     return NextResponse.json(
       {
         ok: false,
-        runId,
-        error:
-          message,
+        runId: null,
+        error: message,
       },
       {
         status: 500,
-      }
+      },
     );
   }
 }
 
-
-export async function GET(
-  request: NextRequest
-) {
-  return runAutoTasks(
-    request
-  );
+export async function GET(request: NextRequest) {
+  return runAutoTasks(request);
 }
 
-
-export async function POST(
-  request: NextRequest
-) {
-  return runAutoTasks(
-    request
-  );
+export async function POST(request: NextRequest) {
+  return runAutoTasks(request);
 }
