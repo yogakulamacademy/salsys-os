@@ -1,221 +1,128 @@
-import {
-  NextRequest,
-  NextResponse,
-} from 'next/server';
+import { NextRequest, NextResponse } from "next/server";
 
-import {
-  syncYogakulamCourseCatalog,
-} from '@/lib/integrations/yogakulam-courses';
+import { syncYogakulamCourseCatalog } from "@/lib/integrations/yogakulam-courses";
 
-export const runtime =
-  'nodejs';
+export const runtime = "nodejs";
 
-export const dynamic =
-  'force-dynamic';
+export const dynamic = "force-dynamic";
 
-export const maxDuration =
-  60;
+/*
+ * The catalog sync now processes batches with bounded concurrency, so it
+ * should normally finish well below 60 seconds. A longer duration is still
+ * requested for deployments/plans that allow it.
+ */
+export const maxDuration = 300;
 
+function bearerToken(request: NextRequest) {
+  const authorization = request.headers.get("authorization");
 
-function bearerToken(
-  request:
-    NextRequest
-) {
-  const authorization =
-    request.headers.get(
-      'authorization'
-    );
-
-  if (
-    !authorization
-  ) {
+  if (!authorization) {
     return null;
   }
 
-  const match =
-    authorization.match(
-      /^Bearer\s+(.+)$/i
-    );
+  const match = authorization.match(/^Bearer\s+(.+)$/i);
 
-  return match?.[1]
-    ?.trim()
-    || null;
+  return match?.[1]?.trim() || null;
 }
 
-
-function manualAuthorized(
-  request:
-    NextRequest
-) {
-  const expected =
-    process.env
-      .COURSE_CATALOG_SYNC_SECRET
-      ?.trim();
+function manualAuthorized(request: NextRequest) {
+  const expected = process.env.COURSE_CATALOG_SYNC_SECRET?.trim();
 
   if (!expected) {
     return false;
   }
 
-  const custom =
-    request.headers
-      .get(
-        'x-course-catalog-sync-secret'
-      )
-      ?.trim();
+  const custom = request.headers.get("x-course-catalog-sync-secret")?.trim();
 
-  const bearer =
-    bearerToken(
-      request
-    );
+  const bearer = bearerToken(request);
 
-  return (
-    custom === expected
-    ||
-    bearer === expected
-  );
+  return custom === expected || bearer === expected;
 }
 
+function cronAuthorized(request: NextRequest) {
+  const bearer = bearerToken(request);
 
-function cronAuthorized(
-  request:
-    NextRequest
-) {
-  const bearer =
-    bearerToken(
-      request
-    );
+  const cronSecret = process.env.CRON_SECRET?.trim();
 
-  const cronSecret =
-    process.env
-      .CRON_SECRET
-      ?.trim();
+  const syncSecret = process.env.COURSE_CATALOG_SYNC_SECRET?.trim();
 
-  const syncSecret =
-    process.env
-      .COURSE_CATALOG_SYNC_SECRET
-      ?.trim();
-
-  return Boolean(
-    bearer
-    &&
-    (
-      bearer ===
-        cronSecret
-      ||
-      bearer ===
-        syncSecret
-    )
-  );
+  return Boolean(bearer && (bearer === cronSecret || bearer === syncSecret));
 }
 
-
-export async function POST(
-  request:
-    NextRequest
-) {
-  if (
-    !manualAuthorized(
-      request
-    )
-  ) {
+export async function POST(request: NextRequest) {
+  if (!manualAuthorized(request)) {
     return NextResponse.json(
       {
         ok: false,
-        error:
-          'Unauthorized.',
+        error: "Unauthorized.",
       },
       {
         status: 401,
-      }
+      },
     );
   }
 
   try {
-    const result =
-      await syncYogakulamCourseCatalog({
-        trigger:
-          'manual',
-      });
+    const result = await syncYogakulamCourseCatalog({
+      trigger: "manual",
+    });
 
-    return NextResponse.json(
-      result
-    );
+    return NextResponse.json(result);
   } catch (error) {
     const message =
       error instanceof Error
         ? error.message
-        : 'Unknown course catalog sync error';
+        : "Unknown course catalog sync error";
 
-    console.error(
-      'Course catalog manual sync failed:',
-      error
-    );
+    console.error("Course catalog manual sync failed:", error);
 
     return NextResponse.json(
       {
         ok: false,
-        error:
-          message,
+        error: message,
       },
       {
         status: 500,
-      }
+      },
     );
   }
 }
 
-
-export async function GET(
-  request:
-    NextRequest
-) {
-  if (
-    !cronAuthorized(
-      request
-    )
-  ) {
+export async function GET(request: NextRequest) {
+  if (!cronAuthorized(request)) {
     return NextResponse.json(
       {
         ok: false,
-        error:
-          'Unauthorized.',
+        error: "Unauthorized.",
       },
       {
         status: 401,
-      }
+      },
     );
   }
 
   try {
-    const result =
-      await syncYogakulamCourseCatalog({
-        trigger:
-          'cron',
-      });
+    const result = await syncYogakulamCourseCatalog({
+      trigger: "cron",
+    });
 
-    return NextResponse.json(
-      result
-    );
+    return NextResponse.json(result);
   } catch (error) {
     const message =
       error instanceof Error
         ? error.message
-        : 'Unknown course catalog sync error';
+        : "Unknown course catalog sync error";
 
-    console.error(
-      'Course catalog cron sync failed:',
-      error
-    );
+    console.error("Course catalog cron sync failed:", error);
 
     return NextResponse.json(
       {
         ok: false,
-        error:
-          message,
+        error: message,
       },
       {
         status: 500,
-      }
+      },
     );
   }
 }
