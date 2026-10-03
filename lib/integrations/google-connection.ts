@@ -31,7 +31,7 @@ type GoogleConnectionRow = {
 };
 
 type GoogleConnectionTokenOptions = {
-  organizationId?:
+  organizationId:
     string;
 };
 
@@ -41,21 +41,26 @@ const REFRESH_EARLY_MS =
 /*
  * Trusted low-level token loader.
  *
- * Background sync code currently calls this with only connectionId.
- * User-triggered integration actions MUST pass organizationId or use
- * getGoogleAccessTokenForOrganizationConnection().
- *
- * Phase 1D will make scheduled GA4/GSC/Ads syncs organization-aware too.
+ * All token retrieval must be scoped to the organization that owns
+ * the integration connection.
  */
 export async function getGoogleAccessTokenForConnection(
   connectionId: string,
   options:
-    GoogleConnectionTokenOptions = {},
+    GoogleConnectionTokenOptions,
 ) {
+  if (
+    !options.organizationId
+  ) {
+    throw new Error(
+      'Unable to load Google connection: organizationId is required.',
+    );
+  }
+
   const admin =
     createAdminClient();
 
-  let connectionQuery =
+  const connectionQuery =
     admin
       .from(
         'integration_connections',
@@ -74,17 +79,11 @@ export async function getGoogleAccessTokenForConnection(
       .eq(
         'id',
         connectionId,
-      );
-
-  if (
-    options.organizationId
-  ) {
-    connectionQuery =
-      connectionQuery.eq(
+      )
+      .eq(
         'organization_id',
         options.organizationId,
       );
-  }
 
   const {
     data:
@@ -118,7 +117,6 @@ export async function getGoogleAccessTokenForConnection(
   }
 
   if (
-    options.organizationId &&
     connection.organization_id !==
       options.organizationId
   ) {
@@ -267,9 +265,9 @@ export async function getGoogleAccessTokenForConnection(
 }
 
 /*
- * Use this helper for user-triggered actions.
+ * Use this helper for organization-scoped integration actions and syncs.
  * It guarantees that token retrieval is scoped to the organization
- * already authorized by the server action.
+ * already authorized by the calling workflow.
  */
 export async function getGoogleAccessTokenForOrganizationConnection(
   connectionId: string,
