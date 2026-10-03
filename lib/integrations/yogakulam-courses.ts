@@ -225,6 +225,80 @@ const COURSE_NAME_BY_CODE: Record<
 };
 
 
+function websiteCourseFeedUrl() {
+  return (
+    process.env
+      .YOGAKULAM_COURSE_FEED_URL
+      ?.trim()
+    ||
+    'https://www.yogakulam.com/api/crm/course-batches.php'
+  );
+}
+
+
+async function resolveCourseSyncOrganizationId({
+  supabase,
+  feedUrl,
+}: {
+  supabase:
+    ReturnType<
+      typeof createAdminClient
+    >;
+
+  feedUrl:
+    string;
+}) {
+  let hostname:
+    string;
+
+  try {
+    hostname =
+      new URL(
+        feedUrl
+      ).hostname
+        .toLowerCase();
+  } catch {
+    throw new Error(
+      `Invalid course feed URL: ${feedUrl}`
+    );
+  }
+
+  const {
+    data: site,
+    error,
+  } = await supabase
+    .from(
+      'organization_sites'
+    )
+    .select(
+      'organization_id'
+    )
+    .eq(
+      'hostname',
+      hostname
+    )
+    .maybeSingle();
+
+  if (error) {
+    throw new Error(
+      `Unable to resolve organization for ${hostname}: ${error.message}`
+    );
+  }
+
+  if (
+    !site?.organization_id
+  ) {
+    throw new Error(
+      `No organization site mapping exists for ${hostname}`
+    );
+  }
+
+  return String(
+    site.organization_id
+  );
+}
+
+
 export async function syncYogakulamCourseCatalog({
   trigger,
 }: {
@@ -232,6 +306,15 @@ export async function syncYogakulamCourseCatalog({
 }): Promise<CourseCatalogSyncResult> {
   const supabase =
     createAdminClient();
+
+  const feedUrl =
+    websiteCourseFeedUrl();
+
+  const organizationId =
+    await resolveCourseSyncOrganizationId({
+      supabase,
+      feedUrl,
+    });
 
   const {
     data: run,
@@ -241,6 +324,9 @@ export async function syncYogakulamCourseCatalog({
       'course_catalog_sync_runs'
     )
     .insert({
+      organization_id:
+        organizationId,
+
       source_system:
         SOURCE_SYSTEM,
 
@@ -272,7 +358,9 @@ export async function syncYogakulamCourseCatalog({
 
   try {
     const feed =
-      await fetchWebsiteCourseFeed();
+      await fetchWebsiteCourseFeed(
+        feedUrl
+      );
 
     if (
       feed.success !== true ||
@@ -338,6 +426,7 @@ export async function syncYogakulamCourseCatalog({
       const resolved =
         await resolveCourse({
           supabase,
+          organizationId,
           batch,
           cache:
             courseCache,
@@ -372,6 +461,7 @@ export async function syncYogakulamCourseCatalog({
       const result =
         await syncOneBatch({
           supabase,
+          organizationId,
           runId,
           course:
             resolved.course,
@@ -405,6 +495,8 @@ export async function syncYogakulamCourseCatalog({
           runId,
         p_source_system:
           SOURCE_SYSTEM,
+        p_organization_id:
+          organizationId,
       }
     );
 
@@ -491,6 +583,10 @@ export async function syncYogakulamCourseCatalog({
           completedAt,
       })
       .eq(
+        'organization_id',
+        organizationId
+      )
+      .eq(
         'id',
         runId
       );
@@ -558,6 +654,10 @@ export async function syncYogakulamCourseCatalog({
             .toISOString(),
       })
       .eq(
+        'organization_id',
+        organizationId
+      )
+      .eq(
         'id',
         runId
       );
@@ -567,15 +667,11 @@ export async function syncYogakulamCourseCatalog({
 }
 
 
-async function fetchWebsiteCourseFeed():
+async function fetchWebsiteCourseFeed(
+  feedUrl:
+    string
+):
 Promise<WebsiteFeed> {
-  const feedUrl =
-    process.env
-      .YOGAKULAM_COURSE_FEED_URL
-      ?.trim()
-    ||
-    'https://www.yogakulam.com/api/crm/course-batches.php';
-
   const websiteSecret =
     process.env
       .YOGAKULAM_CRM_WEBSITE_SECRET
@@ -646,6 +742,7 @@ Promise<WebsiteFeed> {
 
 async function resolveCourse({
   supabase,
+  organizationId,
   batch,
   cache,
 }: {
@@ -653,6 +750,9 @@ async function resolveCourse({
     ReturnType<
       typeof createAdminClient
     >;
+
+  organizationId:
+    string;
 
   batch:
     WebsiteBatch;
@@ -705,6 +805,10 @@ async function resolveCourse({
       'id,code,name'
     )
     .eq(
+      'organization_id',
+      organizationId
+    )
+    .eq(
       'code',
       code
     )
@@ -752,6 +856,9 @@ async function resolveCourse({
       'courses'
     )
     .insert({
+      organization_id:
+        organizationId,
+
       code,
       name:
         fallbackName,
@@ -814,6 +921,7 @@ async function resolveCourse({
 
 async function syncOneBatch({
   supabase,
+  organizationId,
   runId,
   course,
   batch,
@@ -823,6 +931,9 @@ async function syncOneBatch({
     ReturnType<
       typeof createAdminClient
     >;
+
+  organizationId:
+    string;
 
   runId:
     string;
@@ -870,6 +981,10 @@ async function syncOneBatch({
       'id,batch_code,location,mode,metadata,source_system,external_batch_id'
     )
     .eq(
+      'organization_id',
+      organizationId
+    )
+    .eq(
       'source_system',
       SOURCE_SYSTEM
     )
@@ -888,6 +1003,7 @@ async function syncOneBatch({
   if (synced) {
     await updateExistingBatch({
       supabase,
+      organizationId,
       row:
         synced as ExistingBatchRow,
       runId,
@@ -904,6 +1020,7 @@ async function syncOneBatch({
   const adoptable =
     await findAdoptableExistingBatch({
       supabase,
+      organizationId,
       courseId:
         course.id,
       batch,
@@ -912,6 +1029,7 @@ async function syncOneBatch({
   if (adoptable) {
     await updateExistingBatch({
       supabase,
+      organizationId,
       row:
         adoptable,
       runId,
@@ -939,6 +1057,9 @@ async function syncOneBatch({
       'course_batches'
     )
     .insert({
+      organization_id:
+        organizationId,
+
       course_id:
         course.id,
 
@@ -1019,6 +1140,7 @@ async function syncOneBatch({
 
 async function findAdoptableExistingBatch({
   supabase,
+  organizationId,
   courseId,
   batch,
 }: {
@@ -1026,6 +1148,9 @@ async function findAdoptableExistingBatch({
     ReturnType<
       typeof createAdminClient
     >;
+
+  organizationId:
+    string;
 
   courseId:
     string;
@@ -1052,6 +1177,10 @@ async function findAdoptableExistingBatch({
     )
     .select(
       'id,batch_code,location,mode,metadata,source_system,external_batch_id'
+    )
+    .eq(
+      'organization_id',
+      organizationId
     )
     .eq(
       'course_id',
@@ -1120,6 +1249,7 @@ async function findAdoptableExistingBatch({
 
 async function updateExistingBatch({
   supabase,
+  organizationId,
   row,
   runId,
   batch,
@@ -1131,6 +1261,9 @@ async function updateExistingBatch({
     ReturnType<
       typeof createAdminClient
     >;
+
+  organizationId:
+    string;
 
   row:
     ExistingBatchRow;
@@ -1234,6 +1367,10 @@ async function updateExistingBatch({
           batch
         ),
     })
+    .eq(
+      'organization_id',
+      organizationId
+    )
     .eq(
       'id',
       row.id
