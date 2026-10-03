@@ -866,13 +866,24 @@ export async function sendWhatsAppTemplateAction(
 
   const adminSupabase = createAdminClient();
 
+  const { data: leadTenant, error: leadTenantError } = await adminSupabase
+    .from("leads")
+    .select("organization_id")
+    .eq("id", leadId)
+    .limit(1)
+    .maybeSingle();
+
+  if (leadTenantError || !leadTenant?.organization_id) {
+    redirect(
+      conversationUrl(leadId, {
+        error: "Unable to determine the organization for this lead.",
+      }),
+    );
+  }
+
+  const organizationId = leadTenant.organization_id;
+
   /* =====================================================
-
-
-
-
-
-
 
      LOAD PHONE / WHATSAPP CONTACT
 
@@ -1004,6 +1015,12 @@ export async function sendWhatsAppTemplateAction(
       "lead_id",
 
       leadId,
+    )
+
+    .eq(
+      "organization_id",
+
+      organizationId,
     )
 
     .in(
@@ -1258,10 +1275,16 @@ export async function sendWhatsAppTemplateAction(
     )
 
     .eq(
-      "contact_type",
+  "organization_id",
 
-      "whatsapp",
-    )
+  organizationId,
+)
+
+.eq(
+  "contact_type",
+
+  "whatsapp",
+)
 
     .eq(
       "normalized_value",
@@ -1722,10 +1745,16 @@ export async function sendWhatsAppTemplateAction(
     )
 
     .eq(
-      "contact_type",
+  "organization_id",
 
-      "whatsapp",
-    )
+  organizationId,
+)
+
+.eq(
+  "contact_type",
+
+  "whatsapp",
+)
 
     .eq(
       "normalized_value",
@@ -1786,9 +1815,11 @@ export async function sendWhatsAppTemplateAction(
       .from("lead_contacts")
 
       .insert({
-        lead_id: leadId,
+  organization_id: organizationId,
 
-        contact_type: "whatsapp",
+  lead_id: leadId,
+
+  contact_type: "whatsapp",
 
         /*
 
@@ -1915,6 +1946,12 @@ export async function sendWhatsAppTemplateAction(
     )
 
     .eq(
+  "organization_id",
+
+  organizationId,
+)
+
+    .eq(
       "channel",
 
       "whatsapp",
@@ -1978,9 +2015,11 @@ export async function sendWhatsAppTemplateAction(
       .from("conversations")
 
       .insert({
-        lead_id: leadId,
+  organization_id: organizationId,
 
-        channel: "whatsapp",
+  lead_id: leadId,
+
+  channel: "whatsapp",
 
         /*
 
