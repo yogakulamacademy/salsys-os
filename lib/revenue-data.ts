@@ -1,5 +1,45 @@
 import { createClient } from "@/lib/supabase/server";
 
+async function getCurrentOrganizationId(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+): Promise<string> {
+  const {
+    data: { user },
+    error: authError,
+  } = await supabase.auth.getUser();
+
+  if (authError || !user) {
+    throw new Error(
+      "Unable to resolve current organization: user is not authenticated.",
+    );
+  }
+
+  const { data: memberships, error: membershipError } = await supabase
+    .from("organization_members")
+    .select("organization_id")
+    .eq("user_id", user.id)
+    .eq("active", true)
+    .limit(2);
+
+  if (membershipError) {
+    throw new Error(
+      `Unable to resolve current organization: ${membershipError.message}`,
+    );
+  }
+
+  if (!memberships || memberships.length === 0) {
+    throw new Error("No active organization membership was found.");
+  }
+
+  if (memberships.length > 1) {
+    throw new Error(
+      "Multiple active organization memberships were found. Workspace selection is required.",
+    );
+  }
+
+  return String(memberships[0].organization_id);
+}
+
 export type RevenueCurrencySummary = {
   currency: string;
   pipeline: number;
@@ -181,8 +221,11 @@ export async function getRevenueWorkspace(
 ): Promise<RevenueWorkspace> {
   const supabase = await createClient();
 
+  const organizationId = await getCurrentOrganizationId(supabase);
+
   const { data, error } = await supabase.rpc("get_revenue_workspace", {
     p_current_month: currentMonth,
+    p_organization_id: organizationId,
   });
 
   if (!error) {
@@ -212,7 +255,11 @@ export async function getRevenueWorkspace(
     };
   }
 
-  const fallback = await getLegacyRevenueWorkspace(supabase, currentMonth);
+  const fallback = await getLegacyRevenueWorkspace(
+    supabase,
+    currentMonth,
+    organizationId,
+  );
 
   return {
     ...fallback,
@@ -224,6 +271,7 @@ export async function getRevenueWorkspace(
 async function getLegacyRevenueWorkspace(
   supabase: Awaited<ReturnType<typeof createClient>>,
   currentMonth: string,
+  organizationId: string,
 ): Promise<Omit<RevenueWorkspace, "fallback" | "warning">> {
   const [
     forecastResult,
@@ -253,17 +301,21 @@ async function getLegacyRevenueWorkspace(
         forecast_month
       `,
       )
+      .eq("organization_id", organizationId)
       .order("created_at", {
         ascending: false,
       }),
 
-    supabase.from("v_revenue_forecast_by_stage").select(`
+    supabase
+      .from("v_revenue_forecast_by_stage")
+      .select(`
         currency,
         current_stage,
         lead_count,
         pipeline_value,
         weighted_forecast
-      `),
+      `)
+      .eq("organization_id", organizationId),
 
     supabase
       .from("v_revenue_forecast_monthly")
@@ -276,33 +328,43 @@ async function getLegacyRevenueWorkspace(
         weighted_forecast
       `,
       )
+      .eq("organization_id", organizationId)
       .order("forecast_month", {
         ascending: true,
       }),
 
-    supabase.from("v_revenue_forecast_by_source").select(`
+    supabase
+      .from("v_revenue_forecast_by_source")
+      .select(`
         source,
         currency,
         lead_count,
         pipeline_value,
         weighted_forecast
-      `),
+      `)
+      .eq("organization_id", organizationId),
 
-    supabase.from("v_revenue_forecast_by_location").select(`
+    supabase
+      .from("v_revenue_forecast_by_location")
+      .select(`
         location,
         currency,
         lead_count,
         pipeline_value,
         weighted_forecast
-      `),
+      `)
+      .eq("organization_id", organizationId),
 
-    supabase.from("v_actual_revenue_by_currency").select(`
+    supabase
+      .from("v_actual_revenue_by_currency")
+      .select(`
         currency,
         gross_received,
         refunds,
         actual_revenue,
         successful_payments
-      `),
+      `)
+      .eq("organization_id", organizationId),
 
     supabase
       .from("v_actual_revenue_monthly")
@@ -316,20 +378,27 @@ async function getLegacyRevenueWorkspace(
         successful_payments
       `,
       )
+      .eq("organization_id", organizationId)
       .order("revenue_month", {
         ascending: true,
       }),
 
-    supabase.from("v_lead_revenue_status").select(`
+    supabase
+      .from("v_lead_revenue_status")
+      .select(`
         lead_id,
         net_paid
-      `),
+      `)
+      .eq("organization_id", organizationId),
 
-    supabase.from("v_outstanding_revenue_by_currency").select(`
+    supabase
+      .from("v_outstanding_revenue_by_currency")
+      .select(`
         currency,
         leads_with_balance,
         outstanding_revenue
-      `),
+      `)
+      .eq("organization_id", organizationId),
   ]);
 
   const errors = [
