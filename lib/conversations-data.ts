@@ -162,7 +162,24 @@ export async function getConversationsWorkspace(
 
   const supabase = await createClient();
 
+  const {
+    data: { user },
+    error: authError,
+  } = await supabase.auth.getUser();
+
+  if (authError || !user) {
+    throw new Error(
+      "Unable to resolve current organization: user is not authenticated.",
+    );
+  }
+
+  const organizationId = await getCurrentOrganizationId(
+    supabase,
+    user.id,
+  );
+
   const { data, error } = await supabase.rpc("get_conversations_workspace", {
+    p_organization_id: organizationId,
     p_selected_lead_id: isUuid(requestedLeadId) ? requestedLeadId : null,
     p_limit: 300,
   });
