@@ -132,10 +132,13 @@ export default async function SystemHealthPage() {
     return <MockSystemHealth />;
   }
 
+  const organizationId =
   await requireAdminAccess();
 
-  const { health, summary, activity, failures, errors } =
-    await loadSystemHealth();
+const { health, summary, activity, failures, errors } =
+  await loadSystemHealth(
+    organizationId
+  );
 
   const derivedSummary = summary ?? deriveSummary(health);
 
@@ -441,96 +444,287 @@ export default async function SystemHealthPage() {
   );
 }
 
-async function requireAdminAccess() {
-  const supabase = await createClient();
+async function requireAdminAccess(): Promise<string> {
+  const supabase =
+    await createClient();
+
 
   const {
-    data: { user },
+    data: {
+      user,
+    },
 
-    error: authError,
-  } = await supabase.auth.getUser();
+    error:
+      authError,
+  } =
+    await supabase
+      .auth
+      .getUser();
 
-  if (authError || !user) {
-    redirect("/login");
+
+  if (
+    authError ||
+    !user
+  ) {
+    redirect(
+      "/login"
+    );
   }
 
-  const { data: profile, error: profileError } = await supabase
 
-    .from("profiles")
+  const {
+    data:
+      profile,
 
-    .select("role,active")
+    error:
+      profileError,
+  } =
+    await supabase
+      .from(
+        "profiles"
+      )
+      .select(
+        "role,active"
+      )
+      .eq(
+        "id",
+        user.id
+      )
+      .maybeSingle();
 
-    .eq("id", user.id)
 
-    .maybeSingle();
-
-  if (profileError || !profile || profile.active !== true) {
-    redirect("/login");
+  if (
+    profileError ||
+    !profile ||
+    profile.active !== true
+  ) {
+    redirect(
+      "/login"
+    );
   }
 
-  if (profile.role !== "admin") {
-    redirect("/dashboard");
+
+  if (
+    profile.role !==
+    "admin"
+  ) {
+    redirect(
+      "/dashboard"
+    );
   }
+
+
+  const {
+    data:
+      memberships,
+
+    error:
+      membershipError,
+  } =
+    await supabase
+      .from(
+        "organization_members"
+      )
+      .select(
+        "organization_id"
+      )
+      .eq(
+        "user_id",
+        user.id
+      )
+      .eq(
+        "active",
+        true
+      )
+      .limit(
+        2
+      );
+
+
+  if (
+    membershipError
+  ) {
+    throw new Error(
+      `Unable to resolve current organization: ${membershipError.message}`
+    );
+  }
+
+
+  if (
+    !memberships ||
+    memberships.length === 0
+  ) {
+    throw new Error(
+      "Unable to resolve current organization: no active organization membership found."
+    );
+  }
+
+
+  if (
+    memberships.length > 1
+  ) {
+    throw new Error(
+      "Unable to resolve current organization: multiple active organization memberships found. Workspace switching is required."
+    );
+  }
+
+
+  return memberships[0]
+    .organization_id;
 }
 
-async function loadSystemHealth(): Promise<LoadResult> {
+async function loadSystemHealth(
+  organizationId: string
+): Promise<LoadResult> {
+
   /*
-
    * The service-role client is created only after requireAdminAccess() has
-
-   * validated the signed-in user. This keeps operational tables server-side
-
-   * while avoiding RLS/grant differences across sync-log tables.
-
+   * validated the signed-in user and resolved the current organization.
+   *
+   * Because the service-role client bypasses RLS, every operational read
+   * below is explicitly scoped to organizationId.
    */
 
-  const supabase = createAdminClient() as any;
+  const supabase =
+    createAdminClient() as any;
 
-  const [healthResult, summaryResult, activityResult, failuresResult] =
+
+  const [
+    healthResult,
+    summaryResult,
+    activityResult,
+    failuresResult,
+  ] =
     await Promise.all([
-      supabase.from("v_system_health").select("*"),
-
-      supabase.from("v_system_health_summary").select("*").maybeSingle(),
-
-      supabase.from("v_system_activity_24h").select("*"),
 
       supabase
+        .from(
+          "v_system_health"
+        )
+        .select(
+          "*"
+        )
+        .eq(
+          "organization_id",
+          organizationId
+        ),
 
-        .from("v_system_recent_failures")
 
-        .select("*")
+      supabase
+        .from(
+          "v_system_health_summary"
+        )
+        .select(
+          "*"
+        )
+        .eq(
+          "organization_id",
+          organizationId
+        )
+        .maybeSingle(),
 
-        .order("occurred_at", { ascending: false })
 
-        .limit(20),
+      supabase
+        .from(
+          "v_system_activity_24h"
+        )
+        .select(
+          "*"
+        )
+        .eq(
+          "organization_id",
+          organizationId
+        ),
+
+
+      supabase
+        .from(
+          "v_system_recent_failures"
+        )
+        .select(
+          "*"
+        )
+        .eq(
+          "organization_id",
+          organizationId
+        )
+        .order(
+          "occurred_at",
+          {
+            ascending:
+              false,
+          }
+        )
+        .limit(
+          20
+        ),
     ]);
 
-  const errors: string[] = [];
 
-  if (healthResult.error) {
-    errors.push(`System health: ${healthResult.error.message}`);
+  const errors: string[] =
+    [];
+
+
+  if (
+    healthResult.error
+  ) {
+    errors.push(
+      `System health: ${healthResult.error.message}`
+    );
   }
 
-  if (summaryResult.error) {
-    errors.push(`Health summary: ${summaryResult.error.message}`);
+
+  if (
+    summaryResult.error
+  ) {
+    errors.push(
+      `Health summary: ${summaryResult.error.message}`
+    );
   }
 
-  if (activityResult.error) {
-    errors.push(`24h activity: ${activityResult.error.message}`);
+
+  if (
+    activityResult.error
+  ) {
+    errors.push(
+      `24h activity: ${activityResult.error.message}`
+    );
   }
 
-  if (failuresResult.error) {
-    errors.push(`Recent problems: ${failuresResult.error.message}`);
+
+  if (
+    failuresResult.error
+  ) {
+    errors.push(
+      `Recent problems: ${failuresResult.error.message}`
+    );
   }
+
 
   return {
-    health: (healthResult.data ?? []) as SystemHealthRow[],
+    health:
+      (
+        healthResult.data ??
+        []
+      ) as SystemHealthRow[],
 
-    summary: (summaryResult.data ?? null) as SystemHealthSummary | null,
+    summary:
+      (
+        summaryResult.data ??
+        null
+      ) as SystemHealthSummary | null,
 
-    activity: (activityResult.data ?? []) as SystemActivityRow[],
+    activity:
+      (
+        activityResult.data ??
+        []
+      ) as SystemActivityRow[],
 
-    failures: (failuresResult.data ?? []) as SystemFailureRow[],
+    failures:
+      (
+        failuresResult.data ??
+        []
+      ) as SystemFailureRow[],
 
     errors,
   };
