@@ -482,9 +482,16 @@ export async function getTeamPerformanceSnapshot(
 
   const supabase = await createClient();
 
+  const organizationId =
+    await getCurrentOrganizationId(
+      supabase
+    );
+
   const { data, error } = await supabase.rpc(
     'get_team_performance_snapshot',
     {
+      p_organization_id:
+        organizationId,
       p_start_date: startDate,
       p_end_date: endDate,
     }
