@@ -116,6 +116,42 @@ const emptyCounts: Record<
 };
 
 
+async function getCurrentOrganizationId(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  userId: string,
+): Promise<string> {
+
+  const { data: memberships, error: membershipError } =
+    await supabase
+      .from('organization_members')
+      .select('organization_id')
+      .eq('user_id', userId)
+      .eq('active', true)
+      .limit(2);
+
+  if (membershipError) {
+    throw new Error(
+      `Unable to resolve current organization: ${membershipError.message}`
+    );
+  }
+
+  if (!memberships || memberships.length === 0) {
+    throw new Error(
+      'No active organization membership was found.'
+    );
+  }
+
+  if (memberships.length > 1) {
+    throw new Error(
+      'Multiple active organization memberships were found. Workspace selection is required.'
+    );
+  }
+
+  return String(
+    memberships[0].organization_id
+  );
+}
+
 export async function getDashboardSnapshot():
 Promise<DashboardSnapshot> {
 
@@ -130,12 +166,45 @@ Promise<DashboardSnapshot> {
     await createClient();
 
 
+  const authResult =
+    await supabase.auth.getUser();
+
+
+  if (authResult.error) {
+    throw new Error(
+      `Unable to authenticate Dashboard: ${authResult.error.message}`
+    );
+  }
+
+
+  const user =
+    authResult.data.user;
+
+
+  if (!user) {
+    throw new Error(
+      'Unable to authenticate Dashboard: user is not authenticated.'
+    );
+  }
+
+
+  const organizationId =
+    await getCurrentOrganizationId(
+      supabase,
+      user.id
+    );
+
+
   const {
     data,
     error,
   } =
     await supabase.rpc(
-      'get_dashboard_snapshot'
+      'get_dashboard_snapshot',
+      {
+        p_organization_id:
+          organizationId,
+      }
     );
 
 
