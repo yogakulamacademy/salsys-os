@@ -66,6 +66,20 @@ type ShellProfile = {
   active: boolean;
 };
 
+type WorkspaceMembership = {
+  organizationId: string;
+  organizationName: string;
+  organizationSlug: string;
+  role: string;
+};
+
+type WorkspaceContext = {
+  activeOrganizationId: string | null;
+  activeWorkspace: WorkspaceMembership | null;
+  memberships: WorkspaceMembership[];
+  selectionRequired: boolean;
+};
+
 const adminNavGroups: NavGroup[] = [
   {
     label: "Workspace",
@@ -201,13 +215,28 @@ export function AppShell({ children }: { children: ReactNode }) {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [profile, setProfile] = useState<ShellProfile | null>(null);
   const [profileLoading, setProfileLoading] = useState(true);
+  const [workspace, setWorkspace] = useState<WorkspaceContext | null>(null);
+  const [workspaceLoading, setWorkspaceLoading] = useState(true);
+  const [workspaceSwitching, setWorkspaceSwitching] = useState(false);
 
   const mock = process.env.NEXT_PUBLIC_USE_MOCK_DATA !== "false";
-  const employee = !mock && profile?.role === "admissions";
-  const admin = mock || profile?.role === "admin";
-  const manager = !mock && profile?.role === "manager";
+
+  const activeWorkspace = workspace?.activeWorkspace ?? null;
+  const workspaceMemberships = workspace?.memberships ?? [];
+
+  const effectiveRole = mock
+    ? "admin"
+    : activeWorkspace?.role ?? null;
+
+  const employee = !mock && effectiveRole === "admissions";
+  const admin =
+    mock ||
+    effectiveRole === "owner" ||
+    effectiveRole === "admin";
+  const manager = !mock && effectiveRole === "manager";
   const explicitAdmin = admin || manager;
-  const accessResolved = mock || !profileLoading;
+  const accessResolved =
+    mock || (!profileLoading && !workspaceLoading);
 
   // Admin-only Team and System Health remain hidden from managers.
   const visibleAdminNavGroups = admin
@@ -301,6 +330,49 @@ export function AppShell({ children }: { children: ReactNode }) {
   }, [mock]);
 
   useEffect(() => {
+    let cancelled = false;
+
+    async function loadWorkspace() {
+      if (mock) {
+        if (!cancelled) {
+          setWorkspace(null);
+          setWorkspaceLoading(false);
+        }
+
+        return;
+      }
+
+      try {
+        const response = await fetch("/api/workspace", {
+          cache: "no-store",
+        });
+
+        if (!response.ok) {
+          throw new Error("Unable to load workspace.");
+        }
+
+        const data = (await response.json()) as WorkspaceContext;
+
+        if (!cancelled) {
+          setWorkspace(data);
+          setWorkspaceLoading(false);
+        }
+      } catch {
+        if (!cancelled) {
+          setWorkspace(null);
+          setWorkspaceLoading(false);
+        }
+      }
+    }
+
+    void loadWorkspace();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [mock]);
+
+  useEffect(() => {
     setMobileOpen(false);
 
     document
@@ -371,6 +443,52 @@ export function AppShell({ children }: { children: ReactNode }) {
     };
   }, [mobileOpen]);
 
+  async function handleWorkspaceChange(
+    organizationId: string,
+  ) {
+    if (
+      !organizationId ||
+      workspaceSwitching ||
+      organizationId === activeWorkspace?.organizationId
+    ) {
+      return;
+    }
+
+    setWorkspaceSwitching(true);
+
+    try {
+      const response = await fetch("/api/workspace", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          organizationId,
+        }),
+      });
+
+      if (!response.ok) {
+        const body = await response
+          .json()
+          .catch(() => null);
+
+        throw new Error(
+          body?.error || "Unable to switch workspace.",
+        );
+      }
+
+      window.location.assign("/dashboard");
+    } catch (error) {
+      setWorkspaceSwitching(false);
+
+      window.alert(
+        error instanceof Error
+          ? error.message
+          : "Unable to switch workspace.",
+      );
+    }
+  }
+
   if (pathname.startsWith("/login")) {
     return <>{children}</>;
   }
@@ -379,15 +497,23 @@ export function AppShell({ children }: { children: ReactNode }) {
   const displayEmail = profile?.email || "";
   const roleLabel = employee
     ? "Employee"
-    : profile?.role === "admin"
-      ? "Admin"
-      : profile?.role === "manager"
-        ? "Manager"
-        : mock
-          ? "Development access"
-          : profile
-            ? "Authenticated"
-            : "Access unavailable";
+    : effectiveRole === "owner"
+      ? "Owner"
+      : effectiveRole === "admin"
+        ? "Admin"
+        : effectiveRole === "manager"
+          ? "Manager"
+          : effectiveRole === "viewer"
+            ? "Viewer"
+            : mock
+              ? "Development access"
+              : profile
+                ? "Authenticated"
+                : "Access unavailable";
+
+  const organizationName =
+    activeWorkspace?.organizationName ||
+    (mock ? "Yogakulam" : "Workspace");
 
   return (
     <div className="app-shell app-shell-v3">
@@ -397,7 +523,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         <div className="topbar-brand">
           <BrandMark />
           <div className="topbar-brand-copy">
-            <div className="topbar-brand-name">Yogakulam</div>
+            <div className="topbar-brand-name">{organizationName}</div>
             <div className="topbar-product-name">
               {employee ? "Admissions CRM" : "Growth CRM · v0.9 Beta"}
             </div>
@@ -428,7 +554,34 @@ export function AppShell({ children }: { children: ReactNode }) {
         </form>
 
         <div className="topbar-actions">
-          {!employee && !profileLoading && (
+          {!mock && workspaceMemberships.length > 1 && (
+            <select
+              aria-label="Select school workspace"
+              value={activeWorkspace?.organizationId ?? ""}
+              disabled={workspaceSwitching}
+              onChange={(event) =>
+                void handleWorkspaceChange(event.target.value)
+              }
+              className="hidden max-w-[220px] rounded-lg border border-white/20 bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-900 outline-none md:block"
+            >
+              {!activeWorkspace && (
+                <option value="">Select school</option>
+              )}
+
+              {workspaceMemberships.map((membership) => (
+                <option
+                  key={membership.organizationId}
+                  value={membership.organizationId}
+                >
+                  {membership.organizationName}
+                </option>
+              ))}
+            </select>
+          )}
+
+          {!employee &&
+            !profileLoading &&
+            !workspaceLoading && (
             <Link
               href="/leads/new"
               className="topbar-new-button hidden sm:inline-flex"
@@ -571,7 +724,7 @@ export function AppShell({ children }: { children: ReactNode }) {
               <div className="topbar-profile-copy hidden xl:block">
                 <div className="topbar-profile-name">{displayName}</div>
                 <div className="topbar-profile-role">
-                  {profileLoading ? "Loading access…" : roleLabel}
+                  {profileLoading || workspaceLoading ? "Loading access…" : roleLabel}
                 </div>
               </div>
 
@@ -702,7 +855,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         </form>
 
         <nav className="sidebar-nav">
-          {!mock && profileLoading ? (
+          {!mock && (profileLoading || workspaceLoading) ? (
             <div className="px-3 py-3 text-xs font-medium text-slate-400">
               Loading workspace…
             </div>

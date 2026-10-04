@@ -1,8 +1,10 @@
 'use server';
 
 import { redirect } from 'next/navigation';
+import { cookies } from 'next/headers';
 import { createClient } from '@/lib/supabase/server';
 import { useMockData } from '@/lib/config';
+import { ACTIVE_WORKSPACE_COOKIE } from '@/lib/workspace';
 
 export async function signInAction(formData: FormData) {
   if (useMockData) redirect('/dashboard');
@@ -25,5 +27,9 @@ export async function signOutAction() {
     const supabase = await createClient();
     await supabase.auth.signOut();
   }
+
+  const cookieStore = await cookies();
+  cookieStore.delete(ACTIVE_WORKSPACE_COOKIE);
+
   redirect('/login');
 }
