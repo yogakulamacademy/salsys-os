@@ -1,6 +1,46 @@
 import { useMockData } from '@/lib/config';
 import { createClient } from '@/lib/supabase/server';
 
+async function getCurrentOrganizationId(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+): Promise<string> {
+  const {
+    data: { user },
+    error: authError,
+  } = await supabase.auth.getUser();
+
+  if (authError || !user) {
+    throw new Error(
+      'Unable to resolve current organization: user is not authenticated.',
+    );
+  }
+
+  const { data: memberships, error: membershipError } = await supabase
+    .from('organization_members')
+    .select('organization_id')
+    .eq('user_id', user.id)
+    .eq('active', true)
+    .limit(2);
+
+  if (membershipError) {
+    throw new Error(
+      `Unable to resolve current organization: ${membershipError.message}`,
+    );
+  }
+
+  if (!memberships || memberships.length === 0) {
+    throw new Error('No active organization membership was found.');
+  }
+
+  if (memberships.length > 1) {
+    throw new Error(
+      'Multiple active organization memberships were found. Workspace selection is required.',
+    );
+  }
+
+  return String(memberships[0].organization_id);
+}
+
 export type TeamPerformanceSummary = {
   teamMembers: number;
   currentAssignedTotal: number;
@@ -704,6 +744,8 @@ export async function getTeamAssignmentQueue(
   const supabase =
     await createClient();
 
+  const organizationId = await getCurrentOrganizationId(supabase);
+
   const {
     data,
     error,
@@ -734,6 +776,10 @@ export async function getTeamAssignmentQueue(
           count:
             'exact',
         }
+      )
+      .eq(
+        'organization_id',
+        organizationId
       )
       .eq(
         'status',

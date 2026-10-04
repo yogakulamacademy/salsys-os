@@ -8,6 +8,36 @@ import { createClient } from "@/lib/supabase/server";
 
 const CUSTOMER_SERVICE_WINDOW_MS = 24 * 60 * 60 * 1000;
 
+async function getCurrentOrganizationId(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  userId: string,
+): Promise<string> {
+  const { data: memberships, error: membershipError } = await supabase
+    .from("organization_members")
+    .select("organization_id")
+    .eq("user_id", userId)
+    .eq("active", true)
+    .limit(2);
+
+  if (membershipError) {
+    throw new Error(
+      `Unable to resolve current organization: ${membershipError.message}`,
+    );
+  }
+
+  if (!memberships || memberships.length === 0) {
+    throw new Error("No active organization membership was found.");
+  }
+
+  if (memberships.length > 1) {
+    throw new Error(
+      "Multiple active organization memberships were found. Workspace selection is required.",
+    );
+  }
+
+  return String(memberships[0].organization_id);
+}
+
 export type ConversationWorkspaceMessage = {
   id: string;
   direction: "inbound" | "outbound";
@@ -470,7 +500,16 @@ async function getLegacyInboxStateMap() {
 
   const {
     data: { user },
+    error: authError,
   } = await supabase.auth.getUser();
+
+  if (authError || !user) {
+    throw new Error(
+      "Unable to load conversation attention state: user is not authenticated.",
+    );
+  }
+
+  const organizationId = await getCurrentOrganizationId(supabase, user.id);
 
   const { data: attentionRows, error: attentionError } = await supabase
     .from("v_lead_inbox_attention")
@@ -482,6 +521,7 @@ async function getLegacyInboxStateMap() {
           needs_reply
         `,
     )
+    .eq("organization_id", organizationId)
     .limit(1000);
 
   if (attentionError) {

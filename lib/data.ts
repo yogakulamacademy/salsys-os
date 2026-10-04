@@ -341,6 +341,7 @@ export async function getLeads(): Promise<LeadOverview[]> {
   const supabase = await createClient();
 
   const identity = await getCurrentCrmIdentity(supabase);
+  const organizationId = await getCurrentOrganizationId(supabase);
 
   const employee =
     identity.active &&
@@ -352,6 +353,7 @@ export async function getLeads(): Promise<LeadOverview[]> {
     .from("v_leads_overview")
 
     .select("*")
+    .eq("organization_id", organizationId)
 
     .order("created_at", {
       ascending: false,
@@ -465,6 +467,8 @@ export async function getLead(id: string): Promise<EnrichedLeadDetail | null> {
     return null;
   }
 
+  const organizationId = await getCurrentOrganizationId(supabase);
+
   /* =======================================================
 
 
@@ -500,7 +504,12 @@ export async function getLead(id: string): Promise<EnrichedLeadDetail | null> {
 
     ----------------------------------------------------- */
 
-    supabase.from("v_leads_overview").select("*").eq("id", id).maybeSingle(),
+    supabase
+      .from("v_leads_overview")
+      .select("*")
+      .eq("organization_id", organizationId)
+      .eq("id", id)
+      .maybeSingle(),
 
     /* -----------------------------------------------------
 
@@ -1546,6 +1555,7 @@ export async function getFollowUps(): Promise<FollowUp[]> {
   const supabase = await createClient();
 
   const identity = await getCurrentCrmIdentity(supabase);
+  const organizationId = await getCurrentOrganizationId(supabase);
 
   const employee =
     identity.active &&
@@ -1557,6 +1567,7 @@ export async function getFollowUps(): Promise<FollowUp[]> {
     .from("v_followups_due")
 
     .select("*")
+    .eq("organization_id", organizationId)
 
     .order("due_at", {
       ascending: true,
@@ -1570,6 +1581,7 @@ export async function getFollowUps(): Promise<FollowUp[]> {
       .from("leads")
 
       .select("id")
+      .eq("organization_id", organizationId)
 
       .eq("owner_user_id", identity.user.id)
 
@@ -1819,6 +1831,7 @@ export async function getPipelineCounts(): Promise<Record<LeadStage, number>> {
   const supabase = await createClient();
 
   const identity = await getCurrentCrmIdentity(supabase);
+  const organizationId = await getCurrentOrganizationId(supabase);
 
   if (identity.active && identity.role === "admissions" && identity.user) {
     const { data, error } = await supabase
@@ -1826,6 +1839,7 @@ export async function getPipelineCounts(): Promise<Record<LeadStage, number>> {
       .from("leads")
 
       .select("current_stage")
+      .eq("organization_id", organizationId)
 
       .eq("owner_user_id", identity.user.id)
 
@@ -1852,7 +1866,8 @@ export async function getPipelineCounts(): Promise<Record<LeadStage, number>> {
 
     .from("v_pipeline_counts")
 
-    .select("current_stage,lead_count");
+    .select("current_stage,lead_count")
+    .eq("organization_id", organizationId);
 
   if (error) {
     throw new Error(`Unable to load pipeline counts: ${error.message}`);

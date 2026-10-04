@@ -117,6 +117,36 @@ type EmployeeTodayItem = {
   unread: boolean;
 };
 
+async function getCurrentOrganizationId(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  userId: string,
+): Promise<string> {
+  const { data: memberships, error: membershipError } = await supabase
+    .from("organization_members")
+    .select("organization_id")
+    .eq("user_id", userId)
+    .eq("active", true)
+    .limit(2);
+
+  if (membershipError) {
+    throw new Error(
+      `Unable to resolve current organization: ${membershipError.message}`,
+    );
+  }
+
+  if (!memberships || memberships.length === 0) {
+    throw new Error("No active organization membership was found.");
+  }
+
+  if (memberships.length > 1) {
+    throw new Error(
+      "Multiple active organization memberships were found. Workspace selection is required.",
+    );
+  }
+
+  return String(memberships[0].organization_id);
+}
+
 export default async function DashboardPage({
   searchParams,
 }: {
@@ -151,9 +181,12 @@ export default async function DashboardPage({
   }
 
   if (profile.role === "admissions") {
+    const organizationId = await getCurrentOrganizationId(supabase, user.id);
+
     return (
       <EmployeeDashboard
         userId={user.id}
+        organizationId={organizationId}
         fullName={profile.full_name?.trim() || "Employee"}
         notice={query.notice ?? null}
         error={query.error ?? null}
@@ -166,11 +199,13 @@ export default async function DashboardPage({
 
 async function EmployeeDashboard({
   userId,
+  organizationId,
   fullName,
   notice,
   error,
 }: {
   userId: string;
+  organizationId: string;
   fullName: string;
   notice: string | null;
   error: string | null;
@@ -194,6 +229,7 @@ async function EmployeeDashboard({
         last_contacted_at
       `,
         )
+        .eq("organization_id", organizationId)
         .eq("owner_user_id", userId)
         .order("created_at", { ascending: false })
         .limit(250),
@@ -201,6 +237,7 @@ async function EmployeeDashboard({
       supabase
         .from("tasks")
         .select("id,lead_id,title,due_at,status")
+        .eq("organization_id", organizationId)
         .eq("assigned_to", userId)
         .in("status", ["open", "snoozed"])
         .order("due_at", {
@@ -222,6 +259,7 @@ async function EmployeeDashboard({
         needs_reply
       `,
         )
+        .eq("organization_id", organizationId)
         .limit(500),
 
       supabase
