@@ -1499,6 +1499,11 @@ export async function getTeamAssignmentFairnessSnapshot(
   const supabase =
     await createClient();
 
+  const organizationId =
+    await getCurrentOrganizationId(
+      supabase
+    );
+
   const {
     data,
     error,
@@ -1506,6 +1511,9 @@ export async function getTeamAssignmentFairnessSnapshot(
     await supabase.rpc(
       'get_team_assignment_fairness_snapshot',
       {
+        p_organization_id:
+          organizationId,
+
         p_start_date:
           startDate,
 
