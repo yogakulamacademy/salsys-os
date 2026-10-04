@@ -68,10 +68,56 @@ type RpcPayload = {
   };
 };
 
+async function getCurrentOrganizationId(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+): Promise<string> {
+  const {
+    data: { user },
+    error: authError,
+  } = await supabase.auth.getUser();
+
+  if (authError || !user) {
+    throw new Error(
+      "Unable to resolve current organization: user is not authenticated.",
+    );
+  }
+
+  const { data: memberships, error: membershipError } = await supabase
+    .from("organization_members")
+    .select("organization_id")
+    .eq("user_id", user.id)
+    .eq("active", true)
+    .limit(2);
+
+  if (membershipError) {
+    throw new Error(
+      `Unable to resolve current organization: ${membershipError.message}`,
+    );
+  }
+
+  if (!memberships || memberships.length === 0) {
+    throw new Error(
+      "Unable to resolve current organization: no active organization membership found.",
+    );
+  }
+
+  if (memberships.length > 1) {
+    throw new Error(
+      "Unable to resolve current organization: multiple active organization memberships found. Workspace switching is required.",
+    );
+  }
+
+  return memberships[0].organization_id;
+}
+
 export async function getFunnelWorkspace(): Promise<FunnelWorkspace> {
   const supabase = await createClient();
 
-  const { data, error } = await supabase.rpc("get_funnel_workspace");
+  const organizationId = await getCurrentOrganizationId(supabase);
+
+  const { data, error } = await supabase.rpc("get_funnel_workspace", {
+    p_organization_id: organizationId,
+  });
 
   if (!error) {
     return parseRpcPayload((data ?? {}) as RpcPayload);
@@ -82,7 +128,10 @@ export async function getFunnelWorkspace(): Promise<FunnelWorkspace> {
    * preserve the current direct-view implementation if
    * the compact workspace RPC is unavailable.
    */
-  const fallback = await getLegacyWorkspace(supabase);
+  const fallback = await getLegacyWorkspace(
+    supabase,
+    organizationId,
+  );
 
   return {
     ...fallback,
@@ -135,6 +184,7 @@ function parseRpcPayload(payload: RpcPayload): FunnelWorkspace {
 
 async function getLegacyWorkspace(
   supabase: Awaited<ReturnType<typeof createClient>>,
+  organizationId: string,
 ): Promise<Omit<FunnelWorkspace, "fallback" | "warning">> {
   const [
     overviewResult,
@@ -160,17 +210,29 @@ async function getLegacyWorkspace(
     metaAdsetsResult,
     metaAdsResult,
   ] = await Promise.all([
-    supabase.from("v_end_to_end_funnel_30d").select("*").maybeSingle(),
+    supabase
+      .from("v_end_to_end_funnel_30d")
+      .select("*")
+      .eq("organization_id", organizationId)
+      .maybeSingle(),
 
-    supabase.from("v_funnel_daily_30d").select("*").order("date", {
-      ascending: true,
-    }),
+    supabase
+      .from("v_funnel_daily_30d")
+      .select("*")
+      .eq("organization_id", organizationId)
+      .order("date", {
+        ascending: true,
+      }),
 
-    supabase.from("v_funnel_new_returning_30d").select("*"),
+    supabase
+      .from("v_funnel_new_returning_30d")
+      .select("*")
+      .eq("organization_id", organizationId),
 
     supabase
       .from("v_funnel_source_30d")
       .select("*")
+      .eq("organization_id", organizationId)
       .order("sessions", {
         ascending: false,
       })
@@ -179,6 +241,7 @@ async function getLegacyWorkspace(
     supabase
       .from("v_first_touch_source_funnel_30d")
       .select("*")
+      .eq("organization_id", organizationId)
       .order("leads", {
         ascending: false,
       })
@@ -187,6 +250,7 @@ async function getLegacyWorkspace(
     supabase
       .from("v_funnel_landing_page_30d")
       .select("*")
+      .eq("organization_id", organizationId)
       .order("sessions", {
         ascending: false,
       })
@@ -195,54 +259,92 @@ async function getLegacyWorkspace(
     supabase
       .from("v_funnel_country_30d")
       .select("*")
+      .eq("organization_id", organizationId)
       .order("sessions", {
         ascending: false,
       })
       .limit(20),
 
-    supabase.from("v_funnel_event_30d").select("*").order("event_count", {
-      ascending: false,
-    }),
+    supabase
+      .from("v_funnel_event_30d")
+      .select("*")
+      .eq("organization_id", organizationId)
+      .order("event_count", {
+        ascending: false,
+      }),
 
-    supabase.from("v_repeat_visit_summary").select("*").maybeSingle(),
+    supabase
+      .from("v_repeat_visit_summary")
+      .select("*")
+      .eq("organization_id", organizationId)
+      .maybeSingle(),
 
-    supabase.from("v_conversion_visit_distribution").select("*"),
+    supabase
+      .from("v_conversion_visit_distribution")
+      .select("*")
+      .eq("organization_id", organizationId),
 
-    supabase.from("v_google_ads_crm_overview_30d").select("*").maybeSingle(),
+    supabase
+      .from("v_google_ads_crm_overview_30d")
+      .select("*")
+      .eq("organization_id", organizationId)
+      .maybeSingle(),
 
-    supabase.from("v_google_ads_campaign_crm_30d").select("*").order("spend", {
-      ascending: false,
-    }),
+    supabase
+      .from("v_google_ads_campaign_crm_30d")
+      .select("*")
+      .eq("organization_id", organizationId)
+      .order("spend", {
+        ascending: false,
+      }),
 
     supabase
       .from("v_google_ads_attribution_coverage")
       .select("*")
+      .eq("organization_id", organizationId)
       .maybeSingle(),
 
     supabase
       .from("v_google_ads_campaign_match_diagnostic")
       .select("*")
+      .eq("organization_id", organizationId)
       .order("touchpoints", {
         ascending: false,
       })
       .limit(12),
 
-    supabase.from("v_google_ads_unmatched_paid_leads").select("*", {
-      count: "exact",
-      head: true,
-    }),
+    supabase
+      .from("v_google_ads_unmatched_paid_leads")
+      .select("*", {
+        count: "exact",
+        head: true,
+      })
+      .eq("organization_id", organizationId),
 
-    supabase.from("v_meta_ads_crm_overview_30d").select("*").maybeSingle(),
+    supabase
+      .from("v_meta_ads_crm_overview_30d")
+      .select("*")
+      .eq("organization_id", organizationId)
+      .maybeSingle(),
 
-    supabase.from("v_meta_ads_attribution_coverage").select("*").maybeSingle(),
+    supabase
+      .from("v_meta_ads_attribution_coverage")
+      .select("*")
+      .eq("organization_id", organizationId)
+      .maybeSingle(),
 
-    supabase.from("v_meta_ads_campaign_crm_30d").select("*").order("spend", {
-      ascending: false,
-    }),
+    supabase
+      .from("v_meta_ads_campaign_crm_30d")
+      .select("*")
+      .eq("organization_id", organizationId)
+      .order("spend", {
+        ascending: false,
+      }),
 
     supabase
       .from("v_meta_ads_adset_crm_30d")
       .select("*")
+      .eq("organization_id", organizationId)
       .order("spend", {
         ascending: false,
       })
@@ -251,6 +353,7 @@ async function getLegacyWorkspace(
     supabase
       .from("v_meta_ads_ad_crm_30d")
       .select("*")
+      .eq("organization_id", organizationId)
       .order("spend", {
         ascending: false,
       })
