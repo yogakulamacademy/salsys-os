@@ -1,4 +1,5 @@
 import { createClient } from '@/lib/supabase/server';
+import { requireCurrentOrganizationId } from '@/lib/workspace';
 
 type UnknownRecord = Record<string, unknown>;
 
@@ -31,30 +32,10 @@ async function getCurrentOrganizationId(
   supabase: Awaited<ReturnType<typeof createClient>>,
   userId: string,
 ): Promise<string> {
-  const { data: memberships, error: membershipError } = await supabase
-    .from('organization_members')
-    .select('organization_id')
-    .eq('user_id', userId)
-    .eq('active', true)
-    .limit(2);
-
-  if (membershipError) {
-    throw new Error(
-      `Unable to resolve current organization: ${membershipError.message}`,
-    );
-  }
-
-  if (!memberships || memberships.length === 0) {
-    throw new Error('No active organization membership was found.');
-  }
-
-  if (memberships.length > 1) {
-    throw new Error(
-      'Multiple active organization memberships were found. Workspace selection is required.',
-    );
-  }
-
-  return String(memberships[0].organization_id);
+  return requireCurrentOrganizationId(
+    supabase,
+    userId,
+  );
 }
 
 function asRecord(value: unknown): UnknownRecord | null {
