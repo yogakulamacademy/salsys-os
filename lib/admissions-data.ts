@@ -27,6 +27,36 @@ export type AdmissionsSnapshotData = {
   unreadTotal: number | null;
 };
 
+async function getCurrentOrganizationId(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  userId: string,
+): Promise<string> {
+  const { data: memberships, error: membershipError } = await supabase
+    .from('organization_members')
+    .select('organization_id')
+    .eq('user_id', userId)
+    .eq('active', true)
+    .limit(2);
+
+  if (membershipError) {
+    throw new Error(
+      `Unable to resolve current organization: ${membershipError.message}`,
+    );
+  }
+
+  if (!memberships || memberships.length === 0) {
+    throw new Error('No active organization membership was found.');
+  }
+
+  if (memberships.length > 1) {
+    throw new Error(
+      'Multiple active organization memberships were found. Workspace selection is required.',
+    );
+  }
+
+  return String(memberships[0].organization_id);
+}
+
 function asRecord(value: unknown): UnknownRecord | null {
   return value && typeof value === 'object' && !Array.isArray(value)
     ? (value as UnknownRecord)
@@ -165,13 +195,7 @@ function numberFrom(
 export async function getAdmissionsSnapshot(): Promise<AdmissionsSnapshotData> {
   const supabase = await createClient();
 
-  const [
-    authResult,
-    snapshotResult,
-  ] = await Promise.all([
-    supabase.auth.getUser(),
-    supabase.rpc('get_admissions_snapshot'),
-  ]);
+  const authResult = await supabase.auth.getUser();
 
   if (authResult.error) {
     throw new Error(
@@ -184,6 +208,18 @@ export async function getAdmissionsSnapshot(): Promise<AdmissionsSnapshotData> {
       'Unable to authenticate Admissions Desk: no signed-in user was returned.'
     );
   }
+
+  const organizationId = await getCurrentOrganizationId(
+    supabase,
+    authResult.data.user.id,
+  );
+
+  const snapshotResult = await supabase.rpc(
+    'get_admissions_snapshot',
+    {
+      p_organization_id: organizationId,
+    },
+  );
 
   if (snapshotResult.error) {
     throw new Error(
