@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
+import { requireCurrentOrganizationId } from "@/lib/workspace";
 
 export type FunnelMainData = {
   overview: unknown;
@@ -82,32 +83,10 @@ async function getCurrentOrganizationId(
     );
   }
 
-  const { data: memberships, error: membershipError } = await supabase
-    .from("organization_members")
-    .select("organization_id")
-    .eq("user_id", user.id)
-    .eq("active", true)
-    .limit(2);
-
-  if (membershipError) {
-    throw new Error(
-      `Unable to resolve current organization: ${membershipError.message}`,
-    );
-  }
-
-  if (!memberships || memberships.length === 0) {
-    throw new Error(
-      "Unable to resolve current organization: no active organization membership found.",
-    );
-  }
-
-  if (memberships.length > 1) {
-    throw new Error(
-      "Unable to resolve current organization: multiple active organization memberships found. Workspace switching is required.",
-    );
-  }
-
-  return memberships[0].organization_id;
+  return requireCurrentOrganizationId(
+    supabase,
+    user.id,
+  );
 }
 
 export async function getFunnelWorkspace(): Promise<FunnelWorkspace> {
