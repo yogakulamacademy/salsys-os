@@ -331,6 +331,126 @@ export async function POST(request: NextRequest) {
 
 
 
+      /*
+       * Phase 2D canonical raw-event dual write.
+       *
+       * Keep whatsapp_webhook_events as the channel-specific source of truth
+       * during rollout while also writing the provider event to raw_events.
+       *
+       * The canonical write is intentionally non-blocking so it cannot interrupt
+       * the existing WhatsApp webhook / CRM processing path.
+       */
+      const sourceEventType =
+        stringValue(event.event_type) || 'unknown';
+
+      const externalMessageId =
+        stringValue(event.external_message_id);
+
+      const contactWaId =
+        stringValue(event.contact_wa_id);
+
+      const {
+        error: rawEventError,
+      } = await supabase.rpc(
+        'ingest_raw_event',
+        {
+          p_organization_id:
+            organizationId,
+
+          p_source_system:
+            'whatsapp',
+
+          p_source_event_id:
+            eventKey,
+
+          p_source_event_type:
+            sourceEventType,
+
+          p_ingestion_method:
+            'whatsapp_webhook',
+
+          /*
+           * Meta timestamps remain preserved in the provider payload.
+           * received_at in raw_events records ingestion time.
+           */
+          p_occurred_at:
+            null,
+
+          p_source_account_id:
+            phoneNumberId,
+
+          p_source_subject_id:
+            contactWaId,
+
+          p_anonymous_visitor_id:
+            null,
+
+          p_session_key:
+            null,
+
+          p_external_message_id:
+            externalMessageId,
+
+          p_site:
+            null,
+
+          p_payload:
+            objectValue(event.payload),
+
+          p_context: {
+            object_type:
+              stringValue(event.object_type),
+
+            entry_id:
+              stringValue(event.entry_id),
+
+            field_name:
+              stringValue(event.field_name),
+
+            phone_number_id:
+              phoneNumberId,
+
+            display_phone_number:
+              stringValue(
+                event.display_phone_number
+              ),
+
+            contact_wa_id:
+              contactWaId,
+
+            signature_valid:
+              event.signature_valid === true,
+          },
+
+          p_metadata: {
+            adapter:
+              'app/api/whatsapp/webhook',
+
+            legacy_webhook_event_id:
+              eventId,
+          },
+
+          p_schema_version:
+            1,
+        }
+      );
+
+      if (rawEventError) {
+        console.error(
+          'Canonical WhatsApp raw event ingest failed',
+          {
+            organizationId,
+            eventKey,
+            eventType:
+              sourceEventType,
+            message:
+              rawEventError.message,
+          }
+        );
+      }
+
+
+
       const result = await processStoredWebhookEvent(
 
         supabase,
