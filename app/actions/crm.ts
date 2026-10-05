@@ -10,6 +10,8 @@ import { useMockData } from "@/lib/config";
 
 import type { Channel, IntentLevel, LeadStage } from "@/types/crm";
 
+import { requireCurrentOrganizationId } from "@/lib/workspace";
+
 const allowedStages: LeadStage[] = [
   "new",
 
@@ -233,56 +235,30 @@ export async function createLeadAction(formData: FormData) {
 
   const supabase = await createClient();
 
-    const {
-    data: {
-      user,
-    },
+  const {
+    data: { user },
     error: userError,
   } = await supabase.auth.getUser();
 
   if (userError || !user) {
     redirect(
       "/leads/new?error=" +
-        encodeURIComponent(
-          "Your session has expired. Please sign in again.",
-        ),
+        encodeURIComponent("Your session has expired. Please sign in again."),
     );
   }
 
-  const {
-    data: memberships,
-    error: membershipError,
-  } = await supabase
-    .from("organization_members")
-    .select("organization_id")
-    .eq("user_id", user.id)
-    .eq("active", true)
-    .limit(2);
+  let organizationId: string;
 
-  if (
-    membershipError ||
-    !memberships ||
-    memberships.length === 0
-  ) {
-    redirect(
-      "/leads/new?error=" +
-        encodeURIComponent(
-          "No active organization is assigned to your account.",
-        ),
-    );
+  try {
+    organizationId = await requireCurrentOrganizationId(supabase, user.id);
+  } catch (error) {
+    const message =
+      error instanceof Error
+        ? error.message
+        : "Unable to resolve the active workspace.";
+
+    redirect("/leads/new?error=" + encodeURIComponent(message));
   }
-
-  if (memberships.length !== 1) {
-    redirect(
-      "/leads/new?error=" +
-        encodeURIComponent(
-          "Multiple organizations are assigned to your account. Select a workspace before creating a lead.",
-        ),
-    );
-  }
-
-  const organizationId =
-    memberships[0].organization_id;
 
   const {
     data,
@@ -292,7 +268,6 @@ export async function createLeadAction(formData: FormData) {
     "create_crm_lead",
 
     {
-
       p_organization_id: organizationId,
       p_first_name: firstName,
 
