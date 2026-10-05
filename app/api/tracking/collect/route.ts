@@ -141,6 +141,56 @@ export async function POST(request: NextRequest) {
 
     const organizationId = organizationSite.organization_id;
     const trustedSite = organizationSite.hostname;
+    const occurredAt = payload.occurredAt || new Date().toISOString();
+
+    /*
+     * Phase 2C raw-event dual write.
+     *
+     * Capture the sanitized browser event in the canonical immutable raw-event
+     * store before downstream session/touchpoint processing. This write is
+     * intentionally non-blocking during the rollout so a raw-event platform
+     * issue cannot interrupt the existing production tracking pipeline.
+     *
+     * Tenant selection still comes only from the trusted Origin mapping.
+     */
+    const { error: rawEventError } = await supabase.rpc("ingest_raw_event", {
+      p_organization_id: organizationId,
+      p_source_system: "website",
+      p_source_event_id: payload.eventId,
+      p_source_event_type: payload.eventType,
+      p_ingestion_method: "tracking_collect",
+      p_occurred_at: occurredAt,
+      p_source_account_id: null,
+      p_source_subject_id: null,
+      p_anonymous_visitor_id: payload.anonymousVisitorId,
+      p_session_key: payload.sessionKey,
+      p_external_message_id: null,
+      p_site: trustedSite,
+      p_payload: payload,
+      p_context: {
+        origin_hostname: originHostname,
+        trusted_site: trustedSite,
+        geo_country: geo.country,
+        geo_region: geo.region,
+        geo_city: geo.city,
+        geo_timezone: geo.timezone,
+        user_agent: request.headers.get("user-agent"),
+      },
+      p_metadata: {
+        adapter: "app/api/tracking/collect",
+        reported_site: payload.site || null,
+      },
+      p_schema_version: 1,
+    });
+
+    if (rawEventError) {
+      console.error("Raw website event ingest failed", {
+        organizationId,
+        eventId: payload.eventId,
+        eventType: payload.eventType,
+        message: rawEventError.message,
+      });
+    }
 
     /*
      * Find the exact tenant-scoped session first.
@@ -353,7 +403,7 @@ export async function POST(request: NextRequest) {
     }
 
     /*
-     * The raw tracking event remains tenant scoped.
+     * The normalized touchpoint remains tenant scoped.
      *
      * lead_id is set only when the exact session has an authoritative lead
      * association. Historical browser identity alone is never enough.
@@ -369,7 +419,7 @@ export async function POST(request: NextRequest) {
       geo_region: geo.region,
       geo_city: geo.city,
 
-      occurred_at: payload.occurredAt || new Date().toISOString(),
+      occurred_at: occurredAt,
 
       source: touch.source || null,
       medium: touch.medium || null,
