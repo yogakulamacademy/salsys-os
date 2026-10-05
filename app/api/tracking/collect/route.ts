@@ -87,7 +87,6 @@ export async function POST(request: NextRequest) {
     const payload = sanitizeTrackingPayload(await request.json());
 
     const supabase = createAdminClient();
-    const touch = payload.sessionTouch || {};
     const geo = getRequestGeo(request);
 
     /*
@@ -147,41 +146,44 @@ export async function POST(request: NextRequest) {
      * Phase 2C raw-event dual write.
      *
      * Capture the sanitized browser event in the canonical immutable raw-event
-     * store before downstream session/touchpoint processing. This write is
-     * intentionally non-blocking during the rollout so a raw-event platform
-     * issue cannot interrupt the existing production tracking pipeline.
+     * store before downstream session/touchpoint processing. Phase 3B now uses
+     * this canonical raw record as the required source for deterministic
+     * normalization.
      *
      * Tenant selection still comes only from the trusted Origin mapping.
      */
-    const { error: rawEventError } = await supabase.rpc("ingest_raw_event", {
-      p_organization_id: organizationId,
-      p_source_system: "website",
-      p_source_event_id: payload.eventId,
-      p_source_event_type: payload.eventType,
-      p_ingestion_method: "tracking_collect",
-      p_occurred_at: occurredAt,
-      p_source_account_id: null,
-      p_source_subject_id: null,
-      p_anonymous_visitor_id: payload.anonymousVisitorId,
-      p_session_key: payload.sessionKey,
-      p_external_message_id: null,
-      p_site: trustedSite,
-      p_payload: payload,
-      p_context: {
-        origin_hostname: originHostname,
-        trusted_site: trustedSite,
-        geo_country: geo.country,
-        geo_region: geo.region,
-        geo_city: geo.city,
-        geo_timezone: geo.timezone,
-        user_agent: request.headers.get("user-agent"),
+    const { data: rawEventResult, error: rawEventError } = await supabase.rpc(
+      "ingest_raw_event",
+      {
+        p_organization_id: organizationId,
+        p_source_system: "website",
+        p_source_event_id: payload.eventId,
+        p_source_event_type: payload.eventType,
+        p_ingestion_method: "tracking_collect",
+        p_occurred_at: occurredAt,
+        p_source_account_id: null,
+        p_source_subject_id: null,
+        p_anonymous_visitor_id: payload.anonymousVisitorId,
+        p_session_key: payload.sessionKey,
+        p_external_message_id: null,
+        p_site: trustedSite,
+        p_payload: payload,
+        p_context: {
+          origin_hostname: originHostname,
+          trusted_site: trustedSite,
+          geo_country: geo.country,
+          geo_region: geo.region,
+          geo_city: geo.city,
+          geo_timezone: geo.timezone,
+          user_agent: request.headers.get("user-agent"),
+        },
+        p_metadata: {
+          adapter: "app/api/tracking/collect",
+          reported_site: payload.site || null,
+        },
+        p_schema_version: 1,
       },
-      p_metadata: {
-        adapter: "app/api/tracking/collect",
-        reported_site: payload.site || null,
-      },
-      p_schema_version: 1,
-    });
+    );
 
     if (rawEventError) {
       console.error("Raw website event ingest failed", {
@@ -193,296 +195,38 @@ export async function POST(request: NextRequest) {
     }
 
     /*
-     * Find the exact tenant-scoped session first.
+     * Phase 3B canonical website normalization.
      *
-     * If this session already has a lead_id, that exact session assignment
-     * is more authoritative than the browser-level visitor_identity_links
-     * pointer.
+     * Session creation/update and touchpoint normalization now live behind the
+     * database processor so the same deterministic rules can later be reused by
+     * a claimed background worker. The processor itself is processing-state
+     * neutral; Phase 2 lifecycle synchronization remains below.
      */
-    const { data: existingSession, error: existingError } = await supabase
-      .from("web_sessions")
-      .select(
-        `
-          id,
-          organization_id,
-          anonymous_visitor_id,
-          lead_id
-        `,
-      )
-      .eq("session_key", payload.sessionKey)
-      .eq("organization_id", organizationId)
-      .maybeSingle();
-
-    if (existingError) {
-      throw existingError;
-    }
-
-    if (
-      existingSession &&
-      existingSession.anonymous_visitor_id !== payload.anonymousVisitorId
-    ) {
+    if (rawEventError || !rawEventResult?.event_id) {
       throw new Error(
-        "Tracking session does not belong to the supplied anonymous visitor.",
+        rawEventError?.message ||
+          "Unable to persist canonical website event before normalization.",
       );
     }
 
-    /*
-     * visitor_identity_links is current-session routing state, not a
-     * permanent Person identity.
-     *
-     * A browser may be shared by multiple people. Therefore a historical
-     * visitor -> lead link is used only when it explicitly points to this
-     * exact current session.
-     */
-    const { data: identity, error: identityError } = await supabase
-      .from("visitor_identity_links")
-      .select("lead_id, last_session_key")
-      .eq("organization_id", organizationId)
-      .eq("anonymous_visitor_id", payload.anonymousVisitorId)
-      .maybeSingle();
-
-    if (identityError) {
-      throw identityError;
-    }
-
-    let candidateLeadId: string | null = null;
-
-    if (existingSession?.lead_id) {
-      candidateLeadId = existingSession.lead_id;
-    } else if (
-      identity?.lead_id &&
-      identity.last_session_key === payload.sessionKey
-    ) {
-      candidateLeadId = identity.lead_id;
-    }
-
-    /*
-     * Because this route uses the admin client, explicitly verify that any
-     * candidate lead belongs to the organization resolved from Origin.
-     */
-    let resolvedLeadId: string | null = null;
-
-    if (candidateLeadId) {
-      const { data: organizationLead, error: organizationLeadError } =
-        await supabase
-          .from("leads")
-          .select("id")
-          .eq("id", candidateLeadId)
-          .eq("organization_id", organizationId)
-          .maybeSingle();
-
-      if (organizationLeadError) {
-        throw organizationLeadError;
-      }
-
-      resolvedLeadId = organizationLead?.id ?? null;
-    }
-
-    let session = existingSession;
-
-    if (existingSession) {
-      const { error: updateError } = await supabase
-        .from("web_sessions")
-        .update({
-          organization_id: organizationId,
-          last_seen_at: new Date().toISOString(),
-
-          ...(resolvedLeadId
-            ? {
-                lead_id: resolvedLeadId,
-              }
-            : {}),
-
-          ...(geo.country
-            ? {
-                geo_country: geo.country,
-              }
-            : {}),
-
-          ...(geo.region
-            ? {
-                geo_region: geo.region,
-              }
-            : {}),
-
-          ...(geo.city
-            ? {
-                geo_city: geo.city,
-              }
-            : {}),
-
-          ...(geo.timezone
-            ? {
-                geo_timezone: geo.timezone,
-              }
-            : {}),
-        })
-        .eq("id", existingSession.id)
-        .eq("organization_id", organizationId);
-
-      if (updateError) {
-        throw updateError;
-      }
-    } else {
-      /*
-       * New sessions stay anonymous unless this exact session has already
-       * been explicitly identified. A previous session from the same browser
-       * must never automatically identify the new session.
-       */
-      const sessionRow = {
-        organization_id: organizationId,
-        anonymous_visitor_id: payload.anonymousVisitorId,
-        lead_id: resolvedLeadId,
-        session_key: payload.sessionKey,
-        site: trustedSite,
-
-        source: touch.source || null,
-        medium: touch.medium || null,
-
-        geo_country: geo.country,
-        geo_region: geo.region,
-        geo_city: geo.city,
-        geo_timezone: geo.timezone,
-
-        campaign_name: touch.campaign || null,
-        landing_page: payload.pageUrl || payload.pagePath || null,
-        referrer: payload.referrer || null,
-
-        utm_source: touch.source || null,
-        utm_medium: touch.medium || null,
-        utm_campaign: touch.campaign || null,
-        utm_content: touch.content || null,
-        utm_term: touch.term || null,
-
-        gclid: touch.gclid || null,
-        gbraid: touch.gbraid || null,
-        wbraid: touch.wbraid || null,
-        fbclid: touch.fbclid || null,
-
-        user_agent: request.headers.get("user-agent"),
-        last_seen_at: new Date().toISOString(),
-
-        metadata: {
-          site: trustedSite,
-
-          /*
-           * Browser-supplied site is diagnostic metadata only and is never
-           * used for tenant selection.
-           */
-          reported_site: payload.site || null,
-          page_title: payload.pageTitle,
-          first_touch: payload.firstTouch,
-          utm_id: touch.utmId,
-          adgroup_id: touch.adgroupId,
-          creative_id: touch.creativeId,
-        },
-      };
-
-      const { data: createdSession, error: sessionError } = await supabase
-        .from("web_sessions")
-        .insert(sessionRow)
-        .select(
-          `
-            id,
-            organization_id,
-            anonymous_visitor_id,
-            lead_id
-          `,
-        )
-        .single();
-
-      if (sessionError) {
-        throw sessionError;
-      }
-
-      session = createdSession;
-    }
-
-    if (!session) {
-      throw new Error("Unable to create tracking session.");
-    }
-
-    /*
-     * The normalized touchpoint remains tenant scoped.
-     *
-     * lead_id is set only when the exact session has an authoritative lead
-     * association. Historical browser identity alone is never enough.
-     */
-    const eventRow = {
-      organization_id: organizationId,
-      event_id: payload.eventId,
-      lead_id: resolvedLeadId,
-      web_session_id: session.id,
-      anonymous_visitor_id: payload.anonymousVisitorId,
-
-      geo_country: geo.country,
-      geo_region: geo.region,
-      geo_city: geo.city,
-
-      occurred_at: occurredAt,
-
-      source: touch.source || null,
-      medium: touch.medium || null,
-      campaign_name: touch.campaign || null,
-      content: touch.content || null,
-      term: touch.term || null,
-
-      platform: touch.source || null,
-      channel: "website",
-
-      landing_page: payload.pageUrl || payload.pagePath || null,
-      referrer: payload.referrer || null,
-
-      event_type: payload.eventType,
-
-      utm_source: touch.source || null,
-      utm_medium: touch.medium || null,
-      utm_campaign: touch.campaign || null,
-      utm_content: touch.content || null,
-      utm_term: touch.term || null,
-
-      gclid: touch.gclid || null,
-      gbraid: touch.gbraid || null,
-      wbraid: touch.wbraid || null,
-      fbclid: touch.fbclid || null,
-
-      external_campaign_id: touch.campaignId || null,
-      external_adset_id: touch.adsetId || null,
-      external_ad_id: touch.adId || touch.creativeId || null,
-
-      metadata: {
-        site: trustedSite,
-        reported_site: payload.site || null,
-        page_title: payload.pageTitle,
-        page_path: payload.pagePath,
-        first_touch: payload.firstTouch,
-        utm_id: touch.utmId,
-        adgroup_id: touch.adgroupId,
-        ...payload.metadata,
+    const { error: processingError } = await supabase.rpc(
+      "process_website_raw_event",
+      {
+        p_organization_id: organizationId,
+        p_raw_event_id: rawEventResult.event_id,
       },
-    };
+    );
 
-    /*
-     * Event IDs are tenant scoped.
-     */
-    const { error: eventError } = await supabase
-      .from("touchpoints")
-      .upsert(eventRow, {
-        onConflict: "organization_id,event_id",
-        ignoreDuplicates: true,
-      });
-
-    if (eventError) {
-      throw eventError;
+    if (processingError) {
+      throw processingError;
     }
 
     /*
      * Phase 2E1 processing-state synchronization.
      *
-     * Mark the canonical raw event processed only after the existing
-     * tenant-scoped touchpoint write succeeds. Keep this synchronization
-     * non-blocking so lifecycle bookkeeping cannot interrupt production
-     * website tracking.
+     * Mark the canonical raw event processed only after the canonical
+     * website normalizer succeeds. Keep lifecycle bookkeeping non-blocking so
+     * status synchronization cannot interrupt successful website tracking.
      */
     if (!rawEventError) {
       const { error: rawProcessingError } = await supabase.rpc(
@@ -493,10 +237,11 @@ export async function POST(request: NextRequest) {
           p_source_event_id: payload.eventId,
           p_status: "processed",
           p_processor_name: "tracking_collect",
-          p_processor_version: "phase2e1",
+          p_processor_version: "phase3b",
           p_processing_error: null,
           p_processing_metadata: {
-            normalized_target: "touchpoints",
+            normalized_target: "web_sessions,touchpoints",
+            normalizer: "process_website_raw_event",
           },
         },
       );
