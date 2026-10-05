@@ -476,6 +476,41 @@ export async function POST(request: NextRequest) {
       throw eventError;
     }
 
+    /*
+     * Phase 2E1 processing-state synchronization.
+     *
+     * Mark the canonical raw event processed only after the existing
+     * tenant-scoped touchpoint write succeeds. Keep this synchronization
+     * non-blocking so lifecycle bookkeeping cannot interrupt production
+     * website tracking.
+     */
+    if (!rawEventError) {
+      const { error: rawProcessingError } = await supabase.rpc(
+        "set_raw_event_processing_status",
+        {
+          p_organization_id: organizationId,
+          p_source_system: "website",
+          p_source_event_id: payload.eventId,
+          p_status: "processed",
+          p_processor_name: "tracking_collect",
+          p_processor_version: "phase2e1",
+          p_processing_error: null,
+          p_processing_metadata: {
+            normalized_target: "touchpoints",
+          },
+        },
+      );
+
+      if (rawProcessingError) {
+        console.error("Raw website event processing sync failed", {
+          organizationId,
+          eventId: payload.eventId,
+          eventType: payload.eventType,
+          message: rawProcessingError.message,
+        });
+      }
+    }
+
     return NextResponse.json(
       {
         ok: true,
