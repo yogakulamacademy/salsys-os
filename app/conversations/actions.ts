@@ -343,6 +343,23 @@ export async function sendWhatsAppMessageAction(
 
   const adminSupabase = createAdminClient();
 
+  const { data: leadTenant, error: leadTenantError } = await adminSupabase
+    .from("leads")
+    .select("organization_id")
+    .eq("id", leadId)
+    .limit(1)
+    .maybeSingle();
+
+  if (leadTenantError || !leadTenant?.organization_id) {
+    redirect(
+      conversationUrl(leadId, {
+        error: "Unable to determine the organization for this lead.",
+      }),
+    );
+  }
+
+  const organizationId = leadTenant.organization_id;
+
   const {
     data: contact,
 
@@ -354,6 +371,8 @@ export async function sendWhatsAppMessageAction(
     .select("value, normalized_value, is_primary")
 
     .eq("lead_id", leadId)
+
+    .eq("organization_id", organizationId)
 
     .eq(
       "contact_type",
@@ -440,6 +459,8 @@ export async function sendWhatsAppMessageAction(
     )
 
     .eq("lead_id", leadId)
+
+    .eq("organization_id", organizationId)
 
     .eq("channel", "whatsapp")
 
@@ -1174,148 +1195,28 @@ export async function sendWhatsAppTemplateAction(
 
   /* =====================================================
 
+     TELEPHONE IDENTITY SAFETY
 
-
-
-
-
-
-     DUPLICATE SAFETY
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-     If this number is already attached as
-
-
-
-
-
-
-
-     WhatsApp to ANOTHER lead, do not silently
-
-
-
-
-
-
-
-     move it.
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-     We should merge duplicate leads separately.
-
-
-
-
-
-
+     Validate phone + WhatsApp as one normalized telephone
+     identity family before anything is sent through Meta.
 
   ===================================================== */
 
-  const {
-    data: existingWaOwner,
+  const { error: telephoneIdentityError } = await adminSupabase.rpc(
+    "validate_lead_telephone_identity",
+    {
+      p_lead_id: leadId,
+      p_normalized_value: to,
+    },
+  );
 
-    error: ownerError,
-  } = await adminSupabase
-
-    .from("lead_contacts")
-
-    .select(
-      `
-
-
-
-
-
-
-
-        lead_id,
-
-
-
-
-
-
-
-        normalized_value
-
-
-
-
-
-
-
-        `,
-    )
-
-    .eq(
-  "organization_id",
-
-  organizationId,
-)
-
-.eq(
-  "contact_type",
-
-  "whatsapp",
-)
-
-    .eq(
-      "normalized_value",
-
-      to,
-    )
-
-    .limit(1)
-
-    .maybeSingle();
-
-  if (ownerError) {
+  if (telephoneIdentityError) {
     redirect(
       conversationUrl(
         leadId,
 
         {
-          error: `Unable to check existing WhatsApp identity: ${ownerError.message}`,
-        },
-      ),
-    );
-  }
-
-  if (existingWaOwner?.lead_id && existingWaOwner.lead_id !== leadId) {
-    redirect(
-      conversationUrl(
-        leadId,
-
-        {
-          error:
-            "This WhatsApp number already belongs to another CRM lead. Merge the duplicate lead before starting a new WhatsApp conversation.",
+          error: `Unable to validate the WhatsApp identity: ${telephoneIdentityError.message}`,
         },
       ),
     );
@@ -1692,100 +1593,28 @@ export async function sendWhatsAppTemplateAction(
 
   /* =====================================================
 
+     REVALIDATE META-RETURNED WHATSAPP ID
 
-
-
-
-
-
-     SECOND DUPLICATE CHECK USING RETURNED WA_ID
-
-
-
-
-
-
+     Meta may canonicalize the recipient number. Validate
+     the returned identity before attaching it to the lead.
 
   ===================================================== */
 
-  const {
-    data: resolvedOwner,
+  const { error: resolvedIdentityError } = await adminSupabase.rpc(
+    "validate_lead_telephone_identity",
+    {
+      p_lead_id: leadId,
+      p_normalized_value: resolvedWaId,
+    },
+  );
 
-    error: resolvedOwnerError,
-  } = await adminSupabase
-
-    .from("lead_contacts")
-
-    .select(
-      `
-
-
-
-
-
-
-
-        lead_id,
-
-
-
-
-
-
-
-        normalized_value
-
-
-
-
-
-
-
-        `,
-    )
-
-    .eq(
-  "organization_id",
-
-  organizationId,
-)
-
-.eq(
-  "contact_type",
-
-  "whatsapp",
-)
-
-    .eq(
-      "normalized_value",
-
-      resolvedWaId,
-    )
-
-    .limit(1)
-
-    .maybeSingle();
-
-  if (resolvedOwnerError) {
+  if (resolvedIdentityError) {
     redirect(
       conversationUrl(
         leadId,
 
         {
-          error: `WhatsApp was sent, but CRM identity checking failed: ${resolvedOwnerError.message}. Do not resend the template.`,
-        },
-      ),
-    );
-  }
-
-  if (resolvedOwner?.lead_id && resolvedOwner.lead_id !== leadId) {
-    redirect(
-      conversationUrl(
-        leadId,
-
-        {
-          error:
-            "WhatsApp was sent, but Meta resolved this number to a WhatsApp identity already attached to another CRM lead. Do not resend. The two lead records need to be merged.",
+          error: `WhatsApp was sent, but Meta resolved this number to an identity that cannot be attached safely: ${resolvedIdentityError.message}. Do not resend.`,
         },
       ),
     );
@@ -1793,80 +1622,34 @@ export async function sendWhatsAppTemplateAction(
 
   /* =====================================================
 
+     ATTACH WHATSAPP IDENTITY + REFRESH CANONICAL PERSON
 
-
-
-
-
-
-     CREATE WHATSAPP CONTACT ON EXISTING LEAD
-
-
-
-
-
-
+     This RPC performs the contact write and Person identity
+     refresh in one database transaction.
 
   ===================================================== */
 
-  if (!whatsappContact) {
-    const { error: whatsappContactError } = await adminSupabase
+  const { error: whatsappIdentityError } = await adminSupabase.rpc(
+    "attach_lead_whatsapp_identity",
+    {
+      p_lead_id: leadId,
+      p_value: sourceContact?.value || resolvedWaId,
+      p_normalized_value: resolvedWaId,
+      p_verified: whatsappVerified,
+      p_source_system: "whatsapp_template",
+    },
+  );
 
-      .from("lead_contacts")
+  if (whatsappIdentityError) {
+    redirect(
+      conversationUrl(
+        leadId,
 
-      .insert({
-  organization_id: organizationId,
-
-  lead_id: leadId,
-
-  contact_type: "whatsapp",
-
-        /*
-
-
-
-
-
-
-
-           * Keep the original submitted
-
-
-
-
-
-
-
-           * number for human display.
-
-
-
-
-
-
-
-           */
-
-        value: sourceContact?.value || resolvedWaId,
-
-        normalized_value: resolvedWaId,
-
-        is_primary: true,
-
-        verified: whatsappVerified,
-      });
-
-    if (whatsappContactError) {
-      redirect(
-        conversationUrl(
-          leadId,
-
-          {
-            error: `WhatsApp was sent, but the CRM could not attach the WhatsApp number: ${whatsappContactError.message}. Do not resend the template.`,
-          },
-        ),
-      );
-    }
+        {
+          error: `WhatsApp was sent, but the CRM could not synchronize the WhatsApp identity: ${whatsappIdentityError.message}. Do not resend the template.`,
+        },
+      ),
+    );
   }
 
   /* =====================================================
@@ -1946,10 +1729,10 @@ export async function sendWhatsAppTemplateAction(
     )
 
     .eq(
-  "organization_id",
+      "organization_id",
 
-  organizationId,
-)
+      organizationId,
+    )
 
     .eq(
       "channel",
@@ -2015,11 +1798,11 @@ export async function sendWhatsAppTemplateAction(
       .from("conversations")
 
       .insert({
-  organization_id: organizationId,
+        organization_id: organizationId,
 
-  lead_id: leadId,
+        lead_id: leadId,
 
-  channel: "whatsapp",
+        channel: "whatsapp",
 
         /*
 
