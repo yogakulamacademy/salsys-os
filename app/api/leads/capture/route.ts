@@ -348,6 +348,8 @@ export async function POST(request: NextRequest) {
 
           session_key,
 
+          lead_id,
+
           source,
 
           medium,
@@ -392,88 +394,14 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    /*
-
-     * Fallback:
-
-     * find most recent session for visitor.
-
-     */
-
-    if (!session && payload.anonymousVisitorId) {
-      const {
-        data: visitorSession,
-
-        error: visitorSessionError,
-      } = await supabase
-
-        .from("web_sessions")
-
-        .select(
-          `
-
-          id,
-
-          anonymous_visitor_id,
-
-          session_key,
-
-          source,
-
-          medium,
-
-          campaign_name,
-
-          landing_page,
-
-          referrer,
-
-          utm_source,
-
-          utm_medium,
-
-          utm_campaign,
-
-          geo_country,
-
-          geo_region,
-
-          geo_city,
-
-          geo_timezone,
-
-          last_seen_at
-
-        `,
-        )
-
-        .eq("organization_id", organizationId)
-        .eq("anonymous_visitor_id", payload.anonymousVisitorId)
-        .order("last_seen_at", { ascending: false })
-
-        .limit(1)
-
-        .maybeSingle();
-
-      if (visitorSessionError) {
-        console.error(
-          "Visitor session lookup failed:",
-
-          visitorSessionError,
-        );
-      } else {
-        session = visitorSession;
-      }
-    }
-
     /* =====================================================
 
        STEP 3
 
-       LINK VISITOR HISTORY TO CRM LEAD
+       VERIFY DATABASE-OWNED EXACT-SESSION LINKING
 
-       Best-effort: linking failures are logged but never
-       fail an otherwise successful lead capture.
+       ingest_website_lead() owns visitor/session attachment.
+       This route must not infer identity from browser history.
 
     ===================================================== */
 
@@ -485,187 +413,71 @@ export async function POST(request: NextRequest) {
 
     let identityLinked = false;
 
-    let sessionsLinked = false;
+    const sessionsLinked = Boolean(session?.id && session?.lead_id === leadId);
 
     let touchpointsLinked = false;
 
-    let identityConflict = false;
+    const identityConflict = false;
 
-    if (visitorId) {
+    if (visitorId && resolvedSessionKey) {
       const {
-        data: existingIdentity,
+        data: identityRow,
 
-        error: existingIdentityError,
+        error: identityCheckError,
       } = await supabase
 
         .from("visitor_identity_links")
-        .select("lead_id")
+
+        .select("lead_id, last_session_key")
+
         .eq("organization_id", organizationId)
+
         .eq("anonymous_visitor_id", visitorId)
+
         .maybeSingle();
 
-      if (existingIdentityError) {
+      if (identityCheckError) {
         console.error(
-          "Visitor identity lookup failed:",
+          "Visitor identity verification failed:",
 
-          existingIdentityError,
-        );
-      }
-
-      const existingLeadId = existingIdentity?.lead_id ?? null;
-
-      if (existingLeadId && existingLeadId !== leadId) {
-        /*
-         * Protect against accidentally reassigning a visitor's
-         * historical journey to a different CRM lead.
-         */
-
-        identityConflict = true;
-
-        console.warn(
-          "Visitor is already linked to a different lead; preserving the existing identity link.",
-
-          {
-            visitorId,
-
-            existingLeadId,
-
-            attemptedLeadId: leadId,
-          },
+          identityCheckError,
         );
       } else {
-        const now = new Date().toISOString();
-
-        const { error: identityLinkError } = await supabase
-
-          .from("visitor_identity_links")
-
-          .upsert(
-            {
-              organization_id: organizationId,
-
-              anonymous_visitor_id: visitorId,
-
-              lead_id: leadId,
-
-              last_session_key: resolvedSessionKey,
-
-              source_system: "website",
-
-              linked_at: now,
-
-              updated_at: now,
-            },
-
-            {
-              onConflict: "organization_id,anonymous_visitor_id",
-            },
-          );
-
-        if (identityLinkError) {
-          console.error(
-            "Visitor identity link failed:",
-
-            identityLinkError,
-          );
-        } else {
-          identityLinked = true;
-        }
-
-        const { error: sessionLinkError } = await supabase
-
-          .from("web_sessions")
-          .update({
-            lead_id: leadId,
-          })
-          .eq("organization_id", organizationId)
-          .eq("anonymous_visitor_id", visitorId)
-          .is("lead_id", null);
-
-        if (sessionLinkError) {
-          console.error(
-            "Visitor session linking failed:",
-
-            sessionLinkError,
-          );
-        } else {
-          sessionsLinked = true;
-        }
-
-        const { error: touchpointLinkError } = await supabase
-
-          .from("touchpoints")
-          .update({
-            lead_id: leadId,
-          })
-          .eq("organization_id", organizationId)
-          .eq("anonymous_visitor_id", visitorId)
-          .is("lead_id", null);
-
-        if (touchpointLinkError) {
-          console.error(
-            "Visitor touchpoint linking failed:",
-
-            touchpointLinkError,
-          );
-        } else {
-          touchpointsLinked = true;
-        }
+        identityLinked =
+          identityRow?.lead_id === leadId &&
+          identityRow?.last_session_key === resolvedSessionKey;
       }
-    } else if (session?.id) {
-      /*
-       * Fallback for an unusual request where the session is known
-       * but anonymous_visitor_id was not included in the lead payload.
-       */
+    }
 
-      const { error: sessionLinkError } = await supabase
+    if (session?.id) {
+      const {
+        count: linkedTouchpointCount,
 
-        .from("web_sessions")
-        .update({
-          lead_id: leadId,
-        })
-        .eq("organization_id", organizationId)
-        .eq("id", session.id)
-        .is("lead_id", null);
-
-      if (sessionLinkError) {
-        console.error(
-          "Current session linking failed:",
-
-          sessionLinkError,
-        );
-      } else {
-        sessionsLinked = true;
-      }
-
-      const { error: touchpointLinkError } = await supabase
+        error: touchpointCheckError,
+      } = await supabase
 
         .from("touchpoints")
 
-        .update({
-          lead_id: leadId,
+        .select("id", {
+          count: "exact",
+
+          head: true,
         })
 
-        .eq(
-          "web_session_id",
+        .eq("organization_id", organizationId)
 
-          session.id,
-        )
+        .eq("web_session_id", session.id)
 
-        .is(
-          "lead_id",
+        .eq("lead_id", leadId);
 
-          null,
-        );
-
-      if (touchpointLinkError) {
+      if (touchpointCheckError) {
         console.error(
-          "Current-session touchpoint linking failed:",
+          "Exact-session touchpoint verification failed:",
 
-          touchpointLinkError,
+          touchpointCheckError,
         );
       } else {
-        touchpointsLinked = true;
+        touchpointsLinked = (linkedTouchpointCount ?? 0) > 0;
       }
     }
 
@@ -817,6 +629,8 @@ export async function POST(request: NextRequest) {
       .from("leads")
 
       .update(leadUpdate)
+
+      .eq("organization_id", organizationId)
 
       .eq("id", leadId);
 
