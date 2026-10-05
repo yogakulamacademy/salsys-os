@@ -1,56 +1,29 @@
 import { NextResponse } from "next/server";
 
 import { createClient } from "@/lib/supabase/server";
+import { requireCurrentOrganizationId } from "@/lib/workspace";
 
 export const dynamic = "force-dynamic";
-
-async function getCurrentOrganizationId(
-  supabase: Awaited<ReturnType<typeof createClient>>,
-): Promise<string> {
-  const {
-    data: { user },
-    error: authError,
-  } = await supabase.auth.getUser();
-
-  if (authError || !user) {
-    throw new Error(
-      "Unable to resolve current organization: user is not authenticated.",
-    );
-  }
-
-  const { data: memberships, error: membershipError } = await supabase
-    .from("organization_members")
-    .select("organization_id")
-    .eq("user_id", user.id)
-    .eq("active", true)
-    .limit(2);
-
-  if (membershipError) {
-    throw new Error(
-      `Unable to resolve current organization: ${membershipError.message}`,
-    );
-  }
-
-  if (!memberships || memberships.length === 0) {
-    throw new Error(
-      "Unable to resolve current organization: no active organization membership found.",
-    );
-  }
-
-  if (memberships.length > 1) {
-    throw new Error(
-      "Unable to resolve current organization: multiple active organization memberships found. Workspace switching is required.",
-    );
-  }
-
-  return memberships[0].organization_id;
-}
 
 export async function GET() {
   try {
     const supabase = await createClient();
 
-    const organizationId = await getCurrentOrganizationId(supabase);
+    const {
+      data: { user },
+      error: authError,
+    } = await supabase.auth.getUser();
+
+    if (authError || !user) {
+      throw new Error(
+        "Unable to resolve current organization: user is not authenticated.",
+      );
+    }
+
+    const organizationId = await requireCurrentOrganizationId(
+      supabase,
+      user.id,
+    );
 
     const [
       healthResult,
@@ -78,7 +51,6 @@ export async function GET() {
         .from("v_meta_ads_campaign_30d")
         .select("*", {
           count: "exact",
-
           head: true,
         })
         .eq("organization_id", organizationId),
@@ -87,7 +59,6 @@ export async function GET() {
         .from("v_meta_ads_adset_30d")
         .select("*", {
           count: "exact",
-
           head: true,
         })
         .eq("organization_id", organizationId),
@@ -96,7 +67,6 @@ export async function GET() {
         .from("v_meta_ads_ad_30d")
         .select("*", {
           count: "exact",
-
           head: true,
         })
         .eq("organization_id", organizationId),
@@ -105,7 +75,6 @@ export async function GET() {
         .from("v_meta_ads_publisher_30d")
         .select("*", {
           count: "exact",
-
           head: true,
         })
         .eq("organization_id", organizationId),
@@ -114,7 +83,6 @@ export async function GET() {
         .from("v_meta_ads_country_30d")
         .select("*", {
           count: "exact",
-
           head: true,
         })
         .eq("organization_id", organizationId),
@@ -123,7 +91,6 @@ export async function GET() {
         .from("v_meta_ads_device_30d")
         .select("*", {
           count: "exact",
-
           head: true,
         })
         .eq("organization_id", organizationId),
@@ -183,15 +150,10 @@ export async function GET() {
 
       counts: {
         campaigns: campaignsResult.count ?? 0,
-
         adsets: adsetsResult.count ?? 0,
-
         ads: adsResult.count ?? 0,
-
         publishers: publishersResult.count ?? 0,
-
         countries: countriesResult.count ?? 0,
-
         devices: devicesResult.count ?? 0,
       },
 
@@ -206,7 +168,6 @@ export async function GET() {
     return NextResponse.json(
       {
         ok: false,
-
         error: message,
       },
       {
