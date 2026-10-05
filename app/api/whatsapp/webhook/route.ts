@@ -451,13 +451,238 @@ export async function POST(request: NextRequest) {
 
 
 
-      const result = await processStoredWebhookEvent(
+      let result: Record<string, unknown>;
 
-        supabase,
+      try {
 
-        eventId
+        result = await processStoredWebhookEvent(
 
-      );
+          supabase,
+
+          eventId
+
+        );
+
+      } catch (processorError) {
+
+        /*
+         * Phase 2E1 processing-state synchronization.
+         *
+         * Preserve the existing webhook retry behavior by rethrowing the
+         * processor error after recording the canonical raw-event failure.
+         */
+        if (!rawEventError) {
+
+          const processorMessage =
+
+            processorError instanceof Error
+
+              ? processorError.message
+
+              : 'WhatsApp webhook processor failed';
+
+          const {
+
+            error: rawProcessingError,
+
+          } = await supabase.rpc(
+
+            'set_raw_event_processing_status',
+
+            {
+
+              p_organization_id:
+
+                organizationId,
+
+              p_source_system:
+
+                'whatsapp',
+
+              p_source_event_id:
+
+                eventKey,
+
+              p_status:
+
+                'failed',
+
+              p_processor_name:
+
+                'whatsapp_webhook',
+
+              p_processor_version:
+
+                'phase2e1',
+
+              p_processing_error:
+
+                processorMessage,
+
+              p_processing_metadata: {
+
+                legacy_webhook_event_id:
+
+                  eventId,
+
+                source_event_type:
+
+                  sourceEventType,
+
+              },
+
+            }
+
+          );
+
+          if (rawProcessingError) {
+
+            console.error(
+
+              'Canonical WhatsApp failure-state sync failed',
+
+              {
+
+                organizationId,
+
+                eventKey,
+
+                eventType:
+
+                  sourceEventType,
+
+                message:
+
+                  rawProcessingError.message,
+
+              }
+
+            );
+
+          }
+
+        }
+
+        throw processorError;
+
+      }
+
+
+
+      /*
+       * Sync canonical terminal state only after the existing WhatsApp
+       * processor completes successfully.
+       *
+       * For a duplicate retry of an originally ignored event, the database RPC
+       * preserves the already-terminal "ignored" state.
+       */
+      const canonicalStatus =
+
+        result.ignored === true
+
+          ? 'ignored'
+
+          : result.processed === true ||
+
+              result.already_processed === true
+
+            ? 'processed'
+
+            : null;
+
+      if (
+
+        !rawEventError &&
+
+        canonicalStatus
+
+      ) {
+
+        const {
+
+          error: rawProcessingError,
+
+        } = await supabase.rpc(
+
+          'set_raw_event_processing_status',
+
+          {
+
+            p_organization_id:
+
+              organizationId,
+
+            p_source_system:
+
+              'whatsapp',
+
+            p_source_event_id:
+
+              eventKey,
+
+            p_status:
+
+              canonicalStatus,
+
+            p_processor_name:
+
+              'whatsapp_webhook',
+
+            p_processor_version:
+
+              'phase2e1',
+
+            p_processing_error:
+
+              null,
+
+            p_processing_metadata: {
+
+              legacy_webhook_event_id:
+
+                eventId,
+
+              source_event_type:
+
+                sourceEventType,
+
+            },
+
+          }
+
+        );
+
+        if (rawProcessingError) {
+
+          console.error(
+
+            'Canonical WhatsApp processing-state sync failed',
+
+            {
+
+              organizationId,
+
+              eventKey,
+
+              eventType:
+
+                sourceEventType,
+
+              status:
+
+                canonicalStatus,
+
+              message:
+
+                rawProcessingError.message,
+
+            }
+
+          );
+
+        }
+
+      }
 
 
 
