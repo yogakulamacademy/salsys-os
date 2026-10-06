@@ -10,6 +10,7 @@ import type {
 import {
   createClient,
 } from '@/lib/supabase/server';
+import { requireCurrentOrganizationId } from '@/lib/workspace';
 
 export type AttributionWorkspaceData = {
   workspace:
@@ -113,12 +114,34 @@ export async function getAttributionWorkspace(
     await createClient();
 
   const {
+    data: { user },
+    error: authError,
+  } = await supabase.auth.getUser();
+
+  if (
+    authError ||
+    !user
+  ) {
+    throw new Error(
+      'Unable to load attribution workspace: user is not authenticated.',
+    );
+  }
+
+  const organizationId =
+    await requireCurrentOrganizationId(
+      supabase,
+      user.id,
+    );
+
+  const {
     data,
     error,
   } =
-    await supabase.rpc(
+    await (supabase as any).rpc(
       'get_attribution_workspace',
       {
+        p_organization_id:
+          organizationId,
         p_query:
           filters.query.trim() ||
           null,
@@ -184,6 +207,10 @@ export async function getAttributionWorkspace(
         revenue_inr,
         revenue_usd
       `)
+      .eq(
+        'organization_id',
+        organizationId,
+      )
       .order(
         'created_at',
         {
