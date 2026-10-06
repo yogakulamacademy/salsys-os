@@ -28,9 +28,9 @@ import {
 } from "@/app/actions/crm";
 
 import { PaymentCard } from "@/components/payment-card";
-
+import { Person360SummaryCard } from "@/components/person-360-summary";
 import { LeadJourneyIntelligence } from "@/components/lead-journey-intelligence";
-
+import { PersonJourneyTimeline } from "@/components/person-journey-timeline";
 import { PaidMediaAcquisition } from "@/components/paid-media-acquisition";
 
 import {
@@ -45,7 +45,7 @@ import { getLead, getLeadPayments, isMockMode } from "@/lib/data";
 import { createClient } from "@/lib/supabase/server";
 
 import { formatDateTime } from "@/lib/format";
-
+import { getPersonJourneyForLead } from "@/lib/person-journey-data";
 import type { Channel, LeadStage } from "@/types/crm";
 
 const kindDot: Record<string, string> = {
@@ -183,52 +183,56 @@ export default async function LeadDetailPage({
 
   const supabase = await createClient();
 
-  const [lead, payments, contactLogsResult, contactSummaryResult] =
-    await Promise.all([
-      getLead(id),
+  const [
+    lead,
+    payments,
+    contactLogsResult,
+    contactSummaryResult,
+    personJourney,
+  ] = await Promise.all([
+    getLead(id),
 
-      getLeadPayments(id),
+    getLeadPayments(id),
 
-      supabase
+    supabase
 
-        .from("v_lead_contact_logs")
+      .from("v_lead_contact_logs")
 
-        .select(
-          "id, employee_name, method, direction, outcome, contacted_at, comment, call_duration_seconds, source",
-        )
+      .select(
+        "id, employee_name, method, direction, outcome, contacted_at, comment, call_duration_seconds, source",
+      )
 
-        .eq(
-          "lead_id",
+      .eq(
+        "lead_id",
 
-          id,
-        )
+        id,
+      )
 
-        .order(
-          "contacted_at",
+      .order(
+        "contacted_at",
 
-          {
-            ascending: false,
-          },
-        )
+        {
+          ascending: false,
+        },
+      )
 
-        .limit(50),
+      .limit(50),
 
-      supabase
+    supabase
 
-        .from("v_lead_contact_summary")
+      .from("v_lead_contact_summary")
 
-        .select(
-          "total_contacts, successful_contacts, no_answer_contacts, follow_up_needed_contacts",
-        )
+      .select(
+        "total_contacts, successful_contacts, no_answer_contacts, follow_up_needed_contacts",
+      )
 
-        .eq(
-          "lead_id",
+      .eq("lead_id", id)
+      .maybeSingle(),
 
-          id,
-        )
-
-        .maybeSingle(),
-    ]);
+    getPersonJourneyForLead(id, {
+      limit: 200,
+    }),
+  ]);
 
   if (!lead) {
     notFound();
@@ -507,15 +511,21 @@ export default async function LeadDetailPage({
           </div>
 
           {/* =================================================
-
-
-
-              WEBSITE JOURNEY INTELLIGENCE
-
-
-
+              CANONICAL PERSON 360
           ================================================= */}
+          <Person360SummaryCard person={personJourney.person} />
 
+          {/* =================================================
+              CANONICAL CUSTOMER JOURNEY
+          ================================================= */}
+          <PersonJourneyTimeline
+            events={personJourney.journey}
+            total={personJourney.journeyTotal}
+          />
+
+          {/* =================================================
+              WEBSITE JOURNEY INTELLIGENCE
+          ================================================= */}
           <LeadJourneyIntelligence leadId={id} />
 
           {/* =================================================
