@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { useMockData } from "@/lib/config";
 import { mockLeads } from "@/lib/mock-data";
 import { getLeads } from "@/lib/data";
+import { requireCurrentOrganizationId } from "@/lib/workspace";
 
 export const LEADS_PAGE_SIZE = 50;
 
@@ -159,14 +160,33 @@ export async function getLeadsWorkspacePage(
   }
 
   const supabase =
-    await createClient();
+  await createClient();
 
-  const {
-    data,
-    error,
-  } = await supabase.rpc(
-    "get_leads_workspace_page",
-    {
+const {
+  data: { user },
+  error: authError,
+} = await supabase.auth.getUser();
+
+if (authError || !user) {
+  throw new Error(
+    "Unable to load Leads workspace: user is not authenticated.",
+  );
+}
+
+const organizationId =
+  await requireCurrentOrganizationId(
+    supabase,
+    user.id,
+  );
+
+const {
+  data,
+  error,
+} = await (supabase as any).rpc(
+  "get_leads_workspace_page",
+  {
+    p_organization_id:
+      organizationId,
       p_page:
         filters.page,
       p_page_size:
