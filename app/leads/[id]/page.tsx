@@ -13,7 +13,6 @@ import {
   MapPin,
   MessageCircle,
   MessageSquarePlus,
-  MousePointerClick,
   Pencil,
   Phone,
   Send,
@@ -47,20 +46,6 @@ import { createClient } from "@/lib/supabase/server";
 import { formatDateTime } from "@/lib/format";
 import { getPersonJourneyForLead } from "@/lib/person-journey-data";
 import type { Channel, LeadStage } from "@/types/crm";
-
-const kindDot: Record<string, string> = {
-  marketing: "bg-violet-500",
-
-  website: "bg-sky-500",
-
-  message: "bg-emerald-500",
-
-  stage: "bg-orange-500",
-
-  payment: "bg-amber-500",
-
-  system: "bg-slate-400",
-};
 
 const stages: Array<[LeadStage, string]> = [
   ["new", "New"],
@@ -289,52 +274,6 @@ export default async function LeadDetailPage({
 
       .join(", ") || "—";
 
-  const normalizedPoints = lead.touchpoints.map((point) => ({
-    point,
-
-    haystack: [point.label, point.source, point.medium, point.detail]
-
-      .filter(Boolean)
-
-      .join(" ")
-
-      .toLowerCase(),
-  }));
-
-  const pageViews = normalizedPoints.filter(
-    ({ haystack }) =>
-      haystack.includes("page view") ||
-      haystack.includes("page_view") ||
-      haystack.includes("pageview"),
-  ).length;
-
-  const whatsappClicks = normalizedPoints.filter(
-    ({ haystack }) =>
-      haystack.includes("whatsapp") &&
-      (haystack.includes("click") || haystack.includes("cta")),
-  ).length;
-
-  const formStarts = normalizedPoints.filter(
-    ({ haystack }) =>
-      haystack.includes("form start") || haystack.includes("form_start"),
-  ).length;
-
-  const submissions = normalizedPoints.filter(
-    ({ haystack }) =>
-      haystack.includes("form submit") ||
-      haystack.includes("form_submit") ||
-      haystack.includes("lead form submit") ||
-      haystack.includes("lead_form_submit"),
-  ).length;
-
-  const whatsappPoints = normalizedPoints.filter(({ haystack }) =>
-    haystack.includes("whatsapp"),
-  );
-
-  const latestWhatsapp =
-    whatsappPoints.length > 0
-      ? whatsappPoints[whatsappPoints.length - 1].point
-      : null;
 
   return (
     <>
@@ -557,64 +496,6 @@ export default async function LeadDetailPage({
 
 
 
-
-
-
-
-              ENGAGEMENT
-
-
-
-
-
-
-
-          ================================================= */}
-
-          <div className="card-pad">
-            <div className="flex items-center justify-between gap-3">
-              <div>
-                <div className="eyebrow">Website engagement</div>
-
-                <div className="section-title mt-1">Lead activity</div>
-              </div>
-
-              <MousePointerClick size={20} className="text-slate-400" />
-            </div>
-
-            <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-              <Metric label="Page views" value={pageViews} />
-
-              <Metric label="WhatsApp clicks" value={whatsappClicks} />
-
-              <Metric label="Form starts" value={formStarts} />
-
-              <Metric label="Submissions" value={submissions} />
-            </div>
-
-            <div className="mt-4 rounded-xl bg-slate-50 p-4">
-              <div className="text-xs font-semibold text-slate-400">
-                Latest WhatsApp interaction
-              </div>
-
-              <div className="mt-2 text-sm font-semibold text-slate-700">
-                {latestWhatsapp
-                  ? `${latestWhatsapp.label} · ${formatDateTime(latestWhatsapp.timestamp)}`
-                  : "No WhatsApp interaction tracked yet."}
-              </div>
-
-              {latestWhatsapp?.detail && (
-                <div className="mt-1 text-xs leading-5 text-slate-500">
-                  {latestWhatsapp.detail}
-                </div>
-              )}
-            </div>
-          </div>
-
-          {/* =================================================
-
-
-
               CONTACT HISTORY
 
 
@@ -733,93 +614,6 @@ export default async function LeadDetailPage({
                   </div>
                 </div>
               ))}
-            </div>
-          </div>
-
-          {/* =================================================
-
-
-
-
-
-
-
-              TIMELINE
-
-
-
-
-
-
-
-          ================================================= */}
-
-          <div className="card-pad">
-            <div className="flex items-center justify-between">
-              <div>
-                <div className="eyebrow">Journey</div>
-
-                <div className="section-title mt-1">Lead timeline</div>
-              </div>
-
-              <span className="text-xs text-slate-400">
-                {lead.touchpoints.length} events
-              </span>
-            </div>
-
-            <div className="mt-6 space-y-0">
-              {lead.touchpoints.length === 0 && (
-                <div className="text-sm text-slate-400">
-                  No timeline events yet.
-                </div>
-              )}
-
-              {lead.touchpoints.map(
-                (
-                  point,
-
-                  idx,
-                ) => (
-                  <div
-                    key={point.id}
-                    className="relative flex gap-4 pb-6 last:pb-0"
-                  >
-                    {idx !== lead.touchpoints.length - 1 && (
-                      <div className="absolute left-[7px] top-4 h-[calc(100%-4px)] w-px bg-slate-200" />
-                    )}
-
-                    <div
-                      className={`relative mt-1 h-4 w-4 shrink-0 rounded-full border-4 border-white shadow ${
-                        kindDot[point.kind] ?? "bg-slate-400"
-                      }`}
-                    />
-
-                    <div className="min-w-0 flex-1">
-                      <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
-                        <div className="text-sm font-semibold capitalize text-slate-800">
-                          {point.label}
-                        </div>
-
-                        <div className="text-xs text-slate-400">
-                          {formatDateTime(point.timestamp)}
-                        </div>
-                      </div>
-
-                      <div className="mt-1 text-xs text-slate-500">
-                        {point.source}
-
-                        {point.medium ? ` · ${point.medium}` : ""}
-                      </div>
-
-                      {point.detail && (
-                        <div className="mt-1.5 text-sm text-slate-600">
-                          {point.detail}
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                ),
-              )}
             </div>
           </div>
 
