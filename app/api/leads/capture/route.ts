@@ -110,6 +110,27 @@ function metadataNumber(
   return Number.isFinite(parsed) ? parsed : null;
 }
 
+function normalizeSiteHostname(site: string | null | undefined) {
+  const value = site?.trim();
+
+  if (!value) return null;
+
+  try {
+    const candidate = /^[a-z][a-z0-9+.-]*:\/\//i.test(value)
+      ? value
+      : `https://${value}`;
+
+    const hostname = new URL(candidate).hostname
+      .trim()
+      .toLowerCase()
+      .replace(/\.$/, "");
+
+    return hostname || null;
+  } catch {
+    return null;
+  }
+}
+
 /* =========================================================
 
    OPTIONS
@@ -145,40 +166,63 @@ export async function POST(request: NextRequest) {
 
   /* -------------------------------------------------------
 
-     SECURITY
+     AUTHENTICATION MODE
+
+     If X-Salsys-Secret is present, it is authoritative.
+     An invalid Salsys credential never falls back to the
+     legacy website secret.
+
+     The Salsys secret is server-to-server only.
 
   ------------------------------------------------------- */
 
-  if (origin && !isTrackingOriginAllowed(origin)) {
-    return NextResponse.json(
-      {
-        ok: false,
+  const suppliedSalsysSecret =
+    request.headers.get("x-salsys-secret");
 
-        error: "Origin not allowed",
-      },
+  const hasSalsysCredential =
+    suppliedSalsysSecret !== null;
 
-      {
-        status: 403,
+  const salsysSecret =
+    suppliedSalsysSecret?.trim() ?? "";
 
-        headers: cors,
-      },
-    );
-  }
+  if (!hasSalsysCredential) {
+    /*
+     * Preserve the existing Yogakulam browser-origin policy
+     * for the legacy website-secret integration.
+     */
+    if (origin && !isTrackingOriginAllowed(origin)) {
+      return NextResponse.json(
+        {
+          ok: false,
 
-  if (!isWebsiteCaptureAuthorized(request.headers.get("x-website-secret"))) {
-    return NextResponse.json(
-      {
-        ok: false,
+          error: "Origin not allowed",
+        },
+        {
+          status: 403,
 
-        error: "Unauthorized",
-      },
+          headers: cors,
+        },
+      );
+    }
 
-      {
-        status: 401,
+    if (
+      !isWebsiteCaptureAuthorized(
+        request.headers.get("x-website-secret"),
+      )
+    ) {
+      return NextResponse.json(
+        {
+          ok: false,
 
-        headers: cors,
-      },
-    );
+          error: "Unauthorized",
+        },
+        {
+          status: 401,
+
+          headers: cors,
+        },
+      );
+    }
   }
 
   try {
@@ -215,6 +259,95 @@ export async function POST(request: NextRequest) {
     const payload = sanitizeWebsiteLeadPayload(await request.json());
 
     const supabase = createAdminClient();
+    /*
+     * New Salsys integration credentials are validated using
+     * the service-role-only database function.
+     *
+     * The submitted site hostname is checked against the
+     * credential's allowed_hosts and the credential must have
+     * leads:write permission.
+     */
+    let credentialOrganizationId: string | null = null;
+
+    if (hasSalsysCredential) {
+      const hostname =
+        normalizeSiteHostname(payload.site);
+
+      const {
+        data: credentialData,
+
+        error: credentialError,
+      } = await supabase.rpc(
+        "validate_integration_api_secret",
+        {
+          p_secret_key: salsysSecret,
+
+          p_required_scope: "leads:write",
+
+          p_hostname: hostname,
+        },
+      );
+
+      if (credentialError) {
+        console.error(
+          "Salsys credential validation failed:",
+          credentialError,
+        );
+
+        return NextResponse.json(
+          {
+            ok: false,
+
+            error: "Credential validation failed",
+          },
+          {
+            status: 500,
+
+            headers: cors,
+          },
+        );
+      }
+
+      const credential = Array.isArray(credentialData)
+        ? credentialData[0]
+        : credentialData;
+
+      credentialOrganizationId =
+        credential &&
+        typeof credential === "object" &&
+        "organization_id" in credential
+          ? String(
+              (
+                credential as Record<string, unknown>
+              ).organization_id ?? "",
+            ) || null
+          : null;
+
+      /*
+       * No matching active credential means:
+       *
+       * - wrong secret
+       * - revoked/expired secret
+       * - missing leads:write scope
+       * - hostname not allowed
+       *
+       * Deliberately return the same response for all cases.
+       */
+      if (!credentialOrganizationId) {
+        return NextResponse.json(
+          {
+            ok: false,
+
+            error: "Unauthorized",
+          },
+          {
+            status: 401,
+
+            headers: cors,
+          },
+        );
+      }
+    }
 
     /* =====================================================
 
@@ -226,53 +359,95 @@ export async function POST(request: NextRequest) {
 
     ===================================================== */
 
-    const { data, error } = await supabase.rpc(
-      "ingest_website_lead",
+    const ingestArgs = {
+      p_external_event_id:
+        payload.externalEventId,
 
-      {
-        p_external_event_id: payload.externalEventId,
+      p_site:
+        payload.site ?? null,
 
-        p_site: payload.site ?? null,
+      p_form_name:
+        payload.formName ?? null,
 
-        p_form_name: payload.formName ?? null,
+      p_first_name:
+        payload.firstName ?? null,
 
-        p_first_name: payload.firstName ?? null,
+      p_last_name:
+        payload.lastName ?? null,
 
-        p_last_name: payload.lastName ?? null,
+      p_email:
+        payload.email ?? null,
 
-        p_email: payload.email ?? null,
+      p_phone:
+        payload.phone ?? null,
 
-        p_phone: payload.phone ?? null,
+      p_course_code:
+        payload.courseCode ?? null,
 
-        p_course_code: payload.courseCode ?? null,
+      p_preferred_location:
+        payload.preferredLocation ?? null,
 
-        p_preferred_location: payload.preferredLocation ?? null,
+      p_preferred_month:
+        payload.preferredMonth ?? null,
 
-        p_preferred_month: payload.preferredMonth ?? null,
+      p_preferred_mode:
+        payload.preferredMode ?? null,
 
-        p_preferred_mode: payload.preferredMode ?? null,
+      p_country:
+        payload.country ?? null,
 
-        p_country: payload.country ?? null,
+      p_timezone:
+        payload.timezone ?? null,
 
-        p_timezone: payload.timezone ?? null,
+      p_message:
+        payload.message ?? null,
 
-        p_message: payload.message ?? null,
+      p_anonymous_visitor_id:
+        payload.anonymousVisitorId ?? null,
 
-        p_anonymous_visitor_id: payload.anonymousVisitorId ?? null,
+      p_session_key:
+        payload.sessionKey ?? null,
 
-        p_session_key: payload.sessionKey ?? null,
+      p_first_touch:
+        payload.firstTouch ?? {},
 
-        p_first_touch: payload.firstTouch ?? {},
+      p_session_touch:
+        payload.sessionTouch ?? {},
 
-        p_session_touch: payload.sessionTouch ?? {},
+      p_metadata: {
+        ...(payload.metadata ?? {}),
 
-        p_metadata: {
-          ...(payload.metadata ?? {}),
+        request_user_agent:
+          request.headers.get("user-agent"),
 
-          request_user_agent: request.headers.get("user-agent"),
-        },
+        capture_auth_mode:
+          hasSalsysCredential
+            ? "salsys_api_key"
+            : "legacy_website_secret",
       },
-    );
+    };
+
+    /*
+     * Credential-authenticated traffic uses the explicit
+     * tenant-bound ingestion contract.
+     *
+     * Legacy Yogakulam traffic keeps using the original RPC.
+     */
+    const { data, error } =
+      credentialOrganizationId
+        ? await supabase.rpc(
+            "ingest_website_lead_for_organization",
+            {
+              p_organization_id:
+                credentialOrganizationId,
+
+              ...ingestArgs,
+            },
+          )
+        : await supabase.rpc(
+            "ingest_website_lead",
+            ingestArgs,
+          );
 
     if (error) {
       throw error;
