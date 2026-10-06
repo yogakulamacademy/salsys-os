@@ -802,7 +802,7 @@ export function AttributionWorkspace({
 
                   <Header>Lead Creation</Header>
 
-                  <Header>Last Touch</Header>
+                  <Header>Last Marketing Touch</Header>
 
                   <Header>Current Channel</Header>
                 </tr>
