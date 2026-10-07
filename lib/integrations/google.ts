@@ -23,6 +23,7 @@ export const GOOGLE_SCOPES = [
   'https://www.googleapis.com/auth/analytics.readonly',
   'https://www.googleapis.com/auth/webmasters.readonly',
   'https://www.googleapis.com/auth/adwords',
+  'https://www.googleapis.com/auth/datamanager',
 ] as const;
 
 export type GoogleTokenResponse = {
