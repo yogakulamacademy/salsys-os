@@ -43,7 +43,46 @@ type OAuthStateRow = {
 
 type ExistingConnection = {
   id: string;
+  account_name: string | null;
 };
+
+
+type LegacyConnectionCandidate = {
+  id: string;
+  account_name: string | null;
+  auth_mode: string;
+  status: string;
+  external_account_id: string | null;
+  provider_metadata: Record<string, unknown> | null;
+};
+
+
+function isAdoptableLegacyMetaConnection(
+  connection: LegacyConnectionCandidate,
+) {
+  const metadata =
+    connection.provider_metadata;
+
+  return (
+    connection.auth_mode ===
+      'system_user' &&
+    connection.status ===
+      'disconnected' &&
+    connection.external_account_id ===
+      null &&
+    metadata !== null &&
+    typeof metadata ===
+      'object' &&
+    metadata[
+      'credential_source'
+    ] ===
+      'vercel_env' &&
+    metadata[
+      'token_env'
+    ] ===
+      'META_ACCESS_TOKEN'
+  );
+}
 
 
 function safeReturnTo(
@@ -635,6 +674,12 @@ export async function GET(
       );
 
 
+    /*
+     * Prefer an exact tenant + provider + Meta subject match.
+     *
+     * Reauthorization of an already migrated connection must
+     * always resolve the same connection row.
+     */
     const {
       data:
         rawExisting,
@@ -646,7 +691,7 @@ export async function GET(
           'integration_connections',
         )
         .select(
-          'id',
+          'id, account_name',
         )
         .eq(
           'organization_id',
@@ -670,10 +715,115 @@ export async function GET(
     }
 
 
-    const existing =
+    const exactExisting =
       rawExisting as unknown as
         | ExistingConnection
         | null;
+
+
+    let existing =
+      exactExisting;
+
+    let legacyConnectionAdopted =
+      false;
+
+
+    /*
+     * Migration compatibility:
+     *
+     * Older SalsysOS Meta integrations used one tenant-scoped
+     * connection row whose credential came from META_ACCESS_TOKEN.
+     *
+     * The first successful tenant authorization may adopt that
+     * row only when it is unambiguously identifiable as the
+     * disconnected legacy environment-backed connection.
+     *
+     * We never choose arbitrarily between multiple candidates.
+     */
+    if (!existing) {
+      const {
+        data:
+          rawLegacyCandidates,
+        error:
+          legacyCandidatesError,
+      } =
+        await admin
+          .from(
+            'integration_connections',
+          )
+          .select(
+            [
+              'id',
+              'account_name',
+              'auth_mode',
+              'status',
+              'external_account_id',
+              'provider_metadata',
+            ].join(','),
+          )
+          .eq(
+            'organization_id',
+            stateRow.organization_id,
+          )
+          .eq(
+            'provider',
+            'meta',
+          )
+          .is(
+            'external_account_id',
+            null,
+          );
+
+
+      if (legacyCandidatesError) {
+        throw new Error(
+          'Unable to resolve the legacy Meta connection.',
+        );
+      }
+
+
+      const legacyCandidates =
+        (
+          rawLegacyCandidates ??
+          []
+        ) as unknown as
+          LegacyConnectionCandidate[];
+
+
+      const adoptableLegacyConnections =
+        legacyCandidates.filter(
+          isAdoptableLegacyMetaConnection,
+        );
+
+
+      if (
+        adoptableLegacyConnections.length >
+        1
+      ) {
+        throw new Error(
+          'Multiple legacy Meta connections require manual resolution before authorization.',
+        );
+      }
+
+
+      const legacyExisting =
+        adoptableLegacyConnections[0] ??
+        null;
+
+
+      if (legacyExisting) {
+        existing = {
+          id:
+            legacyExisting.id,
+
+          account_name:
+            legacyExisting.account_name,
+        };
+
+        legacyConnectionAdopted =
+          true;
+      }
+    }
 
 
     const tokenExpiresAt =
@@ -710,6 +860,9 @@ export async function GET(
         inspection.userId,
 
       account_name:
+        existing
+          ?.account_name
+          ?.trim() ||
         'Meta Business Integration',
 
       account_email:
@@ -774,11 +927,15 @@ export async function GET(
 
 
     if (existing) {
-      const {
-        error:
-          updateError,
-      } =
-        await admin
+      /*
+       * Treat connection resolution and persistence as a
+       * compare-and-swap operation.
+       *
+       * The row must still match the identity/legacy state that
+       * was inspected above when the UPDATE executes.
+       */
+      let updateQuery =
+        admin
           .from(
             'integration_connections',
           )
@@ -792,12 +949,85 @@ export async function GET(
           .eq(
             'organization_id',
             stateRow.organization_id,
+          )
+          .eq(
+            'provider',
+            'meta',
+          );
+
+
+      if (legacyConnectionAdopted) {
+        updateQuery =
+          updateQuery
+            .eq(
+              'auth_mode',
+              'system_user',
+            )
+            .eq(
+              'status',
+              'disconnected',
+            )
+            .is(
+              'external_account_id',
+              null,
+            )
+            .contains(
+              'provider_metadata',
+              {
+                credential_source:
+                  'vercel_env',
+
+                token_env:
+                  'META_ACCESS_TOKEN',
+              },
+            );
+      } else {
+        /*
+         * Normal reconnects must still belong to the inspected
+         * Meta system-user subject at update time.
+         */
+        updateQuery =
+          updateQuery.eq(
+            'external_account_id',
+            inspection.userId,
+          );
+      }
+
+
+      const {
+        data:
+          updatedRows,
+        error:
+          updateError,
+      } =
+        await updateQuery
+          .select(
+            'id',
           );
 
 
       if (updateError) {
         throw new Error(
           'Meta connection could not be updated.',
+        );
+      }
+
+
+      const updatedConnections =
+        (
+          updatedRows ??
+          []
+        ) as unknown as Array<{
+          id: string;
+        }>;
+
+
+      if (
+        updatedConnections.length !==
+        1
+      ) {
+        throw new Error(
+          'Meta connection changed during authorization. Please reconnect.',
         );
       }
     } else {
@@ -885,6 +1115,9 @@ export async function GET(
             Boolean(
               tokenExpiresAt,
             ),
+
+          legacy_connection_adopted:
+            legacyConnectionAdopted,
         },
       });
 
