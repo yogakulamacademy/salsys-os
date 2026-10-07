@@ -2,7 +2,7 @@ import "server-only";
 
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 
-import { decryptIntegrationSecret } from "@/lib/integrations/crypto";
+import { getMetaAccessTokenForConnection } from "@/lib/integrations/meta-connection";
 
 const UPSERT_CHUNK_SIZE = 500;
 
@@ -73,15 +73,6 @@ type SyncMetaAdsOptions = {
   startDate: string;
   endDate: string;
   syncRunId?: string;
-};
-
-type MetaConnectionRow = {
-  id: string;
-  organization_id: string | null;
-  provider: string;
-  status: string;
-  access_token_ciphertext: string | null;
-  provider_metadata: Record<string, unknown> | null;
 };
 
 type MetaAssetRow = {
@@ -161,35 +152,12 @@ async function getMetaAccessTokenForSyncContext({
     throw new Error("Meta sync context is incomplete.");
   }
 
-  const { data: rawConnection, error: connectionError } = await supabase
-    .from("integration_connections")
-    .select(
-      [
-        "id",
-        "organization_id",
-        "provider",
-        "status",
-        "access_token_ciphertext",
-        "provider_metadata",
-      ].join(","),
-    )
-    .eq("id", connectionId)
-    .eq("organization_id", organizationId)
-    .maybeSingle();
-
-  if (connectionError || !rawConnection) {
-    throw new Error(
-      connectionError?.message ??
-        "Meta connection was not found for this organization.",
-    );
-  }
-
-  const connection = rawConnection as unknown as MetaConnectionRow;
-
-  if (connection.provider !== "meta" || connection.status !== "connected") {
-    throw new Error("Meta connection is not active.");
-  }
-
+  /*
+   * Keep provider-asset authorization here.
+   *
+   * The generic connection helper intentionally knows nothing
+   * about which Meta asset a workflow is authorized to use.
+   */
   const { data: rawAsset, error: assetError } = await supabase
     .from("integration_assets")
     .select(
@@ -228,22 +196,11 @@ async function getMetaAccessTokenForSyncContext({
     );
   }
 
-  if (connection.access_token_ciphertext) {
-    return decryptIntegrationSecret(connection.access_token_ciphertext);
-  }
-
-  const credentialSource =
-    connection.provider_metadata &&
-    typeof connection.provider_metadata === "object"
-      ? connection.provider_metadata["credential_source"]
-      : null;
-
-  if (credentialSource === "vercel_env") {
-    return requireEnv("META_ACCESS_TOKEN");
-  }
-
-  throw new Error(
-    "Meta connection does not have a supported credential source.",
+  return getMetaAccessTokenForConnection(
+    connectionId,
+    {
+      organizationId,
+    },
   );
 }
 
