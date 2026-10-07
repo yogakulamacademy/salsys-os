@@ -51,6 +51,9 @@ const PUBLIC_EXACT_PATHS = new Set([
 |
 */
 
+const ACTIVE_WORKSPACE_COOKIE = "yk-active-workspace";
+const WORKSPACE_SELECTION_PATH = "/workspace";
+
 const EMPLOYEE_EXACT_PATHS = new Set([
   "/dashboard",
   "/leads",
@@ -405,6 +408,54 @@ export async function middleware(request: NextRequest) {
     return redirectWithAuthCookies(request, response, "/login", {
       error: "access-disabled",
     });
+  }
+
+  /*
+   * Workspace selection is intentionally handled before role routing.
+   *
+   * /workspace and /api/workspace must remain reachable so an authenticated
+   * user can establish the active tenant.
+   */
+  if (
+    pathname === WORKSPACE_SELECTION_PATH ||
+    pathname === "/api/workspace"
+  ) {
+    return response;
+  }
+
+  /*
+   * All protected CRM pages require an explicit workspace cookie.
+   *
+   * The cookie itself is not an authorization boundary. Server loaders,
+   * organization membership checks and database RLS continue to validate
+   * tenant access. This gate prevents server-rendered pages from executing
+   * before a workspace has been selected.
+   */
+  const activeWorkspaceId =
+    request.cookies.get(ACTIVE_WORKSPACE_COOKIE)?.value?.trim() ?? "";
+
+  if (!activeWorkspaceId) {
+    if (pathname.startsWith("/api/")) {
+      return NextResponse.json(
+        {
+          ok: false,
+          code: "workspace_selection_required",
+          error: "Select a workspace before using this API route.",
+        },
+        {
+          status: 409,
+        },
+      );
+    }
+
+    return redirectWithAuthCookies(
+      request,
+      response,
+      WORKSPACE_SELECTION_PATH,
+      {
+        next: pathname,
+      },
+    );
   }
 
   const role = String(profile.role ?? "");
