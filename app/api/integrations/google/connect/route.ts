@@ -116,13 +116,14 @@ export async function GET(
       createAdminClient();
 
     /*
-     * Future workspace switcher:
+     * Resolve the tenant in this order:
      *
-     * /api/integrations/google/connect
-     *   ?organization_id=<workspace uuid>
+     * 1. Explicit organization_id query parameter.
+     * 2. Active CRM workspace cookie.
+     * 3. Single manageable membership fallback.
      *
-     * For the current single-workspace account we resolve the
-     * user's only manageable organization automatically.
+     * The resolved organization is still validated against the
+     * authenticated user's active owner/admin memberships below.
      */
     const requestedOrganizationId =
       request.nextUrl.searchParams
@@ -131,6 +132,19 @@ export async function GET(
         )
         ?.trim() ||
       null;
+
+    const activeWorkspaceOrganizationId =
+      request.cookies
+        .get(
+          'yk-active-workspace',
+        )
+        ?.value
+        ?.trim() ||
+      null;
+
+    const targetOrganizationId =
+      requestedOrganizationId ??
+      activeWorkspaceOrganizationId;
 
     let membershipQuery =
       admin
@@ -157,12 +171,12 @@ export async function GET(
         );
 
     if (
-      requestedOrganizationId
+      targetOrganizationId
     ) {
       membershipQuery =
         membershipQuery.eq(
           'organization_id',
-          requestedOrganizationId,
+          targetOrganizationId,
         );
     }
 
@@ -209,7 +223,7 @@ export async function GET(
     }
 
     if (
-      !requestedOrganizationId &&
+      !targetOrganizationId &&
       memberships.length !==
         1
     ) {
