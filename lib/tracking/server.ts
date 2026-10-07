@@ -16,6 +16,24 @@ export type TrackingAttribution = {
   creativeId?: string | null;
 };
 
+export type TrackingConsentState = {
+  analytics: boolean | null;
+  adUserData: boolean | null;
+  adPersonalization: boolean | null;
+  marketing: boolean | null;
+  mode?: string | null;
+  source?: string | null;
+};
+
+export type TrackingConsentPayload = {
+  eventId: string;
+  occurredAt?: string;
+  anonymousVisitorId?: string;
+  sessionKey?: string;
+  site?: string;
+  consent: TrackingConsentState;
+};
+
 export type TrackingPayload = {
   eventId: string;
   eventType: string;
@@ -29,11 +47,52 @@ export type TrackingPayload = {
   referrer?: string;
   firstTouch?: TrackingAttribution;
   sessionTouch?: TrackingAttribution;
+  fbc?: string;
+  fbp?: string;
+  consent?: TrackingConsentState;
   metadata?: Record<string, unknown>;
 };
 
 const safeText = (value: unknown, max = 500) =>
   typeof value === 'string' && value.trim() ? value.trim().slice(0, max) : null;
+
+const safeBoolean = (value: unknown): boolean | null =>
+  typeof value === 'boolean' ? value : null;
+
+const cleanConsent = (
+  value: unknown,
+): TrackingConsentState | undefined => {
+  if (
+    !value ||
+    typeof value !== 'object' ||
+    Array.isArray(value)
+  ) {
+    return undefined;
+  }
+
+  const obj =
+    value as Record<string, unknown>;
+
+  const consent: TrackingConsentState = {
+    analytics: safeBoolean(obj.analytics),
+    adUserData: safeBoolean(obj.adUserData),
+    adPersonalization: safeBoolean(obj.adPersonalization),
+    marketing: safeBoolean(obj.marketing),
+    mode: safeText(obj.mode, 60),
+    source: safeText(obj.source, 100),
+  };
+
+  const hasExplicitState = [
+    consent.analytics,
+    consent.adUserData,
+    consent.adPersonalization,
+    consent.marketing,
+  ].some((state) => state !== null);
+
+  return hasExplicitState
+    ? consent
+    : undefined;
+};
 
 export function sanitizeTrackingPayload(input: unknown): TrackingPayload {
   if (!input || typeof input !== 'object') throw new Error('Invalid tracking payload.');
@@ -73,10 +132,59 @@ export function sanitizeTrackingPayload(input: unknown): TrackingPayload {
     referrer: safeText(raw.referrer, 2000) ?? undefined,
     firstTouch: cleanAttribution(raw.firstTouch),
     sessionTouch: cleanAttribution(raw.sessionTouch),
+    fbc: safeText(raw.fbc, 500) ?? undefined,
+    fbp: safeText(raw.fbp, 500) ?? undefined,
+    consent: cleanConsent(raw.consent),
     metadata,
   };
 }
 
+
+export function sanitizeTrackingConsentPayload(
+  input: unknown,
+): TrackingConsentPayload {
+  if (
+    !input ||
+    typeof input !== 'object' ||
+    Array.isArray(input)
+  ) {
+    throw new Error('Invalid tracking consent payload.');
+  }
+
+  const raw =
+    input as Record<string, unknown>;
+
+  const eventId =
+    safeText(raw.eventId, 100);
+
+  if (!eventId) {
+    throw new Error('Missing consent event identifier.');
+  }
+
+  const consent =
+    cleanConsent(raw.consent);
+
+  if (!consent) {
+    throw new Error('At least one explicit consent state is required.');
+  }
+
+  return {
+    eventId,
+    occurredAt:
+      safeText(raw.occurredAt, 80) ??
+      undefined,
+    anonymousVisitorId:
+      safeText(raw.anonymousVisitorId, 120) ??
+      undefined,
+    sessionKey:
+      safeText(raw.sessionKey, 120) ??
+      undefined,
+    site:
+      safeText(raw.site, 160) ??
+      undefined,
+    consent,
+  };
+}
 
 function normalizeOrigin(value: string) {
   const trimmed = value.trim();

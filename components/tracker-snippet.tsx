@@ -15,6 +15,7 @@ export function TrackerSnippet() {
     () => `<script
   src="${origin}/yogakulam-tracker.js"
   data-endpoint="${origin}/api/tracking/collect"
+  data-consent-endpoint="${origin}/api/tracking/consent"
   data-site="yogakulamacademy.com"
   data-consent-mode="required"
   defer>
@@ -26,6 +27,7 @@ export function TrackerSnippet() {
     () => `<script
   src="${origin}/yogakulam-tracker.js"
   data-endpoint="${origin}/api/tracking/collect"
+  data-consent-endpoint="${origin}/api/tracking/consent"
   data-site="yogakulamacademy.com"
   data-consent-mode="granted"
   data-debug="true"
@@ -49,7 +51,7 @@ export function TrackerSnippet() {
       <div className="tracking-snippet-block">
         <div className="mb-2 flex items-center justify-between gap-3">
           <div className="text-xs font-medium text-slate-400">
-            Production snippet — consent required
+            Production snippet â€” consent required
           </div>
 
           <button
@@ -69,7 +71,7 @@ export function TrackerSnippet() {
 
       <div className="tracking-snippet-block">
         <div className="mb-2 text-xs font-medium text-amber-600">
-          Temporary testing snippet — use in GTM while diagnosing
+          Temporary testing snippet â€” use in GTM while diagnosing
         </div>
 
         <pre className="tracking-code-block overflow-x-auto rounded-2xl bg-slate-950 p-4 text-xs leading-6 text-slate-100">

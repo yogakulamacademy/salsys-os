@@ -222,6 +222,76 @@ export async function POST(request: NextRequest) {
     }
 
     /*
+     * Phase 8C.15 canonical provider-match projection.
+     *
+     * Only browser-observed fbc/fbp values that survived server
+     * sanitization are projected. No identifier is manufactured.
+     *
+     * Keep this after canonical website normalization because the
+     * projection targets the canonical session and touchpoint rows.
+     */
+    if (payload.fbc || payload.fbp) {
+      const { error: matchSignalError } = await supabase.rpc(
+        "apply_tracking_match_signals",
+        {
+          p_organization_id: organizationId,
+          p_raw_event_id: rawEventResult.event_id,
+        },
+      );
+
+      if (matchSignalError) {
+        throw matchSignalError;
+      }
+    }
+
+    /*
+     * Phase 8C.15 event-time consent provenance.
+     *
+     * A normal analytics event may contain the consent state that
+     * was effective when that event was collected. Preserve that
+     * state as an immutable ledger fact linked to the canonical
+     * raw event.
+     *
+     * Each consent category remains independent. In particular,
+     * analytics consent does not imply advertising or marketing
+     * consent.
+     *
+     * Revocation while analytics collection is disabled is handled
+     * by /api/tracking/consent instead, so this path never needs to
+     * bypass normal analytics gating.
+     */
+    if (payload.consent) {
+      const { error: consentSnapshotError } = await supabase.rpc(
+        "ingest_tracking_consent_event",
+        {
+          p_organization_id: organizationId,
+          p_source_event_id: payload.eventId,
+          p_occurred_at: occurredAt,
+          p_anonymous_visitor_id: payload.anonymousVisitorId,
+          p_session_key: payload.sessionKey,
+          p_site: trustedSite,
+          p_consent_analytics: payload.consent.analytics,
+          p_consent_ad_user_data: payload.consent.adUserData,
+          p_consent_ad_personalization:
+            payload.consent.adPersonalization,
+          p_consent_marketing: payload.consent.marketing,
+          p_consent_mode: payload.consent.mode || null,
+          p_consent_source:
+            payload.consent.source || "yk_tracker",
+          p_raw_event_id: rawEventResult.event_id,
+          p_metadata: {
+            adapter: "app/api/tracking/collect",
+            provenance: "event_time_snapshot",
+          },
+        },
+      );
+
+      if (consentSnapshotError) {
+        throw consentSnapshotError;
+      }
+    }
+
+    /*
      * Phase 2E1 processing-state synchronization.
      *
      * Mark the canonical raw event processed only after the canonical
@@ -242,6 +312,12 @@ export async function POST(request: NextRequest) {
           p_processing_metadata: {
             normalized_target: "web_sessions,touchpoints",
             normalizer: "process_website_raw_event",
+            match_signals_projected: Boolean(
+              payload.fbc || payload.fbp,
+            ),
+            consent_snapshot_persisted: Boolean(
+              payload.consent,
+            ),
           },
         },
       );

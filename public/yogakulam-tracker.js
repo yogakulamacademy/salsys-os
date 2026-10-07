@@ -17,6 +17,8 @@
   }
 
   var endpoint = script.dataset.endpoint || '/api/tracking/collect';
+  var consentEndpoint = script.dataset.consentEndpoint || endpoint.replace(/\/collect(?:\?.*)?$/, '/consent');
+  if (consentEndpoint === endpoint) consentEndpoint = '/api/tracking/consent';
   var site = script.dataset.site || location.hostname;
   var consentMode = script.dataset.consentMode || 'required';
   var cookieDays = Number(script.dataset.cookieDays || '90');
@@ -55,6 +57,310 @@
     document.cookie = name + '=' + encodeURIComponent(value) + '; path=/; max-age=' + maxAge + '; samesite=lax';
   }
   function deleteCookie(name) { document.cookie = name + '=; path=/; max-age=0; samesite=lax'; }
+
+  function explicitBoolean(value) {
+    return value === true ? true : value === false ? false : null;
+  }
+
+  function consentSnapshot() {
+    return {
+      analytics: consentState.analytics,
+      adUserData: consentState.adUserData,
+      adPersonalization: consentState.adPersonalization,
+      marketing: consentState.marketing,
+      mode: consentState.mode,
+      source: consentState.source
+    };
+  }
+
+  function hasExplicitConsentState() {
+    return consentState.analytics !== null ||
+      consentState.adUserData !== null ||
+      consentState.adPersonalization !== null ||
+      consentState.marketing !== null;
+  }
+
+  function mergeConsentDetail(detail) {
+    if (!detail || typeof detail !== 'object') return;
+
+    if (Object.prototype.hasOwnProperty.call(detail, 'analytics')) {
+      consentState.analytics = explicitBoolean(detail.analytics);
+    }
+
+    if (Object.prototype.hasOwnProperty.call(detail, 'adUserData')) {
+      consentState.adUserData = explicitBoolean(detail.adUserData);
+    }
+
+    if (Object.prototype.hasOwnProperty.call(detail, 'adPersonalization')) {
+      consentState.adPersonalization = explicitBoolean(detail.adPersonalization);
+    }
+
+    if (Object.prototype.hasOwnProperty.call(detail, 'marketing')) {
+      consentState.marketing = explicitBoolean(detail.marketing);
+    }
+
+    if (
+      typeof detail.mode === 'string' &&
+      detail.mode.trim()
+    ) {
+      consentState.mode = detail.mode.trim().slice(0, 60);
+    }
+
+    if (
+      typeof detail.source === 'string' &&
+      detail.source.trim()
+    ) {
+      consentState.source = detail.source.trim().slice(0, 100);
+    }
+  }
+
+  function observedMetaSignals() {
+    if (consentState.adUserData !== true) {
+      return {
+        fbc: null,
+        fbp: null
+      };
+    }
+
+    return {
+      fbc: getCookie('_fbc'),
+      fbp: getCookie('_fbp')
+    };
+  }
+
+  async function postConsentState(includeIdentifiers) {
+    if (!hasExplicitConsentState()) {
+      return {
+        skipped: true,
+        reason: 'no_explicit_consent_state'
+      };
+    }
+
+    var body = {
+      eventId: uid('cons'),
+      occurredAt: new Date().toISOString(),
+      site: site,
+      consent: consentSnapshot()
+    };
+
+    if (includeIdentifiers) {
+      body.anonymousVisitorId = visitorId;
+      body.sessionKey = sessionKey;
+    }
+
+    try {
+      log('Sending consent state', body.consent);
+
+      var response = await fetch(consentEndpoint, {
+        method: 'POST',
+        mode: 'cors',
+        credentials: 'omit',
+        keepalive: true,
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(body)
+      });
+
+      var result = null;
+
+      try {
+        result = await response.json();
+      } catch(e) {}
+
+      if (!response.ok) {
+        var message =
+          result && result.error
+            ? result.error
+            : ('HTTP ' + response.status);
+
+        warn(
+          'Consent state failed:',
+          response.status,
+          message
+        );
+
+        pushDataLayer({
+          event: 'yk_consent_error',
+          status: response.status,
+          error: message
+        });
+
+        return {
+          ok: false,
+          status: response.status,
+          error: message
+        };
+      }
+
+      log(
+        'Consent state recorded:',
+        response.status
+      );
+
+      pushDataLayer({
+        event: 'yk_consent_sent',
+        status: response.status
+      });
+
+      return result || {
+        ok: true,
+        status: response.status
+      };
+
+    } catch (error) {
+      var message2 =
+        error && error.message
+          ? error.message
+          : String(error);
+
+      warn(
+        'Consent network/CORS failure:',
+        message2
+      );
+
+      pushDataLayer({
+        event: 'yk_consent_error',
+        status: 0,
+        error: message2
+      });
+
+      return {
+        ok: false,
+        status: 0,
+        error: message2
+      };
+    }
+  }
+
+  function updateConsent(detail) {
+    var wasGranted =
+      consentGranted;
+
+    mergeConsentDetail(detail);
+
+    if (!hasExplicitConsentState()) {
+      return Promise.resolve({
+        skipped: true,
+        reason: 'no_explicit_consent_state'
+      });
+    }
+
+    var analyticsState =
+      consentState.analytics;
+
+    /*
+     * Analytics grant.
+     *
+     * Persist internal analytics identifiers only after analytics
+     * consent is explicitly TRUE.
+     */
+    if (analyticsState === true) {
+      consentGranted = true;
+
+      setCookie(
+        'yk_analytics_consent',
+        '1'
+      );
+
+      setCookie(
+        'yk_vid',
+        visitorId
+      );
+
+      try {
+        sessionStorage.setItem(
+          'yk_sid',
+          sessionKey
+        );
+      } catch(e) {}
+
+      if (
+        storageOK &&
+        meaningful(firstTouch)
+      ) {
+        try {
+          localStorage.setItem(
+            'yk_first_touch_v1',
+            JSON.stringify(firstTouch)
+          );
+        } catch(e) {}
+      }
+    }
+
+    /*
+     * Persist the consent decision independently of normal
+     * analytics collection.
+     *
+     * For revocation, previously consented identifiers may be
+     * included so the ledger can retain continuity. If analytics
+     * was never granted, ephemeral identifiers are not sent.
+     */
+    var consentRequest =
+      postConsentState(
+        wasGranted ||
+        analyticsState === true
+      );
+
+    /*
+     * Analytics revocation.
+     *
+     * Start the consent request before deleting the previous
+     * analytics identifiers.
+     */
+    if (analyticsState === false) {
+      consentGranted = false;
+
+      setCookie(
+        'yk_analytics_consent',
+        '0'
+      );
+
+      deleteCookie(
+        'yk_vid'
+      );
+
+      if (storageOK) {
+        try {
+          localStorage.removeItem(
+            'yk_first_touch_v1'
+          );
+        } catch(e) {}
+      }
+
+      try {
+        sessionStorage.removeItem(
+          'yk_sid'
+        );
+      } catch(e) {}
+    }
+
+    /*
+     * Existing behavior remains:
+     * first analytics grant starts normal tracking.
+     */
+    if (
+      analyticsState === true &&
+      !wasGranted
+    ) {
+      document
+        .querySelectorAll(
+          'form[data-yk-lead-form]'
+        )
+        .forEach(decorateForm);
+
+      pushReady();
+
+      send(
+        'page_view',
+        {
+          consent_granted_now: true
+        }
+      );
+    }
+
+    return consentRequest;
+  }
   function params() { return new URLSearchParams(location.search); }
   function referrerSource() {
     if (!document.referrer) return { source: 'direct', medium: 'none' };
@@ -83,23 +389,89 @@
   }
   function meaningful(t) { return t && ((t.source && t.source !== 'direct') || t.gclid || t.gbraid || t.wbraid || t.fbclid || t.campaign); }
 
-  var consentGranted = consentMode === 'none' || consentMode === 'granted' || getCookie('yk_analytics_consent') === '1';
+  var analyticsConsentCookie = getCookie('yk_analytics_consent');
+
+  var consentGranted =
+    consentMode === 'none' ||
+    consentMode === 'granted' ||
+    analyticsConsentCookie === '1';
+
+  var consentState = {
+    analytics:
+      consentGranted
+        ? true
+        : analyticsConsentCookie === '0'
+          ? false
+          : null,
+    adUserData: null,
+    adPersonalization: null,
+    marketing: null,
+    mode: consentMode,
+    source: 'yk_tracker'
+  };
+
   var sessionTouch = touchFromUrl();
   var firstTouch = sessionTouch;
+
   if (consentGranted && storageOK) {
     try {
-      var storedFirst = JSON.parse(localStorage.getItem('yk_first_touch_v1') || 'null');
-      if (storedFirst) firstTouch = storedFirst;
-      else if (meaningful(sessionTouch)) localStorage.setItem('yk_first_touch_v1', JSON.stringify(sessionTouch));
+      var storedFirst =
+        JSON.parse(
+          localStorage.getItem(
+            'yk_first_touch_v1'
+          ) || 'null'
+        );
+
+      if (storedFirst) {
+        firstTouch = storedFirst;
+      } else if (meaningful(sessionTouch)) {
+        localStorage.setItem(
+          'yk_first_touch_v1',
+          JSON.stringify(sessionTouch)
+        );
+      }
     } catch(e) {}
   }
 
-  var visitorId = consentGranted ? (getCookie('yk_vid') || uid('vis')) : uid('vis');
-  if (consentGranted) setCookie('yk_vid', visitorId);
+  var visitorId =
+    consentGranted
+      ? (
+          getCookie('yk_vid') ||
+          uid('vis')
+        )
+      : uid('vis');
+
+  if (consentGranted) {
+    setCookie(
+      'yk_vid',
+      visitorId
+    );
+  }
+
   var sessionKey = null;
-  if (consentGranted) { try { sessionKey = sessionStorage.getItem('yk_sid'); } catch(e) {} }
-  if (!sessionKey) sessionKey = uid('ses');
-  if (consentGranted) { try { sessionStorage.setItem('yk_sid', sessionKey); } catch(e) {} }
+
+  if (consentGranted) {
+    try {
+      sessionKey =
+        sessionStorage.getItem(
+          'yk_sid'
+        );
+    } catch(e) {}
+  }
+
+  if (!sessionKey) {
+    sessionKey =
+      uid('ses');
+  }
+
+  if (consentGranted) {
+    try {
+      sessionStorage.setItem(
+        'yk_sid',
+        sessionKey
+      );
+    } catch(e) {}
+  }
 
   async function send(eventType, metadata) {
     if (!consentGranted) {
@@ -108,11 +480,47 @@
       return { skipped: true, reason: 'consent_required' };
     }
     var body = {
-      eventId: uid('evt'), eventType: eventType, occurredAt: new Date().toISOString(), anonymousVisitorId: visitorId,
-      sessionKey: sessionKey, site: site, pageUrl: location.href, pagePath: location.pathname + location.search,
-      pageTitle: document.title, referrer: document.referrer || null, firstTouch: firstTouch, sessionTouch: sessionTouch,
+      eventId: uid('evt'),
+      eventType: eventType,
+      occurredAt: new Date().toISOString(),
+      anonymousVisitorId: visitorId,
+      sessionKey: sessionKey,
+      site: site,
+      pageUrl: location.href,
+      pagePath: location.pathname + location.search,
+      pageTitle: document.title,
+      referrer: document.referrer || null,
+      firstTouch: firstTouch,
+      sessionTouch: sessionTouch,
       metadata: metadata || {}
     };
+
+    /*
+     * Preserve the event-time consent state.
+     */
+    if (hasExplicitConsentState()) {
+      body.consent =
+        consentSnapshot();
+    }
+
+    /*
+     * Read only browser-observed Meta values.
+     *
+     * Do not create fbc from fbclid.
+     * Do not create fbp.
+     */
+    var metaSignals =
+      observedMetaSignals();
+
+    if (metaSignals.fbc) {
+      body.fbc =
+        metaSignals.fbc;
+    }
+
+    if (metaSignals.fbp) {
+      body.fbp =
+        metaSignals.fbp;
+    }
     try {
       if (navigator.sendBeacon && eventType === 'page_exit') {
         navigator.sendBeacon(endpoint, new Blob([JSON.stringify(body)], { type: 'application/json' }));
@@ -167,13 +575,16 @@
 
   window.YKTracking = {
     track: send,
+
     status: function () {
       return {
         loaded: true,
         endpoint: endpoint,
+        consentEndpoint: consentEndpoint,
         site: site,
         consentMode: consentMode,
         consentGranted: consentGranted,
+        consent: consentSnapshot(),
         debug: debug,
         anonymousVisitorId: visitorId,
         sessionKey: sessionKey,
@@ -181,23 +592,54 @@
         sessionTouch: sessionTouch
       };
     },
-    context: function () { return consentGranted ? { anonymousVisitorId: visitorId, sessionKey: sessionKey, firstTouch: firstTouch, sessionTouch: sessionTouch } : null; },
-    decorateForm: decorateForm,
-    grantConsent: function () {
-      if (consentGranted) return;
-      consentGranted = true;
-      setCookie('yk_analytics_consent','1'); setCookie('yk_vid', visitorId);
-      try { sessionStorage.setItem('yk_sid', sessionKey); } catch(e) {}
-      if (storageOK && meaningful(firstTouch)) { try { localStorage.setItem('yk_first_touch_v1', JSON.stringify(firstTouch)); } catch(e) {} }
-      document.querySelectorAll('form[data-yk-lead-form]').forEach(decorateForm);
-      pushReady();
-      send('page_view', { consent_granted_now: true });
+
+    context: function () {
+      return consentGranted
+        ? {
+            anonymousVisitorId: visitorId,
+            sessionKey: sessionKey,
+            firstTouch: firstTouch,
+            sessionTouch: sessionTouch
+          }
+        : null;
     },
+
+    decorateForm: decorateForm,
+
+    /*
+     * Rich consent API.
+     *
+     * Example:
+     *
+     * YKTracking.setConsent({
+     *   analytics: true,
+     *   adUserData: false,
+     *   adPersonalization: false,
+     *   marketing: true,
+     *   source: 'your_cmp'
+     * });
+     */
+    setConsent: function (detail) {
+      return updateConsent(
+        detail || {}
+      );
+    },
+
+    /*
+     * Legacy analytics-only API remains compatible.
+     */
+    grantConsent: function () {
+      return updateConsent({
+        analytics: true,
+        source: 'yk_tracker_api'
+      });
+    },
+
     revokeConsent: function () {
-      consentGranted = false;
-      setCookie('yk_analytics_consent','0'); deleteCookie('yk_vid');
-      if (storageOK) { try { localStorage.removeItem('yk_first_touch_v1'); } catch(e) {} }
-      try { sessionStorage.removeItem('yk_sid'); } catch(e) {}
+      return updateConsent({
+        analytics: false,
+        source: 'yk_tracker_api'
+      });
     }
   };
 
@@ -245,9 +687,14 @@
   }, true);
 
   window.addEventListener('yk:consent', function (event) {
-    var detail = event && event.detail ? event.detail : {};
-    if (detail.analytics === true) window.YKTracking.grantConsent();
-    if (detail.analytics === false) window.YKTracking.revokeConsent();
+    var detail =
+      event && event.detail
+        ? event.detail
+        : {};
+
+    window.YKTracking.setConsent(
+      detail
+    );
   });
 
   log('Loaded', window.YKTracking.status());

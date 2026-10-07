@@ -23,6 +23,7 @@ const PUBLIC_EXACT_PATHS = new Set([
   "/api/whatsapp/webhook",
   "/api/sync/course-batches",
     "/api/tracking/collect",
+  "/api/tracking/consent",
   "/api/tracking/identify",
 ]);
 
