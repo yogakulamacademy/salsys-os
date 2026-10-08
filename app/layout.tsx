@@ -3,8 +3,8 @@ import './globals.css';
 import { AppShell } from '@/components/app-shell';
 
 export const metadata: Metadata = {
-  title: 'Yogakulam Growth CRM',
-  description: 'Lead intelligence, attribution and admissions CRM for Yogakulam Academy',
+  title: 'SalsysOS',
+  description: 'Sales + Analysis Operating System for lead conversion, customer journeys, attribution and revenue intelligence',
 };
 
 const themeBootScript = `

@@ -1,4 +1,4 @@
-Yogakulam Growth CRM v0.4 patch
+SalsysOS v0.4 patch
 
 Apply to an existing v0.3 project:
 1. Stop npm run dev.

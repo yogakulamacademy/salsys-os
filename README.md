@@ -1,6 +1,6 @@
-# Yogakulam Growth CRM v0.6
+# SalsysOS
 
-A working starter for Yogakulam Academy's lead-management, admissions-funnel and marketing-attribution system.
+A multi-tenant Sales + Analysis Operating System for lead management, sales execution, customer journey intelligence, marketing attribution and revenue analytics.
 
 ## v0.6 milestone
 
