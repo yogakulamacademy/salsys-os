@@ -1,4 +1,4 @@
-# Yogakulam Growth CRM architecture
+# SalsysOS architecture
 
 ## v0.2 data flow
 

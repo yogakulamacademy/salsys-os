@@ -169,7 +169,7 @@ export default async function RevenuePage() {
       <PageHeader
         eyebrow="Financial intelligence"
         title="Revenue Forecast"
-        description="Pipeline, weighted forecast, real payment revenue, refunds and outstanding balances from Yogakulam CRM."
+        description="Pipeline, weighted forecast, real payment revenue, refunds and outstanding balances from SalsysOS."
       />
 
       {workspace.warning && (

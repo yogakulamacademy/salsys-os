@@ -1,4 +1,4 @@
-# Yogakulam Growth CRM v0.6 — Website Tracking + Automatic Lead Capture
+# SalsysOS v0.6 — Website Tracking + Automatic Lead Capture
 
 This milestone connects the live Vercel CRM to `yogakulam.com` / `yogakulamacademy.com` without replacing the academy website's existing forms or database.
 
