@@ -709,10 +709,12 @@ export default async function IntegrationsPage({
                         Account connected
                       </span>
 
-                      {definition.provider ===
-                      'google' ? (
+                      {(
+                        definition.provider === 'google' ||
+                        definition.provider === 'meta'
+                      ) ? (
                         <IntegrationConnectButton
-                          provider="google"
+                          provider={definition.provider}
                           mode="reconnect"
                         />
                       ) : null}
@@ -741,10 +743,12 @@ export default async function IntegrationsPage({
                         </button>
                       </form>
                     </>
-                  ) : definition.provider ===
-                    'google' ? (
+                  ) : (
+                    definition.provider === 'google' ||
+                    definition.provider === 'meta'
+                  ) ? (
                     <IntegrationConnectButton
-                      provider="google"
+                      provider={definition.provider}
                     />
                   ) : (
                     <button

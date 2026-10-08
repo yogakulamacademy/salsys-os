@@ -13,7 +13,7 @@ import {
 } from 'lucide-react';
 
 type IntegrationConnectButtonProps = {
-  provider: 'google';
+  provider: 'google' | 'meta';
   mode?: 'connect' | 'reconnect';
 };
 
@@ -34,11 +34,7 @@ export function IntegrationConnectButton({
 
   const openPopup =
     useCallback(() => {
-      if (provider !== 'google') {
-        return;
-      }
-
-      const left =
+const left =
         Math.max(
           0,
           window.screenX +
@@ -58,8 +54,8 @@ export function IntegrationConnectButton({
 
       const popup =
         window.open(
-          '/api/integrations/google/connect?popup=1',
-          'yogakulam-google-oauth',
+          `/api/integrations/${provider}/connect?popup=1`,
+          `yogakulam-${provider}-oauth`,
           [
             `width=${POPUP_WIDTH}`,
             `height=${POPUP_HEIGHT}`,
@@ -72,7 +68,7 @@ export function IntegrationConnectButton({
 
       if (!popup) {
         window.alert(
-          'Your browser blocked the Google connection popup. Allow popups for this CRM and try again.',
+          'Your browser blocked the connection popup. Allow popups for this CRM and try again.',
         );
         return;
       }
@@ -220,10 +216,10 @@ export function IntegrationConnectButton({
       )}
 
       {opening
-        ? 'Opening Google…'
+        ? `Opening ${provider === 'google' ? 'Google' : 'Meta'}...`
         : reconnect
           ? 'Reconnect'
-          : 'Connect Google'}
+          : `Connect ${provider === 'google' ? 'Google' : 'Meta'}`}
     </button>
   );
 }
