@@ -15,6 +15,10 @@ import {
   createClient,
 } from '@/lib/supabase/server';
 
+import {
+  getProviderVisibility,
+} from '@/lib/integrations/provider-visibility';
+
 export type CampaignsWorkspaceData = {
   campaigns: CampaignWorkspaceRow[];
   summary: CampaignWorkspaceSummary;
@@ -118,6 +122,61 @@ export async function getCampaignsWorkspace(
   const supabase =
     await createClient();
 
+  const visibility =
+    await getProviderVisibility(
+      supabase,
+    );
+
+  const requestedPlatform =
+    filters.platform?.trim() ||
+    'all';
+
+  const requestedPlatformKey =
+    requestedPlatform.toLowerCase();
+
+  const googleRequested =
+    requestedPlatformKey ===
+      'google ads' ||
+    requestedPlatformKey ===
+      'google';
+
+  const metaRequested =
+    requestedPlatformKey ===
+      'meta ads' ||
+    requestedPlatformKey ===
+      'meta';
+
+  if (
+    (!visibility.googleConnected &&
+      !visibility.metaConnected) ||
+    (googleRequested &&
+      !visibility.googleConnected) ||
+    (metaRequested &&
+      !visibility.metaConnected)
+  ) {
+    return buildLocalWorkspace(
+      [],
+      filters,
+      {
+        googleError: null,
+        metaError: null,
+        warning: null,
+        fallback: false,
+      },
+    );
+  }
+
+  const effectivePlatform =
+    requestedPlatformKey === 'all'
+      ? visibility.googleConnected &&
+        !visibility.metaConnected
+        ? 'Google Ads'
+        : visibility.metaConnected &&
+            !visibility.googleConnected
+          ? 'Meta Ads'
+          : filters.platform
+      : filters.platform;
+
   const {
     data,
     error,
@@ -129,7 +188,7 @@ export async function getCampaignsWorkspace(
           filters.query ||
           null,
         p_platform:
-          filters.platform,
+          effectivePlatform,
         p_outcome:
           filters.outcome,
         p_sort:
@@ -177,7 +236,7 @@ export async function getCampaignsWorkspace(
     CampaignWorkspaceRow[] =
     [];
 
-  if (!googleResult.error) {
+  if (visibility.googleConnected && !googleResult.error) {
     normalized.push(
       ...(
         googleResult.data ??
@@ -195,7 +254,7 @@ export async function getCampaignsWorkspace(
     );
   }
 
-  if (!metaResult.error) {
+  if (visibility.metaConnected && !metaResult.error) {
     normalized.push(
       ...(
         metaResult.data ??
@@ -218,13 +277,17 @@ export async function getCampaignsWorkspace(
     filters,
     {
       googleError:
-        googleResult.error
-          ?.message ??
-        null,
+        visibility.googleConnected
+          ? googleResult.error
+              ?.message ??
+            null
+          : null,
       metaError:
-        metaResult.error
-          ?.message ??
-        null,
+        visibility.metaConnected
+          ? metaResult.error
+              ?.message ??
+            null
+          : null,
       warning:
         `Optimized campaign read model unavailable: ${error.message}`,
       fallback: true,

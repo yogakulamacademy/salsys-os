@@ -40,6 +40,10 @@ import {
 } from '@/lib/supabase/server';
 
 import {
+  getWorkspaceContextForUser,
+} from '@/lib/workspace';
+
+import {
   createAdminClient,
 } from '@/lib/supabase/admin';
 
@@ -109,7 +113,7 @@ function formatDate(
     | undefined,
 ) {
   if (!value) {
-    return 'â€”';
+    return '-';
   }
 
   const date =
@@ -120,7 +124,7 @@ function formatDate(
       date.getTime(),
     )
   ) {
-    return 'â€”';
+    return '-';
   }
 
   return new Intl.DateTimeFormat(
@@ -199,46 +203,6 @@ function statusTone(
   return 'border-slate-200 bg-slate-50 text-slate-600';
 }
 
-function legacyConfiguration(
-  provider:
-    IntegrationProvider,
-) {
-  if (
-    provider ===
-    'google'
-  ) {
-    return Boolean(
-      process.env
-        .GCP_SERVICE_ACCOUNT_EMAIL ||
-      process.env
-        .GA4_PROPERTY_ID ||
-      process.env
-        .GSC_SITE_URL ||
-      process.env
-        .GOOGLE_ADS_CUSTOMER_ID,
-    );
-  }
-
-  if (
-    provider ===
-    'meta'
-  ) {
-    return Boolean(
-      process.env
-        .META_ACCESS_TOKEN &&
-      process.env
-        .META_AD_ACCOUNT_ID,
-    );
-  }
-
-  return Boolean(
-    process.env
-      .WA_ACCESS_TOKEN &&
-    process.env
-      .WA_PHONE_NUMBER_ID,
-  );
-}
-
 export default async function IntegrationsPage({
   searchParams,
 }: {
@@ -293,84 +257,29 @@ export default async function IntegrationsPage({
     redirect('/dashboard');
   }
 
-  const admin =
-    createAdminClient();
+  const workspaceContext =
+    await getWorkspaceContextForUser(
+      supabase,
+      user.id,
+    );
 
-  const requestedOrganizationId =
-    query.organization_id?.trim() ||
-    null;
-
-  let membershipQuery =
-    admin
-      .from(
-        'organization_members',
-      )
-      .select(
-        'organization_id, role',
-      )
-      .eq(
-        'user_id',
-        user.id,
-      )
-      .eq(
-        'active',
-        true,
-      )
-      .in(
-        'role',
-        [
-          'owner',
-          'admin',
-        ],
-      );
+  const activeWorkspace =
+    workspaceContext.activeWorkspace;
 
   if (
-    requestedOrganizationId
-  ) {
-    membershipQuery =
-      membershipQuery.eq(
-        'organization_id',
-        requestedOrganizationId,
-      );
-  }
-
-  const {
-    data:
-      rawMemberships,
-    error:
-      membershipError,
-  } =
-    await membershipQuery;
-
-  const memberships =
-    (
-      rawMemberships ??
-      []
-    ) as Array<{
-      organization_id:
-        string;
-      role:
-        string;
-    }>;
-
-  if (
-    membershipError ||
-    memberships.length ===
-      0
+    !activeWorkspace ||
+    !['owner', 'admin'].includes(
+      activeWorkspace.role,
+    )
   ) {
     redirect('/dashboard');
   }
 
-  /*
-   * Today the account has one manageable workspace.
-   * When the SalsysOS workspace switcher is added it will pass
-   * organization_id explicitly. Until then, the first manageable
-   * workspace is used only when no workspace was supplied.
-   */
   const organizationId =
-    requestedOrganizationId ??
-    memberships[0]
-      .organization_id;
+    activeWorkspace.organizationId;
+
+  const admin =
+    createAdminClient();
 
   const {
     data:
@@ -563,10 +472,6 @@ export default async function IntegrationsPage({
                   asset.is_selected,
               );
 
-            const legacy =
-              legacyConfiguration(
-                definition.provider,
-              );
 
             return (
               <section
@@ -623,7 +528,7 @@ export default async function IntegrationsPage({
                       <span className="max-w-[65%] truncate text-right font-semibold text-slate-700">
                         {connection?.account_name ??
                           connection?.account_email ??
-                          'â€”'}
+                          '-'}
                       </span>
                     </div>
 
@@ -634,7 +539,7 @@ export default async function IntegrationsPage({
 
                       <span className="text-right font-medium text-slate-700">
                         {connection?.auth_mode ??
-                          'â€”'}
+                          '-'}
                       </span>
                     </div>
 
@@ -671,31 +576,6 @@ export default async function IntegrationsPage({
                     </div>
                   ) : null}
 
-                  <div className="flex items-center gap-2 rounded-xl border border-slate-200 px-3 py-2.5">
-                    {legacy ? (
-                      <CheckCircle2
-                        size={16}
-                        className="shrink-0 text-emerald-600"
-                      />
-                    ) : (
-                      <CircleDashed
-                        size={16}
-                        className="shrink-0 text-slate-400"
-                      />
-                    )}
-
-                    <div className="min-w-0">
-                      <div className="text-[11px] font-semibold text-slate-700">
-                        Existing integration
-                      </div>
-
-                      <div className="mt-0.5 text-[10px] leading-4 text-slate-500">
-                        {legacy
-                          ? 'Legacy server configuration detected. It remains active during migration.'
-                          : 'No legacy environment configuration detected by this page.'}
-                      </div>
-                    </div>
-                  </div>
                 </div>
 
                 <div className="mt-5 flex flex-wrap items-center gap-2">
@@ -768,7 +648,7 @@ export default async function IntegrationsPage({
                     {definition.provider ===
                     'google'
                       ? 'OAuth authorization ready'
-                      : `${definition.futureAction} Â· next step`}
+                      : `${definition.futureAction} - next step`}
                   </span>
                 </div>
               </section>

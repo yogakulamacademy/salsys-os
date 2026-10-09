@@ -1,5 +1,9 @@
 import { createClient } from "@/lib/supabase/server";
 import { requireCurrentOrganizationId } from "@/lib/workspace";
+import {
+  getProviderVisibility,
+  type ProviderVisibility,
+} from "@/lib/integrations/provider-visibility";
 
 export type FunnelMainData = {
   overview: unknown;
@@ -94,12 +98,22 @@ export async function getFunnelWorkspace(): Promise<FunnelWorkspace> {
 
   const organizationId = await getCurrentOrganizationId(supabase);
 
+  const visibility =
+    await getProviderVisibility(
+      supabase,
+    );
+
   const { data, error } = await supabase.rpc("get_funnel_workspace", {
     p_organization_id: organizationId,
   });
 
   if (!error) {
-    return parseRpcPayload((data ?? {}) as RpcPayload);
+    return applyProviderVisibility(
+      parseRpcPayload(
+        (data ?? {}) as RpcPayload,
+      ),
+      visibility,
+    );
   }
 
   /*
@@ -112,11 +126,14 @@ export async function getFunnelWorkspace(): Promise<FunnelWorkspace> {
     organizationId,
   );
 
-  return {
-    ...fallback,
-    fallback: true,
-    warning: `Optimized Funnel read model unavailable: ${error.message}`,
-  };
+  return applyProviderVisibility(
+    {
+      ...fallback,
+      fallback: true,
+      warning: `Optimized Funnel read model unavailable: ${error.message}`,
+    },
+    visibility,
+  );
 }
 
 function parseRpcPayload(payload: RpcPayload): FunnelWorkspace {
@@ -401,6 +418,37 @@ async function getLegacyWorkspace(
       adsets: metaAdsetsResult.data ?? [],
       ads: metaAdsResult.data ?? [],
     },
+  };
+}
+
+function applyProviderVisibility(
+  workspace: FunnelWorkspace,
+  visibility: ProviderVisibility,
+): FunnelWorkspace {
+  return {
+    ...workspace,
+
+    googleAds:
+      visibility.googleConnected
+        ? workspace.googleAds
+        : {
+            overview: {},
+            campaigns: [],
+            coverage: {},
+            matches: [],
+            unmatchedCount: 0,
+          },
+
+    metaAds:
+      visibility.metaConnected
+        ? workspace.metaAds
+        : {
+            overview: {},
+            coverage: {},
+            campaigns: [],
+            adsets: [],
+            ads: [],
+          },
   };
 }
 

@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
+import { getProviderVisibility } from "@/lib/integrations/provider-visibility";
 
 export type OverviewRow = {
   range_start: string | null;
@@ -190,18 +191,43 @@ type RpcPayload = {
 export async function getAnalyticsWorkspace(): Promise<AnalyticsWorkspace> {
   const supabase = await createClient();
 
-  const { data, error } = await supabase.rpc("get_analytics_workspace");
+  const visibility =
+    await getProviderVisibility(supabase);
+
+  if (!visibility.googleConnected) {
+    return {
+      overview: {},
+      sourceRows: [],
+      landingRows: [],
+      campaignRows: [],
+      countryRows: [],
+      reconciliation: [],
+      health: {},
+      syncRuns: [],
+      fallback: false,
+      warning: null,
+    };
+  }
+
+  const { data, error } = await supabase.rpc("get_analytics_workspace", {
+    p_organization_id: visibility.organizationId,
+  });
 
   if (!error) {
     return parseWorkspace((data ?? {}) as RpcPayload);
   }
 
-  const fallback = await getLegacyWorkspace(supabase);
-
   return {
-    ...fallback,
-    fallback: true,
-    warning: `Optimized Analytics read model unavailable: ${error.message}`,
+    overview: {},
+    sourceRows: [],
+    landingRows: [],
+    campaignRows: [],
+    countryRows: [],
+    reconciliation: [],
+    health: {},
+    syncRuns: [],
+    fallback: false,
+    warning: `Unable to load Analytics workspace: ${error.message}`,
   };
 }
 
@@ -249,301 +275,6 @@ function parseWorkspace(payload: RpcPayload): AnalyticsWorkspace {
 
     fallback: false,
     warning: null,
-  };
-}
-
-async function getLegacyWorkspace(
-  supabase: Awaited<ReturnType<typeof createClient>>,
-): Promise<Omit<AnalyticsWorkspace, "fallback" | "warning">> {
-  const [
-    overviewResult,
-    ga4SourceResult,
-    crmSourceResult,
-    crmSourceRevenueResult,
-    ga4LandingResult,
-    crmLandingResult,
-    ga4CampaignResult,
-    crmCampaignResult,
-    ga4CountryResult,
-    crmCountryResult,
-    reconciliationResult,
-    healthResult,
-    syncRunsResult,
-  ] = await Promise.all([
-    supabase
-      .from("v_analytics_30d_overview")
-      .select(
-        `
-        range_start,
-        range_end,
-        ga4_sessions,
-        ga4_page_views,
-        ga4_new_users,
-        ga4_avg_daily_users,
-        ga4_engaged_sessions,
-        ga4_engagement_rate,
-        ga4_avg_session_duration,
-        ga4_key_events,
-        crm_sessions,
-        crm_visitors,
-        crm_page_views,
-        crm_form_submits,
-        crm_web_leads,
-        crm_qualified_leads,
-        crm_enrolled_leads,
-        website_lead_conversion_rate
-      `,
-      )
-      .maybeSingle(),
-
-    supabase
-      .from("v_ga4_source_30d")
-      .select(
-        `
-        source,
-        medium,
-        sessions,
-        new_users,
-        user_days,
-        engaged_sessions,
-        key_events
-      `,
-      )
-      .order("sessions", {
-        ascending: false,
-      })
-      .limit(50),
-
-    supabase
-      .from("v_crm_source_30d")
-      .select(
-        `
-        source,
-        medium,
-        lead_count,
-        qualified_count,
-        enrolled_count
-      `,
-      )
-      .order("lead_count", {
-        ascending: false,
-      })
-      .limit(100),
-
-    supabase.from("v_crm_source_revenue_30d").select(`
-        source,
-        medium,
-        currency,
-        net_revenue
-      `),
-
-    supabase
-      .from("v_ga4_landing_page_30d")
-      .select(
-        `
-        landing_page,
-        sessions,
-        user_days,
-        engaged_sessions,
-        key_events
-      `,
-      )
-      .order("sessions", {
-        ascending: false,
-      })
-      .limit(50),
-
-    supabase
-      .from("v_crm_landing_page_30d")
-      .select(
-        `
-        landing_page,
-        lead_count,
-        qualified_count,
-        enrolled_count
-      `,
-      )
-      .order("lead_count", {
-        ascending: false,
-      })
-      .limit(250),
-
-    supabase
-      .from("v_ga4_campaign_30d")
-      .select(
-        `
-        campaign,
-        source,
-        medium,
-        sessions,
-        engaged_sessions,
-        key_events
-      `,
-      )
-      .order("sessions", {
-        ascending: false,
-      })
-      .limit(50),
-
-    supabase
-      .from("v_crm_campaign_30d")
-      .select(
-        `
-        campaign,
-        lead_count,
-        qualified_count,
-        enrolled_count
-      `,
-      )
-      .order("lead_count", {
-        ascending: false,
-      })
-      .limit(100),
-
-    supabase
-      .from("v_ga4_country_30d")
-      .select(
-        `
-        country,
-        sessions,
-        user_days,
-        engaged_sessions,
-        key_events
-      `,
-      )
-      .order("sessions", {
-        ascending: false,
-      })
-      .limit(50),
-
-    supabase
-      .from("v_crm_country_30d")
-      .select(
-        `
-        country,
-        lead_count,
-        qualified_count,
-        enrolled_count
-      `,
-      )
-      .order("lead_count", {
-        ascending: false,
-      })
-      .limit(100),
-
-    supabase
-      .from("v_analytics_reconciliation_daily_30d")
-      .select(
-        `
-        analytics_date,
-        ga4_sessions,
-        crm_sessions,
-        ga4_page_views,
-        crm_page_views,
-        crm_visitors,
-        crm_form_submits,
-        crm_web_leads
-      `,
-      )
-      .order("analytics_date", {
-        ascending: false,
-      }),
-
-    supabase
-      .from("v_ga4_sync_health")
-      .select(
-        `
-        latest_analytics_date,
-        latest_data_update,
-        last_successful_sync,
-        daily_rows,
-        source_rows,
-        landing_page_rows,
-        campaign_rows,
-        country_rows
-      `,
-      )
-      .maybeSingle(),
-
-    supabase
-      .from("ga4_sync_runs")
-      .select(
-        `
-        id,
-        status,
-        from_date,
-        to_date,
-        total_rows,
-        error_message,
-        started_at,
-        completed_at
-      `,
-      )
-      .order("started_at", {
-        ascending: false,
-      })
-      .limit(6),
-  ]);
-
-  const errors = [
-    overviewResult.error,
-    ga4SourceResult.error,
-    crmSourceResult.error,
-    crmSourceRevenueResult.error,
-    ga4LandingResult.error,
-    crmLandingResult.error,
-    ga4CampaignResult.error,
-    crmCampaignResult.error,
-    ga4CountryResult.error,
-    crmCountryResult.error,
-    reconciliationResult.error,
-    healthResult.error,
-    syncRunsResult.error,
-  ].filter(Boolean);
-
-  if (errors.length > 0) {
-    throw new Error(
-      `Unable to load Analytics dashboard: ${errors
-        .map((item) => item?.message)
-        .join(" | ")}`,
-    );
-  }
-
-  const ga4Sources = (ga4SourceResult.data ?? []) as Ga4SourceRow[];
-
-  const crmSources = (crmSourceResult.data ?? []) as CrmSourceRow[];
-
-  const revenueRows = (crmSourceRevenueResult.data ??
-    []) as CrmSourceRevenueRow[];
-
-  const ga4Landing = (ga4LandingResult.data ?? []) as Ga4LandingRow[];
-
-  const crmLanding = (crmLandingResult.data ?? []) as CrmLandingRow[];
-
-  const ga4Campaigns = (ga4CampaignResult.data ?? []) as Ga4CampaignRow[];
-
-  const crmCampaigns = (crmCampaignResult.data ?? []) as CrmCampaignRow[];
-
-  const ga4Countries = (ga4CountryResult.data ?? []) as Ga4CountryRow[];
-
-  const crmCountries = (crmCountryResult.data ?? []) as CrmCountryRow[];
-
-  return {
-    overview: (overviewResult.data ?? {}) as Partial<OverviewRow>,
-
-    sourceRows: mergeSources(ga4Sources, crmSources, revenueRows),
-
-    landingRows: mergeLandingPages(ga4Landing, crmLanding),
-
-    campaignRows: mergeCampaigns(ga4Campaigns, crmCampaigns),
-
-    countryRows: mergeCountries(ga4Countries, crmCountries),
-
-    reconciliation: (reconciliationResult.data ?? []) as ReconciliationRow[],
-
-    health: (healthResult.data ?? {}) as Partial<SyncHealthRow>,
-
-    syncRuns: (syncRunsResult.data ?? []) as SyncRunRow[],
   };
 }
 

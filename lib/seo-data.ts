@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
+import { getProviderVisibility } from "@/lib/integrations/provider-visibility";
 
 export type SeoOverviewRow = {
   range_start: string | null;
@@ -133,7 +134,29 @@ type RpcPayload = {
 export async function getSeoWorkspace(): Promise<SeoWorkspace> {
   const supabase = await createClient();
 
-  const { data, error } = await supabase.rpc("get_seo_workspace");
+  const visibility =
+    await getProviderVisibility(supabase);
+
+  if (!visibility.googleConnected) {
+    return {
+      overview: {},
+      daily: [],
+      queries: [],
+      pages: [],
+      countries: [],
+      devices: [],
+      appearances: [],
+      opportunities: [],
+      health: {},
+      syncRuns: [],
+      fallback: false,
+      warning: null,
+    };
+  }
+
+  const { data, error } = await supabase.rpc("get_seo_workspace", {
+    p_organization_id: visibility.organizationId,
+  });
 
   if (!error) {
     const payload = (data ?? {}) as RpcPayload;
@@ -168,236 +191,18 @@ export async function getSeoWorkspace(): Promise<SeoWorkspace> {
     };
   }
 
-  /*
-   * Safe fallback:
-   * preserve the existing direct-view reads if the optimized
-   * workspace RPC is temporarily unavailable.
-   */
-  const [
-    overviewResult,
-    dailyResult,
-    queryResult,
-    pageResult,
-    countryResult,
-    deviceResult,
-    appearanceResult,
-    opportunitiesResult,
-    healthResult,
-    syncRunsResult,
-  ] = await Promise.all([
-    supabase
-      .from("v_seo_30d_overview")
-      .select(
-        `
-        range_start,
-        range_end,
-        clicks,
-        impressions,
-        ctr,
-        avg_position,
-        organic_leads,
-        organic_qualified_leads,
-        organic_enrolled_leads,
-        organic_revenue_inr,
-        organic_revenue_usd,
-        click_to_lead_rate
-      `,
-      )
-      .maybeSingle(),
-
-    supabase
-      .from("v_seo_daily_30d")
-      .select(
-        `
-        date,
-        clicks,
-        impressions,
-        ctr,
-        avg_position
-      `,
-      )
-      .order("date", {
-        ascending: true,
-      }),
-
-    supabase
-      .from("v_seo_query_30d")
-      .select(
-        `
-        query,
-        clicks,
-        impressions,
-        ctr,
-        avg_position
-      `,
-      )
-      .order("clicks", {
-        ascending: false,
-      })
-      .limit(30),
-
-    supabase
-      .from("v_seo_page_30d")
-      .select(
-        `
-        page,
-        clicks,
-        impressions,
-        ctr,
-        avg_position
-      `,
-      )
-      .order("clicks", {
-        ascending: false,
-      })
-      .limit(25),
-
-    supabase
-      .from("v_seo_country_30d")
-      .select(
-        `
-        country,
-        clicks,
-        impressions,
-        ctr,
-        avg_position
-      `,
-      )
-      .order("clicks", {
-        ascending: false,
-      })
-      .limit(15),
-
-    supabase
-      .from("v_seo_device_30d")
-      .select(
-        `
-        device,
-        clicks,
-        impressions,
-        ctr,
-        avg_position
-      `,
-      )
-      .order("clicks", {
-        ascending: false,
-      }),
-
-    supabase
-      .from("v_seo_search_appearance_30d")
-      .select(
-        `
-        search_appearance,
-        clicks,
-        impressions,
-        ctr,
-        avg_position
-      `,
-      )
-      .order("clicks", {
-        ascending: false,
-      }),
-
-    supabase
-      .from("v_seo_opportunities_30d")
-      .select(
-        `
-        query,
-        clicks,
-        impressions,
-        ctr,
-        avg_position,
-        opportunity_type,
-        recommendation
-      `,
-      )
-      .order("impressions", {
-        ascending: false,
-      })
-      .limit(40),
-
-    supabase
-      .from("v_gsc_sync_health")
-      .select(
-        `
-        latest_gsc_date,
-        latest_data_update,
-        last_successful_sync,
-        daily_rows,
-        query_rows,
-        page_rows,
-        country_rows,
-        device_rows,
-        search_appearance_rows
-      `,
-      )
-      .maybeSingle(),
-
-    supabase
-      .from("gsc_sync_runs")
-      .select(
-        `
-        id,
-        site_url,
-        start_date,
-        end_date,
-        status,
-        triggered_by,
-        total_rows,
-        error_message,
-        started_at,
-        completed_at
-      `,
-      )
-      .order("started_at", {
-        ascending: false,
-      })
-      .limit(6),
-  ]);
-
-  const errors = [
-    overviewResult.error,
-    dailyResult.error,
-    queryResult.error,
-    pageResult.error,
-    countryResult.error,
-    deviceResult.error,
-    appearanceResult.error,
-    opportunitiesResult.error,
-    healthResult.error,
-    syncRunsResult.error,
-  ].filter(Boolean);
-
-  if (errors.length > 0) {
-    throw new Error(
-      `Unable to load SEO dashboard: ${errors
-        .map((item) => item?.message)
-        .join(" | ")}`,
-    );
-  }
-
   return {
-    overview: (overviewResult.data ?? {}) as Partial<SeoOverviewRow>,
-
-    daily: (dailyResult.data ?? []) as DailyRow[],
-
-    queries: (queryResult.data ?? []) as QueryRow[],
-
-    pages: (pageResult.data ?? []) as PageRow[],
-
-    countries: (countryResult.data ?? []) as CountryRow[],
-
-    devices: (deviceResult.data ?? []) as DeviceRow[],
-
-    appearances: (appearanceResult.data ?? []) as SearchAppearanceRow[],
-
-    opportunities: (opportunitiesResult.data ?? []) as OpportunityRow[],
-
-    health: (healthResult.data ?? {}) as Partial<SyncHealthRow>,
-
-    syncRuns: (syncRunsResult.data ?? []) as SyncRunRow[],
-
-    fallback: true,
-    warning: `Optimized SEO read model unavailable: ${error.message}`,
+    overview: {},
+    daily: [],
+    queries: [],
+    pages: [],
+    countries: [],
+    devices: [],
+    appearances: [],
+    opportunities: [],
+    health: {},
+    syncRuns: [],
+    fallback: false,
+    warning: `Unable to load SEO workspace: ${error.message}`,
   };
 }
