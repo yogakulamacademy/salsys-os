@@ -6,6 +6,10 @@ import {
   createClient,
 } from '@/lib/supabase/server';
 
+import {
+  requireCurrentOrganizationId,
+} from '@/lib/workspace';
+
 
 export const dynamic =
   'force-dynamic';
@@ -15,6 +19,30 @@ export async function GET() {
   try {
     const supabase =
       await createClient();
+
+    const {
+      data: {
+        user,
+      },
+      error:
+        authError,
+    } =
+      await supabase.auth.getUser();
+
+    if (
+      authError ||
+      !user
+    ) {
+      throw new Error(
+        'Unable to resolve current organization: user is not authenticated.',
+      );
+    }
+
+    const organizationId =
+      await requireCurrentOrganizationId(
+        supabase,
+        user.id,
+      );
 
 
     const [
@@ -35,6 +63,10 @@ export async function GET() {
           .select(
             '*'
           )
+          .eq(
+            'organization_id',
+            organizationId
+          )
           .maybeSingle(),
 
         supabase
@@ -43,6 +75,10 @@ export async function GET() {
           )
           .select(
             '*'
+          )
+          .eq(
+            'organization_id',
+            organizationId
           ),
 
         supabase
@@ -57,6 +93,10 @@ export async function GET() {
               head:
                 true,
             }
+          )
+          .eq(
+            'organization_id',
+            organizationId
           ),
 
         supabase
@@ -71,6 +111,10 @@ export async function GET() {
               head:
                 true,
             }
+          )
+          .eq(
+            'organization_id',
+            organizationId
           ),
 
         supabase
@@ -85,6 +129,10 @@ export async function GET() {
               head:
                 true,
             }
+          )
+          .eq(
+            'organization_id',
+            organizationId
           ),
 
         supabase
@@ -99,6 +147,10 @@ export async function GET() {
               head:
                 true,
             }
+          )
+          .eq(
+            'organization_id',
+            organizationId
           ),
 
         supabase
@@ -113,6 +165,10 @@ export async function GET() {
               head:
                 true,
             }
+          )
+          .eq(
+            'organization_id',
+            organizationId
           ),
 
         supabase
@@ -137,6 +193,10 @@ export async function GET() {
             started_at,
             completed_at
           `)
+          .eq(
+            'organization_id',
+            organizationId
+          )
           .order(
             'started_at',
             {

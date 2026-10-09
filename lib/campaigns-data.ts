@@ -184,6 +184,8 @@ export async function getCampaignsWorkspace(
     await supabase.rpc(
       'get_campaigns_workspace',
       {
+        p_organization_id:
+          visibility.organizationId,
         p_query:
           filters.query ||
           null,
@@ -222,6 +224,10 @@ export async function getCampaignsWorkspace(
           'v_google_ads_campaign_crm_30d',
         )
         .select('*')
+        .eq(
+          'organization_id',
+          visibility.organizationId,
+        )
         .limit(1000),
 
       supabase
@@ -229,6 +235,10 @@ export async function getCampaignsWorkspace(
           'v_meta_ads_campaign_crm_30d',
         )
         .select('*')
+        .eq(
+          'organization_id',
+          visibility.organizationId,
+        )
         .limit(1000),
     ]);
 
