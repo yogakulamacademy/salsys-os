@@ -10,6 +10,7 @@ import {
 } from '@/lib/data';
 
 import { createClient } from '@/lib/supabase/server';
+import { requireCurrentOrganizationId } from '@/lib/workspace';
 
 export type FollowUpsWorkspaceSummary = {
   dueNow: number;
@@ -89,11 +90,30 @@ export async function getFollowUpsWorkspace({
   const supabase = await createClient();
 
   const {
+    data: { user },
+    error: authError,
+  } = await supabase.auth.getUser();
+
+  if (authError || !user) {
+    throw new Error(
+      'Unable to load follow-ups: user is not authenticated.',
+    );
+  }
+
+  const organizationId =
+    await requireCurrentOrganizationId(
+      supabase,
+      user.id,
+    );
+
+  const {
     data,
     error,
   } = await supabase.rpc(
     'get_followups_workspace',
     {
+      p_organization_id:
+        organizationId,
       p_page: safePage,
       p_page_size: safePageSize,
     },
