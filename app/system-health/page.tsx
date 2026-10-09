@@ -26,6 +26,7 @@ import { isMockMode } from "@/lib/data";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 import { createClient } from "@/lib/supabase/server";
+import { getWorkspaceContextForUser } from "@/lib/workspace";
 
 export const dynamic = "force-dynamic";
 
@@ -445,134 +446,58 @@ const { health, summary, activity, failures, errors } =
 }
 
 async function requireAdminAccess(): Promise<string> {
-  const supabase =
-    await createClient();
-
+  const supabase = await createClient();
 
   const {
-    data: {
-      user,
-    },
+    data: { user },
+    error: authError,
+  } = await supabase.auth.getUser();
 
-    error:
-      authError,
-  } =
-    await supabase
-      .auth
-      .getUser();
-
-
-  if (
-    authError ||
-    !user
-  ) {
-    redirect(
-      "/login"
-    );
+  if (authError || !user) {
+    redirect("/login");
   }
 
-
   const {
-    data:
-      profile,
-
-    error:
-      profileError,
-  } =
-    await supabase
-      .from(
-        "profiles"
-      )
-      .select(
-        "role,active"
-      )
-      .eq(
-        "id",
-        user.id
-      )
-      .maybeSingle();
-
+    data: profile,
+    error: profileError,
+  } = await supabase
+    .from("profiles")
+    .select("active")
+    .eq("id", user.id)
+    .maybeSingle();
 
   if (
     profileError ||
     !profile ||
     profile.active !== true
   ) {
-    redirect(
-      "/login"
-    );
+    redirect("/login");
   }
 
+  const workspace = await getWorkspaceContextForUser(
+    supabase,
+    user.id,
+  );
 
-  if (
-    profile.role !==
-    "admin"
-  ) {
-    redirect(
-      "/dashboard"
-    );
-  }
-
-
-  const {
-    data:
-      memberships,
-
-    error:
-      membershipError,
-  } =
-    await supabase
-      .from(
-        "organization_members"
-      )
-      .select(
-        "organization_id"
-      )
-      .eq(
-        "user_id",
-        user.id
-      )
-      .eq(
-        "active",
-        true
-      )
-      .limit(
-        2
-      );
-
-
-  if (
-    membershipError
-  ) {
+  if (workspace.memberships.length === 0) {
     throw new Error(
-      `Unable to resolve current organization: ${membershipError.message}`
+      "Unable to resolve current organization: no active organization membership found.",
     );
   }
 
+  if (!workspace.activeWorkspace) {
+    redirect("/workspace");
+  }
 
   if (
-    !memberships ||
-    memberships.length === 0
+    workspace.activeWorkspace.role !== "owner" &&
+    workspace.activeWorkspace.role !== "admin"
   ) {
-    throw new Error(
-      "Unable to resolve current organization: no active organization membership found."
-    );
+    redirect("/dashboard");
   }
 
-
-  if (
-    memberships.length > 1
-  ) {
-    throw new Error(
-      "Unable to resolve current organization: multiple active organization memberships found. Workspace switching is required."
-    );
-  }
-
-
-  return memberships[0]
-    .organization_id;
+  return workspace.activeWorkspace.organizationId;
 }
-
 async function loadSystemHealth(
   organizationId: string
 ): Promise<LoadResult> {
