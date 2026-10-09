@@ -10,7 +10,7 @@ export const metadata: Metadata = {
 const themeBootScript = `
 (function () {
   try {
-    var saved = localStorage.getItem('yk-theme');
+    var saved = localStorage.getItem('yk-theme') || 'light';
     var dark = saved === 'dark' || (!saved && window.matchMedia('(prefers-color-scheme: dark)').matches);
     document.documentElement.classList.toggle('dark', dark);
     document.documentElement.style.colorScheme = dark ? 'dark' : 'light';

@@ -11,7 +11,14 @@ export async function signInAction(formData: FormData) {
 
   const email = String(formData.get('email') ?? '').trim();
   const password = String(formData.get('password') ?? '');
-  const next = String(formData.get('next') ?? '/dashboard');
+  const requestedNext = String(formData.get('next') ?? '/dashboard').trim();
+
+  const next =
+    requestedNext.startsWith('/') &&
+    !requestedNext.startsWith('//') &&
+    !requestedNext.startsWith('/workspace')
+      ? requestedNext
+      : '/dashboard';
 
   if (!email || !password) redirect('/login?error=Enter%20your%20email%20and%20password');
 
@@ -19,7 +26,7 @@ export async function signInAction(formData: FormData) {
   const { error } = await supabase.auth.signInWithPassword({ email, password });
   if (error) redirect('/login?error=Invalid%20email%20or%20password');
 
-  redirect(next.startsWith('/') ? next : '/dashboard');
+  redirect(`/workspace?next=${encodeURIComponent(next)}`);
 }
 
 export async function signOutAction() {

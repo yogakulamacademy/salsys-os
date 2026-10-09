@@ -16,7 +16,7 @@ export function ThemeToggle() {
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
-    const saved = window.localStorage.getItem('yk-theme');
+    const saved = window.localStorage.getItem('yk-theme') ?? 'light';
     const preferred: Theme = saved === 'dark' || saved === 'light'
       ? saved
       : window.matchMedia('(prefers-color-scheme: dark)').matches

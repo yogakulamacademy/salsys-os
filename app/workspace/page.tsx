@@ -142,20 +142,6 @@ export default function WorkspacePage() {
 
         setWorkspace(context);
         setLoading(false);
-
-        /*
-         * A user with exactly one active workspace does not need to make
-         * a manual choice. Persist it into the same secure cookie used
-         * for multi-workspace accounts, then continue.
-         */
-        if (
-          context.activeWorkspace &&
-          !context.selectionRequired
-        ) {
-          void selectWorkspace(
-            context.activeWorkspace.organizationId,
-          );
-        }
       } catch (loadError) {
         if (cancelled) {
           return;
