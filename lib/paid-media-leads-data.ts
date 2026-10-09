@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
+import { requireCurrentOrganizationId } from "@/lib/workspace";
 
 export type PaidMediaLead = {
   lead_id: string;
@@ -120,7 +121,22 @@ export async function getPaidMediaLeadsWorkspace(
 ): Promise<PaidMediaLeadsWorkspace> {
   const supabase = await createClient();
 
+  const {
+    data: { user },
+    error: authError,
+  } = await supabase.auth.getUser();
+
+  if (authError || !user) {
+    throw new Error("Unable to load paid-media leads: user is not authenticated.");
+  }
+
+  const organizationId = await requireCurrentOrganizationId(
+    supabase,
+    user.id,
+  );
+
   const { data, error } = await supabase.rpc("get_paid_media_leads_workspace", {
+    p_organization_id: organizationId,
     p_query: safeOrSearch(filters.query) || null,
     p_platform: normalizedFilter(filters.platform),
     p_stage: normalizedFilter(filters.stage),
@@ -146,7 +162,11 @@ export async function getPaidMediaLeadsWorkspace(
    * retain the existing direct-view path if the
    * optimized RPC is unavailable.
    */
-  const fallback = await getLegacyWorkspace(supabase, filters);
+  const fallback = await getLegacyWorkspace(
+    supabase,
+    filters,
+    organizationId,
+  );
 
   return {
     ...fallback,
@@ -184,15 +204,20 @@ function parseRpcPayload(payload: RpcPayload): PaidMediaLeadsWorkspace {
 async function getLegacyWorkspace(
   supabase: Awaited<ReturnType<typeof createClient>>,
   filters: PaidMediaLeadsFilters,
+  organizationId: string,
 ): Promise<Omit<PaidMediaLeadsWorkspace, "warning">> {
   const overviewPromise = supabase
     .from("v_paid_media_leads_overview")
     .select("*")
+    .eq("organization_id", organizationId)
     .maybeSingle();
 
-  let query = supabase.from("v_paid_media_leads_ui").select("*", {
-    count: "exact",
-  });
+  let query = supabase
+    .from("v_paid_media_leads_ui")
+    .select("*", {
+      count: "exact",
+    })
+    .eq("organization_id", organizationId);
 
   if (filters.platform && filters.platform !== "all") {
     query = query.eq("platform", filters.platform);
@@ -280,6 +305,7 @@ async function getLegacyWorkspace(
     selectedLeadPromise = supabase
       .from("v_paid_media_leads_ui")
       .select("*")
+      .eq("organization_id", organizationId)
       .eq("lead_id", filters.selectedLeadId)
       .maybeSingle();
 
@@ -288,6 +314,7 @@ async function getLegacyWorkspace(
       .select(
         "id,event_type,source,medium,campaign_name,landing_page,occurred_at",
       )
+      .eq("organization_id", organizationId)
       .eq("lead_id", filters.selectedLeadId)
       .order("occurred_at", {
         ascending: false,
