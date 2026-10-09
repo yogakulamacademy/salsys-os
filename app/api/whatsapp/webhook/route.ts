@@ -785,6 +785,7 @@ async function processStoredWebhookEvent(
     .select(
       `
       id,
+      organization_id,
       event_type,
       external_message_id,
       payload,
@@ -891,6 +892,17 @@ async function processStoredWhatsAppStatusEvent(
     };
   }
 
+  const organizationId =
+    stringValue(
+      storedEvent.organization_id
+    );
+
+  if (!organizationId) {
+    throw new Error(
+      'WhatsApp status webhook event organization is missing.'
+    );
+  }
+
   const externalMessageId =
     stringValue(
       storedEvent.external_message_id
@@ -926,6 +938,9 @@ async function processStoredWhatsAppStatusEvent(
   } = await supabase.rpc(
     'apply_whatsapp_message_status',
     {
+      p_organization_id:
+        organizationId,
+
       p_external_message_id:
         externalMessageId,
 
