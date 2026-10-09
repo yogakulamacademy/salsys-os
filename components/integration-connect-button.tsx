@@ -218,7 +218,7 @@ const left =
       {opening
         ? `Opening ${provider === 'google' ? 'Google' : 'Meta'}...`
         : reconnect
-          ? 'Reconnect'
+          ? `Reconnect ${provider === 'google' ? 'Google' : 'Meta'}`
           : `Connect ${provider === 'google' ? 'Google' : 'Meta'}`}
     </button>
   );

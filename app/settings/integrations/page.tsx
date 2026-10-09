@@ -18,7 +18,6 @@ import {
   KeyRound,
   Link2,
   MessageCircle,
-  RefreshCw,
   ShieldCheck,
   Unplug,
 } from 'lucide-react';
@@ -78,7 +77,7 @@ const PROVIDERS:
       icon:
         <Globe2 size={18} />,
       futureAction:
-        'Google OAuth ready',
+        'Google connection',
     },
     {
       provider:
@@ -90,7 +89,7 @@ const PROVIDERS:
       icon:
         <Facebook size={18} />,
       futureAction:
-        'Meta authorization',
+        'Meta connection',
     },
     {
       provider:
@@ -102,7 +101,7 @@ const PROVIDERS:
       icon:
         <MessageCircle size={18} />,
       futureAction:
-        'Meta / WhatsApp connection',
+        'WhatsApp connection',
     },
   ];
 
@@ -391,7 +390,7 @@ export default async function IntegrationsPage({
       <PageHeader
         eyebrow="Settings"
         title="Account integrations"
-        description="Connect external accounts once, select the assets the CRM should use, and keep provider credentials server-side."
+        description="Connect external accounts, choose the assets this workspace should use, and manage connection status securely."
         actions={
           <Link
             href="/settings"
@@ -512,9 +511,7 @@ export default async function IntegrationsPage({
                     {connection?.status ===
                     'connected'
                       ? 'Connected'
-                      : connection?.status
-                        ? connection.status
-                        : 'Not connected'}
+                      : 'Not connected'}
                   </span>
                 </div>
 
@@ -522,7 +519,11 @@ export default async function IntegrationsPage({
                   <div className="rounded-xl border border-slate-200 bg-slate-50/70 p-3">
                     <div className="flex items-center justify-between gap-3 text-xs">
                       <span className="text-slate-500">
-                        Account
+                        {connection &&
+                        connection.status !==
+                          'connected'
+                          ? 'Previous account'
+                          : 'Account'}
                       </span>
 
                       <span className="max-w-[65%] truncate text-right font-semibold text-slate-700">
@@ -532,20 +533,14 @@ export default async function IntegrationsPage({
                       </span>
                     </div>
 
-                    <div className="mt-2 flex items-center justify-between gap-3 text-xs">
-                      <span className="text-slate-500">
-                        Auth mode
-                      </span>
-
-                      <span className="text-right font-medium text-slate-700">
-                        {connection?.auth_mode ??
-                          '-'}
-                      </span>
-                    </div>
 
                     <div className="mt-2 flex items-center justify-between gap-3 text-xs">
                       <span className="text-slate-500">
-                        Selected assets
+                        {connection &&
+                        connection.status !==
+                          'connected'
+                          ? 'Saved assets'
+                          : 'Selected assets'}
                       </span>
 
                       <span className="font-semibold text-slate-700">
@@ -629,12 +624,17 @@ export default async function IntegrationsPage({
                   ) ? (
                     <IntegrationConnectButton
                       provider={definition.provider}
+                      mode={
+                        connection
+                          ? 'reconnect'
+                          : 'connect'
+                      }
                     />
                   ) : (
                     <button
                       type="button"
                       disabled
-                      title={`${definition.futureAction} is added in the next provider-specific step.`}
+                      title={`${definition.futureAction} setup is not available yet.`}
                       className="inline-flex cursor-not-allowed items-center gap-2 rounded-lg bg-violet-600 px-3 py-2 text-xs font-semibold text-white opacity-55"
                     >
                       <Link2
@@ -644,12 +644,19 @@ export default async function IntegrationsPage({
                     </button>
                   )}
 
-                  <span className="text-[10px] text-slate-400">
-                    {definition.provider ===
-                    'google'
-                      ? 'OAuth authorization ready'
-                      : `${definition.futureAction} - next step`}
-                  </span>
+                  {connection?.status !==
+                  'connected' ? (
+                    <span className="text-[10px] text-slate-400">
+                      {definition.provider ===
+                        'google' ||
+                      definition.provider ===
+                        'meta'
+                        ? connection
+                          ? 'Reconnect to resume data sync'
+                          : 'Connect to start data sync'
+                        : `${definition.futureAction} setup coming next`}
+                    </span>
+                  ) : null}
                 </div>
               </section>
             );
@@ -687,7 +694,7 @@ export default async function IntegrationsPage({
         );
       })()}
 
-      <div className="mt-4 grid gap-4 lg:grid-cols-2">
+      <div className="mt-4 max-w-3xl">
         <section className="card-pad rounded-2xl border border-slate-200 bg-white">
           <div className="flex items-start gap-3">
             <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-slate-100 text-slate-600">
@@ -702,7 +709,7 @@ export default async function IntegrationsPage({
               </div>
 
               <div className="section-title mt-1">
-                Credential storage
+                Connection security
               </div>
             </div>
           </div>
@@ -712,11 +719,11 @@ export default async function IntegrationsPage({
               ready={
                 encryptionConfigured
               }
-              title="Encryption key"
+              title="Credential protection"
               detail={
                 encryptionConfigured
-                  ? 'INTEGRATION_ENCRYPTION_KEY is configured server-side.'
-                  : 'Add INTEGRATION_ENCRYPTION_KEY before storing OAuth or provider tokens.'
+                  ? 'Connection credentials are protected with server-side encryption.'
+                  : 'Credential encryption must be configured before storing provider access.'
               }
             />
 
@@ -724,70 +731,31 @@ export default async function IntegrationsPage({
               ready={
                 workspace.installed
               }
-              title="Protected integration tables"
-              detail="Browser roles have no direct grants to connection, asset, OAuth-state or audit tables."
+              title="Private integration data"
+              detail="Connection details and provider assets are protected from direct browser access."
             />
 
             <SecurityRow
               ready
-              title="Safe migration"
-              detail="Existing sync routes keep using their current credentials until each provider is deliberately migrated."
+              title="Workspace isolation"
+              detail="Integration data is scoped to the active workspace so organizations stay separated."
             />
           </div>
         </section>
-
-        <section className="card-pad rounded-2xl border border-slate-200 bg-white">
-          <div className="flex items-start gap-3">
-            <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-violet-50 text-violet-600">
-              <RefreshCw
-                size={18}
-              />
-            </span>
-
-            <div>
-              <div className="eyebrow">
-                Migration
-              </div>
-
-              <div className="section-title mt-1">
-                What changes later
-              </div>
-            </div>
-          </div>
-
-          <div className="mt-5 space-y-3 text-sm leading-6 text-slate-600">
-            <p>
-              Account-specific access tokens, refresh tokens and discovered asset IDs move into the integration layer.
-            </p>
-
-            <p>
-              Stable application credentials such as Google OAuth client credentials, Meta App credentials, webhook verification secrets and the integration encryption key remain server-only environment values.
-            </p>
-
-            <p>
-              The CRM can then select GA4 properties, Search Console sites, Google Ads accounts, Meta ad accounts, Facebook Pages, Instagram accounts, WABAs and WhatsApp phone numbers without code changes.
-            </p>
-          </div>
-
-          <div className="mt-5 rounded-xl border border-violet-200 bg-violet-50/70 p-3 text-xs leading-5 text-violet-800">
-            Provider-specific OAuth is intentionally not enabled until this foundation is installed and verified. This prevents us from disturbing the working production integrations.
-          </div>
-        </section>
       </div>
-
       <section className="card-pad mt-4 rounded-2xl border border-slate-200 bg-white">
         <div className="flex items-start justify-between gap-4">
           <div>
             <div className="eyebrow">
-              Next
+              Google
             </div>
 
             <div className="section-title mt-1">
-              Google OAuth connection
+              What Google connection includes
             </div>
 
             <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-500">
-              Google account authorization is now enabled. After connecting, the next step will discover the GA4 properties, Search Console sites and Google Ads accounts available to that Google account so you can select the CRM assets without changing code.
+              Connect or reconnect Google to authorize Analytics, Search Console and Google Ads for this workspace. After authorization, choose the properties, sites and ad accounts SalsysOS should use.
             </p>
           </div>
 
