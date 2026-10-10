@@ -31,6 +31,10 @@ import {
 } from '@/components/integration-connect-button';
 
 import {
+  WhatsAppEmbeddedSignupButton,
+} from '@/components/whatsapp-embedded-signup-button';
+
+import {
   GoogleIntegrationAssets,
 } from '@/components/google-integration-assets';
 
@@ -385,6 +389,19 @@ export default async function IntegrationsPage({
         .INTEGRATION_ENCRYPTION_KEY,
     );
 
+  const whatsappEmbeddedSignup = {
+    appId:
+      process.env.META_APP_ID?.trim() ?? '',
+    configId:
+      process.env.WHATSAPP_EMBEDDED_SIGNUP_CONFIG_ID?.trim() ?? '',
+    graphVersion:
+      /^v\d+\.\d+$/.test(
+        process.env.META_API_VERSION?.trim() ?? '',
+      )
+        ? process.env.META_API_VERSION!.trim()
+        : 'v26.0',
+  };
+
   return (
     <div className="settings-integrations-page">
       <PageHeader
@@ -592,6 +609,13 @@ export default async function IntegrationsPage({
                           provider={definition.provider}
                           mode="reconnect"
                         />
+                      ) : definition.provider === 'whatsapp' ? (
+                        <WhatsAppEmbeddedSignupButton
+                          appId={whatsappEmbeddedSignup.appId}
+                          configId={whatsappEmbeddedSignup.configId}
+                          graphVersion={whatsappEmbeddedSignup.graphVersion}
+                          mode="reconnect"
+                        />
                       ) : null}
 
                       <form
@@ -630,6 +654,30 @@ export default async function IntegrationsPage({
                           : 'connect'
                       }
                     />
+                  ) : definition.provider === 'whatsapp' ? (
+                    <div className="w-full rounded-xl border border-violet-100 bg-violet-50/40 p-3">
+                      <div className="mb-3">
+                        <div className="text-xs font-semibold text-slate-800">
+                          Connect WhatsApp Business
+                        </div>
+                        <p className="mt-1 text-[11px] leading-5 text-slate-500">
+                          Continue with Meta to choose this workspace&apos;s WhatsApp Business Account and phone number. SalsysOS encrypts the returned business credential and keeps it isolated to this workspace.
+                        </p>
+                      </div>
+
+                      <WhatsAppEmbeddedSignupButton
+                        appId={whatsappEmbeddedSignup.appId}
+                        configId={whatsappEmbeddedSignup.configId}
+                        graphVersion={whatsappEmbeddedSignup.graphVersion}
+                        mode={connection ? 'reconnect' : 'connect'}
+                      />
+
+                      {!whatsappEmbeddedSignup.configId ? (
+                        <div className="mt-2 text-[10px] leading-4 text-amber-600">
+                          Add WHATSAPP_EMBEDDED_SIGNUP_CONFIG_ID on the server before testing this connection.
+                        </div>
+                      ) : null}
+                    </div>
                   ) : (
                     <button
                       type="button"
@@ -654,7 +702,9 @@ export default async function IntegrationsPage({
                         ? connection
                           ? 'Reconnect to resume data sync'
                           : 'Connect to start data sync'
-                        : `${definition.futureAction} setup coming next`}
+                        : definition.provider === 'whatsapp'
+                          ? 'Connect this workspace through Meta Embedded Signup'
+                          : `${definition.futureAction} setup coming next`}
                     </span>
                   ) : null}
                 </div>
