@@ -140,12 +140,9 @@ export async function getApprovedWhatsAppTemplates(
 
   try {
     runtime =
-      await getWhatsAppRuntimeForOrganization(
-        resolvedOrganizationId,
-        {
-          allowLegacyBootstrap: true,
-        }
-      );
+  await getWhatsAppRuntimeForOrganization(
+    resolvedOrganizationId,
+  );
   } catch (error) {
     return {
       templates: [],

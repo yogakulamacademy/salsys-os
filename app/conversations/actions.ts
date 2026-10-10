@@ -67,9 +67,7 @@ async function requireWhatsAppRuntime(
   organizationId: string,
 ) {
   try {
-    return await getWhatsAppRuntimeForOrganization(organizationId, {
-      allowLegacyBootstrap: true,
-    });
+    return await getWhatsAppRuntimeForOrganization(organizationId);
   } catch (error) {
     const message =
       error instanceof Error
