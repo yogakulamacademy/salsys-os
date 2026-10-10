@@ -30,6 +30,8 @@ import { PageHeader, StatCard } from "@/components/ui";
 import { getSupabasePublicConfig, useMockData } from "@/lib/config";
 
 import { createClient } from "@/lib/supabase/server";
+import { getWhatsAppRuntimeForOrganization } from "@/lib/integrations/whatsapp-connection";
+import { getCurrentWorkspaceContext } from "@/lib/workspace";
 
 type ForecastSetting = {
   stage: string;
@@ -220,7 +222,13 @@ export default async function SettingsPage({
 
   const live = !useMockData && configured;
 
-  const [settings, audit, settingsError] = await loadSettings(live);
+  const [
+    [settings, audit, settingsError],
+    whatsappConnection,
+  ] = await Promise.all([
+    loadSettings(live),
+    loadWhatsAppConnectionState(live),
+  ]);
 
   const canManage = settings.permissions?.can_manage ?? false;
 
@@ -233,13 +241,6 @@ export default async function SettingsPage({
     settings.pipeline_aging_schema?.stage_column &&
     settings.pipeline_aging_schema?.warning_column &&
     settings.pipeline_aging_schema?.stuck_column,
-  );
-
-  const whatsappConfigured = Boolean(
-    process.env.WA_ACCESS_TOKEN &&
-    process.env.WA_PHONE_NUMBER_ID &&
-    (process.env.WA_BUSINESS_ACCOUNT_ID || process.env.WA_WABA_ID) &&
-    process.env.WA_APP_SECRET,
   );
 
   return (
@@ -542,13 +543,9 @@ export default async function SettingsPage({
             <Integration
               icon={<MessageCircle size={18} />}
               name="WhatsApp Cloud API"
-              status={
-                whatsappConfigured
-                  ? "Configuration present"
-                  : "Needs environment configuration"
-              }
-              ready={whatsappConfigured}
-              detail="Inbound messages, outbound replies, templates and delivery/read status"
+              status={whatsappConnection.status}
+              ready={whatsappConnection.ready}
+              detail="Workspace-scoped inbound messages, outbound replies, templates and delivery/read status"
             />
 
             <Integration
@@ -676,6 +673,53 @@ export default async function SettingsPage({
       </section>
     </>
   );
+}
+
+type WhatsAppConnectionState = {
+  ready: boolean;
+  status: string;
+};
+
+async function loadWhatsAppConnectionState(
+  live: boolean,
+): Promise<WhatsAppConnectionState> {
+  if (!live) {
+    return {
+      ready: false,
+      status: "Unavailable in mock mode",
+    };
+  }
+
+  try {
+    const workspace =
+      await getCurrentWorkspaceContext();
+
+    if (!workspace.activeOrganizationId) {
+      return {
+        ready: false,
+        status: workspace.selectionRequired
+          ? "Select a workspace"
+          : "No active workspace",
+      };
+    }
+
+    const runtime =
+      await getWhatsAppRuntimeForOrganization(
+        workspace.activeOrganizationId,
+      );
+
+    return {
+      ready: true,
+      status: runtime.displayPhoneNumber
+        ? `Connected · ${runtime.displayPhoneNumber}`
+        : "Connected",
+    };
+  } catch {
+    return {
+      ready: false,
+      status: "Not connected for this workspace",
+    };
+  }
 }
 
 async function loadSettings(

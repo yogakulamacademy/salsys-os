@@ -44,6 +44,7 @@ import type { Channel } from "@/types/crm";
 import { WhatsAppTemplateComposer } from "@/components/whatsapp-template-composer";
 
 import { getApprovedWhatsAppTemplates } from "@/lib/whatsapp-templates";
+import { getCurrentWorkspaceContext } from "@/lib/workspace";
 
 import { ConversationsRealtime } from "@/components/conversations-realtime";
 
@@ -78,14 +79,23 @@ export default async function ConversationsPage({
 }) {
   const query = await searchParams;
 
-  const [workspace, courses] = await Promise.all([
+  const mock = isMockMode();
+
+  const [workspace, courses, workspaceContext] = await Promise.all([
     getConversationsWorkspace(query.lead),
 
     getCourses(),
+
+    mock
+      ? Promise.resolve(null)
+      : getCurrentWorkspaceContext(),
   ]);
 
   const { conversationSummary, selectedId, selected, whatsappWindow, metrics } =
     workspace;
+
+  const organizationId =
+    workspaceContext?.activeOrganizationId ?? null;
 
   const canStartWhatsApp =
     Boolean(selected?.phone) && selected?.currentContactChannel !== "whatsapp";
@@ -106,8 +116,6 @@ export default async function ConversationsPage({
     ? updateConversationLeadContextAction.bind(null, selectedId)
     : undefined;
 
-  const mock = isMockMode();
-
   const noticeText =
     query.notice === "whatsapp-sent"
       ? "WhatsApp message sent and logged in the CRM."
@@ -125,13 +133,19 @@ export default async function ConversationsPage({
     selected && (canStartWhatsApp || (whatsappWindow && !whatsappWindow.open)),
   );
 
-  const whatsappTemplateCatalog = shouldLoadWhatsAppTemplates
-    ? await getApprovedWhatsAppTemplates()
-    : {
-        templates: [],
+  const whatsappTemplateCatalog =
+    shouldLoadWhatsAppTemplates && !mock
+      ? organizationId
+        ? await getApprovedWhatsAppTemplates(organizationId)
+        : {
+            templates: [],
+            error: "Unable to resolve the active workspace for WhatsApp templates.",
+          }
+      : {
+          templates: [],
 
-        error: null,
-      };
+          error: null,
+        };
 
   const whatsappCount = metrics.whatsappCount;
 

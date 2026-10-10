@@ -14,6 +14,7 @@ import {
   getApprovedWhatsAppTemplates,
   renderTemplateText,
 } from "@/lib/whatsapp-templates";
+import { getWhatsAppRuntimeForOrganization } from "@/lib/integrations/whatsapp-connection";
 
 const DEFAULT_WHATSAPP_API_VERSION = "v26.0";
 
@@ -31,15 +32,6 @@ function textValue(
   return value || null;
 }
 
-function requireEnv(name: string) {
-  const value = process.env[name]?.trim();
-
-  if (!value) {
-    throw new Error(`${name} is not configured.`);
-  }
-
-  return value;
-}
 
 function whatsappApiVersion() {
   const value =
@@ -68,6 +60,28 @@ function conversationUrl(
   });
 
   return `/conversations?${search.toString()}`;
+}
+
+async function requireWhatsAppRuntime(
+  leadId: string,
+  organizationId: string,
+) {
+  try {
+    return await getWhatsAppRuntimeForOrganization(organizationId, {
+      allowLegacyBootstrap: true,
+    });
+  } catch (error) {
+    const message =
+      error instanceof Error
+        ? error.message
+        : "WhatsApp is not connected for this workspace.";
+
+    redirect(
+      conversationUrl(leadId, {
+        error: message,
+      }),
+    );
+  }
 }
 
 type MetaSendResponse = {
@@ -586,9 +600,14 @@ export async function sendWhatsAppMessageAction(
     );
   }
 
-  const accessToken = requireEnv("WA_ACCESS_TOKEN");
+  const whatsappRuntime = await requireWhatsAppRuntime(
+    leadId,
+    organizationId,
+  );
 
-  const phoneNumberId = requireEnv("WA_PHONE_NUMBER_ID");
+  const accessToken = whatsappRuntime.accessToken;
+
+  const phoneNumberId = whatsappRuntime.phoneNumberId;
 
   const version = whatsappApiVersion();
 
@@ -1240,7 +1259,7 @@ export async function sendWhatsAppTemplateAction(
 
   ===================================================== */
 
-  const catalog = await getApprovedWhatsAppTemplates();
+  const catalog = await getApprovedWhatsAppTemplates(organizationId);
 
   if (catalog.error) {
     redirect(
@@ -1396,9 +1415,14 @@ export async function sendWhatsAppTemplateAction(
 
   ===================================================== */
 
-  const accessToken = requireEnv("WA_ACCESS_TOKEN");
+  const whatsappRuntime = await requireWhatsAppRuntime(
+    leadId,
+    organizationId,
+  );
 
-  const phoneNumberId = requireEnv("WA_PHONE_NUMBER_ID");
+  const accessToken = whatsappRuntime.accessToken;
+
+  const phoneNumberId = whatsappRuntime.phoneNumberId;
 
   const version = whatsappApiVersion();
 

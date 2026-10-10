@@ -1,5 +1,7 @@
 import 'server-only';
 
+import { getWhatsAppRuntimeForOrganization } from '@/lib/integrations/whatsapp-connection';
+
 const DEFAULT_WHATSAPP_API_VERSION = 'v26.0';
 
 type RawTemplateComponent = {
@@ -117,33 +119,48 @@ export function renderTemplateText(
   );
 }
 
-export async function getApprovedWhatsAppTemplates(): Promise<{
+export async function getApprovedWhatsAppTemplates(
+  organizationId: string
+): Promise<{
   templates: WhatsAppTemplateOption[];
   error: string | null;
 }> {
+  const resolvedOrganizationId =
+    organizationId?.trim();
+
+  if (!resolvedOrganizationId) {
+    return {
+      templates: [],
+      error:
+        'Unable to load WhatsApp templates: organizationId is required.',
+    };
+  }
+
+  let runtime;
+
+  try {
+    runtime =
+      await getWhatsAppRuntimeForOrganization(
+        resolvedOrganizationId,
+        {
+          allowLegacyBootstrap: true,
+        }
+      );
+  } catch (error) {
+    return {
+      templates: [],
+      error:
+        error instanceof Error
+          ? error.message
+          : 'WhatsApp is not connected for this workspace.',
+    };
+  }
+
   const accessToken =
-    process.env.WA_ACCESS_TOKEN?.trim();
+    runtime.accessToken;
 
   const wabaId =
-    process.env
-      .WA_BUSINESS_ACCOUNT_ID
-      ?.trim();
-
-  if (!accessToken) {
-    return {
-      templates: [],
-      error:
-        'WA_ACCESS_TOKEN is not configured.',
-    };
-  }
-
-  if (!wabaId) {
-    return {
-      templates: [],
-      error:
-        'WA_BUSINESS_ACCOUNT_ID is not configured.',
-    };
-  }
+    runtime.wabaId;
 
   const version =
     apiVersion();
