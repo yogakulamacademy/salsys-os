@@ -15,6 +15,7 @@ import {
   CircleDashed,
   Facebook,
   Globe2,
+  Instagram,
   KeyRound,
   Link2,
   MessageCircle,
@@ -94,6 +95,18 @@ const PROVIDERS:
         <Facebook size={18} />,
       futureAction:
         'Meta connection',
+    },
+    {
+      provider:
+        'instagram',
+      title:
+        'Instagram',
+      description:
+        'Instagram Direct messaging through a professional account connected with Facebook Login for Business.',
+      icon:
+        <Instagram size={18} />,
+      futureAction:
+        'Instagram connection',
     },
     {
       provider:
@@ -603,7 +616,8 @@ export default async function IntegrationsPage({
 
                       {(
                         definition.provider === 'google' ||
-                        definition.provider === 'meta'
+                        definition.provider === 'meta' ||
+                        definition.provider === 'instagram'
                       ) ? (
                         <IntegrationConnectButton
                           provider={definition.provider}
@@ -644,7 +658,8 @@ export default async function IntegrationsPage({
                     </>
                   ) : (
                     definition.provider === 'google' ||
-                    definition.provider === 'meta'
+                    definition.provider === 'meta' ||
+                    definition.provider === 'instagram'
                   ) ? (
                     <IntegrationConnectButton
                       provider={definition.provider}
@@ -698,7 +713,9 @@ export default async function IntegrationsPage({
                       {definition.provider ===
                         'google' ||
                       definition.provider ===
-                        'meta'
+                        'meta' ||
+                      definition.provider ===
+                        'instagram'
                         ? connection
                           ? 'Reconnect to resume data sync'
                           : 'Connect to start data sync'

@@ -13,7 +13,7 @@ import {
 } from 'lucide-react';
 
 type IntegrationConnectButtonProps = {
-  provider: 'google' | 'meta';
+  provider: 'google' | 'meta' | 'instagram';
   mode?: 'connect' | 'reconnect';
 };
 
@@ -190,6 +190,13 @@ const left =
   const reconnect =
     mode === 'reconnect';
 
+  const providerLabel =
+    provider === 'google'
+      ? 'Google'
+      : provider === 'meta'
+        ? 'Meta'
+        : 'Instagram';
+
   return (
     <button
       type="button"
@@ -216,10 +223,10 @@ const left =
       )}
 
       {opening
-        ? `Opening ${provider === 'google' ? 'Google' : 'Meta'}...`
+        ? `Opening ${providerLabel}...`
         : reconnect
-          ? `Reconnect ${provider === 'google' ? 'Google' : 'Meta'}`
-          : `Connect ${provider === 'google' ? 'Google' : 'Meta'}`}
+          ? `Reconnect ${providerLabel}`
+          : `Connect ${providerLabel}`}
     </button>
   );
 }

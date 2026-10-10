@@ -1,6 +1,7 @@
 export type IntegrationProvider =
   | 'google'
   | 'meta'
+  | 'instagram'
   | 'whatsapp';
 
 export type IntegrationAuthMode =
