@@ -540,6 +540,10 @@ export async function disconnectIntegrationAction(
   const organizationId =
     connection.organization_id;
 
+  const isWhatsApp =
+  connection.provider ===
+  'whatsapp';
+
   let providerRevocationConfirmed =
     true;
 
@@ -571,14 +575,15 @@ export async function disconnectIntegrationAction(
     }
   }
 
-  const {
-    error: updateError,
-  } =
-    await admin
-      .from(
-        'integration_connections',
-      )
-      .update({
+  const disconnectUpdate =
+  isWhatsApp
+    ? {
+        status:
+          'disconnected',
+        last_error:
+          null,
+      }
+    : {
         status:
           'disconnected',
         access_token_ciphertext:
@@ -589,15 +594,26 @@ export async function disconnectIntegrationAction(
           null,
         last_error:
           null,
-      })
-      .eq(
-        'id',
-        connectionId,
-      )
-      .eq(
-        'organization_id',
-        organizationId,
-      );
+      };
+
+const {
+  error: updateError,
+} =
+  await admin
+    .from(
+      'integration_connections',
+    )
+    .update(
+      disconnectUpdate,
+    )
+    .eq(
+      'id',
+      connectionId,
+    )
+    .eq(
+      'organization_id',
+      organizationId,
+    );
 
   if (updateError) {
     redirect(
@@ -608,6 +624,7 @@ export async function disconnectIntegrationAction(
     );
   }
 
+  if (!isWhatsApp) {
   await admin
     .from(
       'integration_assets',
@@ -621,6 +638,7 @@ export async function disconnectIntegrationAction(
       'organization_id',
       organizationId,
     );
+}
 
   await admin
     .from(
@@ -638,11 +656,15 @@ export async function disconnectIntegrationAction(
       actor_user_id:
         user.id,
       detail: {
-        account_name:
-          connection.account_name,
-        provider_revocation_confirmed:
-          providerRevocationConfirmed,
-      },
+  account_name:
+    connection.account_name,
+  provider_revocation_confirmed:
+    providerRevocationConfirmed,
+  credential_preserved:
+    isWhatsApp,
+  assets_preserved:
+    isWhatsApp,
+},
     });
 
   revalidatePath(
@@ -650,13 +672,15 @@ export async function disconnectIntegrationAction(
   );
 
   redirect(
-    integrationsUrl(
-      'notice',
-      providerRevocationConfirmed
+  integrationsUrl(
+    'notice',
+    isWhatsApp
+      ? 'WhatsApp disconnected from SalsysOS. The saved authorization was preserved for reconnection.'
+      : providerRevocationConfirmed
         ? 'Integration disconnected.'
         : 'Integration disconnected from the CRM. Provider revocation could not be confirmed.',
-    ),
-  );
+  ),
+);
 }
 
 export async function discoverGoogleAssetsAction(
