@@ -1,7 +1,10 @@
 import 'server-only';
 
 import { createAdminClient } from '@/lib/supabase/admin';
-import { encryptIntegrationSecret } from '@/lib/integrations/crypto';
+import {
+  decryptIntegrationSecret,
+  encryptIntegrationSecret,
+} from '@/lib/integrations/crypto';
 
 const DEFAULT_WHATSAPP_API_VERSION = 'v26.0';
 
@@ -35,13 +38,49 @@ type ExistingConnectionRow = {
   external_account_id: string | null;
 };
 
+type ReconnectConnectionRow = {
+  id: string;
+  organization_id: string;
+  provider: string;
+  auth_mode: string;
+  status: string;
+  external_account_id: string | null;
+  access_token_ciphertext: string | null;
+  scopes: unknown;
+  token_expires_at: string | null;
+  token_type: string | null;
+  provider_metadata: Record<string, unknown> | null;
+};
+
+type ReconnectAccountRow = {
+  id: string;
+  organization_id: string;
+  connection_id: string | null;
+  phone_number_id: string;
+  active: boolean;
+  is_default: boolean;
+};
+
+export type ReconnectWhatsAppInput = {
+  organizationId: string;
+  actorUserId: string;
+  connectionId: string;
+};
+
+export type ReauthorizeWhatsAppInput = {
+  organizationId: string;
+  actorUserId: string;
+  connectionId: string;
+  accessToken: string;
+};
+
 export type ConnectWhatsAppInput = {
   organizationId: string;
   actorUserId: string;
   wabaId: string;
   phoneNumberId: string;
   accessToken: string;
-  authMode?: 'manual_token' | 'embedded_signup';
+  authMode?: 'manual_token' | 'embedded_signup' | 'system_user';
   credentialSource?: string;
   scopes?: string[];
   tokenExpiresAt?: string | null;
@@ -544,4 +583,392 @@ export async function connectWhatsAppForOrganization(
     displayPhoneNumber,
     verifiedName,
   };
+}
+
+
+export async function reconnectWhatsAppForOrganization(
+  input: ReconnectWhatsAppInput,
+): Promise<ConnectWhatsAppResult> {
+  const organizationId = input.organizationId.trim();
+  const actorUserId = input.actorUserId.trim();
+  const connectionId = input.connectionId.trim();
+
+  if (!organizationId || !actorUserId || !connectionId) {
+    throw new Error('WhatsApp reconnect authorization is incomplete.');
+  }
+
+  const admin = createAdminClient();
+
+  const {
+    data: rawConnection,
+    error: connectionError,
+  } = await admin
+    .from('integration_connections')
+    .select(
+      [
+        'id',
+        'organization_id',
+        'provider',
+        'auth_mode',
+        'status',
+        'external_account_id',
+        'access_token_ciphertext',
+        'scopes',
+        'token_expires_at',
+        'token_type',
+        'provider_metadata',
+      ].join(','),
+    )
+    .eq('id', connectionId)
+    .eq('organization_id', organizationId)
+    .eq('provider', 'whatsapp')
+    .maybeSingle();
+
+  if (connectionError || !rawConnection) {
+    throw new Error(
+      connectionError?.message ||
+        'WhatsApp connection was not found for this workspace.',
+    );
+  }
+
+  const connection =
+    rawConnection as unknown as ReconnectConnectionRow;
+
+  if (
+    connection.id !== connectionId ||
+    connection.organization_id !== organizationId ||
+    connection.provider !== 'whatsapp'
+  ) {
+    throw new Error(
+      'WhatsApp connection was not found for this workspace.',
+    );
+  }
+
+  const wabaId = requiredNumericId(
+    connection.external_account_id ?? '',
+    'WhatsApp Business Account ID',
+  );
+
+  if (!connection.access_token_ciphertext) {
+    throw new Error(
+      'The existing WhatsApp authorization is no longer available. Meta authorization is required again.',
+    );
+  }
+
+  let accessToken: string;
+
+  try {
+    accessToken = decryptIntegrationSecret(
+      connection.access_token_ciphertext,
+    );
+  } catch {
+    throw new Error(
+      'The existing WhatsApp authorization could not be decrypted. Meta authorization is required again.',
+    );
+  }
+
+  if (!accessToken.trim()) {
+    throw new Error(
+      'The existing WhatsApp authorization is empty. Meta authorization is required again.',
+    );
+  }
+
+  const {
+    data: rawAccounts,
+    error: accountsError,
+  } = await admin
+    .from('whatsapp_accounts')
+    .select(
+      [
+        'id',
+        'organization_id',
+        'connection_id',
+        'phone_number_id',
+        'active',
+        'is_default',
+      ].join(','),
+    )
+    .eq('organization_id', organizationId)
+    .eq('connection_id', connectionId)
+    .eq('active', true)
+    .limit(10);
+
+  if (accountsError) {
+    throw new Error(
+      `Unable to load the WhatsApp phone mapping: ${accountsError.message}`,
+    );
+  }
+
+  const accounts =
+    (rawAccounts ?? []) as unknown as ReconnectAccountRow[];
+
+  if (accounts.length === 0) {
+    throw new Error(
+      'No active WhatsApp phone number is bound to this connection.',
+    );
+  }
+
+  const metadata =
+    connection.provider_metadata &&
+    typeof connection.provider_metadata === 'object'
+      ? connection.provider_metadata
+      : {};
+
+  const metadataPhoneNumberId =
+    typeof metadata.phone_number_id === 'string'
+      ? metadata.phone_number_id.trim()
+      : '';
+
+  const account =
+    (metadataPhoneNumberId
+      ? accounts.find(
+          (candidate) =>
+            candidate.phone_number_id === metadataPhoneNumberId,
+        )
+      : null) ??
+    accounts.find((candidate) => candidate.is_default) ??
+    (accounts.length === 1 ? accounts[0] : null);
+
+  if (!account) {
+    throw new Error(
+      'SalsysOS could not determine which existing WhatsApp phone number should be reconnected.',
+    );
+  }
+
+  const phoneNumberId = requiredNumericId(
+    account.phone_number_id,
+    'Phone Number ID',
+  );
+
+  const authMode =
+    connection.auth_mode === 'embedded_signup'
+      ? 'embedded_signup'
+      : connection.auth_mode === 'manual_token'
+        ? 'manual_token'
+        : 'system_user';
+
+  const credentialSource =
+    typeof metadata.credential_source === 'string' &&
+    metadata.credential_source.trim()
+      ? metadata.credential_source.trim()
+      : 'encrypted_connection';
+
+  const scopes = Array.isArray(connection.scopes)
+    ? connection.scopes
+        .filter(
+          (scope): scope is string =>
+            typeof scope === 'string' && Boolean(scope.trim()),
+        )
+        .map((scope) => scope.trim())
+    : undefined;
+
+  /*
+   * Reuse the normal WhatsApp connection pipeline.
+   *
+   * This verifies that:
+   *   - the stored token can still access Meta,
+   *   - this exact phone belongs to this exact WABA,
+   *   - the Meta app can subscribe the WABA to webhooks.
+   *
+   * Because the existing WABA already belongs to this organization,
+   * connectWhatsAppForOrganization() updates the existing connection
+   * instead of creating a replacement connection.
+   */
+  return connectWhatsAppForOrganization({
+    organizationId,
+    actorUserId,
+    wabaId,
+    phoneNumberId,
+    accessToken,
+    authMode,
+    credentialSource,
+    scopes,
+    tokenExpiresAt: connection.token_expires_at,
+    tokenType: connection.token_type,
+    providerMetadata: metadata,
+  });
+}
+
+
+export async function reauthorizeWhatsAppForOrganization(
+  input: ReauthorizeWhatsAppInput,
+): Promise<ConnectWhatsAppResult> {
+  const organizationId = input.organizationId.trim();
+  const actorUserId = input.actorUserId.trim();
+  const connectionId = input.connectionId.trim();
+  const accessToken = input.accessToken.trim();
+
+  if (
+    !organizationId ||
+    !actorUserId ||
+    !connectionId
+  ) {
+    throw new Error(
+      'WhatsApp reauthorization context is incomplete.',
+    );
+  }
+
+  if (!accessToken) {
+    throw new Error(
+      'WhatsApp access token is required.',
+    );
+  }
+
+  const admin = createAdminClient();
+
+  const {
+    data: rawConnection,
+    error: connectionError,
+  } = await admin
+    .from('integration_connections')
+    .select(
+      [
+        'id',
+        'organization_id',
+        'provider',
+        'auth_mode',
+        'external_account_id',
+        'scopes',
+        'provider_metadata',
+      ].join(','),
+    )
+    .eq('id', connectionId)
+    .eq('organization_id', organizationId)
+    .eq('provider', 'whatsapp')
+    .maybeSingle();
+
+  if (
+    connectionError ||
+    !rawConnection
+  ) {
+    throw new Error(
+      connectionError?.message ||
+        'WhatsApp connection was not found for this workspace.',
+    );
+  }
+
+  const connection =
+    rawConnection as unknown as {
+      id: string;
+      organization_id: string;
+      provider: string;
+      auth_mode: string;
+      external_account_id: string | null;
+      scopes: unknown;
+      provider_metadata: Record<string, unknown> | null;
+    };
+
+  const wabaId = requiredNumericId(
+    connection.external_account_id ?? '',
+    'WhatsApp Business Account ID',
+  );
+
+  const {
+    data: rawAccounts,
+    error: accountError,
+  } = await admin
+    .from('whatsapp_accounts')
+    .select(
+      [
+        'id',
+        'organization_id',
+        'connection_id',
+        'phone_number_id',
+        'active',
+        'is_default',
+      ].join(','),
+    )
+    .eq('organization_id', organizationId)
+    .eq('connection_id', connectionId)
+    .eq('active', true)
+    .limit(10);
+
+  if (accountError) {
+    throw new Error(
+      `Unable to load the WhatsApp phone mapping: ${accountError.message}`,
+    );
+  }
+
+  const accounts =
+    (rawAccounts ?? []) as unknown as ReconnectAccountRow[];
+
+  if (accounts.length === 0) {
+    throw new Error(
+      'No active WhatsApp phone number is bound to this connection.',
+    );
+  }
+
+  const metadata =
+    connection.provider_metadata &&
+    typeof connection.provider_metadata === 'object'
+      ? connection.provider_metadata
+      : {};
+
+  const metadataPhoneNumberId =
+    typeof metadata.phone_number_id === 'string'
+      ? metadata.phone_number_id.trim()
+      : '';
+
+  const account =
+    (metadataPhoneNumberId
+      ? accounts.find(
+          (candidate) =>
+            candidate.phone_number_id === metadataPhoneNumberId,
+        )
+      : null) ??
+    accounts.find(
+      (candidate) => candidate.is_default,
+    ) ??
+    (accounts.length === 1
+      ? accounts[0]
+      : null);
+
+  if (!account) {
+    throw new Error(
+      'SalsysOS could not determine which existing WhatsApp phone number should be reauthorized.',
+    );
+  }
+
+  const phoneNumberId = requiredNumericId(
+    account.phone_number_id,
+    'Phone Number ID',
+  );
+
+  const scopes = Array.isArray(connection.scopes)
+    ? connection.scopes
+        .filter(
+          (scope): scope is string =>
+            typeof scope === 'string' &&
+            Boolean(scope.trim()),
+        )
+        .map((scope) => scope.trim())
+    : [
+        'whatsapp_business_management',
+        'whatsapp_business_messaging',
+      ];
+
+  /*
+   * connectWhatsAppForOrganization() verifies the supplied
+   * token against this exact saved WABA + phone before the
+   * credential is encrypted and persisted.
+   *
+   * A token for a different WABA/phone will fail verification.
+   */
+  return connectWhatsAppForOrganization({
+    organizationId,
+    actorUserId,
+    wabaId,
+    phoneNumberId,
+    accessToken,
+    authMode: 'system_user',
+    credentialSource: 'encrypted_connection',
+    scopes,
+    tokenExpiresAt: null,
+    tokenType: 'bearer',
+    providerMetadata: {
+      ...metadata,
+      credential_source: 'encrypted_connection',
+      reauthorized_at: new Date().toISOString(),
+    },
+  });
 }

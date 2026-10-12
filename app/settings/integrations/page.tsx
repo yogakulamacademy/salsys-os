@@ -59,6 +59,8 @@ import type {
 
 import {
   disconnectIntegrationAction,
+  reconnectWhatsAppAction,
+  reauthorizeWhatsAppAction,
 } from './actions';
 
 type ProviderDefinition = {
@@ -159,7 +161,11 @@ function providerConnection(
     IntegrationConnection[],
   provider:
     IntegrationProvider,
-) {
+)
+
+
+
+{
   return (
     connections.find(
       (connection) =>
@@ -502,6 +508,19 @@ export default async function IntegrationsPage({
               );
 
 
+            const hasWhatsAppCredential =
+  definition.provider === 'whatsapp' &&
+  connection
+    ? Boolean(
+        (
+          connection as IntegrationConnection & {
+            access_token_ciphertext?: string | null;
+          }
+        ).access_token_ciphertext?.trim(),
+      )
+    : false;
+
+
             return (
               <section
                 key={
@@ -544,6 +563,26 @@ export default async function IntegrationsPage({
                       : 'Not connected'}
                   </span>
                 </div>
+
+{definition.provider === 'whatsapp' &&
+query.notice?.toLowerCase().includes('whatsapp') ? (
+  <div
+    role="status"
+    className="mt-4 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs font-medium leading-5 text-emerald-700"
+  >
+    {query.notice}
+  </div>
+) : null}
+
+{definition.provider === 'whatsapp' &&
+query.error?.toLowerCase().includes('whatsapp') ? (
+  <div
+    role="alert"
+    className="mt-4 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-xs font-medium leading-5 text-rose-700"
+  >
+    {query.error}
+  </div>
+) : null}
 
                 <div className="mt-5 space-y-3">
                   <div className="rounded-xl border border-slate-200 bg-slate-50/70 p-3">
@@ -624,13 +663,51 @@ export default async function IntegrationsPage({
                           mode="reconnect"
                         />
                       ) : definition.provider === 'whatsapp' ? (
-                        <WhatsAppEmbeddedSignupButton
-                          appId={whatsappEmbeddedSignup.appId}
-                          configId={whatsappEmbeddedSignup.configId}
-                          graphVersion={whatsappEmbeddedSignup.graphVersion}
-                          mode="reconnect"
-                        />
-                      ) : null}
+  hasWhatsAppCredential ? (
+    <form action={reconnectWhatsAppAction}>
+      <input
+        type="hidden"
+        name="connection_id"
+        value={connection.id}
+      />
+
+      <button
+        type="submit"
+        className="btn-secondary"
+      >
+        Reconnect WhatsApp
+      </button>
+    </form>
+  ) : (
+    <form
+      action={reauthorizeWhatsAppAction}
+      className="flex flex-wrap items-center gap-2"
+    >
+      <input
+        type="hidden"
+        name="connection_id"
+        value={connection.id}
+      />
+
+      <input
+        type="password"
+        name="access_token"
+        required
+        autoComplete="off"
+        spellCheck={false}
+        placeholder="System user token"
+        className="min-w-[240px] rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs text-slate-700 outline-none transition focus:border-violet-400 focus:ring-2 focus:ring-violet-100"
+      />
+
+      <button
+        type="submit"
+        className="btn-secondary"
+      >
+        Reauthorize WhatsApp
+      </button>
+    </form>
+  )
+) : null}
 
                       <form
                         action={
@@ -671,28 +748,90 @@ export default async function IntegrationsPage({
                     />
                   ) : definition.provider === 'whatsapp' ? (
                     <div className="w-full rounded-xl border border-violet-100 bg-violet-50/40 p-3">
-                      <div className="mb-3">
-                        <div className="text-xs font-semibold text-slate-800">
-                          Connect WhatsApp Business
-                        </div>
-                        <p className="mt-1 text-[11px] leading-5 text-slate-500">
-                          Continue with Meta to choose this workspace&apos;s WhatsApp Business Account and phone number. SalsysOS encrypts the returned business credential and keeps it isolated to this workspace.
-                        </p>
-                      </div>
+  <div className="mb-3">
+    <div className="text-xs font-semibold text-slate-800">
+      {connection
+        ? hasWhatsAppCredential
+          ? 'Reconnect WhatsApp Business'
+          : 'Reauthorize WhatsApp Business'
+        : 'Connect WhatsApp Business'}
+    </div>
 
-                      <WhatsAppEmbeddedSignupButton
-                        appId={whatsappEmbeddedSignup.appId}
-                        configId={whatsappEmbeddedSignup.configId}
-                        graphVersion={whatsappEmbeddedSignup.graphVersion}
-                        mode={connection ? 'reconnect' : 'connect'}
-                      />
+    <p className="mt-1 text-[11px] leading-5 text-slate-500">
+      {connection
+        ? hasWhatsAppCredential
+          ? "Verify and restore this workspace's existing WhatsApp Business connection."
+          : "The saved WhatsApp authorization is no longer available. Enter a new Meta system-user token to restore this workspace's existing WhatsApp connection."
+        : "Continue with Meta to choose this workspace's WhatsApp Business Account and phone number. SalsysOS encrypts the returned business credential and keeps it isolated to this workspace."}
+    </p>
+  </div>
 
-                      {!whatsappEmbeddedSignup.configId ? (
-                        <div className="mt-2 text-[10px] leading-4 text-amber-600">
-                          Add WHATSAPP_EMBEDDED_SIGNUP_CONFIG_ID on the server before testing this connection.
-                        </div>
-                      ) : null}
-                    </div>
+  {connection ? (
+    hasWhatsAppCredential ? (
+      <form action={reconnectWhatsAppAction}>
+        <input
+          type="hidden"
+          name="connection_id"
+          value={connection.id}
+        />
+
+        <button
+          type="submit"
+          className="inline-flex items-center gap-2 rounded-lg bg-violet-600 px-3 py-2 text-xs font-semibold text-white transition hover:bg-violet-700"
+        >
+          Reconnect WhatsApp
+        </button>
+      </form>
+    ) : (
+      <form
+        action={reauthorizeWhatsAppAction}
+        className="grid max-w-xl gap-2"
+      >
+        <input
+          type="hidden"
+          name="connection_id"
+          value={connection.id}
+        />
+
+        <input
+          type="password"
+          name="access_token"
+          required
+          autoComplete="off"
+          spellCheck={false}
+          placeholder="Paste Meta system-user token"
+          className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-xs text-slate-700 outline-none transition focus:border-violet-400 focus:ring-2 focus:ring-violet-100"
+        />
+
+        <p className="text-[10px] leading-4 text-slate-500">
+          The token is sent securely to the server, verified against the existing WhatsApp Business Account and phone number, and stored encrypted.
+        </p>
+
+        <button
+          type="submit"
+          className="w-fit inline-flex items-center gap-2 rounded-lg bg-violet-600 px-3 py-2 text-xs font-semibold text-white transition hover:bg-violet-700"
+        >
+          Reauthorize WhatsApp
+        </button>
+      </form>
+    )
+  ) : (
+    <WhatsAppEmbeddedSignupButton
+      appId={whatsappEmbeddedSignup.appId}
+      configId={whatsappEmbeddedSignup.configId}
+      graphVersion={whatsappEmbeddedSignup.graphVersion}
+      mode="connect"
+    />
+  )}
+
+  {!whatsappEmbeddedSignup.configId && !connection ? (
+    <div className="mt-2 text-[10px] leading-4 text-amber-600">
+      Add WHATSAPP_EMBEDDED_SIGNUP_CONFIG_ID on the server before testing this connection.
+    </div>
+  ) : null}
+</div>
+
+
                   ) : (
                     <button
                       type="button"
@@ -707,6 +846,7 @@ export default async function IntegrationsPage({
                     </button>
                   )}
 
+
                   {connection?.status !==
                   'connected' ? (
                     <span className="text-[10px] text-slate-400">
@@ -720,8 +860,10 @@ export default async function IntegrationsPage({
                           ? 'Reconnect to resume data sync'
                           : 'Connect to start data sync'
                         : definition.provider === 'whatsapp'
-                          ? 'Connect this workspace through Meta Embedded Signup'
-                          : `${definition.futureAction} setup coming next`}
+  ? connection
+    ? 'Restore this workspace\'s existing WhatsApp connection'
+    : 'Connect this workspace through Meta Embedded Signup'
+  : `${definition.futureAction} setup coming next`}
                     </span>
                   ) : null}
                 </div>

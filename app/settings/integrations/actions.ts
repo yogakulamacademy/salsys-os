@@ -32,6 +32,11 @@ import {
   discoverGoogleAssets,
 } from '@/lib/integrations/google-assets';
 
+import {
+  reconnectWhatsAppForOrganization,
+  reauthorizeWhatsAppForOrganization,
+} from '@/lib/integrations/whatsapp-connect';
+
 function textValue(
   formData: FormData,
   key: string,
@@ -261,6 +266,229 @@ async function getManagedConnection({
     error:
       null,
   };
+}
+
+
+export async function reconnectWhatsAppAction(
+  formData: FormData,
+) {
+  const user = await requireActiveUser();
+
+  const connectionId =
+    textValue(
+      formData,
+      'connection_id',
+    );
+
+  if (!connectionId) {
+    redirect(
+      integrationsUrl(
+        'error',
+        'WhatsApp connection is missing.',
+      ),
+    );
+  }
+
+  const {
+    connection,
+    error: managedError,
+  } =
+    await getManagedConnection({
+      userId: user.id,
+      connectionId,
+      provider: 'whatsapp',
+      requireConnected: false,
+    });
+
+  if (
+    managedError ||
+    !connection
+  ) {
+    redirect(
+      integrationsUrl(
+        'error',
+        managedError ??
+          'WhatsApp connection not found.',
+      ),
+    );
+  }
+
+  let result:
+    | Awaited<
+        ReturnType<
+          typeof reconnectWhatsAppForOrganization
+        >
+      >
+    | null = null;
+
+  let reconnectError:
+    | string
+    | null = null;
+
+  try {
+    result =
+      await reconnectWhatsAppForOrganization({
+        organizationId:
+          connection.organization_id,
+        actorUserId:
+          user.id,
+        connectionId:
+          connection.id,
+      });
+  } catch (error) {
+    reconnectError =
+      error instanceof Error
+        ? error.message
+        : 'Unable to reconnect WhatsApp.';
+  }
+
+  if (
+    reconnectError ||
+    !result
+  ) {
+    redirect(
+      integrationsUrl(
+        'error',
+        reconnectError ??
+          'Unable to reconnect WhatsApp.',
+      ),
+    );
+  }
+
+  revalidatePath(
+    '/settings/integrations',
+  );
+
+  const phone =
+    result.displayPhoneNumber?.trim();
+
+  redirect(
+    integrationsUrl(
+      'notice',
+      phone
+        ? `WhatsApp ${phone} reconnected successfully.`
+        : 'WhatsApp Business reconnected successfully.',
+    ),
+  );
+}
+
+export async function reauthorizeWhatsAppAction(
+  formData: FormData,
+) {
+  const user = await requireActiveUser();
+
+  const connectionId =
+    textValue(
+      formData,
+      'connection_id',
+    );
+
+  const accessToken =
+    textValue(
+      formData,
+      'access_token',
+    );
+
+  if (!connectionId) {
+    redirect(
+      integrationsUrl(
+        'error',
+        'WhatsApp connection is missing.',
+      ),
+    );
+  }
+
+  if (!accessToken) {
+    redirect(
+      integrationsUrl(
+        'error',
+        'WhatsApp system-user token is required.',
+      ),
+    );
+  }
+
+  const {
+    connection,
+    error: managedError,
+  } =
+    await getManagedConnection({
+      userId: user.id,
+      connectionId,
+      provider: 'whatsapp',
+      requireConnected: false,
+    });
+
+  if (
+    managedError ||
+    !connection
+  ) {
+    redirect(
+      integrationsUrl(
+        'error',
+        managedError ??
+          'WhatsApp connection not found.',
+      ),
+    );
+  }
+
+  let result:
+    | Awaited<
+        ReturnType<
+          typeof reauthorizeWhatsAppForOrganization
+        >
+      >
+    | null = null;
+
+  let reauthorizeError:
+    | string
+    | null = null;
+
+  try {
+    result =
+      await reauthorizeWhatsAppForOrganization({
+        organizationId:
+          connection.organization_id,
+        actorUserId:
+          user.id,
+        connectionId:
+          connection.id,
+        accessToken,
+      });
+  } catch (error) {
+    reauthorizeError =
+      error instanceof Error
+        ? error.message
+        : 'Unable to reauthorize WhatsApp.';
+  }
+
+  if (
+    reauthorizeError ||
+    !result
+  ) {
+    redirect(
+      integrationsUrl(
+        'error',
+        reauthorizeError ??
+          'Unable to reauthorize WhatsApp.',
+      ),
+    );
+  }
+
+  revalidatePath(
+    '/settings/integrations',
+  );
+
+  const phone =
+    result.displayPhoneNumber?.trim();
+
+  redirect(
+    integrationsUrl(
+      'notice',
+      phone
+        ? `WhatsApp ${phone} reauthorized successfully.`
+        : 'WhatsApp Business reauthorized successfully.',
+    ),
+  );
 }
 
 export async function disconnectIntegrationAction(
