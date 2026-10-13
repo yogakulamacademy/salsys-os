@@ -1,20 +1,20 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import {
-  ACTIVE_WORKSPACE_COOKIE,
+  ACTIVE_ORGANIZATION_COOKIE,
   getWorkspaceContextForUser,
 } from "@/lib/workspace";
 
-const WORKSPACE_COOKIE_MAX_AGE_SECONDS =
+const ORGANIZATION_COOKIE_MAX_AGE_SECONDS =
   60 * 60 * 24 * 30;
 
-function workspaceCookieOptions() {
+function organizationCookieOptions() {
   return {
     httpOnly: true,
     sameSite: "lax" as const,
     secure: process.env.NODE_ENV === "production",
     path: "/",
-    maxAge: WORKSPACE_COOKIE_MAX_AGE_SECONDS,
+    maxAge: ORGANIZATION_COOKIE_MAX_AGE_SECONDS,
   };
 }
 
@@ -108,18 +108,18 @@ export async function POST(request: Request) {
         user.id,
       );
 
-    const selectedWorkspace =
+    const selectedOrganization =
       workspace.memberships.find(
         (membership) =>
           membership.organizationId ===
           organizationId,
       );
 
-    if (!selectedWorkspace) {
+    if (!selectedOrganization) {
       return NextResponse.json(
         {
           error:
-            "You do not have an active membership in that workspace.",
+            "You do not have an active membership in that organization.",
         },
         { status: 403 },
       );
@@ -128,14 +128,14 @@ export async function POST(request: Request) {
     const response = NextResponse.json({
       ok: true,
       activeOrganizationId:
-        selectedWorkspace.organizationId,
-      activeWorkspace: selectedWorkspace,
+        selectedOrganization.organizationId,
+      activeWorkspace: selectedOrganization,
     });
 
     response.cookies.set(
-      ACTIVE_WORKSPACE_COOKIE,
-      selectedWorkspace.organizationId,
-      workspaceCookieOptions(),
+      ACTIVE_ORGANIZATION_COOKIE,
+      selectedOrganization.organizationId,
+      organizationCookieOptions(),
     );
 
     return response;
@@ -143,7 +143,7 @@ export async function POST(request: Request) {
     const message =
       error instanceof Error
         ? error.message
-        : "Unable to switch workspace.";
+        : "Unable to switch organization.";
 
     return NextResponse.json(
       { error: message },
