@@ -13,11 +13,12 @@ export function TrackerSnippet() {
 
   const snippet = useMemo(
     () => `<script
-  src="${origin}/yogakulam-tracker.js"
+  src="${origin}/salsys.js"
   data-endpoint="${origin}/api/tracking/collect"
   data-consent-endpoint="${origin}/api/tracking/consent"
   data-site="yogakulamacademy.com"
   data-consent-mode="required"
+  data-legacy-compat="true"
   defer>
 </script>`,
     [origin],
@@ -25,11 +26,12 @@ export function TrackerSnippet() {
 
   const testSnippet = useMemo(
     () => `<script
-  src="${origin}/yogakulam-tracker.js"
+  src="${origin}/salsys.js"
   data-endpoint="${origin}/api/tracking/collect"
   data-consent-endpoint="${origin}/api/tracking/consent"
   data-site="yogakulamacademy.com"
   data-consent-mode="granted"
+  data-legacy-compat="true"
   data-debug="true"
   defer>
 </script>`,
@@ -51,7 +53,7 @@ export function TrackerSnippet() {
       <div className="tracking-snippet-block">
         <div className="mb-2 flex items-center justify-between gap-3">
           <div className="text-xs font-medium text-slate-400">
-            Production snippet â€” consent required
+            Production snippet — consent required
           </div>
 
           <button
@@ -71,7 +73,7 @@ export function TrackerSnippet() {
 
       <div className="tracking-snippet-block">
         <div className="mb-2 text-xs font-medium text-amber-600">
-          Temporary testing snippet â€” use in GTM while diagnosing
+          Temporary testing snippet — use while diagnosing
         </div>
 
         <pre className="tracking-code-block overflow-x-auto rounded-2xl bg-slate-950 p-4 text-xs leading-6 text-slate-100">
