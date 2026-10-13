@@ -22,7 +22,7 @@ export async function signInAction(formData: FormData) {
 
   const next = safeRequestedNext ? requestedNext : '/dashboard';
 
-  if (!email || !password) redirect('/login?error=Enter%20your%20email%20or%20password');
+  if (!email || !password) redirect('/login?error=Enter%20your%20email%20and%20password');
 
   const supabase = await createClient();
   const { error } = await supabase.auth.signInWithPassword({ email, password });
