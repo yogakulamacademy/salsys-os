@@ -8,6 +8,7 @@ import {
   parseLeadsWorkspaceParams,
 } from "@/lib/leads-data";
 import { isMockMode } from "@/lib/data";
+import { getCurrentWorkspaceContext } from "@/lib/workspace";
 
 type LeadsPageProps = {
   searchParams: Promise<{
@@ -32,6 +33,19 @@ export default async function LeadsPage({ searchParams }: LeadsPageProps) {
   const mock = isMockMode();
   const notice = one(params.notice);
 
+  let canCreateLead = mock;
+
+  if (!mock) {
+    const workspaceContext = await getCurrentWorkspaceContext();
+    const salesRole =
+      workspaceContext.functionalWorkspaces
+        .find((functionalWorkspace) => functionalWorkspace.code === "sales")
+        ?.role.trim()
+        .toLowerCase() ?? "";
+
+    canCreateLead = ["owner", "admin", "manager"].includes(salesRole);
+  }
+
   return (
     <div className="leads-premium-page">
       <PageHeader
@@ -39,10 +53,12 @@ export default async function LeadsPage({ searchParams }: LeadsPageProps) {
         title="Leads"
         description="Find, filter and triage prospects across every acquisition channel from one focused workspace."
         actions={
-          <Link href="/leads/new" className="btn-primary">
-            <Plus size={16} />
-            Add lead
-          </Link>
+          canCreateLead ? (
+            <Link href="/leads/new" className="btn-primary">
+              <Plus size={16} />
+              Add lead
+            </Link>
+          ) : undefined
         }
       />
 
