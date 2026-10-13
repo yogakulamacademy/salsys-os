@@ -9,6 +9,7 @@ import {
 } from "@/lib/data";
 
 import { createClient } from "@/lib/supabase/server";
+import { requireCurrentOrganizationId } from "@/lib/workspace";
 
 export type TrackingWorkspace = {
   health: TrackingHealth;
@@ -18,10 +19,32 @@ export type TrackingWorkspace = {
   warning: string | null;
 };
 
+export type TrackingInstallation = {
+  organizationId: string | null;
+  site: string | null;
+  publicKey: string | null;
+  environment: "live" | "test" | null;
+  allowedHosts: string[];
+  scopes: string[];
+  legacyCompat: boolean;
+};
+
 type TrackingRpcPayload = {
   health?: Record<string, unknown>;
   capture?: Record<string, unknown>;
   funnel?: Record<string, unknown>;
+};
+
+type CredentialListRow = {
+  credential_id?: unknown;
+  credential_kind?: unknown;
+  environment?: unknown;
+  public_key?: unknown;
+  scopes?: unknown;
+  allowed_hosts?: unknown;
+  status?: unknown;
+  effective_status?: unknown;
+  created_at?: unknown;
 };
 
 export async function getTrackingWorkspace(): Promise<TrackingWorkspace> {
@@ -46,11 +69,6 @@ export async function getTrackingWorkspace(): Promise<TrackingWorkspace> {
   const { data, error } = await supabase.rpc("get_tracking_workspace");
 
   if (error) {
-    /*
-     * Safe fallback:
-     * preserve the current three-view read path if the
-     * compact workspace RPC is temporarily unavailable.
-     */
     const [health, capture, funnel] = await Promise.all([
       getTrackingHealth(),
       getWebsiteCaptureHealth(),
@@ -67,11 +85,8 @@ export async function getTrackingWorkspace(): Promise<TrackingWorkspace> {
   }
 
   const payload = (data ?? {}) as TrackingRpcPayload;
-
   const healthRow = payload.health ?? {};
-
   const captureRow = payload.capture ?? {};
-
   const funnelRow = payload.funnel ?? {};
 
   return {
@@ -104,6 +119,120 @@ export async function getTrackingWorkspace(): Promise<TrackingWorkspace> {
     fallback: false,
     warning: null,
   };
+}
+
+export async function getTrackingInstallation(): Promise<TrackingInstallation> {
+  if (isMockMode()) {
+    return {
+      organizationId: null,
+      site: "example.com",
+      publicKey: null,
+      environment: null,
+      allowedHosts: [],
+      scopes: [],
+      legacyCompat: false,
+    };
+  }
+
+  const supabase = await createClient();
+  const {
+    data: { user },
+    error: authError,
+  } = await supabase.auth.getUser();
+
+  if (authError || !user) {
+    return emptyInstallation();
+  }
+
+  let organizationId: string;
+
+  try {
+    organizationId = await requireCurrentOrganizationId(supabase, user.id);
+  } catch {
+    return emptyInstallation();
+  }
+
+  const [{ data: siteRows }, { data: credentialRows, error: credentialError }] =
+    await Promise.all([
+      supabase
+        .from("organization_sites")
+        .select("hostname,status")
+        .eq("organization_id", organizationId)
+        .eq("status", "active")
+        .order("created_at", { ascending: true }),
+      supabase.rpc("list_integration_api_credentials", {
+        p_organization_id: organizationId,
+      }),
+    ]);
+
+  const sites = (siteRows ?? [])
+    .map((row) => String(row.hostname ?? "").trim().toLowerCase())
+    .filter(Boolean);
+
+  const rows = credentialError
+    ? []
+    : ((credentialRows ?? []) as CredentialListRow[]);
+
+  const activeWebsiteCredentials = rows
+    .filter((row) => {
+      const status = String(row.effective_status ?? row.status ?? "");
+      const kind = String(row.credential_kind ?? "");
+      const scopes = arrayOfStrings(row.scopes);
+      const allowedHosts = arrayOfStrings(row.allowed_hosts).map((host) =>
+        host.toLowerCase(),
+      );
+
+      return (
+        status === "active" &&
+        kind === "website" &&
+        scopes.includes("events:write") &&
+        allowedHosts.some((host) => sites.includes(host))
+      );
+    })
+    .sort((left, right) =>
+      String(right.created_at ?? "").localeCompare(String(left.created_at ?? "")),
+    );
+
+  const selected = activeWebsiteCredentials[0] ?? null;
+  const allowedHosts = selected ? arrayOfStrings(selected.allowed_hosts) : [];
+  const site =
+    allowedHosts.find((host) => sites.includes(host.toLowerCase())) ??
+    sites[0] ??
+    null;
+
+  return {
+    organizationId,
+    site,
+    publicKey: selected ? optionalText(selected.public_key) ?? null : null,
+    environment: selected
+      ? String(selected.environment ?? "") === "test"
+        ? "test"
+        : "live"
+      : null,
+    allowedHosts,
+    scopes: selected ? arrayOfStrings(selected.scopes) : [],
+    // Yogakulam is the existing production migration case. Other workspaces
+    // receive the generic Salsys SDK contract only.
+    legacyCompat: site === "yogakulamacademy.com" || site === "yogakulam.com",
+  };
+}
+
+function emptyInstallation(): TrackingInstallation {
+  return {
+    organizationId: null,
+    site: null,
+    publicKey: null,
+    environment: null,
+    allowedHosts: [],
+    scopes: [],
+    legacyCompat: false,
+  };
+}
+
+function arrayOfStrings(value: unknown) {
+  return Array.isArray(value)
+    ? value.map((item) => String(item ?? "").trim()).filter(Boolean)
+    : [];
 }
 
 function toNumber(value: unknown) {
