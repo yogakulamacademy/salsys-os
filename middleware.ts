@@ -354,6 +354,14 @@ export async function middleware(request: NextRequest) {
     return response;
   }
 
+  if (
+    pathname === "/forgot-password" ||
+    pathname === "/auth/callback" ||
+    pathname === "/reset-password"
+  ) {
+    return response;
+  }
+
   if (!userId) {
     return redirectWithAuthCookies(request, response, "/login", {
       next: pathname,
