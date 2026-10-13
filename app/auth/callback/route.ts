@@ -13,9 +13,8 @@ function redirectWithError(request: NextRequest, message: string) {
 
 export async function GET(request: NextRequest) {
   const code = request.nextUrl.searchParams.get('code');
-  const next = request.nextUrl.searchParams.get('next');
 
-  if (!code || next !== '/reset-password') {
+  if (!code) {
     return redirectWithError(
       request,
       'This password reset link is invalid. Request a new one.',
