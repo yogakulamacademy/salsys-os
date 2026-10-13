@@ -13,6 +13,7 @@ import { PageHeader } from "@/components/ui";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { getWorkspaceContextForUser } from "@/lib/workspace";
+import { setEmployeeOrganizationActiveAction } from "./activation-actions";
 import { createEmployeeAction, updateEmployeeAccessAction } from "./actions";
 
 type OrganizationMemberRow = {
@@ -371,6 +372,7 @@ export default async function TeamAccessPage({
                   const editable =
                     member.organizationRole !== "owner" &&
                     member.organizationRole !== "admin";
+                  const isSelf = member.userId === user.id;
 
                   return (
                     <tr key={member.userId} className="align-top hover:bg-slate-50/70">
@@ -442,66 +444,110 @@ export default async function TeamAccessPage({
                               Edit access
                             </summary>
 
-                            <form
-                              action={updateEmployeeAccessAction}
-                              className="mt-3 space-y-3 rounded-xl border border-slate-200 bg-white p-3 shadow-sm"
-                            >
-                              <input
-                                type="hidden"
-                                name="employee_id"
-                                value={member.userId}
-                              />
-
-                              {assignableWorkspaces.map((workspace) => {
-                                const existingGrant = member.workspaces.find(
-                                  (grant) => grant.code === workspace.code,
-                                );
-                                const role =
-                                  existingGrant?.role === "manager"
-                                    ? "manager"
-                                    : "member";
-
-                                return (
-                                  <div
-                                    key={workspace.code}
-                                    className="grid grid-cols-[1fr_104px] items-center gap-2 rounded-lg border border-slate-100 bg-slate-50 px-2.5 py-2"
-                                  >
-                                    <label className="flex items-center gap-2 text-xs font-semibold text-slate-700">
-                                      <input
-                                        type="checkbox"
-                                        name="workspace_codes"
-                                        value={workspace.code}
-                                        defaultChecked={Boolean(existingGrant)}
-                                        className="h-4 w-4 rounded border-slate-300"
-                                      />
-                                      {workspace.name}
-                                    </label>
-
-                                    <select
-                                      name={`workspace_role_${workspace.code}`}
-                                      defaultValue={role}
-                                      className="rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-xs font-semibold text-slate-700 outline-none focus:border-brand"
-                                      aria-label={`${workspace.name} role`}
-                                    >
-                                      <option value="member">Member</option>
-                                      <option value="manager">Manager</option>
-                                    </select>
-                                  </div>
-                                );
-                              })}
-
-                              <div className="text-[11px] leading-5 text-slate-500">
-                                At least one workspace is required. Admin access is
-                                managed through organization roles, not this editor.
-                              </div>
-
-                              <button
-                                type="submit"
-                                className="btn-primary w-full justify-center"
+                            <div className="mt-3 space-y-3 rounded-xl border border-slate-200 bg-white p-3 shadow-sm">
+                              <form
+                                action={updateEmployeeAccessAction}
+                                className="space-y-3"
                               >
-                                Save access
-                              </button>
-                            </form>
+                                <input
+                                  type="hidden"
+                                  name="employee_id"
+                                  value={member.userId}
+                                />
+
+                                {assignableWorkspaces.map((workspace) => {
+                                  const existingGrant = member.workspaces.find(
+                                    (grant) => grant.code === workspace.code,
+                                  );
+                                  const role =
+                                    existingGrant?.role === "manager"
+                                      ? "manager"
+                                      : "member";
+
+                                  return (
+                                    <div
+                                      key={workspace.code}
+                                      className="grid grid-cols-[1fr_104px] items-center gap-2 rounded-lg border border-slate-100 bg-slate-50 px-2.5 py-2"
+                                    >
+                                      <label className="flex items-center gap-2 text-xs font-semibold text-slate-700">
+                                        <input
+                                          type="checkbox"
+                                          name="workspace_codes"
+                                          value={workspace.code}
+                                          defaultChecked={Boolean(existingGrant)}
+                                          className="h-4 w-4 rounded border-slate-300"
+                                          disabled={!member.organizationActive}
+                                        />
+                                        {workspace.name}
+                                      </label>
+
+                                      <select
+                                        name={`workspace_role_${workspace.code}`}
+                                        defaultValue={role}
+                                        className="rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-xs font-semibold text-slate-700 outline-none focus:border-brand disabled:bg-slate-100 disabled:text-slate-400"
+                                        aria-label={`${workspace.name} role`}
+                                        disabled={!member.organizationActive}
+                                      >
+                                        <option value="member">Member</option>
+                                        <option value="manager">Manager</option>
+                                      </select>
+                                    </div>
+                                  );
+                                })}
+
+                                <div className="text-[11px] leading-5 text-slate-500">
+                                  At least one workspace is required. Admin access is
+                                  managed through organization roles, not this editor.
+                                </div>
+
+                                <button
+                                  type="submit"
+                                  className="btn-primary w-full justify-center disabled:cursor-not-allowed disabled:opacity-50"
+                                  disabled={!member.organizationActive}
+                                >
+                                  Save access
+                                </button>
+                              </form>
+
+                              <div className="border-t border-slate-100 pt-3">
+                                <div className="mb-2 text-[11px] leading-5 text-slate-500">
+                                  {member.organizationActive
+                                    ? "Suspending this organization preserves the workspace setup so it can be restored exactly later."
+                                    : "Reactivating restores this employee's existing workspace configuration for this organization."}
+                                </div>
+
+                                <form action={setEmployeeOrganizationActiveAction}>
+                                  <input
+                                    type="hidden"
+                                    name="employee_id"
+                                    value={member.userId}
+                                  />
+                                  <input
+                                    type="hidden"
+                                    name="active"
+                                    value={member.organizationActive ? "false" : "true"}
+                                  />
+                                  <button
+                                    type="submit"
+                                    className={
+                                      member.organizationActive
+                                        ? "w-full rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs font-semibold text-rose-700 hover:border-rose-300"
+                                        : "w-full rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs font-semibold text-emerald-700 hover:border-emerald-300"
+                                    }
+                                    disabled={isSelf}
+                                    title={
+                                      isSelf
+                                        ? "You cannot change your own organization access here."
+                                        : undefined
+                                    }
+                                  >
+                                    {member.organizationActive
+                                      ? "Suspend organization access"
+                                      : "Reactivate organization access"}
+                                  </button>
+                                </form>
+                              </div>
+                            </div>
                           </details>
                         ) : (
                           <span className="text-xs font-semibold text-slate-400">
