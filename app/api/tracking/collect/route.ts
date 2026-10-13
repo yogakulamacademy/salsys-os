@@ -83,6 +83,22 @@ function getRawEvents(body: unknown): unknown[] {
   return [body];
 }
 
+function candidateEventId(rawEvent: unknown, index: number) {
+  if (
+    rawEvent &&
+    typeof rawEvent === "object" &&
+    !Array.isArray(rawEvent)
+  ) {
+    const value = (rawEvent as Record<string, unknown>).eventId;
+
+    if (typeof value === "string" && value.trim()) {
+      return value.trim().slice(0, 100);
+    }
+  }
+
+  return `batch_item_${index + 1}`;
+}
+
 export async function OPTIONS(request: NextRequest) {
   const origin = request.headers.get("origin");
 
@@ -129,7 +145,6 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const payloads = rawEvents.map((event) => sanitizeTrackingPayload(event));
     const supabase = createAdminClient();
     const geo = getRequestGeo(request);
     const originHostname = trackingOriginHostname(origin);
@@ -202,10 +217,29 @@ export async function POST(request: NextRequest) {
     const results: Array<{
       eventId: string;
       ok: boolean;
+      retryable: boolean;
       error?: string;
     }> = [];
 
-    for (const payload of payloads) {
+    for (let index = 0; index < rawEvents.length; index += 1) {
+      const rawEvent = rawEvents[index];
+      let payload;
+
+      try {
+        payload = sanitizeTrackingPayload(rawEvent);
+      } catch (error) {
+        results.push({
+          eventId: candidateEventId(rawEvent, index),
+          ok: false,
+          retryable: false,
+          error:
+            error instanceof Error
+              ? error.message
+              : "Invalid tracking event payload",
+        });
+        continue;
+      }
+
       try {
         await ingestBrowserTrackingEvent({
           supabase,
@@ -221,18 +255,39 @@ export async function POST(request: NextRequest) {
           sdkVersion,
         });
 
-        results.push({ eventId: payload.eventId, ok: true });
+        results.push({
+          eventId: payload.eventId,
+          ok: true,
+          retryable: false,
+        });
       } catch (error) {
         results.push({
           eventId: payload.eventId,
           ok: false,
-          error: error instanceof Error ? error.message : "Tracking ingest failed",
+          retryable: true,
+          error:
+            error instanceof Error
+              ? error.message
+              : "Tracking ingest failed",
         });
       }
     }
 
     const accepted = results.filter((result) => result.ok).length;
     const failed = results.length - accepted;
+    const retryableFailed = results.filter(
+      (result) => !result.ok && result.retryable,
+    ).length;
+    const permanentFailed = failed - retryableFailed;
+
+    const status =
+      failed === 0
+        ? 200
+        : accepted > 0
+          ? 207
+          : retryableFailed > 0
+            ? 503
+            : 400;
 
     return NextResponse.json(
       {
@@ -240,10 +295,12 @@ export async function POST(request: NextRequest) {
         batch: rawEvents.length > 1,
         accepted,
         failed,
+        retryableFailed,
+        permanentFailed,
         results,
       },
       {
-        status: failed === 0 ? 200 : accepted > 0 ? 207 : 400,
+        status,
         headers: cors,
       },
     );
