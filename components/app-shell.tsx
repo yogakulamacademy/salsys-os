@@ -45,6 +45,7 @@ import {
   FUNCTIONAL_WORKSPACE_DEFINITIONS,
   getFunctionalWorkspaceForPathname,
   getFunctionalWorkspaceRootPath,
+  isFunctionalWorkspaceRouteAllowed,
 } from "@/lib/functional-workspaces";
 import { createClient as createBrowserClient } from "@/lib/supabase/browser";
 
@@ -255,29 +256,60 @@ export function AppShell({ children }: { children: ReactNode }) {
       ? routeWorkspace.code
       : functionalWorkspaces[0]?.code ?? "";
 
-  const activeFunctionalWorkspaceName =
+  const activeFunctionalWorkspaceAccess =
     functionalWorkspaces.find(
       (workspaceAccess) => workspaceAccess.code === activeFunctionalWorkspaceCode,
-    )?.name ?? routeWorkspace?.name ?? "Workspace";
+    ) ?? null;
 
-  const effectiveRole = mock
-    ? "admin"
-    : activeWorkspace?.role ?? null;
+  const activeFunctionalWorkspaceName =
+    activeFunctionalWorkspaceAccess?.name ?? routeWorkspace?.name ?? "Workspace";
+
+  const effectiveRole = mock ? "admin" : activeWorkspace?.role ?? null;
 
   const employee = !mock && effectiveRole === "admissions";
   const admin =
-    mock ||
-    effectiveRole === "owner" ||
-    effectiveRole === "admin";
+    mock || effectiveRole === "owner" || effectiveRole === "admin";
   const manager = !mock && effectiveRole === "manager";
   const explicitAdmin = admin || manager;
-  const accessResolved =
-    mock || (!profileLoading && !workspaceLoading);
+  const accessResolved = mock || (!profileLoading && !workspaceLoading);
+
+  function canAccessActiveWorkspaceRoute(href: string) {
+    if (!activeFunctionalWorkspaceAccess || !activeFunctionalWorkspaceCode) {
+      return false;
+    }
+
+    return isFunctionalWorkspaceRouteAllowed(
+      activeFunctionalWorkspaceCode,
+      activeFunctionalWorkspaceAccess.role,
+      href,
+    );
+  }
 
   const visibleNavGroups: NavGroup[] =
     accessResolved && activeFunctionalWorkspaceCode
-      ? workspaceNavGroups[activeFunctionalWorkspaceCode] ?? []
+      ? (workspaceNavGroups[activeFunctionalWorkspaceCode] ?? [])
+          .map((group) => ({
+            ...group,
+            items: group.items.filter((item) =>
+              canAccessActiveWorkspaceRoute(item.href),
+            ),
+          }))
+          .filter((group) => group.items.length > 0)
       : [];
+
+  const showLeadSearch = canAccessActiveWorkspaceRoute("/leads");
+  const canCreateLead = canAccessActiveWorkspaceRoute("/leads/new");
+  const canViewAdmissions = canAccessActiveWorkspaceRoute("/admissions");
+  const canViewFollowUps = canAccessActiveWorkspaceRoute("/follow-ups");
+  const canViewConversations = canAccessActiveWorkspaceRoute("/conversations");
+  const canViewLeadActivity = canAccessActiveWorkspaceRoute("/re-engaged");
+  const canViewSystemHealth = canAccessActiveWorkspaceRoute("/system-health");
+  const showNotifications =
+    canViewAdmissions ||
+    canViewFollowUps ||
+    canViewConversations ||
+    canViewLeadActivity ||
+    canViewSystemHealth;
 
   useEffect(() => {
     let cancelled = false;
@@ -424,7 +456,6 @@ export function AppShell({ children }: { children: ReactNode }) {
         return;
       }
 
-      // Opening/clicking one popover closes the other one.
       closeMenus(clickedMenu);
     }
 
@@ -489,8 +520,7 @@ export function AppShell({ children }: { children: ReactNode }) {
                 : "Access unavailable";
 
   const organizationName =
-    activeWorkspace?.organizationName ||
-    (mock ? "Yogakulam" : "Workspace");
+    activeWorkspace?.organizationName || (mock ? "Yogakulam" : "Workspace");
 
   return (
     <div className="app-shell app-shell-v3">
@@ -514,19 +544,17 @@ export function AppShell({ children }: { children: ReactNode }) {
           <Menu size={18} />
         </button>
 
-        <form action="/leads" method="get" className="global-search">
-          <Search size={15} className="global-search-icon" />
-          <input
-            name="q"
-            placeholder={
-              employee
-                ? "Search my leads..."
-                : "Search lead, course or country..."
-            }
-            aria-label="Search leads"
-          />
-          <kbd>Enter</kbd>
-        </form>
+        {showLeadSearch && (
+          <form action="/leads" method="get" className="global-search">
+            <Search size={15} className="global-search-icon" />
+            <input
+              name="q"
+              placeholder={employee ? "Search my leads..." : "Search lead, course or country..."}
+              aria-label="Search leads"
+            />
+            <kbd>Enter</kbd>
+          </form>
+        )}
 
         <div className="topbar-actions">
           {!workspaceLoading && functionalWorkspaces.length > 1 && (
@@ -552,9 +580,7 @@ export function AppShell({ children }: { children: ReactNode }) {
             </span>
           )}
 
-          {!employee &&
-            !profileLoading &&
-            !workspaceLoading && (
+          {canCreateLead && !profileLoading && !workspaceLoading && (
             <Link
               href="/leads/new"
               className="topbar-new-button hidden sm:inline-flex"
@@ -564,128 +590,146 @@ export function AppShell({ children }: { children: ReactNode }) {
             </Link>
           )}
 
-          <details className="topbar-notification-menu">
-            <summary
-              className="topbar-icon-btn topbar-notification-trigger"
-              aria-label="Open notifications"
-            >
-              <Bell size={17} />
-            </summary>
+          {showNotifications && (
+            <details className="topbar-notification-menu">
+              <summary
+                className="topbar-icon-btn topbar-notification-trigger"
+                aria-label="Open notifications"
+              >
+                <Bell size={17} />
+              </summary>
 
-            <div className="topbar-notification-popover">
-              <div className="topbar-todo-head">
-                <div>
-                  <div className="topbar-todo-title">Your to-dos</div>
-                  <div className="topbar-todo-subtitle">
-                    Priority CRM queues that may need your attention.
+              <div className="topbar-notification-popover">
+                <div className="topbar-todo-head">
+                  <div>
+                    <div className="topbar-todo-title">Your to-dos</div>
+                    <div className="topbar-todo-subtitle">
+                      Priority workspace queues that may need your attention.
+                    </div>
                   </div>
+
+                  {canAccessActiveWorkspaceRoute("/dashboard") && (
+                    <Link href="/dashboard" className="topbar-todo-view-all">
+                      Dashboard
+                    </Link>
+                  )}
+
+                  {!canAccessActiveWorkspaceRoute("/dashboard") &&
+                    canViewSystemHealth && (
+                      <Link
+                        href="/system-health"
+                        className="topbar-todo-view-all"
+                      >
+                        System health
+                      </Link>
+                    )}
                 </div>
 
-                <Link href="/dashboard" className="topbar-todo-view-all">
-                  Dashboard
-                </Link>
+                <div className="topbar-todo-list">
+                  {canViewAdmissions && (
+                    <Link href="/admissions" className="topbar-todo-card">
+                      <span className="topbar-todo-icon">
+                        <ClipboardCheck size={16} />
+                      </span>
+
+                      <span className="topbar-todo-copy">
+                        <span className="topbar-todo-card-title">
+                          <span className="topbar-todo-dot" aria-hidden="true" />
+                          Admissions priorities
+                        </span>
+                        <small>
+                          Review SLA pressure, priority workload and conversion
+                          signals.
+                        </small>
+                      </span>
+
+                      <ChevronDown size={15} className="topbar-todo-chevron" />
+                    </Link>
+                  )}
+
+                  {canViewFollowUps && (
+                    <Link href="/follow-ups" className="topbar-todo-card">
+                      <span className="topbar-todo-icon">
+                        <ListTodo size={16} />
+                      </span>
+
+                      <span className="topbar-todo-copy">
+                        <span className="topbar-todo-card-title">
+                          <span className="topbar-todo-dot" aria-hidden="true" />
+                          Follow-ups
+                        </span>
+                        <small>
+                          Check due and overdue tasks before they become stale.
+                        </small>
+                      </span>
+
+                      <ChevronDown size={15} className="topbar-todo-chevron" />
+                    </Link>
+                  )}
+
+                  {canViewConversations && (
+                    <Link href="/conversations" className="topbar-todo-card">
+                      <span className="topbar-todo-icon">
+                        <MessageSquareText size={16} />
+                      </span>
+
+                      <span className="topbar-todo-copy">
+                        <span className="topbar-todo-card-title">
+                          <span className="topbar-todo-dot" aria-hidden="true" />
+                          Conversations
+                        </span>
+                        <small>
+                          Open replies and active conversations that need attention.
+                        </small>
+                      </span>
+
+                      <ChevronDown size={15} className="topbar-todo-chevron" />
+                    </Link>
+                  )}
+
+                  {canViewLeadActivity && (
+                    <Link href="/re-engaged" className="topbar-todo-card">
+                      <span className="topbar-todo-icon">
+                        <RefreshCw size={16} />
+                      </span>
+
+                      <span className="topbar-todo-copy">
+                        <span className="topbar-todo-card-title">
+                          <span className="topbar-todo-dot" aria-hidden="true" />
+                          Lead activity
+                        </span>
+                        <small>
+                          Review hot and re-engaged leads returning to the funnel.
+                        </small>
+                      </span>
+
+                      <ChevronDown size={15} className="topbar-todo-chevron" />
+                    </Link>
+                  )}
+
+                  {canViewSystemHealth && (
+                    <Link href="/system-health" className="topbar-todo-card">
+                      <span className="topbar-todo-icon">
+                        <Activity size={16} />
+                      </span>
+
+                      <span className="topbar-todo-copy">
+                        <span className="topbar-todo-card-title">
+                          <span className="topbar-todo-dot" aria-hidden="true" />
+                          System health
+                        </span>
+                        <small>
+                          Check processing, integrations and operational warnings.
+                        </small>
+                      </span>
+
+                      <ChevronDown size={15} className="topbar-todo-chevron" />
+                    </Link>
+                  )}
+                </div>
               </div>
-
-              <div className="topbar-todo-list">
-                {!employee && (
-                  <Link href="/admissions" className="topbar-todo-card">
-                    <span className="topbar-todo-icon">
-                      <ClipboardCheck size={16} />
-                    </span>
-
-                    <span className="topbar-todo-copy">
-                      <span className="topbar-todo-card-title">
-                        <span className="topbar-todo-dot" aria-hidden="true" />
-                        Admissions priorities
-                      </span>
-                      <small>
-                        Review SLA pressure, priority workload and conversion
-                        signals.
-                      </small>
-                    </span>
-
-                    <ChevronDown size={15} className="topbar-todo-chevron" />
-                  </Link>
-                )}
-
-                <Link href="/follow-ups" className="topbar-todo-card">
-                  <span className="topbar-todo-icon">
-                    <ListTodo size={16} />
-                  </span>
-
-                  <span className="topbar-todo-copy">
-                    <span className="topbar-todo-card-title">
-                      <span className="topbar-todo-dot" aria-hidden="true" />
-                      Follow-ups
-                    </span>
-                    <small>
-                      Check due and overdue tasks before they become stale.
-                    </small>
-                  </span>
-
-                  <ChevronDown size={15} className="topbar-todo-chevron" />
-                </Link>
-
-                <Link href="/conversations" className="topbar-todo-card">
-                  <span className="topbar-todo-icon">
-                    <MessageSquareText size={16} />
-                  </span>
-
-                  <span className="topbar-todo-copy">
-                    <span className="topbar-todo-card-title">
-                      <span className="topbar-todo-dot" aria-hidden="true" />
-                      Conversations
-                    </span>
-                    <small>
-                      Open replies and active conversations that need attention.
-                    </small>
-                  </span>
-
-                  <ChevronDown size={15} className="topbar-todo-chevron" />
-                </Link>
-
-                {!employee && (
-                  <Link href="/re-engaged" className="topbar-todo-card">
-                    <span className="topbar-todo-icon">
-                      <RefreshCw size={16} />
-                    </span>
-
-                    <span className="topbar-todo-copy">
-                      <span className="topbar-todo-card-title">
-                        <span className="topbar-todo-dot" aria-hidden="true" />
-                        Lead activity
-                      </span>
-                      <small>
-                        Review hot and re-engaged leads returning to the funnel.
-                      </small>
-                    </span>
-
-                    <ChevronDown size={15} className="topbar-todo-chevron" />
-                  </Link>
-                )}
-
-                {admin && (
-                  <Link href="/system-health" className="topbar-todo-card">
-                    <span className="topbar-todo-icon">
-                      <Activity size={16} />
-                    </span>
-
-                    <span className="topbar-todo-copy">
-                      <span className="topbar-todo-card-title">
-                        <span className="topbar-todo-dot" aria-hidden="true" />
-                        System health
-                      </span>
-                      <small>
-                        Check processing, integrations and operational warnings.
-                      </small>
-                    </span>
-
-                    <ChevronDown size={15} className="topbar-todo-chevron" />
-                  </Link>
-                )}
-              </div>
-            </div>
-          </details>
+            </details>
+          )}
 
           <details className="topbar-profile-menu">
             <summary
@@ -809,23 +853,21 @@ export function AppShell({ children }: { children: ReactNode }) {
           </button>
         </div>
 
-        <form
-          action="/leads"
-          method="get"
-          className="mobile-menu-search lg:hidden"
-          onSubmit={() => setMobileOpen(false)}
-        >
-          <Search size={16} className="mobile-menu-search-icon" />
-          <input
-            name="q"
-            placeholder={
-              employee
-                ? "Search my leads..."
-                : "Search lead, course or country..."
-            }
-            aria-label="Search leads from mobile menu"
-          />
-        </form>
+        {showLeadSearch && (
+          <form
+            action="/leads"
+            method="get"
+            className="mobile-menu-search lg:hidden"
+            onSubmit={() => setMobileOpen(false)}
+          >
+            <Search size={16} className="mobile-menu-search-icon" />
+            <input
+              name="q"
+              placeholder={employee ? "Search my leads..." : "Search lead, course or country..."}
+              aria-label="Search leads from mobile menu"
+            />
+          </form>
+        )}
 
         <nav className="sidebar-nav">
           {!mock && (profileLoading || workspaceLoading) ? (
@@ -867,7 +909,11 @@ export function AppShell({ children }: { children: ReactNode }) {
             aria-hidden="true"
           />
           <span>
-            {mock ? "Development" : employee ? "Assigned workspace" : "Live"}
+            {mock
+              ? "Development"
+              : activeFunctionalWorkspaceName
+                ? `${activeFunctionalWorkspaceName} workspace`
+                : "Live"}
           </span>
         </div>
       </aside>
