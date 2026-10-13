@@ -15,6 +15,9 @@ begin;
 -- - Organization owner/admin retains access to every enabled workspace.
 -- - The Admin workspace is intentionally NOT assignable through
 --   workspace_memberships; it is reserved for organization owner/admin.
+-- - Authenticated tenant admins cannot disable/delete/recreate the Admin
+--   workspace row, preventing application-level self-lockout. Trusted
+--   service_role maintenance remains possible outside authenticated RLS.
 -- - Existing Admissions members are backfilled to Sales.
 -- - Existing legacy Managers are backfilled to non-Admin workspaces so later
 --   middleware migration can preserve their broad operational access.
@@ -426,6 +429,11 @@ using (
 );
 
 
+-- Tenant admins may manage ordinary functional workspaces, but the Admin
+-- workspace itself is system-reserved. This prevents a tenant admin from
+-- disabling/deleting/recreating the very workspace required to administer the
+-- organization. service_role bypasses these authenticated RLS policies for
+-- controlled maintenance.
 drop policy if exists organization_workspaces_admin_insert
   on public.organization_workspaces;
 create policy organization_workspaces_admin_insert
@@ -433,7 +441,8 @@ on public.organization_workspaces
 for insert
 to authenticated
 with check (
-  public.can_manage_organization(organization_id)
+  workspace_code <> 'admin'
+  and public.can_manage_organization(organization_id)
 );
 
 
@@ -444,10 +453,12 @@ on public.organization_workspaces
 for update
 to authenticated
 using (
-  public.can_manage_organization(organization_id)
+  workspace_code <> 'admin'
+  and public.can_manage_organization(organization_id)
 )
 with check (
-  public.can_manage_organization(organization_id)
+  workspace_code <> 'admin'
+  and public.can_manage_organization(organization_id)
 );
 
 
@@ -458,7 +469,8 @@ on public.organization_workspaces
 for delete
 to authenticated
 using (
-  public.can_manage_organization(organization_id)
+  workspace_code <> 'admin'
+  and public.can_manage_organization(organization_id)
 );
 
 
