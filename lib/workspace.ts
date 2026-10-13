@@ -3,7 +3,12 @@ import "server-only";
 import { cookies } from "next/headers";
 import { createClient } from "@/lib/supabase/server";
 
-export const ACTIVE_WORKSPACE_COOKIE = "yk-active-workspace";
+// The persisted value is an organization/tenant id. Keep the legacy cookie
+// name for session compatibility while using organization terminology in code.
+export const ACTIVE_ORGANIZATION_COOKIE = "yk-active-workspace";
+
+/** @deprecated Use ACTIVE_ORGANIZATION_COOKIE. */
+export const ACTIVE_WORKSPACE_COOKIE = ACTIVE_ORGANIZATION_COOKIE;
 
 type ServerSupabaseClient = Awaited<ReturnType<typeof createClient>>;
 
@@ -221,7 +226,7 @@ export async function getWorkspaceContextForUser(
   } else if (memberships.length > 1) {
     const cookieStore = await cookies();
     const selectedOrganizationId =
-      cookieStore.get(ACTIVE_WORKSPACE_COOKIE)?.value?.trim() ?? "";
+      cookieStore.get(ACTIVE_ORGANIZATION_COOKIE)?.value?.trim() ?? "";
 
     activeWorkspace =
       memberships.find(
