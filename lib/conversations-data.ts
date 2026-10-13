@@ -43,7 +43,7 @@ export type ConversationWorkspaceSelected = {
   leadCreationChannel: Channel;
   lastContactedAt?: string;
   createdAt: string;
-  phone?: string;
+  hasTelephoneContact: boolean;
   interestedCourseId?: string;
   lastMessages: ConversationWorkspaceMessage[];
 };
@@ -105,7 +105,7 @@ type RpcSelectedRow = {
   leadCreationChannel?: string | null;
   lastContactedAt?: string | null;
   createdAt?: string | null;
-  phone?: string | null;
+  hasTelephoneContact?: boolean | null;
   interestedCourseId?: string | null;
   lastMessages?: RpcMessageRow[] | null;
 };
@@ -269,12 +269,6 @@ function normalizeInbox(
 
       lastContactedAt: row.lastContactedAt ?? null,
 
-      /*
-       * Keep the existing visual behavior:
-       * selecting a conversation clears
-       * the unread dot immediately while
-       * ConversationReadMarker persists it.
-       */
       unread: row.id === selectedId ? false : Boolean(row.unread),
 
       needsReply: Boolean(row.needsReply),
@@ -350,7 +344,7 @@ function normalizeSelected(
 
     createdAt: row.createdAt,
 
-    phone: row.phone ?? undefined,
+    hasTelephoneContact: Boolean(row.hasTelephoneContact),
 
     interestedCourseId: row.interestedCourseId ?? undefined,
 
@@ -390,6 +384,19 @@ async function getLegacyWorkspace(
     : conversationLeads[0]?.id;
 
   const selectedLead = selectedId ? await getLead(selectedId) : null;
+
+  let hasTelephoneContact = Boolean(selectedLead?.phone);
+
+  if (!mock && selectedLead) {
+    const supabase = await createClient();
+    const { data, error } = await supabase.rpc("has_lead_telephone_contact", {
+      p_lead_id: selectedLead.id,
+    });
+
+    if (!error) {
+      hasTelephoneContact = data === true;
+    }
+  }
 
   const conversationSummary: ConversationLeadSummary[] = conversationLeads.map(
     (lead) => {
@@ -449,7 +456,7 @@ async function getLegacyWorkspace(
 
         createdAt: selectedLead.createdAt,
 
-        phone: selectedLead.phone,
+        hasTelephoneContact,
 
         interestedCourseId: selectedLead.interestedCourseId,
 

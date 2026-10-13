@@ -98,7 +98,8 @@ export default async function ConversationsPage({
     workspaceContext?.activeOrganizationId ?? null;
 
   const canStartWhatsApp =
-    Boolean(selected?.phone) && selected?.currentContactChannel !== "whatsapp";
+    Boolean(selected?.hasTelephoneContact) &&
+    selected?.currentContactChannel !== "whatsapp";
 
   const interactionAction = selectedId
     ? logLeadInteractionAction.bind(null, selectedId)
@@ -162,89 +163,22 @@ export default async function ConversationsPage({
         actions={
           <span
             className={`
-
-
-
-
-
-
-
               rounded-xl
-
-
-
-
-
-
-
               px-3
-
-
-
-
-
-
-
               py-2
-
-
-
-
-
-
-
               text-xs
-
-
-
-
-
-
-
               font-bold
-
-
-
-
-
-
-
               ${
                 mock
                   ? "bg-orange-50 text-orange-700"
                   : "bg-emerald-50 text-emerald-700"
               }
-
-
-
-
-
-
-
             `}
           >
             {mock ? "Mock inbox" : "Live messaging"}
           </span>
         }
       />
-
-      {/* ===================================================
-
-
-
-
-
-
-
-          INBOX METRICS
-
-
-
-
-
-
-
-      =================================================== */}
 
       <div className="conversation-metrics mb-4 grid gap-3 sm:grid-cols-3">
         <InboxMetric
@@ -256,24 +190,6 @@ export default async function ConversationsPage({
 
         <InboxMetric label="High intent + payment" value={highIntentCount} />
       </div>
-
-      {/* ===================================================
-
-
-
-
-
-
-
-          NOTICES
-
-
-
-
-
-
-
-      =================================================== */}
 
       {query.error && (
         <div className="mb-4 animate-rise rounded-xl border border-red-100 bg-red-50 px-4 py-3 text-sm font-medium text-red-700">
@@ -287,262 +203,30 @@ export default async function ConversationsPage({
         </div>
       )}
 
-      {/* ===================================================
-
-
-
-
-
-
-
-          CONVERSATION WORKSPACE
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-          Desktop:
-
-
-
-
-
-
-
-          - fixed viewport height
-
-
-
-
-
-
-
-          - contacts scroll independently
-
-
-
-
-
-
-
-          - messages scroll independently
-
-
-
-
-
-
-
-          - context scrolls independently
-
-
-
-
-
-
-
-      =================================================== */}
-
       <div
         className="
-
-
-
-
-
-
-
           conversation-workspace
-
-
-
-
-
-
-
           grid
-
-
-
-
-
-
-
           overflow-hidden
-
-
-
-
-
-
-
           rounded-2xl
-
-
-
-
-
-
-
           border
-
-
-
-
-
-
-
           border-slate-200
-
-
-
-
-
-
-
           bg-white
-
-
-
-
-
-
-
           shadow-card
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
           lg:h-[calc(100dvh-270px)]
-
-
-
-
-
-
-
           lg:min-h-[560px]
-
-
-
-
-
-
-
           lg:grid-cols-[320px_minmax(0,1fr)_300px]
-
-
-
-
-
-
-
         "
       >
-        {/* ===============================================
-
-
-
-
-
-
-
-            LEFT — CONVERSATION LIST
-
-
-
-
-
-
-
-        =============================================== */}
-
         <div
           className="
-
-
-
-
-
-
-
             conversation-list-pane
-
-
-
-
-
-
-
             min-h-0
-
-
-
-
-
-
-
             overflow-y-auto
-
-
-
-
-
-
-
             overscroll-contain
-
-
-
-
-
-
-
             border-r
-
-
-
-
-
-
-
             border-slate-200
-
-
-
-
-
-
-
             bg-slate-50/40
-
-
-
-
-
-
-
           "
         >
           <ConversationsSidebar
@@ -574,160 +258,28 @@ export default async function ConversationsPage({
           </section>
         ) : (
           <>
-            {/* ===========================================
-
-
-
-
-
-
-
-                CENTER — CHAT
-
-
-
-
-
-
-
-            =========================================== */}
-
             <section
               className="
-
-
-
-
-
-
-
                 conversation-chat-pane
-
-
-
-
-
-
-
                 flex
-
-
-
-
-
-
-
                 min-h-0
-
-
-
-
-
-
-
                 min-w-0
-
-
-
-
-
-
-
                 flex-col
-
-
-
-
-
-
-
                 overflow-hidden
-
-
-
-
-
-
-
                 bg-white
-
-
-
-
-
-
-
               "
             >
               <ConversationReadMarker leadId={selected.id} />
 
-              {/* CHAT HEADER */}
-
               <div
                 className="
-
-
-
-
-
-
-
                   conversation-chat-header
-
-
-
-
-
-
-
                   shrink-0
-
-
-
-
-
-
-
                   border-b
-
-
-
-
-
-
-
                   border-slate-100
-
-
-
-
-
-
-
                   bg-white
-
-
-
-
-
-
-
                   px-4
-
-
-
-
-
-
-
                   py-3
-
-
-
-
-
-
-
                 "
               >
                 <div className="flex items-start justify-between gap-4">
@@ -773,86 +325,20 @@ export default async function ConversationsPage({
                 </div>
               </div>
 
-              {/* WHATSAPP WINDOW STATUS */}
-
               {whatsappWindow && (
                 <div
                   className={`
-
-
-
-
-
-
-
                     shrink-0
-
-
-
-
-
-
-
                     border-b
-
-
-
-
-
-
-
                     px-4
-
-
-
-
-
-
-
                     py-2
-
-
-
-
-
-
-
                     text-[10px]
-
-
-
-
-
-
-
                     font-semibold
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
                     ${
                       whatsappWindow.open
                         ? "border-emerald-100 bg-emerald-50/70 text-emerald-700"
                         : "border-amber-100 bg-amber-50/70 text-amber-700"
                     }
-
-
-
-
-
-
-
                   `}
                 >
                   {whatsappWindow.label}
@@ -866,81 +352,16 @@ export default async function ConversationsPage({
                 </div>
               )}
 
-              {/* MESSAGE HISTORY */}
-
               <div
                 className="
-
-
-
-
-
-
-
                   conversation-message-area
-
-
-
-
-
-
-
                   min-h-0
-
-
-
-
-
-
-
                   flex-1
-
-
-
-
-
-
-
                   overflow-y-auto
-
-
-
-
-
-
-
                   overscroll-contain
-
-
-
-
-
-
-
                   px-4
-
-
-
-
-
-
-
                   py-5
-
-
-
-
-
-
-
                   sm:px-6
-
-
-
-
-
-
-
                 "
               >
                 <ConversationThread
@@ -955,8 +376,6 @@ export default async function ConversationsPage({
                   }
                 />
               </div>
-
-              {/* COMPOSER */}
 
               <div className="shrink-0">
                 {selected.currentContactChannel === "whatsapp" ? (
@@ -976,7 +395,6 @@ export default async function ConversationsPage({
                         "Use an approved WhatsApp template to continue the conversation."
                       }
                       mode="followup"
-                      phone={selected.phone}
                     />
                   ) : null
                 ) : canStartWhatsApp && whatsappTemplateAction ? (
@@ -985,7 +403,6 @@ export default async function ConversationsPage({
                     templates={whatsappTemplateCatalog.templates}
                     loadError={whatsappTemplateCatalog.error}
                     mode="start"
-                    phone={selected.phone}
                   />
                 ) : interactionAction ? (
                   <form
@@ -1035,113 +452,18 @@ export default async function ConversationsPage({
               </div>
             </section>
 
-            {/* ===========================================
-
-
-
-
-
-
-
-                RIGHT — LEAD CONTEXT
-
-
-
-
-
-
-
-            =========================================== */}
-
             <aside
               className="
-
-
-
-
-
-
-
                 conversation-context-pane
-
-
-
-
-
-
-
                 hidden
-
-
-
-
-
-
-
                 min-h-0
-
-
-
-
-
-
-
                 overflow-y-auto
-
-
-
-
-
-
-
                 overscroll-contain
-
-
-
-
-
-
-
                 border-l
-
-
-
-
-
-
-
                 border-slate-200
-
-
-
-
-
-
-
                 bg-slate-50/55
-
-
-
-
-
-
-
                 p-4
-
-
-
-
-
-
-
                 lg:block
-
-
-
-
-
-
-
               "
             >
               <div>
@@ -1162,8 +484,6 @@ export default async function ConversationsPage({
                   <StageBadge stage={selected.stage} />
                 </div>
               </div>
-
-              {/* QUICK EDIT */}
 
               {leadContextAction && (
                 <div className="conversation-context-card mt-5 rounded-2xl border border-slate-200 bg-white p-4">
@@ -1222,8 +542,6 @@ export default async function ConversationsPage({
                 </div>
               )}
 
-              {/* CURRENT DETAILS */}
-
               <div className="mt-5 space-y-3">
                 <ContextRow
                   label="Course"
@@ -1264,8 +582,6 @@ export default async function ConversationsPage({
                 />
               </div>
 
-              {/* QUICK ACTIONS */}
-
               <div className="conversation-quick-actions mt-5 border-t border-slate-200 pt-4">
                 <div className="text-[10px] font-bold uppercase tracking-[.12em] text-slate-400">
                   Quick actions
@@ -1290,8 +606,6 @@ export default async function ConversationsPage({
                 </div>
               </div>
 
-              {/* AI PLACEHOLDER */}
-
               <div className="conversation-ai-note mt-5 rounded-2xl border border-brand/10 bg-brand/[0.045] p-4">
                 <div className="text-[10px] font-bold uppercase tracking-[.12em] text-brand/60">
                   AI layer next
@@ -1315,24 +629,6 @@ export default async function ConversationsPage({
   );
 }
 
-/* =========================================================
-
-
-
-
-
-
-
-   METRIC
-
-
-
-
-
-
-
-\========================================================= */
-
 function InboxMetric({
   label,
 
@@ -1352,24 +648,6 @@ function InboxMetric({
     </div>
   );
 }
-
-/* =========================================================
-
-
-
-
-
-
-
-   CONTEXT ROW
-
-
-
-
-
-
-
-\========================================================= */
 
 function ContextRow({
   label,
@@ -1401,53 +679,11 @@ function ContextRow({
   return (
     <div
       className={`
-
-
-
-
-
-
-
         conversation-context-row
-
-
-
-
-
-
-
         rounded-xl
-
-
-
-
-
-
-
         border
-
-
-
-
-
-
-
         p-3
-
-
-
-
-
-
-
         ${tones[tone]}
-
-
-
-
-
-
-
       `}
     >
       <div className="text-[9px] font-bold uppercase tracking-[.12em] opacity-60">
@@ -1460,24 +696,6 @@ function ContextRow({
     </div>
   );
 }
-
-/* =========================================================
-
-
-
-
-
-
-
-   HEADER CONTEXT BADGE
-
-
-
-
-
-
-
-\========================================================= */
 
 function ContextBadge({
   tone,
@@ -1496,117 +714,22 @@ function ContextBadge({
   return (
     <span
       className={`
-
-
-
-
-
-
-
         inline-flex
-
-
-
-
-
-
-
         items-center
-
-
-
-
-
-
-
         gap-1
-
-
-
-
-
-
-
         rounded-full
-
-
-
-
-
-
-
         border
-
-
-
-
-
-
-
         px-2
-
-
-
-
-
-
-
         py-1
-
-
-
-
-
-
-
         text-[9px]
-
-
-
-
-
-
-
         font-bold
-
-
-
-
-
-
-
         ${className}
-
-
-
-
-
-
-
       `}
     >
       {children}
     </span>
   );
 }
-
-/* =========================================================
-
-
-
-
-
-
-
-   CHANNEL BADGE
-
-
-
-
-
-
-
-\========================================================= */
 
 function ChannelBadge({ channel }: { channel: string }) {
   const classes =
@@ -1625,101 +748,17 @@ function ChannelBadge({ channel }: { channel: string }) {
   return (
     <span
       className={`
-
-
-
-
-
-
-
         inline-flex
-
-
-
-
-
-
-
         items-center
-
-
-
-
-
-
-
         gap-1
-
-
-
-
-
-
-
         rounded-full
-
-
-
-
-
-
-
         border
-
-
-
-
-
-
-
         px-2
-
-
-
-
-
-
-
         py-1
-
-
-
-
-
-
-
         text-[9px]
-
-
-
-
-
-
-
         font-bold
-
-
-
-
-
-
-
         capitalize
-
-
-
-
-
-
-
         ${classes}
-
-
-
-
-
-
-
       `}
     >
       <ChannelIcon channel={channel} />
@@ -1732,24 +771,6 @@ function ChannelBadge({ channel }: { channel: string }) {
     </span>
   );
 }
-
-/* =========================================================
-
-
-
-
-
-
-
-   CHANNEL ICON
-
-
-
-
-
-
-
-\========================================================= */
 
 function ChannelIcon({ channel }: { channel: string }) {
   if (channel === "instagram") {
@@ -1771,38 +792,14 @@ function ChannelIcon({ channel }: { channel: string }) {
   return <ContactRound size={11} />;
 }
 
-/* =========================================================
-
-
-
-
-
-
-
-   INITIALS
-
-
-
-
-
-
-
-\========================================================= */
-
 function initials(name: string) {
   return (
     name
-
       .split(" ")
-
       .filter(Boolean)
-
       .map((part) => Array.from(part)[0] ?? "")
-
       .slice(0, 2)
-
       .join("")
-
       .toLocaleUpperCase("en-IN") || "?"
   );
 }
