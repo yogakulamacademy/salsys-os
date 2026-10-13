@@ -136,6 +136,24 @@ type WorkspaceGrant = {
   role: string;
 };
 
+type OrganizationMembershipRow = {
+  organization_id: string | null;
+  role: string | null;
+};
+
+type OrganizationRow = {
+  id: string;
+};
+
+type EnabledWorkspaceRow = {
+  workspace_code: string | null;
+};
+
+type WorkspaceMembershipRow = {
+  workspace_code: string | null;
+  role: string | null;
+};
+
 async function getActiveOrganizationGrants(
   supabase: ReturnType<typeof createServerClient>,
   userId: string,
@@ -153,7 +171,9 @@ async function getActiveOrganizationGrants(
   const organizationIds = Array.from(
     new Set(
       (membershipRows ?? [])
-        .map((row) => String(row.organization_id ?? "").trim())
+        .map((row: OrganizationMembershipRow) =>
+          String(row.organization_id ?? "").trim(),
+        )
         .filter(Boolean),
     ),
   );
@@ -173,23 +193,27 @@ async function getActiveOrganizationGrants(
   }
 
   const activeOrganizationIds = new Set(
-    (organizationRows ?? []).map((row) => String(row.id)),
+    (organizationRows ?? []).map((row: OrganizationRow) => String(row.id)),
   );
 
-  return (membershipRows ?? []).flatMap((membership) => {
-    const organizationId = String(membership.organization_id ?? "").trim();
+  return (membershipRows ?? []).flatMap(
+    (membership: OrganizationMembershipRow) => {
+      const organizationId = String(
+        membership.organization_id ?? "",
+      ).trim();
 
-    if (!activeOrganizationIds.has(organizationId)) {
-      return [];
-    }
+      if (!activeOrganizationIds.has(organizationId)) {
+        return [];
+      }
 
-    return [
-      {
-        organizationId,
-        role: String(membership.role ?? "").trim().toLowerCase(),
-      },
-    ];
-  });
+      return [
+        {
+          organizationId,
+          role: String(membership.role ?? "").trim().toLowerCase(),
+        },
+      ];
+    },
+  );
 }
 
 async function getWorkspaceGrants(
@@ -209,7 +233,9 @@ async function getWorkspaceGrants(
 
   const enabledCodes = new Set(
     (enabledRows ?? [])
-      .map((row) => String(row.workspace_code ?? "").trim().toLowerCase())
+      .map((row: EnabledWorkspaceRow) =>
+        String(row.workspace_code ?? "").trim().toLowerCase(),
+      )
       .filter(Boolean),
   );
 
@@ -234,7 +260,7 @@ async function getWorkspaceGrants(
 
   const rolesByCode = new Map<string, string>();
 
-  for (const membership of membershipRows ?? []) {
+  for (const membership of (membershipRows ?? []) as WorkspaceMembershipRow[]) {
     const code = String(membership.workspace_code ?? "").trim().toLowerCase();
     const role = String(membership.role ?? "").trim().toLowerCase();
 
@@ -377,7 +403,9 @@ export async function middleware(request: NextRequest) {
   } catch (error) {
     return accessDenied(
       pathname,
-      error instanceof Error ? error.message : "Organization access unavailable.",
+      error instanceof Error
+        ? error.message
+        : "Organization access unavailable.",
     );
   }
 
