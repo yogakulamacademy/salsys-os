@@ -46,8 +46,6 @@ type WhatsAppTemplateComposerProps = {
   windowLabel?: string;
 
   mode?: "followup" | "start";
-
-  phone?: string;
 };
 
 function displayName(value: string) {
@@ -72,8 +70,6 @@ export function WhatsAppTemplateComposer({
   windowLabel,
 
   mode = "followup",
-
-  phone,
 }: WhatsAppTemplateComposerProps) {
   const usableTemplates = useMemo(
     () => templates.filter((template) => template.supported),
@@ -139,15 +135,10 @@ export function WhatsAppTemplateComposer({
               startingWhatsApp ? "text-emerald-700" : "text-amber-700"
             }`}
           >
-            {startingWhatsApp ? (
-              <>
-                Send an approved WhatsApp template to this lead
-                {phone ? ` at ${phone}` : ""}.
-              </>
-            ) : (
-              windowLabel ||
-              "Use an approved WhatsApp template to continue this conversation."
-            )}
+            {startingWhatsApp
+              ? "Send an approved WhatsApp template to this lead."
+              : windowLabel ||
+                "Use an approved WhatsApp template to continue this conversation."}
           </div>
         </div>
       </div>
