@@ -622,9 +622,12 @@ export async function updateEmployeeAccessAction(formData: FormData) {
       }
     }
 
-    const nextOrganizationRole = selectedSet.has('sales')
-      ? 'admissions'
-      : 'viewer';
+    const nextOrganizationRole =
+      targetRole === 'manager'
+        ? 'manager'
+        : selectedSet.has('sales')
+          ? 'admissions'
+          : 'viewer';
     const { error: organizationRoleError } = await admin
       .from('organization_members')
       .update({ role: nextOrganizationRole })
