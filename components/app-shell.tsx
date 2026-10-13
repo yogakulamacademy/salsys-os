@@ -36,7 +36,6 @@ import {
   type ComponentType,
   type ReactNode,
   useEffect,
-  useMemo,
   useState,
 } from "react";
 import { signOutAction } from "@/app/actions/auth";
@@ -95,107 +94,107 @@ type WorkspaceContext = {
   selectionRequired: boolean;
 };
 
-const adminNavGroups: NavGroup[] = [
-  {
-    label: "Workspace",
-    items: [
-      { href: "/dashboard", label: "Dashboard", icon: Gauge },
-      { href: "/admissions", label: "Admissions Desk", icon: ClipboardCheck },
-      { href: "/leads", label: "Leads", icon: ContactRound },
-      { href: "/pipeline", label: "Pipeline", icon: Boxes },
-      {
-        href: "/conversations",
-        label: "Conversations",
-        icon: MessageSquareText,
-      },
-      { href: "/follow-ups", label: "Follow-ups", icon: ListTodo },
-    ],
-  },
-  {
-    label: "Operations",
-    items: [
-      {
-        href: "/course-management",
-        label: "Course Management",
-        icon: BookOpen,
-      },
-    ],
-  },
-  {
-    label: "Growth",
-    items: [
-      { href: "/campaigns", label: "Campaigns", icon: Target },
-      { href: "/paid-media-leads", label: "Paid Media Leads", icon: Megaphone },
-      { href: "/re-engaged", label: "Lead Activity", icon: RefreshCw },
-    ],
-  },
-  {
-    label: "Insights",
-    items: [
-      { href: "/analytics", label: "Analytics", icon: BarChart3 },
-      { href: "/funnel", label: "Funnel", icon: GitBranch },
-      { href: "/attribution", label: "Attribution", icon: LineChart },
-      { href: "/seo", label: "SEO", icon: FileSearch },
-      { href: "/revenue", label: "Revenue Forecast", icon: CircleDollarSign },
-      { href: "/tracking", label: "Tracking", icon: Tags },
-    ],
-  },
-  {
-    label: "System",
-    items: [{ href: "/settings", label: "Settings", icon: Settings }],
-  },
-];
-
-const adminOnlyTeamNavGroup: NavGroup = {
-  label: "Team",
-  items: [
+const workspaceNavGroups: Record<string, NavGroup[]> = {
+  sales: [
     {
-      href: "/team-performance",
-      label: "Team Performance",
-      icon: UsersRound,
+      label: "Sales",
+      items: [
+        { href: "/dashboard", label: "Dashboard", icon: Gauge },
+        { href: "/admissions", label: "Admissions Desk", icon: ClipboardCheck },
+        { href: "/leads", label: "Leads", icon: ContactRound },
+        { href: "/pipeline", label: "Pipeline", icon: Boxes },
+        {
+          href: "/conversations",
+          label: "Conversations",
+          icon: MessageSquareText,
+        },
+        { href: "/follow-ups", label: "Follow-ups", icon: ListTodo },
+        { href: "/re-engaged", label: "Lead Activity", icon: RefreshCw },
+      ],
+    },
+  ],
+  marketing: [
+    {
+      label: "Marketing",
+      items: [
+        { href: "/campaigns", label: "Campaigns", icon: Target },
+        {
+          href: "/paid-media-leads",
+          label: "Paid Media Leads",
+          icon: Megaphone,
+        },
+      ],
     },
     {
-      href: "/contact-intelligence",
-      label: "Contact Intelligence",
-      icon: Activity,
+      label: "Insights",
+      items: [
+        { href: "/analytics", label: "Analytics", icon: BarChart3 },
+        { href: "/attribution", label: "Attribution", icon: LineChart },
+        { href: "/seo", label: "SEO", icon: FileSearch },
+        { href: "/tracking", label: "Tracking", icon: Tags },
+      ],
+    },
+  ],
+  finance: [
+    {
+      label: "Finance",
+      items: [
+        {
+          href: "/revenue",
+          label: "Revenue Forecast",
+          icon: CircleDollarSign,
+        },
+      ],
+    },
+  ],
+  reports: [
+    {
+      label: "Reports",
+      items: [
+        { href: "/funnel", label: "Funnel", icon: GitBranch },
+        {
+          href: "/team-performance",
+          label: "Team Performance",
+          icon: UsersRound,
+        },
+        {
+          href: "/contact-intelligence",
+          label: "Contact Intelligence",
+          icon: Activity,
+        },
+      ],
+    },
+  ],
+  admin: [
+    {
+      label: "Administration",
+      items: [
+        { href: "/settings", label: "Settings", icon: Settings },
+        {
+          href: "/settings/integrations",
+          label: "Integrations",
+          icon: PlugZap,
+        },
+        {
+          href: "/settings/team",
+          label: "Team & Access",
+          icon: ShieldCheck,
+        },
+      ],
     },
     {
-      href: "/settings/team",
-      label: "Team & Access",
-      icon: ShieldCheck,
+      label: "System",
+      items: [
+        {
+          href: "/course-management",
+          label: "Course Management",
+          icon: BookOpen,
+        },
+        { href: "/system-health", label: "System Health", icon: Activity },
+      ],
     },
   ],
 };
-
-const adminOnlySystemNavGroup: NavGroup = {
-  label: "System",
-  items: [
-    { href: "/settings", label: "Settings", icon: Settings },
-    {
-      href: "/settings/integrations",
-      label: "Integrations",
-      icon: PlugZap,
-    },
-    { href: "/system-health", label: "System Health", icon: Activity },
-  ],
-};
-
-const employeeNavGroups: NavGroup[] = [
-  {
-    label: "My workspace",
-    items: [
-      { href: "/dashboard", label: "My Dashboard", icon: Gauge },
-      { href: "/leads", label: "My Leads", icon: ContactRound },
-      { href: "/pipeline", label: "My Pipeline", icon: Boxes },
-      {
-        href: "/conversations",
-        label: "Conversations",
-        icon: MessageSquareText,
-      },
-      { href: "/follow-ups", label: "Follow-ups", icon: ListTodo },
-    ],
-  },
-];
 
 function isNavActive(pathname: string, href: string) {
   if (href === "/settings") {
@@ -275,35 +274,10 @@ export function AppShell({ children }: { children: ReactNode }) {
   const accessResolved =
     mock || (!profileLoading && !workspaceLoading);
 
-  // Admin-only Team and System Health remain hidden from managers.
-  const visibleAdminNavGroups = admin
-    ? [
-        adminNavGroups[0],
-        adminNavGroups[1],
-        adminOnlyTeamNavGroup,
-        ...adminNavGroups.slice(2, -1),
-        adminOnlySystemNavGroup,
-      ]
-    : adminNavGroups;
-
-  // Never guess the employee menu while the authenticated role is loading.
-  // Unknown/unsupported roles receive no privileged navigation.
-  const visibleNavGroups: NavGroup[] = !accessResolved
-    ? []
-    : explicitAdmin
-      ? visibleAdminNavGroups
-      : employee
-        ? employeeNavGroups
-        : [];
-
-  const visibleNav = visibleNavGroups.flatMap((group) => group.items);
-
-  const current = useMemo(
-    () =>
-      visibleNav.find((item) => isNavActive(pathname, item.href))?.label ??
-      (employee ? "Admissions Workspace" : "Growth CRM"),
-    [pathname, visibleNav, employee],
-  );
+  const visibleNavGroups: NavGroup[] =
+    accessResolved && activeFunctionalWorkspaceCode
+      ? workspaceNavGroups[activeFunctionalWorkspaceCode] ?? []
+      : [];
 
   useEffect(() => {
     let cancelled = false;
