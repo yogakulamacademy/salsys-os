@@ -4,6 +4,7 @@ import { redirect } from 'next/navigation';
 import { cookies } from 'next/headers';
 import { createClient } from '@/lib/supabase/server';
 import { useMockData } from '@/lib/config';
+import { isSafeFunctionalWorkspaceDestination } from '@/lib/functional-workspaces';
 import { ACTIVE_ORGANIZATION_COOKIE } from '@/lib/workspace';
 
 export async function signInAction(formData: FormData) {
@@ -13,14 +14,15 @@ export async function signInAction(formData: FormData) {
   const password = String(formData.get('password') ?? '');
   const requestedNext = String(formData.get('next') ?? '/dashboard').trim();
 
-  const next =
+  const safeRequestedNext =
     requestedNext.startsWith('/') &&
     !requestedNext.startsWith('//') &&
-    !requestedNext.startsWith('/workspace')
-      ? requestedNext
-      : '/dashboard';
+    (!requestedNext.startsWith('/workspace') ||
+      isSafeFunctionalWorkspaceDestination(requestedNext));
 
-  if (!email || !password) redirect('/login?error=Enter%20your%20email%20and%20password');
+  const next = safeRequestedNext ? requestedNext : '/dashboard';
+
+  if (!email || !password) redirect('/login?error=Enter%20your%20email%20or%20password');
 
   const supabase = await createClient();
   const { error } = await supabase.auth.signInWithPassword({ email, password });
