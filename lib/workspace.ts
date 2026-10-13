@@ -14,12 +14,130 @@ export type WorkspaceMembership = {
   role: string;
 };
 
+export type FunctionalWorkspaceAccess = {
+  organizationId: string;
+  code: string;
+  name: string;
+  description: string;
+  role: string;
+  sortOrder: number;
+};
+
 export type WorkspaceContext = {
   activeOrganizationId: string | null;
   activeWorkspace: WorkspaceMembership | null;
   memberships: WorkspaceMembership[];
+  functionalWorkspaces: FunctionalWorkspaceAccess[];
   selectionRequired: boolean;
 };
+
+async function getFunctionalWorkspacesForUser(
+  supabase: ServerSupabaseClient,
+  userId: string,
+  activeWorkspace: WorkspaceMembership,
+): Promise<FunctionalWorkspaceAccess[]> {
+  const organizationId = activeWorkspace.organizationId;
+  const organizationRole = activeWorkspace.role;
+
+  const {
+    data: organizationWorkspaceRows,
+    error: organizationWorkspaceError,
+  } = await supabase
+    .from("organization_workspaces")
+    .select("workspace_code")
+    .eq("organization_id", organizationId)
+    .eq("enabled", true);
+
+  if (organizationWorkspaceError) {
+    throw new Error(
+      `Unable to load enabled workspaces: ${organizationWorkspaceError.message}`,
+    );
+  }
+
+  const enabledCodes = Array.from(
+    new Set(
+      (organizationWorkspaceRows ?? [])
+        .map((row) => String(row.workspace_code ?? "").trim())
+        .filter(Boolean),
+    ),
+  );
+
+  if (enabledCodes.length === 0) {
+    return [];
+  }
+
+  const { data: catalogRows, error: catalogError } = await supabase
+    .from("workspace_catalog")
+    .select("code,name,description,sort_order,status")
+    .in("code", enabledCodes)
+    .eq("status", "active");
+
+  if (catalogError) {
+    throw new Error(
+      `Unable to load workspace catalog: ${catalogError.message}`,
+    );
+  }
+
+  const effectiveRoles = new Map<string, string>();
+
+  if (organizationRole === "owner" || organizationRole === "admin") {
+    for (const code of enabledCodes) {
+      effectiveRoles.set(code, organizationRole);
+    }
+  } else {
+    const { data: workspaceMembershipRows, error: workspaceMembershipError } =
+      await supabase
+        .from("workspace_memberships")
+        .select("workspace_code,role")
+        .eq("organization_id", organizationId)
+        .eq("user_id", userId)
+        .eq("active", true)
+        .in("workspace_code", enabledCodes);
+
+    if (workspaceMembershipError) {
+      throw new Error(
+        `Unable to load workspace memberships: ${workspaceMembershipError.message}`,
+      );
+    }
+
+    for (const membership of workspaceMembershipRows ?? []) {
+      const code = String(membership.workspace_code ?? "").trim();
+      const role = String(membership.role ?? "").trim();
+
+      if (code && role) {
+        effectiveRoles.set(code, role);
+      }
+    }
+  }
+
+  return (catalogRows ?? [])
+    .flatMap((workspace) => {
+      const code = String(workspace.code ?? "").trim();
+      const role = effectiveRoles.get(code);
+
+      if (!code || !role) {
+        return [];
+      }
+
+      return [
+        {
+          organizationId,
+          code,
+          name: String(workspace.name ?? "").trim(),
+          description: String(workspace.description ?? "").trim(),
+          role,
+          sortOrder: Number(workspace.sort_order ?? 100),
+        },
+      ];
+    })
+    .sort((left, right) => {
+      if (left.sortOrder !== right.sortOrder) {
+        return left.sortOrder - right.sortOrder;
+      }
+
+      return left.name.localeCompare(right.name);
+    });
+}
 
 export async function getWorkspaceContextForUser(
   supabase: ServerSupabaseClient,
@@ -50,6 +168,7 @@ export async function getWorkspaceContextForUser(
       activeOrganizationId: null,
       activeWorkspace: null,
       memberships: [],
+      functionalWorkspaces: [],
       selectionRequired: false,
     };
   }
@@ -111,10 +230,15 @@ export async function getWorkspaceContextForUser(
       ) ?? null;
   }
 
+  const functionalWorkspaces = activeWorkspace
+    ? await getFunctionalWorkspacesForUser(supabase, userId, activeWorkspace)
+    : [];
+
   return {
     activeOrganizationId: activeWorkspace?.organizationId ?? null,
     activeWorkspace,
     memberships,
+    functionalWorkspaces,
     selectionRequired: memberships.length > 1 && !activeWorkspace,
   };
 }
