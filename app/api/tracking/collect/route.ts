@@ -280,18 +280,27 @@ export async function POST(request: NextRequest) {
     ).length;
     const permanentFailed = failed - retryableFailed;
 
+    /*
+     * Retryable failure wins for the whole transport batch.
+     *
+     * The browser will retry the same event IDs. raw_events has a tenant +
+     * source + source_event_id uniqueness guarantee, so already-accepted items
+     * are safe to replay while the transient item is retried.
+     *
+     * If the only failures are permanent validation failures, 200 is returned
+     * when at least one event was accepted so the browser can discard that
+     * batch instead of retrying malformed local data forever.
+     */
     const status =
-      failed === 0
-        ? 200
+      retryableFailed > 0
+        ? 503
         : accepted > 0
-          ? 207
-          : retryableFailed > 0
-            ? 503
-            : 400;
+          ? 200
+          : 400;
 
     return NextResponse.json(
       {
-        ok: failed === 0,
+        ok: retryableFailed === 0 && accepted > 0,
         batch: rawEvents.length > 1,
         accepted,
         failed,
