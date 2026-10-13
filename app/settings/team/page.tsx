@@ -12,6 +12,7 @@ import { PageHeader } from "@/components/ui";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { getWorkspaceContextForUser } from "@/lib/workspace";
+import { createEmployeeAction } from "./actions";
 
 type OrganizationMemberRow = {
   user_id: string;
@@ -105,27 +106,24 @@ export default async function TeamAccessPage({
   const organizationId = activeOrganization.organizationId;
   const admin = createAdminClient();
 
-  const [
-    membersResult,
-    enabledWorkspacesResult,
-    catalogResult,
-  ] = await Promise.all([
-    admin
-      .from("organization_members")
-      .select("user_id,role,active")
-      .eq("organization_id", organizationId)
-      .order("created_at", { ascending: true }),
-    admin
-      .from("organization_workspaces")
-      .select("workspace_code")
-      .eq("organization_id", organizationId)
-      .eq("enabled", true),
-    admin
-      .from("workspace_catalog")
-      .select("code,name,sort_order")
-      .eq("status", "active")
-      .order("sort_order", { ascending: true }),
-  ]);
+  const [membersResult, enabledWorkspacesResult, catalogResult] =
+    await Promise.all([
+      admin
+        .from("organization_members")
+        .select("user_id,role,active")
+        .eq("organization_id", organizationId)
+        .order("created_at", { ascending: true }),
+      admin
+        .from("organization_workspaces")
+        .select("workspace_code")
+        .eq("organization_id", organizationId)
+        .eq("enabled", true),
+      admin
+        .from("workspace_catalog")
+        .select("code,name,sort_order")
+        .eq("status", "active")
+        .order("sort_order", { ascending: true }),
+    ]);
 
   if (membersResult.error) {
     throw new Error(
@@ -158,6 +156,9 @@ export default async function TeamAccessPage({
     ((catalogResult.data ?? []) as WorkspaceCatalogRow[]).filter((workspace) =>
       enabledWorkspaceCodes.has(workspace.code),
     );
+  const assignableWorkspaces = workspaceCatalog.filter(
+    (workspace) => workspace.code !== "admin",
+  );
 
   const [profilesResult, workspaceMembershipsResult, authUsers] =
     memberIds.length > 0
@@ -448,22 +449,98 @@ export default async function TeamAccessPage({
             </div>
 
             <div>
-              <div className="font-semibold text-slate-900">
-                Add Employee
-              </div>
+              <div className="font-semibold text-slate-900">Add Employee</div>
               <div className="text-xs text-slate-500">
-                Workspace-aware provisioning is next.
+                Create login + organization + workspace access.
               </div>
             </div>
           </div>
 
-          <div className="mt-5 rounded-xl border border-slate-200 bg-slate-50 px-4 py-4 text-sm leading-6 text-slate-600">
-            The legacy create/deactivate controls are temporarily hidden while
-            employee provisioning is upgraded to create the Auth account,
-            organization membership, and functional workspace grants together.
-            This prevents new orphaned or cross-tenant employee accounts during
-            the W4 migration.
-          </div>
+          <form action={createEmployeeAction} className="mt-5 space-y-4">
+            <label className="block">
+              <span className="mb-1.5 block text-xs font-semibold text-slate-600">
+                Full name
+              </span>
+              <input
+                required
+                name="full_name"
+                type="text"
+                autoComplete="off"
+                placeholder="Employee name"
+                className="team-input w-full rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm outline-none transition focus:border-brand"
+              />
+            </label>
+
+            <label className="block">
+              <span className="mb-1.5 block text-xs font-semibold text-slate-600">
+                Login email
+              </span>
+              <input
+                required
+                name="email"
+                type="email"
+                autoComplete="off"
+                placeholder="employee@example.com"
+                className="team-input w-full rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm outline-none transition focus:border-brand"
+              />
+            </label>
+
+            <label className="block">
+              <span className="mb-1.5 block text-xs font-semibold text-slate-600">
+                Temporary password
+              </span>
+              <input
+                required
+                name="password"
+                type="password"
+                minLength={10}
+                autoComplete="new-password"
+                placeholder="Minimum 10 characters"
+                className="team-input w-full rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm outline-none transition focus:border-brand"
+              />
+            </label>
+
+            <fieldset>
+              <legend className="mb-2 block text-xs font-semibold text-slate-600">
+                Workspace access
+              </legend>
+
+              <div className="space-y-2">
+                {assignableWorkspaces.map((workspace) => (
+                  <label
+                    key={workspace.code}
+                    className="flex cursor-pointer items-start gap-3 rounded-xl border border-slate-200 bg-white px-3.5 py-3 transition hover:border-slate-300"
+                  >
+                    <input
+                      type="checkbox"
+                      name="workspace_codes"
+                      value={workspace.code}
+                      className="mt-0.5 h-4 w-4 rounded border-slate-300"
+                    />
+                    <span>
+                      <span className="block text-sm font-semibold text-slate-800">
+                        {workspace.name}
+                      </span>
+                      <span className="mt-0.5 block text-xs leading-5 text-slate-500">
+                        Employee access · member role
+                      </span>
+                    </span>
+                  </label>
+                ))}
+              </div>
+            </fieldset>
+
+            <div className="rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-3 text-xs leading-5 text-slate-500">
+              Select at least one workspace. Admin access cannot be assigned here.
+              Employees with Sales access retain the legacy admissions compatibility
+              role; non-Sales employees use the legacy viewer role.
+            </div>
+
+            <button type="submit" className="btn-primary w-full justify-center">
+              <UserPlus size={16} />
+              Create employee
+            </button>
+          </form>
         </section>
       </div>
     </>
