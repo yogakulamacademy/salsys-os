@@ -507,7 +507,12 @@ export function AppShell({ children }: { children: ReactNode }) {
     }
   }
 
-  if (pathname.startsWith("/login") || pathname === "/workspace") {
+  if (
+    pathname.startsWith("/login") ||
+    pathname === "/forgot-password" ||
+    pathname === "/reset-password" ||
+    pathname === "/workspace"
+  ) {
     return <>{children}</>;
   }
 
