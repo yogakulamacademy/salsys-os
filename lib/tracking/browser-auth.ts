@@ -136,11 +136,15 @@ export async function resolveBrowserTrackingCredential({
   }
 
   // Usage bookkeeping must never make a valid browser event fail.
-  void supabase
-    .from('integration_api_credentials')
-    .update({ last_used_at: new Date().toISOString() })
-    .eq('id', credential.id)
-    .eq('organization_id', credential.organization_id);
+  try {
+    await supabase
+      .from('integration_api_credentials')
+      .update({ last_used_at: new Date().toISOString() })
+      .eq('id', credential.id)
+      .eq('organization_id', credential.organization_id);
+  } catch {
+    // Do not reject an otherwise valid tracking request if usage bookkeeping fails.
+  }
 
   return {
     credentialId: credential.id,
