@@ -279,6 +279,17 @@ export function metaAuthorizationUrl({
     'true',
   );
 
+  /*
+   * A reconnect must re-request permissions from the current
+   * Login for Business configuration. Without this, Meta can
+   * silently reuse the user's older grant and omit permissions
+   * that were added to the configuration later.
+   */
+  url.searchParams.set(
+    'auth_type',
+    'rerequest',
+  );
+
   return url;
 }
 
