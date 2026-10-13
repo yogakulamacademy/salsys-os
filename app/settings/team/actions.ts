@@ -499,6 +499,15 @@ export async function updateEmployeeAccessAction(formData: FormData) {
     );
   }
 
+  if (targetResult.data.active !== true) {
+    redirect(
+      teamUrl(
+        'error',
+        'Reactivate this employee before changing workspace access.',
+      ),
+    );
+  }
+
   if (enabledWorkspaceResult.error) {
     redirect(
       teamUrl(
