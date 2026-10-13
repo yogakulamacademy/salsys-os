@@ -13,6 +13,7 @@ import { NextResponse, type NextRequest } from "next/server";
 */
 
 const PUBLIC_EXACT_PATHS = new Set([
+  "/salsys.js",
   "/yogakulam-tracker.js",
   "/api/leads/capture",
   "/api/analytics/ga4/sync",
@@ -24,7 +25,7 @@ const PUBLIC_EXACT_PATHS = new Set([
   "/api/whatsapp/webhook",
   "/api/instagram/webhook",
   "/api/sync/course-batches",
-    "/api/tracking/collect",
+  "/api/tracking/collect",
   "/api/tracking/consent",
   "/api/tracking/identify",
 ]);
