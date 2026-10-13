@@ -453,6 +453,54 @@ export async function createInactiveMetaConversionRoute(
     );
 
 
+  const admin =
+    createAdminClient();
+
+  /*
+   * created_by is provenance, not an arbitrary profile reference.
+   * Validate it against the exact organization before any provider call.
+   * System-created routes may intentionally leave createdBy null.
+   */
+  if (createdBy) {
+    const {
+      data: creatorMembership,
+      error: creatorMembershipError,
+    } =
+      await admin
+        .from(
+          "organization_members",
+        )
+        .select(
+          "id",
+        )
+        .eq(
+          "organization_id",
+          organizationId,
+        )
+        .eq(
+          "user_id",
+          createdBy,
+        )
+        .eq(
+          "active",
+          true,
+        )
+        .maybeSingle();
+
+    if (creatorMembershipError) {
+      throw new Error(
+        `Unable to validate Meta conversion route creator: ${creatorMembershipError.message}`,
+      );
+    }
+
+    if (!creatorMembership) {
+      throw new Error(
+        "Meta conversion route creator must be an active member of the organization.",
+      );
+    }
+  }
+
+
   const verifiedDestination =
     await verifyMetaConversionDestination({
       organizationId,
@@ -467,9 +515,6 @@ export async function createInactiveMetaConversionRoute(
     );
   }
 
-
-  const admin =
-    createAdminClient();
 
   const {
     data: rawRouteKeyMatch,
