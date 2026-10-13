@@ -35,7 +35,6 @@ function passwordResetRedirectUrl() {
     url.pathname = '/auth/callback';
     url.search = '';
     url.hash = '';
-    url.searchParams.set('next', '/reset-password');
 
     return url.toString();
   } catch {
