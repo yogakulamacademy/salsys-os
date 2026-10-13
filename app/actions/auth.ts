@@ -4,7 +4,7 @@ import { redirect } from 'next/navigation';
 import { cookies } from 'next/headers';
 import { createClient } from '@/lib/supabase/server';
 import { useMockData } from '@/lib/config';
-import { ACTIVE_WORKSPACE_COOKIE } from '@/lib/workspace';
+import { ACTIVE_ORGANIZATION_COOKIE } from '@/lib/workspace';
 
 export async function signInAction(formData: FormData) {
   if (useMockData) redirect('/dashboard');
@@ -36,7 +36,7 @@ export async function signOutAction() {
   }
 
   const cookieStore = await cookies();
-  cookieStore.delete(ACTIVE_WORKSPACE_COOKIE);
+  cookieStore.delete(ACTIVE_ORGANIZATION_COOKIE);
 
   redirect('/login');
 }
