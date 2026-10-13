@@ -10,8 +10,9 @@ import {
 } from "next/server";
 
 import {
-  runConfiguredConversionFeedbackWorker,
-} from "@/lib/conversion-feedback/configured-worker";
+  runConfiguredConversionFeedbackCycle,
+  runScheduledConversionFeedback,
+} from "@/lib/conversion-feedback/orchestrator";
 
 
 export const dynamic =
@@ -20,12 +21,18 @@ export const dynamic =
 export const runtime =
   "nodejs";
 
+export const maxDuration =
+  300;
+
 
 const DEFAULT_LIMIT =
   25;
 
 const DEFAULT_LEASE_SECONDS =
   300;
+
+const DEFAULT_ENQUEUE_LIMIT =
+  500;
 
 const UUID_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -35,6 +42,7 @@ type RequestBody = {
   organizationId?: unknown;
   limit?: unknown;
   leaseSeconds?: unknown;
+  enqueueLimit?: unknown;
 };
 
 
@@ -70,14 +78,21 @@ function constantTimeEqual(
 
 function authorizationState(
   request: NextRequest,
+  configuredSecrets:
+    Array<
+      string | undefined
+    >,
 ) {
-  const expectedSecret =
-    process.env
-      .CONVERSION_FEEDBACK_RUN_SECRET
-      ?.trim() ??
-    "";
+  const secrets =
+    configuredSecrets
+      .map(
+        (value) =>
+          value?.trim() ??
+          "",
+      )
+      .filter(Boolean);
 
-  if (!expectedSecret) {
+  if (secrets.length === 0) {
     return {
       configured: false,
       authorized: false,
@@ -108,9 +123,12 @@ function authorizationState(
       Boolean(
         suppliedSecret,
       ) &&
-      constantTimeEqual(
-        suppliedSecret,
-        expectedSecret,
+      secrets.some(
+        (expectedSecret) =>
+          constantTimeEqual(
+            suppliedSecret,
+            expectedSecret,
+          ),
       ),
   };
 }
@@ -138,15 +156,10 @@ function optionalInteger(
 }
 
 
-export async function POST(
-  request: NextRequest,
+function unauthorizedResponse(
+  configured: boolean,
 ) {
-  const auth =
-    authorizationState(
-      request,
-    );
-
-  if (!auth.configured) {
+  if (!configured) {
     return NextResponse.json(
       {
         ok: false,
@@ -159,16 +172,115 @@ export async function POST(
     );
   }
 
+  return NextResponse.json(
+    {
+      ok: false,
+      error:
+        "Unauthorized",
+    },
+    {
+      status: 401,
+    },
+  );
+}
+
+
+/*
+ * Vercel Cron invokes this route with GET and sends CRON_SECRET
+ * as a Bearer token when that project environment variable exists.
+ *
+ * The scheduled path discovers only organizations that have active
+ * conversion-feedback routes. Queue materialization remains tenant-scoped,
+ * and provider payloads / match identifiers are never returned here.
+ */
+export async function GET(
+  request: NextRequest,
+) {
+  const auth =
+    authorizationState(
+      request,
+      [
+        process.env
+          .CRON_SECRET,
+      ],
+    );
+
   if (!auth.authorized) {
+    return unauthorizedResponse(
+      auth.configured,
+    );
+  }
+
+  try {
+    const report =
+      await runScheduledConversionFeedback({
+        limit:
+          DEFAULT_LIMIT,
+        leaseSeconds:
+          DEFAULT_LEASE_SECONDS,
+        enqueueLimit:
+          DEFAULT_ENQUEUE_LIMIT,
+      });
+
+    return NextResponse.json(
+      {
+        ok:
+          report.failed === 0,
+        trigger:
+          "cron",
+        report,
+      },
+      {
+        status:
+          report.failed === 0
+            ? 200
+            : 500,
+      },
+    );
+  } catch (error) {
+    console.error(
+      "Conversion feedback scheduled run failed.",
+      error,
+    );
+
     return NextResponse.json(
       {
         ok: false,
         error:
-          "Unauthorized",
+          "Conversion feedback scheduled run failed.",
       },
       {
-        status: 401,
+        status: 500,
       },
+    );
+  }
+}
+
+
+/*
+ * Manual / service-level execution remains organization-scoped.
+ *
+ * CONVERSION_FEEDBACK_RUN_SECRET is retained for compatibility. CRON_SECRET
+ * is also accepted so operators can use the same protected service credential
+ * if they intentionally choose to do so.
+ */
+export async function POST(
+  request: NextRequest,
+) {
+  const auth =
+    authorizationState(
+      request,
+      [
+        process.env
+          .CONVERSION_FEEDBACK_RUN_SECRET,
+        process.env
+          .CRON_SECRET,
+      ],
+    );
+
+  if (!auth.authorized) {
+    return unauthorizedResponse(
+      auth.configured,
     );
   }
 
@@ -266,52 +378,90 @@ export async function POST(
   }
 
 
+  const enqueueLimit =
+    optionalInteger(
+      body.enqueueLimit,
+      DEFAULT_ENQUEUE_LIMIT,
+    );
+
+  if (
+    enqueueLimit === null ||
+    enqueueLimit < 1 ||
+    enqueueLimit > 5000
+  ) {
+    return NextResponse.json(
+      {
+        ok: false,
+        error:
+          "enqueueLimit must be an integer between 1 and 5000.",
+      },
+      {
+        status: 400,
+      },
+    );
+  }
+
+
   try {
-    const report =
-      await runConfiguredConversionFeedbackWorker({
+    const cycle =
+      await runConfiguredConversionFeedbackCycle({
         organizationId,
         limit,
         leaseSeconds,
+        enqueueLimit,
       });
 
     /*
-     * Worker reports contain only operational counts.
-     * Provider payloads, match identifiers and credentials
-     * are intentionally never returned by this route.
+     * Only operational counts are returned. Provider request bodies,
+     * identifiers, consent evidence and credentials stay server-side.
      */
     return NextResponse.json({
       ok: true,
+      trigger:
+        "manual",
       report: {
         organizationId:
-          report.organizationId,
+          cycle.organizationId,
+
+        enqueue: {
+          candidateCount:
+            cycle.enqueue.candidateCount,
+
+          insertedCount:
+            cycle.enqueue.insertedCount,
+
+          alreadyQueuedCount:
+            cycle.enqueue.alreadyQueuedCount,
+        },
 
         claimed:
-          report.claimed,
+          cycle.worker.claimed,
 
         delivered:
-          report.delivered,
+          cycle.worker.delivered,
 
         skipped:
-          report.skipped,
+          cycle.worker.skipped,
 
         retryableFailed:
-          report.retryableFailed,
+          cycle.worker.retryableFailed,
 
         permanentFailed:
-          report.permanentFailed,
+          cycle.worker.permanentFailed,
 
         leaseLost:
-          report.leaseLost,
+          cycle.worker.leaseLost,
 
         finalizationErrors:
-          report.finalizationErrors,
+          cycle.worker.finalizationErrors,
       },
     });
-  } catch {
-    /*
-     * Do not expose queue, database, provider or credential
-     * internals through this service-level endpoint.
-     */
+  } catch (error) {
+    console.error(
+      "Conversion feedback manual run failed.",
+      error,
+    );
+
     return NextResponse.json(
       {
         ok: false,

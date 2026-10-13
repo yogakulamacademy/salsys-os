@@ -16,6 +16,10 @@
     {
       "path": "/api/analytics/meta-ads/sync",
       "schedule": "15 6 * * *"
+    },
+    {
+      "path": "/api/conversion-feedback/run",
+      "schedule": "45 6 * * *"
     }
   ]
 }
