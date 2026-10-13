@@ -235,7 +235,16 @@ export async function getGoogleAccessTokenForConnection(
       );
   }
 
+  /*
+   * Re-check the connection state as part of the credential write.
+   *
+   * A user can disconnect the integration while Google's token refresh
+   * request is in flight. In that case the disconnect flow clears stored
+   * credentials, and this update must not repopulate them afterward.
+   */
   const {
+    data:
+      updatedConnection,
     error:
       updateError,
   } =
@@ -253,11 +262,29 @@ export async function getGoogleAccessTokenForConnection(
       .eq(
         'organization_id',
         connection.organization_id,
-      );
+      )
+      .eq(
+        'provider',
+        'google',
+      )
+      .eq(
+        'status',
+        'connected',
+      )
+      .select(
+        'id',
+      )
+      .maybeSingle();
 
   if (updateError) {
     throw new Error(
       updateError.message,
+    );
+  }
+
+  if (!updatedConnection) {
+    throw new Error(
+      'Google connection changed state during token refresh.',
     );
   }
 
