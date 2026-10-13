@@ -8,6 +8,7 @@ import {
   Bell,
   BookOpen,
   Boxes,
+  Building2,
   ChevronDown,
   CircleDollarSign,
   ClipboardCheck,
@@ -57,6 +58,7 @@ type NavItem = {
     strokeWidth?: number;
     className?: string;
   }>;
+  organizationAdminOnly?: boolean;
 };
 
 type NavGroup = {
@@ -181,6 +183,12 @@ const workspaceNavGroups: Record<string, NavGroup[]> = {
           label: "Team & Access",
           icon: ShieldCheck,
         },
+        {
+          href: "/workspace",
+          label: "Organizations",
+          icon: Building2,
+          organizationAdminOnly: true,
+        },
       ],
     },
     {
@@ -198,8 +206,8 @@ const workspaceNavGroups: Record<string, NavGroup[]> = {
 };
 
 function isNavActive(pathname: string, href: string) {
-  if (href === "/settings") {
-    return pathname === "/settings";
+  if (href === "/settings" || href === "/workspace") {
+    return pathname === href;
   }
 
   return pathname === href || pathname.startsWith(`${href}/`);
@@ -291,7 +299,9 @@ export function AppShell({ children }: { children: ReactNode }) {
           .map((group) => ({
             ...group,
             items: group.items.filter((item) =>
-              canAccessActiveWorkspaceRoute(item.href),
+              item.organizationAdminOnly
+                ? admin
+                : canAccessActiveWorkspaceRoute(item.href),
             ),
           }))
           .filter((group) => group.items.length > 0)
@@ -497,7 +507,7 @@ export function AppShell({ children }: { children: ReactNode }) {
     }
   }
 
-  if (pathname.startsWith("/login")) {
+  if (pathname.startsWith("/login") || pathname === "/workspace") {
     return <>{children}</>;
   }
 
@@ -789,6 +799,13 @@ export function AppShell({ children }: { children: ReactNode }) {
                   </Link>
                 )}
 
+                {admin && workspace?.memberships && workspace.memberships.length > 1 && (
+                  <Link href="/workspace" className="topbar-account-row">
+                    <Building2 size={17} />
+                    <span>Organizations</span>
+                  </Link>
+                )}
+
                 {admin && (
                   <Link href="/system-health" className="topbar-account-row">
                     <Activity size={17} />
@@ -852,6 +869,36 @@ export function AppShell({ children }: { children: ReactNode }) {
             <X size={17} />
           </button>
         </div>
+
+        {!workspaceLoading && functionalWorkspaces.length > 1 && (
+          <div className="px-3 pb-3 lg:hidden">
+            <label className="mb-1.5 block text-[10px] font-bold uppercase tracking-[.12em] text-slate-400">
+              Workspace
+            </label>
+            <select
+              aria-label="Select functional workspace from mobile menu"
+              value={activeFunctionalWorkspaceCode}
+              onChange={(event) =>
+                handleFunctionalWorkspaceChange(event.target.value)
+              }
+              className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-800 outline-none"
+            >
+              {functionalWorkspaces.map((workspaceAccess) => (
+                <option key={workspaceAccess.code} value={workspaceAccess.code}>
+                  {workspaceAccess.name}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
+
+        {!workspaceLoading && functionalWorkspaces.length === 1 && (
+          <div className="px-3 pb-3 lg:hidden">
+            <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-semibold text-slate-700">
+              {activeFunctionalWorkspaceName}
+            </div>
+          </div>
+        )}
 
         {showLeadSearch && (
           <form
