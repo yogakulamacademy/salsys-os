@@ -42,6 +42,11 @@ import {
 import { signOutAction } from "@/app/actions/auth";
 import { LiveRefresh } from "@/components/live-refresh";
 import { ThemeToggle } from "@/components/theme-toggle";
+import {
+  FUNCTIONAL_WORKSPACE_DEFINITIONS,
+  getFunctionalWorkspaceForPathname,
+  getFunctionalWorkspaceRootPath,
+} from "@/lib/functional-workspaces";
 import { createClient as createBrowserClient } from "@/lib/supabase/browser";
 
 type NavItem = {
@@ -73,10 +78,20 @@ type WorkspaceMembership = {
   role: string;
 };
 
+type FunctionalWorkspaceAccess = {
+  organizationId: string;
+  code: string;
+  name: string;
+  description: string;
+  role: string;
+  sortOrder: number;
+};
+
 type WorkspaceContext = {
   activeOrganizationId: string | null;
   activeWorkspace: WorkspaceMembership | null;
   memberships: WorkspaceMembership[];
+  functionalWorkspaces: FunctionalWorkspaceAccess[];
   selectionRequired: boolean;
 };
 
@@ -217,12 +232,34 @@ export function AppShell({ children }: { children: ReactNode }) {
   const [profileLoading, setProfileLoading] = useState(true);
   const [workspace, setWorkspace] = useState<WorkspaceContext | null>(null);
   const [workspaceLoading, setWorkspaceLoading] = useState(true);
-  const [workspaceSwitching, setWorkspaceSwitching] = useState(false);
 
   const mock = process.env.NEXT_PUBLIC_USE_MOCK_DATA !== "false";
 
   const activeWorkspace = workspace?.activeWorkspace ?? null;
-  const workspaceMemberships = workspace?.memberships ?? [];
+  const functionalWorkspaces: FunctionalWorkspaceAccess[] = mock
+    ? FUNCTIONAL_WORKSPACE_DEFINITIONS.map((definition, index) => ({
+        organizationId: "mock",
+        code: definition.code,
+        name: definition.name,
+        description: "",
+        role: "admin",
+        sortOrder: (index + 1) * 10,
+      }))
+    : workspace?.functionalWorkspaces ?? [];
+
+  const routeWorkspace = getFunctionalWorkspaceForPathname(pathname);
+  const activeFunctionalWorkspaceCode =
+    routeWorkspace &&
+    functionalWorkspaces.some(
+      (workspaceAccess) => workspaceAccess.code === routeWorkspace.code,
+    )
+      ? routeWorkspace.code
+      : functionalWorkspaces[0]?.code ?? "";
+
+  const activeFunctionalWorkspaceName =
+    functionalWorkspaces.find(
+      (workspaceAccess) => workspaceAccess.code === activeFunctionalWorkspaceCode,
+    )?.name ?? routeWorkspace?.name ?? "Workspace";
 
   const effectiveRole = mock
     ? "admin"
@@ -443,49 +480,15 @@ export function AppShell({ children }: { children: ReactNode }) {
     };
   }, [mobileOpen]);
 
-  async function handleWorkspaceChange(
-    organizationId: string,
-  ) {
-    if (
-      !organizationId ||
-      workspaceSwitching ||
-      organizationId === activeWorkspace?.organizationId
-    ) {
+  function handleFunctionalWorkspaceChange(workspaceCode: string) {
+    if (!workspaceCode || workspaceCode === activeFunctionalWorkspaceCode) {
       return;
     }
 
-    setWorkspaceSwitching(true);
+    const target = getFunctionalWorkspaceRootPath(workspaceCode);
 
-    try {
-      const response = await fetch("/api/workspace", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          organizationId,
-        }),
-      });
-
-      if (!response.ok) {
-        const body = await response
-          .json()
-          .catch(() => null);
-
-        throw new Error(
-          body?.error || "Unable to switch workspace.",
-        );
-      }
-
-      window.location.assign("/dashboard");
-    } catch (error) {
-      setWorkspaceSwitching(false);
-
-      window.alert(
-        error instanceof Error
-          ? error.message
-          : "Unable to switch workspace.",
-      );
+    if (target) {
+      window.location.assign(target);
     }
   }
 
@@ -523,10 +526,8 @@ export function AppShell({ children }: { children: ReactNode }) {
         <div className="topbar-brand">
           <BrandMark />
           <div className="topbar-brand-copy">
-            <div className="topbar-brand-name">{organizationName}</div>
-            <div className="topbar-product-name">
-              {employee ? "Admissions CRM" : "Growth CRM · v0.9 Beta"}
-            </div>
+            <div className="topbar-brand-name">SalsysOS</div>
+            <div className="topbar-product-name">{organizationName}</div>
           </div>
         </div>
 
@@ -554,29 +555,27 @@ export function AppShell({ children }: { children: ReactNode }) {
         </form>
 
         <div className="topbar-actions">
-          {!mock && workspaceMemberships.length > 1 && (
+          {!workspaceLoading && functionalWorkspaces.length > 1 && (
             <select
-              aria-label="Select school workspace"
-              value={activeWorkspace?.organizationId ?? ""}
-              disabled={workspaceSwitching}
+              aria-label="Select functional workspace"
+              value={activeFunctionalWorkspaceCode}
               onChange={(event) =>
-                void handleWorkspaceChange(event.target.value)
+                handleFunctionalWorkspaceChange(event.target.value)
               }
               className="hidden max-w-[220px] rounded-lg border border-white/20 bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-900 outline-none md:block"
             >
-              {!activeWorkspace && (
-                <option value="">Select school</option>
-              )}
-
-              {workspaceMemberships.map((membership) => (
-                <option
-                  key={membership.organizationId}
-                  value={membership.organizationId}
-                >
-                  {membership.organizationName}
+              {functionalWorkspaces.map((workspaceAccess) => (
+                <option key={workspaceAccess.code} value={workspaceAccess.code}>
+                  {workspaceAccess.name}
                 </option>
               ))}
             </select>
+          )}
+
+          {!workspaceLoading && functionalWorkspaces.length === 1 && (
+            <span className="hidden max-w-[220px] rounded-lg border border-white/20 bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-900 md:block">
+              {activeFunctionalWorkspaceName}
+            </span>
           )}
 
           {!employee &&
