@@ -258,11 +258,9 @@ export async function GET(
 
 
 /*
- * Manual / service-level execution remains organization-scoped.
- *
- * CONVERSION_FEEDBACK_RUN_SECRET is retained for compatibility. CRON_SECRET
- * is also accepted so operators can use the same protected service credential
- * if they intentionally choose to do so.
+ * Manual / service-level execution is organization-scoped and intentionally
+ * uses its own credential. CRON_SECRET is reserved for the scheduled GET path
+ * and cannot be used to authorize arbitrary manual organization runs.
  */
 export async function POST(
   request: NextRequest,
@@ -273,8 +271,6 @@ export async function POST(
       [
         process.env
           .CONVERSION_FEEDBACK_RUN_SECRET,
-        process.env
-          .CRON_SECRET,
       ],
     );
 
