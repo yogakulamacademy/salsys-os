@@ -14,6 +14,19 @@ const META_DESTINATION_KIND =
   "meta_dataset_event";
 
 
+type RouteActivationSnapshotRow = {
+  id: string;
+  organization_id: string;
+  connection_id: string;
+  integration_asset_id: string;
+  destination_kind: string;
+  destination_external_id: string | null;
+  destination_event_name: string | null;
+  status: string;
+  updated_at: string;
+};
+
+
 type ActivatedRouteRow = {
   id: string;
   organization_id: string;
@@ -83,6 +96,52 @@ export async function activateMetaConversionRoute({
     );
 
 
+  const admin =
+    createAdminClient();
+
+  /*
+   * Capture the exact route version BEFORE readiness verification.
+   *
+   * Readiness performs provider-side Dataset verification. Without this
+   * optimistic-concurrency snapshot, another service-role operation could
+   * change the route mapping after verification and before activation.
+   * The final UPDATE therefore requires the row to still have the same
+   * updated_at and provider-resource bindings that were present when this
+   * activation attempt began.
+   */
+  const {
+    data: rawSnapshot,
+    error: snapshotError,
+  } =
+    await admin
+      .from(
+        "conversion_feedback_routes",
+      )
+      .select(
+        "id,organization_id,connection_id,integration_asset_id,destination_kind,destination_external_id,destination_event_name,status,updated_at",
+      )
+      .eq(
+        "id",
+        normalizedRouteId,
+      )
+      .eq(
+        "organization_id",
+        normalizedOrganizationId,
+      )
+      .maybeSingle();
+
+  if (snapshotError) {
+    throw new Error(
+      `Unable to read Meta conversion route activation snapshot: ${snapshotError.message}`,
+    );
+  }
+
+  const snapshot =
+    rawSnapshot as unknown as
+      | RouteActivationSnapshotRow
+      | null;
+
+
   const readiness =
     await assessMetaConversionRouteReadiness({
       organizationId:
@@ -101,9 +160,20 @@ export async function activateMetaConversionRoute({
     };
   }
 
+  if (
+    !snapshot ||
+    snapshot.status !==
+      "inactive" ||
+    snapshot.destination_kind !==
+      META_DESTINATION_KIND ||
+    !snapshot.destination_external_id ||
+    !snapshot.destination_event_name
+  ) {
+    throw new Error(
+      "Meta conversion route changed before readiness verification completed and was not activated.",
+    );
+  }
 
-  const admin =
-    createAdminClient();
 
   const {
     data: rawActivated,
@@ -132,6 +202,26 @@ export async function activateMetaConversionRoute({
       .eq(
         "destination_kind",
         META_DESTINATION_KIND,
+      )
+      .eq(
+        "connection_id",
+        snapshot.connection_id,
+      )
+      .eq(
+        "integration_asset_id",
+        snapshot.integration_asset_id,
+      )
+      .eq(
+        "destination_external_id",
+        snapshot.destination_external_id,
+      )
+      .eq(
+        "destination_event_name",
+        snapshot.destination_event_name,
+      )
+      .eq(
+        "updated_at",
+        snapshot.updated_at,
       )
       .select(
         "id,organization_id,status,destination_kind,destination_external_id,destination_event_name,updated_at",
