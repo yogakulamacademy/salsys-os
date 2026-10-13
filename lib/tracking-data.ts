@@ -8,8 +8,9 @@ import {
   type WebFunnel7d,
 } from "@/lib/data";
 
+import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
-import { requireCurrentOrganizationId } from "@/lib/workspace";
+import { getWorkspaceContextForUser } from "@/lib/workspace";
 
 export type TrackingWorkspace = {
   health: TrackingHealth;
@@ -22,11 +23,23 @@ export type TrackingWorkspace = {
 export type TrackingInstallation = {
   organizationId: string | null;
   site: string | null;
+  sites: string[];
   publicKey: string | null;
+  credentialId: string | null;
+  connectionId: string | null;
+  credentialName: string | null;
   environment: "live" | "test" | null;
   allowedHosts: string[];
   scopes: string[];
   legacyCompat: boolean;
+  canManage: boolean;
+  createdAt: string | null;
+  lastUsedAt: string | null;
+  lastEventAt: string | null;
+  lastEventSdkVersion: string | null;
+  lastEventSchemaVersion: number | null;
+  lastEventStatus: string | null;
+  events24h: number;
 };
 
 type TrackingRpcPayload = {
@@ -37,6 +50,8 @@ type TrackingRpcPayload = {
 
 type CredentialListRow = {
   credential_id?: unknown;
+  connection_id?: unknown;
+  name?: unknown;
   credential_kind?: unknown;
   environment?: unknown;
   public_key?: unknown;
@@ -45,6 +60,7 @@ type CredentialListRow = {
   status?: unknown;
   effective_status?: unknown;
   created_at?: unknown;
+  last_used_at?: unknown;
 };
 
 export async function getTrackingWorkspace(): Promise<TrackingWorkspace> {
@@ -126,11 +142,23 @@ export async function getTrackingInstallation(): Promise<TrackingInstallation> {
     return {
       organizationId: null,
       site: "example.com",
+      sites: ["example.com"],
       publicKey: null,
+      credentialId: null,
+      connectionId: null,
+      credentialName: null,
       environment: null,
       allowedHosts: [],
       scopes: [],
       legacyCompat: false,
+      canManage: true,
+      createdAt: null,
+      lastUsedAt: null,
+      lastEventAt: null,
+      lastEventSdkVersion: null,
+      lastEventSchemaVersion: null,
+      lastEventStatus: null,
+      events24h: 0,
     };
   }
 
@@ -144,19 +172,35 @@ export async function getTrackingInstallation(): Promise<TrackingInstallation> {
     return emptyInstallation();
   }
 
-  let organizationId: string;
+  let workspace;
 
   try {
-    organizationId = await requireCurrentOrganizationId(supabase, user.id);
+    workspace = await getWorkspaceContextForUser(supabase, user.id);
   } catch {
     return emptyInstallation();
   }
 
+  const organizationId = workspace.activeOrganizationId;
+
+  if (!organizationId || !workspace.activeWorkspace) {
+    return emptyInstallation();
+  }
+
+  const canManage = ["owner", "admin"].includes(
+    workspace.activeWorkspace.role,
+  );
+
+  // Installation diagnostics are a server-side administrative read after the
+  // authenticated user's tenant membership has been resolved above. This avoids
+  // depending on direct organization_sites/raw_events table access from the
+  // browser-facing Supabase role.
+  const admin = createAdminClient();
+
   const [{ data: siteRows }, { data: credentialRows, error: credentialError }] =
     await Promise.all([
-      supabase
+      admin
         .from("organization_sites")
-        .select("hostname,status")
+        .select("hostname,status,created_at")
         .eq("organization_id", organizationId)
         .eq("status", "active")
         .order("created_at", { ascending: true }),
@@ -200,10 +244,77 @@ export async function getTrackingInstallation(): Promise<TrackingInstallation> {
     sites[0] ??
     null;
 
+  let lastEventAt: string | null = null;
+  let lastEventSdkVersion: string | null = null;
+  let lastEventSchemaVersion: number | null = null;
+  let lastEventStatus: string | null = null;
+  let events24h = 0;
+
+  if (site) {
+    const since24h = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+
+    const [latestEventResult, countResult] = await Promise.all([
+      admin
+        .from("raw_events")
+        .select("id,received_at,schema_version,context,metadata")
+        .eq("organization_id", organizationId)
+        .eq("source_system", "website")
+        .eq("site", site)
+        .order("received_at", { ascending: false })
+        .limit(1)
+        .maybeSingle(),
+      admin
+        .from("raw_events")
+        .select("id", { count: "exact", head: true })
+        .eq("organization_id", organizationId)
+        .eq("source_system", "website")
+        .eq("site", site)
+        .gte("received_at", since24h),
+    ]);
+
+    events24h = countResult.count ?? 0;
+
+    const latestEvent = latestEventResult.data;
+
+    if (latestEvent) {
+      lastEventAt = optionalText(latestEvent.received_at) ?? null;
+      lastEventSchemaVersion = Number.isFinite(Number(latestEvent.schema_version))
+        ? Number(latestEvent.schema_version)
+        : null;
+
+      const context = objectValue(latestEvent.context);
+      const metadata = objectValue(latestEvent.metadata);
+
+      lastEventSdkVersion =
+        optionalText(context.sdk_version) ??
+        optionalText(metadata.sdk_version) ??
+        null;
+
+      const { data: processingRow } = await admin
+        .from("raw_event_processing")
+        .select("status")
+        .eq("organization_id", organizationId)
+        .eq("raw_event_id", latestEvent.id)
+        .maybeSingle();
+
+      lastEventStatus = optionalText(processingRow?.status) ?? null;
+    }
+  }
+
+  const normalizedSite = site?.replace(/^www\./, "") ?? "";
+
   return {
     organizationId,
     site,
+    sites,
     publicKey: selected ? optionalText(selected.public_key) ?? null : null,
+    credentialId: selected
+      ? optionalText(selected.credential_id) ?? null
+      : null,
+    connectionId: selected
+      ? optionalText(selected.connection_id) ?? null
+      : null,
+    credentialName: selected ? optionalText(selected.name) ?? null : null,
     environment: selected
       ? String(selected.environment ?? "") === "test"
         ? "test"
@@ -211,9 +322,17 @@ export async function getTrackingInstallation(): Promise<TrackingInstallation> {
       : null,
     allowedHosts,
     scopes: selected ? arrayOfStrings(selected.scopes) : [],
-    // Yogakulam is the existing production migration case. Other workspaces
-    // receive the generic Salsys SDK contract only.
-    legacyCompat: site === "yogakulamacademy.com" || site === "yogakulam.com",
+    legacyCompat:
+      normalizedSite === "yogakulamacademy.com" ||
+      normalizedSite === "yogakulam.com",
+    canManage,
+    createdAt: selected ? optionalText(selected.created_at) ?? null : null,
+    lastUsedAt: selected ? optionalText(selected.last_used_at) ?? null : null,
+    lastEventAt,
+    lastEventSdkVersion,
+    lastEventSchemaVersion,
+    lastEventStatus,
+    events24h,
   };
 }
 
@@ -221,11 +340,23 @@ function emptyInstallation(): TrackingInstallation {
   return {
     organizationId: null,
     site: null,
+    sites: [],
     publicKey: null,
+    credentialId: null,
+    connectionId: null,
+    credentialName: null,
     environment: null,
     allowedHosts: [],
     scopes: [],
     legacyCompat: false,
+    canManage: false,
+    createdAt: null,
+    lastUsedAt: null,
+    lastEventAt: null,
+    lastEventSdkVersion: null,
+    lastEventSchemaVersion: null,
+    lastEventStatus: null,
+    events24h: 0,
   };
 }
 
@@ -233,6 +364,12 @@ function arrayOfStrings(value: unknown) {
   return Array.isArray(value)
     ? value.map((item) => String(item ?? "").trim()).filter(Boolean)
     : [];
+}
+
+function objectValue(value: unknown): Record<string, unknown> {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : {};
 }
 
 function toNumber(value: unknown) {
