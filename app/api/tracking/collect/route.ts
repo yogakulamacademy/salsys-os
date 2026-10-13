@@ -5,11 +5,16 @@ import {
   resolveBrowserTrackingCredential,
   trackingOriginHostname,
 } from "@/lib/tracking/browser-auth";
+import { ingestBrowserTrackingEvent } from "@/lib/tracking/ingest-browser-event";
 import {
   isTrackingOriginAllowed,
   sanitizeTrackingPayload,
   trackingCorsHeaders,
 } from "@/lib/tracking/server";
+
+const MAX_BATCH_SIZE = 20;
+const MAX_PAYLOAD_BYTES = 128_000;
+const CURRENT_SCHEMA_VERSION = 1;
 
 function decodeGeoHeader(value: string | null) {
   if (!value) return null;
@@ -36,7 +41,8 @@ function browserTrackingCorsHeaders(origin: string | null) {
   return {
     ...legacy,
     ...(origin ? { "Access-Control-Allow-Origin": origin } : {}),
-    "Access-Control-Allow-Headers": "Content-Type, X-Salsys-Key",
+    "Access-Control-Allow-Headers":
+      "Content-Type, X-Salsys-Key, X-Salsys-SDK-Version, X-Salsys-Schema-Version",
     Vary: "Origin",
   };
 }
@@ -49,11 +55,37 @@ function getBrowserPublicKey(request: NextRequest) {
   );
 }
 
+function parseSchemaVersion(request: NextRequest) {
+  const value = Number(
+    request.headers.get("x-salsys-schema-version") || CURRENT_SCHEMA_VERSION,
+  );
+
+  return Number.isInteger(value) && value > 0 && value <= CURRENT_SCHEMA_VERSION
+    ? value
+    : null;
+}
+
+function parseSdkVersion(request: NextRequest) {
+  const value = request.headers.get("x-salsys-sdk-version")?.trim();
+  return value ? value.slice(0, 80) : null;
+}
+
+function getRawEvents(body: unknown): unknown[] {
+  if (
+    body &&
+    typeof body === "object" &&
+    !Array.isArray(body) &&
+    Array.isArray((body as Record<string, unknown>).events)
+  ) {
+    return (body as { events: unknown[] }).events;
+  }
+
+  return [body];
+}
+
 export async function OPTIONS(request: NextRequest) {
   const origin = request.headers.get("origin");
 
-  // Preflight is not authorization. The POST below validates the public key,
-  // allowed hostname, credential status/scope and organization binding.
   return new NextResponse(null, {
     status: 204,
     headers: browserTrackingCorsHeaders(origin),
@@ -68,17 +100,40 @@ export async function POST(request: NextRequest) {
   try {
     const length = Number(request.headers.get("content-length") || "0");
 
-    if (length > 32_000) {
+    if (length > MAX_PAYLOAD_BYTES) {
       return NextResponse.json(
         { ok: false, error: "Payload too large" },
         { status: 413, headers: cors },
       );
     }
 
-    const payload = sanitizeTrackingPayload(await request.json());
+    const schemaVersion = parseSchemaVersion(request);
+
+    if (!schemaVersion) {
+      return NextResponse.json(
+        { ok: false, error: "Unsupported tracking schema version." },
+        { status: 400, headers: cors },
+      );
+    }
+
+    const requestBody = await request.json();
+    const rawEvents = getRawEvents(requestBody);
+
+    if (rawEvents.length === 0 || rawEvents.length > MAX_BATCH_SIZE) {
+      return NextResponse.json(
+        {
+          ok: false,
+          error: `Tracking batch must contain between 1 and ${MAX_BATCH_SIZE} events.`,
+        },
+        { status: 400, headers: cors },
+      );
+    }
+
+    const payloads = rawEvents.map((event) => sanitizeTrackingPayload(event));
     const supabase = createAdminClient();
     const geo = getRequestGeo(request);
     const originHostname = trackingOriginHostname(origin);
+    const sdkVersion = parseSdkVersion(request);
 
     if (!originHostname) {
       return NextResponse.json(
@@ -102,10 +157,7 @@ export async function POST(request: NextRequest) {
 
       if (!credential) {
         return NextResponse.json(
-          {
-            ok: false,
-            error: "Tracking key is invalid for this website.",
-          },
+          { ok: false, error: "Tracking key is invalid for this website." },
           { status: 403, headers: cors },
         );
       }
@@ -115,8 +167,7 @@ export async function POST(request: NextRequest) {
       credentialId = credential.credentialId;
       credentialPublicKey = credential.publicKey;
     } else {
-      // Temporary legacy path for the existing Yogakulam installation.
-      // New Salsys SDK installs should always provide data-key.
+      // Temporary compatibility path for the current Yogakulam install.
       if (!isTrackingOriginAllowed(origin)) {
         return NextResponse.json(
           { ok: false, error: "Origin not allowed" },
@@ -148,132 +199,54 @@ export async function POST(request: NextRequest) {
       trustedSite = organizationSite.hostname;
     }
 
-    const occurredAt = payload.occurredAt || new Date().toISOString();
+    const results: Array<{
+      eventId: string;
+      ok: boolean;
+      error?: string;
+    }> = [];
 
-    const { data: rawEventResult, error: rawEventError } = await supabase.rpc(
-      "ingest_raw_event",
+    for (const payload of payloads) {
+      try {
+        await ingestBrowserTrackingEvent({
+          supabase,
+          payload,
+          organizationId,
+          trustedSite,
+          originHostname,
+          geo,
+          userAgent: request.headers.get("user-agent"),
+          credentialId,
+          credentialPublicKey,
+          schemaVersion,
+          sdkVersion,
+        });
+
+        results.push({ eventId: payload.eventId, ok: true });
+      } catch (error) {
+        results.push({
+          eventId: payload.eventId,
+          ok: false,
+          error: error instanceof Error ? error.message : "Tracking ingest failed",
+        });
+      }
+    }
+
+    const accepted = results.filter((result) => result.ok).length;
+    const failed = results.length - accepted;
+
+    return NextResponse.json(
       {
-        p_organization_id: organizationId,
-        p_source_system: "website",
-        p_source_event_id: payload.eventId,
-        p_source_event_type: payload.eventType,
-        p_ingestion_method: "tracking_collect",
-        p_occurred_at: occurredAt,
-        p_source_account_id: credentialPublicKey,
-        p_source_subject_id: null,
-        p_anonymous_visitor_id: payload.anonymousVisitorId,
-        p_session_key: payload.sessionKey,
-        p_external_message_id: null,
-        p_site: trustedSite,
-        p_payload: payload,
-        p_context: {
-          origin_hostname: originHostname,
-          trusted_site: trustedSite,
-          geo_country: geo.country,
-          geo_region: geo.region,
-          geo_city: geo.city,
-          geo_timezone: geo.timezone,
-          user_agent: request.headers.get("user-agent"),
-        },
-        p_metadata: {
-          adapter: "app/api/tracking/collect",
-          reported_site: payload.site || null,
-          browser_auth: credentialId ? "publishable_key" : "legacy_origin",
-          credential_id: credentialId,
-        },
-        p_schema_version: 1,
+        ok: failed === 0,
+        batch: rawEvents.length > 1,
+        accepted,
+        failed,
+        results,
+      },
+      {
+        status: failed === 0 ? 200 : accepted > 0 ? 207 : 400,
+        headers: cors,
       },
     );
-
-    if (rawEventError || !rawEventResult?.event_id) {
-      throw new Error(
-        rawEventError?.message ||
-          "Unable to persist canonical website event before normalization.",
-      );
-    }
-
-    const { error: processingError } = await supabase.rpc(
-      "process_website_raw_event",
-      {
-        p_organization_id: organizationId,
-        p_raw_event_id: rawEventResult.event_id,
-      },
-    );
-
-    if (processingError) throw processingError;
-
-    if (payload.fbc || payload.fbp) {
-      const { error: matchSignalError } = await supabase.rpc(
-        "apply_tracking_match_signals",
-        {
-          p_organization_id: organizationId,
-          p_raw_event_id: rawEventResult.event_id,
-        },
-      );
-
-      if (matchSignalError) throw matchSignalError;
-    }
-
-    if (payload.consent) {
-      const { error: consentSnapshotError } = await supabase.rpc(
-        "ingest_tracking_consent_event",
-        {
-          p_organization_id: organizationId,
-          p_source_event_id: payload.eventId,
-          p_occurred_at: occurredAt,
-          p_anonymous_visitor_id: payload.anonymousVisitorId,
-          p_session_key: payload.sessionKey,
-          p_site: trustedSite,
-          p_consent_analytics: payload.consent.analytics,
-          p_consent_ad_user_data: payload.consent.adUserData,
-          p_consent_ad_personalization: payload.consent.adPersonalization,
-          p_consent_marketing: payload.consent.marketing,
-          p_consent_mode: payload.consent.mode || null,
-          p_consent_source:
-            payload.consent.source ||
-            (credentialId ? "salsys_browser_sdk" : "yk_tracker"),
-          p_raw_event_id: rawEventResult.event_id,
-          p_metadata: {
-            adapter: "app/api/tracking/collect",
-            provenance: "event_time_snapshot",
-            credential_id: credentialId,
-          },
-        },
-      );
-
-      if (consentSnapshotError) throw consentSnapshotError;
-    }
-
-    const { error: rawProcessingError } = await supabase.rpc(
-      "set_raw_event_processing_status",
-      {
-        p_organization_id: organizationId,
-        p_source_system: "website",
-        p_source_event_id: payload.eventId,
-        p_status: "processed",
-        p_processor_name: "tracking_collect",
-        p_processor_version: credentialId ? "salsys-sdk-key-v1" : "phase3b",
-        p_processing_error: null,
-        p_processing_metadata: {
-          normalized_target: "web_sessions,touchpoints",
-          normalizer: "process_website_raw_event",
-          match_signals_projected: Boolean(payload.fbc || payload.fbp),
-          consent_snapshot_persisted: Boolean(payload.consent),
-          credential_id: credentialId,
-        },
-      },
-    );
-
-    if (rawProcessingError) {
-      console.error("Raw website event processing sync failed", {
-        organizationId,
-        eventId: payload.eventId,
-        eventType: payload.eventType,
-        message: rawProcessingError.message,
-      });
-    }
-
-    return NextResponse.json({ ok: true }, { headers: cors });
   } catch (error) {
     const message =
       error instanceof Error ? error.message : "Tracking ingest failed";
