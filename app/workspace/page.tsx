@@ -1,8 +1,9 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { isSafeFunctionalWorkspaceDestination } from "@/lib/functional-workspaces";
 
-type WorkspaceMembership = {
+type OrganizationMembership = {
   organizationId: string;
   organizationName: string;
   organizationSlug: string;
@@ -11,8 +12,8 @@ type WorkspaceMembership = {
 
 type WorkspaceContext = {
   activeOrganizationId: string | null;
-  activeWorkspace: WorkspaceMembership | null;
-  memberships: WorkspaceMembership[];
+  activeWorkspace: OrganizationMembership | null;
+  memberships: OrganizationMembership[];
   selectionRequired: boolean;
 };
 
@@ -29,7 +30,8 @@ function destinationAfterSelection() {
   if (
     requested.startsWith("/") &&
     !requested.startsWith("//") &&
-    !requested.startsWith("/workspace")
+    (!requested.startsWith("/workspace") ||
+      isSafeFunctionalWorkspaceDestination(requested))
   ) {
     return requested;
   }
@@ -50,7 +52,7 @@ export default function WorkspacePage() {
   const [error, setError] =
     useState<string | null>(null);
 
-  async function selectWorkspace(
+  async function selectOrganization(
     organizationId: string,
   ) {
     if (!organizationId || switchingId) {
@@ -80,7 +82,7 @@ export default function WorkspacePage() {
       if (!response.ok) {
         throw new Error(
           body?.error ||
-            "Unable to select workspace.",
+            "Unable to select organization.",
         );
       }
 
@@ -93,7 +95,7 @@ export default function WorkspacePage() {
       setError(
         selectionError instanceof Error
           ? selectionError.message
-          : "Unable to select workspace.",
+          : "Unable to select organization.",
       );
     }
   }
@@ -101,7 +103,7 @@ export default function WorkspacePage() {
   useEffect(() => {
     let cancelled = false;
 
-    async function loadWorkspace() {
+    async function loadOrganizations() {
       try {
         const response =
           await fetch("/api/workspace", {
@@ -129,7 +131,7 @@ export default function WorkspacePage() {
             "error" in body &&
             typeof body.error === "string"
               ? body.error
-              : "Unable to load workspaces.",
+              : "Unable to load organizations.",
           );
         }
 
@@ -150,14 +152,14 @@ export default function WorkspacePage() {
         setError(
           loadError instanceof Error
             ? loadError.message
-            : "Unable to load workspaces.",
+            : "Unable to load organizations.",
         );
 
         setLoading(false);
       }
     }
 
-    void loadWorkspace();
+    void loadOrganizations();
 
     return () => {
       cancelled = true;
@@ -169,17 +171,17 @@ export default function WorkspacePage() {
       <section className="w-full max-w-2xl rounded-3xl border border-slate-200 bg-white p-6 shadow-sm sm:p-8">
         <div className="mb-7">
           <div className="text-xs font-bold uppercase tracking-[0.18em] text-slate-400">
-            Workspace
+            Organization
           </div>
 
           <h1 className="mt-2 text-2xl font-bold text-slate-950 sm:text-3xl">
-            Choose your workspace
+            Choose your organization
           </h1>
 
           <p className="mt-2 max-w-xl text-sm leading-6 text-slate-500">
             Select the organization you want to work in.
-            Your CRM data and permissions remain isolated
-            to the selected workspace.
+            CRM data, memberships and workspace permissions remain isolated
+            to the selected organization.
           </p>
         </div>
 
@@ -191,7 +193,7 @@ export default function WorkspacePage() {
 
         {loading && (
           <div className="rounded-2xl border border-slate-200 bg-slate-50 px-5 py-6 text-sm font-medium text-slate-500">
-            Loading your workspaces...
+            Loading your organizations...
           </div>
         )}
 
@@ -200,7 +202,7 @@ export default function WorkspacePage() {
           workspace.memberships.length === 0 && (
             <div className="rounded-2xl border border-amber-200 bg-amber-50 px-5 py-6">
               <div className="font-semibold text-amber-900">
-                No active workspace found
+                No active organization found
               </div>
 
               <p className="mt-1 text-sm leading-6 text-amber-700">
@@ -231,7 +233,7 @@ export default function WorkspacePage() {
                         Boolean(switchingId)
                       }
                       onClick={() =>
-                        void selectWorkspace(
+                        void selectOrganization(
                           membership.organizationId,
                         )
                       }
