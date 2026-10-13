@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import {
   ArrowLeft,
   BadgeCheck,
+  PencilLine,
   ShieldCheck,
   UserPlus,
   Users,
@@ -12,7 +13,7 @@ import { PageHeader } from "@/components/ui";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { getWorkspaceContextForUser } from "@/lib/workspace";
-import { createEmployeeAction } from "./actions";
+import { createEmployeeAction, updateEmployeeAccessAction } from "./actions";
 
 type OrganizationMemberRow = {
   user_id: string;
@@ -344,7 +345,7 @@ export default async function TeamAccessPage({
           </div>
 
           <div className="team-table-wrap overflow-x-auto">
-            <table className="team-table w-full min-w-[920px]">
+            <table className="team-table w-full min-w-[1040px]">
               <thead>
                 <tr className="border-b border-slate-100 bg-slate-50/70">
                   <th className="px-5 py-3 text-left text-[11px] font-semibold uppercase tracking-[.1em] text-slate-400">
@@ -359,78 +360,163 @@ export default async function TeamAccessPage({
                   <th className="px-5 py-3 text-left text-[11px] font-semibold uppercase tracking-[.1em] text-slate-400">
                     Status
                   </th>
+                  <th className="px-5 py-3 text-left text-[11px] font-semibold uppercase tracking-[.1em] text-slate-400">
+                    Access
+                  </th>
                 </tr>
               </thead>
 
               <tbody className="divide-y divide-slate-100">
-                {members.map((member) => (
-                  <tr key={member.userId} className="hover:bg-slate-50/70">
-                    <td className="px-5 py-4">
-                      <div className="font-semibold text-slate-900">
-                        {member.fullName}
-                      </div>
-                      <div className="mt-0.5 text-xs text-slate-500">
-                        {member.email}
-                      </div>
-                      <div className="mt-1 text-[11px] text-slate-400">
-                        Legacy profile: {member.legacyProfileRole}
-                      </div>
-                    </td>
+                {members.map((member) => {
+                  const editable =
+                    member.organizationRole !== "owner" &&
+                    member.organizationRole !== "admin";
 
-                    <td className="px-5 py-4">
-                      <span className="inline-flex rounded-full bg-sky-50 px-2.5 py-1 text-xs font-semibold capitalize text-sky-700">
-                        {member.organizationRole.replaceAll("_", " ")}
-                      </span>
-                    </td>
-
-                    <td className="px-5 py-4">
-                      {member.workspaces.length > 0 ? (
-                        <div className="flex flex-wrap gap-1.5">
-                          {member.workspaces.map((workspace) => (
-                            <span
-                              key={workspace.code}
-                              className="inline-flex rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-600"
-                              title={`${workspace.name} · ${workspace.role}`}
-                            >
-                              {workspace.name}
-                              <span className="ml-1 text-slate-400">
-                                · {workspace.role}
-                              </span>
-                            </span>
-                          ))}
+                  return (
+                    <tr key={member.userId} className="align-top hover:bg-slate-50/70">
+                      <td className="px-5 py-4">
+                        <div className="font-semibold text-slate-900">
+                          {member.fullName}
                         </div>
-                      ) : (
-                        <span className="text-xs font-semibold text-slate-400">
-                          No workspace grants
-                        </span>
-                      )}
-                    </td>
+                        <div className="mt-0.5 text-xs text-slate-500">
+                          {member.email}
+                        </div>
+                        <div className="mt-1 text-[11px] text-slate-400">
+                          Legacy profile: {member.legacyProfileRole}
+                        </div>
+                      </td>
 
-                    <td className="px-5 py-4">
-                      <div className="flex flex-wrap gap-1.5">
-                        <span
-                          className={
-                            member.organizationActive
-                              ? "inline-flex rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-700"
-                              : "inline-flex rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-500"
-                          }
-                        >
-                          Org {member.organizationActive ? "active" : "inactive"}
+                      <td className="px-5 py-4">
+                        <span className="inline-flex rounded-full bg-sky-50 px-2.5 py-1 text-xs font-semibold capitalize text-sky-700">
+                          {member.organizationRole.replaceAll("_", " ")}
                         </span>
-                        {!member.accountActive ? (
-                          <span className="inline-flex rounded-full bg-rose-50 px-2.5 py-1 text-xs font-semibold text-rose-700">
-                            Account disabled
+                      </td>
+
+                      <td className="px-5 py-4">
+                        {member.workspaces.length > 0 ? (
+                          <div className="flex flex-wrap gap-1.5">
+                            {member.workspaces.map((workspace) => (
+                              <span
+                                key={workspace.code}
+                                className="inline-flex rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-600"
+                                title={`${workspace.name} · ${workspace.role}`}
+                              >
+                                {workspace.name}
+                                <span className="ml-1 text-slate-400">
+                                  · {workspace.role}
+                                </span>
+                              </span>
+                            ))}
+                          </div>
+                        ) : (
+                          <span className="text-xs font-semibold text-slate-400">
+                            No workspace grants
                           </span>
-                        ) : null}
-                      </div>
-                    </td>
-                  </tr>
-                ))}
+                        )}
+                      </td>
+
+                      <td className="px-5 py-4">
+                        <div className="flex flex-wrap gap-1.5">
+                          <span
+                            className={
+                              member.organizationActive
+                                ? "inline-flex rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-700"
+                                : "inline-flex rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-500"
+                            }
+                          >
+                            Org {member.organizationActive ? "active" : "inactive"}
+                          </span>
+                          {!member.accountActive ? (
+                            <span className="inline-flex rounded-full bg-rose-50 px-2.5 py-1 text-xs font-semibold text-rose-700">
+                              Account disabled
+                            </span>
+                          ) : null}
+                        </div>
+                      </td>
+
+                      <td className="px-5 py-4">
+                        {editable ? (
+                          <details className="group min-w-[280px]">
+                            <summary className="inline-flex cursor-pointer list-none items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 hover:border-slate-300">
+                              <PencilLine size={14} />
+                              Edit access
+                            </summary>
+
+                            <form
+                              action={updateEmployeeAccessAction}
+                              className="mt-3 space-y-3 rounded-xl border border-slate-200 bg-white p-3 shadow-sm"
+                            >
+                              <input
+                                type="hidden"
+                                name="employee_id"
+                                value={member.userId}
+                              />
+
+                              {assignableWorkspaces.map((workspace) => {
+                                const existingGrant = member.workspaces.find(
+                                  (grant) => grant.code === workspace.code,
+                                );
+                                const role =
+                                  existingGrant?.role === "manager"
+                                    ? "manager"
+                                    : "member";
+
+                                return (
+                                  <div
+                                    key={workspace.code}
+                                    className="grid grid-cols-[1fr_104px] items-center gap-2 rounded-lg border border-slate-100 bg-slate-50 px-2.5 py-2"
+                                  >
+                                    <label className="flex items-center gap-2 text-xs font-semibold text-slate-700">
+                                      <input
+                                        type="checkbox"
+                                        name="workspace_codes"
+                                        value={workspace.code}
+                                        defaultChecked={Boolean(existingGrant)}
+                                        className="h-4 w-4 rounded border-slate-300"
+                                      />
+                                      {workspace.name}
+                                    </label>
+
+                                    <select
+                                      name={`workspace_role_${workspace.code}`}
+                                      defaultValue={role}
+                                      className="rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-xs font-semibold text-slate-700 outline-none focus:border-brand"
+                                      aria-label={`${workspace.name} role`}
+                                    >
+                                      <option value="member">Member</option>
+                                      <option value="manager">Manager</option>
+                                    </select>
+                                  </div>
+                                );
+                              })}
+
+                              <div className="text-[11px] leading-5 text-slate-500">
+                                At least one workspace is required. Admin access is
+                                managed through organization roles, not this editor.
+                              </div>
+
+                              <button
+                                type="submit"
+                                className="btn-primary w-full justify-center"
+                              >
+                                Save access
+                              </button>
+                            </form>
+                          </details>
+                        ) : (
+                          <span className="text-xs font-semibold text-slate-400">
+                            Managed by organization role
+                          </span>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
 
                 {members.length === 0 ? (
                   <tr>
                     <td
-                      colSpan={4}
+                      colSpan={5}
                       className="px-5 py-8 text-center text-sm text-slate-500"
                     >
                       No members are assigned to this organization.
