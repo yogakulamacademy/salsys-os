@@ -1,301 +1,146 @@
 'use server';
 
-import {
-  revalidatePath,
-} from 'next/cache';
+import { revalidatePath } from 'next/cache';
+import { redirect } from 'next/navigation';
+import { createClient } from '@/lib/supabase/server';
+import { requireCurrentOrganizationId } from '@/lib/workspace';
+import { useMockData } from '@/lib/config';
 
-import {
-  redirect,
-} from 'next/navigation';
-
-import {
-  createClient,
-} from '@/lib/supabase/server';
-
-import {
-  useMockData,
-} from '@/lib/config';
-
-
-function textValue(
-  formData: FormData,
-  key: string
-) {
-  const value =
-    String(
-      formData.get(
-        key
-      ) ?? ''
-    ).trim();
-
+function textValue(formData: FormData, key: string) {
+  const value = String(formData.get(key) ?? '').trim();
   return value || null;
 }
 
+function numberValue(formData: FormData, key: string) {
+  const raw = textValue(formData, key);
 
-function numberValue(
-  formData: FormData,
-  key: string
-) {
-  const raw =
-    textValue(
-      formData,
-      key
-    );
-
-  if (
-    raw ===
-    null
-  ) {
+  if (raw === null) {
     return null;
   }
 
-  const value =
-    Number(raw);
-
-  return Number.isFinite(
-    value
-  )
-    ? value
-    : null;
+  const value = Number(raw);
+  return Number.isFinite(value) ? value : null;
 }
-
 
 function settingsRedirect(
-  type:
-    | 'notice'
-    | 'error',
-  message: string
+  type: 'notice' | 'error',
+  message: string,
 ): never {
-  redirect(
-    `/settings?${type}=${encodeURIComponent(
-      message
-    )}`
-  );
+  redirect(`/settings?${type}=${encodeURIComponent(message)}`);
 }
 
-
-export async function updateForecastProbabilityAction(
-  formData: FormData
+async function getCurrentOrganizationId(
+  supabase: Awaited<ReturnType<typeof createClient>>,
 ) {
-  if (
-    useMockData
-  ) {
-    settingsRedirect(
-      'error',
-      'Mock mode is active. Settings were not changed.'
-    );
-  }
-
-  const stage =
-    textValue(
-      formData,
-      'stage'
-    );
-
-  const probabilityPercent =
-    numberValue(
-      formData,
-      'probability_percent'
-    );
-
-  if (
-    !stage
-  ) {
-    settingsRedirect(
-      'error',
-      'Stage is required.'
-    );
-  }
-
-  if (
-    probabilityPercent ===
-      null ||
-    probabilityPercent <
-      0 ||
-    probabilityPercent >
-      100
-  ) {
-    settingsRedirect(
-      'error',
-      'Forecast probability must be between 0% and 100%.'
-    );
-  }
-
-  const supabase =
-    await createClient();
-
   const {
-    error,
-  } =
-    await supabase.rpc(
-      'update_crm_stage_probability',
-      {
-        p_stage:
-          stage,
-        p_probability:
-          probabilityPercent /
-          100,
-      }
-    );
+    data: { user },
+    error: authError,
+  } = await supabase.auth.getUser();
+
+  if (authError || !user) {
+    settingsRedirect('error', 'Unable to resolve the active organization.');
+  }
+
+  return requireCurrentOrganizationId(supabase, user.id);
+}
+
+export async function updateForecastProbabilityAction(formData: FormData) {
+  if (useMockData) {
+    settingsRedirect('error', 'Mock mode is active. Settings were not changed.');
+  }
+
+  const stage = textValue(formData, 'stage');
+  const probabilityPercent = numberValue(formData, 'probability_percent');
+
+  if (!stage) {
+    settingsRedirect('error', 'Stage is required.');
+  }
 
   if (
-    error
+    probabilityPercent === null ||
+    probabilityPercent < 0 ||
+    probabilityPercent > 100
   ) {
     settingsRedirect(
       'error',
-      error.message
+      'Forecast probability must be between 0% and 100%.',
     );
   }
 
-  revalidatePath(
-    '/settings'
-  );
+  const supabase = await createClient();
+  const organizationId = await getCurrentOrganizationId(supabase);
 
-  revalidatePath(
-    '/revenue'
-  );
+  const { error } = await supabase.rpc('update_crm_stage_probability_v2', {
+    p_organization_id: organizationId,
+    p_stage: stage,
+    p_probability: probabilityPercent / 100,
+  });
 
-  revalidatePath(
-    '/dashboard'
-  );
+  if (error) {
+    settingsRedirect('error', error.message);
+  }
+
+  revalidatePath('/settings');
+  revalidatePath('/revenue');
+  revalidatePath('/dashboard');
 
   settingsRedirect(
     'notice',
-    `${pretty(
-      stage
-    )} forecast probability updated to ${probabilityPercent}%.`
+    `${pretty(stage)} forecast probability updated to ${probabilityPercent}%.`,
   );
 }
 
+export async function updatePipelineAgingRuleAction(formData: FormData) {
+  if (useMockData) {
+    settingsRedirect('error', 'Mock mode is active. Settings were not changed.');
+  }
 
-export async function updatePipelineAgingRuleAction(
-  formData: FormData
-) {
-  if (
-    useMockData
-  ) {
+  const stage = textValue(formData, 'stage');
+  const warningHours = numberValue(formData, 'warning_hours');
+  const stuckHours = numberValue(formData, 'stuck_hours');
+
+  if (!stage) {
+    settingsRedirect('error', 'Stage is required.');
+  }
+
+  if (warningHours === null || warningHours < 0) {
+    settingsRedirect('error', 'Warning threshold must be 0 hours or greater.');
+  }
+
+  if (stuckHours === null || stuckHours <= warningHours) {
     settingsRedirect(
       'error',
-      'Mock mode is active. Settings were not changed.'
+      'Stuck threshold must be greater than the warning threshold.',
     );
   }
 
-  const stage =
-    textValue(
-      formData,
-      'stage'
-    );
+  const supabase = await createClient();
+  const organizationId = await getCurrentOrganizationId(supabase);
 
-  const warningHours =
-    numberValue(
-      formData,
-      'warning_hours'
-    );
+  const { error } = await supabase.rpc(
+    'update_crm_pipeline_aging_rule_v2',
+    {
+      p_organization_id: organizationId,
+      p_stage: stage,
+      p_warning_hours: warningHours,
+      p_stuck_hours: stuckHours,
+    },
+  );
 
-  const stuckHours =
-    numberValue(
-      formData,
-      'stuck_hours'
-    );
-
-  if (
-    !stage
-  ) {
-    settingsRedirect(
-      'error',
-      'Stage is required.'
-    );
+  if (error) {
+    settingsRedirect('error', error.message);
   }
 
-  if (
-    warningHours ===
-      null ||
-    warningHours <
-      0
-  ) {
-    settingsRedirect(
-      'error',
-      'Warning threshold must be 0 hours or greater.'
-    );
-  }
+  revalidatePath('/settings');
+  revalidatePath('/pipeline');
+  revalidatePath('/leads');
+  revalidatePath('/admissions');
 
-  if (
-    stuckHours ===
-      null ||
-    stuckHours <=
-      warningHours
-  ) {
-    settingsRedirect(
-      'error',
-      'Stuck threshold must be greater than the warning threshold.'
-    );
-  }
-
-  const supabase =
-    await createClient();
-
-  const {
-    error,
-  } =
-    await supabase.rpc(
-      'update_crm_pipeline_aging_rule',
-      {
-        p_stage:
-          stage,
-        p_warning_hours:
-          warningHours,
-        p_stuck_hours:
-          stuckHours,
-      }
-    );
-
-  if (
-    error
-  ) {
-    settingsRedirect(
-      'error',
-      error.message
-    );
-  }
-
-  revalidatePath(
-    '/settings'
-  );
-
-  revalidatePath(
-    '/pipeline'
-  );
-
-  revalidatePath(
-    '/leads'
-  );
-
-  revalidatePath(
-    '/admissions'
-  );
-
-  settingsRedirect(
-    'notice',
-    `${pretty(
-      stage
-    )} pipeline aging thresholds updated.`
-  );
+  settingsRedirect('notice', `${pretty(stage)} pipeline aging thresholds updated.`);
 }
 
-
-function pretty(
-  value: string
-) {
+function pretty(value: string) {
   return value
-    .replaceAll(
-      '_',
-      ' '
-    )
-    .replace(
-      /\b\w/g,
-      (
-        letter
-      ) =>
-        letter.toUpperCase()
-    );
+    .replaceAll('_', ' ')
+    .replace(/\b\w/g, (letter) => letter.toUpperCase());
 }
