@@ -18,7 +18,7 @@ The product should eventually answer:
 
 > **What is this person likely to do next, why, and what should we do right now to increase the probability of conversion?**
 
-The first product vertical is **Yoga / Education / Wellness**, with Yogakulam Academy as tenant #1. The second planned vertical is **Real Estate**. The architecture must therefore support vertical depth while remaining reusable for future productization.
+The first product vertical is **Yoga / Education / Wellness**, with Yogakulam Academy as tenant #1. The second planned vertical is **Real Estate**. The architecture must support vertical depth while remaining reusable for future productization.
 
 ---
 
@@ -134,7 +134,7 @@ Do **not** repurpose these labels.
 | W5 Sales Workspace | 12% | ~98–99% |
 | W6 Marketing Workspace | 12% | Foundation exists; formal expansion pending |
 | W7 Finance + Reports Workspaces | 11% | Pending formal build |
-| W8 Admin Workspace + Security / QA | 10% | Active, ~90% |
+| W8 Admin Workspace + Security / QA | 10% | Active, ~91% |
 
 Planned cumulative checkpoints remain W1 10%, W2 25%, W3 40%, W4 55%, W5 67%, W6 79%, W7 90%, W8 100%.
 
@@ -218,22 +218,23 @@ W8K Production cutover + security sign-off
 - cross-tenant viewer adversarial tests passed
 - legacy multi-org session cannot rebind one authenticated session to a second tenant
 - integration credential cross-tenant list/create/revoke/rotate blocked for a bound tenant session
-- `can_manage_organization` and CRM admin helpers now require current session tenant for authenticated callers
+- `can_manage_organization` and CRM admin helpers require current session tenant for authenticated callers
 - `can_mutate_organization(...)` is the transition-safe write boundary for authenticated tenant mutations
 - organization-scoped INSERT/UPDATE/DELETE policies across CRM, course, enrollment, payment, identity, touchpoint, and web-session surfaces require a tenant-bound mutation/admin gate
 - `is_organization_admin(...)` uses the tenant-bound mutation gate
 - mutation-policy audit found zero organization-scoped mutation policies outside approved tenant-bound mutation/admin gates
 - nine latent accommodation mutation SECURITY DEFINER RPCs have authenticated execution removed and remain service-role callable
 - five latent course resolver/admin SECURITY DEFINER RPCs have authenticated execution removed and remain service-role callable
-- legacy global CRM settings reads now resolve through tenant-aware compatibility wrappers
-- internal settings/tenant helpers had unnecessary authenticated execution removed
-- four additional unused authorization/helper RPCs had authenticated execution removed after policy/function/app-consumer checks
+- legacy global CRM settings reads resolve through tenant-aware compatibility wrappers
+- unnecessary authenticated execution removed from internal settings/tenant helpers and four unused authorization/helper RPCs
 - Supabase authenticated-executable SECURITY DEFINER warning count reduced from 67 → 53 → 48 → **44** without widening table privileges
-- WhatsApp Embedded Signup completion revalidates the currently authenticated/bound tenant before consuming OAuth state or mutating integration data
-- Meta Ads debug diagnostics are no longer public and now require service/operator secret authorization
-- production currently has zero unused/unexpired OAuth states for Google, Meta, Instagram, or WhatsApp
-- GA4/GSC health route tenant-scoping fix is prepared in PR #14 and awaits build validation
-- tenant-preserving password recovery is prepared in PR #15 and awaits build/config/E2E validation
+- WhatsApp Embedded Signup completion revalidates the authenticated/bound tenant before consuming OAuth state or mutating integration data
+- Meta Ads debug diagnostics require operator/service authorization rather than being public
+- production OAuth-state audit found zero unused/unexpired Google, Meta, Instagram, or WhatsApp states
+- GA4 and GSC health/history/count routes now explicitly resolve and filter to the trusted active tenant
+- tenant-bound password recovery code is merged, uses tenant slug binding, rejects cross-tenant recovery mismatches, forces fresh login after rotation, and never trusts forwarded Host headers for production reset URLs
+- password-recovery entry is hidden in production until `SALSYSOS_APP_URL` is configured, preventing a visibly broken recovery path
+- GitHub Actions CI now independently runs `npm ci`, `npm run typecheck`, and `npm run build`, reducing reliance on Vercel preview capacity
 
 ### W8 production rollout state — last verified 2026-10-14
 
@@ -251,8 +252,8 @@ Do **not** enable strict enforcement until a genuine tenant-specific production 
 3. W8F remaining SECURITY DEFINER classification; current advisor count is 44, many intentionally user-facing/policy helpers
 4. finish W8G remaining service-client mutation review
 5. complete W8I adversarial matrix
-6. validate and merge PR #14 after a real build/type check
-7. validate and merge PR #15 after build, production `SALSYSOS_APP_URL`/Supabase redirect configuration, and real recovery E2E test
+6. configure production `SALSYSOS_APP_URL` and Supabase Auth redirect allow-list for password recovery
+7. perform real tenant-specific password recovery E2E before W8K sign-off
 8. W8J controlled second-tenant login test
 9. W8K strict-enforcement cutover and sign-off
 10. Supabase leaked-password protection remains external/configuration work
@@ -417,8 +418,6 @@ Legacy state: one admin identity still belongs to SalsysOS, Test Yoga School, an
 - `20261014093616_legacy_settings_and_internal_tenant_helper_hardening`
 - `20261014100145_unused_authorization_rpc_execute_hardening`
 
-The source migration for `20261014100145` was merged to `main` in PR #16.
-
 ---
 
 ## 17. Current progress snapshot — 2026-10-14
@@ -427,16 +426,16 @@ These are planning estimates, not mathematically exact completion figures.
 
 | Meter | Current estimate |
 |---|---:|
-| W1–W8 workspace program | ~78–79% |
+| W1–W8 workspace program | ~79% |
 | W5 Sales Workspace | ~98–99% |
-| W8 Admin/Security/QA | ~90% |
+| W8 Admin/Security/QA | ~91% |
 | W8G Integrations/Webhooks | ~98% |
-| Technical platform | ~78% |
+| Technical platform | ~78–79% |
 | Behavioral Intelligence | ~35–40% |
 | Privacy & Compliance Control Plane | ~15–20% |
-| First commercial-ready multi-tenant product | ~66–68% |
-| Full expanded SalsysOS platform scope | ~61–63% |
-| Wider R0–R14 commercial roadmap | ~50–51% |
+| First commercial-ready multi-tenant product | ~67–69% |
+| Full expanded SalsysOS platform scope | ~62–64% |
+| Wider R0–R14 commercial roadmap | ~50–52% |
 
 Adding new approved scope may reduce the percentage of the **expanded total roadmap** without undoing completed work. Always state when the denominator changed.
 
@@ -444,32 +443,38 @@ Adding new approved scope may reduce the percentage of the **expanded total road
 
 ## 18. Current milestone
 
+### Milestone M-2026-10-14-F — Independent CI + analytics/auth tenant hardening
+
+Completed:
+
+- diagnosed the first independent CI build failure as a build-analysis environment issue: Next.js reached `/funnel` before Supabase public configuration was present; application TypeScript itself passed
+- added GitHub Actions CI with `npm ci`, `npm run typecheck`, and `npm run build`
+- CI uses non-secret placeholder Supabase public values solely so Next.js can reach `cookies()` and correctly identify authenticated routes as dynamic during build analysis; it does not connect to production
+- independent CI typecheck and production build both pass
+- PR #18 merged: durable GitHub CI is now available even when Vercel preview capacity is rate-limited
+- PR #14 independently validated and merged: GA4/GSC health routes are explicitly tenant-scoped
+- PR #15 independently validated and merged: tenant-bound password recovery code is now on main
+- password recovery was hardened before merge so production reset URLs require `SALSYSOS_APP_URL`, forwarded Host headers are not trusted in production, and the login recovery entry remains hidden until production recovery is configured
+- strict tenant rollout state remains intentionally unchanged: strict=false, persisted bindings=0, active multi-org sessions=1, bound multi-org sessions=0
+
+Remaining activation/sign-off:
+
+- configure `SALSYSOS_APP_URL` in the production hosting environment
+- allow `<SALSYSOS_APP_URL>/auth/callback` in Supabase Auth redirect configuration
+- perform a real password-reset E2E test
+- observe a genuine persisted tenant session binding before strict tenant enforcement
+
 ### Milestone M-2026-10-14-E — W8 integration/auth continuation and RPC surface reduction
 
 Completed:
 
-- PR #13 merged: WhatsApp Embedded Signup completion now re-resolves the trusted active tenant before OAuth state consumption/integration mutation
-- PR #13 merged: Meta Ads debug endpoint now requires operator/service authorization rather than being public
-- production OAuth-state audit found zero unused/unexpired Google, Meta, Instagram, or WhatsApp states
-- production migration `20261014100145_unused_authorization_rpc_execute_hardening` applied
-- authenticated EXECUTE removed from four unused authorization/helper SECURITY DEFINER RPCs while preserving service-role execution
-- Supabase authenticated-executable SECURITY DEFINER advisor count reduced to **44**
-- PR #16 source-sync for `20261014100145` merged to `main`
-- strict rollout state rechecked: strict=false, persisted bindings=0, active multi-org sessions=1, bound multi-org sessions=0
-- PR #15 password recovery was further hardened so production recovery-link generation requires explicit `SALSYSOS_APP_URL`; forwarded Host headers are not trusted in production
-- `.env.example` now documents `SALSYSOS_APP_URL` on PR #15
+- PR #13 merged: WhatsApp Embedded Signup callback tenant revalidation + Meta Ads debug authorization
+- production migration `20261014100145_unused_authorization_rpc_execute_hardening`
+- PR #16 source-sync merged
+- SECURITY DEFINER advisor count reduced to 44
+- canonical rollout state rechecked
 
-Prepared but not merged:
-
-- PR #14 scopes GA4 and GSC health/history/count queries to the trusted active tenant
-- PR #15 implements tenant-bound password recovery
-
-Validation blocker:
-
-- Vercel is currently rejecting new preview deployments due to project build-rate limits **before build starts**. Treat this as an external CI-capacity blocker, not a code-build failure.
-- PR #14 and PR #15 remain intentionally unmerged until real build/type validation is available. PR #15 also needs production origin/redirect configuration and an end-to-end recovery test.
-
-### Prior milestone M-2026-10-14-D — Settings/helper hardening
+### Milestone M-2026-10-14-D — Settings/helper hardening
 
 Completed:
 
@@ -477,7 +482,7 @@ Completed:
 - unnecessary authenticated execution removed from internal tenant/settings helpers
 - advisor count reduced from 53 to 48
 
-### Prior milestone M-2026-10-14-C — Latent privileged RPC surface reduction
+### Milestone M-2026-10-14-C — Latent privileged RPC surface reduction
 
 Completed:
 
@@ -485,7 +490,7 @@ Completed:
 - nine accommodation and five course resolver/admin latent SECURITY DEFINER RPCs removed from authenticated execution
 - advisor count reduced from 67 to 53
 
-### Prior milestone M-2026-10-14-B — Session-bound tenant mutation boundary
+### Milestone M-2026-10-14-B — Session-bound tenant mutation boundary
 
 Completed:
 
@@ -494,7 +499,7 @@ Completed:
 - bound-session cross-tenant mutation regression returned 0
 - mutation-policy audit found zero organization-scoped mutation policies outside approved tenant-bound gates
 
-### Prior milestone M-2026-10-14-A — Tenant-bound administration hardening
+### Milestone M-2026-10-14-A — Tenant-bound administration hardening
 
 Completed:
 
@@ -508,9 +513,9 @@ Completed:
 
 ## 19. Immediate next execution order
 
-1. wait for/restore a real build-validation path, then validate PR #14 and PR #15
-2. configure production `SALSYSOS_APP_URL` and Supabase recovery redirect allow-list before merging/releasing PR #15
-3. continue W8F classification of the remaining 44 authenticated-executable SECURITY DEFINER functions; preserve intentional user-facing/policy helpers and revoke only exposure proven unnecessary
+1. configure/verify password-recovery production origin + Supabase redirect allow-list when hosting/Auth configuration access is available
+2. perform password recovery E2E with a real tenant-specific user
+3. continue W8F classification of remaining 44 authenticated-executable SECURITY DEFINER functions; preserve intentional user-facing/policy helpers and revoke only exposure proven unnecessary
 4. finish W8G direct service-client mutation review
 5. expand W8I adversarial matrix across remaining RPC, analytics, settings, and service-client surfaces
 6. obtain/observe a genuine tenant-specific persisted session binding in production
