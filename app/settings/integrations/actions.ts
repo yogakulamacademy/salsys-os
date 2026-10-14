@@ -17,6 +17,10 @@ import {
 } from '@/lib/supabase/admin';
 
 import {
+  getWorkspaceContextForUser,
+} from '@/lib/workspace';
+
+import {
   decryptIntegrationSecret,
 } from '@/lib/integrations/crypto';
 
@@ -92,7 +96,26 @@ async function requireActiveUser() {
     redirect('/dashboard');
   }
 
-  return user;
+  const workspaceContext =
+    await getWorkspaceContextForUser(
+      supabase,
+      user.id,
+    );
+
+  const activeWorkspace =
+    workspaceContext.activeWorkspace;
+
+  if (!activeWorkspace) {
+    redirect(
+      '/login?error=tenant-context-required',
+    );
+  }
+
+  return {
+    user,
+    organizationId:
+      activeWorkspace.organizationId,
+  };
 }
 
 function integrationsUrl(
@@ -129,11 +152,13 @@ type ManagedConnection = {
 
 async function getManagedConnection({
   userId,
+  activeOrganizationId,
   connectionId,
   provider,
   requireConnected = false,
 }: {
   userId: string;
+  activeOrganizationId: string;
   connectionId: string;
   provider?: string;
   requireConnected?: boolean;
@@ -173,7 +198,9 @@ async function getManagedConnection({
   if (
     connectionError ||
     !connection ||
-    !connection.organization_id
+    !connection.organization_id ||
+    connection.organization_id !==
+      activeOrganizationId
   ) {
     return {
       admin,
@@ -200,7 +227,7 @@ async function getManagedConnection({
       )
       .eq(
         'organization_id',
-        connection.organization_id,
+        activeOrganizationId,
       )
       .eq(
         'user_id',
@@ -272,7 +299,12 @@ async function getManagedConnection({
 export async function reconnectWhatsAppAction(
   formData: FormData,
 ) {
-  const user = await requireActiveUser();
+  const {
+    user,
+    organizationId:
+      activeOrganizationId,
+  } =
+    await requireActiveUser();
 
   const connectionId =
     textValue(
@@ -295,6 +327,7 @@ export async function reconnectWhatsAppAction(
   } =
     await getManagedConnection({
       userId: user.id,
+      activeOrganizationId,
       connectionId,
       provider: 'whatsapp',
       requireConnected: false,
@@ -375,7 +408,12 @@ export async function reconnectWhatsAppAction(
 export async function reauthorizeWhatsAppAction(
   formData: FormData,
 ) {
-  const user = await requireActiveUser();
+  const {
+    user,
+    organizationId:
+      activeOrganizationId,
+  } =
+    await requireActiveUser();
 
   const connectionId =
     textValue(
@@ -413,6 +451,7 @@ export async function reauthorizeWhatsAppAction(
   } =
     await getManagedConnection({
       userId: user.id,
+      activeOrganizationId,
       connectionId,
       provider: 'whatsapp',
       requireConnected: false,
@@ -494,7 +533,11 @@ export async function reauthorizeWhatsAppAction(
 export async function disconnectIntegrationAction(
   formData: FormData,
 ) {
-  const user =
+  const {
+    user,
+    organizationId:
+      activeOrganizationId,
+  } =
     await requireActiveUser();
 
   const connectionId =
@@ -521,6 +564,7 @@ export async function disconnectIntegrationAction(
     await getManagedConnection({
       userId:
         user.id,
+      activeOrganizationId,
       connectionId,
     });
 
@@ -686,7 +730,11 @@ const {
 export async function discoverGoogleAssetsAction(
   formData: FormData,
 ) {
-  const user =
+  const {
+    user,
+    organizationId:
+      activeOrganizationId,
+  } =
     await requireActiveUser();
 
   const connectionId =
@@ -713,6 +761,7 @@ export async function discoverGoogleAssetsAction(
     await getManagedConnection({
       userId:
         user.id,
+      activeOrganizationId,
       connectionId,
       provider:
         'google',
@@ -749,8 +798,8 @@ export async function discoverGoogleAssetsAction(
   try {
     /*
      * The token helper receives a connection ID only after this
-     * action has verified that the authenticated user owns/admins
-     * the connection's organization.
+     * action has verified that it belongs to the currently bound tenant and
+     * that the authenticated user owns/admins that organization.
      */
     const accessToken =
       await getGoogleAccessTokenForOrganizationConnection(
@@ -913,7 +962,11 @@ export async function discoverGoogleAssetsAction(
 export async function selectGoogleAssetAction(
   formData: FormData,
 ) {
-  const user =
+  const {
+    user,
+    organizationId:
+      activeOrganizationId,
+  } =
     await requireActiveUser();
 
   const connectionId =
@@ -949,6 +1002,7 @@ export async function selectGoogleAssetAction(
     await getManagedConnection({
       userId:
         user.id,
+      activeOrganizationId,
       connectionId,
       provider:
         'google',
