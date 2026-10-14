@@ -22,6 +22,10 @@ jobs:
 
     env:
       NEXT_PUBLIC_USE_MOCK_DATA: 'true'
+      # Non-secret placeholders let Next.js reach the cookies()-based dynamic
+      # route boundary during build analysis without connecting to production.
+      NEXT_PUBLIC_SUPABASE_URL: 'https://ci-placeholder.supabase.co'
+      NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: 'ci-placeholder-key'
 
     steps:
       - name: Checkout
