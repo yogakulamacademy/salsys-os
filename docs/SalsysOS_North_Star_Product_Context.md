@@ -137,7 +137,7 @@ Do **not** repurpose these labels.
 | W5 Sales Workspace | 12% | ~98–99% |
 | W6 Marketing Workspace | 12% | Foundation exists; formal expansion pending |
 | W7 Finance + Reports Workspaces | 11% | Pending formal build |
-| W8 Admin Workspace + Security / QA | 10% | Active, ~80% |
+| W8 Admin Workspace + Security / QA | 10% | Active, ~84–85% |
 
 Planned cumulative checkpoints remain:
 
@@ -231,13 +231,17 @@ W8K Production cutover + security sign-off
 - integration credential cross-tenant list/create/revoke/rotate blocked for a bound tenant session
 - `can_manage_organization` now requires current session tenant for authenticated callers
 - cross-tenant organization-workspace mutation regression now returns 0
+- `can_mutate_organization(...)` added as the transition-safe write boundary for authenticated tenant mutations
+- organization-scoped INSERT/UPDATE/DELETE policies across CRM, course, enrollment, payment, identity, touchpoint and web-session surfaces now require a tenant-bound mutation/admin gate
+- `is_organization_admin(...)` now uses the tenant-bound mutation gate
+- latest mutation-policy audit found zero organization-scoped mutation policies outside the approved tenant-bound mutation/admin gates
 
 ### W8 remaining critical blockers
 
 1. strict tenant-session enforcement flag is still intentionally OFF
 2. one legacy admin identity still has active memberships in all three organizations
 3. real production tenant-specific sessions must be observed/bound before strict cutover
-4. W8F remaining SECURITY DEFINER/RLS classification
+4. W8F remaining SECURITY DEFINER classification/hardening; current advisor count is 67 authenticated-executable SECURITY DEFINER functions, many intentionally user-facing and requiring classification rather than blanket revocation
 5. W8G remaining direct service-mutation audit
 6. W8I remaining adversarial matrix
 7. W8J controlled second-tenant login test
@@ -443,6 +447,8 @@ Key recent production migrations include:
 - `20261014074859_tenant_team_membership_consistency`
 - `20261014084439_session_bound_crm_admin_authorization`
 - `20261014084720_session_bound_organization_management`
+- `20261014091441_session_bound_tenant_mutation_policies`
+- `20261014091745_session_bound_organization_admin_authorization`
 
 ---
 
@@ -452,14 +458,14 @@ These are planning estimates, not mathematically exact completion figures.
 
 | Meter | Current estimate |
 |---|---:|
-| W1–W8 workspace program | ~75% |
+| W1–W8 workspace program | ~76% |
 | W5 Sales Workspace | ~98–99% |
-| W8 Admin/Security/QA | ~80% |
-| Technical platform | ~76% |
+| W8 Admin/Security/QA | ~84–85% |
+| Technical platform | ~77% |
 | Behavioral Intelligence | ~35–40% |
 | Privacy & Compliance Control Plane | ~15–20% |
-| First commercial-ready multi-tenant product | ~60–65% |
-| Full expanded SalsysOS platform scope | ~58–62% |
+| First commercial-ready multi-tenant product | ~62–65% |
+| Full expanded SalsysOS platform scope | ~59–62% |
 | Wider R0–R14 commercial roadmap | ~50% |
 
 Adding new approved scope may reduce the percentage of the **expanded total roadmap** without undoing completed work. Always state when the denominator changed.
@@ -468,7 +474,23 @@ Adding new approved scope may reduce the percentage of the **expanded total road
 
 ## 18. Current milestone
 
-### Milestone M-2026-10-14-A — Tenant-bound administration hardening
+### Milestone M-2026-10-14-B — Session-bound tenant mutation boundary
+
+Completed:
+
+- canonical North Star file merged to `main`
+- production migration `20261014091441_session_bound_tenant_mutation_policies` applied
+- production migration `20261014091745_session_bound_organization_admin_authorization` applied
+- new `can_mutate_organization(...)` helper requires authenticated requests to resolve to the target tenant and hold active membership; service-role behavior is preserved
+- critical organization-scoped write policies now require session-bound tenant authorization even while the global strict rollout flag remains OFF
+- bound SalsysOS session test returned `can_mutate_bound=true` and `can_mutate_other=false`
+- rollback-only cross-tenant course UPDATE regression returned 0 rows
+- mutation-policy audit found zero remaining organization-scoped INSERT/UPDATE/DELETE policies outside the approved tenant-bound mutation/admin gates
+- direct authenticated lead UPDATE remains blocked by table privilege; no new table privilege was granted
+- source migrations synchronized to GitHub branch `w8-session-bound-mutation-policies`
+- security advisor rerun: 20 known no-policy/service-only tables remain informational; authenticated SECURITY DEFINER warning count is 67 after adding `can_mutate_organization`; leaked-password protection remains an external Auth configuration warning
+
+### Prior milestone M-2026-10-14-A — Tenant-bound administration hardening
 
 Completed:
 
@@ -483,8 +505,6 @@ Completed:
 - all adversarial production verification used rollback-only transactions
 - source migrations synchronized to GitHub
 
-Latest merged security commit before this document: `f12167a1bff0b8b2cd8275842bd25ae3d7bebdd3`.
-
 ### Roadmap milestone
 
 Behavioral Intelligence + Privacy/Compliance scope accepted and added as approved product direction.
@@ -493,9 +513,9 @@ Behavioral Intelligence + Privacy/Compliance scope accepted and added as approve
 
 ## 19. Immediate next execution order
 
-1. finish W8F SECURITY DEFINER / RLS classification and remove unnecessary exposed privilege
+1. continue W8F SECURITY DEFINER classification, starting with accommodation/admin RPCs and course resolver APIs; revoke or narrow only where usage and authorization prove it safe
 2. finish W8G integration/service mutation tenant audit
-3. complete W8I adversarial matrix
+3. expand W8I adversarial matrix across remaining RPC and service-client mutation surfaces
 4. verify password-reset flow preserves tenant context
 5. obtain/observe real tenant-specific session binding in production
 6. perform W8J controlled second-tenant validation
