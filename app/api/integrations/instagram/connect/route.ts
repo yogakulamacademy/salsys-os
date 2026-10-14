@@ -12,6 +12,10 @@ import {
 } from '@/lib/supabase/admin';
 
 import {
+  getWorkspaceContextForUser,
+} from '@/lib/workspace';
+
+import {
   createOAuthState,
   hashOAuthState,
 } from '@/lib/integrations/crypto';
@@ -22,14 +26,11 @@ import {
   instagramRedirectUri,
 } from '@/lib/integrations/instagram';
 
-
 export const dynamic =
   'force-dynamic';
 
-
 const OAUTH_STATE_TTL_MS =
   10 * 60 * 1000;
-
 
 function pageUrl(
   request: NextRequest,
@@ -52,7 +53,6 @@ function pageUrl(
   return url;
 }
 
-
 export async function GET(
   request: NextRequest,
 ) {
@@ -67,7 +67,6 @@ export async function GET(
       authError,
   } =
     await supabase.auth.getUser();
-
 
   if (
     authError ||
@@ -89,7 +88,6 @@ export async function GET(
     );
   }
 
-
   const {
     data:
       profile,
@@ -109,7 +107,6 @@ export async function GET(
       )
       .maybeSingle();
 
-
   if (
     profileError ||
     !profile ||
@@ -123,150 +120,39 @@ export async function GET(
     );
   }
 
-
   try {
-    const admin =
-      createAdminClient();
+    const workspace =
+      await getWorkspaceContextForUser(
+        supabase,
+        user.id,
+      );
 
-
-    /*
-     * Resolve the tenant using the same authorization
-     * contract as the existing Meta and Google integrations:
-     *
-     * 1. Explicit organization_id query parameter.
-     * 2. Active CRM workspace cookie.
-     * 3. Single manageable membership fallback.
-     *
-     * The requested organization is never trusted by itself.
-     * It must match an active owner/admin membership.
-     */
-    const requestedOrganizationId =
-      request.nextUrl.searchParams
-        .get(
-          'organization_id',
-        )
-        ?.trim() ||
-      null;
-
-
-    const activeWorkspaceOrganizationId =
-      request.cookies
-        .get(
-          'yk-active-workspace',
-        )
-        ?.value
-        ?.trim() ||
-      null;
-
-
-    const targetOrganizationId =
-      requestedOrganizationId ??
-      activeWorkspaceOrganizationId;
-
-
-    let membershipQuery =
-      admin
-        .from(
-          'organization_members',
-        )
-        .select(
-          'organization_id, role',
-        )
-        .eq(
-          'user_id',
-          user.id,
-        )
-        .eq(
-          'active',
-          true,
-        )
-        .in(
-          'role',
-          [
-            'owner',
-            'admin',
-          ],
-        );
-
+    const activeWorkspace =
+      workspace.activeWorkspace;
 
     if (
-      targetOrganizationId
-    ) {
-      membershipQuery =
-        membershipQuery.eq(
-          'organization_id',
-          targetOrganizationId,
-        );
-    }
-
-
-    const {
-      data:
-        rawMemberships,
-      error:
-        membershipsError,
-    } =
-      await membershipQuery;
-
-
-    if (
-      membershipsError
+      !activeWorkspace ||
+      ![
+        'owner',
+        'admin',
+      ].includes(
+        activeWorkspace.role,
+      )
     ) {
       return NextResponse.redirect(
         pageUrl(
           request,
           'error',
-          `Unable to resolve workspace access: ${membershipsError.message}`,
+          'You do not have permission to manage integrations for this tenant.',
         ),
       );
     }
-
-
-    const memberships =
-      (
-        rawMemberships ??
-        []
-      ) as Array<{
-        organization_id:
-          string;
-        role:
-          string;
-      }>;
-
-
-    if (
-      memberships.length ===
-      0
-    ) {
-      return NextResponse.redirect(
-        pageUrl(
-          request,
-          'error',
-          'You do not have permission to manage integrations for this workspace.',
-        ),
-      );
-    }
-
-
-    if (
-      !targetOrganizationId &&
-      memberships.length !==
-        1
-    ) {
-      return NextResponse.redirect(
-        pageUrl(
-          request,
-          'error',
-          'Select a workspace before connecting Instagram.',
-        ),
-      );
-    }
-
 
     const organizationId =
-      memberships[0]
-        .organization_id;
+      activeWorkspace.organizationId;
 
+    const admin =
+      createAdminClient();
 
     const {
       data:
@@ -285,14 +171,15 @@ export async function GET(
           'id',
           organizationId,
         )
+        .eq(
+          'status',
+          'active',
+        )
         .maybeSingle();
-
 
     if (
       organizationError ||
-      !organization ||
-      organization.status !==
-        'active'
+      !organization
     ) {
       return NextResponse.redirect(
         pageUrl(
@@ -300,33 +187,28 @@ export async function GET(
           'error',
           organizationError
             ?.message ??
-            'This workspace is not active.',
+            'This tenant is not active.',
         ),
       );
     }
-
 
     const {
       appId,
     } =
       instagramLoginConfiguration();
 
-
     const redirectUri =
       instagramRedirectUri(
         request,
       );
 
-
     const state =
       createOAuthState();
-
 
     const stateHash =
       hashOAuthState(
         state,
       );
-
 
     const expiresAt =
       new Date(
@@ -334,23 +216,16 @@ export async function GET(
           OAUTH_STATE_TTL_MS,
       ).toISOString();
 
-
     const popupMode =
       request.nextUrl.searchParams.get(
         'popup',
       ) === '1';
-
 
     const returnTo =
       popupMode
         ? '/settings/integrations?oauth_popup=1'
         : '/settings/integrations';
 
-
-    /*
-     * Remove expired Instagram OAuth states belonging
-     * to this authenticated user.
-     */
     await admin
       .from(
         'integration_oauth_states',
@@ -369,7 +244,6 @@ export async function GET(
         new Date().toISOString(),
       );
 
-
     const {
       error:
         stateInsertError,
@@ -381,23 +255,17 @@ export async function GET(
         .insert({
           provider:
             'instagram',
-
           state_hash:
             stateHash,
-
           created_by:
             user.id,
-
           organization_id:
             organizationId,
-
           return_to:
             returnTo,
-
           expires_at:
             expiresAt,
         });
-
 
     if (
       stateInsertError
@@ -411,14 +279,12 @@ export async function GET(
       );
     }
 
-
     const authorizationUrl =
       instagramAuthorizationUrl({
         appId,
         redirectUri,
         state,
       });
-
 
     return NextResponse.redirect(
       authorizationUrl,
@@ -428,7 +294,6 @@ export async function GET(
       error instanceof Error
         ? error.message
         : 'Unable to start Instagram authorization.';
-
 
     return NextResponse.redirect(
       pageUrl(
