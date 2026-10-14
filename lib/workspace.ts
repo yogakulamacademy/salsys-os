@@ -37,6 +37,24 @@ export type WorkspaceContext = {
   selectionRequired: boolean;
 };
 
+async function bindCurrentTenantSession(
+  supabase: ServerSupabaseClient,
+  organizationId: string,
+) {
+  const { error } = await supabase.rpc(
+    "bind_current_tenant_session",
+    {
+      p_organization_id: organizationId,
+    },
+  );
+
+  if (error) {
+    throw new Error(
+      `Unable to bind the authenticated session to its tenant: ${error.message}`,
+    );
+  }
+}
+
 async function getFunctionalWorkspacesForUser(
   supabase: ServerSupabaseClient,
   userId: string,
@@ -149,6 +167,20 @@ export async function getWorkspaceContextForUser(
   supabase: ServerSupabaseClient,
   userId: string,
 ): Promise<WorkspaceContext> {
+  const cookieStore = await cookies();
+  const boundOrganizationId =
+    cookieStore.get(ACTIVE_ORGANIZATION_COOKIE)?.value?.trim() ?? "";
+
+  // Existing sessions created before the database-level tenant binding rollout
+  // are upgraded lazily from the already HTTP-only tenant cookie. The RPC
+  // independently verifies active membership before writing the binding.
+  if (boundOrganizationId) {
+    await bindCurrentTenantSession(
+      supabase,
+      boundOrganizationId,
+    );
+  }
+
   const { data: membershipRows, error: membershipError } = await supabase
     .from("organization_members")
     .select("organization_id,role")
@@ -225,16 +257,22 @@ export async function getWorkspaceContextForUser(
   if (memberships.length === 1) {
     activeWorkspace = memberships[0];
   } else if (memberships.length > 1) {
-    const cookieStore = await cookies();
-    const boundOrganizationId =
-      cookieStore.get(ACTIVE_ORGANIZATION_COOKIE)?.value?.trim() ?? "";
-
     // The cookie never grants membership. It only identifies which already-
     // authorized tenant login established this session context.
     activeWorkspace =
       memberships.find(
         (membership) => membership.organizationId === boundOrganizationId,
       ) ?? null;
+  }
+
+  if (
+    activeWorkspace &&
+    activeWorkspace.organizationId !== boundOrganizationId
+  ) {
+    await bindCurrentTenantSession(
+      supabase,
+      activeWorkspace.organizationId,
+    );
   }
 
   const functionalWorkspaces = activeWorkspace
