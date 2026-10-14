@@ -21,6 +21,12 @@ const PUBLIC_EXACT_PATHS = new Set([
 
 const ACTIVE_WORKSPACE_COOKIE = "yk-active-workspace";
 
+const OAUTH_CALLBACK_PROVIDER_BY_PATH: Record<string, string> = {
+  "/api/integrations/google/callback": "google",
+  "/api/integrations/meta/callback": "meta",
+  "/api/integrations/instagram/callback": "instagram",
+};
+
 const EMPLOYEE_EXACT_PATHS = new Set([
   "/dashboard",
   "/leads",
@@ -264,6 +270,38 @@ export async function middleware(request: NextRequest) {
     return redirectWithAuthCookies(request, response, "/login", {
       error: "tenant-context-required",
     });
+  }
+
+  /*
+   * OAuth callback state identifies the tenant that started authorization,
+   * but it must never become tenant authority by itself. Before any callback
+   * route can use its service-role client, require the state to belong to the
+   * tenant resolved from the current authenticated session.
+   */
+  const oauthProvider = OAUTH_CALLBACK_PROVIDER_BY_PATH[pathname];
+
+  if (oauthProvider) {
+    const state = request.nextUrl.searchParams.get("state")?.trim() ?? "";
+
+    if (!state) {
+      return redirectWithAuthCookies(request, response, "/settings/integrations", {
+        error: "integration-oauth-state-missing",
+      });
+    }
+
+    const { data: stateMatches, error: stateMatchError } = await supabase.rpc(
+      "oauth_state_matches_current_tenant",
+      {
+        p_provider: oauthProvider,
+        p_state: state,
+      },
+    );
+
+    if (stateMatchError || stateMatches !== true) {
+      return redirectWithAuthCookies(request, response, "/settings/integrations", {
+        error: "integration-oauth-tenant-mismatch",
+      });
+    }
   }
 
   // /workspace is no longer an organization selector. Keep the route reachable
