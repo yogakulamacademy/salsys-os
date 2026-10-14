@@ -25,19 +25,29 @@ async function applicationOrigin() {
 
   if (configuredOrigin) {
     try {
-      return new URL(configuredOrigin).origin;
+      const parsed = new URL(configuredOrigin);
+      if (parsed.protocol === 'https:' || parsed.protocol === 'http:') {
+        return parsed.origin;
+      }
     } catch {
-      // Fall through to trusted deployment headers.
+      return null;
     }
+  }
+
+  /*
+   * Recovery emails must never trust a forwarded Host value in production.
+   * Require an explicit canonical origin there so password reset links cannot
+   * be redirected to an attacker-controlled host through header poisoning.
+   */
+  if (process.env.NODE_ENV === 'production') {
+    return null;
   }
 
   const requestHeaders = await headers();
   const host =
     requestHeaders.get('x-forwarded-host')?.trim() ||
     requestHeaders.get('host')?.trim();
-  const protocol =
-    requestHeaders.get('x-forwarded-proto')?.trim() ||
-    (process.env.NODE_ENV === 'production' ? 'https' : 'http');
+  const protocol = requestHeaders.get('x-forwarded-proto')?.trim() || 'http';
 
   if (!host || !/^https?$/.test(protocol)) {
     return null;
