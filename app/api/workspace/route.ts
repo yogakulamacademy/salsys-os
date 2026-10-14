@@ -34,7 +34,12 @@ export async function GET() {
         user.id,
       );
 
-    return NextResponse.json(workspace);
+    return NextResponse.json({
+      activeOrganizationId: workspace.activeOrganizationId,
+      activeWorkspace: workspace.activeWorkspace,
+      functionalWorkspaces: workspace.functionalWorkspaces,
+      selectionRequired: false,
+    });
   } catch (error) {
     const message =
       error instanceof Error
