@@ -4,6 +4,7 @@ import { cookies } from "next/headers";
 import { createClient } from "@/lib/supabase/server";
 
 export const ACTIVE_WORKSPACE_COOKIE = "yk-active-workspace";
+export const ACTIVE_ORGANIZATION_COOKIE = ACTIVE_WORKSPACE_COOKIE;
 
 type ServerSupabaseClient = Awaited<ReturnType<typeof createClient>>;
 
@@ -21,10 +22,35 @@ export type WorkspaceContext = {
   selectionRequired: boolean;
 };
 
+async function bindCurrentTenantSession(
+  supabase: ServerSupabaseClient,
+  organizationId: string,
+) {
+  const { error } = await supabase.rpc("bind_current_tenant_session", {
+    p_organization_id: organizationId,
+  });
+
+  if (error) {
+    throw new Error(
+      `Unable to bind the authenticated session to its tenant: ${error.message}`,
+    );
+  }
+}
+
 export async function getWorkspaceContextForUser(
   supabase: ServerSupabaseClient,
   userId: string,
 ): Promise<WorkspaceContext> {
+  const cookieStore = await cookies();
+  const boundOrganizationId =
+    cookieStore.get(ACTIVE_WORKSPACE_COOKIE)?.value?.trim() ?? "";
+
+  // Upgrade existing organization-specific sessions before normal RLS reads.
+  // The database RPC independently verifies active membership.
+  if (boundOrganizationId) {
+    await bindCurrentTenantSession(supabase, boundOrganizationId);
+  }
+
   const { data: membershipRows, error: membershipError } = await supabase
     .from("organization_members")
     .select("organization_id,role")
@@ -100,22 +126,24 @@ export async function getWorkspaceContextForUser(
   if (memberships.length === 1) {
     activeWorkspace = memberships[0];
   } else if (memberships.length > 1) {
-    const cookieStore = await cookies();
-    const selectedOrganizationId =
-      cookieStore.get(ACTIVE_WORKSPACE_COOKIE)?.value?.trim() ?? "";
-
     activeWorkspace =
       memberships.find(
-        (membership) =>
-          membership.organizationId === selectedOrganizationId,
+        (membership) => membership.organizationId === boundOrganizationId,
       ) ?? null;
+  }
+
+  if (
+    activeWorkspace &&
+    activeWorkspace.organizationId !== boundOrganizationId
+  ) {
+    await bindCurrentTenantSession(supabase, activeWorkspace.organizationId);
   }
 
   return {
     activeOrganizationId: activeWorkspace?.organizationId ?? null,
     activeWorkspace,
     memberships,
-    selectionRequired: memberships.length > 1 && !activeWorkspace,
+    selectionRequired: false,
   };
 }
 
@@ -123,10 +151,7 @@ export async function requireCurrentOrganizationId(
   supabase: ServerSupabaseClient,
   userId: string,
 ): Promise<string> {
-  const workspace = await getWorkspaceContextForUser(
-    supabase,
-    userId,
-  );
+  const workspace = await getWorkspaceContextForUser(supabase, userId);
 
   if (workspace.memberships.length === 0) {
     throw new Error("No active organization membership was found.");
@@ -134,7 +159,7 @@ export async function requireCurrentOrganizationId(
 
   if (!workspace.activeOrganizationId) {
     throw new Error(
-      "Multiple active organization memberships were found. Workspace selection is required.",
+      "Tenant context is not bound. Sign in through your organization-specific login link.",
     );
   }
 
@@ -155,8 +180,5 @@ export async function getCurrentWorkspaceContext(): Promise<WorkspaceContext> {
     );
   }
 
-  return getWorkspaceContextForUser(
-    supabase,
-    user.id,
-  );
+  return getWorkspaceContextForUser(supabase, user.id);
 }
