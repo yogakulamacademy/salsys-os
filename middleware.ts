@@ -8,17 +8,6 @@ import {
   isUsableFunctionalWorkspaceRole,
 } from "@/lib/functional-workspaces";
 
-/*
-|--------------------------------------------------------------------------
-| Public integration routes
-|--------------------------------------------------------------------------
-|
-| These endpoints must be reachable without a normal CRM browser session.
-| Each endpoint is responsible for its own route-level authentication,
-| webhook validation, secret validation, origin checks, etc.
-|
-*/
-
 const PUBLIC_EXACT_PATHS = new Set([
   "/salsys.js",
   "/yogakulam-tracker.js",
@@ -39,12 +28,6 @@ const PUBLIC_EXACT_PATHS = new Set([
 
 const ACTIVE_ORGANIZATION_COOKIE = "yk-active-workspace";
 
-/*
-|--------------------------------------------------------------------------
-| Helpers
-|--------------------------------------------------------------------------
-*/
-
 function normalizePathname(pathname: string) {
   if (pathname.length > 1 && pathname.endsWith("/")) {
     return pathname.slice(0, -1);
@@ -59,6 +42,13 @@ function isPublicPath(pathname: string) {
 
 function isTenantLoginPath(pathname: string) {
   return /^\/login\/[^/]+$/.test(pathname);
+}
+
+function oauthCallbackProvider(pathname: string) {
+  if (pathname === "/api/integrations/google/callback") return "google";
+  if (pathname === "/api/integrations/meta/callback") return "meta";
+  if (pathname === "/api/integrations/instagram/callback") return "instagram";
+  return null;
 }
 
 function redirectWithAuthCookies(
@@ -279,12 +269,6 @@ async function getWorkspaceGrants(
   });
 }
 
-/*
-|--------------------------------------------------------------------------
-| Middleware
-|--------------------------------------------------------------------------
-*/
-
 export async function middleware(request: NextRequest) {
   const localMockMode =
     process.env.NODE_ENV !== "production" &&
@@ -339,8 +323,6 @@ export async function middleware(request: NextRequest) {
   const { data: claimsResult } = await supabase.auth.getClaims();
   const userId = claimsResult?.claims?.sub ?? null;
 
-  // Tenant login URLs must always remain reachable. They are the only normal
-  // customer entry points that can establish/re-establish tenant binding.
   if (pathname === "/login" || isTenantLoginPath(pathname)) {
     return response;
   }
@@ -430,8 +412,27 @@ export async function middleware(request: NextRequest) {
     });
   }
 
-  // /api/workspace is now read-only context retrieval. Tenant selection through
-  // this endpoint no longer exists, but all signed-in workspace roles need GET.
+  const callbackProvider = oauthCallbackProvider(pathname);
+  if (callbackProvider) {
+    const state = request.nextUrl.searchParams.get("state")?.trim() ?? "";
+
+    if (state) {
+      const { data: stateMatchesTenant, error: stateGuardError } =
+        await supabase.rpc("integration_oauth_state_matches_tenant", {
+          p_provider: callbackProvider,
+          p_state: state,
+          p_organization_id: activeOrganization.organizationId,
+        });
+
+      if (stateGuardError || stateMatchesTenant !== true) {
+        return accessDenied(
+          pathname,
+          "This OAuth authorization session does not belong to the active tenant.",
+        );
+      }
+    }
+  }
+
   if (pathname === "/api/workspace") {
     return response;
   }
@@ -453,21 +454,11 @@ export async function middleware(request: NextRequest) {
 
   const requestedWorkspace = getFunctionalWorkspaceForPathname(pathname);
 
-  /*
-   * Unknown /workspace/<code> paths should reach the Next.js not-found path.
-   * /workspace itself is no longer an organization-selection surface; its page
-   * may redirect to the tenant dashboard for legacy links.
-   */
   if (pathname.startsWith("/workspace/") && !requestedWorkspace) {
     return response;
   }
 
   if (!requestedWorkspace) {
-    /*
-     * Unmapped private routes keep legacy broad access only for organization
-     * owner/admin. Other users fail closed until a route is intentionally
-     * assigned to a functional workspace.
-     */
     if (
       activeOrganization.role === "owner" ||
       activeOrganization.role === "admin"
