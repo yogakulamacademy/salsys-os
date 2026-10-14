@@ -1,10 +1,11 @@
 import { revalidatePath } from 'next/cache';
-import {
-  NextRequest,
-  NextResponse,
-} from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 
 import { hashOAuthState } from '@/lib/integrations/crypto';
+import {
+  IntegrationTenantError,
+  requireIntegrationAdminTenant,
+} from '@/lib/integrations/tenant-context';
 import { completeWhatsAppEmbeddedSignup } from '@/lib/integrations/whatsapp-embedded-signup';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { createClient } from '@/lib/supabase/server';
@@ -100,9 +101,7 @@ export async function POST(request: NextRequest) {
 
   const { data: rawState, error: stateError } = await admin
     .from('integration_oauth_states')
-    .select(
-      'id, created_by, organization_id, expires_at, used_at',
-    )
+    .select('id, created_by, organization_id, expires_at, used_at')
     .eq('provider', 'whatsapp')
     .eq('state_hash', intentHash)
     .maybeSingle();
@@ -123,34 +122,29 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  const [membershipResult, organizationResult] = await Promise.all([
-    admin
-      .from('organization_members')
-      .select('id, role, active')
-      .eq('organization_id', state.organization_id)
-      .eq('user_id', user.id)
-      .eq('active', true)
-      .in('role', ['owner', 'admin'])
-      .maybeSingle(),
+  /*
+   * Re-resolve tenant authority from the current authenticated session.
+   * The OAuth state may identify a tenant, but it never becomes authority
+   * by itself. Completion is allowed only when it still matches the
+   * session-bound active tenant and the user still has admin/owner access.
+   */
+  try {
+    const { organizationId: activeOrganizationId } =
+      await requireIntegrationAdminTenant(supabase, user.id);
 
-    admin
-      .from('organizations')
-      .select('id, status')
-      .eq('id', state.organization_id)
-      .maybeSingle(),
-  ]);
+    if (activeOrganizationId !== state.organization_id) {
+      return jsonError(
+        'WhatsApp authorization belongs to a different workspace. Please connect again from the current workspace.',
+        403,
+      );
+    }
+  } catch (error) {
+    const message =
+      error instanceof IntegrationTenantError
+        ? error.message
+        : 'Unable to verify the active workspace.';
 
-  if (
-    membershipResult.error ||
-    !membershipResult.data ||
-    organizationResult.error ||
-    !organizationResult.data ||
-    organizationResult.data.status !== 'active'
-  ) {
-    return jsonError(
-      'You no longer have permission to manage integrations for this workspace.',
-      403,
-    );
+    return jsonError(message, 403);
   }
 
   const { data: consumedRows, error: consumeError } = await admin
@@ -159,6 +153,7 @@ export async function POST(request: NextRequest) {
       used_at: new Date().toISOString(),
     })
     .eq('id', state.id)
+    .eq('organization_id', state.organization_id)
     .is('used_at', null)
     .select('id');
 
