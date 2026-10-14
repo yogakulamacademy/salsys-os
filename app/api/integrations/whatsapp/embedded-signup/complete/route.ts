@@ -8,6 +8,7 @@ import { hashOAuthState } from '@/lib/integrations/crypto';
 import { completeWhatsAppEmbeddedSignup } from '@/lib/integrations/whatsapp-embedded-signup';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { createClient } from '@/lib/supabase/server';
+import { getWorkspaceContextForUser } from '@/lib/workspace';
 
 export const dynamic = 'force-dynamic';
 
@@ -123,6 +124,23 @@ export async function POST(request: NextRequest) {
     );
   }
 
+  const workspaceContext = await getWorkspaceContextForUser(
+    supabase,
+    user.id,
+  );
+  const activeWorkspace = workspaceContext.activeWorkspace;
+
+  if (
+    !activeWorkspace ||
+    activeWorkspace.organizationId !== state.organization_id ||
+    !['owner', 'admin'].includes(activeWorkspace.role)
+  ) {
+    return jsonError(
+      'This authorization session does not belong to your active tenant.',
+      403,
+    );
+  }
+
   const [membershipResult, organizationResult] = await Promise.all([
     admin
       .from('organization_members')
@@ -148,7 +166,7 @@ export async function POST(request: NextRequest) {
     organizationResult.data.status !== 'active'
   ) {
     return jsonError(
-      'You no longer have permission to manage integrations for this workspace.',
+      'You no longer have permission to manage integrations for this tenant.',
       403,
     );
   }
