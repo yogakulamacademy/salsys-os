@@ -138,6 +138,24 @@ export async function signInAction(formData: FormData) {
     );
   }
 
+  const { error: tenantBindingError } = await supabase.rpc(
+    'bind_current_tenant_session',
+    {
+      p_organization_id: organization.id,
+    },
+  );
+
+  if (tenantBindingError) {
+    await supabase.auth.signOut();
+    redirect(
+      authUrl(
+        loginPath,
+        'error',
+        'Unable to establish a secure tenant session. Please sign in again.',
+      ),
+    );
+  }
+
   const cookieStore = await cookies();
   cookieStore.set(ACTIVE_ORGANIZATION_COOKIE, organization.id, {
     httpOnly: true,
