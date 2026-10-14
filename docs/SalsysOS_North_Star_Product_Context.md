@@ -10,13 +10,13 @@
 
 ## 1. North Star
 
-SalsysOS = **Sales + Analysis Operating System**. It is a **Customer Journey Intelligence + Revenue Intelligence operating system**, not a generic CRM.
+SalsysOS = **Sales + Analysis Operating System**: a **Customer Journey Intelligence + Revenue Intelligence operating system**, not a generic CRM.
 
 Core question:
 
 > **What is this person likely to do next, why, and what should we do right now to increase the probability of conversion?**
 
-First vertical: Yoga / Education / Wellness. Tenant #1: Yogakulam Academy. Second planned vertical: Real Estate.
+First vertical: Yoga / Education / Wellness, with Yogakulam Academy as tenant #1. Second planned vertical: Real Estate.
 
 Core loop:
 
@@ -39,7 +39,7 @@ Behavioral scoring direction: `Frequency × Recency × Depth × Commercial Inten
 | W5 Sales Workspace | 12% | ~98–99% |
 | W6 Marketing Workspace | 12% | Foundation exists; formal expansion pending |
 | W7 Finance + Reports | 11% | Pending formal build |
-| W8 Admin + Security / QA | 10% | Active, ~96–97% |
+| W8 Admin + Security / QA | 10% | Active, ~97% |
 
 Do not repurpose W1–W8. Current execution order:
 
@@ -55,46 +55,36 @@ W7 includes payments, revenue, finance, operational/executive reporting, and ten
 
 ## 3. W8 Admin + Security / QA
 
-Fixed phases:
-
-- W8A Tenant identity contract + current membership audit
-- W8B Tenant-specific login entry
-- W8C Authentication → tenant binding
-- W8D Remove organization chooser / switching API / UI
-- W8E Central trusted tenant resolver
-- W8F DB / RLS / RPC tenant-isolation audit
-- W8G Integrations + webhooks tenant binding
-- W8H Tenant team-administration isolation
-- W8I Cross-tenant adversarial regression
-- W8J Controlled second-tenant staging test
-- W8K Production cutover + security sign-off
+Fixed phases: W8A tenant identity/audit; W8B tenant login; W8C auth→tenant binding; W8D remove org switching; W8E trusted tenant resolver; W8F DB/RLS/RPC isolation; W8G integrations/webhooks; W8H team admin isolation; W8I adversarial regression; W8J controlled second-tenant staging; W8K production cutover/sign-off.
 
 ### Verified W8 state
 
-- tenant-specific login implemented; normal organization switching removed
+- tenant-specific login implemented; normal org switching removed
 - trusted current-tenant resolver, session binding and slug binding implemented
 - single-active-membership guard protects future normal users
 - CRM settings and Team & Access tenant-scoped
 - `can_mutate_organization(...)` is the transitional authenticated write boundary
-- organization-scoped CRM/course/enrollment/payment/identity/touchpoint/web-session writes require tenant-bound mutation/admin gates
+- organization-scoped CRM/course/enrollment/payment/identity/touchpoint/web-session mutations require tenant-bound mutation/admin gates
 - mutation-policy audit found zero organization-scoped mutations outside approved tenant-bound gates
-- authenticated `is_organization_member(...)` now always requires trusted current-tenant match plus active membership, independent of the global strict rollout flag; service-role remains trusted
-- sole-active-membership users retain safe fallback through `current_tenant_organization_id()` even without persisted binding
-- broad RLS read surfaces using `is_organization_member(...)` are therefore tenant-bound while strict rollout remains OFF
-- a follow-up audit found four remaining organization-scoped SELECT policies that used only `is_crm_user()` and therefore bypassed the central membership gate: accommodation properties, accommodation rooms, batch accommodation types, and course catalog sync runs
-- pre-fix proof for those policies: a SalsysOS-bound legacy multi-org session could read 1 Yogakulam accommodation property and 3 Yogakulam course-catalog sync rows
-- production migration `20261014115949_tenant_scope_remaining_organization_read_policies` now adds tenant-bound organization membership to all four policies; post-fix foreign counts are 0 across all four tables
-- pre-fix central membership proof: SalsysOS-bound legacy session could read 16 Yogakulam courses; post-fix sees 0, foreign membership=false, and 0 foreign membership/workspace/web-session/person rows
-- genuine single-org Yogakulam viewer compatibility remains intact and still sees the expected 16 Yogakulam courses through sole-membership fallback
-- cross-tenant organization-management, integration credential, course mutation, team/reporting, CRM settings, Sales RPC, OAuth-state, lead-contact, messaging, follow-up, stage and WhatsApp attachment regressions exercised
-- Google/Meta/Instagram OAuth callbacks are current-tenant guarded before route-level service-role access
-- WhatsApp Embedded Signup revalidates the current tenant before state consumption/mutation
+- authenticated `is_organization_member(...)` now always requires trusted current-tenant match + active membership, independent of global strict rollout; service-role remains trusted
+- sole-active-membership users retain safe fallback through `current_tenant_organization_id()` even without a persisted binding
+- broad RLS reads using `is_organization_member(...)` are now tenant-bound while strict rollout remains OFF
+- four remaining org-scoped SELECT policies that only used `is_crm_user()` were found and fixed: accommodation properties, accommodation rooms, batch accommodation types, course catalog sync runs
+- post-fix audit finds no organization-id SELECT policy outside approved tenant/read authorization gates
+- `has_workspace_access(...)` is now also explicitly session-bound for authenticated internal callers, rather than relying on the global strict rollout flag; direct authenticated EXECUTE remains revoked
+- post-workspace hardening regression: bound `create_crm_lead(...)` and bound team snapshot still work; no rollback-only test lead persisted
+- pre-fix read proof: SalsysOS-bound legacy multi-org session could read 16 Yogakulam courses; post-fix sees 0 and foreign membership=false
+- additional post-fix counts: 0 foreign membership/workspace/web-session/person rows
+- single-org Yogakulam viewer compatibility preserved; expected 16 Yogakulam courses remain visible via sole-membership fallback
+- Google/Meta/Instagram OAuth callbacks current-tenant guarded before service-role mutation
+- WhatsApp Embedded Signup revalidates current tenant before state consumption/mutation
 - `attach_whatsapp_outbound_message_id(...)` requires `can_mutate_organization(lead.organization_id)`
+- foreign settings/follow-up/contact/lead update/interaction/stage/owner assignment/WhatsApp attach regressions are blocked
 - analytics sync service paths remain operator/cron-secret protected and explicitly tenant-scoped
 - password recovery is tenant-bound and fails closed until production origin configuration exists
-- independent GitHub Actions validates typecheck/build
+- GitHub Actions independently validates typecheck/build
 
-### Production rollout state — last verified 2026-10-14
+### Current production rollout state — last verified 2026-10-14
 
 - global strict session-tenant enforcement: **OFF**
 - persisted `tenant_session_bindings`: **0**
@@ -102,13 +92,13 @@ Fixed phases:
 - active single-org sessions: **0**
 - active multi-org sessions: **0**
 
-The global strict flag remains OFF until one genuine tenant-specific production session binding is observed and validated. Authenticated organization membership/read authorization is now independently session-bound, materially reducing transitional risk.
+Global strict enforcement remains OFF until one genuine tenant-specific production session binding is observed and validated. Authenticated membership, reads, workspace access, CRM administration, organization management, and key mutations are now independently tenant-bound, substantially reducing transitional risk.
 
 ### Remaining W8 blockers
 
-1. obtain/observe a genuine tenant-specific persisted production session binding through a real login
+1. observe a genuine tenant-specific persisted production session binding through a real login
 2. safely resolve the legacy admin identity that still has active memberships in three organizations
-3. finish classification of remaining authenticated-executable SECURITY DEFINER functions; many are intentional top-level app/policy helpers
+3. finish final classification/validation of authenticated SECURITY DEFINER functions; remaining set is currently 14 RLS authorization helpers + 16 authenticated workflow mutation RPCs + 11 authenticated read/auth/application RPCs
 4. finish final W8G service-client/runtime validation
 5. complete remaining W8I adversarial matrix
 6. configure `SALSYSOS_APP_URL` + Supabase Auth redirect allow-list and run password-recovery E2E
@@ -116,25 +106,15 @@ The global strict flag remains OFF until one genuine tenant-specific production 
 8. W8K strict-enforcement cutover/sign-off
 9. enable Supabase leaked-password protection when Auth configuration access is available
 
-Known advisor posture: 20 `rls_enabled_no_policy` INFO findings are service/backend tables without direct anon/auth access; do not add dummy policies merely to silence them. SECURITY DEFINER warnings require classification, not blanket revocation.
+Known advisor posture: 20 `rls_enabled_no_policy` INFO findings are service/backend tables without direct anon/auth access; do not add dummy policies merely to silence them. Current SECURITY DEFINER exposure: anon executable **0**, authenticated executable **41**, service-role executable **122**. The 41 authenticated functions are classified above and require intent review rather than blanket revocation.
 
 ---
 
 ## 4. Technical roadmap — fixed 11 phases
 
-1. Identity Resolution
-2. Raw Event Platform
-3. Session & Touchpoint Processing
-4. Customer Journey / Customer 360
-5. CRM Journey Experience
-6. Attribution & Revenue
-7. Intent + Product Affinity + Sales Intelligence
-8. Conversion Feedback
-9. Content + SEO Intelligence
-10. AEO / GEO / AI Visibility
-11. Predictive Intelligence
+1 Identity Resolution; 2 Raw Event Platform; 3 Session & Touchpoint Processing; 4 Customer Journey / 360; 5 CRM Journey Experience; 6 Attribution & Revenue; 7 Intent + Product Affinity + Sales Intelligence; 8 Conversion Feedback; 9 Content + SEO Intelligence; 10 AEO/GEO/AI Visibility; 11 Predictive Intelligence.
 
-Phases 1–3 have substantial foundations; 4–8 have strong/material foundations with operational depth remaining; 9 partial; 10 mostly pending; 11 early. Approximately 8/11 are materially built, not fully complete.
+Phases 1–3 have substantial foundations; 4–8 have strong/material foundations with depth remaining; 9 partial; 10 mostly pending; 11 early. Approximately 8/11 are materially built, not fully complete.
 
 ---
 
@@ -148,7 +128,7 @@ Current interpretation: R0 largely done; R1 nearing completion; R2 strong; R3 ne
 
 ## 6. Behavioral Intelligence
 
-BI-1 taxonomy; BI-2 pre-lead timeline; BI-3 post-lead timeline; BI-4 Intent Score v1; BI-5 trend/reactivation; BI-6 segments; BI-7 content/revenue influence; BI-8 sales influence; BI-9 predictive scoring; BI-10 next-best-action.
+BI-1 taxonomy; BI-2 pre-lead; BI-3 post-lead; BI-4 Intent Score v1; BI-5 trend/reactivation; BI-6 segments; BI-7 content/revenue influence; BI-8 sales influence; BI-9 predictive scoring; BI-10 next-best-action.
 
 **Current estimate: ~35–40% foundation.**
 
@@ -156,7 +136,7 @@ BI-1 taxonomy; BI-2 pre-lead timeline; BI-3 post-lead timeline; BI-4 Intent Scor
 
 ## 7. Privacy & Compliance Control Plane
 
-Product posture: **privacy-by-design infrastructure with configurable controls supporting applicable privacy frameworks**, not universal legal-compliance claims.
+Posture: **privacy-by-design infrastructure with configurable controls supporting applicable privacy frameworks**, not universal compliance claims.
 
 PC-1 Consent Ledger v2; PC-2 Purpose Registry; PC-3 jurisdiction/policy; PC-4 event policy metadata; PC-5 identity-stitching policy; PC-6 identity vault/PII separation; PC-7 retention; PC-8 rights orchestration; PC-9 vendor/processor registry; PC-10 lineage; PC-11 profiling controls; PC-12 compliance audit/reporting.
 
@@ -169,13 +149,13 @@ Consent is purpose-specific, not one boolean. Behavioral/profile processing must
 ## 8. Multi-tenant identity contract
 
 - 1 organization = 1 tenant = isolated data boundary
-- login session resolves to exactly one trusted tenant
-- no normal organization selector/switcher
-- tenant login route `/login/<organization-slug>`
+- session resolves exactly one trusted tenant
+- no normal org selector/switcher
+- login route `/login/<organization-slug>`
 - active membership in requested tenant required
-- browser/client organization IDs are never sufficient authority
+- client/browser org IDs never sufficient authority
 - platform admin separate from tenant admin
-- changed URL IDs/payloads/RPC args/API calls must not expose another tenant
+- changed URLs/payloads/RPC args/APIs must not expose another tenant
 
 Legacy exception: one admin identity still belongs to SalsysOS, Test Yoga School, and Yogakulam Academy. This remains a W8J/W8K migration blocker.
 
@@ -183,26 +163,8 @@ Legacy exception: one admin identity still belongs to SalsysOS, Test Yoga School
 
 ## 9. Recent production security migrations
 
-- `20261014050034_single_active_tenant_membership_guard`
-- `20261014051818_integration_oauth_active_tenant_guard`
-- `20261014052718_function_search_path_hardening`
-- `20261014053539_trigger_function_execute_hardening`
-- `20261014053906_service_only_table_grant_hardening`
-- `20261014054340_deprecated_course_batch_rpc_hardening`
-- `20261014054613_course_catalog_finalize_rpc_hardening`
-- `20261014055555_tenant_scoped_crm_settings_foundation`
-- `20261014055627_tenant_scoped_crm_settings_rpcs`
-- `20261014055802_tenant_scoped_crm_settings_views`
-- `20261014060357_tenant_session_binding_foundation`
-- `20261014060514_tenant_session_slug_binding`
-- `20261014060716_tenant_aware_settings_compatibility_reads`
-- `20261014061001_session_bound_tenant_authorization`
-- `20261014065212_tenant_identity_anon_grant_hardening`
-- `20261014065437_tenant_identity_mutation_grant_hardening`
-- `20261014065535_legacy_global_crm_settings_mutator_hardening`
-- `20261014074859_tenant_team_membership_consistency`
-- `20261014084439_session_bound_crm_admin_authorization`
-- `20261014084720_session_bound_organization_management`
+Current tail:
+
 - `20261014091441_session_bound_tenant_mutation_policies`
 - `20261014091745_session_bound_organization_admin_authorization`
 - `20261014092325_latent_accommodation_rpc_execute_hardening`
@@ -210,13 +172,16 @@ Legacy exception: one admin identity still belongs to SalsysOS, Test Yoga School
 - `20261014093616_legacy_settings_and_internal_tenant_helper_hardening`
 - `20261014100145_unused_authorization_rpc_execute_hardening`
 - `20261014105133_internal_authorization_helper_execute_hardening`
-- `20261014105425_internal_authorization_helper_execute_hardening` — duplicate idempotent retry preserved for source parity
+- `20261014105425_internal_authorization_helper_execute_hardening` — duplicate idempotent retry preserved for parity
 - `20261014110215_session_bound_crm_settings_reads`
 - `20261014110702_internal_workspace_access_helper_execute_hardening`
 - `20261014113720_oauth_state_current_tenant_guard`
 - `20261014114745_session_bound_whatsapp_outbound_attach`
 - `20261014115501_session_bound_organization_membership_reads`
 - `20261014115949_tenant_scope_remaining_organization_read_policies`
+- `20261014120314_session_bound_workspace_access`
+
+Earlier migration history remains in repository source and Supabase production history.
 
 ---
 
@@ -226,12 +191,12 @@ Legacy exception: one admin identity still belongs to SalsysOS, Test Yoga School
 |---|---:|
 | W1–W8 workspace program | ~82% |
 | W5 Sales Workspace | ~98–99% |
-| W8 Admin/Security/QA | ~96–97% |
+| W8 Admin/Security/QA | ~97% |
 | W8G Integrations/Webhooks | ~99% |
 | Technical platform | ~81% |
 | Behavioral Intelligence | ~35–40% |
 | Privacy & Compliance Control Plane | ~15–20% |
-| First commercial-ready multi-tenant product | ~72% |
+| First commercial-ready multi-tenant product | ~72–73% |
 | Full expanded SalsysOS platform scope | ~66% |
 | Wider R0–R14 commercial roadmap | ~53% |
 
@@ -241,45 +206,39 @@ Planning estimates only; new approved scope can change the denominator.
 
 ## 11. Current milestone
 
-### Milestone M-2026-10-14-L — Remaining organization-scoped read-policy isolation
+### Milestone M-2026-10-14-M — Tenant-bound membership, read-policy, and workspace access layer
 
-Completed/verified in production database:
+Completed/verified in production:
 
-- PR #23 passed CI and merged to `main` as `2031d681ad6f79a3ed9ca3191231515bf6505656`
-- production migration `20261014115501_session_bound_organization_membership_reads` makes authenticated membership authorization tenant-bound even while global strict rollout remains OFF
-- pre-fix central proof: SalsysOS-bound legacy multi-org session could read 16 Yogakulam courses; post-fix it sees 0, foreign membership=false, and 0 foreign membership/workspace/web-session/person rows
-- single-org Yogakulam viewer compatibility remains intact through sole-active-membership fallback and still sees expected Yogakulam course data
-- systematic audit of organization-id tables then found four SELECT policies not using membership/tenant authorization: accommodation properties, accommodation rooms, batch accommodation types, and course catalog sync runs
-- pre-fix direct proof: SalsysOS-bound legacy session saw 1 foreign Yogakulam accommodation property and 3 foreign Yogakulam catalog-sync rows
-- production migration `20261014115949_tenant_scope_remaining_organization_read_policies` adds `is_organization_member(organization_id)` to those four SELECT policies
-- post-fix foreign counts are 0 across all four tables
-- follow-up/stage adversarial checks also confirmed foreign complete, snooze, and stage-change operations are authorization-blocked; the snooze test used a rollback-only temporary open task state to ensure it reached the authorization branch
-- all fake sessions and task-state mutations were rollback-only; no test data persisted
+- PR #23 passed CI and merged to main as `2031d681ad6f79a3ed9ca3191231515bf6505656`
+- `20261014115501_session_bound_organization_membership_reads`: authenticated membership requires current tenant + active membership
+- pre-fix SalsysOS-bound legacy session could read 16 foreign Yogakulam courses; post-fix 0
+- single-org viewer fallback compatibility verified
+- systematic organization-id SELECT audit found four remaining `is_crm_user()`-only policies
+- `20261014115949_tenant_scope_remaining_organization_read_policies` adds tenant membership to those four policies; pre-fix foreign property/catalog rows were visible, post-fix all four foreign counts are 0
+- repeated policy audit now finds **zero** organization-id SELECT policies outside approved tenant/read authorization gates
+- `20261014120314_session_bound_workspace_access` makes authenticated internal workspace access require session-bound current tenant regardless of strict rollout flag
+- post-workspace regression: bound CRM lead creation and bound team snapshot remain authorized; rollback cleanup confirms no test lead persisted
+- remaining 41 authenticated SECURITY DEFINER functions classified into 14 RLS helpers, 16 workflow mutation RPCs, and 11 read/auth/application RPCs; anon SECURITY DEFINER exposure is 0
+- global strict rollout remains OFF pending a real persisted tenant session
 
-This substantially closes the transitional RLS read gap while strict session enforcement remains intentionally OFF pending a real tenant-specific session binding.
+### Prior M-J / M-I highlights
 
-### Prior milestone M-J — Sales/WhatsApp cross-tenant adversarial expansion
+- WhatsApp outbound attach now tenant-bound via `can_mutate_organization(...)`
+- foreign Sales/settings/follow-up/contact/stage/owner-assignment paths tested and blocked
+- Google/Meta/Instagram OAuth callbacks current-tenant guarded before service-role mutation
 
-- `20261014114745_session_bound_whatsapp_outbound_attach` closes a membership-only WhatsApp mutation path
-- foreign CRM settings, follow-ups, contacts, lead updates, interaction logs, stage changes, owner assignment, and WhatsApp attachment have been adversarially tested
-
-### Prior milestone M-I — OAuth callback current-tenant enforcement
-
-- `20261014113720_oauth_state_current_tenant_guard`
-- Google/Meta/Instagram callbacks are current-tenant guarded before service-role callback mutation
-- PR #22 merged as `28439ab97534da3e2fc7c831a4034a85edfc5391`
-
-Prior M-H through M-A remain recorded in repository history and merged PRs.
+Prior milestones remain in repository history.
 
 ---
 
 ## 12. Immediate next execution order
 
-1. complete CI and merge the combined membership/read-policy source-sync PR
-2. re-run organization-scoped read-policy audit and remaining SECURITY DEFINER classification
+1. CI + merge the combined membership/read/workspace hardening PR
+2. finish W8F intent review of the 41 classified authenticated SECURITY DEFINER functions; revoke only if proven unnecessary
 3. finish final W8G service-client/runtime validation
 4. complete remaining W8I adversarial cases
-5. obtain a real tenant-specific login and observe a persisted session binding
+5. obtain real tenant-specific login and observe persisted session binding
 6. configure recovery origin/redirect allow-list and run password-recovery E2E
 7. W8J controlled second-tenant validation
 8. resolve legacy multi-org admin identity safely
@@ -288,16 +247,12 @@ Prior M-H through M-A remain recorded in repository history and merged PRs.
 
 ---
 
-## 13. Update + engineering protocol
+## 13. Engineering protocol
 
-Every meaningful checkpoint records date, milestone, actual changes, migrations/PRs/commits, verification, warnings/failures, progress meters, blockers, and exact next action. Do not claim 99%/100% without scope and verification.
-
-Verify before modifying; preserve unrelated work; validate build/typecheck before merging runtime changes; separate external blockers from code failures; never expose secrets; do not invent tests; do not enable global strict tenant enforcement prematurely; use rollback-only production adversarial tests when possible; service-role mutations require trusted tenant binding; client-supplied tenant IDs are never authority.
+Verify before modifying; preserve unrelated work; validate build/typecheck before merging runtime changes; separate external blockers from code failures; never expose secrets; do not invent tests; do not enable global strict tenant enforcement prematurely; use rollback-only production adversarial tests where possible; service-role mutations require trusted tenant binding; client-supplied tenant IDs are never authority. Update this document after every meaningful checkpoint.
 
 ---
 
 ## 14. Related roadmap
 
 `docs/SalsysOS_Behavioral_Intelligence_Privacy_Control_Plane_Roadmap.md`
-
-This file remains the top-level North Star/current progress source of truth and must be updated whenever product, architecture, roadmap, verified progress, blockers, or next actions materially change.
