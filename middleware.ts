@@ -38,7 +38,6 @@ const PUBLIC_EXACT_PATHS = new Set([
 ]);
 
 const ACTIVE_ORGANIZATION_COOKIE = "yk-active-workspace";
-const ORGANIZATION_SELECTION_PATH = "/workspace";
 
 /*
 |--------------------------------------------------------------------------
@@ -56,6 +55,10 @@ function normalizePathname(pathname: string) {
 
 function isPublicPath(pathname: string) {
   return PUBLIC_EXACT_PATHS.has(normalizePathname(pathname));
+}
+
+function isTenantLoginPath(pathname: string) {
+  return /^\/login\/[^/]+$/.test(pathname);
 }
 
 function redirectWithAuthCookies(
@@ -336,21 +339,9 @@ export async function middleware(request: NextRequest) {
   const { data: claimsResult } = await supabase.auth.getClaims();
   const userId = claimsResult?.claims?.sub ?? null;
 
-  if (pathname === "/login") {
-    if (!userId) {
-      return response;
-    }
-
-    const { data: loginProfile } = await supabase
-      .from("profiles")
-      .select("active")
-      .eq("id", userId)
-      .maybeSingle();
-
-    if (loginProfile?.active === true) {
-      return redirectWithAuthCookies(request, response, "/dashboard");
-    }
-
+  // Tenant login URLs must always remain reachable. They are the only normal
+  // customer entry points that can establish/re-establish tenant binding.
+  if (pathname === "/login" || isTenantLoginPath(pathname)) {
     return response;
   }
 
@@ -392,18 +383,6 @@ export async function middleware(request: NextRequest) {
     });
   }
 
-  /*
-   * /workspace remains the organization selector. /api/workspace is the
-   * compatibility tenant-selection API. Functional workspace routes live at
-   * /workspace/<code> and continue through the authorization checks below.
-   */
-  if (
-    pathname === ORGANIZATION_SELECTION_PATH ||
-    pathname === "/api/workspace"
-  ) {
-    return response;
-  }
-
   let organizationGrants: OrganizationGrant[];
 
   try {
@@ -421,14 +400,14 @@ export async function middleware(request: NextRequest) {
     return accessDenied(pathname, "No active organization access is assigned.");
   }
 
-  const selectedOrganizationId =
+  const boundOrganizationId =
     request.cookies.get(ACTIVE_ORGANIZATION_COOKIE)?.value?.trim() ?? "";
 
   const activeOrganization =
     organizationGrants.length === 1
       ? organizationGrants[0]
       : organizationGrants.find(
-          (grant) => grant.organizationId === selectedOrganizationId,
+          (grant) => grant.organizationId === boundOrganizationId,
         ) ?? null;
 
   if (!activeOrganization) {
@@ -436,8 +415,9 @@ export async function middleware(request: NextRequest) {
       return NextResponse.json(
         {
           ok: false,
-          code: "organization_selection_required",
-          error: "Select an organization before using this API route.",
+          code: "tenant_context_required",
+          error:
+            "Tenant context is not bound. Sign in through your organization-specific login link.",
         },
         {
           status: 409,
@@ -445,14 +425,15 @@ export async function middleware(request: NextRequest) {
       );
     }
 
-    return redirectWithAuthCookies(
-      request,
-      response,
-      ORGANIZATION_SELECTION_PATH,
-      {
-        next: pathname,
-      },
-    );
+    return redirectWithAuthCookies(request, response, "/login", {
+      error: "tenant-context-required",
+    });
+  }
+
+  // /api/workspace is now read-only context retrieval. Tenant selection through
+  // this endpoint no longer exists, but all signed-in workspace roles need GET.
+  if (pathname === "/api/workspace") {
+    return response;
   }
 
   let workspaceGrants: WorkspaceGrant[];
@@ -473,8 +454,9 @@ export async function middleware(request: NextRequest) {
   const requestedWorkspace = getFunctionalWorkspaceForPathname(pathname);
 
   /*
-   * Unknown /workspace/<code> paths should reach the Next.js not-found path
-   * rather than being mistaken for the organization selector.
+   * Unknown /workspace/<code> paths should reach the Next.js not-found path.
+   * /workspace itself is no longer an organization-selection surface; its page
+   * may redirect to the tenant dashboard for legacy links.
    */
   if (pathname.startsWith("/workspace/") && !requestedWorkspace) {
     return response;
