@@ -3,8 +3,9 @@ import "server-only";
 import { cookies } from "next/headers";
 import { createClient } from "@/lib/supabase/server";
 
-// The persisted value is an organization/tenant id. Keep the legacy cookie
-// name for session compatibility while using organization terminology in code.
+// Tenant binding cookie. It is set only after organization-specific sign-in and
+// is always revalidated against an active organization membership server-side.
+// Keep the legacy cookie name for session compatibility during the migration.
 export const ACTIVE_ORGANIZATION_COOKIE = "yk-active-workspace";
 
 /** @deprecated Use ACTIVE_ORGANIZATION_COOKIE. */
@@ -225,13 +226,14 @@ export async function getWorkspaceContextForUser(
     activeWorkspace = memberships[0];
   } else if (memberships.length > 1) {
     const cookieStore = await cookies();
-    const selectedOrganizationId =
+    const boundOrganizationId =
       cookieStore.get(ACTIVE_ORGANIZATION_COOKIE)?.value?.trim() ?? "";
 
+    // The cookie never grants membership. It only identifies which already-
+    // authorized tenant login established this session context.
     activeWorkspace =
       memberships.find(
-        (membership) =>
-          membership.organizationId === selectedOrganizationId,
+        (membership) => membership.organizationId === boundOrganizationId,
       ) ?? null;
   }
 
@@ -244,7 +246,7 @@ export async function getWorkspaceContextForUser(
     activeWorkspace,
     memberships,
     functionalWorkspaces,
-    selectionRequired: memberships.length > 1 && !activeWorkspace,
+    selectionRequired: false,
   };
 }
 
@@ -263,7 +265,7 @@ export async function requireCurrentOrganizationId(
 
   if (!workspace.activeOrganizationId) {
     throw new Error(
-      "Multiple active organization memberships were found. Workspace selection is required.",
+      "Tenant context is not bound. Sign in through your organization-specific login link.",
     );
   }
 
