@@ -22,9 +22,7 @@ Core loop:
 
 `marketing spend → traffic → source/campaign/content → anonymous behavior → identity resolution → lead → conversation → intent/objection/product affinity → salesperson → follow-up → payment/enrollment → revenue → attribution → conversion feedback → learning → recommendation`
 
-The CRM is the team interface; the event/journey/intelligence system is the brain.
-
-Principles: raw events separate from CRM rows; deterministic identity where possible; observed vs inferred data kept distinct; revenue connected to acquisition/behavior; data quality before analytics trust; hard tenancy; privacy-by-design; auditable AI workflows; adoption/migration over destructive replacement.
+The CRM is the team interface; the event/journey/intelligence system is the brain. Key principles: separate raw events from CRM rows, deterministic identity where possible, observed vs inferred separation, revenue-linked analytics, data quality before intelligence, hard tenancy, privacy-by-design, auditable AI workflows, and safe migration over destructive replacement.
 
 Behavioral scoring direction: `Frequency × Recency × Depth × Commercial Intent`.
 
@@ -41,21 +39,23 @@ Behavioral scoring direction: `Frequency × Recency × Depth × Commercial Inten
 | W5 Sales Workspace | 12% | ~98–99% |
 | W6 Marketing Workspace | 12% | Foundation exists; formal expansion pending |
 | W7 Finance + Reports Workspaces | 11% | Pending formal build |
-| W8 Admin Workspace + Security / QA | 10% | Active, ~92–93% |
+| W8 Admin Workspace + Security / QA | 10% | Active, ~93% |
 
-Do not repurpose these labels. Current execution order is:
+Do not repurpose these labels. Current execution order:
 
 `W8 tenant/security → W6 → W7 → remaining W8 closeout`
 
-W5A Manager authorization and W5B Lead/commercial authorization are complete. W5C Sales workflow hardening is effectively complete at DB/security level; final app smoke remains.
+W5A Manager authorization and W5B Lead/commercial authorization are complete. W5C is effectively complete at DB/security level; final app smoke remains.
 
-W6 includes Campaigns, Paid Media, Google Ads, Meta Ads, GA4, Search Console, SEO, Tracking, attribution, plus W6-OG1 Website Intelligence, OG2 Opportunity Engine, OG3 Keyword/SERP, OG4 Content, OG5 Revenue-Aware Organic Intelligence, OG6 AEO, OG7 GEO/AI Visibility, OG8 Experimentation/Learning, OG9 Human-Approved Autonomous Optimization.
+W6 covers Campaigns, Paid Media, Google Ads, Meta Ads, GA4, Search Console, SEO, Tracking, attribution, plus OG1 Website Intelligence, OG2 Opportunity Engine, OG3 Keyword/SERP, OG4 Content, OG5 Revenue-Aware Organic, OG6 AEO, OG7 GEO/AI Visibility, OG8 Experimentation/Learning, OG9 Human-Approved Autonomous Optimization.
 
-W7 includes revenue, payments, finance views, operational/executive reporting, and tenant/role-scoped management reporting.
+W7 covers payments, revenue, finance, operational/executive reporting, and tenant/role-scoped business reporting.
 
 ---
 
-## 3. W8 Admin + Security / QA — fixed phases
+## 3. W8 Admin + Security / QA
+
+Fixed phases:
 
 - W8A Tenant identity contract + current membership audit
 - W8B Tenant-specific login entry
@@ -77,36 +77,39 @@ W7 includes revenue, payments, finance views, operational/executive reporting, a
 - organization-scoped CRM/course/enrollment/payment/identity/touchpoint/web-session writes require tenant-bound mutation/admin gates
 - `can_mutate_organization(...)` is the transitional write boundary
 - mutation-policy audit found zero organization-scoped mutation policies outside approved gates
-- cross-tenant viewer, organization-management, integration credential, course mutation, team/reporting, and settings regressions have been exercised
-- legacy multi-org authenticated session cannot rebind to a second tenant
+- cross-tenant viewer, organization-management, integration credential, course mutation, team/reporting, CRM settings, and Sales RPC regressions exercised
+- legacy multi-org session cannot rebind one authenticated session to another tenant
 - latent accommodation/course RPC exposure and unused/internal helper exposure reduced
-- authenticated-executable SECURITY DEFINER advisor count reduced **67 → 53 → 48 → 44 → 41** without widening table privileges
-- GA4/GSC health routes tenant-scoped; WhatsApp Embedded Signup revalidates tenant; Meta Ads diagnostics operator/service protected
-- tenant-bound password recovery merged and fails closed for production origin until explicitly configured
-- GitHub Actions independently validates typecheck/build
+- authenticated-executable SECURITY DEFINER advisor count reduced **67 → 53 → 48 → 44 → 41 → 40** without widening table privileges
+- `has_workspace_access(uuid,text)` is now internal/service-only after dependency + repository audit showed no direct app or policy consumer; all DB callers are SECURITY DEFINER
+- rollback-only regression after that revoke confirmed bound team snapshot and bound `create_crm_lead` still work while foreign team snapshot remains blocked
+- GA4/GSC health tenant-scoped; WhatsApp Embedded Signup tenant-revalidated; Meta diagnostics operator/service protected
+- tenant-bound password recovery merged and production origin fails closed until configured
+- independent GitHub Actions validates typecheck/build
 
 ### Current production rollout state — last verified 2026-10-14
 
 - strict session-tenant enforcement: **OFF**
 - persisted `tenant_session_bindings`: **0**
-- active multi-organization sessions: **1**
-- bound multi-organization sessions: **0**
+- active Auth sessions: **0**
+- active single-org sessions: **0**
+- active multi-org sessions: **0**
 
-Do **not** enable strict enforcement until a genuine tenant-specific production session binding is observed and validated.
+There is therefore no genuine live tenant-specific session available yet to validate persisted binding. Do **not** enable strict enforcement until one is observed and tested.
 
 ### W8 remaining blockers
 
-1. observe a genuine tenant-specific persisted production session binding
-2. safely resolve one legacy admin identity with active memberships in three organizations
-3. continue W8F classification of the remaining 41 authenticated-executable SECURITY DEFINER functions; many are intentionally top-level app or policy helpers
+1. obtain/observe a genuine tenant-specific persisted production session binding through a real login
+2. safely resolve the legacy admin identity that still has three active organization memberships
+3. continue W8F classification of the remaining 40 authenticated-executable SECURITY DEFINER functions; many are intentionally top-level app or direct policy helpers
 4. finish W8G remaining direct service-client mutation review
 5. complete W8I remaining adversarial matrix
-6. configure production `SALSYSOS_APP_URL` + Supabase Auth redirect allow-list and perform real password-recovery E2E
+6. configure `SALSYSOS_APP_URL` + Supabase Auth redirect allow-list and perform real password-recovery E2E
 7. W8J controlled second-tenant login test
-8. W8K strict-enforcement cutover and sign-off
-9. Supabase leaked-password protection remains external/configuration work
+8. W8K strict-enforcement cutover/sign-off
+9. enable Supabase leaked-password protection when Auth configuration access is available
 
-The 20 `rls_enabled_no_policy` advisor INFO findings are known service/backend tables without direct anon/auth access; do not add dummy policies merely to silence the advisor.
+The 20 `rls_enabled_no_policy` advisor INFO findings are known service/backend tables without direct anon/auth access; do not add dummy policies only to silence the advisor.
 
 ---
 
@@ -124,44 +127,21 @@ The 20 `rls_enabled_no_policy` advisor INFO findings are known service/backend t
 10. AEO / GEO / AI Visibility
 11. Predictive Intelligence
 
-Phases 1–3 have substantial foundations; 4–8 have strong/material foundations with operational depth remaining; 9 is partial; 10 mostly pending; 11 early. Approximately **8/11 phases are materially built**, not fully complete.
+Phases 1–3 have substantial foundations; 4–8 have strong/material foundations with operational depth remaining; 9 partial; 10 mostly pending; 11 early. Approximately **8/11 are materially built**, not fully complete.
 
 ---
 
 ## 5. Commercial roadmap — fixed R0–R14
 
-- R0 Platform Rebrand
-- R1 Foundation, Tenancy, Security & Production Baseline
-- R2 Lead Capture, Identity, Raw Events & Data Quality
-- R3 CRM Sales Execution
-- R4 Customer Journey / Customer 360
-- R5 Attribution, Funnel & Revenue Intelligence
-- R6 Intent, Product Affinity & Sales Intelligence
-- R7 Integrations & Conversion Feedback
-- R8 Content + SEO Intelligence
-- R9 AEO / GEO / AI Visibility
-- R10 Predictive Intelligence + Owner Command Center
-- R11 Wellness/Education Productization
-- R12 SalsysOS Realty
-- R13 Commercial SaaS Readiness
-- R14 Marketing + First 100 Customers
+R0 Platform Rebrand; R1 Foundation/Tenancy/Security; R2 Lead Capture/Identity/Raw Events/Data Quality; R3 CRM Sales Execution; R4 Customer Journey/360; R5 Attribution/Funnel/Revenue; R6 Intent/Product Affinity/Sales Intelligence; R7 Integrations/Conversion Feedback; R8 Content+SEO; R9 AEO/GEO/AI Visibility; R10 Predictive Intelligence + Owner Command Center; R11 Wellness/Education Productization; R12 Realty; R13 Commercial SaaS Readiness; R14 Marketing + First 100 Customers.
 
-R0 largely done; R1 nearing completion; R2 strong; R3 nearly complete; R4–R6 strong foundations; R7 in progress; R8 partial; R9 pending; R10 early/partial; R11–R14 pending.
+Current interpretation: R0 largely done; R1 nearing completion; R2 strong; R3 nearly complete; R4–R6 strong foundations; R7 in progress; R8 partial; R9 pending; R10 early; R11–R14 pending.
 
 ---
 
-## 6. Behavioral Intelligence workstream
+## 6. Behavioral Intelligence
 
-- BI-1 Behavioral event taxonomy
-- BI-2 Pre-lead timeline
-- BI-3 Post-lead timeline
-- BI-4 Intent Score v1
-- BI-5 Intent trend + reactivation
-- BI-6 Behavioral segments
-- BI-7 Content/revenue influence
-- BI-8 Sales influence
-- BI-9 Predictive scoring
-- BI-10 Recommendation / next-best-action
+BI-1 taxonomy; BI-2 pre-lead timeline; BI-3 post-lead timeline; BI-4 Intent Score v1; BI-5 trend/reactivation; BI-6 segments; BI-7 content/revenue influence; BI-8 sales influence; BI-9 predictive scoring; BI-10 next-best-action.
 
 **Current estimate: ~35–40% foundation.**
 
@@ -169,20 +149,9 @@ R0 largely done; R1 nearing completion; R2 strong; R3 nearly complete; R4–R6 s
 
 ## 7. Privacy & Compliance Control Plane
 
-Product posture: **privacy-by-design infrastructure with configurable controls supporting applicable privacy frameworks**, not a claim of universal legal compliance.
+Product posture: **privacy-by-design infrastructure with configurable controls supporting applicable privacy frameworks**, not universal legal-compliance claims.
 
-- PC-1 Consent Ledger v2
-- PC-2 Purpose Registry
-- PC-3 Jurisdiction/policy decision layer
-- PC-4 Event policy metadata
-- PC-5 Identity-stitching policy
-- PC-6 Identity Vault / PII separation
-- PC-7 Retention Engine
-- PC-8 Rights Orchestrator
-- PC-9 Vendor / Processor Registry
-- PC-10 Data Lineage
-- PC-11 Profiling / automated-decision controls
-- PC-12 Compliance audit/reporting
+PC-1 Consent Ledger v2; PC-2 Purpose Registry; PC-3 jurisdiction/policy; PC-4 event policy metadata; PC-5 identity-stitching policy; PC-6 identity vault/PII separation; PC-7 retention; PC-8 rights orchestration; PC-9 vendor/processor registry; PC-10 lineage; PC-11 profiling controls; PC-12 compliance audit/reporting.
 
 Consent is purpose-specific, not one boolean. Behavioral/profile processing must be permission-aware.
 
@@ -195,17 +164,19 @@ Consent is purpose-specific, not one boolean. Behavioral/profile processing must
 - 1 organization = 1 tenant = isolated data boundary
 - login session resolves to exactly one trusted tenant
 - no normal organization selector/switcher
-- tenant-specific login route `/login/<organization-slug>`
-- auth verifies active membership in requested tenant; no membership → deny
+- tenant login route `/login/<organization-slug>`
+- active membership in requested tenant required
 - browser/client organization IDs are never sufficient authority
-- platform admin is separate from tenant admin
-- changing URL IDs, payloads, RPC args, or API calls must not expose another tenant
+- platform admin separate from tenant admin
+- changed URL IDs/payloads/RPC args/API calls must not expose another tenant
 
-Legacy exception: one admin identity belongs to SalsysOS, Test Yoga School, and Yogakulam Academy. This is a W8J/W8K migration blocker, not target architecture.
+Legacy exception: one admin identity belongs to SalsysOS, Test Yoga School, and Yogakulam Academy. This remains a W8J/W8K migration blocker.
 
 ---
 
-## 9. Important recent production security migrations
+## 9. Recent production security migrations
+
+Key current sequence:
 
 - `20261014050034_single_active_tenant_membership_guard`
 - `20261014051818_integration_oauth_active_tenant_guard`
@@ -234,8 +205,9 @@ Legacy exception: one admin identity belongs to SalsysOS, Test Yoga School, and 
 - `20261014093616_legacy_settings_and_internal_tenant_helper_hardening`
 - `20261014100145_unused_authorization_rpc_execute_hardening`
 - `20261014105133_internal_authorization_helper_execute_hardening`
-- `20261014105425_internal_authorization_helper_execute_hardening` — duplicate idempotent production retry, preserved for exact source parity
+- `20261014105425_internal_authorization_helper_execute_hardening` — duplicate idempotent retry preserved for source parity
 - `20261014110215_session_bound_crm_settings_reads`
+- `20261014110702_internal_workspace_access_helper_execute_hardening`
 
 ---
 
@@ -243,93 +215,71 @@ Legacy exception: one admin identity belongs to SalsysOS, Test Yoga School, and 
 
 | Meter | Current estimate |
 |---|---:|
-| W1–W8 workspace program | ~79–80% |
+| W1–W8 workspace program | ~80% |
 | W5 Sales Workspace | ~98–99% |
-| W8 Admin/Security/QA | ~92–93% |
+| W8 Admin/Security/QA | ~93% |
 | W8G Integrations/Webhooks | ~98% |
-| Technical platform | ~79% |
+| Technical platform | ~79–80% |
 | Behavioral Intelligence | ~35–40% |
 | Privacy & Compliance Control Plane | ~15–20% |
-| First commercial-ready multi-tenant product | ~68–70% |
-| Full expanded SalsysOS platform scope | ~63–65% |
+| First commercial-ready multi-tenant product | ~69–70% |
+| Full expanded SalsysOS platform scope | ~64–65% |
 | Wider R0–R14 commercial roadmap | ~51–52% |
 
-These are planning estimates. Adding approved scope may change the denominator without undoing completed work.
+Planning estimates only; new approved scope can change the denominator.
 
 ---
 
 ## 11. Current milestone
 
-### Milestone M-2026-10-14-G — Internal helper + CRM settings read isolation
+### Milestone M-2026-10-14-H — Workspace access helper surface reduction
 
 Completed:
 
-- production migrations `20261014105133_internal_authorization_helper_execute_hardening` and duplicate idempotent retry `20261014105425_internal_authorization_helper_execute_hardening`
-- direct authenticated EXECUTE removed from internal helpers `can_manage_sales_workspace(uuid)`, `workspace_role(uuid,text)`, and `session_is_bound_to_organization(uuid)`; service/internal call chains preserved
-- advisor SECURITY DEFINER count reduced **44 → 41**
-- rollback-only authenticated regression proved `create_crm_lead(...)` and `assign_lead_owner(...)` still work through internal helper chains; rollback left persisted bindings=0, test leads=0, sample owner unchanged
-- `has_lead_telephone_contact` and `current_tenant_organization_id` were classified as still required by active invoker/wrapper call chains and were **not** revoked blindly
-- adversarial bound-session tests confirmed foreign `get_team_performance_snapshot` and `get_team_assignment_fairness_snapshot` calls are blocked
-- adversarial testing found a real transitional isolation gap: while strict mode is OFF, `get_crm_stage_settings_v2(foreign_org)` could return settings to the legacy multi-org identity because it checked membership but not the bound tenant session
-- production migration `20261014110215_session_bound_crm_settings_reads` fixed both `get_crm_stage_settings_v2` and `get_crm_settings_audit_v2` so authenticated reads require the requested organization to match the active tenant session plus active membership
-- post-fix regression: bound-tenant stage settings allowed, foreign stage settings blocked with `Not authorized for organization`, foreign settings audit returns zero rows
-- strict tenant enforcement remains OFF; no production test rows or persistent fake bindings were left behind
+- audited `has_workspace_access(uuid,text)` repository usage and database callers
+- no direct app references found; all four database callers (`can_manage_workspace`, `workspace_role`, team performance snapshot, assignment-fairness snapshot) are SECURITY DEFINER
+- production migration `20261014110702_internal_workspace_access_helper_execute_hardening` removes direct authenticated EXECUTE while preserving service/internal execution
+- post-change advisor count reduced **41 → 40**
+- rollback-only regression proved bound team-performance snapshot still returns an object, bound `create_crm_lead(...)` still succeeds through `workspace_role → has_workspace_access`, and foreign team-performance snapshot remains blocked
+- no test lead or fake binding was persisted
+- latest Auth-session aggregate shows zero active Auth sessions and zero persisted tenant bindings; strict mode stays OFF
 
-Prior milestones: M-F independent CI + analytics/auth hardening; M-E integration callback/diagnostics + unused RPC reduction; M-D settings/helper hardening; M-C latent RPC reduction; M-B tenant mutation boundary; M-A tenant-bound administration.
+### Prior milestone M-G — Internal helper + CRM settings read isolation
+
+- internal authorization helper exposure reduced 44 → 41
+- adversarial testing discovered and fixed foreign CRM settings reads for a bound legacy multi-org identity while strict mode is OFF
+- `20261014110215_session_bound_crm_settings_reads` requires bound tenant + membership for settings reads
+- foreign stage settings blocked; foreign audit hidden; bound settings allowed
+
+Prior M-F through M-A remain recorded in repository history and merged PRs.
 
 ---
 
 ## 12. Immediate next execution order
 
-1. finish PR/source merge for milestone G and validate with GitHub CI
-2. continue W8F classification of the remaining 41 SECURITY DEFINER functions without revoking active policy/top-level RPCs
+1. source-sync/merge milestone H with GitHub CI
+2. continue W8F remaining 40 SECURITY DEFINER classifications without revoking required top-level or policy helpers
 3. finish W8G direct service-client mutation review
-4. expand W8I adversarial matrix across remaining Sales/settings/reporting/integration surfaces
-5. configure production recovery origin + Supabase redirect allow-list when hosting/Auth configuration access is available
-6. perform real password-recovery E2E
-7. obtain/observe genuine persisted tenant-specific production session binding
-8. W8J controlled second-tenant validation
-9. safely resolve legacy multi-org admin identity
-10. W8K strict tenant enforcement cutover + sign-off
-11. resume W6 Marketing + Organic Growth Intelligence
-12. begin Privacy Control Plane foundations alongside Behavioral Intelligence expansion
-13. build W7 Finance + Reports
-14. continue Technical 9–11 / R8–R10 and commercial R11–R14
+4. expand W8I remaining Sales/settings/reporting/integration adversarial tests
+5. obtain a real tenant-specific login and observe persisted session binding
+6. configure recovery origin/redirect allow-list and run password-recovery E2E
+7. W8J controlled second-tenant validation
+8. resolve legacy multi-org admin identity safely
+9. W8K strict tenant enforcement cutover/sign-off
+10. resume W6 Marketing/Organic Growth Intelligence, Privacy foundations, W7 Finance/Reports, Technical 9–11, and R8–R14
 
 ---
 
-## 13. Update protocol
+## 13. Update + engineering protocol
 
-Every meaningful checkpoint must record date, milestone, completed work, migrations/PRs/commits, verification, warnings/failures, W1–W8, Technical 1–11, R0–R14, Behavioral Intelligence, Privacy/Compliance, commercial readiness, blockers, and exact next checkpoint. Do not claim 99% or 100% without defining scope and verifying it.
+Every meaningful checkpoint records date, milestone, actual changes, migrations/PRs/commits, verification, warnings/failures, progress meters, blockers, and exact next action. Do not claim 99%/100% without scope and verification.
 
----
-
-## 14. Engineering rules
-
-- one checkpoint at a time
-- verify before modifying
-- preserve unrelated work
-- validate build/typecheck/deployment before merging runtime code when applicable
-- distinguish external blockers from code failures
-- no secrets in logs, commits, chat, or docs
-- prefer adoption/migration over destructive replacement
-- no second customer tenant before isolation validation
-- do not invent successful tests
-- do not enable strict session enforcement prematurely
-- use rollback-only SQL for adversarial production regressions where possible
-- service-role paths require explicit trusted tenant binding before tenant-scoped mutation
-- tenant IDs supplied by browser/client are never sufficient authority
+Verify before modifying; preserve unrelated work; validate build/typecheck before merging runtime changes; separate external blockers from code failures; never expose secrets; do not invent tests; do not enable strict tenant enforcement prematurely; use rollback-only production adversarial tests when possible; service-role mutations require trusted tenant binding; client-supplied tenant IDs are never authority.
 
 ---
 
-## 15. Related canonical roadmap
+## 14. Related roadmap
 
 `docs/SalsysOS_Behavioral_Intelligence_Privacy_Control_Plane_Roadmap.md`
 
-This file remains the top-level North Star and current progress source of truth.
-
----
-
-## 16. Future-session rule
-
-Before substantial SalsysOS work, read this file first when context is incomplete. Update it in the same development cycle whenever product, architecture, roadmap, verified progress, blockers, or next actions materially change.
+This file remains the top-level North Star/current progress source of truth and must be updated whenever product, architecture, roadmap, verified progress, blockers, or next actions materially change.
