@@ -39,7 +39,7 @@ Behavioral scoring direction: `Frequency × Recency × Depth × Commercial Inten
 | W5 Sales Workspace | 12% | ~98–99% |
 | W6 Marketing Workspace | 12% | Foundation exists; formal expansion pending |
 | W7 Finance + Reports Workspaces | 11% | Pending formal build |
-| W8 Admin Workspace + Security / QA | 10% | Active, ~93% |
+| W8 Admin Workspace + Security / QA | 10% | Active, ~94% |
 
 Do not repurpose these labels. Current execution order:
 
@@ -77,13 +77,17 @@ Fixed phases:
 - organization-scoped CRM/course/enrollment/payment/identity/touchpoint/web-session writes require tenant-bound mutation/admin gates
 - `can_mutate_organization(...)` is the transitional write boundary
 - mutation-policy audit found zero organization-scoped mutation policies outside approved gates
-- cross-tenant viewer, organization-management, integration credential, course mutation, team/reporting, CRM settings, and Sales RPC regressions exercised
+- cross-tenant viewer, organization-management, integration credential, course mutation, team/reporting, CRM settings, Sales RPC, and OAuth-state regressions exercised
 - legacy multi-org session cannot rebind one authenticated session to another tenant
 - latent accommodation/course RPC exposure and unused/internal helper exposure reduced
-- authenticated-executable SECURITY DEFINER advisor count reduced **67 → 53 → 48 → 44 → 41 → 40** without widening table privileges
-- `has_workspace_access(uuid,text)` is now internal/service-only after dependency + repository audit showed no direct app or policy consumer; all DB callers are SECURITY DEFINER
+- authenticated-executable SECURITY DEFINER advisor count reduced **67 → 53 → 48 → 44 → 41 → 40**, then intentionally returned to **41** because the new tenant-bound OAuth-state validator is an authenticated SECURITY DEFINER policy endpoint required by middleware
+- `has_workspace_access(uuid,text)` is internal/service-only after dependency + repository audit showed no direct app or policy consumer; all DB callers are SECURITY DEFINER
 - rollback-only regression after that revoke confirmed bound team snapshot and bound `create_crm_lead` still work while foreign team snapshot remains blocked
-- GA4/GSC health tenant-scoped; WhatsApp Embedded Signup tenant-revalidated; Meta diagnostics operator/service protected
+- Google, Meta, and Instagram integration connect flows derive tenant only from trusted session context
+- Google/Meta/Instagram OAuth callback entry is now guarded in middleware by current-tenant OAuth-state verification before route-level service-role access
+- WhatsApp Embedded Signup already re-resolves current tenant and requires it to equal OAuth-state tenant before state consumption/mutation
+- GA4/GSC health tenant-scoped; Meta diagnostics operator/service protected
+- analytics sync service paths remain operator/cron-secret protected and carry explicit organization IDs into tenant-scoped writes
 - tenant-bound password recovery merged and production origin fails closed until configured
 - independent GitHub Actions validates typecheck/build
 
@@ -101,8 +105,8 @@ There is therefore no genuine live tenant-specific session available yet to vali
 
 1. obtain/observe a genuine tenant-specific persisted production session binding through a real login
 2. safely resolve the legacy admin identity that still has three active organization memberships
-3. continue W8F classification of the remaining 40 authenticated-executable SECURITY DEFINER functions; many are intentionally top-level app or direct policy helpers
-4. finish W8G remaining direct service-client mutation review
+3. continue W8F classification of the remaining 41 authenticated-executable SECURITY DEFINER functions; the new OAuth-state guard is intentional and many others are top-level app or direct policy helpers
+4. finish the final W8G service-client/runtime validation pass
 5. complete W8I remaining adversarial matrix
 6. configure `SALSYSOS_APP_URL` + Supabase Auth redirect allow-list and perform real password-recovery E2E
 7. W8J controlled second-tenant login test
@@ -208,6 +212,7 @@ Key current sequence:
 - `20261014105425_internal_authorization_helper_execute_hardening` — duplicate idempotent retry preserved for source parity
 - `20261014110215_session_bound_crm_settings_reads`
 - `20261014110702_internal_workspace_access_helper_execute_hardening`
+- `20261014113720_oauth_state_current_tenant_guard`
 
 ---
 
@@ -215,16 +220,16 @@ Key current sequence:
 
 | Meter | Current estimate |
 |---|---:|
-| W1–W8 workspace program | ~80% |
+| W1–W8 workspace program | ~80–81% |
 | W5 Sales Workspace | ~98–99% |
-| W8 Admin/Security/QA | ~93% |
-| W8G Integrations/Webhooks | ~98% |
-| Technical platform | ~79–80% |
+| W8 Admin/Security/QA | ~94% |
+| W8G Integrations/Webhooks | ~99% |
+| Technical platform | ~80% |
 | Behavioral Intelligence | ~35–40% |
 | Privacy & Compliance Control Plane | ~15–20% |
-| First commercial-ready multi-tenant product | ~69–70% |
-| Full expanded SalsysOS platform scope | ~64–65% |
-| Wider R0–R14 commercial roadmap | ~51–52% |
+| First commercial-ready multi-tenant product | ~70% |
+| Full expanded SalsysOS platform scope | ~65% |
+| Wider R0–R14 commercial roadmap | ~52% |
 
 Planning estimates only; new approved scope can change the denominator.
 
@@ -232,17 +237,31 @@ Planning estimates only; new approved scope can change the denominator.
 
 ## 11. Current milestone
 
-### Milestone M-2026-10-14-H — Workspace access helper surface reduction
+### Milestone M-2026-10-14-I — OAuth callback current-tenant enforcement
 
-Completed:
+Completed/verified in production database:
 
-- audited `has_workspace_access(uuid,text)` repository usage and database callers
-- no direct app references found; all four database callers (`can_manage_workspace`, `workspace_role`, team performance snapshot, assignment-fairness snapshot) are SECURITY DEFINER
-- production migration `20261014110702_internal_workspace_access_helper_execute_hardening` removes direct authenticated EXECUTE while preserving service/internal execution
-- post-change advisor count reduced **41 → 40**
-- rollback-only regression proved bound team-performance snapshot still returns an object, bound `create_crm_lead(...)` still succeeds through `workspace_role → has_workspace_access`, and foreign team-performance snapshot remains blocked
-- no test lead or fake binding was persisted
-- latest Auth-session aggregate shows zero active Auth sessions and zero persisted tenant bindings; strict mode stays OFF
+- audited service-role integration mutation surfaces across Account Integrations plus GA4, GSC, Google Ads, Meta Ads, Google OAuth, Meta OAuth, Instagram OAuth, and WhatsApp Embedded Signup
+- confirmed interactive integration setup derives tenant from trusted authenticated workspace context and service-role mutations are scoped back to the resolved organization
+- identified a transition-only gap in Google/Meta/Instagram callback flows: a legacy identity with multiple memberships could possess an OAuth state for a non-current organization while global strict enforcement is OFF
+- production migration `20261014113720_oauth_state_current_tenant_guard` adds `oauth_state_matches_current_tenant(provider,state)`, requiring the state to belong to the current trusted tenant, current user, provider, be unused, and unexpired
+- middleware now checks that guard for Google, Meta, and Instagram OAuth callbacks before callback routes can reach their service-role clients
+- WhatsApp Embedded Signup already had equivalent route-level revalidation and is unchanged
+- rollback-only adversarial regression bound the legacy test session to SalsysOS: SalsysOS OAuth state returned true, Yogakulam OAuth state returned false
+- rollback cleanup verified zero fake OAuth states and zero fake tenant-session bindings persisted
+- security advisor recheck shows **41** authenticated-executable SECURITY DEFINER functions: the increase from 40 is intentional because `oauth_state_matches_current_tenant` is a signed-in policy endpoint used by middleware; the remaining set continues to require classification rather than blanket revocation
+- 20 `rls_enabled_no_policy` INFO findings remain unchanged and are known service/backend tables; leaked-password protection remains an external Auth configuration warning
+
+Pending before this milestone is fully merged:
+
+- GitHub CI typecheck/build for the middleware change
+- PR merge into `main`
+
+### Prior milestone M-H — Workspace access helper surface reduction
+
+- `has_workspace_access(uuid,text)` direct authenticated exposure removed after repository/database dependency review
+- bound team snapshot and `create_crm_lead` continued working; foreign team snapshot remained blocked
+- advisor count reduced 41 → 40 before the intentional OAuth-policy endpoint was introduced
 
 ### Prior milestone M-G — Internal helper + CRM settings read isolation
 
@@ -257,9 +276,9 @@ Prior M-F through M-A remain recorded in repository history and merged PRs.
 
 ## 12. Immediate next execution order
 
-1. source-sync/merge milestone H with GitHub CI
-2. continue W8F remaining 40 SECURITY DEFINER classifications without revoking required top-level or policy helpers
-3. finish W8G direct service-client mutation review
+1. run GitHub CI and merge OAuth callback current-tenant guard
+2. finish final W8G service-client/runtime validation pass
+3. continue W8F remaining 41 SECURITY DEFINER classifications without revoking required top-level or policy helpers
 4. expand W8I remaining Sales/settings/reporting/integration adversarial tests
 5. obtain a real tenant-specific login and observe persisted session binding
 6. configure recovery origin/redirect allow-list and run password-recovery E2E
