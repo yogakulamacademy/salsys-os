@@ -1,22 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import {
-  ACTIVE_ORGANIZATION_COOKIE,
-  getWorkspaceContextForUser,
-} from "@/lib/workspace";
-
-const ORGANIZATION_COOKIE_MAX_AGE_SECONDS =
-  60 * 60 * 24 * 30;
-
-function organizationCookieOptions() {
-  return {
-    httpOnly: true,
-    sameSite: "lax" as const,
-    secure: process.env.NODE_ENV === "production",
-    path: "/",
-    maxAge: ORGANIZATION_COOKIE_MAX_AGE_SECONDS,
-  };
-}
+import { getWorkspaceContextForUser } from "@/lib/workspace";
 
 async function getAuthenticatedUser() {
   const supabase = await createClient();
@@ -56,94 +40,6 @@ export async function GET() {
       error instanceof Error
         ? error.message
         : "Unable to load workspace.";
-
-    return NextResponse.json(
-      { error: message },
-      { status: 500 },
-    );
-  }
-}
-
-export async function POST(request: Request) {
-  const { supabase, user } =
-    await getAuthenticatedUser();
-
-  if (!user) {
-    return NextResponse.json(
-      { error: "Authentication required." },
-      { status: 401 },
-    );
-  }
-
-  let body: unknown;
-
-  try {
-    body = await request.json();
-  } catch {
-    return NextResponse.json(
-      { error: "Invalid request body." },
-      { status: 400 },
-    );
-  }
-
-  const organizationId =
-    body &&
-    typeof body === "object" &&
-    "organizationId" in body &&
-    typeof body.organizationId === "string"
-      ? body.organizationId.trim()
-      : "";
-
-  if (!organizationId) {
-    return NextResponse.json(
-      { error: "organizationId is required." },
-      { status: 400 },
-    );
-  }
-
-  try {
-    const workspace =
-      await getWorkspaceContextForUser(
-        supabase,
-        user.id,
-      );
-
-    const selectedOrganization =
-      workspace.memberships.find(
-        (membership) =>
-          membership.organizationId ===
-          organizationId,
-      );
-
-    if (!selectedOrganization) {
-      return NextResponse.json(
-        {
-          error:
-            "You do not have an active membership in that organization.",
-        },
-        { status: 403 },
-      );
-    }
-
-    const response = NextResponse.json({
-      ok: true,
-      activeOrganizationId:
-        selectedOrganization.organizationId,
-      activeWorkspace: selectedOrganization,
-    });
-
-    response.cookies.set(
-      ACTIVE_ORGANIZATION_COOKIE,
-      selectedOrganization.organizationId,
-      organizationCookieOptions(),
-    );
-
-    return response;
-  } catch (error) {
-    const message =
-      error instanceof Error
-        ? error.message
-        : "Unable to switch organization.";
 
     return NextResponse.json(
       { error: message },
