@@ -4,7 +4,7 @@
 **Last updated:** 2026-10-14  
 **Repository:** `yogakulamacademy/salsys-os`
 
-> Update this file after every meaningful phase/checkpoint. It exists so a future contributor or AI session can understand what SalsysOS is, why it exists, what has been completed, what remains, what is blocked, and what must happen next without reconstructing the project from chat history.
+> Read this file first when SalsysOS context is incomplete or uncertain. Update it after every meaningful phase/checkpoint so project direction, progress, blockers, validation state, and next actions survive loss of chat/session context.
 
 ---
 
@@ -12,19 +12,17 @@
 
 SalsysOS means **Sales + Analysis Operating System**.
 
-It is not intended to become a generic CRM with many disconnected features. The North Star is a **Customer Journey Intelligence + Revenue Intelligence operating system** that connects marketing, visitor behavior, identity, CRM activity, sales execution, payments, attribution, content performance, privacy/compliance controls, and predictive recommendations into one closed loop.
+It is not intended to become a generic CRM with disconnected features. The North Star is a **Customer Journey Intelligence + Revenue Intelligence operating system** connecting marketing, visitor behavior, identity, CRM activity, sales execution, payments, attribution, content performance, privacy/compliance controls, and predictive recommendations into one closed loop.
 
-The core business question SalsysOS should eventually answer is:
+The product should eventually answer:
 
 > **What is this person likely to do next, why, and what should we do right now to increase the probability of conversion?**
 
-The first product vertical is **Yoga / Education / Wellness**, with Yogakulam Academy as tenant #1. The second planned vertical is **Real Estate**. The architecture must therefore be deep enough for vertical workflows but reusable enough for future productization.
+The first product vertical is **Yoga / Education / Wellness**, with Yogakulam Academy as tenant #1. The second planned vertical is **Real Estate**. The architecture must therefore support vertical depth while remaining reusable for future productization.
 
 ---
 
 ## 2. Core closed loop
-
-SalsysOS should connect:
 
 `marketing spend → traffic → source/campaign/content → anonymous behavior → identity resolution → lead → conversation → intent/objection/product affinity → salesperson → follow-up → payment/enrollment → revenue → attribution → conversion feedback → learning → recommendation`
 
@@ -40,42 +38,41 @@ Every person should eventually have one continuous behavioral timeline:
 
 `anonymous visitor → repeat visitor → content engagement → lead → sales engagement → customer / lost lead → post-lead engagement`
 
-SalsysOS must understand both **pre-lead** and **post-lead** activity.
-
-Important capabilities:
+SalsysOS must understand both **pre-lead** and **post-lead** activity, including:
 
 - pre-lead website/session history
 - post-lead return behavior
 - course/product interest
-- content engagement
 - pricing/payment/accommodation/testimonial/teacher/curriculum activity
 - recency, frequency, depth, and commercial-intent signals
-- intent trend over time
-- lead reactivation detection
+- intent trend and acceleration
+- reactivation detection
 - behavioral segments
 - conversion-assisting pages/content
 - revenue influence by content
-- sales influence on subsequent digital behavior
+- sales influence on later digital behavior
 - next-best-action recommendations
 
-The system must avoid treating page-view volume alone as intent. The intended scoring direction is:
+Page-view volume alone is not intent. Initial scoring direction:
 
 `Frequency × Recency × Depth × Commercial Intent`
 
-Initial rules may be deterministic. Later models should learn from actual conversions and revenue.
+Rules may begin deterministic and later be calibrated from actual conversion and revenue outcomes.
 
 ---
 
 ## 4. Data architecture principles
 
-1. **Raw events are not CRM rows.** Keep high-volume event storage separate from CRM operational tables.
+1. **Raw events are not CRM rows.** High-volume events stay separate from CRM operational tables.
 2. **Identity is deterministic where possible.** Resolve anonymous visitors, leads, customers, channels, and source identities through a controlled identity layer.
-3. **Observed vs inferred data must stay distinguishable.** A page visit is observed; an intent score is inferred.
-4. **Customer 360 should summarize the event graph**, not duplicate millions of raw events.
-5. **Revenue must connect back to acquisition and behavior.** Traffic/rankings/leads alone are not the goal.
+3. **Observed vs inferred data stay distinguishable.** A page visit is observed; an intent score is inferred.
+4. **Customer 360 summarizes the event graph** instead of duplicating raw events.
+5. **Revenue connects back to acquisition and behavior.** Traffic/rankings/leads alone are not the goal.
 6. **Data quality precedes analytics trust.** Broken identities, attribution, timestamps, tenancy, or source mappings invalidate downstream intelligence.
 7. **Hard tenancy is mandatory.** Browser-supplied organization IDs are never authority.
 8. **Privacy and policy are first-class architecture**, not a later banner/configuration exercise.
+9. **AI operates workflows**, but important changes remain auditable and explainable.
+10. **Adopt/migrate instead of destructive replacement** where safe continuity matters.
 
 ---
 
@@ -83,11 +80,11 @@ Initial rules may be deterministic. Later models should learn from actual conver
 
 SalsysOS must be privacy-by-design and support configurable controls for frameworks such as GDPR/ePrivacy, India DPDP, CCPA/CPRA, and future jurisdictions without claiming universal legal compliance.
 
-The product promise should be closer to:
+Preferred product wording:
 
 > **Privacy-by-design infrastructure with configurable controls supporting applicable privacy frameworks.**
 
-The Compliance Control Plane should contain:
+The control plane should contain:
 
 1. Jurisdiction Engine
 2. Consent Management / Consent Ledger
@@ -106,9 +103,9 @@ The Compliance Control Plane should contain:
 15. Profiling & Automated Decision Controls
 16. Policy-aware Data Lineage
 
-Consent is not one boolean. At minimum the architecture should support purpose-specific states such as analytics, personalization, marketing, ad sharing, profiling, and email marketing, plus notice version, timestamp, source, jurisdiction, withdrawal and proof metadata.
+Consent is not one boolean. The architecture should support purpose-specific states such as analytics, personalization, marketing, ad sharing, profiling, and email marketing, plus notice version, timestamp, source, jurisdiction, withdrawal, and proof metadata.
 
-A future event-policy decision must be able to answer questions such as:
+A future event-policy decision must be able to answer:
 
 - may this event be stored?
 - may anonymous history be stitched to a known identity?
@@ -118,7 +115,7 @@ A future event-policy decision must be able to answer questions such as:
 - how long may it be retained?
 - may it be used for model training?
 
-PII should progressively move toward a protected identity-vault pattern, with behavioral systems using internal person IDs rather than repeatedly carrying names/emails/phones.
+PII should progressively move toward a protected identity-vault pattern, with behavioral systems using internal person IDs instead of repeatedly carrying names/emails/phones.
 
 Deletion, access, correction, consent withdrawal, restriction, and marketing opt-out should become orchestrated workflows rather than manual work across many systems.
 
@@ -137,22 +134,15 @@ Do **not** repurpose these labels.
 | W5 Sales Workspace | 12% | ~98–99% |
 | W6 Marketing Workspace | 12% | Foundation exists; formal expansion pending |
 | W7 Finance + Reports Workspaces | 11% | Pending formal build |
-| W8 Admin Workspace + Security / QA | 10% | Active, ~86% |
+| W8 Admin Workspace + Security / QA | 10% | Active, ~90% |
 
-Planned cumulative checkpoints remain:
+Planned cumulative checkpoints remain W1 10%, W2 25%, W3 40%, W4 55%, W5 67%, W6 79%, W7 90%, W8 100%.
 
-- W1 → 10%
-- W2 → 25%
-- W3 → 40%
-- W4 → 55%
-- W5 → 67%
-- W6 → 79%
-- W7 → 90%
-- W8 → 100%
-
-Execution exception currently in force: W8 tenant/security hardening was pulled forward before W6/W7. Current sequence is:
+Execution exception currently in force:
 
 `W8 tenant/security → W6 → W7 → remaining W8 closeout`
+
+W8 was pulled forward before onboarding another tenant because hard tenant isolation is a prerequisite for commercial multi-tenancy.
 
 ---
 
@@ -162,7 +152,7 @@ W5A Manager authorization — COMPLETE
 W5B Lead + commercial authorization — COMPLETE  
 W5C Sales workflow hardening — essentially complete at DB/security level; final app smoke remains
 
-Completed W5C items include:
+Completed W5C work includes:
 
 - WhatsApp contact capability
 - workflow mutation hardening
@@ -174,7 +164,7 @@ Completed W5C items include:
 
 ## 8. W6 Marketing Workspace scope
 
-Existing scope includes Campaigns, Paid Media, Google Ads, Meta Ads, GA4, Search Console, SEO, Tracking, acquisition and attribution.
+Existing scope includes Campaigns, Paid Media, Google Ads, Meta Ads, GA4, Search Console, SEO, Tracking, acquisition, and attribution.
 
 Organic Growth Intelligence is part of W6:
 
@@ -188,15 +178,15 @@ Organic Growth Intelligence is part of W6:
 - W6-OG8 Experimentation + Learning
 - W6-OG9 Human-Approved Autonomous Optimization
 
-Behavioral Intelligence extends W6 by connecting organic/paid/content behavior to lead quality, intent, conversions and revenue.
+Behavioral Intelligence extends W6 by connecting organic/paid/content behavior to lead quality, intent, conversions, and revenue.
 
 ---
 
 ## 9. W7 Finance + Reports scope
 
-W7 covers revenue, payments, finance views, management/business reporting, authorization, tenant/role scoping, operational reports and executive reporting.
+W7 covers revenue, payments, finance views, management/business reporting, authorization, tenant/role scoping, operational reports, and executive reporting.
 
-Revenue and payment truth from W7 must feed attribution, content intelligence, sales intelligence and recommendation models.
+Revenue and payment truth must feed attribution, content intelligence, sales intelligence, and recommendation models.
 
 ---
 
@@ -223,35 +213,49 @@ W8K Production cutover + security sign-off
 - session slug binding implemented
 - single-active-membership guard implemented for future normal users
 - OAuth active-tenant guard implemented
-- multiple table/function/grant hardening migrations applied
 - CRM settings tenant-scoped
 - Team & Access tenant-scoped
 - cross-tenant viewer adversarial tests passed
 - legacy multi-org session cannot rebind one authenticated session to a second tenant
 - integration credential cross-tenant list/create/revoke/rotate blocked for a bound tenant session
-- `can_manage_organization` now requires current session tenant for authenticated callers
-- cross-tenant organization-workspace mutation regression now returns 0
-- `can_mutate_organization(...)` added as the transition-safe write boundary for authenticated tenant mutations
-- organization-scoped INSERT/UPDATE/DELETE policies across CRM, course, enrollment, payment, identity, touchpoint and web-session surfaces now require a tenant-bound mutation/admin gate
-- `is_organization_admin(...)` now uses the tenant-bound mutation gate
-- latest mutation-policy audit found zero organization-scoped mutation policies outside the approved tenant-bound mutation/admin gates
+- `can_manage_organization` and CRM admin helpers now require current session tenant for authenticated callers
+- `can_mutate_organization(...)` is the transition-safe write boundary for authenticated tenant mutations
+- organization-scoped INSERT/UPDATE/DELETE policies across CRM, course, enrollment, payment, identity, touchpoint, and web-session surfaces require a tenant-bound mutation/admin gate
+- `is_organization_admin(...)` uses the tenant-bound mutation gate
+- mutation-policy audit found zero organization-scoped mutation policies outside approved tenant-bound mutation/admin gates
 - nine latent accommodation mutation SECURITY DEFINER RPCs have authenticated execution removed and remain service-role callable
 - five latent course resolver/admin SECURITY DEFINER RPCs have authenticated execution removed and remain service-role callable
-- security advisor authenticated-executable SECURITY DEFINER count reduced from 67 to 53 without widening table privileges
+- legacy global CRM settings reads now resolve through tenant-aware compatibility wrappers
+- internal settings/tenant helpers had unnecessary authenticated execution removed
+- four additional unused authorization/helper RPCs had authenticated execution removed after policy/function/app-consumer checks
+- Supabase authenticated-executable SECURITY DEFINER warning count reduced from 67 → 53 → 48 → **44** without widening table privileges
+- WhatsApp Embedded Signup completion revalidates the currently authenticated/bound tenant before consuming OAuth state or mutating integration data
+- Meta Ads debug diagnostics are no longer public and now require service/operator secret authorization
+- production currently has zero unused/unexpired OAuth states for Google, Meta, Instagram, or WhatsApp
+- GA4/GSC health route tenant-scoping fix is prepared in PR #14 and awaits build validation
+- tenant-preserving password recovery is prepared in PR #15 and awaits build/config/E2E validation
+
+### W8 production rollout state — last verified 2026-10-14
+
+- strict session-tenant enforcement: **OFF**
+- persisted `tenant_session_bindings`: **0**
+- active multi-organization sessions: **1**
+- bound multi-organization sessions: **0**
+
+Do **not** enable strict enforcement until a genuine tenant-specific production session binding is observed and validated.
 
 ### W8 remaining critical blockers
 
-1. strict tenant-session enforcement flag is still intentionally OFF
+1. obtain/observe a real tenant-specific persisted production session binding
 2. one legacy admin identity still has active memberships in all three organizations
-3. real production tenant-specific sessions must be observed/bound before strict cutover
-4. W8F remaining SECURITY DEFINER classification/hardening; current advisor count is 53, with many intentionally user-facing functions requiring classification rather than blanket revocation
-5. W8G remaining direct service-mutation audit
-6. W8I remaining adversarial matrix
-7. W8J controlled second-tenant login test
-8. W8K strict-enforcement cutover and sign-off
-9. Supabase leaked-password protection remains external/configuration work
-
-Do **not** enable strict enforcement until a genuine tenant-specific binding path is verified safely.
+3. W8F remaining SECURITY DEFINER classification; current advisor count is 44, many intentionally user-facing/policy helpers
+4. finish W8G remaining service-client mutation review
+5. complete W8I adversarial matrix
+6. validate and merge PR #14 after a real build/type check
+7. validate and merge PR #15 after build, production `SALSYSOS_APP_URL`/Supabase redirect configuration, and real recovery E2E test
+8. W8J controlled second-tenant login test
+9. W8K strict-enforcement cutover and sign-off
+10. Supabase leaked-password protection remains external/configuration work
 
 ---
 
@@ -269,7 +273,7 @@ Do **not** enable strict enforcement until a genuine tenant-specific binding pat
 10. AEO / GEO / AI Visibility
 11. Predictive Intelligence
 
-### Current technical interpretation
+Current interpretation:
 
 - 1 Identity Resolution — substantially complete foundation
 - 2 Raw Event Platform — substantially complete foundation
@@ -326,109 +330,65 @@ Roughly **7 of 14 are built or materially underway**.
 
 ## 13. Behavioral Intelligence workstream
 
-This is not a replacement roadmap. It deepens Technical Phases 4, 5, 7, 9 and 11 and Commercial phases R4, R6, R8 and R10.
+This deepens Technical Phases 4, 5, 7, 9, and 11 plus Commercial R4, R6, R8, and R10.
 
-### BI-1 Behavioral event taxonomy
-Define commercially meaningful event types and page/content classifications.
+- BI-1 Behavioral event taxonomy
+- BI-2 Pre-lead timeline
+- BI-3 Post-lead timeline
+- BI-4 Intent Score v1
+- BI-5 Intent trend + reactivation
+- BI-6 Behavioral segments
+- BI-7 Content/revenue influence
+- BI-8 Sales influence
+- BI-9 Predictive scoring
+- BI-10 Recommendation / next-best-action
 
-### BI-2 Pre-lead timeline
-Aggregate anonymous history before lead creation where policy allows.
-
-### BI-3 Post-lead timeline
-Continue website/content/product behavior after lead capture.
-
-### BI-4 Intent Score v1
-Deterministic Recency × Frequency × Depth × Commercial Intent model.
-
-### BI-5 Intent trend + reactivation
-Detect score acceleration and cold-to-hot reactivation.
-
-### BI-6 Behavioral segments
-High-intent, returning, price-sensitive, accommodation researcher, testimonial-heavy, curriculum researcher, inactive-reactivated, multi-product researcher, etc.
-
-### BI-7 Content/revenue influence
-Conversion-assisting pages, content influence, lead quality and revenue by content.
-
-### BI-8 Sales influence
-Measure behavior changes after calls, WhatsApp, email and follow-ups.
-
-### BI-9 Predictive scoring
-Learn conversion probability from real outcomes.
-
-### BI-10 Recommendation / next-best-action
-Human-readable recommended action and reason.
-
-**Current Behavioral Intelligence completion estimate: ~35–40% foundation.**
+**Current Behavioral Intelligence estimate: ~35–40% foundation.**
 
 ---
 
 ## 14. Privacy & Compliance workstream
 
-This is a cross-cutting control plane. It should begin before deeper behavioral tracking is expanded.
+This is a cross-cutting control plane and should begin before significant behavioral tracking expansion.
 
-### PC-1 Consent Ledger v2
-Granular purposes + proof + versioning + withdrawal.
+- PC-1 Consent Ledger v2
+- PC-2 Purpose Registry
+- PC-3 Jurisdiction / policy decision layer
+- PC-4 Event policy metadata
+- PC-5 Identity-stitching policy
+- PC-6 Identity Vault / PII separation
+- PC-7 Retention Engine
+- PC-8 Rights Orchestrator
+- PC-9 Vendor / Processor Registry
+- PC-10 Data Lineage
+- PC-11 Profiling / automated-decision controls
+- PC-12 Compliance audit/reporting
 
-### PC-2 Purpose Registry
-Explicit purposes, allowed data, retention, outputs and destinations.
+**Current Privacy & Compliance estimate: ~15–20% foundation.**
 
-### PC-3 Jurisdiction / policy decision layer
-Configurable EU/UK/India/California/etc behavior.
-
-### PC-4 Event policy metadata
-Purpose, identity state, jurisdiction, consent state, retention class.
-
-### PC-5 Identity-stitching policy
-Control when anonymous history can be linked to known identity.
-
-### PC-6 Identity Vault / PII separation
-Progressive separation of direct identity from behavioral analytics.
-
-### PC-7 Retention Engine
-Automated retention/anonymization/deletion schedules.
-
-### PC-8 Rights Orchestrator
-Access, correction, deletion, withdrawal, restriction, opt-out.
-
-### PC-9 Vendor / Processor Registry
-Destinations, subprocessors, scopes, transfer/residency metadata.
-
-### PC-10 Data Lineage
-Track source → derived score/segment → activation destination.
-
-### PC-11 Profiling / automated-decision controls
-Human-in-the-loop defaults and explainable recommendations.
-
-### PC-12 Compliance audit/reporting
-Evidence, configuration and request-history reporting.
-
-**Current Privacy & Compliance completion estimate: ~15–20% foundation.**
-
-Existing foundations include tracking consent ledger, tenant/security hardening, raw event infrastructure, audit patterns, service isolation and identity architecture.
+Existing foundations include the tracking consent ledger, tenant/security hardening, raw event infrastructure, audit patterns, service isolation, and identity architecture.
 
 ---
 
 ## 15. Multi-tenant identity contract
 
-Required product behavior:
+Required behavior:
 
 - 1 organization = 1 tenant = isolated data boundary
 - login session resolves to exactly one trusted tenant
 - normal customers do not receive an organization selector/switcher
-- tenant-specific route format: `/login/<organization-slug>`
+- tenant-specific login route: `/login/<organization-slug>`
 - auth verifies active membership in requested tenant
 - no membership → deny
 - browser-supplied organization IDs are never authority
 - platform admin is separate from tenant admin
-- changing URL IDs, payloads, RPC args or API calls must not expose another tenant
+- changing URL IDs, payloads, RPC args, or API calls must not expose another tenant
 
-Legacy state: one admin identity still belongs to SalsysOS, Test Yoga School and Yogakulam Academy. This is a migration exception and a W8J/W8K blocker, not the target architecture.
+Legacy state: one admin identity still belongs to SalsysOS, Test Yoga School, and Yogakulam Academy. This is a migration exception and W8J/W8K blocker, not the target architecture.
 
 ---
 
-## 16. Important production security migrations already completed
-
-Key recent production migrations include:
+## 16. Important recent production security migrations
 
 - `20261014050034_single_active_tenant_membership_guard`
 - `20261014051818_integration_oauth_active_tenant_guard`
@@ -454,6 +414,10 @@ Key recent production migrations include:
 - `20261014091745_session_bound_organization_admin_authorization`
 - `20261014092325_latent_accommodation_rpc_execute_hardening`
 - `20261014092425_latent_course_rpc_execute_hardening`
+- `20261014093616_legacy_settings_and_internal_tenant_helper_hardening`
+- `20261014100145_unused_authorization_rpc_execute_hardening`
+
+The source migration for `20261014100145` was merged to `main` in PR #16.
 
 ---
 
@@ -463,15 +427,16 @@ These are planning estimates, not mathematically exact completion figures.
 
 | Meter | Current estimate |
 |---|---:|
-| W1–W8 workspace program | ~76–77% |
+| W1–W8 workspace program | ~78–79% |
 | W5 Sales Workspace | ~98–99% |
-| W8 Admin/Security/QA | ~86% |
-| Technical platform | ~77% |
+| W8 Admin/Security/QA | ~90% |
+| W8G Integrations/Webhooks | ~98% |
+| Technical platform | ~78% |
 | Behavioral Intelligence | ~35–40% |
 | Privacy & Compliance Control Plane | ~15–20% |
-| First commercial-ready multi-tenant product | ~63–65% |
-| Full expanded SalsysOS platform scope | ~59–62% |
-| Wider R0–R14 commercial roadmap | ~50% |
+| First commercial-ready multi-tenant product | ~66–68% |
+| Full expanded SalsysOS platform scope | ~61–63% |
+| Wider R0–R14 commercial roadmap | ~50–51% |
 
 Adding new approved scope may reduce the percentage of the **expanded total roadmap** without undoing completed work. Always state when the denominator changed.
 
@@ -479,76 +444,90 @@ Adding new approved scope may reduce the percentage of the **expanded total road
 
 ## 18. Current milestone
 
-### Milestone M-2026-10-14-C — Latent privileged RPC surface reduction
+### Milestone M-2026-10-14-E — W8 integration/auth continuation and RPC surface reduction
 
 Completed:
 
-- production migration `20261014092325_latent_accommodation_rpc_execute_hardening` applied
-- authenticated execution removed from nine accommodation SECURITY DEFINER RPCs after repository search and database dependency audit found no current application or internal function consumers
-- production migration `20261014092425_latent_course_rpc_execute_hardening` applied
-- authenticated execution removed from two course resolver and three course-admin SECURITY DEFINER RPCs after the same no-consumer audit
-- all fourteen functions remain callable by `service_role`, preserving trusted server-side capability for future use
-- post-change privilege checks confirmed accommodation RPCs: authenticated=false, service_role=true
-- security advisor rerun reduced authenticated-executable SECURITY DEFINER warnings from 67 to 53
-- no table privileges were widened and no production data mutation was required for this checkpoint
-- the 20 known RLS-enabled/no-policy backend/service tables remain informational and unchanged
+- PR #13 merged: WhatsApp Embedded Signup completion now re-resolves the trusted active tenant before OAuth state consumption/integration mutation
+- PR #13 merged: Meta Ads debug endpoint now requires operator/service authorization rather than being public
+- production OAuth-state audit found zero unused/unexpired Google, Meta, Instagram, or WhatsApp states
+- production migration `20261014100145_unused_authorization_rpc_execute_hardening` applied
+- authenticated EXECUTE removed from four unused authorization/helper SECURITY DEFINER RPCs while preserving service-role execution
+- Supabase authenticated-executable SECURITY DEFINER advisor count reduced to **44**
+- PR #16 source-sync for `20261014100145` merged to `main`
+- strict rollout state rechecked: strict=false, persisted bindings=0, active multi-org sessions=1, bound multi-org sessions=0
+- PR #15 password recovery was further hardened so production recovery-link generation requires explicit `SALSYSOS_APP_URL`; forwarded Host headers are not trusted in production
+- `.env.example` now documents `SALSYSOS_APP_URL` on PR #15
+
+Prepared but not merged:
+
+- PR #14 scopes GA4 and GSC health/history/count queries to the trusted active tenant
+- PR #15 implements tenant-bound password recovery
+
+Validation blocker:
+
+- Vercel is currently rejecting new preview deployments due to project build-rate limits **before build starts**. Treat this as an external CI-capacity blocker, not a code-build failure.
+- PR #14 and PR #15 remain intentionally unmerged until real build/type validation is available. PR #15 also needs production origin/redirect configuration and an end-to-end recovery test.
+
+### Prior milestone M-2026-10-14-D — Settings/helper hardening
+
+Completed:
+
+- legacy tenant-aware settings compatibility reads hardened
+- unnecessary authenticated execution removed from internal tenant/settings helpers
+- advisor count reduced from 53 to 48
+
+### Prior milestone M-2026-10-14-C — Latent privileged RPC surface reduction
+
+Completed:
+
+- production migrations `20261014092325` and `20261014092425`
+- nine accommodation and five course resolver/admin latent SECURITY DEFINER RPCs removed from authenticated execution
+- advisor count reduced from 67 to 53
 
 ### Prior milestone M-2026-10-14-B — Session-bound tenant mutation boundary
 
 Completed:
 
-- canonical North Star file merged to `main`
-- production migration `20261014091441_session_bound_tenant_mutation_policies` applied
-- production migration `20261014091745_session_bound_organization_admin_authorization` applied
-- new `can_mutate_organization(...)` helper requires authenticated requests to resolve to the target tenant and hold active membership; service-role behavior is preserved
-- critical organization-scoped write policies now require session-bound tenant authorization even while the global strict rollout flag remains OFF
-- bound SalsysOS session test returned `can_mutate_bound=true` and `can_mutate_other=false`
-- rollback-only cross-tenant course UPDATE regression returned 0 rows
-- mutation-policy audit found zero remaining organization-scoped INSERT/UPDATE/DELETE policies outside the approved tenant-bound mutation/admin gates
-- direct authenticated lead UPDATE remains blocked by table privilege; no new table privilege was granted
-- security advisor at that point showed 67 authenticated-executable SECURITY DEFINER functions
+- `can_mutate_organization(...)` transition-safe write gate
+- organization-scoped mutation policies hardened
+- bound-session cross-tenant mutation regression returned 0
+- mutation-policy audit found zero organization-scoped mutation policies outside approved tenant-bound gates
 
 ### Prior milestone M-2026-10-14-A — Tenant-bound administration hardening
 
 Completed:
 
-- W8H Team & Access tenant isolation merged to `main`
-- tenant employee provisioning/activation made tenant-scoped
-- inactive organization membership now deactivates workspace membership
-- one authenticated session cannot be rebound to a different tenant
-- bound legacy admin cannot administer another tenant through CRM-admin authorization
-- cross-tenant integration credential list/create/revoke/rotate blocked
-- bound legacy admin cannot manage another tenant through `can_manage_organization`
-- cross-tenant organization-workspace mutation regression reduced from 4 writable rows to 0
-- all adversarial production verification used rollback-only transactions
-
-### Roadmap milestone
-
-Behavioral Intelligence + Privacy/Compliance scope accepted and added as approved product direction.
+- tenant Team & Access isolation
+- tenant employee provisioning/activation
+- inactive membership/workspace consistency
+- cross-tenant CRM admin and integration credential blocking
+- organization management bound to current tenant session
 
 ---
 
 ## 19. Immediate next execution order
 
-1. continue W8F SECURITY DEFINER classification across remaining 53 authenticated-executable functions; preserve intentional user-facing RPCs and revoke only unused/unsafe exposure
-2. finish W8G integration/service mutation tenant audit
-3. expand W8I adversarial matrix across remaining RPC and service-client mutation surfaces
-4. verify password-reset flow preserves tenant context
-5. obtain/observe real tenant-specific session binding in production
-6. perform W8J controlled second-tenant validation
-7. resolve legacy multi-org admin identity safely
-8. perform W8K strict tenant enforcement cutover + sign-off
-9. resume W6 Marketing + Organic Growth Intelligence
-10. begin Privacy Control Plane foundations alongside Behavioral Intelligence expansion
-11. build W7 Finance + Reports
-12. continue Technical 9–11 / R8–R10
-13. productization/commercial phases R11–R14
+1. wait for/restore a real build-validation path, then validate PR #14 and PR #15
+2. configure production `SALSYSOS_APP_URL` and Supabase recovery redirect allow-list before merging/releasing PR #15
+3. continue W8F classification of the remaining 44 authenticated-executable SECURITY DEFINER functions; preserve intentional user-facing/policy helpers and revoke only exposure proven unnecessary
+4. finish W8G direct service-client mutation review
+5. expand W8I adversarial matrix across remaining RPC, analytics, settings, and service-client surfaces
+6. obtain/observe a genuine tenant-specific persisted session binding in production
+7. perform W8J controlled second-tenant validation
+8. resolve legacy multi-org admin identity safely
+9. perform W8K strict tenant enforcement cutover + sign-off
+10. resume W6 Marketing + Organic Growth Intelligence
+11. begin Privacy Control Plane foundations alongside Behavioral Intelligence expansion
+12. build W7 Finance + Reports
+13. continue Technical 9–11 / R8–R10
+14. productization/commercial phases R11–R14
 
 ---
 
 ## 20. Update protocol after every major phase/checkpoint
 
-Every major checkpoint must update this document with:
+Every meaningful checkpoint must update this document with:
 
 - date
 - milestone ID/name
@@ -556,7 +535,7 @@ Every major checkpoint must update this document with:
 - migrations/PRs/commits when relevant
 - verification performed
 - regressions or known warnings
-- phase percentage
+- checkpoint percentage
 - W1–W8 percentage
 - Technical 1–11 status
 - R0–R14 status
@@ -587,21 +566,20 @@ Warnings must be separated from hard failures.
 - one checkpoint at a time
 - verify before modifying
 - preserve unrelated work
-- production changes must be validated
-- build/typecheck/deployment status before merge when applicable
-- no secrets in logs, commits, chat or docs
+- validate build/typecheck/deployment before merging runtime code when applicable
+- distinguish external CI/deployment blockers from code failures
+- no secrets in logs, commits, chat, or docs
 - prefer adoption/migration over destructive replacement
-- no second tenant onboarding before isolation is sufficiently validated
-- external blockers must be labeled external
+- no second customer tenant onboarding before isolation is sufficiently validated
 - do not invent successful tests
 - do not enable strict session enforcement prematurely
 - use rollback-only SQL for destructive/adversarial production regressions when possible
+- service-role paths require explicit trusted tenant binding before tenant-scoped mutation
+- tenant IDs supplied by browser/client are never sufficient authority
 
 ---
 
 ## 22. Related canonical roadmap document
-
-See also:
 
 `docs/SalsysOS_Behavioral_Intelligence_Privacy_Control_Plane_Roadmap.md`
 
