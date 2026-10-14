@@ -137,7 +137,7 @@ Do **not** repurpose these labels.
 | W5 Sales Workspace | 12% | ~98–99% |
 | W6 Marketing Workspace | 12% | Foundation exists; formal expansion pending |
 | W7 Finance + Reports Workspaces | 11% | Pending formal build |
-| W8 Admin Workspace + Security / QA | 10% | Active, ~84–85% |
+| W8 Admin Workspace + Security / QA | 10% | Active, ~86% |
 
 Planned cumulative checkpoints remain:
 
@@ -235,13 +235,16 @@ W8K Production cutover + security sign-off
 - organization-scoped INSERT/UPDATE/DELETE policies across CRM, course, enrollment, payment, identity, touchpoint and web-session surfaces now require a tenant-bound mutation/admin gate
 - `is_organization_admin(...)` now uses the tenant-bound mutation gate
 - latest mutation-policy audit found zero organization-scoped mutation policies outside the approved tenant-bound mutation/admin gates
+- nine latent accommodation mutation SECURITY DEFINER RPCs have authenticated execution removed and remain service-role callable
+- five latent course resolver/admin SECURITY DEFINER RPCs have authenticated execution removed and remain service-role callable
+- security advisor authenticated-executable SECURITY DEFINER count reduced from 67 to 53 without widening table privileges
 
 ### W8 remaining critical blockers
 
 1. strict tenant-session enforcement flag is still intentionally OFF
 2. one legacy admin identity still has active memberships in all three organizations
 3. real production tenant-specific sessions must be observed/bound before strict cutover
-4. W8F remaining SECURITY DEFINER classification/hardening; current advisor count is 67 authenticated-executable SECURITY DEFINER functions, many intentionally user-facing and requiring classification rather than blanket revocation
+4. W8F remaining SECURITY DEFINER classification/hardening; current advisor count is 53, with many intentionally user-facing functions requiring classification rather than blanket revocation
 5. W8G remaining direct service-mutation audit
 6. W8I remaining adversarial matrix
 7. W8J controlled second-tenant login test
@@ -449,6 +452,8 @@ Key recent production migrations include:
 - `20261014084720_session_bound_organization_management`
 - `20261014091441_session_bound_tenant_mutation_policies`
 - `20261014091745_session_bound_organization_admin_authorization`
+- `20261014092325_latent_accommodation_rpc_execute_hardening`
+- `20261014092425_latent_course_rpc_execute_hardening`
 
 ---
 
@@ -458,13 +463,13 @@ These are planning estimates, not mathematically exact completion figures.
 
 | Meter | Current estimate |
 |---|---:|
-| W1–W8 workspace program | ~76% |
+| W1–W8 workspace program | ~76–77% |
 | W5 Sales Workspace | ~98–99% |
-| W8 Admin/Security/QA | ~84–85% |
+| W8 Admin/Security/QA | ~86% |
 | Technical platform | ~77% |
 | Behavioral Intelligence | ~35–40% |
 | Privacy & Compliance Control Plane | ~15–20% |
-| First commercial-ready multi-tenant product | ~62–65% |
+| First commercial-ready multi-tenant product | ~63–65% |
 | Full expanded SalsysOS platform scope | ~59–62% |
 | Wider R0–R14 commercial roadmap | ~50% |
 
@@ -474,7 +479,21 @@ Adding new approved scope may reduce the percentage of the **expanded total road
 
 ## 18. Current milestone
 
-### Milestone M-2026-10-14-B — Session-bound tenant mutation boundary
+### Milestone M-2026-10-14-C — Latent privileged RPC surface reduction
+
+Completed:
+
+- production migration `20261014092325_latent_accommodation_rpc_execute_hardening` applied
+- authenticated execution removed from nine accommodation SECURITY DEFINER RPCs after repository search and database dependency audit found no current application or internal function consumers
+- production migration `20261014092425_latent_course_rpc_execute_hardening` applied
+- authenticated execution removed from two course resolver and three course-admin SECURITY DEFINER RPCs after the same no-consumer audit
+- all fourteen functions remain callable by `service_role`, preserving trusted server-side capability for future use
+- post-change privilege checks confirmed accommodation RPCs: authenticated=false, service_role=true
+- security advisor rerun reduced authenticated-executable SECURITY DEFINER warnings from 67 to 53
+- no table privileges were widened and no production data mutation was required for this checkpoint
+- the 20 known RLS-enabled/no-policy backend/service tables remain informational and unchanged
+
+### Prior milestone M-2026-10-14-B — Session-bound tenant mutation boundary
 
 Completed:
 
@@ -487,8 +506,7 @@ Completed:
 - rollback-only cross-tenant course UPDATE regression returned 0 rows
 - mutation-policy audit found zero remaining organization-scoped INSERT/UPDATE/DELETE policies outside the approved tenant-bound mutation/admin gates
 - direct authenticated lead UPDATE remains blocked by table privilege; no new table privilege was granted
-- source migrations synchronized to GitHub branch `w8-session-bound-mutation-policies`
-- security advisor rerun: 20 known no-policy/service-only tables remain informational; authenticated SECURITY DEFINER warning count is 67 after adding `can_mutate_organization`; leaked-password protection remains an external Auth configuration warning
+- security advisor at that point showed 67 authenticated-executable SECURITY DEFINER functions
 
 ### Prior milestone M-2026-10-14-A — Tenant-bound administration hardening
 
@@ -503,7 +521,6 @@ Completed:
 - bound legacy admin cannot manage another tenant through `can_manage_organization`
 - cross-tenant organization-workspace mutation regression reduced from 4 writable rows to 0
 - all adversarial production verification used rollback-only transactions
-- source migrations synchronized to GitHub
 
 ### Roadmap milestone
 
@@ -513,7 +530,7 @@ Behavioral Intelligence + Privacy/Compliance scope accepted and added as approve
 
 ## 19. Immediate next execution order
 
-1. continue W8F SECURITY DEFINER classification, starting with accommodation/admin RPCs and course resolver APIs; revoke or narrow only where usage and authorization prove it safe
+1. continue W8F SECURITY DEFINER classification across remaining 53 authenticated-executable functions; preserve intentional user-facing RPCs and revoke only unused/unsafe exposure
 2. finish W8G integration/service mutation tenant audit
 3. expand W8I adversarial matrix across remaining RPC and service-client mutation surfaces
 4. verify password-reset flow preserves tenant context
