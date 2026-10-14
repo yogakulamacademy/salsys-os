@@ -13,6 +13,10 @@ import {
 } from '@/lib/supabase/server';
 
 import {
+  requireCurrentOrganizationId,
+} from '@/lib/workspace';
+
+import {
   useMockData,
 } from '@/lib/config';
 
@@ -74,6 +78,34 @@ function settingsRedirect(
 }
 
 
+async function getCurrentOrganizationId(
+  supabase: Awaited<ReturnType<typeof createClient>>
+) {
+  const {
+    data: {
+      user,
+    },
+    error: authError,
+  } =
+    await supabase.auth.getUser();
+
+  if (
+    authError ||
+    !user
+  ) {
+    settingsRedirect(
+      'error',
+      'Unable to resolve the active organization.'
+    );
+  }
+
+  return requireCurrentOrganizationId(
+    supabase,
+    user.id
+  );
+}
+
+
 export async function updateForecastProbabilityAction(
   formData: FormData
 ) {
@@ -124,12 +156,19 @@ export async function updateForecastProbabilityAction(
   const supabase =
     await createClient();
 
+  const organizationId =
+    await getCurrentOrganizationId(
+      supabase
+    );
+
   const {
     error,
   } =
     await supabase.rpc(
-      'update_crm_stage_probability',
+      'update_crm_stage_probability_v2',
       {
+        p_organization_id:
+          organizationId,
         p_stage:
           stage,
         p_probability:
@@ -234,12 +273,19 @@ export async function updatePipelineAgingRuleAction(
   const supabase =
     await createClient();
 
+  const organizationId =
+    await getCurrentOrganizationId(
+      supabase
+    );
+
   const {
     error,
   } =
     await supabase.rpc(
-      'update_crm_pipeline_aging_rule',
+      'update_crm_pipeline_aging_rule_v2',
       {
+        p_organization_id:
+          organizationId,
         p_stage:
           stage,
         p_warning_hours:
