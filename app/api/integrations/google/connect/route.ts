@@ -12,6 +12,10 @@ import {
 } from '@/lib/supabase/admin';
 
 import {
+  getWorkspaceContextForUser,
+} from '@/lib/workspace';
+
+import {
   createOAuthState,
   hashOAuthState,
 } from '@/lib/integrations/crypto';
@@ -112,133 +116,38 @@ export async function GET(
   }
 
   try {
-    const admin =
-      createAdminClient();
-
-    /*
-     * Resolve the tenant in this order:
-     *
-     * 1. Explicit organization_id query parameter.
-     * 2. Active CRM workspace cookie.
-     * 3. Single manageable membership fallback.
-     *
-     * The resolved organization is still validated against the
-     * authenticated user's active owner/admin memberships below.
-     */
-    const requestedOrganizationId =
-      request.nextUrl.searchParams
-        .get(
-          'organization_id',
-        )
-        ?.trim() ||
-      null;
-
-    const activeWorkspaceOrganizationId =
-      request.cookies
-        .get(
-          'yk-active-workspace',
-        )
-        ?.value
-        ?.trim() ||
-      null;
-
-    const targetOrganizationId =
-      requestedOrganizationId ??
-      activeWorkspaceOrganizationId;
-
-    let membershipQuery =
-      admin
-        .from(
-          'organization_members',
-        )
-        .select(
-          'organization_id, role',
-        )
-        .eq(
-          'user_id',
-          user.id,
-        )
-        .eq(
-          'active',
-          true,
-        )
-        .in(
-          'role',
-          [
-            'owner',
-            'admin',
-          ],
-        );
-
-    if (
-      targetOrganizationId
-    ) {
-      membershipQuery =
-        membershipQuery.eq(
-          'organization_id',
-          targetOrganizationId,
-        );
-    }
-
-    const {
-      data:
-        rawMemberships,
-      error:
-        membershipsError,
-    } =
-      await membershipQuery;
-
-    if (membershipsError) {
-      return NextResponse.redirect(
-        pageUrl(
-          request,
-          'error',
-          `Unable to resolve workspace access: ${membershipsError.message}`,
-        ),
+    const workspace =
+      await getWorkspaceContextForUser(
+        supabase,
+        user.id,
       );
-    }
 
-    const memberships =
-      (
-        rawMemberships ??
-        []
-      ) as Array<{
-        organization_id:
-          string;
-        role:
-          string;
-      }>;
+    const activeWorkspace =
+      workspace.activeWorkspace;
 
     if (
-      memberships.length ===
-      0
+      !activeWorkspace ||
+      ![
+        'owner',
+        'admin',
+      ].includes(
+        activeWorkspace.role,
+      )
     ) {
       return NextResponse.redirect(
         pageUrl(
           request,
           'error',
-          'You do not have permission to manage integrations for this workspace.',
-        ),
-      );
-    }
-
-    if (
-      !targetOrganizationId &&
-      memberships.length !==
-        1
-    ) {
-      return NextResponse.redirect(
-        pageUrl(
-          request,
-          'error',
-          'Select a workspace before connecting Google.',
+          'You do not have permission to manage integrations for this tenant.',
         ),
       );
     }
 
     const organizationId =
-      memberships[0]
-        .organization_id;
+      activeWorkspace.organizationId;
+
+    const admin =
+      createAdminClient();
 
     const {
       data:
@@ -257,13 +166,15 @@ export async function GET(
           'id',
           organizationId,
         )
+        .eq(
+          'status',
+          'active',
+        )
         .maybeSingle();
 
     if (
       organizationError ||
-      !organization ||
-      organization.status !==
-        'active'
+      !organization
     ) {
       return NextResponse.redirect(
         pageUrl(
@@ -271,7 +182,7 @@ export async function GET(
           'error',
           organizationError
             ?.message ??
-            'This workspace is not active.',
+            'This tenant is not active.',
         ),
       );
     }
@@ -310,7 +221,6 @@ export async function GET(
         ? '/settings/integrations?oauth_popup=1'
         : '/settings/integrations';
 
-    // Housekeeping only. It is okay if there is nothing to delete.
     await admin
       .from(
         'integration_oauth_states',
