@@ -2,6 +2,7 @@ import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
 const PUBLIC_EXACT_PATHS = new Set([
+  "/auth/callback",
   "/yogakulam-tracker.js",
   "/api/leads/capture",
   "/api/analytics/ga4/sync",
@@ -56,6 +57,10 @@ function isPublicPath(pathname: string) {
 
 function isTenantLoginPath(pathname: string) {
   return /^\/login\/[^/]+$/.test(pathname);
+}
+
+function isTenantForgotPasswordPath(pathname: string) {
+  return /^\/forgot-password\/[^/]+$/.test(pathname);
 }
 
 function isAdminOnlyPage(pathname: string) {
@@ -182,9 +187,14 @@ export async function middleware(request: NextRequest) {
   const { data: claimsResult } = await supabase.auth.getClaims();
   const userId = claimsResult?.claims?.sub ?? null;
 
-  // Login endpoints must remain reachable even when an older session is still
-  // present, because tenant-bound sign-in may need to replace that session.
-  if (pathname === "/login" || isTenantLoginPath(pathname)) {
+  // Tenant login and password-reset request pages must remain reachable even
+  // with an older session present. Recovery completion itself is handled by
+  // /auth/callback, then the reset-password page is protected normally.
+  if (
+    pathname === "/login" ||
+    isTenantLoginPath(pathname) ||
+    isTenantForgotPasswordPath(pathname)
+  ) {
     return response;
   }
 

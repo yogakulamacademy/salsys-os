@@ -1,4 +1,6 @@
+import Link from 'next/link';
 import { Building2, LockKeyhole, Sparkles } from 'lucide-react';
+
 import { signInAction } from '@/app/actions/auth';
 import { useMockData } from '@/lib/config';
 
@@ -20,6 +22,9 @@ export default async function TenantLoginPage({
   const [{ organizationSlug }, query] = await Promise.all([params, searchParams]);
   const normalizedSlug = decodeURIComponent(organizationSlug).trim().toLowerCase();
   const organizationName = displayOrganizationName(normalizedSlug) || 'Organization';
+  const passwordRecoveryAvailable =
+    process.env.NODE_ENV !== 'production' ||
+    Boolean(process.env.SALSYSOS_APP_URL?.trim());
 
   return (
     <div className="grid min-h-screen place-items-center px-4 py-10">
@@ -96,9 +101,19 @@ export default async function TenantLoginPage({
           </label>
 
           <label className="block">
-            <span className="mb-1.5 block text-sm font-semibold text-slate-700">
-              Password
-            </span>
+            <div className="mb-1.5 flex items-center justify-between gap-3">
+              <span className="block text-sm font-semibold text-slate-700">
+                Password
+              </span>
+              {passwordRecoveryAvailable && (
+                <Link
+                  className="text-xs font-semibold text-brand hover:underline"
+                  href={`/forgot-password/${encodeURIComponent(normalizedSlug)}`}
+                >
+                  Forgot password?
+                </Link>
+              )}
+            </div>
             <input
               className="input"
               name="password"
