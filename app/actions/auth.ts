@@ -101,14 +101,23 @@ export async function signInAction(formData: FormData) {
     redirect(authUrl(loginPath, 'error', 'Invalid email or password'));
   }
 
-  const { data: organization, error: organizationError } = await supabase
-    .from('organizations')
-    .select('id,slug,status')
-    .eq('slug', organizationSlug)
-    .eq('status', 'active')
-    .maybeSingle();
+  // Bind the new Supabase Auth session to the tenant identified by the login
+  // route. The database validates the slug, active organization and active
+  // membership before returning the trusted organization ID.
+  const {
+    data: boundOrganizationId,
+    error: tenantBindingError,
+  } = await supabase.rpc(
+    'bind_current_tenant_session_by_slug',
+    {
+      p_organization_slug: organizationSlug,
+    },
+  );
 
-  if (organizationError || !organization?.id) {
+  if (
+    tenantBindingError ||
+    !boundOrganizationId
+  ) {
     await supabase.auth.signOut();
     redirect(
       authUrl(
@@ -119,45 +128,8 @@ export async function signInAction(formData: FormData) {
     );
   }
 
-  const { data: membership, error: membershipError } = await supabase
-    .from('organization_members')
-    .select('organization_id,role,active')
-    .eq('organization_id', organization.id)
-    .eq('user_id', signInData.user.id)
-    .eq('active', true)
-    .maybeSingle();
-
-  if (membershipError || !membership) {
-    await supabase.auth.signOut();
-    redirect(
-      authUrl(
-        loginPath,
-        'error',
-        'Your account is not authorized for this organization.',
-      ),
-    );
-  }
-
-  const { error: tenantBindingError } = await supabase.rpc(
-    'bind_current_tenant_session',
-    {
-      p_organization_id: organization.id,
-    },
-  );
-
-  if (tenantBindingError) {
-    await supabase.auth.signOut();
-    redirect(
-      authUrl(
-        loginPath,
-        'error',
-        'Unable to establish a secure tenant session. Please sign in again.',
-      ),
-    );
-  }
-
   const cookieStore = await cookies();
-  cookieStore.set(ACTIVE_ORGANIZATION_COOKIE, organization.id, {
+  cookieStore.set(ACTIVE_ORGANIZATION_COOKIE, String(boundOrganizationId), {
     httpOnly: true,
     sameSite: 'lax',
     secure: process.env.NODE_ENV === 'production',
