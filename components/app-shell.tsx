@@ -8,7 +8,6 @@ import {
   Bell,
   BookOpen,
   Boxes,
-  Building2,
   ChevronDown,
   CircleDollarSign,
   ClipboardCheck,
@@ -182,12 +181,6 @@ const workspaceNavGroups: Record<string, NavGroup[]> = {
           href: "/settings/team",
           label: "Team & Access",
           icon: ShieldCheck,
-        },
-        {
-          href: "/workspace",
-          label: "Organizations",
-          icon: Building2,
-          organizationAdminOnly: true,
         },
       ],
     },
@@ -801,13 +794,6 @@ export function AppShell({ children }: { children: ReactNode }) {
                   <Link href="/settings/team" className="topbar-account-row">
                     <UsersRound size={17} />
                     <span>Team &amp; access</span>
-                  </Link>
-                )}
-
-                {admin && workspace?.memberships && workspace.memberships.length > 1 && (
-                  <Link href="/workspace" className="topbar-account-row">
-                    <Building2 size={17} />
-                    <span>Organizations</span>
                   </Link>
                 )}
 
