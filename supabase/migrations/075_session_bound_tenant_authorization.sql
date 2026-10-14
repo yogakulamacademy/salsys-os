@@ -1,9 +1,45 @@
 begin;
 
--- W5D Tenant Isolation: make the central organization/workspace authorization
--- helpers session-bound. A signed-in user can authorize only the organization
--- attached to the current JWT session_id. Users with exactly one active tenant
--- retain a safe migration fallback until their session is lazily bound.
+-- W5D Tenant Isolation: install session-aware authorization helpers behind a
+-- controlled rollout flag. While enforcement=false the helpers preserve the
+-- existing membership behavior, so production can receive this migration before
+-- the tenant-bound application cutover. A later cutover migration flips the flag
+-- only after tenant-specific login/session binding is live.
+
+create table if not exists public.tenant_security_config (
+  singleton boolean primary key default true check (singleton = true),
+  enforce_session_tenant boolean not null default false,
+  updated_at timestamptz not null default now()
+);
+
+insert into public.tenant_security_config (
+  singleton,
+  enforce_session_tenant
+)
+values (true, false)
+on conflict (singleton) do nothing;
+
+alter table public.tenant_security_config enable row level security;
+revoke all on table public.tenant_security_config from public, anon, authenticated;
+grant all on table public.tenant_security_config to service_role;
+
+create or replace function public.tenant_session_enforcement_enabled()
+returns boolean
+language sql
+stable
+security definer
+set search_path = public, auth, pg_temp
+as $function$
+  select coalesce(
+    (
+      select c.enforce_session_tenant
+      from public.tenant_security_config c
+      where c.singleton = true
+      limit 1
+    ),
+    false
+  );
+$function$;
 
 create or replace function public.current_tenant_organization_id()
 returns uuid
@@ -64,13 +100,16 @@ as $function$
   select
     auth.role() = 'service_role'
     or (
-      public.session_is_bound_to_organization(p_organization_id)
-      and exists (
+      exists (
         select 1
         from public.organization_members om
         where om.organization_id = p_organization_id
           and om.user_id = auth.uid()
           and om.active = true
+      )
+      and (
+        not public.tenant_session_enforcement_enabled()
+        or public.session_is_bound_to_organization(p_organization_id)
       )
     );
 $function$;
@@ -88,14 +127,17 @@ as $function$
   select
     auth.role() = 'service_role'
     or (
-      public.session_is_bound_to_organization(p_organization_id)
-      and exists (
+      exists (
         select 1
         from public.organization_members om
         where om.organization_id = p_organization_id
           and om.user_id = auth.uid()
           and om.active = true
           and om.role = any(p_roles)
+      )
+      and (
+        not public.tenant_session_enforcement_enabled()
+        or public.session_is_bound_to_organization(p_organization_id)
       )
     );
 $function$;
@@ -111,7 +153,10 @@ set search_path = public, auth, pg_temp
 as $function$
   select case
     when auth.role() = 'service_role' then 'service_role'::text
-    when public.session_is_bound_to_organization(p_organization_id) then (
+    when public.tenant_session_enforcement_enabled()
+         and not public.session_is_bound_to_organization(p_organization_id)
+      then null::text
+    else (
       select om.role
       from public.organization_members om
       where om.organization_id = p_organization_id
@@ -119,7 +164,6 @@ as $function$
         and om.active = true
       limit 1
     )
-    else null::text
   end;
 $function$;
 
@@ -151,7 +195,10 @@ as $function$
   select
     auth.role() = 'service_role'
     or (
-      public.session_is_bound_to_organization(p_organization_id)
+      (
+        not public.tenant_session_enforcement_enabled()
+        or public.session_is_bound_to_organization(p_organization_id)
+      )
       and exists (
         select 1
         from public.organization_workspaces ow
@@ -183,6 +230,8 @@ as $function$
     );
 $function$;
 
+revoke all on function public.tenant_session_enforcement_enabled()
+  from public, anon;
 revoke all on function public.current_tenant_organization_id()
   from public, anon;
 revoke all on function public.session_is_bound_to_organization(uuid)
@@ -198,6 +247,8 @@ revoke all on function public.can_manage_organization(uuid)
 revoke all on function public.has_workspace_access(uuid, text)
   from public, anon;
 
+grant execute on function public.tenant_session_enforcement_enabled()
+  to authenticated, service_role;
 grant execute on function public.current_tenant_organization_id()
   to authenticated, service_role;
 grant execute on function public.session_is_bound_to_organization(uuid)
