@@ -8,10 +8,25 @@ import { createClient } from '@/lib/supabase/server';
 import { ACTIVE_ORGANIZATION_COOKIE } from '@/lib/workspace';
 
 const PASSWORD_RECOVERY_COOKIE = 'salsys-password-recovery';
+const ORGANIZATION_COOKIE_MAX_AGE_SECONDS = 60 * 60 * 24 * 30;
 
 function authUrl(path: string, key: 'notice' | 'error', message: string) {
   const params = new URLSearchParams({ [key]: message });
   return `${path}?${params.toString()}`;
+}
+
+function tenantLoginUrl(
+  organizationSlug: string,
+  key?: 'notice' | 'error',
+  message?: string,
+) {
+  const path = `/login/${encodeURIComponent(organizationSlug)}`;
+
+  if (!key || !message) {
+    return path;
+  }
+
+  return authUrl(path, key, message);
 }
 
 function passwordResetRedirectUrl() {
@@ -47,6 +62,9 @@ export async function signInAction(formData: FormData) {
 
   const email = String(formData.get('email') ?? '').trim();
   const password = String(formData.get('password') ?? '');
+  const organizationSlug = String(formData.get('organization_slug') ?? '')
+    .trim()
+    .toLowerCase();
   const requestedNext = String(formData.get('next') ?? '/dashboard').trim();
 
   const safeRequestedNext =
@@ -57,18 +75,79 @@ export async function signInAction(formData: FormData) {
 
   const next = safeRequestedNext ? requestedNext : '/dashboard';
 
+  if (!organizationSlug) {
+    redirect(
+      authUrl(
+        '/login',
+        'error',
+        'Use your organization-specific SalsysOS login link.',
+      ),
+    );
+  }
+
+  const loginPath = tenantLoginUrl(organizationSlug);
+
   if (!email || !password) {
-    redirect('/login?error=Enter%20your%20email%20and%20password');
+    redirect(authUrl(loginPath, 'error', 'Enter your email and password'));
   }
 
   const supabase = await createClient();
-  const { error } = await supabase.auth.signInWithPassword({ email, password });
+  const { data: signInData, error } = await supabase.auth.signInWithPassword({
+    email,
+    password,
+  });
 
-  if (error) {
-    redirect('/login?error=Invalid%20email%20or%20password');
+  if (error || !signInData.user) {
+    redirect(authUrl(loginPath, 'error', 'Invalid email or password'));
   }
 
-  redirect(`/workspace?next=${encodeURIComponent(next)}`);
+  const { data: organization, error: organizationError } = await supabase
+    .from('organizations')
+    .select('id,slug,status')
+    .eq('slug', organizationSlug)
+    .eq('status', 'active')
+    .maybeSingle();
+
+  if (organizationError || !organization?.id) {
+    await supabase.auth.signOut();
+    redirect(
+      authUrl(
+        loginPath,
+        'error',
+        'This organization is unavailable or your account does not have access.',
+      ),
+    );
+  }
+
+  const { data: membership, error: membershipError } = await supabase
+    .from('organization_members')
+    .select('organization_id,role,active')
+    .eq('organization_id', organization.id)
+    .eq('user_id', signInData.user.id)
+    .eq('active', true)
+    .maybeSingle();
+
+  if (membershipError || !membership) {
+    await supabase.auth.signOut();
+    redirect(
+      authUrl(
+        loginPath,
+        'error',
+        'Your account is not authorized for this organization.',
+      ),
+    );
+  }
+
+  const cookieStore = await cookies();
+  cookieStore.set(ACTIVE_ORGANIZATION_COOKIE, organization.id, {
+    httpOnly: true,
+    sameSite: 'lax',
+    secure: process.env.NODE_ENV === 'production',
+    path: '/',
+    maxAge: ORGANIZATION_COOKIE_MAX_AGE_SECONDS,
+  });
+
+  redirect(next);
 }
 
 export async function requestPasswordResetAction(formData: FormData) {
@@ -193,7 +272,7 @@ export async function updatePasswordAction(formData: FormData) {
     authUrl(
       '/login',
       'notice',
-      'Password updated. Sign in with your new password.',
+      'Password updated. Open your organization login link and sign in with your new password.',
     ),
   );
 }
