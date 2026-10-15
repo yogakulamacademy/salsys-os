@@ -220,6 +220,86 @@ type ContentIntelligenceRpcPayload = {
   internal_links?: InternalLinkOpportunityRow[];
 };
 
+
+export type SeoRevenueOverview = {
+  range_start: string | null;
+  range_end: string | null;
+  organic_clicks: number | string | null;
+  organic_impressions: number | string | null;
+  organic_leads: number | string | null;
+  organic_qualified_leads: number | string | null;
+  organic_enrolled_leads: number | string | null;
+  organic_revenue_inr: number | string | null;
+  organic_revenue_usd: number | string | null;
+};
+
+export type SeoRevenueSummary = {
+  pages_with_leads: number | string | null;
+  pages_with_qualified_leads: number | string | null;
+  pages_with_enrollments: number | string | null;
+  pages_with_revenue: number | string | null;
+  mapped_organic_leads: number | string | null;
+  unmapped_organic_leads: number | string | null;
+  landing_page_attribution_coverage: number | string | null;
+  high_traffic_without_leads: number | string | null;
+  commercial_signal_pages: number | string | null;
+};
+
+export type SeoRevenueValuePageRow = {
+  page_id: string;
+  site_id: string;
+  normalized_url: string;
+  url_path: string;
+  title: string | null;
+  page_type: string;
+  is_indexable: boolean | null;
+  gsc_clicks: number | string | null;
+  gsc_impressions: number | string | null;
+  gsc_ctr: number | string | null;
+  gsc_avg_position: number | string | null;
+  organic_leads: number | string | null;
+  organic_qualified_leads: number | string | null;
+  organic_enrolled_leads: number | string | null;
+  revenue_leads: number | string | null;
+  organic_revenue_inr: number | string | null;
+  organic_revenue_usd: number | string | null;
+  click_to_lead_rate_directional: number | string | null;
+  lead_to_qualified_rate: number | string | null;
+  lead_to_enrolled_rate: number | string | null;
+  business_value_signal: string;
+  revenue_priority_score_v1: number | string | null;
+  recommended_action: string;
+  recommendation: string;
+  content_recommended_action: string;
+  content_priority_score: number | string | null;
+};
+
+export type SeoRevenueTrafficGapRow = {
+  page_id: string;
+  site_id: string;
+  normalized_url: string;
+  url_path: string;
+  title: string | null;
+  gsc_clicks: number | string | null;
+  gsc_impressions: number | string | null;
+  gsc_ctr: number | string | null;
+  gsc_avg_position: number | string | null;
+  business_value_signal: string;
+  revenue_priority_score_v1: number | string | null;
+  recommended_action: string;
+  recommendation: string;
+  content_recommended_action: string;
+  content_priority_score: number | string | null;
+};
+
+type SeoRevenueRpcPayload = {
+  overview?: Partial<SeoRevenueOverview>;
+  summary?: Partial<SeoRevenueSummary>;
+  value_pages?: SeoRevenueValuePageRow[];
+  traffic_gaps?: SeoRevenueTrafficGapRow[];
+  priority_actions?: SeoRevenueValuePageRow[];
+};
+
 export type SyncHealthRow = {
   latest_gsc_date: string | null;
   latest_data_update: string | null;
@@ -261,6 +341,12 @@ export type SeoWorkspace = {
   contentGaps: ContentGapRow[];
   internalLinkOpportunities: InternalLinkOpportunityRow[];
   contentWarning: string | null;
+  revenueOverview: Partial<SeoRevenueOverview>;
+  revenueSummary: Partial<SeoRevenueSummary>;
+  revenueValuePages: SeoRevenueValuePageRow[];
+  revenueTrafficGaps: SeoRevenueTrafficGapRow[];
+  revenuePriorityActions: SeoRevenueValuePageRow[];
+  revenueWarning: string | null;
   health: Partial<SyncHealthRow>;
   syncRuns: SyncRunRow[];
   fallback: boolean;
@@ -305,6 +391,12 @@ export async function getSeoWorkspace(): Promise<SeoWorkspace> {
       contentGaps: [],
       internalLinkOpportunities: [],
       contentWarning: null,
+      revenueOverview: {},
+      revenueSummary: {},
+      revenueValuePages: [],
+      revenueTrafficGaps: [],
+      revenuePriorityActions: [],
+      revenueWarning: null,
       health: {},
       syncRuns: [],
       fallback: false,
@@ -312,11 +404,14 @@ export async function getSeoWorkspace(): Promise<SeoWorkspace> {
     };
   }
 
-  const [v2Result, contentResult] = await Promise.all([
+  const [v2Result, contentResult, revenueResult] = await Promise.all([
     supabase.rpc("get_seo_workspace_v2", {
       p_organization_id: visibility.organizationId,
     }),
     supabase.rpc("get_seo_content_intelligence", {
+      p_organization_id: visibility.organizationId,
+    }),
+    supabase.rpc("get_seo_revenue_intelligence", {
       p_organization_id: visibility.organizationId,
     }),
   ]);
@@ -328,6 +423,13 @@ export async function getSeoWorkspace(): Promise<SeoWorkspace> {
       : null,
   );
 
+  const revenuePayload = revenueWorkspaceFromPayload(
+    (revenueResult.data ?? {}) as SeoRevenueRpcPayload,
+    revenueResult.error
+      ? `Revenue-aware organic intelligence is unavailable: ${revenueResult.error.message}`
+      : null,
+  );
+
   if (!v2Result.error) {
     return {
       ...workspaceFromPayload(
@@ -336,6 +438,7 @@ export async function getSeoWorkspace(): Promise<SeoWorkspace> {
         null,
       ),
       ...contentPayload,
+      ...revenuePayload,
     };
   }
 
@@ -351,6 +454,7 @@ export async function getSeoWorkspace(): Promise<SeoWorkspace> {
         `Keyword + SERP intelligence is unavailable: ${v2Result.error.message}`,
       ),
       ...contentPayload,
+      ...revenuePayload,
     };
   }
 
@@ -366,6 +470,7 @@ export async function getSeoWorkspace(): Promise<SeoWorkspace> {
     keywordIntelligence: [],
     keywordSummary: {},
     ...contentPayload,
+    ...revenuePayload,
     health: {},
     syncRuns: [],
     fallback: false,
@@ -411,6 +516,13 @@ function workspaceFromPayload(
     internalLinkOpportunities: [],
     contentWarning: null,
 
+    revenueOverview: {},
+    revenueSummary: {},
+    revenueValuePages: [],
+    revenueTrafficGaps: [],
+    revenuePriorityActions: [],
+    revenueWarning: null,
+
     health: payload.health ?? {},
 
     syncRuns: Array.isArray(payload.sync_runs) ? payload.sync_runs : [],
@@ -447,5 +559,34 @@ function contentWorkspaceFromPayload(
       : [],
 
     contentWarning,
+  };
+}
+
+
+function revenueWorkspaceFromPayload(
+  payload: SeoRevenueRpcPayload,
+  revenueWarning: string | null,
+): Pick<
+  SeoWorkspace,
+  | "revenueOverview"
+  | "revenueSummary"
+  | "revenueValuePages"
+  | "revenueTrafficGaps"
+  | "revenuePriorityActions"
+  | "revenueWarning"
+> {
+  return {
+    revenueOverview: payload.overview ?? {},
+    revenueSummary: payload.summary ?? {},
+    revenueValuePages: Array.isArray(payload.value_pages)
+      ? payload.value_pages
+      : [],
+    revenueTrafficGaps: Array.isArray(payload.traffic_gaps)
+      ? payload.traffic_gaps
+      : [],
+    revenuePriorityActions: Array.isArray(payload.priority_actions)
+      ? payload.priority_actions
+      : [],
+    revenueWarning,
   };
 }

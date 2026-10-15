@@ -213,6 +213,16 @@ export default async function SeoPage() {
 
     contentWarning,
 
+    revenueOverview,
+
+    revenueSummary,
+
+    revenueValuePages,
+
+    revenueTrafficGaps,
+
+    revenueWarning,
+
     health,
 
     syncRuns,
@@ -525,6 +535,225 @@ export default async function SeoPage() {
           with an organic medium. Search Console clicks and CRM leads are
           different measurement systems, so the click-to-lead rate is
           directional rather than an exact identity match.
+        </div>
+      </section>
+
+      {/* ===================================================
+
+          REVENUE-AWARE ORGANIC INTELLIGENCE
+
+      =================================================== */}
+
+      <section className="seo-table-card card-pad mt-4">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+          <div>
+            <div className="eyebrow">Revenue-aware organic intelligence</div>
+
+            <div className="section-title mt-1">Which organic pages create business value?</div>
+
+            <p className="mt-2 max-w-3xl text-xs leading-5 text-slate-500">
+              First-touch Google organic leads are mapped back to captured landing
+              pages, then compared with Search Console visibility and paid revenue.
+              INR and USD remain separate; no FX conversion or modeled revenue is
+              introduced.
+            </p>
+          </div>
+
+          <CircleDollarSign size={20} className="shrink-0 text-slate-400" />
+        </div>
+
+        {revenueWarning && (
+          <div className="mt-4 rounded-xl border border-amber-100 bg-amber-50 px-4 py-3 text-xs font-medium leading-5 text-amber-700">
+            {revenueWarning}
+          </div>
+        )}
+
+        <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          <KeywordSummaryCard
+            label="Organic leads"
+            value={formatNumber(revenueOverview.organic_leads)}
+            sub={`${formatNumber(revenueSummary.pages_with_leads)} landing pages produced leads`}
+            tone="emerald"
+          />
+
+          <KeywordSummaryCard
+            label="Landing-page coverage"
+            value={formatHundredPercent(revenueSummary.landing_page_attribution_coverage)}
+            sub={`${formatNumber(revenueSummary.mapped_organic_leads)} of ${formatNumber(revenueOverview.organic_leads)} organic leads mapped`}
+          />
+
+          <KeywordSummaryCard
+            label="High-traffic gaps"
+            value={formatNumber(revenueSummary.high_traffic_without_leads)}
+            sub="10+ organic clicks with no observed first-touch lead"
+            tone="amber"
+          />
+
+          <KeywordSummaryCard
+            label="Observed organic revenue"
+            value={`${formatMoney(revenueOverview.organic_revenue_inr, "INR")} · ${formatMoney(
+              revenueOverview.organic_revenue_usd,
+              "USD",
+            )}`}
+            sub={`${formatNumber(revenueSummary.pages_with_revenue)} landing pages with paid revenue`}
+          />
+        </div>
+
+        <div className="mt-4 rounded-xl border border-slate-100 bg-slate-50 px-4 py-3 text-xs leading-5 text-slate-500">
+          <span className="font-semibold text-slate-600">Current evidence:</span>{" "}
+          {formatNumber(revenueOverview.organic_qualified_leads)} qualified ·{" "}
+          {formatNumber(revenueOverview.organic_enrolled_leads)} enrolled ·{" "}
+          {formatNumber(revenueSummary.pages_with_revenue)} revenue-producing landing
+          pages in the latest finalized 30-day window. Zero is treated as observed
+          absence, not estimated missing revenue.
+        </div>
+
+        <div className="mt-6">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+            <div>
+              <div className="text-xs font-semibold uppercase tracking-wide text-slate-400">
+                Organic value pages
+              </div>
+
+              <div className="mt-1 text-sm font-semibold text-slate-800">
+                Pages that have already produced first-touch organic leads
+              </div>
+            </div>
+
+            <div className="text-xs text-slate-400">
+              Ranked by observed business value + search upside
+            </div>
+          </div>
+
+          {revenueValuePages.length === 0 ? (
+            <div className="mt-4 rounded-xl border border-dashed border-slate-200 px-5 py-8 text-center text-sm text-slate-400">
+              No landing-page-level organic business signals are available yet.
+            </div>
+          ) : (
+            <div className="mt-4 space-y-3">
+              {revenueValuePages.slice(0, 8).map((row) => (
+                <article
+                  key={row.page_id}
+                  className="rounded-xl border border-slate-100 bg-slate-50 p-4"
+                >
+                  <div className="flex flex-col gap-3 xl:flex-row xl:items-start xl:justify-between">
+                    <div className="min-w-0">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <RevenueSignalBadge type={row.business_value_signal} />
+
+                        <span className="text-xs text-slate-400">
+                          priority {formatNumber(row.revenue_priority_score_v1)}
+                        </span>
+
+                        <span className="text-xs text-slate-400">
+                          {pretty(row.recommended_action)}
+                        </span>
+                      </div>
+
+                      <div className="mt-2 truncate text-sm font-semibold text-slate-800">
+                        {row.title || shortPage(row.normalized_url)}
+                      </div>
+
+                      <div
+                        className="mt-1 truncate text-xs text-slate-400"
+                        title={row.normalized_url}
+                      >
+                        {shortPage(row.normalized_url)}
+                      </div>
+                    </div>
+
+                    <div className="grid shrink-0 grid-cols-4 gap-5 text-right">
+                      <MiniStat label="Clicks" value={formatNumber(row.gsc_clicks)} />
+                      <MiniStat label="Leads" value={formatNumber(row.organic_leads)} />
+                      <MiniStat
+                        label="Position"
+                        value={formatDecimal(row.gsc_avg_position, 1)}
+                      />
+                      <MiniStat
+                        label="Lead rate"
+                        value={formatHundredPercent(row.click_to_lead_rate_directional)}
+                      />
+                    </div>
+                  </div>
+
+                  <div className="mt-3 text-xs leading-5 text-slate-500">
+                    {row.recommendation}
+                  </div>
+                </article>
+              ))}
+            </div>
+          )}
+        </div>
+
+        <div className="mt-7 border-t border-slate-100 pt-6">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+            <div>
+              <div className="text-xs font-semibold uppercase tracking-wide text-slate-400">
+                Traffic without observed leads
+              </div>
+
+              <div className="mt-1 text-sm font-semibold text-slate-800">
+                Search visibility that is not yet translating into first-touch leads
+              </div>
+            </div>
+
+            <div className="text-xs text-slate-400">
+              Review intent and conversion path before chasing more traffic
+            </div>
+          </div>
+
+          {revenueTrafficGaps.length === 0 ? (
+            <div className="mt-4 rounded-xl border border-dashed border-slate-200 px-5 py-8 text-center text-sm text-slate-400">
+              No high-traffic organic conversion gaps are observed.
+            </div>
+          ) : (
+            <div className="seo-table-wrap mt-4 overflow-x-auto">
+              <table className="seo-data-table min-w-full text-left text-sm">
+                <thead>
+                  <tr className="border-b border-slate-100 text-xs uppercase tracking-wide text-slate-400">
+                    <th className="px-3 py-3">Page</th>
+                    <th className="px-3 py-3 text-right">Clicks</th>
+                    <th className="px-3 py-3 text-right">Impressions</th>
+                    <th className="px-3 py-3 text-right">Position</th>
+                    <th className="px-3 py-3">Recommended action</th>
+                  </tr>
+                </thead>
+
+                <tbody>
+                  {revenueTrafficGaps.slice(0, 10).map((row) => (
+                    <tr
+                      key={row.page_id}
+                      className="border-b border-slate-50 last:border-0"
+                    >
+                      <td className="max-w-[520px] px-3 py-3">
+                        <div className="truncate font-semibold text-slate-800">
+                          {row.title || shortPage(row.normalized_url)}
+                        </div>
+                        <div
+                          className="mt-1 truncate text-xs text-slate-400"
+                          title={row.normalized_url}
+                        >
+                          {shortPage(row.normalized_url)}
+                        </div>
+                      </td>
+                      <td className="px-3 py-3 text-right font-semibold text-slate-700">
+                        {formatNumber(row.gsc_clicks)}
+                      </td>
+                      <td className="px-3 py-3 text-right text-slate-600">
+                        {formatNumber(row.gsc_impressions)}
+                      </td>
+                      <td className="px-3 py-3 text-right text-slate-600">
+                        {formatDecimal(row.gsc_avg_position, 1)}
+                      </td>
+                      <td className="px-3 py-3 text-xs text-slate-500">
+                        {row.recommendation}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
         </div>
       </section>
 
@@ -1974,6 +2203,38 @@ function KeywordSignalBadge({ type }: { type: string }) {
   return (
     <span
       className={`inline-flex rounded-full px-2.5 py-1 text-[11px] font-semibold ring-1 ring-inset ${className}`}
+    >
+      {label}
+    </span>
+  );
+}
+
+function RevenueSignalBadge({ type }: { type: string }) {
+  const normalized = String(type || "");
+
+  const label =
+    normalized === "revenue_proven"
+      ? "Revenue proven"
+      : normalized === "enrollment_proven"
+        ? "Enrollment proven"
+        : normalized === "qualified_demand"
+          ? "Qualified demand"
+          : normalized === "lead_demand"
+            ? "Lead demand"
+            : normalized === "traffic_without_leads"
+              ? "Traffic gap"
+              : pretty(normalized);
+
+  const classes =
+    normalized === "revenue_proven" || normalized === "enrollment_proven"
+      ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+      : normalized === "qualified_demand" || normalized === "lead_demand"
+        ? "border-sky-200 bg-sky-50 text-sky-700"
+        : "border-amber-200 bg-amber-50 text-amber-700";
+
+  return (
+    <span
+      className={`inline-flex rounded-full border px-2.5 py-1 text-[11px] font-medium ${classes}`}
     >
       {label}
     </span>
