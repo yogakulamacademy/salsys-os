@@ -37,6 +37,13 @@ import {
 } from '@/lib/integrations/google-assets';
 
 import {
+  getMetaAccessTokenForOrganizationConnection,
+} from '@/lib/integrations/meta-connection';
+
+import {
+  discoverMetaAdAccounts,
+} from '@/lib/integrations/meta-assets';
+import {
   reconnectWhatsAppForOrganization,
   reauthorizeWhatsAppForOrganization,
 } from '@/lib/integrations/whatsapp-connect';
@@ -1192,6 +1199,623 @@ export async function selectGoogleAssetAction(
     integrationsUrl(
       'notice',
       'Google asset selected.',
+    ),
+  );
+}
+
+export async function discoverMetaAssetsAction(
+  formData: FormData,
+) {
+  const {
+    user,
+    organizationId:
+      activeOrganizationId,
+  } =
+    await requireActiveUser();
+
+  const connectionId =
+    textValue(
+      formData,
+      'connection_id',
+    );
+
+  if (!connectionId) {
+    redirect(
+      integrationsUrl(
+        'error',
+        'Meta connection is missing.',
+      ),
+    );
+  }
+
+  const {
+    admin,
+    connection,
+    error:
+      managedError,
+  } =
+    await getManagedConnection({
+      userId:
+        user.id,
+      activeOrganizationId,
+      connectionId,
+      provider:
+        'meta',
+      requireConnected:
+        true,
+    });
+
+  if (
+    managedError ||
+    !connection
+  ) {
+    redirect(
+      integrationsUrl(
+        'error',
+        managedError ??
+          'Active Meta connection not found.',
+      ),
+    );
+  }
+
+  const organizationId =
+    connection.organization_id;
+
+  let successMessage:
+    | string
+    | null =
+    null;
+
+  let failureMessage:
+    | string
+    | null =
+    null;
+
+  try {
+    const accessToken =
+      await getMetaAccessTokenForOrganizationConnection(
+        connectionId,
+        organizationId,
+      );
+
+    const discovery =
+      await discoverMetaAdAccounts(
+        accessToken,
+      );
+
+    if (
+      discovery.assets.length ===
+      0
+    ) {
+      throw new Error(
+        'No accessible Meta ad accounts were found. Assign an ad account to this Meta system user/business integration, ensure Ads read permission is granted, then reconnect and try again.',
+      );
+    }
+
+    const {
+      data:
+        existingRows,
+      error:
+        existingReadError,
+    } =
+      await admin
+        .from(
+          'integration_assets',
+        )
+        .select(
+          'id, external_id, is_selected',
+        )
+        .eq(
+          'organization_id',
+          organizationId,
+        )
+        .eq(
+          'connection_id',
+          connectionId,
+        )
+        .eq(
+          'asset_type',
+          'meta_ad_account',
+        );
+
+    if (existingReadError) {
+      throw new Error(
+        existingReadError.message,
+      );
+    }
+
+    const previousSelected =
+      existingRows?.find(
+        (row) =>
+          row.is_selected,
+      )?.external_id ??
+      null;
+
+    const discoveredIds =
+      new Set(
+        discovery.assets.map(
+          (asset) =>
+            asset.external_id,
+        ),
+      );
+
+    const selectedExternalId =
+      discovery.assets.length ===
+      1
+        ? discovery.assets[0]
+            .external_id
+        : previousSelected &&
+            discoveredIds.has(
+              previousSelected,
+            )
+          ? previousSelected
+          : null;
+
+    const now =
+      new Date().toISOString();
+
+    const rows =
+      discovery.assets.map(
+        (asset) => ({
+          organization_id:
+            organizationId,
+          connection_id:
+            connectionId,
+          asset_type:
+            asset.asset_type,
+          external_id:
+            asset.external_id,
+          name:
+            asset.name,
+          status:
+            selectedExternalId ===
+            asset.external_id
+              ? 'selected'
+              : 'available',
+          is_selected:
+            selectedExternalId ===
+            asset.external_id,
+          metadata:
+            asset.metadata,
+          discovered_at:
+            now,
+          updated_at:
+            now,
+        }),
+      );
+
+    const {
+      error:
+        upsertError,
+    } =
+      await admin
+        .from(
+          'integration_assets',
+        )
+        .upsert(
+          rows,
+          {
+            onConflict:
+              'connection_id,asset_type,external_id',
+          },
+        );
+
+    if (upsertError) {
+      throw new Error(
+        upsertError.message,
+      );
+    }
+
+    const staleIds =
+      (existingRows ?? [])
+        .filter(
+          (row) =>
+            !discoveredIds.has(
+              row.external_id,
+            ),
+        )
+        .map(
+          (row) =>
+            row.id,
+        );
+
+    if (staleIds.length) {
+      const {
+        error:
+          staleUpdateError,
+      } =
+        await admin
+          .from(
+            'integration_assets',
+          )
+          .update({
+            is_selected:
+              false,
+            status:
+              'unavailable',
+            updated_at:
+              now,
+          })
+          .eq(
+            'organization_id',
+            organizationId,
+          )
+          .eq(
+            'connection_id',
+            connectionId,
+          )
+          .eq(
+            'asset_type',
+            'meta_ad_account',
+          )
+          .in(
+            'id',
+            staleIds,
+          );
+
+      if (staleUpdateError) {
+        throw new Error(
+          staleUpdateError.message,
+        );
+      }
+    }
+
+    const {
+      error:
+        connectionUpdateError,
+    } =
+      await admin
+        .from(
+          'integration_connections',
+        )
+        .update({
+          last_verified_at:
+            now,
+          last_error:
+            null,
+        })
+        .eq(
+          'id',
+          connectionId,
+        )
+        .eq(
+          'organization_id',
+          organizationId,
+        );
+
+    if (
+      connectionUpdateError
+    ) {
+      throw new Error(
+        connectionUpdateError.message,
+      );
+    }
+
+    await admin
+      .from(
+        'integration_audit_log',
+      )
+      .insert({
+        organization_id:
+          organizationId,
+        connection_id:
+          connectionId,
+        provider:
+          'meta',
+        event_type:
+          'assets_discovered',
+        actor_user_id:
+          user.id,
+        detail: {
+          discovered_count:
+            discovery.assets.length,
+          selected_external_id:
+            selectedExternalId,
+          auto_selected:
+            discovery.assets.length ===
+            1,
+          granted_scopes:
+            discovery.scopes,
+        },
+      });
+
+    successMessage =
+      discovery.assets.length ===
+      1
+        ? 'Discovered 1 Meta ad account and selected it automatically.'
+        : selectedExternalId
+          ? `Discovered ${discovery.assets.length} Meta ad accounts and preserved the current selection.`
+          : `Discovered ${discovery.assets.length} Meta ad accounts. Choose the account this workspace should use.`;
+  } catch (error) {
+    failureMessage =
+      error instanceof Error
+        ? error.message
+        : 'Meta asset discovery failed.';
+
+    await admin
+      .from(
+        'integration_connections',
+      )
+      .update({
+        last_error:
+          failureMessage.slice(
+            0,
+            1000,
+          ),
+      })
+      .eq(
+        'id',
+        connectionId,
+      )
+      .eq(
+        'organization_id',
+        organizationId,
+      );
+  }
+
+  revalidatePath(
+    '/settings/integrations',
+  );
+
+  if (failureMessage) {
+    redirect(
+      integrationsUrl(
+        'error',
+        failureMessage,
+      ),
+    );
+  }
+
+  redirect(
+    integrationsUrl(
+      'notice',
+      successMessage ??
+        'Meta asset discovery completed.',
+    ),
+  );
+}
+
+
+export async function selectMetaAssetAction(
+  formData: FormData,
+) {
+  const {
+    user,
+    organizationId:
+      activeOrganizationId,
+  } =
+    await requireActiveUser();
+
+  const connectionId =
+    textValue(
+      formData,
+      'connection_id',
+    );
+
+  const assetId =
+    textValue(
+      formData,
+      'asset_id',
+    );
+
+  if (
+    !connectionId ||
+    !assetId
+  ) {
+    redirect(
+      integrationsUrl(
+        'error',
+        'Meta asset selection is incomplete.',
+      ),
+    );
+  }
+
+  const {
+    admin,
+    connection,
+    error:
+      managedError,
+  } =
+    await getManagedConnection({
+      userId:
+        user.id,
+      activeOrganizationId,
+      connectionId,
+      provider:
+        'meta',
+      requireConnected:
+        true,
+    });
+
+  if (
+    managedError ||
+    !connection
+  ) {
+    redirect(
+      integrationsUrl(
+        'error',
+        managedError ??
+          'Active Meta connection not found.',
+      ),
+    );
+  }
+
+  const organizationId =
+    connection.organization_id;
+
+  const {
+    data:
+      rawAsset,
+    error:
+      assetError,
+  } =
+    await admin
+      .from(
+        'integration_assets',
+      )
+      .select(
+        'id, organization_id, connection_id, asset_type, external_id, name, status',
+      )
+      .eq(
+        'id',
+        assetId,
+      )
+      .eq(
+        'connection_id',
+        connectionId,
+      )
+      .eq(
+        'organization_id',
+        organizationId,
+      )
+      .maybeSingle();
+
+  const asset =
+    rawAsset as unknown as
+      | {
+          id: string;
+          organization_id:
+            string;
+          connection_id:
+            string;
+          asset_type:
+            string;
+          external_id:
+            string;
+          name:
+            | string
+            | null;
+          status:
+            string;
+        }
+      | null;
+
+  if (
+    assetError ||
+    !asset ||
+    asset.asset_type !==
+      'meta_ad_account' ||
+    asset.status ===
+      'unavailable'
+  ) {
+    redirect(
+      integrationsUrl(
+        'error',
+        assetError?.message ??
+          'Meta ad-account asset not found.',
+      ),
+    );
+  }
+
+  const {
+    error:
+      resetError,
+  } =
+    await admin
+      .from(
+        'integration_assets',
+      )
+      .update({
+        is_selected:
+          false,
+        status:
+          'available',
+      })
+      .eq(
+        'organization_id',
+        organizationId,
+      )
+      .eq(
+        'connection_id',
+        connectionId,
+      )
+      .eq(
+        'asset_type',
+        'meta_ad_account',
+      )
+      .neq(
+        'status',
+        'unavailable',
+      );
+
+  if (resetError) {
+    redirect(
+      integrationsUrl(
+        'error',
+        resetError.message,
+      ),
+    );
+  }
+
+  const {
+    error:
+      selectError,
+  } =
+    await admin
+      .from(
+        'integration_assets',
+      )
+      .update({
+        is_selected:
+          true,
+        status:
+          'selected',
+      })
+      .eq(
+        'id',
+        asset.id,
+      )
+      .eq(
+        'organization_id',
+        organizationId,
+      )
+      .eq(
+        'connection_id',
+        connectionId,
+      );
+
+  if (selectError) {
+    redirect(
+      integrationsUrl(
+        'error',
+        selectError.message,
+      ),
+    );
+  }
+
+  await admin
+    .from(
+      'integration_audit_log',
+    )
+    .insert({
+      organization_id:
+        organizationId,
+      connection_id:
+        connectionId,
+      provider:
+        'meta',
+      event_type:
+        'asset_selected',
+      actor_user_id:
+        user.id,
+      detail: {
+        asset_type:
+          asset.asset_type,
+        external_id:
+          asset.external_id,
+        name:
+          asset.name,
+      },
+    });
+
+  revalidatePath(
+    '/settings/integrations',
+  );
+
+  redirect(
+    integrationsUrl(
+      'notice',
+      `Meta ad account selected: ${asset.name ?? asset.external_id}.`,
     ),
   );
 }

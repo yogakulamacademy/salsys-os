@@ -40,6 +40,9 @@ import {
 } from '@/components/google-integration-assets';
 
 import {
+  MetaIntegrationAssets,
+} from '@/components/meta-integration-assets';
+import {
   createClient,
 } from '@/lib/supabase/server';
 
@@ -897,6 +900,35 @@ query.error?.toLowerCase().includes('whatsapp') ? (
               assetsForConnection(
                 workspace.assets,
                 googleConnection.id,
+              )
+            }
+          />
+        );
+      })()}
+      {(() => {
+        const metaConnection =
+          providerConnection(
+            workspace.connections,
+            'meta',
+          );
+
+        if (
+          !metaConnection ||
+          metaConnection.status !==
+            'connected'
+        ) {
+          return null;
+        }
+
+        return (
+          <MetaIntegrationAssets
+            connectionId={
+              metaConnection.id
+            }
+            assets={
+              assetsForConnection(
+                workspace.assets,
+                metaConnection.id,
               )
             }
           />
