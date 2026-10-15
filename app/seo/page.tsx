@@ -23,6 +23,15 @@ import { PageHeader } from "@/components/ui";
 
 import { getSeoWorkspace } from "@/lib/seo-data";
 
+import {
+  approveExperiment,
+  createExperimentFromCandidate,
+  proposeOptimizationFromExperiment,
+  recordManualOptimizationState,
+  reviewOptimizationAction,
+  startExperimentWithBaseline,
+} from "./actions";
+
 type SeoOverviewRow = {
   range_start: string | null;
 
@@ -252,6 +261,16 @@ export default async function SeoPage() {
     experimentGuardrails,
 
     experimentWarning,
+
+    optimizationSummary,
+
+    optimizationActions,
+
+    optimizationEvents,
+
+    optimizationGuardrails,
+
+    optimizationWarning,
 
     health,
 
@@ -1510,6 +1529,50 @@ export default async function SeoPage() {
                       {row.learning_summary}
                     </div>
                   )}
+
+                  <div className="mt-4 flex flex-wrap gap-2 border-t border-slate-200 pt-3">
+                    {row.status === "draft" && (
+                      <form action={approveExperiment}>
+                        <input type="hidden" name="experiment_id" value={row.experiment_id} />
+                        <button
+                          type="submit"
+                          className="rounded-lg bg-slate-900 px-3 py-2 text-xs font-semibold text-white transition hover:bg-slate-700"
+                        >
+                          Approve experiment
+                        </button>
+                      </form>
+                    )}
+
+                    {row.status === "approved" && (
+                      <form action={startExperimentWithBaseline}>
+                        <input type="hidden" name="experiment_id" value={row.experiment_id} />
+                        <button
+                          type="submit"
+                          className="rounded-lg bg-violet-600 px-3 py-2 text-xs font-semibold text-white transition hover:bg-violet-500"
+                        >
+                          Start + capture 14d baseline
+                        </button>
+                      </form>
+                    )}
+
+                    {(row.status === "approved" || row.status === "running") &&
+                      !optimizationActions.some(
+                        (action) =>
+                          action.experiment_id === row.experiment_id &&
+                          action.approval_status !== "rejected" &&
+                          action.execution_status !== "rolled_back",
+                      ) && (
+                        <form action={proposeOptimizationFromExperiment}>
+                          <input type="hidden" name="experiment_id" value={row.experiment_id} />
+                          <button
+                            type="submit"
+                            className="rounded-lg border border-violet-200 bg-white px-3 py-2 text-xs font-semibold text-violet-700 transition hover:bg-violet-50"
+                          >
+                            Propose controlled action
+                          </button>
+                        </form>
+                      )}
+                  </div>
                 </article>
               ))}
             </div>
@@ -1570,7 +1633,296 @@ export default async function SeoPage() {
                   <div className="mt-3 text-xs leading-5 text-slate-500">
                     {row.recommendation}
                   </div>
+
+                  <div className="mt-4 border-t border-slate-200 pt-3">
+                    <form action={createExperimentFromCandidate}>
+                      <input type="hidden" name="source_layer" value={row.source_layer} />
+                      <input type="hidden" name="page_id" value={row.page_id} />
+                      <input
+                        type="hidden"
+                        name="recommended_action"
+                        value={row.recommended_action}
+                      />
+                      <button
+                        type="submit"
+                        className="rounded-lg bg-slate-900 px-3 py-2 text-xs font-semibold text-white transition hover:bg-slate-700"
+                      >
+                        Create controlled experiment
+                      </button>
+                    </form>
+                  </div>
                 </article>
+              ))}
+            </div>
+          )}
+        </div>
+      </section>
+
+      {/* ===================================================
+
+          HUMAN-APPROVED AUTONOMOUS OPTIMIZATION
+
+      =================================================== */}
+
+      <section className="seo-table-card card-pad mt-4">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+          <div>
+            <div className="eyebrow">Human-approved optimization</div>
+
+            <div className="section-title mt-1">
+              What is approved to change, and what actually happened?
+            </div>
+
+            <p className="mt-2 max-w-3xl text-xs leading-5 text-slate-500">
+              OG9 turns approved experiments into controlled optimization actions.
+              The current executor is manual: SalsysOS can propose, gate, record and
+              audit a change, but it cannot publish to the website automatically.
+            </p>
+          </div>
+
+          <Target size={20} className="shrink-0 text-slate-400" />
+        </div>
+
+        {optimizationWarning && (
+          <div className="mt-4 rounded-xl border border-amber-100 bg-amber-50 px-4 py-3 text-xs font-medium leading-5 text-amber-700">
+            {optimizationWarning}
+          </div>
+        )}
+
+        <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          <KeywordSummaryCard
+            label="Pending approval"
+            value={formatNumber(optimizationSummary.pending_approval)}
+            sub="Blocked until an organization admin approves"
+            tone="amber"
+          />
+
+          <KeywordSummaryCard
+            label="Ready actions"
+            value={formatNumber(optimizationSummary.ready_actions)}
+            sub="Approved, but execution still requires a running experiment"
+          />
+
+          <KeywordSummaryCard
+            label="Applied actions"
+            value={formatNumber(optimizationSummary.applied_actions)}
+            sub="Recorded implementations with retained evidence"
+            tone="emerald"
+          />
+
+          <KeywordSummaryCard
+            label="Rolled back"
+            value={formatNumber(optimizationSummary.rolled_back_actions)}
+            sub={`${formatNumber(optimizationSummary.failed_actions)} failed · ${formatNumber(
+              optimizationSummary.rejected_actions,
+            )} rejected`}
+          />
+        </div>
+
+        <div className="mt-4 rounded-xl border border-sky-100 bg-sky-50 px-4 py-3 text-xs leading-5 text-sky-700">
+          Execution guardrail: human approval is mandatory, automatic publishing is
+          disabled, direct authenticated writes are disabled, and a captured experiment
+          baseline is required before an approved change can be recorded as applied.
+          {optimizationGuardrails.reversible_actions_expected
+            ? " Approved actions are expected to remain reversible."
+            : ""}
+        </div>
+
+        <div className="mt-7">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+            <div>
+              <div className="text-xs font-semibold uppercase tracking-wide text-slate-400">
+                Optimization queue
+              </div>
+
+              <div className="mt-1 text-sm font-semibold text-slate-800">
+                Proposed → approved → executed → measured
+              </div>
+            </div>
+
+            <div className="text-xs text-slate-400">
+              {formatNumber(optimizationSummary.total_actions)} actions
+            </div>
+          </div>
+
+          {optimizationActions.length === 0 ? (
+            <div className="mt-4 rounded-xl border border-dashed border-slate-200 px-5 py-8 text-center">
+              <div className="text-sm font-semibold text-slate-700">
+                No optimization action has been proposed yet.
+              </div>
+              <div className="mt-2 text-xs leading-5 text-slate-400">
+                Create an experiment from a deterministic candidate, approve it, then
+                propose a controlled action. Nothing is published automatically.
+              </div>
+            </div>
+          ) : (
+            <div className="mt-4 grid gap-3 xl:grid-cols-2">
+              {optimizationActions.slice(0, 20).map((row) => {
+                const relatedExperiment = experiments.find(
+                  (experiment) => experiment.experiment_id === row.experiment_id,
+                );
+                const canRecordApply =
+                  row.approval_status === "approved" &&
+                  row.execution_status === "ready" &&
+                  relatedExperiment?.status === "running" &&
+                  relatedExperiment.has_baseline;
+
+                return (
+                  <article
+                    key={row.id}
+                    className="rounded-xl border border-slate-100 bg-slate-50 p-4"
+                  >
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="inline-flex rounded-full border border-slate-200 bg-white px-2.5 py-1 text-[11px] font-medium text-slate-600">
+                        {pretty(row.approval_status)}
+                      </span>
+                      <span className="inline-flex rounded-full border border-violet-200 bg-violet-50 px-2.5 py-1 text-[11px] font-medium text-violet-700">
+                        {pretty(row.execution_status)}
+                      </span>
+                      <span className="text-xs text-slate-400">
+                        {pretty(row.action_kind)} · {pretty(row.risk_level)} risk
+                      </span>
+                    </div>
+
+                    <div className="mt-2 text-sm font-semibold text-slate-800">
+                      {pretty(row.source_action || row.action_kind)}
+                    </div>
+
+                    {row.target_url && (
+                      <div
+                        className="mt-1 truncate text-xs text-slate-400"
+                        title={row.target_url}
+                      >
+                        {shortPage(row.target_url)}
+                      </div>
+                    )}
+
+                    <div className="mt-3 text-xs leading-5 text-slate-500">
+                      {String(
+                        row.proposal?.instruction ||
+                          "Review this approved experiment before any website change is made.",
+                      )}
+                    </div>
+
+                    <div className="mt-4 grid grid-cols-3 gap-3">
+                      <MiniStat label="Executor" value={pretty(row.executor_kind)} />
+                      <MiniStat label="Reversible" value={row.reversible ? "Yes" : "No"} />
+                      <MiniStat
+                        label="Auto publish"
+                        value={row.automatic_publish_enabled ? "On" : "Off"}
+                      />
+                    </div>
+
+                    <div className="mt-4 flex flex-wrap gap-2 border-t border-slate-200 pt-3">
+                      {row.approval_status === "pending" && (
+                        <>
+                          <form action={reviewOptimizationAction}>
+                            <input type="hidden" name="action_id" value={row.id} />
+                            <input type="hidden" name="decision" value="approved" />
+                            <button
+                              type="submit"
+                              className="rounded-lg bg-emerald-600 px-3 py-2 text-xs font-semibold text-white transition hover:bg-emerald-500"
+                            >
+                              Approve action
+                            </button>
+                          </form>
+
+                          <form action={reviewOptimizationAction}>
+                            <input type="hidden" name="action_id" value={row.id} />
+                            <input type="hidden" name="decision" value="rejected" />
+                            <button
+                              type="submit"
+                              className="rounded-lg border border-rose-200 bg-white px-3 py-2 text-xs font-semibold text-rose-700 transition hover:bg-rose-50"
+                            >
+                              Reject
+                            </button>
+                          </form>
+                        </>
+                      )}
+
+                      {canRecordApply && (
+                        <form action={recordManualOptimizationState}>
+                          <input type="hidden" name="action_id" value={row.id} />
+                          <input type="hidden" name="new_status" value="applied" />
+                          <button
+                            type="submit"
+                            className="rounded-lg bg-violet-600 px-3 py-2 text-xs font-semibold text-white transition hover:bg-violet-500"
+                          >
+                            Record manual change applied
+                          </button>
+                        </form>
+                      )}
+
+                      {row.approval_status === "approved" &&
+                        row.execution_status === "ready" &&
+                        !canRecordApply && (
+                          <span className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-medium text-amber-700">
+                            Start experiment + capture baseline before execution
+                          </span>
+                        )}
+
+                      {row.execution_status === "applied" && row.reversible && (
+                        <form action={recordManualOptimizationState}>
+                          <input type="hidden" name="action_id" value={row.id} />
+                          <input type="hidden" name="new_status" value="rolled_back" />
+                          <button
+                            type="submit"
+                            className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-semibold text-slate-700 transition hover:bg-slate-100"
+                          >
+                            Record rollback
+                          </button>
+                        </form>
+                      )}
+                    </div>
+
+                    {row.last_error && (
+                      <div className="mt-3 rounded-lg border border-rose-100 bg-rose-50 px-3 py-2 text-xs leading-5 text-rose-700">
+                        {row.last_error}
+                      </div>
+                    )}
+                  </article>
+                );
+              })}
+            </div>
+          )}
+        </div>
+
+        <div className="mt-7 border-t border-slate-100 pt-6">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+            <div>
+              <div className="text-xs font-semibold uppercase tracking-wide text-slate-400">
+                Audit trail
+              </div>
+              <div className="mt-1 text-sm font-semibold text-slate-800">
+                Human reviews and execution state changes
+              </div>
+            </div>
+            <div className="text-xs text-slate-400">
+              {formatNumber(optimizationEvents.length)} recent events loaded
+            </div>
+          </div>
+
+          {optimizationEvents.length === 0 ? (
+            <div className="mt-4 rounded-xl border border-dashed border-slate-200 px-5 py-6 text-center text-xs text-slate-400">
+              Audit events will appear after an optimization action is proposed.
+            </div>
+          ) : (
+            <div className="mt-4 overflow-hidden rounded-xl border border-slate-100">
+              {optimizationEvents.slice(0, 12).map((event) => (
+                <div
+                  key={event.id}
+                  className="flex flex-col gap-1 border-b border-slate-100 px-4 py-3 last:border-b-0 sm:flex-row sm:items-center sm:justify-between"
+                >
+                  <div className="text-xs font-medium text-slate-700">
+                    {pretty(event.event_type)}
+                    <span className="ml-2 font-normal text-slate-400">
+                      · {pretty(event.actor_kind)}
+                    </span>
+                  </div>
+                  <div className="text-xs text-slate-400">
+                    {formatDateTime(event.created_at)}
+                  </div>
+                </div>
               ))}
             </div>
           )}
@@ -2158,6 +2510,7 @@ export default async function SeoPage() {
                   <div className="mt-3 text-xs leading-5 text-slate-500">
                     {row.recommendation}
                   </div>
+
                 </article>
               ))}
             </div>

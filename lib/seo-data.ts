@@ -555,6 +555,71 @@ type SeoExperimentRpcPayload = {
   guardrails?: SeoExperimentGuardrails;
 };
 
+
+export type SeoOptimizationSummary = {
+  total_actions: number | string | null;
+  pending_approval: number | string | null;
+  approved_actions: number | string | null;
+  rejected_actions: number | string | null;
+  ready_actions: number | string | null;
+  running_actions: number | string | null;
+  applied_actions: number | string | null;
+  failed_actions: number | string | null;
+  rolled_back_actions: number | string | null;
+  automatic_publish_enabled: number | string | null;
+};
+
+export type SeoOptimizationActionRow = {
+  id: string;
+  experiment_id: string;
+  target_page_id: string | null;
+  target_url: string | null;
+  source_layer: string;
+  source_action: string | null;
+  action_kind: string;
+  proposal: Record<string, unknown>;
+  risk_level: string;
+  executor_kind: string;
+  execution_gate: string;
+  automatic_publish_enabled: boolean;
+  reversible: boolean;
+  approval_status: string;
+  approval_note: string | null;
+  approved_at: string | null;
+  rejected_at: string | null;
+  execution_status: string;
+  last_error: string | null;
+  applied_at: string | null;
+  rolled_back_at: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type SeoOptimizationEventRow = {
+  id: string;
+  action_id: string;
+  event_type: string;
+  actor_kind: string;
+  event_payload: Record<string, unknown>;
+  created_at: string;
+};
+
+export type SeoOptimizationGuardrails = {
+  human_approval_required?: boolean;
+  automatic_publish_enabled?: boolean;
+  tenant_scoped?: boolean;
+  reversible_actions_expected?: boolean;
+  direct_authenticated_writes_enabled?: boolean;
+  baseline_required_before_execution?: boolean;
+};
+
+type SeoOptimizationRpcPayload = {
+  summary?: Partial<SeoOptimizationSummary>;
+  actions?: SeoOptimizationActionRow[];
+  events?: SeoOptimizationEventRow[];
+  guardrails?: SeoOptimizationGuardrails;
+};
+
 export type SyncHealthRow = {
   latest_gsc_date: string | null;
   latest_data_update: string | null;
@@ -617,6 +682,11 @@ export type SeoWorkspace = {
   experimentCandidates: SeoExperimentCandidateRow[];
   experimentGuardrails: SeoExperimentGuardrails;
   experimentWarning: string | null;
+  optimizationSummary: Partial<SeoOptimizationSummary>;
+  optimizationActions: SeoOptimizationActionRow[];
+  optimizationEvents: SeoOptimizationEventRow[];
+  optimizationGuardrails: SeoOptimizationGuardrails;
+  optimizationWarning: string | null;
   health: Partial<SyncHealthRow>;
   syncRuns: SyncRunRow[];
   fallback: boolean;
@@ -682,6 +752,11 @@ export async function getSeoWorkspace(): Promise<SeoWorkspace> {
       experimentCandidates: [],
       experimentGuardrails: {},
       experimentWarning: null,
+      optimizationSummary: {},
+      optimizationActions: [],
+      optimizationEvents: [],
+      optimizationGuardrails: {},
+      optimizationWarning: null,
       health: {},
       syncRuns: [],
       fallback: false,
@@ -720,6 +795,13 @@ export async function getSeoWorkspace(): Promise<SeoWorkspace> {
     p_organization_id: visibility.organizationId,
   });
 
+  // OG9 is intentionally loaded after OG8. Keep action intelligence out of the
+  // primary SEO Promise.all so approval/execution state cannot compete with
+  // the core Search Console workspace during page render.
+  const optimizationResult = await supabase.rpc("get_seo_optimization_intelligence", {
+    p_organization_id: visibility.organizationId,
+  });
+
   const contentPayload = contentWorkspaceFromPayload(
     (contentResult.data ?? {}) as ContentIntelligenceRpcPayload,
     contentResult.error
@@ -755,6 +837,13 @@ export async function getSeoWorkspace(): Promise<SeoWorkspace> {
       : null,
   );
 
+  const optimizationPayload = optimizationWorkspaceFromPayload(
+    (optimizationResult.data ?? {}) as SeoOptimizationRpcPayload,
+    optimizationResult.error
+      ? `Human-approved optimization is unavailable: ${optimizationResult.error.message}`
+      : null,
+  );
+
   if (!v2Result.error) {
     return {
       ...workspaceFromPayload(
@@ -767,6 +856,7 @@ export async function getSeoWorkspace(): Promise<SeoWorkspace> {
       ...aeoPayload,
       ...geoPayload,
       ...experimentPayload,
+      ...optimizationPayload,
     };
   }
 
@@ -786,6 +876,7 @@ export async function getSeoWorkspace(): Promise<SeoWorkspace> {
       ...aeoPayload,
       ...geoPayload,
       ...experimentPayload,
+      ...optimizationPayload,
     };
   }
 
@@ -805,6 +896,7 @@ export async function getSeoWorkspace(): Promise<SeoWorkspace> {
     ...aeoPayload,
     ...geoPayload,
     ...experimentPayload,
+    ...optimizationPayload,
     health: {},
     syncRuns: [],
     fallback: false,
@@ -874,6 +966,12 @@ function workspaceFromPayload(
     experimentCandidates: [],
     experimentGuardrails: {},
     experimentWarning: null,
+
+    optimizationSummary: {},
+    optimizationActions: [],
+    optimizationEvents: [],
+    optimizationGuardrails: {},
+    optimizationWarning: null,
 
     health: payload.health ?? {},
 
@@ -1010,5 +1108,26 @@ function experimentWorkspaceFromPayload(
       : [],
     experimentGuardrails: payload.guardrails ?? {},
     experimentWarning,
+  };
+}
+
+
+function optimizationWorkspaceFromPayload(
+  payload: SeoOptimizationRpcPayload,
+  optimizationWarning: string | null,
+): Pick<
+  SeoWorkspace,
+  | "optimizationSummary"
+  | "optimizationActions"
+  | "optimizationEvents"
+  | "optimizationGuardrails"
+  | "optimizationWarning"
+> {
+  return {
+    optimizationSummary: payload.summary ?? {},
+    optimizationActions: Array.isArray(payload.actions) ? payload.actions : [],
+    optimizationEvents: Array.isArray(payload.events) ? payload.events : [],
+    optimizationGuardrails: payload.guardrails ?? {},
+    optimizationWarning,
   };
 }
