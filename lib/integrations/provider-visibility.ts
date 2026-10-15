@@ -1,6 +1,5 @@
 import "server-only";
 
-import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { requireCurrentOrganizationId } from "@/lib/workspace";
 
@@ -11,6 +10,12 @@ export type ProviderVisibility = {
   organizationId: string;
   googleConnected: boolean;
   metaConnected: boolean;
+};
+
+type ProviderVisibilityRpc = {
+  organization_id?: string | null;
+  google_connected?: boolean | null;
+  meta_connected?: boolean | null;
 };
 
 export async function getProviderVisibility(
@@ -36,26 +41,15 @@ export async function getProviderVisibility(
       user.id,
     );
 
-  /*
-   * integration_connections is intentionally not exposed through
-   * the ordinary authenticated-user RLS path.
-   *
-   * The organization boundary is resolved first through the
-   * authenticated user's workspace membership. Only after that
-   * authorization succeeds do we use the server-only admin client
-   * for this narrow connection-status lookup.
-   */
-  const admin = createAdminClient();
-
   const {
     data,
     error,
-  } = await admin
-    .from("integration_connections")
-    .select("provider,status")
-    .eq("organization_id", organizationId)
-    .eq("status", "connected")
-    .in("provider", ["google", "meta"]);
+  } = await supabase.rpc(
+    "get_provider_visibility",
+    {
+      p_organization_id: organizationId,
+    },
+  );
 
   if (error) {
     throw new Error(
@@ -63,19 +57,15 @@ export async function getProviderVisibility(
     );
   }
 
-  const providers = new Set(
-    (data ?? []).map((row) =>
-      String(row.provider ?? "")
-        .trim()
-        .toLowerCase(),
-    ),
-  );
+  const payload =
+    (data ?? {}) as ProviderVisibilityRpc;
 
   return {
-    organizationId,
+    organizationId:
+      payload.organization_id ?? organizationId,
     googleConnected:
-      providers.has("google"),
+      payload.google_connected === true,
     metaConnected:
-      providers.has("meta"),
+      payload.meta_connected === true,
   };
 }

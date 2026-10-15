@@ -78,6 +78,62 @@ export type OpportunityRow = {
   recommendation: string;
 };
 
+export type KeywordIntelligencePageRow = {
+  page: string;
+  surface: string;
+  clicks: number | string | null;
+  impressions: number | string | null;
+  avg_position: number | string | null;
+  active_days: number | string | null;
+};
+
+export type KeywordIntelligenceRow = {
+  query: string;
+  site_url: string;
+
+  clicks: number | string | null;
+  impressions: number | string | null;
+  ctr: number | string | null;
+  avg_position: number | string | null;
+
+  page_count: number | string | null;
+  active_days: number | string | null;
+
+  branded: boolean;
+  mixed_surface: boolean;
+  signal_type: string;
+
+  leader_page: string;
+  leader_surface: string;
+  leader_impressions: number | string | null;
+  leader_clicks: number | string | null;
+  leader_avg_position: number | string | null;
+  leader_active_days: number | string | null;
+  leader_share: number | string | null;
+
+  runner_up_page: string | null;
+  runner_up_surface: string | null;
+  runner_up_impressions: number | string | null;
+  runner_up_clicks: number | string | null;
+  runner_up_avg_position: number | string | null;
+  runner_up_active_days: number | string | null;
+  runner_up_share: number | string | null;
+
+  surface_count: number | string | null;
+  pages: KeywordIntelligencePageRow[];
+  recommendation: string;
+};
+
+export type KeywordSummary = {
+  overlap_queries: number | string | null;
+  likely_cannibalization: number | string | null;
+  needs_review: number | string | null;
+  observed_overlap: number | string | null;
+  healthy_leader: number | string | null;
+  branded_coverage: number | string | null;
+  high_impression_overlaps: number | string | null;
+};
+
 export type SyncHealthRow = {
   latest_gsc_date: string | null;
   latest_data_update: string | null;
@@ -112,6 +168,8 @@ export type SeoWorkspace = {
   devices: DeviceRow[];
   appearances: SearchAppearanceRow[];
   opportunities: OpportunityRow[];
+  keywordIntelligence: KeywordIntelligenceRow[];
+  keywordSummary: Partial<KeywordSummary>;
   health: Partial<SyncHealthRow>;
   syncRuns: SyncRunRow[];
   fallback: boolean;
@@ -127,6 +185,8 @@ type RpcPayload = {
   devices?: DeviceRow[];
   appearances?: SearchAppearanceRow[];
   opportunities?: OpportunityRow[];
+  keyword_intelligence?: KeywordIntelligenceRow[];
+  keyword_summary?: Partial<KeywordSummary>;
   health?: Partial<SyncHealthRow>;
   sync_runs?: SyncRunRow[];
 };
@@ -147,6 +207,8 @@ export async function getSeoWorkspace(): Promise<SeoWorkspace> {
       devices: [],
       appearances: [],
       opportunities: [],
+      keywordIntelligence: [],
+      keywordSummary: {},
       health: {},
       syncRuns: [],
       fallback: false,
@@ -154,41 +216,28 @@ export async function getSeoWorkspace(): Promise<SeoWorkspace> {
     };
   }
 
-  const { data, error } = await supabase.rpc("get_seo_workspace", {
+  const v2Result = await supabase.rpc("get_seo_workspace_v2", {
     p_organization_id: visibility.organizationId,
   });
 
-  if (!error) {
-    const payload = (data ?? {}) as RpcPayload;
+  if (!v2Result.error) {
+    return workspaceFromPayload(
+      (v2Result.data ?? {}) as RpcPayload,
+      false,
+      null,
+    );
+  }
 
-    return {
-      overview: payload.overview ?? {},
+  const legacyResult = await supabase.rpc("get_seo_workspace", {
+    p_organization_id: visibility.organizationId,
+  });
 
-      daily: Array.isArray(payload.daily) ? payload.daily : [],
-
-      queries: Array.isArray(payload.queries) ? payload.queries : [],
-
-      pages: Array.isArray(payload.pages) ? payload.pages : [],
-
-      countries: Array.isArray(payload.countries) ? payload.countries : [],
-
-      devices: Array.isArray(payload.devices) ? payload.devices : [],
-
-      appearances: Array.isArray(payload.appearances)
-        ? payload.appearances
-        : [],
-
-      opportunities: Array.isArray(payload.opportunities)
-        ? payload.opportunities
-        : [],
-
-      health: payload.health ?? {},
-
-      syncRuns: Array.isArray(payload.sync_runs) ? payload.sync_runs : [],
-
-      fallback: false,
-      warning: null,
-    };
+  if (!legacyResult.error) {
+    return workspaceFromPayload(
+      (legacyResult.data ?? {}) as RpcPayload,
+      true,
+      `Keyword + SERP intelligence is unavailable: ${v2Result.error.message}`,
+    );
   }
 
   return {
@@ -200,9 +249,52 @@ export async function getSeoWorkspace(): Promise<SeoWorkspace> {
     devices: [],
     appearances: [],
     opportunities: [],
+    keywordIntelligence: [],
+    keywordSummary: {},
     health: {},
     syncRuns: [],
     fallback: false,
-    warning: `Unable to load SEO workspace: ${error.message}`,
+    warning: `Unable to load SEO workspace: ${legacyResult.error.message}`,
+  };
+}
+
+function workspaceFromPayload(
+  payload: RpcPayload,
+  fallback: boolean,
+  warning: string | null,
+): SeoWorkspace {
+  return {
+    overview: payload.overview ?? {},
+
+    daily: Array.isArray(payload.daily) ? payload.daily : [],
+
+    queries: Array.isArray(payload.queries) ? payload.queries : [],
+
+    pages: Array.isArray(payload.pages) ? payload.pages : [],
+
+    countries: Array.isArray(payload.countries) ? payload.countries : [],
+
+    devices: Array.isArray(payload.devices) ? payload.devices : [],
+
+    appearances: Array.isArray(payload.appearances)
+      ? payload.appearances
+      : [],
+
+    opportunities: Array.isArray(payload.opportunities)
+      ? payload.opportunities
+      : [],
+
+    keywordIntelligence: Array.isArray(payload.keyword_intelligence)
+      ? payload.keyword_intelligence
+      : [],
+
+    keywordSummary: payload.keyword_summary ?? {},
+
+    health: payload.health ?? {},
+
+    syncRuns: Array.isArray(payload.sync_runs) ? payload.sync_runs : [],
+
+    fallback,
+    warning,
   };
 }

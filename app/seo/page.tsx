@@ -199,6 +199,10 @@ export default async function SeoPage() {
 
     opportunities,
 
+    keywordIntelligence,
+
+    keywordSummary,
+
     health,
 
     syncRuns,
@@ -655,6 +659,198 @@ export default async function SeoPage() {
             </tbody>
           </table>
         </div>
+      </section>
+
+      {/* ===================================================
+
+
+
+          KEYWORD + SERP INTELLIGENCE
+
+
+
+      =================================================== */}
+
+      <section className="seo-table-card card-pad mt-4">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+          <div>
+            <div className="eyebrow">SERP intelligence</div>
+
+            <div className="section-title mt-1">Query → page overlap</div>
+
+            <p className="mt-2 max-w-3xl text-xs leading-5 text-slate-500">
+              Observed Search Console overlap across the latest 30 finalized
+              days. Multi-page visibility is not automatically
+              cannibalization: branded coverage and clear leaders are
+              separated from queries that need review.
+            </p>
+          </div>
+
+          <FileSearch size={20} className="shrink-0 text-slate-400" />
+        </div>
+
+        <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          <KeywordSummaryCard
+            label="Observed overlaps"
+            value={formatNumber(keywordSummary.overlap_queries)}
+            sub={`${formatNumber(
+              keywordSummary.high_impression_overlaps,
+            )} with 50+ impressions`}
+          />
+
+          <KeywordSummaryCard
+            label="Likely cannibalization"
+            value={formatNumber(keywordSummary.likely_cannibalization)}
+            sub="Highest-priority overlap signals"
+            tone="rose"
+          />
+
+          <KeywordSummaryCard
+            label="Needs review"
+            value={formatNumber(keywordSummary.needs_review)}
+            sub="Meaningful visibility split"
+            tone="amber"
+          />
+
+          <KeywordSummaryCard
+            label="Branded coverage"
+            value={formatNumber(keywordSummary.branded_coverage)}
+            sub="Excluded from cannibalization"
+            tone="emerald"
+          />
+        </div>
+
+        {keywordIntelligence.length === 0 ? (
+          <div className="mt-5 rounded-xl border border-dashed border-slate-200 px-5 py-10 text-center text-sm text-slate-400">
+            Page + query intelligence is not available yet.
+          </div>
+        ) : (
+          <div className="mt-5 space-y-3">
+            {keywordIntelligence.slice(0, 16).map((row) => (
+              <article
+                key={`${row.site_url}-${row.query}`}
+                className="rounded-xl border border-slate-100 bg-slate-50 p-4"
+              >
+                <div className="flex flex-col gap-3 xl:flex-row xl:items-start xl:justify-between">
+                  <div className="min-w-0">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <KeywordSignalBadge type={row.signal_type} />
+
+                      <span className="text-xs text-slate-400">
+                        {formatNumber(row.impressions)} impressions
+                      </span>
+
+                      <span className="text-xs text-slate-400">
+                        {formatNumber(row.page_count)} ranking pages
+                      </span>
+
+                      <span className="text-xs text-slate-400">
+                        position {formatDecimal(row.avg_position, 1)}
+                      </span>
+                    </div>
+
+                    <div className="mt-2 text-sm font-semibold text-slate-800">
+                      {row.query}
+                    </div>
+                  </div>
+
+                  <div className="grid shrink-0 grid-cols-3 gap-5 text-right">
+                    <MiniStat
+                      label="Clicks"
+                      value={formatNumber(row.clicks)}
+                    />
+
+                    <MiniStat
+                      label="CTR"
+                      value={formatFractionPercent(row.ctr)}
+                    />
+
+                    <MiniStat
+                      label="Active days"
+                      value={formatNumber(row.active_days)}
+                    />
+                  </div>
+                </div>
+
+                <div className="mt-4 grid gap-3 lg:grid-cols-2">
+                  <div className="rounded-xl border border-slate-100 bg-white p-3">
+                    <div className="flex items-center justify-between gap-3">
+                      <span className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">
+                        Current leader
+                      </span>
+
+                      <span className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">
+                        {pretty(row.leader_surface)}
+                      </span>
+                    </div>
+
+                    <div
+                      className="mt-2 truncate text-xs font-semibold text-slate-700"
+                      title={row.leader_page}
+                    >
+                      {shortPage(row.leader_page)}
+                    </div>
+
+                    <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-slate-500">
+                      <span>
+                        {formatNumber(row.leader_impressions)} impressions
+                      </span>
+
+                      <span>
+                        {formatFractionPercent(row.leader_share)} share
+                      </span>
+
+                      <span>
+                        position{" "}
+                        {formatDecimal(row.leader_avg_position, 1)}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="rounded-xl border border-slate-100 bg-white p-3">
+                    <div className="flex items-center justify-between gap-3">
+                      <span className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">
+                        Secondary page
+                      </span>
+
+                      <span className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">
+                        {pretty(row.runner_up_surface)}
+                      </span>
+                    </div>
+
+                    <div
+                      className="mt-2 truncate text-xs font-semibold text-slate-700"
+                      title={row.runner_up_page || undefined}
+                    >
+                      {row.runner_up_page
+                        ? shortPage(row.runner_up_page)
+                        : "—"}
+                    </div>
+
+                    <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-slate-500">
+                      <span>
+                        {formatNumber(row.runner_up_impressions)} impressions
+                      </span>
+
+                      <span>
+                        {formatFractionPercent(row.runner_up_share)} share
+                      </span>
+
+                      <span>
+                        position{" "}
+                        {formatDecimal(row.runner_up_avg_position, 1)}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="mt-3 text-xs leading-5 text-slate-500">
+                  {row.recommendation}
+                </div>
+              </article>
+            ))}
+          </div>
+        )}
       </section>
 
       {/* ===================================================
@@ -1369,6 +1565,75 @@ function OpportunityBadge({ type }: { type: string }) {
 
 
       "
+    >
+      {label}
+    </span>
+  );
+}
+
+function KeywordSummaryCard({
+  label,
+  value,
+  sub,
+  tone = "slate",
+}: {
+  label: string;
+  value: string;
+  sub: string;
+  tone?: "slate" | "rose" | "amber" | "emerald";
+}) {
+  const toneClass =
+    tone === "rose"
+      ? "border-rose-100 bg-rose-50"
+      : tone === "amber"
+        ? "border-amber-100 bg-amber-50"
+        : tone === "emerald"
+          ? "border-emerald-100 bg-emerald-50"
+          : "border-slate-100 bg-slate-50";
+
+  return (
+    <div className={`rounded-xl border p-4 ${toneClass}`}>
+      <div className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">
+        {label}
+      </div>
+
+      <div className="mt-2 text-xl font-semibold text-slate-800">{value}</div>
+
+      <div className="mt-1 text-[11px] leading-4 text-slate-500">{sub}</div>
+    </div>
+  );
+}
+
+function KeywordSignalBadge({ type }: { type: string }) {
+  const normalized = String(type || "").toLowerCase();
+
+  const label =
+    normalized === "likely_cannibalization"
+      ? "Likely cannibalization"
+      : normalized === "needs_review"
+        ? "Needs review"
+        : normalized === "healthy_leader"
+          ? "Healthy leader"
+          : normalized === "branded_coverage"
+            ? "Branded coverage"
+            : normalized === "observed_overlap"
+              ? "Observed overlap"
+              : pretty(normalized);
+
+  const className =
+    normalized === "likely_cannibalization"
+      ? "bg-rose-50 text-rose-700 ring-rose-100"
+      : normalized === "needs_review"
+        ? "bg-amber-50 text-amber-700 ring-amber-100"
+        : normalized === "healthy_leader"
+          ? "bg-emerald-50 text-emerald-700 ring-emerald-100"
+          : normalized === "branded_coverage"
+            ? "bg-sky-50 text-sky-700 ring-sky-100"
+            : "bg-white text-slate-600 ring-slate-200";
+
+  return (
+    <span
+      className={`inline-flex rounded-full px-2.5 py-1 text-[11px] font-semibold ring-1 ring-inset ${className}`}
     >
       {label}
     </span>
