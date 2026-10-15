@@ -243,6 +243,16 @@ export default async function SeoPage() {
 
     geoWarning,
 
+    experimentSummary,
+
+    experiments,
+
+    experimentCandidates,
+
+    experimentGuardrails,
+
+    experimentWarning,
+
     health,
 
     syncRuns,
@@ -1322,6 +1332,248 @@ export default async function SeoPage() {
               tone="amber"
             />
           </div>
+        </div>
+      </section>
+
+      {/* ===================================================
+
+          EXPERIMENTATION + LEARNING
+
+      =================================================== */}
+
+      <section className="seo-table-card card-pad mt-4">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+          <div>
+            <div className="eyebrow">Experimentation + learning</div>
+
+            <div className="section-title mt-1">
+              What should we test, and what did we learn?
+            </div>
+
+            <p className="mt-2 max-w-3xl text-xs leading-5 text-slate-500">
+              Recommendations from Content, Revenue, AEO and GEO can now enter a
+              controlled experiment lifecycle. Baselines, changes and outcome
+              windows are preserved as evidence; before/after movement is not
+              treated as proof of causality.
+            </p>
+          </div>
+
+          <RefreshCw size={20} className="shrink-0 text-slate-400" />
+        </div>
+
+        {experimentWarning && (
+          <div className="mt-4 rounded-xl border border-amber-100 bg-amber-50 px-4 py-3 text-xs font-medium leading-5 text-amber-700">
+            {experimentWarning}
+          </div>
+        )}
+
+        <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          <KeywordSummaryCard
+            label="Experiment candidates"
+            value={formatNumber(experimentSummary.candidate_actions)}
+            sub="Deterministic OG4–OG7 actions available for controlled testing"
+            tone="amber"
+          />
+
+          <KeywordSummaryCard
+            label="Active experiments"
+            value={formatNumber(
+              toNumber(experimentSummary.approved_experiments) +
+                toNumber(experimentSummary.running_experiments),
+            )}
+            sub={`${formatNumber(experimentSummary.draft_experiments)} draft · ${formatNumber(
+              experimentSummary.running_experiments,
+            )} running`}
+          />
+
+          <KeywordSummaryCard
+            label="Measured experiments"
+            value={formatNumber(experimentSummary.experiments_with_outcome)}
+            sub={`${formatNumber(experimentSummary.experiments_with_baseline)} with baseline · ${formatNumber(
+              experimentSummary.applied_changes,
+            )} applied changes`}
+          />
+
+          <KeywordSummaryCard
+            label="Learned outcomes"
+            value={formatNumber(experimentSummary.completed_experiments)}
+            sub={`${formatNumber(experimentSummary.positive_learnings)} positive · ${formatNumber(
+              experimentSummary.mixed_learnings,
+            )} mixed · ${formatNumber(experimentSummary.inconclusive_learnings)} inconclusive`}
+            tone="emerald"
+          />
+        </div>
+
+        <div className="mt-4 rounded-xl border border-sky-100 bg-sky-50 px-4 py-3 text-xs leading-5 text-sky-700">
+          Experiment guardrail: human approval is required before execution and
+          automatic publishing is disabled. Raw Search Console, GA4, CRM,
+          payment and first-party tracking evidence is preserved.
+          {experimentGuardrails.note ? ` ${experimentGuardrails.note}` : ""}
+        </div>
+
+        <div className="mt-7">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+            <div>
+              <div className="text-xs font-semibold uppercase tracking-wide text-slate-400">
+                Experiment lifecycle
+              </div>
+
+              <div className="mt-1 text-sm font-semibold text-slate-800">
+                Approved tests, measured outcomes and retained learning
+              </div>
+            </div>
+
+            <div className="text-xs text-slate-400">
+              {formatNumber(experimentSummary.total_experiments)} experiments
+            </div>
+          </div>
+
+          {experiments.length === 0 ? (
+            <div className="mt-4 rounded-xl border border-dashed border-slate-200 px-5 py-8 text-center">
+              <div className="text-sm font-semibold text-slate-700">
+                No SEO experiment has been started yet.
+              </div>
+              <div className="mt-2 text-xs leading-5 text-slate-400">
+                This is expected for the new OG8 foundation. Candidate actions
+                below can become human-approved experiments after review.
+              </div>
+            </div>
+          ) : (
+            <div className="mt-4 grid gap-3 xl:grid-cols-2">
+              {experiments.slice(0, 10).map((row) => (
+                <article
+                  key={row.experiment_id}
+                  className="rounded-xl border border-slate-100 bg-slate-50 p-4"
+                >
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="inline-flex rounded-full border border-slate-200 bg-white px-2.5 py-1 text-[11px] font-medium text-slate-600">
+                      {pretty(row.status)}
+                    </span>
+                    <span className="text-xs text-slate-400">
+                      {pretty(row.source_layer)}
+                    </span>
+                    <span className="text-xs text-slate-400">
+                      {pretty(row.primary_metric)}
+                    </span>
+                  </div>
+
+                  <div className="mt-2 text-sm font-semibold text-slate-800">
+                    {row.title}
+                  </div>
+
+                  <div className="mt-1 text-xs leading-5 text-slate-500">
+                    {row.hypothesis}
+                  </div>
+
+                  <div className="mt-4 grid grid-cols-4 gap-3">
+                    <MiniStat
+                      label="Baseline"
+                      value={row.has_baseline ? "Yes" : "No"}
+                    />
+                    <MiniStat
+                      label="Outcome"
+                      value={row.has_outcome ? "Yes" : "No"}
+                    />
+                    <MiniStat
+                      label="Changes"
+                      value={formatNumber(row.change_count)}
+                    />
+                    <MiniStat
+                      label="Observation"
+                      value={`${formatNumber(row.minimum_observation_days)}d`}
+                    />
+                  </div>
+
+                  {row.has_outcome && (
+                    <div className="mt-4 grid grid-cols-4 gap-3">
+                      <MiniStat
+                        label="Clicks Δ"
+                        value={formatSignedNumber(row.delta_gsc_clicks)}
+                      />
+                      <MiniStat
+                        label="Sessions Δ"
+                        value={formatSignedNumber(row.delta_ga4_sessions)}
+                      />
+                      <MiniStat
+                        label="Leads Δ"
+                        value={formatSignedNumber(row.delta_organic_leads)}
+                      />
+                      <MiniStat
+                        label="AI sessions Δ"
+                        value={formatSignedNumber(row.delta_ai_referral_sessions)}
+                      />
+                    </div>
+                  )}
+
+                  {row.learning_summary && (
+                    <div className="mt-3 rounded-lg border border-slate-100 bg-white px-3 py-2 text-xs leading-5 text-slate-500">
+                      {row.learning_summary}
+                    </div>
+                  )}
+                </article>
+              ))}
+            </div>
+          )}
+        </div>
+
+        <div className="mt-7 border-t border-slate-100 pt-6">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+            <div>
+              <div className="text-xs font-semibold uppercase tracking-wide text-slate-400">
+                Candidate experiments
+              </div>
+
+              <div className="mt-1 text-sm font-semibold text-slate-800">
+                Deterministic actions that can enter a controlled test
+              </div>
+            </div>
+
+            <div className="text-xs text-slate-400">
+              {formatNumber(experimentSummary.candidate_actions)} total candidates
+            </div>
+          </div>
+
+          {experimentCandidates.length === 0 ? (
+            <div className="mt-4 rounded-xl border border-dashed border-slate-200 px-5 py-8 text-center text-sm text-slate-400">
+              No experiment candidates are available yet.
+            </div>
+          ) : (
+            <div className="mt-4 grid gap-3 xl:grid-cols-2">
+              {experimentCandidates.slice(0, 12).map((row) => (
+                <article
+                  key={`${row.source_layer}-${row.page_id}-${row.recommended_action}`}
+                  className="rounded-xl border border-slate-100 bg-slate-50 p-4"
+                >
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="inline-flex rounded-full border border-violet-200 bg-violet-50 px-2.5 py-1 text-[11px] font-medium text-violet-700">
+                      {pretty(row.source_layer)}
+                    </span>
+                    <span className="text-xs text-slate-400">
+                      priority {formatNumber(row.priority_score)}
+                    </span>
+                    <span className="text-xs text-slate-400">
+                      {pretty(row.recommended_action)}
+                    </span>
+                  </div>
+
+                  <div className="mt-2 truncate text-sm font-semibold text-slate-800">
+                    {row.title || shortPage(row.normalized_url)}
+                  </div>
+
+                  <div
+                    className="mt-1 truncate text-xs text-slate-400"
+                    title={row.normalized_url}
+                  >
+                    {shortPage(row.normalized_url)}
+                  </div>
+
+                  <div className="mt-3 text-xs leading-5 text-slate-500">
+                    {row.recommendation}
+                  </div>
+                </article>
+              ))}
+            </div>
+          )}
         </div>
       </section>
 
@@ -3382,6 +3634,16 @@ function formatDateTime(value: string | null | undefined) {
 
     timeZone: "Asia/Kolkata",
   }).format(date);
+}
+
+function formatSignedNumber(value: number | string | null | undefined) {
+  const number = toNumber(value);
+
+  if (number === 0) {
+    return "0";
+  }
+
+  return `${number > 0 ? "+" : ""}${formatNumber(number)}`;
 }
 
 function pretty(value: string | null | undefined) {

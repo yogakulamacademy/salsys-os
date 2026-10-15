@@ -465,6 +465,96 @@ type SeoGeoRpcPayload = {
   guardrails?: SeoGeoGuardrails;
 };
 
+
+export type SeoExperimentSummary = {
+  total_experiments: number | string | null;
+  draft_experiments: number | string | null;
+  approved_experiments: number | string | null;
+  running_experiments: number | string | null;
+  completed_experiments: number | string | null;
+  cancelled_experiments: number | string | null;
+  experiments_with_baseline: number | string | null;
+  experiments_with_outcome: number | string | null;
+  positive_learnings: number | string | null;
+  negative_learnings: number | string | null;
+  mixed_learnings: number | string | null;
+  inconclusive_learnings: number | string | null;
+  applied_changes: number | string | null;
+  candidate_actions: number | string | null;
+};
+
+export type SeoExperimentCandidateRow = {
+  organization_id: string;
+  source_layer: string;
+  target_kind: string;
+  page_id: string;
+  normalized_url: string;
+  title: string | null;
+  recommended_action: string;
+  recommendation: string;
+  priority_score: number | string | null;
+  evidence: Record<string, unknown>;
+};
+
+export type SeoExperimentOutcomeRow = {
+  experiment_id: string;
+  title: string;
+  hypothesis: string;
+  target_kind: string;
+  target_page_id: string | null;
+  target_url: string | null;
+  source_layer: string;
+  source_action: string | null;
+  primary_metric: string;
+  secondary_metrics: string[];
+  status: string;
+  minimum_observation_days: number | string | null;
+  approved_at: string | null;
+  started_at: string | null;
+  completed_at: string | null;
+  result_classification: string | null;
+  result_confidence: string | null;
+  learning_summary: string | null;
+  baseline_start: string | null;
+  baseline_end: string | null;
+  outcome_start: string | null;
+  outcome_end: string | null;
+  baseline_gsc_clicks: number | string | null;
+  outcome_gsc_clicks: number | string | null;
+  delta_gsc_clicks: number | string | null;
+  delta_gsc_impressions: number | string | null;
+  delta_gsc_ctr: number | string | null;
+  position_improvement: number | string | null;
+  delta_ga4_sessions: number | string | null;
+  delta_ga4_engaged_sessions: number | string | null;
+  delta_organic_leads: number | string | null;
+  delta_qualified_leads: number | string | null;
+  delta_enrolled_leads: number | string | null;
+  delta_revenue_inr: number | string | null;
+  delta_revenue_usd: number | string | null;
+  delta_ai_referral_sessions: number | string | null;
+  has_baseline: boolean;
+  has_outcome: boolean;
+  created_at: string;
+  updated_at: string;
+  change_count: number | string | null;
+};
+
+export type SeoExperimentGuardrails = {
+  human_approval_required?: boolean;
+  automatic_publishing?: boolean;
+  raw_evidence_overwritten?: boolean;
+  causality_claimed?: boolean;
+  note?: string;
+};
+
+type SeoExperimentRpcPayload = {
+  summary?: Partial<SeoExperimentSummary>;
+  experiments?: SeoExperimentOutcomeRow[];
+  candidates?: SeoExperimentCandidateRow[];
+  guardrails?: SeoExperimentGuardrails;
+};
+
 export type SyncHealthRow = {
   latest_gsc_date: string | null;
   latest_data_update: string | null;
@@ -522,6 +612,11 @@ export type SeoWorkspace = {
   geoPages: SeoGeoPageRow[];
   geoGuardrails: SeoGeoGuardrails;
   geoWarning: string | null;
+  experimentSummary: Partial<SeoExperimentSummary>;
+  experiments: SeoExperimentOutcomeRow[];
+  experimentCandidates: SeoExperimentCandidateRow[];
+  experimentGuardrails: SeoExperimentGuardrails;
+  experimentWarning: string | null;
   health: Partial<SyncHealthRow>;
   syncRuns: SyncRunRow[];
   fallback: boolean;
@@ -582,6 +677,11 @@ export async function getSeoWorkspace(): Promise<SeoWorkspace> {
       geoPages: [],
       geoGuardrails: {},
       geoWarning: null,
+      experimentSummary: {},
+      experiments: [],
+      experimentCandidates: [],
+      experimentGuardrails: {},
+      experimentWarning: null,
       health: {},
       syncRuns: [],
       fallback: false,
@@ -589,7 +689,14 @@ export async function getSeoWorkspace(): Promise<SeoWorkspace> {
     };
   }
 
-  const [v2Result, contentResult, revenueResult, aeoResult, geoResult] = await Promise.all([
+  const [
+    v2Result,
+    contentResult,
+    revenueResult,
+    aeoResult,
+    geoResult,
+    experimentResult,
+  ] = await Promise.all([
     supabase.rpc("get_seo_workspace_v2", {
       p_organization_id: visibility.organizationId,
     }),
@@ -603,6 +710,9 @@ export async function getSeoWorkspace(): Promise<SeoWorkspace> {
       p_organization_id: visibility.organizationId,
     }),
     supabase.rpc("get_seo_geo_intelligence", {
+      p_organization_id: visibility.organizationId,
+    }),
+    supabase.rpc("get_seo_experiment_intelligence", {
       p_organization_id: visibility.organizationId,
     }),
   ]);
@@ -635,6 +745,13 @@ export async function getSeoWorkspace(): Promise<SeoWorkspace> {
       : null,
   );
 
+  const experimentPayload = experimentWorkspaceFromPayload(
+    (experimentResult.data ?? {}) as SeoExperimentRpcPayload,
+    experimentResult.error
+      ? `Experimentation intelligence is unavailable: ${experimentResult.error.message}`
+      : null,
+  );
+
   if (!v2Result.error) {
     return {
       ...workspaceFromPayload(
@@ -646,6 +763,7 @@ export async function getSeoWorkspace(): Promise<SeoWorkspace> {
       ...revenuePayload,
       ...aeoPayload,
       ...geoPayload,
+      ...experimentPayload,
     };
   }
 
@@ -664,6 +782,7 @@ export async function getSeoWorkspace(): Promise<SeoWorkspace> {
       ...revenuePayload,
       ...aeoPayload,
       ...geoPayload,
+      ...experimentPayload,
     };
   }
 
@@ -682,6 +801,7 @@ export async function getSeoWorkspace(): Promise<SeoWorkspace> {
     ...revenuePayload,
     ...aeoPayload,
     ...geoPayload,
+    ...experimentPayload,
     health: {},
     syncRuns: [],
     fallback: false,
@@ -745,6 +865,12 @@ function workspaceFromPayload(
     geoPages: [],
     geoGuardrails: {},
     geoWarning: null,
+
+    experimentSummary: {},
+    experiments: [],
+    experimentCandidates: [],
+    experimentGuardrails: {},
+    experimentWarning: null,
 
     health: payload.health ?? {},
 
@@ -858,5 +984,28 @@ function geoWorkspaceFromPayload(
     geoPages: Array.isArray(payload.pages) ? payload.pages : [],
     geoGuardrails: payload.guardrails ?? {},
     geoWarning,
+  };
+}
+
+
+function experimentWorkspaceFromPayload(
+  payload: SeoExperimentRpcPayload,
+  experimentWarning: string | null,
+): Pick<
+  SeoWorkspace,
+  | "experimentSummary"
+  | "experiments"
+  | "experimentCandidates"
+  | "experimentGuardrails"
+  | "experimentWarning"
+> {
+  return {
+    experimentSummary: payload.summary ?? {},
+    experiments: Array.isArray(payload.experiments) ? payload.experiments : [],
+    experimentCandidates: Array.isArray(payload.candidates)
+      ? payload.candidates
+      : [],
+    experimentGuardrails: payload.guardrails ?? {},
+    experimentWarning,
   };
 }
