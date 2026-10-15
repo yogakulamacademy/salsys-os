@@ -300,6 +300,89 @@ type SeoRevenueRpcPayload = {
   priority_actions?: SeoRevenueValuePageRow[];
 };
 
+
+export type SeoAeoSummary = {
+  total_pages: number | string | null;
+  crawled_pages: number | string | null;
+  uncrawled_pages: number | string | null;
+  pages_with_answer_sections: number | string | null;
+  pages_with_answer_demand: number | string | null;
+  pages_with_high_opportunity_demand: number | string | null;
+  answer_specific_schema_pages: number | string | null;
+  priority_page_actions: number | string | null;
+  best_page_readiness: number | string | null;
+  answer_queries: number | string | null;
+  answer_clicks: number | string | null;
+  answer_impressions: number | string | null;
+  high_opportunity_queries: number | string | null;
+  striking_answer_queries: number | string | null;
+};
+
+export type SeoAeoAnswerClassRow = {
+  answer_class: string;
+  query_count: number | string | null;
+  clicks: number | string | null;
+  impressions: number | string | null;
+  high_opportunity_queries: number | string | null;
+};
+
+export type SeoAeoQueryOpportunityRow = {
+  query: string;
+  answer_class: string;
+  semantic_intent: string | null;
+  clicks: number | string | null;
+  impressions: number | string | null;
+  ctr: number | string | null;
+  avg_position: number | string | null;
+  page_count: number | string | null;
+  leader_page: string;
+  leader_clicks: number | string | null;
+  leader_impressions: number | string | null;
+  leader_avg_position: number | string | null;
+  answer_opportunity_score_v1: number | string | null;
+  recommended_action: string;
+  recommendation: string;
+};
+
+export type SeoAeoPageReadinessRow = {
+  page_id: string;
+  site_id: string;
+  normalized_url: string;
+  url_path: string;
+  title: string | null;
+  page_type: string;
+  is_indexable: boolean | null;
+  snapshot_id: string | null;
+  word_count: number | string | null;
+  schema_types: string[];
+  answer_heading_count: number | string | null;
+  interrogative_heading_count: number | string | null;
+  has_answer_sections: boolean;
+  has_faq_schema: boolean;
+  has_howto_schema: boolean;
+  semantic_coverage_score_v1: number | string | null;
+  semantic_topic_count: number | string | null;
+  semantic_entity_count: number | string | null;
+  answer_query_count: number | string | null;
+  high_opportunity_query_count: number | string | null;
+  answer_clicks: number | string | null;
+  answer_impressions: number | string | null;
+  best_answer_opportunity_score: number | string | null;
+  answer_classes: string[];
+  answer_readiness_score_v1: number | string | null;
+  answer_state: string;
+  recommended_action: string;
+  recommendation: string;
+  action_priority: number | string | null;
+};
+
+type SeoAeoRpcPayload = {
+  summary?: Partial<SeoAeoSummary>;
+  answer_classes?: SeoAeoAnswerClassRow[];
+  query_opportunities?: SeoAeoQueryOpportunityRow[];
+  page_readiness?: SeoAeoPageReadinessRow[];
+};
+
 export type SyncHealthRow = {
   latest_gsc_date: string | null;
   latest_data_update: string | null;
@@ -347,6 +430,11 @@ export type SeoWorkspace = {
   revenueTrafficGaps: SeoRevenueTrafficGapRow[];
   revenuePriorityActions: SeoRevenueValuePageRow[];
   revenueWarning: string | null;
+  aeoSummary: Partial<SeoAeoSummary>;
+  aeoAnswerClasses: SeoAeoAnswerClassRow[];
+  aeoQueryOpportunities: SeoAeoQueryOpportunityRow[];
+  aeoPageReadiness: SeoAeoPageReadinessRow[];
+  aeoWarning: string | null;
   health: Partial<SyncHealthRow>;
   syncRuns: SyncRunRow[];
   fallback: boolean;
@@ -397,6 +485,11 @@ export async function getSeoWorkspace(): Promise<SeoWorkspace> {
       revenueTrafficGaps: [],
       revenuePriorityActions: [],
       revenueWarning: null,
+      aeoSummary: {},
+      aeoAnswerClasses: [],
+      aeoQueryOpportunities: [],
+      aeoPageReadiness: [],
+      aeoWarning: null,
       health: {},
       syncRuns: [],
       fallback: false,
@@ -404,7 +497,7 @@ export async function getSeoWorkspace(): Promise<SeoWorkspace> {
     };
   }
 
-  const [v2Result, contentResult, revenueResult] = await Promise.all([
+  const [v2Result, contentResult, revenueResult, aeoResult] = await Promise.all([
     supabase.rpc("get_seo_workspace_v2", {
       p_organization_id: visibility.organizationId,
     }),
@@ -412,6 +505,9 @@ export async function getSeoWorkspace(): Promise<SeoWorkspace> {
       p_organization_id: visibility.organizationId,
     }),
     supabase.rpc("get_seo_revenue_intelligence", {
+      p_organization_id: visibility.organizationId,
+    }),
+    supabase.rpc("get_seo_aeo_intelligence", {
       p_organization_id: visibility.organizationId,
     }),
   ]);
@@ -430,6 +526,13 @@ export async function getSeoWorkspace(): Promise<SeoWorkspace> {
       : null,
   );
 
+  const aeoPayload = aeoWorkspaceFromPayload(
+    (aeoResult.data ?? {}) as SeoAeoRpcPayload,
+    aeoResult.error
+      ? `Answer Engine intelligence is unavailable: ${aeoResult.error.message}`
+      : null,
+  );
+
   if (!v2Result.error) {
     return {
       ...workspaceFromPayload(
@@ -439,6 +542,7 @@ export async function getSeoWorkspace(): Promise<SeoWorkspace> {
       ),
       ...contentPayload,
       ...revenuePayload,
+      ...aeoPayload,
     };
   }
 
@@ -455,6 +559,7 @@ export async function getSeoWorkspace(): Promise<SeoWorkspace> {
       ),
       ...contentPayload,
       ...revenuePayload,
+      ...aeoPayload,
     };
   }
 
@@ -471,6 +576,7 @@ export async function getSeoWorkspace(): Promise<SeoWorkspace> {
     keywordSummary: {},
     ...contentPayload,
     ...revenuePayload,
+    ...aeoPayload,
     health: {},
     syncRuns: [],
     fallback: false,
@@ -522,6 +628,12 @@ function workspaceFromPayload(
     revenueTrafficGaps: [],
     revenuePriorityActions: [],
     revenueWarning: null,
+
+    aeoSummary: {},
+    aeoAnswerClasses: [],
+    aeoQueryOpportunities: [],
+    aeoPageReadiness: [],
+    aeoWarning: null,
 
     health: payload.health ?? {},
 
@@ -588,5 +700,31 @@ function revenueWorkspaceFromPayload(
       ? payload.priority_actions
       : [],
     revenueWarning,
+  };
+}
+
+function aeoWorkspaceFromPayload(
+  payload: SeoAeoRpcPayload,
+  aeoWarning: string | null,
+): Pick<
+  SeoWorkspace,
+  | "aeoSummary"
+  | "aeoAnswerClasses"
+  | "aeoQueryOpportunities"
+  | "aeoPageReadiness"
+  | "aeoWarning"
+> {
+  return {
+    aeoSummary: payload.summary ?? {},
+    aeoAnswerClasses: Array.isArray(payload.answer_classes)
+      ? payload.answer_classes
+      : [],
+    aeoQueryOpportunities: Array.isArray(payload.query_opportunities)
+      ? payload.query_opportunities
+      : [],
+    aeoPageReadiness: Array.isArray(payload.page_readiness)
+      ? payload.page_readiness
+      : [],
+    aeoWarning,
   };
 }

@@ -223,6 +223,16 @@ export default async function SeoPage() {
 
     revenueWarning,
 
+    aeoSummary,
+
+    aeoAnswerClasses,
+
+    aeoQueryOpportunities,
+
+    aeoPageReadiness,
+
+    aeoWarning,
+
     health,
 
     syncRuns,
@@ -258,6 +268,15 @@ export default async function SeoPage() {
       ? Math.round(
           (toNumber(contentSummary.crawled_pages) /
             toNumber(contentSummary.total_pages)) *
+            100,
+        )
+      : 0;
+
+  const aeoCrawlCoveragePercent =
+    toNumber(aeoSummary.total_pages) > 0
+      ? Math.round(
+          (toNumber(aeoSummary.crawled_pages) /
+            toNumber(aeoSummary.total_pages)) *
             100,
         )
       : 0;
@@ -752,6 +771,268 @@ export default async function SeoPage() {
                   ))}
                 </tbody>
               </table>
+            </div>
+          )}
+        </div>
+      </section>
+
+      {/* ===================================================
+
+          ANSWER ENGINE INTELLIGENCE
+
+      =================================================== */}
+
+      <section className="seo-table-card card-pad mt-4">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+          <div>
+            <div className="eyebrow">Answer Engine intelligence</div>
+
+            <div className="section-title mt-1">
+              Which questions can we answer better?
+            </div>
+
+            <p className="mt-2 max-w-3xl text-xs leading-5 text-slate-500">
+              Deterministic AEO signals from observed Search Console demand,
+              current leader pages, crawl evidence, answer-oriented headings,
+              topic/entity coverage and structured data. This layer does not
+              generate answers or assume schema markup improves visibility by
+              itself.
+            </p>
+          </div>
+
+          <Target size={20} className="shrink-0 text-slate-400" />
+        </div>
+
+        {aeoWarning && (
+          <div className="mt-4 rounded-xl border border-amber-100 bg-amber-50 px-4 py-3 text-xs font-medium leading-5 text-amber-700">
+            {aeoWarning}
+          </div>
+        )}
+
+        <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          <KeywordSummaryCard
+            label="Answer demand"
+            value={formatNumber(aeoSummary.answer_queries)}
+            sub={`${formatNumber(aeoSummary.answer_impressions)} observed impressions`}
+            tone="emerald"
+          />
+
+          <KeywordSummaryCard
+            label="High-opportunity queries"
+            value={formatNumber(aeoSummary.high_opportunity_queries)}
+            sub={`${formatNumber(aeoSummary.striking_answer_queries)} striking-distance answer queries`}
+            tone="amber"
+          />
+
+          <KeywordSummaryCard
+            label="Answer sections"
+            value={formatNumber(aeoSummary.pages_with_answer_sections)}
+            sub={`${formatNumber(aeoSummary.crawled_pages)} of ${formatNumber(aeoSummary.total_pages)} pages crawled`}
+          />
+
+          <KeywordSummaryCard
+            label="Answer-specific schema"
+            value={formatNumber(aeoSummary.answer_specific_schema_pages)}
+            sub="Observed FAQPage / HowTo markup; not required by default"
+          />
+        </div>
+
+        <div className="mt-4 rounded-xl border border-sky-100 bg-sky-50 px-4 py-3 text-xs leading-5 text-sky-700">
+          Coverage guardrail: {formatNumber(aeoSummary.uncrawled_pages)} of {formatNumber(
+            aeoSummary.total_pages,
+          )} discovered pages do not yet have crawl evidence ({aeoCrawlCoveragePercent}%
+          observed). AEO readiness is evidence-based only. FAQPage or HowTo
+          markup should be considered only when the visible content genuinely
+          supports it.
+        </div>
+
+        <div className="mt-7">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+            <div>
+              <div className="text-xs font-semibold uppercase tracking-wide text-slate-400">
+                Answer opportunities
+              </div>
+
+              <div className="mt-1 text-sm font-semibold text-slate-800">
+                Search demand where a clearer direct answer may improve usefulness
+              </div>
+            </div>
+
+            <div className="text-xs text-slate-400">
+              {formatNumber(aeoSummary.pages_with_high_opportunity_demand)} leader pages with high-opportunity demand
+            </div>
+          </div>
+
+          {aeoQueryOpportunities.length === 0 ? (
+            <div className="mt-4 rounded-xl border border-dashed border-slate-200 px-5 py-8 text-center text-sm text-slate-400">
+              No answer-seeking query evidence is available yet.
+            </div>
+          ) : (
+            <div className="seo-table-wrap mt-4 overflow-x-auto">
+              <table className="seo-data-table min-w-full text-left text-sm">
+                <thead>
+                  <tr className="border-b border-slate-100 text-xs uppercase tracking-wide text-slate-400">
+                    <th className="px-3 py-3">Query</th>
+                    <th className="px-3 py-3">Class</th>
+                    <th className="px-3 py-3 text-right">Impressions</th>
+                    <th className="px-3 py-3 text-right">Position</th>
+                    <th className="px-3 py-3 text-right">Score</th>
+                    <th className="px-3 py-3">Current leader</th>
+                  </tr>
+                </thead>
+
+                <tbody>
+                  {aeoQueryOpportunities.slice(0, 12).map((row) => (
+                    <tr
+                      key={`${row.query}-${row.leader_page}`}
+                      className="border-b border-slate-50 last:border-0"
+                    >
+                      <td className="max-w-[360px] px-3 py-3">
+                        <div className="font-semibold text-slate-800">
+                          {row.query}
+                        </div>
+                        <div className="mt-1 text-[11px] text-slate-400">
+                          {formatAeoAction(row.recommended_action)}
+                        </div>
+                      </td>
+                      <td className="px-3 py-3">
+                        <AeoClassBadge type={row.answer_class} />
+                      </td>
+                      <td className="px-3 py-3 text-right font-semibold text-slate-700">
+                        {formatNumber(row.impressions)}
+                      </td>
+                      <td className="px-3 py-3 text-right text-slate-600">
+                        {formatDecimal(row.avg_position, 1)}
+                      </td>
+                      <td className="px-3 py-3 text-right font-semibold text-slate-700">
+                        {formatNumber(row.answer_opportunity_score_v1)}
+                      </td>
+                      <td className="max-w-[320px] px-3 py-3">
+                        <div
+                          className="truncate text-xs font-medium text-slate-600"
+                          title={row.leader_page}
+                        >
+                          {shortPage(row.leader_page)}
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+
+        <div className="mt-7 border-t border-slate-100 pt-6">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+            <div>
+              <div className="text-xs font-semibold uppercase tracking-wide text-slate-400">
+                Demand mix
+              </div>
+
+              <div className="mt-1 text-sm font-semibold text-slate-800">
+                What people are asking search engines to resolve
+              </div>
+            </div>
+
+            <div className="text-xs text-slate-400">
+              {formatNumber(aeoSummary.answer_clicks)} observed clicks across answer demand
+            </div>
+          </div>
+
+          <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+            {aeoAnswerClasses.slice(0, 8).map((row) => (
+              <div
+                key={row.answer_class}
+                className="rounded-xl border border-slate-100 bg-slate-50 p-4"
+              >
+                <AeoClassBadge type={row.answer_class} />
+                <div className="mt-3 text-lg font-semibold text-slate-800">
+                  {formatNumber(row.query_count)} queries
+                </div>
+                <div className="mt-1 text-[11px] text-slate-500">
+                  {formatNumber(row.impressions)} impressions · {formatNumber(
+                    row.high_opportunity_queries,
+                  )} high opportunity
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div className="mt-7 border-t border-slate-100 pt-6">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+            <div>
+              <div className="text-xs font-semibold uppercase tracking-wide text-slate-400">
+                Page readiness
+              </div>
+
+              <div className="mt-1 text-sm font-semibold text-slate-800">
+                Crawled pages where answer structure and semantic clarity can improve
+              </div>
+            </div>
+
+            <div className="text-xs text-slate-400">
+              {formatNumber(aeoSummary.priority_page_actions)} priority page actions
+            </div>
+          </div>
+
+          {aeoPageReadiness.length === 0 ? (
+            <div className="mt-4 rounded-xl border border-dashed border-slate-200 px-5 py-8 text-center text-sm text-slate-400">
+              No crawled AEO page-readiness evidence is available yet.
+            </div>
+          ) : (
+            <div className="mt-4 grid gap-3 xl:grid-cols-2">
+              {aeoPageReadiness.slice(0, 10).map((row) => (
+                <article
+                  key={row.page_id}
+                  className="rounded-xl border border-slate-100 bg-slate-50 p-4"
+                >
+                  <div className="flex flex-wrap items-center gap-2">
+                    <AeoActionBadge type={row.recommended_action} />
+                    <span className="text-xs text-slate-400">
+                      readiness {formatNumber(row.answer_readiness_score_v1)}
+                    </span>
+                    <span className="text-xs text-slate-400">
+                      priority {formatNumber(row.action_priority)}
+                    </span>
+                  </div>
+
+                  <div className="mt-2 truncate text-sm font-semibold text-slate-800">
+                    {row.title || shortPage(row.normalized_url)}
+                  </div>
+
+                  <div
+                    className="mt-1 truncate text-xs text-slate-400"
+                    title={row.normalized_url}
+                  >
+                    {shortPage(row.normalized_url)}
+                  </div>
+
+                  <div className="mt-4 grid grid-cols-4 gap-3">
+                    <MiniStat
+                      label="Queries"
+                      value={formatNumber(row.answer_query_count)}
+                    />
+                    <MiniStat
+                      label="Impressions"
+                      value={formatNumber(row.answer_impressions)}
+                    />
+                    <MiniStat
+                      label="Answer sections"
+                      value={formatNumber(row.answer_heading_count)}
+                    />
+                    <MiniStat
+                      label="Semantic"
+                      value={formatNumber(row.semantic_coverage_score_v1)}
+                    />
+                  </div>
+
+                  <div className="mt-3 text-xs leading-5 text-slate-500">
+                    {row.recommendation}
+                  </div>
+                </article>
+              ))}
             </div>
           )}
         </div>
@@ -2239,6 +2520,91 @@ function RevenueSignalBadge({ type }: { type: string }) {
       {label}
     </span>
   );
+}
+
+
+function AeoClassBadge({ type }: { type: string }) {
+  const normalized = String(type || "").toLowerCase();
+
+  const label =
+    normalized === "direct_question"
+      ? "Direct question"
+      : normalized === "location_discovery"
+        ? "Location"
+        : normalized === "comparison_choice"
+          ? "Comparison"
+          : normalized === "eligibility_certification"
+            ? "Eligibility / certification"
+            : normalized === "cost_fees"
+              ? "Cost / fees"
+              : normalized === "duration_schedule"
+                ? "Duration / schedule"
+                : normalized === "informational_discovery"
+                  ? "Informational"
+                  : pretty(normalized);
+
+  const classes =
+    normalized === "direct_question"
+      ? "border-violet-200 bg-violet-50 text-violet-700"
+      : normalized === "cost_fees" || normalized === "eligibility_certification"
+        ? "border-amber-200 bg-amber-50 text-amber-700"
+        : normalized === "location_discovery"
+          ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+          : "border-sky-200 bg-sky-50 text-sky-700";
+
+  return (
+    <span
+      className={`inline-flex rounded-full border px-2.5 py-1 text-[11px] font-medium ${classes}`}
+    >
+      {label}
+    </span>
+  );
+}
+
+function AeoActionBadge({ type }: { type: string }) {
+  const normalized = String(type || "").toLowerCase();
+  const important =
+    normalized === "add_direct_answers" ||
+    normalized === "strengthen_answer_sections" ||
+    normalized === "strengthen_semantic_clarity";
+
+  return (
+    <span
+      className={`inline-flex rounded-full border px-2.5 py-1 text-[11px] font-medium ${
+        important
+          ? "border-amber-200 bg-amber-50 text-amber-700"
+          : "border-sky-200 bg-sky-50 text-sky-700"
+      }`}
+    >
+      {formatAeoAction(normalized)}
+    </span>
+  );
+}
+
+function formatAeoAction(value: string) {
+  const normalized = String(value || "").toLowerCase();
+
+  return normalized === "strengthen_answer"
+    ? "Strengthen answer"
+    : normalized === "improve_answer_match"
+      ? "Improve answer match"
+      : normalized === "clarify_answer_owner"
+        ? "Clarify answer owner"
+        : normalized === "review_answer_coverage"
+          ? "Review answer coverage"
+          : normalized === "add_direct_answers"
+            ? "Add direct answers"
+            : normalized === "strengthen_semantic_clarity"
+              ? "Strengthen semantic clarity"
+              : normalized === "strengthen_answer_sections"
+                ? "Strengthen answer sections"
+                : normalized === "align_answer_sections"
+                  ? "Align answer sections"
+                  : normalized === "review_structured_data"
+                    ? "Review structured data"
+                    : normalized === "fix_indexability"
+                      ? "Fix indexability"
+                      : pretty(normalized);
 }
 
 function ContentActionBadge({ type }: { type: string }) {
