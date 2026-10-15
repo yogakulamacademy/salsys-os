@@ -96,6 +96,8 @@ export type GscSyncCounts = {
 
   pageRows: number;
 
+  pageQueryRows: number;
+
   countryRows: number;
 
   deviceRows: number;
@@ -1275,6 +1277,8 @@ Promise<GscSyncCounts> {
 
     pageApiRows,
 
+    pageQueryApiRows,
+
     countryApiRows,
 
     deviceApiRows,
@@ -1352,6 +1356,34 @@ Promise<GscSyncCounts> {
             'date',
 
             'page',
+
+          ],
+
+        }
+
+      ),
+
+
+
+      querySearchAnalytics(
+
+        accessToken,
+
+        siteUrl,
+
+        {
+
+          startDate,
+
+          endDate,
+
+          dimensions: [
+
+            'date',
+
+            'page',
+
+            'query',
 
           ],
 
@@ -1594,6 +1626,77 @@ Promise<GscSyncCounts> {
 
 
 
+  const pageQueryRows =
+
+    pageQueryApiRows.map(
+
+      (row) => ({
+
+        organization_id:
+          resolvedRuntime.organizationId,
+
+        site_url:
+
+          siteUrl,
+
+        date:
+
+          dimensionValue(
+
+            row,
+
+            0,
+
+            startDate
+
+          ),
+
+        search_type:
+
+          SEARCH_TYPE,
+
+        page:
+
+          dimensionValue(
+
+            row,
+
+            1,
+
+            '(not set)'
+
+          ),
+
+        query:
+
+          dimensionValue(
+
+            row,
+
+            2,
+
+            '(not set)'
+
+          ),
+
+        ...baseMetrics(
+
+          row
+
+        ),
+
+        sync_run_id:
+
+          syncRunId ??
+
+          null,
+
+      })
+
+    );
+
+
+
   const countryRows =
 
     countryApiRows.map(
@@ -1781,6 +1884,8 @@ Promise<GscSyncCounts> {
 
     'gsc_page_daily',
 
+    'gsc_page_query_daily',
+
     'gsc_country_daily',
 
     'gsc_device_daily',
@@ -1865,6 +1970,20 @@ Promise<GscSyncCounts> {
 
     supabase,
 
+    'gsc_page_query_daily',
+
+    pageQueryRows,
+
+    'organization_id,site_url,date,search_type,page,query'
+
+  );
+
+
+
+  await upsertInChunks(
+
+    supabase,
+
     'gsc_country_daily',
 
     countryRows,
@@ -1911,6 +2030,8 @@ Promise<GscSyncCounts> {
 
     pageRows.length +
 
+    pageQueryRows.length +
+
     countryRows.length +
 
     deviceRows.length +
@@ -1932,6 +2053,10 @@ Promise<GscSyncCounts> {
     pageRows:
 
       pageRows.length,
+
+    pageQueryRows:
+
+      pageQueryRows.length,
 
     countryRows:
 

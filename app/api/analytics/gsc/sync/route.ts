@@ -337,6 +337,8 @@ async function executeRuntimeSync(
               counts.queryRows,
             pageRows:
               counts.pageRows,
+            pageQueryRows:
+              counts.pageQueryRows,
             countryRows:
               counts.countryRows,
             deviceRows:
