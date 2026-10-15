@@ -383,6 +383,88 @@ type SeoAeoRpcPayload = {
   page_readiness?: SeoAeoPageReadinessRow[];
 };
 
+export type SeoGeoSummary = {
+  range_start: string | null;
+  range_end: string | null;
+  total_pages: number | string | null;
+  crawled_pages: number | string | null;
+  pages_with_observed_ai_referrals: number | string | null;
+  first_party_ai_referral_sessions: number | string | null;
+  ai_linked_leads: number | string | null;
+  strong_readiness_pages: number | string | null;
+  priority_geo_actions: number | string | null;
+  organization_entities: number | string | null;
+  described_entities: number | string | null;
+  externally_identified_entities: number | string | null;
+  organization_topics: number | string | null;
+  described_topics: number | string | null;
+  topic_relations: number | string | null;
+  entity_relations: number | string | null;
+  ai_analysis_runs: number | string | null;
+  completed_ai_analysis_runs: number | string | null;
+  best_generative_readiness: number | string | null;
+  providers_observed: number | string | null;
+  ga4_ai_sessions: number | string | null;
+  ga4_ai_users: number | string | null;
+  ga4_ai_engaged_sessions: number | string | null;
+  ga4_ai_key_events: number | string | null;
+};
+
+export type SeoGeoProviderRow = {
+  provider: string;
+  range_start: string | null;
+  range_end: string | null;
+  sessions: number | string | null;
+  users: number | string | null;
+  new_users: number | string | null;
+  engaged_sessions: number | string | null;
+  key_events: number | string | null;
+  engagement_rate: number | string | null;
+  key_event_rate: number | string | null;
+};
+
+export type SeoGeoPageRow = {
+  page_id: string;
+  site_id: string;
+  normalized_url: string;
+  url_path: string;
+  title: string | null;
+  page_type: string;
+  is_indexable: boolean | null;
+  word_count: number | string | null;
+  schema_types: string[];
+  page_topic_count: number | string | null;
+  page_entity_count: number | string | null;
+  semantic_coverage_score_v1: number | string | null;
+  answer_readiness_score_v1: number | string | null;
+  answer_query_count: number | string | null;
+  high_opportunity_answer_queries: number | string | null;
+  ai_referral_sessions: number | string | null;
+  ai_linked_leads: number | string | null;
+  observed_ai_providers: string[];
+  generative_readiness_score_v1: number | string | null;
+  geo_state: string;
+  recommended_action: string;
+  recommendation: string;
+  geo_priority: number | string | null;
+};
+
+export type SeoGeoGuardrails = {
+  referrals_are_observed?: boolean;
+  citations_measured?: boolean;
+  model_mentions_measured?: boolean;
+  model_rankings_measured?: boolean;
+  readiness_is_deterministic?: boolean;
+  note?: string;
+};
+
+type SeoGeoRpcPayload = {
+  summary?: Partial<SeoGeoSummary>;
+  providers?: SeoGeoProviderRow[];
+  pages?: SeoGeoPageRow[];
+  guardrails?: SeoGeoGuardrails;
+};
+
 export type SyncHealthRow = {
   latest_gsc_date: string | null;
   latest_data_update: string | null;
@@ -435,6 +517,11 @@ export type SeoWorkspace = {
   aeoQueryOpportunities: SeoAeoQueryOpportunityRow[];
   aeoPageReadiness: SeoAeoPageReadinessRow[];
   aeoWarning: string | null;
+  geoSummary: Partial<SeoGeoSummary>;
+  geoProviders: SeoGeoProviderRow[];
+  geoPages: SeoGeoPageRow[];
+  geoGuardrails: SeoGeoGuardrails;
+  geoWarning: string | null;
   health: Partial<SyncHealthRow>;
   syncRuns: SyncRunRow[];
   fallback: boolean;
@@ -490,6 +577,11 @@ export async function getSeoWorkspace(): Promise<SeoWorkspace> {
       aeoQueryOpportunities: [],
       aeoPageReadiness: [],
       aeoWarning: null,
+      geoSummary: {},
+      geoProviders: [],
+      geoPages: [],
+      geoGuardrails: {},
+      geoWarning: null,
       health: {},
       syncRuns: [],
       fallback: false,
@@ -497,7 +589,7 @@ export async function getSeoWorkspace(): Promise<SeoWorkspace> {
     };
   }
 
-  const [v2Result, contentResult, revenueResult, aeoResult] = await Promise.all([
+  const [v2Result, contentResult, revenueResult, aeoResult, geoResult] = await Promise.all([
     supabase.rpc("get_seo_workspace_v2", {
       p_organization_id: visibility.organizationId,
     }),
@@ -508,6 +600,9 @@ export async function getSeoWorkspace(): Promise<SeoWorkspace> {
       p_organization_id: visibility.organizationId,
     }),
     supabase.rpc("get_seo_aeo_intelligence", {
+      p_organization_id: visibility.organizationId,
+    }),
+    supabase.rpc("get_seo_geo_intelligence", {
       p_organization_id: visibility.organizationId,
     }),
   ]);
@@ -533,6 +628,13 @@ export async function getSeoWorkspace(): Promise<SeoWorkspace> {
       : null,
   );
 
+  const geoPayload = geoWorkspaceFromPayload(
+    (geoResult.data ?? {}) as SeoGeoRpcPayload,
+    geoResult.error
+      ? `Generative visibility intelligence is unavailable: ${geoResult.error.message}`
+      : null,
+  );
+
   if (!v2Result.error) {
     return {
       ...workspaceFromPayload(
@@ -543,6 +645,7 @@ export async function getSeoWorkspace(): Promise<SeoWorkspace> {
       ...contentPayload,
       ...revenuePayload,
       ...aeoPayload,
+      ...geoPayload,
     };
   }
 
@@ -560,6 +663,7 @@ export async function getSeoWorkspace(): Promise<SeoWorkspace> {
       ...contentPayload,
       ...revenuePayload,
       ...aeoPayload,
+      ...geoPayload,
     };
   }
 
@@ -577,6 +681,7 @@ export async function getSeoWorkspace(): Promise<SeoWorkspace> {
     ...contentPayload,
     ...revenuePayload,
     ...aeoPayload,
+    ...geoPayload,
     health: {},
     syncRuns: [],
     fallback: false,
@@ -634,6 +739,12 @@ function workspaceFromPayload(
     aeoQueryOpportunities: [],
     aeoPageReadiness: [],
     aeoWarning: null,
+
+    geoSummary: {},
+    geoProviders: [],
+    geoPages: [],
+    geoGuardrails: {},
+    geoWarning: null,
 
     health: payload.health ?? {},
 
@@ -726,5 +837,26 @@ function aeoWorkspaceFromPayload(
       ? payload.page_readiness
       : [],
     aeoWarning,
+  };
+}
+
+
+function geoWorkspaceFromPayload(
+  payload: SeoGeoRpcPayload,
+  geoWarning: string | null,
+): Pick<
+  SeoWorkspace,
+  | "geoSummary"
+  | "geoProviders"
+  | "geoPages"
+  | "geoGuardrails"
+  | "geoWarning"
+> {
+  return {
+    geoSummary: payload.summary ?? {},
+    geoProviders: Array.isArray(payload.providers) ? payload.providers : [],
+    geoPages: Array.isArray(payload.pages) ? payload.pages : [],
+    geoGuardrails: payload.guardrails ?? {},
+    geoWarning,
   };
 }

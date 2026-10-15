@@ -233,6 +233,16 @@ export default async function SeoPage() {
 
     aeoWarning,
 
+    geoSummary,
+
+    geoProviders,
+
+    geoPages,
+
+    geoGuardrails,
+
+    geoWarning,
+
     health,
 
     syncRuns,
@@ -1035,6 +1045,283 @@ export default async function SeoPage() {
               ))}
             </div>
           )}
+        </div>
+      </section>
+
+      {/* ===================================================
+
+          GENERATIVE VISIBILITY INTELLIGENCE
+
+      =================================================== */}
+
+      <section className="seo-table-card card-pad mt-4">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+          <div>
+            <div className="eyebrow">Generative visibility intelligence</div>
+
+            <div className="section-title mt-1">
+              Where are AI assistants already sending traffic?
+            </div>
+
+            <p className="mt-2 max-w-3xl text-xs leading-5 text-slate-500">
+              Observed AI-assistant referrals are reported separately from
+              deterministic generative-discoverability readiness. Readiness
+              combines crawl evidence, topic/entity clarity and answer
+              structure; it is not a claim that a model cited, mentioned or
+              recommended the page.
+            </p>
+          </div>
+
+          <Sparkles size={20} className="shrink-0 text-slate-400" />
+        </div>
+
+        {geoWarning && (
+          <div className="mt-4 rounded-xl border border-amber-100 bg-amber-50 px-4 py-3 text-xs font-medium leading-5 text-amber-700">
+            {geoWarning}
+          </div>
+        )}
+
+        <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          <KeywordSummaryCard
+            label="AI referral traffic"
+            value={formatNumber(geoSummary.ga4_ai_sessions)}
+            sub={`${formatNumber(geoSummary.providers_observed)} observed providers · ${formatNumber(geoSummary.ga4_ai_users)} users`}
+            tone="emerald"
+          />
+
+          <KeywordSummaryCard
+            label="Observed entry pages"
+            value={formatNumber(geoSummary.pages_with_observed_ai_referrals)}
+            sub={`${formatNumber(geoSummary.first_party_ai_referral_sessions)} first-party sessions · ${formatNumber(geoSummary.ai_linked_leads)} linked leads`}
+          />
+
+          <KeywordSummaryCard
+            label="Strong readiness"
+            value={formatNumber(geoSummary.strong_readiness_pages)}
+            sub={`Best deterministic readiness ${formatNumber(geoSummary.best_generative_readiness)} / 100`}
+            tone="amber"
+          />
+
+          <KeywordSummaryCard
+            label="Knowledge relationships"
+            value={formatNumber(
+              toNumber(geoSummary.entity_relations) +
+                toNumber(geoSummary.topic_relations),
+            )}
+            sub={`${formatNumber(geoSummary.organization_entities)} entities · ${formatNumber(geoSummary.organization_topics)} topics`}
+          />
+        </div>
+
+        <div className="mt-4 rounded-xl border border-sky-100 bg-sky-50 px-4 py-3 text-xs leading-5 text-sky-700">
+          Evidence guardrail: AI referral traffic is observed. Citation share,
+          model mentions and model rankings are not measured yet. GA4 reports
+          {" "}{formatNumber(geoSummary.ga4_ai_sessions)} AI sessions while first-party
+          tracking reports {formatNumber(geoSummary.first_party_ai_referral_sessions)};
+          these are separate measurement systems and are not forced to reconcile.
+          {geoGuardrails.note ? ` ${geoGuardrails.note}` : ""}
+        </div>
+
+        <div className="mt-7">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+            <div>
+              <div className="text-xs font-semibold uppercase tracking-wide text-slate-400">
+                Observed AI providers
+              </div>
+
+              <div className="mt-1 text-sm font-semibold text-slate-800">
+                Traffic that analytics already attributes to AI assistants
+              </div>
+            </div>
+
+            <div className="text-xs text-slate-400">
+              {formatNumber(geoSummary.ga4_ai_engaged_sessions)} engaged sessions · {formatNumber(
+                geoSummary.ga4_ai_key_events,
+              )} key events
+            </div>
+          </div>
+
+          {geoProviders.length === 0 ? (
+            <div className="mt-4 rounded-xl border border-dashed border-slate-200 px-5 py-8 text-center text-sm text-slate-400">
+              No observed AI-assistant referral traffic is available in the current window.
+            </div>
+          ) : (
+            <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+              {geoProviders.map((row) => (
+                <article
+                  key={row.provider}
+                  className="rounded-xl border border-slate-100 bg-slate-50 p-4"
+                >
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="text-sm font-semibold text-slate-800">
+                      {row.provider}
+                    </div>
+                    <Globe2 size={16} className="text-slate-400" />
+                  </div>
+
+                  <div className="mt-3 text-2xl font-semibold text-slate-800">
+                    {formatNumber(row.sessions)}
+                  </div>
+                  <div className="text-[11px] text-slate-500">sessions</div>
+
+                  <div className="mt-4 grid grid-cols-3 gap-3">
+                    <MiniStat label="Users" value={formatNumber(row.users)} />
+                    <MiniStat
+                      label="Engaged"
+                      value={formatNumber(row.engaged_sessions)}
+                    />
+                    <MiniStat
+                      label="Events"
+                      value={formatNumber(row.key_events)}
+                    />
+                  </div>
+
+                  <div className="mt-3 text-[11px] text-slate-500">
+                    {formatFractionPercent(row.engagement_rate)} engagement rate
+                  </div>
+                </article>
+              ))}
+            </div>
+          )}
+        </div>
+
+        <div className="mt-7 border-t border-slate-100 pt-6">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+            <div>
+              <div className="text-xs font-semibold uppercase tracking-wide text-slate-400">
+                Generative entry pages
+              </div>
+
+              <div className="mt-1 text-sm font-semibold text-slate-800">
+                Pages with observed AI traffic or deterministic readiness actions
+              </div>
+            </div>
+
+            <div className="text-xs text-slate-400">
+              {formatNumber(geoSummary.priority_geo_actions)} priority GEO actions
+            </div>
+          </div>
+
+          {geoPages.length === 0 ? (
+            <div className="mt-4 rounded-xl border border-dashed border-slate-200 px-5 py-8 text-center text-sm text-slate-400">
+              No crawled generative-readiness evidence is available yet.
+            </div>
+          ) : (
+            <div className="mt-4 grid gap-3 xl:grid-cols-2">
+              {geoPages.slice(0, 12).map((row) => (
+                <article
+                  key={row.page_id}
+                  className="rounded-xl border border-slate-100 bg-slate-50 p-4"
+                >
+                  <div className="flex flex-wrap items-center gap-2">
+                    <GeoActionBadge type={row.recommended_action} />
+                    <span className="text-xs text-slate-400">
+                      readiness {formatNumber(row.generative_readiness_score_v1)}
+                    </span>
+                    <span className="text-xs text-slate-400">
+                      priority {formatNumber(row.geo_priority)}
+                    </span>
+                    {toNumber(row.ai_referral_sessions) > 0 && (
+                      <span className="inline-flex rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-[11px] font-medium text-emerald-700">
+                        Observed AI entry
+                      </span>
+                    )}
+                  </div>
+
+                  <div className="mt-2 truncate text-sm font-semibold text-slate-800">
+                    {row.title || shortPage(row.normalized_url)}
+                  </div>
+
+                  <div
+                    className="mt-1 truncate text-xs text-slate-400"
+                    title={row.normalized_url}
+                  >
+                    {shortPage(row.normalized_url)}
+                  </div>
+
+                  <div className="mt-4 grid grid-cols-4 gap-3">
+                    <MiniStat
+                      label="AI sessions"
+                      value={formatNumber(row.ai_referral_sessions)}
+                    />
+                    <MiniStat
+                      label="Semantic"
+                      value={formatNumber(row.semantic_coverage_score_v1)}
+                    />
+                    <MiniStat
+                      label="Answer"
+                      value={formatNumber(row.answer_readiness_score_v1)}
+                    />
+                    <MiniStat
+                      label="Entities"
+                      value={formatNumber(row.page_entity_count)}
+                    />
+                  </div>
+
+                  {row.observed_ai_providers.length > 0 && (
+                    <div className="mt-3 text-[11px] text-slate-400">
+                      Observed providers: {row.observed_ai_providers.join(", ")}
+                    </div>
+                  )}
+
+                  <div className="mt-3 text-xs leading-5 text-slate-500">
+                    {row.recommendation}
+                  </div>
+                </article>
+              ))}
+            </div>
+          )}
+        </div>
+
+        <div className="mt-7 border-t border-slate-100 pt-6">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+            <div>
+              <div className="text-xs font-semibold uppercase tracking-wide text-slate-400">
+                Knowledge-model gaps
+              </div>
+
+              <div className="mt-1 text-sm font-semibold text-slate-800">
+                Evidence needed before deeper model-specific visibility analysis
+              </div>
+            </div>
+
+            <div className="text-xs text-slate-400">
+              {formatNumber(geoSummary.ai_analysis_runs)} provenance-tagged AI analysis runs
+            </div>
+          </div>
+
+          <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+            <KeywordSummaryCard
+              label="Entity descriptions"
+              value={`${formatNumber(geoSummary.described_entities)} / ${formatNumber(
+                geoSummary.organization_entities,
+              )}`}
+              sub="Explicit entity descriptions available"
+            />
+
+            <KeywordSummaryCard
+              label="Topic descriptions"
+              value={`${formatNumber(geoSummary.described_topics)} / ${formatNumber(
+                geoSummary.organization_topics,
+              )}`}
+              sub="Explicit topic descriptions available"
+            />
+
+            <KeywordSummaryCard
+              label="External entity IDs"
+              value={formatNumber(geoSummary.externally_identified_entities)}
+              sub="Externally identified semantic entities"
+            />
+
+            <KeywordSummaryCard
+              label="Graph relations"
+              value={formatNumber(
+                toNumber(geoSummary.entity_relations) +
+                  toNumber(geoSummary.topic_relations),
+              )}
+              sub="Entity + topic relationships currently observed"
+              tone="amber"
+            />
+          </div>
         </div>
       </section>
 
@@ -2605,6 +2892,48 @@ function formatAeoAction(value: string) {
                     : normalized === "fix_indexability"
                       ? "Fix indexability"
                       : pretty(normalized);
+}
+
+function GeoActionBadge({ type }: { type: string }) {
+  const normalized = String(type || "").toLowerCase();
+
+  const label =
+    normalized === "protect_observed_ai_entry"
+      ? "Protect AI entry"
+      : normalized === "strengthen_observed_ai_entry"
+        ? "Strengthen AI entry"
+        : normalized === "strengthen_entity_clarity"
+          ? "Strengthen entities"
+          : normalized === "strengthen_topic_clarity"
+            ? "Strengthen topics"
+            : normalized === "strengthen_answer_clarity"
+              ? "Strengthen answers"
+              : normalized === "strengthen_semantic_coverage"
+                ? "Strengthen semantics"
+                : normalized === "fix_indexability"
+                  ? "Fix indexability"
+                  : normalized === "monitor"
+                    ? "Monitor"
+                    : pretty(normalized);
+
+  const className =
+    normalized === "protect_observed_ai_entry"
+      ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+      : normalized === "strengthen_observed_ai_entry"
+        ? "border-sky-200 bg-sky-50 text-sky-700"
+        : normalized === "fix_indexability"
+          ? "border-rose-200 bg-rose-50 text-rose-700"
+          : normalized === "monitor"
+            ? "border-slate-200 bg-white text-slate-600"
+            : "border-amber-200 bg-amber-50 text-amber-700";
+
+  return (
+    <span
+      className={`inline-flex rounded-full border px-2.5 py-1 text-[11px] font-medium ${className}`}
+    >
+      {label}
+    </span>
+  );
 }
 
 function ContentActionBadge({ type }: { type: string }) {
