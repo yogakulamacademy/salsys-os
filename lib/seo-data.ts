@@ -695,7 +695,6 @@ export async function getSeoWorkspace(): Promise<SeoWorkspace> {
     revenueResult,
     aeoResult,
     geoResult,
-    experimentResult,
   ] = await Promise.all([
     supabase.rpc("get_seo_workspace_v2", {
       p_organization_id: visibility.organizationId,
@@ -712,10 +711,14 @@ export async function getSeoWorkspace(): Promise<SeoWorkspace> {
     supabase.rpc("get_seo_geo_intelligence", {
       p_organization_id: visibility.organizationId,
     }),
-    supabase.rpc("get_seo_experiment_intelligence", {
-      p_organization_id: visibility.organizationId,
-    }),
   ]);
+
+  // OG8 candidate generation reuses several expensive OG4-OG7 views.
+  // Keep it out of the main SEO Promise.all so it cannot compete with
+  // get_seo_workspace_v2 and push the primary workspace over statement timeout.
+  const experimentResult = await supabase.rpc("get_seo_experiment_intelligence", {
+    p_organization_id: visibility.organizationId,
+  });
 
   const contentPayload = contentWorkspaceFromPayload(
     (contentResult.data ?? {}) as ContentIntelligenceRpcPayload,
