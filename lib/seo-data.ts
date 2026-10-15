@@ -134,6 +134,92 @@ export type KeywordSummary = {
   high_impression_overlaps: number | string | null;
 };
 
+
+export type ContentIntelligenceSummary = {
+  total_pages: number | string | null;
+  crawled_pages: number | string | null;
+  uncrawled_pages: number | string | null;
+  fix_indexability: number | string | null;
+  improve_snippet: number | string | null;
+  expand_content: number | string | null;
+  strengthen_internal_links: number | string | null;
+  improve_existing: number | string | null;
+  create_content_topics: number | string | null;
+  expand_topic_topics: number | string | null;
+  internal_link_opportunities: number | string | null;
+};
+
+export type ContentPageActionRow = {
+  page_id: string;
+  site_id: string;
+  normalized_url: string;
+  url_path: string;
+  page_type: string;
+  title: string | null;
+  word_count: number | string | null;
+  is_indexable: boolean | null;
+  content_state: string;
+  recommended_action: string;
+  action_priority_score: number | string | null;
+  action_reason: string;
+  gsc_clicks: number | string | null;
+  gsc_impressions: number | string | null;
+  gsc_ctr: number | string | null;
+  gsc_avg_position: number | string | null;
+  semantic_coverage_score_v1: number | string | null;
+  semantic_topic_count: number | string | null;
+  semantic_entity_count: number | string | null;
+  technical_issue_count: number | string | null;
+  internal_link_opportunities: number | string | null;
+  best_internal_link_score: number | string | null;
+  opportunity_score_v1: number | string | null;
+  opportunity_reasons: string[];
+};
+
+export type ContentGapQueryRow = {
+  query: string;
+  clicks: number | string | null;
+  impressions: number | string | null;
+  ctr: number | string | null;
+  avg_position: number | string | null;
+};
+
+export type ContentGapRow = {
+  site_id: string;
+  topic_id: string;
+  canonical_key: string;
+  topic_name: string;
+  topic_type: string;
+  mapped_pages: number | string | null;
+  indexable_pages: number | string | null;
+  query_count: number | string | null;
+  gsc_clicks: number | string | null;
+  gsc_impressions: number | string | null;
+  gsc_avg_position: number | string | null;
+  top_queries: ContentGapQueryRow[];
+  gap_type: string;
+  priority_score_v1: number | string | null;
+  recommendation: string;
+};
+
+export type InternalLinkOpportunityRow = {
+  site_id: string;
+  source_url: string;
+  target_url: string;
+  source_page_id: string;
+  target_page_id: string;
+  shared_topic_count: number | string | null;
+  semantic_confidence: number | string | null;
+  opportunity_score_v1: number | string | null;
+};
+
+type ContentIntelligenceRpcPayload = {
+  summary?: Partial<ContentIntelligenceSummary>;
+  page_actions?: ContentPageActionRow[];
+  content_gaps?: ContentGapRow[];
+  internal_links?: InternalLinkOpportunityRow[];
+};
+
 export type SyncHealthRow = {
   latest_gsc_date: string | null;
   latest_data_update: string | null;
@@ -170,6 +256,11 @@ export type SeoWorkspace = {
   opportunities: OpportunityRow[];
   keywordIntelligence: KeywordIntelligenceRow[];
   keywordSummary: Partial<KeywordSummary>;
+  contentSummary: Partial<ContentIntelligenceSummary>;
+  contentPageActions: ContentPageActionRow[];
+  contentGaps: ContentGapRow[];
+  internalLinkOpportunities: InternalLinkOpportunityRow[];
+  contentWarning: string | null;
   health: Partial<SyncHealthRow>;
   syncRuns: SyncRunRow[];
   fallback: boolean;
@@ -209,6 +300,11 @@ export async function getSeoWorkspace(): Promise<SeoWorkspace> {
       opportunities: [],
       keywordIntelligence: [],
       keywordSummary: {},
+      contentSummary: {},
+      contentPageActions: [],
+      contentGaps: [],
+      internalLinkOpportunities: [],
+      contentWarning: null,
       health: {},
       syncRuns: [],
       fallback: false,
@@ -216,16 +312,31 @@ export async function getSeoWorkspace(): Promise<SeoWorkspace> {
     };
   }
 
-  const v2Result = await supabase.rpc("get_seo_workspace_v2", {
-    p_organization_id: visibility.organizationId,
-  });
+  const [v2Result, contentResult] = await Promise.all([
+    supabase.rpc("get_seo_workspace_v2", {
+      p_organization_id: visibility.organizationId,
+    }),
+    supabase.rpc("get_seo_content_intelligence", {
+      p_organization_id: visibility.organizationId,
+    }),
+  ]);
+
+  const contentPayload = contentWorkspaceFromPayload(
+    (contentResult.data ?? {}) as ContentIntelligenceRpcPayload,
+    contentResult.error
+      ? `Content intelligence is unavailable: ${contentResult.error.message}`
+      : null,
+  );
 
   if (!v2Result.error) {
-    return workspaceFromPayload(
-      (v2Result.data ?? {}) as RpcPayload,
-      false,
-      null,
-    );
+    return {
+      ...workspaceFromPayload(
+        (v2Result.data ?? {}) as RpcPayload,
+        false,
+        null,
+      ),
+      ...contentPayload,
+    };
   }
 
   const legacyResult = await supabase.rpc("get_seo_workspace", {
@@ -233,11 +344,14 @@ export async function getSeoWorkspace(): Promise<SeoWorkspace> {
   });
 
   if (!legacyResult.error) {
-    return workspaceFromPayload(
-      (legacyResult.data ?? {}) as RpcPayload,
-      true,
-      `Keyword + SERP intelligence is unavailable: ${v2Result.error.message}`,
-    );
+    return {
+      ...workspaceFromPayload(
+        (legacyResult.data ?? {}) as RpcPayload,
+        true,
+        `Keyword + SERP intelligence is unavailable: ${v2Result.error.message}`,
+      ),
+      ...contentPayload,
+    };
   }
 
   return {
@@ -251,6 +365,7 @@ export async function getSeoWorkspace(): Promise<SeoWorkspace> {
     opportunities: [],
     keywordIntelligence: [],
     keywordSummary: {},
+    ...contentPayload,
     health: {},
     syncRuns: [],
     fallback: false,
@@ -290,11 +405,47 @@ function workspaceFromPayload(
 
     keywordSummary: payload.keyword_summary ?? {},
 
+    contentSummary: {},
+    contentPageActions: [],
+    contentGaps: [],
+    internalLinkOpportunities: [],
+    contentWarning: null,
+
     health: payload.health ?? {},
 
     syncRuns: Array.isArray(payload.sync_runs) ? payload.sync_runs : [],
 
     fallback,
     warning,
+  };
+}
+
+function contentWorkspaceFromPayload(
+  payload: ContentIntelligenceRpcPayload,
+  contentWarning: string | null,
+): Pick<
+  SeoWorkspace,
+  | "contentSummary"
+  | "contentPageActions"
+  | "contentGaps"
+  | "internalLinkOpportunities"
+  | "contentWarning"
+> {
+  return {
+    contentSummary: payload.summary ?? {},
+
+    contentPageActions: Array.isArray(payload.page_actions)
+      ? payload.page_actions
+      : [],
+
+    contentGaps: Array.isArray(payload.content_gaps)
+      ? payload.content_gaps
+      : [],
+
+    internalLinkOpportunities: Array.isArray(payload.internal_links)
+      ? payload.internal_links
+      : [],
+
+    contentWarning,
   };
 }

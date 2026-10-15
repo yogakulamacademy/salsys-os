@@ -203,6 +203,16 @@ export default async function SeoPage() {
 
     keywordSummary,
 
+    contentSummary,
+
+    contentPageActions,
+
+    contentGaps,
+
+    internalLinkOpportunities,
+
+    contentWarning,
+
     health,
 
     syncRuns,
@@ -228,6 +238,19 @@ export default async function SeoPage() {
 
     ...daily.map((row) => toNumber(row.impressions)),
   );
+
+  const contentDecisionActions = contentPageActions
+    .filter((row) => row.recommended_action !== "crawl_page")
+    .slice(0, 12);
+
+  const crawlCoveragePercent =
+    toNumber(contentSummary.total_pages) > 0
+      ? Math.round(
+          (toNumber(contentSummary.crawled_pages) /
+            toNumber(contentSummary.total_pages)) *
+            100,
+        )
+      : 0;
 
   return (
     <div className="seo-polish">
@@ -851,6 +874,323 @@ export default async function SeoPage() {
             ))}
           </div>
         )}
+      </section>
+
+      {/* ===================================================
+
+          CONTENT INTELLIGENCE
+
+      =================================================== */}
+
+      <section className="seo-table-card card-pad mt-4">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+          <div>
+            <div className="eyebrow">Content intelligence</div>
+
+            <div className="section-title mt-1">What should we improve next?</div>
+
+            <p className="mt-2 max-w-3xl text-xs leading-5 text-slate-500">
+              Deterministic recommendations from crawl evidence, Search Console,
+              semantic mappings, technical signals and the internal-link graph.
+              Content gaps are treated as evidence to review, not automatic
+              instructions to publish a new page.
+            </p>
+          </div>
+
+          <Target size={20} className="shrink-0 text-slate-400" />
+        </div>
+
+        {contentWarning && (
+          <div className="mt-4 rounded-xl border border-amber-100 bg-amber-50 px-4 py-3 text-xs font-medium leading-5 text-amber-700">
+            {contentWarning}
+          </div>
+        )}
+
+        <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          <KeywordSummaryCard
+            label="Crawl evidence"
+            value={`${formatNumber(contentSummary.crawled_pages)} / ${formatNumber(
+              contentSummary.total_pages,
+            )}`}
+            sub={`${crawlCoveragePercent}% of discovered pages have observed crawl snapshots`}
+          />
+
+          <KeywordSummaryCard
+            label="Potential new content"
+            value={formatNumber(contentSummary.create_content_topics)}
+            sub="Demand-backed topics with no mapped crawled page"
+            tone="amber"
+          />
+
+          <KeywordSummaryCard
+            label="Expand topic"
+            value={formatNumber(contentSummary.expand_topic_topics)}
+            sub="Demand-backed topics relying on one mapped page"
+          />
+
+          <KeywordSummaryCard
+            label="Internal-link opportunities"
+            value={formatNumber(contentSummary.internal_link_opportunities)}
+            sub="Semantic source → target opportunities"
+            tone="emerald"
+          />
+        </div>
+
+        {toNumber(contentSummary.uncrawled_pages) > 0 && (
+          <div className="mt-4 rounded-xl border border-sky-100 bg-sky-50 px-4 py-3 text-xs leading-5 text-sky-700">
+            <span className="font-semibold">Coverage guardrail:</span>{" "}
+            {formatNumber(contentSummary.uncrawled_pages)} discovered pages do
+            not yet have crawl snapshots. “Potential new content” means no
+            mapped crawled page was observed; it does not prove that a relevant
+            page does not already exist. Complete crawl coverage before acting
+            on those suggestions.
+          </div>
+        )}
+
+        <div className="mt-6">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+            <div>
+              <div className="text-xs font-semibold uppercase tracking-wide text-slate-400">
+                Priority page actions
+              </div>
+
+              <div className="mt-1 text-sm font-semibold text-slate-800">
+                Improve observed pages before creating duplicates
+              </div>
+            </div>
+
+            <div className="text-xs text-slate-400">
+              {formatNumber(contentDecisionActions.length)} shown ·{" "}
+              {formatNumber(contentSummary.uncrawled_pages)} awaiting crawl
+              evidence
+            </div>
+          </div>
+
+          {contentDecisionActions.length === 0 ? (
+            <div className="mt-4 rounded-xl border border-dashed border-slate-200 px-5 py-8 text-center text-sm text-slate-400">
+              No observed page actions are available yet.
+            </div>
+          ) : (
+            <div className="mt-4 space-y-3">
+              {contentDecisionActions.map((row) => (
+                <article
+                  key={row.page_id}
+                  className="rounded-xl border border-slate-100 bg-slate-50 p-4"
+                >
+                  <div className="flex flex-col gap-3 xl:flex-row xl:items-start xl:justify-between">
+                    <div className="min-w-0">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <ContentActionBadge type={row.recommended_action} />
+
+                        <span className="text-xs text-slate-400">
+                          priority {formatNumber(row.action_priority_score)}
+                        </span>
+
+                        <span className="text-xs text-slate-400">
+                          {formatNumber(row.gsc_impressions)} impressions
+                        </span>
+                      </div>
+
+                      <div className="mt-2 truncate text-sm font-semibold text-slate-800">
+                        {row.title || shortPage(row.normalized_url)}
+                      </div>
+
+                      <div
+                        className="mt-1 truncate text-xs text-slate-400"
+                        title={row.normalized_url}
+                      >
+                        {shortPage(row.normalized_url)}
+                      </div>
+                    </div>
+
+                    <div className="grid shrink-0 grid-cols-3 gap-5 text-right">
+                      <MiniStat
+                        label="Position"
+                        value={formatDecimal(row.gsc_avg_position, 1)}
+                      />
+
+                      <MiniStat
+                        label="Semantic"
+                        value={formatNumber(row.semantic_coverage_score_v1)}
+                      />
+
+                      <MiniStat
+                        label="Link gaps"
+                        value={formatNumber(row.internal_link_opportunities)}
+                      />
+                    </div>
+                  </div>
+
+                  <div className="mt-3 text-xs leading-5 text-slate-500">
+                    {row.action_reason}
+                  </div>
+                </article>
+              ))}
+            </div>
+          )}
+        </div>
+
+        <div className="mt-7 border-t border-slate-100 pt-6">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+            <div>
+              <div className="text-xs font-semibold uppercase tracking-wide text-slate-400">
+                Topic coverage
+              </div>
+
+              <div className="mt-1 text-sm font-semibold text-slate-800">
+                Demand-backed content gaps
+              </div>
+            </div>
+
+            <div className="text-xs text-slate-400">
+              Search demand + semantic coverage
+            </div>
+          </div>
+
+          {contentGaps.length === 0 ? (
+            <div className="mt-4 rounded-xl border border-dashed border-slate-200 px-5 py-8 text-center text-sm text-slate-400">
+              No content-gap signals are available yet.
+            </div>
+          ) : (
+            <div className="mt-4 grid gap-3 xl:grid-cols-2">
+              {contentGaps.slice(0, 10).map((row) => (
+                <article
+                  key={row.topic_id}
+                  className="rounded-xl border border-slate-100 bg-slate-50 p-4"
+                >
+                  <div className="flex flex-wrap items-center gap-2">
+                    <ContentGapBadge type={row.gap_type} />
+
+                    <span className="text-xs text-slate-400">
+                      priority {formatNumber(row.priority_score_v1)}
+                    </span>
+
+                    <span className="text-xs text-slate-400">
+                      {pretty(row.topic_type)}
+                    </span>
+                  </div>
+
+                  <div className="mt-2 text-sm font-semibold text-slate-800">
+                    {row.topic_name}
+                  </div>
+
+                  <div className="mt-3 grid grid-cols-3 gap-3">
+                    <MiniStat
+                      label="Impressions"
+                      value={formatNumber(row.gsc_impressions)}
+                    />
+
+                    <MiniStat
+                      label="Queries"
+                      value={formatNumber(row.query_count)}
+                    />
+
+                    <MiniStat
+                      label="Mapped pages"
+                      value={formatNumber(row.mapped_pages)}
+                    />
+                  </div>
+
+                  {Array.isArray(row.top_queries) &&
+                    row.top_queries.length > 0 && (
+                      <div className="mt-4 flex flex-wrap gap-2">
+                        {row.top_queries.slice(0, 3).map((query) => (
+                          <span
+                            key={query.query}
+                            className="rounded-full border border-slate-200 bg-white px-2.5 py-1 text-[11px] text-slate-600"
+                          >
+                            {query.query} ·{" "}
+                            {formatNumber(query.impressions)} imp.
+                          </span>
+                        ))}
+                      </div>
+                    )}
+
+                  <div className="mt-3 text-xs leading-5 text-slate-500">
+                    {row.recommendation}
+                  </div>
+                </article>
+              ))}
+            </div>
+          )}
+        </div>
+
+        <div className="mt-7 border-t border-slate-100 pt-6">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+            <div>
+              <div className="text-xs font-semibold uppercase tracking-wide text-slate-400">
+                Internal links
+              </div>
+
+              <div className="mt-1 text-sm font-semibold text-slate-800">
+                Highest-confidence source → target opportunities
+              </div>
+            </div>
+
+            <div className="text-xs text-slate-400">
+              Top {formatNumber(Math.min(10, internalLinkOpportunities.length))}
+            </div>
+          </div>
+
+          {internalLinkOpportunities.length === 0 ? (
+            <div className="mt-4 rounded-xl border border-dashed border-slate-200 px-5 py-8 text-center text-sm text-slate-400">
+              No internal-link opportunities are available yet.
+            </div>
+          ) : (
+            <div className="seo-table-wrap mt-4 overflow-x-auto">
+              <table className="seo-data-table min-w-full text-left text-sm">
+                <thead>
+                  <tr className="border-b border-slate-100 text-xs uppercase tracking-wide text-slate-400">
+                    <th className="px-3 py-3">Source</th>
+                    <th className="px-3 py-3">Target</th>
+                    <th className="px-3 py-3 text-right">Shared topics</th>
+                    <th className="px-3 py-3 text-right">Confidence</th>
+                    <th className="px-3 py-3 text-right">Score</th>
+                  </tr>
+                </thead>
+
+                <tbody>
+                  {internalLinkOpportunities.slice(0, 10).map((row) => (
+                    <tr
+                      key={`${row.source_page_id}-${row.target_page_id}`}
+                      className="border-b border-slate-50 last:border-0"
+                    >
+                      <td className="max-w-[320px] px-3 py-3">
+                        <div
+                          className="truncate font-semibold text-slate-700"
+                          title={row.source_url}
+                        >
+                          {shortPage(row.source_url)}
+                        </div>
+                      </td>
+
+                      <td className="max-w-[320px] px-3 py-3">
+                        <div
+                          className="truncate font-semibold text-slate-700"
+                          title={row.target_url}
+                        >
+                          {shortPage(row.target_url)}
+                        </div>
+                      </td>
+
+                      <td className="px-3 py-3 text-right text-slate-600">
+                        {formatNumber(row.shared_topic_count)}
+                      </td>
+
+                      <td className="px-3 py-3 text-right text-slate-600">
+                        {formatFractionPercent(row.semantic_confidence)}
+                      </td>
+
+                      <td className="px-3 py-3 text-right font-semibold text-slate-800">
+                        {formatNumber(row.opportunity_score_v1)}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
       </section>
 
       {/* ===================================================
@@ -1630,6 +1970,76 @@ function KeywordSignalBadge({ type }: { type: string }) {
           : normalized === "branded_coverage"
             ? "bg-sky-50 text-sky-700 ring-sky-100"
             : "bg-white text-slate-600 ring-slate-200";
+
+  return (
+    <span
+      className={`inline-flex rounded-full px-2.5 py-1 text-[11px] font-semibold ring-1 ring-inset ${className}`}
+    >
+      {label}
+    </span>
+  );
+}
+
+function ContentActionBadge({ type }: { type: string }) {
+  const normalized = String(type || "").toLowerCase();
+
+  const label =
+    normalized === "fix_indexability"
+      ? "Fix indexability"
+      : normalized === "improve_snippet"
+        ? "Improve snippet"
+        : normalized === "expand_content"
+          ? "Expand content"
+          : normalized === "strengthen_internal_links"
+            ? "Strengthen internal links"
+            : normalized === "improve_existing"
+              ? "Improve existing"
+              : normalized === "crawl_page"
+                ? "Needs crawl"
+                : pretty(normalized);
+
+  const className =
+    normalized === "fix_indexability"
+      ? "bg-rose-50 text-rose-700 ring-rose-100"
+      : normalized === "improve_snippet"
+        ? "bg-amber-50 text-amber-700 ring-amber-100"
+        : normalized === "expand_content"
+          ? "bg-sky-50 text-sky-700 ring-sky-100"
+          : normalized === "strengthen_internal_links"
+            ? "bg-violet-50 text-violet-700 ring-violet-100"
+            : normalized === "improve_existing"
+              ? "bg-emerald-50 text-emerald-700 ring-emerald-100"
+              : "bg-white text-slate-600 ring-slate-200";
+
+  return (
+    <span
+      className={`inline-flex rounded-full px-2.5 py-1 text-[11px] font-semibold ring-1 ring-inset ${className}`}
+    >
+      {label}
+    </span>
+  );
+}
+
+function ContentGapBadge({ type }: { type: string }) {
+  const normalized = String(type || "").toLowerCase();
+
+  const label =
+    normalized === "create_content"
+      ? "Potential new content"
+      : normalized === "expand_topic"
+        ? "Expand topic"
+        : normalized === "restore_coverage"
+          ? "Restore coverage"
+          : pretty(normalized);
+
+  const className =
+    normalized === "create_content"
+      ? "bg-amber-50 text-amber-700 ring-amber-100"
+      : normalized === "restore_coverage"
+        ? "bg-rose-50 text-rose-700 ring-rose-100"
+        : normalized === "expand_topic"
+          ? "bg-sky-50 text-sky-700 ring-sky-100"
+          : "bg-white text-slate-600 ring-slate-200";
 
   return (
     <span
