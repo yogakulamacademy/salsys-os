@@ -61,9 +61,6 @@ export async function signInAction(formData: FormData) {
 
   const email = String(formData.get('email') ?? '').trim();
   const password = String(formData.get('password') ?? '');
-  const organizationSlug = normalizedOrganizationSlug(
-    formData.get('organization_slug'),
-  );
   const requestedNext = String(formData.get('next') ?? '/dashboard').trim();
 
   const next =
@@ -73,56 +70,97 @@ export async function signInAction(formData: FormData) {
       ? requestedNext
       : '/dashboard';
 
-  if (!organizationSlug) {
+  if (!email || !password) {
     redirect(
       authUrl(
         '/login',
         'error',
-        'Use your organization-specific SalsysOS login link.',
+        'Enter your email and password',
       ),
     );
   }
 
-  const loginPath = `/login/${encodeURIComponent(organizationSlug)}`;
-
-  if (!email || !password) {
-    redirect(authUrl(loginPath, 'error', 'Enter your email and password'));
-  }
-
   const supabase = await createClient();
-  const { data: signInData, error } = await supabase.auth.signInWithPassword({
+
+  const {
+    data: signInData,
+    error: signInError,
+  } = await supabase.auth.signInWithPassword({
     email,
     password,
   });
 
-  if (error || !signInData.user) {
-    redirect(authUrl(loginPath, 'error', 'Invalid email or password'));
-  }
-
-  const { data: boundOrganizationId, error: tenantBindingError } =
-    await supabase.rpc('bind_current_tenant_session_by_slug', {
-      p_organization_slug: organizationSlug,
-    });
-
-  if (tenantBindingError || !boundOrganizationId) {
-    await supabase.auth.signOut();
+  if (signInError || !signInData.user) {
     redirect(
       authUrl(
-        loginPath,
+        '/login',
         'error',
-        'This organization is unavailable or your account does not have access.',
+        'Invalid email or password',
       ),
     );
   }
 
+  /*
+   * Canonical SalsysOS customer login.
+   *
+   * The authenticated identity determines the tenant.
+   * No organization ID or organization slug is accepted from the browser.
+   */
+  const {
+    data: boundOrganizationId,
+    error: tenantBindingError,
+  } = await supabase.rpc(
+    'bind_current_tenant_session_for_current_user',
+  );
+
+  if (tenantBindingError || !boundOrganizationId) {
+    /*
+     * Never leave an authenticated but unbound customer session.
+     */
+    await supabase.auth.signOut();
+
+    const rawMessage = tenantBindingError?.message ?? '';
+
+    const message =
+      rawMessage.includes(
+        'Multiple active organization memberships',
+      )
+        ? 'This account is linked to multiple organizations. Please contact your SalsysOS administrator.'
+        : rawMessage.includes(
+              'No active organization membership',
+            )
+          ? 'Your account is not assigned to an active organization.'
+          : 'Unable to establish your organization session. Please try again.';
+
+    redirect(
+      authUrl(
+        '/login',
+        'error',
+        message,
+      ),
+    );
+  }
+
+  /*
+   * Keep the compatibility workspace cookie for application code that
+   * still reads it. The value is safe because it came from the trusted
+   * server-side tenant binding RPC, not from browser input.
+   *
+   * The persistent tenant-session binding remains the security authority.
+   */
   const cookieStore = await cookies();
-  cookieStore.set(ACTIVE_WORKSPACE_COOKIE, String(boundOrganizationId), {
-    httpOnly: true,
-    sameSite: 'lax',
-    secure: process.env.NODE_ENV === 'production',
-    path: '/',
-    maxAge: ORGANIZATION_COOKIE_MAX_AGE_SECONDS,
-  });
+
+  cookieStore.set(
+    ACTIVE_WORKSPACE_COOKIE,
+    String(boundOrganizationId),
+    {
+      httpOnly: true,
+      sameSite: 'lax',
+      secure: process.env.NODE_ENV === 'production',
+      path: '/',
+      maxAge: ORGANIZATION_COOKIE_MAX_AGE_SECONDS,
+    },
+  );
 
   redirect(next);
 }

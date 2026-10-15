@@ -1,10 +1,16 @@
-import { Building2, LockKeyhole, Sparkles } from 'lucide-react';
+import { LockKeyhole, ShieldCheck, Sparkles } from 'lucide-react';
+
+import { signInAction } from '@/app/actions/auth';
 import { useMockData } from '@/lib/config';
 
 export default async function LoginPage({
   searchParams,
 }: {
-  searchParams: Promise<{ error?: string; notice?: string }>;
+  searchParams: Promise<{
+    error?: string;
+    notice?: string;
+    next?: string;
+  }>;
 }) {
   const params = await searchParams;
 
@@ -15,6 +21,7 @@ export default async function LoginPage({
           <div className="grid h-12 w-12 place-items-center rounded-2xl bg-brand font-black text-white">
             S
           </div>
+
           <div>
             <div className="font-bold text-slate-950">SalsysOS</div>
             <div className="text-sm text-slate-400">
@@ -24,14 +31,15 @@ export default async function LoginPage({
         </div>
 
         <div className="mb-6">
-          <div className="eyebrow">Secure tenant access</div>
+          <div className="eyebrow">Secure account access</div>
+
           <h1 className="mt-1 text-2xl font-bold text-slate-950">
-            Organization login required
+            Sign in
           </h1>
+
           <p className="mt-2 text-sm leading-6 text-slate-500">
-            SalsysOS accounts are bound to a single organization for each login
-            session. Open the organization-specific login link provided by your
-            administrator.
+            Use your SalsysOS account to continue. Your organization is
+            securely resolved from your authenticated account.
           </p>
         </div>
 
@@ -50,6 +58,7 @@ export default async function LoginPage({
         {useMockData && (
           <div className="mb-5 flex gap-2 rounded-xl border border-orange-100 bg-orange-50 p-3 text-sm text-orange-700">
             <Sparkles size={17} className="mt-0.5 shrink-0" />
+
             <span>
               Mock mode is enabled. Sign-in is bypassed until{' '}
               <code>NEXT_PUBLIC_USE_MOCK_DATA=false</code>.
@@ -57,23 +66,56 @@ export default async function LoginPage({
           </div>
         )}
 
-        <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-          <div className="flex items-start gap-3">
-            <div className="mt-0.5 grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-white text-slate-500 shadow-sm">
-              <Building2 size={17} />
-            </div>
-            <div>
-              <div className="font-semibold text-slate-900">No organization switcher</div>
-              <p className="mt-1 text-sm leading-6 text-slate-500">
-                Your organization is established by the login URL and verified
-                against your active membership before access is granted.
-              </p>
-            </div>
-          </div>
-        </div>
+        <form action={signInAction} className="space-y-4">
+          <input
+            type="hidden"
+            name="next"
+            value={params.next ?? '/dashboard'}
+          />
 
-        <div className="mt-5 flex items-center gap-2 text-xs font-medium text-slate-400">
-          <LockKeyhole size={14} /> Tenant-isolated authentication
+          <label className="block">
+            <span className="mb-1.5 block text-sm font-semibold text-slate-700">
+              Email
+            </span>
+
+            <input
+              className="input"
+              name="email"
+              type="email"
+              autoComplete="email"
+              required
+              placeholder="you@company.com"
+            />
+          </label>
+
+          <label className="block">
+            <span className="mb-1.5 block text-sm font-semibold text-slate-700">
+              Password
+            </span>
+
+            <input
+              className="input"
+              name="password"
+              type="password"
+              autoComplete="current-password"
+              required
+              placeholder="••••••••"
+            />
+          </label>
+
+          <button className="btn-primary w-full" type="submit">
+            <LockKeyhole size={16} />
+            Sign in
+          </button>
+        </form>
+
+        <div className="mt-5 flex items-start gap-2 rounded-xl bg-slate-50 px-3 py-3 text-xs leading-5 text-slate-500">
+          <ShieldCheck size={16} className="mt-0.5 shrink-0" />
+
+          <span>
+            Your tenant is established by your authenticated account and
+            verified against your active organization membership.
+          </span>
         </div>
       </div>
     </div>
