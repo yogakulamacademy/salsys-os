@@ -4,6 +4,7 @@ import { NextResponse, type NextRequest } from "next/server";
 const PUBLIC_EXACT_PATHS = new Set([
   "/",
   "/auth/callback",
+  "/auth/recovery-confirm",
   "/yogakulam-tracker.js",
   "/api/leads/capture",
   "/api/analytics/ga4/sync",
@@ -54,7 +55,6 @@ function normalizePathname(pathname: string) {
   if (pathname.length > 1 && pathname.endsWith("/")) {
     return pathname.slice(0, -1);
   }
-
   return pathname;
 }
 
@@ -76,26 +76,16 @@ function isTenantResetPasswordPath(pathname: string) {
 
 function isAdminOnlyPage(pathname: string) {
   const normalized = normalizePathname(pathname);
-
-  if (ADMIN_ONLY_EXACT_PATHS.has(normalized)) {
-    return true;
-  }
-
+  if (ADMIN_ONLY_EXACT_PATHS.has(normalized)) return true;
   for (const adminPath of ADMIN_ONLY_EXACT_PATHS) {
-    if (normalized.startsWith(`${adminPath}/`)) {
-      return true;
-    }
+    if (normalized.startsWith(`${adminPath}/`)) return true;
   }
-
   return false;
 }
 
 function isEmployeeAllowedPage(pathname: string) {
   const normalized = normalizePathname(pathname);
-  return (
-    EMPLOYEE_EXACT_PATHS.has(normalized) ||
-    EMPLOYEE_LEAD_ROUTE.test(normalized)
-  );
+  return EMPLOYEE_EXACT_PATHS.has(normalized) || EMPLOYEE_LEAD_ROUTE.test(normalized);
 }
 
 function redirectWithAuthCookies(
@@ -107,29 +97,20 @@ function redirectWithAuthCookies(
   const redirectUrl = request.nextUrl.clone();
   redirectUrl.pathname = pathname;
   redirectUrl.search = "";
-
   if (searchParams) {
     for (const [key, value] of Object.entries(searchParams)) {
       redirectUrl.searchParams.set(key, value);
     }
   }
-
   const redirectResponse = NextResponse.redirect(redirectUrl);
-  response.cookies.getAll().forEach((cookie) => {
-    redirectResponse.cookies.set(cookie);
-  });
-
+  response.cookies.getAll().forEach((cookie) => redirectResponse.cookies.set(cookie));
   return redirectResponse;
 }
 
 function authConfigurationError(pathname: string) {
   if (pathname.startsWith("/api/")) {
-    return NextResponse.json(
-      { ok: false, error: "CRM authentication is not configured." },
-      { status: 503 },
-    );
+    return NextResponse.json({ ok: false, error: "CRM authentication is not configured." }, { status: 503 });
   }
-
   return new NextResponse("CRM authentication is not configured.", {
     status: 503,
     headers: { "Content-Type": "text/plain; charset=utf-8" },
@@ -138,12 +119,8 @@ function authConfigurationError(pathname: string) {
 
 function accessDenied(pathname: string, message: string) {
   if (pathname.startsWith("/api/")) {
-    return NextResponse.json(
-      { ok: false, error: message },
-      { status: 403 },
-    );
+    return NextResponse.json({ ok: false, error: message }, { status: 403 });
   }
-
   return new NextResponse(message, {
     status: 403,
     headers: { "Content-Type": "text/plain; charset=utf-8" },
@@ -155,24 +132,18 @@ export async function middleware(request: NextRequest) {
     process.env.NODE_ENV !== "production" &&
     process.env.NEXT_PUBLIC_USE_MOCK_DATA !== "false";
 
-  if (localMockMode) {
-    return NextResponse.next();
-  }
+  if (localMockMode) return NextResponse.next();
 
   const pathname = normalizePathname(request.nextUrl.pathname);
 
-  if (isPublicPath(pathname)) {
-    return NextResponse.next();
-  }
+  if (isPublicPath(pathname)) return NextResponse.next();
 
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const key =
     process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ||
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
-  if (!url || !key) {
-    return authConfigurationError(pathname);
-  }
+  if (!url || !key) return authConfigurationError(pathname);
 
   let response = NextResponse.next({ request });
 
@@ -182,12 +153,8 @@ export async function middleware(request: NextRequest) {
         return request.cookies.getAll();
       },
       setAll(cookiesToSet) {
-        cookiesToSet.forEach(({ name, value }) => {
-          request.cookies.set(name, value);
-        });
-
+        cookiesToSet.forEach(({ name, value }) => request.cookies.set(name, value));
         response = NextResponse.next({ request });
-
         cookiesToSet.forEach(({ name, value, options }) => {
           response.cookies.set(name, value, options);
         });
@@ -198,9 +165,6 @@ export async function middleware(request: NextRequest) {
   const { data: claimsResult } = await supabase.auth.getClaims();
   const userId = claimsResult?.claims?.sub ?? null;
 
-  // Tenant login and password-reset request pages must remain reachable even
-  // with an older session present. Recovery completion itself is handled by
-  // /auth/callback and then validated against the bound tenant below.
   if (
     pathname === "/login" ||
     isTenantLoginPath(pathname) ||
@@ -210,9 +174,7 @@ export async function middleware(request: NextRequest) {
   }
 
   if (!userId) {
-    return redirectWithAuthCookies(request, response, "/login", {
-      next: pathname,
-    });
+    return redirectWithAuthCookies(request, response, "/login", { next: pathname });
   }
 
   const { data: profile, error: profileError } = await supabase
@@ -223,15 +185,9 @@ export async function middleware(request: NextRequest) {
 
   if (profileError || !profile || profile.active !== true) {
     if (pathname.startsWith("/api/")) {
-      return NextResponse.json(
-        { ok: false, error: "CRM access is disabled." },
-        { status: 403 },
-      );
+      return NextResponse.json({ ok: false, error: "CRM access is disabled." }, { status: 403 });
     }
-
-    return redirectWithAuthCookies(request, response, "/login", {
-      error: "access-disabled",
-    });
+    return redirectWithAuthCookies(request, response, "/login", { error: "access-disabled" });
   }
 
   const cookieOrganizationId =
@@ -250,10 +206,8 @@ export async function middleware(request: NextRequest) {
     }
   }
 
-  const {
-    data: activeOrganizationId,
-    error: tenantContextError,
-  } = await supabase.rpc("current_tenant_organization_id");
+  const { data: activeOrganizationId, error: tenantContextError } =
+    await supabase.rpc("current_tenant_organization_id");
 
   if (tenantContextError) {
     return accessDenied(pathname, "Unable to resolve tenant context.");
@@ -271,31 +225,17 @@ export async function middleware(request: NextRequest) {
         { status: 409 },
       );
     }
-
     return redirectWithAuthCookies(request, response, "/login", {
       error: "tenant-context-required",
     });
   }
 
-  // A recovery session has already been authenticated by Supabase and bound to
-  // a tenant by /auth/callback before this page is reached. Allow the user to
-  // choose a new password regardless of their normal CRM role. This does not
-  // grant access to any other protected page.
-  if (isTenantResetPasswordPath(pathname)) {
-    return response;
-  }
+  if (isTenantResetPasswordPath(pathname)) return response;
 
-  /*
-   * OAuth callback state identifies the tenant that started authorization,
-   * but it must never become tenant authority by itself. Before any callback
-   * route can use its service-role client, require the state to belong to the
-   * tenant resolved from the current authenticated session.
-   */
   const oauthProvider = OAUTH_CALLBACK_PROVIDER_BY_PATH[pathname];
 
   if (oauthProvider) {
     const state = request.nextUrl.searchParams.get("state")?.trim() ?? "";
-
     if (!state) {
       return redirectWithAuthCookies(request, response, "/settings/integrations", {
         error: "integration-oauth-state-missing",
@@ -317,17 +257,13 @@ export async function middleware(request: NextRequest) {
     }
   }
 
-  // /workspace is no longer an organization selector. Keep the route reachable
-  // only as a compatibility redirect to /dashboard.
   if (pathname === "/workspace" || pathname === "/api/workspace") {
     return response;
   }
 
   const role = String(profile.role ?? "");
 
-  if (role === "admin") {
-    return response;
-  }
+  if (role === "admin") return response;
 
   if (role === "manager") {
     if (isAdminOnlyPage(pathname)) {
@@ -335,24 +271,18 @@ export async function middleware(request: NextRequest) {
         restricted: "1",
       });
     }
-
     return response;
   }
 
   if (role === "admissions") {
     if (pathname.startsWith("/api/")) {
       return NextResponse.json(
-        {
-          ok: false,
-          error: "This API route is not available to Admissions users.",
-        },
+        { ok: false, error: "This API route is not available to Admissions users." },
         { status: 403 },
       );
     }
 
-    if (isEmployeeAllowedPage(pathname)) {
-      return response;
-    }
+    if (isEmployeeAllowedPage(pathname)) return response;
 
     return redirectWithAuthCookies(request, response, "/dashboard", {
       restricted: "1",
