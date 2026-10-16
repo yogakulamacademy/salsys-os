@@ -70,6 +70,10 @@ function isTenantForgotPasswordPath(pathname: string) {
   return /^\/forgot-password\/[^/]+$/.test(pathname);
 }
 
+function isTenantResetPasswordPath(pathname: string) {
+  return /^\/reset-password\/[^/]+$/.test(pathname);
+}
+
 function isAdminOnlyPage(pathname: string) {
   const normalized = normalizePathname(pathname);
 
@@ -196,7 +200,7 @@ export async function middleware(request: NextRequest) {
 
   // Tenant login and password-reset request pages must remain reachable even
   // with an older session present. Recovery completion itself is handled by
-  // /auth/callback, then the reset-password page is protected normally.
+  // /auth/callback and then validated against the bound tenant below.
   if (
     pathname === "/login" ||
     isTenantLoginPath(pathname) ||
@@ -271,6 +275,14 @@ export async function middleware(request: NextRequest) {
     return redirectWithAuthCookies(request, response, "/login", {
       error: "tenant-context-required",
     });
+  }
+
+  // A recovery session has already been authenticated by Supabase and bound to
+  // a tenant by /auth/callback before this page is reached. Allow the user to
+  // choose a new password regardless of their normal CRM role. This does not
+  // grant access to any other protected page.
+  if (isTenantResetPasswordPath(pathname)) {
+    return response;
   }
 
   /*
