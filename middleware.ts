@@ -4,6 +4,7 @@ import { NextResponse, type NextRequest } from "next/server";
 const PUBLIC_EXACT_PATHS = new Set([
   "/",
   "/auth/callback",
+  "/auth/recovery-confirm",
   "/yogakulam-tracker.js",
   "/api/leads/capture",
   "/api/analytics/ga4/sync",
