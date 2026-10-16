@@ -34,11 +34,6 @@ async function applicationOrigin() {
     }
   }
 
-  /*
-   * Recovery emails must never trust a forwarded Host value in production.
-   * Require an explicit canonical origin there so password reset links cannot
-   * be redirected to an attacker-controlled host through header poisoning.
-   */
   if (process.env.NODE_ENV === 'production') {
     return null;
   }
@@ -71,96 +66,41 @@ export async function signInAction(formData: FormData) {
       : '/dashboard';
 
   if (!email || !password) {
-    redirect(
-      authUrl(
-        '/login',
-        'error',
-        'Enter your email and password',
-      ),
-    );
+    redirect(authUrl('/login', 'error', 'Enter your email and password'));
   }
 
   const supabase = await createClient();
-
-  const {
-    data: signInData,
-    error: signInError,
-  } = await supabase.auth.signInWithPassword({
-    email,
-    password,
-  });
+  const { data: signInData, error: signInError } =
+    await supabase.auth.signInWithPassword({ email, password });
 
   if (signInError || !signInData.user) {
-    redirect(
-      authUrl(
-        '/login',
-        'error',
-        'Invalid email or password',
-      ),
-    );
+    redirect(authUrl('/login', 'error', 'Invalid email or password'));
   }
 
-  /*
-   * Canonical SalsysOS customer login.
-   *
-   * The authenticated identity determines the tenant.
-   * No organization ID or organization slug is accepted from the browser.
-   */
-  const {
-    data: boundOrganizationId,
-    error: tenantBindingError,
-  } = await supabase.rpc(
-    'bind_current_tenant_session_for_current_user',
-  );
+  const { data: boundOrganizationId, error: tenantBindingError } =
+    await supabase.rpc('bind_current_tenant_session_for_current_user');
 
   if (tenantBindingError || !boundOrganizationId) {
-    /*
-     * Never leave an authenticated but unbound customer session.
-     */
     await supabase.auth.signOut();
 
     const rawMessage = tenantBindingError?.message ?? '';
+    const message = rawMessage.includes('Multiple active organization memberships')
+      ? 'This account is linked to multiple organizations. Please contact your SalsysOS administrator.'
+      : rawMessage.includes('No active organization membership')
+        ? 'Your account is not assigned to an active organization.'
+        : 'Unable to establish your organization session. Please try again.';
 
-    const message =
-      rawMessage.includes(
-        'Multiple active organization memberships',
-      )
-        ? 'This account is linked to multiple organizations. Please contact your SalsysOS administrator.'
-        : rawMessage.includes(
-              'No active organization membership',
-            )
-          ? 'Your account is not assigned to an active organization.'
-          : 'Unable to establish your organization session. Please try again.';
-
-    redirect(
-      authUrl(
-        '/login',
-        'error',
-        message,
-      ),
-    );
+    redirect(authUrl('/login', 'error', message));
   }
 
-  /*
-   * Keep the compatibility workspace cookie for application code that
-   * still reads it. The value is safe because it came from the trusted
-   * server-side tenant binding RPC, not from browser input.
-   *
-   * The persistent tenant-session binding remains the security authority.
-   */
   const cookieStore = await cookies();
-
-  cookieStore.set(
-    ACTIVE_WORKSPACE_COOKIE,
-    String(boundOrganizationId),
-    {
-      httpOnly: true,
-      sameSite: 'lax',
-      secure: process.env.NODE_ENV === 'production',
-      path: '/',
-      maxAge: ORGANIZATION_COOKIE_MAX_AGE_SECONDS,
-    },
-  );
+  cookieStore.set(ACTIVE_WORKSPACE_COOKIE, String(boundOrganizationId), {
+    httpOnly: true,
+    sameSite: 'lax',
+    secure: process.env.NODE_ENV === 'production',
+    path: '/',
+    maxAge: ORGANIZATION_COOKIE_MAX_AGE_SECONDS,
+  });
 
   redirect(next);
 }
@@ -181,9 +121,7 @@ export async function requestPasswordResetAction(formData: FormData) {
     );
   }
 
-  const forgotPath = `/forgot-password/${encodeURIComponent(
-    organizationSlug,
-  )}`;
+  const forgotPath = `/forgot-password/${encodeURIComponent(organizationSlug)}`;
 
   if (!email) {
     redirect(authUrl(forgotPath, 'error', 'Enter your email address.'));
@@ -220,7 +158,6 @@ export async function requestPasswordResetAction(formData: FormData) {
     redirectTo: callbackUrl.toString(),
   });
 
-  // Deliberately return the same response whether or not the account exists.
   redirect(
     authUrl(
       forgotPath,
@@ -228,6 +165,89 @@ export async function requestPasswordResetAction(formData: FormData) {
       'If an eligible account exists for that email, a password reset link has been sent.',
     ),
   );
+}
+
+export async function confirmPasswordRecoveryAction(formData: FormData) {
+  const tokenHash = String(formData.get('token_hash') ?? '').trim();
+
+  if (!tokenHash) {
+    redirect(
+      authUrl(
+        '/login',
+        'error',
+        'This password reset link is invalid. Request a new one.',
+      ),
+    );
+  }
+
+  const supabase = await createClient();
+  const { data: verification, error: verificationError } =
+    await supabase.auth.verifyOtp({
+      token_hash: tokenHash,
+      type: 'recovery',
+    });
+
+  if (verificationError || !verification.user) {
+    await supabase.auth.signOut();
+    redirect(
+      authUrl(
+        '/login',
+        'error',
+        'This password reset link is invalid or expired. Request a new one.',
+      ),
+    );
+  }
+
+  const { data: boundOrganizationId, error: tenantBindingError } =
+    await supabase.rpc('bind_current_tenant_session_for_current_user');
+
+  if (tenantBindingError || !boundOrganizationId) {
+    await supabase.auth.signOut();
+    const cookieStore = await cookies();
+    cookieStore.delete(ACTIVE_WORKSPACE_COOKIE);
+    redirect(
+      authUrl(
+        '/login',
+        'error',
+        'Unable to establish your organization recovery session. Contact your SalsysOS administrator.',
+      ),
+    );
+  }
+
+  const { data: organization, error: organizationError } = await supabase
+    .from('organizations')
+    .select('slug')
+    .eq('id', boundOrganizationId)
+    .maybeSingle();
+
+  const organizationSlug = String(organization?.slug ?? '').trim().toLowerCase();
+
+  if (
+    organizationError ||
+    !ORGANIZATION_SLUG_PATTERN.test(organizationSlug)
+  ) {
+    await supabase.auth.signOut();
+    const cookieStore = await cookies();
+    cookieStore.delete(ACTIVE_WORKSPACE_COOKIE);
+    redirect(
+      authUrl(
+        '/login',
+        'error',
+        'Unable to resolve your organization recovery session.',
+      ),
+    );
+  }
+
+  const cookieStore = await cookies();
+  cookieStore.set(ACTIVE_WORKSPACE_COOKIE, String(boundOrganizationId), {
+    httpOnly: true,
+    sameSite: 'lax',
+    secure: process.env.NODE_ENV === 'production',
+    path: '/',
+    maxAge: ORGANIZATION_COOKIE_MAX_AGE_SECONDS,
+  });
+
+  redirect(`/reset-password/${encodeURIComponent(organizationSlug)}`);
 }
 
 export async function updateRecoveredPasswordAction(formData: FormData) {
@@ -241,9 +261,7 @@ export async function updateRecoveredPasswordAction(formData: FormData) {
     redirect('/login?error=invalid-recovery-tenant');
   }
 
-  const resetPath = `/reset-password/${encodeURIComponent(
-    organizationSlug,
-  )}`;
+  const resetPath = `/reset-password/${encodeURIComponent(organizationSlug)}`;
   const loginPath = `/login/${encodeURIComponent(organizationSlug)}`;
 
   if (password.length < 12) {
@@ -276,8 +294,6 @@ export async function updateRecoveredPasswordAction(formData: FormData) {
     );
   }
 
-  // Re-assert that this recovery session is bound to the tenant encoded in
-  // the recovery link. A slug for another membership cannot switch sessions.
   const { data: boundOrganizationId, error: tenantBindingError } =
     await supabase.rpc('bind_current_tenant_session_by_slug', {
       p_organization_slug: organizationSlug,
@@ -308,8 +324,6 @@ export async function updateRecoveredPasswordAction(formData: FormData) {
     );
   }
 
-  // Force a normal tenant-specific sign-in after password rotation instead of
-  // carrying the recovery session into the CRM as a long-lived user session.
   await supabase.auth.signOut();
   const cookieStore = await cookies();
   cookieStore.delete(ACTIVE_WORKSPACE_COOKIE);
