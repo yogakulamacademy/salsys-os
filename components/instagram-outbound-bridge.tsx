@@ -15,12 +15,23 @@ type InstagramSendResult = {
   };
 };
 
-function findManualInteractionForm() {
-  const bodyInput = document.querySelector<HTMLInputElement>(
-    'form input[name="body"]',
-  );
+function findManualInteractionForm(): HTMLFormElement | null {
+  const forms = Array.from(document.querySelectorAll<HTMLFormElement>('form'));
 
-  return bodyInput?.closest('form') ?? null;
+  return (
+    forms.find((form) => {
+      const direction = form.querySelector<HTMLSelectElement>(
+        'select[name="direction"]',
+      );
+      const channel = form.querySelector<HTMLSelectElement>(
+        'select[name="channel"]',
+      );
+      const body = form.querySelector<HTMLElement>('[name="body"]');
+      const submit = form.querySelector<HTMLButtonElement>('button[type="submit"]');
+
+      return Boolean(direction && channel && body && submit);
+    }) ?? null
+  );
 }
 
 function selectedLeadId() {
@@ -75,7 +86,9 @@ export function InstagramOutboundBridge() {
       const channel = form.querySelector<HTMLSelectElement>(
         'select[name="channel"]',
       );
-      const body = form.querySelector<HTMLInputElement>('input[name="body"]');
+      const body = form.querySelector<HTMLInputElement | HTMLTextAreaElement>(
+        '[name="body"]',
+      );
       const submit = form.querySelector<HTMLButtonElement>('button[type="submit"]');
       const helper = form.querySelector<HTMLDivElement>('.mt-2.text-\[10px\]');
 
@@ -92,7 +105,8 @@ export function InstagramOutboundBridge() {
 
       const updateUi = () => {
         const isInstagramOutbound =
-          channel.value === 'instagram' && direction.value === 'outbound';
+          channel.value.toLowerCase() === 'instagram' &&
+          direction.value.toLowerCase() === 'outbound';
 
         if (isInstagramOutbound) {
           submit.textContent = sending ? 'Sending...' : 'Send';
@@ -121,7 +135,8 @@ export function InstagramOutboundBridge() {
 
       const onSubmit = async (event: SubmitEvent) => {
         const isInstagramOutbound =
-          channel.value === 'instagram' && direction.value === 'outbound';
+          channel.value.toLowerCase() === 'instagram' &&
+          direction.value.toLowerCase() === 'outbound';
 
         if (!isInstagramOutbound || sending) {
           return;
@@ -166,8 +181,6 @@ export function InstagramOutboundBridge() {
           body.value = '';
           router.refresh();
         } catch (error) {
-          // NEXT_REDIRECT is handled by Next.js. Genuine client-side failures
-          // are logged while preserving the unsent draft in the input.
           console.error('Instagram send failed:', error);
         } finally {
           sending = false;
