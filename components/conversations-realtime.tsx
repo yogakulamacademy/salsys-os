@@ -12,6 +12,10 @@ import {
   createClient,
 } from '@/lib/supabase/browser';
 
+import {
+  InstagramOutboundBridge,
+} from '@/components/instagram-outbound-bridge';
+
 type RealtimeMessage = {
   id?: string;
   lead_id?: string;
@@ -64,17 +68,17 @@ export function ConversationsRealtime() {
             table: 'messages',
           },
           (payload: unknown) => {
-  const event =
-    payload as {
-      new?: RealtimeMessage;
-    };
+            const event =
+              payload as {
+                new?: RealtimeMessage;
+              };
 
-  const message =
-    event.new;
+            const message =
+              event.new;
 
-  if (!message) {
-    return;
-  }
+            if (!message) {
+              return;
+            }
 
             /*
              * IMPORTANT:
@@ -82,11 +86,12 @@ export function ConversationsRealtime() {
              * Do not refresh after our own
              * outbound CRM message.
              *
-             * The composer will handle that
-             * message locally.
+             * The composer/bridge handles that
+             * message locally or refreshes after
+             * the provider accepts it.
              *
-             * We only refresh for customer
-             * inbound messages.
+             * We only auto-refresh here for
+             * customer inbound messages.
              */
             if (
               message.direction ===
@@ -116,5 +121,5 @@ export function ConversationsRealtime() {
     router,
   ]);
 
-  return null;
+  return <InstagramOutboundBridge />;
 }
