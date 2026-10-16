@@ -4,6 +4,7 @@ import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 
 import { sendInstagramMessageAction } from '@/app/conversations/instagram-actions';
+import { markCopilotAssistedMessageAction } from '@/app/conversations/copilot-audit-actions';
 
 type InstagramSendResult = {
   ok: true;
@@ -184,12 +185,13 @@ export function InstagramOutboundBridge() {
           return;
         }
 
+        const wasCopilotAssisted = copilotAssisted;
         sending = true;
         updateUi();
 
         const formData = new FormData();
         formData.set('body', text);
-        if (copilotAssisted) {
+        if (wasCopilotAssisted) {
           formData.set('ai_generated', 'true');
         }
 
@@ -201,6 +203,14 @@ export function InstagramOutboundBridge() {
 
           if (!result?.ok) {
             return;
+          }
+
+          if (wasCopilotAssisted && result.message.id) {
+            await markCopilotAssistedMessageAction({
+              leadId,
+              messageId: result.message.id,
+              channel: 'instagram',
+            });
           }
 
           body.value = '';
