@@ -266,7 +266,7 @@ create table if not exists public.automation_suppressions (
     foreign key (workflow_id, organization_id)
     references public.automation_workflows(id, organization_id)
     on delete cascade,
-  constraint automation_suppressions_scope_check
+  constraint automation_suppressions_workflow_scope_check
     check (scope <> 'workflow' or workflow_id is not null)
 );
 
