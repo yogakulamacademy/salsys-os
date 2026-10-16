@@ -23,20 +23,40 @@ function findManualInteractionForm() {
   return bodyInput?.closest('form') ?? null;
 }
 
+function selectedLeadId() {
+  const fromQuery = new URLSearchParams(window.location.search)
+    .get('lead')
+    ?.trim();
+
+  if (fromQuery) {
+    return fromQuery;
+  }
+
+  const profileLink = Array.from(
+    document.querySelectorAll<HTMLAnchorElement>('a[href^="/leads/"]'),
+  ).find((link) => link.textContent?.trim() === 'Lead profile');
+
+  if (!profileLink) {
+    return '';
+  }
+
+  try {
+    const url = new URL(profileLink.href, window.location.origin);
+    const parts = url.pathname.split('/').filter(Boolean);
+
+    return parts[0] === 'leads' && parts[1] ? parts[1] : '';
+  } catch {
+    return '';
+  }
+}
+
 export function InstagramOutboundBridge() {
   const router = useRouter();
 
   useEffect(() => {
-    const leadId = new URLSearchParams(window.location.search)
-      .get('lead')
-      ?.trim() ?? '';
-
-    if (!leadId) {
-      return;
-    }
-
     let disposed = false;
     let detach: (() => void) | null = null;
+    let attachedForm: HTMLFormElement | null = null;
 
     const attach = () => {
       if (disposed || detach) {
@@ -62,6 +82,8 @@ export function InstagramOutboundBridge() {
       if (!direction || !channel || !body || !submit) {
         return;
       }
+
+      attachedForm = form;
 
       const originalButtonText = submit.textContent ?? 'Log';
       const originalPlaceholder = body.placeholder;
@@ -107,6 +129,16 @@ export function InstagramOutboundBridge() {
 
         event.preventDefault();
         event.stopPropagation();
+
+        const leadId = selectedLeadId();
+
+        if (!leadId) {
+          if (helper) {
+            helper.textContent =
+              'Unable to resolve the selected CRM lead. Reopen this conversation and try again.';
+          }
+          return;
+        }
 
         const text = body.value.trim();
 
@@ -168,6 +200,12 @@ export function InstagramOutboundBridge() {
     attach();
 
     const observer = new MutationObserver(() => {
+      if (attachedForm && !attachedForm.isConnected) {
+        detach?.();
+        detach = null;
+        attachedForm = null;
+      }
+
       if (!detach) {
         attach();
       }
