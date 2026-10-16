@@ -1,6 +1,6 @@
 'use server';
 
-import { cookies, headers } from 'next/headers';
+import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
 
 import { useMockData } from '@/lib/config';
@@ -8,47 +8,10 @@ import { createClient } from '@/lib/supabase/server';
 import { ACTIVE_WORKSPACE_COOKIE } from '@/lib/workspace';
 
 const ORGANIZATION_COOKIE_MAX_AGE_SECONDS = 60 * 60 * 24 * 30;
-const ORGANIZATION_SLUG_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 
 function authUrl(path: string, key: 'notice' | 'error', message: string) {
   const params = new URLSearchParams({ [key]: message });
   return `${path}?${params.toString()}`;
-}
-
-function normalizedOrganizationSlug(value: FormDataEntryValue | null) {
-  const slug = String(value ?? '').trim().toLowerCase();
-  return ORGANIZATION_SLUG_PATTERN.test(slug) ? slug : '';
-}
-
-async function applicationOrigin() {
-  const configuredOrigin = process.env.SALSYSOS_APP_URL?.trim();
-
-  if (configuredOrigin) {
-    try {
-      const parsed = new URL(configuredOrigin);
-      if (parsed.protocol === 'https:' || parsed.protocol === 'http:') {
-        return parsed.origin;
-      }
-    } catch {
-      return null;
-    }
-  }
-
-  if (process.env.NODE_ENV === 'production') {
-    return null;
-  }
-
-  const requestHeaders = await headers();
-  const host =
-    requestHeaders.get('x-forwarded-host')?.trim() ||
-    requestHeaders.get('host')?.trim();
-  const protocol = requestHeaders.get('x-forwarded-proto')?.trim() || 'http';
-
-  if (!host || !/^https?$/.test(protocol)) {
-    return null;
-  }
-
-  return `${protocol}://${host}`;
 }
 
 export async function signInAction(formData: FormData) {
@@ -107,21 +70,7 @@ export async function signInAction(formData: FormData) {
 
 export async function requestPasswordResetAction(formData: FormData) {
   const email = String(formData.get('email') ?? '').trim();
-  const organizationSlug = normalizedOrganizationSlug(
-    formData.get('organization_slug'),
-  );
-
-  if (!organizationSlug) {
-    redirect(
-      authUrl(
-        '/login',
-        'error',
-        'Use your organization-specific SalsysOS login link.',
-      ),
-    );
-  }
-
-  const forgotPath = `/forgot-password/${encodeURIComponent(organizationSlug)}`;
+  const forgotPath = '/forgot-password';
 
   if (!email) {
     redirect(authUrl(forgotPath, 'error', 'Enter your email address.'));
@@ -137,27 +86,10 @@ export async function requestPasswordResetAction(formData: FormData) {
     );
   }
 
-  const origin = await applicationOrigin();
-
-  if (!origin) {
-    redirect(
-      authUrl(
-        forgotPath,
-        'error',
-        'Password recovery is temporarily unavailable.',
-      ),
-    );
-  }
-
-  const callbackUrl = new URL('/auth/callback', origin);
-  callbackUrl.searchParams.set('organization_slug', organizationSlug);
-  callbackUrl.searchParams.set('flow', 'password-recovery');
-
   const supabase = await createClient();
-  await supabase.auth.resetPasswordForEmail(email, {
-    redirectTo: callbackUrl.toString(),
-  });
+  await supabase.auth.resetPasswordForEmail(email);
 
+  // Deliberately return the same response whether or not the account exists.
   redirect(
     authUrl(
       forgotPath,
@@ -198,6 +130,8 @@ export async function confirmPasswordRecoveryAction(formData: FormData) {
     );
   }
 
+  // Resolve the tenant from the authenticated recovery identity only.
+  // No organization slug or organization ID is accepted from the browser.
   const { data: boundOrganizationId, error: tenantBindingError } =
     await supabase.rpc('bind_current_tenant_session_for_current_user');
 
@@ -214,30 +148,6 @@ export async function confirmPasswordRecoveryAction(formData: FormData) {
     );
   }
 
-  const { data: organization, error: organizationError } = await supabase
-    .from('organizations')
-    .select('slug')
-    .eq('id', boundOrganizationId)
-    .maybeSingle();
-
-  const organizationSlug = String(organization?.slug ?? '').trim().toLowerCase();
-
-  if (
-    organizationError ||
-    !ORGANIZATION_SLUG_PATTERN.test(organizationSlug)
-  ) {
-    await supabase.auth.signOut();
-    const cookieStore = await cookies();
-    cookieStore.delete(ACTIVE_WORKSPACE_COOKIE);
-    redirect(
-      authUrl(
-        '/login',
-        'error',
-        'Unable to resolve your organization recovery session.',
-      ),
-    );
-  }
-
   const cookieStore = await cookies();
   cookieStore.set(ACTIVE_WORKSPACE_COOKIE, String(boundOrganizationId), {
     httpOnly: true,
@@ -247,22 +157,14 @@ export async function confirmPasswordRecoveryAction(formData: FormData) {
     maxAge: ORGANIZATION_COOKIE_MAX_AGE_SECONDS,
   });
 
-  redirect(`/reset-password/${encodeURIComponent(organizationSlug)}`);
+  redirect('/reset-password');
 }
 
 export async function updateRecoveredPasswordAction(formData: FormData) {
-  const organizationSlug = normalizedOrganizationSlug(
-    formData.get('organization_slug'),
-  );
   const password = String(formData.get('password') ?? '');
   const confirmPassword = String(formData.get('confirm_password') ?? '');
-
-  if (!organizationSlug) {
-    redirect('/login?error=invalid-recovery-tenant');
-  }
-
-  const resetPath = `/reset-password/${encodeURIComponent(organizationSlug)}`;
-  const loginPath = `/login/${encodeURIComponent(organizationSlug)}`;
+  const resetPath = '/reset-password';
+  const loginPath = '/login';
 
   if (password.length < 12) {
     redirect(
@@ -294,10 +196,10 @@ export async function updateRecoveredPasswordAction(formData: FormData) {
     );
   }
 
+  // Re-assert canonical tenant binding from the authenticated user before
+  // rotating credentials. This does not trust any tenant identifier from UI.
   const { data: boundOrganizationId, error: tenantBindingError } =
-    await supabase.rpc('bind_current_tenant_session_by_slug', {
-      p_organization_slug: organizationSlug,
-    });
+    await supabase.rpc('bind_current_tenant_session_for_current_user');
 
   if (tenantBindingError || !boundOrganizationId) {
     await supabase.auth.signOut();
@@ -307,7 +209,7 @@ export async function updateRecoveredPasswordAction(formData: FormData) {
       authUrl(
         loginPath,
         'error',
-        'This reset link is not valid for this organization.',
+        'This password reset session is not valid for an active organization.',
       ),
     );
   }
