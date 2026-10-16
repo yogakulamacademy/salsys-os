@@ -12,20 +12,43 @@ import {
 
 type SuccessfulCopilotReply = Extract<CopilotReplyResult, { ok: true }>;
 
+function leadIdFromProfileLink() {
+  const profileLink = Array.from(
+    document.querySelectorAll<HTMLAnchorElement>('a[href^="/leads/"]'),
+  ).find((link) => link.textContent?.trim() === "Lead profile");
+
+  if (!profileLink) {
+    return "";
+  }
+
+  try {
+    const url = new URL(profileLink.href, window.location.origin);
+    const parts = url.pathname.split("/").filter(Boolean);
+
+    return parts[0] === "leads" && parts[1] ? parts[1] : "";
+  } catch {
+    return "";
+  }
+}
+
 export function ConversationCopilotFloating() {
   const searchParams = useSearchParams();
-  const leadId = searchParams.get("lead")?.trim() || "";
+  const queryLeadId = searchParams.get("lead")?.trim() || "";
+  const [leadId, setLeadId] = useState(queryLeadId);
   const [target, setTarget] = useState<HTMLElement | null>(null);
   const [result, setResult] = useState<SuccessfulCopilotReply | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
 
   useEffect(() => {
+    const resolvedLeadId = queryLeadId || leadIdFromProfileLink();
+    setLeadId(resolvedLeadId);
+
     const contextPane = document.querySelector<HTMLElement>(
       ".conversation-context-pane",
     );
 
-    if (!contextPane) {
+    if (!contextPane || !resolvedLeadId) {
       setTarget(null);
       return;
     }
@@ -51,6 +74,8 @@ export function ConversationCopilotFloating() {
       oldPlaceholder.style.display = "none";
     }
 
+    setResult(null);
+    setError(null);
     setTarget(host);
 
     return () => {
@@ -64,7 +89,7 @@ export function ConversationCopilotFloating() {
         oldPlaceholder.style.display = "";
       }
     };
-  }, [leadId]);
+  }, [queryLeadId]);
 
   if (!leadId || !target) {
     return null;
