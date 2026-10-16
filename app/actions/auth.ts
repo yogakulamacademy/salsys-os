@@ -230,6 +230,104 @@ export async function requestPasswordResetAction(formData: FormData) {
   );
 }
 
+export async function confirmPasswordRecoveryAction(formData: FormData) {
+  const tokenHash = String(formData.get('token_hash') ?? '').trim();
+
+  if (!tokenHash) {
+    redirect(
+      authUrl(
+        '/login',
+        'error',
+        'This password reset link is invalid. Request a new one.',
+      ),
+    );
+  }
+
+  const supabase = await createClient();
+  const { data: verification, error: verificationError } =
+    await supabase.auth.verifyOtp({
+      token_hash: tokenHash,
+      type: 'recovery',
+    });
+
+  if (verificationError || !verification.user) {
+    await supabase.auth.signOut();
+    redirect(
+      authUrl(
+        '/login',
+        'error',
+        'This password reset link is invalid or expired. Request a new one.',
+      ),
+    );
+  }
+
+  /*
+   * Resolve the tenant from the authenticated recovery identity, never from
+   * browser input. This keeps password recovery aligned with the canonical
+   * one-active-membership tenant model and works across devices/browsers.
+   */
+  const {
+    data: boundOrganizationId,
+    error: tenantBindingError,
+  } = await supabase.rpc(
+    'bind_current_tenant_session_for_current_user',
+  );
+
+  if (tenantBindingError || !boundOrganizationId) {
+    await supabase.auth.signOut();
+    const cookieStore = await cookies();
+    cookieStore.delete(ACTIVE_WORKSPACE_COOKIE);
+    redirect(
+      authUrl(
+        '/login',
+        'error',
+        'Unable to establish your organization recovery session. Contact your SalsysOS administrator.',
+      ),
+    );
+  }
+
+  const { data: organization, error: organizationError } = await supabase
+    .from('organizations')
+    .select('slug')
+    .eq('id', boundOrganizationId)
+    .maybeSingle();
+
+  const organizationSlug = String(organization?.slug ?? '')
+    .trim()
+    .toLowerCase();
+
+  if (
+    organizationError ||
+    !ORGANIZATION_SLUG_PATTERN.test(organizationSlug)
+  ) {
+    await supabase.auth.signOut();
+    const cookieStore = await cookies();
+    cookieStore.delete(ACTIVE_WORKSPACE_COOKIE);
+    redirect(
+      authUrl(
+        '/login',
+        'error',
+        'Unable to resolve your organization recovery session.',
+      ),
+    );
+  }
+
+  const cookieStore = await cookies();
+  cookieStore.set(
+    ACTIVE_WORKSPACE_COOKIE,
+    String(boundOrganizationId),
+    {
+      httpOnly: true,
+      sameSite: 'lax',
+      secure: process.env.NODE_ENV === 'production',
+      path: '/',
+      maxAge: ORGANIZATION_COOKIE_MAX_AGE_SECONDS,
+    },
+  );
+
+  redirect(`/reset-password/${encodeURIComponent(organizationSlug)}`);
+}
+
 export async function updateRecoveredPasswordAction(formData: FormData) {
   const organizationSlug = normalizedOrganizationSlug(
     formData.get('organization_slug'),
