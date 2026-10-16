@@ -2,7 +2,9 @@
 
 import { LockKeyhole, Send } from "lucide-react";
 
-import { useRef, useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
+
+import { markCopilotAssistedMessageAction } from "@/app/conversations/copilot-audit-actions";
 
 type WhatsAppSendResult = {
   ok: true;
@@ -20,6 +22,11 @@ type WhatsAppSendResult = {
 
 type ServerAction = (formData: FormData) => Promise<WhatsAppSendResult | void>;
 
+type CopilotDraftEvent = CustomEvent<{
+  channel?: string;
+  body?: string;
+}>;
+
 export function WhatsAppComposer({
   action,
   windowOpen,
@@ -30,10 +37,31 @@ export function WhatsAppComposer({
   windowLabel: string;
 }) {
   const [body, setBody] = useState("");
+  const [copilotAssisted, setCopilotAssisted] = useState(false);
 
   const [isPending, startTransition] = useTransition();
 
   const formRef = useRef<HTMLFormElement | null>(null);
+
+  useEffect(() => {
+    const applyCopilotDraft = (event: Event) => {
+      const detail = (event as CopilotDraftEvent).detail;
+
+      if (detail?.channel !== "whatsapp" || !detail.body?.trim()) {
+        return;
+      }
+
+      setBody(detail.body.slice(0, 4096));
+      setCopilotAssisted(true);
+
+      requestAnimationFrame(() => {
+        formRef.current?.querySelector<HTMLTextAreaElement>('textarea[name="body"]')?.focus();
+      });
+    };
+
+    window.addEventListener("crm:copilot-draft", applyCopilotDraft);
+    return () => window.removeEventListener("crm:copilot-draft", applyCopilotDraft);
+  }, []);
 
   const sendMessage = () => {
     const text = body.trim();
@@ -42,11 +70,16 @@ export function WhatsAppComposer({
       return;
     }
 
+    const wasCopilotAssisted = copilotAssisted;
     const formData = new FormData();
     formData.set("body", text);
+    if (wasCopilotAssisted) {
+      formData.set("ai_generated", "true");
+    }
 
     // Clear immediately so the composer behaves like a messaging app.
     setBody("");
+    setCopilotAssisted(false);
 
     startTransition(async () => {
       try {
@@ -55,7 +88,16 @@ export function WhatsAppComposer({
         if (!result?.ok) {
           // Restore the draft if the server action returns no successful result.
           setBody((current) => current || text);
+          if (wasCopilotAssisted) setCopilotAssisted(true);
           return;
+        }
+
+        if (wasCopilotAssisted && result.message.id) {
+          await markCopilotAssistedMessageAction({
+            leadId: new URLSearchParams(window.location.search).get("lead") || "",
+            messageId: result.message.id,
+            channel: "whatsapp",
+          });
         }
 
         // The thread listens for this event and appends the sent bubble locally.
@@ -67,6 +109,7 @@ export function WhatsAppComposer({
       } catch (error) {
         console.error("WhatsApp send failed:", error);
         setBody((current) => current || text);
+        if (wasCopilotAssisted) setCopilotAssisted(true);
       }
     });
   };
@@ -131,6 +174,7 @@ export function WhatsAppComposer({
           <div className="flex items-center gap-3 text-[10px] font-medium text-slate-400">
             <span>Enter to send · Shift + Enter for new line</span>
             <span>{body.length}/4096</span>
+            {copilotAssisted ? <span className="text-violet-600">AI-assisted draft</span> : null}
           </div>
 
           <button
