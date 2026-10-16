@@ -26,6 +26,17 @@ type RouterDecision = {
   reason: string;
 };
 
+type KnowledgeHit = {
+  chunk_id: string;
+  document_id: string;
+  title: string;
+  category: string;
+  content: string;
+  rank: number;
+  valid_until: string | null;
+  metadata: Record<string, unknown> | null;
+};
+
 export type CopilotReplyResult =
   | {
       ok: true;
@@ -38,6 +49,7 @@ export type CopilotReplyResult =
       intent: string;
       nextAction: 'reply' | 'handoff';
       reason: string;
+      knowledgeUsed: number;
     }
   | {
       ok: false;
@@ -172,7 +184,7 @@ function parseRouterDecision(raw: string): RouterDecision {
 }
 
 function serializeContext(value: unknown) {
-  return JSON.stringify(value, null, 2).slice(0, 24000);
+  return JSON.stringify(value, null, 2).slice(0, 28000);
 }
 
 export async function generateCopilotReplyAction(
@@ -278,6 +290,43 @@ export async function generateCopilotReplyAction(
       timestamp: message.created_at,
     }));
 
+  const latestInbound = [...messages]
+    .reverse()
+    .find(
+      (message) =>
+        message.direction === 'inbound' &&
+        message.body &&
+        message.body !== '[non-text message]',
+    );
+
+  let approvedKnowledge: KnowledgeHit[] = [];
+
+  if (latestInbound?.body) {
+    const { data: knowledgeRows, error: knowledgeError } = await supabase.rpc(
+      'search_organization_knowledge_v1',
+      {
+        p_organization_id: organizationId,
+        p_query: latestInbound.body,
+        p_limit: 6,
+      },
+    );
+
+    if (knowledgeError) {
+      console.warn('Organization knowledge retrieval failed', {
+        leadId,
+        organizationId,
+        message: knowledgeError.message,
+      });
+    } else {
+      approvedKnowledge = (knowledgeRows ?? []).map((row: KnowledgeHit) => ({
+        ...row,
+        title: cleanText(String(row.title ?? ''), 240),
+        category: cleanText(String(row.category ?? 'general'), 80),
+        content: cleanText(String(row.content ?? ''), 1800),
+      }));
+    }
+  }
+
   let selectedCourse: Record<string, unknown> | null = null;
   let upcomingBatches: Array<Record<string, unknown>> = [];
   let availableCourses: Array<Record<string, unknown>> = [];
@@ -335,6 +384,14 @@ export async function generateCopilotReplyAction(
     selectedCourse,
     upcomingBatches,
     availableCourses,
+    approvedOrganizationKnowledge: approvedKnowledge.map((knowledge) => ({
+      title: knowledge.title,
+      category: knowledge.category,
+      content: knowledge.content,
+      validUntil: knowledge.valid_until,
+      relevance: knowledge.rank,
+      documentId: knowledge.document_id,
+    })),
     recentConversation: messages,
   };
 
@@ -346,7 +403,7 @@ export async function generateCopilotReplyAction(
       model: models.haiku,
       maxTokens: 260,
       system:
-        'You are the routing layer for an admissions reply co-pilot. Classify the latest conversation. Never draft the customer reply. Return JSON only.',
+        'You are the routing layer for an admissions reply co-pilot. Classify the latest conversation. Never draft the customer reply. Return JSON only. Approved organization knowledge is authoritative for organization-specific policies when present.',
       prompt: `Classify this CRM conversation.\n\nReturn exactly one JSON object with:\n- complexity: "simple" or "complex"\n- risk: "low", "review", or "human_only"\n- intent: short label\n- nextAction: "reply" or "handoff"\n- reason: one short sentence\n\nUse human_only for refund disputes, serious complaints, policy exceptions, safety/sensitive situations, legal threats, or commitments outside supplied facts. Use review for discounts, unusual payment requests, accommodation exceptions, complaints, and uncertain facts.\n\nCRM CONTEXT:\n${contextText}`,
     });
 
@@ -362,7 +419,7 @@ export async function generateCopilotReplyAction(
         model: replyModel,
         maxTokens: 520,
         system:
-          'You are SalsysOS Admissions Reply Co-Pilot. You draft a message for a human admissions team member to review and send. You never send messages yourself. Use only facts supplied in CRM CONTEXT. Never invent prices, dates, availability, accreditation, policies, refunds, discounts, promises, or exceptions. If a required fact is missing, ask a concise clarifying question or say the admissions team can confirm it. Keep the tone warm, natural, helpful, concise, and appropriate for chat. No markdown tables. Avoid sounding robotic. For human_only situations, draft only a neutral acknowledgement and indicate that the team will review; do not make a commitment.',
+          'You are SalsysOS Admissions Reply Co-Pilot. You draft a message for a human admissions team member to review and send. You never send messages yourself. Use only facts supplied in CRM CONTEXT. Live structured CRM data is authoritative for current courses, batches, prices and availability. approvedOrganizationKnowledge is authoritative for organization-specific FAQs and policies when relevant. Never invent prices, dates, availability, accreditation, policies, refunds, discounts, promises, or exceptions. If a required fact is missing, ask a concise clarifying question or say the admissions team can confirm it. Keep the tone warm, natural, helpful, concise, and appropriate for chat. No markdown tables. Avoid sounding robotic. For human_only situations, draft only a neutral acknowledgement and indicate that the team will review; do not make a commitment.',
         prompt: `Draft the next ${channel} reply.\n\nRouter decision:\n${JSON.stringify(decision)}\n\nCRM CONTEXT:\n${contextText}\n\nReturn only the customer-facing draft, with no analysis, labels, or quotation marks.`,
       }),
       2000,
@@ -379,6 +436,7 @@ export async function generateCopilotReplyAction(
       intent: decision.intent,
       nextAction: decision.nextAction,
       reason: decision.reason,
+      knowledgeUsed: approvedKnowledge.length,
     };
   } catch (error) {
     console.error('Claude Co-Pilot generation failed', {
