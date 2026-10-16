@@ -5,7 +5,10 @@ import { redirect } from "next/navigation";
 
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { getInstagramRuntimeForOrganization } from "@/lib/integrations/instagram-connection";
+import {
+  getInstagramRuntimeForOrganization,
+  type InstagramRuntimeConnection,
+} from "@/lib/integrations/instagram-connection";
 
 const DEFAULT_INSTAGRAM_API_VERSION = "v26.0";
 const MAX_INSTAGRAM_TEXT_LENGTH = 1000;
@@ -191,7 +194,7 @@ export async function sendInstagramMessageAction(
     );
   }
 
-  let runtime;
+  let runtime: InstagramRuntimeConnection;
 
   try {
     runtime = await getInstagramRuntimeForOrganization(
