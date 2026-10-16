@@ -90,7 +90,7 @@ export function InstagramOutboundBridge() {
         '[name="body"]',
       );
       const submit = form.querySelector<HTMLButtonElement>('button[type="submit"]');
-      const helper = form.querySelector<HTMLDivElement>('.mt-2.text-\[10px\]');
+      const helper = form.querySelector<HTMLDivElement>('div.mt-2');
 
       if (!direction || !channel || !body || !submit) {
         return;
