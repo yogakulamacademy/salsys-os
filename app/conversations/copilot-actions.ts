@@ -215,23 +215,7 @@ export async function generateCopilotReplyAction(
   const { data: lead, error: leadError } = await admin
     .from('leads')
     .select(
-      [
-        'id',
-        'organization_id',
-        'display_name',
-        'country',
-        'current_stage',
-        'intent',
-        'interested_course_id',
-        'preferred_batch_id',
-        'preferred_location',
-        'preferred_month',
-        'preferred_mode',
-        'summary',
-        'notes',
-        'current_contact_channel',
-        'lead_creation_channel',
-      ].join(','),
+      'id, organization_id, display_name, country, current_stage, intent, interested_course_id, preferred_batch_id, preferred_location, preferred_month, preferred_mode, summary, notes, current_contact_channel, lead_creation_channel',
     )
     .eq('id', leadId)
     .maybeSingle();
@@ -280,7 +264,10 @@ export async function generateCopilotReplyAction(
     .limit(24);
 
   if (messageError) {
-    return { ok: false, error: `Unable to load conversation history: ${messageError.message}` };
+    return {
+      ok: false,
+      error: `Unable to load conversation history: ${messageError.message}`,
+    };
   }
 
   const messages = [...(messageRows ?? [])]
