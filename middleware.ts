@@ -5,6 +5,7 @@ const PUBLIC_EXACT_PATHS = new Set([
   "/",
   "/auth/callback",
   "/auth/recovery-confirm",
+  "/forgot-password",
   "/yogakulam-tracker.js",
   "/api/leads/capture",
   "/api/analytics/ga4/sync",
@@ -72,6 +73,10 @@ function isTenantForgotPasswordPath(pathname: string) {
 
 function isTenantResetPasswordPath(pathname: string) {
   return /^\/reset-password\/[^/]+$/.test(pathname);
+}
+
+function isPasswordResetCompletionPath(pathname: string) {
+  return pathname === "/reset-password" || isTenantResetPasswordPath(pathname);
 }
 
 function isAdminOnlyPage(pathname: string) {
@@ -230,7 +235,10 @@ export async function middleware(request: NextRequest) {
     });
   }
 
-  if (isTenantResetPasswordPath(pathname)) return response;
+  // Recovery completion is allowed only after Supabase has authenticated the
+  // recovery token and the server has bound the session to the user's one
+  // active organization. Normal CRM role authorization resumes everywhere else.
+  if (isPasswordResetCompletionPath(pathname)) return response;
 
   const oauthProvider = OAUTH_CALLBACK_PROVIDER_BY_PATH[pathname];
 
