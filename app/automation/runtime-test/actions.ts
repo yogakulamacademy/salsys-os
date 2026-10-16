@@ -64,26 +64,64 @@ export async function runControlledFollowupTestAction(formData: FormData) {
   if (existingRun?.id) go('notice', 'Deduplication passed: this exact workflow/lead test already ran, so no second task was created.');
 
   const now = new Date();
+  const sourceSystem = 'manual_smart_trigger_test';
   const sourceEventId = `lead.created:${workflowId}:${leadId}:v1`;
-  const { data: event, error: eventError } = await admin.from('automation_events').insert({
-    organization_id: organizationId,
-    event_name: 'lead.created',
-    source_system: 'manual_smart_trigger_test',
-    source_event_id: sourceEventId,
-    lead_id: leadId,
-    occurred_at: now.toISOString(),
-    payload: { mode: 'controlled_manual_test', actor_user_id: userId },
-  }).select('id').single();
-  if (eventError || !event?.id) go('error', eventError?.message || 'Unable to record the test event.');
+
+  let eventId: string | null = null;
+
+  const { data: existingEvent, error: existingEventError } = await admin
+    .from('automation_events')
+    .select('id')
+    .eq('organization_id', organizationId)
+    .eq('source_system', sourceSystem)
+    .eq('source_event_id', sourceEventId)
+    .maybeSingle();
+
+  if (existingEventError) go('error', existingEventError.message);
+
+  if (existingEvent?.id) {
+    eventId = existingEvent.id;
+  } else {
+    const { data: insertedEvent, error: eventError } = await admin.from('automation_events').insert({
+      organization_id: organizationId,
+      event_name: 'lead.created',
+      source_system: sourceSystem,
+      source_event_id: sourceEventId,
+      lead_id: leadId,
+      occurred_at: now.toISOString(),
+      payload: { mode: 'controlled_manual_test', actor_user_id: userId },
+    }).select('id').single();
+
+    if (eventError || !insertedEvent?.id) {
+      // A concurrent retry may have inserted the same dedupe event first.
+      const { data: racedEvent, error: racedEventError } = await admin
+        .from('automation_events')
+        .select('id')
+        .eq('organization_id', organizationId)
+        .eq('source_system', sourceSystem)
+        .eq('source_event_id', sourceEventId)
+        .maybeSingle();
+
+      if (racedEventError || !racedEvent?.id) {
+        go('error', eventError?.message || racedEventError?.message || 'Unable to record the test event.');
+      }
+
+      eventId = racedEvent.id;
+    } else {
+      eventId = insertedEvent.id;
+    }
+  }
+
+  if (!eventId) go('error', 'Unable to resolve the automation test event.');
 
   const { data: run, error: runError } = await admin.from('automation_runs').insert({
     organization_id: organizationId,
     workflow_id: workflowId,
-    event_id: event.id,
+    event_id: eventId,
     lead_id: leadId,
     dedupe_key: dedupeKey,
     status: 'running',
-    decision: { mode: 'controlled_manual_test', trigger: 'lead.created', matched: true },
+    decision: { mode: 'controlled_manual_test', trigger: 'lead.created', matched: true, event_reused: Boolean(existingEvent?.id) },
     reason: 'Controlled deterministic Smart Trigger V1 test.',
     started_at: now.toISOString(),
   }).select('id').single();
@@ -112,7 +150,7 @@ export async function runControlledFollowupTestAction(formData: FormData) {
     due_at: dueAt,
     created_by_type: 'automation',
     created_by_id: `smart_trigger:${workflowId}`,
-    metadata: { source: 'smart_trigger_v1', mode: 'controlled_manual_test', workflow_id: workflowId, automation_run_id: run.id, event_id: event.id },
+    metadata: { source: 'smart_trigger_v1', mode: 'controlled_manual_test', workflow_id: workflowId, automation_run_id: run.id, event_id: eventId },
   }).select('id').single();
 
   if (taskError || !task?.id) {
@@ -127,7 +165,7 @@ export async function runControlledFollowupTestAction(formData: FormData) {
   const ended = new Date().toISOString();
   await Promise.all([
     admin.from('automation_action_runs').update({ status: 'completed', executed_at: ended, result: { task_id: task.id, customer_message_sent: false } }).eq('organization_id', organizationId).eq('id', actionRun.id),
-    admin.from('automation_runs').update({ status: 'completed', completed_at: ended, decision: { mode: 'controlled_manual_test', trigger: 'lead.created', matched: true, action: 'create_followup', task_id: task.id, customer_message_sent: false } }).eq('organization_id', organizationId).eq('id', run.id),
+    admin.from('automation_runs').update({ status: 'completed', completed_at: ended, decision: { mode: 'controlled_manual_test', trigger: 'lead.created', matched: true, action: 'create_followup', task_id: task.id, customer_message_sent: false, event_reused: Boolean(existingEvent?.id) } }).eq('organization_id', organizationId).eq('id', run.id),
   ]);
 
   revalidatePath('/automation');
