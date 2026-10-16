@@ -136,7 +136,9 @@ export default async function ReplyWaitTestPage({
 
   const waitingReply = waitState?.status === 'waiting';
   const timeoutScheduled = scheduledJob?.status === 'scheduled';
-  const timeoutDue = timeoutScheduled && new Date(scheduledJob.scheduled_for).getTime() <= Date.now();
+  const timeoutDue = scheduledJob
+    ? new Date(scheduledJob.scheduled_for).getTime() <= Date.now()
+    : false;
 
   return (
     <div className="space-y-6">
