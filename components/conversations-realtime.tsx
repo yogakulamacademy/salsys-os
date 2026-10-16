@@ -15,6 +15,7 @@ import {
 import {
   InstagramOutboundBridge,
 } from '@/components/instagram-outbound-bridge';
+import { ConversationCopilotFloating } from '@/components/conversation-copilot-floating';
 
 type RealtimeMessage = {
   id?: string;
@@ -121,5 +122,10 @@ export function ConversationsRealtime() {
     router,
   ]);
 
-  return <InstagramOutboundBridge />;
+  return (
+    <>
+      <InstagramOutboundBridge />
+      <ConversationCopilotFloating />
+    </>
+  );
 }
