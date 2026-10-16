@@ -145,6 +145,38 @@ function parseRouterDecision(raw: string): RouterDecision {
     reason: 'Router output could not be parsed; use stronger review.',
   };
 
+  const normalized = raw.trim();
+  const pipeParts = normalized.split('|').map((part) => part.trim());
+
+  if (pipeParts.length >= 5) {
+    const [complexityToken, riskToken, intentToken, nextActionToken, ...reasonParts] =
+      pipeParts;
+
+    const complexity =
+      complexityToken.toLowerCase() === 'simple' ? 'simple' : 'complex';
+    const risk =
+      riskToken.toLowerCase() === 'low'
+        ? 'low'
+        : riskToken.toLowerCase() === 'human_only'
+          ? 'human_only'
+          : 'review';
+    const nextAction =
+      nextActionToken.toLowerCase() === 'handoff' ? 'handoff' : 'reply';
+    const intent = cleanText(intentToken || 'other', 80);
+    const reason = cleanText(
+      reasonParts.join(' | ') || 'Human review required before sending.',
+      240,
+    );
+
+    return {
+      complexity,
+      risk,
+      intent,
+      nextAction,
+      reason,
+    };
+  }
+
   const firstBrace = raw.indexOf('{');
   const lastBrace = raw.lastIndexOf('}');
 
@@ -206,7 +238,7 @@ function parseRouterDecision(raw: string): RouterDecision {
       nextAction: nextActionToken === 'handoff' ? 'handoff' : 'reply',
       reason: cleanText(
         reasonMatch?.[1]?.replace(/["']$/, '').trim() ||
-          'Router returned a non-JSON classification; parsed conservatively.',
+          'Router returned a non-standard classification; parsed conservatively.',
         240,
       ),
     };
@@ -434,10 +466,10 @@ export async function generateCopilotReplyAction(
     const routerRaw = await callClaude({
       apiKey: models.apiKey,
       model: models.haiku,
-      maxTokens: 320,
+      maxTokens: 180,
       system:
-        'You are the routing layer for an admissions reply co-pilot. Classify the latest inbound customer message, using older conversation messages only as context. Do not let an older unrelated request override the latest message unless the latest message explicitly refers back to it. Never draft the customer reply. Your entire output must be one valid JSON object with no markdown, commentary, or code fences. Approved organization knowledge is authoritative for organization-specific policies when present.',
-      prompt: `Classify the latest inbound customer message in this CRM conversation.\n\nReturn exactly one JSON object with:\n- complexity: "simple" or "complex"\n- risk: "low", "review", or "human_only"\n- intent: short label\n- nextAction: "reply" or "handoff"\n- reason: one short sentence\n\nUse human_only for a latest-message refund dispute, serious complaint, policy exception, safety/sensitive situation, legal threat, or commitment outside supplied facts. Use review for discounts, unusual payment requests, accommodation exceptions, complaints, and uncertain facts. A simple factual question that is directly answered by approved organization knowledge can be low risk even if an older unrelated message was high risk.\n\nCRM CONTEXT:\n${contextText}`,
+        'You are the routing layer for an admissions reply co-pilot. Classify only the latest inbound customer message. Older conversation messages are context only and must not override the latest request unless the latest message explicitly refers back to them. Never draft the customer reply. Return exactly one pipe-delimited line and nothing else: complexity|risk|intent|nextAction|reason. Allowed complexity: simple or complex. Allowed risk: low, review, or human_only. Allowed nextAction: reply or handoff. Do not use the pipe character inside intent or reason. Approved organization knowledge is authoritative when present.',
+      prompt: `Classify the latest inbound customer message.\n\nRequired output format:\nsimple|low|knowledge_lookup|reply|Short reason here\n\nUse human_only for a latest-message refund dispute, serious complaint, policy exception, safety/sensitive situation, legal threat, or commitment outside supplied facts. Use review for discounts, unusual payment requests, accommodation exceptions, complaints, and uncertain facts. A simple factual question directly answered by approved organization knowledge can be low risk even if an older unrelated message was high risk.\n\nCRM CONTEXT:\n${contextText}`,
     });
 
     const decision = parseRouterDecision(routerRaw);
@@ -452,7 +484,7 @@ export async function generateCopilotReplyAction(
         model: replyModel,
         maxTokens: 520,
         system:
-          'You are SalsysOS Admissions Reply Co-Pilot. You draft a message for a human admissions team member to review and send. You never send messages yourself. Answer the latest inbound customer message first and do not reopen older unrelated topics unless the latest message refers back to them. Use only facts supplied in CRM CONTEXT. Live structured CRM data is authoritative for current courses, batches, prices and availability. approvedOrganizationKnowledge is authoritative for organization-specific FAQs and policies when relevant. Never invent prices, dates, availability, accreditation, policies, refunds, discounts, promises, or exceptions. If a required fact is missing, ask a concise clarifying question or say the admissions team can confirm it. Keep the tone warm, natural, helpful, concise, and appropriate for chat. No markdown tables. Avoid sounding robotic. For human_only situations, draft only a neutral acknowledgement and indicate that the team will review; do not make a commitment.',
+          'You are SalsysOS Admissions Reply Co-Pilot. You draft a message for a human admissions team member to review and send. You never send messages yourself. Answer the latest inbound customer message first and do not reopen older unrelated topics unless the latest message refers back to them. Use only facts supplied in CRM CONTEXT. Live structured CRM data is authoritative for current courses, batches, prices and availability. approvedOrganizationKnowledge is authoritative for organization-specific FAQs and policies when relevant. Recent conversation history is conversational context only and is NOT authoritative for organization-specific facts. Never repeat a factual claim from an older message unless it is still supported by live structured CRM data or currently approved organization knowledge. If an older message contains a fact that is no longer supported, do not repeat that fact; say you cannot currently confirm it if needed. Never invent prices, dates, availability, accreditation, policies, refunds, discounts, promises, or exceptions. If a required fact is missing, ask a concise clarifying question or say the admissions team can confirm it. Keep the tone warm, natural, helpful, concise, and appropriate for chat. No markdown tables. Avoid sounding robotic. For human_only situations, draft only a neutral acknowledgement and indicate that the team will review; do not make a commitment.',
         prompt: `Draft the next ${channel} reply to the latest inbound customer message.\n\nRouter decision:\n${JSON.stringify(decision)}\n\nCRM CONTEXT:\n${contextText}\n\nReturn only the customer-facing draft, with no analysis, labels, or quotation marks.`,
       }),
       2000,
