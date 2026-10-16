@@ -148,39 +148,71 @@ function parseRouterDecision(raw: string): RouterDecision {
   const firstBrace = raw.indexOf('{');
   const lastBrace = raw.lastIndexOf('}');
 
-  if (firstBrace < 0 || lastBrace <= firstBrace) {
-    return fallback;
+  if (firstBrace >= 0 && lastBrace > firstBrace) {
+    try {
+      const parsed = JSON.parse(raw.slice(firstBrace, lastBrace + 1)) as Record<
+        string,
+        unknown
+      >;
+
+      const complexity =
+        parsed.complexity === 'simple' ? 'simple' : 'complex';
+      const risk =
+        parsed.risk === 'low'
+          ? 'low'
+          : parsed.risk === 'human_only'
+            ? 'human_only'
+            : 'review';
+      const nextAction = parsed.nextAction === 'handoff' ? 'handoff' : 'reply';
+
+      return {
+        complexity,
+        risk,
+        intent: cleanText(stringValue(parsed.intent) || 'other', 80),
+        nextAction,
+        reason: cleanText(
+          stringValue(parsed.reason) || 'Human review required before sending.',
+          240,
+        ),
+      };
+    } catch {
+      // Fall through to tolerant key/value parsing below.
+    }
   }
 
-  try {
-    const parsed = JSON.parse(raw.slice(firstBrace, lastBrace + 1)) as Record<
-      string,
-      unknown
-    >;
+  const readToken = (key: string) => {
+    const match = raw.match(
+      new RegExp(`${key}\\s*[=:]\\s*["']?([a-zA-Z0-9_-]+)`, 'i'),
+    );
+    return match?.[1]?.trim().toLowerCase() || '';
+  };
 
-    const complexity =
-      parsed.complexity === 'simple' ? 'simple' : 'complex';
-    const risk =
-      parsed.risk === 'low'
-        ? 'low'
-        : parsed.risk === 'human_only'
-          ? 'human_only'
-          : 'review';
-    const nextAction = parsed.nextAction === 'handoff' ? 'handoff' : 'reply';
+  const complexityToken = readToken('complexity');
+  const riskToken = readToken('risk');
+  const nextActionToken = readToken('nextAction');
+  const intentMatch = raw.match(/intent\s*[=:]\s*["']?([^\n,"'}]+)/i);
+  const reasonMatch = raw.match(/reason\s*[=:]\s*["']?([^\n}]+)/i);
 
+  if (complexityToken || riskToken || nextActionToken || intentMatch) {
     return {
-      complexity,
-      risk,
-      intent: cleanText(stringValue(parsed.intent) || 'other', 80),
-      nextAction,
+      complexity: complexityToken === 'simple' ? 'simple' : 'complex',
+      risk:
+        riskToken === 'low'
+          ? 'low'
+          : riskToken === 'human_only'
+            ? 'human_only'
+            : 'review',
+      intent: cleanText(intentMatch?.[1]?.trim() || 'other', 80),
+      nextAction: nextActionToken === 'handoff' ? 'handoff' : 'reply',
       reason: cleanText(
-        stringValue(parsed.reason) || 'Human review required before sending.',
+        reasonMatch?.[1]?.replace(/["']$/, '').trim() ||
+          'Router returned a non-JSON classification; parsed conservatively.',
         240,
       ),
     };
-  } catch {
-    return fallback;
   }
+
+  return fallback;
 }
 
 function serializeContext(value: unknown) {
@@ -370,6 +402,7 @@ export async function generateCopilotReplyAction(
   const context = {
     currentDate: new Date().toISOString().slice(0, 10),
     channel,
+    latestInboundMessage: latestInbound?.body || null,
     lead: {
       name: lead.display_name,
       country: lead.country,
@@ -401,10 +434,10 @@ export async function generateCopilotReplyAction(
     const routerRaw = await callClaude({
       apiKey: models.apiKey,
       model: models.haiku,
-      maxTokens: 260,
+      maxTokens: 320,
       system:
-        'You are the routing layer for an admissions reply co-pilot. Classify the latest conversation. Never draft the customer reply. Return JSON only. Approved organization knowledge is authoritative for organization-specific policies when present.',
-      prompt: `Classify this CRM conversation.\n\nReturn exactly one JSON object with:\n- complexity: "simple" or "complex"\n- risk: "low", "review", or "human_only"\n- intent: short label\n- nextAction: "reply" or "handoff"\n- reason: one short sentence\n\nUse human_only for refund disputes, serious complaints, policy exceptions, safety/sensitive situations, legal threats, or commitments outside supplied facts. Use review for discounts, unusual payment requests, accommodation exceptions, complaints, and uncertain facts.\n\nCRM CONTEXT:\n${contextText}`,
+        'You are the routing layer for an admissions reply co-pilot. Classify the latest inbound customer message, using older conversation messages only as context. Do not let an older unrelated request override the latest message unless the latest message explicitly refers back to it. Never draft the customer reply. Your entire output must be one valid JSON object with no markdown, commentary, or code fences. Approved organization knowledge is authoritative for organization-specific policies when present.',
+      prompt: `Classify the latest inbound customer message in this CRM conversation.\n\nReturn exactly one JSON object with:\n- complexity: "simple" or "complex"\n- risk: "low", "review", or "human_only"\n- intent: short label\n- nextAction: "reply" or "handoff"\n- reason: one short sentence\n\nUse human_only for a latest-message refund dispute, serious complaint, policy exception, safety/sensitive situation, legal threat, or commitment outside supplied facts. Use review for discounts, unusual payment requests, accommodation exceptions, complaints, and uncertain facts. A simple factual question that is directly answered by approved organization knowledge can be low risk even if an older unrelated message was high risk.\n\nCRM CONTEXT:\n${contextText}`,
     });
 
     const decision = parseRouterDecision(routerRaw);
@@ -419,8 +452,8 @@ export async function generateCopilotReplyAction(
         model: replyModel,
         maxTokens: 520,
         system:
-          'You are SalsysOS Admissions Reply Co-Pilot. You draft a message for a human admissions team member to review and send. You never send messages yourself. Use only facts supplied in CRM CONTEXT. Live structured CRM data is authoritative for current courses, batches, prices and availability. approvedOrganizationKnowledge is authoritative for organization-specific FAQs and policies when relevant. Never invent prices, dates, availability, accreditation, policies, refunds, discounts, promises, or exceptions. If a required fact is missing, ask a concise clarifying question or say the admissions team can confirm it. Keep the tone warm, natural, helpful, concise, and appropriate for chat. No markdown tables. Avoid sounding robotic. For human_only situations, draft only a neutral acknowledgement and indicate that the team will review; do not make a commitment.',
-        prompt: `Draft the next ${channel} reply.\n\nRouter decision:\n${JSON.stringify(decision)}\n\nCRM CONTEXT:\n${contextText}\n\nReturn only the customer-facing draft, with no analysis, labels, or quotation marks.`,
+          'You are SalsysOS Admissions Reply Co-Pilot. You draft a message for a human admissions team member to review and send. You never send messages yourself. Answer the latest inbound customer message first and do not reopen older unrelated topics unless the latest message refers back to them. Use only facts supplied in CRM CONTEXT. Live structured CRM data is authoritative for current courses, batches, prices and availability. approvedOrganizationKnowledge is authoritative for organization-specific FAQs and policies when relevant. Never invent prices, dates, availability, accreditation, policies, refunds, discounts, promises, or exceptions. If a required fact is missing, ask a concise clarifying question or say the admissions team can confirm it. Keep the tone warm, natural, helpful, concise, and appropriate for chat. No markdown tables. Avoid sounding robotic. For human_only situations, draft only a neutral acknowledgement and indicate that the team will review; do not make a commitment.',
+        prompt: `Draft the next ${channel} reply to the latest inbound customer message.\n\nRouter decision:\n${JSON.stringify(decision)}\n\nCRM CONTEXT:\n${contextText}\n\nReturn only the customer-facing draft, with no analysis, labels, or quotation marks.`,
       }),
       2000,
     );
