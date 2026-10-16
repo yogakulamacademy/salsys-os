@@ -95,7 +95,7 @@ export default async function KnowledgeSettingsPage({
 
     if (user) {
       try {
-        const workspace = await getCurrentWorkspaceContext(supabase, user.id);
+        const workspace = await getCurrentWorkspaceContext(supabase);
         const organizationId = workspace.activeOrganizationId;
         organizationName = workspace.activeWorkspace?.organizationName || organizationName;
 
