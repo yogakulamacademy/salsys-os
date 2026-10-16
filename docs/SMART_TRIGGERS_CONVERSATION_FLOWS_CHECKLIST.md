@@ -165,11 +165,13 @@ flow variables / captured answers
 Channel sending must remain separate from flow logic.
 
 ### WhatsApp
-- respect customer-service window;
-- free-form reply only when allowed;
-- approved template required when outside the applicable service window;
-- template status/language/category must be validated;
-- message must be auditable in CRM.
+- respect the rolling customer-service window;
+- free-form / AI-generated reply only when the WhatsApp conversation window is open;
+- approved template required when the applicable WhatsApp window is closed or when starting/restarting outreach;
+- every inbound customer reply should refresh the policy state used by the resolver;
+- template status/language/category/variables must be validated before send;
+- if the flow asks to send but policy requirements are not satisfied, fail closed and create a staff-visible reason instead of bypassing policy;
+- message and provider result must be auditable in CRM.
 
 ### Instagram
 - send only through connected tenant Instagram identity;
@@ -178,7 +180,26 @@ Channel sending must remain separate from flow logic.
 - log outbound provider result in CRM.
 
 ### General
-Flow engine asks the channel policy layer whether a message is eligible. The flow definition must not bypass provider policy.
+Flow engine asks a **Channel Policy Resolver** whether a requested customer message is eligible. The flow definition must not bypass provider policy.
+
+Conceptually:
+
+```text
+Flow requests customer message
+        ↓
+Channel Policy Resolver
+   ↙                 ↘
+WhatsApp            Instagram
+   ↓                   ↓
+window/template       eligibility
+policy check          policy check
+   ↓                   ↓
+approved send path OR fail closed
+        ↓
+provider send
+        ↓
+CRM audit
+```
 
 ## Organization Knowledge Integration
 
@@ -234,11 +255,22 @@ Draft or archived knowledge is not authoritative.
 - [x] internal `create_followup` action implementation
 - [x] no provider/customer-message action in controlled test
 - [x] fix tenant-alignment trigger for optional runtime fields
-- [ ] rerun controlled execution after trigger fix
-- [ ] verify 1 event / 1 run / 1 action-run / 1 task
-- [ ] rerun same workflow+lead and verify deduplication
-- [ ] verify no Instagram/WhatsApp/email/SMS message sent
+- [x] controlled execution rerun after trigger fix
+- [x] verify 1 event / 1 run / 1 action-run / 1 task
+- [x] rerun same workflow+lead and verify deduplication
+- [x] verify zero customer messages for controlled runtime
 - [ ] verify Test Yoga School cannot see/run SalsysOS workflow
+
+Validated database state after the second identical test:
+
+```text
+Events             1
+Runs               1
+Action runs        1
+Follow-up tasks    1
+Customer messages  0
+Latest run         completed
+```
 
 ### ST-4 — Event Runtime
 - [ ] canonical event emitter API
@@ -355,34 +387,49 @@ Draft or archived knowledge is not authoritative.
 
 ## Current Exact Checkpoint
 
-Current controlled runtime test found and fixed a schema-trigger bug:
+Controlled deterministic runtime and deduplication are now validated for the first safe workflow:
 
 ```text
-record "new" has no field "conversation_id"
+lead.created -> create_followup
 ```
 
-Root cause: one shared tenant-alignment trigger referenced optional columns directly across multiple automation tables.
+Verified behavior:
 
-Fix deployed and committed:
+```text
+first execution
+  -> existing deduped event reused
+  -> one automation run completed
+  -> one action-run completed
+  -> one internal follow-up task created
+  -> zero customer messages
+
+second identical execution
+  -> existing run found by dedupe key
+  -> no new event
+  -> no new run
+  -> no new action-run
+  -> no new task
+  -> zero customer messages
+```
+
+Runtime fixes included:
 
 ```text
 fix_automation_tenant_alignment_optional_fields_v1
 commit bf11f866954533de5a7a17e1cca15e4b40778bbc
+
+reuse deduped automation test events
+commit 5e55b1461193e9ba8d0fbe7de7012e6109e6a866
 ```
 
 ### Next exact action
 
-1. Open the latest PR #31 preview.
-2. Open `/automation/runtime-test`.
-3. Select the same test lead.
-4. Run the controlled test once.
-5. Verify exactly:
-   - one event;
-   - one run;
-   - one action-run;
-   - one internal follow-up task;
-   - zero customer messages.
-6. Run the same test again and verify deduplication creates no second task.
+Complete ST-3 with cross-tenant runtime isolation:
+
+1. verify Test Yoga School cannot read the SalsysOS workflow;
+2. verify Test Yoga School cannot activate/run the SalsysOS workflow;
+3. verify a foreign lead/workflow pairing is rejected;
+4. once passed, mark deterministic internal-only runtime signed off and begin ST-5 Scheduler + Wait States design/implementation.
 
 ## Locked Rule
 
