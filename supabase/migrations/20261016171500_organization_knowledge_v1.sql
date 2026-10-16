@@ -47,11 +47,11 @@ create table if not exists public.knowledge_documents (
   constraint knowledge_documents_source_fk
     foreign key (source_id, organization_id)
     references public.knowledge_sources(id, organization_id)
-    on delete set null,
+    on delete restrict,
   constraint knowledge_documents_supersedes_fk
     foreign key (supersedes_document_id, organization_id)
     references public.knowledge_documents(id, organization_id)
-    on delete set null
+    on delete restrict
 );
 
 create index if not exists knowledge_documents_org_status_idx
