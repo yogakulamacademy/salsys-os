@@ -1,9 +1,10 @@
-import { CheckCircle2, MessageCircleReply, ShieldCheck, TimerReset } from 'lucide-react';
+import { CheckCircle2, MessageCircleReply, ShieldCheck, TimerOff, TimerReset } from 'lucide-react';
 
 import {
   simulateControlledInboundReplyAction,
   startControlledReplyWaitAction,
 } from '@/app/automation/reply-wait-test/actions';
+import { processControlledReplyTimeoutAction } from '@/app/automation/reply-wait-test/timeout-action';
 import { PageHeader } from '@/components/ui';
 import { createClient } from '@/lib/supabase/server';
 import { getCurrentWorkspaceContext } from '@/lib/workspace';
@@ -134,13 +135,15 @@ export default async function ReplyWaitTestPage({
   }
 
   const waitingReply = waitState?.status === 'waiting';
+  const timeoutScheduled = scheduledJob?.status === 'scheduled';
+  const timeoutDue = timeoutScheduled && new Date(scheduledJob.scheduled_for).getTime() <= Date.now();
 
   return (
     <div className="space-y-6">
       <PageHeader
         eyebrow="Automation · Reply Wait Test"
         title="Wait for Reply Runtime Test"
-        description={`Validate stop-on-reply behavior for ${organizationName} without sending any customer message.`}
+        description={`Validate reply-wins and no-reply timeout behavior for ${organizationName} without sending any customer message.`}
       />
 
       {query.notice ? (
@@ -159,7 +162,7 @@ export default async function ReplyWaitTestPage({
         <div className="flex items-start gap-3">
           <ShieldCheck className="mt-0.5 shrink-0" size={18} />
           <div>
-            <strong>Controlled mode:</strong> this page only writes internal automation state and a synthetic inbound event when you press a button. It does not send WhatsApp, Instagram, email, SMS, or any other customer message.
+            <strong>Controlled mode:</strong> this page only writes internal automation state and synthetic test events when you press a button. It does not send WhatsApp, Instagram, email, SMS, or any other customer message.
           </div>
         </div>
       </div>
@@ -167,7 +170,7 @@ export default async function ReplyWaitTestPage({
       {!canManage ? (
         <div className="card-pad text-sm text-slate-600">Organization admin access is required.</div>
       ) : (
-        <div className="grid gap-6 xl:grid-cols-2">
+        <div className="grid gap-6 xl:grid-cols-3">
           <section className="card-pad">
             <div className="flex items-start gap-3">
               <div className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-violet-50 text-violet-700">
@@ -203,7 +206,7 @@ export default async function ReplyWaitTestPage({
 
                 <label className="block">
                   <span className="mb-1.5 block text-xs font-bold uppercase tracking-wide text-slate-500">Reply timeout</span>
-                  <select name="timeout_minutes" defaultValue="5" className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-900">
+                  <select name="timeout_minutes" defaultValue="1" className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-900">
                     <option value="1">1 minute</option>
                     <option value="5">5 minutes</option>
                     <option value="10">10 minutes</option>
@@ -230,7 +233,7 @@ export default async function ReplyWaitTestPage({
                 <MessageCircleReply size={18} />
               </div>
               <div>
-                <h2 className="font-bold text-slate-950">2. Simulate customer reply</h2>
+                <h2 className="font-bold text-slate-950">2. Reply arrives</h2>
                 <p className="mt-1 text-sm text-slate-500">Simulates the inbound event that should cancel the no-reply timeout path.</p>
               </div>
             </div>
@@ -251,6 +254,40 @@ export default async function ReplyWaitTestPage({
               <div className="mt-5 flex items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-800">
                 <CheckCircle2 size={16} />
                 Latest reply wait is {waitState.status}.
+              </div>
+            ) : (
+              <div className="mt-5 text-sm text-slate-500">Start a reply wait first.</div>
+            )}
+          </section>
+
+          <section className="card-pad">
+            <div className="flex items-start gap-3">
+              <div className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-amber-50 text-amber-700">
+                <TimerOff size={18} />
+              </div>
+              <div>
+                <h2 className="font-bold text-slate-950">3. No reply timeout</h2>
+                <p className="mt-1 text-sm text-slate-500">Manually simulates the future scheduler worker taking the no-reply branch.</p>
+              </div>
+            </div>
+
+            {waitingReply && timeoutScheduled && scheduledJob ? (
+              <form action={processControlledReplyTimeoutAction} className="mt-5 space-y-4">
+                <input type="hidden" name="job_id" value={scheduledJob.id} />
+                <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">
+                  <div><strong>Job:</strong> scheduled</div>
+                  <div className="mt-1"><strong>Due:</strong> {formatDate(scheduledJob.scheduled_for)}</div>
+                  <div className="mt-1"><strong>Due now:</strong> {timeoutDue ? 'Yes' : 'No'}</div>
+                  <div className="mt-1"><strong>Attempts:</strong> {scheduledJob.attempt_count}</div>
+                </div>
+                <button type="submit" className="btn-primary">
+                  <TimerOff size={15} />
+                  Process no-reply timeout
+                </button>
+              </form>
+            ) : scheduledJob ? (
+              <div className="mt-5 flex items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">
+                Timeout job is {scheduledJob.status}.
               </div>
             ) : (
               <div className="mt-5 text-sm text-slate-500">Start a reply wait first.</div>
