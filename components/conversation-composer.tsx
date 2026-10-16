@@ -4,6 +4,8 @@ import { LockKeyhole, Send } from "lucide-react";
 
 import { useEffect, useRef, useState, useTransition } from "react";
 
+import { markCopilotAssistedMessageAction } from "@/app/conversations/copilot-audit-actions";
+
 type WhatsAppSendResult = {
   ok: true;
   message: {
@@ -68,9 +70,10 @@ export function WhatsAppComposer({
       return;
     }
 
+    const wasCopilotAssisted = copilotAssisted;
     const formData = new FormData();
     formData.set("body", text);
-    if (copilotAssisted) {
+    if (wasCopilotAssisted) {
       formData.set("ai_generated", "true");
     }
 
@@ -85,8 +88,16 @@ export function WhatsAppComposer({
         if (!result?.ok) {
           // Restore the draft if the server action returns no successful result.
           setBody((current) => current || text);
-          if (copilotAssisted) setCopilotAssisted(true);
+          if (wasCopilotAssisted) setCopilotAssisted(true);
           return;
+        }
+
+        if (wasCopilotAssisted && result.message.id) {
+          await markCopilotAssistedMessageAction({
+            leadId: new URLSearchParams(window.location.search).get("lead") || "",
+            messageId: result.message.id,
+            channel: "whatsapp",
+          });
         }
 
         // The thread listens for this event and appends the sent bubble locally.
@@ -98,7 +109,7 @@ export function WhatsAppComposer({
       } catch (error) {
         console.error("WhatsApp send failed:", error);
         setBody((current) => current || text);
-        if (copilotAssisted) setCopilotAssisted(true);
+        if (wasCopilotAssisted) setCopilotAssisted(true);
       }
     });
   };
