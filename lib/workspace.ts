@@ -45,8 +45,6 @@ export async function getWorkspaceContextForUser(
   const boundOrganizationId =
     cookieStore.get(ACTIVE_WORKSPACE_COOKIE)?.value?.trim() ?? "";
 
-  // Upgrade existing organization-specific sessions before normal RLS reads.
-  // The database RPC independently verifies active membership.
   if (boundOrganizationId) {
     await bindCurrentTenantSession(supabase, boundOrganizationId);
   }
@@ -166,8 +164,10 @@ export async function requireCurrentOrganizationId(
   return workspace.activeOrganizationId;
 }
 
-export async function getCurrentWorkspaceContext(): Promise<WorkspaceContext> {
-  const supabase = await createClient();
+export async function getCurrentWorkspaceContext(
+  suppliedSupabase?: ServerSupabaseClient,
+): Promise<WorkspaceContext> {
+  const supabase = suppliedSupabase ?? (await createClient());
 
   const {
     data: { user },
