@@ -12,6 +12,7 @@ type ClaudeResponse = {
     type?: string;
     text?: string;
   }>;
+  stop_reason?: string | null;
   error?: {
     message?: string;
     type?: string;
@@ -26,6 +27,17 @@ type RouterDecision = {
   reason: string;
 };
 
+type KnowledgeHit = {
+  chunk_id: string;
+  document_id: string;
+  title: string;
+  category: string;
+  content: string;
+  rank: number;
+  valid_until: string | null;
+  metadata: Record<string, unknown> | null;
+};
+
 export type CopilotReplyResult =
   | {
       ok: true;
@@ -38,6 +50,7 @@ export type CopilotReplyResult =
       intent: string;
       nextAction: 'reply' | 'handoff';
       reason: string;
+      knowledgeUsed: number;
     }
   | {
       ok: false;
@@ -67,12 +80,14 @@ async function callClaude({
   system,
   prompt,
   maxTokens,
+  allowEmptyRetry = true,
 }: {
   apiKey: string;
   model: string;
   system: string;
   prompt: string;
   maxTokens: number;
+  allowEmptyRetry?: boolean;
 }) {
   const response = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
@@ -112,13 +127,29 @@ async function callClaude({
 
   const text =
     payload.content
-      ?.filter((item) => item.type === 'text' && typeof item.text === 'string')
+      ?.filter((item) => typeof item.text === 'string')
       .map((item) => item.text || '')
       .join('\n')
       .trim() || '';
 
+  if (!text && allowEmptyRetry) {
+    return callClaude({
+      apiKey,
+      model,
+      system,
+      prompt,
+      maxTokens: Math.max(maxTokens * 3, 800),
+      allowEmptyRetry: false,
+    });
+  }
+
   if (!text) {
-    throw new Error('Claude returned an empty response.');
+    const stopReason = payload.stop_reason?.trim();
+    throw new Error(
+      stopReason
+        ? `Claude returned an empty response (${stopReason}).`
+        : 'Claude returned an empty response.',
+    );
   }
 
   return text;
@@ -133,46 +164,149 @@ function parseRouterDecision(raw: string): RouterDecision {
     reason: 'Router output could not be parsed; use stronger review.',
   };
 
-  const firstBrace = raw.indexOf('{');
-  const lastBrace = raw.lastIndexOf('}');
+  const normalized = raw.trim();
+  const pipeParts = normalized.split('|').map((part) => part.trim());
 
-  if (firstBrace < 0 || lastBrace <= firstBrace) {
-    return fallback;
-  }
-
-  try {
-    const parsed = JSON.parse(raw.slice(firstBrace, lastBrace + 1)) as Record<
-      string,
-      unknown
-    >;
+  if (pipeParts.length >= 5) {
+    const [complexityToken, riskToken, intentToken, nextActionToken, ...reasonParts] =
+      pipeParts;
 
     const complexity =
-      parsed.complexity === 'simple' ? 'simple' : 'complex';
+      complexityToken.toLowerCase() === 'simple' ? 'simple' : 'complex';
     const risk =
-      parsed.risk === 'low'
+      riskToken.toLowerCase() === 'low'
         ? 'low'
-        : parsed.risk === 'human_only'
+        : riskToken.toLowerCase() === 'human_only'
           ? 'human_only'
           : 'review';
-    const nextAction = parsed.nextAction === 'handoff' ? 'handoff' : 'reply';
+    const nextAction =
+      nextActionToken.toLowerCase() === 'handoff' ? 'handoff' : 'reply';
+    const intent = cleanText(intentToken || 'other', 80);
+    const reason = cleanText(
+      reasonParts.join(' | ') || 'Human review required before sending.',
+      240,
+    );
 
     return {
       complexity,
       risk,
-      intent: cleanText(stringValue(parsed.intent) || 'other', 80),
+      intent,
       nextAction,
+      reason,
+    };
+  }
+
+  const firstBrace = raw.indexOf('{');
+  const lastBrace = raw.lastIndexOf('}');
+
+  if (firstBrace >= 0 && lastBrace > firstBrace) {
+    try {
+      const parsed = JSON.parse(raw.slice(firstBrace, lastBrace + 1)) as Record<
+        string,
+        unknown
+      >;
+
+      const complexity =
+        parsed.complexity === 'simple' ? 'simple' : 'complex';
+      const risk =
+        parsed.risk === 'low'
+          ? 'low'
+          : parsed.risk === 'human_only'
+            ? 'human_only'
+            : 'review';
+      const nextAction = parsed.nextAction === 'handoff' ? 'handoff' : 'reply';
+
+      return {
+        complexity,
+        risk,
+        intent: cleanText(stringValue(parsed.intent) || 'other', 80),
+        nextAction,
+        reason: cleanText(
+          stringValue(parsed.reason) || 'Human review required before sending.',
+          240,
+        ),
+      };
+    } catch {
+      // Fall through to tolerant key/value parsing below.
+    }
+  }
+
+  const readToken = (key: string) => {
+    const match = raw.match(
+      new RegExp(`${key}\\s*[=:]\\s*["']?([a-zA-Z0-9_-]+)`, 'i'),
+    );
+    return match?.[1]?.trim().toLowerCase() || '';
+  };
+
+  const complexityToken = readToken('complexity');
+  const riskToken = readToken('risk');
+  const nextActionToken = readToken('nextAction');
+  const intentMatch = raw.match(/intent\s*[=:]\s*["']?([^\n,"'}]+)/i);
+  const reasonMatch = raw.match(/reason\s*[=:]\s*["']?([^\n}]+)/i);
+
+  if (complexityToken || riskToken || nextActionToken || intentMatch) {
+    return {
+      complexity: complexityToken === 'simple' ? 'simple' : 'complex',
+      risk:
+        riskToken === 'low'
+          ? 'low'
+          : riskToken === 'human_only'
+            ? 'human_only'
+            : 'review',
+      intent: cleanText(intentMatch?.[1]?.trim() || 'other', 80),
+      nextAction: nextActionToken === 'handoff' ? 'handoff' : 'reply',
       reason: cleanText(
-        stringValue(parsed.reason) || 'Human review required before sending.',
+        reasonMatch?.[1]?.replace(/["']$/, '').trim() ||
+          'Router returned a non-standard classification; parsed conservatively.',
         240,
       ),
     };
-  } catch {
-    return fallback;
   }
+
+  return fallback;
 }
 
 function serializeContext(value: unknown) {
-  return JSON.stringify(value, null, 2).slice(0, 24000);
+  return JSON.stringify(value, null, 2).slice(0, 28000);
+}
+
+function safeRouterFallback(
+  latestInbound: string,
+  knowledgeCount: number,
+): RouterDecision {
+  const lower = latestInbound.toLowerCase();
+  const highRisk =
+    /\b(refund|chargeback|lawyer|legal action|sue|complaint|medical emergency|unsafe|harassment)\b/.test(
+      lower,
+    );
+
+  if (highRisk) {
+    return {
+      complexity: 'complex',
+      risk: 'human_only',
+      intent: 'sensitive_request',
+      nextAction: 'handoff',
+      reason: 'The latest request may require a consequential commitment or staff escalation.',
+    };
+  }
+
+  if (knowledgeCount > 0) {
+    return {
+      complexity: 'simple',
+      risk: 'low',
+      intent: 'knowledge_lookup',
+      nextAction: 'reply',
+      reason: 'Approved organization knowledge directly supports a factual reply.',
+    };
+  }
+
+  return {
+    complexity: 'complex',
+    risk: 'review',
+    intent: 'other',
+    nextAction: 'reply',
+    reason: 'No approved organization knowledge directly supports the latest factual request.',
+  };
 }
 
 export async function generateCopilotReplyAction(
@@ -278,6 +412,43 @@ export async function generateCopilotReplyAction(
       timestamp: message.created_at,
     }));
 
+  const latestInbound = [...messages]
+    .reverse()
+    .find(
+      (message) =>
+        message.direction === 'inbound' &&
+        message.body &&
+        message.body !== '[non-text message]',
+    );
+
+  let approvedKnowledge: KnowledgeHit[] = [];
+
+  if (latestInbound?.body) {
+    const { data: knowledgeRows, error: knowledgeError } = await supabase.rpc(
+      'search_organization_knowledge_v1',
+      {
+        p_organization_id: organizationId,
+        p_query: latestInbound.body,
+        p_limit: 6,
+      },
+    );
+
+    if (knowledgeError) {
+      console.warn('Organization knowledge retrieval failed', {
+        leadId,
+        organizationId,
+        message: knowledgeError.message,
+      });
+    } else {
+      approvedKnowledge = (knowledgeRows ?? []).map((row: KnowledgeHit) => ({
+        ...row,
+        title: cleanText(String(row.title ?? ''), 240),
+        category: cleanText(String(row.category ?? 'general'), 80),
+        content: cleanText(String(row.content ?? ''), 1800),
+      }));
+    }
+  }
+
   let selectedCourse: Record<string, unknown> | null = null;
   let upcomingBatches: Array<Record<string, unknown>> = [];
   let availableCourses: Array<Record<string, unknown>> = [];
@@ -321,6 +492,7 @@ export async function generateCopilotReplyAction(
   const context = {
     currentDate: new Date().toISOString().slice(0, 10),
     channel,
+    latestInboundMessage: latestInbound?.body || null,
     lead: {
       name: lead.display_name,
       country: lead.country,
@@ -335,22 +507,48 @@ export async function generateCopilotReplyAction(
     selectedCourse,
     upcomingBatches,
     availableCourses,
+    approvedOrganizationKnowledge: approvedKnowledge.map((knowledge) => ({
+      title: knowledge.title,
+      category: knowledge.category,
+      content: knowledge.content,
+      validUntil: knowledge.valid_until,
+      relevance: knowledge.rank,
+      documentId: knowledge.document_id,
+    })),
     recentConversation: messages,
   };
 
   const contextText = serializeContext(context);
 
   try {
-    const routerRaw = await callClaude({
-      apiKey: models.apiKey,
-      model: models.haiku,
-      maxTokens: 260,
-      system:
-        'You are the routing layer for an admissions reply co-pilot. Classify the latest conversation. Never draft the customer reply. Return JSON only.',
-      prompt: `Classify this CRM conversation.\n\nReturn exactly one JSON object with:\n- complexity: "simple" or "complex"\n- risk: "low", "review", or "human_only"\n- intent: short label\n- nextAction: "reply" or "handoff"\n- reason: one short sentence\n\nUse human_only for refund disputes, serious complaints, policy exceptions, safety/sensitive situations, legal threats, or commitments outside supplied facts. Use review for discounts, unusual payment requests, accommodation exceptions, complaints, and uncertain facts.\n\nCRM CONTEXT:\n${contextText}`,
-    });
+    let decision: RouterDecision;
 
-    const decision = parseRouterDecision(routerRaw);
+    try {
+      const routerRaw = await callClaude({
+        apiKey: models.apiKey,
+        model: models.haiku,
+        maxTokens: 480,
+        system:
+          'You are the routing layer for an admissions reply co-pilot. Classify only the latest inbound customer message. Older conversation messages are context only and must not override the latest request unless the latest message explicitly refers back to them. Never draft the customer reply. Return exactly one pipe-delimited line and nothing else: complexity|risk|intent|nextAction|reason. Allowed complexity: simple or complex. Allowed risk: low, review, or human_only. Allowed nextAction: reply or handoff. Do not use the pipe character inside intent or reason. Approved organization knowledge is authoritative when present.',
+        prompt: `Classify the latest inbound customer message.\n\nRequired output format:\nsimple|low|knowledge_lookup|reply|Short reason here\n\nUse human_only for a latest-message refund dispute, serious complaint, policy exception, safety/sensitive situation, legal threat, or commitment outside supplied facts. Use review for discounts, unusual payment requests, accommodation exceptions, complaints, and uncertain facts. A simple factual question directly answered by approved organization knowledge can be low risk even if an older unrelated message was high risk.\n\nCRM CONTEXT:\n${contextText}`,
+      });
+
+      decision = parseRouterDecision(routerRaw);
+    } catch (routerError) {
+      console.warn('Claude Co-Pilot router failed; using safe deterministic fallback', {
+        leadId,
+        organizationId,
+        channel,
+        message:
+          routerError instanceof Error ? routerError.message : String(routerError),
+      });
+
+      decision = safeRouterFallback(
+        latestInbound?.body || '',
+        approvedKnowledge.length,
+      );
+    }
+
     const replyModel =
       decision.complexity === 'simple' && decision.risk === 'low'
         ? models.haiku
@@ -360,10 +558,10 @@ export async function generateCopilotReplyAction(
       await callClaude({
         apiKey: models.apiKey,
         model: replyModel,
-        maxTokens: 520,
+        maxTokens: 700,
         system:
-          'You are SalsysOS Admissions Reply Co-Pilot. You draft a message for a human admissions team member to review and send. You never send messages yourself. Use only facts supplied in CRM CONTEXT. Never invent prices, dates, availability, accreditation, policies, refunds, discounts, promises, or exceptions. If a required fact is missing, ask a concise clarifying question or say the admissions team can confirm it. Keep the tone warm, natural, helpful, concise, and appropriate for chat. No markdown tables. Avoid sounding robotic. For human_only situations, draft only a neutral acknowledgement and indicate that the team will review; do not make a commitment.',
-        prompt: `Draft the next ${channel} reply.\n\nRouter decision:\n${JSON.stringify(decision)}\n\nCRM CONTEXT:\n${contextText}\n\nReturn only the customer-facing draft, with no analysis, labels, or quotation marks.`,
+          'You are SalsysOS Admissions Reply Co-Pilot. You draft a message for a human admissions team member to review and send. You never send messages yourself. Answer the latest inbound customer message first and do not reopen older unrelated topics unless the latest message refers back to them. Use only facts supplied in CRM CONTEXT. Live structured CRM data is authoritative for current courses, batches, prices and availability. approvedOrganizationKnowledge is authoritative for organization-specific FAQs and policies when relevant. Recent conversation history is conversational context only and is NOT authoritative for organization-specific facts. Never repeat a factual claim from an older message unless it is still supported by live structured CRM data or currently approved organization knowledge. If an older message contains a fact that is no longer supported, do not repeat that fact; say you cannot currently confirm it if needed. Never invent prices, dates, availability, accreditation, policies, refunds, discounts, promises, or exceptions. If a required fact is missing, ask a concise clarifying question or say the admissions team can confirm it. Keep the tone warm, natural, helpful, concise, and appropriate for chat. No markdown tables. Avoid sounding robotic. For human_only situations, draft only a neutral acknowledgement and indicate that the team will review; do not make a commitment.',
+        prompt: `Draft the next ${channel} reply to the latest inbound customer message.\n\nRouter decision:\n${JSON.stringify(decision)}\n\nCRM CONTEXT:\n${contextText}\n\nReturn only the customer-facing draft, with no analysis, labels, or quotation marks.`,
       }),
       2000,
     );
@@ -379,6 +577,7 @@ export async function generateCopilotReplyAction(
       intent: decision.intent,
       nextAction: decision.nextAction,
       reason: decision.reason,
+      knowledgeUsed: approvedKnowledge.length,
     };
   } catch (error) {
     console.error('Claude Co-Pilot generation failed', {

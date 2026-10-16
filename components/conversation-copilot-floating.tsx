@@ -1,6 +1,6 @@
 "use client";
 
-import { Bot, ShieldAlert, Sparkles, WandSparkles } from "lucide-react";
+import { Bot, BookOpenCheck, ShieldAlert, Sparkles, WandSparkles } from "lucide-react";
 import { useSearchParams } from "next/navigation";
 import { useEffect, useState, useTransition } from "react";
 import { createPortal } from "react-dom";
@@ -169,7 +169,7 @@ export function ConversationCopilotFloating() {
       {isPending ? (
         <div className="mt-3 flex items-center gap-2 rounded-xl bg-white/80 px-3 py-3 text-xs font-medium text-violet-700">
           <Sparkles size={14} className="animate-pulse" />
-          Reading the lead and recent conversation…
+          Reading the lead, conversation and approved organization knowledge…
         </div>
       ) : null}
 
@@ -195,6 +195,12 @@ export function ConversationCopilotFloating() {
             <span className="rounded-full bg-slate-100 px-2 py-1 text-slate-600">
               {result.intent || "general enquiry"}
             </span>
+            {result.knowledgeUsed > 0 ? (
+              <span className="inline-flex items-center gap-1 rounded-full bg-violet-50 px-2 py-1 text-violet-700 ring-1 ring-inset ring-violet-200">
+                <BookOpenCheck size={11} />
+                Knowledge {result.knowledgeUsed}
+              </span>
+            ) : null}
           </div>
 
           <div className="whitespace-pre-wrap text-sm leading-6 text-slate-800">
@@ -210,14 +216,16 @@ export function ConversationCopilotFloating() {
 
           <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
             <div className="text-[10px] font-medium leading-4 text-slate-400">
-              Review or edit before sending.
+              {result.risk === "human_only"
+                ? "Acknowledgement draft only. Staff action is required."
+                : "Review or edit before sending."}
             </div>
             <button
               type="button"
               onClick={useDraft}
               className="btn-primary !rounded-lg !px-3 !py-2 text-xs"
             >
-              Use draft
+              {result.risk === "human_only" ? "Use acknowledgement" : "Use draft"}
             </button>
           </div>
         </div>
