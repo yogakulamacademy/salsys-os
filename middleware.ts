@@ -2,6 +2,7 @@ import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
 const PUBLIC_EXACT_PATHS = new Set([
+  "/",
   "/auth/callback",
   "/yogakulam-tracker.js",
   "/api/leads/capture",

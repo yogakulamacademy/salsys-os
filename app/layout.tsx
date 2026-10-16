@@ -1,10 +1,15 @@
 import type { Metadata } from 'next';
 import './globals.css';
-import { AppShell } from '@/components/app-shell';
+import { RootShell } from '@/components/root-shell';
 
 export const metadata: Metadata = {
-  title: 'SalsysOS',
-  description: 'Sales + Analysis Operating System for lead conversion, customer journeys, attribution and revenue intelligence',
+  metadataBase: new URL('https://salsysos.com'),
+  title: {
+    default: 'SalsysOS — Sales + Analysis Operating System',
+    template: '%s | SalsysOS',
+  },
+  description:
+    'SalsysOS connects sales, customer conversations, marketing, attribution, organic growth, experiments, and revenue intelligence in one operating system.',
 };
 
 const themeBootScript = `
@@ -24,7 +29,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
         <script dangerouslySetInnerHTML={{ __html: themeBootScript }} />
       </head>
       <body>
-        <AppShell>{children}</AppShell>
+        <RootShell>{children}</RootShell>
       </body>
     </html>
   );
