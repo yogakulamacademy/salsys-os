@@ -15,6 +15,11 @@ type InstagramSendResult = {
   };
 };
 
+type CopilotDraftEvent = CustomEvent<{
+  channel?: string;
+  body?: string;
+}>;
+
 function findManualInteractionForm(): HTMLFormElement | null {
   const forms = Array.from(document.querySelectorAll<HTMLFormElement>('form'));
 
@@ -102,6 +107,7 @@ export function InstagramOutboundBridge() {
       const originalPlaceholder = body.placeholder;
       const originalHelper = helper?.textContent ?? '';
       let sending = false;
+      let copilotAssisted = false;
 
       const updateUi = () => {
         const isInstagramOutbound =
@@ -115,8 +121,9 @@ export function InstagramOutboundBridge() {
             : 'Reply on Instagram...';
 
           if (helper) {
-            helper.textContent =
-              'Instagram outbound replies are sent through the connected Instagram API and logged in CRM.';
+            helper.textContent = copilotAssisted
+              ? 'AI-assisted draft · review before sending · sent through Instagram API + logged in CRM.'
+              : 'Instagram outbound replies are sent through the connected Instagram API and logged in CRM.';
           }
         } else {
           submit.textContent = originalButtonText;
@@ -131,6 +138,21 @@ export function InstagramOutboundBridge() {
         body.disabled = sending;
         channel.disabled = sending;
         direction.disabled = sending;
+      };
+
+      const applyCopilotDraft = (event: Event) => {
+        const detail = (event as CopilotDraftEvent).detail;
+
+        if (detail?.channel !== 'instagram' || !detail.body?.trim()) {
+          return;
+        }
+
+        channel.value = 'instagram';
+        direction.value = 'outbound';
+        body.value = detail.body.slice(0, 1000);
+        copilotAssisted = true;
+        updateUi();
+        body.focus();
       };
 
       const onSubmit = async (event: SubmitEvent) => {
@@ -167,6 +189,9 @@ export function InstagramOutboundBridge() {
 
         const formData = new FormData();
         formData.set('body', text);
+        if (copilotAssisted) {
+          formData.set('ai_generated', 'true');
+        }
 
         try {
           const result = (await sendInstagramMessageAction(
@@ -179,6 +204,7 @@ export function InstagramOutboundBridge() {
           }
 
           body.value = '';
+          copilotAssisted = false;
           router.refresh();
         } catch (error) {
           console.error('Instagram send failed:', error);
@@ -191,12 +217,14 @@ export function InstagramOutboundBridge() {
       channel.addEventListener('change', updateUi);
       direction.addEventListener('change', updateUi);
       form.addEventListener('submit', onSubmit, true);
+      window.addEventListener('crm:copilot-draft', applyCopilotDraft);
       updateUi();
 
       detach = () => {
         channel.removeEventListener('change', updateUi);
         direction.removeEventListener('change', updateUi);
         form.removeEventListener('submit', onSubmit, true);
+        window.removeEventListener('crm:copilot-draft', applyCopilotDraft);
         submit.textContent = originalButtonText;
         submit.disabled = false;
         body.disabled = false;
