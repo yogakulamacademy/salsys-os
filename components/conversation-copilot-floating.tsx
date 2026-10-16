@@ -15,26 +15,51 @@ type SuccessfulCopilotReply = Extract<CopilotReplyResult, { ok: true }>;
 export function ConversationCopilotFloating() {
   const searchParams = useSearchParams();
   const leadId = searchParams.get("lead")?.trim() || "";
-  const [target, setTarget] = useState<Element | null>(null);
+  const [target, setTarget] = useState<HTMLElement | null>(null);
   const [result, setResult] = useState<SuccessfulCopilotReply | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
 
   useEffect(() => {
-    const contextHeader = document.querySelector(
-      ".conversation-context-pane > div:first-child",
-    );
-    const oldPlaceholder = document.querySelector<HTMLElement>(
-      ".conversation-ai-note",
+    const contextPane = document.querySelector<HTMLElement>(
+      ".conversation-context-pane",
     );
 
-    setTarget(contextHeader);
+    if (!contextPane) {
+      setTarget(null);
+      return;
+    }
+
+    const existingHost = contextPane.querySelector<HTMLElement>(
+      '[data-copilot-host="true"]',
+    );
+
+    const host = existingHost ?? document.createElement("div");
+    host.dataset.copilotHost = "true";
+
+    if (!existingHost) {
+      const firstSection = contextPane.firstElementChild;
+      const insertionPoint = firstSection?.nextSibling ?? null;
+      contextPane.insertBefore(host, insertionPoint);
+    }
+
+    const oldPlaceholder = contextPane.querySelector<HTMLElement>(
+      ".conversation-ai-note",
+    );
 
     if (oldPlaceholder) {
       oldPlaceholder.style.display = "none";
     }
 
+    setTarget(host);
+
     return () => {
+      setTarget(null);
+
+      if (!existingHost && host.isConnected) {
+        host.remove();
+      }
+
       if (oldPlaceholder) {
         oldPlaceholder.style.display = "";
       }
