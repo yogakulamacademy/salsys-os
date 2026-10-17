@@ -10,6 +10,9 @@ type WorkflowRow = {
   name: string;
   status: string;
   metadata: Record<string, unknown> | null;
+  current_draft_version: number | null;
+  current_published_version: number | null;
+  runtime_flow_enabled: boolean;
 };
 
 type ValidationResult = {
@@ -22,6 +25,7 @@ type ValidationResult = {
   validator_version?: string;
   customer_messaging_enabled?: boolean;
   version_number?: number;
+  definition_hash?: string;
 };
 
 export default async function FlowValidationTestPage({
@@ -50,7 +54,7 @@ export default async function FlowValidationTestPage({
         supabase.rpc('can_manage_organization', { p_organization_id: organizationId }),
         supabase
           .from('automation_workflows')
-          .select('id,name,status,metadata')
+          .select('id,name,status,metadata,current_draft_version,current_published_version,runtime_flow_enabled')
           .eq('organization_id', organizationId)
           .eq('status', 'active')
           .order('updated_at', { ascending: false })
@@ -66,8 +70,10 @@ export default async function FlowValidationTestPage({
     }
   }
 
-  const errors = validation?.errors ?? [];
-  const warnings = validation?.warnings ?? [];
+  const draftVersion = Number(workflow?.current_draft_version ?? 1);
+  const validationMatchesDraft = Number(validation?.version_number ?? 0) === draftVersion;
+  const errors = validationMatchesDraft ? validation?.errors ?? [] : [];
+  const warnings = validationMatchesDraft ? validation?.warnings ?? [] : [];
 
   return (
     <div className="space-y-6">
@@ -93,7 +99,7 @@ export default async function FlowValidationTestPage({
         <div className="flex items-start gap-3">
           <ShieldCheck className="mt-0.5 shrink-0" size={18} />
           <div>
-            <strong>Validation-only mode:</strong> this check reads the tenant-scoped draft graph and writes only a validation result into workflow metadata. It does not publish, enroll a lead, execute nodes, schedule jobs, call AI, or send customer messages.
+            <strong>Validation-only mode:</strong> this check reads the tenant-scoped current draft graph and writes only a validation lock. It does not publish, enroll a lead, execute nodes, schedule jobs, call AI, or send customer messages.
           </div>
         </div>
       </div>
@@ -108,11 +114,14 @@ export default async function FlowValidationTestPage({
             <div className="flex flex-wrap items-center justify-between gap-4">
               <div>
                 <h2 className="font-bold text-slate-950">{workflow.name}</h2>
-                <p className="mt-1 text-sm text-slate-500">Validate Version 1 before publish eligibility is considered.</p>
+                <p className="mt-1 text-sm text-slate-500">
+                  Validate Draft Version {draftVersion} before publish eligibility is considered.
+                  {workflow.current_published_version ? ` Published Version ${workflow.current_published_version} remains unchanged.` : ''}
+                </p>
               </div>
               <form action={validateControlledFlowAction}>
                 <input type="hidden" name="workflow_id" value={workflow.id} />
-                <input type="hidden" name="version_number" value="1" />
+                <input type="hidden" name="version_number" value={draftVersion} />
                 <button type="submit" className="btn-primary">Run draft validation</button>
               </form>
             </div>
@@ -120,22 +129,22 @@ export default async function FlowValidationTestPage({
 
           <section className="card-pad">
             <div className="flex items-start gap-3">
-              <div className={`grid h-10 w-10 shrink-0 place-items-center rounded-xl ${validation?.valid ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700'}`}>
-                {validation?.valid ? <CheckCircle2 size={18} /> : <AlertTriangle size={18} />}
+              <div className={`grid h-10 w-10 shrink-0 place-items-center rounded-xl ${validationMatchesDraft && validation?.valid ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700'}`}>
+                {validationMatchesDraft && validation?.valid ? <CheckCircle2 size={18} /> : <AlertTriangle size={18} />}
               </div>
               <div>
                 <h2 className="font-bold text-slate-950">Latest validation result</h2>
                 <p className="mt-1 text-sm text-slate-500">
-                  {validation
-                    ? validation.valid
-                      ? 'Structurally valid for the current controlled definition.'
-                      : 'Blocking structural issues remain.'
-                    : 'No validation has been run yet.'}
+                  {!validationMatchesDraft
+                    ? `Draft Version ${draftVersion} has not been validation-locked yet.`
+                    : validation?.valid
+                      ? `Draft Version ${draftVersion} is structurally valid and hash-locked.`
+                      : 'Blocking structural issues remain.'}
                 </p>
               </div>
             </div>
 
-            {validation ? (
+            {validationMatchesDraft && validation ? (
               <div className="mt-5 grid gap-4 md:grid-cols-4">
                 <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
                   <div className="text-xs font-bold uppercase tracking-wide text-slate-500">Status</div>
