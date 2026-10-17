@@ -13,6 +13,7 @@ const PUBLIC_EXACT_PATHS = new Set([
   "/api/analytics/google-ads/sync",
   "/api/analytics/meta-ads/sync",
   "/api/admissions/auto-tasks",
+  "/api/automation/runtime-scheduler",
   "/api/conversion-feedback/run",
   "/api/whatsapp/webhook",
   "/api/instagram/webhook",
@@ -235,9 +236,6 @@ export async function middleware(request: NextRequest) {
     });
   }
 
-  // Recovery completion is allowed only after Supabase has authenticated the
-  // recovery token and the server has bound the session to the user's one
-  // active organization. Normal CRM role authorization resumes everywhere else.
   if (isPasswordResetCompletionPath(pathname)) return response;
 
   const oauthProvider = OAUTH_CALLBACK_PROVIDER_BY_PATH[pathname];
