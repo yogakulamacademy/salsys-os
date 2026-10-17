@@ -2,7 +2,9 @@
 
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
+import { NextRequest } from 'next/server';
 
+import { GET as runtimeSchedulerGet } from '@/app/api/automation/runtime-scheduler/route';
 import {
   runControlledAutomationSchedulerSweep,
   runProductionAutomationSchedulerSweep,
@@ -236,5 +238,47 @@ export async function verifyProductionSchedulerGateAction(formData: FormData) {
   go(
     'notice',
     'Production scheduler gate passed: runtime_flow_enabled=false caused 0 workflows scanned, 0 candidates discovered, and 0 jobs claimed.',
+  );
+}
+
+export async function verifyRuntimeSchedulerApiDisabledAction() {
+  await adminContext();
+
+  const secret = process.env.CRON_SECRET?.trim();
+  if (!secret) go('error', 'CRON_SECRET is not configured, so the protected scheduler API cannot be probed.');
+
+  if (process.env.AUTOMATION_SCHEDULER_ENABLED?.trim().toLowerCase() === 'true') {
+    go('error', 'This disabled-gate probe requires AUTOMATION_SCHEDULER_ENABLED to remain false or unset.');
+  }
+
+  const response = await runtimeSchedulerGet(
+    new NextRequest('https://salsysos.internal/api/automation/runtime-scheduler', {
+      headers: {
+        authorization: `Bearer ${secret}`,
+      },
+    }),
+  );
+
+  const body = (await response.json()) as Record<string, unknown>;
+  const zeroCounts =
+    Number(body.workflowsScanned ?? -1) === 0 &&
+    Number(body.candidatesFound ?? -1) === 0 &&
+    Number(body.jobsClaimed ?? -1) === 0 &&
+    Number(body.jobsCompleted ?? -1) === 0 &&
+    Number(body.jobsRequeued ?? -1) === 0 &&
+    Number(body.jobsFailed ?? -1) === 0 &&
+    Number(body.jobsSkipped ?? -1) === 0;
+
+  if (response.status !== 200 || body.ok !== true || body.enabled !== false || !zeroCounts) {
+    go(
+      'error',
+      `Scheduler API disabled-gate probe failed: HTTP ${response.status}, enabled=${String(body.enabled)}, workflows=${String(body.workflowsScanned)}, claimed=${String(body.jobsClaimed)}.`,
+    );
+  }
+
+  revalidatePath('/automation/runtime-scheduler-test');
+  go(
+    'notice',
+    'Scheduler API disabled gate passed: authorized request returned enabled=false with 0 workflows, 0 candidates, and 0 jobs claimed or processed.',
   );
 }
