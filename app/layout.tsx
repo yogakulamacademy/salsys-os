@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import './globals.css';
 import { RootShell } from '@/components/root-shell';
+import { GlobalSearchOverlay } from '@/components/global-search-overlay';
 
 export const metadata: Metadata = {
   metadataBase: new URL('https://salsysos.com'),
@@ -30,6 +31,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
       </head>
       <body>
         <RootShell>{children}</RootShell>
+        <GlobalSearchOverlay />
       </body>
     </html>
   );
