@@ -121,6 +121,36 @@ export async function POST(request: NextRequest) {
 
     const accepted = Boolean(data?.accepted);
     const duplicate = Boolean(data?.duplicate);
+    const rawEventId = data?.event_id ? String(data.event_id) : null;
+
+    let processing: Record<string, unknown> | null = null;
+
+    if (accepted && rawEventId) {
+      const {
+        data: processingData,
+        error: processingError,
+      } = await admin.rpc(
+        'process_tracking_raw_event_v1',
+        {
+          p_organization_id: source.organizationId,
+          p_raw_event_id: rawEventId,
+        },
+      );
+
+      if (processingError) {
+        processing = {
+          ok: false,
+          processed: false,
+          reason: 'processor_rpc_failed',
+        };
+      } else if (
+        processingData &&
+        typeof processingData === 'object' &&
+        !Array.isArray(processingData)
+      ) {
+        processing = processingData as Record<string, unknown>;
+      }
+    }
 
     return json(
       {
@@ -128,13 +158,14 @@ export async function POST(request: NextRequest) {
         accepted,
         duplicate,
         quarantined: !accepted,
-        raw_event_id: data?.event_id ?? null,
+        raw_event_id: rawEventId,
         event_family: data?.event_family ?? null,
         contract_status: data?.contract_status ?? null,
         reason: data?.reason ?? null,
+        processing,
         received_at: new Date().toISOString(),
       },
-      accepted ? 202 : 202,
+      202,
       {
         'X-RateLimit-Limit': String(rate.limit),
         'X-RateLimit-Remaining': String(rate.remaining),
