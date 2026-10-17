@@ -5,7 +5,7 @@
 **Current branch:** `feature/smart-triggers-runtime-worker`  
 **Parent feature branch:** `feature/smart-triggers-v1`  
 **Parent PR:** #31 — Add Smart Triggers + Conversation Flow automation foundation  
-**Approx. Smart Triggers completion:** ~78%  
+**Approx. Smart Triggers completion:** ~79%  
 **Approx. overall SalsysOS completion:** ~77%  
 
 ## Product direction — locked
@@ -43,12 +43,16 @@ Core tables:
 - `automation_scheduled_jobs`
 - `automation_variables`
 - `automation_flow_versions`
+- `automation_scheduler_settings`
+- `automation_scheduler_invocations`
 
 Workflow/runtime controls:
 
 - `current_draft_version`
 - `current_published_version`
 - `runtime_flow_enabled`
+- `automation_scheduler_settings.enabled`
+- Vercel `AUTOMATION_SCHEDULER_ENABLED`
 
 Runtime modules/routes:
 
@@ -67,15 +71,17 @@ Database capabilities verified:
 - `pg_cron` installed
 - `pg_net` installed
 - `supabase_vault` installed
+- `invoke_automation_runtime_scheduler_v1()` installed
 
 Current production-safe state:
 
 ```text
-Published flow              v1
-Editable draft              v2
-runtime_flow_enabled        false
-AUTOMATION_SCHEDULER_ENABLED false / unset
-Customer auto-send          disabled
+Published flow                       v1
+Editable draft                       v2
+runtime_flow_enabled                 false
+automation_scheduler_settings.enabled false
+AUTOMATION_SCHEDULER_ENABLED         false / unset
+Customer auto-send                   disabled
 ```
 
 ---
@@ -155,7 +161,15 @@ Customer auto-send          disabled
 - [x] protected scheduler API route
 - [x] `CRON_SECRET` authentication verified on fresh Preview deployment
 - [x] global scheduler kill switch fail-closed test (`AUTOMATION_SCHEDULER_ENABLED=false`)
-- [ ] recurring scheduler mechanism enabled
+- [x] Supabase scheduler configuration table
+- [x] Supabase scheduler invocation audit table
+- [x] `pg_cron` registration created
+- [x] `pg_net` invocation function created
+- [x] recurring cron executes inertly while DB scheduler setting is disabled
+- [x] scheduler authorization secret record created in Supabase Vault
+- [ ] align Vault scheduler secret with the exact Vercel `CRON_SECRET`
+- [ ] authenticated Supabase cron -> scheduler API invocation validation
+- [ ] recurring background scheduler sign-off
 - [ ] timezone-safe production execution sign-off
 - [ ] exact datetime node
 - [ ] wait-until business hours
@@ -246,6 +260,8 @@ Customer auto-send          disabled
 - [x] retry/terminal-failure auditability
 - [x] scheduler global kill switch
 - [x] workflow-level runtime gate
+- [x] DB-level scheduler kill switch
+- [x] scheduler invocation audit foundation
 - [ ] opt-out keyword handling
 - [ ] do-not-contact enforcement
 - [ ] per-channel suppression
@@ -280,6 +296,9 @@ Customer auto-send          disabled
 - [x] worker concurrency sign-off
 - [x] worker cross-tenant isolation sign-off
 - [x] scheduler API authentication / kill-switch sign-off
+- [x] Supabase recurring scheduler foundation installed
+- [x] inert recurring cron behavior verified
+- [ ] authenticated recurring cron invocation sign-off
 - [ ] recurring background scheduler sign-off
 - [ ] suppression sign-off
 - [ ] channel-policy sign-off
@@ -401,7 +420,7 @@ candidates           = 0
 claims               = 0
 ```
 
-Protected scheduler API with valid `CRON_SECRET` and global scheduler disabled:
+Protected scheduler API with valid Vercel `CRON_SECRET` and global scheduler disabled:
 
 ```text
 authorized request      yes
@@ -414,40 +433,92 @@ jobs processed           0
 
 This passed on a fresh Preview deployment after Vercel environment variables were refreshed.
 
+## J. Supabase recurring scheduler foundation
+
+Migration applied to production:
+
+`20261017144500_automation_runtime_scheduler_foundation_v1.sql`
+
+Git commit:
+
+`3c6d3ca6d1877022f438dd3d164b621322db1095`
+
+Created:
+
+- `automation_scheduler_settings`
+- `automation_scheduler_invocations`
+- `invoke_automation_runtime_scheduler_v1()`
+- cron job `salsys-automation-runtime-scheduler-v1`
+
+Cron schedule:
+
+```text
+* * * * *
+```
+
+Verified production state immediately after installation:
+
+```text
+cron job active                     true
+DB scheduler enabled                false
+last_outcome                        disabled
+last_request_id                     null
+HTTP scheduler request while off    none
+customer messaging                  disabled
+```
+
+This proves the recurring database scheduler is alive but fail-closed.
+
+A Vault secret record named `salsys_runtime_scheduler_cron_secret` now exists. However, its value was generated inside Supabase and has **not yet been proven identical to Vercel `CRON_SECRET`**. Do not enable the DB scheduler setting until secret parity is established.
+
 ---
 
 # Current exact checkpoint
 
-The generic worker, retry handling, concurrency protection, tenant isolation, due-job discovery, scheduler sweep, scheduler API authentication and dual kill-switches are now validated.
+The generic worker, retry handling, concurrency protection, tenant isolation, due-job discovery, scheduler sweep, scheduler API authentication, dual runtime gates and Supabase cron foundation are all in place.
 
-Production Supabase has `pg_cron`, `pg_net`, and `supabase_vault`, so the recurring scheduler can be implemented through Supabase rather than relying on minute-level Vercel Cron.
+Current safety state:
+
+```text
+Published flow                        v1
+Draft flow                            v2
+runtime_flow_enabled                  false
+DB scheduler enabled                  false
+Vercel AUTOMATION_SCHEDULER_ENABLED   false / unset
+Cron registered                       true
+Cron HTTP invocation                  blocked by DB scheduler gate
+Customer auto-send                    disabled
+```
 
 ## Next exact action
 
-Build the **Supabase recurring scheduler foundation without enabling customer messaging**:
+Complete the **scheduler-secret parity + authenticated cron test** without enabling any workflow execution:
 
-1. create minimal scheduler configuration/audit state;
-2. store scheduler authorization material securely with Vault;
-3. create a `pg_cron` + `pg_net` invocation path to `/api/automation/runtime-scheduler`;
-4. keep the global scheduler kill switch OFF initially;
-5. verify cron registration and authenticated invocation produce 0 work while disabled;
-6. only after that, run a controlled internal-only enabled scheduler pilot for one workflow with no customer-send node.
+1. make the Supabase Vault secret exactly match Vercel `CRON_SECRET`;
+2. keep Vercel `AUTOMATION_SCHEDULER_ENABLED=false`;
+3. temporarily enable only `automation_scheduler_settings.enabled=true`;
+4. let one cron invocation reach `/api/automation/runtime-scheduler`;
+5. verify HTTP authentication succeeds but API returns `enabled=false` and 0 work;
+6. verify scheduler invocation audit/request ID;
+7. turn the DB scheduler setting back off if additional hardening is needed;
+8. only after that, consider a controlled internal-only scheduler pilot.
 
 ---
 
 # Remaining major Smart Trigger work
 
-1. recurring Supabase scheduler / background due-job pickup;
-2. automatic event emitter + provider webhook adapter;
-3. suppression / opt-out / DNC / frequency-cap enforcement;
-4. WhatsApp channel policy + approved-template handling;
-5. WhatsApp + Instagram actual send nodes + provider audit;
-6. AI flow nodes grounded in Organization Knowledge;
-7. human approval / handoff runtime;
-8. analytics + production monitoring;
-9. broader adversarial tests;
-10. controlled internal-only production pilot;
-11. controlled customer-messaging pilot.
+1. scheduler-secret parity + authenticated Supabase cron validation;
+2. recurring background scheduler production sign-off;
+3. automatic event emitter + provider webhook adapter;
+4. suppression / opt-out / DNC / frequency-cap enforcement;
+5. WhatsApp channel policy + approved-template handling;
+6. WhatsApp + Instagram actual send nodes + provider audit;
+7. AI flow nodes grounded in Organization Knowledge;
+8. human approval / handoff runtime;
+9. analytics + production monitoring;
+10. broader adversarial tests;
+11. controlled internal-only production pilot;
+12. controlled customer-messaging pilot.
 
 ---
 
