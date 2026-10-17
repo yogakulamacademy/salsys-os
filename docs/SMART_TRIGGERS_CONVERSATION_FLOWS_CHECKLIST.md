@@ -1,7 +1,7 @@
 # SalsysOS — Smart Triggers + Conversation Flows Checklist
 
 **Status:** Active product roadmap / implementation checklist  
-**Date:** 2026-10-16  
+**Date:** 2026-10-17  
 **Branch:** `feature/smart-triggers-v1`  
 **PR:** #31  
 
@@ -21,87 +21,11 @@ Smart Triggers
 + Audit, Deduplication, Suppression and Stop-on-Reply
 ```
 
-The existing Smart Trigger tables remain the foundation. They are not being discarded.
+Customer auto-send remains blocked until channel-policy, suppression, approval, audit, tenant-isolation and production-runtime checkpoints are complete.
 
-## Target Conversation Flow
+## Current Data Model
 
-Example:
-
-```text
-NEW LEAD
-  -> Wait 2 minutes
-  -> Send welcome message
-  -> Ask which course they want
-  -> Branch by answer
-  -> Save lead/course attributes
-  -> Generate grounded AI reply
-  -> Wait for reply
-  -> If no reply after 6 hours: follow-up
-  -> If reply arrives: cancel pending follow-up and continue
-  -> If high intent: assign admissions user + notify
-  -> If payment pending: schedule reminder
-  -> End / human handoff
-```
-
-## Automation Levels
-
-### 1. Deterministic automation
-Safe system operations that can execute without AI, for example:
-- create follow-up task;
-- wait / resume;
-- update stage;
-- assign owner;
-- add tag;
-- notify staff;
-- branch on structured CRM fields.
-
-### 2. AI-assisted automation
-AI may:
-- classify intent;
-- classify risk;
-- summarize conversation;
-- generate a draft reply;
-- recommend next action;
-- answer using approved Organization Knowledge.
-
-Human approval remains required before consequential customer-facing actions.
-
-### 3. Low-risk autonomous AI
-Future mode only after controlled validation. Must remain opt-in and constrained by:
-- approved Organization Knowledge;
-- channel policy;
-- risk classification;
-- audit trail;
-- suppression / opt-out;
-- stop-on-reply;
-- message caps;
-- quiet hours;
-- tenant isolation.
-
-## Node / Block Catalog
-
-Planned visual flow nodes:
-
-- **Trigger** — new lead, inbound message, stage change, payment pending, tag added, scheduled date, webhook, AI signal.
-- **Send Message** — channel-aware outbound message.
-- **WhatsApp Template** — approved template when required by WhatsApp policy/window.
-- **AI Reply** — Claude + tenant-scoped Organization Knowledge + CRM context.
-- **Ask Question** — capture course, location, month, budget, mode, etc.
-- **Condition** — if/else branching.
-- **Wait** — duration or exact date/time.
-- **Wait for Reply** — pause until customer replies or timeout occurs.
-- **Update Lead** — stage, course, intent, country, tags, custom fields.
-- **Assign Owner** — salesperson/admissions routing.
-- **Create Follow-up** — internal CRM task.
-- **Human Approval** — pause before a sensitive/consequential action.
-- **Human Handoff** — stop automation and transfer conversation to staff.
-- **Webhook/API** — external integration step.
-- **AI Decision** — intent/risk/lead classification / next-best-action.
-- **Stop Flow** — terminate enrollment.
-
-## Data Model
-
-### Existing V1 foundation — implemented
+Core automation foundation:
 
 - `automation_workflows`
 - `automation_triggers`
@@ -113,108 +37,28 @@ Planned visual flow nodes:
 - `automation_enrollments`
 - `automation_suppressions`
 
-These tables remain canonical for workflow definitions, execution ledgers, enrollments, audit, suppression and safety controls.
-
-### Planned flow-orchestration additions
+Conversation-flow/runtime foundation now implemented:
 
 - `automation_flow_nodes`
 - `automation_flow_edges`
 - `automation_wait_states`
 - `automation_scheduled_jobs`
 - `automation_variables`
+- `automation_flow_versions`
 
-Exact schema is not locked until the deterministic runtime test and scheduler design are validated.
+Workflow version pointers now include:
 
-## Per-Lead Scheduling Model
+- `current_draft_version`
+- `current_published_version`
+- `runtime_flow_enabled`
 
-Scheduling is enrollment-specific, not only campaign-level.
+Enrollments support:
 
-Example:
-
-```text
-Lead enters flow
-T+0       Welcome
-T+10 min  Ask course
-T+6 hr    Follow-up if no reply
-T+1 day   Reminder if still no reply
-T+3 days  Nurture
-```
-
-If the lead replies while waiting:
-
-```text
-pending no-reply step -> cancel / invalidate
-reply event -> resume correct branch
-```
-
-Required persisted state eventually includes:
-
-```text
-lead_id
-workflow_id
-current_node_id
-status
-next_action_at
-last_event_at
-attempt_count
-flow variables / captured answers
-```
-
-## Channel Policy Layer
-
-Channel sending must remain separate from flow logic.
-
-### WhatsApp
-- respect the rolling customer-service window;
-- free-form / AI-generated reply only when the WhatsApp conversation window is open;
-- approved template required when the applicable WhatsApp window is closed or when starting/restarting outreach;
-- every inbound customer reply should refresh the policy state used by the resolver;
-- template status/language/category/variables must be validated before send;
-- if the flow asks to send but policy requirements are not satisfied, fail closed and create a staff-visible reason instead of bypassing policy;
-- message and provider result must be auditable in CRM.
-
-### Instagram
-- send only through connected tenant Instagram identity;
-- use conversation-bound external recipient/thread identifiers;
-- respect provider/API policy and message eligibility;
-- log outbound provider result in CRM.
-
-### General
-Flow engine asks a **Channel Policy Resolver** whether a requested customer message is eligible. The flow definition must not bypass provider policy.
-
-Conceptually:
-
-```text
-Flow requests customer message
-        ↓
-Channel Policy Resolver
-   ↙                 ↘
-WhatsApp            Instagram
-   ↓                   ↓
-window/template       eligibility
-policy check          policy check
-   ↓                   ↓
-approved send path OR fail closed
-        ↓
-provider send
-        ↓
-CRM audit
-```
-
-## Organization Knowledge Integration
-
-AI customer-facing replies must use:
-
-```text
-lead context
-+ current conversation
-+ structured CRM data
-+ currently approved Organization Knowledge
-+ channel policy
-+ risk rules
-```
-
-Draft or archived knowledge is not authoritative.
+- `current_node_id`
+- `flow_version`
+- `next_action_at`
+- per-enrollment variables
+- pinned published-flow execution state
 
 ## Smart Trigger Implementation Checklist
 
@@ -242,9 +86,9 @@ Draft or archived knowledge is not authoritative.
 - [x] create safe draft workflow
 - [x] draft save does not execute anything
 - [x] first definition: `lead.created -> create_followup`
-- [ ] workflow edit UX
 - [ ] workflow duplicate UX
 - [ ] pause/resume/archive controls
+- [x] visual workflow edit foundation moved into `/automation/flow-builder`
 
 ### ST-3 — Controlled Deterministic Runtime
 - [x] `/automation/runtime-test`
@@ -254,70 +98,80 @@ Draft or archived knowledge is not authoritative.
 - [x] runtime dedupe design
 - [x] internal `create_followup` action implementation
 - [x] no provider/customer-message action in controlled test
-- [x] fix tenant-alignment trigger for optional runtime fields
-- [x] controlled execution rerun after trigger fix
+- [x] optional-field tenant-alignment fix
+- [x] first deterministic run passes
+- [x] identical rerun deduplicates
 - [x] verify 1 event / 1 run / 1 action-run / 1 task
-- [x] rerun same workflow+lead and verify deduplication
-- [x] verify zero customer messages for controlled runtime
-- [ ] verify Test Yoga School cannot see/run SalsysOS workflow
-
-Validated database state after the second identical test:
-
-```text
-Events             1
-Runs               1
-Action runs        1
-Follow-up tasks    1
-Customer messages  0
-Latest run         completed
-```
+- [x] verify zero customer messages
+- [ ] final adversarial cross-tenant runtime test using Test Yoga School
 
 ### ST-4 — Event Runtime
 - [ ] canonical event emitter API
-- [ ] `lead.created`
-- [ ] `message.received`
+- [ ] automatic `lead.created`
+- [x] controlled `message.received` event path validated
 - [ ] `lead.stage_changed`
 - [ ] `payment.pending`
 - [ ] tag/custom-field events
-- [ ] provider/webhook events
-- [ ] durable processing / retry policy
-- [ ] idempotent event consumption
+- [ ] provider/webhook event adapter
+- [ ] durable retry policy
 - [ ] dead-letter / failed-run visibility
 
 ### ST-5 — Scheduler + Wait States
-- [ ] delay node
+- [x] persisted delay wait-state foundation
 - [ ] exact datetime node
 - [ ] wait-until business hours
-- [ ] wait-for-reply node
-- [ ] persistent `next_action_at`
-- [ ] scheduler worker / due-job pickup
-- [ ] retry/backoff
-- [ ] timezone-safe execution
+- [x] persisted wait-for-reply node
+- [x] persistent `next_action_at`
+- [x] scheduled-job ledger
+- [x] controlled due-job claim/resume behavior
+- [x] retry attempt counter exercised in controlled delay resume
+- [ ] production scheduler worker / recurring due-job pickup
+- [ ] retry/backoff policy
+- [ ] timezone-safe production execution
 - [ ] quiet-hours enforcement
-- [ ] cancel/reschedule pending jobs
+- [x] cancel stale reply-timeout job when reply arrives
+- [ ] general cancel/reschedule job API
 
 ### ST-6 — Stop-on-Reply / Conversation State
-- [ ] inbound reply cancels stale no-reply steps
-- [ ] enrollment resumes correct branch
+- [x] controlled inbound reply cancels pending no-reply timeout
+- [x] reply wait resumes correct `reply_received` branch
+- [x] no-reply timeout follows `reply_timeout` branch
+- [x] no-reply branch can enter delay and resume to next node
+- [x] duplicate reply/timeout processing fails closed in controlled tests
+- [ ] real webhook inbound reply integration
 - [ ] multiple-channel conversation policy
-- [ ] prevent duplicate nurture after human reply
+- [ ] prevent nurture after human takeover
 - [ ] human takeover pauses automation
 - [ ] explicit resume automation control
 
 ### ST-7 — Visual Conversation Flow Builder
-- [ ] canvas / node UI
-- [ ] node inspector
-- [ ] edges / branches
-- [ ] trigger nodes
-- [ ] condition nodes
-- [ ] wait nodes
-- [ ] ask-question nodes
-- [ ] action nodes
+- [x] persisted canvas / node UI
+- [x] drag + save layout
+- [x] node inspector
+- [x] editable edge labels / branch values
+- [x] branch target rewiring
+- [x] create draft nodes
+- [x] delete non-trigger draft nodes
+- [x] create draft connections
+- [x] trigger node support
+- [x] condition node support
+- [x] wait node support
+- [x] wait-for-reply support
+- [x] internal action node foundation
+- [x] human approval / handoff node types available in draft catalog
+- [x] graph validation before publish
+- [x] reachability validation
+- [x] branch-value validation
+- [x] controlled V1 cycle blocking
+- [x] versioned flow definitions
+- [x] immutable published snapshots
+- [x] draft vs published versions
+- [x] validation definition hash / stale-validation protection
+- [x] publish v1 -> clone editable v2
+- [x] database-level published node/edge immutability guard
+- [ ] ask-question node
 - [ ] AI nodes
-- [ ] human approval / handoff nodes
-- [ ] validation before publish
-- [ ] versioned flow definitions
-- [ ] draft vs published versions
+- [ ] production-ready interaction polish
 
 ### ST-8 — Customer Messaging Actions
 - [ ] WhatsApp channel eligibility resolver
@@ -327,8 +181,8 @@ Latest run         completed
 - [ ] provider result logging
 - [ ] rate / attempt limits
 - [ ] message caps
-- [ ] fail-closed when channel identity is unavailable
-- [ ] fail-closed when template/policy requirement is not satisfied
+- [ ] fail closed when channel identity unavailable
+- [ ] fail closed when template/policy requirement not satisfied
 
 ### ST-9 — AI + Knowledge Nodes
 - [x] shared Instagram + WhatsApp AI Reply Co-Pilot exists
@@ -349,16 +203,20 @@ Latest run         completed
 - [x] tenant isolation foundation
 - [x] run/action audit ledgers
 - [x] suppression table foundation
+- [x] published flow immutability guard
+- [x] enrollment pinned to immutable published version
+- [x] runtime stays disabled during all controlled graph tests
+- [x] controlled graph tests verified zero customer messages
 - [ ] opt-out keyword handling
 - [ ] do-not-contact enforcement
 - [ ] per-channel suppression
 - [ ] workflow suppression
 - [ ] message frequency caps
 - [ ] human approval audit
-- [ ] flow version audit
+- [x] flow version audit foundation
 - [ ] provider-send audit
-- [ ] cancellation audit
-- [ ] adversarial cross-tenant runtime tests
+- [ ] cancellation audit expansion
+- [ ] adversarial cross-tenant graph/runtime tests
 
 ### ST-11 — Analytics
 - [ ] workflow enrollment count
@@ -372,9 +230,9 @@ Latest run         completed
 - [ ] lead-to-enrollment impact
 
 ### ST-12 — Production Rollout
-- [ ] deterministic internal-only runtime sign-off
-- [ ] scheduler sign-off
-- [ ] stop-on-reply sign-off
+- [ ] deterministic internal-only runtime final sign-off
+- [ ] scheduler worker sign-off
+- [x] controlled stop-on-reply logic sign-off
 - [ ] suppression sign-off
 - [ ] channel policy sign-off
 - [ ] human-approval sign-off
@@ -385,54 +243,141 @@ Latest run         completed
 - [ ] controlled production pilot
 - [ ] broader tenant rollout
 
+## Verified Flow Checkpoints
+
+### Draft graph structure
+
+Validated draft graph:
+
+```text
+New lead created
+  -> Wait for customer reply
+  -> Did the customer reply?
+       -> reply_received -> Reply branch (end)
+       -> reply_timeout  -> Follow-up delay
+                           -> Continue after delay
+                           -> No reply branch (end)
+```
+
+Validation result:
+
+```text
+Nodes          6
+Connections    5
+Validation     passed
+Messaging      disabled
+```
+
+### Versioning
+
+```text
+Published Version 1 = immutable snapshot
+Draft Version 2     = editable clone
+Runtime enabled     = false
+```
+
+Verified Version 2 edit did not alter Version 1.
+
+### Published enrollment pinning
+
+A controlled enrollment was pinned to Published v1 while Draft v2 existed.
+
+Verified:
+
+```text
+flow_version = 1
+Draft at start = 2
+current_node = published v1 trigger
+runtime_flow_enabled = false
+```
+
+### Published reply branch
+
+Verified controlled path:
+
+```text
+Trigger
+-> Wait for reply
+-> synthetic message.received
+-> cancel reply timeout job
+-> reply_outcome = reply_received
+-> published reply branch
+-> end
+```
+
+Result:
+
+```text
+Enrollment     completed
+Reply wait     resumed
+Timeout job    cancelled
+Runs           0
+Action runs    0
+Customer send  0
+```
+
+### Published no-reply branch
+
+Verified controlled path:
+
+```text
+Trigger
+-> Wait for reply
+-> timeout
+-> reply_outcome = reply_timeout
+-> Follow-up delay
+-> resume_wait scheduled
+-> resume delay
+-> Continue after delay
+-> No reply branch (end)
+```
+
+Final verified state on 2026-10-17:
+
+```text
+Enrollment status       completed
+Pinned flow version     v1
+Current node            No reply branch (end)
+Delay wait              resumed
+resume_wait job          completed
+Job attempts            1
+Current published        v1
+Current draft            v2
+Runtime enabled          false
+Automation runs          0
+Automation action runs   0
+Customer message sent    false
+```
+
 ## Current Exact Checkpoint
 
-Controlled deterministic runtime and deduplication are now validated for the first safe workflow:
+The controlled conversation-flow engine now proves all of the following against an immutable published snapshot:
 
-```text
-lead.created -> create_followup
-```
-
-Verified behavior:
-
-```text
-first execution
-  -> existing deduped event reused
-  -> one automation run completed
-  -> one action-run completed
-  -> one internal follow-up task created
-  -> zero customer messages
-
-second identical execution
-  -> existing run found by dedupe key
-  -> no new event
-  -> no new run
-  -> no new action-run
-  -> no new task
-  -> zero customer messages
-```
-
-Runtime fixes included:
-
-```text
-fix_automation_tenant_alignment_optional_fields_v1
-commit bf11f866954533de5a7a17e1cca15e4b40778bbc
-
-reuse deduped automation test events
-commit 5e55b1461193e9ba8d0fbe7de7012e6109e6a866
-```
+- draft editing is isolated from published definitions;
+- graph validation and hash-locking work;
+- publish + clone creates a new editable draft;
+- enrollment pins to published version;
+- trigger can advance into wait-for-reply;
+- reply wins and cancels pending timeout;
+- no-reply timeout selects the correct condition branch;
+- delay scheduling persists per enrollment;
+- delay resume follows the published edge to the terminal node;
+- controlled duplicate processing fails closed;
+- no customer messages are sent during these runtime tests.
 
 ### Next exact action
 
-Complete ST-3 with cross-tenant runtime isolation:
+Move from test-specific/manual flow actions toward the **general production runtime worker foundation**:
 
-1. verify Test Yoga School cannot read the SalsysOS workflow;
-2. verify Test Yoga School cannot activate/run the SalsysOS workflow;
-3. verify a foreign lead/workflow pairing is rejected;
-4. once passed, mark deterministic internal-only runtime signed off and begin ST-5 Scheduler + Wait States design/implementation.
+1. extract shared published-node execution into reusable runtime functions;
+2. implement generic due-job claim/process logic for `resume_wait` and `resume_reply_timeout`;
+3. add controlled worker test with runtime still disabled globally;
+4. validate idempotency/concurrency and retry behavior;
+5. run final cross-tenant adversarial runtime tests;
+6. only then consider enabling scheduled background processing for internal-only actions.
 
 ## Locked Rule
 
-Do not enable autonomous customer messaging merely because the flow builder exists.
+Do not enable autonomous customer messaging merely because the flow builder/runtime works.
 
-Customer auto-send remains blocked until deterministic runtime, scheduler, stop-on-reply, suppressions, provider/channel policies, audit, human-review controls and tenant isolation have all passed controlled E2E validation.
+Customer auto-send remains blocked until scheduler, suppression, channel policies, provider audit, human-review controls, rate limits and tenant-isolation tests are signed off.
