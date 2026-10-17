@@ -10,6 +10,9 @@ type WorkflowRow = {
   id: string;
   name: string;
   status: string;
+  current_draft_version: number | null;
+  current_published_version: number | null;
+  runtime_flow_enabled: boolean;
 };
 
 type FlowNode = {
@@ -58,7 +61,7 @@ export default async function FlowBuilderPage({
         supabase.rpc('can_manage_organization', { p_organization_id: organizationId }),
         supabase
           .from('automation_workflows')
-          .select('id,name,status')
+          .select('id,name,status,current_draft_version,current_published_version,runtime_flow_enabled')
           .eq('organization_id', organizationId)
           .eq('status', 'active')
           .order('updated_at', { ascending: false })
@@ -69,6 +72,8 @@ export default async function FlowBuilderPage({
       canManage = manageResult.data === true;
       workflow = (workflowResult.data ?? null) as WorkflowRow | null;
 
+      const draftVersion = Number(workflow?.current_draft_version ?? 1);
+
       if (workflow?.id) {
         const [nodeResult, edgeResult] = await Promise.all([
           supabase
@@ -76,7 +81,7 @@ export default async function FlowBuilderPage({
             .select('id,node_key,node_type,label,position_x,position_y,config')
             .eq('organization_id', organizationId)
             .eq('workflow_id', workflow.id)
-            .eq('version_number', 1)
+            .eq('version_number', draftVersion)
             .order('position_y', { ascending: true })
             .order('position_x', { ascending: true }),
           supabase
@@ -84,7 +89,7 @@ export default async function FlowBuilderPage({
             .select('id,source_node_id,target_node_id,edge_key,label,condition')
             .eq('organization_id', organizationId)
             .eq('workflow_id', workflow.id)
-            .eq('version_number', 1)
+            .eq('version_number', draftVersion)
             .order('priority', { ascending: true }),
         ]);
 
@@ -93,6 +98,8 @@ export default async function FlowBuilderPage({
       }
     }
   }
+
+  const draftVersion = Number(workflow?.current_draft_version ?? 1);
 
   return (
     <div className="space-y-6">
@@ -118,7 +125,7 @@ export default async function FlowBuilderPage({
         <div className="flex items-start gap-3">
           <ShieldCheck className="mt-0.5 shrink-0" size={18} />
           <div>
-            <strong>Structure-only mode:</strong> dragging nodes, editing settings, and creating/rerouting connections changes only the persisted draft graph. It does not enroll leads, execute a flow, schedule jobs, call AI, or send WhatsApp/Instagram messages.
+            <strong>Structure-only mode:</strong> dragging nodes, editing settings, and creating/rerouting connections changes only the current draft version. It does not enroll leads, execute a flow, schedule jobs, call AI, or send WhatsApp/Instagram messages.
           </div>
         </div>
       </div>
@@ -134,8 +141,8 @@ export default async function FlowBuilderPage({
               <Workflow size={18} />
             </div>
             <div>
-              <h2 className="font-bold text-slate-950">No flow graph exists yet</h2>
-              <p className="mt-1 text-sm text-slate-500">Create the controlled graph first from `/automation/flow-builder-test`.</p>
+              <h2 className="font-bold text-slate-950">No draft graph exists for Version {draftVersion}</h2>
+              <p className="mt-1 text-sm text-slate-500">Create or clone a draft definition before editing.</p>
             </div>
           </div>
         </div>
@@ -145,14 +152,17 @@ export default async function FlowBuilderPage({
             <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
               <div>
                 <h2 className="font-bold text-slate-950">{workflow.name}</h2>
-                <p className="mt-1 text-sm text-slate-500">Version 1 · {nodes.length} nodes · {edges.length} edges</p>
+                <p className="mt-1 text-sm text-slate-500">
+                  Draft Version {draftVersion} · {nodes.length} nodes · {edges.length} edges
+                  {workflow.current_published_version ? ` · Published Version ${workflow.current_published_version}` : ''}
+                </p>
               </div>
               <div className="rounded-full bg-amber-50 px-3 py-1 text-xs font-bold text-amber-700">Draft canvas</div>
             </div>
 
             <FlowCanvas
               workflowId={workflow.id}
-              versionNumber={1}
+              versionNumber={draftVersion}
               initialNodes={nodes}
               edges={edges}
             />
@@ -160,7 +170,7 @@ export default async function FlowBuilderPage({
 
           <ConnectionCreator
             workflowId={workflow.id}
-            versionNumber={1}
+            versionNumber={draftVersion}
             nodes={nodes.map((node) => ({
               id: node.id,
               node_key: node.node_key,
