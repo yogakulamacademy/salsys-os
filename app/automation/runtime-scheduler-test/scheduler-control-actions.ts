@@ -31,7 +31,12 @@ export async function syncAndEnableSupabaseSchedulerGateTestAction() {
   const secret = process.env.CRON_SECRET?.trim();
   if (!secret) go('error', 'CRON_SECRET is not available in this deployment.');
 
+  const vercelUrl = process.env.VERCEL_URL?.trim();
+  if (!vercelUrl) go('error', 'VERCEL_URL is not available in this deployment.');
+
+  const endpointUrl = `https://${vercelUrl}/api/automation/runtime-scheduler`;
   const admin = createAdminClient();
+
   const { error: vaultError } = await admin.rpc('upsert_automation_scheduler_vault_secret_v1', {
     p_secret: secret,
   });
@@ -39,7 +44,11 @@ export async function syncAndEnableSupabaseSchedulerGateTestAction() {
 
   const { error: settingsError } = await admin
     .from('automation_scheduler_settings')
-    .update({ enabled: true, updated_at: new Date().toISOString() })
+    .update({
+      enabled: true,
+      endpoint_url: endpointUrl,
+      updated_at: new Date().toISOString(),
+    })
     .eq('id', 1);
   if (settingsError) go('error', `Scheduler setting update failed: ${settingsError.message}`);
 
@@ -49,6 +58,6 @@ export async function syncAndEnableSupabaseSchedulerGateTestAction() {
   revalidatePath('/automation/runtime-scheduler-test');
   go(
     'notice',
-    `Supabase scheduler gate armed safely. CRON_SECRET was synced to Vault, DB scheduler enabled, and request ${requestId ?? 'queued'} was invoked while Vercel global scheduler remains disabled.`,
+    `Supabase scheduler gate armed safely against this preview deployment. CRON_SECRET was synced to Vault, DB scheduler enabled, and request ${requestId ?? 'queued'} was invoked while Vercel global scheduler remains disabled.`,
   );
 }
