@@ -9,6 +9,48 @@ const ENTITY_TYPES = new Set([
   'knowledge_chunk',
 ]);
 
+const SEARCH_SOURCE_FIELDS = [
+  'organization_id',
+  'entity_type',
+  'entity_id',
+  'lead_id',
+  'conversation_id',
+  'document_id',
+  'lead_code',
+  'display_name',
+  'stage',
+  'status',
+  'intent',
+  'channel',
+  'direction',
+  'message_type',
+  'preferred_location',
+  'preferred_mode',
+  'country',
+  'lead_origin',
+  'lead_creation_channel',
+  'first_touch_source',
+  'first_touch_medium',
+  'first_touch_campaign',
+  'last_touch_source',
+  'last_touch_medium',
+  'last_touch_campaign',
+  'summary',
+  'body',
+  'content',
+  'document_title',
+  'document_category',
+  'document_version',
+  'chunk_index',
+  'preferred_month',
+  'started_at',
+  'last_message_at',
+  'sent_at',
+  'received_at',
+  'created_at',
+  'updated_at',
+] as const;
+
 export type SearchEntityType = 'lead' | 'conversation' | 'message' | 'knowledge_chunk';
 
 export type SearchResultItem = {
@@ -83,7 +125,7 @@ export async function searchTenantOpenSearch(input: {
     size,
     track_total_hits: true,
     _source: {
-      excludes: [],
+      includes: SEARCH_SOURCE_FIELDS,
     },
     query: {
       bool: {
