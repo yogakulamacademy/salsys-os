@@ -18,6 +18,7 @@ type FlowNode = {
   label: string;
   position_x: number;
   position_y: number;
+  config: Record<string, unknown> | null;
 };
 
 type FlowEdge = {
@@ -26,6 +27,7 @@ type FlowEdge = {
   target_node_id: string;
   edge_key: string;
   label: string | null;
+  condition: Record<string, unknown> | null;
 };
 
 export default async function FlowBuilderPage({
@@ -70,7 +72,7 @@ export default async function FlowBuilderPage({
         const [nodeResult, edgeResult] = await Promise.all([
           supabase
             .from('automation_flow_nodes')
-            .select('id,node_key,node_type,label,position_x,position_y')
+            .select('id,node_key,node_type,label,position_x,position_y,config')
             .eq('organization_id', organizationId)
             .eq('workflow_id', workflow.id)
             .eq('version_number', 1)
@@ -78,7 +80,7 @@ export default async function FlowBuilderPage({
             .order('position_x', { ascending: true }),
           supabase
             .from('automation_flow_edges')
-            .select('id,source_node_id,target_node_id,edge_key,label')
+            .select('id,source_node_id,target_node_id,edge_key,label,condition')
             .eq('organization_id', organizationId)
             .eq('workflow_id', workflow.id)
             .eq('version_number', 1)
@@ -96,7 +98,7 @@ export default async function FlowBuilderPage({
       <PageHeader
         eyebrow="Automation · Flow Builder"
         title="Conversation Flow Builder"
-        description={`Arrange the persisted conversation journey for ${organizationName}. This controlled editor currently saves layout only.`}
+        description={`Arrange and configure the persisted conversation journey for ${organizationName}. This controlled editor still does not execute flows or send messages.`}
       />
 
       {query.notice ? (
@@ -115,7 +117,7 @@ export default async function FlowBuilderPage({
         <div className="flex items-start gap-3">
           <ShieldCheck className="mt-0.5 shrink-0" size={18} />
           <div>
-            <strong>Layout-only mode:</strong> dragging and saving nodes changes only the persisted canvas positions. It does not enroll leads, execute a flow, schedule a job, call AI, or send WhatsApp/Instagram messages.
+            <strong>Structure-only mode:</strong> dragging nodes or editing node/branch settings changes only the persisted draft graph. It does not enroll leads, execute a flow, schedule jobs, call AI, or send WhatsApp/Instagram messages.
           </div>
         </div>
       </div>
