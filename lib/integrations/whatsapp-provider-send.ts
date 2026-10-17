@@ -30,6 +30,17 @@ type FinalizeResult = {
   reason?: string;
 };
 
+type RecordSuccessResult = {
+  ok?: boolean;
+  recorded?: boolean;
+  status?: string;
+  message_id?: string | null;
+  conversation_id?: string | null;
+  provider_message_id?: string | null;
+  customer_message_sent?: boolean;
+  reason?: string;
+};
+
 type MetaSendResponse = {
   messaging_product?: string;
   contacts?: Array<{ input?: string; wa_id?: string }>;
@@ -49,6 +60,7 @@ export type WhatsAppProviderSendResult = {
   status: string;
   providerCallAttempted: boolean;
   providerMessageId: string | null;
+  canonicalMessageId: string | null;
   customerMessageSent: boolean;
   error: string | null;
 };
@@ -119,6 +131,77 @@ async function finalize(params: {
   }
 
   return asRecord(data) as FinalizeResult;
+}
+
+async function recordSuccessfulSend(params: {
+  organizationId: string;
+  auditId: string;
+  providerMessageId: string;
+  providerResponse: JsonRecord;
+}) {
+  const admin = createAdminClient();
+  const { data, error } = await admin.rpc('record_whatsapp_provider_send_success_v1', {
+    p_organization_id: params.organizationId,
+    p_audit_id: params.auditId,
+    p_provider_message_id: params.providerMessageId,
+    p_provider_response: params.providerResponse,
+  });
+
+  if (error) {
+    throw new Error(`Unable to link WhatsApp provider send to canonical CRM message: ${error.message}`);
+  }
+
+  const result = asRecord(data) as RecordSuccessResult;
+  if (result.ok !== true || result.recorded !== true) {
+    throw new Error(
+      optionalString(result.reason) || 'WhatsApp provider send could not be linked to the canonical CRM message.',
+    );
+  }
+
+  return result;
+}
+
+async function preserveProviderAcceptance(params: {
+  organizationId: string;
+  auditId: string;
+  providerMessageId: string;
+  providerResponse: JsonRecord;
+  reconciliationError: string;
+}) {
+  const admin = createAdminClient();
+  const now = new Date().toISOString();
+  const fallbackResponse = {
+    ...params.providerResponse,
+    canonical_reconciliation: {
+      status: 'required',
+      error: params.reconciliationError.slice(0, 2000),
+      recorded_at: now,
+    },
+  };
+
+  const { error } = await admin
+    .from('automation_provider_send_audits')
+    .update({
+      status: 'sent',
+      provider_message_id: params.providerMessageId,
+      provider_response: fallbackResponse,
+      provider_error: null,
+      customer_message_sent: true,
+      sent_at: now,
+      provider_delivery_status: 'sent',
+      updated_at: now,
+    })
+    .eq('organization_id', params.organizationId)
+    .eq('id', params.auditId)
+    .eq('channel', 'whatsapp')
+    .eq('provider', 'meta_cloud_api')
+    .eq('status', 'sending');
+
+  if (error) {
+    throw new Error(
+      `Meta accepted the WhatsApp message, but the provider audit reconciliation fallback also failed: ${error.message}`,
+    );
+  }
 }
 
 async function resolveRecipient(organizationId: string, leadId: string) {
@@ -258,6 +341,7 @@ export async function executePreparedWhatsAppProviderSend(params: {
       status: optionalString(claim.status) || 'blocked',
       providerCallAttempted: false,
       providerMessageId: null,
+      canonicalMessageId: null,
       customerMessageSent: claim.customer_message_sent === true,
       error: optionalString(claim.reason),
     };
@@ -273,10 +357,15 @@ export async function executePreparedWhatsAppProviderSend(params: {
       status: 'failed',
       providerCallAttempted: false,
       providerMessageId: null,
+      canonicalMessageId: null,
       customerMessageSent: false,
       error: reason,
     };
   }
+
+  let providerAccepted = false;
+  let acceptedProviderMessageId: string | null = null;
+  let acceptedProviderResponse: JsonRecord | null = null;
 
   try {
     const runtime = await getWhatsAppRuntimeForOrganization(organizationId);
@@ -351,30 +440,71 @@ export async function executePreparedWhatsAppProviderSend(params: {
         status: 'failed',
         providerCallAttempted: true,
         providerMessageId: null,
+        canonicalMessageId: null,
         customerMessageSent: false,
         error: providerError,
       };
     }
 
-    const final = await finalize({
+    providerAccepted = true;
+    acceptedProviderMessageId = providerMessageId;
+    acceptedProviderResponse = sanitizedResponse;
+
+    const recorded = await recordSuccessfulSend({
       organizationId,
       auditId,
-      success: true,
       providerMessageId,
       providerResponse: sanitizedResponse,
     });
 
     return {
-      ok: final.ok === true,
+      ok: recorded.ok === true,
       auditId,
-      status: optionalString(final.status) || 'sent',
+      status: optionalString(recorded.status) || 'sent',
       providerCallAttempted: true,
       providerMessageId,
-      customerMessageSent: final.customer_message_sent === true,
-      error: optionalString(final.reason),
+      canonicalMessageId: optionalString(recorded.message_id),
+      customerMessageSent: recorded.customer_message_sent === true,
+      error: optionalString(recorded.reason),
     };
   } catch (error) {
     const message = error instanceof Error ? error.message : 'WhatsApp provider send failed.';
+
+    if (providerAccepted && acceptedProviderMessageId && acceptedProviderResponse) {
+      try {
+        await preserveProviderAcceptance({
+          organizationId,
+          auditId,
+          providerMessageId: acceptedProviderMessageId,
+          providerResponse: acceptedProviderResponse,
+          reconciliationError: message,
+        });
+      } catch (fallbackError) {
+        const fallbackMessage =
+          fallbackError instanceof Error ? fallbackError.message : 'Provider acceptance fallback failed.';
+        return {
+          ok: false,
+          auditId,
+          status: 'sent',
+          providerCallAttempted: true,
+          providerMessageId: acceptedProviderMessageId,
+          canonicalMessageId: null,
+          customerMessageSent: true,
+          error: `${message} ${fallbackMessage}`,
+        };
+      }
+
+      return {
+        ok: false,
+        auditId,
+        status: 'sent',
+        providerCallAttempted: true,
+        providerMessageId: acceptedProviderMessageId,
+        canonicalMessageId: null,
+        customerMessageSent: true,
+        error: `Meta accepted the message, but canonical CRM reconciliation is required: ${message}`,
+      };
+    }
 
     try {
       await finalize({
@@ -394,6 +524,7 @@ export async function executePreparedWhatsAppProviderSend(params: {
       status: 'failed',
       providerCallAttempted: false,
       providerMessageId: null,
+      canonicalMessageId: null,
       customerMessageSent: false,
       error: message,
     };
