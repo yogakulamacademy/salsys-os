@@ -2,92 +2,86 @@ import { NextRequest, NextResponse } from "next/server";
 
 import { createAdminClient } from "@/lib/supabase/admin";
 import {
-  isTrackingOriginAllowed,
-  trackingCorsHeaders,
-} from "@/lib/tracking/server";
+  authenticateServerTrackingSource,
+  consumeTrackingRateLimit,
+} from "@/lib/tracking/runtime";
 
 function cleanText(value: unknown, maxLength: number) {
   if (typeof value !== "string") return "";
   return value.trim().slice(0, maxLength);
 }
 
-export async function OPTIONS(request: NextRequest) {
-  const origin = request.headers.get("origin");
-
-  return new NextResponse(null, {
-    status: 204,
-    headers: trackingCorsHeaders(origin),
-  });
+function bearerToken(request: NextRequest) {
+  const authorization = request.headers.get("authorization")?.trim() ?? "";
+  if (!authorization.toLowerCase().startsWith("bearer ")) return null;
+  return authorization.slice(7).trim() || null;
 }
 
 export async function POST(request: NextRequest) {
-  const origin = request.headers.get("origin");
-  const cors = trackingCorsHeaders(origin);
+  const sourceKey = request.headers.get("x-salsys-source-key");
+  const source = await authenticateServerTrackingSource(
+    sourceKey,
+    bearerToken(request),
+  );
 
-  /*
-   * This endpoint is designed for server-to-server identification.
-   * If an Origin header is present, it must still be on the tracking
-   * allowlist. Requests without Origin are authenticated by the
-   * server-only tracking secret below.
-   */
-  if (origin && !isTrackingOriginAllowed(origin)) {
+  const legacyExpected = process.env.TRACKING_INGEST_SECRET;
+  const legacySupplied = request.headers.get("x-tracking-secret");
+  const legacyAuthorized =
+    !sourceKey &&
+    !bearerToken(request) &&
+    Boolean(legacyExpected && legacySupplied && legacySupplied === legacyExpected);
+
+  if (!source && !legacyAuthorized) {
     return NextResponse.json(
       {
         ok: false,
-        error: "Origin not allowed",
+        error: "Unauthorized tracking source",
       },
       {
-        status: 403,
-        headers: cors,
+        status: 401,
+        headers: { "Cache-Control": "no-store" },
       },
     );
   }
 
-  const expected = process.env.TRACKING_INGEST_SECRET;
-  const supplied = request.headers.get("x-tracking-secret");
+  let rate:
+    | { allowed: boolean; count: number; limit: number; remaining: number; reason: string | null }
+    | null = null;
 
-  if (!expected || !supplied || supplied !== expected) {
-    return NextResponse.json(
-      {
-        ok: false,
-        error: "Unauthorized",
-      },
-      {
-        status: 401,
-        headers: cors,
-      },
-    );
+  if (source) {
+    rate = await consumeTrackingRateLimit(source);
+    if (!rate.allowed) {
+      return NextResponse.json(
+        { ok: false, error: "Rate limit exceeded" },
+        {
+          status: 429,
+          headers: {
+            "Cache-Control": "no-store",
+            "Retry-After": "60",
+            "X-RateLimit-Limit": String(rate.limit),
+            "X-RateLimit-Remaining": "0",
+          },
+        },
+      );
+    }
   }
 
   try {
     const length = Number(request.headers.get("content-length") || "0");
+    const maxPayload = source ? Math.min(source.maxPayloadBytes, 8_000) : 8_000;
 
-    if (length > 8_000) {
+    if (length > maxPayload) {
       return NextResponse.json(
-        {
-          ok: false,
-          error: "Payload too large",
-        },
-        {
-          status: 413,
-          headers: cors,
-        },
+        { ok: false, error: "Payload too large" },
+        { status: 413, headers: { "Cache-Control": "no-store" } },
       );
     }
 
     const body = await request.json();
-
     const leadId = cleanText(body.leadId, 100);
     const visitorId = cleanText(body.anonymousVisitorId, 180);
     const sessionKey = cleanText(body.sessionKey, 180);
 
-    /*
-     * Exact-session identity is required.
-     *
-     * We deliberately do not use the legacy no-session fallback here,
-     * because one browser/visitor ID may legitimately be used by more
-     * than one person over time.
-     */
     if (!leadId || !visitorId || !sessionKey) {
       throw new Error(
         "leadId, anonymousVisitorId and sessionKey are required.",
@@ -96,9 +90,6 @@ export async function POST(request: NextRequest) {
 
     const supabase = createAdminClient();
 
-    /*
-     * Resolve the authoritative organization from the lead.
-     */
     const { data: lead, error: leadError } = await supabase
       .from("leads")
       .select("id, organization_id")
@@ -106,20 +97,25 @@ export async function POST(request: NextRequest) {
       .maybeSingle();
 
     if (leadError) throw leadError;
-
     if (!lead?.organization_id) {
       throw new Error("Lead organization could not be resolved.");
     }
 
     const organizationId = lead.organization_id;
 
-    /*
-     * Cross-tenant and shared-browser protection.
-     *
-     * The exact session must already exist inside the same organization
-     * as the lead and must belong to the supplied anonymous visitor.
-     * This is stronger than trusting a browser ID or Origin alone.
-     */
+    if (source && source.organizationId !== organizationId) {
+      return NextResponse.json(
+        {
+          ok: false,
+          error: "Tracking source does not belong to the lead organization.",
+        },
+        {
+          status: 403,
+          headers: { "Cache-Control": "no-store" },
+        },
+      );
+    }
+
     const { data: session, error: sessionError } = await supabase
       .from("web_sessions")
       .select(
@@ -137,17 +133,12 @@ export async function POST(request: NextRequest) {
       .maybeSingle();
 
     if (sessionError) throw sessionError;
-
     if (!session) {
       throw new Error(
         "Matching tracking session was not found for this lead organization.",
       );
     }
 
-    /*
-     * Keep visitor_identity_links as current-session routing state,
-     * not as permanent Person identity.
-     */
     const { error: linkError } = await supabase
       .from("visitor_identity_links")
       .upsert(
@@ -156,10 +147,12 @@ export async function POST(request: NextRequest) {
           anonymous_visitor_id: visitorId,
           lead_id: leadId,
           last_session_key: sessionKey,
-          source_system: "tracking-identify",
+          source_system: source?.sourceSystem || "tracking-identify-legacy",
           linked_at: new Date().toISOString(),
           metadata: {
             identity_scope: "exact_session",
+            tracking_source_id: source?.id || null,
+            legacy_auth: legacyAuthorized,
           },
         },
         {
@@ -169,10 +162,6 @@ export async function POST(request: NextRequest) {
 
     if (linkError) throw linkError;
 
-    /*
-     * Attach only the exact session and its touchpoints to this lead.
-     * Historical sessions for the same browser remain untouched.
-     */
     const { data: attribution, error: attachError } = await supabase.rpc(
       "attach_visitor_journey_to_lead",
       {
@@ -184,18 +173,11 @@ export async function POST(request: NextRequest) {
 
     if (attachError) throw attachError;
 
-    /*
-     * The session now has an authoritative lead_id. Refresh the canonical
-     * Person graph so person_sessions reflects this identification too.
-     *
-     * resolve_person_for_lead is service-role only; this route uses the
-     * server-side admin client intentionally.
-     */
     const { error: personError } = await supabase.rpc(
       "resolve_person_for_lead",
       {
         p_lead_id: leadId,
-        p_source_system: "tracking-identify",
+        p_source_system: source?.sourceSystem || "tracking-identify-legacy",
       },
     );
 
@@ -205,9 +187,18 @@ export async function POST(request: NextRequest) {
       {
         ok: true,
         attribution,
+        source_auth: source ? "tracking_source" : "legacy_secret",
       },
       {
-        headers: cors,
+        headers: {
+          "Cache-Control": "no-store",
+          ...(rate
+            ? {
+                "X-RateLimit-Limit": String(rate.limit),
+                "X-RateLimit-Remaining": String(rate.remaining),
+              }
+            : {}),
+        },
       },
     );
   } catch (error) {
@@ -215,13 +206,10 @@ export async function POST(request: NextRequest) {
       error instanceof Error ? error.message : "Lead identification failed";
 
     return NextResponse.json(
-      {
-        ok: false,
-        error: message,
-      },
+      { ok: false, error: message },
       {
         status: 400,
-        headers: cors,
+        headers: { "Cache-Control": "no-store" },
       },
     );
   }
