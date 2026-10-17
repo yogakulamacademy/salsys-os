@@ -1,5 +1,6 @@
 'use server';
 
+import { randomUUID } from 'crypto';
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 
@@ -104,6 +105,17 @@ async function assertOwnedNode({
   return node;
 }
 
+function defaultConfigForNodeType(nodeType: string): Record<string, unknown> {
+  if (nodeType === 'wait') return { wait_type: 'delay', delay_minutes: 10 };
+  if (nodeType === 'wait_for_reply') return { timeout_minutes: 360, stop_on_reply: true };
+  if (nodeType === 'condition') return { variable: 'reply_outcome', operator: 'equals' };
+  if (nodeType === 'action') return { action_type: 'create_followup' };
+  if (nodeType === 'human_approval') return { approval_mode: 'human_review' };
+  if (nodeType === 'human_handoff') return { reason: 'manual_review' };
+  if (nodeType === 'end') return { outcome: '' };
+  return {};
+}
+
 export async function saveFlowLayoutAction(formData: FormData) {
   const workflowId = value(formData, 'workflow_id');
   const versionNumber = Number(value(formData, 'version_number') || '1');
@@ -155,6 +167,96 @@ export async function saveFlowLayoutAction(formData: FormData) {
   go('notice', 'Flow layout saved. Node positions were persisted; nothing was executed and no customer message was sent.');
 }
 
+export async function createFlowNodeAction(formData: FormData) {
+  const workflowId = value(formData, 'workflow_id');
+  const versionNumber = Number(value(formData, 'version_number') || '1');
+  const nodeType = value(formData, 'node_type');
+  const label = value(formData, 'label');
+
+  const allowedTypes = ['condition', 'action', 'wait', 'wait_for_reply', 'human_approval', 'human_handoff', 'end'];
+
+  if (!workflowId || !label) go('error', 'Workflow and node label are required.');
+  if (!Number.isInteger(versionNumber) || versionNumber < 1) go('error', 'Flow version is invalid.');
+  if (!allowedTypes.includes(nodeType)) go('error', 'Unsupported node type.');
+  if (label.length > 120) go('error', 'Node label must be 120 characters or fewer.');
+
+  const { organizationId } = await adminContext();
+  const admin = createAdminClient();
+
+  const { data: workflow, error: workflowError } = await admin
+    .from('automation_workflows')
+    .select('id')
+    .eq('organization_id', organizationId)
+    .eq('id', workflowId)
+    .maybeSingle();
+
+  if (workflowError || !workflow) go('error', workflowError?.message || 'Workflow was not found in this organization.');
+
+  const { data: existingNodes, error: existingNodesError } = await admin
+    .from('automation_flow_nodes')
+    .select('position_x,position_y')
+    .eq('organization_id', organizationId)
+    .eq('workflow_id', workflowId)
+    .eq('version_number', versionNumber);
+
+  if (existingNodesError) go('error', existingNodesError.message);
+
+  const rows = existingNodes ?? [];
+  const maxX = rows.reduce((max, row) => Math.max(max, Number(row.position_x ?? 0)), 80);
+  const nextX = Math.min(maxX + 260, 3600);
+  const nextY = 160 + ((rows.length % 4) * 120);
+  const nodeKey = `${nodeType}_${randomUUID().slice(0, 8)}`;
+
+  const { error } = await admin.from('automation_flow_nodes').insert({
+    organization_id: organizationId,
+    workflow_id: workflowId,
+    version_number: versionNumber,
+    node_key: nodeKey,
+    node_type: nodeType,
+    label,
+    config: defaultConfigForNodeType(nodeType),
+    position_x: nextX,
+    position_y: nextY,
+    enabled: true,
+  });
+
+  if (error) go('error', error.message);
+
+  revalidatePath('/automation/flow-builder');
+  go('notice', 'Draft node created. It is not connected or executable until you explicitly wire and publish a validated flow.');
+}
+
+export async function deleteFlowNodeAction(formData: FormData) {
+  const workflowId = value(formData, 'workflow_id');
+  const versionNumber = Number(value(formData, 'version_number') || '1');
+  const nodeId = value(formData, 'node_id');
+
+  if (!workflowId || !nodeId) go('error', 'Workflow and node are required.');
+  if (!Number.isInteger(versionNumber) || versionNumber < 1) go('error', 'Flow version is invalid.');
+
+  const { organizationId } = await adminContext();
+  const admin = createAdminClient();
+  const node = await assertOwnedNode({ organizationId, workflowId, versionNumber, nodeId });
+
+  if (String(node.node_type) === 'trigger') {
+    go('error', 'The trigger node cannot be deleted. Change the trigger settings instead.');
+  }
+
+  const { error } = await admin
+    .from('automation_flow_nodes')
+    .delete()
+    .eq('organization_id', organizationId)
+    .eq('workflow_id', workflowId)
+    .eq('version_number', versionNumber)
+    .eq('id', nodeId);
+
+  if (error) go('error', error.message);
+
+  revalidatePath('/automation/flow-builder');
+  revalidatePath('/automation/flow-builder-test');
+  go('notice', 'Draft node deleted. Any connected draft edges were removed with it; nothing was executed.');
+}
+
 export async function updateFlowNodeAction(formData: FormData) {
   const workflowId = value(formData, 'workflow_id');
   const versionNumber = Number(value(formData, 'version_number') || '1');
@@ -187,12 +289,29 @@ export async function updateFlowNodeAction(formData: FormData) {
       timeout_minutes: Math.round(timeoutMinutes),
       stop_on_reply: checked(formData, 'stop_on_reply'),
     };
+  } else if (nodeType === 'wait') {
+    const delayMinutes = Number(value(formData, 'delay_minutes') || '10');
+    if (!Number.isFinite(delayMinutes) || delayMinutes < 1 || delayMinutes > 10080) {
+      go('error', 'Wait delay must be between 1 and 10,080 minutes.');
+    }
+    config = { ...config, wait_type: 'delay', delay_minutes: Math.round(delayMinutes) };
   } else if (nodeType === 'condition') {
     const variable = value(formData, 'variable') || 'reply_outcome';
     const operator = value(formData, 'operator') || 'equals';
     if (variable.length > 80) go('error', 'Condition variable must be 80 characters or fewer.');
     if (!['equals', 'not_equals', 'exists'].includes(operator)) go('error', 'Unsupported condition operator.');
     config = { ...config, variable, operator };
+  } else if (nodeType === 'action') {
+    const actionType = value(formData, 'action_type') || 'create_followup';
+    if (!['create_followup', 'assign_owner', 'add_tag', 'notify_user'].includes(actionType)) {
+      go('error', 'Only safe internal action types are editable in this controlled builder.');
+    }
+    config = { ...config, action_type: actionType };
+  } else if (nodeType === 'human_handoff') {
+    const reason = value(formData, 'reason');
+    config = { ...config, reason: reason.slice(0, 120) };
+  } else if (nodeType === 'human_approval') {
+    config = { ...config, approval_mode: 'human_review' };
   } else if (nodeType === 'end') {
     const outcome = value(formData, 'outcome');
     if (outcome.length > 80) go('error', 'Outcome must be 80 characters or fewer.');
@@ -220,6 +339,7 @@ export async function updateFlowEdgeAction(formData: FormData) {
   const edgeId = value(formData, 'edge_id');
   const label = value(formData, 'label');
   const branchValue = value(formData, 'branch_value');
+  const targetNodeId = value(formData, 'target_node_id');
 
   if (!workflowId || !edgeId) go('error', 'Workflow and edge are required.');
   if (!Number.isInteger(versionNumber) || versionNumber < 1) go('error', 'Flow version is invalid.');
@@ -231,7 +351,7 @@ export async function updateFlowEdgeAction(formData: FormData) {
 
   const { data: edge, error: edgeError } = await admin
     .from('automation_flow_edges')
-    .select('id,condition')
+    .select('id,source_node_id,target_node_id,condition')
     .eq('organization_id', organizationId)
     .eq('workflow_id', workflowId)
     .eq('version_number', versionNumber)
@@ -240,6 +360,13 @@ export async function updateFlowEdgeAction(formData: FormData) {
 
   if (edgeError || !edge) go('error', edgeError?.message || 'Flow edge was not found in this organization/workflow/version.');
 
+  let nextTargetNodeId = String(edge.target_node_id);
+  if (targetNodeId && targetNodeId !== nextTargetNodeId) {
+    await assertOwnedNode({ organizationId, workflowId, versionNumber, nodeId: targetNodeId });
+    if (targetNodeId === String(edge.source_node_id)) go('error', 'A branch cannot point back to the same node.');
+    nextTargetNodeId = targetNodeId;
+  }
+
   const existingCondition = (edge.condition ?? {}) as Record<string, unknown>;
   const condition = branchValue
     ? { ...existingCondition, equals: branchValue }
@@ -247,7 +374,7 @@ export async function updateFlowEdgeAction(formData: FormData) {
 
   const { error } = await admin
     .from('automation_flow_edges')
-    .update({ label: label || null, condition })
+    .update({ label: label || null, condition, target_node_id: nextTargetNodeId })
     .eq('organization_id', organizationId)
     .eq('workflow_id', workflowId)
     .eq('version_number', versionNumber)
@@ -257,5 +384,5 @@ export async function updateFlowEdgeAction(formData: FormData) {
 
   revalidatePath('/automation/flow-builder');
   revalidatePath('/automation/flow-builder-test');
-  go('notice', 'Branch settings saved. Flow structure changed only; nothing was executed and no customer message was sent.');
+  go('notice', 'Branch settings saved. The draft target connection was updated without executing the flow.');
 }
