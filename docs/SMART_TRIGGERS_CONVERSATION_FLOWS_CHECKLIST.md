@@ -5,8 +5,8 @@
 **Current branch:** `feature/smart-triggers-runtime-worker`  
 **Parent feature branch:** `feature/smart-triggers-v1`  
 **Parent PR:** #31 — Add Smart Triggers + Conversation Flow automation foundation  
-**Approx. Smart Triggers completion:** ~70%  
-**Approx. overall SalsysOS completion:** ~75%  
+**Approx. Smart Triggers completion:** ~74%  
+**Approx. overall SalsysOS completion:** ~76%  
 
 ## Product Direction — Locked
 
@@ -65,7 +65,7 @@ Enrollments support:
 - per-enrollment variables
 - pinned published-flow execution state
 
-Runtime worker foundation now also includes:
+Runtime worker foundation now includes:
 
 - atomic due-job claim RPC: `claim_automation_scheduled_jobs_v1`
 - `FOR UPDATE SKIP LOCKED` concurrency protection
@@ -76,6 +76,10 @@ Runtime worker foundation now also includes:
 - generic processing target types:
   - `resume_wait`
   - `resume_reply_timeout`
+- controlled E2E worker execution validated
+- duplicate/idempotent rerun protection validated
+- two-worker race validation on both supported job types
+- cross-tenant claim isolation validated using Test Yoga School
 
 The claim RPC is applied to production Supabase, but automatic background pickup remains disabled.
 
@@ -127,7 +131,7 @@ The claim RPC is applied to production Supabase, but automatic background pickup
 - [x] identical rerun deduplicates
 - [x] verify 1 event / 1 run / 1 action-run / 1 task
 - [x] verify zero customer messages
-- [ ] final adversarial cross-tenant runtime test using Test Yoga School
+- [ ] final adversarial cross-tenant runtime test for legacy deterministic runtime
 
 ## ST-4 — Event Runtime
 
@@ -155,11 +159,14 @@ The claim RPC is applied to production Supabase, but automatic background pickup
 - [x] max attempts enforced during claim
 - [x] generic runtime-worker module created
 - [x] controlled runtime-worker test page created
-- [ ] controlled generic worker E2E validation
-- [ ] concurrent/double-claim worker validation
+- [x] controlled generic worker E2E validation
+- [x] idempotent rerun / completed-job no-reclaim validation
+- [x] concurrent/double-claim validation for `resume_reply_timeout`
+- [x] concurrent/double-claim validation for `resume_wait`
+- [x] cross-tenant worker claim isolation validation
 - [ ] production recurring due-job pickup / cron
-- [ ] retry/backoff policy
-- [ ] failed-job/dead-letter policy
+- [ ] retry/backoff E2E validation
+- [ ] failed-job/dead-letter E2E validation
 - [ ] timezone-safe production execution
 - [ ] exact datetime node
 - [ ] wait-until business hours
@@ -254,6 +261,9 @@ The claim RPC is applied to production Supabase, but automatic background pickup
 - [x] controlled graph tests verified zero customer messages
 - [x] scheduled-job dedupe foundation
 - [x] generic worker atomic-claim foundation
+- [x] generic worker idempotency validation
+- [x] worker concurrency/double-claim validation
+- [x] cross-tenant generic-worker claim isolation
 - [ ] opt-out keyword handling
 - [ ] do-not-contact enforcement
 - [ ] per-channel suppression
@@ -263,9 +273,7 @@ The claim RPC is applied to production Supabase, but automatic background pickup
 - [x] flow version audit foundation
 - [ ] provider-send audit
 - [ ] cancellation audit expansion
-- [ ] worker concurrency/adversarial tests
-- [ ] cross-tenant generic-worker test
-- [ ] adversarial cross-tenant graph/runtime tests
+- [ ] broader adversarial cross-tenant graph/runtime tests
 
 ## ST-11 — Analytics
 
@@ -284,16 +292,18 @@ The claim RPC is applied to production Supabase, but automatic background pickup
 ## ST-12 — Production Rollout
 
 - [ ] deterministic internal-only runtime final sign-off
-- [ ] generic scheduler worker sign-off
+- [x] controlled generic scheduler worker sign-off
 - [x] controlled stop-on-reply logic sign-off
 - [ ] recurring background scheduler sign-off
+- [ ] retry/backoff sign-off
+- [ ] failed/dead-letter sign-off
 - [ ] suppression sign-off
 - [ ] channel policy sign-off
 - [ ] human-approval sign-off
 - [ ] WhatsApp test flow
 - [ ] Instagram test flow
-- [ ] cross-tenant adversarial test
-- [ ] worker concurrency test
+- [x] generic worker cross-tenant claim isolation test
+- [x] worker concurrency test
 - [ ] rate-limit / retry test
 - [ ] controlled internal-only production pilot
 - [ ] controlled customer-messaging pilot
@@ -407,58 +417,70 @@ Automation action runs  0
 Customer message sent   false
 ```
 
-## 6. Generic Runtime Worker Foundation — NEW
+## 6. Generic Runtime Worker E2E — VERIFIED
 
-The work has now moved from manual/test-specific node actions toward a reusable worker.
-
-Implemented:
+Reusable worker path validated end-to-end:
 
 ```text
-automation_scheduled_jobs
-        ↓
-claim_automation_scheduled_jobs_v1()
-        ↓ atomic claim
-status = claimed
-attempt_count += 1
-        ↓
-lib/automation/runtime-worker.ts
-        ↓
-resume_reply_timeout OR resume_wait
+resume_reply_timeout
+-> atomic claim
+-> attempt_count = 1
+-> reply wait expired
+-> reply_outcome = reply_timeout
+-> Published v1 condition
+-> Follow-up delay
+-> resume_wait scheduled
+-> atomic claim
+-> attempt_count = 1
+-> delay resumed
+-> Continue after delay
+-> No reply branch (end)
+-> enrollment completed
 ```
 
-Safety characteristics already in place:
+Verified no extra run/action-run records and no customer message.
 
-- organization-scoped claims;
-- scheduled-only claims;
-- max-attempt guard;
-- row locking;
-- `SKIP LOCKED` for concurrent workers;
-- service-role-only RPC execution;
-- no automatic provider/customer send;
-- automatic background runtime still disabled;
-- controlled test page `/automation/runtime-worker-test` created.
+## 7. Generic Worker Idempotency + Concurrency — VERIFIED
 
-Production Supabase migration applied:
+Completed jobs could not be reclaimed. A duplicate atomic claim returned zero rows.
+
+Two independent workers raced the same job at the same time for both worker paths:
 
 ```text
-claim_automation_scheduled_jobs_v1
+resume_reply_timeout: racers 2 -> claims observed 1 -> loser claims 0
+resume_wait:          racers 2 -> claims observed 1 -> loser claims 0
 ```
 
-Current runtime-worker branch commits include:
+Both winning jobs processed exactly once and had `attempt_count = 1`.
+
+## 8. Cross-Tenant Worker Isolation — VERIFIED
+
+A worker claim scoped to **Test Yoga School** attempted to claim a scheduled `resume_reply_timeout` job owned by **SalsysOS**.
+
+Database evidence:
 
 ```text
-886e6a2ff66e0629db731c093b7c0f013e076493  Add atomic scheduled-job claim RPC
-1e3af6a1817351aa3a76f7a1f55825e5a2ba5f99  Generic runtime worker implementation checkpoint
-173de97e4123c00a91afbe467fcb08359ac52a84  Controlled runtime-worker test UI checkpoint
+Foreign tenant                 Test Yoga School
+Claims observed                0
+Original job status            scheduled
+Original attempt_count         0
+Original claimed_at            null
+Job status unchanged           true
+Attempt count unchanged        true
+Claim timestamp unchanged      true
+Published version              v1
+Draft version                  v2
+Automatic runtime              false
+Customer message sent          false
 ```
 
-The generic worker itself is **not yet signed off**. The next E2E test must prove the reusable worker processes a prepared job correctly before background scheduling is enabled.
+The foreign tenant could neither claim nor mutate the SalsysOS scheduled job.
 
 ---
 
 # Current Exact Checkpoint
 
-The conversation-flow engine now proves all of the following against an immutable published snapshot:
+The conversation-flow engine now proves all of the following against immutable published flow state:
 
 - draft editing is isolated from published definitions;
 - graph validation and hash-locking work;
@@ -470,28 +492,28 @@ The conversation-flow engine now proves all of the following against an immutabl
 - delay scheduling persists per enrollment;
 - delay resume follows the published edge to the terminal node;
 - controlled duplicate processing fails closed;
-- no customer messages are sent during these runtime tests;
-- an atomic reusable scheduled-job claim layer now exists;
-- a generic runtime-worker module now exists;
-- a controlled worker-test UI now exists.
+- generic worker executes both supported job types end-to-end;
+- completed jobs cannot be reclaimed;
+- two concurrent workers cannot double-claim either supported job type;
+- a foreign tenant worker scope cannot claim or mutate another tenant's job;
+- no customer messages are sent during any controlled runtime test.
 
-Automatic runtime remains OFF.
+Automatic/background runtime remains OFF.
 
 Customer messaging remains OFF.
 
 ## Next exact action
 
-Use `/automation/runtime-worker-test` after the latest preview is Ready:
+Move to **worker retry/backoff + terminal failure/dead-letter validation** before adding recurring background pickup:
 
-1. select one test lead;
-2. click **Prepare controlled worker job**;
-3. verify one pinned published enrollment + one reply wait + one scheduled `resume_reply_timeout` job;
-4. click **Process one job with generic worker**;
-5. verify the generic worker claims exactly one job and follows the published v1 no-reply branch;
-6. rerun to validate idempotency / no double processing;
-7. run concurrency/double-claim validation;
-8. run cross-tenant worker validation using Test Yoga School;
-9. only after those pass, add recurring background due-job pickup for internal-only runtime.
+1. create a controlled failure-only scheduled job;
+2. claim it through the same atomic RPC;
+3. force a safe worker failure with no customer/provider action;
+4. verify attempt 1 requeues with backoff;
+5. repeat until `max_attempts` is reached;
+6. verify final status becomes `failed` and stops being claimable;
+7. verify `last_error`, attempts and timestamps are auditable;
+8. only after retry/failure handling passes, add recurring due-job pickup for internal-only runtime.
 
 ---
 
@@ -499,18 +521,18 @@ Use `/automation/runtime-worker-test` after the latest preview is Ready:
 
 The largest remaining blocks are:
 
-1. generic runtime-worker E2E + concurrency sign-off;
-2. automatic event emitter + webhook event adapter;
-3. recurring scheduler / background due-job pickup;
-4. retry/backoff + failed/dead-letter handling;
-5. suppression / opt-out / DNC / frequency-cap enforcement;
-6. WhatsApp channel policy + approved-template handling;
-7. WhatsApp + Instagram actual send nodes and provider audit;
-8. AI flow nodes grounded in Organization Knowledge;
-9. human approval / handoff runtime;
-10. analytics + production monitoring;
-11. cross-tenant adversarial tests;
-12. controlled production pilots.
+1. retry/backoff + failed/dead-letter validation;
+2. recurring scheduler / background due-job pickup;
+3. automatic event emitter + webhook event adapter;
+4. suppression / opt-out / DNC / frequency-cap enforcement;
+5. WhatsApp channel policy + approved-template handling;
+6. WhatsApp + Instagram actual send nodes and provider audit;
+7. AI flow nodes grounded in Organization Knowledge;
+8. human approval / handoff runtime;
+9. analytics + production monitoring;
+10. broader cross-tenant/adversarial tests;
+11. controlled internal-only production pilot;
+12. controlled customer-messaging pilot.
 
 ---
 
