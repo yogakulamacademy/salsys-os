@@ -1,5 +1,6 @@
 import { ShieldCheck, Workflow } from 'lucide-react';
 
+import { ConnectionCreator } from '@/app/automation/flow-builder/connection-creator';
 import { FlowCanvas } from '@/app/automation/flow-builder/flow-canvas';
 import { PageHeader } from '@/components/ui';
 import { createClient } from '@/lib/supabase/server';
@@ -117,7 +118,7 @@ export default async function FlowBuilderPage({
         <div className="flex items-start gap-3">
           <ShieldCheck className="mt-0.5 shrink-0" size={18} />
           <div>
-            <strong>Structure-only mode:</strong> dragging nodes or editing node/branch settings changes only the persisted draft graph. It does not enroll leads, execute a flow, schedule jobs, call AI, or send WhatsApp/Instagram messages.
+            <strong>Structure-only mode:</strong> dragging nodes, editing settings, and creating/rerouting connections changes only the persisted draft graph. It does not enroll leads, execute a flow, schedule jobs, call AI, or send WhatsApp/Instagram messages.
           </div>
         </div>
       </div>
@@ -139,22 +140,35 @@ export default async function FlowBuilderPage({
           </div>
         </div>
       ) : (
-        <section className="card-pad">
-          <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
-            <div>
-              <h2 className="font-bold text-slate-950">{workflow.name}</h2>
-              <p className="mt-1 text-sm text-slate-500">Version 1 · {nodes.length} nodes · {edges.length} edges</p>
+        <div className="space-y-5">
+          <section className="card-pad">
+            <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <h2 className="font-bold text-slate-950">{workflow.name}</h2>
+                <p className="mt-1 text-sm text-slate-500">Version 1 · {nodes.length} nodes · {edges.length} edges</p>
+              </div>
+              <div className="rounded-full bg-amber-50 px-3 py-1 text-xs font-bold text-amber-700">Draft canvas</div>
             </div>
-            <div className="rounded-full bg-amber-50 px-3 py-1 text-xs font-bold text-amber-700">Draft canvas</div>
-          </div>
 
-          <FlowCanvas
+            <FlowCanvas
+              workflowId={workflow.id}
+              versionNumber={1}
+              initialNodes={nodes}
+              edges={edges}
+            />
+          </section>
+
+          <ConnectionCreator
             workflowId={workflow.id}
             versionNumber={1}
-            initialNodes={nodes}
-            edges={edges}
+            nodes={nodes.map((node) => ({
+              id: node.id,
+              node_key: node.node_key,
+              node_type: node.node_type,
+              label: node.label,
+            }))}
           />
-        </section>
+        </div>
       )}
     </div>
   );
