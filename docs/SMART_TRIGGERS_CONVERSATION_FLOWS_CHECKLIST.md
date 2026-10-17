@@ -54,7 +54,7 @@ Workflow/runtime controls:
 - `automation_scheduler_settings.enabled`
 - Vercel `AUTOMATION_SCHEDULER_ENABLED`
 
-Runtime modules/routes:
+Runtime modules/routes on `feature/smart-triggers-runtime-worker`:
 
 - `lib/automation/runtime-worker.ts`
 - `lib/automation/runtime-scheduler.ts`
@@ -73,16 +73,20 @@ Database capabilities verified:
 - `supabase_vault` installed
 - `invoke_automation_runtime_scheduler_v1()` installed
 
-Current production-safe state:
+Current production safety state:
 
 ```text
-Published flow                       v1
-Editable draft                       v2
-runtime_flow_enabled                 false
-automation_scheduler_settings.enabled false
-AUTOMATION_SCHEDULER_ENABLED         false / unset
-Customer auto-send                   disabled
+Published flow                         v1
+Editable draft                         v2
+runtime_flow_enabled                   false
+DB scheduler setting                   true
+Cron registered                        true
+Cron interval                          every minute
+Vault scheduler secret                 exists
+Customer auto-send                     disabled
 ```
+
+Important: the recurring DB scheduler is currently issuing HTTP requests every minute, but those requests are **not yet reaching the scheduler API handler on production**. Production currently redirects `/api/automation/runtime-scheduler` to the login page because the scheduler route/public middleware change is only present on the feature branch, not on `main`/production.
 
 ---
 
@@ -158,17 +162,21 @@ Customer auto-send                   disabled
 - [x] controlled due-job discovery
 - [x] controlled scheduler sweep E2E
 - [x] production scheduler fail-closed gate with `runtime_flow_enabled=false`
-- [x] protected scheduler API route
+- [x] protected scheduler API route on feature branch
 - [x] `CRON_SECRET` authentication verified on fresh Preview deployment
-- [x] global scheduler kill switch fail-closed test (`AUTOMATION_SCHEDULER_ENABLED=false`)
+- [x] global scheduler kill-switch fail-closed test on Preview (`AUTOMATION_SCHEDULER_ENABLED=false`)
 - [x] Supabase scheduler configuration table
 - [x] Supabase scheduler invocation audit table
 - [x] `pg_cron` registration created
 - [x] `pg_net` invocation function created
-- [x] recurring cron executes inertly while DB scheduler setting is disabled
+- [x] recurring cron initially verified inert while DB scheduler setting was disabled
 - [x] scheduler authorization secret record created in Supabase Vault
-- [ ] align Vault scheduler secret with the exact Vercel `CRON_SECRET`
-- [ ] authenticated Supabase cron -> scheduler API invocation validation
+- [x] DB scheduler setting subsequently enabled for authenticated cron testing
+- [x] cron is queueing one request per minute through `pg_net`
+- [ ] deploy scheduler API route/public middleware change to production
+- [ ] authenticated Supabase cron -> production scheduler API handler validation
+- [ ] verify production scheduler API JSON response (`enabled=false`, zero work) from cron
+- [ ] prove Vault secret parity at the actual production handler
 - [ ] recurring background scheduler sign-off
 - [ ] timezone-safe production execution sign-off
 - [ ] exact datetime node
@@ -258,10 +266,11 @@ Customer auto-send                   disabled
 - [x] worker concurrency protection
 - [x] cross-tenant worker isolation
 - [x] retry/terminal-failure auditability
-- [x] scheduler global kill switch
+- [x] scheduler global kill-switch foundation
 - [x] workflow-level runtime gate
-- [x] DB-level scheduler kill switch
+- [x] DB-level scheduler gate
 - [x] scheduler invocation audit foundation
+- [ ] production cron endpoint routing/auth validation
 - [ ] opt-out keyword handling
 - [ ] do-not-contact enforcement
 - [ ] per-channel suppression
@@ -295,9 +304,10 @@ Customer auto-send                   disabled
 - [x] terminal-failure sign-off
 - [x] worker concurrency sign-off
 - [x] worker cross-tenant isolation sign-off
-- [x] scheduler API authentication / kill-switch sign-off
+- [x] scheduler API authentication / kill-switch sign-off on Preview
 - [x] Supabase recurring scheduler foundation installed
-- [x] inert recurring cron behavior verified
+- [x] inert recurring cron behavior initially verified
+- [ ] production scheduler route deployed
 - [ ] authenticated recurring cron invocation sign-off
 - [ ] recurring background scheduler sign-off
 - [ ] suppression sign-off
@@ -409,7 +419,7 @@ completed       2
 failed          0
 ```
 
-## I. Production scheduler safety gates
+## I. Scheduler API safety gates on Preview
 
 Workflow-level gate:
 
@@ -420,7 +430,7 @@ candidates           = 0
 claims               = 0
 ```
 
-Protected scheduler API with valid Vercel `CRON_SECRET` and global scheduler disabled:
+Protected scheduler API with valid Preview `CRON_SECRET` and global scheduler disabled:
 
 ```text
 authorized request      yes
@@ -456,7 +466,7 @@ Cron schedule:
 * * * * *
 ```
 
-Verified production state immediately after installation:
+Initial fail-closed validation after installation:
 
 ```text
 cron job active                     true
@@ -467,47 +477,79 @@ HTTP scheduler request while off    none
 customer messaging                  disabled
 ```
 
-This proves the recurring database scheduler is alive but fail-closed.
+A Vault secret record named `salsys_runtime_scheduler_cron_secret` was then created.
 
-A Vault secret record named `salsys_runtime_scheduler_cron_secret` now exists. However, its value was generated inside Supabase and has **not yet been proven identical to Vercel `CRON_SECRET`**. Do not enable the DB scheduler setting until secret parity is established.
+## K. Latest recurring-cron checkpoint — BLOCKER IDENTIFIED
+
+Current DB state was re-verified after enabling the DB scheduler setting:
+
+```text
+DB scheduler enabled          true
+cron job active               true
+cron schedule                 every minute
+Vault secret count            1
+latest DB outcome             queued
+latest request IDs            created successfully
+customer auto-send            disabled
+runtime_flow_enabled          false
+```
+
+Recent `pg_net` response records return HTTP `200`, but the response body is the **SalsysOS login HTML**, not scheduler JSON.
+
+This means the recurring cron currently reaches `https://salsysos.com`, but **does not reach the scheduler API handler**.
+
+Root cause was verified in GitHub:
+
+- on `feature/smart-triggers-runtime-worker`, `middleware.ts` includes `/api/automation/runtime-scheduler` in `PUBLIC_EXACT_PATHS`;
+- the feature branch also contains `app/api/automation/runtime-scheduler/route.ts`;
+- on `main`, the scheduler route does not exist yet;
+- on `main`, `middleware.ts` does not list `/api/automation/runtime-scheduler` as public.
+
+Therefore the production root domain redirects the cron request to `/login?next=/api/automation/runtime-scheduler` before the feature-branch scheduler handler can run.
+
+Do **not** interpret the HTTP 200 as scheduler authentication success. It is a login-page response.
 
 ---
 
-# Current exact checkpoint
+# Current exact checkpoint for the next chat
 
-The generic worker, retry handling, concurrency protection, tenant isolation, due-job discovery, scheduler sweep, scheduler API authentication, dual runtime gates and Supabase cron foundation are all in place.
+The worker engine itself is stable through controlled tests. The active work is now the recurring production scheduler handoff.
 
-Current safety state:
+Exact state to continue from:
 
 ```text
-Published flow                        v1
-Draft flow                            v2
-runtime_flow_enabled                  false
-DB scheduler enabled                  false
-Vercel AUTOMATION_SCHEDULER_ENABLED   false / unset
-Cron registered                       true
-Cron HTTP invocation                  blocked by DB scheduler gate
-Customer auto-send                    disabled
+Branch                           feature/smart-triggers-runtime-worker
+Published flow                   v1
+Draft flow                       v2
+runtime_flow_enabled             false
+Customer messaging               OFF
+Supabase cron                    installed + active every minute
+DB scheduler setting             enabled=true
+Supabase Vault secret            exists
+Cron requests                    being queued every minute
+Production scheduler handler     NOT reached
+Observed HTTP body               login page HTML
+Main branch scheduler route      missing
+Main middleware public exemption missing
 ```
 
 ## Next exact action
 
-Complete the **scheduler-secret parity + authenticated cron test** without enabling any workflow execution:
+Fix the **production route deployment/routing gap** before doing any further scheduler enablement:
 
-1. make the Supabase Vault secret exactly match Vercel `CRON_SECRET`;
-2. keep Vercel `AUTOMATION_SCHEDULER_ENABLED=false`;
-3. temporarily enable only `automation_scheduler_settings.enabled=true`;
-4. let one cron invocation reach `/api/automation/runtime-scheduler`;
-5. verify HTTP authentication succeeds but API returns `enabled=false` and 0 work;
-6. verify scheduler invocation audit/request ID;
-7. turn the DB scheduler setting back off if additional hardening is needed;
-8. only after that, consider a controlled internal-only scheduler pilot.
+1. keep customer messaging OFF and `runtime_flow_enabled=false`;
+2. either merge/deploy the scheduler route + middleware public exemption to production, or temporarily point the DB scheduler endpoint to a verified feature Preview URL for a controlled test;
+3. confirm a cron request returns scheduler JSON rather than login HTML;
+4. confirm the JSON shows `enabled=false`, `workflowsScanned=0`, `candidatesFound=0`, and `jobsClaimed=0` while the Vercel global kill switch remains off;
+5. only then declare Vault/Vercel secret parity proven at the actual handler;
+6. after that, decide whether to leave the DB scheduler enabled or turn it back off before the internal-only pilot;
+7. only after the authenticated recurring path is proven should we proceed to a controlled internal-only scheduler pilot.
 
 ---
 
 # Remaining major Smart Trigger work
 
-1. scheduler-secret parity + authenticated Supabase cron validation;
+1. deploy scheduler route/public middleware to production and prove recurring authenticated cron JSON response;
 2. recurring background scheduler production sign-off;
 3. automatic event emitter + provider webhook adapter;
 4. suppression / opt-out / DNC / frequency-cap enforcement;
