@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ArrowLeft, Search, Sparkles } from "lucide-react";
+import { ArrowLeft, Brain, Search, Sparkles } from "lucide-react";
 
 import { SeoIntelligenceSearch } from "@/components/seo-intelligence-search";
 import { PageHeader } from "@/components/ui";
@@ -14,10 +14,16 @@ export default function SeoIntelligencePage() {
         title="SEO Intelligence Search"
         description="Explore pages, topics, entities, experiments and optimization actions with tenant-safe OpenSearch ranking across SEO, AEO, GEO, traffic and business-value signals."
         actions={
-          <Link href="/seo" className="btn-secondary">
-            <ArrowLeft size={15} />
-            SEO overview
-          </Link>
+          <div className="flex flex-wrap items-center gap-2">
+            <Link href="/seo/decisions" className="btn-secondary">
+              <Brain size={15} />
+              Decision Intelligence
+            </Link>
+            <Link href="/seo" className="btn-secondary">
+              <ArrowLeft size={15} />
+              SEO overview
+            </Link>
+          </div>
         }
       />
 
