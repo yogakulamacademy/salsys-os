@@ -14,7 +14,6 @@ const PUBLIC_EXACT_PATHS = new Set([
   "/api/analytics/meta-ads/sync",
   "/api/admissions/auto-tasks",
   "/api/automation/runtime-scheduler",
-  "/api/internal/whatsapp-template-sync-pilot",
   "/api/conversion-feedback/run",
   "/api/whatsapp/webhook",
   "/api/instagram/webhook",
