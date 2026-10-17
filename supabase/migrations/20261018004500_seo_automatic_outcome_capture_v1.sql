@@ -272,29 +272,35 @@ begin
 end;
 $$;
 
-create or replace view public.v_seo_learning_health_v1
+drop view if exists public.v_seo_learning_health_v1;
+create view public.v_seo_learning_health_v1
 with (security_invoker=true)
 as
 select
   o.id as organization_id,
   coalesce(s.enabled,false) as enabled,
   coalesce(s.auto_finalize,false) as auto_finalize,
+  count(distinct e.id) filter (where e.status='running')::integer as running_experiments,
+  count(distinct e.id) filter (where e.status='completed')::integer as completed_experiments,
+  count(distinct l.id)::integer as learning_events,
+  count(distinct l.id) filter (where l.result_classification='positive')::integer as positive_learnings,
+  count(distinct l.id) filter (where l.result_classification='negative')::integer as negative_learnings,
+  count(distinct l.id) filter (where l.result_classification='mixed')::integer as mixed_learnings,
+  count(distinct l.id) filter (where l.result_classification='inconclusive')::integer as inconclusive_learnings,
+  max(l.evaluated_at) as last_learning_at,
   coalesce(s.auto_capture_outcomes,false) as auto_capture_outcomes,
   coalesce(s.outcome_lag_days,0) as outcome_lag_days,
-  count(distinct e.id) filter (where e.status='running') as running_experiments,
   count(distinct e.id) filter (where e.status='running' and exists(
     select 1 from public.seo_experiment_measurements m
     where m.organization_id=e.organization_id and m.experiment_id=e.id and m.phase='baseline'
-  )) as running_with_baseline,
+  ))::integer as running_with_baseline,
   count(distinct e.id) filter (where e.status='running' and exists(
     select 1 from public.seo_experiment_measurements m
     where m.organization_id=e.organization_id and m.experiment_id=e.id and m.phase='final'
-  )) as running_with_final,
-  count(distinct l.id) as learning_events,
-  count(distinct r.id) filter (where r.status='learned') as learned_outcomes,
-  count(distinct r.id) filter (where r.status='failed') as failed_outcomes,
+  ))::integer as running_with_final,
+  count(distinct r.id) filter (where r.status='learned')::integer as learned_outcomes,
+  count(distinct r.id) filter (where r.status='failed')::integer as failed_outcomes,
   max(r.created_at) as last_outcome_capture_at,
-  max(l.evaluated_at) as last_learning_at,
   now() as checked_at
 from public.organizations o
 left join public.seo_learning_settings s on s.organization_id=o.id
