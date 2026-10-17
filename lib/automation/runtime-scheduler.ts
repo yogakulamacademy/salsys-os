@@ -55,6 +55,7 @@ export async function runProductionAutomationSchedulerSweep(
   admin: SupabaseClient,
   options?: {
     organizationId?: string;
+    workflowId?: string;
     workflowsLimit?: number;
     jobsPerWorkflow?: number;
   },
@@ -73,6 +74,10 @@ export async function runProductionAutomationSchedulerSweep(
 
   if (options?.organizationId) {
     workflowQuery = workflowQuery.eq('organization_id', options.organizationId);
+  }
+
+  if (options?.workflowId) {
+    workflowQuery = workflowQuery.eq('id', options.workflowId);
   }
 
   const { data: workflows, error: workflowError } = await workflowQuery;
