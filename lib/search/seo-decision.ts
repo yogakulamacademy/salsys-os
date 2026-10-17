@@ -13,6 +13,9 @@ export type SeoDecisionRecommendation = {
   title: string | null;
   is_indexable: boolean;
   decision_priority_score: number;
+  base_decision_priority_score: number;
+  learning_evidence_count: number;
+  learning_adjustment: number;
   minimum_priority_score: number;
   recommended_action_kind: string;
   decision_title: string;
@@ -55,6 +58,9 @@ function normalizeRecommendations(value: unknown, organizationId: string) {
         title: typeof row.title === 'string' ? row.title : null,
         is_indexable: row.is_indexable === true,
         decision_priority_score: Number(row.decision_priority_score || 0),
+        base_decision_priority_score: Number(row.base_decision_priority_score ?? row.decision_priority_score ?? 0),
+        learning_evidence_count: Number(row.learning_evidence_count || 0),
+        learning_adjustment: Number(row.learning_adjustment || 0),
         minimum_priority_score: Number(row.minimum_priority_score || 0),
         recommended_action_kind: String(row.recommended_action_kind || 'other'),
         decision_title: String(row.decision_title || 'SEO recommendation'),
@@ -78,7 +84,7 @@ export async function getSeoNextBestActions(input: {
   if (!organizationId) throw new Error('SEO_DECISION_ORGANIZATION_REQUIRED');
 
   const admin = createAdminClient();
-  const { data, error } = await admin.rpc('get_seo_next_best_actions_v1', {
+  const { data, error } = await admin.rpc('get_seo_next_best_actions_learning_v1', {
     p_organization_id: organizationId,
     p_site_id: input.siteId?.trim() || null,
     p_limit: normalizeLimit(input.limit),
@@ -93,6 +99,10 @@ export async function getSeoNextBestActions(input: {
   return {
     ok: true,
     organizationId,
+    decisionVersion:
+      data && typeof data === 'object' && !Array.isArray(data) && typeof (data as Record<string, unknown>).decision_version === 'string'
+        ? String((data as Record<string, unknown>).decision_version)
+        : 'v2_learning',
     generatedAt:
       data && typeof data === 'object' && !Array.isArray(data) && typeof (data as Record<string, unknown>).generated_at === 'string'
         ? String((data as Record<string, unknown>).generated_at)
