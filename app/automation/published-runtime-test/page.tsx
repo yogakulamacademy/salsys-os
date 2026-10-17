@@ -1,9 +1,10 @@
-import { CheckCircle2, MessageCircleReply, ShieldCheck, TimerOff, Workflow } from 'lucide-react';
+import { CheckCircle2, FastForward, MessageCircleReply, ShieldCheck, TimerOff, Workflow } from 'lucide-react';
 
 import {
   advancePinnedEnrollmentOneStepAction,
   pinLeadToPublishedFlowAction,
 } from '@/app/automation/published-runtime-test/actions';
+import { resumePublishedDelayAction } from '@/app/automation/published-runtime-test/delay-action';
 import { simulatePublishedNoReplyTimeoutAction } from '@/app/automation/published-runtime-test/no-reply-action';
 import { simulatePublishedInboundReplyAction } from '@/app/automation/published-runtime-test/reply-action';
 import { PageHeader } from '@/components/ui';
@@ -173,6 +174,13 @@ export default async function PublishedRuntimeTestPage({
     currentNode?.node_type === 'wait_for_reply' &&
     latestWait?.wait_type === 'reply' &&
     latestWait?.status === 'waiting';
+  const canResumeDelay =
+    latestEnrollment?.status === 'active' &&
+    currentNode?.node_type === 'wait' &&
+    latestWait?.wait_type === 'delay' &&
+    latestWait?.status === 'waiting' &&
+    latestJob?.job_type === 'resume_wait' &&
+    latestJob?.status === 'scheduled';
 
   return (
     <div className="space-y-6">
@@ -315,6 +323,21 @@ export default async function PublishedRuntimeTestPage({
                       </button>
                     </form>
                   </div>
+                ) : null}
+
+                {canResumeDelay && latestWait ? (
+                  <form action={resumePublishedDelayAction} className="rounded-xl border border-sky-200 bg-sky-50 p-4">
+                    <input type="hidden" name="workflow_id" value={workflow.id} />
+                    <input type="hidden" name="enrollment_id" value={latestEnrollment.id} />
+                    <input type="hidden" name="wait_state_id" value={latestWait.id} />
+                    <div className="mb-3 text-xs leading-5 text-sky-800">
+                      Controlled fast-forward: resume the published delay now and follow its one outgoing connection. No provider or customer send is allowed.
+                    </div>
+                    <button type="submit" className="btn-primary">
+                      <FastForward size={15} />
+                      Resume published delay now
+                    </button>
+                  </form>
                 ) : null}
 
                 {latestWait ? (
