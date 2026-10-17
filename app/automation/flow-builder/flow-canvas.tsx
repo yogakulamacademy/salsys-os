@@ -1,9 +1,20 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import { GitBranch, MessageSquareReply, MousePointer2, Play, Settings2, Square } from 'lucide-react';
+import {
+  GitBranch,
+  MessageSquareReply,
+  MousePointer2,
+  Play,
+  Plus,
+  Settings2,
+  Square,
+  Trash2,
+} from 'lucide-react';
 
 import {
+  createFlowNodeAction,
+  deleteFlowNodeAction,
   saveFlowLayoutAction,
   updateFlowEdgeAction,
   updateFlowNodeAction,
@@ -39,6 +50,9 @@ function nodeClass(type: string) {
   if (type === 'trigger') return 'border-emerald-200 bg-emerald-50';
   if (type === 'condition') return 'border-amber-200 bg-amber-50';
   if (type === 'wait_for_reply') return 'border-violet-200 bg-violet-50';
+  if (type === 'human_handoff' || type === 'human_approval') return 'border-sky-200 bg-sky-50';
+  if (type === 'action') return 'border-indigo-200 bg-indigo-50';
+  if (type === 'wait') return 'border-fuchsia-200 bg-fuchsia-50';
   return 'border-slate-200 bg-white';
 }
 
@@ -132,6 +146,28 @@ export function FlowCanvas({
         </form>
       </div>
 
+      <section className="rounded-2xl border border-slate-200 bg-white p-4">
+        <div className="flex items-center gap-2 text-sm font-bold text-slate-900">
+          <Plus size={16} />
+          Add draft node
+        </div>
+        <form action={createFlowNodeAction} className="mt-3 grid gap-3 md:grid-cols-[180px_1fr_auto]">
+          <input type="hidden" name="workflow_id" value={workflowId} />
+          <input type="hidden" name="version_number" value={versionNumber} />
+          <select name="node_type" defaultValue="action" className="rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm">
+            <option value="action">Internal action</option>
+            <option value="wait">Wait</option>
+            <option value="wait_for_reply">Wait for reply</option>
+            <option value="condition">Condition</option>
+            <option value="human_approval">Human approval</option>
+            <option value="human_handoff">Human handoff</option>
+            <option value="end">End</option>
+          </select>
+          <input name="label" required maxLength={120} placeholder="Node label" className="rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm" />
+          <button type="submit" className="btn-primary">Add node</button>
+        </form>
+      </section>
+
       <div className="overflow-auto rounded-2xl border border-slate-200 bg-slate-50">
         <div
           className="relative"
@@ -209,71 +245,117 @@ export function FlowCanvas({
           </div>
 
           {selectedNode ? (
-            <form action={updateFlowNodeAction} key={selectedNode.id} className="mt-5 space-y-4">
-              <input type="hidden" name="workflow_id" value={workflowId} />
-              <input type="hidden" name="version_number" value={versionNumber} />
-              <input type="hidden" name="node_id" value={selectedNode.id} />
+            <>
+              <form action={updateFlowNodeAction} key={selectedNode.id} className="mt-5 space-y-4">
+                <input type="hidden" name="workflow_id" value={workflowId} />
+                <input type="hidden" name="version_number" value={versionNumber} />
+                <input type="hidden" name="node_id" value={selectedNode.id} />
 
-              <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-xs font-bold uppercase tracking-wide text-slate-500">
-                {selectedNode.node_type.replaceAll('_', ' ')} · {selectedNode.node_key}
-              </div>
+                <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-xs font-bold uppercase tracking-wide text-slate-500">
+                  {selectedNode.node_type.replaceAll('_', ' ')} · {selectedNode.node_key}
+                </div>
 
-              <label className="block">
-                <span className="mb-1.5 block text-xs font-bold uppercase tracking-wide text-slate-500">Label</span>
-                <input name="label" defaultValue={selectedNode.label} maxLength={120} required className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-900" />
-              </label>
-
-              {selectedNode.node_type === 'trigger' ? (
                 <label className="block">
-                  <span className="mb-1.5 block text-xs font-bold uppercase tracking-wide text-slate-500">Event</span>
-                  <select name="event_name" defaultValue={stringConfig(selectedNode.config, 'event_name', 'lead.created')} className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-900">
-                    <option value="lead.created">New lead created</option>
-                    <option value="message.received">Message received</option>
-                    <option value="lead.stage_changed">Lead stage changed</option>
-                    <option value="payment.pending">Payment pending</option>
-                  </select>
+                  <span className="mb-1.5 block text-xs font-bold uppercase tracking-wide text-slate-500">Label</span>
+                  <input name="label" defaultValue={selectedNode.label} maxLength={120} required className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-900" />
                 </label>
-              ) : null}
 
-              {selectedNode.node_type === 'wait_for_reply' ? (
-                <>
+                {selectedNode.node_type === 'trigger' ? (
                   <label className="block">
-                    <span className="mb-1.5 block text-xs font-bold uppercase tracking-wide text-slate-500">Timeout minutes</span>
-                    <input name="timeout_minutes" type="number" min={1} max={10080} defaultValue={numberConfig(selectedNode.config, 'timeout_minutes', 360)} className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-900" />
-                  </label>
-                  <label className="flex items-center gap-2 text-sm text-slate-700">
-                    <input name="stop_on_reply" type="checkbox" defaultChecked={boolConfig(selectedNode.config, 'stop_on_reply', true)} />
-                    Stop the no-reply wait when the customer replies
-                  </label>
-                </>
-              ) : null}
-
-              {selectedNode.node_type === 'condition' ? (
-                <div className="grid gap-3 sm:grid-cols-2">
-                  <label className="block">
-                    <span className="mb-1.5 block text-xs font-bold uppercase tracking-wide text-slate-500">Variable</span>
-                    <input name="variable" defaultValue={stringConfig(selectedNode.config, 'variable', 'reply_outcome')} maxLength={80} className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-900" />
-                  </label>
-                  <label className="block">
-                    <span className="mb-1.5 block text-xs font-bold uppercase tracking-wide text-slate-500">Operator</span>
-                    <select name="operator" defaultValue={stringConfig(selectedNode.config, 'operator', 'equals')} className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-900">
-                      <option value="equals">Equals</option>
-                      <option value="not_equals">Does not equal</option>
-                      <option value="exists">Exists</option>
+                    <span className="mb-1.5 block text-xs font-bold uppercase tracking-wide text-slate-500">Event</span>
+                    <select name="event_name" defaultValue={stringConfig(selectedNode.config, 'event_name', 'lead.created')} className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-900">
+                      <option value="lead.created">New lead created</option>
+                      <option value="message.received">Message received</option>
+                      <option value="lead.stage_changed">Lead stage changed</option>
+                      <option value="payment.pending">Payment pending</option>
                     </select>
                   </label>
-                </div>
-              ) : null}
+                ) : null}
 
-              {selectedNode.node_type === 'end' ? (
-                <label className="block">
-                  <span className="mb-1.5 block text-xs font-bold uppercase tracking-wide text-slate-500">Outcome</span>
-                  <input name="outcome" defaultValue={stringConfig(selectedNode.config, 'outcome')} maxLength={80} className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-900" />
-                </label>
-              ) : null}
+                {selectedNode.node_type === 'wait_for_reply' ? (
+                  <>
+                    <label className="block">
+                      <span className="mb-1.5 block text-xs font-bold uppercase tracking-wide text-slate-500">Timeout minutes</span>
+                      <input name="timeout_minutes" type="number" min={1} max={10080} defaultValue={numberConfig(selectedNode.config, 'timeout_minutes', 360)} className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-900" />
+                    </label>
+                    <label className="flex items-center gap-2 text-sm text-slate-700">
+                      <input name="stop_on_reply" type="checkbox" defaultChecked={boolConfig(selectedNode.config, 'stop_on_reply', true)} />
+                      Stop the no-reply wait when the customer replies
+                    </label>
+                  </>
+                ) : null}
 
-              <button type="submit" className="btn-primary">Save node settings</button>
-            </form>
+                {selectedNode.node_type === 'wait' ? (
+                  <label className="block">
+                    <span className="mb-1.5 block text-xs font-bold uppercase tracking-wide text-slate-500">Delay minutes</span>
+                    <input name="delay_minutes" type="number" min={1} max={10080} defaultValue={numberConfig(selectedNode.config, 'delay_minutes', 10)} className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-900" />
+                  </label>
+                ) : null}
+
+                {selectedNode.node_type === 'condition' ? (
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <label className="block">
+                      <span className="mb-1.5 block text-xs font-bold uppercase tracking-wide text-slate-500">Variable</span>
+                      <input name="variable" defaultValue={stringConfig(selectedNode.config, 'variable', 'reply_outcome')} maxLength={80} className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-900" />
+                    </label>
+                    <label className="block">
+                      <span className="mb-1.5 block text-xs font-bold uppercase tracking-wide text-slate-500">Operator</span>
+                      <select name="operator" defaultValue={stringConfig(selectedNode.config, 'operator', 'equals')} className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-900">
+                        <option value="equals">Equals</option>
+                        <option value="not_equals">Does not equal</option>
+                        <option value="exists">Exists</option>
+                      </select>
+                    </label>
+                  </div>
+                ) : null}
+
+                {selectedNode.node_type === 'action' ? (
+                  <label className="block">
+                    <span className="mb-1.5 block text-xs font-bold uppercase tracking-wide text-slate-500">Safe internal action</span>
+                    <select name="action_type" defaultValue={stringConfig(selectedNode.config, 'action_type', 'create_followup')} className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-900">
+                      <option value="create_followup">Create follow-up</option>
+                      <option value="assign_owner">Assign owner</option>
+                      <option value="add_tag">Add tag</option>
+                      <option value="notify_user">Notify user</option>
+                    </select>
+                  </label>
+                ) : null}
+
+                {selectedNode.node_type === 'human_handoff' ? (
+                  <label className="block">
+                    <span className="mb-1.5 block text-xs font-bold uppercase tracking-wide text-slate-500">Handoff reason</span>
+                    <input name="reason" defaultValue={stringConfig(selectedNode.config, 'reason', 'manual_review')} maxLength={120} className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-900" />
+                  </label>
+                ) : null}
+
+                {selectedNode.node_type === 'human_approval' ? (
+                  <div className="rounded-xl border border-sky-200 bg-sky-50 px-3 py-3 text-sm text-sky-800">
+                    This node is locked to human review in the controlled builder.
+                  </div>
+                ) : null}
+
+                {selectedNode.node_type === 'end' ? (
+                  <label className="block">
+                    <span className="mb-1.5 block text-xs font-bold uppercase tracking-wide text-slate-500">Outcome</span>
+                    <input name="outcome" defaultValue={stringConfig(selectedNode.config, 'outcome')} maxLength={80} className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-900" />
+                  </label>
+                ) : null}
+
+                <button type="submit" className="btn-primary">Save node settings</button>
+              </form>
+
+              {selectedNode.node_type !== 'trigger' ? (
+                <form action={deleteFlowNodeAction} className="mt-3">
+                  <input type="hidden" name="workflow_id" value={workflowId} />
+                  <input type="hidden" name="version_number" value={versionNumber} />
+                  <input type="hidden" name="node_id" value={selectedNode.id} />
+                  <button type="submit" className="inline-flex items-center gap-2 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-sm font-bold text-rose-700 hover:bg-rose-100">
+                    <Trash2 size={15} />
+                    Delete draft node
+                  </button>
+                </form>
+              ) : null}
+            </>
           ) : (
             <div className="mt-5 text-sm text-slate-500">Select a node on the canvas.</div>
           )}
@@ -281,7 +363,7 @@ export function FlowCanvas({
 
         <section className="rounded-2xl border border-slate-200 bg-white p-5">
           <h3 className="font-bold text-slate-950">Branch connections</h3>
-          <p className="mt-1 text-sm text-slate-500">Edit edge labels and branch values. Connections cannot be rewired yet.</p>
+          <p className="mt-1 text-sm text-slate-500">Edit labels, branch values, and reroute the target node.</p>
 
           <div className="mt-5 space-y-3">
             {edges.map((edge) => {
@@ -296,7 +378,7 @@ export function FlowCanvas({
                   <div className="text-sm font-semibold text-slate-900">
                     {source?.label || 'Unknown'} → {target?.label || 'Unknown'}
                   </div>
-                  <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                  <div className="mt-3 grid gap-3 sm:grid-cols-3">
                     <label className="block">
                       <span className="mb-1 block text-[11px] font-bold uppercase tracking-wide text-slate-500">Label</span>
                       <input name="label" defaultValue={edge.label ?? ''} maxLength={120} className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm" />
@@ -304,6 +386,16 @@ export function FlowCanvas({
                     <label className="block">
                       <span className="mb-1 block text-[11px] font-bold uppercase tracking-wide text-slate-500">Branch value</span>
                       <input name="branch_value" defaultValue={branchValue} maxLength={80} placeholder="Optional" className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm" />
+                    </label>
+                    <label className="block">
+                      <span className="mb-1 block text-[11px] font-bold uppercase tracking-wide text-slate-500">Target node</span>
+                      <select name="target_node_id" defaultValue={edge.target_node_id} className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm">
+                        {nodes
+                          .filter((node) => node.id !== edge.source_node_id)
+                          .map((node) => (
+                            <option key={node.id} value={node.id}>{node.label}</option>
+                          ))}
+                      </select>
                     </label>
                   </div>
                   <button type="submit" className="mt-3 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-700 hover:bg-slate-100">Save branch</button>
