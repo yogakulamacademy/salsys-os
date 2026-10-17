@@ -1,9 +1,13 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import { GitBranch, MessageSquareReply, MousePointer2, Play, Square } from 'lucide-react';
+import { GitBranch, MessageSquareReply, MousePointer2, Play, Settings2, Square } from 'lucide-react';
 
-import { saveFlowLayoutAction } from '@/app/automation/flow-builder/actions';
+import {
+  saveFlowLayoutAction,
+  updateFlowEdgeAction,
+  updateFlowNodeAction,
+} from '@/app/automation/flow-builder/actions';
 
 type FlowNode = {
   id: string;
@@ -12,6 +16,7 @@ type FlowNode = {
   label: string;
   position_x: number;
   position_y: number;
+  config: Record<string, unknown> | null;
 };
 
 type FlowEdge = {
@@ -20,6 +25,7 @@ type FlowEdge = {
   target_node_id: string;
   edge_key: string;
   label: string | null;
+  condition: Record<string, unknown> | null;
 };
 
 function NodeIcon({ type }: { type: string }) {
@@ -36,6 +42,21 @@ function nodeClass(type: string) {
   return 'border-slate-200 bg-white';
 }
 
+function stringConfig(config: Record<string, unknown> | null, key: string, fallback = '') {
+  const value = config?.[key];
+  return typeof value === 'string' ? value : fallback;
+}
+
+function numberConfig(config: Record<string, unknown> | null, key: string, fallback: number) {
+  const value = Number(config?.[key]);
+  return Number.isFinite(value) ? value : fallback;
+}
+
+function boolConfig(config: Record<string, unknown> | null, key: string, fallback = false) {
+  const value = config?.[key];
+  return typeof value === 'boolean' ? value : fallback;
+}
+
 export function FlowCanvas({
   workflowId,
   versionNumber,
@@ -49,8 +70,10 @@ export function FlowCanvas({
 }) {
   const [nodes, setNodes] = useState(initialNodes);
   const [draggingId, setDraggingId] = useState<string | null>(null);
+  const [selectedNodeId, setSelectedNodeId] = useState<string | null>(initialNodes[0]?.id ?? null);
 
   const nodeMap = useMemo(() => new Map(nodes.map((node) => [node.id, node])), [nodes]);
+  const selectedNode = selectedNodeId ? nodeMap.get(selectedNodeId) ?? null : null;
   const canvasWidth = Math.max(1180, ...nodes.map((node) => node.position_x + 260));
   const canvasHeight = Math.max(620, ...nodes.map((node) => node.position_y + 180));
 
@@ -62,6 +85,7 @@ export function FlowCanvas({
     const node = nodeMap.get(nodeId);
     if (!node) return;
     setDraggingId(nodeId);
+    setSelectedNodeId(nodeId);
     event.dataTransfer.effectAllowed = 'move';
     event.dataTransfer.setData('text/plain', JSON.stringify({
       id: nodeId,
@@ -93,11 +117,11 @@ export function FlowCanvas({
   }
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-5">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-2 text-sm text-slate-600">
           <MousePointer2 size={16} />
-          Drag nodes to rearrange the flow. Saving only persists layout positions.
+          Drag nodes to rearrange the flow. Click a node to edit its draft settings.
         </div>
 
         <form action={saveFlowLayoutAction}>
@@ -155,9 +179,10 @@ export function FlowCanvas({
             <div
               key={node.id}
               draggable
+              onClick={() => setSelectedNodeId(node.id)}
               onDragStart={(event) => onDragStart(event, node.id)}
               onDragEnd={() => setDraggingId(null)}
-              className={`absolute w-[210px] cursor-grab rounded-2xl border p-4 shadow-sm transition active:cursor-grabbing ${nodeClass(node.node_type)} ${draggingId === node.id ? 'opacity-60' : ''}`}
+              className={`absolute w-[210px] cursor-grab rounded-2xl border p-4 shadow-sm transition active:cursor-grabbing ${nodeClass(node.node_type)} ${draggingId === node.id ? 'opacity-60' : ''} ${selectedNodeId === node.id ? 'ring-2 ring-violet-400 ring-offset-2' : ''}`}
               style={{ left: node.position_x, top: node.position_y }}
             >
               <div className="flex items-center gap-2 text-[11px] font-bold uppercase tracking-wide text-slate-500">
@@ -169,6 +194,124 @@ export function FlowCanvas({
             </div>
           ))}
         </div>
+      </div>
+
+      <div className="grid gap-5 xl:grid-cols-[1.05fr_1fr]">
+        <section className="rounded-2xl border border-slate-200 bg-white p-5">
+          <div className="flex items-start gap-3">
+            <div className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-violet-50 text-violet-700">
+              <Settings2 size={16} />
+            </div>
+            <div>
+              <h3 className="font-bold text-slate-950">Node inspector</h3>
+              <p className="mt-1 text-sm text-slate-500">Edit the selected node’s draft label and safe structural settings.</p>
+            </div>
+          </div>
+
+          {selectedNode ? (
+            <form action={updateFlowNodeAction} key={selectedNode.id} className="mt-5 space-y-4">
+              <input type="hidden" name="workflow_id" value={workflowId} />
+              <input type="hidden" name="version_number" value={versionNumber} />
+              <input type="hidden" name="node_id" value={selectedNode.id} />
+
+              <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-xs font-bold uppercase tracking-wide text-slate-500">
+                {selectedNode.node_type.replaceAll('_', ' ')} · {selectedNode.node_key}
+              </div>
+
+              <label className="block">
+                <span className="mb-1.5 block text-xs font-bold uppercase tracking-wide text-slate-500">Label</span>
+                <input name="label" defaultValue={selectedNode.label} maxLength={120} required className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-900" />
+              </label>
+
+              {selectedNode.node_type === 'trigger' ? (
+                <label className="block">
+                  <span className="mb-1.5 block text-xs font-bold uppercase tracking-wide text-slate-500">Event</span>
+                  <select name="event_name" defaultValue={stringConfig(selectedNode.config, 'event_name', 'lead.created')} className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-900">
+                    <option value="lead.created">New lead created</option>
+                    <option value="message.received">Message received</option>
+                    <option value="lead.stage_changed">Lead stage changed</option>
+                    <option value="payment.pending">Payment pending</option>
+                  </select>
+                </label>
+              ) : null}
+
+              {selectedNode.node_type === 'wait_for_reply' ? (
+                <>
+                  <label className="block">
+                    <span className="mb-1.5 block text-xs font-bold uppercase tracking-wide text-slate-500">Timeout minutes</span>
+                    <input name="timeout_minutes" type="number" min={1} max={10080} defaultValue={numberConfig(selectedNode.config, 'timeout_minutes', 360)} className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-900" />
+                  </label>
+                  <label className="flex items-center gap-2 text-sm text-slate-700">
+                    <input name="stop_on_reply" type="checkbox" defaultChecked={boolConfig(selectedNode.config, 'stop_on_reply', true)} />
+                    Stop the no-reply wait when the customer replies
+                  </label>
+                </>
+              ) : null}
+
+              {selectedNode.node_type === 'condition' ? (
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <label className="block">
+                    <span className="mb-1.5 block text-xs font-bold uppercase tracking-wide text-slate-500">Variable</span>
+                    <input name="variable" defaultValue={stringConfig(selectedNode.config, 'variable', 'reply_outcome')} maxLength={80} className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-900" />
+                  </label>
+                  <label className="block">
+                    <span className="mb-1.5 block text-xs font-bold uppercase tracking-wide text-slate-500">Operator</span>
+                    <select name="operator" defaultValue={stringConfig(selectedNode.config, 'operator', 'equals')} className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-900">
+                      <option value="equals">Equals</option>
+                      <option value="not_equals">Does not equal</option>
+                      <option value="exists">Exists</option>
+                    </select>
+                  </label>
+                </div>
+              ) : null}
+
+              {selectedNode.node_type === 'end' ? (
+                <label className="block">
+                  <span className="mb-1.5 block text-xs font-bold uppercase tracking-wide text-slate-500">Outcome</span>
+                  <input name="outcome" defaultValue={stringConfig(selectedNode.config, 'outcome')} maxLength={80} className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-900" />
+                </label>
+              ) : null}
+
+              <button type="submit" className="btn-primary">Save node settings</button>
+            </form>
+          ) : (
+            <div className="mt-5 text-sm text-slate-500">Select a node on the canvas.</div>
+          )}
+        </section>
+
+        <section className="rounded-2xl border border-slate-200 bg-white p-5">
+          <h3 className="font-bold text-slate-950">Branch connections</h3>
+          <p className="mt-1 text-sm text-slate-500">Edit edge labels and branch values. Connections cannot be rewired yet.</p>
+
+          <div className="mt-5 space-y-3">
+            {edges.map((edge) => {
+              const source = nodeMap.get(edge.source_node_id);
+              const target = nodeMap.get(edge.target_node_id);
+              const branchValue = stringConfig(edge.condition, 'equals');
+              return (
+                <form action={updateFlowEdgeAction} key={edge.id} className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                  <input type="hidden" name="workflow_id" value={workflowId} />
+                  <input type="hidden" name="version_number" value={versionNumber} />
+                  <input type="hidden" name="edge_id" value={edge.id} />
+                  <div className="text-sm font-semibold text-slate-900">
+                    {source?.label || 'Unknown'} → {target?.label || 'Unknown'}
+                  </div>
+                  <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                    <label className="block">
+                      <span className="mb-1 block text-[11px] font-bold uppercase tracking-wide text-slate-500">Label</span>
+                      <input name="label" defaultValue={edge.label ?? ''} maxLength={120} className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm" />
+                    </label>
+                    <label className="block">
+                      <span className="mb-1 block text-[11px] font-bold uppercase tracking-wide text-slate-500">Branch value</span>
+                      <input name="branch_value" defaultValue={branchValue} maxLength={80} placeholder="Optional" className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm" />
+                    </label>
+                  </div>
+                  <button type="submit" className="mt-3 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-700 hover:bg-slate-100">Save branch</button>
+                </form>
+              );
+            })}
+          </div>
+        </section>
       </div>
     </div>
   );
