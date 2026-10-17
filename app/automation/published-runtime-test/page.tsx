@@ -1,9 +1,10 @@
-import { CheckCircle2, MessageCircleReply, ShieldCheck, Workflow } from 'lucide-react';
+import { CheckCircle2, MessageCircleReply, ShieldCheck, TimerOff, Workflow } from 'lucide-react';
 
 import {
   advancePinnedEnrollmentOneStepAction,
   pinLeadToPublishedFlowAction,
 } from '@/app/automation/published-runtime-test/actions';
+import { simulatePublishedNoReplyTimeoutAction } from '@/app/automation/published-runtime-test/no-reply-action';
 import { simulatePublishedInboundReplyAction } from '@/app/automation/published-runtime-test/reply-action';
 import { PageHeader } from '@/components/ui';
 import { createClient } from '@/lib/supabase/server';
@@ -46,12 +47,15 @@ type NodeRow = {
 type WaitRow = {
   id: string;
   status: string;
+  wait_type: string;
   timeout_at: string | null;
+  resume_at: string | null;
 };
 
 type JobRow = {
   id: string;
   status: string;
+  job_type: string;
   scheduled_for: string;
   attempt_count: number;
 };
@@ -138,7 +142,7 @@ export default async function PublishedRuntimeTestPage({
               .maybeSingle(),
             supabase
               .from('automation_wait_states')
-              .select('id,status,timeout_at')
+              .select('id,status,wait_type,timeout_at,resume_at')
               .eq('organization_id', organizationId)
               .eq('enrollment_id', latestEnrollment.id)
               .order('created_at', { ascending: false })
@@ -146,7 +150,7 @@ export default async function PublishedRuntimeTestPage({
               .maybeSingle(),
             supabase
               .from('automation_scheduled_jobs')
-              .select('id,status,scheduled_for,attempt_count')
+              .select('id,status,job_type,scheduled_for,attempt_count')
               .eq('organization_id', organizationId)
               .eq('enrollment_id', latestEnrollment.id)
               .order('created_at', { ascending: false })
@@ -164,9 +168,10 @@ export default async function PublishedRuntimeTestPage({
 
   const metadata = (latestEnrollment?.metadata ?? {}) as Record<string, unknown>;
   const canAdvance = latestEnrollment?.status === 'active' && currentNode?.node_type === 'trigger';
-  const canSimulateReply =
+  const canResolveReplyWait =
     latestEnrollment?.status === 'active' &&
     currentNode?.node_type === 'wait_for_reply' &&
+    latestWait?.wait_type === 'reply' &&
     latestWait?.status === 'waiting';
 
   return (
@@ -282,31 +287,47 @@ export default async function PublishedRuntimeTestPage({
                   </form>
                 ) : null}
 
-                {canSimulateReply && latestWait ? (
-                  <form action={simulatePublishedInboundReplyAction} className="rounded-xl border border-emerald-200 bg-emerald-50 p-4">
-                    <input type="hidden" name="workflow_id" value={workflow.id} />
-                    <input type="hidden" name="enrollment_id" value={latestEnrollment.id} />
-                    <input type="hidden" name="wait_state_id" value={latestWait.id} />
-                    <div className="mb-3 text-xs leading-5 text-emerald-800">
-                      This creates a synthetic inbound <strong>message.received</strong> event, cancels the timeout, evaluates the published v{latestEnrollment.flow_version} reply branch, and sends nothing to the customer.
-                    </div>
-                    <button type="submit" className="btn-primary">
-                      <MessageCircleReply size={15} />
-                      Simulate published inbound reply
-                    </button>
-                  </form>
+                {canResolveReplyWait && latestWait ? (
+                  <div className="grid gap-3 md:grid-cols-2">
+                    <form action={simulatePublishedInboundReplyAction} className="rounded-xl border border-emerald-200 bg-emerald-50 p-4">
+                      <input type="hidden" name="workflow_id" value={workflow.id} />
+                      <input type="hidden" name="enrollment_id" value={latestEnrollment.id} />
+                      <input type="hidden" name="wait_state_id" value={latestWait.id} />
+                      <div className="mb-3 text-xs leading-5 text-emerald-800">
+                        Simulate a customer reply and follow the published <strong>reply_received</strong> branch.
+                      </div>
+                      <button type="submit" className="btn-primary">
+                        <MessageCircleReply size={15} />
+                        Simulate published inbound reply
+                      </button>
+                    </form>
+
+                    <form action={simulatePublishedNoReplyTimeoutAction} className="rounded-xl border border-amber-200 bg-amber-50 p-4">
+                      <input type="hidden" name="workflow_id" value={workflow.id} />
+                      <input type="hidden" name="enrollment_id" value={latestEnrollment.id} />
+                      <input type="hidden" name="wait_state_id" value={latestWait.id} />
+                      <div className="mb-3 text-xs leading-5 text-amber-800">
+                        Controlled fast-forward: process the pending reply timeout now, follow <strong>reply_timeout</strong>, and enter the published delay node.
+                      </div>
+                      <button type="submit" className="btn-primary">
+                        <TimerOff size={15} />
+                        Simulate published no-reply timeout
+                      </button>
+                    </form>
+                  </div>
                 ) : null}
 
                 {latestWait ? (
                   <div className="rounded-xl border border-violet-200 bg-violet-50 p-4 text-violet-900">
-                    <div><strong>Reply wait:</strong> {latestWait.status}</div>
-                    <div className="mt-1"><strong>Timeout:</strong> {formatDate(latestWait.timeout_at)}</div>
+                    <div><strong>Wait:</strong> {latestWait.wait_type} · {latestWait.status}</div>
+                    <div className="mt-1"><strong>Reply timeout:</strong> {formatDate(latestWait.timeout_at)}</div>
+                    <div className="mt-1"><strong>Resume at:</strong> {formatDate(latestWait.resume_at)}</div>
                   </div>
                 ) : null}
 
                 {latestJob ? (
                   <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
-                    <div><strong>Timeout job:</strong> {latestJob.status}</div>
+                    <div><strong>Scheduled job:</strong> {latestJob.job_type} · {latestJob.status}</div>
                     <div className="mt-1"><strong>Scheduled:</strong> {formatDate(latestJob.scheduled_for)}</div>
                     <div className="mt-1"><strong>Attempts:</strong> {latestJob.attempt_count}</div>
                   </div>
@@ -317,7 +338,9 @@ export default async function PublishedRuntimeTestPage({
                     ? 'Enrollment is parked only. No graph step has executed.'
                     : latestEnrollment.status === 'completed'
                       ? 'Controlled published branch completed. No customer message was sent.'
-                      : 'Enrollment advanced only inside the pinned published version. No customer message was sent.'}
+                      : currentNode?.node_type === 'wait'
+                        ? 'Enrollment is waiting inside the published no-reply branch. No customer message was sent.'
+                        : 'Enrollment advanced only inside the pinned published version. No customer message was sent.'}
                 </div>
               </div>
             ) : (
