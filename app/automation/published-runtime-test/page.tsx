@@ -1,6 +1,9 @@
 import { CheckCircle2, ShieldCheck, Workflow } from 'lucide-react';
 
-import { pinLeadToPublishedFlowAction } from '@/app/automation/published-runtime-test/actions';
+import {
+  advancePinnedEnrollmentOneStepAction,
+  pinLeadToPublishedFlowAction,
+} from '@/app/automation/published-runtime-test/actions';
 import { PageHeader } from '@/components/ui';
 import { createClient } from '@/lib/supabase/server';
 import { getCurrentWorkspaceContext } from '@/lib/workspace';
@@ -27,6 +30,7 @@ type EnrollmentRow = {
   status: string;
   flow_version: number;
   current_node_id: string | null;
+  next_action_at: string | null;
   metadata: Record<string, unknown> | null;
   created_at: string;
 };
@@ -37,6 +41,28 @@ type NodeRow = {
   node_type: string;
   label: string;
 };
+
+type WaitRow = {
+  id: string;
+  status: string;
+  timeout_at: string | null;
+};
+
+type JobRow = {
+  id: string;
+  status: string;
+  scheduled_for: string;
+  attempt_count: number;
+};
+
+function formatDate(value: string | null) {
+  if (!value) return '—';
+  return new Intl.DateTimeFormat('en-IN', {
+    dateStyle: 'medium',
+    timeStyle: 'medium',
+    timeZone: 'Asia/Kolkata',
+  }).format(new Date(value));
+}
 
 export default async function PublishedRuntimeTestPage({
   searchParams,
@@ -55,6 +81,8 @@ export default async function PublishedRuntimeTestPage({
   let leads: LeadRow[] = [];
   let latestEnrollment: EnrollmentRow | null = null;
   let currentNode: NodeRow | null = null;
+  let latestWait: WaitRow | null = null;
+  let latestJob: JobRow | null = null;
 
   if (user) {
     const workspace = await getCurrentWorkspaceContext(supabase);
@@ -87,7 +115,7 @@ export default async function PublishedRuntimeTestPage({
       if (workflow?.id) {
         const { data: enrollment } = await supabase
           .from('automation_enrollments')
-          .select('id,lead_id,status,flow_version,current_node_id,metadata,created_at')
+          .select('id,lead_id,status,flow_version,current_node_id,next_action_at,metadata,created_at')
           .eq('organization_id', organizationId)
           .eq('workflow_id', workflow.id)
           .eq('metadata->>source', 'published_flow_controlled_pin_test')
@@ -98,22 +126,43 @@ export default async function PublishedRuntimeTestPage({
         latestEnrollment = (enrollment ?? null) as EnrollmentRow | null;
 
         if (latestEnrollment?.current_node_id) {
-          const { data: node } = await supabase
-            .from('automation_flow_nodes')
-            .select('id,node_key,node_type,label')
-            .eq('organization_id', organizationId)
-            .eq('workflow_id', workflow.id)
-            .eq('version_number', latestEnrollment.flow_version)
-            .eq('id', latestEnrollment.current_node_id)
-            .maybeSingle();
+          const [{ data: node }, { data: wait }, { data: job }] = await Promise.all([
+            supabase
+              .from('automation_flow_nodes')
+              .select('id,node_key,node_type,label')
+              .eq('organization_id', organizationId)
+              .eq('workflow_id', workflow.id)
+              .eq('version_number', latestEnrollment.flow_version)
+              .eq('id', latestEnrollment.current_node_id)
+              .maybeSingle(),
+            supabase
+              .from('automation_wait_states')
+              .select('id,status,timeout_at')
+              .eq('organization_id', organizationId)
+              .eq('enrollment_id', latestEnrollment.id)
+              .order('created_at', { ascending: false })
+              .limit(1)
+              .maybeSingle(),
+            supabase
+              .from('automation_scheduled_jobs')
+              .select('id,status,scheduled_for,attempt_count')
+              .eq('organization_id', organizationId)
+              .eq('enrollment_id', latestEnrollment.id)
+              .order('created_at', { ascending: false })
+              .limit(1)
+              .maybeSingle(),
+          ]);
 
           currentNode = (node ?? null) as NodeRow | null;
+          latestWait = (wait ?? null) as WaitRow | null;
+          latestJob = (job ?? null) as JobRow | null;
         }
       }
     }
   }
 
   const metadata = (latestEnrollment?.metadata ?? {}) as Record<string, unknown>;
+  const canAdvance = latestEnrollment?.status === 'active' && currentNode?.node_type === 'trigger';
 
   return (
     <div className="space-y-6">
@@ -139,7 +188,7 @@ export default async function PublishedRuntimeTestPage({
         <div className="flex items-start gap-3">
           <ShieldCheck className="mt-0.5 shrink-0" size={18} />
           <div>
-            <strong>Pin-only mode:</strong> this test creates an internal enrollment pinned to the current published version and parks it on that version’s trigger node. It does not advance the graph, create jobs, call AI, or send any customer message.
+            <strong>Controlled mode:</strong> pinning creates an internal enrollment. Advancing one step reads only the enrollment’s pinned published version and may create an internal reply wait + timeout job. It does not call AI or send any customer message.
           </div>
         </div>
       </div>
@@ -205,7 +254,7 @@ export default async function PublishedRuntimeTestPage({
               </div>
               <div>
                 <h2 className="font-bold text-slate-950">Latest controlled pin</h2>
-                <p className="mt-1 text-sm text-slate-500">This must remain tied to the published snapshot even if Draft Version {workflow.current_draft_version ?? '—'} changes.</p>
+                <p className="mt-1 text-sm text-slate-500">This remains tied to the published snapshot even if Draft Version {workflow.current_draft_version ?? '—'} changes.</p>
               </div>
             </div>
 
@@ -216,10 +265,37 @@ export default async function PublishedRuntimeTestPage({
                   <div className="mt-1"><strong>Pinned flow version:</strong> v{latestEnrollment.flow_version}</div>
                   <div className="mt-1"><strong>Draft version at start:</strong> v{String(metadata.draft_version_at_start ?? '—')}</div>
                   <div className="mt-1"><strong>Current node:</strong> {currentNode ? `${currentNode.label} (${currentNode.node_type})` : '—'}</div>
+                  <div className="mt-1"><strong>Next action:</strong> {formatDate(latestEnrollment.next_action_at)}</div>
                   <div className="mt-1"><strong>Customer message sent:</strong> {metadata.customer_message_sent === true ? 'Yes' : 'No'}</div>
                 </div>
+
+                {canAdvance ? (
+                  <form action={advancePinnedEnrollmentOneStepAction}>
+                    <input type="hidden" name="workflow_id" value={workflow.id} />
+                    <input type="hidden" name="enrollment_id" value={latestEnrollment.id} />
+                    <button type="submit" className="btn-primary">Advance one published step</button>
+                  </form>
+                ) : null}
+
+                {latestWait ? (
+                  <div className="rounded-xl border border-violet-200 bg-violet-50 p-4 text-violet-900">
+                    <div><strong>Reply wait:</strong> {latestWait.status}</div>
+                    <div className="mt-1"><strong>Timeout:</strong> {formatDate(latestWait.timeout_at)}</div>
+                  </div>
+                ) : null}
+
+                {latestJob ? (
+                  <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                    <div><strong>Timeout job:</strong> {latestJob.status}</div>
+                    <div className="mt-1"><strong>Scheduled:</strong> {formatDate(latestJob.scheduled_for)}</div>
+                    <div className="mt-1"><strong>Attempts:</strong> {latestJob.attempt_count}</div>
+                  </div>
+                ) : null}
+
                 <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-800">
-                  Enrollment is parked only. No graph step has executed.
+                  {currentNode?.node_type === 'trigger'
+                    ? 'Enrollment is parked only. No graph step has executed.'
+                    : 'Enrollment advanced only inside the pinned published version. No customer message was sent.'}
                 </div>
               </div>
             ) : (
