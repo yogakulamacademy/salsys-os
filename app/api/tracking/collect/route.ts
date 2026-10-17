@@ -1,11 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 
 import { createAdminClient } from "@/lib/supabase/admin";
+import { sanitizeTrackingPayload } from "@/lib/tracking/server";
 import {
-  isTrackingOriginAllowed,
-  sanitizeTrackingPayload,
-  trackingCorsHeaders,
-} from "@/lib/tracking/server";
+  consumeTrackingRateLimit,
+  corsHeadersForTrackingOrigin,
+  resolveBrowserTrackingSource,
+} from "@/lib/tracking/runtime";
 
 function decodeGeoHeader(value: string | null) {
   if (!value) return null;
@@ -26,40 +27,27 @@ function getRequestGeo(request: NextRequest) {
   };
 }
 
-/*
- * Trusted tenant resolution.
- *
- * organization_id is never accepted from the browser payload.
- * The tenant is resolved from the already allowlisted HTTP Origin.
- */
-function getOriginHostname(origin: string | null) {
-  if (!origin) return null;
-
-  try {
-    return new URL(origin).hostname.trim().toLowerCase().replace(/\.$/, "");
-  } catch {
-    return null;
-  }
-}
-
 export async function OPTIONS(request: NextRequest) {
   const origin = request.headers.get("origin");
+  const source = await resolveBrowserTrackingSource(origin);
 
   return new NextResponse(null, {
-    status: 204,
-    headers: trackingCorsHeaders(origin),
+    status: source ? 204 : 403,
+    headers: corsHeadersForTrackingOrigin(origin, Boolean(source)),
   });
 }
 
 export async function POST(request: NextRequest) {
   const origin = request.headers.get("origin");
-  const cors = trackingCorsHeaders(origin);
+  const source = await resolveBrowserTrackingSource(origin);
+  const cors = corsHeadersForTrackingOrigin(origin, Boolean(source));
 
-  if (!isTrackingOriginAllowed(origin)) {
+  if (!source) {
     return NextResponse.json(
       {
         ok: false,
-        error: "Origin not allowed",
+        accepted: false,
+        error: "Tracking source is not registered or active.",
       },
       {
         status: 403,
@@ -68,108 +56,71 @@ export async function POST(request: NextRequest) {
     );
   }
 
+  const length = Number(request.headers.get("content-length") || "0");
+
+  if (length > source.maxPayloadBytes) {
+    return NextResponse.json(
+      {
+        ok: false,
+        accepted: false,
+        error: "Payload too large",
+      },
+      {
+        status: 413,
+        headers: cors,
+      },
+    );
+  }
+
+  const rate = await consumeTrackingRateLimit(source);
+
+  if (!rate.allowed) {
+    return NextResponse.json(
+      {
+        ok: false,
+        accepted: false,
+        error: "Rate limit exceeded",
+      },
+      {
+        status: 429,
+        headers: {
+          ...cors,
+          "Retry-After": "60",
+          "X-RateLimit-Limit": String(rate.limit),
+          "X-RateLimit-Remaining": "0",
+        },
+      },
+    );
+  }
+
   try {
-    const length = Number(request.headers.get("content-length") || "0");
-
-    if (length > 32_000) {
-      return NextResponse.json(
-        {
-          ok: false,
-          error: "Payload too large",
-        },
-        {
-          status: 413,
-          headers: cors,
-        },
-      );
-    }
-
     const payload = sanitizeTrackingPayload(await request.json());
-
     const supabase = createAdminClient();
     const geo = getRequestGeo(request);
-
-    /*
-     * Resolve organization from trusted Origin.
-     */
-    const originHostname = getOriginHostname(origin);
-
-    if (!originHostname) {
-      return NextResponse.json(
-        {
-          ok: false,
-          error: "Unable to resolve tracking hostname.",
-        },
-        {
-          status: 403,
-          headers: cors,
-        },
-      );
-    }
-
-    const { data: organizationSite, error: organizationSiteError } =
-      await supabase
-        .from("organization_sites")
-        .select(
-          `
-            organization_id,
-            hostname
-          `,
-        )
-        .eq("hostname", originHostname)
-        .eq("status", "active")
-        .maybeSingle();
-
-    if (organizationSiteError) {
-      throw organizationSiteError;
-    }
-
-    if (!organizationSite?.organization_id) {
-      return NextResponse.json(
-        {
-          ok: false,
-          error:
-            "No active organization is configured for this tracking domain.",
-        },
-        {
-          status: 403,
-          headers: cors,
-        },
-      );
-    }
-
-    const organizationId = organizationSite.organization_id;
-    const trustedSite = organizationSite.hostname;
+    const organizationId = source.organizationId;
+    const trustedSite = source.hostname;
     const occurredAt = payload.occurredAt || new Date().toISOString();
 
-    /*
-     * Phase 2C raw-event dual write.
-     *
-     * Capture the sanitized browser event in the canonical immutable raw-event
-     * store before downstream session/touchpoint processing. Phase 3B now uses
-     * this canonical raw record as the required source for deterministic
-     * normalization.
-     *
-     * Tenant selection still comes only from the trusted Origin mapping.
-     */
+    if (!trustedSite) {
+      throw new Error("Website tracking source is missing its trusted hostname.");
+    }
+
     const { data: rawEventResult, error: rawEventError } = await supabase.rpc(
-      "ingest_raw_event",
+      "ingest_tracking_event_v1",
       {
         p_organization_id: organizationId,
-        p_source_system: "website",
+        p_tracking_source_id: source.id,
         p_source_event_id: payload.eventId,
-        p_source_event_type: payload.eventType,
-        p_ingestion_method: "tracking_collect",
+        p_event_name: payload.eventType,
+        p_ingestion_method: "tracking_collect_v1",
         p_occurred_at: occurredAt,
-        p_source_account_id: null,
-        p_source_subject_id: null,
         p_anonymous_visitor_id: payload.anonymousVisitorId,
         p_session_key: payload.sessionKey,
         p_external_message_id: null,
         p_site: trustedSite,
         p_payload: payload,
         p_context: {
-          origin_hostname: originHostname,
+          origin_hostname: trustedSite,
           trusted_site: trustedSite,
           geo_country: geo.country,
           geo_region: geo.region,
@@ -180,32 +131,38 @@ export async function POST(request: NextRequest) {
         p_metadata: {
           adapter: "app/api/tracking/collect",
           reported_site: payload.site || null,
+          dynamic_source_resolution: true,
         },
         p_schema_version: 1,
+        p_is_browser: true,
       },
     );
 
-    if (rawEventError) {
-      console.error("Raw website event ingest failed", {
-        organizationId,
-        eventId: payload.eventId,
-        eventType: payload.eventType,
-        message: rawEventError.message,
-      });
-    }
-
-    /*
-     * Phase 3B canonical website normalization.
-     *
-     * Session creation/update and touchpoint normalization now live behind the
-     * database processor so the same deterministic rules can later be reused by
-     * a claimed background worker. The processor itself is processing-state
-     * neutral; Phase 2 lifecycle synchronization remains below.
-     */
     if (rawEventError || !rawEventResult?.event_id) {
       throw new Error(
         rawEventError?.message ||
           "Unable to persist canonical website event before normalization.",
+      );
+    }
+
+    if (!rawEventResult.accepted) {
+      return NextResponse.json(
+        {
+          ok: true,
+          accepted: false,
+          quarantined: true,
+          duplicate: Boolean(rawEventResult.duplicate),
+          raw_event_id: rawEventResult.event_id,
+          reason: rawEventResult.reason || "event_not_processable",
+        },
+        {
+          status: 202,
+          headers: {
+            ...cors,
+            "X-RateLimit-Limit": String(rate.limit),
+            "X-RateLimit-Remaining": String(rate.remaining),
+          },
+        },
       );
     }
 
@@ -221,15 +178,6 @@ export async function POST(request: NextRequest) {
       throw processingError;
     }
 
-    /*
-     * Phase 8C.15 canonical provider-match projection.
-     *
-     * Only browser-observed fbc/fbp values that survived server
-     * sanitization are projected. No identifier is manufactured.
-     *
-     * Keep this after canonical website normalization because the
-     * projection targets the canonical session and touchpoint rows.
-     */
     if (payload.fbc || payload.fbp) {
       const { error: matchSignalError } = await supabase.rpc(
         "apply_tracking_match_signals",
@@ -244,22 +192,6 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    /*
-     * Phase 8C.15 event-time consent provenance.
-     *
-     * A normal analytics event may contain the consent state that
-     * was effective when that event was collected. Preserve that
-     * state as an immutable ledger fact linked to the canonical
-     * raw event.
-     *
-     * Each consent category remains independent. In particular,
-     * analytics consent does not imply advertising or marketing
-     * consent.
-     *
-     * Revocation while analytics collection is disabled is handled
-     * by /api/tracking/consent instead, so this path never needs to
-     * bypass normal analytics gating.
-     */
     if (payload.consent) {
       const { error: consentSnapshotError } = await supabase.rpc(
         "ingest_tracking_consent_event",
@@ -291,53 +223,50 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    /*
-     * Phase 2E1 processing-state synchronization.
-     *
-     * Mark the canonical raw event processed only after the canonical
-     * website normalizer succeeds. Keep lifecycle bookkeeping non-blocking so
-     * status synchronization cannot interrupt successful website tracking.
-     */
-    if (!rawEventError) {
-      const { error: rawProcessingError } = await supabase.rpc(
-        "set_raw_event_processing_status",
-        {
-          p_organization_id: organizationId,
-          p_source_system: "website",
-          p_source_event_id: payload.eventId,
-          p_status: "processed",
-          p_processor_name: "tracking_collect",
-          p_processor_version: "phase3b",
-          p_processing_error: null,
-          p_processing_metadata: {
-            normalized_target: "web_sessions,touchpoints",
-            normalizer: "process_website_raw_event",
-            match_signals_projected: Boolean(
-              payload.fbc || payload.fbp,
-            ),
-            consent_snapshot_persisted: Boolean(
-              payload.consent,
-            ),
-          },
+    const { error: rawProcessingError } = await supabase.rpc(
+      "set_raw_event_processing_status",
+      {
+        p_organization_id: organizationId,
+        p_source_system: source.sourceSystem,
+        p_source_event_id: payload.eventId,
+        p_status: "processed",
+        p_processor_name: "tracking_collect_v1",
+        p_processor_version: "tracking-platform-v1",
+        p_processing_error: null,
+        p_processing_metadata: {
+          normalized_target: "web_sessions,touchpoints",
+          normalizer: "process_website_raw_event",
+          tracking_source_id: source.id,
+          match_signals_projected: Boolean(payload.fbc || payload.fbp),
+          consent_snapshot_persisted: Boolean(payload.consent),
         },
-      );
+      },
+    );
 
-      if (rawProcessingError) {
-        console.error("Raw website event processing sync failed", {
-          organizationId,
-          eventId: payload.eventId,
-          eventType: payload.eventType,
-          message: rawProcessingError.message,
-        });
-      }
+    if (rawProcessingError) {
+      console.error("Raw website event processing sync failed", {
+        organizationId,
+        eventId: payload.eventId,
+        eventType: payload.eventType,
+        message: rawProcessingError.message,
+      });
     }
 
     return NextResponse.json(
       {
         ok: true,
+        accepted: true,
+        duplicate: Boolean(rawEventResult.duplicate),
+        raw_event_id: rawEventResult.event_id,
+        event_family: rawEventResult.event_family,
       },
       {
-        headers: cors,
+        status: 202,
+        headers: {
+          ...cors,
+          "X-RateLimit-Limit": String(rate.limit),
+          "X-RateLimit-Remaining": String(rate.remaining),
+        },
       },
     );
   } catch (error) {
@@ -347,11 +276,16 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(
       {
         ok: false,
+        accepted: false,
         error: message,
       },
       {
         status: 400,
-        headers: cors,
+        headers: {
+          ...cors,
+          "X-RateLimit-Limit": String(rate.limit),
+          "X-RateLimit-Remaining": String(rate.remaining),
+        },
       },
     );
   }
