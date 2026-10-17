@@ -4,6 +4,7 @@ import {
   prepareRuntimeSchedulerTestAction,
   runRuntimeSchedulerSweepAction,
   verifyProductionSchedulerGateAction,
+  verifyRuntimeSchedulerApiDisabledAction,
 } from '@/app/automation/runtime-scheduler-test/actions';
 import { PageHeader } from '@/components/ui';
 import { createClient } from '@/lib/supabase/server';
@@ -230,6 +231,12 @@ export default async function RuntimeSchedulerTestPage({
                         <button type="submit" className="btn-primary">Verify production scheduler gate</button>
                       </form>
                     ) : null}
+                    <form action={verifyRuntimeSchedulerApiDisabledAction} className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                      <div className="mb-3 text-xs leading-5 text-slate-700">
+                        Protected API gate: invokes the scheduler route with server-side `CRON_SECRET` while the global `AUTOMATION_SCHEDULER_ENABLED` kill switch remains false/unset. It must return enabled=false and process 0 jobs.
+                      </div>
+                      <button type="submit" className="btn-primary">Verify scheduler API disabled gate</button>
+                    </form>
                   </div>
                 ) : null}
               </div>
