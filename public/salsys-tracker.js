@@ -180,7 +180,7 @@
       context: pageContext(),
       metadata: {
         sdk: 'salsys-browser-v1',
-        sdk_version: '1.0.0',
+        sdk_version: '1.1.0',
         consent_snapshot: privacyState(),
         local_permission: localPermission(String(name || '').toLowerCase())
       }
@@ -237,8 +237,7 @@
     return attempt(0);
   }
 
-  function saveConsent(decisions, options) {
-    options = options || {};
+  function saveConsent(decisions) {
     var normalized = {};
     Object.keys(decisions || {}).forEach(function (purpose) {
       var decision = String(decisions[purpose] || '').toLowerCase();
@@ -275,6 +274,34 @@
         safeRemove(window.localStorage, KEYS.persistentVisitor);
       }
 
+      return result;
+    });
+  }
+
+  function requestPrivacy(requestType, details) {
+    details = details || {};
+    return postJson('/api/privacy/rights/v1', {
+      request_type: String(requestType || '').toLowerCase(),
+      visitor_id: getVisitorId(),
+      jurisdiction: details.jurisdiction || null,
+      email: details.email || null,
+      phone: details.phone || null,
+      purpose_key: details.purposeKey || details.purpose_key || null
+    }, true).then(function (result) {
+      if (requestType === 'withdraw_consent' && (details.purposeKey || details.purpose_key)) {
+        var purpose = details.purposeKey || details.purpose_key;
+        var current = privacyState();
+        current[purpose] = 'withdrawn';
+        current.updated_at = new Date().toISOString();
+        safeSet(window.localStorage, KEYS.privacy, JSON.stringify(current));
+        if (purpose === 'analytics') safeRemove(window.localStorage, KEYS.persistentVisitor);
+      }
+      if (requestType === 'opt_out_sale_sharing') {
+        var state = privacyState();
+        state.sale_sharing = 'opted_out';
+        state.updated_at = new Date().toISOString();
+        safeSet(window.localStorage, KEYS.privacy, JSON.stringify(state));
+      }
       return result;
     });
   }
@@ -320,13 +347,14 @@
 
   var api = {
     __v1: true,
-    version: '1.0.0',
+    version: '1.1.0',
     track: sendEvent,
     page: function (properties) {
       return sendEvent('web.page_viewed', properties || {}, { keepalive: true });
     },
     trackLead: trackLead,
     consent: saveConsent,
+    requestPrivacy: requestPrivacy,
     privacy: function () {
       return {
         decisions: privacyState(),
@@ -341,6 +369,12 @@
   window.Salsys = api;
 
   installDeclarativeTracking();
+
+  // GPC is treated as an actionable sale/sharing opt-out even when the user never
+  // interacts with a banner. The server remains authoritative as a second gate.
+  if (gpcEnabled() && privacyState().sale_sharing !== 'opted_out') {
+    saveConsent({ sale_sharing: 'opted_out' }).catch(function () {});
+  }
 
   if (AUTO_PAGE && analyticsGranted()) {
     window.__salsysInitialPageSent = true;
