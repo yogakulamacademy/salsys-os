@@ -3,6 +3,7 @@ import { CheckCircle2, Cpu, ShieldCheck, TimerReset, Workflow } from 'lucide-rea
 import {
   prepareRuntimeWorkerTestAction,
   processRuntimeWorkerJobAction,
+  runRuntimeWorkerDoubleClaimTestAction,
 } from '@/app/automation/runtime-worker-test/actions';
 import { PageHeader } from '@/components/ui';
 import { createClient } from '@/lib/supabase/server';
@@ -295,14 +296,24 @@ export default async function RuntimeWorkerTestPage({
                 ) : null}
 
                 {canProcess && latestJob ? (
-                  <form action={processRuntimeWorkerJobAction} className="rounded-xl border border-sky-200 bg-sky-50 p-4">
-                    <input type="hidden" name="job_id" value={latestJob.id} />
-                    <div className="mb-3 flex items-start gap-2 text-xs leading-5 text-sky-800">
-                      <TimerReset className="mt-0.5 shrink-0" size={15} />
-                      <span>Controlled fast-forward allows this specific job to be claimed before its real due time. The same atomic claim path will later be used by the scheduler worker.</span>
-                    </div>
-                    <button type="submit" className="btn-primary">Process one job with generic worker</button>
-                  </form>
+                  <div className="space-y-3">
+                    <form action={processRuntimeWorkerJobAction} className="rounded-xl border border-sky-200 bg-sky-50 p-4">
+                      <input type="hidden" name="job_id" value={latestJob.id} />
+                      <div className="mb-3 flex items-start gap-2 text-xs leading-5 text-sky-800">
+                        <TimerReset className="mt-0.5 shrink-0" size={15} />
+                        <span>Controlled fast-forward allows this specific job to be claimed before its real due time. The same atomic claim path will later be used by the scheduler worker.</span>
+                      </div>
+                      <button type="submit" className="btn-primary">Process one job with generic worker</button>
+                    </form>
+
+                    <form action={runRuntimeWorkerDoubleClaimTestAction} className="rounded-xl border border-amber-200 bg-amber-50 p-4">
+                      <input type="hidden" name="job_id" value={latestJob.id} />
+                      <div className="mb-3 text-xs leading-5 text-amber-800">
+                        Concurrency test: two independent service-role workers will race to atomically claim this exact scheduled job. Exactly one must win; the loser must receive no claim.
+                      </div>
+                      <button type="submit" className="btn-primary">Run double-claim race test</button>
+                    </form>
+                  </div>
                 ) : null}
 
                 {enrollment.status === 'completed' ? (
