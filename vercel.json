@@ -2,10 +2,6 @@
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "crons": [
     {
-      "path": "/api/automation/runtime-scheduler",
-      "schedule": "*/5 * * * *"
-    },
-    {
       "path": "/api/analytics/ga4/sync",
       "schedule": "30 4 * * *"
     },
