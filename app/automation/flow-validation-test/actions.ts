@@ -1,5 +1,6 @@
 'use server';
 
+import { createHash } from 'crypto';
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 
@@ -42,6 +43,8 @@ type NodeRow = {
   label: string;
   config: Record<string, unknown> | null;
   enabled: boolean;
+  position_x?: number;
+  position_y?: number;
 };
 
 type EdgeRow = {
@@ -51,6 +54,7 @@ type EdgeRow = {
   edge_key: string;
   label: string | null;
   condition: Record<string, unknown> | null;
+  priority?: number;
 };
 
 function textConfig(config: Record<string, unknown> | null, key: string) {
@@ -66,6 +70,47 @@ function numberConfig(config: Record<string, unknown> | null, key: string) {
 function boolConfig(config: Record<string, unknown> | null, key: string) {
   const raw = config?.[key];
   return typeof raw === 'boolean' ? raw : null;
+}
+
+function stableJson(value: unknown): string {
+  if (Array.isArray(value)) return `[${value.map(stableJson).join(',')}]`;
+  if (value && typeof value === 'object') {
+    return `{${Object.entries(value as Record<string, unknown>)
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([key, item]) => `${JSON.stringify(key)}:${stableJson(item)}`)
+      .join(',')}}`;
+  }
+  return JSON.stringify(value);
+}
+
+function definitionHash(nodes: NodeRow[], edges: EdgeRow[]) {
+  const canonicalNodes = [...nodes]
+    .sort((a, b) => a.node_key.localeCompare(b.node_key))
+    .map((node) => ({
+      node_key: node.node_key,
+      node_type: node.node_type,
+      label: node.label,
+      config: node.config ?? {},
+      enabled: node.enabled !== false,
+      position_x: Number(node.position_x ?? 0),
+      position_y: Number(node.position_y ?? 0),
+    }));
+
+  const nodeKeyById = new Map(nodes.map((node) => [node.id, node.node_key]));
+  const canonicalEdges = [...edges]
+    .map((edge) => ({
+      edge_key: edge.edge_key,
+      source_node_key: nodeKeyById.get(edge.source_node_id) ?? edge.source_node_id,
+      target_node_key: nodeKeyById.get(edge.target_node_id) ?? edge.target_node_id,
+      label: edge.label ?? null,
+      condition: edge.condition ?? {},
+      priority: Number(edge.priority ?? 0),
+    }))
+    .sort((a, b) => a.edge_key.localeCompare(b.edge_key));
+
+  return createHash('sha256')
+    .update(stableJson({ nodes: canonicalNodes, edges: canonicalEdges }))
+    .digest('hex');
 }
 
 function validateGraph(nodes: NodeRow[], edges: EdgeRow[]) {
@@ -213,19 +258,19 @@ export async function validateControlledFlowAction(formData: FormData) {
   const [{ data: workflow, error: workflowError }, { data: nodes, error: nodeError }, { data: edges, error: edgeError }] = await Promise.all([
     admin
       .from('automation_workflows')
-      .select('id,metadata')
+      .select('id,metadata,current_draft_version')
       .eq('organization_id', organizationId)
       .eq('id', workflowId)
       .maybeSingle(),
     admin
       .from('automation_flow_nodes')
-      .select('id,node_key,node_type,label,config,enabled')
+      .select('id,node_key,node_type,label,config,enabled,position_x,position_y')
       .eq('organization_id', organizationId)
       .eq('workflow_id', workflowId)
       .eq('version_number', versionNumber),
     admin
       .from('automation_flow_edges')
-      .select('id,source_node_id,target_node_id,edge_key,label,condition')
+      .select('id,source_node_id,target_node_id,edge_key,label,condition,priority')
       .eq('organization_id', organizationId)
       .eq('workflow_id', workflowId)
       .eq('version_number', versionNumber),
@@ -234,14 +279,21 @@ export async function validateControlledFlowAction(formData: FormData) {
   if (workflowError || !workflow) go('error', workflowError?.message || 'Workflow was not found in this organization.');
   if (nodeError) go('error', nodeError.message);
   if (edgeError) go('error', edgeError.message);
+  if (workflow.current_draft_version && Number(workflow.current_draft_version) !== versionNumber) {
+    go('error', `Version ${versionNumber} is not the current editable draft.`);
+  }
 
-  const result = validateGraph((nodes ?? []) as NodeRow[], (edges ?? []) as EdgeRow[]);
+  const nodeRows = (nodes ?? []) as NodeRow[];
+  const edgeRows = (edges ?? []) as EdgeRow[];
+  const result = validateGraph(nodeRows, edgeRows);
+  const hash = definitionHash(nodeRows, edgeRows);
   const existingMetadata = (workflow.metadata ?? {}) as Record<string, unknown>;
   const metadata = {
     ...existingMetadata,
     flow_validation: {
       ...result,
       version_number: versionNumber,
+      definition_hash: hash,
     },
     flow_publish_eligible: result.valid,
     safety_mode: 'draft_only',
@@ -255,11 +307,32 @@ export async function validateControlledFlowAction(formData: FormData) {
 
   if (updateError) go('error', updateError.message);
 
+  const { error: versionError } = await admin
+    .from('automation_flow_versions')
+    .upsert(
+      {
+        organization_id: organizationId,
+        workflow_id: workflowId,
+        version_number: versionNumber,
+        status: 'draft',
+        definition_hash: hash,
+        validated_at: result.valid ? result.checked_at : null,
+        validation_snapshot: {
+          ...result,
+          version_number: versionNumber,
+          definition_hash: hash,
+        },
+      },
+      { onConflict: 'organization_id,workflow_id,version_number' },
+    );
+
+  if (versionError) go('error', versionError.message);
+
   revalidatePath('/automation/flow-validation-test');
   revalidatePath('/automation/flow-builder');
 
   if (result.valid) {
-    go('notice', `Draft validation passed: ${result.node_count} nodes and ${result.edge_count} connections are structurally valid. This does not publish or execute the flow.`);
+    go('notice', `Draft validation passed: ${result.node_count} nodes and ${result.edge_count} connections are structurally valid. Version ${versionNumber} is now validation-locked to its definition hash, but it is not published or executable.`);
   }
 
   go('error', `Draft validation found ${result.errors.length} blocking issue${result.errors.length === 1 ? '' : 's'}. Nothing was published or executed.`);
