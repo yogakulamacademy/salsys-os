@@ -3,7 +3,10 @@
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 
-import { runControlledAutomationSchedulerSweep } from '@/lib/automation/runtime-scheduler';
+import {
+  runControlledAutomationSchedulerSweep,
+  runProductionAutomationSchedulerSweep,
+} from '@/lib/automation/runtime-scheduler';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { createClient } from '@/lib/supabase/server';
 import { requireCurrentOrganizationId } from '@/lib/workspace';
@@ -195,5 +198,43 @@ export async function runRuntimeSchedulerSweepAction() {
   go(
     'notice',
     `Controlled scheduler sweep finished: ${result.candidatesFound} due candidate(s), ${result.jobsClaimed} claimed, ${result.jobsCompleted} completed, ${result.jobsFailed} failed. Background runtime remains disabled and no customer message was sent.`,
+  );
+}
+
+export async function verifyProductionSchedulerGateAction(formData: FormData) {
+  const workflowId = value(formData, 'workflow_id');
+  if (!workflowId) go('error', 'Workflow is required.');
+
+  const { organizationId } = await adminContext();
+  const admin = createAdminClient();
+
+  const { data: workflow, error: workflowError } = await admin
+    .from('automation_workflows')
+    .select('id,runtime_flow_enabled')
+    .eq('organization_id', organizationId)
+    .eq('id', workflowId)
+    .maybeSingle();
+
+  if (workflowError || !workflow) go('error', workflowError?.message || 'Workflow was not found.');
+  if (workflow.runtime_flow_enabled === true) go('error', 'This fail-closed gate test requires runtime_flow_enabled=false.');
+
+  const result = await runProductionAutomationSchedulerSweep(admin, {
+    organizationId,
+    workflowId,
+    workflowsLimit: 1,
+    jobsPerWorkflow: 5,
+  });
+
+  if (result.workflowsScanned !== 0 || result.candidatesFound !== 0 || result.jobsClaimed !== 0) {
+    go(
+      'error',
+      `Production scheduler gate failed closed check: scanned ${result.workflowsScanned}, candidates ${result.candidatesFound}, claimed ${result.jobsClaimed}. Background runtime remains disabled.`,
+    );
+  }
+
+  revalidatePath('/automation/runtime-scheduler-test');
+  go(
+    'notice',
+    'Production scheduler gate passed: runtime_flow_enabled=false caused 0 workflows scanned, 0 candidates discovered, and 0 jobs claimed.',
   );
 }
