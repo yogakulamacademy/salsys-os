@@ -56,7 +56,6 @@ declare
   v_touchpoint_id uuid;
   v_session_id uuid;
   v_session_match boolean := false;
-  v_result jsonb;
 begin
   if p_organization_id is null or p_raw_event_id is null then
     raise exception 'organization_id and raw_event_id are required';
@@ -119,8 +118,14 @@ begin
     else '{}'::jsonb
   end;
 
-  v_email := nullif(lower(btrim(coalesce(v_identity->>'email',v_payload->>'email',''))),'');
-  v_phone := nullif(btrim(coalesce(v_identity->>'phone',v_identity->>'whatsapp',v_payload->>'phone',v_payload->>'whatsapp','')),'');
+  v_email := nullif(
+    lower(btrim(coalesce(v_identity->>'email',v_payload->>'email',''))),
+    ''
+  );
+  v_phone := nullif(
+    btrim(coalesce(v_identity->>'phone',v_identity->>'whatsapp',v_payload->>'phone',v_payload->>'whatsapp','')),
+    ''
+  );
   v_email_norm := v_email;
   v_phone_norm := nullif(regexp_replace(coalesce(v_phone,''),'[^0-9+]','','g'),'');
 
@@ -128,17 +133,35 @@ begin
     raise exception 'lead submission requires at least email or phone identity';
   end if;
 
-  v_first_name := nullif(btrim(coalesce(v_identity->>'first_name',v_identity->>'firstName',v_payload->>'first_name',v_payload->>'firstName','')),'');
-  v_last_name := nullif(btrim(coalesce(v_identity->>'last_name',v_identity->>'lastName',v_payload->>'last_name',v_payload->>'lastName','')),'');
+  v_first_name := nullif(
+    btrim(coalesce(v_identity->>'first_name',v_identity->>'firstName',v_payload->>'first_name',v_payload->>'firstName','')),
+    ''
+  );
+  v_last_name := nullif(
+    btrim(coalesce(v_identity->>'last_name',v_identity->>'lastName',v_payload->>'last_name',v_payload->>'lastName','')),
+    ''
+  );
   v_country := nullif(btrim(coalesce(v_identity->>'country',v_payload->>'country','')),'');
   v_timezone := nullif(btrim(coalesce(v_identity->>'timezone',v_payload->>'timezone','')),'');
-  v_course_code := nullif(btrim(coalesce(v_lead_data->>'course_code',v_lead_data->>'courseCode',v_payload->>'course_code',v_payload->>'courseCode','')),'');
-  v_location := nullif(btrim(coalesce(v_lead_data->>'preferred_location',v_lead_data->>'preferredLocation',v_payload->>'preferred_location',v_payload->>'preferredLocation',''))),'');
-  v_mode := nullif(btrim(coalesce(v_lead_data->>'preferred_mode',v_lead_data->>'preferredMode',v_payload->>'preferred_mode',v_payload->>'preferredMode',''))),'');
+  v_course_code := nullif(
+    btrim(coalesce(v_lead_data->>'course_code',v_lead_data->>'courseCode',v_payload->>'course_code',v_payload->>'courseCode','')),
+    ''
+  );
+  v_location := nullif(
+    btrim(coalesce(v_lead_data->>'preferred_location',v_lead_data->>'preferredLocation',v_payload->>'preferred_location',v_payload->>'preferredLocation','')),
+    ''
+  );
+  v_mode := nullif(
+    btrim(coalesce(v_lead_data->>'preferred_mode',v_lead_data->>'preferredMode',v_payload->>'preferred_mode',v_payload->>'preferredMode','')),
+    ''
+  );
   v_message := nullif(btrim(coalesce(v_lead_data->>'message',v_payload->>'message','')),'');
 
   begin
-    v_month := nullif(btrim(coalesce(v_lead_data->>'preferred_month',v_lead_data->>'preferredMonth',v_payload->>'preferred_month',v_payload->>'preferredMonth','')),'')::date;
+    v_month := nullif(
+      btrim(coalesce(v_lead_data->>'preferred_month',v_lead_data->>'preferredMonth',v_payload->>'preferred_month',v_payload->>'preferredMonth','')),
+      ''
+    )::date;
   exception when others then
     v_month := null;
   end;
@@ -202,7 +225,8 @@ begin
     insert into public.lead_ingest_events(
       organization_id,source_system,external_event_id,lead_id,site,form_name,matched_existing,status,metadata
     )
-    select p_organization_id,v_source.source_system,v_raw.source_event_id,v_email_lead,v_raw.site,v_raw.source_event_type,true,'failed',
+    values(
+      p_organization_id,v_source.source_system,v_raw.source_event_id,v_email_lead,v_raw.site,v_raw.source_event_type,true,'failed',
       jsonb_build_object(
         'raw_event_id',v_raw.id,
         'tracking_source_id',v_source.id,
@@ -210,6 +234,7 @@ begin
         'email_lead_id',v_email_lead,
         'phone_lead_id',v_phone_lead
       )
+    )
     on conflict (organization_id,source_system,external_event_id) do nothing;
 
     return jsonb_build_object(
@@ -269,9 +294,11 @@ begin
         country=coalesce(v_country,l.country),
         timezone=coalesce(v_timezone,l.timezone),
         current_contact_channel=v_channel,
-        notes=case when v_message is not null and (l.notes is null or position(v_message in l.notes)=0)
-                   then concat_ws(E'\n',nullif(l.notes,''),v_message)
-                   else l.notes end,
+        notes=case
+          when v_message is not null and (l.notes is null or position(v_message in l.notes)=0)
+            then concat_ws(E'\n',nullif(l.notes,''),v_message)
+          else l.notes
+        end,
         metadata=coalesce(l.metadata,'{}'::jsonb) || jsonb_build_object(
           'latest_tracking_source_id',v_source.id,
           'latest_source_event_id',v_raw.source_event_id,
@@ -284,17 +311,25 @@ begin
 
     if v_email_norm is not null then
       insert into public.lead_contacts(organization_id,lead_id,contact_type,value,normalized_value,is_primary)
-      values(p_organization_id,v_target_lead,'email',v_email,v_email_norm,not exists(
-        select 1 from public.lead_contacts x where x.organization_id=p_organization_id and x.lead_id=v_target_lead and x.is_primary=true
-      ))
+      values(
+        p_organization_id,v_target_lead,'email',v_email,v_email_norm,
+        not exists(
+          select 1 from public.lead_contacts x
+          where x.organization_id=p_organization_id and x.lead_id=v_target_lead and x.is_primary=true
+        )
+      )
       on conflict (organization_id,contact_type,normalized_value) do nothing;
     end if;
 
     if v_phone_norm is not null then
       insert into public.lead_contacts(organization_id,lead_id,contact_type,value,normalized_value,is_primary)
-      values(p_organization_id,v_target_lead,'phone',v_phone,v_phone_norm,not exists(
-        select 1 from public.lead_contacts x where x.organization_id=p_organization_id and x.lead_id=v_target_lead and x.is_primary=true
-      ))
+      values(
+        p_organization_id,v_target_lead,'phone',v_phone,v_phone_norm,
+        not exists(
+          select 1 from public.lead_contacts x
+          where x.organization_id=p_organization_id and x.lead_id=v_target_lead and x.is_primary=true
+        )
+      )
       on conflict (organization_id,contact_type,normalized_value) do nothing;
     end if;
 
@@ -311,23 +346,27 @@ begin
 
     if v_session_id is not null then
       v_session_match := true;
+
       update public.web_sessions
-      set lead_id=v_target_lead,last_seen_at=greatest(coalesce(last_seen_at,started_at),now())
+      set lead_id=v_target_lead,
+          last_seen_at=greatest(coalesce(last_seen_at,started_at),now())
       where id=v_session_id and organization_id=p_organization_id;
 
       if v_raw.anonymous_visitor_id is not null then
         insert into public.visitor_identity_links(
           organization_id,anonymous_visitor_id,lead_id,last_session_key,source_system,linked_at,metadata
-        ) values(
+        )
+        values(
           p_organization_id,v_raw.anonymous_visitor_id,v_target_lead,v_raw.session_key,v_source.source_system,now(),
           jsonb_build_object('raw_event_id',v_raw.id,'tracking_source_id',v_source.id,'identity_scope','exact_session')
         )
         on conflict (organization_id,anonymous_visitor_id)
-        do update set lead_id=excluded.lead_id,
-                      last_session_key=excluded.last_session_key,
-                      source_system=excluded.source_system,
-                      linked_at=excluded.linked_at,
-                      metadata=coalesce(public.visitor_identity_links.metadata,'{}'::jsonb) || excluded.metadata
+        do update set
+          lead_id=excluded.lead_id,
+          last_session_key=excluded.last_session_key,
+          source_system=excluded.source_system,
+          linked_at=excluded.linked_at,
+          metadata=coalesce(public.visitor_identity_links.metadata,'{}'::jsonb) || excluded.metadata
         where public.visitor_identity_links.organization_id=excluded.organization_id;
       end if;
 
@@ -340,7 +379,8 @@ begin
     source,medium,campaign_name,content,term,platform,channel,landing_page,referrer,event_type,
     utm_source,utm_medium,utm_campaign,utm_content,utm_term,
     gclid,gbraid,wbraid,fbclid,metadata
-  ) values(
+  )
+  values(
     p_organization_id,
     v_source.source_system || ':' || v_raw.source_event_id,
     v_target_lead,v_session_id,v_raw.anonymous_visitor_id,
@@ -360,7 +400,8 @@ begin
 
   insert into public.lead_ingest_events(
     organization_id,source_system,external_event_id,lead_id,site,form_name,matched_existing,status,metadata
-  ) values(
+  )
+  values(
     p_organization_id,v_source.source_system,v_raw.source_event_id,v_target_lead,v_raw.site,v_raw.source_event_type,
     v_matched_existing,'processed',
     jsonb_build_object(
@@ -371,8 +412,7 @@ begin
       'touchpoint_id',v_touchpoint_id
     )
   )
-  on conflict (organization_id,source_system,external_event_id)
-  do nothing;
+  on conflict (organization_id,source_system,external_event_id) do nothing;
 
   return jsonb_build_object(
     'ok',true,'processed',true,'duplicate_event',false,
@@ -436,12 +476,18 @@ begin
           processor_name='tracking_dispatcher_v1',
           processor_version='v1',
           processing_error='no_automatic_processor_for_event',
-          processing_metadata=coalesce(processing_metadata,'{}'::jsonb) || jsonb_build_object('event_family',v_raw.event_family,'event_type',v_raw.source_event_type),
+          processing_metadata=coalesce(processing_metadata,'{}'::jsonb) || jsonb_build_object(
+            'event_family',v_raw.event_family,
+            'event_type',v_raw.source_event_type
+          ),
           processed_at=coalesce(processed_at,now()),
           updated_at=now()
       where raw_event_id=p_raw_event_id and organization_id=p_organization_id;
 
-      return jsonb_build_object('ok',true,'processed',false,'ignored',true,'reason','no_automatic_processor_for_event','raw_event_id',p_raw_event_id);
+      return jsonb_build_object(
+        'ok',true,'processed',false,'ignored',true,
+        'reason','no_automatic_processor_for_event','raw_event_id',p_raw_event_id
+      );
     end if;
 
     update public.raw_event_processing
@@ -458,7 +504,6 @@ begin
     where raw_event_id=p_raw_event_id and organization_id=p_organization_id;
 
     return jsonb_build_object('ok',true,'processed',true,'raw_event_id',p_raw_event_id,'result',v_result);
-
   exception when others then
     v_error := left(sqlerrm,1000);
 
@@ -470,11 +515,17 @@ begin
     set status=case when coalesce(v_attempt,1)>=3 then 'dead_letter' else 'failed' end,
         attempt_count=coalesce(v_attempt,1),
         last_attempt_at=now(),
-        next_retry_at=case when coalesce(v_attempt,1)>=3 then null else now() + make_interval(secs => least(900,30 * (2 ^ greatest(coalesce(v_attempt,1)-1,0)))) end,
+        next_retry_at=case
+          when coalesce(v_attempt,1)>=3 then null
+          else now() + make_interval(secs => least(900,30 * power(2,greatest(coalesce(v_attempt,1)-1,0)))::double precision)
+        end,
         processor_name='tracking_dispatcher_v1',
         processor_version='v1',
         processing_error=v_error,
-        processing_metadata=coalesce(processing_metadata,'{}'::jsonb) || jsonb_build_object('event_family',v_raw.event_family,'event_type',v_raw.source_event_type),
+        processing_metadata=coalesce(processing_metadata,'{}'::jsonb) || jsonb_build_object(
+          'event_family',v_raw.event_family,
+          'event_type',v_raw.source_event_type
+        ),
         updated_at=now()
     where raw_event_id=p_raw_event_id and organization_id=p_organization_id;
 
