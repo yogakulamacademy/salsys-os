@@ -1,6 +1,8 @@
 import { runProductionAutomationSchedulerSweep } from '@/lib/automation/runtime-scheduler';
 import { createAdminClient } from '@/lib/supabase/admin';
 
+// Keep this helper server-only. A fresh deployment is required after Vercel env changes
+// so CRON_SECRET and AUTOMATION_SCHEDULER_ENABLED are captured by the runtime.
 export type RuntimeSchedulerApiResult = {
   status: number;
   body: Record<string, unknown>;
