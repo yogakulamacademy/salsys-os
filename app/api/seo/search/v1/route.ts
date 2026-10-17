@@ -2,9 +2,9 @@ import { NextRequest, NextResponse } from 'next/server';
 
 import {
   inferSeoSearchMode,
-  searchTenantSeoOpenSearch,
   type SeoSearchMode,
 } from '@/lib/search/seo';
+import { searchTenantSeoHybrid } from '@/lib/search/seo-semantic';
 import { requireSingleActiveTenant } from '@/lib/tenant/server';
 
 export const runtime = 'nodejs';
@@ -46,7 +46,7 @@ export async function GET(request: NextRequest) {
     const requestedMode = (params.get('mode') || '').trim().toLowerCase() as SeoSearchMode;
     const mode = MODES.has(requestedMode) ? requestedMode : inferSeoSearchMode(query);
 
-    const result = await searchTenantSeoOpenSearch({
+    const result = await searchTenantSeoHybrid({
       organizationId: tenant.organizationId,
       query,
       mode,
@@ -59,6 +59,9 @@ export async function GET(request: NextRequest) {
         ok: true,
         query,
         mode: result.mode,
+        retrieval_mode: result.retrievalMode,
+        semantic_available: result.semanticAvailable,
+        semantic_candidates: 'semanticCandidates' in result ? result.semanticCandidates : 0,
         total: result.total,
         took_ms: result.tookMs,
         items: result.items,
