@@ -90,6 +90,24 @@ function sanitizedProviderError(payload: TemplatePage, status: number) {
   return parts.join(' ');
 }
 
+function validatedGraphPagingUrl(value: string | undefined) {
+  const candidate = value?.trim();
+  if (!candidate) return null;
+
+  let parsed: URL;
+  try {
+    parsed = new URL(candidate);
+  } catch {
+    throw new Error('Meta returned an invalid template pagination URL.');
+  }
+
+  if (parsed.protocol !== 'https:' || parsed.hostname !== 'graph.facebook.com') {
+    throw new Error('Meta returned an unexpected template pagination host.');
+  }
+
+  return parsed.toString();
+}
+
 async function fetchAllTemplates(wabaId: string, accessToken: string) {
   const templates: RawTemplate[] = [];
   let pagesFetched = 0;
@@ -125,7 +143,7 @@ async function fetchAllTemplates(wabaId: string, accessToken: string) {
 
     pagesFetched += 1;
     templates.push(...(payload.data ?? []));
-    nextUrl = payload.paging?.next?.trim() || null;
+    nextUrl = validatedGraphPagingUrl(payload.paging?.next);
   }
 
   return { templates, pagesFetched };
@@ -231,8 +249,6 @@ export async function syncWhatsAppTemplatesForOrganization(
           },
           active: true,
           last_synced_at: now,
-          approved_at: approvalStatus === 'approved' ? now : null,
-          rejected_at: approvalStatus === 'rejected' ? now : null,
         };
       });
 
