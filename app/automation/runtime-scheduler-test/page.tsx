@@ -3,6 +3,7 @@ import { CalendarClock, CheckCircle2, Play, ShieldCheck } from 'lucide-react';
 import {
   prepareRuntimeSchedulerTestAction,
   runRuntimeSchedulerSweepAction,
+  verifyProductionSchedulerGateAction,
 } from '@/app/automation/runtime-scheduler-test/actions';
 import { PageHeader } from '@/components/ui';
 import { createClient } from '@/lib/supabase/server';
@@ -140,7 +141,7 @@ export default async function RuntimeSchedulerTestPage({
       <div className="rounded-2xl border border-violet-200 bg-violet-50 p-4 text-sm leading-6 text-violet-900">
         <div className="flex items-start gap-3">
           <ShieldCheck className="mt-0.5 shrink-0" size={18} />
-          <div><strong>Controlled scheduler mode:</strong> prepares one already-due internal `resume_wait` job and manually runs the same due-job sweep logic that a future cron will call. No cron is enabled, no AI runs, and no provider/customer message is sent.</div>
+          <div><strong>Controlled scheduler mode:</strong> prepares already-due internal jobs and manually runs the same due-job sweep logic that a future cron will call. No cron is enabled, no AI runs, and no provider/customer message is sent.</div>
         </div>
       </div>
 
@@ -215,9 +216,20 @@ export default async function RuntimeSchedulerTestPage({
                 ) : null}
 
                 {enrollment.status === 'completed' ? (
-                  <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-emerald-800">
-                    <div className="flex items-center gap-2 font-semibold"><CheckCircle2 size={16} /> Due-job scheduler path completed.</div>
-                    <div className="mt-1 text-xs">Recurring background scheduling is still disabled.</div>
+                  <div className="space-y-3">
+                    <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-emerald-800">
+                      <div className="flex items-center gap-2 font-semibold"><CheckCircle2 size={16} /> Due-job scheduler path completed.</div>
+                      <div className="mt-1 text-xs">Recurring background scheduling is still disabled.</div>
+                    </div>
+                    {!workflow.runtime_flow_enabled ? (
+                      <form action={verifyProductionSchedulerGateAction} className="rounded-xl border border-violet-200 bg-violet-50 p-4">
+                        <input type="hidden" name="workflow_id" value={workflow.id} />
+                        <div className="mb-3 text-xs leading-5 text-violet-800">
+                          Final safety gate: invoke the production scheduler path while `runtime_flow_enabled=false`. It must scan 0 workflows and claim 0 jobs.
+                        </div>
+                        <button type="submit" className="btn-primary">Verify production scheduler gate</button>
+                      </form>
+                    ) : null}
                   </div>
                 ) : null}
               </div>
