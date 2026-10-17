@@ -1,9 +1,10 @@
-import { CheckCircle2, ShieldCheck, Workflow } from 'lucide-react';
+import { CheckCircle2, MessageCircleReply, ShieldCheck, Workflow } from 'lucide-react';
 
 import {
   advancePinnedEnrollmentOneStepAction,
   pinLeadToPublishedFlowAction,
 } from '@/app/automation/published-runtime-test/actions';
+import { simulatePublishedInboundReplyAction } from '@/app/automation/published-runtime-test/reply-action';
 import { PageHeader } from '@/components/ui';
 import { createClient } from '@/lib/supabase/server';
 import { getCurrentWorkspaceContext } from '@/lib/workspace';
@@ -163,13 +164,17 @@ export default async function PublishedRuntimeTestPage({
 
   const metadata = (latestEnrollment?.metadata ?? {}) as Record<string, unknown>;
   const canAdvance = latestEnrollment?.status === 'active' && currentNode?.node_type === 'trigger';
+  const canSimulateReply =
+    latestEnrollment?.status === 'active' &&
+    currentNode?.node_type === 'wait_for_reply' &&
+    latestWait?.status === 'waiting';
 
   return (
     <div className="space-y-6">
       <PageHeader
         eyebrow="Automation · Published Runtime Test"
         title="Published Flow Enrollment Pin Test"
-        description={`Verify that ${organizationName} can pin a controlled enrollment to the immutable published flow snapshot while the editable draft continues separately.`}
+        description={`Verify that ${organizationName} can pin and advance a controlled enrollment against the immutable published flow snapshot while the editable draft continues separately.`}
       />
 
       {query.notice ? (
@@ -188,7 +193,7 @@ export default async function PublishedRuntimeTestPage({
         <div className="flex items-start gap-3">
           <ShieldCheck className="mt-0.5 shrink-0" size={18} />
           <div>
-            <strong>Controlled mode:</strong> pinning creates an internal enrollment. Advancing one step reads only the enrollment’s pinned published version and may create an internal reply wait + timeout job. It does not call AI or send any customer message.
+            <strong>Controlled mode:</strong> these actions read only the enrollment’s pinned published version. They may create internal wait/job/event/variable state, but automatic runtime remains disabled and no customer message is sent.
           </div>
         </div>
       </div>
@@ -277,6 +282,21 @@ export default async function PublishedRuntimeTestPage({
                   </form>
                 ) : null}
 
+                {canSimulateReply && latestWait ? (
+                  <form action={simulatePublishedInboundReplyAction} className="rounded-xl border border-emerald-200 bg-emerald-50 p-4">
+                    <input type="hidden" name="workflow_id" value={workflow.id} />
+                    <input type="hidden" name="enrollment_id" value={latestEnrollment.id} />
+                    <input type="hidden" name="wait_state_id" value={latestWait.id} />
+                    <div className="mb-3 text-xs leading-5 text-emerald-800">
+                      This creates a synthetic inbound <strong>message.received</strong> event, cancels the timeout, evaluates the published v{latestEnrollment.flow_version} reply branch, and sends nothing to the customer.
+                    </div>
+                    <button type="submit" className="btn-primary">
+                      <MessageCircleReply size={15} />
+                      Simulate published inbound reply
+                    </button>
+                  </form>
+                ) : null}
+
                 {latestWait ? (
                   <div className="rounded-xl border border-violet-200 bg-violet-50 p-4 text-violet-900">
                     <div><strong>Reply wait:</strong> {latestWait.status}</div>
@@ -295,7 +315,9 @@ export default async function PublishedRuntimeTestPage({
                 <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-800">
                   {currentNode?.node_type === 'trigger'
                     ? 'Enrollment is parked only. No graph step has executed.'
-                    : 'Enrollment advanced only inside the pinned published version. No customer message was sent.'}
+                    : latestEnrollment.status === 'completed'
+                      ? 'Controlled published branch completed. No customer message was sent.'
+                      : 'Enrollment advanced only inside the pinned published version. No customer message was sent.'}
                 </div>
               </div>
             ) : (
