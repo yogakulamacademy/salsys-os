@@ -2,8 +2,11 @@
 
 **Status:** Active product roadmap / implementation checklist  
 **Date:** 2026-10-17  
-**Branch:** `feature/smart-triggers-v1`  
-**PR:** #31  
+**Current branch:** `feature/smart-triggers-runtime-worker`  
+**Parent feature branch:** `feature/smart-triggers-v1`  
+**Parent PR:** #31 — Add Smart Triggers + Conversation Flow automation foundation  
+**Approx. Smart Triggers completion:** ~70%  
+**Approx. overall SalsysOS completion:** ~75%  
 
 ## Product Direction — Locked
 
@@ -23,6 +26,8 @@ Smart Triggers
 
 Customer auto-send remains blocked until channel-policy, suppression, approval, audit, tenant-isolation and production-runtime checkpoints are complete.
 
+---
+
 ## Current Data Model
 
 Core automation foundation:
@@ -37,7 +42,7 @@ Core automation foundation:
 - `automation_enrollments`
 - `automation_suppressions`
 
-Conversation-flow/runtime foundation now implemented:
+Conversation-flow/runtime foundation implemented:
 
 - `automation_flow_nodes`
 - `automation_flow_edges`
@@ -46,7 +51,7 @@ Conversation-flow/runtime foundation now implemented:
 - `automation_variables`
 - `automation_flow_versions`
 
-Workflow version pointers now include:
+Workflow version pointers:
 
 - `current_draft_version`
 - `current_published_version`
@@ -60,9 +65,26 @@ Enrollments support:
 - per-enrollment variables
 - pinned published-flow execution state
 
-## Smart Trigger Implementation Checklist
+Runtime worker foundation now also includes:
 
-### ST-1 — Foundation
+- atomic due-job claim RPC: `claim_automation_scheduled_jobs_v1`
+- `FOR UPDATE SKIP LOCKED` concurrency protection
+- attempt-count increment at claim time
+- max-attempt enforcement
+- generic runtime worker module: `lib/automation/runtime-worker.ts`
+- controlled worker UI: `/automation/runtime-worker-test`
+- generic processing target types:
+  - `resume_wait`
+  - `resume_reply_timeout`
+
+The claim RPC is applied to production Supabase, but automatic background pickup remains disabled.
+
+---
+
+# Smart Trigger Implementation Checklist
+
+## ST-1 — Foundation
+
 - [x] tenant-scoped workflow schema
 - [x] RLS policies
 - [x] organization-alignment guards
@@ -80,17 +102,19 @@ Enrollments support:
 - [x] max-attempt fields
 - [x] stop-on-reply field
 
-### ST-2 — Admin Workspace
+## ST-2 — Admin Workspace
+
 - [x] `/automation`
 - [x] tenant-scoped workflow library
 - [x] create safe draft workflow
 - [x] draft save does not execute anything
 - [x] first definition: `lead.created -> create_followup`
+- [x] visual workflow edit foundation in `/automation/flow-builder`
 - [ ] workflow duplicate UX
 - [ ] pause/resume/archive controls
-- [x] visual workflow edit foundation moved into `/automation/flow-builder`
 
-### ST-3 — Controlled Deterministic Runtime
+## ST-3 — Controlled Deterministic Runtime
+
 - [x] `/automation/runtime-test`
 - [x] manual activation for controlled testing
 - [x] manual lead selection
@@ -105,7 +129,8 @@ Enrollments support:
 - [x] verify zero customer messages
 - [ ] final adversarial cross-tenant runtime test using Test Yoga School
 
-### ST-4 — Event Runtime
+## ST-4 — Event Runtime
+
 - [ ] canonical event emitter API
 - [ ] automatic `lead.created`
 - [x] controlled `message.received` event path validated
@@ -116,35 +141,50 @@ Enrollments support:
 - [ ] durable retry policy
 - [ ] dead-letter / failed-run visibility
 
-### ST-5 — Scheduler + Wait States
+## ST-5 — Scheduler + Wait States
+
 - [x] persisted delay wait-state foundation
-- [ ] exact datetime node
-- [ ] wait-until business hours
 - [x] persisted wait-for-reply node
 - [x] persistent `next_action_at`
 - [x] scheduled-job ledger
+- [x] scheduled-job dedupe index
 - [x] controlled due-job claim/resume behavior
 - [x] retry attempt counter exercised in controlled delay resume
-- [ ] production scheduler worker / recurring due-job pickup
+- [x] atomic generic job-claim RPC created
+- [x] atomic claim uses row lock + `SKIP LOCKED`
+- [x] max attempts enforced during claim
+- [x] generic runtime-worker module created
+- [x] controlled runtime-worker test page created
+- [ ] controlled generic worker E2E validation
+- [ ] concurrent/double-claim worker validation
+- [ ] production recurring due-job pickup / cron
 - [ ] retry/backoff policy
+- [ ] failed-job/dead-letter policy
 - [ ] timezone-safe production execution
+- [ ] exact datetime node
+- [ ] wait-until business hours
 - [ ] quiet-hours enforcement
 - [x] cancel stale reply-timeout job when reply arrives
 - [ ] general cancel/reschedule job API
 
-### ST-6 — Stop-on-Reply / Conversation State
+## ST-6 — Stop-on-Reply / Conversation State
+
 - [x] controlled inbound reply cancels pending no-reply timeout
 - [x] reply wait resumes correct `reply_received` branch
 - [x] no-reply timeout follows `reply_timeout` branch
 - [x] no-reply branch can enter delay and resume to next node
 - [x] duplicate reply/timeout processing fails closed in controlled tests
+- [x] published reply branch validated against pinned version
+- [x] published no-reply branch validated against pinned version
+- [x] published delay resume validated to terminal node
 - [ ] real webhook inbound reply integration
 - [ ] multiple-channel conversation policy
 - [ ] prevent nurture after human takeover
 - [ ] human takeover pauses automation
 - [ ] explicit resume automation control
 
-### ST-7 — Visual Conversation Flow Builder
+## ST-7 — Visual Conversation Flow Builder
+
 - [x] persisted canvas / node UI
 - [x] drag + save layout
 - [x] node inspector
@@ -169,14 +209,17 @@ Enrollments support:
 - [x] validation definition hash / stale-validation protection
 - [x] publish v1 -> clone editable v2
 - [x] database-level published node/edge immutability guard
+- [x] verify Draft v2 edit does not alter Published v1
 - [ ] ask-question node
 - [ ] AI nodes
 - [ ] production-ready interaction polish
 
-### ST-8 — Customer Messaging Actions
+## ST-8 — Customer Messaging Actions
+
 - [ ] WhatsApp channel eligibility resolver
 - [ ] WhatsApp free-form send node
 - [ ] WhatsApp approved-template node
+- [ ] WhatsApp service-window/template-policy resolver
 - [ ] Instagram send node
 - [ ] provider result logging
 - [ ] rate / attempt limits
@@ -184,7 +227,8 @@ Enrollments support:
 - [ ] fail closed when channel identity unavailable
 - [ ] fail closed when template/policy requirement not satisfied
 
-### ST-9 — AI + Knowledge Nodes
+## ST-9 — AI + Knowledge Nodes
+
 - [x] shared Instagram + WhatsApp AI Reply Co-Pilot exists
 - [x] Organization Knowledge V1 exists
 - [x] approved-only retrieval validated
@@ -199,7 +243,8 @@ Enrollments support:
 - [ ] human-review gate for sensitive intents
 - [ ] low-risk auto-send eligibility policy
 
-### ST-10 — Safety / Compliance / Audit
+## ST-10 — Safety / Compliance / Audit
+
 - [x] tenant isolation foundation
 - [x] run/action audit ledgers
 - [x] suppression table foundation
@@ -207,6 +252,8 @@ Enrollments support:
 - [x] enrollment pinned to immutable published version
 - [x] runtime stays disabled during all controlled graph tests
 - [x] controlled graph tests verified zero customer messages
+- [x] scheduled-job dedupe foundation
+- [x] generic worker atomic-claim foundation
 - [ ] opt-out keyword handling
 - [ ] do-not-contact enforcement
 - [ ] per-channel suppression
@@ -216,9 +263,12 @@ Enrollments support:
 - [x] flow version audit foundation
 - [ ] provider-send audit
 - [ ] cancellation audit expansion
+- [ ] worker concurrency/adversarial tests
+- [ ] cross-tenant generic-worker test
 - [ ] adversarial cross-tenant graph/runtime tests
 
-### ST-11 — Analytics
+## ST-11 — Analytics
+
 - [ ] workflow enrollment count
 - [ ] completion / drop-off rate
 - [ ] node-level conversion
@@ -228,24 +278,32 @@ Enrollments support:
 - [ ] template/send failure rate
 - [ ] AI draft acceptance rate
 - [ ] lead-to-enrollment impact
+- [ ] scheduler/worker success + failure metrics
+- [ ] job retry/dead-letter metrics
 
-### ST-12 — Production Rollout
+## ST-12 — Production Rollout
+
 - [ ] deterministic internal-only runtime final sign-off
-- [ ] scheduler worker sign-off
+- [ ] generic scheduler worker sign-off
 - [x] controlled stop-on-reply logic sign-off
+- [ ] recurring background scheduler sign-off
 - [ ] suppression sign-off
 - [ ] channel policy sign-off
 - [ ] human-approval sign-off
 - [ ] WhatsApp test flow
 - [ ] Instagram test flow
 - [ ] cross-tenant adversarial test
+- [ ] worker concurrency test
 - [ ] rate-limit / retry test
-- [ ] controlled production pilot
+- [ ] controlled internal-only production pilot
+- [ ] controlled customer-messaging pilot
 - [ ] broader tenant rollout
 
-## Verified Flow Checkpoints
+---
 
-### Draft graph structure
+# Verified Flow Checkpoints
+
+## 1. Draft graph structure
 
 Validated draft graph:
 
@@ -268,7 +326,7 @@ Validation     passed
 Messaging      disabled
 ```
 
-### Versioning
+## 2. Versioning
 
 ```text
 Published Version 1 = immutable snapshot
@@ -278,7 +336,7 @@ Runtime enabled     = false
 
 Verified Version 2 edit did not alter Version 1.
 
-### Published enrollment pinning
+## 3. Published enrollment pinning
 
 A controlled enrollment was pinned to Published v1 while Draft v2 existed.
 
@@ -291,7 +349,7 @@ current_node = published v1 trigger
 runtime_flow_enabled = false
 ```
 
-### Published reply branch
+## 4. Published reply branch
 
 Verified controlled path:
 
@@ -316,7 +374,7 @@ Action runs    0
 Customer send  0
 ```
 
-### Published no-reply branch
+## 5. Published no-reply branch
 
 Verified controlled path:
 
@@ -332,26 +390,75 @@ Trigger
 -> No reply branch (end)
 ```
 
-Final verified state on 2026-10-17:
+Final verified state:
 
 ```text
 Enrollment status       completed
 Pinned flow version     v1
 Current node            No reply branch (end)
 Delay wait              resumed
-resume_wait job          completed
+resume_wait job         completed
 Job attempts            1
-Current published        v1
-Current draft            v2
-Runtime enabled          false
-Automation runs          0
-Automation action runs   0
-Customer message sent    false
+Current published       v1
+Current draft           v2
+Runtime enabled         false
+Automation runs         0
+Automation action runs  0
+Customer message sent   false
 ```
 
-## Current Exact Checkpoint
+## 6. Generic Runtime Worker Foundation — NEW
 
-The controlled conversation-flow engine now proves all of the following against an immutable published snapshot:
+The work has now moved from manual/test-specific node actions toward a reusable worker.
+
+Implemented:
+
+```text
+automation_scheduled_jobs
+        ↓
+claim_automation_scheduled_jobs_v1()
+        ↓ atomic claim
+status = claimed
+attempt_count += 1
+        ↓
+lib/automation/runtime-worker.ts
+        ↓
+resume_reply_timeout OR resume_wait
+```
+
+Safety characteristics already in place:
+
+- organization-scoped claims;
+- scheduled-only claims;
+- max-attempt guard;
+- row locking;
+- `SKIP LOCKED` for concurrent workers;
+- service-role-only RPC execution;
+- no automatic provider/customer send;
+- automatic background runtime still disabled;
+- controlled test page `/automation/runtime-worker-test` created.
+
+Production Supabase migration applied:
+
+```text
+claim_automation_scheduled_jobs_v1
+```
+
+Current runtime-worker branch commits include:
+
+```text
+886e6a2ff66e0629db731c093b7c0f013e076493  Add atomic scheduled-job claim RPC
+1e3af6a1817351aa3a76f7a1f55825e5a2ba5f99  Generic runtime worker implementation checkpoint
+173de97e4123c00a91afbe467fcb08359ac52a84  Controlled runtime-worker test UI checkpoint
+```
+
+The generic worker itself is **not yet signed off**. The next E2E test must prove the reusable worker processes a prepared job correctly before background scheduling is enabled.
+
+---
+
+# Current Exact Checkpoint
+
+The conversation-flow engine now proves all of the following against an immutable published snapshot:
 
 - draft editing is isolated from published definitions;
 - graph validation and hash-locking work;
@@ -363,21 +470,52 @@ The controlled conversation-flow engine now proves all of the following against 
 - delay scheduling persists per enrollment;
 - delay resume follows the published edge to the terminal node;
 - controlled duplicate processing fails closed;
-- no customer messages are sent during these runtime tests.
+- no customer messages are sent during these runtime tests;
+- an atomic reusable scheduled-job claim layer now exists;
+- a generic runtime-worker module now exists;
+- a controlled worker-test UI now exists.
 
-### Next exact action
+Automatic runtime remains OFF.
 
-Move from test-specific/manual flow actions toward the **general production runtime worker foundation**:
+Customer messaging remains OFF.
 
-1. extract shared published-node execution into reusable runtime functions;
-2. implement generic due-job claim/process logic for `resume_wait` and `resume_reply_timeout`;
-3. add controlled worker test with runtime still disabled globally;
-4. validate idempotency/concurrency and retry behavior;
-5. run final cross-tenant adversarial runtime tests;
-6. only then consider enabling scheduled background processing for internal-only actions.
+## Next exact action
 
-## Locked Rule
+Use `/automation/runtime-worker-test` after the latest preview is Ready:
+
+1. select one test lead;
+2. click **Prepare controlled worker job**;
+3. verify one pinned published enrollment + one reply wait + one scheduled `resume_reply_timeout` job;
+4. click **Process one job with generic worker**;
+5. verify the generic worker claims exactly one job and follows the published v1 no-reply branch;
+6. rerun to validate idempotency / no double processing;
+7. run concurrency/double-claim validation;
+8. run cross-tenant worker validation using Test Yoga School;
+9. only after those pass, add recurring background due-job pickup for internal-only runtime.
+
+---
+
+# Remaining Major Smart Trigger Work
+
+The largest remaining blocks are:
+
+1. generic runtime-worker E2E + concurrency sign-off;
+2. automatic event emitter + webhook event adapter;
+3. recurring scheduler / background due-job pickup;
+4. retry/backoff + failed/dead-letter handling;
+5. suppression / opt-out / DNC / frequency-cap enforcement;
+6. WhatsApp channel policy + approved-template handling;
+7. WhatsApp + Instagram actual send nodes and provider audit;
+8. AI flow nodes grounded in Organization Knowledge;
+9. human approval / handoff runtime;
+10. analytics + production monitoring;
+11. cross-tenant adversarial tests;
+12. controlled production pilots.
+
+---
+
+# Locked Rule
 
 Do not enable autonomous customer messaging merely because the flow builder/runtime works.
 
-Customer auto-send remains blocked until scheduler, suppression, channel policies, provider audit, human-review controls, rate limits and tenant-isolation tests are signed off.
+Customer auto-send remains blocked until scheduler, suppression, channel policies, provider audit, human-review controls, rate limits, retries and tenant-isolation tests are signed off.
