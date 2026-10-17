@@ -5,6 +5,7 @@ import {
   processRuntimeWorkerJobAction,
   runRuntimeWorkerDoubleClaimTestAction,
 } from '@/app/automation/runtime-worker-test/actions';
+import { runRuntimeWorkerCrossTenantTestAction } from '@/app/automation/runtime-worker-test/cross-tenant-action';
 import { PageHeader } from '@/components/ui';
 import { createClient } from '@/lib/supabase/server';
 import { getCurrentWorkspaceContext } from '@/lib/workspace';
@@ -312,6 +313,14 @@ export default async function RuntimeWorkerTestPage({
                         Concurrency test: two independent service-role workers will race to atomically claim this exact scheduled job. Exactly one must win; the loser must receive no claim.
                       </div>
                       <button type="submit" className="btn-primary">Run double-claim race test</button>
+                    </form>
+
+                    <form action={runRuntimeWorkerCrossTenantTestAction} className="rounded-xl border border-fuchsia-200 bg-fuchsia-50 p-4">
+                      <input type="hidden" name="job_id" value={latestJob.id} />
+                      <div className="mb-3 text-xs leading-5 text-fuchsia-900">
+                        Tenant isolation test: a worker scoped to a different organization will try to claim this exact job. It must receive zero rows, and this job must remain scheduled with attempts unchanged.
+                      </div>
+                      <button type="submit" className="btn-primary">Run cross-tenant isolation test</button>
                     </form>
                   </div>
                 ) : null}
