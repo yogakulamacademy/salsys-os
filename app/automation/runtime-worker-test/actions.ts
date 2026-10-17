@@ -3,7 +3,10 @@
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 
-import { claimAndProcessAutomationJobs } from '@/lib/automation/runtime-worker';
+import {
+  claimAndProcessAutomationJobs,
+  processClaimedAutomationJob,
+} from '@/lib/automation/runtime-worker';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { createClient } from '@/lib/supabase/server';
 import { requireCurrentOrganizationId } from '@/lib/workspace';
@@ -250,4 +253,76 @@ export async function processRuntimeWorkerJobAction(formData: FormData) {
 
   revalidatePath('/automation/runtime-worker-test');
   go('notice', `${result.message} Automatic runtime remains disabled and no customer message was sent.`);
+}
+
+export async function runRuntimeWorkerDoubleClaimTestAction(formData: FormData) {
+  const jobId = value(formData, 'job_id');
+  if (!jobId) go('error', 'Scheduled job is required.');
+
+  const { organizationId } = await adminContext();
+  const inspector = createAdminClient();
+
+  const { data: job, error: jobError } = await inspector
+    .from('automation_scheduled_jobs')
+    .select('id,payload,status,job_type')
+    .eq('organization_id', organizationId)
+    .eq('id', jobId)
+    .maybeSingle();
+
+  if (jobError || !job) go('error', jobError?.message || 'Scheduled job was not found.');
+  const payload = (job.payload ?? {}) as Record<string, unknown>;
+  if (payload.source !== 'runtime_worker_controlled_test' && payload.worker !== 'smart_trigger_runtime_v1') {
+    go('error', 'Controlled concurrency test will not claim unrelated scheduled jobs.');
+  }
+  if (job.status !== 'scheduled') go('notice', `This job is already ${job.status}; the double-claim test did not run.`);
+
+  const claimerA = createAdminClient();
+  const claimerB = createAdminClient();
+  const args = {
+    p_organization_id: organizationId,
+    p_limit: 1,
+    p_job_id: jobId,
+    p_allow_early: true,
+  };
+
+  const [resultA, resultB] = await Promise.all([
+    claimerA.rpc('claim_automation_scheduled_jobs_v1', args),
+    claimerB.rpc('claim_automation_scheduled_jobs_v1', args),
+  ]);
+
+  if (resultA.error || resultB.error) {
+    go('error', `Double-claim RPC error: ${resultA.error?.message || resultB.error?.message || 'unknown error'}`);
+  }
+
+  const rowsA = (resultA.data ?? []) as Array<Record<string, unknown>>;
+  const rowsB = (resultB.data ?? []) as Array<Record<string, unknown>>;
+  const totalClaims = rowsA.length + rowsB.length;
+
+  if (totalClaims !== 1) {
+    go('error', `Concurrency safety check failed: expected exactly 1 claim from 2 workers, got ${totalClaims}. Automatic runtime remains disabled.`);
+  }
+
+  const winner = rowsA.length === 1 ? 'A' : 'B';
+  const claimedJob = (rowsA[0] ?? rowsB[0]) as Record<string, unknown>;
+  const claimedPayload = (claimedJob.payload ?? {}) as Record<string, unknown>;
+  claimedJob.payload = {
+    ...claimedPayload,
+    concurrency_test: {
+      racers: 2,
+      winner,
+      claims_observed: totalClaims,
+      loser_claims: 0,
+      automatic_runtime_enabled: false,
+      customer_message_sent: false,
+    },
+  };
+
+  const processor = createAdminClient();
+  const processed = await processClaimedAutomationJob(processor, claimedJob as never);
+
+  revalidatePath('/automation/runtime-worker-test');
+  go(
+    'notice',
+    `Double-claim race passed: 2 workers raced the same ${job.job_type} job, exactly 1 claimed it (worker ${winner}), and the winner processed once. ${processed.message} Automatic runtime remains disabled and no customer message was sent.`,
+  );
 }
