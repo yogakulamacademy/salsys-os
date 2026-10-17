@@ -140,7 +140,7 @@ begin
     if v_policy.data_category='raw_events' then
       for v_row in
         select r.id,r.received_at,r.anonymous_visitor_id,
-               nullif(r.metadata->>'lead_id','')::uuid as lead_id
+               case when (r.metadata->>'lead_id') ~* '^[0-9a-f-]{36}$' then (r.metadata->>'lead_id')::uuid else null end as lead_id
         from public.raw_events r
         where r.organization_id=p_organization_id
           and r.received_at < now() - make_interval(days=>v_policy.retention_days)
@@ -236,6 +236,7 @@ declare
   v_raw public.raw_events%rowtype;
   v_ws public.web_sessions%rowtype;
   v_person uuid;
+  v_lead uuid;
   v_hold boolean;
   v_fingerprint text;
 begin
@@ -269,12 +270,13 @@ begin
       update public.privacy_retention_actions set status='skipped',metadata=metadata||jsonb_build_object('reason','record_missing'),updated_at=now() where id=v_action.id;
       return jsonb_build_object('ok',true,'status','skipped');
     end if;
-    if nullif(v_raw.metadata->>'lead_id','') is not null then
+    v_lead:=case when (v_raw.metadata->>'lead_id') ~* '^[0-9a-f-]{36}$' then (v_raw.metadata->>'lead_id')::uuid else null end;
+    if v_lead is not null then
       select pl.person_id into v_person from public.person_leads pl
-      where pl.organization_id=p_organization_id and pl.lead_id=(v_raw.metadata->>'lead_id')::uuid;
+      where pl.organization_id=p_organization_id and pl.lead_id=v_lead;
     end if;
     v_hold:=public.privacy_retention_has_hold_v1(
-      p_organization_id,v_person,nullif(v_raw.metadata->>'lead_id','')::uuid,v_raw.anonymous_visitor_id
+      p_organization_id,v_person,v_lead,v_raw.anonymous_visitor_id
     );
     if v_hold then
       update public.privacy_retention_actions set status='held',held_reason='active_legal_hold',updated_at=now() where id=v_action.id;
@@ -290,8 +292,7 @@ begin
         external_message_id=null,
         payload='{}'::jsonb,
         context='{}'::jsonb,
-        metadata=jsonb_build_object('retention_anonymized',true,'retention_action_id',v_action.id),
-        updated_at=coalesce((select updated_at from public.raw_event_processing where raw_event_id=id),now())
+        metadata=jsonb_build_object('retention_anonymized',true,'retention_action_id',v_action.id)
       where id=v_action.record_id and organization_id=p_organization_id;
     elsif v_action.requested_action='delete' then
       delete from public.raw_events where id=v_action.record_id and organization_id=p_organization_id;
@@ -403,9 +404,7 @@ declare
   v_org record;
   v_results jsonb:='[]'::jsonb;
 begin
-  for v_org in
-    select organization_id from public.privacy_automation_settings
-  loop
+  for v_org in select organization_id from public.privacy_automation_settings loop
     v_results:=v_results || jsonb_build_array(
       jsonb_build_object('organization_id',v_org.organization_id,'result',public.run_privacy_retention_sweep_v1(v_org.organization_id))
     );
@@ -440,7 +439,6 @@ grant execute on function public.execute_privacy_retention_action_v1(uuid,uuid) 
 grant execute on function public.run_privacy_retention_sweep_v1(uuid) to service_role;
 grant execute on function public.run_all_privacy_retention_sweeps_v1() to service_role;
 
--- Run hourly. Enforcement remains inert because per-organization execution defaults OFF + dry-run ON.
 do $$
 begin
   if exists(select 1 from pg_extension where extname='pg_cron') then
