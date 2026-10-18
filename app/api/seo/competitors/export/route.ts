@@ -72,7 +72,7 @@ export async function GET(request: NextRequest) {
 
     let bytes: Buffer;
     let contentType: string;
-    let extension: string;
+    let extension: 'csv' | 'pdf' | 'doc';
     if (format === 'csv') {
       bytes = Buffer.from(buildCsv(context), 'utf8');
       contentType = 'text/csv; charset=utf-8';
@@ -93,7 +93,7 @@ export async function GET(request: NextRequest) {
     await admin.from('seo_intelligence_exports').insert({
       organization_id: tenant.organizationId,
       export_type: 'competitor_analysis',
-      format: extension === 'doc' ? 'docx' : extension,
+      format: extension,
       status: 'completed',
       file_name: fileName,
       content_hash: hash,
@@ -103,7 +103,7 @@ export async function GET(request: NextRequest) {
       filters: { surface: 'all' },
     });
 
-    return new NextResponse(bytes, {
+    return new NextResponse(new Uint8Array(bytes), {
       status: 200,
       headers: {
         'Content-Type': contentType,
