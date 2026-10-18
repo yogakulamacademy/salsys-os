@@ -1,4 +1,4 @@
-import { Activity, Gauge, Target, TrendingUp } from 'lucide-react';
+import { Activity, CircleCheckBig, Gauge, Target, TrendingUp } from 'lucide-react';
 
 export type IntelligenceRecommendationEffectivenessRow = {
   signal_id: string;
@@ -9,6 +9,9 @@ export type IntelligenceRecommendationEffectivenessRow = {
   accepted_count: number;
   dismissed_count: number;
   acted_count: number;
+  completed_count?: number;
+  started_not_completed_count?: number;
+  completion_rate?: number | null;
   outcome_observed_count: number;
   positive_count: number;
   negative_count: number;
@@ -20,7 +23,7 @@ export type IntelligenceRecommendationEffectivenessRow = {
   sample_band: 'insufficient' | 'emerging' | 'established' | 'mature' | string;
 };
 
-function pct(value: number | null) {
+function pct(value: number | null | undefined) {
   return value == null ? '—' : `${Math.round(value * 100)}%`;
 }
 
@@ -44,12 +47,14 @@ export function IntelligenceRecommendationEffectiveness({
 }) {
   const observed = rows.reduce((sum, row) => sum + Number(row.outcome_observed_count || 0), 0);
   const acted = rows.reduce((sum, row) => sum + Number(row.acted_count || 0), 0);
+  const completed = rows.reduce((sum, row) => sum + Number(row.completed_count || 0), 0);
   const positive = rows.reduce((sum, row) => sum + Number(row.positive_count || 0), 0);
   const resolved = rows.reduce(
     (sum, row) => sum + Number(row.positive_count || 0) + Number(row.negative_count || 0) + Number(row.mixed_count || 0),
     0,
   );
   const calibrationReady = rows.filter((row) => row.sample_band === 'established' || row.sample_band === 'mature').length;
+  const completionRate = acted > 0 ? completed / acted : null;
 
   return (
     <section className="mt-4 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
@@ -58,19 +63,24 @@ export function IntelligenceRecommendationEffectiveness({
           <div className="text-[10px] font-black uppercase tracking-[.14em] text-slate-400">Recommendation learning</div>
           <h2 className="mt-1 text-base font-black text-slate-900">Effectiveness evidence</h2>
           <p className="mt-1 max-w-3xl text-xs leading-5 text-slate-500">
-            Observed operator actions and downstream CRM outcomes are summarized by signal and role. This is learning evidence, not causal attribution.
+            Operator actions, explicit completion and downstream CRM outcomes are summarized by signal and role. This is learning evidence, not causal attribution.
           </p>
         </div>
         <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-bold text-slate-600">
-          Calibration remains locked until sample maturity is sufficient.
+          Bounded calibration activates only after sample maturity gates are met.
         </div>
       </div>
 
-      <div className="grid gap-px bg-slate-100 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-px bg-slate-100 sm:grid-cols-2 lg:grid-cols-5">
         <div className="bg-white px-5 py-4">
           <Activity size={16} className="text-slate-400" />
           <div className="mt-2 text-2xl font-black text-slate-900">{acted}</div>
-          <div className="text-xs font-bold text-slate-500">Recommendations acted on</div>
+          <div className="text-xs font-bold text-slate-500">Actions started</div>
+        </div>
+        <div className="bg-white px-5 py-4">
+          <CircleCheckBig size={16} className="text-slate-400" />
+          <div className="mt-2 text-2xl font-black text-slate-900">{pct(completionRate)}</div>
+          <div className="text-xs font-bold text-slate-500">Action completion rate</div>
         </div>
         <div className="bg-white px-5 py-4">
           <Target size={16} className="text-slate-400" />
@@ -96,7 +106,7 @@ export function IntelligenceRecommendationEffectiveness({
       ) : (
         <div className="divide-y divide-slate-100">
           {rows.slice(0, 8).map((row) => (
-            <div key={`${row.signal_id}:${row.role_scope}`} className="grid gap-3 px-5 py-4 md:grid-cols-[minmax(0,1.5fr)_repeat(4,minmax(0,.75fr))] md:items-center">
+            <div key={`${row.signal_id}:${row.role_scope}`} className="grid gap-3 px-5 py-4 md:grid-cols-[minmax(0,1.5fr)_repeat(5,minmax(0,.75fr))] md:items-center">
               <div className="min-w-0">
                 <div className="truncate text-sm font-black text-slate-900">{signalLabel(row.signal_id)}</div>
                 <div className="mt-1 text-[11px] font-bold uppercase tracking-wide text-slate-400">
@@ -105,7 +115,15 @@ export function IntelligenceRecommendationEffectiveness({
               </div>
               <div>
                 <div className="text-xs font-black text-slate-900">{row.acted_count}</div>
-                <div className="text-[11px] text-slate-400">acted</div>
+                <div className="text-[11px] text-slate-400">started</div>
+              </div>
+              <div>
+                <div className="text-xs font-black text-slate-900">{row.completed_count ?? 0}</div>
+                <div className="text-[11px] text-slate-400">completed</div>
+              </div>
+              <div>
+                <div className="text-xs font-black text-slate-900">{pct(row.completion_rate)}</div>
+                <div className="text-[11px] text-slate-400">completion rate</div>
               </div>
               <div>
                 <div className="text-xs font-black text-slate-900">{row.outcome_observed_count}</div>
