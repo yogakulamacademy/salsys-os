@@ -5,7 +5,7 @@
 **Production Supabase project:** `doaozrkrtgeslddwhclj`  
 **Production domain:** `https://salsysos.com`  
 **Current intelligence branch:** `feature/system-intelligence-core-v1`  
-**Branch HEAD before this checkpoint update:** `a0d9467072f5af384180cd43134335a54ea9c8f2` — `Document System Intelligence Core v1 checkpoint`
+**Branch HEAD before this checkpoint update:** `eb735cd36e56dcfb81a8ae017d8485ce06eeeb4a` — `Close OpenSearch lexical E2E checkpoint`
 
 > This is the mutable implementation checkpoint. It records verified implementation state, active blockers, production-safety posture, remaining phases and immediate execution order. Strategic product direction is also preserved in `docs/SalsysOS_North_Star_Product_Context.md`.
 
@@ -466,7 +466,7 @@ Finance/reports remains one of the largest conventional product phases still ope
 
 ## 16. System Intelligence Core v1 — implemented
 
-New branch:
+Current branch:
 
 `feature/system-intelligence-core-v1`
 
@@ -545,7 +545,12 @@ Preview deployment:
 - deployment: `READY`
 - unauthenticated `/intelligence` request correctly redirected to login and preserved `next=/intelligence`
 
-Current system-intelligence branch later added documentation commit `a0d9467072f5af384180cd43134335a54ea9c8f2`.
+Documentation on this branch was then refreshed through:
+
+- `fb0eee98b3acf2d799493b758ca913eb521d3300` — current checkpoint refresh
+- `97f815004ef77c937ac74475f48c136cdb7e7049` — North Star refresh
+- `87ffc20379c2a8bc99b11feeab073e783ca94255` — feature completion matrix
+- `eb735cd36e56dcfb81a8ae017d8485ce06eeeb4a` — OpenSearch lexical E2E checkpoint closeout
 
 ### Intelligence Core remaining work
 
@@ -556,6 +561,8 @@ v2:
 - trend/velocity/acceleration
 - baseline comparisons
 - role-aware priorities
+- fix cross-currency revenue prioritization so raw INR/USD values are never compared as if equivalent
+- verify/fix intelligence deep links against real app routes, including the current acquisition/marketing destination
 
 v3:
 
@@ -667,7 +674,7 @@ Verified:
 
 ### Phase A — System Intelligence Core v2
 
-Add correlation, freshness, velocity, trend comparison and role-aware priority briefs.
+Add correlation, freshness, velocity, trend comparison and role-aware priority briefs. First close the known v1 quality issues: cross-currency revenue prioritization and stale/invalid deep-link destinations.
 
 ### Phase B — Claude unified reasoning layer
 
@@ -705,7 +712,7 @@ Connect DataForSEO or another provider later when real competitor/ranking/AEO/GE
 
 ## 21. Immediate recommended execution order
 
-1. Build **System Intelligence Core v2**: correlate duplicate/related signals, freshness/decay, trends and role-aware priorities.
+1. Build **System Intelligence Core v2**: first fix cross-currency revenue prioritization and route/deep-link correctness, then correlate duplicate/related signals, add freshness/decay, trends and role-aware priorities.
 2. Add **Claude unified operating synthesis** over the bounded intelligence contract.
 3. Complete **W8 final tenant/security sign-off** independently.
 4. Run **Smart Triggers controlled production pilot** without broad autonomous sends.
@@ -739,5 +746,6 @@ Connect DataForSEO or another provider later when real competitor/ranking/AEO/GE
 - `docs/SalsysOS_North_Star_Product_Context.md`
 - `docs/SalsysOS_System_Intelligence_Core_V1.md`
 - `docs/SalsysOS_Feature_Completion_Matrix_2026-10-18.md`
+- `docs/SalsysOS_OpenSearch_E2E_Verified_2026-10-18.md`
 - `docs/checkpoints/M-2026-10-18-SEO-OpenSearch-Competitor-Intelligence.md`
 - `docs/SalsysOS_Behavioral_Intelligence_Privacy_Control_Plane_Roadmap.md`
