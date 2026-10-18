@@ -20,6 +20,7 @@ const MODES = new Set<SeoSearchMode>([
   'aeo',
   'geo',
   'experiments',
+  'competitors',
 ]);
 
 function parseInteger(value: string | null, fallback: number) {
