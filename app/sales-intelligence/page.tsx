@@ -3,9 +3,9 @@ import type { ReactNode } from 'react';
 import {
   ArrowRight,
   BrainCircuit,
+  CircleAlert,
   Flame,
   Gauge,
-  Layers3,
   Target,
 } from 'lucide-react';
 
@@ -16,16 +16,16 @@ export default async function SalesIntelligencePage() {
   const { rows, warning } = await getR6SalesIntelligence(150);
 
   const highIntent = rows.filter((row) => row.derivedIntent === 'high' || row.derivedIntent === 'very_high').length;
-  const highConfidence = rows.filter((row) => row.intentConfidence === 'high').length;
+  const activeObjections = rows.filter((row) => row.activeObjectionCount > 0).length;
   const strongAffinity = rows.filter((row) => (row.recommendedAffinityScore ?? 0) >= 80).length;
-  const multipleProducts = rows.filter((row) => row.candidateCourseCount > 1).length;
+  const highConfidence = rows.filter((row) => row.intentConfidence === 'high').length;
 
   return (
     <div className="sales-intelligence-polish">
       <PageHeader
         eyebrow="Sales intelligence"
-        title="Intent & Product Affinity"
-        description="Observed CRM stage, customer behaviour, Person-level course affinity and deterministic sales guidance in one tenant-safe view."
+        title="Intent, Affinity & Objections"
+        description="Observed CRM stage, customer behaviour, Person-level course affinity, explicit objections and deterministic sales guidance in one tenant-safe view."
         actions={
           <Link href="/intelligence" className="btn-primary">
             <BrainCircuit size={15} />
@@ -49,10 +49,10 @@ export default async function SalesIntelligencePage() {
           note="Derived high / very-high intent from observed evidence"
         />
         <MetricCard
-          icon={<Gauge size={17} />}
-          label="High confidence"
-          value={highConfidence}
-          note="Intent classification backed by stronger evidence"
+          icon={<CircleAlert size={17} />}
+          label="Active objections"
+          value={activeObjections}
+          note="Leads with explicit unresolved sales blockers"
         />
         <MetricCard
           icon={<Target size={17} />}
@@ -61,10 +61,10 @@ export default async function SalesIntelligencePage() {
           note="Recommended course affinity score 80+"
         />
         <MetricCard
-          icon={<Layers3 size={17} />}
-          label="Multi-course interest"
-          value={multipleProducts}
-          note="More than one resolved course candidate"
+          icon={<Gauge size={17} />}
+          label="High confidence"
+          value={highConfidence}
+          note="Intent classification backed by stronger evidence"
         />
       </section>
 
@@ -74,7 +74,7 @@ export default async function SalesIntelligencePage() {
             <div className="eyebrow">Operator queue</div>
             <div className="section-title mt-1">Lead-level sales evidence</div>
             <p className="mt-2 max-w-3xl text-xs leading-5 text-slate-400">
-              Stored CRM intent and derived intent remain separate. Course recommendations come from resolved Person-level affinity evidence. Priority and next action are deterministic operating guidance, not predictive probability or causal attribution.
+              Stored CRM intent, derived intent and explicit objections remain separate. Course recommendations come from resolved Person-level affinity evidence. Priority and next action are deterministic operating guidance, not predictive probability or causal attribution.
             </p>
           </div>
           <span className="rounded-lg bg-slate-50 px-3 py-1.5 text-xs font-semibold text-slate-500">
@@ -88,7 +88,7 @@ export default async function SalesIntelligencePage() {
           </div>
         ) : (
           <div className="mt-5 overflow-x-auto">
-            <table className="min-w-[1280px] w-full text-left text-sm">
+            <table className="min-w-[1420px] w-full text-left text-sm">
               <thead>
                 <tr className="border-b border-slate-100 text-[11px] uppercase tracking-wide text-slate-400">
                   <th className="px-3 py-3">Lead</th>
@@ -97,6 +97,7 @@ export default async function SalesIntelligencePage() {
                   <th className="px-3 py-3">Behaviour</th>
                   <th className="px-3 py-3">Course affinity</th>
                   <th className="px-3 py-3">Evidence</th>
+                  <th className="px-3 py-3">Objections</th>
                   <th className="px-3 py-3 text-right">Priority</th>
                   <th className="px-3 py-3">Next action</th>
                 </tr>
@@ -183,6 +184,33 @@ function LeadRow({ row }: { row: LeadSalesIntelligenceRow }) {
             Product: {row.recommendationReasonCodes.slice(0, 3).map(pretty).join(' · ')}
           </div>
         )}
+      </td>
+
+      <td className="px-3 py-4">
+        {row.activeObjectionCount > 0 ? (
+          <>
+            <div className="flex flex-wrap gap-1.5">
+              {row.activeObjectionCategories.slice(0, 3).map((category) => (
+                <span key={category} className="rounded-lg bg-amber-50 px-2 py-1 text-[10px] font-bold text-amber-700">
+                  {pretty(category)}
+                </span>
+              ))}
+            </div>
+            <div className="mt-2 text-[11px] text-slate-500">
+              {row.activeObjectionCount} active objection{row.activeObjectionCount === 1 ? '' : 's'}
+            </div>
+            {row.latestActiveObjectionNote && (
+              <div className="mt-1 max-w-[210px] text-[11px] leading-5 text-slate-400">
+                {row.latestActiveObjectionNote}
+              </div>
+            )}
+          </>
+        ) : (
+          <span className="text-slate-400">None recorded</span>
+        )}
+        <Link href={`/leads/${row.leadId}/objections`} className="mt-2 inline-flex text-[11px] font-semibold text-brand hover:underline">
+          Manage objections
+        </Link>
       </td>
 
       <td className="px-3 py-4 text-right">
