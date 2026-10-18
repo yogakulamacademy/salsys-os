@@ -4,8 +4,8 @@
 **Canonical repository:** `yogakulamacademy/salsys-os`
 **Production Supabase project:** `doaozrkrtgeslddwhclj`
 **Production domain:** `https://salsysos.com`
-**Active SEO/competitor branch:** `feature/seo-competitor-ranking-v1`
-**Branch HEAD at checkpoint:** `9e5b60d9d6001982bc57c84c0784d59297ad8ace` — `Export competitive opportunities with ranking reports`
+**Active OpenSearch integration branch:** `feature/opensearch-aws-sigv4-v1`
+**Branch HEAD before this checkpoint update:** `5ccedaaa57b2b22acf584e6c540ddcc9e4ababf3` — `Sign SEO OpenSearch requests through shared adapter`
 
 > This is the mutable implementation checkpoint. `SalsysOS_Master_Context.md` remains the long-lived strategic source of truth.
 
@@ -79,7 +79,7 @@ The unused draft erasure orchestrator migration remains intentionally unapplied 
 
 ### E. OpenSearch core foundation
 
-Implemented:
+Implemented in SalsysOS:
 
 - reference-only `search_index_outbox`
 - per-organization search settings
@@ -95,11 +95,48 @@ Implemented:
 - privacy-safe observability telemetry
 - admin OpenSearch health page
 
-Production remains safe because real OpenSearch provider credentials are still not configured and organization indexing remains disabled.
+**Provider status has advanced from “not connected” to “provider provisioned/configured; live E2E pending.”**
 
-### F. SEO → OpenSearch lexical intelligence
+A real Amazon OpenSearch Serverless collection now exists:
 
-SEO search entities now include:
+- collection: `salsys-search`
+- region: `ap-southeast-2`
+- type: `SEARCH`
+- status observed during setup: `ACTIVE`
+- endpoint: `https://ka4nj04bskgw51vo0w2h.ap-southeast-2.aoss.amazonaws.com`
+- ARN: `arn:aws:aoss:ap-southeast-2:354245663449:collection/ka4nj04bskgw51vo0w2h`
+- encryption: AWS-owned key
+- deletion protection: enabled
+- network endpoint: public, but authenticated access is required
+
+Production-wide organization indexing remains disabled. This is still a controlled preview-only pilot until health/bootstrap/indexing/search and cross-tenant tests pass.
+
+### F. AWS SigV4 OpenSearch adapter
+
+A dedicated integration branch now carries AWS OpenSearch Serverless signing support while preserving the existing provider modes.
+
+Supported request authentication paths:
+
+- existing Basic authentication
+- existing Bearer authentication
+- AWS SigV4 signing for OpenSearch Serverless (`aoss`)
+
+The shared signed-request path is used for the OpenSearch operations needed by the pilot, including:
+
+- health request
+- index bootstrap
+- bulk indexing worker
+- normal tenant search
+- SEO lexical search
+- competitor lexical search
+- SEO mapping/bootstrap requests
+- tenant result verification path
+
+A dedicated AWS principal was prepared for the Vercel pilot rather than reusing broad account credentials. Preferred Vercel↔AWS OIDC could not be completed in this AWS account because organization-level policy blocked the required IAM/OIDC operation, so the controlled preview currently uses dedicated branch-scoped AWS credentials instead. No credential values belong in this checkpoint.
+
+### G. SEO → OpenSearch lexical intelligence
+
+SEO search entities include:
 
 - `seo_page`
 - `seo_topic`
@@ -114,11 +151,11 @@ Implemented:
 - 30-minute derived SEO refresh
 - SEO-only pilot seed path
 - tenant-filtered SEO query layer
-- explicit dynamic:false SEO mappings
+- explicit `dynamic:false` SEO mappings
 - authenticated `/api/seo/search/v1`
 - interactive `/seo/intelligence` workspace
 
-### G. Semantic / hybrid SEO retrieval
+### H. Semantic / hybrid SEO retrieval
 
 Implemented provider-independent semantic architecture:
 
@@ -132,9 +169,9 @@ Implemented provider-independent semantic architecture:
 - lexical + vector Reciprocal Rank Fusion
 - lexical fail-open fallback
 
-Real embeddings and kNN E2E remain blocked until a real OpenSearch + embedding provider configuration is connected.
+A real OpenSearch provider now exists, but real embeddings/vector generation still require a separate embedding provider/model/dimension configuration. Semantic/kNN E2E is therefore still pending after lexical OpenSearch E2E.
 
-### H. SEO Decision Intelligence
+### I. SEO Decision Intelligence
 
 Implemented:
 
@@ -149,7 +186,7 @@ Implemented:
 
 No automatic website publishing is permitted from recommendations.
 
-### I. SEO Learning Loop
+### J. SEO Learning Loop
 
 Implemented:
 
@@ -164,7 +201,7 @@ Implemented:
 
 No fabricated historical learning is seeded. The model starts neutral and learns from real completed experiments.
 
-### J. Automatic outcome capture
+### K. Automatic outcome capture
 
 Implemented:
 
@@ -178,7 +215,7 @@ Implemented:
 
 This closes the observe → measure → learn loop without requiring manual analysis after an approved experiment begins.
 
-### K. Explainability + forecasting
+### L. Explainability + forecasting
 
 Implemented:
 
@@ -192,7 +229,7 @@ Implemented:
 
 The system does not fabricate conversion/revenue rates.
 
-### L. Opportunity Portfolio
+### M. Opportunity Portfolio
 
 Implemented:
 
@@ -204,7 +241,7 @@ Implemented:
 - prediction-vs-actual calibration metrics
 - tenant-safe portfolio API
 
-### M. Competitor Intelligence + SEO/AEO/GEO Ranking
+### N. Competitor Intelligence + SEO/AEO/GEO Ranking
 
 Implemented:
 
@@ -224,9 +261,9 @@ Implemented:
 
 External live ranking provider credentials are not configured yet, so paid/live SEO/AEO/GEO checks remain disabled.
 
-### N. Competitor Intelligence → OpenSearch / opportunity layer
+### O. Competitor Intelligence → OpenSearch / opportunity layer
 
-Latest branch work now includes:
+Implemented branch work includes:
 
 - competitor/rank/analysis intelligence prepared for OpenSearch search mode
 - competitor intelligence search mode added to the SEO intelligence experience
@@ -251,14 +288,30 @@ Claude is used for grounded reasoning and recommendations, not as the source of 
 
 ### OpenSearch
 
-Still missing in Vercel:
+**Current state: provisioned/configured for a controlled preview pilot; real application E2E not yet verified.**
 
-- `OPENSEARCH_URL`
-- OpenSearch auth credentials
-- optional index prefix
-- dedicated search worker secret
+AWS side:
 
-Therefore real external indexing/search E2E is still blocked.
+- Amazon OpenSearch Serverless collection `salsys-search` created and observed `ACTIVE`
+- collection endpoint and ARN recorded above
+- authenticated access policy prepared
+- dedicated Vercel pilot AWS principal prepared
+- deletion protection enabled
+
+Vercel side on `feature/opensearch-aws-sigv4-v1` / Preview only:
+
+- `OPENSEARCH_URL` configured
+- `OPENSEARCH_INDEX_PREFIX` configured
+- `OPENSEARCH_AWS_REGION` configured
+- `OPENSEARCH_AWS_SERVICE` configured
+- `AWS_ACCESS_KEY_ID` configured as Sensitive
+- `AWS_SECRET_ACCESS_KEY` configured as Sensitive
+- `AWS_REGION=ap-southeast-2`
+- `AWS_DEFAULT_REGION=ap-southeast-2`
+
+The credential values are intentionally not recorded here.
+
+Production environment is untouched by this pilot configuration.
 
 ### Semantic embeddings
 
@@ -271,32 +324,38 @@ Still missing:
 - `SEO_RANKING_API_URL`
 - `SEO_RANKING_API_KEY`
 
-Provider settings are initialized disabled; no paid rank polling is active.
+Provider settings remain initialized disabled; no paid rank polling is active.
 
 ---
 
 ## 5. Current branch/build state
 
-Branch HEAD at this checkpoint:
+Active integration branch before this checkpoint update:
 
-`9e5b60d9d6001982bc57c84c0784d59297ad8ace` — `Export competitive opportunities with ranking reports`
+`5ccedaaa57b2b22acf584e6c540ddcc9e4ababf3` — `Sign SEO OpenSearch requests through shared adapter`
 
-Vercel status on this HEAD is **failure due deployment build-rate limiting** (`retry in 24 hours`), not a confirmed code failure.
+A prior SigV4 branch commit received a successful Vercel build, but the latest branch state has **not** received a fresh preview deployment/compile after the final configuration changes because the Vercel Hobby project hit its daily API deployment limit:
 
-An earlier commit in the same branch (`9015fa4...`) did reach the build and exposed a TypeScript issue in `lib/seo/rank-provider-control.ts` where Supabase returned `{}` typing for `current.last_health_status`. Later branch commits may include further work, but the latest HEAD has not received a fresh compile because Vercel rate-limited it. Do not claim the current HEAD is build-verified until a new build succeeds.
+`Resource is limited — try again in 24 hours (more than 100, code: api-deployments-free-per-day)`
+
+This is a platform quota blocker, not evidence of an OpenSearch or application code failure. Do not claim the latest branch is fully build/runtime verified until a fresh preview deployment succeeds after the quota resets.
+
+The earlier SEO competitor checkpoint build blocker is therefore superseded: the project has now reached the provider-connection phase, but final AWS SigV4 runtime proof is waiting on a new preview deployment.
 
 ---
 
 ## 6. Production safety state
 
-- OpenSearch organization indexing: disabled
+- OpenSearch production-wide organization indexing: disabled
+- OpenSearch AWS pilot configuration: Preview + `feature/opensearch-aws-sigv4-v1` only
 - Semantic SEO indexing: disabled
 - Live ranking providers: disabled
 - No fake competitor/ranking data should be seeded
 - No automatic website publishing
 - Human approval required for high-impact SEO actions
 - Search/SEO/competitor operations remain tenant-bound
-- Sensitive credentials remain server-side
+- Sensitive credentials remain server-side and are not written to docs/logs/UI/exports
+- Do not promote the OpenSearch pilot to Production until health/bootstrap/indexing/search and cross-tenant validation pass
 
 ---
 
@@ -308,7 +367,9 @@ Planning estimates only:
 - Privacy technical platform: ~93–94%
 - SEO Intelligence architecture: ~97%
 - Competitor / ranking architecture: ~90%
-- OpenSearch foundation: strong, but real provider E2E still incomplete
+- OpenSearch foundation: strong
+- OpenSearch provider provisioning/configuration: completed for controlled preview pilot
+- OpenSearch real application E2E: pending fresh preview deployment and runtime tests
 - Semantic retrieval architecture: strong, real embeddings/kNN still incomplete
 - Real historical forecast calibration: early because real completed experiment volume is still low/zero
 
@@ -316,20 +377,68 @@ Do not convert architecture readiness into production-provider readiness.
 
 ---
 
-## 8. Immediate next execution order
+## 8. OpenSearch provider checklist
 
-1. Re-run a fresh Vercel build when rate limit clears; fix any remaining TypeScript/runtime errors before merge.
-2. Finish/verify competitor entities in OpenSearch mapping/query/source allowlists and UI on a successful build.
-3. Connect an actual OpenSearch provider and run protected health → bootstrap → SEO mapping → controlled tenant pilot → worker → adversarial cross-tenant query.
-4. Connect an embedding provider and run semantic bootstrap → vector worker → kNN → hybrid quality calibration.
-5. Select/connect a live SEO/AEO/GEO ranking provider; run one-query normalization tests before enabling any recurring checks.
-6. Enable controlled rank worker only after provider health, budgets and normalization pass.
-7. Accumulate real SEO experiments and calibrate forecast/decision learning from actual outcomes.
-8. Continue W8 tenant/security closeout separately; do not treat search tenant filtering as global W8 completion.
+### Completed
+
+- [x] Verify competitor OpenSearch entities/mappings/query/source allowlists/UI exist on the current code line
+- [x] Create real Amazon OpenSearch Serverless provider resource
+- [x] Create `salsys-search` SEARCH collection in `ap-southeast-2`
+- [x] Confirm collection reaches `ACTIVE`
+- [x] Keep AWS-owned encryption and deletion protection enabled
+- [x] Prepare authenticated data access for the controlled pilot
+- [x] Add AWS SigV4 support while preserving Basic/Bearer modes
+- [x] Route core OpenSearch/SEO lexical requests through the shared signed-request adapter
+- [x] Add branch-scoped Preview `OPENSEARCH_URL`
+- [x] Add branch-scoped Preview index prefix / AWS service / AWS region configuration
+- [x] Add dedicated branch-scoped Sensitive AWS access key variables
+- [x] Add standard `AWS_REGION` and `AWS_DEFAULT_REGION` to resolve AWS SDK/Vercel region detection
+- [x] Keep Production environment untouched
+- [x] Keep production-wide organization indexing disabled
+
+### Waiting on Vercel quota reset / runtime proof
+
+- [ ] Fresh Preview deployment of `feature/opensearch-aws-sigv4-v1`
+- [ ] Verify SigV4 OpenSearch health request succeeds from Vercel
+- [ ] Bootstrap the controlled OpenSearch index
+- [ ] Apply SEO + competitor mappings successfully
+- [ ] Enable exactly one controlled Yogakulam tenant in the OpenSearch pilot guard
+- [ ] Process a bounded indexing outbox batch
+- [ ] Verify indexed documents are searchable for the authorized tenant
+- [ ] Verify SEO lexical search against real indexed data
+- [ ] Verify competitor lexical search against real indexed data
+- [ ] Run adversarial cross-tenant query
+- [ ] Confirm foreign-tenant results = `0`
+- [ ] Review logs/telemetry for secrets, tenant leakage and retry failures
+- [ ] Only after all checks pass, decide whether the provider can be promoted beyond the preview pilot
+
+### Subsequent provider work
+
+- [ ] Connect real embedding provider/model/dimension
+- [ ] Run semantic bootstrap → vector worker → kNN → hybrid/RRF quality calibration
+- [ ] Connect live SEO/AEO/GEO ranking provider
+- [ ] Run one-query provider normalization before recurring checks
+- [ ] Enable bounded recurring rank worker only after health/budget/normalization checks pass
 
 ---
 
-## 9. Engineering guardrails
+## 9. Immediate next execution order
+
+1. Wait for the Vercel Hobby API deployment quota to reset; do not redeploy Production.
+2. Fresh Preview deployment of `feature/opensearch-aws-sigv4-v1`.
+3. Call protected OpenSearch health and prove AWS SigV4 authentication from the Vercel runtime.
+4. Bootstrap the base index and apply SEO + competitor mappings.
+5. Enable only one controlled Yogakulam tenant, run a bounded outbox worker batch and verify lexical search.
+6. Run adversarial cross-tenant search and require foreign results to equal zero before any broader enablement.
+7. Connect an embedding provider and run semantic bootstrap → vector worker → kNN → hybrid quality calibration.
+8. Select/connect a live SEO/AEO/GEO ranking provider; run one-query normalization tests before enabling recurring checks.
+9. Enable controlled rank worker only after provider health, budgets and normalization pass.
+10. Accumulate real SEO experiments and calibrate forecast/decision learning from actual outcomes.
+11. Continue W8 tenant/security closeout separately; do not treat search tenant filtering as global W8 completion.
+
+---
+
+## 10. Engineering guardrails
 
 - PostgreSQL remains the source of truth; OpenSearch is a derived retrieval layer.
 - Client-supplied organization IDs are never authority.
@@ -338,4 +447,5 @@ Do not convert architecture readiness into production-provider readiness.
 - Ranking truth must come from observed evidence, not Claude.
 - Customer messaging and website publishing remain human-controlled until explicitly signed off.
 - No secrets in logs, UI, exports or checkpoint files.
+- Do not copy the branch-scoped AWS credentials into Production until the controlled preview E2E and tenant-isolation checks pass.
 - Every meaningful phase should update this checkpoint and the GitHub canonical context.
