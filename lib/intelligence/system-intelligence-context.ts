@@ -6,7 +6,9 @@ import { getCurrentWorkspaceContext } from '@/lib/workspace';
 export type IntelligenceRole = 'owner' | 'admin' | 'manager' | 'admissions' | 'other';
 
 export type IntelligenceOwnerSignalRow = {
+  lead_id: string;
   current_stage: string | null;
+  last_contacted_at: string | null;
   needs_reply: boolean | null;
   last_inbound_at: string | null;
   has_overdue_followup: boolean | null;
@@ -42,12 +44,24 @@ export type IntelligenceSystemActivityRow = {
   latest_activity_at: string | null;
 };
 
+export type IntelligenceLearningProfile = {
+  signal_id: string;
+  role_scope: string;
+  outcome_samples: number | string | null;
+  score_adjustment: number | string | null;
+  confidence: number | string | null;
+  positive_count: number | string | null;
+  negative_count: number | string | null;
+  neutral_count: number | string | null;
+};
+
 export type SystemIntelligenceContext = {
   organizationId: string;
   role: IntelligenceRole;
   ownerSignals: IntelligenceOwnerSignalRow[];
   journey: IntelligenceJourneyRow[];
   systemActivity: IntelligenceSystemActivityRow[];
+  learningProfiles: IntelligenceLearningProfile[];
   velocity: {
     inbound24h: number;
     inboundPrevious24h: number;
@@ -101,10 +115,10 @@ export async function getSystemIntelligenceContext(now = new Date()): Promise<Sy
   const role = normalizeRole(workspace.activeWorkspace?.role);
   const since48h = new Date(now.getTime() - 48 * 60 * 60 * 1000).toISOString();
 
-  const [ownerSignalsResult, journeyResult, systemActivityResult, messagesResult, leadsResult] = await Promise.all([
+  const [ownerSignalsResult, journeyResult, systemActivityResult, messagesResult, leadsResult, learningResult] = await Promise.all([
     supabase
       .from('v_admissions_owner_lead_signals')
-      .select('current_stage,needs_reply,last_inbound_at,has_overdue_followup,priority_score,payment_status,outstanding_balance,currency')
+      .select('lead_id,current_stage,last_contacted_at,needs_reply,last_inbound_at,has_overdue_followup,priority_score,payment_status,outstanding_balance,currency')
       .eq('organization_id', organizationId)
       .limit(750),
     supabase
@@ -129,6 +143,11 @@ export async function getSystemIntelligenceContext(now = new Date()): Promise<Sy
       .eq('organization_id', organizationId)
       .gte('created_at', since48h)
       .limit(5000),
+    supabase
+      .from('system_intelligence_learning_profiles')
+      .select('signal_id,role_scope,outcome_samples,score_adjustment,confidence,positive_count,negative_count,neutral_count')
+      .eq('organization_id', organizationId)
+      .limit(250),
   ]);
 
   const degradedSources: string[] = [];
@@ -137,6 +156,7 @@ export async function getSystemIntelligenceContext(now = new Date()): Promise<Sy
   if (systemActivityResult.error) degradedSources.push('system_activity');
   if (messagesResult.error) degradedSources.push('message_velocity');
   if (leadsResult.error) degradedSources.push('lead_velocity');
+  if (learningResult.error) degradedSources.push('recommendation_learning');
 
   const messages = messagesResult.error ? [] : (messagesResult.data ?? []);
   const inboundRows = messages.filter((row) => row.direction === 'inbound');
@@ -151,6 +171,7 @@ export async function getSystemIntelligenceContext(now = new Date()): Promise<Sy
     ownerSignals: ownerSignalsResult.error ? [] : (ownerSignalsResult.data ?? []) as IntelligenceOwnerSignalRow[],
     journey: journeyResult.error ? [] : (journeyResult.data ?? []) as IntelligenceJourneyRow[],
     systemActivity: systemActivityResult.error ? [] : (systemActivityResult.data ?? []) as IntelligenceSystemActivityRow[],
+    learningProfiles: learningResult.error ? [] : (learningResult.data ?? []) as IntelligenceLearningProfile[],
     velocity: {
       inbound24h: inbound.current,
       inboundPrevious24h: inbound.previous,
