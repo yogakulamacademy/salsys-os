@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { ArrowLeft, Brain, Search, Swords } from 'lucide-react';
 
 import { SeoCompetitorIntelligence } from '@/components/seo-competitor-intelligence';
+import { SeoRankProviderControl } from '@/components/seo-rank-provider-control';
 import { PageHeader } from '@/components/ui';
 
 export const dynamic = 'force-dynamic';
@@ -45,6 +46,7 @@ export default function SeoCompetitorsPage() {
         </div>
       </section>
 
+      <SeoRankProviderControl />
       <SeoCompetitorIntelligence />
     </div>
   );
