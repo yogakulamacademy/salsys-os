@@ -2,7 +2,7 @@
 
 **Date:** 2026-10-18  
 **Repository:** `yogakulamacademy/salsys-os`  
-**Current integration branch:** `feature/system-intelligence-core-v1`
+**Current integration branch:** `feature/system-intelligence-v2`
 
 > Percentages are directional planning estimates, not formal QA, legal-compliance or production-provider sign-off. A feature can be architecturally advanced while still waiting on a real provider or final security validation.
 
@@ -10,9 +10,9 @@
 
 ## Executive summary
 
-**Overall defined SalsysOS scope:** approximately **82–85% complete**.
+**Overall defined SalsysOS scope:** approximately **84–86% complete**.
 
-The platform foundation, CRM, tracking, attribution, SEO Decision Intelligence and lexical search are already strong. The largest remaining areas are system-wide intelligence, Smart Triggers productionization, semantic/vector retrieval, Finance + Reports, final W8 security sign-off, cross-system learning and controlled automation.
+The platform foundation, CRM, tracking, attribution, SEO Decision Intelligence and lexical search are already strong. System Intelligence v2 now adds signal correlation, role-aware ranking, behavioral re-engagement, short-window velocity, operational-health confidence and bounded Claude synthesis. The largest remaining areas are recommendation/outcome learning, Smart Triggers productionization, semantic/vector retrieval, Finance + Reports, final W8 security sign-off and controlled automation.
 
 ---
 
@@ -59,10 +59,11 @@ The platform foundation, CRM, tracking, attribution, SEO Decision Intelligence a
 | Revenue intelligence foundation | 75% | 25% | Pipeline/weighted/collected/outstanding, forecasts | Reconciliation, finance ops, role/reporting depth |
 | Finance workspace / W7 | 55–65% | 35–45% | Revenue data available | Transactions, reconciliation, refunds, permissions, closeout |
 | Analytics / reports | 73% | 27% | Funnel, attribution, dashboard, SEO reports, exports in modules | Cohorts, period comparisons, custom/scheduled reports |
-| System health / observability | 75% | 25% | Health pages, logs, worker/provider state | Intelligent stale-sync/queue/provider alerts |
-| System Intelligence Core v1 | 100% v1 | — | Signal contract, ranking, UI, API, real evidence build proof | v2+ below |
-| System Intelligence full vision | 45% | 55% | Deterministic cross-domain operating brief foundation | Correlation, trends, roles, behavior, health, learning |
-| Claude unified operating brain | 50% | 50% | Claude exists in reply/SEO/competitor modules | Cross-system bounded synthesis and role briefs |
+| System health / observability | 80% | 20% | Health pages, logs, worker/provider state, Intelligence v2 health/degradation signal | Deeper stale-sync/provider alerts and response playbooks |
+| System Intelligence Core v1 | 100% v1 | — | Deterministic signal contract, ranking, UI, API, real evidence build proof | Superseded by v2 development line |
+| System Intelligence Core v2 | 90% v2 | 10% | Correlation, behavioral re-engagement, 24h velocity, system-health confidence, role-aware scoring, API/UI; Preview build READY | Authenticated runtime product validation, freshness/decay refinements |
+| System Intelligence full vision | 62% | 38% | Cross-domain deterministic engine plus adaptive v2 context | Outcome learning, wider marketing/SEO/team-capacity signals, learned calibration |
+| Claude unified operating brain | 68% | 32% | Bounded operating synthesis API/UI, strict grounding contract, Preview config/build verified | Authenticated Claude E2E, role-specific brief depth, learning from user feedback |
 | Cross-system learning | 63% | 37% | Strong SEO learning foundations | Recommendation ledger and outcomes across all domains |
 | Controlled autonomous action layer | 30% | 70% | Scheduler/actions/approval concepts | Risk classes, budgets, dry run, rollback, low-risk pilots |
 | Production hardening / rollout | 80% | 20% | Strong preview/deployment/test discipline | Final security, monitoring, QA, branch consolidation |
@@ -81,6 +82,7 @@ The platform foundation, CRM, tracking, attribution, SEO Decision Intelligence a
 - Core CRM / Sales foundation
 - Claude SEO → draft experiment E2E
 - Controlled OpenSearch lexical pilot
+- System Intelligence Core v1
 
 ### Strong but not formally closed
 
@@ -90,14 +92,16 @@ The platform foundation, CRM, tracking, attribution, SEO Decision Intelligence a
 - SEO Learning / Outcome Capture
 - Attribution
 - OpenSearch lexical production architecture
+- System Intelligence Core v2 deterministic architecture/build
+- Claude operating synthesis architecture/build
 
 ---
 
 ## Largest remaining work packages
 
-### 1. System Intelligence Core v2+
+### 1. Cross-system recommendation/outcome learning
 
-Need correlation, freshness, decay, trend/velocity, roles, behavior, SEO/marketing/system-health inputs, Claude synthesis and learning.
+Need a recommendation impression/action/outcome ledger so SalsysOS can measure which recommendations were accepted, dismissed, acted on and actually improved outcomes. This is the next major intelligence checkpoint.
 
 ### 2. W8 final security closeout
 
@@ -115,9 +119,9 @@ Need embedding provider/model/dimension, vector bootstrap, worker, kNN and RRF c
 
 Need payment/reconciliation/refund/ROI/reporting/permissions closeout.
 
-### 6. Cross-system learning
+### 6. Intelligence expansion
 
-Need a recommendation/action/outcome ledger so Sales, Marketing, Messaging and Automation can learn like SEO already does.
+Need more marketing/SEO/team-capacity signals, longer-window trend baselines, signal decay and role-specific briefing depth.
 
 ### 7. Controlled execution
 
@@ -131,13 +135,13 @@ Live competitor/ranking provider is deferred. DataForSEO or another provider can
 
 ## Recommended execution order
 
-1. System Intelligence Core v2 — correlation + freshness + trend + role views.
-2. Claude unified operating synthesis over bounded verified signals.
-3. W8 final security sign-off.
+1. Complete authenticated runtime validation of System Intelligence v2 + Claude synthesis.
+2. Build cross-system recommendation/action/outcome ledger and feedback capture.
+3. Complete W8 final security sign-off.
 4. Smart Triggers controlled production pilot.
 5. Semantic/vector/kNN/hybrid E2E.
 6. Finance + Reports / W7 closeout.
-7. Cross-system recommendation/outcome learning.
+7. Extend learned calibration across system recommendations.
 8. Controlled low-risk action layer.
 9. Live ranking provider later.
 
