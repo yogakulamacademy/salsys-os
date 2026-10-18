@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 
 import { createAdminClient } from '@/lib/supabase/admin';
 
-const PILOT_ORGANIZATION_ID = '11111111-1111-1111-1111-111111111111';
+const PILOT_ORGANIZATION_SLUG = 'yogakulam-academy';
 const MAX_PILOT_DOCUMENTS = 25;
 const ALLOWED_ENTITY_TYPES = new Set([
   'lead',
@@ -22,12 +22,25 @@ function unauthorized() {
   return NextResponse.json({ ok: false, error: 'Unauthorized.' }, { status: 401 });
 }
 
-async function getStatus() {
+async function resolvePilotOrganizationId() {
+  const supabase = createAdminClient();
+  const { data, error } = await supabase
+    .from('organizations')
+    .select('id')
+    .eq('slug', PILOT_ORGANIZATION_SLUG)
+    .maybeSingle();
+
+  if (error) throw new Error(`pilot_organization_resolve_failed:${error.message}`);
+  if (!data?.id) throw new Error('pilot_organization_not_found');
+  return String(data.id);
+}
+
+async function getStatus(organizationId: string) {
   const supabase = createAdminClient();
   const { data, error } = await supabase
     .from('search_index_settings')
     .select('organization_id,provider,indexing_enabled,batch_size,max_attempts,pilot_mode_enabled,pilot_started_at,pilot_max_documents,pilot_seeded_at,pilot_completed_at,updated_at')
-    .eq('organization_id', PILOT_ORGANIZATION_ID)
+    .eq('organization_id', organizationId)
     .maybeSingle();
 
   if (error) throw new Error(`pilot_status_failed:${error.message}`);
@@ -38,10 +51,12 @@ export async function GET(request: NextRequest) {
   if (!authorized(request)) return unauthorized();
 
   try {
+    const organizationId = await resolvePilotOrganizationId();
     return NextResponse.json({
       ok: true,
-      organizationId: PILOT_ORGANIZATION_ID,
-      settings: await getStatus(),
+      organizationSlug: PILOT_ORGANIZATION_SLUG,
+      organizationId,
+      settings: await getStatus(organizationId),
     });
   } catch (error) {
     return NextResponse.json(
@@ -62,18 +77,18 @@ export async function POST(request: NextRequest) {
   }
 
   const action = String(body.action ?? '').trim();
-  const suppliedOrganizationId = String(body.organizationId ?? PILOT_ORGANIZATION_ID).trim();
-
-  if (suppliedOrganizationId !== PILOT_ORGANIZATION_ID) {
-    return NextResponse.json(
-      { ok: false, error: 'This endpoint is locked to the controlled Yogakulam pilot organization.' },
-      { status: 403 },
-    );
-  }
-
   const supabase = createAdminClient();
 
   try {
+    const organizationId = await resolvePilotOrganizationId();
+
+    if (body.organizationId != null && String(body.organizationId).trim() !== organizationId) {
+      return NextResponse.json(
+        { ok: false, error: 'This endpoint is locked to the live Yogakulam pilot organization.' },
+        { status: 403 },
+      );
+    }
+
     if (action === 'stage') {
       const requested = Number(body.maxDocuments ?? 25);
       const maxDocuments = Number.isInteger(requested)
@@ -81,13 +96,13 @@ export async function POST(request: NextRequest) {
         : MAX_PILOT_DOCUMENTS;
 
       const { data, error } = await supabase.rpc('stage_search_index_pilot_v1', {
-        p_organization_id: PILOT_ORGANIZATION_ID,
+        p_organization_id: organizationId,
         p_max_documents: maxDocuments,
         p_confirm_controlled_pilot: body.confirm === true,
       });
       if (error) throw new Error(`pilot_stage_failed:${error.message}`);
 
-      return NextResponse.json({ ok: true, action, result: data, settings: await getStatus() });
+      return NextResponse.json({ ok: true, action, organizationId, result: data, settings: await getStatus(organizationId) });
     }
 
     if (action === 'seed') {
@@ -101,12 +116,12 @@ export async function POST(request: NextRequest) {
       }
 
       const { data, error } = await supabase.rpc('seed_search_index_pilot_v1', {
-        p_organization_id: PILOT_ORGANIZATION_ID,
+        p_organization_id: organizationId,
         p_entity_types: entityTypes,
       });
       if (error) throw new Error(`pilot_seed_failed:${error.message}`);
 
-      return NextResponse.json({ ok: true, action, result: data, settings: await getStatus() });
+      return NextResponse.json({ ok: true, action, organizationId, result: data, settings: await getStatus(organizationId) });
     }
 
     if (action === 'arm') {
@@ -118,12 +133,12 @@ export async function POST(request: NextRequest) {
       }
 
       const { data, error } = await supabase.rpc('arm_search_index_pilot_v1', {
-        p_organization_id: PILOT_ORGANIZATION_ID,
+        p_organization_id: organizationId,
         p_confirm_external_indexing: true,
       });
       if (error) throw new Error(`pilot_arm_failed:${error.message}`);
 
-      return NextResponse.json({ ok: true, action, result: data, settings: await getStatus() });
+      return NextResponse.json({ ok: true, action, organizationId, result: data, settings: await getStatus(organizationId) });
     }
 
     return NextResponse.json(
