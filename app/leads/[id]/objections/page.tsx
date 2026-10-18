@@ -3,12 +3,12 @@ import { notFound } from 'next/navigation';
 import { ArrowLeft, CheckCircle2, CircleAlert, PlusCircle } from 'lucide-react';
 
 import {
-  leadObjectionCategories,
   recordLeadObjectionAction,
   resolveLeadObjectionAction,
 } from '@/app/actions/objections';
 import { PageHeader } from '@/components/ui';
 import { getLead } from '@/lib/data';
+import { leadObjectionCategories } from '@/lib/objection-constants';
 import { createClient } from '@/lib/supabase/server';
 
 export default async function LeadObjectionsPage({
@@ -23,7 +23,7 @@ export default async function LeadObjectionsPage({
 
   if (!lead) notFound();
 
-  const { data, error } = await supabase
+  const { data, error } = await (supabase as any)
     .from('lead_objection_signals')
     .select('id,category,status,evidence_kind,note,confidence,created_at,resolved_at')
     .eq('lead_id', id)
@@ -31,8 +31,8 @@ export default async function LeadObjectionsPage({
     .limit(100);
 
   const rows = data ?? [];
-  const active = rows.filter((row) => row.status === 'active');
-  const resolved = rows.filter((row) => row.status === 'resolved');
+  const active = rows.filter((row: any) => row.status === 'active');
+  const resolved = rows.filter((row: any) => row.status === 'resolved');
   const createAction = recordLeadObjectionAction.bind(null, id);
 
   return (
@@ -139,7 +139,7 @@ export default async function LeadObjectionsPage({
               </div>
             ) : (
               <div className="mt-5 space-y-3">
-                {active.map((row) => {
+                {active.map((row: any) => {
                   const resolveAction = resolveLeadObjectionAction.bind(null, id, String(row.id));
                   return (
                     <div key={String(row.id)} className="rounded-2xl border border-amber-100 bg-amber-50/40 p-4">
@@ -185,7 +185,7 @@ export default async function LeadObjectionsPage({
               <div className="mt-5 text-sm text-slate-400">No resolved objections yet.</div>
             ) : (
               <div className="mt-5 space-y-3">
-                {resolved.map((row) => (
+                {resolved.map((row: any) => (
                   <div key={String(row.id)} className="rounded-xl border border-slate-100 bg-slate-50 p-4">
                     <div className="flex flex-wrap items-center gap-2">
                       <span className="inline-flex items-center gap-1 rounded-lg bg-emerald-50 px-2.5 py-1 text-[11px] font-bold text-emerald-700">
