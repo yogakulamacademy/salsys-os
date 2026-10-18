@@ -5,14 +5,30 @@ import { useRouter } from 'next/navigation';
 import { ArrowRight, Check, ThumbsDown, ThumbsUp } from 'lucide-react';
 
 type FeedbackState = 'idle' | 'accepted' | 'dismissed' | 'error';
+type ActionState = 'idle' | 'started' | 'completed' | 'error';
 
 export function IntelligenceRecommendationFeedback({ signalId, href }: { signalId: string; href?: string }) {
   const router = useRouter();
   const [recommendationId, setRecommendationId] = useState<string | null>(null);
+  const [startedRecommendationId, setStartedRecommendationId] = useState<string | null>(null);
   const [state, setState] = useState<FeedbackState>('idle');
+  const [actionState, setActionState] = useState<ActionState>('idle');
   const [busy, setBusy] = useState(false);
   const [actionBusy, setActionBusy] = useState(false);
   const touched = useRef(false);
+  const storageKey = `salsys:intelligence:started:${signalId}`;
+
+  useEffect(() => {
+    try {
+      const stored = window.sessionStorage.getItem(storageKey);
+      if (stored) {
+        setStartedRecommendationId(stored);
+        setActionState('started');
+      }
+    } catch {
+      // Completion recovery is additive; unavailable browser storage must not block the intelligence workspace.
+    }
+  }, [storageKey]);
 
   useEffect(() => {
     if (touched.current) return;
@@ -66,6 +82,14 @@ export function IntelligenceRecommendationFeedback({ signalId, href }: { signalI
 
     try {
       if (recommendationId) {
+        setStartedRecommendationId(recommendationId);
+        setActionState('started');
+        try {
+          window.sessionStorage.setItem(storageKey, recommendationId);
+        } catch {
+          // The server event is authoritative; storage only helps restore the completion control on return.
+        }
+
         await fetch('/api/intelligence/v1/recommendations', {
           method: 'POST',
           headers: { 'content-type': 'application/json', accept: 'application/json' },
@@ -77,6 +101,34 @@ export function IntelligenceRecommendationFeedback({ signalId, href }: { signalI
       // Action logging must never block the operator from reaching the recommended workspace.
     } finally {
       router.push(href);
+    }
+  }
+
+  async function completeAction() {
+    if (!startedRecommendationId || actionBusy) return;
+    setActionBusy(true);
+
+    try {
+      const response = await fetch('/api/intelligence/v1/recommendations', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', accept: 'application/json' },
+        body: JSON.stringify({ event: 'action_completed', recommendation_id: startedRecommendationId }),
+        cache: 'no-store',
+      });
+      const data = await response.json() as { ok?: boolean };
+      if (!response.ok || !data.ok) throw new Error('action_completion_failed');
+
+      try {
+        window.sessionStorage.removeItem(storageKey);
+      } catch {
+        // Completion was already recorded server-side.
+      }
+      setStartedRecommendationId(null);
+      setActionState('completed');
+    } catch {
+      setActionState('error');
+    } finally {
+      setActionBusy(false);
     }
   }
 
@@ -113,21 +165,41 @@ export function IntelligenceRecommendationFeedback({ signalId, href }: { signalI
     </div>
   );
 
+  const completionControl = actionState === 'completed' ? (
+    <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-700">
+      <Check size={11} /> Action completed
+    </span>
+  ) : startedRecommendationId ? (
+    <button
+      type="button"
+      disabled={actionBusy}
+      onClick={() => void completeAction()}
+      className="inline-flex shrink-0 items-center gap-1 rounded-lg border border-emerald-200 bg-emerald-50 px-2 py-1 text-[9px] font-black text-emerald-700 transition hover:bg-emerald-100 disabled:cursor-wait disabled:opacity-60"
+      aria-label="Mark recommendation action complete"
+    >
+      <Check size={10} /> {actionBusy ? 'Saving…' : 'Mark done'}
+    </button>
+  ) : null;
+
   return (
     <div className="flex min-w-0 flex-1 flex-wrap items-center justify-between gap-3">
       {feedbackControl}
-      {href ? (
-        <button
-          type="button"
-          disabled={actionBusy}
-          onClick={() => void actOnRecommendation()}
-          className="inline-flex shrink-0 items-center gap-1 text-[11px] font-black text-brand hover:underline disabled:cursor-wait disabled:opacity-60"
-          aria-label="Act on this recommendation"
-        >
-          {actionBusy ? 'Opening…' : 'Act on this'}
-          <ArrowRight size={12} />
-        </button>
-      ) : null}
+      <div className="inline-flex flex-wrap items-center justify-end gap-2">
+        {completionControl}
+        {actionState === 'error' ? <span className="text-[9px] font-semibold text-rose-500">Couldn&apos;t mark complete</span> : null}
+        {href ? (
+          <button
+            type="button"
+            disabled={actionBusy}
+            onClick={() => void actOnRecommendation()}
+            className="inline-flex shrink-0 items-center gap-1 text-[11px] font-black text-brand hover:underline disabled:cursor-wait disabled:opacity-60"
+            aria-label="Act on this recommendation"
+          >
+            {actionBusy && !startedRecommendationId ? 'Opening…' : 'Act on this'}
+            <ArrowRight size={12} />
+          </button>
+        ) : null}
+      </div>
     </div>
   );
 }
