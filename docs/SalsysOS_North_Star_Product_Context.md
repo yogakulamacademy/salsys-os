@@ -4,7 +4,7 @@
 **Last updated:** 2026-10-18  
 **Repository:** `yogakulamacademy/salsys-os`
 
-> Read this file first when SalsysOS context is incomplete. Update it after every meaningful checkpoint so product direction, verified progress, blockers, and next actions survive loss of chat/session context. The mutable implementation checkpoint is `docs/SalsysOS_Current_Checkpoint.md`.
+> Read this file first when SalsysOS context is incomplete. Update it after every meaningful checkpoint so product direction, verified progress, blockers and next actions survive loss of chat/session context. The mutable implementation checkpoint is `docs/SalsysOS_Current_Checkpoint.md`.
 
 ---
 
@@ -16,9 +16,10 @@ Core question:
 
 > **What is this person likely to do next, why, and what should we do right now to increase the probability of conversion?**
 
-First vertical: Yoga / Education / Wellness, with Yogakulam Academy as the real production proving ground. Second planned vertical: Real Estate.
+First vertical: Yoga / Education / Wellness, with Yogakulam Academy as the real production proving ground.  
+Second planned vertical: Real Estate.
 
-Core loop:
+Core business loop:
 
 `marketing spend → traffic/source/content → behavior → identity → lead → conversation → intent/objection/product affinity → salesperson activity → follow-up → payment/enrollment → revenue → attribution → learning → next-best action`
 
@@ -26,63 +27,131 @@ Locked AI direction:
 
 `Assist → Decide → Act with controls`
 
+The system should evolve from static dashboards into an adaptive operating system that continuously answers:
+
+> **What changed, what matters now, why does it matter, and what should the team do next?**
+
 Human approval must remain available for sensitive/high-impact customer, financial, automation and website actions.
 
-Principles: PostgreSQL/source systems remain truth; observed facts remain separate from inferred/modelled facts; deterministic identity first; revenue-linked analytics; data quality before intelligence; hard tenancy; privacy-by-design; auditable AI workflows; provider-neutral internal contracts where practical; no secret leakage; no fabricated metrics.
+Principles:
+
+- PostgreSQL/source systems remain truth
+- observed facts stay separate from inferred/modelled facts
+- deterministic identity first
+- revenue-linked analytics
+- data quality before intelligence
+- hard tenancy
+- privacy-by-design
+- auditable AI workflows
+- provider-neutral internal contracts where practical
+- no secret leakage
+- no fabricated metrics/evidence
+- AI may explain evidence but cannot invent evidence
 
 ---
 
 ## 2. Workspace program — fixed meanings
 
-| Workspace | Weight | Status |
+| Workspace | Weight | Current status |
 |---|---:|---|
 | W1 Architecture / Audit | 10% | COMPLETE |
 | W2 RBAC | 15% | COMPLETE |
 | W3 Shell / Header / Workspace Navigation | 15% | COMPLETE |
 | W4 Employee Accounts | 15% | COMPLETE |
-| W5 Sales Workspace | 12% | ~98–99% |
-| W6 Marketing Workspace | 12% | Materially advanced; SEO/Organic Intelligence is now the strongest sub-area |
-| W7 Finance + Reports | 11% | Pending formal build/closeout |
+| W5 Sales Workspace | 12% | ~97–99% |
+| W6 Marketing Workspace | 12% | Materially advanced; SEO/Organic Intelligence strongest sub-area |
+| W7 Finance + Reports | 11% | Partial; formal closeout still pending |
 | W8 Admin + Security / QA | 10% | Active; strict tenant cutover/sign-off still separate |
 
 Do not repurpose W1–W8.
 
-W6 includes Campaigns, Paid Media, Google Ads, Meta Ads, GA4, Search Console, SEO, Tracking, attribution, Website Intelligence, Opportunity Engine, Keyword/SERP, Content Intelligence, Revenue-Aware Organic, AEO, GEO/AI Visibility, Experimentation/Learning, Human-Approved Optimization, OpenSearch retrieval and competitor/rank intelligence.
+---
+
+## 3. Current whole-system interpretation
+
+Planning estimate only:
+
+- overall defined SalsysOS scope: **~82–85% complete**
+- foundation/architecture: ~98%
+- CRM/sales: ~97%
+- conversations/admissions: ~94%
+- tracking: ~100%
+- attribution/marketing intelligence: ~91%
+- SEO Intelligence: ~93–97% architecture
+- OpenSearch lexical platform: ~94%, with real controlled E2E verified
+- semantic/hybrid retrieval: ~65%
+- privacy technical platform: ~94%
+- W8 tenant/security: ~92%
+- Smart Triggers: ~80%
+- finance/reports: ~63–73% depending sub-area
+- System Intelligence Core: ~45% of the final intelligent-system vision
+- Claude unified reasoning layer: ~50%
+- controlled autonomous actions: ~30%
+
+Remaining work is increasingly about **orchestration, intelligence, learning, security sign-off and production control**, not conventional CRUD screens.
 
 ---
 
-## 3. Tenancy / W8 security contract
+## 4. Tenancy / W8 security contract
 
 Fixed phases: W8A tenant identity/audit; W8B tenant login; W8C auth→tenant binding; W8D remove org switching; W8E trusted tenant resolver; W8F DB/RLS/RPC isolation; W8G integrations/webhooks; W8H team admin isolation; W8I adversarial regression; W8J controlled second-tenant staging; W8K production cutover/sign-off.
 
 Verified direction/state:
 
 - one organization = one tenant = isolated data boundary
-- server-derived tenant is authority; browser/client org IDs are never sufficient authority
+- server-derived tenant is authority
+- browser/client organization IDs are never sufficient authority
 - normal org switching is removed by default
 - exactly one active membership per normal user is the target contract
-- CRM settings, Team & Access, Sales and integration paths have been substantially tenant-hardened
+- CRM/settings/Team & Access/Sales/integration paths are substantially tenant-hardened
 - OAuth/integration service mutations revalidate tenant before mutation
 - cross-tenant adversarial checks have blocked foreign CRM/settings/follow-up/contact/stage/owner/integration paths
-- OpenSearch/SEO/competitor queries also enforce server tenant filters and post-validation
+- OpenSearch/SEO queries enforce tenant filters and post-validation
+- real OpenSearch cross-tenant verification returned zero foreign results
+- Claude SEO recommendation→experiment staging rejected foreign-tenant access
 
-Strict global tenant-session enforcement remains a separate W8 cutover/sign-off item. Do not treat search-layer tenant filtering as W8 completion.
+Strict global tenant-session enforcement remains a separate W8 cutover/sign-off item.
 
-Remaining W8 work includes final authenticated SECURITY DEFINER intent review, residual service-client/runtime validation, remaining adversarial matrix, controlled second-tenant validation, legacy multi-org admin cleanup and strict cutover/sign-off.
+Remaining W8 work:
+
+- final controlled second-tenant matrix
+- remaining `SECURITY DEFINER` intent review
+- residual service-client/runtime validation
+- legacy multi-org admin cleanup
+- strict tenant-session cutover
+- formal W8 sign-off
 
 ---
 
-## 4. Smart Triggers / Automation
+## 5. Sales / Admissions / Conversations
 
-Direction: WATI/AiSensy-style conversation automation adapted to SalsysOS with visual flows, wait states, branching, channel policies, AI decisions, human approval/handoff, dedupe, suppression, stop-on-reply and audit.
+Materially implemented:
 
-Implemented foundation includes tenant-scoped workflows, triggers, conditions, actions, events, runs, enrollments, suppressions, flow nodes/edges, wait states, scheduled jobs, variables and immutable published flow versions.
+- lead management
+- stage/intent/ownership
+- employee-scoped access
+- secure contacts
+- pipeline
+- tasks/follow-ups
+- admissions dashboard
+- needs-reply/unread attention state
+- first-touch queue
+- high-intent/payment-pending work
+- source/campaign attribution fields
+- enrollment/payment fields
+- WhatsApp integration foundation
+- Instagram messaging foundation
+- shared AI Reply Co-Pilot
+- organization knowledge grounding
+- human approval before send
 
-Controlled reply and no-reply runtime paths were validated without customer sends. Autonomous customer messaging remains gated until provider/channel-policy, suppression, audit, rate-limit and human-review controls are fully signed off.
+The next growth in this area should come from intelligence, not more static UI: objection detection, lead acceleration/decay, predicted next action, team capacity and why-this-lead-now explanations.
+
+Autonomous customer sends remain gated.
 
 ---
 
-## 5. Tracking Contract v1
+## 6. Tracking Contract v1
 
 **Status: READY / frozen.**
 
@@ -96,237 +165,337 @@ Production-verified foundations:
 - rate limiting
 - sanitization/redaction
 - lead processing/dedupe
-- retry/recovery crons
+- retry/recovery jobs
 - attribution state machine
 - browser/privacy gating
-- release gate verifying tracked organizations ready for external ingestion and OpenSearch indexing
+- release gate
 
-Tracking remains upstream evidence; external clients do not write directly to CRM lead truth.
+Tracking remains upstream evidence; external clients do not write CRM lead truth directly.
 
 ---
 
-## 6. Privacy & Compliance technical platform
+## 7. Privacy & Compliance technical platform
 
-Posture: privacy-by-design technical controls supporting applicable frameworks; do not claim universal legal compliance.
+Implemented foundations:
 
-Implemented foundations include:
-
-- retention executor + scheduled run
+- retention executor + schedule
 - verified access/export
-- autonomous subject resolution
-- erasure planner + scheduled run
+- subject resolution
+- erasure planner + schedule
 - privacy-safe search telemetry
 
-The unused draft erasure orchestrator migration remains intentionally unapplied and must not be run.
+The unused draft erasure orchestrator migration remains intentionally unapplied.
 
-Directional privacy technical readiness: ~93–94% for the currently defined technical platform, not legal/compliance sign-off.
+Directional technical readiness: ~94%, not universal legal-compliance sign-off.
 
 ---
 
-## 7. OpenSearch platform foundation
+## 8. OpenSearch platform — controlled lexical E2E verified
 
-Implemented:
+Implemented platform foundation:
 
 - reference-only search outbox
 - per-organization settings
-- revision/lease-safe claim + finalize
+- revision/lease-safe claim/finalize
 - JIT document rebuilding from PostgreSQL truth
 - protected indexing worker
-- strict server tenant resolver
+- strict tenant resolver
 - tenant-filtered query service
 - tenant-bound global search API
 - controlled pilot guard/cap
 - health/bootstrap endpoints
 - global command palette
-- privacy-safe search observability
+- privacy-safe observability
 - admin search-health workspace
+- AWS SigV4 shared adapter while preserving Basic/Bearer modes
 
-Production safety posture:
+Real AWS provider:
 
-- external OpenSearch credentials are still not configured
-- organization indexing remains disabled
-- therefore no production external search indexing is active
+- Amazon OpenSearch Serverless collection `salsys-search`
+- region `ap-southeast-2`
+- authenticated access
+- AWS-owned encryption
+- deletion protection
 
-PostgreSQL remains the source of truth; OpenSearch is a derived retrieval layer.
+Controlled Yogakulam verification completed:
 
----
+- bounded lead indexing batch: 25 claimed / 25 succeeded / 0 failed
+- real authorized Yogakulam retrieval returned matches
+- foreign tenant retrieval returned `0`
+- SEO mappings applied
+- bounded SEO indexing succeeded
+- real SEO lexical retrieval returned results
+- foreign tenant SEO retrieval returned `0`
+- indexing switched back OFF after the pilot
 
-## 8. SEO Intelligence — current architecture
+Production-wide external indexing remains intentionally OFF pending rollout decision/hardening.
 
-SEO OpenSearch entity types include:
-
-- `seo_page`
-- `seo_topic`
-- `seo_entity`
-- `seo_experiment`
-- `seo_action`
-
-Implemented SEO intelligence stack:
-
-1. **Lexical retrieval** — JIT SEO documents, explicit `dynamic:false` mappings, refresh jobs, authenticated tenant-safe API and `/seo/intelligence` workspace.
-2. **Semantic/hybrid foundation** — embedding outbox, content-hash dedupe, privacy-safe embedding subjects, separate kNN semantic index design, protected semantic worker/bootstrap, tenant-filtered kNN and Reciprocal Rank Fusion with lexical fallback.
-3. **Decision Intelligence** — configurable multi-signal next-best-action scoring using demand, opportunity, business/revenue, technical, content, AEO/GEO and related evidence.
-4. **Human-gated execution** — recommendations can stage draft experiments/actions, but automatic website publishing remains disabled.
-5. **Learning Loop** — baseline/outcome comparison, positive/negative/mixed/inconclusive classification, confidence, hourly learning sweep and bounded learned ranking adjustments.
-6. **Automatic outcome capture** — maturity detection, GSC lag, same-length final windows, audit trail and autonomous final measurement/finalization.
-7. **Explainability + forecasting** — reason drivers, bounded low/base/high scenarios, extra clicks/leads and revenue only when real evidence exists; no fabricated conversion/revenue rates.
-8. **Opportunity Portfolio** — capacity-aware top 3/5/8 planning with effort, risk, confidence and modeled upside.
-9. **Forecast calibration** — forecast snapshots at experiment staging so predicted vs actual outcomes can be measured later.
-
-Directional SEO Intelligence architecture readiness: ~97%. This is architecture readiness, not real-provider/semantic-production readiness.
+PostgreSQL remains source of truth; OpenSearch remains derived retrieval.
 
 ---
 
-## 9. Competitor Intelligence + SEO/AEO/GEO ranking
+## 9. SEO Intelligence
 
-Implemented foundations:
+Materially implemented stack:
 
-- tenant-scoped competitor registry
+1. **Lexical retrieval** — tenant-safe SEO OpenSearch documents, mappings, refresh and `/seo/intelligence`.
+2. **Decision Intelligence** — configurable multi-signal next-best-action scoring.
+3. **Human-gated execution** — recommendation → draft experiment/action; no auto website publishing.
+4. **Learning Loop** — baseline/outcome comparison and bounded learned ranking adjustments.
+5. **Automatic outcome capture** — maturity detection, GSC lag and autonomous final measurement.
+6. **Explainability + forecasting** — bounded scenarios, clicks/leads/revenue only when evidence exists.
+7. **Opportunity Portfolio** — capacity-aware top priorities with effort/upside/confidence/risk.
+8. **Forecast calibration** — prediction snapshots at experiment staging.
+9. **Claude SEO Intelligence** — grounded first-party/GSC reasoning with explicit no-fabrication rules.
+10. **Claude recommendation → draft experiment** — real E2E verified, idempotent, tenant-safe and human-controlled.
+
+Recent staging verification proved:
+
+- real draft creation
+- repeat call returned same experiment
+- draft remained unapproved/unstarted
+- correct provenance and page binding
+- recommendation linkage
+- foreign-tenant rejection
+- no publishing/execution
+- synthetic verification data removed afterward
+
+---
+
+## 10. Competitor Intelligence + SEO/AEO/GEO ranking
+
+Architecture implemented:
+
+- competitor registry
 - SEO/AEO/GEO rank targets
-- historical rank snapshots
-- Claude competitor strategist grounded in observed evidence
-- explicit recommendation contract: surface, priority, action, why, competitor advantage, expected signal, confidence, evidence, target query and validated tenant-owned target URL
+- snapshot schema
+- grounded Claude competitor strategist
+- explicit recommendation contract
 - recommendation → draft experiment bridge
-- human approval guardrails
+- human approval
 - lease-safe rank worker
-- retry/backoff + failure categorization
-- provider control plane with per-tenant surface enablement, min interval and hourly/daily budgets
-- one-query normalization health test
-- fail-closed activation
-- PDF / CSV / DOC exports with tenant-scoped audit metadata
-
-Latest branch work also adds:
-
-- competitor/rank/analysis intelligence into the OpenSearch-oriented search layer
-- competitor intelligence search mode
+- retry/backoff/failure categorization
+- provider controls and budgets
+- one-query normalization health path
+- reporting/export
+- competitor/rank/analysis OpenSearch model
 - competitive opportunity engine
-- competitive opportunities surfaced in the SEO workspace
-- competitive opportunities included in ranking-report exports
 
-Rollback-only database testing verified competitor, rank-target and analysis documents build for the correct tenant and are rejected cross-tenant; synthetic validation data was removed.
+Live ranking evidence is intentionally deferred.
 
-Directional competitor/ranking architecture readiness: ~90%.
+A DataForSEO integration branch was started, but the product decision is to keep the live ranking provider for later while Claude works only from already observed first-party/GSC evidence.
 
----
-
-## 10. Claude / AI contract
-
-Anthropic server-side configuration is present for production/preview.
-
-Claude is used for reasoning, classification and grounded recommendations. It is **not** the source of ranking truth. Ranking/citation evidence must come from GSC and/or an actual external rank/visibility provider.
-
-Claude must not invent ranking positions, traffic, AI citations, URLs, revenue, competitor capabilities or evidence.
+Do not fabricate ranking positions, SERP features or AI citations.
 
 ---
 
-## 11. External provider blockers
+## 11. Semantic / hybrid retrieval
 
-### OpenSearch
+Provider-independent architecture exists for:
 
-Still missing real provider configuration in Vercel, including endpoint/auth. Real indexing/search E2E remains blocked.
+- embedding outbox
+- content-hash dedupe
+- privacy-safe embedding subjects
+- semantic settings
+- kNN index design
+- semantic bootstrap/worker
+- tenant-filtered semantic query
+- lexical + vector RRF
+- lexical fail-open fallback
 
-### Semantic embeddings
+Still required:
 
-The adapter exists, but a real embedding provider/model/dimension configuration is still required. Real vector generation and kNN quality calibration remain pending.
-
-### Live ranking provider
-
-Still missing:
-
-- `SEO_RANKING_API_URL`
-- `SEO_RANKING_API_KEY`
-
-Provider settings are initialized disabled; no recurring paid/live SEO/AEO/GEO polling is active.
-
----
-
-## 12. Current branch / deployment state
-
-Active SEO/competitor branch:
-
-`feature/seo-competitor-ranking-v1`
-
-Checkpoint HEAD before context-document commits:
-
-`9e5b60d9d6001982bc57c84c0784d59297ad8ace` — `Export competitive opportunities with ranking reports`
-
-Vercel status on that HEAD is **failure because the deployment was rate-limited** (`retry in 24 hours`), not a successful compile validation.
-
-An earlier build on commit `9015fa4...` reached type checking and exposed a TypeScript issue in `lib/seo/rank-provider-control.ts` around `current.last_health_status` being inferred from `{}`. A fresh build is required once the Vercel quota clears, and any remaining type/runtime errors must be fixed before merge.
+- embedding provider/model/dimension
+- remaining signed semantic request path where needed
+- real vector bootstrap
+- embedding generation
+- kNN E2E
+- hybrid relevance calibration
+- cost controls
 
 ---
 
-## 13. Directional progress snapshot — 2026-10-18
+## 12. Smart Triggers / Automation
 
-Planning estimates only:
+Implemented foundation:
 
-| Meter | Current interpretation |
-|---|---:|
-| Tracking Contract v1 | ~100% READY |
-| Privacy technical platform | ~93–94% |
-| W5 Sales Workspace | ~98–99% |
-| W8 Security / QA | highly advanced; strict cutover still pending |
-| SEO Intelligence architecture | ~97% |
-| Competitor / ranking architecture | ~90% |
-| OpenSearch provider E2E | pending external provider |
-| Semantic embeddings / kNN E2E | pending real embedding + OpenSearch provider |
-| Forecast calibration from real experiment history | early |
+- tenant-scoped workflows/triggers/conditions/actions/events/runs
+- action runs/enrollments/suppressions
+- flow nodes/edges/waits
+- scheduled jobs/variables
+- immutable published versions
+- reply/no-reply runtime paths
+- lease-safe scheduler foundation
+- retry/backoff/terminal failure handling
+- protected scheduler route
 
-Do not convert architecture percentages into production-provider readiness or legal/compliance claims.
+Remaining:
 
----
+- final scheduler secret/config proof
+- controlled production scheduler activation
+- real-channel send pilot
+- suppression/stop-on-reply in real provider conditions
+- rate/send caps
+- escalation/handoff
+- provider failure recovery
+- workflow analytics/observability
 
-## 14. Current milestone
-
-### Milestone M-2026-10-18 — Organic Growth Decision Operating System
-
-Materially implemented:
-
-`GSC/GA4/CRM/revenue/AEO/GEO evidence → lexical/hybrid retrieval → decision ranking → explainability/forecast → opportunity portfolio → human-gated experiment → automatic observation/outcome capture → learning → improved future ranking`
-
-Competitor extension:
-
-`competitor registry + SEO/AEO/GEO rank evidence → Claude grounded gap analysis → competitive opportunity → draft experiment → human approval → measurement → learning`
-
-Key safety principle: **recommendations can prepare work, but publishing/execution remains human-controlled.**
-
-### Prior milestone highlights
-
-- W8 organization read/write RLS closure and tenant hardening
-- global password recovery + post-login shell fixes
-- Instagram outbound messaging + shared AI Reply Co-Pilot
-- tenant-safe Organization Knowledge V1
-- Smart Triggers + conversation flow runtime foundation
-- Tracking Contract v1 release gate
-- privacy retention/access/subject-resolution/erasure planner
-- OpenSearch foundation and pilot guard
-- SEO semantic/hybrid, decision, learning, forecasting and portfolio layers
+Autonomous messaging remains OFF until these controls pass.
 
 ---
 
-## 15. Immediate next execution order
+## 13. System Intelligence Core — new operating-system layer
 
-1. Wait for Vercel rate limit to clear and run a fresh branch build; fix any remaining TypeScript/runtime errors before merge.
-2. Verify competitor OpenSearch mappings/query/source allowlists and UI in a successful build.
-3. Connect a real OpenSearch provider: protected health → core bootstrap → SEO/competitor mapping → controlled single-tenant pilot → worker → cross-tenant adversarial search.
-4. Connect a real embedding provider and validate semantic bootstrap → vector worker → kNN → hybrid ranking quality.
-5. Select/connect a real SEO/AEO/GEO ranking provider; run one-query normalization tests before enabling recurring checks.
-6. Enable bounded rank polling only after provider health, normalization and cost controls pass.
-7. Accumulate real experiments and calibrate forecasts/action learning against observed outcomes.
-8. Continue W8 tenant/security closeout independently.
+A new shared intelligence contract now exists on:
+
+`feature/system-intelligence-core-v1`
+
+Core loop:
+
+`live tenant evidence → deterministic signals → priority score → ranked operating brief → recommended next move → human action`
+
+Implemented v1 evidence categories:
+
+- reply pressure
+- response-time pressure
+- first-touch backlog
+- due follow-ups
+- high-intent pipeline
+- payment-pending pipeline
+- outstanding revenue
+- batch/capacity pressure
+- acquisition quality
+- opportunity-value data quality
+
+Each signal includes a stable ID, category, severity, 0–100 score, explanation, recommended next move, key metric, deep link and evidence.
+
+New surfaces:
+
+- `lib/intelligence/system-intelligence.ts`
+- `components/system-intelligence-brief.tsx`
+- `/intelligence`
+- `GET /api/intelligence/v1`
+
+The API derives tenant context server-side and accepts no client organization ID.
+
+Real Yogakulam snapshot used during verification contained changing business evidence including 25 reply-needed conversations, 25 conversations over one hour, 3 high-intent leads, 1 first-touch-due lead and 26 unvalued open leads.
+
+Verified Vercel preview:
+
+- deployment `dpl_GRGpQz5jYTgjDaT4ZoLKhN5kWwbn`
+- commit `f31dce4107de6ef02d4cab09c9634b4c5ecbcdc7`
+- Next.js 15.5.26
+- compiled successfully in 21.6s
+- static generation 38/38
+- deployment READY
+- unauthenticated `/intelligence` correctly redirected to login
+
+This is the first cross-module operating-intelligence layer, not the final intelligence system.
 
 ---
 
-## 16. Engineering protocol
+## 14. Intelligence roadmap from here
 
-Verify before modifying; preserve unrelated work; validate build/typecheck before claiming runtime readiness; separate external blockers from code failures; never expose secrets; do not invent tests or evidence; never enable strict tenant enforcement, autonomous customer sends, external indexing, paid rank polling or website publishing without the corresponding control gate; prefer rollback-only production adversarial tests where possible; client-supplied tenant IDs are never authority.
+### v2 — correlation / freshness / role awareness
 
-Update both `docs/SalsysOS_Current_Checkpoint.md` and this document after every meaningful checkpoint.
+- correlate overlapping signals
+- freshness and signal decay
+- trend/velocity/acceleration
+- baseline comparison
+- owner/manager/admissions/marketing priority views
+
+### v3 — behavioral / cross-system intelligence
+
+- reactivation
+- page revisits/product affinity
+- objection/sentiment changes
+- movement/drop-off risk
+- team capacity/ownership pressure
+- SEO + sales + marketing + system-health signals in one brain
+
+### v4 — Claude unified synthesis
+
+Claude receives bounded verified signals and produces:
+
+- morning brief
+- live operating brief
+- owner brief
+- admissions brief
+- marketing brief
+- risk/opportunity summary
+- why-now explanation
+- recommended sequence of work
+
+Claude may synthesize evidence but cannot create the underlying facts.
+
+### v5 — learning + controlled action
+
+`recommendation → human action → outcome → measurement → calibration → better future ranking`
+
+Only low-risk actions should move toward controlled automation, with approval, budgets, send caps, audit, dry-run and rollback controls.
 
 ---
 
-## 17. Related context
+## 15. Finance / Reports
+
+Existing foundations include pipeline/weighted/collected/outstanding revenue views and revenue-aware attribution/forecast logic.
+
+Formal W7 remains incomplete. Major remaining work:
+
+- finance workspace
+- payment transaction intelligence
+- reconciliation
+- course/batch revenue
+- source/campaign ROI
+- employee revenue contribution
+- refund/credit handling
+- standardized reports/exports
+- permissions
+
+---
+
+## 16. Current major remaining phases
+
+1. **System Intelligence Core v2** — correlation, freshness, trends, roles.
+2. **Claude unified reasoning layer** — bounded cross-system operating briefs.
+3. **W8 final security sign-off** — second tenant, remaining RPC/service validation and cutover.
+4. **Smart Triggers production pilot** — scheduler/channel policy/suppression/recovery.
+5. **Semantic/hybrid search** — embeddings → vector → kNN → RRF calibration.
+6. **Finance + Reports / W7** — formal revenue-operations closeout.
+7. **Cross-system learning** — extend SEO-style learning to sales/marketing/messaging/automation.
+8. **Controlled action layer** — gradual low-risk execution under explicit controls.
+9. **Live ranking provider later** — DataForSEO or alternative only when competitor evidence becomes priority.
+
+---
+
+## 17. Production safety posture
+
+- production-wide OpenSearch indexing OFF after controlled pilot
+- semantic/vector indexing OFF
+- live rank provider OFF
+- DataForSEO deferred
+- autonomous messaging OFF
+- automatic website publishing OFF
+- sensitive actions human-controlled
+- no fake competitor/ranking data
+- credentials server-side only
+- PostgreSQL remains truth
+- branch consolidation and final production hardening remain before declaring the whole platform production-complete
+
+---
+
+## 18. Engineering protocol
+
+Verify before modifying; preserve unrelated work; build/typecheck before claiming readiness; separate external blockers from code failures; never expose secrets; do not invent tests/evidence; client-supplied tenant IDs are never authority; cross-tenant validation is mandatory before external indexing/search changes; do not enable strict tenant enforcement, autonomous customer sends, paid rank polling or website publishing without the corresponding control gate.
+
+Update both this file and `docs/SalsysOS_Current_Checkpoint.md` after every meaningful checkpoint.
+
+---
+
+## 19. Related context
 
 - `docs/SalsysOS_Current_Checkpoint.md`
+- `docs/SalsysOS_System_Intelligence_Core_V1.md`
+- `docs/SalsysOS_Feature_Completion_Matrix_2026-10-18.md`
 - `docs/checkpoints/M-2026-10-18-SEO-OpenSearch-Competitor-Intelligence.md`
 - `docs/SalsysOS_Behavioral_Intelligence_Privacy_Control_Plane_Roadmap.md`
