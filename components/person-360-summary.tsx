@@ -3,8 +3,8 @@ import type { ReactNode } from "react";
 import {
   CircleDollarSign,
   Clock3,
+  ListTodo,
   MessageCircle,
-  MessageSquare,
   MousePointerClick,
   Route,
 } from "lucide-react";
@@ -38,11 +38,17 @@ export function Person360SummaryCard({
     person.last_contacted_at,
     person.last_inbound_at,
     person.last_outbound_at,
+    person.last_task_completed_at,
   ]);
 
   const paymentSummary = formatPaidAmounts(
     person.paid_amount_by_currency,
   );
+
+  const overdueCount = Number(person.overdue_task_count ?? 0);
+  const nextTaskDue = person.next_task_due_at
+    ? formatDateTime(person.next_task_due_at)
+    : null;
 
   return (
     <section className="card-pad">
@@ -55,8 +61,8 @@ export function Person360SummaryCard({
           </div>
 
           <p className="mt-1 text-xs leading-5 text-slate-400">
-            Canonical activity across identity, website, conversations and
-            payments.
+            Canonical activity across identity, website, conversations,
+            follow-ups and payments.
           </p>
         </div>
 
@@ -109,13 +115,15 @@ export function Person360SummaryCard({
         />
 
         <SummaryMetric
-          icon={<MessageSquare size={16} />}
-          label="Messages"
-          value={formatCount(person.message_count)}
+          icon={<ListTodo size={16} />}
+          label="Open follow-ups"
+          value={formatCount(person.open_task_count)}
           sub={
-            person.last_message_at
-              ? `Last ${formatDateTime(person.last_message_at)}`
-              : "No messages yet"
+            overdueCount > 0
+              ? `${formatCount(overdueCount)} overdue`
+              : nextTaskDue
+                ? `Next ${nextTaskDue}`
+                : `${formatCount(person.task_count)} total tasks`
           }
         />
 
