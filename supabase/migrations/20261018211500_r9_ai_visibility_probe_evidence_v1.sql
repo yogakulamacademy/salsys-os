@@ -41,6 +41,9 @@ create table if not exists public.seo_ai_visibility_probe_runs (
     )
 );
 
+create unique index if not exists seo_ai_visibility_probe_runs_id_org_uidx
+  on public.seo_ai_visibility_probe_runs (id, organization_id);
+
 create index if not exists idx_seo_ai_visibility_probe_runs_org_status
   on public.seo_ai_visibility_probe_runs (organization_id, status, requested_at desc);
 
@@ -72,8 +75,8 @@ create table if not exists public.seo_ai_visibility_observations (
     check (response_excerpt is null or length(response_excerpt) <= 2000)
 );
 
-create unique index if not exists seo_ai_visibility_probe_runs_id_org_uidx
-  on public.seo_ai_visibility_probe_runs (id, organization_id);
+create unique index if not exists seo_ai_visibility_observations_id_org_uidx
+  on public.seo_ai_visibility_observations (id, organization_id);
 
 create index if not exists idx_seo_ai_visibility_observations_org_observed
   on public.seo_ai_visibility_observations (organization_id, observed_at desc);
@@ -99,9 +102,6 @@ create table if not exists public.seo_ai_visibility_citations (
   constraint seo_ai_visibility_citations_position_chk
     check (citation_position is null or citation_position >= 1)
 );
-
-create unique index if not exists seo_ai_visibility_observations_id_org_uidx
-  on public.seo_ai_visibility_observations (id, organization_id);
 
 create index if not exists idx_seo_ai_visibility_citations_org_observed
   on public.seo_ai_visibility_citations (organization_id, observed_at desc);
