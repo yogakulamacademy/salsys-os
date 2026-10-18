@@ -25,6 +25,7 @@ const PUBLIC_EXACT_PATHS = new Set([
   "/api/search/index/pilot",
   "/api/search/index/worker",
   "/api/seo/competitors/rank-worker",
+  "/api/automation/runtime-scheduler",
 ]);
 
 const ACTIVE_WORKSPACE_COOKIE = "yk-active-workspace";
