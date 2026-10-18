@@ -4,7 +4,6 @@ import { NextResponse, type NextRequest } from "next/server";
 const PUBLIC_EXACT_PATHS = new Set([
   "/",
   "/auth/callback",
-  "/auth/recovery-confirm",
   "/forgot-password",
   "/yogakulam-tracker.js",
   "/api/leads/capture",
@@ -24,7 +23,6 @@ const PUBLIC_EXACT_PATHS = new Set([
   "/api/search/index/bootstrap",
   "/api/search/index/seo-bootstrap",
   "/api/search/index/pilot",
-  "/api/search/index/pilot-verify",
   "/api/search/index/worker",
   "/api/seo/competitors/rank-worker",
 ]);
