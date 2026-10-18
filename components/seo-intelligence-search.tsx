@@ -9,6 +9,7 @@ import {
   Globe2,
   Search,
   Sparkles,
+  Swords,
   Target,
   Wrench,
 } from "lucide-react";
@@ -21,7 +22,8 @@ type SeoMode =
   | "technical"
   | "aeo"
   | "geo"
-  | "experiments";
+  | "experiments"
+  | "competitors";
 
 type SearchItem = {
   id: string;
@@ -50,6 +52,7 @@ const modes: Array<{ key: SeoMode; label: string; icon: typeof Search }> = [
   { key: "technical", label: "Technical", icon: Wrench },
   { key: "aeo", label: "AEO", icon: Bot },
   { key: "geo", label: "GEO / AI", icon: Globe2 },
+  { key: "competitors", label: "Competitors", icon: Swords },
   { key: "experiments", label: "Experiments", icon: FlaskConical },
 ];
 
@@ -73,6 +76,10 @@ function titleFor(item: SearchItem) {
     text(source.topic_name) ||
     text(source.semantic_entity_name) ||
     text(source.experiment_title) ||
+    text(source.competitor_name) ||
+    text(source.competitor_domain) ||
+    text(source.rank_query) ||
+    text(source.analysis_scope) ||
     text(source.target_url) ||
     text(source.url_path) ||
     "SEO intelligence result"
@@ -88,13 +95,18 @@ function subtitleFor(item: SearchItem) {
     "recommendation",
     "hypothesis",
     "learning_summary",
+    "analysis_recommendation_text",
+    "analysis_gap_text",
+    "analysis_summary_text",
+    "rank_competitor_text",
+    "rank_serp_feature_text",
   ]) {
     const highlighted = item.highlights[key]?.[0];
     if (highlighted) return plainHighlight(highlighted).slice(0, 240);
     const value = text(source[key]);
     if (value) return value.slice(0, 240);
   }
-  return text(source.normalized_url) || text(source.target_url) || "";
+  return text(source.normalized_url) || text(source.rank_own_url) || text(source.target_url) || text(source.competitor_domain) || "";
 }
 
 function entityLabel(entityType: string | null) {
@@ -109,6 +121,12 @@ function entityLabel(entityType: string | null) {
       return "Experiment";
     case "seo_action":
       return "Optimization";
+    case "seo_competitor":
+      return "Competitor";
+    case "seo_rank_target":
+      return "Rank target";
+    case "seo_competitor_analysis":
+      return "Competitor analysis";
     default:
       return "SEO";
   }
@@ -121,7 +139,7 @@ function metricChips(item: SearchItem) {
   const opportunity = numberValue(source.opportunity_score);
   if (opportunity !== null) chips.push(`Opportunity ${Math.round(opportunity)}`);
 
-  const priority = numberValue(source.action_priority_score ?? source.priority_score);
+  const priority = numberValue(source.action_priority_score ?? source.priority_score ?? source.rank_priority);
   if (priority !== null) chips.push(`Priority ${Math.round(priority)}`);
 
   const impressions = numberValue(source.gsc_impressions);
@@ -138,6 +156,17 @@ function metricChips(item: SearchItem) {
 
   const geo = numberValue(source.generative_readiness_score);
   if (geo !== null) chips.push(`GEO ${Math.round(geo)}`);
+
+  const rankPosition = numberValue(source.rank_own_position);
+  if (rankPosition !== null) chips.push(`Rank #${rankPosition.toFixed(rankPosition % 1 ? 1 : 0)}`);
+
+  const competitorCount = numberValue(source.rank_competitor_count);
+  if (competitorCount !== null) chips.push(`${Math.round(competitorCount)} competitors observed`);
+
+  if (source.rank_answer_visibility === true) chips.push("AEO visible");
+  if (source.rank_answer_visibility === false) chips.push("AEO gap");
+  if (source.rank_ai_cited === true) chips.push("AI cited");
+  if (source.rank_ai_cited === false) chips.push("GEO citation gap");
 
   return chips.slice(0, 5);
 }
@@ -191,7 +220,7 @@ export function SeoIntelligenceSearch() {
             <input
               value={query}
               onChange={(event) => setQuery(event.target.value)}
-              placeholder="Ask SEO data: pages with traffic but no leads, weak AEO pages, content gaps..."
+              placeholder="Ask SEO data: ranking losses, competitors beating us, GEO citation gaps, weak AEO pages..."
               className="w-full rounded-xl border border-slate-200 bg-slate-50 py-3 pl-10 pr-4 text-sm outline-none transition focus:border-slate-400 focus:bg-white"
             />
           </div>
@@ -238,7 +267,7 @@ export function SeoIntelligenceSearch() {
           <Search size={24} className="mx-auto text-slate-300" />
           <div className="mt-2 text-sm font-semibold text-slate-700">No matching SEO intelligence yet</div>
           <div className="mt-1 text-xs text-slate-400">
-            Try another phrase or intelligence mode. Once the OpenSearch pilot is indexed, this workspace will rank live SEO opportunities.
+            Try another phrase or intelligence mode. Once OpenSearch is connected and indexed, this workspace will include live competitor and ranking intelligence too.
           </div>
         </div>
       ) : null}
@@ -248,7 +277,7 @@ export function SeoIntelligenceSearch() {
           {items.map((item) => {
             const source = item.source;
             const action = text(source.recommended_action) || text(source.seo_action_kind);
-            const url = text(source.normalized_url) || text(source.target_url);
+            const url = text(source.normalized_url) || text(source.rank_own_url) || text(source.target_url) || text(source.competitor_domain);
             return (
               <article key={item.id} className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
                 <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
@@ -260,6 +289,11 @@ export function SeoIntelligenceSearch() {
                       {action ? (
                         <span className="rounded-full bg-emerald-50 px-2 py-1 text-[10px] font-semibold text-emerald-700">
                           {action.replace(/_/g, " ")}
+                        </span>
+                      ) : null}
+                      {text(source.rank_surface) ? (
+                        <span className="rounded-full bg-sky-50 px-2 py-1 text-[10px] font-semibold uppercase text-sky-700">
+                          {text(source.rank_surface)}
                         </span>
                       ) : null}
                     </div>
