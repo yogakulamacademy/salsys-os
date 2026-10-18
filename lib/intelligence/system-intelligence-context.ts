@@ -6,9 +6,11 @@ import { getCurrentWorkspaceContext } from '@/lib/workspace';
 export type IntelligenceRole = 'owner' | 'admin' | 'manager' | 'admissions' | 'other';
 
 export type IntelligenceOwnerSignalRow = {
+  lead_id: string;
   current_stage: string | null;
   needs_reply: boolean | null;
   last_inbound_at: string | null;
+  last_contacted_at: string | null;
   has_overdue_followup: boolean | null;
   priority_score: number | null;
   payment_status: string | null;
@@ -104,7 +106,7 @@ export async function getSystemIntelligenceContext(now = new Date()): Promise<Sy
   const [ownerSignalsResult, journeyResult, systemActivityResult, messagesResult, leadsResult] = await Promise.all([
     supabase
       .from('v_admissions_owner_lead_signals')
-      .select('current_stage,needs_reply,last_inbound_at,has_overdue_followup,priority_score,payment_status,outstanding_balance,currency')
+      .select('lead_id,current_stage,needs_reply,last_inbound_at,last_contacted_at,has_overdue_followup,priority_score,payment_status,outstanding_balance,currency')
       .eq('organization_id', organizationId)
       .limit(750),
     supabase
