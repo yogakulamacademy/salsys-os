@@ -5,24 +5,10 @@ import { redirect } from 'next/navigation';
 
 import { createClient } from '@/lib/supabase/server';
 import { requireCurrentOrganizationId } from '@/lib/workspace';
-
-export const leadObjectionCategories = [
-  'price',
-  'timing',
-  'trust',
-  'schedule',
-  'location',
-  'accommodation',
-  'certification',
-  'health',
-  'travel',
-  'payment',
-  'family',
-  'work',
-  'other',
-] as const;
-
-export type LeadObjectionCategory = (typeof leadObjectionCategories)[number];
+import {
+  leadObjectionCategories,
+  type LeadObjectionCategory,
+} from '@/lib/objection-constants';
 
 function textValue(formData: FormData, key: string) {
   const value = String(formData.get(key) ?? '').trim();
@@ -67,7 +53,7 @@ export async function recordLeadObjectionAction(leadId: string, formData: FormDa
   try {
     const { supabase, user, organizationId } = await getBoundLead(leadId);
 
-    const { error } = await supabase.from('lead_objection_signals').insert({
+    const { error } = await (supabase as any).from('lead_objection_signals').insert({
       organization_id: organizationId,
       lead_id: leadId,
       category,
@@ -93,7 +79,7 @@ export async function resolveLeadObjectionAction(leadId: string, objectionId: st
   try {
     const { supabase, user, organizationId } = await getBoundLead(leadId);
 
-    const { error } = await supabase
+    const { error } = await (supabase as any)
       .from('lead_objection_signals')
       .update({
         status: 'resolved',
