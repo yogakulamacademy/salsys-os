@@ -20,6 +20,43 @@ function revenueCurrencyFromSignal(signalId: string) {
   return signalId.slice(prefix.length).trim().toUpperCase();
 }
 
+export function recommendationTargetLeadIds(
+  signalId: string,
+  context: SystemIntelligenceContext,
+): string[] {
+  const ids = new Set<string>();
+  const add = (value: string | null | undefined) => {
+    if (value) ids.add(value);
+  };
+
+  if (signalId === 'conversation-reply-pressure-correlated') {
+    context.ownerSignals
+      .filter((row) => row.needs_reply === true && ACTIVE_STAGES.has(String(row.current_stage || '')))
+      .forEach((row) => add(row.lead_id));
+  } else if (signalId === 'pipeline-first-touch') {
+    context.ownerSignals
+      .filter((row) => row.current_stage === 'new' && !row.last_contacted_at)
+      .forEach((row) => add(row.lead_id));
+  } else if (signalId === 'follow-up-due') {
+    context.ownerSignals
+      .filter((row) => row.has_overdue_followup === true)
+      .forEach((row) => add(row.lead_id));
+  } else if (signalId === 'pipeline-payment-pending') {
+    context.ownerSignals
+      .filter((row) => row.current_stage === 'payment_pending' || row.payment_status === 'pending')
+      .forEach((row) => add(row.lead_id));
+  } else if (signalId.startsWith('revenue-outstanding-')) {
+    const currency = revenueCurrencyFromSignal(signalId);
+    context.ownerSignals
+      .filter((row) => number(row.outstanding_balance) > 0 && String(row.currency || '').toUpperCase() === currency)
+      .forEach((row) => add(row.lead_id));
+  } else if (signalId === 'behavior-reengaged-leads') {
+    context.journey.filter((row) => row.is_reengaged === true).forEach((row) => add(row.lead_id));
+  }
+
+  return [...ids].slice(0, 500);
+}
+
 export function measureRecommendationSignal(
   signalId: string,
   snapshot: DashboardSnapshot,
