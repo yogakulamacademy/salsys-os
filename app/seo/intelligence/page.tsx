@@ -3,6 +3,7 @@ import { ArrowLeft, Brain, Search, Sparkles } from "lucide-react";
 
 import { ClaudeSeoIntelligence } from "@/components/claude-seo-intelligence";
 import { SeoIntelligenceSearch } from "@/components/seo-intelligence-search";
+import { SeoR8Health } from "@/components/seo-r8-health";
 import { PageHeader } from "@/components/ui";
 
 export const dynamic = "force-dynamic";
@@ -27,6 +28,8 @@ export default function SeoIntelligencePage() {
           </div>
         }
       />
+
+      <SeoR8Health />
 
       <section className="rounded-2xl border border-violet-100 bg-violet-50/60 px-4 py-4 text-sm text-violet-900">
         <div className="flex items-start gap-3">
