@@ -49,7 +49,9 @@ export async function getOpenSearchHealth() {
     };
   }
 
-  const serverlessRootNotFound = config.awsService === 'aoss' && clusterResponse.status === 404;
+  const serverlessRootNotFound = config.auth.mode === 'aws-sigv4'
+    && config.auth.service === 'aoss'
+    && clusterResponse.status === 404;
 
   if (!clusterResponse.ok && !serverlessRootNotFound) {
     return {
