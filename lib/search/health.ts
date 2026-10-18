@@ -94,13 +94,15 @@ export async function getOpenSearchHealth() {
 
     if (mappingResponse.ok) {
       const mapping = (await mappingResponse.json()) as Record<string, unknown>;
-      const root = mapping[config.indexName];
+      const exactRoot = mapping[config.indexName];
+      const root = exactRoot ?? Object.values(mapping)[0];
       if (root && typeof root === 'object' && !Array.isArray(root)) {
         const mappings = (root as Record<string, unknown>).mappings;
         if (mappings && typeof mappings === 'object' && !Array.isArray(mappings)) {
           const value = mappings as Record<string, unknown>;
           const properties = value.properties;
-          mappingSafe = value.dynamic === false
+          const dynamicDisabled = value.dynamic === false || value.dynamic === 'false';
+          mappingSafe = dynamicDisabled
             && Boolean(properties && typeof properties === 'object' && !Array.isArray(properties)
               && 'organization_id' in (properties as Record<string, unknown>)
               && 'entity_type' in (properties as Record<string, unknown>)
