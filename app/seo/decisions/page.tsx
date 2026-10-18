@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ArrowLeft, Brain, Search } from "lucide-react";
+import { ArrowLeft, Brain, Search, Swords } from "lucide-react";
 
 import { SeoDecisionForecastPanel } from "@/components/seo-decision-forecast-panel";
 import { SeoDecisionWorkspace } from "@/components/seo-decision-workspace";
@@ -17,6 +17,10 @@ export default function SeoDecisionPage() {
         description="See the next best SEO action, why it ranks first, the modeled business upside, how historical experiments influence the score, and what the system is currently learning."
         actions={
           <div className="flex flex-wrap items-center gap-2">
+            <Link href="/seo/competitors" className="btn-secondary">
+              <Swords size={15} />
+              Competitors & rankings
+            </Link>
             <Link href="/seo/intelligence" className="btn-secondary">
               <Search size={15} />
               Intelligence search
