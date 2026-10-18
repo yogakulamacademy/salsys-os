@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import {
   addCompetitor,
   addRankTarget,
+  createDraftExperimentFromCompetitorRecommendation,
   getCompetitorIntelligence,
   runClaudeCompetitorAnalysis,
   runRankingCheck,
@@ -24,6 +25,8 @@ function safeError(error: unknown) {
   if (message === 'SEO_RANK_PROVIDER_NOT_CONFIGURED') return { status: 503, error: 'A real-time ranking provider is not configured yet.' };
   if (message.includes('DOMAIN_') || message.includes('QUERY_INVALID') || message.includes('SURFACE_INVALID')) return { status: 400, error: 'Invalid competitor or ranking input.' };
   if (message === 'SEO_RANK_TARGET_NOT_FOUND') return { status: 404, error: 'Ranking target was not found.' };
+  if (message === 'SEO_COMPETITOR_RECOMMENDATION_INVALID') return { status: 400, error: 'The competitor recommendation is invalid.' };
+  if (message.startsWith('SEO_COMPETITOR_EXPERIMENT_CREATE_FAILED')) return { status: 409, error: 'Unable to create the draft experiment from this recommendation.' };
   return { status: 503, error: 'SEO competitor intelligence is temporarily unavailable.' };
 }
 
@@ -82,6 +85,22 @@ export async function POST(request: NextRequest) {
       const targetId = typeof body.target_id === 'string' ? body.target_id : '';
       const result = await runRankingCheck({ organizationId: tenant.organizationId, targetId });
       return NextResponse.json({ ok: true, snapshot: result });
+    }
+
+    if (action === 'create_draft_experiment') {
+      const analysisRunId = typeof body.analysis_run_id === 'string' ? body.analysis_run_id : '';
+      const recommendationIndex = typeof body.recommendation_index === 'number' ? body.recommendation_index : -1;
+      const result = await createDraftExperimentFromCompetitorRecommendation({
+        organizationId: tenant.organizationId,
+        analysisRunId,
+        recommendationIndex,
+        createdBy: tenant.userId,
+      });
+      return NextResponse.json({
+        ok: true,
+        experiment: result,
+        guardrail: 'draft_only_human_approval_required',
+      }, { status: 201 });
     }
 
     return NextResponse.json({ ok: false, error: 'Unsupported action.' }, { status: 400 });
