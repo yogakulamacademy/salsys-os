@@ -5,19 +5,26 @@ import { SystemIntelligenceBrief } from '@/components/system-intelligence-brief'
 import { PageHeader } from '@/components/ui';
 import { getDashboardSnapshot } from '@/lib/dashboard-data';
 import { buildSystemIntelligence } from '@/lib/intelligence/system-intelligence';
+import { getCurrentWorkspaceContext } from '@/lib/workspace';
 
 export const dynamic = 'force-dynamic';
 
 export default async function IntelligencePage() {
-  const snapshot = await getDashboardSnapshot();
-  const brief = buildSystemIntelligence(snapshot);
+  const [snapshot, workspace] = await Promise.all([
+    getDashboardSnapshot(),
+    getCurrentWorkspaceContext(),
+  ]);
+
+  const brief = buildSystemIntelligence(snapshot, new Date(), {
+    role: workspace.activeWorkspace?.role,
+  });
 
   return (
     <div className="dashboard-polish">
       <PageHeader
         eyebrow="Operating intelligence"
         title="What should we do right now?"
-        description="SalsysOS continuously ranks live operating signals instead of presenting the same static dashboard every time. The current version is deterministic, explainable and read-only."
+        description="SalsysOS ranks current operating evidence for the active workspace, correlates overlapping signals, and adapts priority weighting to the signed-in role. Facts remain deterministic and human-controlled."
         actions={
           <Link href="/dashboard" className="btn-secondary">
             Dashboard
@@ -33,9 +40,9 @@ export default async function IntelligencePage() {
           <div className="grid h-10 w-10 place-items-center rounded-xl bg-violet-50 text-violet-700">
             <BrainCircuit size={18} />
           </div>
-          <div className="mt-3 text-sm font-black text-slate-900">Observe → prioritize</div>
+          <div className="mt-3 text-sm font-black text-slate-900">Correlate → prioritize</div>
           <p className="mt-1 text-xs leading-5 text-slate-500">
-            Current CRM, conversation, pipeline, revenue, demand, acquisition and data-quality evidence is converted into ranked operating signals. A change in the evidence changes the ranking.
+            Overlapping evidence is combined before ranking, so one underlying problem does not appear as several inflated priorities. The same evidence can rank differently for admissions, managers and owners.
           </p>
         </section>
 
@@ -45,7 +52,7 @@ export default async function IntelligencePage() {
           </div>
           <div className="mt-3 text-sm font-black text-slate-900">Evidence before AI</div>
           <p className="mt-1 text-xs leading-5 text-slate-500">
-            Facts and thresholds remain deterministic. Claude can later explain and synthesize these signals, but it does not get to invent the underlying counts, revenue, rankings or conversion evidence.
+            Facts and thresholds remain deterministic. Currency views stay separate unless an explicit FX source exists. Claude can later synthesize these verified signals, but it does not invent the underlying evidence.
           </p>
         </section>
 
@@ -55,7 +62,7 @@ export default async function IntelligencePage() {
           </div>
           <div className="mt-3 text-sm font-black text-slate-900">Recommend, don&apos;t silently act</div>
           <p className="mt-1 text-xs leading-5 text-slate-500">
-            Intelligence remains advisory in v1. Sensitive customer, financial, automation and website actions still require the existing approval/control planes.
+            Intelligence remains advisory. Sensitive customer, financial, automation and website actions continue through existing approval and control planes.
           </p>
         </section>
       </div>
@@ -65,15 +72,15 @@ export default async function IntelligencePage() {
           <div>
             <div className="flex items-center gap-2 text-[10px] font-black uppercase tracking-[.14em] text-violet-300">
               <Sparkles size={13} />
-              Intelligence Core v1
+              Intelligence Core v2
             </div>
-            <div className="mt-1 text-lg font-black">This is the first shared intelligence contract for SalsysOS.</div>
+            <div className="mt-1 text-lg font-black">The operating brief now adapts without weakening evidence quality.</div>
             <p className="mt-1 max-w-3xl text-xs leading-5 text-slate-300">
-              Next versions can add behavioral acceleration, reactivation, team capacity, SEO opportunities, system health, Claude synthesis and learned outcome calibration without replacing this evidence-first contract.
+              This checkpoint adds signal correlation, role-aware ranking, valid action routes and currency-safe revenue reasoning. Next: real freshness/decay from timestamped evidence, cross-domain SEO/system-health signals and bounded Claude synthesis.
             </p>
           </div>
           <div className="shrink-0 rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-xs font-bold text-slate-200">
-            Human-controlled · tenant-scoped · explainable
+            Human-controlled · tenant-scoped · role-aware
           </div>
         </div>
       </section>
