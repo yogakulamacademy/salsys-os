@@ -1,3 +1,6 @@
+import "server-only";
+
+import { timingSafeEqual } from "node:crypto";
 import { NextRequest, NextResponse } from "next/server";
 
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -5,6 +8,8 @@ import {
   authenticateServerTrackingSource,
   consumeTrackingRateLimit,
 } from "@/lib/tracking/runtime";
+
+const LEGACY_TRACKING_ORGANIZATION_SLUG = "yogakulam-academy";
 
 function cleanText(value: unknown, maxLength: number) {
   if (typeof value !== "string") return "";
@@ -17,19 +22,29 @@ function bearerToken(request: NextRequest) {
   return authorization.slice(7).trim() || null;
 }
 
+function constantTimeEqual(left: string, right: string) {
+  const leftBuffer = Buffer.from(left, "utf8");
+  const rightBuffer = Buffer.from(right, "utf8");
+
+  if (leftBuffer.length !== rightBuffer.length) return false;
+  return timingSafeEqual(leftBuffer, rightBuffer);
+}
+
 export async function POST(request: NextRequest) {
   const sourceKey = request.headers.get("x-salsys-source-key");
-  const source = await authenticateServerTrackingSource(
-    sourceKey,
-    bearerToken(request),
-  );
+  const bearer = bearerToken(request);
+  const source = await authenticateServerTrackingSource(sourceKey, bearer);
 
-  const legacyExpected = process.env.TRACKING_INGEST_SECRET;
-  const legacySupplied = request.headers.get("x-tracking-secret");
+  const legacyExpected = process.env.TRACKING_INGEST_SECRET?.trim() ?? "";
+  const legacySupplied = request.headers.get("x-tracking-secret")?.trim() ?? "";
   const legacyAuthorized =
     !sourceKey &&
-    !bearerToken(request) &&
-    Boolean(legacyExpected && legacySupplied && legacySupplied === legacyExpected);
+    !bearer &&
+    Boolean(
+      legacyExpected &&
+        legacySupplied &&
+        constantTimeEqual(legacySupplied, legacyExpected),
+    );
 
   if (!source && !legacyAuthorized) {
     return NextResponse.json(
@@ -45,7 +60,13 @@ export async function POST(request: NextRequest) {
   }
 
   let rate:
-    | { allowed: boolean; count: number; limit: number; remaining: number; reason: string | null }
+    | {
+        allowed: boolean;
+        count: number;
+        limit: number;
+        remaining: number;
+        reason: string | null;
+      }
     | null = null;
 
   if (source) {
@@ -114,6 +135,39 @@ export async function POST(request: NextRequest) {
           headers: { "Cache-Control": "no-store" },
         },
       );
+    }
+
+    if (legacyAuthorized) {
+      /*
+       * TRACKING_INGEST_SECRET is a backwards-compatibility credential for
+       * the original Yogakulam server-to-server integration. It must never
+       * become a global multi-tenant credential. Resolve that legacy tenant
+       * server-side and reject lead IDs from every other organization.
+       */
+      const { data: legacyOrganization, error: legacyOrganizationError } =
+        await supabase
+          .from("organizations")
+          .select("id")
+          .eq("slug", LEGACY_TRACKING_ORGANIZATION_SLUG)
+          .eq("status", "active")
+          .maybeSingle();
+
+      if (legacyOrganizationError || !legacyOrganization?.id) {
+        throw new Error("Legacy tracking organization is unavailable.");
+      }
+
+      if (legacyOrganization.id !== organizationId) {
+        return NextResponse.json(
+          {
+            ok: false,
+            error: "Unauthorized tracking source",
+          },
+          {
+            status: 403,
+            headers: { "Cache-Control": "no-store" },
+          },
+        );
+      }
     }
 
     const { data: session, error: sessionError } = await supabase
