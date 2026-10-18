@@ -1,6 +1,7 @@
 import 'server-only';
 
 import { createAdminClient } from '@/lib/supabase/admin';
+import type { SeoActionLearningProfile } from '@/lib/search/seo-decision-forecast';
 
 export type SeoLearningHealth = {
   enabled: boolean;
@@ -84,7 +85,7 @@ export async function getSeoDecisionWorkspaceContext(organizationId: string) {
 
   const admin = createAdminClient();
 
-  const [healthResult, learningResult, experimentResult, actionResult] = await Promise.all([
+  const [healthResult, learningResult, experimentResult, actionResult, profileResult] = await Promise.all([
     admin
       .from('v_seo_learning_health_v1')
       .select('*')
@@ -110,9 +111,13 @@ export async function getSeoDecisionWorkspaceContext(organizationId: string) {
       .in('source_layer', ['decision_intelligence_v1', 'decision_intelligence_v2'])
       .order('created_at', { ascending: false })
       .limit(8),
+    admin
+      .from('v_seo_action_learning_profile_v1')
+      .select('organization_id,action_kind,evidence_count,positive_count,negative_count,mixed_count,inconclusive_count,avg_effect_pct,positive_rate_pct,ranking_adjustment,last_evaluated_at')
+      .eq('organization_id', orgId),
   ]);
 
-  for (const result of [healthResult, learningResult, experimentResult, actionResult]) {
+  for (const result of [healthResult, learningResult, experimentResult, actionResult, profileResult]) {
     if (result.error) {
       throw new Error(`SEO decision workspace query failed: ${result.error.message}`);
     }
@@ -182,10 +187,24 @@ export async function getSeoDecisionWorkspaceContext(organizationId: string) {
     created_at: str(row.created_at),
   }));
 
+  const learningProfiles: SeoActionLearningProfile[] = ((profileResult.data ?? []) as Array<Record<string, unknown>>).map((row) => ({
+    action_kind: str(row.action_kind) || 'other',
+    evidence_count: num(row.evidence_count),
+    positive_count: num(row.positive_count),
+    negative_count: num(row.negative_count),
+    mixed_count: num(row.mixed_count),
+    inconclusive_count: num(row.inconclusive_count),
+    avg_effect_pct: num(row.avg_effect_pct),
+    positive_rate_pct: num(row.positive_rate_pct),
+    ranking_adjustment: num(row.ranking_adjustment),
+    last_evaluated_at: nullableString(row.last_evaluated_at),
+  }));
+
   return {
     health,
     learningEvents,
     experiments,
     actions,
+    learningProfiles,
   };
 }
