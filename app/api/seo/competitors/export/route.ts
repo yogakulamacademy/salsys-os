@@ -15,13 +15,24 @@ function csvCell(value: unknown) {
 }
 
 function buildCsv(context: Awaited<ReturnType<typeof getCompetitorIntelligence>>) {
-  const header = ['surface','query','engine','device','position','url','answer_visibility','ai_cited','ai_provider','observed_at','competitors'];
-  const rows = context.latest.map((row: any) => [
-    row.surface, row.query, row.engine, row.device, row.own_position, row.own_url,
+  const header = [
+    'record_type','surface','query','engine','device','position','url','answer_visibility','ai_cited','ai_provider','observed_at','competitors',
+    'competitive_priority_score','gap_score','business_score','evidence_confidence','action_class','recommended_action','reason','organic_leads','organic_revenue_inr','organic_revenue_usd',
+  ];
+  const rankingRows = context.latest.map((row: any) => [
+    'ranking_observation', row.surface, row.query, row.engine, row.device, row.own_position, row.own_url,
     row.answer_visibility, row.ai_cited, row.ai_provider, row.observed_at,
     Array.isArray(row.competitor_results) ? row.competitor_results.map((item: any) => item?.domain || item?.url || '').filter(Boolean).join(' | ') : '',
+    '', '', '', '', '', '', '', '', '', '',
   ]);
-  return [header, ...rows].map((row) => row.map(csvCell).join(',')).join('\n');
+  const opportunityRows = context.opportunities.map((row: any) => [
+    'competitive_opportunity', row.surface, row.query, row.engine, row.device, row.own_position, row.own_url,
+    row.answer_visibility, row.ai_cited, row.ai_provider, row.observed_at,
+    Array.isArray(row.competitor_domains) ? row.competitor_domains.join(' | ') : '',
+    row.competitive_priority_score, row.gap_score, row.business_score, row.evidence_confidence, row.action_class,
+    row.recommended_action, row.reason, row.organic_leads, row.organic_revenue_inr, row.organic_revenue_usd,
+  ]);
+  return [header, ...rankingRows, ...opportunityRows].map((row) => row.map(csvCell).join(',')).join('\n');
 }
 
 function escapeHtml(value: unknown) {
@@ -30,9 +41,10 @@ function escapeHtml(value: unknown) {
 
 function buildHtml(context: Awaited<ReturnType<typeof getCompetitorIntelligence>>) {
   const analysis: any = context.analyses[0] || null;
-  const rows = context.latest.map((row: any) => `<tr><td>${escapeHtml(row.surface)}</td><td>${escapeHtml(row.query)}</td><td>${escapeHtml(row.own_position ?? '—')}</td><td>${escapeHtml(row.answer_visibility ?? '—')}</td><td>${escapeHtml(row.ai_cited ?? '—')}</td><td>${escapeHtml(row.observed_at ?? '—')}</td></tr>`).join('');
+  const rankingRows = context.latest.map((row: any) => `<tr><td>${escapeHtml(row.surface)}</td><td>${escapeHtml(row.query)}</td><td>${escapeHtml(row.own_position ?? '—')}</td><td>${escapeHtml(row.answer_visibility ?? '—')}</td><td>${escapeHtml(row.ai_cited ?? '—')}</td><td>${escapeHtml(row.observed_at ?? '—')}</td></tr>`).join('');
+  const opportunityRows = context.opportunities.map((row: any) => `<tr><td>${escapeHtml(row.competitive_priority_score)}</td><td>${escapeHtml(row.surface)}</td><td>${escapeHtml(row.query)}</td><td>${escapeHtml(row.action_class)}</td><td>${escapeHtml(row.recommended_action)}</td><td>${escapeHtml(row.evidence_confidence)}</td></tr>`).join('');
   const recs = Array.isArray(analysis?.recommendations) ? analysis.recommendations.map((rec: any) => `<li><strong>${escapeHtml(rec.action || 'Recommendation')}</strong> — ${escapeHtml(rec.why || '')}</li>`).join('') : '<li>No analyzed recommendations yet.</li>';
-  return `<!doctype html><html><head><meta charset="utf-8"><title>SalsysOS SEO Competitor Intelligence</title><style>body{font-family:Arial,sans-serif;margin:36px;color:#111827}h1{font-size:24px}table{border-collapse:collapse;width:100%;margin-top:20px}th,td{border:1px solid #d1d5db;padding:8px;text-align:left;font-size:12px}th{background:#f3f4f6}li{margin-bottom:8px}</style></head><body><h1>SalsysOS SEO / AEO / GEO Competitor Intelligence</h1><p>Competitors tracked: ${context.competitors.length} · Ranking targets: ${context.targets.length}</p><h2>Latest rankings</h2><table><thead><tr><th>Surface</th><th>Query</th><th>Position</th><th>Answer visibility</th><th>AI cited</th><th>Observed</th></tr></thead><tbody>${rows || '<tr><td colspan="6">No ranking observations yet.</td></tr>'}</tbody></table><h2>Recommended actions</h2><ul>${recs}</ul></body></html>`;
+  return `<!doctype html><html><head><meta charset="utf-8"><title>SalsysOS SEO Competitor Intelligence</title><style>body{font-family:Arial,sans-serif;margin:36px;color:#111827}h1{font-size:24px}table{border-collapse:collapse;width:100%;margin-top:20px;margin-bottom:28px}th,td{border:1px solid #d1d5db;padding:8px;text-align:left;font-size:12px;vertical-align:top}th{background:#f3f4f6}li{margin-bottom:8px}</style></head><body><h1>SalsysOS SEO / AEO / GEO Competitor Intelligence</h1><p>Competitors tracked: ${context.competitors.length} · Ranking targets: ${context.targets.length} · Evidence-backed opportunities: ${context.opportunities.length}</p><h2>Competitive opportunities</h2><table><thead><tr><th>Priority</th><th>Surface</th><th>Query</th><th>Action class</th><th>Recommended action</th><th>Evidence</th></tr></thead><tbody>${opportunityRows || '<tr><td colspan="6">No evidence-backed competitive opportunities yet.</td></tr>'}</tbody></table><h2>Latest rankings</h2><table><thead><tr><th>Surface</th><th>Query</th><th>Position</th><th>Answer visibility</th><th>AI cited</th><th>Observed</th></tr></thead><tbody>${rankingRows || '<tr><td colspan="6">No ranking observations yet.</td></tr>'}</tbody></table><h2>Claude recommended actions</h2><ul>${recs}</ul></body></html>`;
 }
 
 function buildMinimalPdf(text: string) {
@@ -82,7 +94,18 @@ export async function GET(request: NextRequest) {
       contentType = 'application/msword; charset=utf-8';
       extension = 'doc';
     } else {
-      const summary = [`SalsysOS SEO / AEO / GEO Competitor Intelligence`, `Competitors tracked: ${context.competitors.length}`, `Ranking targets: ${context.targets.length}`, '', ...context.latest.map((row: any) => `${String(row.surface).toUpperCase()} | ${row.query} | Position ${row.own_position ?? '-'} | AEO ${row.answer_visibility ?? '-'} | GEO cited ${row.ai_cited ?? '-'}`)];
+      const summary = [
+        'SalsysOS SEO / AEO / GEO Competitor Intelligence',
+        `Competitors tracked: ${context.competitors.length}`,
+        `Ranking targets: ${context.targets.length}`,
+        `Evidence-backed opportunities: ${context.opportunities.length}`,
+        '',
+        'TOP COMPETITIVE OPPORTUNITIES',
+        ...context.opportunities.slice(0,12).map((row: any, i: number) => `${i+1}. ${String(row.surface).toUpperCase()} | Priority ${row.competitive_priority_score} | ${row.query} | ${row.recommended_action}`),
+        '',
+        'LATEST RANKING OBSERVATIONS',
+        ...context.latest.slice(0,20).map((row: any) => `${String(row.surface).toUpperCase()} | ${row.query} | Position ${row.own_position ?? '-'} | AEO ${row.answer_visibility ?? '-'} | GEO cited ${row.ai_cited ?? '-'}`),
+      ];
       bytes = buildMinimalPdf(summary.join('\n'));
       contentType = 'application/pdf';
       extension = 'pdf';
@@ -97,10 +120,10 @@ export async function GET(request: NextRequest) {
       status: 'completed',
       file_name: fileName,
       content_hash: hash,
-      row_count: context.latest.length,
+      row_count: context.latest.length + context.opportunities.length,
       requested_by: tenant.userId,
       completed_at: new Date().toISOString(),
-      filters: { surface: 'all' },
+      filters: { surface: 'all', includes: ['rankings','competitive_opportunities','claude_recommendations'] },
     });
 
     return new NextResponse(new Uint8Array(bytes), {
