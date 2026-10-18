@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 
 import { getSeoNextBestActions } from '@/lib/search/seo-decision';
+import { buildSeoDecisionForecast } from '@/lib/search/seo-decision-forecast';
 import { getSeoDecisionWorkspaceContext } from '@/lib/search/seo-decision-workspace';
 import { requireSingleActiveTenant } from '@/lib/tenant/server';
 
@@ -30,6 +31,20 @@ export async function GET() {
       getSeoDecisionWorkspaceContext(tenant.organizationId),
     ]);
 
+    const profileByAction = new Map(
+      context.learningProfiles.map((profile) => [profile.action_kind, profile]),
+    );
+
+    const forecasts = Object.fromEntries(
+      decisions.recommendations.map((recommendation) => [
+        recommendation.page_id,
+        buildSeoDecisionForecast(
+          recommendation,
+          profileByAction.get(recommendation.recommended_action_kind) || null,
+        ),
+      ]),
+    );
+
     return NextResponse.json(
       {
         ok: true,
@@ -38,6 +53,11 @@ export async function GET() {
         role: tenant.role,
         top_recommendation: decisions.topRecommendation,
         recommendations: decisions.recommendations,
+        forecasts,
+        top_forecast: decisions.topRecommendation
+          ? forecasts[decisions.topRecommendation.page_id] || null
+          : null,
+        learning_profiles: context.learningProfiles,
         learning_health: context.health,
         recent_learning: context.learningEvents,
         experiments: context.experiments,
