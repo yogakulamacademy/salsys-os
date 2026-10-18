@@ -64,6 +64,12 @@ export type Person360Summary = {
   last_paid_at: string | null;
   paid_currency_count: number | string | null;
   paid_amount_by_currency: Record<string, number | string> | null;
+
+  task_count: number | string | null;
+  open_task_count: number | string | null;
+  overdue_task_count: number | string | null;
+  next_task_due_at: string | null;
+  last_task_completed_at: string | null;
 };
 
 export type PersonJourneyEvent = {
@@ -140,7 +146,12 @@ const PERSON_360_SELECT = `
   paid_payment_count,
   last_paid_at,
   paid_currency_count,
-  paid_amount_by_currency
+  paid_amount_by_currency,
+  task_count,
+  open_task_count,
+  overdue_task_count,
+  next_task_due_at,
+  last_task_completed_at
 `;
 
 const PERSON_JOURNEY_SELECT = `
@@ -173,12 +184,6 @@ export async function getPersonJourneyForLead(
     throw new Error("A lead ID is required to load Person journey data.");
   }
 
-  /*
-   * Keep mock-mode behavior non-destructive.
-   *
-   * The existing Lead detail page can still render from its mock Lead payload
-   * without forcing a Supabase request for the new Person models.
-   */
   if (useMockData) {
     return {
       organizationId: null,
@@ -208,11 +213,6 @@ export async function getPersonJourneyForLead(
     user.id,
   );
 
-  /*
-   * Preserve the same explicit Lead authorization contract used by getLead().
-   * Active-workspace filtering below is an additional boundary, not a
-   * replacement for Lead-level access control.
-   */
   const { data: canAccess, error: accessError } = await supabase.rpc(
     "can_access_lead",
     {
@@ -238,9 +238,9 @@ export async function getPersonJourneyForLead(
   }
 
   /*
-   * These views/tables are migration-driven. Cast the query client locally so
-   * this adapter does not depend on generated Supabase types being refreshed
-   * in the same commit as migration 017/018.
+   * These views are migration-driven. Cast the query client locally so this
+   * adapter does not depend on generated Supabase types being refreshed in the
+   * same commit as the R4 read-model migrations.
    */
   const db = supabase as any;
 
@@ -277,14 +277,14 @@ export async function getPersonJourneyForLead(
 
   const [personResult, journeyResult] = await Promise.all([
     db
-      .from("v_person_360")
+      .from("v_person_360_operational")
       .select(PERSON_360_SELECT)
       .eq("organization_id", organizationId)
       .eq("person_id", personId)
       .maybeSingle(),
 
     db
-      .from("v_person_journey")
+      .from("v_person_journey_complete")
       .select(PERSON_JOURNEY_SELECT, {
         count: "exact",
       })
