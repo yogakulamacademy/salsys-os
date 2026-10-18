@@ -1,17 +1,26 @@
 'use client';
 
 import { FormEvent, useEffect, useState } from 'react';
-import { Beaker, Brain, Download, RefreshCw, Search, ShieldCheck, Swords } from 'lucide-react';
+import { Beaker, Brain, Download, RefreshCw, Search, ShieldCheck, Swords, Target } from 'lucide-react';
 
 type Data = {
   competitors: any[];
   targets: any[];
   latest: any[];
+  opportunities: any[];
   analyses: any[];
   recommendation_links: any[];
   rank_provider_configured: boolean;
   claude_configured: boolean;
 };
+
+function money(value: unknown, currency: 'INR'|'USD') {
+  const n = Number(value || 0);
+  if (!Number.isFinite(n) || n <= 0) return '';
+  return new Intl.NumberFormat(currency === 'INR' ? 'en-IN' : 'en-US', {
+    style: 'currency', currency, maximumFractionDigits: 0,
+  }).format(n);
+}
 
 export function SeoCompetitorIntelligence() {
   const [data, setData] = useState<Data | null>(null);
@@ -98,8 +107,48 @@ export function SeoCompetitorIntelligence() {
       </section>
 
       <section className="card-pad">
+        <div className="flex items-start gap-3">
+          <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-amber-50 text-amber-700"><Target size={17}/></span>
+          <div className="min-w-0 flex-1">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div><h2 className="font-semibold">Competitive opportunities</h2><p className="mt-1 text-xs text-slate-500">Observed ranking gaps ranked by gap severity, target priority, mapped business value and competitor pressure. No ranking evidence means no opportunity is fabricated.</p></div>
+              <span className="badge badge-gray">{data?.opportunities?.length || 0} observed gaps</span>
+            </div>
+            <div className="mt-4 grid gap-3">
+              {(data?.opportunities || []).slice(0,8).map((o:any, index:number) => (
+                <article key={`${o.target_id}-${o.surface}`} className="rounded-xl border border-slate-100 p-4">
+                  <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                    <div className="min-w-0 flex-1">
+                      <div className="flex flex-wrap gap-2">
+                        <span className="badge badge-blue">#{index+1} · {String(o.surface||'seo').toUpperCase()}</span>
+                        <span className="badge badge-gray">Priority {o.competitive_priority_score}/100</span>
+                        <span className="badge badge-gray">{o.evidence_confidence} evidence</span>
+                        <span className="badge badge-gray">{String(o.action_class||'monitor').replace(/_/g,' ')}</span>
+                      </div>
+                      <h3 className="mt-2 text-sm font-semibold text-slate-900">{o.query}</h3>
+                      <p className="mt-1 text-xs leading-5 text-slate-500">{o.reason}</p>
+                      <div className="mt-3 rounded-lg bg-slate-50 px-3 py-2 text-xs leading-5 text-slate-700"><strong>Recommended action:</strong> {o.recommended_action}</div>
+                      {Array.isArray(o.competitor_domains) && o.competitor_domains.length>0 && <p className="mt-2 text-[11px] text-slate-400">Observed competitors: {o.competitor_domains.slice(0,5).join(', ')}</p>}
+                    </div>
+                    <div className="shrink-0 text-xs text-slate-500 md:text-right">
+                      {o.own_position!=null && <div>Our rank: <strong>#{o.own_position}</strong></div>}
+                      {o.competitor_count>0 && <div>{o.competitor_count} competitor result{o.competitor_count===1?'':'s'}</div>}
+                      {o.organic_leads>0 && <div>{o.organic_leads} organic leads</div>}
+                      {money(o.organic_revenue_inr,'INR') && <div>{money(o.organic_revenue_inr,'INR')} attributed</div>}
+                      {money(o.organic_revenue_usd,'USD') && <div>{money(o.organic_revenue_usd,'USD')} attributed</div>}
+                    </div>
+                  </div>
+                </article>
+              ))}
+              {data && data.opportunities.length===0 && <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50 p-5 text-sm text-slate-500">No evidence-backed competitive opportunities yet. Once a real SEO/AEO/GEO provider captures observations, this engine will rank what to fix first and why.</div>}
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section className="card-pad">
         <div className="flex flex-wrap items-start justify-between gap-3">
-          <div><div className="flex items-center gap-2"><Brain size={17} className="text-brand"/><h2 className="font-semibold">Claude competitor strategist</h2></div><p className="mt-1 text-xs text-slate-500">Claude analyzes only grounded rank observations and competitor evidence; it is not used as the source of ranking truth.</p></div>
+          <div><div className="flex items-center gap-2"><Brain size={17} className="text-brand"/><h2 className="font-semibold">Claude competitor strategist</h2></div><p className="mt-1 text-xs text-slate-500">Claude analyzes grounded rank observations plus the deterministic opportunity scores above; it is not used as the source of ranking truth.</p></div>
           <button className="btn-primary" disabled={!data?.claude_configured || busy==='analyze'} onClick={()=>post({action:'analyze'},'analyze')}>{busy==='analyze'?'Analyzing…':'Analyze & recommend'}</button>
         </div>
         <div className="mt-4 space-y-3">
