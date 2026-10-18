@@ -1,7 +1,5 @@
-import Link from 'next/link';
 import {
   AlertTriangle,
-  ArrowRight,
   BrainCircuit,
   CheckCircle2,
   CircleDollarSign,
@@ -104,11 +102,7 @@ function SignalCard({ signal, rank }: { signal: SystemIntelligenceSignal; rank: 
       </div>
 
       <div className="mt-3 flex min-h-7 flex-wrap items-center justify-between gap-3 border-t border-slate-100 pt-3">
-        <IntelligenceRecommendationFeedback signalId={signal.id} />
-        <Link href={signal.href} className="inline-flex shrink-0 items-center gap-1 text-[11px] font-black text-brand hover:underline">
-          Act on this
-          <ArrowRight size={12} />
-        </Link>
+        <IntelligenceRecommendationFeedback signalId={signal.id} href={signal.href} />
       </div>
 
       <div className="mt-2 flex min-w-0 flex-wrap gap-1.5">
