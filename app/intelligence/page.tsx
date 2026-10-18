@@ -44,37 +44,76 @@ function nullableNumberValue(value: unknown) {
   return Number.isFinite(parsed) ? parsed : null;
 }
 
+function effectivenessKey(signalId: unknown, roleScope: unknown, category: unknown) {
+  return `${String(signalId || '')}:${String(roleScope || '')}:${String(category || '')}`;
+}
+
 async function getRecommendationEffectiveness(): Promise<IntelligenceRecommendationEffectivenessRow[]> {
   try {
     const supabase = await createClient();
-    const { data, error } = await supabase.rpc('get_system_intelligence_recommendation_effectiveness_v1');
+    const [effectivenessResult, completionResult] = await Promise.all([
+      supabase.rpc('get_system_intelligence_recommendation_effectiveness_v1'),
+      supabase.rpc('get_system_intelligence_action_completion_effectiveness_v1'),
+    ]);
 
-    if (error) {
-      console.warn('SYSTEM_INTELLIGENCE_EFFECTIVENESS_FAILED', error.message);
+    if (effectivenessResult.error) {
+      console.warn('SYSTEM_INTELLIGENCE_EFFECTIVENESS_FAILED', effectivenessResult.error.message);
       return [];
     }
 
-    if (!Array.isArray(data)) return [];
+    if (completionResult.error) {
+      console.warn('SYSTEM_INTELLIGENCE_COMPLETION_EFFECTIVENESS_FAILED', completionResult.error.message);
+    }
 
-    return data.map((row) => ({
-      signal_id: String(row.signal_id || ''),
-      role_scope: String(row.role_scope || ''),
-      category: String(row.category || ''),
-      recommendation_count: numberValue(row.recommendation_count),
-      shown_count: numberValue(row.shown_count),
-      accepted_count: numberValue(row.accepted_count),
-      dismissed_count: numberValue(row.dismissed_count),
-      acted_count: numberValue(row.acted_count),
-      outcome_observed_count: numberValue(row.outcome_observed_count),
-      positive_count: numberValue(row.positive_count),
-      negative_count: numberValue(row.negative_count),
-      mixed_count: numberValue(row.mixed_count),
-      inconclusive_count: numberValue(row.inconclusive_count),
-      action_rate: nullableNumberValue(row.action_rate),
-      positive_resolved_rate: nullableNumberValue(row.positive_resolved_rate),
-      negative_resolved_rate: nullableNumberValue(row.negative_resolved_rate),
-      sample_band: String(row.sample_band || 'insufficient'),
-    }));
+    if (!Array.isArray(effectivenessResult.data)) return [];
+
+    const completionBySignal = new Map<string, {
+      completed_count: number;
+      started_not_completed_count: number;
+      completion_rate: number | null;
+    }>();
+
+    if (!completionResult.error && Array.isArray(completionResult.data)) {
+      for (const row of completionResult.data) {
+        completionBySignal.set(
+          effectivenessKey(row.signal_id, row.role_scope, row.category),
+          {
+            completed_count: numberValue(row.completed_count),
+            started_not_completed_count: numberValue(row.started_not_completed_count),
+            completion_rate: nullableNumberValue(row.completion_rate),
+          },
+        );
+      }
+    }
+
+    return effectivenessResult.data.map((row) => {
+      const completion = completionBySignal.get(
+        effectivenessKey(row.signal_id, row.role_scope, row.category),
+      );
+
+      return {
+        signal_id: String(row.signal_id || ''),
+        role_scope: String(row.role_scope || ''),
+        category: String(row.category || ''),
+        recommendation_count: numberValue(row.recommendation_count),
+        shown_count: numberValue(row.shown_count),
+        accepted_count: numberValue(row.accepted_count),
+        dismissed_count: numberValue(row.dismissed_count),
+        acted_count: numberValue(row.acted_count),
+        completed_count: completion?.completed_count ?? 0,
+        started_not_completed_count: completion?.started_not_completed_count ?? numberValue(row.acted_count),
+        completion_rate: completion?.completion_rate ?? null,
+        outcome_observed_count: numberValue(row.outcome_observed_count),
+        positive_count: numberValue(row.positive_count),
+        negative_count: numberValue(row.negative_count),
+        mixed_count: numberValue(row.mixed_count),
+        inconclusive_count: numberValue(row.inconclusive_count),
+        action_rate: nullableNumberValue(row.action_rate),
+        positive_resolved_rate: nullableNumberValue(row.positive_resolved_rate),
+        negative_resolved_rate: nullableNumberValue(row.negative_resolved_rate),
+        sample_band: String(row.sample_band || 'insufficient'),
+      };
+    });
   } catch (error) {
     console.warn(
       'SYSTEM_INTELLIGENCE_EFFECTIVENESS_FAILED',
@@ -153,7 +192,7 @@ export default async function IntelligencePage() {
             </div>
             <div className="mt-1 text-lg font-black">The operating brief now changes with the business and with the person using it.</div>
             <p className="mt-1 max-w-3xl text-xs leading-5 text-slate-300">
-              V2 adds signal correlation, behavioural re-engagement, 24-hour velocity comparison, system-health confidence, role-aware ranking and bounded Claude synthesis. Recommendation actions now feed a tenant-safe outcome observer and an effectiveness layer, while calibration stays locked until observed samples are sufficiently mature.
+              V2 adds signal correlation, behavioural re-engagement, 24-hour velocity comparison, system-health confidence, role-aware ranking and bounded Claude synthesis. Recommendation actions now feed explicit completion tracking, a tenant-safe outcome observer, effectiveness measurement and tightly capped calibration once evidence is mature enough.
             </p>
           </div>
           <div className="shrink-0 rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-xs font-bold text-slate-200">
