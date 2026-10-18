@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { ArrowLeft, Brain, Search, Sparkles } from "lucide-react";
 
+import { ClaudeSeoIntelligence } from "@/components/claude-seo-intelligence";
 import { SeoIntelligenceSearch } from "@/components/seo-intelligence-search";
 import { PageHeader } from "@/components/ui";
 
@@ -42,6 +43,7 @@ export default function SeoIntelligencePage() {
         </div>
       </section>
 
+      <ClaudeSeoIntelligence />
       <SeoIntelligenceSearch />
     </div>
   );
