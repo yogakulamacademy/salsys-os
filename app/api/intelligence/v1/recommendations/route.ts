@@ -3,6 +3,7 @@ import { createHash } from 'node:crypto';
 import { NextRequest, NextResponse } from 'next/server';
 
 import { getDashboardSnapshot } from '@/lib/dashboard-data';
+import { measureRecommendationSignal } from '@/lib/intelligence/recommendation-outcomes';
 import { getSystemIntelligenceContext } from '@/lib/intelligence/system-intelligence-context';
 import { buildSystemIntelligenceV2 } from '@/lib/intelligence/system-intelligence-v2';
 import { createClient } from '@/lib/supabase/server';
@@ -59,6 +60,7 @@ export async function POST(request: NextRequest) {
         metricValue: signal.metricValue,
         action: signal.recommendedAction,
       });
+      const baseline = measureRecommendationSignal(signal.id, snapshot, context);
 
       const { data, error } = await supabase.rpc('touch_system_intelligence_recommendation_v1', {
         p_recommendation_key: key,
@@ -70,12 +72,15 @@ export async function POST(request: NextRequest) {
         p_score: signal.score,
         p_action_text: signal.recommendedAction,
         p_reason_text: signal.reason,
+        p_baseline_metric: baseline?.metric ?? null,
+        p_baseline_value: baseline?.value ?? null,
+        p_desired_direction: baseline?.desiredDirection ?? null,
       });
 
       if (error || !data) throw new Error(`INTELLIGENCE_RECOMMENDATION_TOUCH_FAILED:${error?.message || 'unknown'}`);
 
       return NextResponse.json(
-        { ok: true, recommendation_id: data },
+        { ok: true, recommendation_id: data, outcome_observable: Boolean(baseline) },
         { headers: { 'Cache-Control': 'private, no-store, max-age=0', 'X-Robots-Tag': 'noindex' } },
       );
     }
