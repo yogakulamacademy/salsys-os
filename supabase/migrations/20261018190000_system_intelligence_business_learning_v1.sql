@@ -67,6 +67,9 @@ create or replace function public.touch_system_intelligence_recommendation_v2(
   p_score integer,
   p_action_text text,
   p_reason_text text,
+  p_baseline_metric text default null,
+  p_baseline_value numeric default null,
+  p_desired_direction text default null,
   p_target_lead_ids uuid[] default '{}'
 )
 returns uuid
@@ -86,6 +89,9 @@ begin
      or not public.is_organization_member(v_organization_id) then
     raise exception 'TENANT_ACCESS_DENIED';
   end if;
+  if p_desired_direction is not null and p_desired_direction not in ('increase','decrease') then
+    raise exception 'INTELLIGENCE_DIRECTION_INVALID';
+  end if;
 
   select coalesce(array_agg(distinct l.id), '{}') into v_targets
   from public.leads l
@@ -94,19 +100,30 @@ begin
 
   insert into public.system_intelligence_recommendations (
     organization_id,recommendation_key,surface,source_version,signal_id,category,role_scope,score,
-    action_text,reason_text,target_lead_ids,target_lead_count,created_by,updated_by
+    action_text,reason_text,baseline_metric,baseline_value,desired_direction,
+    target_lead_ids,target_lead_count,created_by,updated_by
   ) values (
     v_organization_id,left(btrim(p_recommendation_key),240),left(coalesce(nullif(btrim(p_surface),''),'system'),80),
     left(btrim(p_source_version),80),left(btrim(p_signal_id),160),left(btrim(p_category),80),
     left(coalesce(nullif(btrim(p_role_scope),''),'workspace'),80),greatest(0,least(100,p_score)),
-    left(btrim(p_action_text),500),left(btrim(p_reason_text),800),v_targets,least(cardinality(v_targets),500),auth.uid(),auth.uid()
+    left(btrim(p_action_text),500),left(btrim(p_reason_text),800),
+    nullif(left(btrim(coalesce(p_baseline_metric,'')),120),''),p_baseline_value,p_desired_direction,
+    v_targets,least(cardinality(v_targets),500),auth.uid(),auth.uid()
   )
   on conflict (organization_id,recommendation_key)
   do update set
-    score=excluded.score, action_text=excluded.action_text, reason_text=excluded.reason_text,
-    target_lead_ids=excluded.target_lead_ids, target_lead_count=excluded.target_lead_count,
-    last_shown_at=now(), shown_count=public.system_intelligence_recommendations.shown_count+1,
-    updated_by=auth.uid(), updated_at=now()
+    score=excluded.score,
+    action_text=excluded.action_text,
+    reason_text=excluded.reason_text,
+    baseline_metric=excluded.baseline_metric,
+    baseline_value=excluded.baseline_value,
+    desired_direction=excluded.desired_direction,
+    target_lead_ids=excluded.target_lead_ids,
+    target_lead_count=excluded.target_lead_count,
+    last_shown_at=now(),
+    shown_count=public.system_intelligence_recommendations.shown_count+1,
+    updated_by=auth.uid(),
+    updated_at=now()
   returning id into v_id;
 
   insert into public.system_intelligence_recommendation_events(organization_id,recommendation_id,event_type,actor_user_id)
@@ -115,8 +132,8 @@ begin
 end;
 $$;
 
-revoke all on function public.touch_system_intelligence_recommendation_v2(text,text,text,text,text,text,integer,text,text,uuid[]) from public, anon;
-grant execute on function public.touch_system_intelligence_recommendation_v2(text,text,text,text,text,text,integer,text,text,uuid[]) to authenticated;
+revoke all on function public.touch_system_intelligence_recommendation_v2(text,text,text,text,text,text,integer,text,text,text,numeric,text,uuid[]) from public, anon;
+grant execute on function public.touch_system_intelligence_recommendation_v2(text,text,text,text,text,text,integer,text,text,text,numeric,text,uuid[]) to authenticated;
 
 create or replace function public.recompute_system_intelligence_learning_profile_v1(
   p_organization_id uuid,
@@ -168,9 +185,16 @@ begin
   )
   on conflict (organization_id,signal_id,role_scope)
   do update set
-    outcome_samples=excluded.outcome_samples,positive_count=excluded.positive_count,neutral_count=excluded.neutral_count,
-    negative_count=excluded.negative_count,mixed_count=excluded.mixed_count,inconclusive_count=excluded.inconclusive_count,
-    score_adjustment=excluded.score_adjustment,confidence=excluded.confidence,last_recomputed_at=now(),updated_at=now();
+    outcome_samples=excluded.outcome_samples,
+    positive_count=excluded.positive_count,
+    neutral_count=excluded.neutral_count,
+    negative_count=excluded.negative_count,
+    mixed_count=excluded.mixed_count,
+    inconclusive_count=excluded.inconclusive_count,
+    score_adjustment=excluded.score_adjustment,
+    confidence=excluded.confidence,
+    last_recomputed_at=now(),
+    updated_at=now();
   return true;
 end;
 $$;
