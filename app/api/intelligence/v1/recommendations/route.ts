@@ -3,7 +3,10 @@ import { createHash } from 'node:crypto';
 import { NextRequest, NextResponse } from 'next/server';
 
 import { getDashboardSnapshot } from '@/lib/dashboard-data';
-import { measureRecommendationSignal } from '@/lib/intelligence/recommendation-outcomes';
+import {
+  measureRecommendationSignal,
+  recommendationTargetLeadIds,
+} from '@/lib/intelligence/recommendation-outcomes';
 import { getSystemIntelligenceContext } from '@/lib/intelligence/system-intelligence-context';
 import { buildSystemIntelligenceV2 } from '@/lib/intelligence/system-intelligence-v2';
 import { createClient } from '@/lib/supabase/server';
@@ -61,8 +64,9 @@ export async function POST(request: NextRequest) {
         action: signal.recommendedAction,
       });
       const baseline = measureRecommendationSignal(signal.id, snapshot, context);
+      const targetLeadIds = recommendationTargetLeadIds(signal.id, context);
 
-      const { data, error } = await supabase.rpc('touch_system_intelligence_recommendation_v1', {
+      const { data, error } = await supabase.rpc('touch_system_intelligence_recommendation_v2', {
         p_recommendation_key: key,
         p_surface: 'system_intelligence',
         p_source_version: 'v2',
@@ -75,12 +79,18 @@ export async function POST(request: NextRequest) {
         p_baseline_metric: baseline?.metric ?? null,
         p_baseline_value: baseline?.value ?? null,
         p_desired_direction: baseline?.desiredDirection ?? null,
+        p_target_lead_ids: targetLeadIds,
       });
 
       if (error || !data) throw new Error(`INTELLIGENCE_RECOMMENDATION_TOUCH_FAILED:${error?.message || 'unknown'}`);
 
       return NextResponse.json(
-        { ok: true, recommendation_id: data, outcome_observable: Boolean(baseline) },
+        {
+          ok: true,
+          recommendation_id: data,
+          outcome_observable: Boolean(baseline),
+          linked_leads: targetLeadIds.length,
+        },
         { headers: { 'Cache-Control': 'private, no-store, max-age=0', 'X-Robots-Tag': 'noindex' } },
       );
     }
