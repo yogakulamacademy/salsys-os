@@ -2,14 +2,21 @@ import { NextResponse } from 'next/server';
 
 import { getDashboardSnapshot } from '@/lib/dashboard-data';
 import { buildSystemIntelligence } from '@/lib/intelligence/system-intelligence';
+import { getCurrentWorkspaceContext } from '@/lib/workspace';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 export async function GET() {
   try {
-    const snapshot = await getDashboardSnapshot();
-    const intelligence = buildSystemIntelligence(snapshot);
+    const [snapshot, workspace] = await Promise.all([
+      getDashboardSnapshot(),
+      getCurrentWorkspaceContext(),
+    ]);
+
+    const intelligence = buildSystemIntelligence(snapshot, new Date(), {
+      role: workspace.activeWorkspace?.role,
+    });
 
     return NextResponse.json(
       { ok: true, intelligence },
@@ -22,7 +29,8 @@ export async function GET() {
     );
   } catch (error) {
     const message = error instanceof Error ? error.message : '';
-    const unauthenticated = message.toLowerCase().includes('authenticate') || message.toLowerCase().includes('authenticated');
+    const normalized = message.toLowerCase();
+    const unauthenticated = normalized.includes('authenticate') || normalized.includes('authenticated');
 
     return NextResponse.json(
       {
