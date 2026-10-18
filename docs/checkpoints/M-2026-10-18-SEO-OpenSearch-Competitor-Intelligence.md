@@ -1,9 +1,23 @@
 # Checkpoint M-2026-10-18 — SEO, OpenSearch, Decision Intelligence, Competitor Intelligence
 
 **Date:** 2026-10-18  
-**Active integration branch:** `feature/opensearch-aws-sigv4-v1`  
-**HEAD before checklist update:** `5ccedaaa57b2b22acf584e6c540ddcc9e4ababf3`  
+**Original integration branch:** `feature/opensearch-aws-sigv4-v1`  
+**Current documentation branch:** `feature/system-intelligence-core-v1`  
 **Production Supabase:** `doaozrkrtgeslddwhclj`
+
+## Status summary
+
+The main lexical OpenSearch milestone that was previously waiting on Vercel quota/runtime proof is now **verified for the controlled Yogakulam pilot**.
+
+The remaining external-provider work is now primarily:
+
+- semantic/vector embeddings
+- real competitor/ranking evidence provider
+- production rollout hardening
+
+The lexical OpenSearch connection itself is no longer the blocker.
+
+---
 
 ## Completed / materially implemented
 
@@ -11,50 +25,58 @@
 - Privacy technical platform includes retention, access/export, subject resolution, erasure planning and privacy-safe search telemetry.
 - OpenSearch foundation includes reference-only outbox, lease/revision-safe workers, server-derived tenant filtering, pilot controls, health/bootstrap and command palette.
 - SEO lexical indexing covers pages, topics, entities, experiments and optimization actions.
-- SEO semantic foundation includes embedding outbox, hash dedupe, privacy-safe embedding subjects, kNN index architecture and hybrid RRF retrieval with lexical fallback.
+- SEO semantic foundation includes embedding outbox, hash dedupe, privacy-safe embedding subjects, kNN architecture and hybrid RRF design with lexical fallback.
 - SEO Decision Intelligence ranks next-best actions using traffic, opportunity, business/revenue, technical, content, AEO and GEO evidence.
 - Decision recommendations can stage draft experiments/actions while preserving human approval and blocking automatic website publishing.
 - SEO Learning Loop classifies outcomes and feeds bounded historical learning into future rankings.
 - Automatic outcome capture waits for experiment maturity/GSC lag, captures same-length final windows, finalizes experiments and records audit evidence.
 - Explainability/forecasting provides bounded low/base/high scenarios and refuses to fabricate lead/revenue rates without observed evidence.
-- Opportunity Portfolio ranks the top 3/5/8 priorities using upside, confidence, effort and risk; forecast snapshots enable prediction-vs-actual calibration.
-- Competitor Intelligence supports tenant-scoped competitors, SEO/AEO/GEO rank targets, historical snapshots, grounded Claude strategy, recommendation→draft-experiment bridge, lease-safe worker, retry/backoff, cost controls and exports.
-- Live ranking provider control plane supports one-query normalization testing, surface enablement, interval/budget controls and fail-closed activation.
-- Competitor/OpenSearch work includes competitor intelligence search mode, competitive opportunity engine, opportunity surfacing in SEO workspace and ranking-report exports.
-- Competitor/rank/analysis OpenSearch entities, query/source allowlists and UI path were verified on the current development line.
+- Opportunity Portfolio ranks top 3/5/8 priorities using upside, confidence, effort and risk; forecast snapshots enable prediction-vs-actual calibration.
+- Competitor Intelligence supports tenant-scoped competitors, SEO/AEO/GEO rank targets, grounded Claude strategy, recommendation→draft-experiment bridge, lease-safe worker, retry/backoff, cost controls and exports.
+- Competitor/OpenSearch architecture includes competitor intelligence search mode, competitive opportunity engine, opportunity surfacing and ranking-report exports.
+- Claude SEO recommendation→draft-experiment E2E has also been verified separately, including idempotency and foreign-tenant rejection.
 
-## OpenSearch provider connection — new progress
+---
 
-The OpenSearch state has advanced from **provider not connected** to **real provider provisioned/configured for a controlled Preview pilot; application E2E pending**.
+## AWS OpenSearch provider
 
-### AWS provider
+Verified provider:
 
-- [x] Created Amazon OpenSearch Serverless collection `salsys-search`
-- [x] Region: `ap-southeast-2`
-- [x] Collection type: `SEARCH`
+- [x] Amazon OpenSearch Serverless collection `salsys-search`
+- [x] Region `ap-southeast-2`
+- [x] Collection type `SEARCH`
 - [x] Collection observed `ACTIVE`
-- [x] Endpoint: `https://ka4nj04bskgw51vo0w2h.ap-southeast-2.aoss.amazonaws.com`
-- [x] ARN: `arn:aws:aoss:ap-southeast-2:354245663449:collection/ka4nj04bskgw51vo0w2h`
-- [x] AWS-owned encryption key retained
-- [x] Deletion protection enabled
-- [x] Public network endpoint with authenticated access requirement
-- [x] Dedicated AWS principal prepared for the Vercel pilot
+- [x] Endpoint `https://ka4nj04bskgw51vo0w2h.ap-southeast-2.aoss.amazonaws.com`
+- [x] ARN `arn:aws:aoss:ap-southeast-2:354245663449:collection/ka4nj04bskgw51vo0w2h`
+- [x] AWS-owned encryption
+- [x] deletion protection enabled
+- [x] authenticated public network endpoint
+- [x] dedicated AWS principal for Vercel pilot
 
-Preferred Vercel↔AWS OIDC could not be completed because an AWS Organizations policy blocked the required IAM/OIDC operation. The controlled Preview pilot therefore uses a dedicated AWS access-key path. Credential values are not recorded in GitHub.
+Preferred Vercel↔AWS OIDC remains blocked by an AWS Organizations SCP. The controlled preview therefore used a dedicated AWS runtime IAM credential path. Credential values are not recorded in GitHub and should never be exposed.
 
-### SalsysOS SigV4 adapter
+---
 
-- [x] Added AWS SigV4 signing support for OpenSearch Serverless (`aoss`)
-- [x] Preserved existing Basic auth support
-- [x] Preserved existing Bearer auth support
-- [x] Shared signed request adapter covers health/bootstrap/indexing/search paths needed by the pilot
-- [x] SEO lexical requests use the shared signed request path
-- [x] Competitor lexical requests use the shared signed request path
-- [x] Tenant verification remains in the query/result flow
+## SigV4 adapter
 
-### Vercel controlled configuration
+Verified implementation:
 
-The following are configured for **Preview only** and branch `feature/opensearch-aws-sigv4-v1`:
+- [x] AWS SigV4 signing for OpenSearch Serverless (`aoss`)
+- [x] Basic auth preserved
+- [x] Bearer auth preserved
+- [x] shared signed adapter covers core health/bootstrap/indexing/search paths
+- [x] normal tenant lexical search uses signed adapter
+- [x] SEO lexical requests use signed adapter
+- [x] SEO mapping/bootstrap requests use signed adapter
+- [x] tenant filter and post-validation retained
+
+Semantic/vector code still requires final signed-provider alignment before semantic production enablement.
+
+---
+
+## Vercel provider configuration
+
+The controlled pilot used branch-scoped Preview configuration for:
 
 - [x] `OPENSEARCH_URL`
 - [x] `OPENSEARCH_INDEX_PREFIX`
@@ -65,97 +87,163 @@ The following are configured for **Preview only** and branch `feature/opensearch
 - [x] `AWS_REGION=ap-southeast-2`
 - [x] `AWS_DEFAULT_REGION=ap-southeast-2`
 
-Production remains untouched by this OpenSearch provider pilot.
+The Vercel account was upgraded to Pro, so the previous Hobby deployment-quota blocker is obsolete.
+
+---
+
+## Real lexical E2E verification
+
+### Base lead search
+
+Controlled Yogakulam pilot:
+
+- [x] exactly 25 Yogakulam lead documents staged for the bounded indexing test
+- [x] worker claimed `25`
+- [x] worker succeeded `25`
+- [x] worker failed `0`
+- [x] all bounded outbox rows finalized `done`
+- [x] real Yogakulam lexical retrieval returned matches
+- [x] observed Yogakulam verification query returned `11` matches
+- [x] foreign `test-yoga-school` verification returned `0`
+- [x] tenant post-validation passed
+
+### SEO lexical search
+
+- [x] SEO mappings applied successfully
+- [x] mapping verification observed `119` mapped fields
+- [x] bounded SEO pilot claimed `10`
+- [x] bounded SEO pilot succeeded `10`
+- [x] bounded SEO pilot failed `0`
+- [x] real SEO lexical retrieval returned `7` results in the verification query
+- [x] foreign-tenant SEO retrieval returned `0`
+
+### Cleanup / safety
+
+- [x] tenant indexing switched back OFF after the controlled verification
+- [x] other tenants remained disabled
+- [x] production-wide indexing remains OFF
+- [x] temporary verification endpoint was removed after use
+- [x] no synthetic competitor/ranking evidence was left behind
+
+This closes the controlled lexical OpenSearch E2E milestone.
+
+---
+
+## Cross-tenant security result
+
+The critical adversarial proof is complete for the lexical pilot:
+
+`authorized Yogakulam search > 0 results`
+
+while:
+
+`foreign test-yoga-school search = 0 results`
+
+The query layer also preserves organization filtering and post-validates returned tenant IDs. This search-layer proof is important, but it does **not** replace the separate W8 global tenant/security sign-off.
+
+---
 
 ## Production safety
 
-- OpenSearch production-wide indexing remains disabled.
-- The AWS provider configuration is branch-scoped Preview only.
-- Semantic indexing remains disabled.
-- Live ranking providers remain disabled.
-- No recurring paid rank checks are active.
-- No automatic website publishing is enabled.
-- Claude is reasoning/strategy only; it is not the source of ranking truth.
-- Search, SEO and competitor data remain tenant-scoped.
-- Sensitive AWS credentials are server-side and must not be written into docs/logs/UI/exports.
-- Do not promote the OpenSearch pilot to Production before runtime health, indexing/search and cross-tenant tests pass.
+Current safety posture:
 
-## Validation already completed
+- production-wide OpenSearch indexing: OFF
+- controlled pilot indexing: OFF after test
+- semantic/vector indexing: OFF
+- live ranking provider: OFF
+- recurring paid rank checks: OFF
+- automatic website publishing: OFF
+- autonomous customer messaging: OFF
+- Claude remains reasoning/strategy, not ranking truth
+- search/SEO data remains tenant-bound
+- sensitive AWS credentials remain server-side
 
-Rollback-only database tests verified competitor, rank-target and analysis search documents are indexable for the correct tenant and rejected cross-tenant. Synthetic rows were removed; no test data remained.
+Do not broaden indexing until monitoring/recovery and rollout controls are reviewed.
 
-An earlier SigV4 branch revision received a successful Vercel build. The latest branch/configuration state still requires a fresh Preview deployment before it can be called runtime-verified.
+---
 
-## Current blocker
+## Competitor Intelligence current limitation
 
-Vercel Hobby has hit the daily API deployment limit:
+The competitor/rank/analysis search architecture is substantially implemented, but a truthful live competitor lexical E2E test still requires actual competitor/ranking records.
 
-`Resource is limited — try again in 24 hours (more than 100, code: api-deployments-free-per-day)`
+At the time of verification Yogakulam had no real records suitable for proving:
 
-This is a Vercel quota blocker, not evidence of an OpenSearch or application code failure.
+- `seo_competitors`
+- `seo_rank_targets`
+- `seo_rank_snapshots`
+- real competitor analysis evidence
 
-## OpenSearch E2E checklist — next after quota reset
+A DataForSEO adapter branch was started later, but the product decision is to **defer the live ranking provider** for now.
 
-- [ ] Fresh Preview deployment of `feature/opensearch-aws-sigv4-v1`
-- [ ] Confirm latest branch compiles/deploys successfully
-- [ ] Run protected OpenSearch health check from Vercel
-- [ ] Prove AWS SigV4 authentication succeeds against the real Serverless endpoint
-- [ ] Bootstrap the controlled base index
-- [ ] Apply SEO + competitor mappings
-- [ ] Enable exactly one controlled Yogakulam tenant
-- [ ] Process a bounded indexing outbox batch
-- [ ] Verify authorized tenant documents are indexed
-- [ ] Verify normal tenant search
-- [ ] Verify SEO lexical search against real indexed data
-- [ ] Verify competitor lexical search against real indexed data
-- [ ] Run adversarial cross-tenant query
-- [ ] Require foreign-tenant result count = `0`
-- [ ] Inspect runtime logs/telemetry for secret leakage, tenant leakage and retry/failure behavior
-- [ ] Only after all checks pass, decide whether to expand the provider beyond the Preview pilot
+Therefore:
+
+- do not seed fake rankings
+- do not claim live competitor positions
+- do not claim Google AI citations without observed provider evidence
+- Claude may reason over first-party/GSC evidence only until a ranking provider is connected
+
+---
 
 ## Remaining external provider work
 
 ### Semantic embeddings
 
-- [ ] Select/connect real embedding provider
-- [ ] Configure model and vector dimension
-- [ ] Run semantic bootstrap
-- [ ] Run vector worker
-- [ ] Verify kNN retrieval
-- [ ] Calibrate lexical + vector RRF/hybrid quality
+Still required:
 
-### Live SEO/AEO/GEO rank provider
+- [ ] select/connect embedding provider
+- [ ] configure model/vector dimension
+- [ ] migrate/verify remaining semantic signed requests
+- [ ] bootstrap real vector index
+- [ ] run embedding worker
+- [ ] verify kNN retrieval
+- [ ] verify tenant isolation for semantic search
+- [ ] calibrate lexical + vector RRF/hybrid relevance
+- [ ] validate cost controls
 
-Still missing:
+### Live SEO/AEO/GEO ranking provider — deferred
 
-- `SEO_RANKING_API_URL`
-- `SEO_RANKING_API_KEY`
+Internal ranking architecture is ready enough to accept a provider later.
 
-Next work:
+When resumed:
 
-- [ ] Select/connect a real ranking provider
-- [ ] Pass one-query normalization test before recurring checks
-- [ ] Verify provider health and cost/budget controls
-- [ ] Enable bounded recurring rank checks only after normalization passes
+- [ ] connect DataForSEO or chosen provider
+- [ ] create truthful competitor/rank targets
+- [ ] run one-query normalization test
+- [ ] verify provider health/budgets
+- [ ] save real rank snapshots
+- [ ] index competitor/rank/analysis documents
+- [ ] verify competitor lexical search
+- [ ] run cross-tenant competitor query
+- [ ] enable bounded recurring checks only after all controls pass
 
-## Build state
+---
 
-Current integration branch before this documentation update:
+## Closed checklist
 
-`5ccedaaa57b2b22acf584e6c540ddcc9e4ababf3` — `Sign SEO OpenSearch requests through shared adapter`
+- [x] Fresh Preview deployment after Vercel quota blocker was removed
+- [x] Verify latest OpenSearch branch builds successfully
+- [x] Prove Vercel→AWS SigV4 path
+- [x] Bootstrap controlled index/mappings
+- [x] Enable exactly one controlled Yogakulam tenant
+- [x] Process bounded lead indexing batch
+- [x] Verify authorized tenant retrieval
+- [x] Verify SEO mappings
+- [x] Process bounded SEO indexing batch
+- [x] Verify SEO lexical retrieval
+- [x] Run adversarial cross-tenant lead search
+- [x] Require foreign lead results `0`
+- [x] Run adversarial cross-tenant SEO search
+- [x] Require foreign SEO results `0`
+- [x] Return pilot indexing to OFF after test
+- [x] Remove temporary verification route/data
 
-Do not claim the latest branch/configuration is fully build/runtime verified until a fresh Preview deployment succeeds after Vercel's quota resets.
+---
 
-## Next checkpoint
+## Next checkpoint from this milestone
 
-1. Fresh Preview deployment when Vercel quota clears.
-2. Real SigV4 health check against `salsys-search`.
-3. Bootstrap base index and apply SEO/competitor mappings.
-4. Enable one Yogakulam tenant only and process a bounded indexing batch.
-5. Validate normal/SEO/competitor lexical search.
-6. Run adversarial cross-tenant search and require zero foreign results.
-7. Connect real embeddings and validate semantic/hybrid retrieval.
-8. Connect a real live ranking provider and pass SEO/AEO/GEO normalization tests.
-9. Enable bounded recurring rank checks only after provider health/cost controls pass.
-10. Accumulate real experiments to calibrate forecast and action-learning models.
-11. Continue W8 tenant/security closeout independently.
+1. Treat lexical OpenSearch as verified infrastructure rather than the active blocker.
+2. Continue System Intelligence Core and Claude unified reasoning work.
+3. Finish W8 tenant/security closeout independently.
+4. Connect a real embedding provider and run semantic/vector E2E.
+5. Revisit a live ranking provider later when competitor evidence becomes product priority.
+6. Keep production-wide OpenSearch indexing OFF until rollout/monitoring controls are explicitly approved.
