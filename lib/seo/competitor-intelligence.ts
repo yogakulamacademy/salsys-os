@@ -21,15 +21,16 @@ function safeDomain(value: string) {
 
 export async function getCompetitorIntelligence(organizationId: string) {
   const admin = createAdminClient();
-  const [competitors, targets, latest, analyses, recommendationLinks] = await Promise.all([
+  const [competitors, targets, latest, opportunities, analyses, recommendationLinks] = await Promise.all([
     admin.from('seo_competitors').select('id,domain,display_name,competitor_type,is_active,source,created_at').eq('organization_id', organizationId).order('created_at', { ascending: true }),
     admin.from('seo_rank_targets').select('id,query,surface,locale,country_code,device,engine,priority,check_interval_minutes,last_checked_at,next_check_at,is_active').eq('organization_id', organizationId).order('priority', { ascending: false }),
     admin.from('v_seo_rank_latest_v1').select('*').eq('organization_id', organizationId).order('priority', { ascending: false }),
+    admin.from('v_seo_competitive_opportunities_v1').select('*').eq('organization_id', organizationId).order('competitive_priority_score', { ascending: false }).limit(25),
     admin.from('seo_competitor_analysis_runs').select('id,status,provider,model,summary,gaps,recommendations,evidence,created_at,completed_at').eq('organization_id', organizationId).order('created_at', { ascending: false }).limit(5),
     admin.from('seo_competitor_recommendation_links').select('id,analysis_run_id,recommendation_index,experiment_id,created_at').eq('organization_id', organizationId).order('created_at', { ascending: false }).limit(100),
   ]);
 
-  for (const result of [competitors, targets, latest, analyses, recommendationLinks]) {
+  for (const result of [competitors, targets, latest, opportunities, analyses, recommendationLinks]) {
     if (result.error) throw new Error(`SEO_COMPETITOR_QUERY_FAILED:${result.error.message}`);
   }
 
@@ -37,6 +38,7 @@ export async function getCompetitorIntelligence(organizationId: string) {
     competitors: competitors.data ?? [],
     targets: targets.data ?? [],
     latest: latest.data ?? [],
+    opportunities: opportunities.data ?? [],
     analyses: analyses.data ?? [],
     recommendation_links: recommendationLinks.data ?? [],
     rank_provider_configured: Boolean(process.env.SEO_RANKING_API_URL && process.env.SEO_RANKING_API_KEY),
@@ -112,6 +114,7 @@ export async function runClaudeCompetitorAnalysis(organizationId: string, userId
   const payload = {
     competitors: context.competitors,
     rankings: context.latest.slice(0, 100),
+    deterministic_opportunities: context.opportunities.slice(0, 25),
   };
 
   const response = await fetch('https://api.anthropic.com/v1/messages', {
@@ -125,10 +128,10 @@ export async function runClaudeCompetitorAnalysis(organizationId: string, userId
       model,
       max_tokens: 2600,
       temperature: 0.2,
-      system: 'You are the SEO/AEO/GEO competitor analyst inside SalsysOS. Use only supplied evidence. Never invent rankings, traffic, citations, competitor capabilities, revenue, URLs or page ownership. Distinguish observed facts from recommendations. Return strict JSON only.',
+      system: 'You are the SEO/AEO/GEO competitor analyst inside SalsysOS. Use only supplied evidence. Never invent rankings, traffic, citations, competitor capabilities, revenue, URLs or page ownership. Treat deterministic_opportunities as a scored decision aid, not new evidence. Distinguish observed facts from recommendations. Return strict JSON only.',
       messages: [{
         role: 'user',
-        content: `Analyze the supplied SEO/AEO/GEO ranking evidence and competitors. Return JSON with keys summary (object), gaps (array), recommendations (array). Each recommendation must contain surface (seo|aeo|geo), priority 1-100, action, why, competitor_advantage, expected_signal, confidence (low|medium|high), evidence, target_query, target_url. target_query must come from supplied ranking evidence. target_url may be one of our observed own_url values only; otherwise return null. Do not use a competitor URL as target_url. Focus on how to outperform observed competitors without unsupported claims. DATA: ${JSON.stringify(payload)}`,
+        content: `Analyze the supplied SEO/AEO/GEO ranking evidence and competitors. Prioritize observed gaps using deterministic_opportunities when available. Return JSON with keys summary (object), gaps (array), recommendations (array). Each recommendation must contain surface (seo|aeo|geo), priority 1-100, action, why, competitor_advantage, expected_signal, confidence (low|medium|high), evidence, target_query, target_url. target_query must come from supplied ranking evidence. target_url may be one of our observed own_url values only; otherwise return null. Do not use a competitor URL as target_url. Focus on how to outperform observed competitors without unsupported claims. DATA: ${JSON.stringify(payload)}`,
       }],
     }),
     signal: AbortSignal.timeout(45000),
@@ -150,7 +153,7 @@ export async function runClaudeCompetitorAnalysis(organizationId: string, userId
     summary: parsed.summary && typeof parsed.summary === 'object' ? parsed.summary : {},
     gaps: Array.isArray(parsed.gaps) ? parsed.gaps : [],
     recommendations: Array.isArray(parsed.recommendations) ? parsed.recommendations : [],
-    evidence: { ranking_targets: context.latest.length, competitors: context.competitors.length },
+    evidence: { ranking_targets: context.latest.length, competitors: context.competitors.length, deterministic_opportunities: context.opportunities.length },
     created_by: userId || null,
     started_at: new Date().toISOString(),
     completed_at: new Date().toISOString(),
