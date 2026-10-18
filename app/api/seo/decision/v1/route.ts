@@ -4,6 +4,9 @@ import {
   getSeoNextBestActions,
   stageSeoDecisionAction,
 } from '@/lib/search/seo-decision';
+import { buildSeoDecisionForecast } from '@/lib/search/seo-decision-forecast';
+import { getSeoDecisionWorkspaceContext } from '@/lib/search/seo-decision-workspace';
+import { persistSeoForecastSnapshot } from '@/lib/search/seo-forecast-calibration';
 import { requireSingleActiveTenant } from '@/lib/tenant/server';
 
 export const runtime = 'nodejs';
@@ -84,6 +87,23 @@ export async function POST(request: NextRequest) {
         ? input.pageId.trim()
         : '';
 
+    let stagedForecast: ReturnType<typeof buildSeoDecisionForecast> | null = null;
+    let stagedActionKind = 'other';
+    try {
+      const [decisions, context] = await Promise.all([
+        getSeoNextBestActions({ organizationId: tenant.organizationId, limit: 25 }),
+        getSeoDecisionWorkspaceContext(tenant.organizationId),
+      ]);
+      const recommendation = decisions.recommendations.find((item) => item.page_id === pageId);
+      if (recommendation) {
+        const profile = context.learningProfiles.find((item) => item.action_kind === recommendation.recommended_action_kind) || null;
+        stagedActionKind = recommendation.recommended_action_kind;
+        stagedForecast = buildSeoDecisionForecast(recommendation, profile);
+      }
+    } catch {
+      stagedForecast = null;
+    }
+
     const result = await stageSeoDecisionAction({
       organizationId: tenant.organizationId,
       pageId,
@@ -95,6 +115,23 @@ export async function POST(request: NextRequest) {
         { ok: false, reason: result.reason || 'Unable to stage this recommendation.' },
         { status: result.reason === 'decision_candidate_not_found' ? 409 : 400, headers: { 'Cache-Control': 'no-store' } },
       );
+    }
+
+    let forecastSnapshotSaved = false;
+    if (stagedForecast && result.experimentId) {
+      try {
+        const snapshot = await persistSeoForecastSnapshot({
+          organizationId: tenant.organizationId,
+          experimentId: result.experimentId,
+          actionId: result.actionId,
+          pageId,
+          actionKind: stagedActionKind,
+          forecast: stagedForecast,
+        });
+        forecastSnapshotSaved = snapshot.ok;
+      } catch {
+        forecastSnapshotSaved = false;
+      }
     }
 
     return NextResponse.json(
@@ -111,6 +148,7 @@ export async function POST(request: NextRequest) {
         automatic_publish_enabled: result.automaticPublishEnabled,
         priority_score: result.priorityScore,
         primary_metric: result.primaryMetric,
+        forecast_snapshot_saved: forecastSnapshotSaved,
       },
       {
         status: result.created ? 201 : 200,
