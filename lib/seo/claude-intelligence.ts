@@ -255,7 +255,7 @@ export async function runClaudeSeoIntelligence(organizationId: string) {
       },
       body: JSON.stringify({
         model,
-        max_tokens: 3200,
+        max_tokens: 6400,
         output_config: {
           format: {
             type: 'json_schema',
@@ -269,24 +269,35 @@ export async function runClaudeSeoIntelligence(organizationId: string) {
           'When live competitor/rank evidence is unavailable, say so explicitly and still analyze first-party SEO opportunity evidence.',
           'If OpenSearch context is unavailable, use the supplied PostgreSQL-derived first-party evidence and state the retrieval limitation only when relevant.',
           'Recommendations are advisory only. No publishing or customer-facing action is authorized.',
+          'Keep the response concise enough to complete within the output token budget.',
           'Think the problem through before you answer.',
         ].join(' '),
         messages: [{
           role: 'user',
           content: [
             'Analyze this tenant evidence. Evidence descriptions in the response must be concise strings grounded in the supplied fields.',
+            'Return at most 8 findings, 8 opportunities, 8 actions, and 8 caveats.',
             'Only use target_url values present in the evidence. Do not claim live rank or competitor position because no live rank provider is connected.',
             'Set approval_required=true on every recommended action.',
             `EVIDENCE: ${JSON.stringify(evidence)}`,
           ].join('\n'),
         }],
       }),
-      signal: AbortSignal.timeout(60000),
+      signal: AbortSignal.timeout(90000),
     });
 
     if (!response.ok) throw new Error(`CLAUDE_REQUEST_FAILED_${response.status}`);
-    const body = await response.json() as { content?: Array<{ type?: string; text?: string }> };
-    const text = body.content?.find((item) => item.type === 'text')?.text || '';
+    const body = await response.json() as {
+      stop_reason?: string;
+      content?: Array<{ type?: string; text?: string }>;
+    };
+    if (body.stop_reason === 'max_tokens') throw new Error('CLAUDE_SEO_OUTPUT_TRUNCATED');
+    const text = (body.content || [])
+      .filter((item) => item.type === 'text' && typeof item.text === 'string')
+      .map((item) => item.text || '')
+      .join('')
+      .trim();
+    if (!text) throw new Error('CLAUDE_SEO_EMPTY_OUTPUT');
     const parsed = extractClaudeJson(text);
     const output = normalizeOutput(parsed);
     const confidence = clampConfidence(parsed.confidence);
