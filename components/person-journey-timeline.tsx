@@ -5,6 +5,7 @@ import {
   CircleUserRound,
   ClipboardCheck,
   Globe2,
+  ListChecks,
   MessageCircle,
   MessageSquareText,
   PhoneCall,
@@ -32,7 +33,7 @@ export function PersonJourneyTimeline({
 
           <p className="mt-1 max-w-3xl text-xs leading-5 text-slate-400">
             Canonical timeline across website activity, CRM changes, admissions
-            contact, conversations, enrollment and payments.
+            contact, workflow actions, conversations, enrollment and payments.
           </p>
         </div>
 
@@ -134,15 +135,11 @@ export function PersonJourneyTimeline({
                         )}
 
                         {event.web_session_id && (
-                          <span>
-                            Website session linked
-                          </span>
+                          <span>Website session linked</span>
                         )}
 
                         {event.lead_id && (
-                          <span>
-                            CRM lead linked
-                          </span>
+                          <span>CRM lead linked</span>
                         )}
                       </div>
 
@@ -205,10 +202,8 @@ function getEventPresentation(
     return {
       label: "Payment",
       icon: <BadgeDollarSign size={16} />,
-      iconClassName:
-        "border-amber-100 bg-amber-50 text-amber-700",
-      badgeClassName:
-        "bg-amber-50 text-amber-700",
+      iconClassName: "border-amber-100 bg-amber-50 text-amber-700",
+      badgeClassName: "bg-amber-50 text-amber-700",
     };
   }
 
@@ -216,10 +211,17 @@ function getEventPresentation(
     return {
       label: "Enrollment",
       icon: <ClipboardCheck size={16} />,
-      iconClassName:
-        "border-emerald-100 bg-emerald-50 text-emerald-700",
-      badgeClassName:
-        "bg-emerald-50 text-emerald-700",
+      iconClassName: "border-emerald-100 bg-emerald-50 text-emerald-700",
+      badgeClassName: "bg-emerald-50 text-emerald-700",
+    };
+  }
+
+  if (category === "workflow") {
+    return {
+      label: "Workflow",
+      icon: <ListChecks size={16} />,
+      iconClassName: "border-indigo-100 bg-indigo-50 text-indigo-700",
+      badgeClassName: "bg-indigo-50 text-indigo-700",
     };
   }
 
@@ -228,20 +230,16 @@ function getEventPresentation(
       return {
         label: "Message",
         icon: <MessageSquareText size={16} />,
-        iconClassName:
-          "border-violet-100 bg-violet-50 text-violet-700",
-        badgeClassName:
-          "bg-violet-50 text-violet-700",
+        iconClassName: "border-violet-100 bg-violet-50 text-violet-700",
+        badgeClassName: "bg-violet-50 text-violet-700",
       };
     }
 
     return {
       label: "Conversation",
       icon: <MessageCircle size={16} />,
-      iconClassName:
-        "border-violet-100 bg-violet-50 text-violet-700",
-      badgeClassName:
-        "bg-violet-50 text-violet-700",
+      iconClassName: "border-violet-100 bg-violet-50 text-violet-700",
+      badgeClassName: "bg-violet-50 text-violet-700",
     };
   }
 
@@ -249,10 +247,8 @@ function getEventPresentation(
     return {
       label: "Contact",
       icon: <PhoneCall size={16} />,
-      iconClassName:
-        "border-orange-100 bg-orange-50 text-orange-700",
-      badgeClassName:
-        "bg-orange-50 text-orange-700",
+      iconClassName: "border-orange-100 bg-orange-50 text-orange-700",
+      badgeClassName: "bg-orange-50 text-orange-700",
     };
   }
 
@@ -260,10 +256,8 @@ function getEventPresentation(
     return {
       label: "CRM",
       icon: <CircleUserRound size={16} />,
-      iconClassName:
-        "border-slate-200 bg-slate-100 text-slate-700",
-      badgeClassName:
-        "bg-slate-100 text-slate-700",
+      iconClassName: "border-slate-200 bg-slate-100 text-slate-700",
+      badgeClassName: "bg-slate-100 text-slate-700",
     };
   }
 
@@ -276,20 +270,16 @@ function getEventPresentation(
     return {
       label: "Digital",
       icon: <Globe2 size={16} />,
-      iconClassName:
-        "border-sky-100 bg-sky-50 text-sky-700",
-      badgeClassName:
-        "bg-sky-50 text-sky-700",
+      iconClassName: "border-sky-100 bg-sky-50 text-sky-700",
+      badgeClassName: "bg-sky-50 text-sky-700",
     };
   }
 
   return {
     label: pretty(category || "Journey"),
     icon: <Route size={16} />,
-    iconClassName:
-      "border-slate-200 bg-slate-50 text-slate-600",
-    badgeClassName:
-      "bg-slate-100 text-slate-600",
+    iconClassName: "border-slate-200 bg-slate-50 text-slate-600",
+    badgeClassName: "bg-slate-100 text-slate-600",
   };
 }
 
@@ -316,6 +306,14 @@ function getEventDetails(
   pushDetail(details, "Outcome", metadata.outcome);
   pushDetail(details, "Status", metadata.status);
   pushDetail(details, "Stage", metadata.to_stage);
+
+  const dueAt = formatMetadataDate(metadata.due_at);
+  if (dueAt) {
+    details.push({
+      label: "Due",
+      value: dueAt,
+    });
+  }
 
   if (
     metadata.amount != null &&
@@ -357,6 +355,20 @@ function pushDetail(
     label,
     value: String(value),
   });
+}
+
+function formatMetadataDate(value: unknown) {
+  if (typeof value !== "string" || !value.trim()) {
+    return "";
+  }
+
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) {
+    return value;
+  }
+
+  return formatDateTime(value);
 }
 
 function formatMoney(
