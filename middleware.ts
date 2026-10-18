@@ -22,6 +22,7 @@ const PUBLIC_EXACT_PATHS = new Set([
   "/api/tracking/identify",
   "/api/search/index/health",
   "/api/search/index/bootstrap",
+  "/api/search/index/seo-bootstrap",
   "/api/search/index/worker",
   "/api/seo/competitors/rank-worker",
 ]);
