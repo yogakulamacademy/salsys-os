@@ -23,10 +23,7 @@ function asText(value: unknown) {
 
 function extractClaudeJson(text: string) {
   const trimmed = text.trim().replace(/^```json\s*/i, '').replace(/```$/i, '').trim();
-  const first = trimmed.indexOf('{');
-  const last = trimmed.lastIndexOf('}');
-  if (first < 0 || last <= first) throw new Error('CLAUDE_SEO_JSON_INVALID');
-  const parsed = JSON.parse(trimmed.slice(first, last + 1));
+  const parsed = JSON.parse(trimmed);
   const record = asRecord(parsed);
   if (!record) throw new Error('CLAUDE_SEO_JSON_INVALID');
   return record;
@@ -145,6 +142,63 @@ function normalizeOutput(parsed: Record<string, unknown>) {
   };
 }
 
+const CLAUDE_OUTPUT_SCHEMA = {
+  type: 'object',
+  properties: {
+    executive_summary: { type: 'string' },
+    findings: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          category: { type: 'string' },
+          finding: { type: 'string' },
+          evidence: { type: 'string' },
+          confidence: { type: 'string', enum: ['low', 'medium', 'high'] },
+        },
+        required: ['category', 'finding', 'evidence', 'confidence'],
+        additionalProperties: false,
+      },
+    },
+    opportunities: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          priority: { type: 'integer' },
+          surface: { type: 'string', enum: ['seo', 'aeo', 'geo'] },
+          opportunity: { type: 'string' },
+          why: { type: 'string' },
+          target_url: { anyOf: [{ type: 'string' }, { type: 'null' }] },
+          evidence: { type: 'string' },
+          confidence: { type: 'string', enum: ['low', 'medium', 'high'] },
+        },
+        required: ['priority', 'surface', 'opportunity', 'why', 'target_url', 'evidence', 'confidence'],
+        additionalProperties: false,
+      },
+    },
+    actions: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          priority: { type: 'integer' },
+          action: { type: 'string' },
+          target_url: { anyOf: [{ type: 'string' }, { type: 'null' }] },
+          expected_signal: { type: 'string' },
+          evidence: { type: 'string' },
+          approval_required: { type: 'boolean' },
+        },
+        required: ['priority', 'action', 'target_url', 'expected_signal', 'evidence', 'approval_required'],
+        additionalProperties: false,
+      },
+    },
+    caveats: { type: 'array', items: { type: 'string' } },
+  },
+  required: ['executive_summary', 'findings', 'opportunities', 'actions', 'caveats'],
+  additionalProperties: false,
+} as const;
+
 export async function getLatestClaudeSeoIntelligence(organizationId: string) {
   const admin = createAdminClient();
   const { data, error } = await admin
@@ -202,6 +256,12 @@ export async function runClaudeSeoIntelligence(organizationId: string) {
       body: JSON.stringify({
         model,
         max_tokens: 3200,
+        output_config: {
+          format: {
+            type: 'json_schema',
+            schema: CLAUDE_OUTPUT_SCHEMA,
+          },
+        },
         system: [
           'You are the grounded SEO/AEO/GEO intelligence analyst inside SalsysOS.',
           'Use only the supplied evidence. Never invent rankings, traffic, conversions, revenue, competitors, SERP features, AI citations, URLs, or page ownership.',
@@ -209,18 +269,14 @@ export async function runClaudeSeoIntelligence(organizationId: string) {
           'When live competitor/rank evidence is unavailable, say so explicitly and still analyze first-party SEO opportunity evidence.',
           'If OpenSearch context is unavailable, use the supplied PostgreSQL-derived first-party evidence and state the retrieval limitation only when relevant.',
           'Recommendations are advisory only. No publishing or customer-facing action is authorized.',
-          'Return strict JSON only.',
+          'Think the problem through before you answer.',
         ].join(' '),
         messages: [{
           role: 'user',
           content: [
-            'Analyze this tenant evidence and return one JSON object with:',
-            'executive_summary (string);',
-            'findings (array of objects with category, finding, evidence, confidence);',
-            'opportunities (array of objects with priority 1-100, surface seo|aeo|geo, opportunity, why, target_url|null, evidence, confidence low|medium|high);',
-            'actions (array of objects with priority 1-100, action, target_url|null, expected_signal, evidence, approval_required=true);',
-            'caveats (array of strings).',
+            'Analyze this tenant evidence. Evidence descriptions in the response must be concise strings grounded in the supplied fields.',
             'Only use target_url values present in the evidence. Do not claim live rank or competitor position because no live rank provider is connected.',
+            'Set approval_required=true on every recommended action.',
             `EVIDENCE: ${JSON.stringify(evidence)}`,
           ].join('\n'),
         }],
