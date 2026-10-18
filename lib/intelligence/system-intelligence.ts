@@ -16,6 +16,14 @@ export type SystemIntelligenceCategory =
   | 'acquisition'
   | 'data_quality';
 
+export type SystemIntelligenceRole =
+  | 'owner'
+  | 'admin'
+  | 'manager'
+  | 'admissions'
+  | 'viewer'
+  | 'unknown';
+
 export type SystemIntelligenceSignal = {
   id: string;
   category: SystemIntelligenceCategory;
@@ -32,6 +40,7 @@ export type SystemIntelligenceSignal = {
 
 export type SystemIntelligenceBrief = {
   generatedAt: string;
+  role: SystemIntelligenceRole;
   state: 'urgent' | 'attention' | 'opportunity' | 'healthy';
   headline: string;
   summary: string;
@@ -43,6 +52,56 @@ export type SystemIntelligenceBrief = {
     dataQuality: number;
   };
 };
+
+export type BuildSystemIntelligenceOptions = {
+  role?: string | null;
+  maxSignals?: number;
+};
+
+function normalizeRole(role?: string | null): SystemIntelligenceRole {
+  if (role === 'owner') return 'owner';
+  if (role === 'admin') return 'admin';
+  if (role === 'manager') return 'manager';
+  if (role === 'admissions') return 'admissions';
+  if (role === 'viewer') return 'viewer';
+  return 'unknown';
+}
+
+function roleBias(
+  role: SystemIntelligenceRole,
+  category: SystemIntelligenceCategory,
+) {
+  if (role === 'admissions') {
+    if (category === 'conversation') return 8;
+    if (category === 'follow_up') return 7;
+    if (category === 'pipeline') return 5;
+    if (category === 'revenue') return 2;
+    if (category === 'data_quality') return -4;
+    if (category === 'acquisition') return -6;
+    if (category === 'demand') return -2;
+  }
+
+  if (role === 'manager') {
+    if (category === 'conversation') return 4;
+    if (category === 'follow_up') return 4;
+    if (category === 'pipeline') return 5;
+    if (category === 'revenue') return 5;
+    if (category === 'demand') return 4;
+    if (category === 'acquisition') return 3;
+    if (category === 'data_quality') return 3;
+  }
+
+  if (role === 'owner' || role === 'admin') {
+    if (category === 'revenue') return 6;
+    if (category === 'demand') return 5;
+    if (category === 'acquisition') return 5;
+    if (category === 'data_quality') return 2;
+    if (category === 'conversation') return 3;
+    if (category === 'pipeline') return 3;
+  }
+
+  return 0;
+}
 
 function clampScore(value: number) {
   return Math.max(0, Math.min(100, Math.round(value)));
@@ -74,54 +133,66 @@ function currencyValue(currency: string, value: number) {
   }
 }
 
-function signal(input: SystemIntelligenceSignal) {
-  return { ...input, score: clampScore(input.score) };
+function applySignal(
+  role: SystemIntelligenceRole,
+  input: SystemIntelligenceSignal,
+) {
+  return {
+    ...input,
+    score: clampScore(input.score + roleBias(role, input.category)),
+  };
 }
 
 export function buildSystemIntelligence(
   snapshot: DashboardSnapshot,
   now = new Date(),
+  options: BuildSystemIntelligenceOptions = {},
 ): SystemIntelligenceBrief {
+  const role = normalizeRole(options.role);
+  const maxSignals = Math.max(1, Math.min(12, options.maxSignals ?? 6));
   const { metrics, counts, sources, revenueSummary, upcomingBatches, unvaluedOpenLeads } = snapshot;
   const signals: SystemIntelligenceSignal[] = [];
+  const push = (input: SystemIntelligenceSignal) => signals.push(applySignal(role, input));
 
   const needsReply = integer(metrics.needsReply);
-  if (needsReply > 0) {
-    signals.push(signal({
-      id: 'conversation-needs-reply',
-      category: 'conversation',
-      tone: needsReply >= 5 ? 'critical' : 'warning',
-      score: 91 + Math.min(needsReply, 9),
-      title: `${needsReply} ${needsReply === 1 ? 'conversation needs' : 'conversations need'} a reply`,
-      reason: 'Inbound demand is waiting on the team. Response delay is a direct conversion-risk signal.',
-      recommendedAction: 'Open the reply queue and handle the oldest high-intent conversations first.',
-      metricLabel: 'Needs reply',
-      metricValue: compactNumber(needsReply),
-      href: '/conversations',
-      evidence: [`${needsReply} conversation${needsReply === 1 ? '' : 's'} currently require a reply`],
-    }));
-  }
-
   const waitingOverHour = integer(metrics.waitingOverHour);
-  if (waitingOverHour > 0) {
-    signals.push(signal({
-      id: 'conversation-waiting-over-hour',
+
+  // Correlate overlapping response-pressure evidence into one signal. Waiting >1h is
+  // a subset of the reply queue, so surfacing both independently exaggerates urgency.
+  if (needsReply > 0 || waitingOverHour > 0) {
+    const severe = waitingOverHour > 0;
+    const responseCount = Math.max(needsReply, waitingOverHour);
+    push({
+      id: 'conversation-response-pressure',
       category: 'conversation',
-      tone: 'critical',
-      score: 94 + Math.min(waitingOverHour, 6),
-      title: `${waitingOverHour} ${waitingOverHour === 1 ? 'lead has' : 'leads have'} waited over an hour`,
-      reason: 'These conversations have crossed the response-time threshold and should be recovered before lower-urgency work.',
-      recommendedAction: 'Prioritize the oldest waiting conversation and respond or assign an owner now.',
-      metricLabel: 'Waiting >1h',
-      metricValue: compactNumber(waitingOverHour),
+      tone: severe || needsReply >= 5 ? 'critical' : 'warning',
+      score: severe
+        ? 94 + Math.min(waitingOverHour, 6)
+        : 88 + Math.min(needsReply, 8),
+      title: severe
+        ? `${waitingOverHour} ${waitingOverHour === 1 ? 'lead has' : 'leads have'} waited over an hour`
+        : `${needsReply} ${needsReply === 1 ? 'conversation needs' : 'conversations need'} a reply`,
+      reason: severe
+        ? 'The reply queue contains conversations beyond the response-time threshold, making recovery the strongest immediate conversion-risk signal.'
+        : 'Inbound demand is waiting on the team. Response delay can reduce conversion probability while intent is still active.',
+      recommendedAction: severe
+        ? 'Open the reply queue, handle the oldest high-intent conversations first, then clear the remaining reply backlog.'
+        : 'Open the reply queue and work the highest-intent unanswered conversations first.',
+      metricLabel: severe ? 'Waiting >1h' : 'Needs reply',
+      metricValue: compactNumber(severe ? waitingOverHour : responseCount),
       href: '/conversations',
-      evidence: [`${waitingOverHour} open conversation${waitingOverHour === 1 ? '' : 's'} are beyond the one-hour threshold`],
-    }));
+      evidence: [
+        `${needsReply} conversation${needsReply === 1 ? '' : 's'} currently require a reply`,
+        ...(waitingOverHour > 0
+          ? [`${waitingOverHour} are beyond the one-hour threshold`]
+          : []),
+      ],
+    });
   }
 
   const firstTouch = integer(metrics.needsFirstTouch);
   if (firstTouch > 0) {
-    signals.push(signal({
+    push({
       id: 'pipeline-first-touch',
       category: 'pipeline',
       tone: firstTouch >= 5 ? 'warning' : 'info',
@@ -133,12 +204,12 @@ export function buildSystemIntelligence(
       metricValue: compactNumber(firstTouch),
       href: '/leads',
       evidence: [`${firstTouch} lead${firstTouch === 1 ? '' : 's'} are in New with no recorded contact`],
-    }));
+    });
   }
 
   const followupsDue = integer(metrics.followupsDue);
   if (followupsDue > 0) {
-    signals.push(signal({
+    push({
       id: 'follow-up-due',
       category: 'follow_up',
       tone: followupsDue >= 8 ? 'warning' : 'info',
@@ -150,12 +221,12 @@ export function buildSystemIntelligence(
       metricValue: compactNumber(followupsDue),
       href: '/follow-ups',
       evidence: [`${followupsDue} due follow-up${followupsDue === 1 ? '' : 's'} in the current workspace`],
-    }));
+    });
   }
 
   const paymentPending = integer(counts.payment_pending);
   if (paymentPending > 0) {
-    signals.push(signal({
+    push({
       id: 'pipeline-payment-pending',
       category: 'revenue',
       tone: 'opportunity',
@@ -167,12 +238,12 @@ export function buildSystemIntelligence(
       metricValue: compactNumber(paymentPending),
       href: '/leads',
       evidence: [`${paymentPending} lead${paymentPending === 1 ? '' : 's'} are in payment_pending`],
-    }));
+    });
   }
 
   const highIntent = integer(counts.high_intent);
   if (highIntent > 0) {
-    signals.push(signal({
+    push({
       id: 'pipeline-high-intent',
       category: 'pipeline',
       tone: 'opportunity',
@@ -184,14 +255,14 @@ export function buildSystemIntelligence(
       metricValue: compactNumber(highIntent),
       href: '/leads',
       evidence: [`${highIntent} lead${highIntent === 1 ? '' : 's'} currently sit in high_intent`],
-    }));
+    });
   }
 
   const openUnvalued = integer(unvaluedOpenLeads);
   if (openUnvalued > 0) {
     const active = Math.max(1, integer(metrics.activePipeline));
     const share = openUnvalued / active;
-    signals.push(signal({
+    push({
       id: 'data-unvalued-open-leads',
       category: 'data_quality',
       tone: share >= 0.35 ? 'warning' : 'info',
@@ -203,35 +274,39 @@ export function buildSystemIntelligence(
       metricValue: compactNumber(openUnvalued),
       href: '/leads',
       evidence: [`${Math.round(share * 100)}% of the active pipeline is currently unvalued`],
-    }));
+    });
   }
 
+  // Currency rows remain independent. We intentionally do not compare raw INR/USD/etc.
+  // amounts without an explicit FX-normalization source.
   const revenue = revenueSummary
     .map((row) => ({
-      currency: row.currency,
+      currency: String(row.currency || '').trim() || 'INR',
       pipeline: Number(row.pipeline || 0),
       weighted: Number(row.weighted || 0),
       collected: Number(row.collected || 0),
       outstanding: Number(row.outstanding || 0),
       opportunities: integer(row.opportunities),
     }))
-    .filter((row) => row.pipeline > 0 || row.outstanding > 0);
+    .filter((row) => row.outstanding > 0);
 
-  const largestOutstanding = [...revenue].sort((a, b) => b.outstanding - a.outstanding)[0];
-  if (largestOutstanding?.outstanding > 0) {
-    signals.push(signal({
-      id: `revenue-outstanding-${largestOutstanding.currency}`,
+  for (const row of revenue) {
+    push({
+      id: `revenue-outstanding-${row.currency.toLowerCase()}`,
       category: 'revenue',
       tone: 'opportunity',
-      score: 72 + Math.min(largestOutstanding.opportunities, 12),
-      title: `${currencyValue(largestOutstanding.currency, largestOutstanding.outstanding)} remains outstanding`,
-      reason: 'Collected revenue is lagging booked/pipeline value in this currency, making payment completion a near-term opportunity.',
+      score: 72 + Math.min(row.opportunities, 12),
+      title: `${currencyValue(row.currency, row.outstanding)} remains outstanding`,
+      reason: `Outstanding value is elevated inside the ${row.currency} revenue view. SalsysOS keeps currencies separate rather than making an unsupported cross-currency comparison.`,
       recommendedAction: 'Review payment-pending and enrolled records with an outstanding balance before adding new discounts or offers.',
-      metricLabel: 'Outstanding',
-      metricValue: currencyValue(largestOutstanding.currency, largestOutstanding.outstanding),
-      href: '/leads',
-      evidence: [`${largestOutstanding.opportunities} valued opportunit${largestOutstanding.opportunities === 1 ? 'y' : 'ies'} contribute to this revenue view`],
-    }));
+      metricLabel: `${row.currency} outstanding`,
+      metricValue: currencyValue(row.currency, row.outstanding),
+      href: '/revenue',
+      evidence: [
+        `${row.opportunities} valued opportunit${row.opportunities === 1 ? 'y' : 'ies'}`,
+        `${currencyValue(row.currency, row.collected)} collected in ${row.currency}`,
+      ],
+    });
   }
 
   const pressuredBatch = upcomingBatches
@@ -247,7 +322,7 @@ export function buildSystemIntelligence(
     })[0];
 
   if (pressuredBatch && (pressuredBatch.hotDemand > 0 || pressuredBatch.occupancyPressure >= 0.65)) {
-    signals.push(signal({
+    push({
       id: `demand-batch-${pressuredBatch.id}`,
       category: 'demand',
       tone: pressuredBatch.seatsRemaining !== null && pressuredBatch.seatsRemaining <= 3 ? 'warning' : 'opportunity',
@@ -257,12 +332,12 @@ export function buildSystemIntelligence(
       recommendedAction: 'Prioritize matching high-intent leads to this batch and verify capacity before increasing promotion.',
       metricLabel: 'Hot demand',
       metricValue: compactNumber(pressuredBatch.hotDemand),
-      href: '/leads',
+      href: '/course-management',
       evidence: [
         `${pressuredBatch.activeDemand} active-demand lead${pressuredBatch.activeDemand === 1 ? '' : 's'}`,
         pressuredBatch.seatsRemaining !== null ? `${pressuredBatch.seatsRemaining} seats remaining` : 'Capacity not set',
       ],
-    }));
+    });
   }
 
   const qualifiedSources = sources
@@ -275,23 +350,23 @@ export function buildSystemIntelligence(
 
   const bestSource = qualifiedSources[0];
   if (bestSource && bestSource.qualified > 0) {
-    signals.push(signal({
+    push({
       id: `acquisition-source-${bestSource.source.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`,
       category: 'acquisition',
       tone: 'opportunity',
       score: 58 + Math.min(Math.round(bestSource.qualificationRate * 25), 25),
       title: `${bestSource.source} is currently the strongest qualified source`,
       reason: `${Math.round(bestSource.qualificationRate * 100)}% of loaded leads from this source have reached Qualified+ in the current dashboard evidence.`,
-      recommendedAction: 'Inspect the source’s recent campaigns/content before reallocating budget or effort; treat this as directional until volume is sufficient.',
+      recommendedAction: 'Inspect the source’s recent campaigns and lead quality before reallocating budget or effort; treat this as directional until volume is sufficient.',
       metricLabel: 'Qualified rate',
       metricValue: `${Math.round(bestSource.qualificationRate * 100)}%`,
-      href: '/marketing',
+      href: '/campaigns',
       evidence: [`${bestSource.leads} leads`, `${bestSource.qualified} Qualified+`, `${bestSource.share}% lead share`],
-    }));
+    });
   }
 
   if (signals.length === 0) {
-    signals.push(signal({
+    push({
       id: 'healthy-no-urgent-signals',
       category: 'pipeline',
       tone: 'healthy',
@@ -303,7 +378,7 @@ export function buildSystemIntelligence(
       metricValue: '0',
       href: '/leads',
       evidence: ['No urgent threshold crossed in the current dashboard snapshot'],
-    }));
+    });
   }
 
   signals.sort((a, b) => b.score - a.score || a.id.localeCompare(b.id));
@@ -322,21 +397,30 @@ export function buildSystemIntelligence(
         : 'healthy';
 
   const headline = top?.title || 'Operations are stable';
+  const roleSummary = role === 'admissions'
+    ? 'The ranking is tuned toward response, follow-up and pipeline work for admissions.'
+    : role === 'manager'
+      ? 'The ranking balances frontline pressure with pipeline, revenue and operating quality.'
+      : role === 'owner' || role === 'admin'
+        ? 'The ranking includes executive-weighted revenue, demand and acquisition context while preserving urgent frontline work.'
+        : 'The ranking uses the shared operating priority model.';
+
   const summary = state === 'urgent'
-    ? 'Immediate response risk is elevated. Work the highest-ranked item before lower-priority activity.'
+    ? `Immediate response risk is elevated. Work the highest-ranked item before lower-priority activity. ${roleSummary}`
     : state === 'attention'
-      ? 'The system found active work that can materially improve pipeline movement if handled now.'
+      ? `The system found active work that can materially improve pipeline movement if handled now. ${roleSummary}`
       : state === 'opportunity'
-        ? 'No critical queue is elevated. Focus can shift toward the strongest conversion and demand opportunities.'
-        : 'No critical operating threshold is elevated in the current evidence.';
+        ? `No critical queue is elevated. Focus can shift toward the strongest conversion and demand opportunities. ${roleSummary}`
+        : `No critical operating threshold is elevated in the current evidence. ${roleSummary}`;
 
   return {
     generatedAt: now.toISOString(),
+    role,
     state,
     headline,
     summary,
     attentionScore,
-    signals: signals.slice(0, 6),
+    signals: signals.slice(0, maxSignals),
     counters: { urgent, opportunities, dataQuality },
   };
 }
