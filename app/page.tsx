@@ -1,3 +1,4 @@
+import Image from 'next/image';
 import Link from 'next/link';
 import {
   ArrowRight,
@@ -68,9 +69,14 @@ export default function HomePage() {
       <header className="sticky top-0 z-40 border-b border-slate-200/80 bg-white/90 backdrop-blur">
         <div className="mx-auto flex max-w-7xl items-center justify-between px-5 py-4 sm:px-8 lg:px-10">
           <Link href="/" className="flex items-center gap-3" aria-label="SalsysOS home">
-            <span className="grid h-10 w-10 place-items-center rounded-xl bg-brand text-sm font-black tracking-tight text-white shadow-sm">
-              S
-            </span>
+            <Image
+              src="/branding/salsys-mark.png"
+              alt="SalsysOS"
+              width={40}
+              height={40}
+              priority
+              className="salsys-brand-mark h-10 w-10 rounded-xl"
+            />
             <span>
               <span className="block text-base font-black tracking-tight text-slate-950">
                 SalsysOS
