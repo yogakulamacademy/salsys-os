@@ -15,6 +15,7 @@ import {
   TrendingUp,
 } from 'lucide-react';
 
+import { IntelligenceRecommendationFeedback } from '@/components/intelligence-recommendation-feedback';
 import type {
   SystemIntelligenceBrief as Brief,
   SystemIntelligenceCategory,
@@ -102,18 +103,20 @@ function SignalCard({ signal, rank }: { signal: SystemIntelligenceSignal; rank: 
         </div>
       </div>
 
-      <div className="mt-3 flex flex-wrap items-end justify-between gap-3">
-        <div className="flex min-w-0 flex-1 flex-wrap gap-1.5">
-          {signal.evidence.slice(0, 3).map((item) => (
-            <span key={item} className="max-w-full truncate rounded-full border border-slate-200 bg-white px-2 py-1 text-[9px] font-semibold text-slate-500">
-              {item}
-            </span>
-          ))}
-        </div>
+      <div className="mt-3 flex min-h-7 flex-wrap items-center justify-between gap-3 border-t border-slate-100 pt-3">
+        <IntelligenceRecommendationFeedback signalId={signal.id} />
         <Link href={signal.href} className="inline-flex shrink-0 items-center gap-1 text-[11px] font-black text-brand hover:underline">
           Act on this
           <ArrowRight size={12} />
         </Link>
+      </div>
+
+      <div className="mt-2 flex min-w-0 flex-wrap gap-1.5">
+        {signal.evidence.slice(0, 3).map((item) => (
+          <span key={item} className="max-w-full truncate rounded-full border border-slate-200 bg-white px-2 py-1 text-[9px] font-semibold text-slate-500">
+            {item}
+          </span>
+        ))}
       </div>
     </article>
   );
@@ -175,7 +178,7 @@ export function SystemIntelligenceBrief({ brief }: { brief: Brief }) {
         <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
           <div>
             <div className="text-xs font-black text-slate-800">What deserves attention now</div>
-            <div className="mt-0.5 text-[10px] font-medium text-slate-400">Ranked from the current CRM, conversation, revenue, demand and acquisition snapshot — not a static checklist.</div>
+            <div className="mt-0.5 text-[10px] font-medium text-slate-400">Ranked from current evidence and now learning which recommendations users actually find useful.</div>
           </div>
           <div className="flex items-center gap-3 text-[10px] font-bold text-slate-500">
             <span className="inline-flex items-center gap-1"><AlertTriangle size={11} className="text-rose-500" /> {brief.counters.urgent} urgent</span>
