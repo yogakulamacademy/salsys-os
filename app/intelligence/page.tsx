@@ -7,6 +7,7 @@ import {
   type IntelligenceRecommendationEffectivenessRow,
 } from '@/components/intelligence-recommendation-effectiveness';
 import { SystemIntelligenceBrief } from '@/components/system-intelligence-brief';
+import { SystemMorningBrief } from '@/components/system-morning-brief';
 import { PageHeader } from '@/components/ui';
 import { getDashboardSnapshot } from '@/lib/dashboard-data';
 import { getSystemIntelligenceContext } from '@/lib/intelligence/system-intelligence-context';
@@ -147,6 +148,7 @@ export default async function IntelligencePage() {
         }
       />
 
+      <SystemMorningBrief snapshot={snapshot} context={context} brief={brief} />
       <SystemIntelligenceBrief brief={brief} />
       <IntelligenceRecommendationEffectiveness rows={effectiveness} />
       <ClaudeOperatingBrief />
@@ -192,7 +194,7 @@ export default async function IntelligencePage() {
             </div>
             <div className="mt-1 text-lg font-black">The operating brief now changes with the business and with the person using it.</div>
             <p className="mt-1 max-w-3xl text-xs leading-5 text-slate-300">
-              V2 adds signal correlation, behavioural re-engagement, 24-hour velocity comparison, system-health confidence, role-aware ranking and bounded Claude synthesis. Recommendation actions now feed explicit completion tracking, a tenant-safe outcome observer, effectiveness measurement and tightly capped calibration once evidence is mature enough.
+              V2 adds a 24-hour Morning Brief, signal correlation, behavioural re-engagement, velocity comparison, system-health confidence, role-aware ranking and bounded Claude synthesis. Recommendation actions feed explicit completion tracking, a tenant-safe outcome observer, effectiveness measurement and tightly capped calibration once evidence is mature enough.
             </p>
           </div>
           <div className="shrink-0 rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-xs font-bold text-slate-200">
