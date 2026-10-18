@@ -1,5 +1,6 @@
 import 'server-only';
 
+import { createHash, createHmac } from 'node:crypto';
 import { createAdminClient } from '@/lib/supabase/admin';
 
 type SearchClaim = {
@@ -18,9 +19,30 @@ type PreparedAction = {
   document?: Record<string, unknown>;
 };
 
-type OpenSearchConfig = {
+type HeaderAuth = {
+  mode: 'header';
+  authorization: string;
+};
+
+type AwsSigV4Auth = {
+  mode: 'aws-sigv4';
+  region: string;
+  service: 'aoss' | 'es';
+  accessKeyId: string;
+  secretAccessKey: string;
+  sessionToken: string | null;
+};
+
+export type OpenSearchConfig = {
   endpoint: string;
   indexName: string;
+  auth: HeaderAuth | AwsSigV4Auth;
+  /**
+   * Backward-compatible field for modules that still use the original
+   * Basic/Bearer provider path. It is intentionally empty in AWS SigV4 mode.
+   * Semantic OpenSearch will be migrated in its own provider checkpoint before
+   * that feature is enabled.
+   */
   authorization: string;
 };
 
@@ -48,6 +70,14 @@ function safeIndexPart(value: string) {
     .slice(0, 120);
 }
 
+function awsService(value: string | null): 'aoss' | 'es' {
+  const normalized = (value || 'aoss').toLowerCase();
+  if (normalized !== 'aoss' && normalized !== 'es') {
+    throw new Error('OPENSEARCH_AWS_SERVICE must be aoss or es.');
+  }
+  return normalized;
+}
+
 export function getOpenSearchConfig(): OpenSearchConfig {
   const endpointRaw = env('OPENSEARCH_URL');
   if (!endpointRaw) throw new Error('OPENSEARCH_URL is not configured.');
@@ -55,14 +85,33 @@ export function getOpenSearchConfig(): OpenSearchConfig {
   const bearer = env('OPENSEARCH_BEARER_TOKEN');
   const username = env('OPENSEARCH_USERNAME');
   const password = env('OPENSEARCH_PASSWORD');
+  const awsRegion = env('OPENSEARCH_AWS_REGION') || env('AWS_REGION') || env('AWS_DEFAULT_REGION');
+  const awsAccessKeyId = env('AWS_ACCESS_KEY_ID');
+  const awsSecretAccessKey = env('AWS_SECRET_ACCESS_KEY');
+  const awsSessionToken = env('AWS_SESSION_TOKEN');
 
-  let authorization: string;
+  let auth: HeaderAuth | AwsSigV4Auth;
+  let authorization = '';
+
   if (bearer) {
     authorization = `Bearer ${bearer}`;
+    auth = { mode: 'header', authorization };
   } else if (username && password) {
     authorization = `Basic ${Buffer.from(`${username}:${password}`, 'utf8').toString('base64')}`;
+    auth = { mode: 'header', authorization };
+  } else if (awsRegion && awsAccessKeyId && awsSecretAccessKey) {
+    auth = {
+      mode: 'aws-sigv4',
+      region: awsRegion,
+      service: awsService(env('OPENSEARCH_AWS_SERVICE')),
+      accessKeyId: awsAccessKeyId,
+      secretAccessKey: awsSecretAccessKey,
+      sessionToken: awsSessionToken,
+    };
   } else {
-    throw new Error('OpenSearch credentials are not configured.');
+    throw new Error(
+      'OpenSearch credentials are not configured. Configure Bearer/Basic auth or AWS SigV4 credentials.',
+    );
   }
 
   const prefix = safeIndexPart(env('OPENSEARCH_INDEX_PREFIX') || 'salsys');
@@ -71,16 +120,141 @@ export function getOpenSearchConfig(): OpenSearchConfig {
   return {
     endpoint: cleanEndpoint(endpointRaw),
     indexName: `${prefix}-global-v1`,
+    auth,
     authorization,
   };
 }
 
-function headers(config: OpenSearchConfig, contentType = 'application/json') {
-  return {
-    Authorization: config.authorization,
-    'Content-Type': contentType,
-    Accept: 'application/json',
-  };
+function sha256Hex(value: string) {
+  return createHash('sha256').update(value, 'utf8').digest('hex');
+}
+
+function hmac(key: Buffer | string, value: string) {
+  return createHmac('sha256', key).update(value, 'utf8').digest();
+}
+
+function rfc3986(value: string) {
+  return encodeURIComponent(value).replace(/[!'()*]/g, (character) =>
+    `%${character.charCodeAt(0).toString(16).toUpperCase()}`,
+  );
+}
+
+function canonicalPath(url: URL) {
+  if (!url.pathname) return '/';
+  return url.pathname
+    .split('/')
+    .map((segment) => {
+      try {
+        return rfc3986(decodeURIComponent(segment));
+      } catch {
+        return rfc3986(segment);
+      }
+    })
+    .join('/') || '/';
+}
+
+function canonicalQuery(url: URL) {
+  const values: Array<[string, string]> = [];
+  url.searchParams.forEach((value, key) => values.push([key, value]));
+  values.sort(([keyA, valueA], [keyB, valueB]) => {
+    const encodedKeyA = rfc3986(keyA);
+    const encodedKeyB = rfc3986(keyB);
+    if (encodedKeyA !== encodedKeyB) return encodedKeyA.localeCompare(encodedKeyB);
+    return rfc3986(valueA).localeCompare(rfc3986(valueB));
+  });
+  return values.map(([key, value]) => `${rfc3986(key)}=${rfc3986(value)}`).join('&');
+}
+
+function amzTimestamp(date: Date) {
+  return date.toISOString().replace(/[:-]|\.\d{3}/g, '');
+}
+
+function bodyString(body: BodyInit | null | undefined) {
+  if (body == null) return '';
+  if (typeof body === 'string') return body;
+  throw new Error('AWS SigV4 OpenSearch requests currently require a string request body.');
+}
+
+function signAwsRequest(
+  auth: AwsSigV4Auth,
+  url: URL,
+  init: RequestInit,
+) {
+  const now = new Date();
+  const amzDate = amzTimestamp(now);
+  const dateStamp = amzDate.slice(0, 8);
+  const payloadHash = sha256Hex(bodyString(init.body));
+  const requestHeaders = new Headers(init.headers || {});
+
+  requestHeaders.set('x-amz-date', amzDate);
+  requestHeaders.set('x-amz-content-sha256', payloadHash);
+  if (auth.sessionToken) requestHeaders.set('x-amz-security-token', auth.sessionToken);
+
+  const signedHeaderNames = [
+    'host',
+    'x-amz-content-sha256',
+    'x-amz-date',
+    ...(auth.sessionToken ? ['x-amz-security-token'] : []),
+  ];
+  const canonicalHeaders = [
+    `host:${url.host}`,
+    `x-amz-content-sha256:${payloadHash}`,
+    `x-amz-date:${amzDate}`,
+    ...(auth.sessionToken ? [`x-amz-security-token:${auth.sessionToken}`] : []),
+  ].join('\n') + '\n';
+  const signedHeaders = signedHeaderNames.join(';');
+  const canonicalRequest = [
+    (init.method || 'GET').toUpperCase(),
+    canonicalPath(url),
+    canonicalQuery(url),
+    canonicalHeaders,
+    signedHeaders,
+    payloadHash,
+  ].join('\n');
+  const credentialScope = `${dateStamp}/${auth.region}/${auth.service}/aws4_request`;
+  const stringToSign = [
+    'AWS4-HMAC-SHA256',
+    amzDate,
+    credentialScope,
+    sha256Hex(canonicalRequest),
+  ].join('\n');
+  const dateKey = hmac(`AWS4${auth.secretAccessKey}`, dateStamp);
+  const regionKey = hmac(dateKey, auth.region);
+  const serviceKey = hmac(regionKey, auth.service);
+  const signingKey = hmac(serviceKey, 'aws4_request');
+  const signature = createHmac('sha256', signingKey).update(stringToSign, 'utf8').digest('hex');
+
+  requestHeaders.set(
+    'Authorization',
+    `AWS4-HMAC-SHA256 Credential=${auth.accessKeyId}/${credentialScope}, SignedHeaders=${signedHeaders}, Signature=${signature}`,
+  );
+
+  return requestHeaders;
+}
+
+export async function openSearchFetch(
+  config: OpenSearchConfig,
+  pathOrUrl: string,
+  init: RequestInit = {},
+) {
+  const url = /^https?:\/\//i.test(pathOrUrl)
+    ? new URL(pathOrUrl)
+    : new URL(pathOrUrl.startsWith('/') ? pathOrUrl : `/${pathOrUrl}`, `${config.endpoint}/`);
+  const requestHeaders = new Headers(init.headers || {});
+  if (!requestHeaders.has('Accept')) requestHeaders.set('Accept', 'application/json');
+
+  if (config.auth.mode === 'header') {
+    requestHeaders.set('Authorization', config.auth.authorization);
+  } else {
+    const signed = signAwsRequest(config.auth, url, { ...init, headers: requestHeaders });
+    signed.forEach((value, key) => requestHeaders.set(key, value));
+  }
+
+  return fetch(url, {
+    ...init,
+    headers: requestHeaders,
+    cache: init.cache || 'no-store',
+  });
 }
 
 function opensearchUrl(config: OpenSearchConfig, path: string) {
@@ -145,10 +319,8 @@ const INDEX_MAPPING = {
 
 export async function ensureOpenSearchIndex(config = getOpenSearchConfig()) {
   const indexUrl = opensearchUrl(config, `/${encodeURIComponent(config.indexName)}`);
-  const head = await fetch(indexUrl, {
+  const head = await openSearchFetch(config, indexUrl, {
     method: 'HEAD',
-    headers: { Authorization: config.authorization },
-    cache: 'no-store',
   });
 
   if (head.ok) return;
@@ -156,11 +328,10 @@ export async function ensureOpenSearchIndex(config = getOpenSearchConfig()) {
     throw new Error(`OpenSearch index check failed with HTTP ${head.status}.`);
   }
 
-  const create = await fetch(indexUrl, {
+  const create = await openSearchFetch(config, indexUrl, {
     method: 'PUT',
-    headers: headers(config),
+    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(INDEX_MAPPING),
-    cache: 'no-store',
   });
 
   if (create.ok) return;
@@ -352,11 +523,10 @@ export async function runSearchIndexWorkerForOrganization(organizationId: string
 
   let response: Response;
   try {
-    response = await fetch(opensearchUrl(config, '/_bulk'), {
+    response = await openSearchFetch(config, opensearchUrl(config, '/_bulk'), {
       method: 'POST',
-      headers: headers(config, 'application/x-ndjson'),
+      headers: { 'Content-Type': 'application/x-ndjson' },
       body: bulkBody(config, prepared),
-      cache: 'no-store',
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : 'OpenSearch bulk request failed.';
