@@ -57,6 +57,30 @@ function roleLabel(role: IntelligenceRole) {
   return 'workspace';
 }
 
+function calibrationAdjustment(context: SystemIntelligenceContext, signal: SystemIntelligenceSignal) {
+  const row = context.calibration.find(
+    (item) => item.signal_id === signal.id
+      && item.role_scope === context.role
+      && item.category === signal.category,
+  );
+
+  if (!row?.calibration_ready) return null;
+  if (row.sample_band !== 'established' && row.sample_band !== 'mature') return null;
+
+  const databaseCap = Math.abs(Math.round(number(row.max_adjustment_points)));
+  const cap = Math.min(5, databaseCap);
+  if (cap <= 0) return null;
+
+  const requestedPoints = Math.round(number(row.calibration_points));
+  const points = Math.max(-cap, Math.min(cap, requestedPoints));
+
+  return {
+    points,
+    sampleBand: row.sample_band,
+    reason: row.calibration_reason,
+  };
+}
+
 function direction(current: number, previous: number) {
   if (previous <= 0) return current > 0 ? 100 : 0;
   return Math.round(((current - previous) / previous) * 100);
@@ -227,7 +251,23 @@ export function buildSystemIntelligenceV2(
   signals.push(...velocitySignals(context));
 
   signals = signals
-    .map((item) => ({ ...item, score: clamp(item.score + roleWeight(context.role, item)) }))
+    .map((item) => {
+      const baseScore = clamp(item.score + roleWeight(context.role, item));
+      const calibration = calibrationAdjustment(context, item);
+      if (!calibration) return { ...item, score: baseScore };
+
+      const finalScore = clamp(baseScore + calibration.points);
+      const signedPoints = calibration.points > 0 ? `+${calibration.points}` : String(calibration.points);
+
+      return {
+        ...item,
+        score: finalScore,
+        evidence: [
+          `Learned ranking: ${baseScore} ${signedPoints} = ${finalScore} · ${calibration.sampleBand} sample`,
+          ...item.evidence,
+        ],
+      };
+    })
     .sort((left, right) => right.score - left.score || left.id.localeCompare(right.id))
     .slice(0, 8);
 
@@ -243,6 +283,11 @@ export function buildSystemIntelligenceV2(
       : opportunities > 0
         ? 'opportunity'
         : 'healthy';
+  const hasActiveCalibration = context.calibration.some(
+    (row) => row.calibration_ready === true
+      && (row.sample_band === 'established' || row.sample_band === 'mature')
+      && row.role_scope === context.role,
+  );
 
   return {
     generatedAt: now.toISOString(),
@@ -255,7 +300,7 @@ export function buildSystemIntelligenceV2(
         ? 'The system found active work that can materially improve current performance.'
         : state === 'opportunity'
           ? 'No critical queue dominates; the strongest current opportunities are ranked below.'
-          : 'No critical operating threshold is elevated.'} Priorities are correlated and weighted for the ${roleLabel(context.role)} role using current tenant evidence.`,
+          : 'No critical operating threshold is elevated.'} Priorities are correlated and weighted for the ${roleLabel(context.role)} role using current tenant evidence${hasActiveCalibration ? ' plus bounded mature-history calibration' : ''}.`,
     signals,
     counters: { urgent, opportunities, dataQuality },
   };
