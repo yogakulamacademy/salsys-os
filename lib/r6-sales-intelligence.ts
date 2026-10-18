@@ -8,29 +8,38 @@ export type LeadSalesIntelligenceRow = {
   leadCode: string;
   leadName: string;
   currentStage: string;
-  crmIntent: string;
-  interestedCourseName: string | null;
-  behaviourTemperature: string;
+  storedIntent: string;
+  derivedIntent: string;
+  intentConfidence: string;
+  intentBasis: string;
+  intentReasonCodes: string[];
   engagementScore: number;
+  behaviourTemperature: string;
+  highIntentEvents7d: number;
+  whatsappClicks7d: number;
+  reservationStarts7d: number;
+  paymentStarts7d: number;
+  sessions7d: number;
+  pageViews7d: number;
   isReengaged: boolean;
-  behaviourReason: string | null;
-  strongestAffinityCourseName: string | null;
-  strongestAffinityScore: number | null;
-  strongestAffinityEvidence: string | null;
-  alternateAffinityCourseName: string | null;
-  alternateAffinityScore: number | null;
-  alternateAffinityEvidence: string | null;
-  affinityCourseCount: number;
-  needsReply: boolean;
-  hasOverdueFollowup: boolean;
   priorityScore: number;
   priorityBand: string;
+  priorityReason: string | null;
+  nextActionCode: string | null;
   nextBestAction: string | null;
   paymentStatus: string | null;
+  paidRows: number;
+  netPaid: number | null;
   outstandingBalance: number | null;
-  currency: string | null;
-  primarySalesSignal: string;
-  salesEvidence: string[];
+  recommendedCourseName: string | null;
+  recommendedAffinityScore: number | null;
+  recommendationBasis: string | null;
+  recommendationReasonCodes: string[];
+  candidateCourseCount: number;
+  personMappingConflict: boolean;
+  lastInboundAt: string | null;
+  lastOutboundAt: string | null;
+  nextFollowupAt: string | null;
 };
 
 function numberValue(value: unknown): number {
@@ -65,7 +74,7 @@ export async function getR6SalesIntelligence(limit = 100): Promise<{
   const organizationId = await requireCurrentOrganizationId(supabase, user.id);
 
   const { data, error } = await supabase
-    .from('v_lead_sales_intelligence_v1')
+    .from('v_lead_sales_intelligence')
     .select('*')
     .eq('organization_id', organizationId)
     .order('priority_score', { ascending: false })
@@ -84,29 +93,38 @@ export async function getR6SalesIntelligence(limit = 100): Promise<{
       leadCode: String(row.lead_code ?? ''),
       leadName: String(row.lead_name ?? row.lead_code ?? 'Lead'),
       currentStage: String(row.current_stage ?? 'new'),
-      crmIntent: String(row.crm_intent ?? 'unknown'),
-      interestedCourseName: row.interested_course_name ? String(row.interested_course_name) : null,
-      behaviourTemperature: String(row.behaviour_temperature ?? 'unknown'),
+      storedIntent: String(row.stored_intent ?? 'unknown'),
+      derivedIntent: String(row.derived_intent ?? 'unknown'),
+      intentConfidence: String(row.intent_confidence ?? 'low'),
+      intentBasis: String(row.intent_basis ?? 'insufficient_evidence'),
+      intentReasonCodes: stringArray(row.intent_reason_codes),
       engagementScore: numberValue(row.engagement_score),
+      behaviourTemperature: String(row.behaviour_temperature ?? 'unknown'),
+      highIntentEvents7d: numberValue(row.high_intent_events_7d),
+      whatsappClicks7d: numberValue(row.whatsapp_clicks_7d),
+      reservationStarts7d: numberValue(row.reservation_starts_7d),
+      paymentStarts7d: numberValue(row.payment_starts_7d),
+      sessions7d: numberValue(row.sessions_7d),
+      pageViews7d: numberValue(row.page_views_7d),
       isReengaged: row.is_reengaged === true,
-      behaviourReason: row.behaviour_reason ? String(row.behaviour_reason) : null,
-      strongestAffinityCourseName: row.strongest_affinity_course_name ? String(row.strongest_affinity_course_name) : null,
-      strongestAffinityScore: nullableNumber(row.strongest_affinity_score),
-      strongestAffinityEvidence: row.strongest_affinity_evidence ? String(row.strongest_affinity_evidence) : null,
-      alternateAffinityCourseName: row.alternate_affinity_course_name ? String(row.alternate_affinity_course_name) : null,
-      alternateAffinityScore: nullableNumber(row.alternate_affinity_score),
-      alternateAffinityEvidence: row.alternate_affinity_evidence ? String(row.alternate_affinity_evidence) : null,
-      affinityCourseCount: numberValue(row.affinity_course_count),
-      needsReply: row.needs_reply === true,
-      hasOverdueFollowup: row.has_overdue_followup === true,
       priorityScore: numberValue(row.priority_score),
       priorityBand: String(row.priority_band ?? 'low'),
+      priorityReason: row.priority_reason ? String(row.priority_reason) : null,
+      nextActionCode: row.next_action_code ? String(row.next_action_code) : null,
       nextBestAction: row.next_best_action ? String(row.next_best_action) : null,
       paymentStatus: row.payment_status ? String(row.payment_status) : null,
+      paidRows: numberValue(row.paid_rows),
+      netPaid: nullableNumber(row.net_paid),
       outstandingBalance: nullableNumber(row.outstanding_balance),
-      currency: row.currency ? String(row.currency) : null,
-      primarySalesSignal: String(row.primary_sales_signal ?? 'limited_evidence'),
-      salesEvidence: stringArray(row.sales_evidence),
+      recommendedCourseName: row.recommended_course_name ? String(row.recommended_course_name) : null,
+      recommendedAffinityScore: nullableNumber(row.recommended_affinity_score),
+      recommendationBasis: row.recommendation_basis ? String(row.recommendation_basis) : null,
+      recommendationReasonCodes: stringArray(row.recommendation_reason_codes),
+      candidateCourseCount: numberValue(row.candidate_course_count),
+      personMappingConflict: row.person_mapping_conflict === true,
+      lastInboundAt: row.last_inbound_at ? String(row.last_inbound_at) : null,
+      lastOutboundAt: row.last_outbound_at ? String(row.last_outbound_at) : null,
+      nextFollowupAt: row.next_followup_at ? String(row.next_followup_at) : null,
     })),
     warning: null,
   };
