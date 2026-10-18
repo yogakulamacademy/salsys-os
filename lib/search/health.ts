@@ -1,6 +1,6 @@
 import 'server-only';
 
-import { ensureOpenSearchIndex, getOpenSearchConfig } from '@/lib/search/opensearch';
+import { ensureOpenSearchIndex, getOpenSearchConfig, openSearchFetch } from '@/lib/search/opensearch';
 
 type ClusterInfo = {
   name?: string;
@@ -23,13 +23,6 @@ function safePrefix(raw: string | undefined) {
   return value.toLowerCase();
 }
 
-function providerHeaders(authorization: string) {
-  return {
-    Authorization: authorization,
-    Accept: 'application/json',
-  };
-}
-
 export async function getOpenSearchHealth() {
   const rawPrefix = process.env.OPENSEARCH_INDEX_PREFIX;
   safePrefix(rawPrefix);
@@ -39,11 +32,9 @@ export async function getOpenSearchHealth() {
 
   let clusterResponse: Response;
   try {
-    clusterResponse = await fetch(config.endpoint, {
+    clusterResponse = await openSearchFetch(config, config.endpoint, {
       method: 'GET',
-      headers: providerHeaders(config.authorization),
       signal: timeoutSignal(),
-      cache: 'no-store',
     });
   } catch {
     return {
@@ -81,22 +72,18 @@ export async function getOpenSearchHealth() {
   }
 
   const indexUrl = `${config.endpoint}/${encodeURIComponent(config.indexName)}`;
-  const indexResponse = await fetch(indexUrl, {
+  const indexResponse = await openSearchFetch(config, indexUrl, {
     method: 'HEAD',
-    headers: providerHeaders(config.authorization),
     signal: timeoutSignal(),
-    cache: 'no-store',
   });
 
   const indexExists = indexResponse.ok;
   let mappingSafe = false;
 
   if (indexExists) {
-    const mappingResponse = await fetch(`${indexUrl}/_mapping`, {
+    const mappingResponse = await openSearchFetch(config, `${indexUrl}/_mapping`, {
       method: 'GET',
-      headers: providerHeaders(config.authorization),
       signal: timeoutSignal(),
-      cache: 'no-store',
     });
 
     if (mappingResponse.ok) {
