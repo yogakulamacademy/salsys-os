@@ -7,10 +7,31 @@ import { PageHeader } from '@/components/ui';
 import { getDashboardSnapshot } from '@/lib/dashboard-data';
 import { getSystemIntelligenceContext } from '@/lib/intelligence/system-intelligence-context';
 import { buildSystemIntelligenceV2 } from '@/lib/intelligence/system-intelligence-v2';
+import { createClient } from '@/lib/supabase/server';
 
 export const dynamic = 'force-dynamic';
 
+async function observeRecommendationOutcomes() {
+  try {
+    const supabase = await createClient();
+    const { error } = await supabase.rpc('observe_system_intelligence_recommendation_outcomes_v1', {
+      p_limit: 25,
+    });
+
+    if (error) {
+      console.warn('SYSTEM_INTELLIGENCE_OUTCOME_OBSERVER_FAILED', error.message);
+    }
+  } catch (error) {
+    console.warn(
+      'SYSTEM_INTELLIGENCE_OUTCOME_OBSERVER_FAILED',
+      error instanceof Error ? error.message : 'unknown',
+    );
+  }
+}
+
 export default async function IntelligencePage() {
+  await observeRecommendationOutcomes();
+
   const [snapshot, context] = await Promise.all([
     getDashboardSnapshot(),
     getSystemIntelligenceContext(),
@@ -75,7 +96,7 @@ export default async function IntelligencePage() {
             </div>
             <div className="mt-1 text-lg font-black">The operating brief now changes with the business and with the person using it.</div>
             <p className="mt-1 max-w-3xl text-xs leading-5 text-slate-300">
-              V2 adds signal correlation, behavioural re-engagement, 24-hour velocity comparison, system-health confidence, role-aware ranking and bounded Claude synthesis. Next comes recommendation outcome feedback and learned calibration across the wider operating system.
+              V2 adds signal correlation, behavioural re-engagement, 24-hour velocity comparison, system-health confidence, role-aware ranking and bounded Claude synthesis. Recommendation actions now feed a tenant-safe outcome observer so downstream CRM movement can become learning evidence without being treated as causal attribution.
             </p>
           </div>
           <div className="shrink-0 rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-xs font-bold text-slate-200">
