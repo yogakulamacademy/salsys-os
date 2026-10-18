@@ -4,6 +4,10 @@ import {
   googleDataManagerAdapter,
 } from "@/lib/conversion-feedback/providers/google-data-manager";
 
+import {
+  metaConversionsApiAdapter,
+} from "@/lib/conversion-feedback/providers/meta-conversions-api";
+
 import type {
   ConversionFeedbackProviderAdapter,
   RunConversionFeedbackWorkerOptions,
@@ -24,6 +28,7 @@ import {
 export const conversionFeedbackProviderAdapters =
   [
     googleDataManagerAdapter,
+    metaConversionsApiAdapter,
   ] satisfies readonly ConversionFeedbackProviderAdapter[];
 
 
