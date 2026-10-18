@@ -1,8 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 
+import { searchTenantOpenSearch } from '@/lib/search/query';
 import { createAdminClient } from '@/lib/supabase/admin';
 
 const PILOT_ORGANIZATION_SLUG = 'yogakulam-academy';
+const FOREIGN_TEST_ORGANIZATION_SLUG = 'test-yoga-school';
 const MAX_PILOT_DOCUMENTS = 25;
 const ALLOWED_ENTITY_TYPES = new Set([
   'lead',
@@ -22,17 +24,21 @@ function unauthorized() {
   return NextResponse.json({ ok: false, error: 'Unauthorized.' }, { status: 401 });
 }
 
-async function resolvePilotOrganizationId() {
+async function resolveOrganizationId(slug: string) {
   const supabase = createAdminClient();
   const { data, error } = await supabase
     .from('organizations')
     .select('id')
-    .eq('slug', PILOT_ORGANIZATION_SLUG)
+    .eq('slug', slug)
     .maybeSingle();
 
   if (error) throw new Error(`pilot_organization_resolve_failed:${error.message}`);
-  if (!data?.id) throw new Error('pilot_organization_not_found');
+  if (!data?.id) throw new Error(`pilot_organization_not_found:${slug}`);
   return String(data.id);
+}
+
+async function resolvePilotOrganizationId() {
+  return resolveOrganizationId(PILOT_ORGANIZATION_SLUG);
 }
 
 async function getStatus(organizationId: string) {
@@ -141,8 +147,50 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ ok: true, action, organizationId, result: data, settings: await getStatus(organizationId) });
     }
 
+    if (action === 'verify-search') {
+      const query = String(body.query ?? 'India').trim().slice(0, 100);
+      if (!query) {
+        return NextResponse.json({ ok: false, error: 'A non-empty verification query is required.' }, { status: 400 });
+      }
+
+      const foreignOrganizationId = await resolveOrganizationId(FOREIGN_TEST_ORGANIZATION_SLUG);
+      const [authorizedSearch, foreignSearch] = await Promise.all([
+        searchTenantOpenSearch({
+          organizationId,
+          query,
+          entityTypes: ['lead'],
+          size: 5,
+        }),
+        searchTenantOpenSearch({
+          organizationId: foreignOrganizationId,
+          query,
+          entityTypes: ['lead'],
+          size: 5,
+        }),
+      ]);
+
+      const authorizedTenantVerified = authorizedSearch.total > 0;
+      const crossTenantBlocked = foreignSearch.total === 0;
+      const ok = authorizedTenantVerified && crossTenantBlocked;
+
+      return NextResponse.json(
+        {
+          ok,
+          action,
+          query,
+          authorizedTotal: authorizedSearch.total,
+          foreignTotal: foreignSearch.total,
+          authorizedTenantVerified,
+          crossTenantBlocked,
+          authorizedTookMs: authorizedSearch.tookMs,
+          foreignTookMs: foreignSearch.tookMs,
+        },
+        { status: ok ? 200 : 207 },
+      );
+    }
+
     return NextResponse.json(
-      { ok: false, error: 'Unsupported action. Use stage, seed, or arm.' },
+      { ok: false, error: 'Unsupported action. Use stage, seed, arm, or verify-search.' },
       { status: 400 },
     );
   } catch (error) {
