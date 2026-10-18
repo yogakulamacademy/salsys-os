@@ -3,7 +3,7 @@ import { NextResponse } from 'next/server';
 import { getDashboardSnapshot } from '@/lib/dashboard-data';
 import { generateClaudeOperatingBrief, isClaudeOperatingBriefConfigured } from '@/lib/intelligence/claude-operating-brief';
 import { getSystemIntelligenceContext } from '@/lib/intelligence/system-intelligence-context';
-import { buildSystemIntelligenceV2 } from '@/lib/intelligence/system-intelligence-v2';
+import { buildSystemIntelligenceV3 } from '@/lib/intelligence/system-intelligence-v3';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -22,7 +22,7 @@ export async function POST() {
       getDashboardSnapshot(),
       getSystemIntelligenceContext(),
     ]);
-    const intelligence = buildSystemIntelligenceV2(snapshot, context);
+    const intelligence = buildSystemIntelligenceV3(snapshot, context);
     const synthesis = await generateClaudeOperatingBrief(intelligence);
 
     return NextResponse.json(
