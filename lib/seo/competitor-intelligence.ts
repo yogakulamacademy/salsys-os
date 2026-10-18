@@ -1,6 +1,7 @@
 import 'server-only';
 
 import { createAdminClient } from '@/lib/supabase/admin';
+import { isDataForSeoConfigured, runDataForSeoRankCheck } from '@/lib/seo/rank-provider-dataforseo';
 
 export type SeoSurface = 'seo' | 'aeo' | 'geo';
 
@@ -17,6 +18,10 @@ function safeDomain(value: string) {
   } catch {
     throw new Error('SEO_COMPETITOR_DOMAIN_INVALID');
   }
+}
+
+function rankProviderConfigured() {
+  return isDataForSeoConfigured() || Boolean(process.env.SEO_RANKING_API_URL && process.env.SEO_RANKING_API_KEY);
 }
 
 export async function getCompetitorIntelligence(organizationId: string) {
@@ -41,7 +46,7 @@ export async function getCompetitorIntelligence(organizationId: string) {
     opportunities: opportunities.data ?? [],
     analyses: analyses.data ?? [],
     recommendation_links: recommendationLinks.data ?? [],
-    rank_provider_configured: Boolean(process.env.SEO_RANKING_API_URL && process.env.SEO_RANKING_API_KEY),
+    rank_provider_configured: rankProviderConfigured(),
     claude_configured: Boolean(process.env.ANTHROPIC_API_KEY && process.env.ANTHROPIC_SONNET_MODEL),
   };
 }
@@ -184,22 +189,65 @@ export async function createDraftExperimentFromCompetitorRecommendation(input: {
   return row as { experiment_id: string; link_id: string; experiment_status: string };
 }
 
+async function resolveRankDomains(organizationId: string) {
+  const admin = createAdminClient();
+  const [pages, competitors] = await Promise.all([
+    admin.from('seo_pages').select('normalized_url').eq('organization_id', organizationId).not('normalized_url', 'is', null).limit(25),
+    admin.from('seo_competitors').select('domain').eq('organization_id', organizationId).eq('is_active', true).limit(100),
+  ]);
+  if (pages.error) throw new Error(`SEO_RANK_SITE_RESOLVE_FAILED:${pages.error.message}`);
+  if (competitors.error) throw new Error(`SEO_RANK_COMPETITOR_RESOLVE_FAILED:${competitors.error.message}`);
+
+  let ownDomain = '';
+  for (const row of pages.data || []) {
+    const value = asText(row.normalized_url);
+    if (!value) continue;
+    try {
+      ownDomain = new URL(value).hostname.replace(/^www\./, '').toLowerCase();
+      if (ownDomain) break;
+    } catch {
+      // Ignore malformed stored URLs and continue looking for a valid site URL.
+    }
+  }
+  if (!ownDomain) throw new Error('SEO_RANK_SITE_DOMAIN_NOT_FOUND');
+
+  return {
+    ownDomain,
+    competitorDomains: (competitors.data || []).map((row) => asText(row.domain)).filter(Boolean),
+  };
+}
+
 export async function runRankingCheck(input: { organizationId: string; targetId: string }) {
-  const url = process.env.SEO_RANKING_API_URL;
-  const key = process.env.SEO_RANKING_API_KEY;
-  if (!url || !key) throw new Error('SEO_RANK_PROVIDER_NOT_CONFIGURED');
   const admin = createAdminClient();
   const { data: target, error } = await admin.from('seo_rank_targets').select('*').eq('organization_id', input.organizationId).eq('id', input.targetId).single();
   if (error || !target) throw new Error('SEO_RANK_TARGET_NOT_FOUND');
 
-  const response = await fetch(url, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json', authorization: `Bearer ${key}` },
-    body: JSON.stringify({ query: target.query, surface: target.surface, locale: target.locale, country_code: target.country_code, device: target.device, engine: target.engine }),
-    signal: AbortSignal.timeout(30000),
-  });
-  if (!response.ok) throw new Error(`SEO_RANK_PROVIDER_FAILED_${response.status}`);
-  const result = await response.json() as Record<string, unknown>;
+  let result: Record<string, unknown>;
+  if (isDataForSeoConfigured()) {
+    const domains = await resolveRankDomains(input.organizationId);
+    result = await runDataForSeoRankCheck({
+      query: target.query,
+      surface: target.surface as SeoSurface,
+      locale: asText(target.locale) || 'en-IN',
+      countryCode: asText(target.country_code) || 'IN',
+      device: target.device === 'mobile' ? 'mobile' : 'desktop',
+      engine: asText(target.engine) || 'google',
+      ownDomain: domains.ownDomain,
+      competitorDomains: domains.competitorDomains,
+    });
+  } else {
+    const url = process.env.SEO_RANKING_API_URL;
+    const key = process.env.SEO_RANKING_API_KEY;
+    if (!url || !key) throw new Error('SEO_RANK_PROVIDER_NOT_CONFIGURED');
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', authorization: `Bearer ${key}` },
+      body: JSON.stringify({ query: target.query, surface: target.surface, locale: target.locale, country_code: target.country_code, device: target.device, engine: target.engine }),
+      signal: AbortSignal.timeout(30000),
+    });
+    if (!response.ok) throw new Error(`SEO_RANK_PROVIDER_FAILED_${response.status}`);
+    result = await response.json() as Record<string, unknown>;
+  }
 
   const snapshot = {
     organization_id: input.organizationId,
