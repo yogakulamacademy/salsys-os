@@ -27,6 +27,7 @@ const PUBLIC_EXACT_PATHS = new Set([
   "/api/seo/competitors/rank-worker",
 ]);
 
+const PREVIEW_VERIFY_EXACT_PATH = "/api/search/index/semantic-transport-verify";
 const ACTIVE_WORKSPACE_COOKIE = "yk-active-workspace";
 
 const OAUTH_CALLBACK_PROVIDER_BY_PATH: Record<string, string> = {
@@ -145,6 +146,13 @@ export async function middleware(request: NextRequest) {
   if (localMockMode) return NextResponse.next();
 
   const pathname = normalizePathname(request.nextUrl.pathname);
+
+  if (
+    process.env.VERCEL_ENV === "preview" &&
+    pathname === PREVIEW_VERIFY_EXACT_PATH
+  ) {
+    return NextResponse.next();
+  }
 
   if (isPublicPath(pathname)) return NextResponse.next();
 
