@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 
 import { getDashboardSnapshot } from '@/lib/dashboard-data';
 import { getSystemIntelligenceContext } from '@/lib/intelligence/system-intelligence-context';
-import { buildSystemIntelligenceV2 } from '@/lib/intelligence/system-intelligence-v2';
+import { buildSystemIntelligenceV3 } from '@/lib/intelligence/system-intelligence-v3';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -13,10 +13,10 @@ export async function GET() {
       getDashboardSnapshot(),
       getSystemIntelligenceContext(),
     ]);
-    const intelligence = buildSystemIntelligenceV2(snapshot, context);
+    const intelligence = buildSystemIntelligenceV3(snapshot, context);
 
     return NextResponse.json(
-      { ok: true, version: 2, intelligence },
+      { ok: true, version: 3, intelligence },
       {
         headers: {
           'Cache-Control': 'private, no-store, max-age=0',
