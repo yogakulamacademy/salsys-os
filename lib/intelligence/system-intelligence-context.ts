@@ -7,11 +7,14 @@ export type IntelligenceRole = 'owner' | 'admin' | 'manager' | 'admissions' | 'o
 
 export type IntelligenceOwnerSignalRow = {
   lead_id: string;
+  owner_user_id: string | null;
   current_stage: string | null;
+  created_at: string | null;
   last_contacted_at: string | null;
   needs_reply: boolean | null;
   last_inbound_at: string | null;
   has_overdue_followup: boolean | null;
+  followups_next_24h: number | string | null;
   priority_score: number | null;
   payment_status: string | null;
   outstanding_balance: number | string | null;
@@ -55,6 +58,32 @@ export type IntelligenceLearningProfile = {
   neutral_count: number | string | null;
 };
 
+export type IntelligenceTeamMember = {
+  user_id: string;
+  full_name: string | null;
+  role: string | null;
+  active: boolean | null;
+};
+
+export type IntelligenceSeoDailyRow = {
+  date: string;
+  clicks: number | string | null;
+  impressions: number | string | null;
+  ctr: number | string | null;
+  avg_position: number | string | null;
+};
+
+export type IntelligencePaidCampaignRow = {
+  provider: 'meta' | 'google';
+  campaign_id: string;
+  campaign_name: string | null;
+  spend: number | string | null;
+  crm_leads: number | string | null;
+  qualified_leads: number | string | null;
+  enrolled_leads: number | string | null;
+  cpl: number | string | null;
+};
+
 export type SystemIntelligenceContext = {
   organizationId: string;
   role: IntelligenceRole;
@@ -62,6 +91,9 @@ export type SystemIntelligenceContext = {
   journey: IntelligenceJourneyRow[];
   systemActivity: IntelligenceSystemActivityRow[];
   learningProfiles: IntelligenceLearningProfile[];
+  teamMembers: IntelligenceTeamMember[];
+  seoDaily: IntelligenceSeoDailyRow[];
+  paidCampaigns: IntelligencePaidCampaignRow[];
   velocity: {
     inbound24h: number;
     inboundPrevious24h: number;
@@ -69,6 +101,14 @@ export type SystemIntelligenceContext = {
     outboundPrevious24h: number;
     newLeads24h: number;
     newLeadsPrevious24h: number;
+  };
+  historical: {
+    newLeads7d: number;
+    newLeadsPrevious7d: number;
+    seoClicks7d: number;
+    seoClicksPrevious7d: number;
+    seoImpressions7d: number;
+    seoImpressionsPrevious7d: number;
   };
   degradedSources: string[];
 };
@@ -99,6 +139,50 @@ function countByWindow<T>(rows: T[], getTime: (row: T) => unknown, nowMs: number
   return { current, previous };
 }
 
+function countBySevenDayWindow<T>(rows: T[], getTime: (row: T) => unknown, nowMs: number) {
+  const currentStart = nowMs - 7 * 24 * 60 * 60 * 1000;
+  const previousStart = nowMs - 14 * 24 * 60 * 60 * 1000;
+  let current = 0;
+  let previous = 0;
+
+  for (const row of rows) {
+    const at = timestamp(getTime(row));
+    if (!at) continue;
+    if (at >= currentStart) current += 1;
+    else if (at >= previousStart) previous += 1;
+  }
+
+  return { current, previous };
+}
+
+function number(value: unknown) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function seoWindow(rows: IntelligenceSeoDailyRow[], nowMs: number) {
+  const currentStart = nowMs - 7 * 24 * 60 * 60 * 1000;
+  const previousStart = nowMs - 14 * 24 * 60 * 60 * 1000;
+  let clicksCurrent = 0;
+  let clicksPrevious = 0;
+  let impressionsCurrent = 0;
+  let impressionsPrevious = 0;
+
+  for (const row of rows) {
+    const at = timestamp(`${row.date}T00:00:00Z`);
+    if (!at) continue;
+    if (at >= currentStart) {
+      clicksCurrent += number(row.clicks);
+      impressionsCurrent += number(row.impressions);
+    } else if (at >= previousStart) {
+      clicksPrevious += number(row.clicks);
+      impressionsPrevious += number(row.impressions);
+    }
+  }
+
+  return { clicksCurrent, clicksPrevious, impressionsCurrent, impressionsPrevious };
+}
+
 export async function getSystemIntelligenceContext(now = new Date()): Promise<SystemIntelligenceContext> {
   const supabase = await createClient();
   const {
@@ -114,11 +198,24 @@ export async function getSystemIntelligenceContext(now = new Date()): Promise<Sy
 
   const role = normalizeRole(workspace.activeWorkspace?.role);
   const since48h = new Date(now.getTime() - 48 * 60 * 60 * 1000).toISOString();
+  const since14d = new Date(now.getTime() - 14 * 24 * 60 * 60 * 1000).toISOString();
+  const since14dDate = since14d.slice(0, 10);
 
-  const [ownerSignalsResult, journeyResult, systemActivityResult, messagesResult, leadsResult, learningResult] = await Promise.all([
+  const [
+    ownerSignalsResult,
+    journeyResult,
+    systemActivityResult,
+    messagesResult,
+    leadsResult,
+    learningResult,
+    teamResult,
+    seoDailyResult,
+    metaCampaignResult,
+    googleCampaignResult,
+  ] = await Promise.all([
     supabase
       .from('v_admissions_owner_lead_signals')
-      .select('lead_id,current_stage,last_contacted_at,needs_reply,last_inbound_at,has_overdue_followup,priority_score,payment_status,outstanding_balance,currency')
+      .select('lead_id,owner_user_id,current_stage,created_at,last_contacted_at,needs_reply,last_inbound_at,has_overdue_followup,followups_next_24h,priority_score,payment_status,outstanding_balance,currency')
       .eq('organization_id', organizationId)
       .limit(750),
     supabase
@@ -141,13 +238,36 @@ export async function getSystemIntelligenceContext(now = new Date()): Promise<Sy
       .from('leads')
       .select('created_at')
       .eq('organization_id', organizationId)
-      .gte('created_at', since48h)
+      .gte('created_at', since14d)
       .limit(5000),
     supabase
       .from('system_intelligence_learning_profiles')
       .select('signal_id,role_scope,outcome_samples,score_adjustment,confidence,positive_count,negative_count,neutral_count')
       .eq('organization_id', organizationId)
       .limit(250),
+    supabase
+      .from('v_admissions_team_members')
+      .select('user_id,full_name,role,active')
+      .eq('organization_id', organizationId)
+      .eq('active', true)
+      .limit(100),
+    supabase
+      .from('gsc_daily')
+      .select('date,clicks,impressions,ctr,avg_position')
+      .eq('organization_id', organizationId)
+      .gte('date', since14dDate)
+      .order('date', { ascending: false })
+      .limit(100),
+    supabase
+      .from('v_meta_ads_campaign_crm_30d')
+      .select('campaign_id,campaign_name,spend,crm_leads,qualified_leads,enrolled_leads,cpl')
+      .eq('organization_id', organizationId)
+      .limit(100),
+    supabase
+      .from('v_google_ads_campaign_crm_30d')
+      .select('campaign_id,campaign_name,spend,crm_leads,qualified_leads,enrolled_leads,cpl')
+      .eq('organization_id', organizationId)
+      .limit(100),
   ]);
 
   const degradedSources: string[] = [];
@@ -157,13 +277,26 @@ export async function getSystemIntelligenceContext(now = new Date()): Promise<Sy
   if (messagesResult.error) degradedSources.push('message_velocity');
   if (leadsResult.error) degradedSources.push('lead_velocity');
   if (learningResult.error) degradedSources.push('recommendation_learning');
+  if (teamResult.error) degradedSources.push('team_capacity');
+  if (seoDailyResult.error) degradedSources.push('seo_history');
+  if (metaCampaignResult.error) degradedSources.push('meta_campaign_performance');
+  if (googleCampaignResult.error) degradedSources.push('google_campaign_performance');
 
   const messages = messagesResult.error ? [] : (messagesResult.data ?? []);
   const inboundRows = messages.filter((row) => row.direction === 'inbound');
   const outboundRows = messages.filter((row) => row.direction === 'outbound');
   const inbound = countByWindow(inboundRows, (row) => row.sent_at || row.created_at, now.getTime());
   const outbound = countByWindow(outboundRows, (row) => row.sent_at || row.created_at, now.getTime());
-  const leads = countByWindow(leadsResult.error ? [] : (leadsResult.data ?? []), (row) => row.created_at, now.getTime());
+  const leadRows = leadsResult.error ? [] : (leadsResult.data ?? []);
+  const leads24h = countByWindow(leadRows, (row) => row.created_at, now.getTime());
+  const leads7d = countBySevenDayWindow(leadRows, (row) => row.created_at, now.getTime());
+  const seoDaily = seoDailyResult.error ? [] : (seoDailyResult.data ?? []) as IntelligenceSeoDailyRow[];
+  const seo = seoWindow(seoDaily, now.getTime());
+
+  const paidCampaigns: IntelligencePaidCampaignRow[] = [
+    ...((metaCampaignResult.error ? [] : metaCampaignResult.data ?? []).map((row) => ({ ...row, provider: 'meta' as const }))),
+    ...((googleCampaignResult.error ? [] : googleCampaignResult.data ?? []).map((row) => ({ ...row, provider: 'google' as const }))),
+  ];
 
   return {
     organizationId,
@@ -172,13 +305,24 @@ export async function getSystemIntelligenceContext(now = new Date()): Promise<Sy
     journey: journeyResult.error ? [] : (journeyResult.data ?? []) as IntelligenceJourneyRow[],
     systemActivity: systemActivityResult.error ? [] : (systemActivityResult.data ?? []) as IntelligenceSystemActivityRow[],
     learningProfiles: learningResult.error ? [] : (learningResult.data ?? []) as IntelligenceLearningProfile[],
+    teamMembers: teamResult.error ? [] : (teamResult.data ?? []) as IntelligenceTeamMember[],
+    seoDaily,
+    paidCampaigns,
     velocity: {
       inbound24h: inbound.current,
       inboundPrevious24h: inbound.previous,
       outbound24h: outbound.current,
       outboundPrevious24h: outbound.previous,
-      newLeads24h: leads.current,
-      newLeadsPrevious24h: leads.previous,
+      newLeads24h: leads24h.current,
+      newLeadsPrevious24h: leads24h.previous,
+    },
+    historical: {
+      newLeads7d: leads7d.current,
+      newLeadsPrevious7d: leads7d.previous,
+      seoClicks7d: seo.clicksCurrent,
+      seoClicksPrevious7d: seo.clicksPrevious,
+      seoImpressions7d: seo.impressionsCurrent,
+      seoImpressionsPrevious7d: seo.impressionsPrevious,
     },
     degradedSources,
   };
