@@ -202,7 +202,6 @@ export async function runClaudeSeoIntelligence(organizationId: string) {
       body: JSON.stringify({
         model,
         max_tokens: 3200,
-        temperature: 0.15,
         system: [
           'You are the grounded SEO/AEO/GEO intelligence analyst inside SalsysOS.',
           'Use only the supplied evidence. Never invent rankings, traffic, conversions, revenue, competitors, SERP features, AI citations, URLs, or page ownership.',
