@@ -44,12 +44,27 @@ export type IntelligenceSystemActivityRow = {
   latest_activity_at: string | null;
 };
 
+export type IntelligenceCalibrationRow = {
+  signal_id: string;
+  role_scope: string;
+  category: string;
+  sample_band: string;
+  outcome_observed_count: number | string | null;
+  resolved_count: number | string | null;
+  net_evidence_rate: number | string | null;
+  calibration_ready: boolean | null;
+  calibration_points: number | string | null;
+  max_adjustment_points: number | string | null;
+  calibration_reason: string | null;
+};
+
 export type SystemIntelligenceContext = {
   organizationId: string;
   role: IntelligenceRole;
   ownerSignals: IntelligenceOwnerSignalRow[];
   journey: IntelligenceJourneyRow[];
   systemActivity: IntelligenceSystemActivityRow[];
+  calibration: IntelligenceCalibrationRow[];
   velocity: {
     inbound24h: number;
     inboundPrevious24h: number;
@@ -103,7 +118,7 @@ export async function getSystemIntelligenceContext(now = new Date()): Promise<Sy
   const role = normalizeRole(workspace.activeWorkspace?.role);
   const since48h = new Date(now.getTime() - 48 * 60 * 60 * 1000).toISOString();
 
-  const [ownerSignalsResult, journeyResult, systemActivityResult, messagesResult, leadsResult] = await Promise.all([
+  const [ownerSignalsResult, journeyResult, systemActivityResult, messagesResult, leadsResult, calibrationResult] = await Promise.all([
     supabase
       .from('v_admissions_owner_lead_signals')
       .select('lead_id,current_stage,needs_reply,last_inbound_at,last_contacted_at,has_overdue_followup,priority_score,payment_status,outstanding_balance,currency')
@@ -131,6 +146,7 @@ export async function getSystemIntelligenceContext(now = new Date()): Promise<Sy
       .eq('organization_id', organizationId)
       .gte('created_at', since48h)
       .limit(5000),
+    supabase.rpc('get_system_intelligence_recommendation_calibration_v1'),
   ]);
 
   const degradedSources: string[] = [];
@@ -139,6 +155,7 @@ export async function getSystemIntelligenceContext(now = new Date()): Promise<Sy
   if (systemActivityResult.error) degradedSources.push('system_activity');
   if (messagesResult.error) degradedSources.push('message_velocity');
   if (leadsResult.error) degradedSources.push('lead_velocity');
+  if (calibrationResult.error) degradedSources.push('recommendation_calibration');
 
   const messages = messagesResult.error ? [] : (messagesResult.data ?? []);
   const inboundRows = messages.filter((row) => row.direction === 'inbound');
@@ -153,6 +170,7 @@ export async function getSystemIntelligenceContext(now = new Date()): Promise<Sy
     ownerSignals: ownerSignalsResult.error ? [] : (ownerSignalsResult.data ?? []) as IntelligenceOwnerSignalRow[],
     journey: journeyResult.error ? [] : (journeyResult.data ?? []) as IntelligenceJourneyRow[],
     systemActivity: systemActivityResult.error ? [] : (systemActivityResult.data ?? []) as IntelligenceSystemActivityRow[],
+    calibration: calibrationResult.error ? [] : (calibrationResult.data ?? []) as IntelligenceCalibrationRow[],
     velocity: {
       inbound24h: inbound.current,
       inboundPrevious24h: inbound.previous,
