@@ -60,7 +60,7 @@ export async function POST(request: NextRequest) {
         action: signal.recommendedAction,
       });
 
-      const { data, error } = await supabase.rpc('touch_system_intelligence_recommendation_v1', {
+      const { data, error } = await supabase.rpc('touch_system_intelligence_recommendation_v2', {
         p_recommendation_key: key,
         p_surface: 'system_intelligence',
         p_source_version: 'v2',
