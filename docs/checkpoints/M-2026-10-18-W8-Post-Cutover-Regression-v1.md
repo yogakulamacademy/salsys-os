@@ -6,9 +6,13 @@
 
 ## Goal
 
-Continue W8 after strict authenticated tenant-session enforcement and verify that the main integration and Team & Access paths remain tenant-safe under the stricter contract.
+Continue W8 after strict authenticated tenant-session enforcement and verify that the main integration, public runtime and Team & Access paths remain tenant-safe under the stricter contract.
 
-This checkpoint also closes a post-cutover lifecycle gap found during regression: a persisted tenant binding must stop being authoritative immediately when the underlying organization membership is no longer active.
+This checkpoint also closes post-cutover lifecycle/runtime gaps found during regression:
+
+1. a persisted tenant binding must stop being authoritative immediately when the underlying organization membership is no longer active;
+2. a historical global tracking-identify compatibility credential must not become a cross-tenant credential;
+3. nonexistent routes must not remain pre-authorized in middleware for future accidental reuse.
 
 ## OAuth / integration regression
 
@@ -48,7 +52,13 @@ Production RPC definitions were re-audited:
 - `set_tenant_employee_active(...)` requires `auth.role() = 'service_role'`;
 - both remain unavailable to `anon` and `authenticated` direct execution.
 
-## Post-cutover gap found
+Additional settings regression:
+
+- core CRM settings mutations resolve the tenant with `requireCurrentOrganizationId(...)` before calling tenant-aware RPCs;
+- Organization Knowledge mutations resolve the active tenant and then require `can_manage_organization(...)` before creating, approving or archiving knowledge;
+- knowledge document/chunk/audit mutations include the resolved `organization_id` and target-document queries are tenant filtered.
+
+## Post-cutover membership gap found
 
 The original strict `current_tenant_organization_id()` trusted a matching persisted `tenant_session_bindings` row without re-checking whether the user's organization membership and organization were still active.
 
@@ -56,7 +66,7 @@ Most downstream authorization helpers still checked active membership, but the t
 
 A second lifecycle consistency issue was also found in `set_tenant_employee_active(...)`: disabling an Admissions employee changed `organization_members.active` and profile state but did not explicitly deactivate the Sales `workspace_memberships` row or delete tenant bindings for that organization.
 
-## Hardening applied
+## Membership/binding hardening applied
 
 Migration:
 
@@ -120,9 +130,81 @@ Inside a transaction after enabling the same employee, the disable path produced
 
 The transaction was rolled back. No real employee lifecycle state was changed by the regression test.
 
+## Public/service runtime route inventory
+
+Middleware-public service routes were reviewed against their route-level authorization rather than being assumed safe merely because they bypass normal CRM authentication.
+
+Verified controls include:
+
+- GA4 sync → `GA4_SYNC_SECRET` or `CRON_SECRET`
+- GSC sync → `GSC_SYNC_SECRET` or `CRON_SECRET`
+- Google Ads sync → `GOOGLE_ADS_SYNC_SECRET` or `CRON_SECRET`
+- Meta Ads sync → `META_ADS_SYNC_SECRET` or `CRON_SECRET`
+- Admissions auto-task runtime → `CRON_SECRET`
+- conversion-feedback runtime → `CONVERSION_FEEDBACK_RUN_SECRET` with constant-time comparison
+- course/batch sync → `COURSE_CATALOG_SYNC_SECRET`; scheduled GET path also accepts `CRON_SECRET`
+- OpenSearch worker/bootstrap/health/SEO bootstrap → `SEARCH_INDEX_WORKER_SECRET` or `CRON_SECRET`
+- OpenSearch pilot → protected worker-secret path; its historical preview-only verifier exception is branch/environment/action constrained and does not apply to the W8 branch
+- competitor rank worker → `SEO_RANKING_WORKER_SECRET` or `CRON_SECRET`
+- WhatsApp webhook → Meta webhook verification token for GET and raw-body HMAC verification using `WA_APP_SECRET` for POST
+- Instagram webhook → verification token for GET and raw-body HMAC verification using `INSTAGRAM_APP_SECRET` for POST
+- website lead capture → canonical organization-bound integration credential or historical website secret path with server-side site-to-organization resolution
+- tracking collect/consent → organization derived from registered tracking source/origin; client organization ID is not accepted as authority
+
+## Legacy tracking-identify gap found and closed
+
+`POST /api/tracking/identify` supported the modern tenant-bound tracking-source credential and an older `TRACKING_INGEST_SECRET` compatibility credential.
+
+The canonical tracking-source path was already safe: the authenticated source carries an authoritative organization and the route rejects a lead whose organization differs.
+
+The historical global secret path, however, accepted a `leadId`, resolved that lead's organization, and then looked up the exact visitor/session inside the resolved organization. A holder of the old global secret therefore had a wider tenant capability than intended if they also knew a valid lead/session tuple.
+
+Commit:
+
+`f0f929859fa787ce8f0194ac837810f00c29b7c4` — `Scope legacy tracking identify to Yogakulam tenant`
+
+Hardening:
+
+- legacy secret comparison now uses `timingSafeEqual`;
+- the legacy credential is explicitly constrained to the active `yogakulam-academy` organization resolved server-side;
+- a lead belonging to any other organization receives a 403;
+- the canonical source-key + bearer path remains fully dynamic and multi-tenant;
+- no organization ID supplied by the caller becomes authority.
+
+Build verification for this commit:
+
+- Vercel deployment: `dpl_BkcaaAuHqeyZNu3W7ydMAkx7LZPH`
+- state: **READY**
+- build completed successfully and outputs were deployed.
+
+## Middleware public-surface cleanup
+
+Two middleware public exemptions referred to routes that no longer exist:
+
+- `/auth/recovery-confirm`
+- `/api/search/index/pilot-verify`
+
+They were removed in:
+
+`f0c0b24267d690b5c48321456bffc30c06ed8694` — `Remove stale public middleware exemptions`
+
+This is defense-in-depth: a future route accidentally created at either path will no longer inherit a public bypass merely because an obsolete pathname remained on the allowlist.
+
+## Post-cutover monitoring
+
+Vercel runtime logs were checked after strict tenant enforcement:
+
+- preview query for `tenant`, last 2 hours: **no matching runtime logs**
+- production query for `tenant`, last 2 hours: **no matching runtime logs**
+- production query for `session`, last 2 hours: **no matching runtime logs**
+
+The production error log over the last 24 hours contained one observed Meta Ads synchronization error (`No selected Meta ad-account assets were found`). It is an integration-configuration/data-readiness issue, not a tenant-binding or cross-tenant failure.
+
+Absence of matching log entries is evidence that no obvious tenant-binding failure surfaced in the observed window; it is not proof that future runtime failures are impossible.
+
 ## Current W8 interpretation
 
-W8 is now approximately **97–98% complete**.
+W8 is now approximately **98–99% complete**.
 
 Closed or materially strengthened:
 
@@ -135,15 +217,17 @@ Closed or materially strengthened:
 - connect-route server-derived organization authority;
 - callback-time owner/admin reauthorization;
 - Team & Access tenant derivation and target validation;
-- employee disable propagation to workspace membership and tenant binding invalidation.
+- employee disable propagation to workspace membership and tenant binding invalidation;
+- public service-route authentication/secret inventory;
+- legacy tracking-identify credential tenant scoping;
+- stale middleware public exemptions removed;
+- initial post-cutover runtime monitoring.
 
 Still required before formal W8 = 100%:
 
-1. final inventory of sensitive service-role/public internal routes and their secret/auth controls;
-2. production monitoring for tenant-binding failures after strict cutover;
-3. final admin/settings regression sweep;
-4. branch consolidation / merge readiness;
-5. formal W8 sign-off document.
+1. verify the final W8 branch build after middleware cleanup;
+2. branch consolidation / merge-readiness review;
+3. create the formal W8 sign-off document.
 
 ## Safety posture
 
@@ -152,4 +236,5 @@ Still required before formal W8 = 100%:
 - employee lifecycle tests were transaction-scoped and rolled back;
 - no customer messages were sent;
 - no integration connection was created or changed;
-- no browser role received new privileged RPC access.
+- no browser role received new privileged RPC access;
+- the historical tracking credential was narrowed rather than broadened.
