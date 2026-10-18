@@ -48,7 +48,7 @@ export async function saveRankProviderSettings(input: {
 }) {
   const admin = createAdminClient();
   const control = await getRankProviderControl(input.organizationId);
-  const current = control.settings ?? {};
+  const current = (control.settings ?? {}) as Record<string, any>;
 
   if (input.enabled === true) {
     if (!control.configured) throw new Error('SEO_RANK_PROVIDER_NOT_CONFIGURED');
@@ -105,7 +105,7 @@ export async function testRankProvider(input: {
 }) {
   const admin = createAdminClient();
   const control = await getRankProviderControl(input.organizationId);
-  const settings = control.settings;
+  const settings = control.settings as Record<string, any> | null;
   const query = text(input.query).slice(0, 300);
   if (query.length < 2) throw new Error('SEO_RANK_QUERY_INVALID');
   if (!surfaceEnabled(settings, input.surface)) throw new Error('SEO_RANK_SURFACE_DISABLED');
