@@ -8,7 +8,7 @@ import {
   recommendationTargetLeadIds,
 } from '@/lib/intelligence/recommendation-outcomes';
 import { getSystemIntelligenceContext } from '@/lib/intelligence/system-intelligence-context';
-import { buildSystemIntelligenceV2 } from '@/lib/intelligence/system-intelligence-v2';
+import { buildSystemIntelligenceV3 } from '@/lib/intelligence/system-intelligence-v3';
 import { createClient } from '@/lib/supabase/server';
 
 export const runtime = 'nodejs';
@@ -31,7 +31,7 @@ function recommendationKey(input: {
     .update(JSON.stringify(input))
     .digest('hex')
     .slice(0, 24);
-  return `system-intelligence-v2:${input.role}:${input.signalId}:${fingerprint}`;
+  return `system-intelligence-v3:${input.role}:${input.signalId}:${fingerprint}`;
 }
 
 export async function POST(request: NextRequest) {
@@ -50,7 +50,7 @@ export async function POST(request: NextRequest) {
         getDashboardSnapshot(),
         getSystemIntelligenceContext(),
       ]);
-      const brief = buildSystemIntelligenceV2(snapshot, context);
+      const brief = buildSystemIntelligenceV3(snapshot, context);
       const signal = brief.signals.find((item) => item.id === signalId);
       if (!signal) {
         return NextResponse.json({ ok: false, error: 'Current intelligence signal not found.' }, { status: 404 });
@@ -69,7 +69,7 @@ export async function POST(request: NextRequest) {
       const { data, error } = await supabase.rpc('touch_system_intelligence_recommendation_v2', {
         p_recommendation_key: key,
         p_surface: 'system_intelligence',
-        p_source_version: 'v2',
+        p_source_version: 'v3',
         p_signal_id: signal.id,
         p_category: signal.category,
         p_role_scope: context.role,
