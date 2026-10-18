@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 
 import { createAdminClient } from '@/lib/supabase/admin';
 import { runRankingCheck } from '@/lib/seo/competitor-intelligence';
+import { isDataForSeoConfigured } from '@/lib/seo/rank-provider-dataforseo';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -26,7 +27,8 @@ function errorCategory(error: unknown) {
 }
 
 async function runDueChecks() {
-  if (!process.env.SEO_RANKING_API_URL || !process.env.SEO_RANKING_API_KEY) {
+  const genericConfigured = Boolean(process.env.SEO_RANKING_API_URL && process.env.SEO_RANKING_API_KEY);
+  if (!isDataForSeoConfigured() && !genericConfigured) {
     return { configured: false, scanned: 0, completed: 0, failed: 0 };
   }
 
