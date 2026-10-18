@@ -42,6 +42,23 @@ function compactRows(rows: unknown[] | null | undefined, limit: number) {
   return (rows || []).slice(0, limit);
 }
 
+async function optionalOpenSearchEvidence(organizationId: string) {
+  try {
+    const result = await searchTenantSeoOpenSearch({ organizationId, mode: 'opportunity', size: 20 });
+    return {
+      available: true,
+      items: result.items.slice(0, 20).map((item) => ({
+        entity_type: item.entityType,
+        entity_id: item.entityId,
+        score: item.score,
+        source: item.source,
+      })),
+    };
+  } catch {
+    return { available: false, items: [] as Array<Record<string, unknown>> };
+  }
+}
+
 async function collectEvidence(organizationId: string) {
   const admin = createAdminClient();
 
@@ -83,7 +100,7 @@ async function collectEvidence(organizationId: string) {
       .eq('organization_id', organizationId)
       .order('topical_authority_score_v1', { ascending: false })
       .limit(20),
-    searchTenantSeoOpenSearch({ organizationId, mode: 'opportunity', size: 20 }),
+    optionalOpenSearchEvidence(organizationId),
   ]);
 
   for (const result of [opportunities, contentGaps, aeoPages, geoPages, topicAuthority]) {
@@ -96,6 +113,7 @@ async function collectEvidence(organizationId: string) {
       live_rank_provider_connected: false,
       competitor_rank_positions_available: false,
       ai_citation_positions_available: false,
+      opensearch_context_available: openSearch.available,
       rule: 'Do not infer or invent live rankings, competitor positions, SERP features, or AI citations.',
     },
     page_opportunities: compactRows(opportunities.data, 20),
@@ -103,12 +121,7 @@ async function collectEvidence(organizationId: string) {
     aeo_pages: compactRows(aeoPages.data, 15),
     geo_pages: compactRows(geoPages.data, 15),
     topic_authority: compactRows(topicAuthority.data, 20),
-    opensearch_opportunities: openSearch.items.slice(0, 20).map((item) => ({
-      entity_type: item.entityType,
-      entity_id: item.entityId,
-      score: item.score,
-      source: item.source,
-    })),
+    opensearch_opportunities: openSearch.items,
   };
 }
 
@@ -195,6 +208,7 @@ export async function runClaudeSeoIntelligence(organizationId: string) {
           'Use only the supplied evidence. Never invent rankings, traffic, conversions, revenue, competitors, SERP features, AI citations, URLs, or page ownership.',
           'Google Search Console average position is historical first-party evidence and must not be described as a current live rank.',
           'When live competitor/rank evidence is unavailable, say so explicitly and still analyze first-party SEO opportunity evidence.',
+          'If OpenSearch context is unavailable, use the supplied PostgreSQL-derived first-party evidence and state the retrieval limitation only when relevant.',
           'Recommendations are advisory only. No publishing or customer-facing action is authorized.',
           'Return strict JSON only.',
         ].join(' '),
