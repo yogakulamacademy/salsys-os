@@ -17,7 +17,7 @@ create table if not exists public.seo_competitors (
 create table if not exists public.seo_rank_targets (
   id uuid primary key default gen_random_uuid(),
   organization_id uuid not null references public.organizations(id) on delete cascade,
-  site_id uuid references public.seo_sites(id) on delete cascade,
+  site_id uuid,
   query text not null,
   surface text not null check (surface in ('seo','aeo','geo')),
   locale text not null default 'en-IN',
@@ -64,7 +64,7 @@ create index if not exists idx_seo_rank_snapshots_target_time
 create table if not exists public.seo_competitor_analysis_runs (
   id uuid primary key default gen_random_uuid(),
   organization_id uuid not null references public.organizations(id) on delete cascade,
-  site_id uuid references public.seo_sites(id) on delete set null,
+  site_id uuid,
   status text not null default 'completed' check (status in ('queued','running','completed','failed')),
   scope text not null default 'portfolio',
   provider text not null default 'deterministic',
