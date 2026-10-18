@@ -3,6 +3,7 @@ import { ArrowLeft, Brain, Search } from "lucide-react";
 
 import { SeoDecisionForecastPanel } from "@/components/seo-decision-forecast-panel";
 import { SeoDecisionWorkspace } from "@/components/seo-decision-workspace";
+import { SeoOpportunityPortfolio } from "@/components/seo-opportunity-portfolio";
 import { PageHeader } from "@/components/ui";
 
 export const dynamic = "force-dynamic";
@@ -43,6 +44,7 @@ export default function SeoDecisionPage() {
       </section>
 
       <SeoDecisionForecastPanel />
+      <SeoOpportunityPortfolio />
       <SeoDecisionWorkspace />
     </div>
   );
