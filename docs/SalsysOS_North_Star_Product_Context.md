@@ -1,30 +1,34 @@
 # SalsysOS North Star Product Context
 
 **Status:** Canonical product/context/progress source of truth  
-**Last updated:** 2026-10-14  
+**Last updated:** 2026-10-18  
 **Repository:** `yogakulamacademy/salsys-os`
 
-> Read this file first when SalsysOS context is incomplete. Update it after every meaningful checkpoint so product direction, verified progress, blockers, and next actions survive loss of chat/session context.
+> Read this file first when SalsysOS context is incomplete. Update it after every meaningful checkpoint so product direction, verified progress, blockers, and next actions survive loss of chat/session context. The mutable implementation checkpoint is `docs/SalsysOS_Current_Checkpoint.md`.
 
 ---
 
 ## 1. North Star
 
-SalsysOS = **Sales + Analysis Operating System**: a **Customer Journey Intelligence + Revenue Intelligence operating system**, not a generic CRM.
+SalsysOS = **Sales + Analysis Operating System**: a vertical **Customer Journey Intelligence + Revenue Intelligence operating system**, not a generic CRM.
 
 Core question:
 
 > **What is this person likely to do next, why, and what should we do right now to increase the probability of conversion?**
 
-First vertical: Yoga / Education / Wellness, with Yogakulam Academy as tenant #1. Second planned vertical: Real Estate.
+First vertical: Yoga / Education / Wellness, with Yogakulam Academy as the real production proving ground. Second planned vertical: Real Estate.
 
 Core loop:
 
-`marketing spend → traffic → source/campaign/content → anonymous behavior → identity resolution → lead → conversation → intent/objection/product affinity → salesperson → follow-up → payment/enrollment → revenue → attribution → conversion feedback → learning → recommendation`
+`marketing spend → traffic/source/content → behavior → identity → lead → conversation → intent/objection/product affinity → salesperson activity → follow-up → payment/enrollment → revenue → attribution → learning → next-best action`
 
-Principles: raw events separate from CRM rows; deterministic identity where possible; observed vs inferred separation; revenue-linked analytics; data quality before intelligence; hard tenancy; privacy-by-design; auditable AI workflows; safe migration over destructive replacement.
+Locked AI direction:
 
-Behavioral scoring direction: `Frequency × Recency × Depth × Commercial Intent`.
+`Assist → Decide → Act with controls`
+
+Human approval must remain available for sensitive/high-impact customer, financial, automation and website actions.
+
+Principles: PostgreSQL/source systems remain truth; observed facts remain separate from inferred/modelled facts; deterministic identity first; revenue-linked analytics; data quality before intelligence; hard tenancy; privacy-by-design; auditable AI workflows; provider-neutral internal contracts where practical; no secret leakage; no fabricated metrics.
 
 ---
 
@@ -37,222 +41,292 @@ Behavioral scoring direction: `Frequency × Recency × Depth × Commercial Inten
 | W3 Shell / Header / Workspace Navigation | 15% | COMPLETE |
 | W4 Employee Accounts | 15% | COMPLETE |
 | W5 Sales Workspace | 12% | ~98–99% |
-| W6 Marketing Workspace | 12% | Foundation exists; formal expansion pending |
-| W7 Finance + Reports | 11% | Pending formal build |
-| W8 Admin + Security / QA | 10% | Active, ~97–98% |
+| W6 Marketing Workspace | 12% | Materially advanced; SEO/Organic Intelligence is now the strongest sub-area |
+| W7 Finance + Reports | 11% | Pending formal build/closeout |
+| W8 Admin + Security / QA | 10% | Active; strict tenant cutover/sign-off still separate |
 
-Do not repurpose W1–W8. Current execution order:
+Do not repurpose W1–W8.
 
-`W8 tenant/security → W6 → W7 → remaining W8 closeout`
-
-W5A Manager authorization COMPLETE. W5B Lead/commercial authorization COMPLETE. W5C effectively complete at DB/security level; final app smoke remains.
-
-W6 includes Campaigns, Paid Media, Google Ads, Meta Ads, GA4, Search Console, SEO, Tracking, attribution, plus OG1 Website Intelligence, OG2 Opportunity Engine, OG3 Keyword/SERP, OG4 Content, OG5 Revenue-Aware Organic, OG6 AEO, OG7 GEO/AI Visibility, OG8 Experimentation/Learning, OG9 Human-Approved Autonomous Optimization.
-
-W7 includes payments, revenue, finance, operational/executive reporting, and tenant/role-scoped business reporting.
+W6 includes Campaigns, Paid Media, Google Ads, Meta Ads, GA4, Search Console, SEO, Tracking, attribution, Website Intelligence, Opportunity Engine, Keyword/SERP, Content Intelligence, Revenue-Aware Organic, AEO, GEO/AI Visibility, Experimentation/Learning, Human-Approved Optimization, OpenSearch retrieval and competitor/rank intelligence.
 
 ---
 
-## 3. W8 Admin + Security / QA
+## 3. Tenancy / W8 security contract
 
 Fixed phases: W8A tenant identity/audit; W8B tenant login; W8C auth→tenant binding; W8D remove org switching; W8E trusted tenant resolver; W8F DB/RLS/RPC isolation; W8G integrations/webhooks; W8H team admin isolation; W8I adversarial regression; W8J controlled second-tenant staging; W8K production cutover/sign-off.
 
-### Verified W8 state
+Verified direction/state:
 
-- tenant-specific login implemented; normal org switching removed
-- trusted current-tenant resolver, session binding and slug binding implemented
-- single-active-membership guard protects future normal users
-- CRM settings and Team & Access tenant-scoped
-- `can_mutate_organization(...)` is the transitional authenticated write boundary
-- authenticated `is_organization_member(...)` always requires trusted current-tenant match + active membership, independent of global strict rollout; service-role remains trusted
-- sole-active-membership users retain safe fallback through `current_tenant_organization_id()` even without persisted binding
-- broad RLS reads using `is_organization_member(...)` are tenant-bound while strict rollout remains OFF
-- all organization-id SELECT policies now pass an approved tenant/read gate audit
-- all organization-id INSERT/UPDATE/DELETE policies now pass an approved tenant-bound mutation/admin gate audit
-- four org-scoped SELECT policies that only used `is_crm_user()` were found and fixed: accommodation properties, accommodation rooms, batch accommodation types, course catalog sync runs
-- six accommodation mutation policies using only global `can_write_crm()` were found; pre-fix a SalsysOS-bound legacy admin could INSERT a row under the foreign Yogakulam organization; `20261014120616_tenant_scope_accommodation_mutation_policies` adds `can_mutate_organization(organization_id)` to all six insert/update policy branches
-- post-fix foreign accommodation insert is rejected by RLS while bound SalsysOS insert succeeds in rollback-only testing
-- `has_workspace_access(...)` explicitly requires session-bound current tenant for authenticated internal callers; direct authenticated EXECUTE remains revoked
-- post-workspace hardening regression: bound `create_crm_lead(...)` and team snapshot still work
-- pre-fix central read proof: SalsysOS-bound legacy multi-org session could read 16 Yogakulam courses; post-fix sees 0 and foreign membership=false
-- additional post-fix counts: 0 foreign membership/workspace/web-session/person rows
-- genuine single-org Yogakulam viewer compatibility preserved through sole-membership fallback
-- Google/Meta/Instagram OAuth callbacks current-tenant guarded before service-role mutation
-- WhatsApp Embedded Signup revalidates current tenant before state consumption/mutation
-- `attach_whatsapp_outbound_message_id(...)` requires `can_mutate_organization(lead.organization_id)`
-- foreign settings/follow-up/contact/lead update/interaction/stage/owner assignment/WhatsApp attach regressions blocked
-- analytics sync service paths remain operator/cron-secret protected and explicitly tenant-scoped
-- password recovery is tenant-bound and fails closed until production origin configuration exists
-- GitHub Actions independently validates typecheck/build
+- one organization = one tenant = isolated data boundary
+- server-derived tenant is authority; browser/client org IDs are never sufficient authority
+- normal org switching is removed by default
+- exactly one active membership per normal user is the target contract
+- CRM settings, Team & Access, Sales and integration paths have been substantially tenant-hardened
+- OAuth/integration service mutations revalidate tenant before mutation
+- cross-tenant adversarial checks have blocked foreign CRM/settings/follow-up/contact/stage/owner/integration paths
+- OpenSearch/SEO/competitor queries also enforce server tenant filters and post-validation
 
-### Current production rollout state — last verified 2026-10-14
+Strict global tenant-session enforcement remains a separate W8 cutover/sign-off item. Do not treat search-layer tenant filtering as W8 completion.
 
-- global strict session-tenant enforcement: **OFF**
-- persisted `tenant_session_bindings`: **0**
-- active Auth sessions: **0**
-- active single-org sessions: **0**
-- active multi-org sessions: **0**
-
-Global strict enforcement remains OFF until one genuine tenant-specific production session binding is observed and validated. Authenticated membership, reads, workspace access, CRM administration, organization management, and organization-scoped mutations are now independently tenant-bound, materially reducing transitional risk.
-
-### Remaining W8 blockers
-
-1. observe a genuine tenant-specific persisted production session binding through a real login
-2. safely resolve the legacy admin identity that still has active memberships in three organizations
-3. finish intent review of authenticated SECURITY DEFINER functions; current set is classified into 14 RLS authorization helpers + 16 workflow mutation RPCs + 11 read/auth/application RPCs
-4. finish final W8G service-client/runtime validation
-5. complete remaining W8I adversarial matrix
-6. configure `SALSYSOS_APP_URL` + Supabase Auth redirect allow-list and run password-recovery E2E
-7. W8J controlled second-tenant login test
-8. W8K strict-enforcement cutover/sign-off
-9. enable Supabase leaked-password protection when Auth configuration access is available
-
-Known advisor posture: 20 `rls_enabled_no_policy` INFO findings are service/backend tables without direct anon/auth access; do not add dummy policies merely to silence them. SECURITY DEFINER exposure: anon executable **0**, authenticated executable **41**, service-role executable **122**. The 41 authenticated functions are classified and require intent review rather than blanket revocation.
+Remaining W8 work includes final authenticated SECURITY DEFINER intent review, residual service-client/runtime validation, remaining adversarial matrix, controlled second-tenant validation, legacy multi-org admin cleanup and strict cutover/sign-off.
 
 ---
 
-## 4. Technical roadmap — fixed 11 phases
+## 4. Smart Triggers / Automation
 
-1 Identity Resolution; 2 Raw Event Platform; 3 Session & Touchpoint Processing; 4 Customer Journey / 360; 5 CRM Journey Experience; 6 Attribution & Revenue; 7 Intent + Product Affinity + Sales Intelligence; 8 Conversion Feedback; 9 Content + SEO Intelligence; 10 AEO/GEO/AI Visibility; 11 Predictive Intelligence.
+Direction: WATI/AiSensy-style conversation automation adapted to SalsysOS with visual flows, wait states, branching, channel policies, AI decisions, human approval/handoff, dedupe, suppression, stop-on-reply and audit.
 
-Phases 1–3 have substantial foundations; 4–8 have strong/material foundations with depth remaining; 9 partial; 10 mostly pending; 11 early. Approximately 8/11 are materially built, not fully complete.
+Implemented foundation includes tenant-scoped workflows, triggers, conditions, actions, events, runs, enrollments, suppressions, flow nodes/edges, wait states, scheduled jobs, variables and immutable published flow versions.
 
----
-
-## 5. Commercial roadmap — fixed R0–R14
-
-R0 Platform Rebrand; R1 Foundation/Tenancy/Security; R2 Lead Capture/Identity/Raw Events/Data Quality; R3 CRM Sales Execution; R4 Customer Journey/360; R5 Attribution/Funnel/Revenue; R6 Intent/Product Affinity/Sales Intelligence; R7 Integrations/Conversion Feedback; R8 Content+SEO; R9 AEO/GEO/AI Visibility; R10 Predictive Intelligence + Owner Command Center; R11 Wellness/Education Productization; R12 Realty; R13 Commercial SaaS Readiness; R14 Marketing + First 100 Customers.
-
-Current interpretation: R0 largely done; R1 nearing completion; R2 strong; R3 nearly complete; R4–R6 strong foundations; R7 in progress; R8 partial; R9 pending; R10 early; R11–R14 pending.
+Controlled reply and no-reply runtime paths were validated without customer sends. Autonomous customer messaging remains gated until provider/channel-policy, suppression, audit, rate-limit and human-review controls are fully signed off.
 
 ---
 
-## 6. Behavioral Intelligence
+## 5. Tracking Contract v1
 
-BI-1 taxonomy; BI-2 pre-lead; BI-3 post-lead; BI-4 Intent Score v1; BI-5 trend/reactivation; BI-6 segments; BI-7 content/revenue influence; BI-8 sales influence; BI-9 predictive scoring; BI-10 next-best-action.
+**Status: READY / frozen.**
 
-**Current estimate: ~35–40% foundation.**
+Production-verified foundations:
 
----
+- dynamic `tracking_sources`
+- event families/contracts
+- immutable raw events
+- generalized collect/consent/identify
+- source provisioning
+- rate limiting
+- sanitization/redaction
+- lead processing/dedupe
+- retry/recovery crons
+- attribution state machine
+- browser/privacy gating
+- release gate verifying tracked organizations ready for external ingestion and OpenSearch indexing
 
-## 7. Privacy & Compliance Control Plane
-
-Posture: **privacy-by-design infrastructure with configurable controls supporting applicable privacy frameworks**, not universal compliance claims.
-
-PC-1 Consent Ledger v2; PC-2 Purpose Registry; PC-3 jurisdiction/policy; PC-4 event policy metadata; PC-5 identity-stitching policy; PC-6 identity vault/PII separation; PC-7 retention; PC-8 rights orchestration; PC-9 vendor/processor registry; PC-10 lineage; PC-11 profiling controls; PC-12 compliance audit/reporting.
-
-Consent is purpose-specific, not one boolean. Behavioral/profile processing must be permission-aware.
-
-**Current estimate: ~15–20% foundation.**
-
----
-
-## 8. Multi-tenant identity contract
-
-- 1 organization = 1 tenant = isolated data boundary
-- session resolves exactly one trusted tenant
-- no normal org selector/switcher
-- login route `/login/<organization-slug>`
-- active membership in requested tenant required
-- client/browser org IDs never sufficient authority
-- platform admin separate from tenant admin
-- changed URLs/payloads/RPC args/APIs must not expose another tenant
-
-Legacy exception: one admin identity still belongs to SalsysOS, Test Yoga School, and Yogakulam Academy. This remains a W8J/W8K migration blocker.
+Tracking remains upstream evidence; external clients do not write directly to CRM lead truth.
 
 ---
 
-## 9. Recent production security migrations
+## 6. Privacy & Compliance technical platform
 
-Current tail:
+Posture: privacy-by-design technical controls supporting applicable frameworks; do not claim universal legal compliance.
 
-- `20261014091441_session_bound_tenant_mutation_policies`
-- `20261014091745_session_bound_organization_admin_authorization`
-- `20261014092325_latent_accommodation_rpc_execute_hardening`
-- `20261014092425_latent_course_rpc_execute_hardening`
-- `20261014093616_legacy_settings_and_internal_tenant_helper_hardening`
-- `20261014100145_unused_authorization_rpc_execute_hardening`
-- `20261014105133_internal_authorization_helper_execute_hardening`
-- `20261014105425_internal_authorization_helper_execute_hardening` — duplicate idempotent retry preserved for parity
-- `20261014110215_session_bound_crm_settings_reads`
-- `20261014110702_internal_workspace_access_helper_execute_hardening`
-- `20261014113720_oauth_state_current_tenant_guard`
-- `20261014114745_session_bound_whatsapp_outbound_attach`
-- `20261014115501_session_bound_organization_membership_reads`
-- `20261014115949_tenant_scope_remaining_organization_read_policies`
-- `20261014120314_session_bound_workspace_access`
-- `20261014120616_tenant_scope_accommodation_mutation_policies`
+Implemented foundations include:
 
-Earlier history remains in repository and Supabase production migration history.
+- retention executor + scheduled run
+- verified access/export
+- autonomous subject resolution
+- erasure planner + scheduled run
+- privacy-safe search telemetry
+
+The unused draft erasure orchestrator migration remains intentionally unapplied and must not be run.
+
+Directional privacy technical readiness: ~93–94% for the currently defined technical platform, not legal/compliance sign-off.
 
 ---
 
-## 10. Current progress snapshot — 2026-10-14
+## 7. OpenSearch platform foundation
 
-| Meter | Current estimate |
+Implemented:
+
+- reference-only search outbox
+- per-organization settings
+- revision/lease-safe claim + finalize
+- JIT document rebuilding from PostgreSQL truth
+- protected indexing worker
+- strict server tenant resolver
+- tenant-filtered query service
+- tenant-bound global search API
+- controlled pilot guard/cap
+- health/bootstrap endpoints
+- global command palette
+- privacy-safe search observability
+- admin search-health workspace
+
+Production safety posture:
+
+- external OpenSearch credentials are still not configured
+- organization indexing remains disabled
+- therefore no production external search indexing is active
+
+PostgreSQL remains the source of truth; OpenSearch is a derived retrieval layer.
+
+---
+
+## 8. SEO Intelligence — current architecture
+
+SEO OpenSearch entity types include:
+
+- `seo_page`
+- `seo_topic`
+- `seo_entity`
+- `seo_experiment`
+- `seo_action`
+
+Implemented SEO intelligence stack:
+
+1. **Lexical retrieval** — JIT SEO documents, explicit `dynamic:false` mappings, refresh jobs, authenticated tenant-safe API and `/seo/intelligence` workspace.
+2. **Semantic/hybrid foundation** — embedding outbox, content-hash dedupe, privacy-safe embedding subjects, separate kNN semantic index design, protected semantic worker/bootstrap, tenant-filtered kNN and Reciprocal Rank Fusion with lexical fallback.
+3. **Decision Intelligence** — configurable multi-signal next-best-action scoring using demand, opportunity, business/revenue, technical, content, AEO/GEO and related evidence.
+4. **Human-gated execution** — recommendations can stage draft experiments/actions, but automatic website publishing remains disabled.
+5. **Learning Loop** — baseline/outcome comparison, positive/negative/mixed/inconclusive classification, confidence, hourly learning sweep and bounded learned ranking adjustments.
+6. **Automatic outcome capture** — maturity detection, GSC lag, same-length final windows, audit trail and autonomous final measurement/finalization.
+7. **Explainability + forecasting** — reason drivers, bounded low/base/high scenarios, extra clicks/leads and revenue only when real evidence exists; no fabricated conversion/revenue rates.
+8. **Opportunity Portfolio** — capacity-aware top 3/5/8 planning with effort, risk, confidence and modeled upside.
+9. **Forecast calibration** — forecast snapshots at experiment staging so predicted vs actual outcomes can be measured later.
+
+Directional SEO Intelligence architecture readiness: ~97%. This is architecture readiness, not real-provider/semantic-production readiness.
+
+---
+
+## 9. Competitor Intelligence + SEO/AEO/GEO ranking
+
+Implemented foundations:
+
+- tenant-scoped competitor registry
+- SEO/AEO/GEO rank targets
+- historical rank snapshots
+- Claude competitor strategist grounded in observed evidence
+- explicit recommendation contract: surface, priority, action, why, competitor advantage, expected signal, confidence, evidence, target query and validated tenant-owned target URL
+- recommendation → draft experiment bridge
+- human approval guardrails
+- lease-safe rank worker
+- retry/backoff + failure categorization
+- provider control plane with per-tenant surface enablement, min interval and hourly/daily budgets
+- one-query normalization health test
+- fail-closed activation
+- PDF / CSV / DOC exports with tenant-scoped audit metadata
+
+Latest branch work also adds:
+
+- competitor/rank/analysis intelligence into the OpenSearch-oriented search layer
+- competitor intelligence search mode
+- competitive opportunity engine
+- competitive opportunities surfaced in the SEO workspace
+- competitive opportunities included in ranking-report exports
+
+Rollback-only database testing verified competitor, rank-target and analysis documents build for the correct tenant and are rejected cross-tenant; synthetic validation data was removed.
+
+Directional competitor/ranking architecture readiness: ~90%.
+
+---
+
+## 10. Claude / AI contract
+
+Anthropic server-side configuration is present for production/preview.
+
+Claude is used for reasoning, classification and grounded recommendations. It is **not** the source of ranking truth. Ranking/citation evidence must come from GSC and/or an actual external rank/visibility provider.
+
+Claude must not invent ranking positions, traffic, AI citations, URLs, revenue, competitor capabilities or evidence.
+
+---
+
+## 11. External provider blockers
+
+### OpenSearch
+
+Still missing real provider configuration in Vercel, including endpoint/auth. Real indexing/search E2E remains blocked.
+
+### Semantic embeddings
+
+The adapter exists, but a real embedding provider/model/dimension configuration is still required. Real vector generation and kNN quality calibration remain pending.
+
+### Live ranking provider
+
+Still missing:
+
+- `SEO_RANKING_API_URL`
+- `SEO_RANKING_API_KEY`
+
+Provider settings are initialized disabled; no recurring paid/live SEO/AEO/GEO polling is active.
+
+---
+
+## 12. Current branch / deployment state
+
+Active SEO/competitor branch:
+
+`feature/seo-competitor-ranking-v1`
+
+Checkpoint HEAD before context-document commits:
+
+`9e5b60d9d6001982bc57c84c0784d59297ad8ace` — `Export competitive opportunities with ranking reports`
+
+Vercel status on that HEAD is **failure because the deployment was rate-limited** (`retry in 24 hours`), not a successful compile validation.
+
+An earlier build on commit `9015fa4...` reached type checking and exposed a TypeScript issue in `lib/seo/rank-provider-control.ts` around `current.last_health_status` being inferred from `{}`. A fresh build is required once the Vercel quota clears, and any remaining type/runtime errors must be fixed before merge.
+
+---
+
+## 13. Directional progress snapshot — 2026-10-18
+
+Planning estimates only:
+
+| Meter | Current interpretation |
 |---|---:|
-| W1–W8 workspace program | ~82–83% |
+| Tracking Contract v1 | ~100% READY |
+| Privacy technical platform | ~93–94% |
 | W5 Sales Workspace | ~98–99% |
-| W8 Admin/Security/QA | ~97–98% |
-| W8G Integrations/Webhooks | ~99% |
-| Technical platform | ~81% |
-| Behavioral Intelligence | ~35–40% |
-| Privacy & Compliance Control Plane | ~15–20% |
-| First commercial-ready multi-tenant product | ~73% |
-| Full expanded SalsysOS platform scope | ~66–67% |
-| Wider R0–R14 commercial roadmap | ~53% |
+| W8 Security / QA | highly advanced; strict cutover still pending |
+| SEO Intelligence architecture | ~97% |
+| Competitor / ranking architecture | ~90% |
+| OpenSearch provider E2E | pending external provider |
+| Semantic embeddings / kNN E2E | pending real embedding + OpenSearch provider |
+| Forecast calibration from real experiment history | early |
 
-Planning estimates only; new approved scope can change the denominator.
+Do not convert architecture percentages into production-provider readiness or legal/compliance claims.
 
 ---
 
-## 11. Current milestone
+## 14. Current milestone
 
-### Milestone M-2026-10-14-N — Organization read/write RLS closure
+### Milestone M-2026-10-18 — Organic Growth Decision Operating System
 
-Completed/verified in production:
+Materially implemented:
 
-- central authenticated membership made tenant-bound via `20261014115501_session_bound_organization_membership_reads`
-- four remaining organization-scoped read policies tenant-scoped via `20261014115949_tenant_scope_remaining_organization_read_policies`
-- authenticated internal workspace access made session-bound via `20261014120314_session_bound_workspace_access`
-- mutation re-audit discovered six accommodation insert/update policies still using only global `can_write_crm()`
-- direct rollback-only exploit proof: SalsysOS-bound legacy admin successfully inserted an accommodation property carrying the foreign Yogakulam organization ID before the fix
-- `20261014120616_tenant_scope_accommodation_mutation_policies` adds `can_mutate_organization(organization_id)` to all six accommodation property/room/batch-type mutation policy branches
-- post-fix foreign insert is rejected by RLS; bound SalsysOS insert is allowed; rollback leaves no test row
-- repeated organization-id mutation-policy audit now returns **zero** policies outside approved tenant mutation/admin gates
-- repeated organization-id SELECT-policy audit returns **zero** policies outside approved tenant/read gates
-- remaining 41 authenticated SECURITY DEFINER functions classified into 14 RLS helpers, 16 workflow mutations, 11 read/auth/application RPCs; anon SECURITY DEFINER exposure is 0
-- global strict session rollout remains OFF pending a real persisted tenant session
+`GSC/GA4/CRM/revenue/AEO/GEO evidence → lexical/hybrid retrieval → decision ranking → explainability/forecast → opportunity portfolio → human-gated experiment → automatic observation/outcome capture → learning → improved future ranking`
 
-### Prior checkpoint highlights
+Competitor extension:
 
-- PR #23 merged as `2031d681ad6f79a3ed9ca3191231515bf6505656`, source-syncing WhatsApp attachment hardening
-- OAuth callback current-tenant guard merged in PR #22 as `28439ab97534da3e2fc7c831a4034a85edfc5391`
-- foreign Sales/settings/follow-up/contact/stage/owner-assignment paths have been adversarially exercised and blocked
+`competitor registry + SEO/AEO/GEO rank evidence → Claude grounded gap analysis → competitive opportunity → draft experiment → human approval → measurement → learning`
 
----
+Key safety principle: **recommendations can prepare work, but publishing/execution remains human-controlled.**
 
-## 12. Immediate next execution order
+### Prior milestone highlights
 
-1. CI + merge the combined membership/read/workspace/accommodation RLS hardening PR
-2. finish W8F intent review of the 41 classified authenticated SECURITY DEFINER functions; revoke only when proven unnecessary
-3. finish final W8G service-client/runtime validation
-4. complete remaining W8I adversarial cases
-5. obtain real tenant-specific login and observe persisted session binding
-6. configure recovery origin/redirect allow-list and run password-recovery E2E
-7. W8J controlled second-tenant validation
-8. resolve legacy multi-org admin identity safely
-9. W8K strict tenant enforcement cutover/sign-off
-10. resume W6 Marketing/Organic Growth Intelligence, Privacy foundations, W7 Finance/Reports, Technical 9–11, and R8–R14
+- W8 organization read/write RLS closure and tenant hardening
+- global password recovery + post-login shell fixes
+- Instagram outbound messaging + shared AI Reply Co-Pilot
+- tenant-safe Organization Knowledge V1
+- Smart Triggers + conversation flow runtime foundation
+- Tracking Contract v1 release gate
+- privacy retention/access/subject-resolution/erasure planner
+- OpenSearch foundation and pilot guard
+- SEO semantic/hybrid, decision, learning, forecasting and portfolio layers
 
 ---
 
-## 13. Engineering protocol
+## 15. Immediate next execution order
 
-Verify before modifying; preserve unrelated work; validate build/typecheck before merging runtime changes; separate external blockers from code failures; never expose secrets; do not invent tests; do not enable global strict tenant enforcement prematurely; use rollback-only production adversarial tests where possible; service-role mutations require trusted tenant binding; client-supplied tenant IDs are never authority. Update this document after every meaningful checkpoint.
+1. Wait for Vercel rate limit to clear and run a fresh branch build; fix any remaining TypeScript/runtime errors before merge.
+2. Verify competitor OpenSearch mappings/query/source allowlists and UI in a successful build.
+3. Connect a real OpenSearch provider: protected health → core bootstrap → SEO/competitor mapping → controlled single-tenant pilot → worker → cross-tenant adversarial search.
+4. Connect a real embedding provider and validate semantic bootstrap → vector worker → kNN → hybrid ranking quality.
+5. Select/connect a real SEO/AEO/GEO ranking provider; run one-query normalization tests before enabling recurring checks.
+6. Enable bounded rank polling only after provider health, normalization and cost controls pass.
+7. Accumulate real experiments and calibrate forecasts/action learning against observed outcomes.
+8. Continue W8 tenant/security closeout independently.
 
 ---
 
-## 14. Related roadmap
+## 16. Engineering protocol
 
-`docs/SalsysOS_Behavioral_Intelligence_Privacy_Control_Plane_Roadmap.md`
+Verify before modifying; preserve unrelated work; validate build/typecheck before claiming runtime readiness; separate external blockers from code failures; never expose secrets; do not invent tests or evidence; never enable strict tenant enforcement, autonomous customer sends, external indexing, paid rank polling or website publishing without the corresponding control gate; prefer rollback-only production adversarial tests where possible; client-supplied tenant IDs are never authority.
+
+Update both `docs/SalsysOS_Current_Checkpoint.md` and this document after every meaningful checkpoint.
+
+---
+
+## 17. Related context
+
+- `docs/SalsysOS_Current_Checkpoint.md`
+- `docs/checkpoints/M-2026-10-18-SEO-OpenSearch-Competitor-Intelligence.md`
+- `docs/SalsysOS_Behavioral_Intelligence_Privacy_Control_Plane_Roadmap.md`
