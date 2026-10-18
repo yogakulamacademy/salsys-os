@@ -21,14 +21,15 @@ function safeDomain(value: string) {
 
 export async function getCompetitorIntelligence(organizationId: string) {
   const admin = createAdminClient();
-  const [competitors, targets, latest, analyses] = await Promise.all([
+  const [competitors, targets, latest, analyses, recommendationLinks] = await Promise.all([
     admin.from('seo_competitors').select('id,domain,display_name,competitor_type,is_active,source,created_at').eq('organization_id', organizationId).order('created_at', { ascending: true }),
     admin.from('seo_rank_targets').select('id,query,surface,locale,country_code,device,engine,priority,check_interval_minutes,last_checked_at,next_check_at,is_active').eq('organization_id', organizationId).order('priority', { ascending: false }),
     admin.from('v_seo_rank_latest_v1').select('*').eq('organization_id', organizationId).order('priority', { ascending: false }),
     admin.from('seo_competitor_analysis_runs').select('id,status,provider,model,summary,gaps,recommendations,evidence,created_at,completed_at').eq('organization_id', organizationId).order('created_at', { ascending: false }).limit(5),
+    admin.from('seo_competitor_recommendation_links').select('id,analysis_run_id,recommendation_index,experiment_id,created_at').eq('organization_id', organizationId).order('created_at', { ascending: false }).limit(100),
   ]);
 
-  for (const result of [competitors, targets, latest, analyses]) {
+  for (const result of [competitors, targets, latest, analyses, recommendationLinks]) {
     if (result.error) throw new Error(`SEO_COMPETITOR_QUERY_FAILED:${result.error.message}`);
   }
 
@@ -37,6 +38,7 @@ export async function getCompetitorIntelligence(organizationId: string) {
     targets: targets.data ?? [],
     latest: latest.data ?? [],
     analyses: analyses.data ?? [],
+    recommendation_links: recommendationLinks.data ?? [],
     rank_provider_configured: Boolean(process.env.SEO_RANKING_API_URL && process.env.SEO_RANKING_API_KEY),
     claude_configured: Boolean(process.env.ANTHROPIC_API_KEY && process.env.ANTHROPIC_SONNET_MODEL),
   };
@@ -121,12 +123,12 @@ export async function runClaudeCompetitorAnalysis(organizationId: string, userId
     },
     body: JSON.stringify({
       model,
-      max_tokens: 2400,
+      max_tokens: 2600,
       temperature: 0.2,
-      system: 'You are the SEO/AEO/GEO competitor analyst inside SalsysOS. Use only supplied evidence. Never invent rankings, traffic, citations, competitor capabilities or revenue. Distinguish observed facts from recommendations. Return strict JSON only.',
+      system: 'You are the SEO/AEO/GEO competitor analyst inside SalsysOS. Use only supplied evidence. Never invent rankings, traffic, citations, competitor capabilities, revenue, URLs or page ownership. Distinguish observed facts from recommendations. Return strict JSON only.',
       messages: [{
         role: 'user',
-        content: `Analyze the supplied SEO/AEO/GEO ranking evidence and competitors. Return JSON with keys summary (object), gaps (array), recommendations (array). Each recommendation must contain surface, priority 1-100, action, why, competitor_advantage, expected_signal, confidence (low|medium|high), and evidence. Focus on how to outperform observed competitors without unsupported claims. DATA: ${JSON.stringify(payload)}`,
+        content: `Analyze the supplied SEO/AEO/GEO ranking evidence and competitors. Return JSON with keys summary (object), gaps (array), recommendations (array). Each recommendation must contain surface (seo|aeo|geo), priority 1-100, action, why, competitor_advantage, expected_signal, confidence (low|medium|high), evidence, target_query, target_url. target_query must come from supplied ranking evidence. target_url may be one of our observed own_url values only; otherwise return null. Do not use a competitor URL as target_url. Focus on how to outperform observed competitors without unsupported claims. DATA: ${JSON.stringify(payload)}`,
       }],
     }),
     signal: AbortSignal.timeout(45000),
@@ -155,6 +157,28 @@ export async function runClaudeCompetitorAnalysis(organizationId: string, userId
   }).select('id,status,provider,model,summary,gaps,recommendations,evidence,created_at').single();
   if (error) throw new Error(`SEO_COMPETITOR_ANALYSIS_SAVE_FAILED:${error.message}`);
   return data;
+}
+
+export async function createDraftExperimentFromCompetitorRecommendation(input: {
+  organizationId: string;
+  analysisRunId: string;
+  recommendationIndex: number;
+  createdBy?: string;
+}) {
+  if (!input.analysisRunId || !Number.isInteger(input.recommendationIndex) || input.recommendationIndex < 0) {
+    throw new Error('SEO_COMPETITOR_RECOMMENDATION_INVALID');
+  }
+  const admin = createAdminClient();
+  const { data, error } = await admin.rpc('create_competitor_recommendation_experiment_v1', {
+    p_organization_id: input.organizationId,
+    p_analysis_run_id: input.analysisRunId,
+    p_recommendation_index: input.recommendationIndex,
+    p_created_by: input.createdBy || null,
+  });
+  if (error) throw new Error(`SEO_COMPETITOR_EXPERIMENT_CREATE_FAILED:${error.message}`);
+  const row = Array.isArray(data) ? data[0] : data;
+  if (!row?.experiment_id) throw new Error('SEO_COMPETITOR_EXPERIMENT_CREATE_FAILED');
+  return row as { experiment_id: string; link_id: string; experiment_status: string };
 }
 
 export async function runRankingCheck(input: { organizationId: string; targetId: string }) {
