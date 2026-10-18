@@ -7,6 +7,7 @@ export type IntelligenceRole = 'owner' | 'admin' | 'manager' | 'admissions' | 'o
 
 export type IntelligenceOwnerSignalRow = {
   lead_id: string;
+  owner_user_id: string | null;
   current_stage: string | null;
   needs_reply: boolean | null;
   last_inbound_at: string | null;
@@ -121,7 +122,7 @@ export async function getSystemIntelligenceContext(now = new Date()): Promise<Sy
   const [ownerSignalsResult, journeyResult, systemActivityResult, messagesResult, leadsResult, calibrationResult] = await Promise.all([
     supabase
       .from('v_admissions_owner_lead_signals')
-      .select('lead_id,current_stage,needs_reply,last_inbound_at,last_contacted_at,has_overdue_followup,priority_score,payment_status,outstanding_balance,currency')
+      .select('lead_id,owner_user_id,current_stage,needs_reply,last_inbound_at,last_contacted_at,has_overdue_followup,priority_score,payment_status,outstanding_balance,currency')
       .eq('organization_id', organizationId)
       .limit(750),
     supabase
