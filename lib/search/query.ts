@@ -1,6 +1,6 @@
 import 'server-only';
 
-import { getOpenSearchConfig } from '@/lib/search/opensearch';
+import { getOpenSearchConfig, openSearchFetch } from '@/lib/search/opensearch';
 
 const ENTITY_TYPES = new Set([
   'lead',
@@ -169,17 +169,16 @@ export async function searchTenantOpenSearch(input: {
     },
   };
 
-  const response = await fetch(
+  const response = await openSearchFetch(
+    config,
     `${config.endpoint}/${encodeURIComponent(config.indexName)}/_search`,
     {
       method: 'POST',
       headers: {
-        Authorization: config.authorization,
         'Content-Type': 'application/json',
         Accept: 'application/json',
       },
       body: JSON.stringify(body),
-      cache: 'no-store',
     },
   );
 
