@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import './globals.css';
+import './brand.css';
 import { RootShell } from '@/components/root-shell';
 import { GlobalSearchOverlay } from '@/components/global-search-overlay';
 
@@ -11,6 +12,10 @@ export const metadata: Metadata = {
   },
   description:
     'SalsysOS connects sales, customer conversations, marketing, attribution, organic growth, experiments, and revenue intelligence in one operating system.',
+  icons: {
+    icon: [{ url: '/icon.png', type: 'image/png' }],
+    shortcut: ['/icon.png'],
+  },
 };
 
 const themeBootScript = `
