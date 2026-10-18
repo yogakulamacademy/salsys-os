@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { ArrowLeft, Brain, Search } from "lucide-react";
 
+import { SeoDecisionForecastPanel } from "@/components/seo-decision-forecast-panel";
 import { SeoDecisionWorkspace } from "@/components/seo-decision-workspace";
 import { PageHeader } from "@/components/ui";
 
@@ -12,7 +13,7 @@ export default function SeoDecisionPage() {
       <PageHeader
         eyebrow="Organic growth operating system"
         title="SEO Decision Intelligence"
-        description="See the next best SEO action, why it ranks first, how historical experiments influence the score, and what the system is currently learning."
+        description="See the next best SEO action, why it ranks first, the modeled business upside, how historical experiments influence the score, and what the system is currently learning."
         actions={
           <div className="flex flex-wrap items-center gap-2">
             <Link href="/seo/intelligence" className="btn-secondary">
@@ -35,12 +36,13 @@ export default function SeoDecisionPage() {
           <div>
             <div className="font-semibold">Decision first, dashboard second</div>
             <p className="mt-1 max-w-4xl text-xs leading-5 text-emerald-700">
-              This workspace combines live search demand, content quality, revenue, AEO/GEO readiness, cannibalization and experiment learning. Recommendations can be staged into human-approved experiments, while measurement and learning run automatically.
+              This workspace combines live search demand, content quality, revenue, AEO/GEO readiness, cannibalization and experiment learning. Forecasts are bounded scenarios using observed funnel data, while recommendations remain human-approved before execution.
             </p>
           </div>
         </div>
       </section>
 
+      <SeoDecisionForecastPanel />
       <SeoDecisionWorkspace />
     </div>
   );
