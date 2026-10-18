@@ -6,10 +6,12 @@ import {
   AttributionWorkspace,
   type AttributionWorkspaceFilters,
 } from "@/components/attribution-workspace";
+import { R5MeasurementHealthPanel } from "@/components/r5-measurement-health";
 
 import { PageHeader } from "@/components/ui";
 
 import { getAttributionWorkspace } from "@/lib/attribution-data";
+import { getR5MeasurementHealth } from "@/lib/r5-measurement-health";
 
 type AttributionPageProps = {
   searchParams: Promise<{
@@ -34,7 +36,10 @@ export default async function AttributionPage({
     stage: query.stage?.trim() || "all",
   };
 
-  const { workspace, warning } = await getAttributionWorkspace(filters);
+  const [{ workspace, warning }, measurementHealth] = await Promise.all([
+    getAttributionWorkspace(filters),
+    getR5MeasurementHealth(),
+  ]);
 
   return (
     <div className="attribution-polish">
@@ -57,6 +62,8 @@ export default async function AttributionPage({
           </>
         }
       />
+
+      <R5MeasurementHealthPanel health={measurementHealth} />
 
       <AttributionWorkspace
         workspace={workspace}
