@@ -1,13 +1,14 @@
 'use client';
 
 import { FormEvent, useEffect, useState } from 'react';
-import { Brain, Download, RefreshCw, Search, ShieldCheck, Swords } from 'lucide-react';
+import { Beaker, Brain, Download, RefreshCw, Search, ShieldCheck, Swords } from 'lucide-react';
 
 type Data = {
   competitors: any[];
   targets: any[];
   latest: any[];
   analyses: any[];
+  recommendation_links: any[];
   rank_provider_configured: boolean;
   claude_configured: boolean;
 };
@@ -55,6 +56,11 @@ export function SeoCompetitorIntelligence() {
 
   const latestAnalysis = data?.analyses?.[0];
   const recommendations = Array.isArray(latestAnalysis?.recommendations) ? latestAnalysis.recommendations : [];
+  const linkedByIndex = new Map<number, any>(
+    (data?.recommendation_links || [])
+      .filter((link: any) => link.analysis_run_id === latestAnalysis?.id)
+      .map((link: any) => [Number(link.recommendation_index), link]),
+  );
 
   return (
     <div className="space-y-5">
@@ -96,7 +102,31 @@ export function SeoCompetitorIntelligence() {
           <div><div className="flex items-center gap-2"><Brain size={17} className="text-brand"/><h2 className="font-semibold">Claude competitor strategist</h2></div><p className="mt-1 text-xs text-slate-500">Claude analyzes only grounded rank observations and competitor evidence; it is not used as the source of ranking truth.</p></div>
           <button className="btn-primary" disabled={!data?.claude_configured || busy==='analyze'} onClick={()=>post({action:'analyze'},'analyze')}>{busy==='analyze'?'Analyzing…':'Analyze & recommend'}</button>
         </div>
-        <div className="mt-4 space-y-3">{recommendations.slice(0,8).map((r:any,i:number)=><div key={i} className="rounded-xl border border-slate-100 p-4"><div className="flex gap-2"><span className="badge badge-blue">{String(r.surface||'seo').toUpperCase()}</span><span className="badge badge-gray">Priority {r.priority ?? '—'}</span><span className="badge badge-gray">{r.confidence || 'unknown'} confidence</span></div><div className="mt-2 font-semibold">{r.action || 'Recommended action'}</div><p className="mt-1 text-sm text-slate-600">{r.why || ''}</p>{r.competitor_advantage && <p className="mt-2 text-xs text-slate-500"><strong>Competitor advantage:</strong> {r.competitor_advantage}</p>}</div>)}{data && !latestAnalysis && <div className="rounded-xl bg-slate-50 p-4 text-sm text-slate-500">Add competitors and ranking observations, then run Claude analysis for grounded actions to outperform observed competitors.</div>}</div>
+        <div className="mt-4 space-y-3">
+          {recommendations.slice(0,8).map((r:any,i:number)=>{
+            const link = linkedByIndex.get(i);
+            const actionBusy = busy === `experiment-${i}`;
+            return <div key={i} className="rounded-xl border border-slate-100 p-4">
+              <div className="flex flex-wrap gap-2"><span className="badge badge-blue">{String(r.surface||'seo').toUpperCase()}</span><span className="badge badge-gray">Priority {r.priority ?? '—'}</span><span className="badge badge-gray">{r.confidence || 'unknown'} confidence</span>{r.target_query && <span className="badge badge-gray">{r.target_query}</span>}</div>
+              <div className="mt-2 font-semibold">{r.action || 'Recommended action'}</div>
+              <p className="mt-1 text-sm text-slate-600">{r.why || ''}</p>
+              {r.competitor_advantage && <p className="mt-2 text-xs text-slate-500"><strong>Competitor advantage:</strong> {r.competitor_advantage}</p>}
+              {r.expected_signal && <p className="mt-1 text-xs text-slate-500"><strong>Expected signal:</strong> {r.expected_signal}</p>}
+              <div className="mt-3 flex flex-wrap items-center gap-2">
+                {link ? <>
+                  <span className="badge badge-green"><Beaker size={12}/> Draft experiment created</span>
+                  <a href="/seo" className="btn-secondary">Review experiment</a>
+                </> : <button
+                  className="btn-secondary"
+                  disabled={actionBusy}
+                  onClick={()=>post({ action:'create_draft_experiment', analysis_run_id: latestAnalysis.id, recommendation_index:i }, `experiment-${i}`)}
+                ><Beaker size={14}/>{actionBusy?'Creating…':'Create draft experiment'}</button>}
+                <span className="text-[11px] text-slate-400">No publishing occurs here. Human approval is still required.</span>
+              </div>
+            </div>;
+          })}
+          {data && !latestAnalysis && <div className="rounded-xl bg-slate-50 p-4 text-sm text-slate-500">Add competitors and ranking observations, then run Claude analysis for grounded actions to outperform observed competitors.</div>}
+        </div>
       </section>
 
       <section className="card-pad">
