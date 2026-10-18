@@ -18,6 +18,8 @@ function errorCategory(error: unknown) {
   const message = error instanceof Error ? error.message : '';
   if (message.startsWith('SEO_RANK_PROVIDER_FAILED_')) return 'provider_error';
   if (message === 'SEO_RANK_PROVIDER_NOT_CONFIGURED') return 'provider_not_configured';
+  if (message === 'SEO_RANK_PROVIDER_DISABLED') return 'provider_disabled';
+  if (message === 'SEO_RANK_SURFACE_DISABLED') return 'surface_disabled';
   if (message === 'SEO_RANK_TARGET_NOT_FOUND') return 'target_not_found';
   if (message.startsWith('SEO_RANK_SAVE_FAILED')) return 'snapshot_save_failed';
   return 'rank_check_failed';
@@ -29,7 +31,7 @@ async function runDueChecks() {
   }
 
   const admin = createAdminClient();
-  const { data, error } = await admin.rpc('claim_due_seo_rank_targets_v1', {
+  const { data, error } = await admin.rpc('claim_due_seo_rank_targets_v2', {
     p_limit: 20,
     p_lease_seconds: 180,
   });
@@ -51,9 +53,7 @@ async function runDueChecks() {
         p_success: true,
         p_error_category: null,
       });
-      if (finalizeError || finalized !== true) {
-        throw new Error('SEO_RANK_WORKER_FINALIZE_FAILED');
-      }
+      if (finalizeError || finalized !== true) throw new Error('SEO_RANK_WORKER_FINALIZE_FAILED');
       completed += 1;
     } catch (error) {
       failed += 1;
@@ -68,19 +68,11 @@ async function runDueChecks() {
     }
   }
 
-  return {
-    configured: true,
-    scanned: claimed.length,
-    completed,
-    failed,
-    failures,
-  };
+  return { configured: true, scanned: claimed.length, completed, failed, failures };
 }
 
 async function handler(request: NextRequest) {
-  if (!authorized(request)) {
-    return NextResponse.json({ ok: false, error: 'Unauthorized.' }, { status: 401 });
-  }
+  if (!authorized(request)) return NextResponse.json({ ok: false, error: 'Unauthorized.' }, { status: 401 });
   try {
     const result = await runDueChecks();
     return NextResponse.json({ ok: true, ...result }, { headers: { 'Cache-Control': 'no-store' } });
