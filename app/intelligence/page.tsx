@@ -2,6 +2,10 @@ import Link from 'next/link';
 import { ArrowRight, BrainCircuit, DatabaseZap, ShieldCheck, Sparkles } from 'lucide-react';
 
 import { ClaudeOperatingBrief } from '@/components/claude-operating-brief';
+import {
+  IntelligenceRecommendationEffectiveness,
+  type IntelligenceRecommendationEffectivenessRow,
+} from '@/components/intelligence-recommendation-effectiveness';
 import { SystemIntelligenceBrief } from '@/components/system-intelligence-brief';
 import { PageHeader } from '@/components/ui';
 import { getDashboardSnapshot } from '@/lib/dashboard-data';
@@ -29,12 +33,64 @@ async function observeRecommendationOutcomes() {
   }
 }
 
+function numberValue(value: unknown) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function nullableNumberValue(value: unknown) {
+  if (value === null || value === undefined || value === '') return null;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+async function getRecommendationEffectiveness(): Promise<IntelligenceRecommendationEffectivenessRow[]> {
+  try {
+    const supabase = await createClient();
+    const { data, error } = await supabase.rpc('get_system_intelligence_recommendation_effectiveness_v1');
+
+    if (error) {
+      console.warn('SYSTEM_INTELLIGENCE_EFFECTIVENESS_FAILED', error.message);
+      return [];
+    }
+
+    if (!Array.isArray(data)) return [];
+
+    return data.map((row) => ({
+      signal_id: String(row.signal_id || ''),
+      role_scope: String(row.role_scope || ''),
+      category: String(row.category || ''),
+      recommendation_count: numberValue(row.recommendation_count),
+      shown_count: numberValue(row.shown_count),
+      accepted_count: numberValue(row.accepted_count),
+      dismissed_count: numberValue(row.dismissed_count),
+      acted_count: numberValue(row.acted_count),
+      outcome_observed_count: numberValue(row.outcome_observed_count),
+      positive_count: numberValue(row.positive_count),
+      negative_count: numberValue(row.negative_count),
+      mixed_count: numberValue(row.mixed_count),
+      inconclusive_count: numberValue(row.inconclusive_count),
+      action_rate: nullableNumberValue(row.action_rate),
+      positive_resolved_rate: nullableNumberValue(row.positive_resolved_rate),
+      negative_resolved_rate: nullableNumberValue(row.negative_resolved_rate),
+      sample_band: String(row.sample_band || 'insufficient'),
+    }));
+  } catch (error) {
+    console.warn(
+      'SYSTEM_INTELLIGENCE_EFFECTIVENESS_FAILED',
+      error instanceof Error ? error.message : 'unknown',
+    );
+    return [];
+  }
+}
+
 export default async function IntelligencePage() {
   await observeRecommendationOutcomes();
 
-  const [snapshot, context] = await Promise.all([
+  const [snapshot, context, effectiveness] = await Promise.all([
     getDashboardSnapshot(),
     getSystemIntelligenceContext(),
+    getRecommendationEffectiveness(),
   ]);
   const brief = buildSystemIntelligenceV2(snapshot, context);
 
@@ -53,6 +109,7 @@ export default async function IntelligencePage() {
       />
 
       <SystemIntelligenceBrief brief={brief} />
+      <IntelligenceRecommendationEffectiveness rows={effectiveness} />
       <ClaudeOperatingBrief />
 
       <div className="mt-4 grid gap-4 lg:grid-cols-3">
@@ -96,7 +153,7 @@ export default async function IntelligencePage() {
             </div>
             <div className="mt-1 text-lg font-black">The operating brief now changes with the business and with the person using it.</div>
             <p className="mt-1 max-w-3xl text-xs leading-5 text-slate-300">
-              V2 adds signal correlation, behavioural re-engagement, 24-hour velocity comparison, system-health confidence, role-aware ranking and bounded Claude synthesis. Recommendation actions now feed a tenant-safe outcome observer so downstream CRM movement can become learning evidence without being treated as causal attribution.
+              V2 adds signal correlation, behavioural re-engagement, 24-hour velocity comparison, system-health confidence, role-aware ranking and bounded Claude synthesis. Recommendation actions now feed a tenant-safe outcome observer and an effectiveness layer, while calibration stays locked until observed samples are sufficiently mature.
             </p>
           </div>
           <div className="shrink-0 rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-xs font-bold text-slate-200">
