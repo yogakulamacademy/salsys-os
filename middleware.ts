@@ -23,6 +23,7 @@ const PUBLIC_EXACT_PATHS = new Set([
   "/api/search/index/health",
   "/api/search/index/bootstrap",
   "/api/search/index/worker",
+  "/api/seo/competitors/rank-worker",
 ]);
 
 const ACTIVE_WORKSPACE_COOKIE = "yk-active-workspace";
@@ -238,9 +239,6 @@ export async function middleware(request: NextRequest) {
     });
   }
 
-  // Recovery completion is allowed only after Supabase has authenticated the
-  // recovery token and the server has bound the session to the user's one
-  // active organization. Normal CRM role authorization resumes everywhere else.
   if (isPasswordResetCompletionPath(pathname)) return response;
 
   const oauthProvider = OAUTH_CALLBACK_PROVIDER_BY_PATH[pathname];
@@ -255,10 +253,7 @@ export async function middleware(request: NextRequest) {
 
     const { data: stateMatches, error: stateMatchError } = await supabase.rpc(
       "oauth_state_matches_current_tenant",
-      {
-        p_provider: oauthProvider,
-        p_state: state,
-      },
+      { p_provider: oauthProvider, p_state: state },
     );
 
     if (stateMatchError || stateMatches !== true) {
@@ -268,48 +263,31 @@ export async function middleware(request: NextRequest) {
     }
   }
 
-  if (pathname === "/workspace" || pathname === "/api/workspace") {
-    return response;
-  }
+  if (pathname === "/workspace" || pathname === "/api/workspace") return response;
 
   const role = String(profile.role ?? "");
-
   if (role === "admin") return response;
 
   if (role === "manager") {
     if (isAdminOnlyPage(pathname)) {
-      return redirectWithAuthCookies(request, response, "/dashboard", {
-        restricted: "1",
-      });
+      return redirectWithAuthCookies(request, response, "/dashboard", { restricted: "1" });
     }
     return response;
   }
 
   if (role === "admissions") {
     if (pathname.startsWith("/api/")) {
-      return NextResponse.json(
-        { ok: false, error: "This API route is not available to Admissions users." },
-        { status: 403 },
-      );
+      return NextResponse.json({ ok: false, error: "This API route is not available to Admissions users." }, { status: 403 });
     }
-
     if (isEmployeeAllowedPage(pathname)) return response;
-
-    return redirectWithAuthCookies(request, response, "/dashboard", {
-      restricted: "1",
-    });
+    return redirectWithAuthCookies(request, response, "/dashboard", { restricted: "1" });
   }
 
   if (pathname.startsWith("/api/")) {
-    return NextResponse.json(
-      { ok: false, error: "CRM role is not authorized." },
-      { status: 403 },
-    );
+    return NextResponse.json({ ok: false, error: "CRM role is not authorized." }, { status: 403 });
   }
 
-  return redirectWithAuthCookies(request, response, "/login", {
-    error: "role-not-authorized",
-  });
+  return redirectWithAuthCookies(request, response, "/login", { error: "role-not-authorized" });
 }
 
 export const config = {
