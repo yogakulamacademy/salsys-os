@@ -1,17 +1,15 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 
 import { searchTenantOpenSearch } from '@/lib/search/query';
 import { createAdminClient } from '@/lib/supabase/admin';
 
-const PILOT_SLUG = 'yogakulam-academy';
-const FOREIGN_SLUG = 'salsysos';
-const PROBE_QUERY = 'India';
+export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
 
-function authorized(request: NextRequest) {
-  const expected = process.env.SEARCH_INDEX_WORKER_SECRET?.trim();
-  if (!expected) return false;
-  return request.headers.get('authorization') === `Bearer ${expected}`;
-}
+const PILOT_SLUG = 'yogakulam-academy';
+const FOREIGN_SLUG = 'test-yoga-school';
+const PROBE_QUERY = 'India';
+const ALLOWED_BRANCH = 'feature/opensearch-aws-sigv4-v1';
 
 async function resolveOrganizationId(slug: string) {
   const supabase = createAdminClient();
@@ -26,9 +24,9 @@ async function resolveOrganizationId(slug: string) {
   return String(data.id);
 }
 
-export async function GET(request: NextRequest) {
-  if (!authorized(request)) {
-    return NextResponse.json({ ok: false, error: 'Unauthorized.' }, { status: 401 });
+export async function GET() {
+  if (process.env.VERCEL_ENV === 'production' || process.env.VERCEL_GIT_COMMIT_REF !== ALLOWED_BRANCH) {
+    return NextResponse.json({ ok: false, error: 'Not available in this environment.' }, { status: 404 });
   }
 
   try {
@@ -37,19 +35,20 @@ export async function GET(request: NextRequest) {
       resolveOrganizationId(FOREIGN_SLUG),
     ]);
 
-    const pilot = await searchTenantOpenSearch({
-      organizationId: pilotOrganizationId,
-      query: PROBE_QUERY,
-      entityTypes: ['lead'],
-      size: 10,
-    });
-
-    const foreign = await searchTenantOpenSearch({
-      organizationId: foreignOrganizationId,
-      query: PROBE_QUERY,
-      entityTypes: ['lead'],
-      size: 10,
-    });
+    const [pilot, foreign] = await Promise.all([
+      searchTenantOpenSearch({
+        organizationId: pilotOrganizationId,
+        query: PROBE_QUERY,
+        entityTypes: ['lead'],
+        size: 10,
+      }),
+      searchTenantOpenSearch({
+        organizationId: foreignOrganizationId,
+        query: PROBE_QUERY,
+        entityTypes: ['lead'],
+        size: 10,
+      }),
+    ]);
 
     const pilotTenantSafe = pilot.items.every(
       (item) => String(item.source.organization_id ?? '') === pilotOrganizationId,
@@ -57,9 +56,10 @@ export async function GET(request: NextRequest) {
     const foreignTenantSafe = foreign.items.every(
       (item) => String(item.source.organization_id ?? '') === foreignOrganizationId,
     );
+    const ok = pilot.total > 0 && foreign.total === 0 && pilotTenantSafe && foreignTenantSafe;
 
     return NextResponse.json({
-      ok: pilot.total > 0 && foreign.total === 0 && pilotTenantSafe && foreignTenantSafe,
+      ok,
       query: PROBE_QUERY,
       pilot: {
         slug: PILOT_SLUG,
@@ -75,7 +75,7 @@ export async function GET(request: NextRequest) {
         tookMs: foreign.tookMs,
         tenantSafe: foreignTenantSafe,
       },
-    });
+    }, { status: ok ? 200 : 207 });
   } catch (error) {
     return NextResponse.json(
       {
