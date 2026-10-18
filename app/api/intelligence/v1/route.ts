@@ -1,18 +1,22 @@
 import { NextResponse } from 'next/server';
 
 import { getDashboardSnapshot } from '@/lib/dashboard-data';
-import { buildSystemIntelligence } from '@/lib/intelligence/system-intelligence';
+import { getSystemIntelligenceContext } from '@/lib/intelligence/system-intelligence-context';
+import { buildSystemIntelligenceV2 } from '@/lib/intelligence/system-intelligence-v2';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 export async function GET() {
   try {
-    const snapshot = await getDashboardSnapshot();
-    const intelligence = buildSystemIntelligence(snapshot);
+    const [snapshot, context] = await Promise.all([
+      getDashboardSnapshot(),
+      getSystemIntelligenceContext(),
+    ]);
+    const intelligence = buildSystemIntelligenceV2(snapshot, context);
 
     return NextResponse.json(
-      { ok: true, intelligence },
+      { ok: true, version: 2, intelligence },
       {
         headers: {
           'Cache-Control': 'private, no-store, max-age=0',
