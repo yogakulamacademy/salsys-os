@@ -49,7 +49,9 @@ export async function getOpenSearchHealth() {
     };
   }
 
-  if (!clusterResponse.ok) {
+  const serverlessRootNotFound = config.awsService === 'aoss' && clusterResponse.status === 404;
+
+  if (!clusterResponse.ok && !serverlessRootNotFound) {
     return {
       ok: false,
       reachable: true,
@@ -65,10 +67,12 @@ export async function getOpenSearchHealth() {
   }
 
   let info: ClusterInfo = {};
-  try {
-    info = (await clusterResponse.json()) as ClusterInfo;
-  } catch {
-    info = {};
+  if (clusterResponse.ok) {
+    try {
+      info = (await clusterResponse.json()) as ClusterInfo;
+    } catch {
+      info = {};
+    }
   }
 
   const indexUrl = `${config.endpoint}/${encodeURIComponent(config.indexName)}`;
