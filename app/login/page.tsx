@@ -1,3 +1,4 @@
+import Image from 'next/image';
 import Link from 'next/link';
 import { LockKeyhole, ShieldCheck, Sparkles } from 'lucide-react';
 
@@ -19,9 +20,14 @@ export default async function LoginPage({
     <div className="grid min-h-screen place-items-center px-4 py-10">
       <div className="w-full max-w-md rounded-3xl border border-slate-200 bg-white p-7 shadow-card sm:p-9">
         <div className="mb-7 flex items-center gap-3">
-          <div className="grid h-12 w-12 place-items-center rounded-2xl bg-brand font-black text-white">
-            S
-          </div>
+          <Image
+            src="/branding/salsys-mark.png"
+            alt="SalsysOS"
+            width={48}
+            height={48}
+            priority
+            className="salsys-brand-mark h-12 w-12 rounded-2xl"
+          />
 
           <div>
             <div className="font-bold text-slate-950">SalsysOS</div>
