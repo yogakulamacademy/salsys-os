@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { ArrowRight, BrainCircuit, DatabaseZap, ShieldCheck, Sparkles } from 'lucide-react';
 
+import { ClaudeOperatingBrief } from '@/components/claude-operating-brief';
 import { SystemIntelligenceBrief } from '@/components/system-intelligence-brief';
 import { PageHeader } from '@/components/ui';
 import { getDashboardSnapshot } from '@/lib/dashboard-data';
@@ -31,8 +32,9 @@ export default async function IntelligencePage() {
       />
 
       <SystemIntelligenceBrief brief={brief} />
+      <ClaudeOperatingBrief />
 
-      <div className="grid gap-4 lg:grid-cols-3">
+      <div className="mt-4 grid gap-4 lg:grid-cols-3">
         <section className="card-pad">
           <div className="grid h-10 w-10 place-items-center rounded-xl bg-violet-50 text-violet-700">
             <BrainCircuit size={18} />
@@ -59,7 +61,7 @@ export default async function IntelligencePage() {
           </div>
           <div className="mt-3 text-sm font-black text-slate-900">Evidence before AI</div>
           <p className="mt-1 text-xs leading-5 text-slate-500">
-            Intelligence Core v2 is still deterministic and read-only. Claude can synthesize this bounded contract next, while customer, financial, automation and website actions continue through the existing control planes.
+            Deterministic evidence remains the authority. Claude now synthesizes the bounded signal contract on demand, while customer, financial, automation and website actions continue through the existing control planes.
           </p>
         </section>
       </div>
@@ -73,7 +75,7 @@ export default async function IntelligencePage() {
             </div>
             <div className="mt-1 text-lg font-black">The operating brief now changes with the business and with the person using it.</div>
             <p className="mt-1 max-w-3xl text-xs leading-5 text-slate-300">
-              V2 adds signal correlation, behavioural re-engagement, 24-hour velocity comparison, system-health confidence and role-aware ranking. The next layer is Claude synthesis over this verified evidence contract, followed by outcome feedback and learned calibration.
+              V2 adds signal correlation, behavioural re-engagement, 24-hour velocity comparison, system-health confidence, role-aware ranking and bounded Claude synthesis. Next comes recommendation outcome feedback and learned calibration across the wider operating system.
             </p>
           </div>
           <div className="shrink-0 rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-xs font-bold text-slate-200">
