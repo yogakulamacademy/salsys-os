@@ -36,9 +36,12 @@ The compatibility review covered:
 | Legacy `adPersonalization` | TRANSLATED | Maps to universal `personalization`. |
 | GPC | PRESERVED / HARDENED | Universal privacy endpoint applies tracking-source policy. |
 | UTM/click IDs | PRESERVED | Universal browser SDK keeps UTM + Google/Meta click identifiers. |
+| Legacy acquisition aliases | MIGRATION BRIDGE ADDED | `campaignid`, `adgroupid` and `creative` are translated during Yogakulam migration; canonical names remain the universal contract. |
+| Paid/organic source normalization | PRESERVED | Google/Meta click IDs and established referrer families retain source/medium normalization during cutover. |
 | `_fbc` / `_fbp` | PRESERVED UNDER CONSENT | Only browser-observed values are read; identifiers are not manufactured. |
 | Page views | PRESERVED | Canonical `web.page_viewed` projects into the established touchpoint vocabulary. |
 | Session start | PRESERVED | Canonical `web.session_started`. |
+| Lead-form scope | PRESERVED / UNIVERSALIZED | Default product entrypoint tracks only forms marked `data-salsys-lead-form` or legacy `data-yk-lead-form`, preventing unrelated forms from becoming lead-funnel events. |
 | Form start | PRESERVED | Canonical `web.form_started`; arbitrary form values are not captured. |
 | Form submit | PRESERVED | Canonical `web.form_submitted`; browser submit is not treated as backend conversion proof. |
 | WhatsApp CTA | PRESERVED | Canonical `web.cta_clicked` with `whatsapp_click` action. |
@@ -47,8 +50,9 @@ The compatibility review covered:
 | Instagram CTA | COMPATIBILITY RESTORED | Universal entrypoint adds established auto-classification. |
 | Enrollment/booking CTA | COMPATIBILITY RESTORED | Established enrollment intent signal is retained for funnel/affinity logic. |
 | Existing `data-yk-event` markup | MIGRATION BRIDGE ADDED | Translated into canonical `web.cta_clicked` events. |
+| Existing `data-yk-lead-form` markup | MIGRATION BRIDGE ADDED | Treated as a lead-form marker alongside canonical `data-salsys-lead-form`. |
 | Existing `yk:consent` dispatch | MIGRATION BRIDGE ADDED | Translated to the neutral privacy-purpose vocabulary. |
-| Existing `YKTracking` diagnostics | MIGRATION FACADE ADDED | `status`, `context`, consent and supported legacy send operations remain available during cutover. |
+| Existing `YKTracking` diagnostics | MIGRATION FACADE ADDED | `status`, `context`, consent, form decoration and supported legacy send operations remain available during cutover. |
 | `yk_tracking_ready` dataLayer event | MIGRATION BRIDGE ADDED | Kept for existing GTM diagnostics during cutover; GTM is not a core tracking dependency. |
 | Server-side geo context | RESTORED | Browser ingest derives country/region/city/timezone from trusted proxy/hosting headers where available; raw client IP is not persisted. |
 | Tenant resolution from browser | PRESERVED / HARDENED | Browser tenant comes from registered trusted origin/source, never client-supplied organization ID. |
@@ -62,6 +66,16 @@ The compatibility review covered:
 | High-intent enrollment signal | PRESERVED | `enrollment_cta_click` remains available to existing affinity/high-intent builders. |
 | Backend language dependency | REMOVED | Canonical server boundary is HTTPS + JSON. |
 | PHP Event Intelligence relay | REMOVED | No longer part of the universal architecture. |
+
+## Explicitly retired / not required by the universal contract
+
+The old tracker exposed a few diagnostics/transport artifacts that are not used by the repository's canonical funnel/attribution/intelligence logic:
+
+- `page_exit` unload telemetry is not a required V1 event;
+- `yk_tracking_sent`, `yk_tracking_error` and `yk_tracking_skipped` are not universal business events;
+- GTM/dataLayer remains optional diagnostics/marketing plumbing, not source-of-truth tracking.
+
+`yk_tracking_ready` is temporarily retained because the existing Tracking UI/GTM diagnostics may use it during cutover. If an external GTM container is later shown to depend on additional legacy diagnostic events, that external dependency must be migrated explicitly rather than making those names part of the universal contract.
 
 ## Authority rules retained
 
@@ -112,14 +126,15 @@ Code compatibility is not the same as production completion.
 The following still require controlled live verification after CI/build passes and the SDK is installed directly in Yogakulam source:
 
 1. returning visitor with legacy consent + `yk_vid` preserves continuity;
-2. new consent grant/denial/GPC receipts behave correctly;
+2. new consent grant/denial/withdrawal/GPC receipts behave correctly;
 3. page/session events persist and normalize once;
 4. WhatsApp/phone/email/Instagram/enrollment CTA classifications produce the expected semantic touchpoints;
-5. forms retain visitor/session continuity without capturing form values;
-6. `/api/events/identify/v1` successfully links the exact session to a real CRM lead and rejects a mismatched tenant/session;
-7. trusted booking/payment/enrollment events reach `raw_events` and downstream revenue/attribution;
-8. the complete real journey reconciles across Tracking, Person 360, Funnel, Attribution and Revenue;
-9. derived features/predictions consume the same journey without fabricating outcomes.
+5. only marked lead forms generate lead-form funnel events and they retain visitor/session continuity without capturing input values;
+6. unrelated/search/newsletter/login forms do not pollute lead-funnel metrics under default SDK configuration;
+7. `/api/events/identify/v1` successfully links the exact session to a real CRM lead and rejects a mismatched tenant/session;
+8. trusted booking/payment/enrollment events reach `raw_events` and downstream revenue/attribution;
+9. the complete real journey reconciles across Tracking, Person 360, Funnel, Attribution and Revenue;
+10. derived features/predictions consume the same journey without fabricating outcomes.
 
 ## Acceptance target
 
