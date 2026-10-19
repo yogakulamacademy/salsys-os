@@ -2,9 +2,9 @@
 
 ## Status
 
-R10 engineering is structurally complete on `feature/system-intelligence-v2`.
+R10 engineering architecture is structurally complete on `feature/system-intelligence-v2`.
 
-This closeout does **not** mean a statistically mature production prediction model already exists. Predictive activation remains evidence-gated: the system will stay on deterministic operational priority scoring until enough real point-in-time feature history and positive/negative outcomes exist to train, evaluate and promote a model safely.
+This closeout does **not** mean a statistically mature production prediction model already exists, and it does **not** yet constitute final production-runtime activation sign-off. Predictive activation remains evidence-gated: the system stays on deterministic operational priority scoring until enough real point-in-time feature history and positive/negative outcomes exist to train, evaluate and promote a model safely.
 
 ## Operating loop delivered
 
@@ -36,7 +36,7 @@ Observe → Understand → Remember → Decide → Act → Measure → Learn →
 ### Predict
 - predictive readiness gate
 - smart lead scoring contract separating operational score from probability
-- leakage-safe training dataset
+- point-in-time training dataset with temporal-leakage checks
 - candidate-training readiness and auditable training-run registry
 - logistic-regression candidate trainer
 - grouped/time-aware holdout evaluation
@@ -72,24 +72,82 @@ All scheduled predictive actions are no-op or deterministic-fallback-safe when e
 - open/unlabeled leads are never silently treated as negatives
 - deterministic lead priority is never presented as conversion probability
 - prediction generation requires predictive-readiness plus an active validated model
-- candidate training requires point-in-time data, class balance and zero temporal leakage violations
+- candidate training requires point-in-time data, class balance and zero temporal-order violations
 - production promotion requires holdout quality/calibration gates
 - replacing an incumbent additionally requires shared realized-outcome non-inferiority evidence
 - sparse drift samples are observational only, not proof of degradation
 - recommendation outcome rates are observed associations, not causal claims
 - R10 views use `security_invoker=true`; anon access is revoked and tenant RLS remains enforced
 
-## Current production-data state at closeout
+## Current production-data state
 
-The canonical database currently has insufficient predictive history for a real model. Yogakulam remains in `deterministic_guarded` / `insufficient_history` mode with no active predictive model, which is the intended safe behaviour.
+The canonical database currently has insufficient predictive history for a real model. Yogakulam remains in deterministic guarded / insufficient-history mode with no active predictive model, which is the intended safe behaviour.
 
-The feature branch preview deployment is green, but Vercel cron jobs do not provide evidence of natural scheduled execution on this branch. Runtime scheduler verification and history accumulation must be performed after the R10 branch is deployed through the production deployment path. This is an activation/revalidation item, not missing R10 architecture.
+## Validation addendum — 2026-10-19
+
+### Middleware / worker authentication
+
+Production-validation review found that tenant middleware could intercept scheduled machine-worker requests before their Bearer-secret route authentication.
+
+Fixed by commit:
+
+`eeb412b3524e5ac32a006d99ee08f5337887f555` — `Allow secret-auth R10 workers through middleware`
+
+The exact R10 worker routes may now pass through middleware to their route-level authentication. This does not expose the normal user-facing Intelligence API.
+
+Vercel status for that implementation commit is GREEN.
+
+### Production cron evidence still pending
+
+The feature branch preview deployment is green, but preview deployment does not provide evidence of natural Vercel Cron execution for the production scheduler lifecycle.
+
+Final runtime activation sign-off must be performed after a controlled production cutover by verifying real creation of:
+
+- hourly awareness snapshots;
+- six-hour lead feature snapshots;
+- operational event memory;
+- worker-authenticated scheduled executions;
+- bounded/idempotent writes.
+
+This is an activation/revalidation item rather than missing R10 architecture.
+
+### Candidate trainer feature-set hardening required before real model activation
+
+A fresh source review found that the current candidate trainer still includes target-adjacent fields while the model target is `eventual_positive_terminal_outcome`:
+
+- `payment_starts_7d`
+- `net_paid`
+- `outstanding_balance`
+- `operational_priority_score`
+
+The v1 training target/prediction point must be made explicit and these inputs must be removed or deliberately justified before allowing a real candidate to train/promote. `net_paid` and `outstanding_balance` are especially close to the terminal commercial outcome and present a strong target-leakage risk for this target definition.
+
+This does **not** currently create a bad production probability because there is no active predictive model and the canonical data is still below readiness thresholds.
+
+Until this is hardened:
+
+- do not force candidate training;
+- do not force model promotion;
+- deterministic guarded scoring remains authoritative.
+
+Detailed validation checkpoint:
+
+`docs/checkpoints/R10-2026-10-19-System-Predictive-Intelligence-Validation.md`
 
 ## Phase boundary
 
-R10 is closed as an engineering phase. Future work should not reopen R10 merely because more real data is required for model maturity. Model training, calibration, drift evidence and learned recommendation effectiveness are ongoing operational learning once the production scheduler is active.
+R10 remains closed as an **architecture/engineering build phase**. Do not reopen it merely because more real data is required for model maturity.
 
-Next roadmap work:
+However, final **production activation sign-off** remains conditional on:
+
+1. candidate trainer target/feature leakage hardening;
+2. controlled production deployment;
+3. natural scheduler/runtime verification.
+
+After those checks pass, ongoing model training, calibration, drift evidence and recommendation effectiveness become operational learning rather than roadmap construction.
+
+Next roadmap work after R10 activation sign-off:
+
 1. close remaining R7 provider-validation items;
 2. R11 Wellness/Education productization;
 3. minimum viable R13 commercial SaaS readiness.
