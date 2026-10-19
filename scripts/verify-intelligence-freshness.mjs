@@ -6,6 +6,7 @@ const root = process.cwd();
 const migrationPath = 'supabase/migrations/20261020100000_event_intelligence_prediction_freshness_v1.sql';
 const sweepPath = 'supabase/migrations/20261020100100_event_intelligence_prediction_expiry_sweep_v1.sql';
 const actionablePath = 'supabase/migrations/20261020100200_event_intelligence_actionable_freshness_v1.sql';
+const currentGuardPath = 'supabase/migrations/20261020100300_event_intelligence_current_freshness_guard_v1.sql';
 
 function fail(message) {
   console.error(`\n[intelligence-freshness] FAIL: ${message}`);
@@ -21,6 +22,7 @@ function read(relativePath) {
 const sql = read(migrationPath);
 const sweep = read(sweepPath);
 const actionable = read(actionablePath);
+const currentGuard = read(currentGuardPath);
 
 const checks = [
   ['event_intelligence_prediction_max_feature_age_v1', 'central feature-age policy'],
@@ -66,6 +68,15 @@ for (const [needle, label] of [
   if (!actionable.includes(needle)) fail(`Actionable-freshness migration is missing ${label} (${needle}).`);
 }
 
+for (const [needle, label] of [
+  ['record_event_intelligence_prediction_freshness_inner_v1', 'current-time guard wrapper'],
+  ['p_expires_at<=v_now', 'already-expired source prediction guard'],
+  ["v_feature_observed_at>v_now+interval '5 minutes'", 'current-time future evidence guard'],
+  ['v_feature_observed_at+v_max_feature_age<=v_now', 'current-time stale evidence guard'],
+]) {
+  if (!currentGuard.includes(needle)) fail(`Current-time freshness guard is missing ${label} (${needle}).`);
+}
+
 if (!sql.includes("'calibrated_probability',false")) {
   fail('Deterministic ranking predictions must remain explicitly non-probabilistic.');
 }
@@ -74,4 +85,4 @@ if (!sql.includes("'feature_freshness_guard',true")) {
   fail('Prediction refresh response must disclose that the freshness guard is active.');
 }
 
-console.log('[intelligence-freshness] PASS: feature freshness, action-time evidence lifetime, stale suppression, expiry sweeping, and freshness-health contracts verified.');
+console.log('[intelligence-freshness] PASS: generation-time freshness, current-time evidence validity, capped action lifetime, stale suppression, expiry sweeping, and freshness-health contracts verified.');
