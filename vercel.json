@@ -3,11 +3,11 @@
   "crons": [
     {
       "path": "/api/intelligence/system-snapshot",
-      "schedule": "0 * * * *"
+      "schedule": "27 * * * *"
     },
     {
       "path": "/api/intelligence/lead-scoring-snapshot",
-      "schedule": "25 */6 * * *"
+      "schedule": "25 * * * *"
     },
     {
       "path": "/api/analytics/ga4/sync",
