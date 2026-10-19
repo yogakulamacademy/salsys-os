@@ -16,7 +16,12 @@ export async function GET() {
     const intelligence = buildSystemIntelligenceV2(snapshot, context);
 
     return NextResponse.json(
-      { ok: true, version: 2, intelligence },
+      {
+        ok: true,
+        version: 2,
+        intelligence,
+        commandCenter: context.commandCenter,
+      },
       {
         headers: {
           'Cache-Control': 'private, no-store, max-age=0',
