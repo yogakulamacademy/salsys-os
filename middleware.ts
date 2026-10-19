@@ -12,6 +12,7 @@ const PUBLIC_EXACT_PATHS = new Set([
   "/api/leads/capture",
   "/api/events/v1",
   "/api/events/browser/v1",
+  "/api/events/identify/v1",
   "/api/privacy/consent/v1",
   "/api/analytics/ga4/sync",
   "/api/analytics/gsc/sync",
