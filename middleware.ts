@@ -22,6 +22,12 @@ const PUBLIC_EXACT_PATHS = new Set([
   "/api/tracking/identify",
   "/api/intelligence/system-snapshot",
   "/api/intelligence/lead-scoring-snapshot",
+  "/api/intelligence/lead-predictions",
+  "/api/intelligence/lead-model-drift",
+  "/api/intelligence/lead-model-retrain",
+  "/api/intelligence/lead-model-train",
+  "/api/intelligence/lead-model-compare",
+  "/api/intelligence/lead-model-promote",
 ]);
 
 const ACTIVE_WORKSPACE_COOKIE = "yk-active-workspace";
