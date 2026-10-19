@@ -9,12 +9,13 @@ import {
   Workflow,
 } from 'lucide-react';
 
-import { createSmartTriggerWorkflowAction } from '@/app/automation/actions';
+import { installSmartTriggerRecipeAction } from '@/app/automation/recipes/actions';
 import { PageHeader } from '@/components/ui';
 import { createClient } from '@/lib/supabase/server';
 import { getCurrentWorkspaceContext } from '@/lib/workspace';
 
 type Recipe = {
+  key: string;
   name: string;
   description: string;
   eventName: 'lead.created' | 'message.received' | 'lead.stage_changed' | 'payment.pending';
@@ -26,6 +27,7 @@ type Recipe = {
 
 const recipes: Recipe[] = [
   {
+    key: 'new_lead_response_sla',
     name: 'New lead response SLA',
     description: 'Create an immediate internal follow-up whenever a new lead enters SalsysOS.',
     eventName: 'lead.created',
@@ -35,6 +37,7 @@ const recipes: Recipe[] = [
     useCase: 'Lead capture → salesperson task',
   },
   {
+    key: 'inbound_message_review',
     name: 'Inbound message review',
     description: 'Create a reply task whenever an inbound customer message is recorded.',
     eventName: 'message.received',
@@ -44,6 +47,7 @@ const recipes: Recipe[] = [
     useCase: 'Inbound message → human response queue',
   },
   {
+    key: 'payment_pending_followup',
     name: 'Payment pending follow-up',
     description: 'Create a controlled follow-up task one hour after a payment-pending event.',
     eventName: 'payment.pending',
@@ -53,6 +57,7 @@ const recipes: Recipe[] = [
     useCase: 'Payment pending → admissions follow-up',
   },
   {
+    key: 'lead_stage_change_review',
     name: 'Lead stage change review',
     description: 'Create an internal review task whenever a lead changes stage.',
     eventName: 'lead.stage_changed',
@@ -70,7 +75,12 @@ function prettyEvent(eventName: Recipe['eventName']) {
   return 'Payment pending';
 }
 
-export default async function AutomationRecipesPage() {
+export default async function AutomationRecipesPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ notice?: string; error?: string }>;
+}) {
+  const query = await searchParams;
   const supabase = await createClient();
   const {
     data: { user },
@@ -86,7 +96,7 @@ export default async function AutomationRecipesPage() {
 
   let organizationName = 'Current organization';
   let canManage = false;
-  let existingNames = new Set<string>();
+  let installedRecipeKeys = new Set<string>();
   let loadError: string | null = null;
 
   try {
@@ -100,15 +110,22 @@ export default async function AutomationRecipesPage() {
           supabase.rpc('can_manage_organization', { p_organization_id: organizationId }),
           supabase
             .from('automation_workflows')
-            .select('name')
+            .select('metadata')
             .eq('organization_id', organizationId)
             .neq('status', 'archived'),
         ]);
 
       if (manageError || workflowError) throw manageError || workflowError;
       canManage = manageData === true;
-      existingNames = new Set(
-        (workflowRows ?? []).map((row) => String(row.name ?? '').trim().toLowerCase()).filter(Boolean),
+      installedRecipeKeys = new Set(
+        (workflowRows ?? [])
+          .map((row) => {
+            const metadata = row.metadata && typeof row.metadata === 'object'
+              ? (row.metadata as Record<string, unknown>)
+              : {};
+            return typeof metadata.recipe_key === 'string' ? metadata.recipe_key : '';
+          })
+          .filter(Boolean),
       );
     }
   } catch (error) {
@@ -123,9 +140,15 @@ export default async function AutomationRecipesPage() {
         description={`Create safe draft workflows for ${organizationName}. These recipes only create internal follow-up tasks; they do not send WhatsApp messages, call AI, or enable runtime execution.`}
       />
 
-      {loadError ? (
+      {query.notice ? (
+        <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-800">
+          {query.notice}
+        </div>
+      ) : null}
+
+      {query.error || loadError ? (
         <div className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-medium text-rose-800">
-          {loadError}
+          {query.error || loadError}
         </div>
       ) : null}
 
@@ -133,7 +156,7 @@ export default async function AutomationRecipesPage() {
         <div className="flex items-start gap-3">
           <ShieldCheck className="mt-0.5 shrink-0" size={18} />
           <div>
-            <strong>Draft-only safety:</strong> installing a recipe creates a tenant-scoped workflow definition with human-review defaults and an internal follow-up action. It remains non-executable until a validated flow is published and runtime is explicitly enabled.
+            <strong>Draft-only safety:</strong> recipe definitions are allowlisted on the server. Installing one creates a tenant-scoped workflow with human-review defaults, runtime explicitly OFF, and an internal follow-up action only.
           </div>
         </div>
       </div>
@@ -141,10 +164,10 @@ export default async function AutomationRecipesPage() {
       <section className="grid gap-5 xl:grid-cols-2">
         {recipes.map((recipe) => {
           const Icon = recipe.icon;
-          const alreadyExists = existingNames.has(recipe.name.toLowerCase());
+          const alreadyExists = installedRecipeKeys.has(recipe.key);
 
           return (
-            <article key={recipe.name} className="card-pad space-y-4">
+            <article key={recipe.key} className="card-pad space-y-4">
               <div className="flex items-start gap-3">
                 <div className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-violet-50 text-violet-700">
                   <Icon size={19} />
@@ -186,12 +209,8 @@ export default async function AutomationRecipesPage() {
               </div>
 
               {canManage ? (
-                <form action={createSmartTriggerWorkflowAction}>
-                  <input type="hidden" name="name" value={recipe.name} />
-                  <input type="hidden" name="description" value={recipe.description} />
-                  <input type="hidden" name="event_name" value={recipe.eventName} />
-                  <input type="hidden" name="followup_title" value={recipe.followupTitle} />
-                  <input type="hidden" name="followup_delay_minutes" value={String(recipe.delayMinutes)} />
+                <form action={installSmartTriggerRecipeAction}>
+                  <input type="hidden" name="recipe_key" value={recipe.key} />
                   <button
                     type="submit"
                     disabled={alreadyExists}
