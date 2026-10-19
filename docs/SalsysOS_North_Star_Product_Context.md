@@ -81,7 +81,11 @@ The active architecture is **Salsys Event Intelligence**, not a GTM-dependent tr
 
 Target chain:
 
-`website/apps/connectors -> universal event SDK -> first-party relay/outbox -> canonical event contract -> PostgreSQL raw_events -> normalization/identity/attribution -> feature store -> prediction ledger -> optional OpenSearch projection -> decisions/recommendations -> observed outcomes`
+`website/apps/connectors -> universal SDK or canonical HTTPS client -> platform-neutral first-party transport/outbox -> canonical event contract -> PostgreSQL raw_events -> normalization/identity/attribution -> feature store -> prediction ledger -> optional OpenSearch projection -> decisions/recommendations -> observed outcomes`
+
+The canonical transport contract is HTTPS + JSON. No backend programming language, framework, database or hosting provider is part of the Salsys tracking specification. Runtime-specific SDKs are convenience clients over the same protocol, not separate tracking architectures.
+
+Canonical protocol: `docs/universal-event-protocol-v1.md`.
 
 ### Already present in production
 
@@ -103,6 +107,10 @@ Target chain:
 - guarded Event Intelligence OpenSearch staging support;
 - search outbox support for derived Event Intelligence entity types.
 
+### Architecture cleanup
+
+The previous backend-language-specific Event Intelligence relay package is not part of the North-Star architecture. The active tracking model is platform/language independent. Legacy tenant-specific website integration code may remain where it supports an existing production workflow, but it is not the universal tracking contract.
+
 ### Not yet complete
 
 The direct Yogakulam first-party source installation and full live E2E proof are still required.
@@ -115,17 +123,19 @@ Tracking is only complete when a real journey proves:
 
 ## 5. Tracking deployment rule
 
-Core tracking must not depend on GTM, GA4, Meta or any single downstream vendor.
+Core tracking must not depend on GTM, GA4, Meta, a backend programming language or any single downstream vendor.
 
 Preferred deployment:
-- direct first-party SDK in website source/common layout;
+- direct first-party browser SDK in website source/common layout;
 - tenant-neutral SDK/event vocabulary;
-- first-party website collection/relay endpoint;
-- durable local outbox/retry behavior;
+- first-party transport endpoint with no file-extension/runtime requirement;
+- durable local outbox/retry behavior implemented by the host platform where required;
 - stable event IDs and idempotency;
 - preserve existing first-party visitor/session continuity during migration;
-- server-to-server identity linking;
+- server-to-server identity linking through the canonical Event API;
 - server-authoritative payment/enrollment/revenue events.
+
+The browser SDK must work independently of the server technology that renders or hosts the site. Trusted server integrations use the same HTTPS/JSON event contract from any runtime.
 
 GTM remains optional for marketing tags, debugging and experiments only.
 
@@ -240,17 +250,18 @@ Do not add unrelated North-Star features until the tracking/Event Intelligence E
 
 Current order:
 
-1. direct universal first-party SDK on Yogakulam;
-2. first-party relay/outbox;
-3. consent/GPC integration;
-4. form tracking + anonymous-to-lead identity;
-5. reservation/checkout/payment/enrollment server events;
-6. revenue attribution proof;
-7. feature-store refresh using live data;
-8. tracking-health/anomaly detection;
-9. controlled Event Intelligence OpenSearch pilot;
-10. model evaluation/calibration from real outcomes;
-11. resume wider R9/R10/R11 product work.
+1. finalize Universal Event Protocol v1;
+2. align/direct-install universal browser SDK on Yogakulam;
+3. implement platform-neutral first-party transport/outbox;
+4. consent/GPC integration;
+5. form tracking + anonymous-to-lead identity;
+6. reservation/checkout/payment/enrollment server events;
+7. revenue attribution proof;
+8. feature-store refresh using live data;
+9. tracking-health/anomaly detection;
+10. controlled Event Intelligence OpenSearch pilot;
+11. model evaluation/calibration from real outcomes;
+12. resume wider R9/R10/R11 product work.
 
 ---
 
