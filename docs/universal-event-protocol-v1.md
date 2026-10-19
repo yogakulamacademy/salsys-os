@@ -1,60 +1,82 @@
 # Salsys Universal Event Protocol v1
 
-**Status:** Architecture contract
+**Status:** Canonical architecture contract  
 **Date:** 2026-10-19
 
-Salsys Event Intelligence is protocol-first and platform independent. No backend language, framework, database or hosting provider is part of the canonical tracking contract.
+Salsys Tracking Intelligence is protocol-first and platform/language independent. No backend language, framework, database, CMS or hosting provider is part of the canonical tracking contract.
 
-## 1. Canonical transport
+The **Universal Tracking Intelligence SDK** is the developer-facing layer over this protocol. SDKs may improve installation ergonomics, but they must emit the same canonical events.
 
-Any trusted server, app, worker or integration that can make HTTPS requests may emit events to SalsysOS.
+## 1. Canonical transports
+
+### Trusted server / app / worker
+
+Any trusted runtime that can make HTTPS requests can emit events:
 
 ```text
 POST /api/events/v1
-Authorization: Bearer <tracking-source credential>
+X-Salsys-Source: <source-key>
+Authorization: Bearer <tracking-source-secret>
 Content-Type: application/json
 ```
 
-Browser collection uses the browser-safe endpoint and trusted origin/source resolution:
+### Browser
+
+Browser collection uses origin-resolved authorization and never receives a server tracking secret:
 
 ```text
 POST /api/events/browser/v1
 Content-Type: application/json
 ```
 
-The transport is HTTPS + JSON. SDKs are convenience clients over this protocol, not alternative event contracts.
+The universal integration boundary is **HTTPS + JSON**.
 
 ## 2. Canonical event envelope
+
+Canonical producers should use snake_case field names:
 
 ```json
 {
   "event_id": "evt_01...",
   "event_name": "web.page_viewed",
-  "schema_version": "1.0",
+  "schema_version": 1,
   "occurred_at": "2026-10-19T12:30:00Z",
-  "source": {
-    "type": "browser",
-    "sdk": "salsys-web",
-    "sdk_version": "1.0.0"
+  "anonymous_visitor_id": "v_01...",
+  "session_key": "s_01...",
+  "external_message_id": null,
+  "site": "example.com",
+  "properties": {
+    "pagePath": "/courses/example"
   },
-  "anonymous_id": "anon_...",
-  "session_id": "ses_...",
-  "context": {},
-  "properties": {}
+  "context": {
+    "page_origin": "https://example.com",
+    "language": "en"
+  },
+  "metadata": {
+    "sdk": "salsys-universal-web",
+    "sdk_version": "1.0.0",
+    "runtime": "browser"
+  }
 }
 ```
 
 Required semantics:
-- `event_id` is globally stable for the producer and is reused on retry;
-- `event_name` must conform to a registered event contract;
-- `occurred_at` describes when the event happened, not when delivery completed;
-- `schema_version` identifies the contract version;
-- browser identity/context fields are optional where they do not apply;
-- sensitive fields must be sanitized before or during canonical ingestion.
+
+- `event_id` is stable and reused for every retry of the same logical event;
+- `event_name` follows a registered event contract;
+- `schema_version` is an integer contract version;
+- `occurred_at` is the observed event time, not delivery completion time;
+- anonymous/session identity is included where relevant;
+- `properties` contains event-specific facts;
+- `context` contains environment/journey context;
+- `metadata` contains producer/SDK/transport metadata;
+- sensitive values are never intentionally serialized and are sanitized again at ingestion.
+
+The current ingestion layer also accepts selected legacy camelCase aliases for compatibility, but new SDKs should emit the canonical snake_case contract above.
 
 ## 3. Universal event namespaces
 
-Recommended namespaces:
+The platform event model is namespace-based:
 
 ```text
 web.*
@@ -71,26 +93,50 @@ system.*
 custom.*
 ```
 
-Vertical-specific semantics may be added through registered contracts without forking the protocol.
+Vertical-specific semantics may be added through registered contracts without forking the protocol or SDK.
 
-## 4. SDK model
+## 4. Browser authority boundary
 
-The protocol is universal. SDKs are runtime-specific adapters over the same contract.
+The browser SDK is intended for observed behavior and intent. Browser-safe events use `web.*`.
 
-Initial SDK/runtime model:
+Examples:
 
 ```text
-Browser JavaScript SDK        required for browser instrumentation
-Raw HTTPS server protocol     canonical server integration
-Reference server SDK          implementation convenience, not authority
-Additional language SDKs      optional and demand-driven
+web.session_started
+web.page_viewed
+web.cta_clicked
+web.form_started
+web.form_submitted
+web.lead_submitted
 ```
 
-No customer is required to use a particular backend language.
+The browser is **not authoritative** for:
 
-## 5. First-party transport contract
+- payment success;
+- confirmed enrollment;
+- refunds;
+- final revenue;
+- privileged CRM state;
+- provider delivery state.
 
-A customer may send browser traffic through a first-party path on its own domain before forwarding to SalsysOS.
+Those facts must be emitted by a trusted server/provider/backend source.
+
+## 5. Universal Tracking Intelligence SDK model
+
+```text
+Universal Event Protocol                 canonical contract
+        |
+        +-- Browser SDK                  direct website/app instrumentation
+        +-- HTTPS Event API              every server language/platform
+        +-- first-party transport        optional customer-domain relay/proxy
+        +-- runtime SDKs                 convenience wrappers, optional
+```
+
+A runtime SDK must not invent a second event model.
+
+## 6. First-party transport contract
+
+A customer may route browser events through a first-party endpoint on its own domain before delivery to SalsysOS.
 
 Example:
 
@@ -98,40 +144,42 @@ Example:
 https://customer.example/events
 ```
 
-A compliant first-party transport may be implemented using an edge worker, reverse proxy, serverless function, application route, queue consumer, conventional backend service or another suitable runtime.
+The transport may be an edge worker, reverse proxy, serverless function, application route, queue consumer, conventional backend service or another suitable runtime.
 
-The transport implementation must preserve:
+A compliant transport preserves:
+
 - canonical event shape;
 - stable `event_id`;
 - tenant/source authorization boundaries;
-- privacy/consent semantics;
+- privacy/consent decisions;
 - retry safety;
-- ordering where the source contract requires it;
-- no exposure of server credentials to browser code.
+- server credential secrecy;
+- ordering when an integration contract requires it.
 
-## 6. Durable outbox contract
+## 7. Durable outbox contract
 
-Durability is a capability, not a database requirement.
+Durability is a capability, not a database or language requirement.
 
 A durable producer/outbox should provide:
-- persistent event journal or equivalent storage;
+
+- persistent journal or equivalent durable storage;
 - stable event IDs;
-- per-destination delivery state where multiple adapters exist;
-- retry with bounded backoff;
-- lease/claim semantics for concurrent workers where needed;
-- dead-letter or terminal failure state;
+- delivery state;
+- bounded retry/backoff;
+- lease/claim semantics where concurrent workers exist;
+- terminal/dead-letter state;
 - retention/cleanup policy;
 - idempotent downstream delivery.
 
-Valid storage implementations may include browser IndexedDB, SQLite, PostgreSQL, MySQL, Redis, queues, KV stores or platform-native durable storage.
+Storage can be IndexedDB, SQLite, PostgreSQL, MySQL, Redis, a queue, KV storage or another platform-native durable mechanism.
 
-## 7. Identity contract
+## 8. Identity contract
 
-Neutral identity vocabulary:
+Canonical neutral identity terms are:
 
 ```text
-anonymous_id
-session_id
+anonymous_visitor_id
+session_key
 person_id
 lead_id
 user_id
@@ -139,31 +187,24 @@ device_id
 event_id
 ```
 
-Tenant-specific or historical identifiers may be preserved as migration aliases, but must not become the universal SDK vocabulary.
+Historical identifiers such as Yogakulam migration aliases may be read during migration, but they are not part of the universal contract.
 
-## 8. Authority rules
+## 9. Privacy contract
 
-Browser events may describe behavior and intent but are not authoritative for:
-- payment success;
-- enrollment completion;
-- refunds;
-- final revenue;
-- privileged CRM state.
+The SDK/protocol must support purpose-specific consent, denial, withdrawal and Global Privacy Control handling.
 
-Those events must originate from trusted server/payment/backend evidence.
+Browser collection must fail closed when the configured policy requires prior consent.
 
-PostgreSQL remains the authoritative source of truth. OpenSearch remains optional and rebuildable.
+No browser SDK may serialize arbitrary form values, passwords, card data, authorization headers, cookies, secrets or browser PII by default.
 
-## 9. Privacy
+## 10. Source of truth
 
-The protocol must support purpose-specific consent, denial, withdrawal/revocation and Global Privacy Control handling.
+PostgreSQL `raw_events` remains immutable event evidence and the canonical event source of truth.
 
-Browser collection must fail closed where the configured consent policy requires consent before optional processing.
+OpenSearch is optional, derived and rebuildable. Raw events are not copied into OpenSearch as an alternate truth store.
 
-No SDK may serialize arbitrary form values or browser PII by default.
+## 11. Compatibility rule
 
-## 10. Compatibility rule
+All future SDKs and transport adapters implement this protocol.
 
-All future SDKs and transport adapters must implement this contract rather than introducing a parallel event model.
-
-A runtime-specific implementation may add developer ergonomics, but it must not change the canonical event meaning, identity model, authorization model or source-of-truth rules.
+A runtime-specific implementation may improve developer ergonomics, but it must not change event meaning, identity semantics, privacy rules, authorization boundaries or source-of-truth rules.
