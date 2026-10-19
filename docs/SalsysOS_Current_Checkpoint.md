@@ -79,20 +79,46 @@ Salsys Event Intelligence is now the active tracking/intelligence architecture.
 
 ### Universal Tracking Intelligence SDK V1 — branch implementation
 
-The active refactor branch now defines **Salsys Universal Tracking Intelligence SDK V1** as the developer-facing tracking layer.
+The active refactor branch defines **Salsys Universal Tracking Intelligence SDK V1** as the developer-facing tracking layer.
 
 Implemented/defined on the branch:
 
-- browser SDK implementation remains `public/salsys-tracker.js` and is backend/CMS independent;
-- canonical integration boundary is HTTPS + JSON;
+- product-facing browser entrypoint: `public/salsys-intelligence.js`;
+- browser tracking core: `public/salsys-tracker.js`;
+- canonical integration boundary: HTTPS + JSON;
 - `docs/universal-event-protocol-v1.md` defines the protocol;
 - `schemas/salsys-event-v1.schema.json` defines the machine-readable canonical envelope;
-- `docs/universal-tracking-intelligence-sdk.md` defines the SDK architecture and developer API;
+- `docs/universal-tracking-intelligence-sdk.md` defines SDK architecture and developer API;
 - `docs/event-tracking-v1.md` defines event naming, authority boundaries and the V1 event model;
+- `/api/events/identify/v1` provides tracking-source-authenticated exact-session anonymous -> CRM lead handoff;
+- browser event ingestion restores trusted server-side geo context where available without persisting raw client IP;
 - PHP-specific Event Intelligence relay/runtime has been removed from the refactor branch;
 - runtime-specific SDKs are optional wrappers and must not introduce parallel event semantics.
 
-This is a branch-level implementation checkpoint. Production cutover and Yogakulam live E2E proof are still pending.
+### Pre-existing tracking compatibility audit — completed in code, live proof pending
+
+The pre-existing Yogakulam tracking stack was reviewed before cutover. Canonical evidence record:
+
+`docs/checkpoints/M-2026-10-19-Universal-Tracking-Compatibility-Audit-v1.md`
+
+Compatibility work completed on the branch includes:
+
+- legacy `yk_vid` visitor continuity migration;
+- legacy `yk_sid` session continuity migration;
+- legacy first-touch migration;
+- migration of stored legacy analytics grant/denial through the new privacy endpoint before normal analytics collection;
+- fail-closed behavior when a prior grant cannot be safely migrated;
+- legacy `yk:consent` translation into neutral purpose-specific consent;
+- legacy `adUserData -> advertising` and `adPersonalization -> personalization` translation without inventing sale/sharing consent;
+- compatibility for established `data-yk-event` CTA markup;
+- restored Instagram CTA classification;
+- restored enrollment/booking CTA classification so existing funnel/affinity signals are not lost;
+- temporary `YKTracking` diagnostics facade during cutover;
+- temporary `yk_tracking_ready` dataLayer compatibility event while GTM remains non-authoritative;
+- canonical `web.*` -> established touchpoint semantic projection remains intact;
+- universal identity handoff preserves the old exact-session cross-tenant/shared-browser safety rule.
+
+This is a branch/code compatibility checkpoint. It does **not** claim that the live Yogakulam production journey has been cut over or proven yet.
 
 ### Architecture decision — platform/language independence
 
@@ -112,6 +138,7 @@ Canonical references:
 docs/universal-event-protocol-v1.md
 docs/universal-tracking-intelligence-sdk.md
 docs/event-tracking-v1.md
+docs/checkpoints/M-2026-10-19-Universal-Tracking-Compatibility-Audit-v1.md
 schemas/salsys-event-v1.schema.json
 ```
 
@@ -135,7 +162,7 @@ Core tracking must not depend on GTM, GA4, Meta, a backend programming language,
 
 A real production journey must prove:
 
-`campaign/click id -> website visitor -> session -> page/CTA behavior -> consent -> enquiry/form -> CRM lead -> anonymous identity attached -> checkout -> payment -> enrollment -> revenue -> attribution -> features -> prediction/recommendation -> observed outcome`
+`campaign/click id -> website visitor -> session -> page/CTA behavior -> consent -> enquiry/form -> CRM lead -> exact-session anonymous identity attached -> checkout -> payment -> enrollment -> revenue -> attribution -> features -> prediction/recommendation -> observed outcome`
 
 The same journey must be reconcilable in PostgreSQL-backed Tracking, Person 360, Funnel, Attribution and Revenue views.
 
@@ -144,14 +171,14 @@ The same journey must be reconcilable in PostgreSQL-backed Tracking, Person 360,
 Do not reinstall the core SalsysOS tracker through GTM.
 
 Target implementation:
-- direct universal browser SDK in Yogakulam website source/common layout;
+- direct `salsys-intelligence.js` installation in Yogakulam website source/common layout;
 - tenant-neutral SDK/event vocabulary;
 - browser events delivered to the browser-safe Event API directly or through a first-party transport;
 - no backend-language/file-extension requirement;
 - stable `event_id` idempotency;
-- preserve/reuse existing `yk_vid`/`yk_sid` continuity during migration;
+- preserve/reuse existing Yogakulam visitor/session continuity during migration;
 - server-authoritative payment/enrollment/revenue events through the trusted Event API;
-- server-to-server lead identification;
+- server-to-server lead identification through `/api/events/identify/v1`;
 - consent-aware analytics/advertising behavior;
 - optional durable first-party outbox without coupling the SDK to one runtime/database.
 
@@ -170,18 +197,19 @@ Rules-generated scores must never be presented as calibrated probabilities.
 
 ## 7. Active next implementation order
 
-1. validate the Universal Tracking Intelligence SDK branch build/CI;
-2. production-align the existing browser SDK with the canonical V1 event contract;
-3. direct-install the browser SDK on Yogakulam source;
-4. verify consent/GPC behavior on the real website;
-5. verify session/page/CTA/form event tracking into canonical `raw_events`;
-6. wire form success to trusted lead identity linkage;
-7. instrument reservation/checkout/payment/enrollment using trusted server events;
-8. prove revenue attribution E2E;
-9. refresh feature builders from live Yogakulam behavior;
-10. run a controlled Event Intelligence OpenSearch pilot while PostgreSQL remains authoritative;
-11. add tracking/data-quality anomaly detection;
-12. move from deterministic intelligence toward evaluated predictive models only when enough outcome evidence exists.
+1. validate the current Universal Tracking Intelligence branch with GitHub CI + deployment build;
+2. direct-install `salsys-intelligence.js` in Yogakulam source with the old tracker removed so events are not double-counted;
+3. verify returning legacy visitor/session/consent migration with controlled real browser tests;
+4. verify consent denial/grant/withdrawal/GPC behavior on the real website;
+5. verify one-and-only-one session/page/CTA/form event flow into canonical `raw_events`;
+6. verify WhatsApp, phone, email, Instagram and enrollment CTA semantic projections;
+7. verify `/api/events/identify/v1` on a real lead and adversarial mismatched tenant/session cases;
+8. instrument reservation/checkout/payment/enrollment using trusted server events;
+9. prove revenue attribution E2E;
+10. refresh feature builders from live Yogakulam behavior;
+11. run a controlled Event Intelligence OpenSearch pilot while PostgreSQL remains authoritative;
+12. add tracking/data-quality anomaly detection;
+13. move from deterministic intelligence toward evaluated predictive models only when enough outcome evidence exists.
 
 ## 8. Safety defaults
 
