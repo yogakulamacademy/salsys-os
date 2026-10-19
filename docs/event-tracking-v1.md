@@ -58,7 +58,7 @@ Typical properties:
 - destination origin/path;
 - campaign/course/content identifiers when explicitly supplied.
 
-The current browser SDK can classify WhatsApp, phone and email CTA links without capturing message/body/form content.
+The browser SDK classifies WhatsApp, phone and email links directly. The Universal Tracking Intelligence entrypoint also preserves the established Instagram and enrollment/booking CTA classifications during migration so existing intent/affinity models do not silently lose signal.
 
 ### `web.form_started`
 
@@ -156,7 +156,15 @@ anonymous_visitor_id
 session_key
 ```
 
-Known identity is linked through trusted workflows. Browsers do not choose tenant IDs or privileged CRM lead IDs as authority.
+Known identity is linked only through a trusted server workflow. Browsers do not choose tenant IDs or privileged CRM lead IDs as authority.
+
+Canonical identity handoff uses:
+
+```text
+POST /api/events/identify/v1
+```
+
+The identity route preserves the strongest pre-existing tracking safety rule: the authenticated tracking source tenant, CRM lead, anonymous visitor and exact pre-existing browser session must all agree before the session/touchpoints are attached. Reusing a browser/visitor identifier by itself is never enough.
 
 ## 9. Acquisition
 
@@ -182,7 +190,40 @@ creative_id
 
 Missing identifiers are never fabricated.
 
-## 10. Event intelligence flow
+Legacy URL aliases used by an established deployment may be translated during a controlled migration, but new integrations should emit/use the canonical names above.
+
+## 10. Privacy and consent
+
+Consent is purpose-specific. Current neutral purposes include:
+
+```text
+analytics
+marketing
+advertising
+sale_sharing
+personalization
+```
+
+Global Privacy Control is honored according to tracking-source policy.
+
+During Yogakulam migration only, established consent aliases are translated as follows:
+
+```text
+legacy analytics        -> analytics
+legacy adUserData       -> advertising
+legacy adPersonalization -> personalization
+legacy marketing        -> marketing
+```
+
+No missing purpose is inferred. In particular, legacy advertising consent is not silently converted into sale/sharing consent.
+
+## 11. Server-side context enrichment
+
+Browser events may be enriched at ingestion with trusted hosting/proxy context such as country, region, city and timezone when the deployment provides those headers.
+
+The browser does not send or control that trusted geo context, and the browser event route does not persist the raw client IP address.
+
+## 12. Event intelligence flow
 
 ```text
 Event
@@ -199,25 +240,35 @@ Event
 
 Predictions and recommendations are derived intelligence. They are not rewritten as observed events unless an actual action/outcome occurs.
 
-## 11. Browser SDK API
+## 13. Browser SDK API
 
 Current universal browser implementation exposes:
 
 ```javascript
-Salsys.track('web.cta_clicked', { action: 'enroll_now' });
-Salsys.page({ content_type: 'course' });
-Salsys.consent({ analytics: 'granted' });
-Salsys.identifiers();
-Salsys.flush();
+SalsysIntelligence.track('web.cta_clicked', { action: 'enroll_now' });
+SalsysIntelligence.page({ content_type: 'course' });
+SalsysIntelligence.consent({ analytics: 'granted' });
+SalsysIntelligence.identifiers();
+SalsysIntelligence.flush();
 ```
 
-Declarative HTML instrumentation is supported through `data-salsys-event`, `data-salsys-track` and `data-salsys-prop-*` attributes.
+`Salsys` remains an API alias. Declarative HTML instrumentation is supported through `data-salsys-event`, `data-salsys-track` and `data-salsys-prop-*` attributes.
 
-## 12. Server API
+The product entrypoint temporarily supports established `data-yk-event`, `yk:consent` and `YKTracking` integrations during the Yogakulam cutover. These are migration shims, not the universal contract for new tenants.
 
-Any backend language can emit trusted events over HTTPS using the canonical event envelope documented in `docs/universal-event-protocol-v1.md`.
+## 14. Server API
 
-## 13. Completion definition
+Any backend language can emit trusted events over HTTPS using:
+
+```text
+POST /api/events/v1
+X-Salsys-Source-Key: <source-key>
+Authorization: Bearer <tracking-source-secret>
+```
+
+Identity handoff uses the same source authentication on `/api/events/identify/v1`.
+
+## 15. Completion definition
 
 Event tracking is not production-complete until a real journey is verified end-to-end:
 
@@ -225,6 +276,7 @@ Event tracking is not production-complete until a real journey is verified end-t
 campaign/click
 -> visitor/session
 -> page/CTA/form behavior
+-> consent
 -> lead identity
 -> booking/checkout
 -> payment
