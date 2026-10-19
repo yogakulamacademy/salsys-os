@@ -1,4 +1,4 @@
-/* Salsys Universal Tracking Intelligence SDK entrypoint v1.1.0 */
+/* Salsys Universal Tracking Intelligence SDK entrypoint v1.2.0 */
 (function () {
   'use strict';
 
@@ -98,6 +98,86 @@
     });
   }
 
+  function prepareAttributionCompatibility() {
+    if (!LEGACY_MIGRATION) return;
+    if (safeGet(window.sessionStorage, 'salsys_session_touch_v1')) return;
+
+    var currentUrl;
+    try { currentUrl = new URL(window.location.href); } catch (_) { return; }
+    var params = currentUrl.searchParams;
+
+    function param() {
+      for (var i = 0; i < arguments.length; i++) {
+        var value = params.get(arguments[i]);
+        if (value) return value.slice(0, 500);
+      }
+      return null;
+    }
+
+    var touch = {
+      source: param('utm_source'),
+      medium: param('utm_medium'),
+      campaign: param('utm_campaign'),
+      content: param('utm_content'),
+      term: param('utm_term'),
+      utmId: param('utm_id'),
+      gclid: param('gclid'),
+      gbraid: param('gbraid'),
+      wbraid: param('wbraid'),
+      fbclid: param('fbclid'),
+      campaignId: param('campaign_id', 'campaignid'),
+      adsetId: param('adset_id'),
+      adId: param('ad_id'),
+      adgroupId: param('adgroup_id', 'adgroupid'),
+      creativeId: param('creative_id', 'creative')
+    };
+
+    if (!touch.source) {
+      if (touch.gclid || touch.gbraid || touch.wbraid) {
+        touch.source = 'google';
+        touch.medium = touch.medium || 'cpc';
+      } else if (touch.fbclid) {
+        touch.source = 'meta';
+        touch.medium = touch.medium || 'paid_social';
+      } else if (document.referrer) {
+        try {
+          var ref = new URL(document.referrer);
+          var host = ref.hostname.replace(/^www\./, '').toLowerCase();
+          var ownHost = window.location.hostname.replace(/^www\./, '').toLowerCase();
+          if (host === ownHost) {
+            touch.source = 'direct';
+            touch.medium = 'internal';
+          } else if (/^google\./.test(host) || host.indexOf('.google.') !== -1) {
+            touch.source = 'google';
+            touch.medium = 'organic';
+          } else if (/instagram\.com$|facebook\.com$|fb\.com$/.test(host)) {
+            touch.source = 'meta';
+            touch.medium = 'organic_social';
+          } else if (/youtube\.com$|youtu\.be$/.test(host)) {
+            touch.source = 'youtube';
+            touch.medium = 'organic_video';
+          } else {
+            touch.source = host || 'referral';
+            touch.medium = 'referral';
+          }
+        } catch (_) {
+          touch.source = 'referral';
+          touch.medium = 'referral';
+        }
+      } else {
+        touch.source = 'direct';
+        touch.medium = 'none';
+      }
+    }
+
+    if (!touch.medium) touch.medium = touch.source === 'direct' ? 'none' : 'referral';
+
+    safeSet(window.sessionStorage, 'salsys_session_touch_v1', JSON.stringify(touch));
+    if (!safeGet(window.sessionStorage, 'salsys_first_touch_session_v1')) {
+      safeSet(window.sessionStorage, 'salsys_first_touch_session_v1', JSON.stringify(touch));
+    }
+  }
+
   function migrateLegacyConsent() {
     if (!LEGACY_MIGRATION) return Promise.resolve();
 
@@ -139,7 +219,6 @@
       safeSet(window.localStorage, 'salsys_privacy_v1', JSON.stringify(state));
       log('Migrated legacy analytics consent', decision, result);
     }).catch(function (error) {
-      // Denial remains fail-closed locally even if the migration receipt cannot be recorded.
       if (decision === 'denied') {
         var deniedState = existing && typeof existing === 'object' && !Array.isArray(existing) ? existing : {};
         deniedState.analytics = 'denied';
@@ -175,8 +254,6 @@
     copy('advertising', 'advertising');
     copy('sale_sharing', 'sale_sharing');
     copy('personalization', 'personalization');
-
-    // Legacy Yogakulam consent vocabulary.
     copy('adUserData', 'advertising');
     copy('adPersonalization', 'personalization');
 
@@ -237,8 +314,6 @@
     document.addEventListener('click', function (event) {
       var target = event.target && event.target.closest ? event.target.closest('a,[data-yk-event]') : null;
       if (!target) return;
-
-      // Native universal tracking already owns these selectors.
       if (target.hasAttribute('data-salsys-event') || target.hasAttribute('data-salsys-track')) return;
 
       var href = String(target.getAttribute('href') || '');
@@ -271,7 +346,6 @@
       api.track('web.cta_clicked', properties, { keepalive: true }).catch(function () {});
     }, { capture: true });
 
-    // Compatibility facade for existing diagnostics/integrations during cutover.
     window.YKTracking = {
       status: function () {
         return {
@@ -345,5 +419,6 @@
     (document.head || document.documentElement).appendChild(core);
   }
 
+  prepareAttributionCompatibility();
   migrateLegacyConsent().then(loadCore).catch(loadCore);
 })();
