@@ -46,11 +46,19 @@ Identity/Journey    Attribution/Funnel
 
 ### 1. Browser SDK
 
-Current browser implementation:
+Canonical browser entrypoint:
+
+```text
+/public/salsys-intelligence.js
+```
+
+The entrypoint loads the existing browser tracking core at:
 
 ```text
 /public/salsys-tracker.js
 ```
+
+`/salsys-tracker.js` remains available for backward compatibility while `/salsys-intelligence.js` is the product-facing Universal Tracking Intelligence SDK entrypoint.
 
 It is backend/CMS independent and can be installed on any web page that can execute JavaScript.
 
@@ -74,7 +82,7 @@ Capabilities already implemented:
 - Global Privacy Control handling;
 - local retry queue;
 - sensitive-key sanitization;
-- manual event tracking through `Salsys.track()`.
+- manual event tracking through the SDK API.
 
 ### 2. Universal Event API
 
@@ -113,21 +121,23 @@ Direct installation:
 
 ```html
 <script
-  src="https://salsysos.com/salsys-tracker.js"
+  src="https://salsysos.com/salsys-intelligence.js"
   data-site="example.com"
   data-consent-mode="required"
   defer>
 </script>
 ```
 
-A customer may self-host the browser bundle or serve it through its own first-party asset domain as long as the event contract is unchanged.
+A customer may self-host the browser entrypoint/core or serve them through its own first-party asset domain as long as the event contract is unchanged.
 
 ## Browser API
+
+The entrypoint exposes the browser API as both `SalsysIntelligence` and the backward-compatible `Salsys` global.
 
 ### Manual event
 
 ```javascript
-Salsys.track('web.cta_clicked', {
+SalsysIntelligence.track('web.cta_clicked', {
   action: 'enroll_now',
   course_key: '200-hour-ytt'
 });
@@ -136,7 +146,7 @@ Salsys.track('web.cta_clicked', {
 ### Page view
 
 ```javascript
-Salsys.page({
+SalsysIntelligence.page({
   content_type: 'course'
 });
 ```
@@ -144,7 +154,7 @@ Salsys.page({
 ### Consent
 
 ```javascript
-Salsys.consent({
+SalsysIntelligence.consent({
   analytics: 'granted',
   advertising: 'denied'
 });
@@ -153,7 +163,7 @@ Salsys.consent({
 ### Visitor/session continuity
 
 ```javascript
-const ids = Salsys.identifiers();
+const ids = SalsysIntelligence.identifiers();
 ```
 
 The browser SDK never treats browser-side payment or enrollment claims as authoritative.
@@ -269,7 +279,7 @@ This keeps collection deterministic and intelligence server-controlled.
 
 Every producer must preserve a stable `event_id` across retries.
 
-A first-party transport/outbox may be implemented using any language/platform. Durability is a capability, not a PHP/MySQL requirement.
+A first-party transport/outbox may be implemented using any language/platform. Durability is a capability, not a language/database requirement.
 
 ## Compatibility rule
 
