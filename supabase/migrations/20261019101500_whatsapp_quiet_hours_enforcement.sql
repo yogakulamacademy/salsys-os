@@ -25,10 +25,11 @@ declare
   v_reason text;
   v_channel_allowed boolean := false;
   v_final boolean := false;
-  v_workflow record;
   v_quiet_hours_enabled boolean := false;
   v_quiet_hours_active boolean := false;
   v_quiet_hours_misconfigured boolean := false;
+  v_quiet_hours_start time;
+  v_quiet_hours_end time;
   v_timezone text;
   v_local_time time;
 begin
@@ -43,45 +44,43 @@ begin
 
   if p_workflow_id is not null then
     select
-      w.quiet_hours_enabled,
+      coalesce(w.quiet_hours_enabled,false),
       w.quiet_hours_start,
       w.quiet_hours_end,
-      w.timezone
-    into v_workflow
+      nullif(btrim(coalesce(w.timezone,'')),'')
+    into
+      v_quiet_hours_enabled,
+      v_quiet_hours_start,
+      v_quiet_hours_end,
+      v_timezone
     from public.automation_workflows w
     where w.id=p_workflow_id
       and w.organization_id=p_organization_id
     limit 1;
-
-    if found then
-      v_quiet_hours_enabled := coalesce(v_workflow.quiet_hours_enabled,false);
-    end if;
   end if;
 
   if v_quiet_hours_enabled then
-    v_timezone := nullif(btrim(coalesce(v_workflow.timezone,'')),'');
-
-    if v_workflow.quiet_hours_start is null
-       or v_workflow.quiet_hours_end is null
+    if v_quiet_hours_start is null
+       or v_quiet_hours_end is null
        or v_timezone is null
        or not exists (select 1 from pg_timezone_names tz where tz.name=v_timezone) then
       v_quiet_hours_misconfigured := true;
     else
       v_local_time := (v_now at time zone v_timezone)::time;
 
-      if v_workflow.quiet_hours_start = v_workflow.quiet_hours_end then
+      if v_quiet_hours_start = v_quiet_hours_end then
         -- Equal bounds are treated as all-day quiet time rather than silently
         -- allowing customer sends from an ambiguous configuration.
         v_quiet_hours_active := true;
-      elsif v_workflow.quiet_hours_start < v_workflow.quiet_hours_end then
+      elsif v_quiet_hours_start < v_quiet_hours_end then
         v_quiet_hours_active :=
-          v_local_time >= v_workflow.quiet_hours_start
-          and v_local_time < v_workflow.quiet_hours_end;
+          v_local_time >= v_quiet_hours_start
+          and v_local_time < v_quiet_hours_end;
       else
         -- Overnight window, for example 22:00 -> 08:00.
         v_quiet_hours_active :=
-          v_local_time >= v_workflow.quiet_hours_start
-          or v_local_time < v_workflow.quiet_hours_end;
+          v_local_time >= v_quiet_hours_start
+          or v_local_time < v_quiet_hours_end;
       end if;
     end if;
   end if;
@@ -120,8 +119,8 @@ begin
     'quiet_hours_misconfigured',v_quiet_hours_misconfigured,
     'quiet_hours_timezone',v_timezone,
     'quiet_hours_local_time',case when v_local_time is null then null else v_local_time::text end,
-    'quiet_hours_start',case when v_workflow.quiet_hours_start is null then null else v_workflow.quiet_hours_start::text end,
-    'quiet_hours_end',case when v_workflow.quiet_hours_end is null then null else v_workflow.quiet_hours_end::text end,
+    'quiet_hours_start',case when v_quiet_hours_start is null then null else v_quiet_hours_start::text end,
+    'quiet_hours_end',case when v_quiet_hours_end is null then null else v_quiet_hours_end::text end,
     'send_allowed',v_final,
     'block_reasons',v_reasons,
     'customer_message_sent',false
