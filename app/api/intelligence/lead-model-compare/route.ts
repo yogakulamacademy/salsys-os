@@ -7,6 +7,7 @@ export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
 
 const MODEL_KEY = 'conversion_probability';
+const FEATURE_SCHEMA_VERSION = 'r10-lead-features-safe-v1';
 const RECENT_COMPARISON_MS = 24 * 60 * 60 * 1000;
 const MAX_SNAPSHOTS = 10000;
 const MIN_SHARED_LEADS = 20;
@@ -18,7 +19,6 @@ const FEATURE_NAMES = [
   'high_intent_events_7d',
   'whatsapp_clicks_7d',
   'reservation_starts_7d',
-  'payment_starts_7d',
   'enquiry_clicks_7d',
   'brochure_downloads_7d',
   'sessions_7d',
@@ -26,20 +26,18 @@ const FEATURE_NAMES = [
   'days_since_last_visit',
   'has_returned_after_becoming_lead',
   'is_reengaged',
-  'net_paid',
-  'outstanding_balance',
   'owner_assigned',
   'lead_age_hours',
   'hours_since_last_contact',
   'hours_since_last_inbound',
   'followup_due',
-  'operational_priority_score',
 ] as const;
 
 type FeatureName = (typeof FEATURE_NAMES)[number];
 
 type ModelArtifact = {
   algorithm?: string;
+  feature_schema_version?: string;
   intercept?: number;
   weights?: Record<string, number>;
   normalization?: {
@@ -125,6 +123,7 @@ function sigmoid(value: number) {
 
 function validateArtifact(artifact: ModelArtifact | undefined) {
   if (!artifact || artifact.algorithm !== 'logistic_regression_gradient_descent') return false;
+  if (artifact.feature_schema_version !== FEATURE_SCHEMA_VERSION) return false;
   if (!Number.isFinite(Number(artifact.intercept))) return false;
   if (!artifact.weights || !artifact.normalization?.mean || !artifact.normalization?.std) return false;
 
@@ -137,16 +136,6 @@ function validateArtifact(artifact: ModelArtifact | undefined) {
 }
 
 function featureValue(payload: Record<string, unknown>, name: FeatureName) {
-  if (name === 'operational_priority_score') {
-    const direct = payload[name];
-    if (direct !== undefined) return finite(direct);
-    const context = payload.operational_context;
-    if (context && typeof context === 'object') {
-      return finite((context as Record<string, unknown>).priority_score);
-    }
-    return 0;
-  }
-
   if (name === 'has_returned_after_becoming_lead'
     || name === 'is_reengaged'
     || name === 'owner_assigned'
@@ -339,7 +328,7 @@ export async function GET(request: NextRequest) {
       const incumbentArtifact = incumbent.metrics?.artifact;
       const candidateArtifact = candidate.metrics?.artifact;
       if (!validateArtifact(incumbentArtifact) || !validateArtifact(candidateArtifact)) {
-        results.push({ organizationId: pair.organization_id, action: 'failed', reason: 'Incumbent or candidate model artifact is incompatible with the comparison scorer.' });
+        results.push({ organizationId: pair.organization_id, action: 'failed', reason: 'Incumbent or candidate model artifact uses an unsafe/legacy feature schema or is incompatible with the comparison scorer.' });
         continue;
       }
 
@@ -511,11 +500,14 @@ export async function GET(request: NextRequest) {
           reason,
           metrics: {
             evidence_contract: 'post_candidate_training_realized_outcomes',
+            feature_schema_version: FEATURE_SCHEMA_VERSION,
             newest_outcome_at: newestOutcomeAt,
             candidate_trained_at: candidate.trained_at,
             one_snapshot_per_lead: true,
             snapshot_selection: 'latest_snapshot_strictly_before_outcome',
             label_known_after_candidate_training_required: true,
+            target_adjacent_payment_features_excluded: true,
+            operational_priority_composite_excluded: true,
             thresholds: {
               minimum_shared_leads: MIN_SHARED_LEADS,
               minimum_positive: MIN_POSITIVE,
@@ -568,6 +560,9 @@ export async function GET(request: NextRequest) {
           outcomes_must_occur_after_candidate_training: true,
           labels_must_be_known_after_candidate_training: true,
           one_point_in_time_snapshot_per_lead: true,
+          feature_schema_version: FEATURE_SCHEMA_VERSION,
+          target_adjacent_payment_features_excluded: true,
+          operational_priority_composite_excluded: true,
           sparse_evidence_does_not_authorize_successor_promotion: true,
           comparison_worker_never_promotes_models: true,
         },
