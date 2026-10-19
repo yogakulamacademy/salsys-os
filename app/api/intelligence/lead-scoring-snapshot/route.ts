@@ -53,6 +53,25 @@ type OutcomeRow = {
   outcome_confidence: string | null;
 };
 
+type SignalQualityRow = {
+  organization_id: string;
+  lead_id: string;
+  linked_person_count: number | string | null;
+  linked_visitor_count: number | string | null;
+  linked_session_count: number | string | null;
+  linked_sessions_30d: number | string | null;
+  analytics_preference_count: number | string | null;
+  profiling_allowed: boolean | null;
+  web_behavior_usable_for_profiling: boolean | null;
+  analytics_evidence_state: string | null;
+  evidence_quality_band: string | null;
+  identity_evidence_state: string | null;
+  evidence_quality_reasons: string[] | null;
+  block_optional_tracking: boolean | null;
+  block_profiling: boolean | null;
+  restrict_processing: boolean | null;
+};
+
 function isAuthorized(request: NextRequest) {
   const authorization = request.headers.get('authorization');
   const secrets = [
@@ -69,9 +88,17 @@ function isAuthorized(request: NextRequest) {
   return secrets.some((secret) => authorization === `Bearer ${secret}`);
 }
 
-function finiteNumber(value: unknown) {
+function nullableFiniteNumber(value: unknown) {
+  if (value === null || value === undefined || value === '') return null;
   const parsed = Number(value);
-  return Number.isFinite(parsed) ? parsed : 0;
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function elapsedHours(timestamp: string | null) {
+  if (!timestamp) return null;
+  const parsed = Date.parse(timestamp);
+  if (!Number.isFinite(parsed)) return null;
+  return Math.max(0, Math.round((Date.now() - parsed) / 3600000));
 }
 
 export async function GET(request: NextRequest) {
@@ -86,26 +113,35 @@ export async function GET(request: NextRequest) {
     const admin = createAdminClient();
     const nowIso = new Date().toISOString();
 
-    const [{ data: leadData, error: leadError }, { data: outcomeData, error: outcomeError }] = await Promise.all([
+    const [
+      { data: leadData, error: leadError },
+      { data: outcomeData, error: outcomeError },
+      { data: qualityData, error: qualityError },
+    ] = await Promise.all([
       admin
         .from('v_r10_smart_lead_scoring_v1')
         .select('organization_id,lead_id,current_stage,lead_status,stored_intent,derived_intent,intent_confidence,engagement_score,behaviour_temperature,high_intent_events_7d,whatsapp_clicks_7d,reservation_starts_7d,payment_starts_7d,enquiry_clicks_7d,brochure_downloads_7d,sessions_7d,page_views_7d,days_since_last_visit,has_returned_after_becoming_lead,is_reengaged,payment_status,net_paid,outstanding_balance,operational_priority_score,operational_priority_band,next_action_code,owner_user_id,lead_created_at,last_contacted_at,last_inbound_at,last_outbound_at,next_followup_at'),
       admin
         .from('v_r10_lead_outcome_evidence_v1')
         .select('organization_id,lead_id,outcome_label,outcome_at,outcome_source,outcome_confidence'),
+      admin
+        .from('v_r10_lead_signal_quality_v1')
+        .select('organization_id,lead_id,linked_person_count,linked_visitor_count,linked_session_count,linked_sessions_30d,analytics_preference_count,profiling_allowed,web_behavior_usable_for_profiling,analytics_evidence_state,evidence_quality_band,identity_evidence_state,evidence_quality_reasons,block_optional_tracking,block_profiling,restrict_processing'),
     ]);
 
-    if (leadError || outcomeError) {
-      console.error('R10_LEAD_FEATURE_SOURCE_FAILED', { leadError, outcomeError });
+    if (leadError || outcomeError || qualityError) {
+      console.error('R10_LEAD_FEATURE_SOURCE_FAILED', { leadError, outcomeError, qualityError });
       return NextResponse.json(
-        { ok: false, error: 'Lead scoring sources could not be read.' },
+        { ok: false, error: 'Lead scoring or signal-quality sources could not be read.' },
         { status: 503, headers: { 'Cache-Control': 'no-store' } },
       );
     }
 
     const leads = (leadData ?? []) as SmartLeadRow[];
     const outcomes = (outcomeData ?? []) as OutcomeRow[];
+    const qualities = (qualityData ?? []) as SignalQualityRow[];
     const outcomeByLead = new Map(outcomes.map((row) => [`${row.organization_id}:${row.lead_id}`, row]));
+    const qualityByLead = new Map(qualities.map((row) => [`${row.organization_id}:${row.lead_id}`, row]));
 
     let labeledSnapshots = 0;
     let labelFailures = 0;
@@ -139,19 +175,30 @@ export async function GET(request: NextRequest) {
     const results: Array<{
       organizationId: string;
       leadId: string;
-      action: 'inserted' | 'skipped_recent' | 'skipped_terminal' | 'failed';
+      action: 'inserted' | 'skipped_recent' | 'skipped_terminal' | 'skipped_privacy_restricted' | 'failed';
       error?: string;
     }> = [];
 
     for (const lead of leads) {
+      const key = `${lead.organization_id}:${lead.lead_id}`;
       const stage = String(lead.current_stage || '');
-      const outcome = outcomeByLead.get(`${lead.organization_id}:${lead.lead_id}`);
+      const outcome = outcomeByLead.get(key);
+      const quality = qualityByLead.get(key);
 
       if (outcome?.outcome_label || !ACTIVE_STAGES.has(stage)) {
         results.push({
           organizationId: lead.organization_id,
           leadId: lead.lead_id,
           action: 'skipped_terminal',
+        });
+        continue;
+      }
+
+      if (!quality || quality.profiling_allowed !== true || quality.restrict_processing === true || quality.block_profiling === true) {
+        results.push({
+          organizationId: lead.organization_id,
+          leadId: lead.lead_id,
+          action: 'skipped_privacy_restricted',
         });
         continue;
       }
@@ -179,43 +226,59 @@ export async function GET(request: NextRequest) {
         continue;
       }
 
+      const webBehaviorUsable = quality.web_behavior_usable_for_profiling === true;
+      const webNumber = (value: unknown) => webBehaviorUsable ? nullableFiniteNumber(value) : null;
+      const webBoolean = (value: boolean | null) => webBehaviorUsable ? value : null;
+
       const featurePayload = {
         stage,
         lead_status: lead.lead_status,
         stored_intent: lead.stored_intent,
         derived_intent: lead.derived_intent,
         intent_confidence: lead.intent_confidence,
-        engagement_score: finiteNumber(lead.engagement_score),
-        behaviour_temperature: lead.behaviour_temperature,
-        high_intent_events_7d: finiteNumber(lead.high_intent_events_7d),
-        whatsapp_clicks_7d: finiteNumber(lead.whatsapp_clicks_7d),
-        reservation_starts_7d: finiteNumber(lead.reservation_starts_7d),
-        payment_starts_7d: finiteNumber(lead.payment_starts_7d),
-        enquiry_clicks_7d: finiteNumber(lead.enquiry_clicks_7d),
-        brochure_downloads_7d: finiteNumber(lead.brochure_downloads_7d),
-        sessions_7d: finiteNumber(lead.sessions_7d),
-        page_views_7d: finiteNumber(lead.page_views_7d),
-        days_since_last_visit: finiteNumber(lead.days_since_last_visit),
-        has_returned_after_becoming_lead: lead.has_returned_after_becoming_lead === true,
-        is_reengaged: lead.is_reengaged === true,
+        engagement_score: webNumber(lead.engagement_score),
+        behaviour_temperature: webBehaviorUsable ? lead.behaviour_temperature : null,
+        high_intent_events_7d: webNumber(lead.high_intent_events_7d),
+        whatsapp_clicks_7d: webNumber(lead.whatsapp_clicks_7d),
+        reservation_starts_7d: webNumber(lead.reservation_starts_7d),
+        payment_starts_7d: webNumber(lead.payment_starts_7d),
+        enquiry_clicks_7d: webNumber(lead.enquiry_clicks_7d),
+        brochure_downloads_7d: webNumber(lead.brochure_downloads_7d),
+        sessions_7d: webNumber(lead.sessions_7d),
+        page_views_7d: webNumber(lead.page_views_7d),
+        days_since_last_visit: webNumber(lead.days_since_last_visit),
+        has_returned_after_becoming_lead: webBoolean(lead.has_returned_after_becoming_lead),
+        is_reengaged: webBoolean(lead.is_reengaged),
         payment_status: lead.payment_status,
-        net_paid: finiteNumber(lead.net_paid),
-        outstanding_balance: finiteNumber(lead.outstanding_balance),
+        net_paid: nullableFiniteNumber(lead.net_paid),
+        outstanding_balance: nullableFiniteNumber(lead.outstanding_balance),
         owner_assigned: Boolean(lead.owner_user_id),
-        lead_age_hours: lead.lead_created_at
-          ? Math.max(0, Math.round((Date.now() - Date.parse(lead.lead_created_at)) / 3600000))
-          : null,
-        hours_since_last_contact: lead.last_contacted_at
-          ? Math.max(0, Math.round((Date.now() - Date.parse(lead.last_contacted_at)) / 3600000))
-          : null,
-        hours_since_last_inbound: lead.last_inbound_at
-          ? Math.max(0, Math.round((Date.now() - Date.parse(lead.last_inbound_at)) / 3600000))
-          : null,
+        lead_age_hours: elapsedHours(lead.lead_created_at),
+        hours_since_last_contact: elapsedHours(lead.last_contacted_at),
+        hours_since_last_inbound: elapsedHours(lead.last_inbound_at),
         followup_due: Boolean(lead.next_followup_at && Date.parse(lead.next_followup_at) <= Date.now()),
         operational_context: {
-          priority_score: finiteNumber(lead.operational_priority_score),
+          priority_score: nullableFiniteNumber(lead.operational_priority_score),
           priority_band: lead.operational_priority_band,
           next_action_code: lead.next_action_code,
+        },
+        feature_availability: {
+          profiling_allowed: true,
+          web_behavior_usable: webBehaviorUsable,
+          crm_context_available: true,
+          transaction_context_available: true,
+        },
+        evidence_quality: {
+          band: quality.evidence_quality_band,
+          analytics_evidence_state: quality.analytics_evidence_state,
+          identity_evidence_state: quality.identity_evidence_state,
+          reasons: quality.evidence_quality_reasons ?? [],
+          linked_person_count: nullableFiniteNumber(quality.linked_person_count),
+          linked_visitor_count: nullableFiniteNumber(quality.linked_visitor_count),
+          linked_session_count: nullableFiniteNumber(quality.linked_session_count),
+          linked_sessions_30d: nullableFiniteNumber(quality.linked_sessions_30d),
+          analytics_preference_count: nullableFiniteNumber(quality.analytics_preference_count),
+          optional_tracking_restricted: quality.block_optional_tracking === true,
         },
       };
 
@@ -224,7 +287,7 @@ export async function GET(request: NextRequest) {
         .insert({
           organization_id: lead.organization_id,
           lead_id: lead.lead_id,
-          snapshot_version: 'r10-lead-features-v1',
+          snapshot_version: 'r10-lead-features-safe-v2',
           feature_payload: featurePayload,
           observed_stage: lead.current_stage,
           observed_status: lead.lead_status,
@@ -252,6 +315,7 @@ export async function GET(request: NextRequest) {
     const inserted = results.filter((row) => row.action === 'inserted').length;
     const skippedRecent = results.filter((row) => row.action === 'skipped_recent').length;
     const skippedTerminal = results.filter((row) => row.action === 'skipped_terminal').length;
+    const skippedPrivacyRestricted = results.filter((row) => row.action === 'skipped_privacy_restricted').length;
     const failed = results.filter((row) => row.action === 'failed').length + labelFailures;
 
     return NextResponse.json(
@@ -261,6 +325,7 @@ export async function GET(request: NextRequest) {
         inserted,
         skippedRecent,
         skippedTerminal,
+        skippedPrivacyRestricted,
         labeledSnapshots,
         labelFailures,
         failed,
@@ -269,7 +334,11 @@ export async function GET(request: NextRequest) {
           terminal_leads_are_not_snapshotted_after_outcome: true,
           labels_only_apply_to_pre_outcome_snapshots: true,
           unlabeled_leads_remain_unlabeled: true,
+          privacy_restricted_leads_are_not_profiled: true,
+          missing_or_withheld_web_evidence_is_null_not_zero: true,
+          web_behavior_is_used_only_when_signal_quality_marks_it_usable: true,
           probability_generation_is_not_performed_here: true,
+          snapshot_version: 'r10-lead-features-safe-v2',
         },
       },
       { status: failed === 0 ? 200 : 207, headers: { 'Cache-Control': 'no-store' } },
