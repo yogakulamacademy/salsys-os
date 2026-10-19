@@ -160,6 +160,14 @@ Using Salsys Universal Consent UI is optional. A tenant can keep CookieYes, OneT
 
 Do not run two visual consent systems that make conflicting decisions for the same purposes.
 
+## Scope with third-party tags
+
+The built-in consent UI directly governs Salsys optional tracking purposes. It does **not** automatically prevent independently installed Google Analytics, Google Ads, Meta Pixel, Hotjar, or other third-party scripts from running.
+
+If a tenant uses those tools, their tag/CMP configuration must be connected to the same visitor choice. The `salsys:consent-changed` event can be used as an integration signal, or an external CMP can remain the single visual authority and submit the same decisions to Salsys.
+
+Installing this banner alone must not be represented as full-site cookie/legal compliance when unrelated third-party tags are still able to run before consent.
+
 ## Persistence and receipts
 
 The browser SDK stores the effective privacy state in first-party local storage under `salsys_privacy_v1`. The authoritative consent receipt is recorded server-side by `/api/privacy/consent/v1`, including tenant/source resolution, purpose, decision, event time, anonymous visitor, GPC evidence, and configured notice version.
@@ -185,4 +193,5 @@ Before calling a tenant cutover complete, verify:
 7. a withdrawal stops future optional analytics behavior;
 8. policy links and tenant copy are correct;
 9. the banner works on mobile and desktop without blocking core site actions;
-10. only one CMP/consent authority is active for Salsys purposes.
+10. only one CMP/consent authority is active for Salsys purposes;
+11. independently installed third-party tags do not bypass the visitor's choice.
