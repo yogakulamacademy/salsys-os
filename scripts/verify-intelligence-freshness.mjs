@@ -5,6 +5,7 @@ import process from 'node:process';
 const root = process.cwd();
 const migrationPath = 'supabase/migrations/20261020100000_event_intelligence_prediction_freshness_v1.sql';
 const sweepPath = 'supabase/migrations/20261020100100_event_intelligence_prediction_expiry_sweep_v1.sql';
+const actionablePath = 'supabase/migrations/20261020100200_event_intelligence_actionable_freshness_v1.sql';
 
 function fail(message) {
   console.error(`\n[intelligence-freshness] FAIL: ${message}`);
@@ -19,6 +20,7 @@ function read(relativePath) {
 
 const sql = read(migrationPath);
 const sweep = read(sweepPath);
+const actionable = read(actionablePath);
 
 const checks = [
   ['event_intelligence_prediction_max_feature_age_v1', 'central feature-age policy'],
@@ -52,6 +54,18 @@ for (const [needle, label] of [
   if (!sweep.includes(needle)) fail(`Expiry-sweep migration is missing ${label} (${needle}).`);
 }
 
+for (const [needle, label] of [
+  ['v_feature_fresh_until := v_feature_observed_at + v_max_feature_age', 'feature freshness deadline'],
+  ['v_expires_at := v_feature_fresh_until', 'prediction expiry capped to evidence lifetime'],
+  ["'feature_fresh_until'", 'freshness deadline provenance'],
+  ["'remaining_fresh_seconds_at_generation'", 'remaining evidence lifetime provenance'],
+  ['now()-f.observed_at>public.event_intelligence_prediction_max_feature_age_v1', 'action-time stale sweep'],
+  ['current_feature_age_seconds', 'current evidence age health metric'],
+  ['f.observed_at>now()+interval \'5 minutes\'', 'action-time future evidence guard'],
+]) {
+  if (!actionable.includes(needle)) fail(`Actionable-freshness migration is missing ${label} (${needle}).`);
+}
+
 if (!sql.includes("'calibrated_probability',false")) {
   fail('Deterministic ranking predictions must remain explicitly non-probabilistic.');
 }
@@ -60,4 +74,4 @@ if (!sql.includes("'feature_freshness_guard',true")) {
   fail('Prediction refresh response must disclose that the freshness guard is active.');
 }
 
-console.log('[intelligence-freshness] PASS: feature freshness, stale suppression, active expiry sweeping, and freshness-health contracts verified.');
+console.log('[intelligence-freshness] PASS: feature freshness, action-time evidence lifetime, stale suppression, expiry sweeping, and freshness-health contracts verified.');
