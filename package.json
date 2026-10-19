@@ -6,7 +6,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "verify:tracking-sdk": "node scripts/verify-tracking-sdk.mjs"
   },
   "dependencies": {
     "@google-analytics/data": "^7.2.0",
