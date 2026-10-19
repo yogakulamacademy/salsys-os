@@ -34,10 +34,6 @@ begin
     raise exception 'organization not found';
   end if;
 
-  -- ---------------------------------------------------------------------------
-  -- Session intent: deterministic behavior score, explicitly not a calibrated
-  -- probability. Converted sessions are excluded from active propensity scoring.
-  -- ---------------------------------------------------------------------------
   for r in
     select *
     from public.event_intelligence_feature_state
@@ -86,9 +82,6 @@ begin
     v_count_session:=v_count_session+1;
   end loop;
 
-  -- ---------------------------------------------------------------------------
-  -- Page traffic + SEO opportunity signals.
-  -- ---------------------------------------------------------------------------
   for r in
     select *
     from public.event_intelligence_feature_state
@@ -149,10 +142,6 @@ begin
     end if;
   end loop;
 
-  -- ---------------------------------------------------------------------------
-  -- Paid media: distinguish attribution health from campaign performance.
-  -- Zero attributed leads is never treated as proof that the campaign is bad.
-  -- ---------------------------------------------------------------------------
   for r in
     select *
     from public.event_intelligence_feature_state
@@ -196,12 +185,10 @@ begin
     end if;
   end loop;
 
-  -- Bridge the existing lead model into the universal prediction ledger without
-  -- pretending that a newer model exists. We reuse its persisted probability,
-  -- confidence and explanation exactly as current evidence.
   for r in
     select distinct on (p.lead_id)
-      p.*,m.version_key as model_version_key
+      p.*,
+      case when m.id is null then null else concat_ws(':',m.model_key,m.version) end as model_version_key
     from public.lead_scoring_predictions p
     left join public.lead_scoring_model_versions m on m.id=p.model_version_id and m.organization_id=p.organization_id
     where p.organization_id=p_organization_id
