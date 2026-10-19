@@ -16,6 +16,12 @@ export function TrackerSnippet() {
   src="${origin}/salsys-intelligence.js"
   data-consent-mode="required"
   defer>
+</script>
+<script
+  src="${origin}/salsys-consent.js"
+  data-consent-banner="auto"
+  data-consent-settings="floating"
+  defer>
 </script>`,
     [origin],
   );
