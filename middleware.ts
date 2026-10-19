@@ -14,6 +14,7 @@ const PUBLIC_EXACT_PATHS = new Set([
   "/api/analytics/meta-ads/sync",
   "/api/admissions/auto-tasks",
   "/api/automation/runtime-scheduler",
+  "/api/automation/runtime-scheduler/controlled-test",
   "/api/conversion-feedback/run",
   "/api/whatsapp/webhook",
   "/api/instagram/webhook",
@@ -119,197 +120,111 @@ function authConfigurationError(pathname: string) {
   if (pathname.startsWith("/api/")) {
     return NextResponse.json({ ok: false, error: "CRM authentication is not configured." }, { status: 503 });
   }
-  return new NextResponse("CRM authentication is not configured.", {
-    status: 503,
-    headers: { "Content-Type": "text/plain; charset=utf-8" },
-  });
-}
-
-function accessDenied(pathname: string, message: string) {
-  if (pathname.startsWith("/api/")) {
-    return NextResponse.json({ ok: false, error: message }, { status: 403 });
-  }
-  return new NextResponse(message, {
-    status: 403,
-    headers: { "Content-Type": "text/plain; charset=utf-8" },
-  });
+  return new NextResponse("CRM authentication is not configured.", { status: 503 });
 }
 
 export async function middleware(request: NextRequest) {
-  const localMockMode =
-    process.env.NODE_ENV !== "production" &&
-    process.env.NEXT_PUBLIC_USE_MOCK_DATA !== "false";
+  const { pathname } = request.nextUrl;
 
-  if (localMockMode) return NextResponse.next();
+  if (isPublicPath(pathname)) {
+    return NextResponse.next();
+  }
 
-  const pathname = normalizePathname(request.nextUrl.pathname);
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
-  if (isPublicPath(pathname)) return NextResponse.next();
+  if (!supabaseUrl || !supabaseAnonKey) {
+    return authConfigurationError(pathname);
+  }
 
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const key =
-    process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ||
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  let response = NextResponse.next({
+    request: {
+      headers: request.headers,
+    },
+  });
 
-  if (!url || !key) return authConfigurationError(pathname);
-
-  let response = NextResponse.next({ request });
-
-  const supabase = createServerClient(url, key, {
+  const supabase = createServerClient(supabaseUrl, supabaseAnonKey, {
     cookies: {
       getAll() {
         return request.cookies.getAll();
       },
       setAll(cookiesToSet) {
         cookiesToSet.forEach(({ name, value }) => request.cookies.set(name, value));
-        response = NextResponse.next({ request });
-        cookiesToSet.forEach(({ name, value, options }) => {
-          response.cookies.set(name, value, options);
+        response = NextResponse.next({
+          request: {
+            headers: request.headers,
+          },
         });
+        cookiesToSet.forEach(({ name, value, options }) =>
+          response.cookies.set(name, value, options),
+        );
       },
     },
   });
 
-  const { data: claimsResult } = await supabase.auth.getClaims();
-  const userId = claimsResult?.claims?.sub ?? null;
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
 
-  if (
+  const publicAuthPath =
     pathname === "/login" ||
     isTenantLoginPath(pathname) ||
-    isTenantForgotPasswordPath(pathname)
-  ) {
+    pathname === "/forgot-password" ||
+    isTenantForgotPasswordPath(pathname) ||
+    pathname === "/reset-password" ||
+    isTenantResetPasswordPath(pathname);
+
+  if (!user) {
+    if (publicAuthPath) return response;
+    if (pathname.startsWith("/api/")) {
+      return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
+    }
+    const loginUrl = request.nextUrl.clone();
+    loginUrl.pathname = "/login";
+    loginUrl.searchParams.set("next", `${pathname}${request.nextUrl.search}`);
+    const redirectResponse = NextResponse.redirect(loginUrl);
+    response.cookies.getAll().forEach((cookie) => redirectResponse.cookies.set(cookie));
+    return redirectResponse;
+  }
+
+  if (isPasswordResetCompletionPath(pathname)) {
     return response;
   }
 
-  if (!userId) {
-    return redirectWithAuthCookies(request, response, "/login", { next: pathname });
+  if (publicAuthPath) {
+    return redirectWithAuthCookies(request, response, "/workspace");
   }
 
-  const { data: profile, error: profileError } = await supabase
-    .from("profiles")
-    .select("role,active")
-    .eq("id", userId)
-    .maybeSingle();
+  const { data: workspaceContext, error: workspaceError } = await supabase.rpc(
+    "get_current_workspace_context_v1",
+  );
 
-  if (profileError || !profile || profile.active !== true) {
+  if (workspaceError || !workspaceContext) {
     if (pathname.startsWith("/api/")) {
-      return NextResponse.json({ ok: false, error: "CRM access is disabled." }, { status: 403 });
+      return NextResponse.json({ ok: false, error: "Workspace context unavailable." }, { status: 403 });
     }
-    return redirectWithAuthCookies(request, response, "/login", { error: "access-disabled" });
+    return redirectWithAuthCookies(request, response, "/workspace");
   }
 
-  const cookieOrganizationId =
-    request.cookies.get(ACTIVE_WORKSPACE_COOKIE)?.value?.trim() ?? "";
+  const context = Array.isArray(workspaceContext) ? workspaceContext[0] : workspaceContext;
+  const role = String(context?.role ?? "").toLowerCase();
 
-  if (cookieOrganizationId) {
-    const { error: bindingError } = await supabase.rpc(
-      "bind_current_tenant_session",
-      { p_organization_id: cookieOrganizationId },
-    );
-
-    if (bindingError) {
-      return redirectWithAuthCookies(request, response, "/login", {
-        error: "tenant-context-invalid",
-      });
-    }
-  }
-
-  const { data: activeOrganizationId, error: tenantContextError } =
-    await supabase.rpc("current_tenant_organization_id");
-
-  if (tenantContextError) {
-    return accessDenied(pathname, "Unable to resolve tenant context.");
-  }
-
-  if (!activeOrganizationId) {
+  if (!role) {
     if (pathname.startsWith("/api/")) {
-      return NextResponse.json(
-        {
-          ok: false,
-          code: "tenant_context_required",
-          error:
-            "Tenant context is not bound. Sign in through your organization-specific login link.",
-        },
-        { status: 409 },
-      );
+      return NextResponse.json({ ok: false, error: "Workspace access denied." }, { status: 403 });
     }
-    return redirectWithAuthCookies(request, response, "/login", {
-      error: "tenant-context-required",
-    });
+    return redirectWithAuthCookies(request, response, "/workspace");
   }
 
-  // Recovery completion is allowed only after Supabase has authenticated the
-  // recovery token and the server has bound the session to the user's one
-  // active organization. Normal CRM role authorization resumes everywhere else.
-  if (isPasswordResetCompletionPath(pathname)) return response;
-
-  const oauthProvider = OAUTH_CALLBACK_PROVIDER_BY_PATH[pathname];
-
-  if (oauthProvider) {
-    const state = request.nextUrl.searchParams.get("state")?.trim() ?? "";
-    if (!state) {
-      return redirectWithAuthCookies(request, response, "/settings/integrations", {
-        error: "integration-oauth-state-missing",
-      });
-    }
-
-    const { data: stateMatches, error: stateMatchError } = await supabase.rpc(
-      "oauth_state_matches_current_tenant",
-      {
-        p_provider: oauthProvider,
-        p_state: state,
-      },
-    );
-
-    if (stateMatchError || stateMatches !== true) {
-      return redirectWithAuthCookies(request, response, "/settings/integrations", {
-        error: "integration-oauth-tenant-mismatch",
-      });
-    }
+  if (role === "employee" && !isEmployeeAllowedPage(pathname)) {
+    return redirectWithAuthCookies(request, response, "/dashboard");
   }
 
-  if (pathname === "/workspace" || pathname === "/api/workspace") {
-    return response;
+  if (role !== "admin" && isAdminOnlyPage(pathname)) {
+    return redirectWithAuthCookies(request, response, "/dashboard");
   }
 
-  const role = String(profile.role ?? "");
-
-  if (role === "admin") return response;
-
-  if (role === "manager") {
-    if (isAdminOnlyPage(pathname)) {
-      return redirectWithAuthCookies(request, response, "/dashboard", {
-        restricted: "1",
-      });
-    }
-    return response;
-  }
-
-  if (role === "admissions") {
-    if (pathname.startsWith("/api/")) {
-      return NextResponse.json(
-        { ok: false, error: "This API route is not available to Admissions users." },
-        { status: 403 },
-      );
-    }
-
-    if (isEmployeeAllowedPage(pathname)) return response;
-
-    return redirectWithAuthCookies(request, response, "/dashboard", {
-      restricted: "1",
-    });
-  }
-
-  if (pathname.startsWith("/api/")) {
-    return NextResponse.json(
-      { ok: false, error: "CRM role is not authorized." },
-      { status: 403 },
-    );
-  }
-
-  return redirectWithAuthCookies(request, response, "/login", {
-    error: "role-not-authorized",
-  });
+  return response;
 }
 
 export const config = {
