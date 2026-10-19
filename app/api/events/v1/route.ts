@@ -32,6 +32,12 @@ function json(
   });
 }
 
+function gpcEnabled(request: NextRequest, context: Record<string, unknown>) {
+  if (request.headers.get('sec-gpc') === '1') return true;
+  const value = context.gpc;
+  return value === true || value === 1 || value === '1';
+}
+
 export async function POST(request: NextRequest) {
   const sourceKey = request.headers.get('x-salsys-source-key');
   const source = await authenticateServerTrackingSource(
@@ -82,6 +88,44 @@ export async function POST(request: NextRequest) {
   try {
     const event = sanitizeGenericTrackingEvent(await request.json());
     const admin = createAdminClient();
+    const gpc = gpcEnabled(request, event.context);
+
+    // Server-side relays are allowed to deliver browser-originated events, but
+    // they do not bypass privacy policy. The server remains the authoritative
+    // privacy gate for optional analytics/advertising events.
+    const { data: privacyGate, error: privacyGateError } = await admin.rpc(
+      'privacy_gate_tracking_event_v1',
+      {
+        p_organization_id: source.organizationId,
+        p_event_name: event.eventName,
+        p_person_id: null,
+        p_lead_id: null,
+        p_anonymous_visitor_id: event.anonymousVisitorId,
+        p_gpc: gpc,
+      },
+    );
+
+    if (privacyGateError) {
+      throw new Error(`Privacy gate failed: ${privacyGateError.message}`);
+    }
+
+    if (!privacyGate?.allowed) {
+      return json(
+        {
+          ok: true,
+          accepted: false,
+          privacy_blocked: true,
+          reason: privacyGate?.reason ?? 'privacy_policy_blocked',
+          purpose: privacyGate?.mapped_purpose ?? privacyGate?.purpose ?? null,
+          received_at: new Date().toISOString(),
+        },
+        200,
+        {
+          'X-RateLimit-Limit': String(rate.limit),
+          'X-RateLimit-Remaining': String(rate.remaining),
+        },
+      );
+    }
 
     const forwardedFor = request.headers.get('x-forwarded-for');
     const ipPresent = Boolean(forwardedFor?.trim());
@@ -102,6 +146,7 @@ export async function POST(request: NextRequest) {
         p_payload: event.payload,
         p_context: {
           ...event.context,
+          gpc,
           user_agent: request.headers.get('user-agent'),
           ip_present: ipPresent,
         },
@@ -109,6 +154,8 @@ export async function POST(request: NextRequest) {
           ...event.metadata,
           adapter: 'app/api/events/v1',
           source_key: source.sourceKey,
+          privacy_gate_reason: privacyGate?.reason ?? null,
+          privacy_purpose: privacyGate?.mapped_purpose ?? privacyGate?.purpose ?? null,
         },
         p_schema_version: event.schemaVersion,
         p_is_browser: false,
@@ -157,6 +204,7 @@ export async function POST(request: NextRequest) {
         ok: true,
         accepted,
         duplicate,
+        privacy_blocked: false,
         quarantined: !accepted,
         raw_event_id: rawEventId,
         event_family: data?.event_family ?? null,
