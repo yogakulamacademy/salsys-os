@@ -109,8 +109,14 @@ if (!serverRoute.includes('ingest_tracking_event_v1')) {
 if (!identifyRoute.includes('authenticateServerTrackingSource')) {
   fail('Identity handoff must require an authenticated tracking source.');
 }
-if (!identifyRoute.includes('attach_web_identity_to_lead')) {
-  fail('Identity handoff must preserve the canonical visitor/session-to-lead attachment flow.');
+if (!identifyRoute.includes('attach_visitor_journey_to_lead')) {
+  fail('Identity handoff must preserve the canonical exact-session visitor-to-lead attachment flow.');
+}
+if (!identifyRoute.includes(".eq('session_key', sessionKey)")) {
+  fail('Identity handoff must verify the exact session key.');
+}
+if (!identifyRoute.includes(".eq('anonymous_visitor_id', visitorId)")) {
+  fail('Identity handoff must verify the anonymous visitor against the exact session.');
 }
 if (!consentRoute.includes('privacy')) {
   fail('Privacy consent endpoint appears to have lost its privacy handling contract.');
