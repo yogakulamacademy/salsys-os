@@ -67,7 +67,6 @@ const trackerChecks = [
   ['web.cta_clicked', 'CTA event'],
   ['web.form_started', 'form-start event'],
   ['web.form_submitted', 'form-submit event'],
-  ['data-salsys-lead-form', 'lead-form marker'],
   ['salsys_visitor_id', 'neutral visitor field'],
   ['salsys_session_id', 'neutral session field'],
   ['gclid', 'Google click ID capture'],
@@ -81,9 +80,11 @@ for (const [needle, label] of trackerChecks) {
 
 const intelligenceChecks = [
   ['SalsysIntelligence', 'product-facing global'],
+  ['data-salsys-lead-form', 'neutral lead-form marker'],
+  ['data-yk-lead-form', 'legacy lead-form migration marker'],
+  ['FORM_MODE', 'lead-form tracking mode'],
   ['instagram_click', 'Instagram CTA compatibility'],
   ['enrollment_cta_click', 'enrollment CTA compatibility'],
-  ['data-yk-lead-form', 'legacy lead-form migration marker'],
   ['yk:consent', 'legacy consent migration bridge'],
   ['yk_tracking_ready', 'controlled legacy dataLayer readiness bridge'],
 ];
