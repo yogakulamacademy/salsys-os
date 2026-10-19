@@ -8,6 +8,7 @@ export const maxDuration = 60;
 
 const MODEL_KEY = 'conversion_probability';
 const SCORE_TYPE = 'conversion_probability';
+const FEATURE_SCHEMA_VERSION = 'r10-lead-features-safe-v1';
 const PREDICTION_TTL_MS = 6 * 60 * 60 * 1000;
 const ACTIVE_STAGES = new Set(['new', 'contacted', 'engaged', 'qualified', 'high_intent', 'payment_pending', 'nurture', 'not_now']);
 
@@ -16,7 +17,6 @@ const FEATURE_NAMES = [
   'high_intent_events_7d',
   'whatsapp_clicks_7d',
   'reservation_starts_7d',
-  'payment_starts_7d',
   'enquiry_clicks_7d',
   'brochure_downloads_7d',
   'sessions_7d',
@@ -24,20 +24,18 @@ const FEATURE_NAMES = [
   'days_since_last_visit',
   'has_returned_after_becoming_lead',
   'is_reengaged',
-  'net_paid',
-  'outstanding_balance',
   'owner_assigned',
   'lead_age_hours',
   'hours_since_last_contact',
   'hours_since_last_inbound',
   'followup_due',
-  'operational_priority_score',
 ] as const;
 
 type FeatureName = (typeof FEATURE_NAMES)[number];
 
 type ModelArtifact = {
   algorithm?: string;
+  feature_schema_version?: string;
   intercept?: number;
   weights?: Record<string, number>;
   normalization?: {
@@ -71,7 +69,6 @@ type LeadRow = {
   high_intent_events_7d: number | string | null;
   whatsapp_clicks_7d: number | string | null;
   reservation_starts_7d: number | string | null;
-  payment_starts_7d: number | string | null;
   enquiry_clicks_7d: number | string | null;
   brochure_downloads_7d: number | string | null;
   sessions_7d: number | string | null;
@@ -79,9 +76,6 @@ type LeadRow = {
   days_since_last_visit: number | string | null;
   has_returned_after_becoming_lead: boolean | null;
   is_reengaged: boolean | null;
-  net_paid: number | string | null;
-  outstanding_balance: number | string | null;
-  priority_score: number | string | null;
   owner_user_id: string | null;
   lead_created_at: string | null;
   last_contacted_at: string | null;
@@ -145,7 +139,6 @@ function buildFeatureValues(lead: LeadRow): Record<FeatureName, number> {
     high_intent_events_7d: finite(lead.high_intent_events_7d),
     whatsapp_clicks_7d: finite(lead.whatsapp_clicks_7d),
     reservation_starts_7d: finite(lead.reservation_starts_7d),
-    payment_starts_7d: finite(lead.payment_starts_7d),
     enquiry_clicks_7d: finite(lead.enquiry_clicks_7d),
     brochure_downloads_7d: finite(lead.brochure_downloads_7d),
     sessions_7d: finite(lead.sessions_7d),
@@ -153,19 +146,17 @@ function buildFeatureValues(lead: LeadRow): Record<FeatureName, number> {
     days_since_last_visit: finite(lead.days_since_last_visit),
     has_returned_after_becoming_lead: bool(lead.has_returned_after_becoming_lead),
     is_reengaged: bool(lead.is_reengaged),
-    net_paid: finite(lead.net_paid),
-    outstanding_balance: finite(lead.outstanding_balance),
     owner_assigned: lead.owner_user_id ? 1 : 0,
     lead_age_hours: hoursSince(lead.lead_created_at),
     hours_since_last_contact: hoursSince(lead.last_contacted_at),
     hours_since_last_inbound: hoursSince(lead.last_inbound_at),
     followup_due: lead.next_followup_at && Date.parse(lead.next_followup_at) <= Date.now() ? 1 : 0,
-    operational_priority_score: finite(lead.priority_score),
   };
 }
 
 function validateArtifact(artifact: ModelArtifact | undefined) {
   if (!artifact || artifact.algorithm !== 'logistic_regression_gradient_descent') return false;
+  if (artifact.feature_schema_version !== FEATURE_SCHEMA_VERSION) return false;
   if (!Number.isFinite(Number(artifact.intercept))) return false;
   if (!artifact.weights || !artifact.normalization?.mean || !artifact.normalization?.std) return false;
 
@@ -244,7 +235,7 @@ export async function GET(request: NextRequest) {
         .select('organization_id,prediction_generation_allowed,predictive_readiness_status,readiness_reason'),
       admin
         .from('v_lead_sales_intelligence')
-        .select('organization_id,lead_id,current_stage,lead_status,engagement_score,high_intent_events_7d,whatsapp_clicks_7d,reservation_starts_7d,payment_starts_7d,enquiry_clicks_7d,brochure_downloads_7d,sessions_7d,page_views_7d,days_since_last_visit,has_returned_after_becoming_lead,is_reengaged,net_paid,outstanding_balance,priority_score,owner_user_id,lead_created_at,last_contacted_at,last_inbound_at,next_followup_at'),
+        .select('organization_id,lead_id,current_stage,lead_status,engagement_score,high_intent_events_7d,whatsapp_clicks_7d,reservation_starts_7d,enquiry_clicks_7d,brochure_downloads_7d,sessions_7d,page_views_7d,days_since_last_visit,has_returned_after_becoming_lead,is_reengaged,owner_user_id,lead_created_at,last_contacted_at,last_inbound_at,next_followup_at'),
       admin
         .from('lead_scoring_model_evaluations')
         .select('model_version_id,evaluated_at,sample_count,roc_auc,brier_score,expected_calibration_error')
@@ -343,7 +334,7 @@ export async function GET(request: NextRequest) {
           organizationId: lead.organization_id,
           leadId: lead.lead_id,
           action: 'failed',
-          reason: 'Active model artifact is missing or incompatible with the production scorer.',
+          reason: 'Active model artifact is missing, uses an unsafe/legacy feature schema, or is incompatible with the production scorer.',
           modelVersionId: model.id,
         });
         continue;
@@ -365,6 +356,7 @@ export async function GET(request: NextRequest) {
         confidence_band: confidenceBand,
         explanation: {
           model_version: model.version,
+          feature_schema_version: FEATURE_SCHEMA_VERSION,
           target: artifact?.target ?? 'eventual_positive_terminal_outcome',
           top_contributors: scored.topContributors,
           model_input: scored.values,
@@ -430,6 +422,9 @@ export async function GET(request: NextRequest) {
           current_predictive_readiness_required: true,
           deterministic_fallback_is_not_reported_as_probability: true,
           predictions_expire_after_hours: PREDICTION_TTL_MS / 3600000,
+          feature_schema_version: FEATURE_SCHEMA_VERSION,
+          target_adjacent_payment_features_excluded: true,
+          operational_priority_composite_excluded: true,
           probability_intervals_are_not_fabricated: true,
           explanation_is_observational_model_contribution_not_causality: true,
         },
