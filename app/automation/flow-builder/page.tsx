@@ -74,7 +74,7 @@ export default async function FlowBuilderPage({
           .from('automation_workflows')
           .select('id,name,status,current_draft_version,current_published_version,runtime_flow_enabled')
           .eq('organization_id', organizationId)
-          .eq('status', 'active')
+          .neq('status', 'archived')
           .order('updated_at', { ascending: false })
           .limit(1)
           .maybeSingle(),
@@ -153,7 +153,7 @@ export default async function FlowBuilderPage({
       {!canManage ? (
         <div className="card-pad text-sm text-slate-600">Organization admin access is required.</div>
       ) : !workflow ? (
-        <div className="card-pad text-sm text-slate-600">An active Smart Trigger workflow is required.</div>
+        <div className="card-pad text-sm text-slate-600">Create a non-archived Smart Trigger workflow before editing its draft flow.</div>
       ) : nodes.length === 0 ? (
         <div className="card-pad">
           <div className="flex items-start gap-3">
@@ -173,7 +173,7 @@ export default async function FlowBuilderPage({
               <div>
                 <h2 className="font-bold text-slate-950">{workflow.name}</h2>
                 <p className="mt-1 text-sm text-slate-500">
-                  Draft Version {draftVersion} · {nodes.length} nodes · {edges.length} edges
+                  {workflow.status.replaceAll('_', ' ')} · Draft Version {draftVersion} · {nodes.length} nodes · {edges.length} edges
                   {workflow.current_published_version ? ` · Published Version ${workflow.current_published_version}` : ''}
                 </p>
               </div>
