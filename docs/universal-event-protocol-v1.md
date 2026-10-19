@@ -15,7 +15,7 @@ Any trusted runtime that can make HTTPS requests can emit events:
 
 ```text
 POST /api/events/v1
-X-Salsys-Source: <source-key>
+X-Salsys-Source-Key: <source-key>
 Authorization: Bearer <tracking-source-secret>
 Content-Type: application/json
 ```
@@ -28,6 +28,30 @@ Browser collection uses origin-resolved authorization and never receives a serve
 POST /api/events/browser/v1
 Content-Type: application/json
 ```
+
+### Trusted identity handoff
+
+Known CRM identity is attached to an existing anonymous journey through the server-only identity endpoint:
+
+```text
+POST /api/events/identify/v1
+X-Salsys-Source-Key: <source-key>
+Authorization: Bearer <tracking-source-secret>
+Content-Type: application/json
+```
+
+Example body:
+
+```json
+{
+  "event_id": "identify_01...",
+  "lead_id": "<crm-lead-id>",
+  "anonymous_visitor_id": "v_01...",
+  "session_key": "s_01..."
+}
+```
+
+Identity handoff is intentionally exact-session scoped. The supplied session must already exist inside the authenticated tracking source tenant and must belong to the supplied anonymous visitor before it can be attached to the lead.
 
 The universal integration boundary is **HTTPS + JSON**.
 
@@ -128,6 +152,7 @@ Universal Event Protocol                 canonical contract
         |
         +-- Browser SDK                  direct website/app instrumentation
         +-- HTTPS Event API              every server language/platform
+        +-- trusted identity API         exact-session anonymous -> known handoff
         +-- first-party transport        optional customer-domain relay/proxy
         +-- runtime SDKs                 convenience wrappers, optional
 ```
@@ -189,6 +214,8 @@ event_id
 
 Historical identifiers such as Yogakulam migration aliases may be read during migration, but they are not part of the universal contract.
 
+A browser ID alone must never become permanent known identity. Trusted identity handoff requires the authenticated tenant, known lead, anonymous visitor and exact existing session to agree.
+
 ## 9. Privacy contract
 
 The SDK/protocol must support purpose-specific consent, denial, withdrawal and Global Privacy Control handling.
@@ -197,13 +224,19 @@ Browser collection must fail closed when the configured policy requires prior co
 
 No browser SDK may serialize arbitrary form values, passwords, card data, authorization headers, cookies, secrets or browser PII by default.
 
-## 10. Source of truth
+## 10. Compatibility and migration
+
+The Universal Tracking Intelligence SDK may temporarily read established tenant-specific visitor/session/consent aliases during a controlled migration so returning journeys are not silently reset.
+
+Compatibility logic must translate those values into the neutral universal vocabulary. New integrations must not introduce tenant-specific names into the canonical contract.
+
+## 11. Source of truth
 
 PostgreSQL `raw_events` remains immutable event evidence and the canonical event source of truth.
 
 OpenSearch is optional, derived and rebuildable. Raw events are not copied into OpenSearch as an alternate truth store.
 
-## 11. Compatibility rule
+## 12. Compatibility rule
 
 All future SDKs and transport adapters implement this protocol.
 
