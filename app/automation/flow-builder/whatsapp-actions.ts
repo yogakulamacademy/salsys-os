@@ -7,6 +7,8 @@ import { createAdminClient } from '@/lib/supabase/admin';
 import { createClient } from '@/lib/supabase/server';
 import { requireCurrentOrganizationId } from '@/lib/workspace';
 
+const INTERNAL_ACTIONS = new Set(['create_followup', 'assign_owner', 'add_tag', 'notify_user']);
+
 function textValue(formData: FormData, key: string) {
   return String(formData.get(key) ?? '').trim();
 }
@@ -38,6 +40,43 @@ async function adminContext() {
   return { organizationId };
 }
 
+async function loadEditableActionNode(params: {
+  organizationId: string;
+  workflowId: string;
+  nodeId: string;
+  versionNumber: number;
+}) {
+  const admin = createAdminClient();
+  const [{ data: workflow, error: workflowError }, { data: node, error: nodeError }] = await Promise.all([
+    admin
+      .from('automation_workflows')
+      .select('id,current_draft_version')
+      .eq('organization_id', params.organizationId)
+      .eq('id', params.workflowId)
+      .maybeSingle(),
+    admin
+      .from('automation_flow_nodes')
+      .select('id,node_type,label,config')
+      .eq('organization_id', params.organizationId)
+      .eq('workflow_id', params.workflowId)
+      .eq('version_number', params.versionNumber)
+      .eq('id', params.nodeId)
+      .maybeSingle(),
+  ]);
+
+  if (workflowError || !workflow) {
+    go('error', workflowError?.message || 'Workflow was not found in this organization.');
+  }
+  if (workflow.current_draft_version !== params.versionNumber) {
+    go('error', 'Actions can only be configured on the current draft flow version.');
+  }
+  if (nodeError || !node || node.node_type !== 'action') {
+    go('error', nodeError?.message || 'Selected node is not an editable action node.');
+  }
+
+  return { admin, node };
+}
+
 export async function configureGuardedWhatsAppSendNodeAction(formData: FormData) {
   const workflowId = textValue(formData, 'workflow_id');
   const nodeId = textValue(formData, 'node_id');
@@ -56,43 +95,22 @@ export async function configureGuardedWhatsAppSendNodeAction(formData: FormData)
   }
 
   const { organizationId } = await adminContext();
-  const admin = createAdminClient();
+  const { admin, node } = await loadEditableActionNode({
+    organizationId,
+    workflowId,
+    nodeId,
+    versionNumber,
+  });
 
-  const [{ data: workflow, error: workflowError }, { data: node, error: nodeError }, { data: template, error: templateError }] =
-    await Promise.all([
-      admin
-        .from('automation_workflows')
-        .select('id,current_draft_version')
-        .eq('organization_id', organizationId)
-        .eq('id', workflowId)
-        .maybeSingle(),
-      admin
-        .from('automation_flow_nodes')
-        .select('id,node_type,label,config')
-        .eq('organization_id', organizationId)
-        .eq('workflow_id', workflowId)
-        .eq('version_number', versionNumber)
-        .eq('id', nodeId)
-        .maybeSingle(),
-      admin
-        .from('automation_whatsapp_templates')
-        .select('id,whatsapp_account_id,template_name,language_code,approval_status,active')
-        .eq('organization_id', organizationId)
-        .eq('id', templateId)
-        .eq('approval_status', 'approved')
-        .eq('active', true)
-        .maybeSingle(),
-    ]);
+  const { data: template, error: templateError } = await admin
+    .from('automation_whatsapp_templates')
+    .select('id,whatsapp_account_id,template_name,language_code,approval_status,active')
+    .eq('organization_id', organizationId)
+    .eq('id', templateId)
+    .eq('approval_status', 'approved')
+    .eq('active', true)
+    .maybeSingle();
 
-  if (workflowError || !workflow) {
-    go('error', workflowError?.message || 'Workflow was not found in this organization.');
-  }
-  if (workflow.current_draft_version !== versionNumber) {
-    go('error', 'WhatsApp actions can only be configured on the current draft flow version.');
-  }
-  if (nodeError || !node || node.node_type !== 'action') {
-    go('error', nodeError?.message || 'Selected node is not an editable action node.');
-  }
   if (templateError || !template) {
     go('error', templateError?.message || 'Select an active provider-approved template synchronized for this workspace.');
   }
@@ -149,4 +167,68 @@ export async function configureGuardedWhatsAppSendNodeAction(formData: FormData)
     'notice',
     `Guarded WhatsApp template ${template.template_name} (${template.language_code}) configured. Human approval is forced ON; nothing was sent and runtime state was not changed.`,
   );
+}
+
+export async function convertGuardedWhatsAppNodeToInternalAction(formData: FormData) {
+  const workflowId = textValue(formData, 'workflow_id');
+  const nodeId = textValue(formData, 'node_id');
+  const label = textValue(formData, 'label');
+  const actionType = textValue(formData, 'action_type');
+  const versionNumber = Number(textValue(formData, 'version_number') || '0');
+
+  if (!workflowId || !nodeId || !label || !INTERNAL_ACTIONS.has(actionType)) {
+    go('error', 'A valid workflow, node, label and safe internal action are required.');
+  }
+  if (label.length > 120) {
+    go('error', 'Node label must be 120 characters or fewer.');
+  }
+  if (!Number.isInteger(versionNumber) || versionNumber < 1) {
+    go('error', 'Flow version is invalid.');
+  }
+
+  const { organizationId } = await adminContext();
+  const { admin, node } = await loadEditableActionNode({
+    organizationId,
+    workflowId,
+    nodeId,
+    versionNumber,
+  });
+
+  const currentConfig =
+    node.config && typeof node.config === 'object' && !Array.isArray(node.config)
+      ? (node.config as Record<string, unknown>)
+      : {};
+
+  const {
+    channel: _channel,
+    requires_approval: _requiresApproval,
+    whatsapp_account_id: _accountId,
+    template_name: _templateName,
+    template_language: _templateLanguage,
+    request_payload: _requestPayload,
+    ...remainingConfig
+  } = currentConfig;
+
+  const { error: updateError } = await admin
+    .from('automation_flow_nodes')
+    .update({
+      label,
+      config: {
+        ...remainingConfig,
+        action_type: actionType,
+      },
+    })
+    .eq('organization_id', organizationId)
+    .eq('workflow_id', workflowId)
+    .eq('version_number', versionNumber)
+    .eq('id', nodeId)
+    .eq('node_type', 'action');
+
+  if (updateError) {
+    go('error', updateError.message);
+  }
+
+  revalidatePath('/automation/flow-builder');
+  revalidatePath('/automation/readiness');
+  go('notice', 'WhatsApp send configuration removed. The node is now a safe internal action.');
 }
