@@ -7,7 +7,10 @@ const PUBLIC_EXACT_PATHS = new Set([
   "/auth/recovery-confirm",
   "/forgot-password",
   "/yogakulam-tracker.js",
+  "/salsys-tracker.js",
   "/api/leads/capture",
+  "/api/events/v1",
+  "/api/events/browser/v1",
   "/api/analytics/ga4/sync",
   "/api/analytics/gsc/sync",
   "/api/analytics/google-ads/sync",
@@ -158,7 +161,7 @@ export async function middleware(request: NextRequest) {
           },
         });
         cookiesToSet.forEach(({ name, value, options }) =>
-          response.cookies.set(name, value, options),
+          response.cookies.set(cookie.name, cookie.value, options),
         );
       },
     },
