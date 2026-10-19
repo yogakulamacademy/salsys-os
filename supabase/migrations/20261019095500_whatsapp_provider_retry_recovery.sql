@@ -78,6 +78,28 @@ begin
     return jsonb_build_object('ok',true,'retry_prepared',false,'provider_call_allowed',false,'customer_message_sent',false,'reason','approval_enrollment_state_mismatch');
   end if;
 
+  -- Exactly one successor is allowed for each failed audit. This makes double-clicks
+  -- and concurrent retry requests reuse the same prepared retry instead of creating
+  -- another provider attempt.
+  v_retry_key := 'failed-audit:' || v_failed.id::text || ':whatsapp-retry:v1';
+
+  select * into v_existing
+  from public.automation_provider_send_audits a
+  where a.organization_id=p_organization_id and a.idempotency_key=v_retry_key
+  limit 1;
+
+  if v_existing.id is not null then
+    select count(*)::integer into v_attempt_count
+    from public.automation_provider_send_audits a
+    where a.organization_id=p_organization_id
+      and a.approval_request_id=v_approval.id
+      and a.channel='whatsapp'
+      and a.provider='meta_cloud_api'
+      and a.request_mode='live';
+
+    return jsonb_build_object('ok',true,'retry_prepared',true,'audit_id',v_existing.id,'status',v_existing.status,'idempotent_reuse',true,'provider_call_allowed',v_existing.status='ready' and v_existing.customer_message_sent=false,'customer_message_sent',v_existing.customer_message_sent,'attempt_number',v_attempt_count,'max_attempts',3,'block_reasons',v_existing.block_reasons);
+  end if;
+
   select count(*)::integer into v_attempt_count
   from public.automation_provider_send_audits a
   where a.organization_id=p_organization_id
@@ -86,21 +108,12 @@ begin
     and a.provider='meta_cloud_api'
     and a.request_mode='live';
 
+  -- Initial provider attempt + at most two explicit operator retries.
   if v_attempt_count >= 3 then
     return jsonb_build_object('ok',true,'retry_prepared',false,'provider_call_allowed',false,'customer_message_sent',false,'reason','provider_retry_limit_reached','attempt_count',v_attempt_count,'max_attempts',3);
   end if;
 
   v_attempt_number := v_attempt_count + 1;
-  v_retry_key := 'approval:' || v_approval.id::text || ':whatsapp:v1:retry:' || v_attempt_number::text;
-
-  select * into v_existing
-  from public.automation_provider_send_audits a
-  where a.organization_id=p_organization_id and a.idempotency_key=v_retry_key
-  limit 1;
-
-  if v_existing.id is not null then
-    return jsonb_build_object('ok',true,'retry_prepared',true,'audit_id',v_existing.id,'status',v_existing.status,'idempotent_reuse',true,'provider_call_allowed',v_existing.status='ready' and v_existing.customer_message_sent=false,'customer_message_sent',v_existing.customer_message_sent,'attempt_number',v_attempt_number,'max_attempts',3,'block_reasons',v_existing.block_reasons);
-  end if;
 
   v_policy := public.resolve_whatsapp_channel_policy_v3(
     p_organization_id,v_failed.lead_id,v_failed.workflow_id,
