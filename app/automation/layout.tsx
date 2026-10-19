@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react';
 import Link from 'next/link';
-import { Activity, GitBranch, ListChecks, MessageSquareText, Settings2, ShieldCheck, Sparkles, Workflow } from 'lucide-react';
+import { Activity, GitBranch, ListChecks, LockKeyhole, MessageSquareText, Settings2, ShieldCheck, Sparkles, Workflow } from 'lucide-react';
 
 const links = [
   { href: '/automation', label: 'Smart Triggers', icon: GitBranch },
@@ -9,6 +9,7 @@ const links = [
   { href: '/automation/approvals', label: 'Approval Queue', icon: ListChecks },
   { href: '/automation/templates', label: 'WhatsApp Templates', icon: MessageSquareText },
   { href: '/automation/runs', label: 'Runtime Monitor', icon: Activity },
+  { href: '/automation/pilot', label: 'Pilot Control', icon: LockKeyhole },
   { href: '/automation/readiness', label: 'Rollout Readiness', icon: ShieldCheck },
   { href: '/automation/settings', label: 'Settings', icon: Settings2 },
 ];
