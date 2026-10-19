@@ -1,0 +1,57 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://salsysos.com/schemas/salsys-event-v1.schema.json",
+  "title": "Salsys Universal Event v1",
+  "description": "Canonical platform/language-independent event envelope for Salsys Tracking Intelligence.",
+  "type": "object",
+  "required": ["event_id", "event_name", "schema_version"],
+  "properties": {
+    "event_id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 160
+    },
+    "event_name": {
+      "type": "string",
+      "minLength": 3,
+      "maxLength": 120,
+      "pattern": "^[a-z][a-z0-9_]*\\.[a-z][a-z0-9_]*$"
+    },
+    "schema_version": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 100
+    },
+    "occurred_at": {
+      "type": ["string", "null"],
+      "format": "date-time",
+      "maxLength": 80
+    },
+    "anonymous_visitor_id": {
+      "type": ["string", "null"],
+      "maxLength": 180
+    },
+    "session_key": {
+      "type": ["string", "null"],
+      "maxLength": 180
+    },
+    "external_message_id": {
+      "type": ["string", "null"],
+      "maxLength": 240
+    },
+    "site": {
+      "type": ["string", "null"],
+      "maxLength": 240
+    },
+    "properties": {
+      "type": "object"
+    },
+    "context": {
+      "type": "object"
+    },
+    "metadata": {
+      "type": "object"
+    }
+  },
+  "additionalProperties": false
+}
