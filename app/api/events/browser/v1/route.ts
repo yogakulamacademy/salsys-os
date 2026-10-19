@@ -36,6 +36,46 @@ function browserGpc(request: NextRequest, context: Record<string, unknown>) {
   return contextGpc === true || contextGpc === 1 || contextGpc === '1';
 }
 
+function decodeHeader(value: string | null) {
+  if (!value) return null;
+  try {
+    return decodeURIComponent(value);
+  } catch {
+    return value;
+  }
+}
+
+/**
+ * Location enrichment is derived only from trusted hosting/proxy headers.
+ * No raw client IP address is persisted by this route.
+ *
+ * Vercel headers are first because they are used by the current deployment.
+ * Common proxy aliases are accepted so the ingestion contract itself does not
+ * depend on a single hosting platform.
+ */
+function requestGeo(request: NextRequest) {
+  return {
+    country:
+      request.headers.get('x-vercel-ip-country') ||
+      request.headers.get('cf-ipcountry') ||
+      request.headers.get('x-country-code') ||
+      null,
+    region:
+      request.headers.get('x-vercel-ip-country-region') ||
+      request.headers.get('x-region-code') ||
+      null,
+    city: decodeHeader(
+      request.headers.get('x-vercel-ip-city') ||
+        request.headers.get('x-city') ||
+        null,
+    ),
+    timezone:
+      request.headers.get('x-vercel-ip-timezone') ||
+      request.headers.get('x-timezone') ||
+      null,
+  };
+}
+
 export async function OPTIONS(request: NextRequest) {
   const origin = browserOrigin(request);
   const source = await resolveBrowserTrackingSource(origin);
@@ -97,6 +137,7 @@ export async function POST(request: NextRequest) {
   try {
     const event = sanitizeGenericTrackingEvent(await request.json());
     const gpc = browserGpc(request, event.context);
+    const geo = requestGeo(request);
     const admin = createAdminClient();
 
     // Privacy is enforced before raw-event persistence. Optional events that are
@@ -153,6 +194,10 @@ export async function POST(request: NextRequest) {
         gpc,
         origin,
         user_agent: request.headers.get('user-agent'),
+        geo_country: geo.country,
+        geo_region: geo.region,
+        geo_city: geo.city,
+        geo_timezone: geo.timezone,
       },
       p_metadata: {
         ...event.metadata,
@@ -160,6 +205,9 @@ export async function POST(request: NextRequest) {
         source_key: source.sourceKey,
         privacy_gate_reason: privacyGate?.reason ?? null,
         privacy_purpose: privacyGate?.mapped_purpose ?? privacyGate?.purpose ?? null,
+        geo_enrichment: Boolean(
+          geo.country || geo.region || geo.city || geo.timezone,
+        ),
       },
       p_schema_version: event.schemaVersion,
       p_is_browser: true,
