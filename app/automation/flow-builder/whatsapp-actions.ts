@@ -42,10 +42,14 @@ export async function configureGuardedWhatsAppSendNodeAction(formData: FormData)
   const workflowId = textValue(formData, 'workflow_id');
   const nodeId = textValue(formData, 'node_id');
   const templateId = textValue(formData, 'template_id');
+  const label = textValue(formData, 'label');
   const versionNumber = Number(textValue(formData, 'version_number') || '0');
 
-  if (!workflowId || !nodeId || !templateId) {
-    go('error', 'Workflow, action node and approved WhatsApp template are required.');
+  if (!workflowId || !nodeId || !templateId || !label) {
+    go('error', 'Workflow, action node, label and approved WhatsApp template are required.');
+  }
+  if (label.length > 120) {
+    go('error', 'Node label must be 120 characters or fewer.');
   }
   if (!Number.isInteger(versionNumber) || versionNumber < 1) {
     go('error', 'Flow version is invalid.');
@@ -128,7 +132,7 @@ export async function configureGuardedWhatsAppSendNodeAction(formData: FormData)
 
   const { error: updateError } = await admin
     .from('automation_flow_nodes')
-    .update({ config })
+    .update({ label, config })
     .eq('organization_id', organizationId)
     .eq('workflow_id', workflowId)
     .eq('version_number', versionNumber)
