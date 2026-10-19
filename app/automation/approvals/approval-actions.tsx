@@ -2,17 +2,17 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { CheckCircle2, Loader2, Send, XCircle } from 'lucide-react';
+import { CheckCircle2, Loader2, RotateCcw, Send, XCircle } from 'lucide-react';
 
 type Props = {
   approvalId: string;
   disabled?: boolean;
-  mode?: 'decision' | 'execute';
+  mode?: 'decision' | 'execute' | 'retry';
 };
 
 export function ApprovalActions({ approvalId, disabled = false, mode = 'decision' }: Props) {
   const router = useRouter();
-  const [busy, setBusy] = useState<'approve' | 'reject' | 'execute' | null>(null);
+  const [busy, setBusy] = useState<'approve' | 'reject' | 'execute' | 'retry' | null>(null);
   const [message, setMessage] = useState<{ tone: 'warning' | 'success'; text: string } | null>(null);
 
   async function decide(decision: 'approve' | 'reject', executionOnly = false) {
@@ -31,7 +31,7 @@ export function ApprovalActions({ approvalId, disabled = false, mode = 'decision
         ok?: boolean;
         error?: string;
         customerMessageSent?: boolean;
-        preparation?: { status?: string };
+        preparation?: { status?: string; reason?: string };
       };
 
       if (!response.ok && response.status !== 202) {
@@ -64,6 +64,58 @@ export function ApprovalActions({ approvalId, disabled = false, mode = 'decision
     }
   }
 
+  async function retryFailedSend() {
+    if (busy || disabled) return;
+    setBusy('retry');
+    setMessage(null);
+
+    try {
+      const response = await fetch(
+        `/api/automation/approvals/${encodeURIComponent(approvalId)}/retry`,
+        { method: 'POST' },
+      );
+
+      const payload = (await response.json().catch(() => ({}))) as {
+        ok?: boolean;
+        error?: string;
+        customerMessageSent?: boolean;
+        preparation?: {
+          status?: string;
+          reason?: string;
+          block_reasons?: string[];
+          attempt_number?: number;
+          max_attempts?: number;
+        };
+      };
+
+      if (!response.ok && response.status !== 202) {
+        throw new Error(payload.error || 'Unable to retry the failed WhatsApp send.');
+      }
+
+      if (payload.customerMessageSent === true) {
+        setMessage({ tone: 'success', text: 'Retry succeeded. WhatsApp message sent and recorded successfully.' });
+      } else {
+        const reasons = Array.isArray(payload.preparation?.block_reasons)
+          ? payload.preparation?.block_reasons.join(', ')
+          : null;
+        const reason = payload.preparation?.reason || reasons || 'current safety gates';
+        setMessage({
+          tone: 'warning',
+          text: `Retry was not sent. It is blocked by ${reason.replaceAll('_', ' ')}.`,
+        });
+      }
+
+      router.refresh();
+    } catch (caught) {
+      setMessage({
+        tone: 'warning',
+        text: caught instanceof Error ? caught.message : 'Unable to retry the failed WhatsApp send.',
+      });
+    } finally {
+      setBusy(null);
+    }
+  }
+
   if (mode === 'execute') {
     return (
       <div className="space-y-2">
@@ -77,11 +129,28 @@ export function ApprovalActions({ approvalId, disabled = false, mode = 'decision
           Execute approved send
         </button>
         {message ? (
-          <p
-            className={`max-w-xl text-xs leading-5 ${
-              message.tone === 'success' ? 'text-emerald-700' : 'text-amber-700'
-            }`}
-          >
+          <p className={`max-w-xl text-xs leading-5 ${message.tone === 'success' ? 'text-emerald-700' : 'text-amber-700'}`}>
+            {message.text}
+          </p>
+        ) : null}
+      </div>
+    );
+  }
+
+  if (mode === 'retry') {
+    return (
+      <div className="space-y-2">
+        <button
+          type="button"
+          disabled={disabled || busy !== null}
+          onClick={retryFailedSend}
+          className="inline-flex items-center gap-2 rounded-xl border border-amber-300 bg-amber-100 px-3 py-2 text-sm font-semibold text-amber-900 transition hover:bg-amber-200 disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          {busy === 'retry' ? <Loader2 size={16} className="animate-spin" /> : <RotateCcw size={16} />}
+          Retry failed send
+        </button>
+        {message ? (
+          <p className={`max-w-xl text-xs leading-5 ${message.tone === 'success' ? 'text-emerald-700' : 'text-amber-700'}`}>
             {message.text}
           </p>
         ) : null}
@@ -112,11 +181,7 @@ export function ApprovalActions({ approvalId, disabled = false, mode = 'decision
         </button>
       </div>
       {message ? (
-        <p
-          className={`max-w-xl text-xs leading-5 ${
-            message.tone === 'success' ? 'text-emerald-700' : 'text-amber-700'
-          }`}
-        >
+        <p className={`max-w-xl text-xs leading-5 ${message.tone === 'success' ? 'text-emerald-700' : 'text-amber-700'}`}>
           {message.text}
         </p>
       ) : null}

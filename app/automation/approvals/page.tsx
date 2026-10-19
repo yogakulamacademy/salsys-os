@@ -39,6 +39,8 @@ type ProviderAuditSummary = {
   id: string;
   status: string;
   customer_message_sent: boolean;
+  provider_error: string | null;
+  failed_at: string | null;
 };
 
 function leadName(lead: LeadSummary | undefined) {
@@ -138,7 +140,7 @@ export default async function AutomationApprovalsPage() {
         auditIds.length
           ? admin
               .from('automation_provider_send_audits')
-              .select('id,status,customer_message_sent')
+              .select('id,status,customer_message_sent,provider_error,failed_at')
               .eq('organization_id', organizationId)
               .in('id', auditIds)
           : Promise.resolve({ data: [], error: null }),
@@ -266,6 +268,11 @@ export default async function AutomationApprovalsPage() {
                   approval.status === 'approved' &&
                   audit?.status === 'ready' &&
                   audit.customer_message_sent !== true;
+                const canRetryFailedSend =
+                  canApprove &&
+                  approval.status === 'approved' &&
+                  audit?.status === 'failed' &&
+                  audit.customer_message_sent !== true;
 
                 return (
                   <div key={approval.id} className="space-y-3 px-4 py-3">
@@ -277,6 +284,9 @@ export default async function AutomationApprovalsPage() {
                           <p className="mt-1 text-xs text-slate-400">
                             Provider audit: {audit.customer_message_sent ? 'sent' : audit.status.replaceAll('_', ' ')}
                           </p>
+                        ) : null}
+                        {audit?.status === 'failed' && audit.provider_error ? (
+                          <p className="mt-1 max-w-2xl text-xs text-rose-600">{audit.provider_error}</p>
                         ) : null}
                       </div>
                       <div className="text-right">
@@ -295,6 +305,15 @@ export default async function AutomationApprovalsPage() {
                           This send was already human-approved and is waiting at the provider boundary. Executing it still rechecks suppression, frequency caps, WhatsApp template eligibility, pilot allowlist, and the provider kill switch.
                         </p>
                         <ApprovalActions approvalId={approval.id} disabled={!canApprove} mode="execute" />
+                      </div>
+                    ) : null}
+
+                    {canRetryFailedSend ? (
+                      <div className="rounded-xl border border-amber-200 bg-amber-50 p-3">
+                        <p className="mb-2 text-xs leading-5 text-amber-900">
+                          The previous provider attempt failed before a customer message was recorded. Retry creates a new audit record and rechecks suppression, frequency caps, template eligibility, pilot controls, and the provider kill switch. A maximum of three total provider attempts is allowed for the approval.
+                        </p>
+                        <ApprovalActions approvalId={approval.id} disabled={!canApprove} mode="retry" />
                       </div>
                     ) : null}
                   </div>
