@@ -10,6 +10,7 @@ export const maxDuration = 60;
 const MODEL_KEY = 'conversion_probability';
 const RUN_VERSION = 'r10-training-run-v1';
 const MODEL_VERSION_PREFIX = 'r10-logistic-v1';
+const FEATURE_SCHEMA_VERSION = 'r10-lead-features-safe-v1';
 const MAX_DATASET_ROWS = 5000;
 const HOLDOUT_FRACTION = 0.2;
 const ITERATIONS = 800;
@@ -23,7 +24,6 @@ const FEATURE_NAMES = [
   'high_intent_events_7d',
   'whatsapp_clicks_7d',
   'reservation_starts_7d',
-  'payment_starts_7d',
   'enquiry_clicks_7d',
   'brochure_downloads_7d',
   'sessions_7d',
@@ -31,14 +31,11 @@ const FEATURE_NAMES = [
   'days_since_last_visit',
   'has_returned_after_becoming_lead',
   'is_reengaged',
-  'net_paid',
-  'outstanding_balance',
   'owner_assigned',
   'lead_age_hours',
   'hours_since_last_contact',
   'hours_since_last_inbound',
   'followup_due',
-  'operational_priority_score',
 ] as const;
 
 type FeatureName = (typeof FEATURE_NAMES)[number];
@@ -73,7 +70,6 @@ type DatasetRow = {
   high_intent_events_7d: number | string | null;
   whatsapp_clicks_7d: number | string | null;
   reservation_starts_7d: number | string | null;
-  payment_starts_7d: number | string | null;
   enquiry_clicks_7d: number | string | null;
   brochure_downloads_7d: number | string | null;
   sessions_7d: number | string | null;
@@ -81,14 +77,11 @@ type DatasetRow = {
   days_since_last_visit: number | string | null;
   has_returned_after_becoming_lead: boolean | null;
   is_reengaged: boolean | null;
-  net_paid: number | string | null;
-  outstanding_balance: number | string | null;
   owner_assigned: boolean | null;
   lead_age_hours: number | string | null;
   hours_since_last_contact: number | string | null;
   hours_since_last_inbound: number | string | null;
   followup_due: boolean | null;
-  operational_priority_score: number | string | null;
 };
 
 type Example = {
@@ -135,7 +128,6 @@ function vector(row: DatasetRow) {
     finite(row.high_intent_events_7d),
     finite(row.whatsapp_clicks_7d),
     finite(row.reservation_starts_7d),
-    finite(row.payment_starts_7d),
     finite(row.enquiry_clicks_7d),
     finite(row.brochure_downloads_7d),
     finite(row.sessions_7d),
@@ -143,14 +135,11 @@ function vector(row: DatasetRow) {
     finite(row.days_since_last_visit),
     bool(row.has_returned_after_becoming_lead),
     bool(row.is_reengaged),
-    finite(row.net_paid),
-    finite(row.outstanding_balance),
     bool(row.owner_assigned),
     finite(row.lead_age_hours),
     finite(row.hours_since_last_contact),
     finite(row.hours_since_last_inbound),
     bool(row.followup_due),
-    finite(row.operational_priority_score),
   ];
 }
 
@@ -361,6 +350,7 @@ function readinessPayload(row: ReadinessRow) {
     negative_leads: finite(row.negative_leads),
     class_balance_ratio: finite(row.class_balance_ratio),
     temporal_leakage_violations: finite(row.temporal_leakage_violations),
+    feature_schema_version: FEATURE_SCHEMA_VERSION,
     evaluated_at: new Date().toISOString(),
   };
 }
@@ -446,6 +436,7 @@ export async function GET(request: NextRequest) {
           feature_schema: FEATURE_NAMES,
           hyperparameters: {
             algorithm: 'logistic_regression_gradient_descent',
+            feature_schema_version: FEATURE_SCHEMA_VERSION,
             iterations: ITERATIONS,
             learning_rate: LEARNING_RATE,
             l2: L2,
@@ -474,7 +465,7 @@ export async function GET(request: NextRequest) {
 
       const { data: datasetData, error: datasetError } = await admin
         .from('v_r10_lead_training_dataset_v1')
-        .select('organization_id,lead_id,feature_snapshot_id,observed_at,outcome_label,outcome_at,engagement_score,high_intent_events_7d,whatsapp_clicks_7d,reservation_starts_7d,payment_starts_7d,enquiry_clicks_7d,brochure_downloads_7d,sessions_7d,page_views_7d,days_since_last_visit,has_returned_after_becoming_lead,is_reengaged,net_paid,outstanding_balance,owner_assigned,lead_age_hours,hours_since_last_contact,hours_since_last_inbound,followup_due,operational_priority_score')
+        .select('organization_id,lead_id,feature_snapshot_id,observed_at,outcome_label,outcome_at,engagement_score,high_intent_events_7d,whatsapp_clicks_7d,reservation_starts_7d,enquiry_clicks_7d,brochure_downloads_7d,sessions_7d,page_views_7d,days_since_last_visit,has_returned_after_becoming_lead,is_reengaged,owner_assigned,lead_age_hours,hours_since_last_contact,hours_since_last_inbound,followup_due')
         .eq('organization_id', readiness.organization_id)
         .lte('observed_at', nowIso)
         .not('outcome_label', 'is', null)
@@ -538,6 +529,7 @@ export async function GET(request: NextRequest) {
 
       const modelArtifact = {
         algorithm: 'logistic_regression_gradient_descent',
+        feature_schema_version: FEATURE_SCHEMA_VERSION,
         intercept: model.intercept,
         weights: Object.fromEntries(FEATURE_NAMES.map((name, index) => [name, model.weights[index]])),
         normalization: {
@@ -551,7 +543,13 @@ export async function GET(request: NextRequest) {
           holdout_leads: holdout.length,
         },
         target: 'eventual_positive_terminal_outcome',
-        note: 'Candidate baseline only. Production use still requires promotion guardrails and tenant predictive-readiness.',
+        excluded_target_adjacent_features: [
+          'payment_starts_7d',
+          'net_paid',
+          'outstanding_balance',
+          'operational_priority_score',
+        ],
+        note: 'Candidate baseline only. Target-adjacent payment fields and the composite operational priority score are excluded from the model feature schema. Production use still requires promotion guardrails and tenant predictive-readiness.',
       };
 
       const { data: modelVersion, error: modelError } = await admin
@@ -569,7 +567,7 @@ export async function GET(request: NextRequest) {
           negative_rows: trainNegatives,
           feature_schema: FEATURE_NAMES,
           metrics: { artifact: modelArtifact },
-          notes: 'R10 candidate logistic-regression baseline trained from leakage-safe point-in-time lead snapshots.',
+          notes: 'R10 candidate logistic-regression baseline trained from point-in-time snapshots using the leakage-reduced safe feature schema.',
         })
         .select('id')
         .single();
@@ -609,8 +607,9 @@ export async function GET(request: NextRequest) {
             confusion_matrix: { tp: cls.tp, fp: cls.fp, tn: cls.tn, fn: cls.fn },
             split_strategy: 'grouped_time_holdout',
             latest_snapshot_per_lead: true,
+            feature_schema_version: FEATURE_SCHEMA_VERSION,
           },
-          notes: 'Automatic holdout evaluation for R10 candidate lead-conversion model.',
+          notes: 'Automatic holdout evaluation for R10 candidate lead-conversion model using the leakage-reduced safe feature schema.',
         });
 
       if (evaluationError) {
@@ -646,6 +645,7 @@ export async function GET(request: NextRequest) {
         action: 'candidate_trained',
         modelVersionId: modelVersion.id,
         modelVersion: version,
+        featureSchemaVersion: FEATURE_SCHEMA_VERSION,
         trainingLeads: train.length,
         holdoutLeads: holdout.length,
         holdoutPositive: holdoutPositives,
@@ -669,6 +669,9 @@ export async function GET(request: NextRequest) {
           grouped_time_holdout: true,
           automatic_holdout_evaluation: true,
           candidate_status_only: true,
+          feature_schema_version: FEATURE_SCHEMA_VERSION,
+          target_adjacent_payment_features_excluded: true,
+          operational_priority_composite_excluded: true,
           production_activation_is_not_performed_here: true,
         },
       },
