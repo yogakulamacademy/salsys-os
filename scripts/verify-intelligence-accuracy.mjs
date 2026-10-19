@@ -5,6 +5,7 @@ import process from 'node:process';
 const root = process.cwd();
 const files = {
   migration: 'supabase/migrations/20261019181500_intelligence_signal_quality_v1.sql',
+  identityRollupFix: 'supabase/migrations/20261019181600_intelligence_signal_quality_identity_rollup_fix_v1.sql',
   snapshotRoute: 'app/api/intelligence/lead-scoring-snapshot/route.ts',
 };
 
@@ -20,6 +21,7 @@ function read(relativePath) {
 }
 
 const migration = read(files.migration);
+const identityRollupFix = read(files.identityRollupFix);
 const route = read(files.snapshotRoute);
 
 const migrationChecks = [
@@ -37,6 +39,15 @@ const migrationChecks = [
 
 for (const [needle, label] of migrationChecks) {
   if (!migration.includes(needle)) fail(`Migration is missing ${label} (${needle}).`);
+}
+
+for (const [needle, label] of [
+  ['person_rollup as (', 'independent person identity rollup'],
+  ['visitor_rollup as (', 'independent visitor/session rollup'],
+  ['coalesce(v.linked_session_count,0)', 'visitor-only session-count aggregation'],
+  ['coalesce(v.linked_sessions_30d,0)', 'visitor-only recent-session aggregation'],
+]) {
+  if (!identityRollupFix.includes(needle)) fail(`Identity-rollup fix is missing ${label} (${needle}).`);
 }
 
 const routeChecks = [
@@ -65,4 +76,4 @@ if (!migration.includes('s.observed_at < s.outcome_at')) {
   fail('Safe training dataset must enforce strict point-in-time ordering before outcome.');
 }
 
-console.log('[intelligence-accuracy] PASS: privacy-aware evidence and safe-training contracts verified.');
+console.log('[intelligence-accuracy] PASS: privacy-aware evidence, cardinality-safe identity rollups, and safe-training contracts verified.');
