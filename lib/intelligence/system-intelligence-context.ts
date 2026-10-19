@@ -59,6 +59,37 @@ export type IntelligenceCalibrationRow = {
   calibration_reason: string | null;
 };
 
+export type IntelligenceAwarenessTrendRow = {
+  snapshots_6h: number | string | null;
+  snapshots_24h: number | string | null;
+  latest_snapshot_at: string | null;
+  previous_snapshot_at: string | null;
+  latest_awareness_status: string | null;
+  previous_awareness_status: string | null;
+  latest_urgency_score: number | string | null;
+  previous_urgency_score: number | string | null;
+  urgency_delta: number | string | null;
+  avg_urgency_6h: number | string | null;
+  urgent_snapshots_6h: number | string | null;
+  latest_top_issue_code: string | null;
+  latest_top_issue_summary: string | null;
+  previous_top_issue_code: string | null;
+  same_top_issue_snapshots_6h: number | string | null;
+  top_issue_persistence_hours_6h: number | string | null;
+  latest_needs_reply: number | string | null;
+  previous_needs_reply: number | string | null;
+  needs_reply_delta: number | string | null;
+  latest_high_intent_leads: number | string | null;
+  previous_high_intent_leads: number | string | null;
+  high_intent_delta: number | string | null;
+  latest_system_failures_24h: number | string | null;
+  previous_system_failures_24h: number | string | null;
+  system_failures_delta: number | string | null;
+  trend_status: string | null;
+  trend_summary: string | null;
+  directional_evidence_available: boolean | null;
+};
+
 export type SystemIntelligenceContext = {
   organizationId: string;
   role: IntelligenceRole;
@@ -66,6 +97,7 @@ export type SystemIntelligenceContext = {
   journey: IntelligenceJourneyRow[];
   systemActivity: IntelligenceSystemActivityRow[];
   calibration: IntelligenceCalibrationRow[];
+  awarenessTrend: IntelligenceAwarenessTrendRow | null;
   velocity: {
     inbound24h: number;
     inboundPrevious24h: number;
@@ -119,7 +151,7 @@ export async function getSystemIntelligenceContext(now = new Date()): Promise<Sy
   const role = normalizeRole(workspace.activeWorkspace?.role);
   const since48h = new Date(now.getTime() - 48 * 60 * 60 * 1000).toISOString();
 
-  const [ownerSignalsResult, journeyResult, systemActivityResult, messagesResult, leadsResult, calibrationResult] = await Promise.all([
+  const [ownerSignalsResult, journeyResult, systemActivityResult, messagesResult, leadsResult, calibrationResult, awarenessTrendResult] = await Promise.all([
     supabase
       .from('v_admissions_owner_lead_signals')
       .select('lead_id,owner_user_id,current_stage,needs_reply,last_inbound_at,last_contacted_at,has_overdue_followup,priority_score,payment_status,outstanding_balance,currency')
@@ -148,6 +180,11 @@ export async function getSystemIntelligenceContext(now = new Date()): Promise<Sy
       .gte('created_at', since48h)
       .limit(5000),
     supabase.rpc('get_system_intelligence_recommendation_calibration_v1'),
+    supabase
+      .from('v_r10_system_awareness_trend_v1')
+      .select('snapshots_6h,snapshots_24h,latest_snapshot_at,previous_snapshot_at,latest_awareness_status,previous_awareness_status,latest_urgency_score,previous_urgency_score,urgency_delta,avg_urgency_6h,urgent_snapshots_6h,latest_top_issue_code,latest_top_issue_summary,previous_top_issue_code,same_top_issue_snapshots_6h,top_issue_persistence_hours_6h,latest_needs_reply,previous_needs_reply,needs_reply_delta,latest_high_intent_leads,previous_high_intent_leads,high_intent_delta,latest_system_failures_24h,previous_system_failures_24h,system_failures_delta,trend_status,trend_summary,directional_evidence_available')
+      .eq('organization_id', organizationId)
+      .maybeSingle(),
   ]);
 
   const degradedSources: string[] = [];
@@ -157,6 +194,7 @@ export async function getSystemIntelligenceContext(now = new Date()): Promise<Sy
   if (messagesResult.error) degradedSources.push('message_velocity');
   if (leadsResult.error) degradedSources.push('lead_velocity');
   if (calibrationResult.error) degradedSources.push('recommendation_calibration');
+  if (awarenessTrendResult.error) degradedSources.push('awareness_trend');
 
   const messages = messagesResult.error ? [] : (messagesResult.data ?? []);
   const inboundRows = messages.filter((row) => row.direction === 'inbound');
@@ -172,6 +210,7 @@ export async function getSystemIntelligenceContext(now = new Date()): Promise<Sy
     journey: journeyResult.error ? [] : (journeyResult.data ?? []) as IntelligenceJourneyRow[],
     systemActivity: systemActivityResult.error ? [] : (systemActivityResult.data ?? []) as IntelligenceSystemActivityRow[],
     calibration: calibrationResult.error ? [] : (calibrationResult.data ?? []) as IntelligenceCalibrationRow[],
+    awarenessTrend: awarenessTrendResult.error ? null : (awarenessTrendResult.data as IntelligenceAwarenessTrendRow | null),
     velocity: {
       inbound24h: inbound.current,
       inboundPrevious24h: inbound.previous,
