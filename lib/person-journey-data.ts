@@ -93,6 +93,17 @@ export type PersonJourneyPayload = {
   journeyTotal: number;
 };
 
+/*
+ * Do not select the three latest-lead journey fields from v_person_360 here.
+ *
+ * v_person_360 historically joined v_lead_journey_intelligence to populate
+ * them. On a lead detail request, asking PostgREST for those columns forces the
+ * planner through the full cross-lead journey aggregation and can exceed the
+ * statement timeout as tracking data grows. The rest of Person 360 is cheap
+ * when those columns are not projected.
+ *
+ * We load those three fields separately for the single latest lead below.
+ */
 const PERSON_360_SELECT = `
   person_id,
   organization_id,
@@ -126,9 +137,6 @@ const PERSON_360_SELECT = `
   high_intent_events_7d,
   first_touchpoint_at,
   last_touchpoint_at,
-  latest_lead_engagement_score,
-  latest_lead_behaviour_temperature,
-  latest_lead_behaviour_reason,
   conversation_count,
   message_count,
   last_conversation_activity_at,
@@ -299,24 +307,72 @@ export async function getPersonJourneyForLead(
       .limit(limit),
   ]);
 
+  /*
+   * Person 360 and the canonical journey are derived intelligence read models.
+   * They must never take the operational Lead detail page down. Authentication,
+   * tenant binding, and Lead authorization still fail closed above; only these
+   * non-authoritative enrichments degrade gracefully.
+   */
   if (personResult.error) {
-    throw new Error(
-      `Unable to load Person 360: ${personResult.error.message}`,
-    );
+    console.error("Person 360 read degraded:", personResult.error.message);
   }
 
   if (journeyResult.error) {
-    throw new Error(
-      `Unable to load Person journey: ${journeyResult.error.message}`,
-    );
+    console.error("Person journey read degraded:", journeyResult.error.message);
+  }
+
+  let person: Person360Summary | null = personResult.error
+    ? null
+    : personResult.data
+      ? ({
+          ...personResult.data,
+          latest_lead_engagement_score: null,
+          latest_lead_behaviour_temperature: null,
+          latest_lead_behaviour_reason: null,
+        } as Person360Summary)
+      : null;
+
+  /*
+   * Recover the three journey signals through a targeted single-lead query.
+   * This preserves the Person 360 UI without forcing the expensive journey
+   * join inside v_person_360 itself.
+   */
+  const latestLeadId = String(person?.latest_lead_id ?? "").trim();
+
+  if (person && latestLeadId) {
+    const { data: latestLeadJourney, error: latestLeadJourneyError } = await db
+      .from("v_lead_journey_intelligence")
+      .select("engagement_score,behaviour_temperature,behaviour_reason")
+      .eq("organization_id", organizationId)
+      .eq("lead_id", latestLeadId)
+      .maybeSingle();
+
+    if (latestLeadJourneyError) {
+      console.error(
+        "Latest lead journey signal read degraded:",
+        latestLeadJourneyError.message,
+      );
+    } else if (latestLeadJourney) {
+      person = {
+        ...person,
+        latest_lead_engagement_score:
+          latestLeadJourney.engagement_score ?? null,
+        latest_lead_behaviour_temperature:
+          latestLeadJourney.behaviour_temperature ?? null,
+        latest_lead_behaviour_reason:
+          latestLeadJourney.behaviour_reason ?? null,
+      };
+    }
   }
 
   return {
     organizationId,
     leadId: normalizedLeadId,
     personId,
-    person: (personResult.data ?? null) as Person360Summary | null,
-    journey: (journeyResult.data ?? []) as PersonJourneyEvent[],
-    journeyTotal: Number(journeyResult.count ?? 0),
+    person,
+    journey: journeyResult.error
+      ? []
+      : ((journeyResult.data ?? []) as PersonJourneyEvent[]),
+    journeyTotal: journeyResult.error ? 0 : Number(journeyResult.count ?? 0),
   };
 }
