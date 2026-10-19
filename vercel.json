@@ -10,6 +10,26 @@
       "schedule": "25 */6 * * *"
     },
     {
+      "path": "/api/intelligence/lead-predictions",
+      "schedule": "40 */6 * * *"
+    },
+    {
+      "path": "/api/intelligence/lead-model-drift",
+      "schedule": "10 7 * * *"
+    },
+    {
+      "path": "/api/intelligence/lead-model-retrain",
+      "schedule": "30 7 * * *"
+    },
+    {
+      "path": "/api/intelligence/lead-model-compare",
+      "schedule": "0 8 * * *"
+    },
+    {
+      "path": "/api/intelligence/lead-model-promote",
+      "schedule": "20 8 * * *"
+    },
+    {
       "path": "/api/analytics/ga4/sync",
       "schedule": "30 4 * * *"
     },
