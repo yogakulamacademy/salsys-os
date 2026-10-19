@@ -22,6 +22,9 @@ The following operator-facing automation capabilities are now on production `mai
 - Draft validation and atomic publish/clone lifecycle.
 - Read-only Runtime Monitor for workflows, enrollments, scheduled jobs, provider audits and trigger runs.
 - Fail-closed WhatsApp Pilot Control surface for exact-lead preparation and safe shutdown. Pilot preparation keeps provider execution off and the page exposes no send or provider-arm action.
+- Provider Audit Explorer with approval → provider → canonical CRM message → delivered/read lineage.
+- Canonical-message approval reconciliation derived from persisted automation approval truth.
+- Automatic provider-gate disarm when a bounded WhatsApp pilot reaches its configured message cap.
 
 Key production merge commits:
 
@@ -32,6 +35,9 @@ Key production merge commits:
 - `2e62ab9118820a84f19949fba95738cbbb8419b4` — guarded validate/publish lifecycle.
 - `34fc934a213eca7e93b9ecf9ed747689f48f184b` — read-only Runtime Monitor.
 - `a870d1d191d044b098a47b1cf23981fbe38c8f8d` — fail-closed WhatsApp Pilot Control surface.
+- `03f0533ce380f968780dd10525cf9a3c62e92ac7` — provider audit lineage explorer.
+- `927ffebc5bd6e44ff6671bf9b18f50d9eec7ec9d` — canonical message approval-lineage reconciliation.
+- `eecf55c3713b4491a03694d8aba909ccb57f79a2` — automatic provider disarm at pilot cap.
 
 ## Controlled live provider proof
 
@@ -54,6 +60,23 @@ Evidence:
 - No provider error and no block reasons on the successful audit row.
 
 This proves provider acceptance and delivery/read webhook reconciliation for the bounded pilot path.
+
+## Canonical CRM approval-lineage proof
+
+The pilot exposed one audit-integrity inconsistency: the provider audit was linked to an approved human approval request, while the canonical CRM message had originally inherited `human_approved=false` from the pre-approval request payload.
+
+Production now derives canonical approval state from the persisted tenant-scoped `automation_approval_requests` record linked by the provider audit. Existing successful approval-backed automation WhatsApp messages were reconciled as part of the production migration.
+
+Verified pilot lineage after migration:
+
+- Provider audit: `153ca3da-bd32-4286-90d9-1347dddc95a8`.
+- Approval request: `d47b4749-abbe-49b7-8cc3-20bf4fadec78`, status `approved`.
+- Canonical CRM message: `eafc8adc-3133-421d-ab0b-a742d7398564`.
+- Canonical CRM message status: `read`.
+- `human_approved=true`.
+- `ai_generated=false`.
+- Canonical message metadata records the approval request ID, approval status and `human_approval_source=automation_approval_request`.
+- Trigger `automation_provider_send_audit_reconcile_message_approval` is enabled in production.
 
 ## Reply / stop-on-reply proof
 
@@ -118,22 +141,37 @@ Therefore the successful pilot does **not** leave the system generally open for 
 
 The same page provides only capability-reducing controls: close provider gate and reset pilot configuration. It deliberately contains no provider-arm button, no test-send button, no autonomous-send control and no messaging-policy mutation.
 
+The production database also contains an automatic fail-closed guard. Trigger `automation_provider_send_audit_auto_disarm_pilot` closes `provider_send_enabled` after a successful live pilot reaches the configured claim/send cap, using the same pilot window/count semantics as the provider claim guard. This prevents a bounded pilot from remaining armed after its cap is exhausted.
+
+## Runtime and audit observability
+
+`/automation/runs` provides tenant-scoped, read-only observability for workflow runtime posture, enrollments, scheduled jobs, provider audits and trigger decisions.
+
+`/automation/audits` and `/automation/audits/[auditId]` provide read-only provider lineage from policy preparation and human approval through workflow/enrollment context, provider acceptance, canonical CRM persistence, delivered/read reconciliation, block reasons, errors and idempotency identifiers.
+
+Neither surface can approve, retry, resend, change policy, alter delivery state or open provider execution.
+
 ## Production verification
 
-Production Vercel deployments for the operator tooling reached `READY`, including the Runtime Monitor. The Pilot Control production deployment is verified separately as part of the merge/deploy record for commit `a870d1d191d044b098a47b1cf23981fbe38c8f8d`.
+Production deployments for the promoted operator tooling reached `READY` on Vercel. The current production head `eecf55c3713b4491a03694d8aba909ccb57f79a2` is deployed with the SalsysOS production aliases.
 
-Unauthenticated requests to protected Automation routes correctly resolve to the SalsysOS sign-in flow; tenant data remains behind authenticated workspace resolution.
+Production migrations for canonical approval reconciliation and pilot auto-disarm were applied successfully. Both database triggers are enabled:
+
+- `automation_provider_send_audit_reconcile_message_approval`
+- `automation_provider_send_audit_auto_disarm_pilot`
+
+Unauthenticated requests to protected Automation routes resolve to the SalsysOS sign-in flow; tenant data remains behind authenticated workspace resolution.
 
 ## Next controlled product work
 
 Recommended next implementation sequence:
 
-1. Keep provider arming separate from normal settings and require an explicit high-friction confirmation plus fresh readiness rechecks immediately before opening execution.
-2. Auto-disarm or hard-stop provider execution after the pilot cap is reached.
-3. Add richer Runtime Monitor drill-down for approval → provider audit → CRM message → delivery/read lineage.
-4. Expand starter recipes into complete publishable conversation flows only after operator controls are in place.
-5. Do not enable autonomous WhatsApp sending until repeated production evidence exists across reply, timeout, suppression, quiet-hours, frequency and provider-failure cases.
+1. Keep provider arming separate from normal settings. If an operator-facing arm flow is added later, require explicit high-friction confirmation and fresh readiness rechecks immediately before opening execution.
+2. Expand non-sending regression coverage for suppression, quiet-hours, frequency-cap and provider-failure paths.
+3. Expand starter recipes into complete publishable conversation flows only after the operator safety controls remain stable under repeated production evidence.
+4. Keep autonomous WhatsApp sending disabled until repeated production evidence exists across reply, timeout, suppression, quiet-hours, frequency, retry and provider-failure cases.
+5. Treat any additional live pilot or wider rollout as a new approval boundary; prior approval does not carry forward.
 
 ## Boundary
 
-This checkpoint is evidence and documentation only. It must not be interpreted as approval to send another live WhatsApp message or to enable general autonomous messaging.
+This checkpoint is evidence and documentation only. It must not be interpreted as approval to send another live WhatsApp message, arm provider execution, or enable general autonomous messaging.
