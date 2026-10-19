@@ -2,22 +2,23 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { CheckCircle2, Loader2, XCircle } from 'lucide-react';
+import { CheckCircle2, Loader2, Send, XCircle } from 'lucide-react';
 
 type Props = {
   approvalId: string;
   disabled?: boolean;
+  mode?: 'decision' | 'execute';
 };
 
-export function ApprovalActions({ approvalId, disabled = false }: Props) {
+export function ApprovalActions({ approvalId, disabled = false, mode = 'decision' }: Props) {
   const router = useRouter();
-  const [busy, setBusy] = useState<'approve' | 'reject' | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState<'approve' | 'reject' | 'execute' | null>(null);
+  const [message, setMessage] = useState<{ tone: 'warning' | 'success'; text: string } | null>(null);
 
-  async function decide(decision: 'approve' | 'reject') {
+  async function decide(decision: 'approve' | 'reject', executionOnly = false) {
     if (busy || disabled) return;
-    setBusy(decision);
-    setError(null);
+    setBusy(executionOnly ? 'execute' : decision);
+    setMessage(null);
 
     try {
       const response = await fetch(`/api/automation/approvals/${encodeURIComponent(approvalId)}`, {
@@ -37,21 +38,55 @@ export function ApprovalActions({ approvalId, disabled = false }: Props) {
         throw new Error(payload.error || 'Unable to save approval decision.');
       }
 
-      if (decision === 'approve' && payload.customerMessageSent !== true) {
-        const preparationStatus = payload.preparation?.status || 'blocked';
-        setError(
-          preparationStatus === 'blocked'
-            ? 'Approved. Provider execution is still blocked by the current safety gates.'
-            : 'Approved. No customer message was sent.',
-        );
+      if (decision === 'approve') {
+        if (payload.customerMessageSent === true) {
+          setMessage({ tone: 'success', text: 'WhatsApp message sent and recorded successfully.' });
+        } else {
+          const preparationStatus = payload.preparation?.status || 'blocked';
+          setMessage({
+            tone: 'warning',
+            text:
+              preparationStatus === 'blocked'
+                ? 'Approved, but provider execution is still blocked by the current safety gates.'
+                : 'Approved. No customer message was sent.',
+          });
+        }
       }
 
       router.refresh();
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : 'Unable to save approval decision.');
+      setMessage({
+        tone: 'warning',
+        text: caught instanceof Error ? caught.message : 'Unable to save approval decision.',
+      });
     } finally {
       setBusy(null);
     }
+  }
+
+  if (mode === 'execute') {
+    return (
+      <div className="space-y-2">
+        <button
+          type="button"
+          disabled={disabled || busy !== null}
+          onClick={() => decide('approve', true)}
+          className="inline-flex items-center gap-2 rounded-xl bg-emerald-600 px-3 py-2 text-sm font-semibold text-white transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          {busy === 'execute' ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />}
+          Execute approved send
+        </button>
+        {message ? (
+          <p
+            className={`max-w-xl text-xs leading-5 ${
+              message.tone === 'success' ? 'text-emerald-700' : 'text-amber-700'
+            }`}
+          >
+            {message.text}
+          </p>
+        ) : null}
+      </div>
+    );
   }
 
   return (
@@ -76,7 +111,15 @@ export function ApprovalActions({ approvalId, disabled = false }: Props) {
           Reject
         </button>
       </div>
-      {error ? <p className="max-w-xl text-xs leading-5 text-amber-700">{error}</p> : null}
+      {message ? (
+        <p
+          className={`max-w-xl text-xs leading-5 ${
+            message.tone === 'success' ? 'text-emerald-700' : 'text-amber-700'
+          }`}
+        >
+          {message.text}
+        </p>
+      ) : null}
     </div>
   );
 }
