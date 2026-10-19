@@ -58,7 +58,7 @@ The entrypoint loads the browser tracking core at:
 /public/salsys-tracker.js
 ```
 
-`/salsys-tracker.js` remains available for backward compatibility while `/salsys-intelligence.js` is the product-facing Universal Tracking Intelligence SDK entrypoint.
+`/salsys-tracker.js` remains available for compatibility while `/salsys-intelligence.js` is the product-facing Universal Tracking Intelligence SDK entrypoint.
 
 Current browser capabilities include:
 
@@ -71,6 +71,7 @@ Current browser capabilities include:
 - session starts;
 - CTA clicks;
 - WhatsApp/call/email click classification;
+- Instagram and enrollment/booking CTA compatibility classification;
 - form start;
 - form submit;
 - SPA navigation tracking;
@@ -79,15 +80,40 @@ Current browser capabilities include:
 - Global Privacy Control handling;
 - local retry queue;
 - sensitive-key sanitization;
-- manual event tracking.
+- manual event tracking;
+- controlled migration of legacy Yogakulam visitor/session/analytics-consent aliases;
+- compatibility for established `data-yk-event` instrumentation and `yk:consent` events during cutover;
+- temporary `YKTracking` diagnostics facade and `yk_tracking_ready` dataLayer bridge during cutover.
 
 ### Universal Event API
 
-Trusted runtimes use the canonical `/api/events/v1` endpoint documented in `docs/universal-event-protocol-v1.md`.
+Trusted runtimes use:
+
+```text
+POST /api/events/v1
+X-Salsys-Source-Key: <source-key>
+Authorization: Bearer <tracking-source-secret>
+```
+
+The same endpoint works from any backend language capable of HTTPS.
 
 ### Browser-safe Event API
 
 Browsers use `/api/events/browser/v1` and are authorized through trusted origin/source configuration rather than server credentials embedded in JavaScript.
+
+The browser ingest path preserves server-side geo enrichment from trusted proxy/hosting headers where available, without persisting a raw client IP address.
+
+### Universal identity handoff
+
+Trusted backends link an anonymous visitor/session to a known CRM lead through:
+
+```text
+POST /api/events/identify/v1
+X-Salsys-Source-Key: <source-key>
+Authorization: Bearer <tracking-source-secret>
+```
+
+The endpoint preserves the pre-existing exact-session safety rule: the lead, tracking source tenant, anonymous visitor and existing session must all agree before journey history is attached.
 
 ### Event schema
 
@@ -102,11 +128,12 @@ schemas/salsys-event-v1.schema.json
 ```html
 <script
   src="https://salsysos.com/salsys-intelligence.js"
-  data-site="example.com"
   data-consent-mode="required"
   defer>
 </script>
 ```
+
+The site hostname is inferred by default. A configured site value may be supplied when needed.
 
 A customer may self-host the browser entrypoint/core as long as the canonical event contract is unchanged.
 
@@ -137,6 +164,21 @@ SalsysIntelligence.consent({
   advertising: 'denied'
 });
 ```
+
+A cookie-consent implementation may also dispatch:
+
+```javascript
+window.dispatchEvent(
+  new CustomEvent('salsys:consent', {
+    detail: {
+      analytics: true,
+      advertising: false
+    }
+  })
+);
+```
+
+During controlled migration, the legacy `yk:consent` event is translated into the new purpose vocabulary.
 
 ### Visitor/session continuity
 
@@ -209,7 +251,9 @@ The browser does not perform business prediction or become authority for confirm
 - arbitrary form values are not captured;
 - sensitive credential/payment fields are excluded or redacted;
 - browser identity is anonymous until linked by a trusted workflow;
-- backend credentials never enter browser JavaScript.
+- backend credentials never enter browser JavaScript;
+- a migrated legacy analytics grant is recorded through the new privacy endpoint before normal analytics collection is allowed;
+- failed migration of a prior grant remains fail-closed.
 
 ## Reliability rules
 
@@ -220,3 +264,5 @@ A first-party transport/outbox may be implemented using any language/platform. D
 ## Compatibility rule
 
 Future JavaScript, Node, Python, Go, Java, .NET, mobile or other SDKs are wrappers over the same Universal Event Protocol. They must not create different event meanings or different source-of-truth rules.
+
+Legacy compatibility exists only to preserve established production journeys during cutover. New tenants should use neutral `Salsys*`, `data-salsys-*`, canonical event names and canonical privacy-purpose names from day one.
