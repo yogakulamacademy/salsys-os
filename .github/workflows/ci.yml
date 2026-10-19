@@ -49,6 +49,9 @@ jobs:
       - name: Verify Prediction Freshness Contracts
         run: npm run verify:intelligence-freshness
 
+      - name: Verify Outcome Learning Contracts
+        run: npm run verify:outcome-learning
+
       - name: Typecheck
         run: npm run typecheck
 
