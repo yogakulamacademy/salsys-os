@@ -90,6 +90,30 @@ export type IntelligenceAwarenessTrendRow = {
   directional_evidence_available: boolean | null;
 };
 
+export type IntelligenceCommandCenterRow = {
+  command_status: string | null;
+  command_summary: string | null;
+  predictive_operating_state: string | null;
+  predictive_readiness_status: string | null;
+  prediction_generation_allowed: boolean | null;
+  active_model_version: string | null;
+  model_health_status: string | null;
+  model_health_reason: string | null;
+  model_age_days: number | string | null;
+  predictions_7d: number | string | null;
+  realized_outcomes_30d: number | string | null;
+  predictive_leads: number | string | null;
+  deterministic_guarded_leads: number | string | null;
+  retraining_recommended: boolean | null;
+  retraining_run_allowed: boolean | null;
+  retraining_reason: string | null;
+  recommendation_learning_status: string | null;
+  recommendations_total: number | string | null;
+  observed_acceptance_rate_pct: number | string | null;
+  observed_completion_rate_pct: number | string | null;
+  observed_positive_outcome_rate_pct: number | string | null;
+};
+
 export type SystemIntelligenceContext = {
   organizationId: string;
   role: IntelligenceRole;
@@ -98,6 +122,7 @@ export type SystemIntelligenceContext = {
   systemActivity: IntelligenceSystemActivityRow[];
   calibration: IntelligenceCalibrationRow[];
   awarenessTrend: IntelligenceAwarenessTrendRow | null;
+  commandCenter: IntelligenceCommandCenterRow | null;
   velocity: {
     inbound24h: number;
     inboundPrevious24h: number;
@@ -151,7 +176,7 @@ export async function getSystemIntelligenceContext(now = new Date()): Promise<Sy
   const role = normalizeRole(workspace.activeWorkspace?.role);
   const since48h = new Date(now.getTime() - 48 * 60 * 60 * 1000).toISOString();
 
-  const [ownerSignalsResult, journeyResult, systemActivityResult, messagesResult, leadsResult, calibrationResult, awarenessTrendResult] = await Promise.all([
+  const [ownerSignalsResult, journeyResult, systemActivityResult, messagesResult, leadsResult, calibrationResult, awarenessTrendResult, commandCenterResult] = await Promise.all([
     supabase
       .from('v_admissions_owner_lead_signals')
       .select('lead_id,owner_user_id,current_stage,needs_reply,last_inbound_at,last_contacted_at,has_overdue_followup,priority_score,payment_status,outstanding_balance,currency')
@@ -185,6 +210,11 @@ export async function getSystemIntelligenceContext(now = new Date()): Promise<Sy
       .select('snapshots_6h,snapshots_24h,latest_snapshot_at,previous_snapshot_at,latest_awareness_status,previous_awareness_status,latest_urgency_score,previous_urgency_score,urgency_delta,avg_urgency_6h,urgent_snapshots_6h,latest_top_issue_code,latest_top_issue_summary,previous_top_issue_code,same_top_issue_snapshots_6h,top_issue_persistence_hours_6h,latest_needs_reply,previous_needs_reply,needs_reply_delta,latest_high_intent_leads,previous_high_intent_leads,high_intent_delta,latest_system_failures_24h,previous_system_failures_24h,system_failures_delta,trend_status,trend_summary,directional_evidence_available')
       .eq('organization_id', organizationId)
       .maybeSingle(),
+    supabase
+      .from('v_r10_owner_command_center_v1')
+      .select('command_status,command_summary,predictive_operating_state,predictive_readiness_status,prediction_generation_allowed,active_model_version,model_health_status,model_health_reason,model_age_days,predictions_7d,realized_outcomes_30d,predictive_leads,deterministic_guarded_leads,retraining_recommended,retraining_run_allowed,retraining_reason,recommendation_learning_status,recommendations_total,observed_acceptance_rate_pct,observed_completion_rate_pct,observed_positive_outcome_rate_pct')
+      .eq('organization_id', organizationId)
+      .maybeSingle(),
   ]);
 
   const degradedSources: string[] = [];
@@ -195,6 +225,7 @@ export async function getSystemIntelligenceContext(now = new Date()): Promise<Sy
   if (leadsResult.error) degradedSources.push('lead_velocity');
   if (calibrationResult.error) degradedSources.push('recommendation_calibration');
   if (awarenessTrendResult.error) degradedSources.push('awareness_trend');
+  if (commandCenterResult.error) degradedSources.push('owner_command_center');
 
   const messages = messagesResult.error ? [] : (messagesResult.data ?? []);
   const inboundRows = messages.filter((row) => row.direction === 'inbound');
@@ -211,6 +242,7 @@ export async function getSystemIntelligenceContext(now = new Date()): Promise<Sy
     systemActivity: systemActivityResult.error ? [] : (systemActivityResult.data ?? []) as IntelligenceSystemActivityRow[],
     calibration: calibrationResult.error ? [] : (calibrationResult.data ?? []) as IntelligenceCalibrationRow[],
     awarenessTrend: awarenessTrendResult.error ? null : (awarenessTrendResult.data as IntelligenceAwarenessTrendRow | null),
+    commandCenter: commandCenterResult.error ? null : (commandCenterResult.data as IntelligenceCommandCenterRow | null),
     velocity: {
       inbound24h: inbound.current,
       inboundPrevious24h: inbound.previous,
