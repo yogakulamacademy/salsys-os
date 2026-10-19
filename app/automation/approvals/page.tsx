@@ -3,6 +3,7 @@ import { ArrowLeft, Clock3, MessageCircle, ShieldCheck } from 'lucide-react';
 
 import { ApprovalActions } from '@/app/automation/approvals/approval-actions';
 import { PageHeader } from '@/components/ui';
+import { createAdminClient } from '@/lib/supabase/admin';
 import { createClient } from '@/lib/supabase/server';
 import { getCurrentWorkspaceContext } from '@/lib/workspace';
 
@@ -113,6 +114,7 @@ export default async function AutomationApprovalsPage() {
             .filter((value): value is string => Boolean(value)),
         ),
       ];
+      const admin = createAdminClient();
 
       const [
         { data: leadRows, error: leadError },
@@ -134,7 +136,7 @@ export default async function AutomationApprovalsPage() {
               .in('id', workflowIds)
           : Promise.resolve({ data: [], error: null }),
         auditIds.length
-          ? supabase
+          ? admin
               .from('automation_provider_send_audits')
               .select('id,status,customer_message_sent')
               .eq('organization_id', organizationId)
