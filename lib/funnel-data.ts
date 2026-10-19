@@ -55,7 +55,6 @@ type RpcPayload = {
     repeat?: unknown;
     distribution?: unknown[];
   };
-
   google_ads?: {
     overview?: unknown;
     campaigns?: unknown[];
@@ -63,7 +62,6 @@ type RpcPayload = {
     matches?: unknown[];
     unmatched_count?: unknown;
   };
-
   meta_ads?: {
     overview?: unknown;
     coverage?: unknown;
@@ -73,8 +71,10 @@ type RpcPayload = {
   };
 };
 
+type SupabaseClient = Awaited<ReturnType<typeof createClient>>;
+
 async function getCurrentOrganizationId(
-  supabase: Awaited<ReturnType<typeof createClient>>,
+  supabase: SupabaseClient,
 ): Promise<string> {
   const {
     data: { user },
@@ -87,21 +87,31 @@ async function getCurrentOrganizationId(
     );
   }
 
-  return requireCurrentOrganizationId(
-    supabase,
-    user.id,
-  );
+  return requireCurrentOrganizationId(supabase, user.id);
 }
 
 export async function getFunnelWorkspace(): Promise<FunnelWorkspace> {
   const supabase = await createClient();
-
   const organizationId = await getCurrentOrganizationId(supabase);
 
-  const visibility =
-    await getProviderVisibility(
-      supabase,
+  let visibility: ProviderVisibility = {
+    organizationId,
+    googleConnected: false,
+    metaConnected: false,
+  };
+
+  try {
+    visibility = await getProviderVisibility(supabase);
+  } catch (error) {
+    if (!isStatementTimeout(error)) {
+      throw error;
+    }
+
+    console.error(
+      "Funnel provider visibility degraded:",
+      error instanceof Error ? error.message : String(error),
     );
+  }
 
   const { data, error } = await supabase.rpc("get_funnel_workspace", {
     p_organization_id: organizationId,
@@ -109,19 +119,14 @@ export async function getFunnelWorkspace(): Promise<FunnelWorkspace> {
 
   if (!error) {
     return applyProviderVisibility(
-      parseRpcPayload(
-        (data ?? {}) as RpcPayload,
-      ),
+      parseRpcPayload((data ?? {}) as RpcPayload),
       visibility,
     );
   }
 
-  /*
-   * Safe fallback:
-   * preserve the current direct-view implementation if
-   * the compact workspace RPC is unavailable.
-   */
-  const fallback = await getLegacyWorkspace(
+  console.error("Funnel optimized read degraded:", error.message);
+
+  const fallback = await getMinimalLegacyWorkspace(
     supabase,
     organizationId,
   );
@@ -130,7 +135,9 @@ export async function getFunnelWorkspace(): Promise<FunnelWorkspace> {
     {
       ...fallback,
       fallback: true,
-      warning: `Optimized Funnel read model unavailable: ${error.message}`,
+      warning:
+        `Optimized Funnel read model unavailable: ${error.message}. ` +
+        "Loaded a reduced compatibility view to protect database health.",
     },
     visibility,
   );
@@ -138,9 +145,7 @@ export async function getFunnelWorkspace(): Promise<FunnelWorkspace> {
 
 function parseRpcPayload(payload: RpcPayload): FunnelWorkspace {
   const funnel = payload.funnel ?? {};
-
   const google = payload.google_ads ?? {};
-
   const meta = payload.meta_ads ?? {};
 
   return {
@@ -156,7 +161,6 @@ function parseRpcPayload(payload: RpcPayload): FunnelWorkspace {
       repeat: funnel.repeat ?? {},
       distribution: funnel.distribution ?? [],
     },
-
     googleAds: {
       overview: google.overview ?? {},
       campaigns: google.campaigns ?? [],
@@ -164,7 +168,6 @@ function parseRpcPayload(payload: RpcPayload): FunnelWorkspace {
       matches: google.matches ?? [],
       unmatchedCount: toNumber(google.unmatched_count),
     },
-
     metaAds: {
       overview: meta.overview ?? {},
       coverage: meta.coverage ?? {},
@@ -172,252 +175,59 @@ function parseRpcPayload(payload: RpcPayload): FunnelWorkspace {
       adsets: meta.adsets ?? [],
       ads: meta.ads ?? [],
     },
-
     fallback: false,
     warning: null,
   };
 }
 
-async function getLegacyWorkspace(
-  supabase: Awaited<ReturnType<typeof createClient>>,
+async function getMinimalLegacyWorkspace(
+  supabase: SupabaseClient,
   organizationId: string,
 ): Promise<Omit<FunnelWorkspace, "fallback" | "warning">> {
-  const [
-    overviewResult,
-    dailyResult,
-    newReturningResult,
-    sourceResult,
-    firstTouchResult,
-    landingResult,
-    countryResult,
-    eventResult,
-    repeatResult,
-    distributionResult,
-
-    googleOverviewResult,
-    googleCampaignsResult,
-    googleCoverageResult,
-    googleMatchesResult,
-    googleUnmatchedResult,
-
-    metaOverviewResult,
-    metaCoverageResult,
-    metaCampaignsResult,
-    metaAdsetsResult,
-    metaAdsResult,
-  ] = await Promise.all([
+  const [overviewResult, dailyResult, sourceResult] = await Promise.all([
     supabase
       .from("v_end_to_end_funnel_30d")
       .select("*")
       .eq("organization_id", organizationId)
       .maybeSingle(),
-
     supabase
       .from("v_funnel_daily_30d")
       .select("*")
       .eq("organization_id", organizationId)
-      .order("date", {
-        ascending: true,
-      }),
-
-    supabase
-      .from("v_funnel_new_returning_30d")
-      .select("*")
-      .eq("organization_id", organizationId),
-
+      .order("date", { ascending: true }),
     supabase
       .from("v_funnel_source_30d")
       .select("*")
       .eq("organization_id", organizationId)
-      .order("sessions", {
-        ascending: false,
-      })
+      .order("sessions", { ascending: false })
       .limit(20),
-
-    supabase
-      .from("v_first_touch_source_funnel_30d")
-      .select("*")
-      .eq("organization_id", organizationId)
-      .order("leads", {
-        ascending: false,
-      })
-      .limit(20),
-
-    supabase
-      .from("v_funnel_landing_page_30d")
-      .select("*")
-      .eq("organization_id", organizationId)
-      .order("sessions", {
-        ascending: false,
-      })
-      .limit(20),
-
-    supabase
-      .from("v_funnel_country_30d")
-      .select("*")
-      .eq("organization_id", organizationId)
-      .order("sessions", {
-        ascending: false,
-      })
-      .limit(20),
-
-    supabase
-      .from("v_funnel_event_30d")
-      .select("*")
-      .eq("organization_id", organizationId)
-      .order("event_count", {
-        ascending: false,
-      }),
-
-    supabase
-      .from("v_repeat_visit_summary")
-      .select("*")
-      .eq("organization_id", organizationId)
-      .maybeSingle(),
-
-    supabase
-      .from("v_conversion_visit_distribution")
-      .select("*")
-      .eq("organization_id", organizationId),
-
-    supabase
-      .from("v_google_ads_crm_overview_30d")
-      .select("*")
-      .eq("organization_id", organizationId)
-      .maybeSingle(),
-
-    supabase
-      .from("v_google_ads_campaign_crm_30d")
-      .select("*")
-      .eq("organization_id", organizationId)
-      .order("spend", {
-        ascending: false,
-      }),
-
-    supabase
-      .from("v_google_ads_attribution_coverage")
-      .select("*")
-      .eq("organization_id", organizationId)
-      .maybeSingle(),
-
-    supabase
-      .from("v_google_ads_campaign_match_diagnostic")
-      .select("*")
-      .eq("organization_id", organizationId)
-      .order("touchpoints", {
-        ascending: false,
-      })
-      .limit(12),
-
-    supabase
-      .from("v_google_ads_unmatched_paid_leads")
-      .select("*", {
-        count: "exact",
-        head: true,
-      })
-      .eq("organization_id", organizationId),
-
-    supabase
-      .from("v_meta_ads_crm_overview_30d")
-      .select("*")
-      .eq("organization_id", organizationId)
-      .maybeSingle(),
-
-    supabase
-      .from("v_meta_ads_attribution_coverage")
-      .select("*")
-      .eq("organization_id", organizationId)
-      .maybeSingle(),
-
-    supabase
-      .from("v_meta_ads_campaign_crm_30d")
-      .select("*")
-      .eq("organization_id", organizationId)
-      .order("spend", {
-        ascending: false,
-      }),
-
-    supabase
-      .from("v_meta_ads_adset_crm_30d")
-      .select("*")
-      .eq("organization_id", organizationId)
-      .order("spend", {
-        ascending: false,
-      })
-      .limit(12),
-
-    supabase
-      .from("v_meta_ads_ad_crm_30d")
-      .select("*")
-      .eq("organization_id", organizationId)
-      .order("spend", {
-        ascending: false,
-      })
-      .limit(12),
   ]);
 
-  const errors = [
-    overviewResult.error,
-    dailyResult.error,
-    newReturningResult.error,
-    sourceResult.error,
-    firstTouchResult.error,
-    landingResult.error,
-    countryResult.error,
-    eventResult.error,
-    repeatResult.error,
-    distributionResult.error,
-
-    googleOverviewResult.error,
-    googleCampaignsResult.error,
-    googleCoverageResult.error,
-    googleMatchesResult.error,
-    googleUnmatchedResult.error,
-
-    metaOverviewResult.error,
-    metaCoverageResult.error,
-    metaCampaignsResult.error,
-    metaAdsetsResult.error,
-    metaAdsResult.error,
-  ].filter(Boolean);
-
-  if (errors.length > 0) {
-    throw new Error(
-      `Unable to load Funnel workspace: ${errors
-        .map((item) => item?.message)
-        .join(" | ")}`,
-    );
+  for (const [label, result] of [
+    ["overview", overviewResult],
+    ["daily", dailyResult],
+    ["source", sourceResult],
+  ] as const) {
+    if (result.error) {
+      console.error(`Funnel fallback ${label} read degraded:`, result.error.message);
+    }
   }
 
   return {
     funnel: {
-      overview: overviewResult.data ?? {},
-      daily: dailyResult.data ?? [],
-      newReturning: newReturningResult.data ?? [],
-      sources: sourceResult.data ?? [],
-      firstTouch: firstTouchResult.data ?? [],
-      landingPages: landingResult.data ?? [],
-      countries: countryResult.data ?? [],
-      events: eventResult.data ?? [],
-      repeat: repeatResult.data ?? {},
-      distribution: distributionResult.data ?? [],
+      overview: overviewResult.error ? {} : overviewResult.data ?? {},
+      daily: dailyResult.error ? [] : dailyResult.data ?? [],
+      newReturning: [],
+      sources: sourceResult.error ? [] : sourceResult.data ?? [],
+      firstTouch: [],
+      landingPages: [],
+      countries: [],
+      events: [],
+      repeat: {},
+      distribution: [],
     },
-
-    googleAds: {
-      overview: googleOverviewResult.data ?? {},
-      campaigns: googleCampaignsResult.data ?? [],
-      coverage: googleCoverageResult.data ?? {},
-      matches: googleMatchesResult.data ?? [],
-      unmatchedCount: googleUnmatchedResult.count ?? 0,
-    },
-
-    metaAds: {
-      overview: metaOverviewResult.data ?? {},
-      coverage: metaCoverageResult.data ?? {},
-      campaigns: metaCampaignsResult.data ?? [],
-      adsets: metaAdsetsResult.data ?? [],
-      ads: metaAdsResult.data ?? [],
-    },
+    googleAds: emptyGoogleAds(),
+    metaAds: emptyMetaAds(),
   };
 }
 
@@ -427,33 +237,46 @@ function applyProviderVisibility(
 ): FunnelWorkspace {
   return {
     ...workspace,
-
-    googleAds:
-      visibility.googleConnected
-        ? workspace.googleAds
-        : {
-            overview: {},
-            campaigns: [],
-            coverage: {},
-            matches: [],
-            unmatchedCount: 0,
-          },
-
-    metaAds:
-      visibility.metaConnected
-        ? workspace.metaAds
-        : {
-            overview: {},
-            coverage: {},
-            campaigns: [],
-            adsets: [],
-            ads: [],
-          },
+    googleAds: visibility.googleConnected
+      ? workspace.googleAds
+      : emptyGoogleAds(),
+    metaAds: visibility.metaConnected
+      ? workspace.metaAds
+      : emptyMetaAds(),
   };
+}
+
+function emptyGoogleAds(): GoogleAdsBusinessData {
+  return {
+    overview: {},
+    campaigns: [],
+    coverage: {},
+    matches: [],
+    unmatchedCount: 0,
+  };
+}
+
+function emptyMetaAds(): MetaAdsBusinessData {
+  return {
+    overview: {},
+    coverage: {},
+    campaigns: [],
+    adsets: [],
+    ads: [],
+  };
+}
+
+function isStatementTimeout(error: unknown) {
+  const message =
+    error instanceof Error ? error.message : String(error ?? "");
+
+  return (
+    message.includes("statement timeout") ||
+    message.includes("canceling statement")
+  );
 }
 
 function toNumber(value: unknown) {
   const number = Number(value ?? 0);
-
   return Number.isFinite(number) ? number : 0;
 }
