@@ -4,15 +4,21 @@ import process from 'node:process';
 
 const root = process.cwd();
 const migrationPath = 'supabase/migrations/20261020100000_event_intelligence_prediction_freshness_v1.sql';
-const absolute = path.join(root, migrationPath);
+const sweepPath = 'supabase/migrations/20261020100100_event_intelligence_prediction_expiry_sweep_v1.sql';
 
 function fail(message) {
   console.error(`\n[intelligence-freshness] FAIL: ${message}`);
   process.exit(1);
 }
 
-if (!fs.existsSync(absolute)) fail(`Missing required file: ${migrationPath}`);
-const sql = fs.readFileSync(absolute, 'utf8');
+function read(relativePath) {
+  const absolute = path.join(root, relativePath);
+  if (!fs.existsSync(absolute)) fail(`Missing required file: ${relativePath}`);
+  return fs.readFileSync(absolute, 'utf8');
+}
+
+const sql = read(migrationPath);
+const sweep = read(sweepPath);
 
 const checks = [
   ['event_intelligence_prediction_max_feature_age_v1', 'central feature-age policy'],
@@ -35,6 +41,17 @@ for (const [needle, label] of checks) {
   if (!sql.includes(needle)) fail(`Freshness migration is missing ${label} (${needle}).`);
 }
 
+for (const [needle, label] of [
+  ['expire_event_intelligence_predictions_v1', 'active prediction expiry sweep'],
+  ["p.expires_at is not null and p.expires_at<=now()", 'time-expiry cleanup independent of feature presence'],
+  ['refresh_event_intelligence_predictions_freshness_inner_v1', 'freshness-aware inner refresh preservation'],
+  ["'expired_before_refresh'", 'expiry sweep accounting'],
+  ["'active_expiry_sweep',true", 'refresh disclosure that expiry sweep ran'],
+  ['for r in select id from public.organizations', 'one-time all-tenant cleanup'],
+]) {
+  if (!sweep.includes(needle)) fail(`Expiry-sweep migration is missing ${label} (${needle}).`);
+}
+
 if (!sql.includes("'calibrated_probability',false")) {
   fail('Deterministic ranking predictions must remain explicitly non-probabilistic.');
 }
@@ -43,4 +60,4 @@ if (!sql.includes("'feature_freshness_guard',true")) {
   fail('Prediction refresh response must disclose that the freshness guard is active.');
 }
 
-console.log('[intelligence-freshness] PASS: prediction freshness, stale suppression, and freshness-health contracts verified.');
+console.log('[intelligence-freshness] PASS: feature freshness, stale suppression, active expiry sweeping, and freshness-health contracts verified.');
