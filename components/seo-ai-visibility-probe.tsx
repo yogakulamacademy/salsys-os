@@ -1,5 +1,6 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { AlertTriangle, Bot, CheckCircle2, Eye, Loader2, RefreshCw, Send, ShieldCheck } from "lucide-react";
 
@@ -70,6 +71,7 @@ function formatDateTime(value: string | null | undefined) {
 }
 
 export function SeoAiVisibilityProbe() {
+  const router = useRouter();
   const [probeKind, setProbeKind] = useState<ProbeKind>("recommendation_visibility");
   const [prompt, setPrompt] = useState(EXAMPLES.recommendation_visibility);
   const [locale, setLocale] = useState("en-IN");
@@ -96,6 +98,7 @@ export function SeoAiVisibilityProbe() {
       const body = (await response.json()) as GetResponse;
       if (!response.ok || !body.ok) throw new Error(body.error || "Unable to load AI visibility probe evidence.");
       setLatest(body.probe || null);
+      router.refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unable to load AI visibility probe evidence.");
     } finally {
@@ -145,7 +148,8 @@ export function SeoAiVisibilityProbe() {
         completed_at: new Date().toISOString(),
         observation: body.result.observation || null,
       });
-      setSuccessMessage("Probe completed and measured evidence was stored in the R9 visibility ledger.");
+      setSuccessMessage("Probe completed. R9 health and probe history have been refreshed from the stored evidence.");
+      router.refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : "AI visibility probe failed.");
     } finally {
@@ -155,6 +159,7 @@ export function SeoAiVisibilityProbe() {
 
   useEffect(() => {
     void loadLatest();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   return (
