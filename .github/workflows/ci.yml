@@ -46,6 +46,9 @@ jobs:
       - name: Verify Intelligence Accuracy Contracts
         run: npm run verify:intelligence-accuracy
 
+      - name: Verify Prediction Freshness Contracts
+        run: npm run verify:intelligence-freshness
+
       - name: Typecheck
         run: npm run typecheck
 
