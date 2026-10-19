@@ -1,5 +1,7 @@
 -- Smart Triggers: explicit, idempotent recovery for failed WhatsApp provider sends.
 -- A retry always creates a new provider-send audit, preserving the failed audit as immutable history.
+-- `record` variables keep function creation compatible with environments where the
+-- Smart Triggers foundation is provisioned separately from the numbered baseline migrations.
 
 create or replace function public.prepare_failed_whatsapp_provider_retry_v1(
   p_organization_id uuid,
@@ -13,15 +15,15 @@ set search_path to 'public','auth','pg_temp'
 as $function$
 declare
   v_now timestamptz := coalesce(p_now, now());
-  v_failed public.automation_provider_send_audits%rowtype;
-  v_approval public.automation_approval_requests%rowtype;
+  v_failed record;
+  v_approval record;
   v_policy jsonb := '{}'::jsonb;
   v_provider_enabled boolean := false;
   v_attempt_count integer := 0;
   v_attempt_number integer := 0;
   v_retry_key text;
   v_retry_id uuid;
-  v_existing public.automation_provider_send_audits%rowtype;
+  v_existing record;
   v_reasons jsonb := '[]'::jsonb;
 begin
   if p_organization_id is null or p_failed_audit_id is null then
