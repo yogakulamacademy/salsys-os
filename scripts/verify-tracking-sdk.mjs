@@ -7,6 +7,7 @@ const root = process.cwd();
 const requiredFiles = [
   'public/salsys-intelligence.js',
   'public/salsys-tracker.js',
+  'public/salsys-consent.js',
   'schemas/salsys-event-v1.schema.json',
   'app/api/events/v1/route.ts',
   'app/api/events/browser/v1/route.ts',
@@ -14,6 +15,7 @@ const requiredFiles = [
   'app/api/privacy/consent/v1/route.ts',
   'docs/universal-event-protocol-v1.md',
   'docs/universal-tracking-intelligence-sdk.md',
+  'docs/universal-consent-ui-v1.md',
   'docs/event-tracking-v1.md',
 ];
 
@@ -30,7 +32,11 @@ function read(relativePath) {
 
 for (const file of requiredFiles) read(file);
 
-for (const file of ['public/salsys-intelligence.js', 'public/salsys-tracker.js']) {
+for (const file of [
+  'public/salsys-intelligence.js',
+  'public/salsys-tracker.js',
+  'public/salsys-consent.js',
+]) {
   const result = spawnSync(process.execPath, ['--check', path.join(root, file)], {
     encoding: 'utf8',
   });
@@ -55,6 +61,7 @@ if (schema?.properties?.event_name?.pattern !== '^[a-z][a-z0-9_]*\\.[a-z][a-z0-9
 
 const tracker = read('public/salsys-tracker.js');
 const intelligence = read('public/salsys-intelligence.js');
+const consentUi = read('public/salsys-consent.js');
 const browserRoute = read('app/api/events/browser/v1/route.ts');
 const serverRoute = read('app/api/events/v1/route.ts');
 const identifyRoute = read('app/api/events/identify/v1/route.ts');
@@ -92,6 +99,22 @@ for (const [needle, label] of intelligenceChecks) {
   if (!intelligence.includes(needle)) fail(`Universal entrypoint is missing ${label} (${needle}).`);
 }
 
+const consentUiChecks = [
+  ['SalsysConsent', 'consent UI global'],
+  ['Your privacy choices', 'first-run consent banner'],
+  ['Privacy settings', 'preference center'],
+  ['Accept all', 'accept-all control'],
+  ['Reject all', 'reject-all control'],
+  ['sale_sharing', 'sale/sharing purpose'],
+  ['globalPrivacyControl', 'GPC enforcement'],
+  ['data-salsys-privacy-settings', 'manual preference-center opener'],
+  ['attachShadow', 'style-isolated consent UI'],
+  ['salsys:consent-changed', 'consent-change event'],
+];
+for (const [needle, label] of consentUiChecks) {
+  if (!consentUi.includes(needle)) fail(`Consent UI is missing ${label} (${needle}).`);
+}
+
 if (!browserRoute.includes('resolveBrowserTrackingSource')) {
   fail('Browser ingestion must resolve the tracking source from trusted origin configuration.');
 }
@@ -122,10 +145,16 @@ if (!identifyRoute.includes(".eq('anonymous_visitor_id', visitorId)")) {
 if (!consentRoute.includes('privacy')) {
   fail('Privacy consent endpoint appears to have lost its privacy handling contract.');
 }
+for (const purpose of ['analytics', 'marketing', 'advertising', 'sale_sharing', 'personalization']) {
+  if (!consentRoute.includes(`'${purpose}'`)) {
+    fail(`Privacy endpoint must support ${purpose}.`);
+  }
+}
 
 for (const publicPath of [
   '/salsys-intelligence.js',
   '/salsys-tracker.js',
+  '/salsys-consent.js',
   '/api/events/v1',
   '/api/events/browser/v1',
   '/api/events/identify/v1',
@@ -140,4 +169,4 @@ if (fs.existsSync(path.join(root, 'integrations/php/event-intelligence'))) {
   fail('PHP Event Intelligence runtime must not be part of the universal tracking architecture.');
 }
 
-console.log('[tracking-sdk] PASS: Universal Tracking Intelligence SDK V1 contract verified.');
+console.log('[tracking-sdk] PASS: Universal Tracking Intelligence SDK V1 + Consent UI contract verified.');
