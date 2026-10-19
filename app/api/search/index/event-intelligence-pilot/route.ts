@@ -110,7 +110,6 @@ export async function GET() {
 
     const worker = await runSearchIndexWorker({
       organizationId: PILOT_ORGANIZATION_ID,
-      limit: Math.min(pending.length, MAX_PILOT_DOCUMENTS),
     });
 
     return NextResponse.json(
