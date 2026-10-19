@@ -20,6 +20,8 @@ const PUBLIC_EXACT_PATHS = new Set([
   "/api/tracking/collect",
   "/api/tracking/consent",
   "/api/tracking/identify",
+  "/api/intelligence/system-snapshot",
+  "/api/intelligence/lead-scoring-snapshot",
 ]);
 
 const ACTIVE_WORKSPACE_COOKIE = "yk-active-workspace";
