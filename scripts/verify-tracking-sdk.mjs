@@ -15,6 +15,7 @@ const requiredFiles = [
   'app/api/privacy/consent/v1/route.ts',
   'docs/universal-event-protocol-v1.md',
   'docs/universal-tracking-intelligence-sdk.md',
+  'docs/universal-consent-ui-v1.md',
   'docs/event-tracking-v1.md',
 ];
 
