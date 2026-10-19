@@ -34,6 +34,12 @@ type WorkflowSummary = {
   name: string;
 };
 
+type ProviderAuditSummary = {
+  id: string;
+  status: string;
+  customer_message_sent: boolean;
+};
+
 function leadName(lead: LeadSummary | undefined) {
   if (!lead) return 'Unknown lead';
   if (lead.display_name?.trim()) return lead.display_name.trim();
@@ -77,6 +83,7 @@ export default async function AutomationApprovalsPage() {
   let approvals: ApprovalRow[] = [];
   let leads = new Map<string, LeadSummary>();
   let workflows = new Map<string, WorkflowSummary>();
+  let providerAudits = new Map<string, ProviderAuditSummary>();
 
   try {
     const workspace = await getCurrentWorkspaceContext(supabase);
@@ -99,8 +106,19 @@ export default async function AutomationApprovalsPage() {
 
       const leadIds = [...new Set(approvals.map((row) => row.lead_id))];
       const workflowIds = [...new Set(approvals.map((row) => row.workflow_id))];
+      const auditIds = [
+        ...new Set(
+          approvals
+            .map((row) => row.provider_send_audit_id)
+            .filter((value): value is string => Boolean(value)),
+        ),
+      ];
 
-      const [{ data: leadRows, error: leadError }, { data: workflowRows, error: workflowError }] = await Promise.all([
+      const [
+        { data: leadRows, error: leadError },
+        { data: workflowRows, error: workflowError },
+        { data: auditRows, error: auditError },
+      ] = await Promise.all([
         leadIds.length
           ? supabase
               .from('leads')
@@ -115,13 +133,24 @@ export default async function AutomationApprovalsPage() {
               .eq('organization_id', organizationId)
               .in('id', workflowIds)
           : Promise.resolve({ data: [], error: null }),
+        auditIds.length
+          ? supabase
+              .from('automation_provider_send_audits')
+              .select('id,status,customer_message_sent')
+              .eq('organization_id', organizationId)
+              .in('id', auditIds)
+          : Promise.resolve({ data: [], error: null }),
       ]);
 
       if (leadError) throw leadError;
       if (workflowError) throw workflowError;
+      if (auditError) throw auditError;
 
       leads = new Map(((leadRows ?? []) as LeadSummary[]).map((row) => [row.id, row]));
       workflows = new Map(((workflowRows ?? []) as WorkflowSummary[]).map((row) => [row.id, row]));
+      providerAudits = new Map(
+        ((auditRows ?? []) as ProviderAuditSummary[]).map((row) => [row.id, row]),
+      );
     }
   } catch (error) {
     loadError = error instanceof Error ? error.message : 'Unable to load approval queue.';
@@ -226,22 +255,49 @@ export default async function AutomationApprovalsPage() {
         ) : (
           <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white">
             <div className="divide-y divide-slate-100">
-              {recent.map((approval) => (
-                <div key={approval.id} className="flex flex-wrap items-center justify-between gap-3 px-4 py-3">
-                  <div>
-                    <p className="text-sm font-semibold text-slate-900">{leadName(leads.get(approval.lead_id))}</p>
-                    <p className="mt-0.5 text-xs text-slate-500">{workflows.get(approval.workflow_id)?.name || 'Automation workflow'}</p>
-                  </div>
-                  <div className="text-right">
-                    <span className={`rounded-full px-2.5 py-1 text-xs font-bold ring-1 ring-inset ${statusClass(approval.status)}`}>
-                      {approval.status.replaceAll('_', ' ')}
-                    </span>
-                    {approval.decided_at ? (
-                      <p className="mt-1.5 text-xs text-slate-400">{new Date(approval.decided_at).toLocaleString('en-IN')}</p>
+              {recent.map((approval) => {
+                const audit = approval.provider_send_audit_id
+                  ? providerAudits.get(approval.provider_send_audit_id)
+                  : undefined;
+                const canExecuteApprovedSend =
+                  canApprove &&
+                  approval.status === 'approved' &&
+                  audit?.status === 'ready' &&
+                  audit.customer_message_sent !== true;
+
+                return (
+                  <div key={approval.id} className="space-y-3 px-4 py-3">
+                    <div className="flex flex-wrap items-center justify-between gap-3">
+                      <div>
+                        <p className="text-sm font-semibold text-slate-900">{leadName(leads.get(approval.lead_id))}</p>
+                        <p className="mt-0.5 text-xs text-slate-500">{workflows.get(approval.workflow_id)?.name || 'Automation workflow'}</p>
+                        {audit ? (
+                          <p className="mt-1 text-xs text-slate-400">
+                            Provider audit: {audit.customer_message_sent ? 'sent' : audit.status.replaceAll('_', ' ')}
+                          </p>
+                        ) : null}
+                      </div>
+                      <div className="text-right">
+                        <span className={`rounded-full px-2.5 py-1 text-xs font-bold ring-1 ring-inset ${statusClass(approval.status)}`}>
+                          {approval.status.replaceAll('_', ' ')}
+                        </span>
+                        {approval.decided_at ? (
+                          <p className="mt-1.5 text-xs text-slate-400">{new Date(approval.decided_at).toLocaleString('en-IN')}</p>
+                        ) : null}
+                      </div>
+                    </div>
+
+                    {canExecuteApprovedSend ? (
+                      <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-3">
+                        <p className="mb-2 text-xs leading-5 text-emerald-800">
+                          This send was already human-approved and is waiting at the provider boundary. Executing it still rechecks suppression, frequency caps, WhatsApp template eligibility, pilot allowlist, and the provider kill switch.
+                        </p>
+                        <ApprovalActions approvalId={approval.id} disabled={!canApprove} mode="execute" />
+                      </div>
                     ) : null}
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </div>
         )}
