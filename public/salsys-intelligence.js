@@ -1,4 +1,4 @@
-/* Salsys Universal Tracking Intelligence SDK entrypoint v1.2.0 */
+/* Salsys Universal Tracking Intelligence SDK entrypoint v1.3.0 */
 (function () {
   'use strict';
 
@@ -12,6 +12,7 @@
 
   var LEGACY_MIGRATION = !(current && current.dataset && current.dataset.legacyMigration === 'false');
   var LEGACY_DATALAYER = !(current && current.dataset && current.dataset.legacyDatalayer === 'false');
+  var FORM_MODE = (current && current.dataset && current.dataset.formMode) || 'lead-only';
   var DEBUG = Boolean(current && current.dataset && current.dataset.debug === 'true');
 
   function log() {
@@ -293,6 +294,61 @@
     window.dataLayer.push(payload);
   }
 
+  function formId(form) {
+    return String(form.id || form.getAttribute('name') || 'anonymous').trim().slice(0, 160);
+  }
+
+  function formAction(form) {
+    try {
+      return new URL(form.action || window.location.href, window.location.href).pathname;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  function isLeadForm(form) {
+    return Boolean(
+      form &&
+      form.matches &&
+      form.matches('form[data-salsys-lead-form],form[data-yk-lead-form]')
+    );
+  }
+
+  function installLeadFormTracking(api) {
+    if (!api || FORM_MODE === 'all') return;
+
+    var startedForms = typeof WeakSet !== 'undefined' ? new WeakSet() : null;
+    var initial = document.querySelectorAll('form[data-salsys-lead-form],form[data-yk-lead-form]');
+    for (var i = 0; i < initial.length; i++) api.decorateForm(initial[i]);
+
+    document.addEventListener('focusin', function (event) {
+      var form = event.target && event.target.closest
+        ? event.target.closest('form[data-salsys-lead-form],form[data-yk-lead-form]')
+        : null;
+      if (!isLeadForm(form) || (startedForms && startedForms.has(form))) return;
+      if (startedForms) startedForms.add(form);
+      api.decorateForm(form);
+      api.track('web.form_started', {
+        form_id: formId(form),
+        form_action: formAction(form),
+        form_kind: 'lead',
+        compatibility_source: form.hasAttribute('data-yk-lead-form') ? 'legacy_lead_form_marker' : null
+      }, { keepalive: true }).catch(function () {});
+    }, { capture: true });
+
+    document.addEventListener('submit', function (event) {
+      var form = event.target;
+      if (!isLeadForm(form)) return;
+      api.decorateForm(form);
+      api.track('web.form_submitted', {
+        form_id: formId(form),
+        form_action: formAction(form),
+        form_kind: 'lead',
+        compatibility_source: form.hasAttribute('data-yk-lead-form') ? 'legacy_lead_form_marker' : null
+      }, { keepalive: true, queue: false }).catch(function () {});
+    }, { capture: true });
+  }
+
   function installCompatibility(api) {
     if (!api || api.__universalCompatibilityInstalled) return;
     api.__universalCompatibilityInstalled = true;
@@ -346,6 +402,8 @@
       api.track('web.cta_clicked', properties, { keepalive: true }).catch(function () {});
     }, { capture: true });
 
+    installLeadFormTracking(api);
+
     window.YKTracking = {
       status: function () {
         return {
@@ -361,6 +419,9 @@
       },
       updateConsent: applyConsent,
       consent: applyConsent,
+      decorateForm: function (form) {
+        return api.decorateForm ? api.decorateForm(form) : undefined;
+      },
       send: function (eventType, metadata) {
         var mapped = canonicalFromLegacyEvent(eventType);
         if (!mapped) return Promise.reject(new Error('Unsupported legacy event type. Use SalsysIntelligence.track() with a registered canonical event.'));
@@ -410,6 +471,11 @@
         }
       }
     }
+
+    // The core can track all forms, but the product entrypoint defaults to
+    // lead-only form semantics so existing funnel/affinity metrics are not
+    // polluted by search, newsletter, login or unrelated forms.
+    if (FORM_MODE !== 'all') core.setAttribute('data-auto-forms', 'false');
 
     core.onload = expose;
     core.onerror = function () {
