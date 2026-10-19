@@ -77,6 +77,21 @@ Salsys Event Intelligence is now the active tracking/intelligence architecture.
 - Guarded pilot staging support exists.
 - Search outbox constraint now allows Event Intelligence derived entity types.
 
+### Architecture decision — platform/language independence
+
+The universal tracking layer is now explicitly **protocol-first**.
+
+- canonical integration boundary = HTTPS + JSON;
+- browser SDK remains JavaScript because it executes in browsers, not because of the customer backend stack;
+- trusted server events may be emitted from any runtime that can make authenticated HTTPS requests;
+- first-party relay/outbox is a platform-neutral transport contract, not a backend-language-specific implementation;
+- durable storage may use any suitable host-platform mechanism;
+- runtime-specific SDKs are optional convenience adapters over the same event protocol;
+- the PHP-specific Event Intelligence relay is removed from the active architecture and repository branch;
+- legacy Yogakulam website integration code is separate from the universal SDK decision and is not the canonical tracking model.
+
+Canonical contract: `docs/universal-event-protocol-v1.md`.
+
 ### OpenSearch rule
 
 OpenSearch is a **secondary rebuildable retrieval/intelligence index**. It is not the authority for raw events, identity, consent, CRM state, payments, enrollments, revenue, feature state, predictions, or observed outcomes.
@@ -89,9 +104,9 @@ The tracking milestone is **not yet complete**.
 
 The user-approved architecture is:
 
-`website/app -> universal first-party SDK -> first-party website relay/outbox -> canonical event contract -> PostgreSQL raw events -> normalization/identity/attribution -> feature store -> predictions -> optional OpenSearch projection -> recommendations/outcomes`
+`website/app/service -> universal SDK or canonical HTTPS client -> platform-neutral first-party transport/outbox -> canonical event contract -> PostgreSQL raw events -> normalization/identity/attribution -> feature store -> predictions -> optional OpenSearch projection -> recommendations/outcomes`
 
-Core tracking must not depend on GTM, GA4, Meta, or any single downstream system. GTM may remain optional for marketing tags/experiments.
+Core tracking must not depend on GTM, GA4, Meta, a backend programming language, framework, database, or any single downstream system. GTM may remain optional for marketing tags/experiments.
 
 ### Acceptance test required before tracking is called complete
 
@@ -108,8 +123,8 @@ Do not reinstall the core SalsysOS tracker through GTM.
 Target implementation:
 - direct script in Yogakulam website source/common layout;
 - tenant-neutral SDK naming (not Yogakulam-only);
-- first-party browser endpoint on the website domain;
-- durable local event/outbox behavior so downstream outages do not lose events;
+- first-party browser endpoint on the website domain with no file-extension/runtime requirement;
+- platform-neutral durable local event/outbox behavior so downstream outages do not lose events;
 - canonical `event_id` idempotency;
 - preserve/reuse existing `yk_vid`/`yk_sid` continuity during migration;
 - server-authoritative payment/enrollment/revenue events;
@@ -132,16 +147,17 @@ Rules-generated scores must never be presented as calibrated probabilities.
 ## 7. Active next implementation order
 
 1. finish production-safe universal Event Intelligence ingestion validation;
-2. build/direct-install universal first-party SDK on Yogakulam source;
-3. build first-party relay/outbox so core tracking is independent from SalsysOS availability;
-4. wire consent and GPC behavior;
-5. wire forms and anonymous -> CRM identity;
-6. instrument reservation/checkout/payment/enrollment with server-authoritative events;
-7. prove revenue attribution E2E;
-8. refresh feature builders from live Yogakulam behavior;
-9. controlled Event Intelligence OpenSearch pilot while PostgreSQL remains authoritative;
-10. add tracking/data-quality anomaly detection;
-11. move from deterministic intelligence toward evaluated predictive models only when enough outcome evidence exists.
+2. finalize Universal Event Protocol v1;
+3. align/direct-install the universal browser SDK on Yogakulam source;
+4. implement the platform-neutral first-party transport/outbox contract;
+5. wire consent and GPC behavior;
+6. wire forms and anonymous -> CRM identity;
+7. instrument reservation/checkout/payment/enrollment with server-authoritative events;
+8. prove revenue attribution E2E;
+9. refresh feature builders from live Yogakulam behavior;
+10. controlled Event Intelligence OpenSearch pilot while PostgreSQL remains authoritative;
+11. add tracking/data-quality anomaly detection;
+12. move from deterministic intelligence toward evaluated predictive models only when enough outcome evidence exists.
 
 ## 8. Safety defaults
 
