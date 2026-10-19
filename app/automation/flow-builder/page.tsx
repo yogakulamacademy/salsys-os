@@ -3,6 +3,7 @@ import { ShieldCheck, Workflow } from 'lucide-react';
 import { ConnectionCreator } from '@/app/automation/flow-builder/connection-creator';
 import { FlowCanvas } from '@/app/automation/flow-builder/flow-canvas';
 import { PageHeader } from '@/components/ui';
+import { createAdminClient } from '@/lib/supabase/admin';
 import { createClient } from '@/lib/supabase/server';
 import { getCurrentWorkspaceContext } from '@/lib/workspace';
 
@@ -34,6 +35,14 @@ type FlowEdge = {
   condition: Record<string, unknown> | null;
 };
 
+type WhatsAppTemplate = {
+  id: string;
+  whatsapp_account_id: string;
+  template_name: string;
+  language_code: string;
+  category: string | null;
+};
+
 export default async function FlowBuilderPage({
   searchParams,
 }: {
@@ -50,6 +59,7 @@ export default async function FlowBuilderPage({
   let workflow: WorkflowRow | null = null;
   let nodes: FlowNode[] = [];
   let edges: FlowEdge[] = [];
+  let whatsappTemplates: WhatsAppTemplate[] = [];
 
   if (user) {
     const workspace = await getCurrentWorkspaceContext(supabase);
@@ -57,7 +67,8 @@ export default async function FlowBuilderPage({
     organizationName = workspace.activeWorkspace?.organizationName || organizationName;
 
     if (organizationId) {
-      const [manageResult, workflowResult] = await Promise.all([
+      const admin = createAdminClient();
+      const [manageResult, workflowResult, templateResult] = await Promise.all([
         supabase.rpc('can_manage_organization', { p_organization_id: organizationId }),
         supabase
           .from('automation_workflows')
@@ -67,10 +78,19 @@ export default async function FlowBuilderPage({
           .order('updated_at', { ascending: false })
           .limit(1)
           .maybeSingle(),
+        admin
+          .from('automation_whatsapp_templates')
+          .select('id,whatsapp_account_id,template_name,language_code,category')
+          .eq('organization_id', organizationId)
+          .eq('approval_status', 'approved')
+          .eq('active', true)
+          .order('template_name', { ascending: true })
+          .order('language_code', { ascending: true }),
       ]);
 
       canManage = manageResult.data === true;
       workflow = (workflowResult.data ?? null) as WorkflowRow | null;
+      whatsappTemplates = (templateResult.data ?? []) as WhatsAppTemplate[];
 
       const draftVersion = Number(workflow?.current_draft_version ?? 1);
 
@@ -106,7 +126,7 @@ export default async function FlowBuilderPage({
       <PageHeader
         eyebrow="Automation · Flow Builder"
         title="Conversation Flow Builder"
-        description={`Arrange and configure the persisted conversation journey for ${organizationName}. This controlled editor still does not execute flows or send messages.`}
+        description={`Arrange and configure the persisted conversation journey for ${organizationName}. Draft editing never executes flows; guarded WhatsApp actions require synchronized provider-approved templates and force human approval.`}
       />
 
       {query.notice ? (
@@ -125,7 +145,7 @@ export default async function FlowBuilderPage({
         <div className="flex items-start gap-3">
           <ShieldCheck className="mt-0.5 shrink-0" size={18} />
           <div>
-            <strong>Structure-only mode:</strong> dragging nodes, editing settings, and creating/rerouting connections changes only the current draft version. It does not enroll leads, execute a flow, schedule jobs, call AI, or send WhatsApp/Instagram messages.
+            <strong>Structure-only mode:</strong> dragging nodes, editing settings, and creating/rerouting connections changes only the current draft version. Configuring a WhatsApp action stores an approved-template reference only; it does not enroll leads, execute a flow, schedule jobs, open provider execution, or send a message.
           </div>
         </div>
       </div>
@@ -165,6 +185,7 @@ export default async function FlowBuilderPage({
               versionNumber={draftVersion}
               initialNodes={nodes}
               edges={edges}
+              whatsappTemplates={whatsappTemplates}
             />
           </section>
 
