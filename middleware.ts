@@ -23,6 +23,7 @@ const PUBLIC_EXACT_PATHS = new Set([
   "/api/tracking/consent",
   "/api/tracking/identify",
   "/api/search/index/event-intelligence-pilot",
+  "/api/search/index/event-intelligence-proof",
   "/api/intelligence/system-snapshot",
   "/api/intelligence/lead-scoring-snapshot",
 ]);
