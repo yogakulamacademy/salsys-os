@@ -75,17 +75,63 @@ Use these as planning ranges, not audit percentages.
 
 ---
 
-## 4. Event Intelligence is now the tracking foundation
+## 4. Universal Tracking Intelligence SDK + Event Intelligence
 
-The active architecture is **Salsys Event Intelligence**, not a GTM-dependent tracker.
+The active tracking architecture is **Salsys Event Intelligence**. The developer-facing collection layer is the **Salsys Universal Tracking Intelligence SDK**.
 
 Target chain:
 
-`website/apps/connectors -> universal SDK or canonical HTTPS client -> platform-neutral first-party transport/outbox -> canonical event contract -> PostgreSQL raw_events -> normalization/identity/attribution -> feature store -> prediction ledger -> optional OpenSearch projection -> decisions/recommendations -> observed outcomes`
+`website/apps/connectors -> Universal Tracking Intelligence SDK or canonical HTTPS client -> optional platform-neutral first-party transport/outbox -> canonical event contract -> PostgreSQL raw_events -> normalization/identity/attribution -> feature store -> prediction ledger -> optional OpenSearch projection -> decisions/recommendations -> observed outcomes`
 
-The canonical transport contract is HTTPS + JSON. No backend programming language, framework, database or hosting provider is part of the Salsys tracking specification. Runtime-specific SDKs are convenience clients over the same protocol, not separate tracking architectures.
+The canonical transport contract is HTTPS + JSON. No backend programming language, framework, database, CMS or hosting provider is part of the Salsys tracking specification. Runtime-specific SDKs are convenience clients over the same protocol, not separate tracking architectures.
 
-Canonical protocol: `docs/universal-event-protocol-v1.md`.
+Canonical references:
+
+```text
+docs/universal-event-protocol-v1.md
+docs/universal-tracking-intelligence-sdk.md
+docs/event-tracking-v1.md
+schemas/salsys-event-v1.schema.json
+```
+
+### V1 SDK model
+
+```text
+Browser SDK                 direct web instrumentation
+HTTPS Event API             canonical trusted-server integration
+First-party transport       optional runtime-neutral relay/proxy/outbox
+Runtime SDKs                optional convenience wrappers
+```
+
+The current browser implementation is `public/salsys-tracker.js`. It is website-platform independent and already supports anonymous/session identity, acquisition capture, page/session/CTA/form events, consent/GPC handling, SPA tracking, form decoration and retry queuing.
+
+### Event tracking authority
+
+Browser events describe observed behavior and intent. Trusted server/provider events establish business truth.
+
+Browser examples:
+
+```text
+web.session_started
+web.page_viewed
+web.cta_clicked
+web.form_started
+web.form_submitted
+```
+
+Trusted-source examples:
+
+```text
+lead.created
+booking.started
+booking.completed
+payment.started
+payment.completed
+payment.failed
+enrollment.completed
+```
+
+The browser must never become authority for confirmed payment, enrollment, refund or final revenue.
 
 ### Already present in production
 
@@ -113,7 +159,7 @@ The previous backend-language-specific Event Intelligence relay package is not p
 
 ### Not yet complete
 
-The direct Yogakulam first-party source installation and full live E2E proof are still required.
+The direct Yogakulam source installation and full live E2E proof are still required.
 
 Tracking is only complete when a real journey proves:
 
@@ -126,13 +172,14 @@ Tracking is only complete when a real journey proves:
 Core tracking must not depend on GTM, GA4, Meta, a backend programming language or any single downstream vendor.
 
 Preferred deployment:
-- direct first-party browser SDK in website source/common layout;
+- direct universal browser SDK in website source/common layout;
 - tenant-neutral SDK/event vocabulary;
-- first-party transport endpoint with no file-extension/runtime requirement;
+- browser-safe origin-resolved collection;
+- optional first-party transport endpoint with no runtime/file-extension requirement;
 - durable local outbox/retry behavior implemented by the host platform where required;
 - stable event IDs and idempotency;
 - preserve existing first-party visitor/session continuity during migration;
-- server-to-server identity linking through the canonical Event API;
+- server-to-server identity linking through trusted flows;
 - server-authoritative payment/enrollment/revenue events.
 
 The browser SDK must work independently of the server technology that renders or hosts the site. Trusted server integrations use the same HTTPS/JSON event contract from any runtime.
@@ -246,22 +293,23 @@ Event Intelligence is the technical foundation for this layer.
 
 ## 11. Active implementation priority
 
-Do not add unrelated North-Star features until the tracking/Event Intelligence E2E foundation is complete.
+Do not add unrelated North-Star features until the Tracking Intelligence E2E foundation is complete.
 
 Current order:
 
-1. finalize Universal Event Protocol v1;
-2. align/direct-install universal browser SDK on Yogakulam;
-3. implement platform-neutral first-party transport/outbox;
-4. consent/GPC integration;
-5. form tracking + anonymous-to-lead identity;
-6. reservation/checkout/payment/enrollment server events;
-7. revenue attribution proof;
-8. feature-store refresh using live data;
-9. tracking-health/anomaly detection;
-10. controlled Event Intelligence OpenSearch pilot;
-11. model evaluation/calibration from real outcomes;
-12. resume wider R9/R10/R11 product work.
+1. validate the Universal Tracking Intelligence SDK branch build/CI;
+2. align the current browser implementation with the canonical V1 event schema and SDK naming;
+3. direct-install the universal browser SDK on Yogakulam;
+4. verify consent/GPC and browser event collection on the real website;
+5. verify session/page/CTA/form events in canonical `raw_events`;
+6. connect form success to anonymous-to-lead identity;
+7. instrument reservation/checkout/payment/enrollment with trusted server events;
+8. prove revenue attribution end-to-end;
+9. refresh feature-store state from live behavior;
+10. add tracking-health/anomaly detection;
+11. run controlled Event Intelligence OpenSearch pilot;
+12. evaluate/calibrate predictive models from real outcomes;
+13. resume wider R9/R10/R11 product work.
 
 ---
 
