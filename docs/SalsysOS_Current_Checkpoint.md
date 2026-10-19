@@ -77,9 +77,26 @@ Salsys Event Intelligence is now the active tracking/intelligence architecture.
 - Guarded pilot staging support exists.
 - Search outbox constraint now allows Event Intelligence derived entity types.
 
+### Universal Tracking Intelligence SDK V1 — branch implementation
+
+The active refactor branch now defines **Salsys Universal Tracking Intelligence SDK V1** as the developer-facing tracking layer.
+
+Implemented/defined on the branch:
+
+- browser SDK implementation remains `public/salsys-tracker.js` and is backend/CMS independent;
+- canonical integration boundary is HTTPS + JSON;
+- `docs/universal-event-protocol-v1.md` defines the protocol;
+- `schemas/salsys-event-v1.schema.json` defines the machine-readable canonical envelope;
+- `docs/universal-tracking-intelligence-sdk.md` defines the SDK architecture and developer API;
+- `docs/event-tracking-v1.md` defines event naming, authority boundaries and the V1 event model;
+- PHP-specific Event Intelligence relay/runtime has been removed from the refactor branch;
+- runtime-specific SDKs are optional wrappers and must not introduce parallel event semantics.
+
+This is a branch-level implementation checkpoint. Production cutover and Yogakulam live E2E proof are still pending.
+
 ### Architecture decision — platform/language independence
 
-The universal tracking layer is now explicitly **protocol-first**.
+The universal tracking layer is explicitly **protocol-first**.
 
 - canonical integration boundary = HTTPS + JSON;
 - browser SDK remains JavaScript because it executes in browsers, not because of the customer backend stack;
@@ -87,10 +104,16 @@ The universal tracking layer is now explicitly **protocol-first**.
 - first-party relay/outbox is a platform-neutral transport contract, not a backend-language-specific implementation;
 - durable storage may use any suitable host-platform mechanism;
 - runtime-specific SDKs are optional convenience adapters over the same event protocol;
-- the PHP-specific Event Intelligence relay is removed from the active architecture and repository branch;
 - legacy Yogakulam website integration code is separate from the universal SDK decision and is not the canonical tracking model.
 
-Canonical contract: `docs/universal-event-protocol-v1.md`.
+Canonical references:
+
+```text
+docs/universal-event-protocol-v1.md
+docs/universal-tracking-intelligence-sdk.md
+docs/event-tracking-v1.md
+schemas/salsys-event-v1.schema.json
+```
 
 ### OpenSearch rule
 
@@ -104,7 +127,7 @@ The tracking milestone is **not yet complete**.
 
 The user-approved architecture is:
 
-`website/app/service -> universal SDK or canonical HTTPS client -> platform-neutral first-party transport/outbox -> canonical event contract -> PostgreSQL raw events -> normalization/identity/attribution -> feature store -> predictions -> optional OpenSearch projection -> recommendations/outcomes`
+`website/app/service -> Universal Tracking Intelligence SDK or canonical HTTPS client -> optional platform-neutral first-party transport/outbox -> canonical event contract -> PostgreSQL raw events -> normalization/identity/attribution -> feature store -> predictions -> optional OpenSearch projection -> recommendations/outcomes`
 
 Core tracking must not depend on GTM, GA4, Meta, a backend programming language, framework, database, or any single downstream system. GTM may remain optional for marketing tags/experiments.
 
@@ -121,15 +144,16 @@ The same journey must be reconcilable in PostgreSQL-backed Tracking, Person 360,
 Do not reinstall the core SalsysOS tracker through GTM.
 
 Target implementation:
-- direct script in Yogakulam website source/common layout;
-- tenant-neutral SDK naming (not Yogakulam-only);
-- first-party browser endpoint on the website domain with no file-extension/runtime requirement;
-- platform-neutral durable local event/outbox behavior so downstream outages do not lose events;
-- canonical `event_id` idempotency;
+- direct universal browser SDK in Yogakulam website source/common layout;
+- tenant-neutral SDK/event vocabulary;
+- browser events delivered to the browser-safe Event API directly or through a first-party transport;
+- no backend-language/file-extension requirement;
+- stable `event_id` idempotency;
 - preserve/reuse existing `yk_vid`/`yk_sid` continuity during migration;
-- server-authoritative payment/enrollment/revenue events;
+- server-authoritative payment/enrollment/revenue events through the trusted Event API;
 - server-to-server lead identification;
-- consent-aware analytics/advertising behavior.
+- consent-aware analytics/advertising behavior;
+- optional durable first-party outbox without coupling the SDK to one runtime/database.
 
 ## 6. Predictive intelligence direction
 
@@ -146,16 +170,16 @@ Rules-generated scores must never be presented as calibrated probabilities.
 
 ## 7. Active next implementation order
 
-1. finish production-safe universal Event Intelligence ingestion validation;
-2. finalize Universal Event Protocol v1;
-3. align/direct-install the universal browser SDK on Yogakulam source;
-4. implement the platform-neutral first-party transport/outbox contract;
-5. wire consent and GPC behavior;
-6. wire forms and anonymous -> CRM identity;
-7. instrument reservation/checkout/payment/enrollment with server-authoritative events;
+1. validate the Universal Tracking Intelligence SDK branch build/CI;
+2. production-align the existing browser SDK with the canonical V1 event contract;
+3. direct-install the browser SDK on Yogakulam source;
+4. verify consent/GPC behavior on the real website;
+5. verify session/page/CTA/form event tracking into canonical `raw_events`;
+6. wire form success to trusted lead identity linkage;
+7. instrument reservation/checkout/payment/enrollment using trusted server events;
 8. prove revenue attribution E2E;
 9. refresh feature builders from live Yogakulam behavior;
-10. controlled Event Intelligence OpenSearch pilot while PostgreSQL remains authoritative;
+10. run a controlled Event Intelligence OpenSearch pilot while PostgreSQL remains authoritative;
 11. add tracking/data-quality anomaly detection;
 12. move from deterministic intelligence toward evaluated predictive models only when enough outcome evidence exists.
 
