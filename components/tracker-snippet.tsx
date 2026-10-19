@@ -4,7 +4,7 @@ import { Check, Copy } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 
 export function TrackerSnippet() {
-  const [origin, setOrigin] = useState('https://your-crm-domain.com');
+  const [origin, setOrigin] = useState('https://salsysos.com');
   const [copied, setCopied] = useState(false);
 
   useEffect(() => {
@@ -13,10 +13,7 @@ export function TrackerSnippet() {
 
   const snippet = useMemo(
     () => `<script
-  src="${origin}/yogakulam-tracker.js"
-  data-endpoint="${origin}/api/tracking/collect"
-  data-consent-endpoint="${origin}/api/tracking/consent"
-  data-site="yogakulamacademy.com"
+  src="${origin}/salsys-intelligence.js"
   data-consent-mode="required"
   defer>
 </script>`,
@@ -25,10 +22,7 @@ export function TrackerSnippet() {
 
   const testSnippet = useMemo(
     () => `<script
-  src="${origin}/yogakulam-tracker.js"
-  data-endpoint="${origin}/api/tracking/collect"
-  data-consent-endpoint="${origin}/api/tracking/consent"
-  data-site="yogakulamacademy.com"
+  src="${origin}/salsys-intelligence.js"
   data-consent-mode="granted"
   data-debug="true"
   defer>
@@ -51,7 +45,7 @@ export function TrackerSnippet() {
       <div className="tracking-snippet-block">
         <div className="mb-2 flex items-center justify-between gap-3">
           <div className="text-xs font-medium text-slate-400">
-            Production snippet â€” consent required
+            Production snippet — direct source install, consent required
           </div>
 
           <button
@@ -71,7 +65,7 @@ export function TrackerSnippet() {
 
       <div className="tracking-snippet-block">
         <div className="mb-2 text-xs font-medium text-amber-600">
-          Temporary testing snippet â€” use in GTM while diagnosing
+          Temporary controlled test snippet — do not use for normal production traffic
         </div>
 
         <pre className="tracking-code-block overflow-x-auto rounded-2xl bg-slate-950 p-4 text-xs leading-6 text-slate-100">
