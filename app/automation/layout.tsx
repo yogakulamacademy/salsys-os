@@ -1,0 +1,33 @@
+import type { ReactNode } from 'react';
+import Link from 'next/link';
+import { GitBranch, ListChecks, Settings2, Workflow } from 'lucide-react';
+
+const links = [
+  { href: '/automation', label: 'Smart Triggers', icon: GitBranch },
+  { href: '/automation/flow-builder', label: 'Flow Builder', icon: Workflow },
+  { href: '/automation/approvals', label: 'Approval Queue', icon: ListChecks },
+  { href: '/automation/settings', label: 'Settings', icon: Settings2 },
+];
+
+export default function AutomationLayout({ children }: { children: ReactNode }) {
+  return (
+    <div className="space-y-5">
+      <nav
+        aria-label="Automation workspace"
+        className="flex flex-wrap gap-2 rounded-2xl border border-slate-200 bg-white p-2 shadow-sm"
+      >
+        {links.map(({ href, label, icon: Icon }) => (
+          <Link
+            key={href}
+            href={href}
+            className="inline-flex items-center gap-2 rounded-xl px-3 py-2 text-sm font-semibold text-slate-700 transition hover:bg-violet-50 hover:text-violet-700"
+          >
+            <Icon size={15} />
+            {label}
+          </Link>
+        ))}
+      </nav>
+      {children}
+    </div>
+  );
+}
