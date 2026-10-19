@@ -13,6 +13,7 @@ const PUBLIC_EXACT_PATHS = new Set([
   "/api/analytics/google-ads/sync",
   "/api/analytics/meta-ads/sync",
   "/api/admissions/auto-tasks",
+  "/api/automation/runtime-scheduler",
   "/api/conversion-feedback/run",
   "/api/whatsapp/webhook",
   "/api/instagram/webhook",
