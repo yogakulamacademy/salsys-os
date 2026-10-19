@@ -1,4 +1,5 @@
 import type { DashboardSnapshot } from '@/lib/dashboard-data';
+import { buildAwarenessTrendSignal } from '@/lib/intelligence/awareness-trend-signal';
 import {
   buildSystemIntelligence,
   type SystemIntelligenceBrief,
@@ -243,11 +244,13 @@ export function buildSystemIntelligenceV2(
   const correlatedReply = compositeReplySignal(context, now);
   const behaviour = behaviouralSignal(context);
   const health = systemHealthSignal(context);
+  const awarenessTrendSignal = buildAwarenessTrendSignal(context);
 
   let signals = base.signals.filter((item) => !['conversation-needs-reply', 'conversation-waiting-over-hour'].includes(item.id));
   if (correlatedReply) signals.push(correlatedReply);
   if (behaviour) signals.push(behaviour);
   if (health) signals.push(health);
+  if (awarenessTrendSignal) signals.push(awarenessTrendSignal);
   signals.push(...velocitySignals(context));
 
   signals = signals
@@ -288,6 +291,7 @@ export function buildSystemIntelligenceV2(
       && (row.sample_band === 'established' || row.sample_band === 'mature')
       && row.role_scope === context.role,
   );
+  const hasDirectionalHistory = context.awarenessTrend?.directional_evidence_available === true;
 
   return {
     generatedAt: now.toISOString(),
@@ -300,7 +304,7 @@ export function buildSystemIntelligenceV2(
         ? 'The system found active work that can materially improve current performance.'
         : state === 'opportunity'
           ? 'No critical queue dominates; the strongest current opportunities are ranked below.'
-          : 'No critical operating threshold is elevated.'} Priorities are correlated and weighted for the ${roleLabel(context.role)} role using current tenant evidence${hasActiveCalibration ? ' plus bounded mature-history calibration' : ''}.`,
+          : 'No critical operating threshold is elevated.'} Priorities are correlated and weighted for the ${roleLabel(context.role)} role using current tenant evidence${hasDirectionalHistory ? ' plus observed recent system direction' : ''}${hasActiveCalibration ? ' plus bounded mature-history calibration' : ''}.`,
     signals,
     counters: { urgent, opportunities, dataQuality },
   };
