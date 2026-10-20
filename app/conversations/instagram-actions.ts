@@ -58,6 +58,34 @@ function objectValue(value: unknown): Record<string, unknown> {
     : {};
 }
 
+function stringArray(value: unknown) {
+  return Array.isArray(value)
+    ? value.filter((item): item is string => typeof item === "string")
+    : [];
+}
+
+function instagramPolicyMessage(reasons: string[]) {
+  if (reasons.includes("instagram_24h_window_closed")) {
+    return "Instagram's standard API reply window is closed. The customer must message the Instagram account again before another software/API reply can be sent.";
+  }
+
+  if (reasons.includes("instagram_user_initiation_missing")) {
+    return "Instagram requires the customer to start the conversation before Salsys can send a standard API reply.";
+  }
+
+  if (reasons.includes("instagram_recipient_suppressed")) {
+    return "This Instagram recipient is suppressed in Salsys and cannot be messaged.";
+  }
+
+  if (reasons.includes("instagram_messaging_connection_unavailable")) {
+    return "The connected Instagram account is unavailable, expired, or missing message access. Reconnect Instagram in Settings → Integrations.";
+  }
+
+  return reasons.length
+    ? `Instagram reply blocked by policy: ${reasons.join(", ")}.`
+    : "Instagram reply is not currently allowed.";
+}
+
 function instagramRecipientId(conversation: {
   external_conversation_id?: string | null;
   metadata?: unknown;
@@ -212,6 +240,45 @@ export async function sendInstagramMessageAction(
     );
   }
 
+  /*
+   * Do not rely on Meta to reject an out-of-window send after the fact.
+   * The service-role-only policy evaluator verifies a real inbound customer
+   * message, connected account, suppression state and the standard 24-hour
+   * Instagram API reply window immediately before the provider call.
+   *
+   * Human replies deliberately do not depend on the autonomous automation
+   * gates; those gates apply only to automated sends.
+   */
+  const { data: policyData, error: policyError } = await admin.rpc(
+    "evaluate_instagram_dm_send_policy_v1",
+    {
+      p_organization_id: organizationId,
+      p_conversation_id: conversation.id,
+      p_now: new Date().toISOString(),
+      p_automated: false,
+      p_human_approved: true,
+    },
+  );
+
+  if (policyError) {
+    redirect(
+      conversationUrl(leadId, {
+        error: `Instagram reply policy could not be verified: ${policyError.message}`,
+      }),
+    );
+  }
+
+  const policy = objectValue(policyData);
+  const policyReasons = stringArray(policy.reasons);
+
+  if (policy.allowed !== true) {
+    redirect(
+      conversationUrl(leadId, {
+        error: instagramPolicyMessage(policyReasons),
+      }),
+    );
+  }
+
   const version = instagramApiVersion();
   const response = await fetch(
     `https://graph.instagram.com/${version}/${encodeURIComponent(
@@ -321,6 +388,12 @@ export async function sendInstagramMessageAction(
         external_message_id: externalMessageId,
         status: "sent",
         sent_at: new Date().toISOString(),
+        human_approved: true,
+        metadata: {
+          provider: "instagram",
+          send_mode: "human_manual",
+          policy_checked: true,
+        },
       })
       .eq("id", crmMessageId)
       .eq("organization_id", organizationId)
