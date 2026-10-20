@@ -1,6 +1,6 @@
 import Link from "next/link";
 
-import { ArrowRight, GitBranch, Target } from "lucide-react";
+import { ArrowRight, GitBranch, Sparkles, Target } from "lucide-react";
 
 import {
   AttributionWorkspace,
@@ -45,6 +45,11 @@ export default async function AttributionPage({
         description="Compare acquisition, lead creation, marketing influence and current conversation channels without overwriting the original source of a lead."
         actions={
           <>
+            <Link href="/commercial-intelligence" className="btn-secondary">
+              <Sparkles size={15} />
+              Intelligence
+            </Link>
+
             <Link href="/campaigns" className="btn-secondary">
               <Target size={15} />
               Campaigns
