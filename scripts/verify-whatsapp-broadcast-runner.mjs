@@ -17,6 +17,7 @@ function read(relativePath) {
 
 const migration = read('supabase/migrations/20261020093000_whatsapp_broadcast_runner_v1.sql');
 const hardening = read('supabase/migrations/20261020093500_whatsapp_broadcast_runner_hardening_v1.sql');
+const lineage = read('supabase/migrations/20261020094000_whatsapp_broadcast_message_lineage_v1.sql');
 const runner = read('lib/automation/whatsapp-broadcast-runner.ts');
 const route = read('app/api/automation/whatsapp/broadcast-runner/route.ts');
 const provider = read('lib/integrations/whatsapp-provider-send.ts');
@@ -60,6 +61,16 @@ if (/set\s+eligible_count\s*=/i.test(hardening)) {
 }
 
 for (const [needle, label] of [
+  ['enrich_whatsapp_broadcast_provider_audit_v1', 'provider audit lineage enrichment'],
+  ["'human_approved',true", 'human approval on provider payload'],
+  ['approved same-tenant campaign/recipient lineage', 'lineage tenant approval guard'],
+  ['enrich_whatsapp_broadcast_message_lineage_v1', 'canonical message lineage enrichment'],
+  ["'broadcast_attribution','direct_provider_send_lineage'", 'direct broadcast lineage marker'],
+]) {
+  if (!lineage.includes(needle)) fail(`Message-lineage migration is missing ${label} (${needle}).`);
+}
+
+for (const [needle, label] of [
   [".in('status', ['approved', 'scheduled', 'running'])", 'approved/scheduled/running campaign scope'],
   ["policy?.policy_enabled !== true", 'messaging-policy gate before campaign start'],
   ["provider?.provider_send_enabled !== true", 'provider gate before campaign start'],
@@ -86,7 +97,7 @@ for (const forbidden of [
 for (const [needle, label] of [
   ['WHATSAPP_BROADCAST_RUNNER_SECRET', 'dedicated optional runner secret'],
   ['CRON_SECRET', 'cron authorization fallback'],
-  ['Authorization', 'Bearer authorization'],
+  ["request.headers.get('authorization')", 'Bearer authorization header'],
   ['maxCampaigns: 5', 'bounded campaign batch'],
   ['maxRecipientsPerCampaign: 10', 'bounded recipient batch'],
   ["'Cache-Control': 'no-store'", 'no-store response'],
@@ -106,4 +117,4 @@ if (!vercel.includes('/api/automation/whatsapp/broadcast-runner')) {
   fail('Vercel cron does not schedule the guarded broadcast runner.');
 }
 
-console.log('[whatsapp-broadcast-runner] PASS: human-approved broadcasts remain tenant-bound, bounded, suppression/frequency/provider/pilot gated, idempotent and reconciled.');
+console.log('[whatsapp-broadcast-runner] PASS: human-approved broadcasts remain tenant-bound, bounded, suppression/frequency/provider/pilot gated, idempotent, human-approved in the CRM ledger, and reconciled.');
