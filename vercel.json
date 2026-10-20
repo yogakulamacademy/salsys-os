@@ -18,6 +18,10 @@
       "schedule": "*/5 * * * *"
     },
     {
+      "path": "/api/automation/instagram/runner",
+      "schedule": "*/5 * * * *"
+    },
+    {
       "path": "/api/analytics/ga4/sync",
       "schedule": "30 4 * * *"
     },
