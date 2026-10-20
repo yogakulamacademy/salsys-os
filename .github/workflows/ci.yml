@@ -52,6 +52,9 @@ jobs:
       - name: Verify Prediction Calibration Contracts
         run: npm run verify:intelligence-calibration
 
+      - name: Verify WhatsApp Operations Contracts
+        run: npm run verify:whatsapp-operations
+
       - name: Typecheck
         run: npm run typecheck
 
