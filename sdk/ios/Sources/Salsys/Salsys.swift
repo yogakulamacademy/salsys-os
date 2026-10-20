@@ -143,14 +143,13 @@ public final class Salsys {
             safeContext["app_version"] = version
         }
 
-        let envelope: [String: Any] = [
+        var envelope: [String: Any] = [
             "event_id": Self.randomID(prefix: "evt"),
             "event_name": normalized,
             "schema_version": 1,
             "occurred_at": Self.isoNow(),
             "anonymous_visitor_id": visitorID(),
             "session_key": currentSessionID(),
-            "site": config?.site as Any,
             "properties": safeProperties,
             "context": safeContext,
             "metadata": [
@@ -162,6 +161,9 @@ public final class Salsys {
                 "platform": "ios",
             ],
         ]
+        if let site = config?.site, !site.isEmpty {
+            envelope["site"] = site
+        }
 
         enqueue(envelope)
         flush()
@@ -241,7 +243,12 @@ public final class Salsys {
         request.timeoutInterval = 10
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.setValue(config.sourceKey, forHTTPHeaderField: "X-Salsys-Source-Key")
-        request.httpBody = try? JSONSerialization.data(withJSONObject: body)
+        guard JSONSerialization.isValidJSONObject(body),
+              let requestBody = try? JSONSerialization.data(withJSONObject: body) else {
+            completion(false)
+            return
+        }
+        request.httpBody = requestBody
 
         session.dataTask(with: request) { [weak self] _, response, error in
             let status = (response as? HTTPURLResponse)?.statusCode ?? 0
