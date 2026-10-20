@@ -193,7 +193,7 @@ function isNavActive(pathname: string, href: string) {
 function BrandMark() {
   return (
     <div className="topbar-brand-mark" aria-hidden="true">
-      <span>YK</span>
+      <span>SO</span>
     </div>
   );
 }
@@ -207,7 +207,7 @@ function initials(name: string) {
     .join("")
     .toUpperCase();
 
-  return value || "YK";
+  return value || "SO";
 }
 
 export function AppShell({ children }: { children: ReactNode }) {
@@ -264,7 +264,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   const current = useMemo(
     () =>
       visibleNav.find((item) => isNavActive(pathname, item.href))?.label ??
-      (employee ? "Admissions Workspace" : "Growth CRM"),
+      (employee ? "Admissions Workspace" : "SalsysOS"),
     [pathname, visibleNav, employee],
   );
 
@@ -437,7 +437,6 @@ export function AppShell({ children }: { children: ReactNode }) {
 
     const previous = document.body.style.overflow;
     document.body.style.overflow = "hidden";
-
     return () => {
       document.body.style.overflow = previous;
     };
@@ -513,7 +512,7 @@ export function AppShell({ children }: { children: ReactNode }) {
 
   const organizationName =
     activeWorkspace?.organizationName ||
-    (mock ? "Yogakulam" : "Workspace");
+    (mock ? "SalsysOS Demo" : "Workspace");
 
   return (
     <div className="app-shell app-shell-v3">
@@ -525,7 +524,7 @@ export function AppShell({ children }: { children: ReactNode }) {
           <div className="topbar-brand-copy">
             <div className="topbar-brand-name">{organizationName}</div>
             <div className="topbar-product-name">
-              {employee ? "Admissions CRM" : "Growth CRM · v0.9 Beta"}
+              {employee ? "SalsysOS · Admissions" : "SalsysOS · v0.9 Beta"}
             </div>
           </div>
         </div>
@@ -657,7 +656,6 @@ export function AppShell({ children }: { children: ReactNode }) {
                   <span className="topbar-todo-icon">
                     <MessageSquareText size={16} />
                   </span>
-
                   <span className="topbar-todo-copy">
                     <span className="topbar-todo-card-title">
                       <span className="topbar-todo-dot" aria-hidden="true" />
