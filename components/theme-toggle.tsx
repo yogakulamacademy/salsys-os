@@ -5,6 +5,9 @@ import { useEffect, useState } from 'react';
 
 type Theme = 'light' | 'dark';
 
+const THEME_STORAGE_KEY = 'salsysos-theme';
+const LEGACY_THEME_STORAGE_KEY = 'yk-theme';
+
 function applyTheme(theme: Theme) {
   const root = document.documentElement;
   root.classList.toggle('dark', theme === 'dark');
@@ -16,12 +19,19 @@ export function ThemeToggle() {
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
-    const saved = window.localStorage.getItem('yk-theme') ?? 'light';
+    const stored = window.localStorage.getItem(THEME_STORAGE_KEY);
+    const legacyStored = window.localStorage.getItem(LEGACY_THEME_STORAGE_KEY);
+    const saved = stored ?? legacyStored ?? 'light';
     const preferred: Theme = saved === 'dark' || saved === 'light'
       ? saved
       : window.matchMedia('(prefers-color-scheme: dark)').matches
         ? 'dark'
         : 'light';
+
+    if (!stored && (legacyStored === 'dark' || legacyStored === 'light')) {
+      window.localStorage.setItem(THEME_STORAGE_KEY, legacyStored);
+    }
+
     setTheme(preferred);
     applyTheme(preferred);
     setMounted(true);
@@ -30,7 +40,7 @@ export function ThemeToggle() {
   function toggleTheme() {
     const next: Theme = theme === 'dark' ? 'light' : 'dark';
     setTheme(next);
-    window.localStorage.setItem('yk-theme', next);
+    window.localStorage.setItem(THEME_STORAGE_KEY, next);
     applyTheme(next);
   }
 
