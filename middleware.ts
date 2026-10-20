@@ -37,8 +37,6 @@ const PUBLIC_EXACT_PATHS = new Set([
   "/api/intelligence/lead-scoring-snapshot",
 ]);
 
-const ACTIVE_WORKSPACE_COOKIE = "yk-active-workspace";
-
 const OAUTH_CALLBACK_PROVIDER_BY_PATH: Record<string, string> = {
   "/api/integrations/google/callback": "google",
   "/api/integrations/meta/callback": "meta",
