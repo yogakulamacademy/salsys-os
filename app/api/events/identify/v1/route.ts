@@ -20,6 +20,12 @@ function text(value: unknown, max: number) {
     : null;
 }
 
+function objectValue(value: unknown): Record<string, unknown> {
+  return value && typeof value === 'object' && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : {};
+}
+
 function json(
   body: Record<string, unknown>,
   status: number,
@@ -37,10 +43,10 @@ function json(
 /**
  * Universal trusted identity handoff.
  *
- * This preserves the strongest behavior of the pre-existing tracking system:
- * a browser identifier alone is never enough to attach history to a CRM lead.
- * The exact session must already exist inside the same tenant and must belong
- * to the supplied anonymous visitor.
+ * Browser/device identifiers are never treated as permanent human identity.
+ * The authenticated tracking source supplies the tenant boundary and the exact
+ * session must already exist for the supplied anonymous visitor. All identity
+ * mutations are performed atomically by attach_exact_session_identity_v1.
  */
 export async function POST(request: NextRequest) {
   const source = await authenticateServerTrackingSource(
@@ -101,7 +107,10 @@ export async function POST(request: NextRequest) {
       input.anonymous_visitor_id ?? input.anonymousVisitorId ?? input.visitor_id,
       180,
     );
-    const sessionKey = text(input.session_key ?? input.sessionKey ?? input.session_id, 180);
+    const sessionKey = text(
+      input.session_key ?? input.sessionKey ?? input.session_id,
+      180,
+    );
 
     if (!leadId || !visitorId || !sessionKey) {
       throw new Error(
@@ -110,88 +119,31 @@ export async function POST(request: NextRequest) {
     }
 
     const admin = createAdminClient();
-
-    const { data: lead, error: leadError } = await admin
-      .from('leads')
-      .select('id,organization_id')
-      .eq('id', leadId)
-      .eq('organization_id', source.organizationId)
-      .maybeSingle();
-
-    if (leadError) throw leadError;
-    if (!lead?.organization_id) {
-      throw new Error('Lead was not found for this tracking source tenant.');
-    }
-
-    const { data: session, error: sessionError } = await admin
-      .from('web_sessions')
-      .select('id,organization_id,anonymous_visitor_id,session_key,lead_id')
-      .eq('organization_id', source.organizationId)
-      .eq('session_key', sessionKey)
-      .eq('anonymous_visitor_id', visitorId)
-      .maybeSingle();
-
-    if (sessionError) throw sessionError;
-    if (!session) {
-      throw new Error(
-        'Matching tracking session was not found for this lead organization.',
-      );
-    }
-
-    const linkedAt = new Date().toISOString();
-
-    const { error: linkError } = await admin
-      .from('visitor_identity_links')
-      .upsert(
-        {
-          organization_id: source.organizationId,
-          anonymous_visitor_id: visitorId,
-          lead_id: leadId,
-          last_session_key: sessionKey,
-          source_system: 'events-identify-v1',
-          linked_at: linkedAt,
-          metadata: {
-            identity_scope: 'exact_session',
-            tracking_source_id: source.id,
-            source_key: source.sourceKey,
-            event_id: eventId,
-          },
-        },
-        {
-          onConflict: 'organization_id,anonymous_visitor_id',
-        },
-      );
-
-    if (linkError) throw linkError;
-
-    const { data: attribution, error: attachError } = await admin.rpc(
-      'attach_visitor_journey_to_lead',
-      {
-        p_lead_id: leadId,
-        p_anonymous_visitor_id: visitorId,
-        p_session_key: sessionKey,
-      },
-    );
-
-    if (attachError) throw attachError;
-
-    const { error: personError } = await admin.rpc('resolve_person_for_lead', {
+    const { data, error } = await admin.rpc('attach_exact_session_identity_v1', {
+      p_organization_id: source.organizationId,
       p_lead_id: leadId,
+      p_anonymous_visitor_id: visitorId,
+      p_session_key: sessionKey,
       p_source_system: 'events-identify-v1',
+      p_metadata: {
+        tracking_source_id: source.id,
+        source_key: source.sourceKey,
+        event_id: eventId,
+      },
     });
 
-    if (personError) throw personError;
+    if (error) throw error;
+
+    const result = objectValue(data);
+    if (result.ok !== true) {
+      throw new Error('Atomic identity handoff did not complete.');
+    }
 
     return json(
       {
-        ok: true,
+        ...result,
         linked: true,
-        lead_id: leadId,
-        anonymous_visitor_id: visitorId,
-        session_key: sessionKey,
         event_id: eventId,
-        attribution,
-        linked_at: linkedAt,
       },
       200,
       {

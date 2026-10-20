@@ -67,6 +67,9 @@ jobs:
       - name: Verify CRM Core Closeout Contracts
         run: npm run verify:crm-core
 
+      - name: Verify Customer 360 Identity Closeout Contracts
+        run: npm run verify:customer360-identity
+
       - name: Typecheck
         run: npm run typecheck
 

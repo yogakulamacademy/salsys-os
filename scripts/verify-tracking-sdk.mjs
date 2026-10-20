@@ -17,6 +17,7 @@ const requiredFiles = [
   'docs/universal-tracking-intelligence-sdk.md',
   'docs/universal-consent-ui-v1.md',
   'docs/event-tracking-v1.md',
+  'supabase/migrations/20261020114000_customer360_identity_closeout_v1.sql',
 ];
 
 function fail(message) {
@@ -65,6 +66,9 @@ const consentUi = read('public/salsys-consent.js');
 const browserRoute = read('app/api/events/browser/v1/route.ts');
 const serverRoute = read('app/api/events/v1/route.ts');
 const identifyRoute = read('app/api/events/identify/v1/route.ts');
+const identityCloseout = read(
+  'supabase/migrations/20261020114000_customer360_identity_closeout_v1.sql',
+);
 const consentRoute = read('app/api/privacy/consent/v1/route.ts');
 const middleware = read('middleware.ts');
 
@@ -133,14 +137,30 @@ if (!serverRoute.includes('ingest_tracking_event_v1')) {
 if (!identifyRoute.includes('authenticateServerTrackingSource')) {
   fail('Identity handoff must require an authenticated tracking source.');
 }
-if (!identifyRoute.includes('attach_visitor_journey_to_lead')) {
-  fail('Identity handoff must preserve the canonical exact-session visitor-to-lead attachment flow.');
+if (!identifyRoute.includes('source.organizationId')) {
+  fail('Identity handoff tenant authority must come from the authenticated tracking source.');
 }
-if (!identifyRoute.includes(".eq('session_key', sessionKey)")) {
-  fail('Identity handoff must verify the exact session key.');
+if (!identifyRoute.includes('attach_exact_session_identity_v1')) {
+  fail('Identity handoff must use the atomic exact-session identity boundary.');
 }
-if (!identifyRoute.includes(".eq('anonymous_visitor_id', visitorId)")) {
-  fail('Identity handoff must verify the anonymous visitor against the exact session.');
+if (identifyRoute.includes(".from('visitor_identity_links')") || identifyRoute.includes('attach_visitor_journey_to_lead')) {
+  fail('Identity HTTP route must not split canonical identity mutations outside the atomic RPC.');
+}
+for (const [needle, label] of [
+  ['create or replace function public.attach_exact_session_identity_v1', 'atomic identity RPC'],
+  ['public.attach_visitor_journey_to_lead', 'canonical exact-session visitor-to-lead attachment'],
+  ['ws.session_key = v_session_key', 'exact session-key verification'],
+  ['ws.anonymous_visitor_id = v_visitor_id', 'anonymous visitor verification against exact session'],
+  ["'identity_scope', 'exact_session'", 'exact-session identity scope'],
+  ['for update', 'transactional session lock'],
+  ['to service_role', 'service-role-only identity mutation boundary'],
+]) {
+  if (!identityCloseout.includes(needle)) {
+    fail(`Atomic identity boundary is missing ${label} (${needle}).`);
+  }
+}
+if (identityCloseout.includes('p_session_key text default null')) {
+  fail('Atomic identity handoff must not permit a visitor-only/no-session fallback.');
 }
 if (!consentRoute.includes('privacy')) {
   fail('Privacy consent endpoint appears to have lost its privacy handling contract.');
