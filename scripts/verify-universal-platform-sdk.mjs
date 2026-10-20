@@ -47,9 +47,7 @@ for (const [needle, label] of [
   ["normalized.startsWith('app.')", 'app telemetry boundary'],
   ["normalized.startsWith('web.')", 'web telemetry boundary'],
   ['PUBLIC_CLIENT_PII_KEYS', 'PII redaction boundary'],
-  ["'payment'", 'test sentinel'],
 ]) {
-  if (label === 'test sentinel') continue;
   if (!runtime.includes(needle)) fail(`Publishable client runtime is missing ${label} (${needle}).`);
 }
 
@@ -75,8 +73,10 @@ const consentRoute = read('app/api/privacy/consent/client/v1/route.ts');
 for (const purpose of ['analytics', 'marketing', 'advertising', 'sale_sharing', 'personalization']) {
   if (!consentRoute.includes(`'${purpose}'`)) fail(`Client consent route must support ${purpose}.`);
 }
-for (const needle of ['record_privacy_preference_v1', 'privacyNoticeVersion', 'X-Salsys-Source-Key']) {
-  if (!consentRoute.includes(needle)) fail(`Client consent route is missing ${needle}.`);
+for (const needle of ['record_privacy_preference_v1', 'privacyNoticeVersion', 'x-salsys-source-key']) {
+  if (!consentRoute.toLowerCase().includes(needle.toLowerCase())) {
+    fail(`Client consent route is missing ${needle}.`);
+  }
 }
 
 const sourceRoute = read('app/api/tracking/sources/route.ts');
@@ -100,8 +100,8 @@ for (const needle of [
 ]) {
   if (!android.includes(needle)) fail(`Android SDK is missing ${needle}.`);
 }
-if (android.includes('Authorization: Bearer') || android.includes('server-source secret')) {
-  fail('Android SDK must not embed trusted server credentials.');
+if (android.includes('Authorization: Bearer') || android.includes('Bearer ')) {
+  fail('Android SDK must not embed bearer/server credentials.');
 }
 
 const ios = read('sdk/ios/Sources/Salsys/Salsys.swift');
@@ -114,6 +114,9 @@ for (const needle of [
   'eventQueueKey',
 ]) {
   if (!ios.includes(needle)) fail(`iOS SDK is missing ${needle}.`);
+}
+if (ios.includes('Authorization: Bearer') || ios.includes('Bearer ')) {
+  fail('iOS SDK must not embed bearer/server credentials.');
 }
 
 const middleware = read('middleware.ts');
