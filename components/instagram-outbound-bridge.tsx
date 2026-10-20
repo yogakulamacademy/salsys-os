@@ -139,18 +139,6 @@ export function InstagramOutboundBridge() {
         form.appendChild(quickReplySelect);
       }
 
-      void loadInstagramQuickReplies().then((rows) => {
-        if (disposed) return;
-        quickReplies = rows;
-
-        for (const reply of rows) {
-          const option = document.createElement('option');
-          option.value = reply.id;
-          option.textContent = `${reply.shortcut} · ${reply.title}`;
-          quickReplySelect.appendChild(option);
-        }
-      });
-
       const updateUi = () => {
         const isInstagramOutbound =
           channel.value.toLowerCase() === 'instagram' &&
@@ -184,6 +172,20 @@ export function InstagramOutboundBridge() {
         quickReplySelect.disabled = sending;
       };
 
+      void loadInstagramQuickReplies().then((rows) => {
+        if (disposed) return;
+        quickReplies = rows;
+
+        for (const reply of rows) {
+          const option = document.createElement('option');
+          option.value = reply.id;
+          option.textContent = `${reply.shortcut} · ${reply.title}`;
+          quickReplySelect.appendChild(option);
+        }
+
+        updateUi();
+      });
+
       const applyQuickReply = () => {
         const reply = quickReplies.find((item) => item.id === quickReplySelect.value);
         if (!reply) return;
@@ -195,15 +197,16 @@ export function InstagramOutboundBridge() {
         body.focus();
       };
 
-      const applyShortcut = (event: KeyboardEvent) => {
-        if (event.key !== 'Tab' || !body.value.trim().startsWith('/')) return;
+      const applyShortcut: EventListener = (event) => {
+        const keyboardEvent = event as KeyboardEvent;
+        if (keyboardEvent.key !== 'Tab' || !body.value.trim().startsWith('/')) return;
         const typed = body.value.trim().toLowerCase();
         const reply = quickReplies.find(
           (item) => item.shortcut.toLowerCase() === typed,
         );
         if (!reply) return;
 
-        event.preventDefault();
+        keyboardEvent.preventDefault();
         body.value = reply.body.slice(0, 1000);
         copilotAssisted = false;
         body.focus();
