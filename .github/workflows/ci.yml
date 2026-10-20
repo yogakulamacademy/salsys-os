@@ -58,6 +58,9 @@ jobs:
       - name: Verify WhatsApp Broadcast Runner Contracts
         run: npm run verify:whatsapp-broadcast-runner
 
+      - name: Verify WhatsApp Growth Contracts
+        run: npm run verify:whatsapp-growth
+
       - name: Typecheck
         run: npm run typecheck
 
