@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import Link from "next/link";
 import {
   ArrowRight,
@@ -11,6 +12,7 @@ import {
   CommercialIntelligencePanel,
   RevenueAttributionReconciliationCard,
 } from "@/components/commercial-intelligence-panel";
+import { PaidMediaIntelligencePanel } from "@/components/paid-media-intelligence-panel";
 import { PageHeader } from "@/components/ui";
 import { getAttributionWorkspace } from "@/lib/attribution-data";
 import {
@@ -62,7 +64,7 @@ export default async function CommercialIntelligencePage() {
       <PageHeader
         eyebrow="Decision intelligence"
         title="Commercial Intelligence"
-        description="One explainable view of funnel leakage, attribution quality, revenue readiness and payment-to-source reconciliation. SalsysOS uses observed facts and deterministic diagnostics here—not invented conversions or uncalibrated probabilities."
+        description="One explainable view of funnel leakage, paid-media efficiency, attribution quality, revenue readiness and payment-to-source reconciliation. SalsysOS uses observed facts and deterministic diagnostics here—not invented conversions or uncalibrated probabilities."
         actions={
           <div className="flex flex-wrap gap-2">
             <Link href="/funnel" className="btn-secondary">
@@ -111,6 +113,11 @@ export default async function CommercialIntelligencePage() {
 
       <RevenueAttributionReconciliationCard reconciliation={reconciliation} />
 
+      <PaidMediaIntelligencePanel
+        google={funnel.googleAds}
+        meta={funnel.metaAds}
+      />
+
       <CommercialIntelligencePanel brief={funnelBrief} />
       <CommercialIntelligencePanel brief={attributionBrief} />
       <CommercialIntelligencePanel brief={revenueBrief} />
@@ -119,12 +126,13 @@ export default async function CommercialIntelligencePage() {
         <div className="eyebrow">Interpretation guardrail</div>
         <div className="section-title mt-1">Smart does not mean speculative</div>
         <p className="mt-2 max-w-4xl text-sm leading-6 text-slate-500">
-          These diagnostics rank observed bottlenecks, completeness gaps and
-          commercial follow-up opportunities. They do not label missing behavior
-          as negative intent, do not merge currencies without an explicit FX
-          layer, and do not present stage weights or readiness scores as calibrated
-          conversion probabilities. Predictive claims stay blocked until real
-          outcome evidence is sufficient for evaluation and promotion.
+          These diagnostics rank observed bottlenecks, completeness gaps,
+          paid-media efficiency and commercial follow-up opportunities. They do
+          not label missing behavior as negative intent, do not merge currencies
+          without an explicit FX layer, and do not present stage weights or
+          readiness scores as calibrated conversion probabilities. Predictive
+          claims stay blocked until real outcome evidence is sufficient for
+          evaluation and promotion.
         </p>
       </section>
     </div>
@@ -137,7 +145,7 @@ function SummaryCard({
   value,
   detail,
 }: {
-  icon: React.ReactNode;
+  icon: ReactNode;
   label: string;
   value: string;
   detail: string;
