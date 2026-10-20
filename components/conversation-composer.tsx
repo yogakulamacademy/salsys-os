@@ -35,6 +35,11 @@ type QuickReply = {
   category: string | null;
 };
 
+type QuickReplyResponse = {
+  ok?: boolean;
+  quickReplies?: QuickReply[];
+};
+
 export function WhatsAppComposer({
   action,
   windowOpen,
@@ -48,10 +53,44 @@ export function WhatsAppComposer({
 }) {
   const [body, setBody] = useState("");
   const [copilotAssisted, setCopilotAssisted] = useState(false);
-
+  const [availableQuickReplies, setAvailableQuickReplies] = useState<QuickReply[]>(quickReplies);
   const [isPending, startTransition] = useTransition();
-
   const formRef = useRef<HTMLFormElement | null>(null);
+
+  useEffect(() => {
+    setAvailableQuickReplies(quickReplies);
+  }, [quickReplies]);
+
+  useEffect(() => {
+    if (!windowOpen || quickReplies.length > 0) return;
+
+    let cancelled = false;
+    const controller = new AbortController();
+
+    fetch("/api/whatsapp/quick-replies", {
+      method: "GET",
+      cache: "no-store",
+      credentials: "same-origin",
+      signal: controller.signal,
+    })
+      .then(async (response) => {
+        if (!response.ok) return null;
+        return (await response.json()) as QuickReplyResponse;
+      })
+      .then((payload) => {
+        if (cancelled || !payload?.ok || !Array.isArray(payload.quickReplies)) return;
+        setAvailableQuickReplies(payload.quickReplies.slice(0, 100));
+      })
+      .catch((error) => {
+        if (error instanceof DOMException && error.name === "AbortError") return;
+        console.warn("WhatsApp quick replies could not be loaded.", error);
+      });
+
+    return () => {
+      cancelled = true;
+      controller.abort();
+    };
+  }, [quickReplies, windowOpen]);
 
   useEffect(() => {
     const applyCopilotDraft = (event: Event) => {
@@ -165,12 +204,12 @@ export function WhatsAppComposer({
       }}
       className="conversation-composer border-t border-slate-100 bg-white p-4"
     >
-      {quickReplies.length ? (
+      {availableQuickReplies.length ? (
         <div className="mb-2 flex items-center gap-2 overflow-x-auto pb-1">
           <span className="inline-flex shrink-0 items-center gap-1 text-[10px] font-bold uppercase tracking-wide text-slate-400">
             <Sparkles size={11} /> Quick replies
           </span>
-          {quickReplies.slice(0, 12).map((reply) => (
+          {availableQuickReplies.slice(0, 12).map((reply) => (
             <button
               key={reply.id}
               type="button"
