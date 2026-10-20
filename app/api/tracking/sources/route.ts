@@ -8,6 +8,8 @@ import { getWorkspaceContextForUser } from '@/lib/workspace';
 
 export const dynamic = 'force-dynamic';
 
+const CLIENT_PLATFORMS = new Set(['android', 'ios', 'shopify', 'web']);
+
 function jsonError(message: string, status: number) {
   return NextResponse.json(
     { ok: false, error: message },
@@ -77,7 +79,7 @@ export async function GET() {
   const { data, error } = await admin
     .from('tracking_sources')
     .select(
-      'id,name,source_type,source_system,source_key,auth_mode,hostname,status,allowed_event_prefixes,max_payload_bytes,rate_limit_per_minute,accepted_event_count,duplicate_event_count,rejected_event_count,last_seen_at,last_rejected_at,created_at,updated_at',
+      'id,name,source_type,source_system,source_key,auth_mode,hostname,status,allowed_event_prefixes,max_payload_bytes,rate_limit_per_minute,accepted_event_count,duplicate_event_count,rejected_event_count,last_seen_at,last_rejected_at,privacy_mode,honor_gpc,require_consent_for_optional,privacy_notice_version,metadata,created_at,updated_at',
     )
     .eq('organization_id', auth.organizationId)
     .order('created_at', { ascending: true });
@@ -107,23 +109,42 @@ export async function POST(request: NextRequest) {
   const name = cleanText(raw.name, 120);
   const requestedType = cleanText(raw.sourceType ?? raw.source_type, 30);
   const sourceType =
-    requestedType && ['api', 'webhook', 'system'].includes(requestedType)
+    requestedType && ['client', 'api', 'webhook', 'system'].includes(requestedType)
       ? requestedType
       : 'api';
 
   if (!name) return jsonError('Source name is required.', 400);
 
+  const platform = cleanText(raw.platform, 40)?.toLowerCase() ?? null;
+  const isPublishableClient = sourceType === 'client';
+
+  if (isPublishableClient && (!platform || !CLIENT_PLATFORMS.has(platform))) {
+    return jsonError('Client sources require platform: android, ios, shopify, or web.', 400);
+  }
+
+  const defaultSourceSystem = isPublishableClient
+    ? platform === 'android' || platform === 'ios'
+      ? 'app'
+      : 'website'
+    : slug(name);
+
   const sourceSystem =
-    cleanText(raw.sourceSystem ?? raw.source_system, 80) || slug(name);
+    cleanText(raw.sourceSystem ?? raw.source_system, 80) || defaultSourceSystem;
 
   const rawPrefixes = raw.allowedEventPrefixes ?? raw.allowed_event_prefixes;
-  const allowedEventPrefixes = Array.isArray(rawPrefixes)
+  let allowedEventPrefixes = Array.isArray(rawPrefixes)
     ? rawPrefixes
         .filter((value): value is string => typeof value === 'string')
         .map((value) => value.trim().toLowerCase())
         .filter((value) => /^[a-z][a-z0-9_]*\.$/.test(value))
         .slice(0, 50)
     : [];
+
+  if (isPublishableClient) {
+    const platformPrefix = platform === 'android' || platform === 'ios' ? 'app.' : 'web.';
+    allowedEventPrefixes = allowedEventPrefixes.filter((prefix) => prefix === platformPrefix);
+    if (allowedEventPrefixes.length === 0) allowedEventPrefixes = [platformPrefix];
+  }
 
   const requestedLimit = Number(
     raw.rateLimitPerMinute ?? raw.rate_limit_per_minute ?? 600,
@@ -139,9 +160,21 @@ export async function POST(request: NextRequest) {
     ? Math.max(1024, Math.min(requestedBytes, 1048576))
     : 32768;
 
-  const secret = `sls_${randomBytes(32).toString('base64url')}`;
-  const secretHash = sha256(secret);
+  const privacyNoticeVersion = cleanText(
+    raw.privacyNoticeVersion ?? raw.privacy_notice_version,
+    120,
+  );
+
+  if (isPublishableClient && !privacyNoticeVersion) {
+    return jsonError('Client sources require a privacy notice version.', 400);
+  }
+
   const sourceKey = `src_${randomBytes(18).toString('base64url')}`;
+  const secret = isPublishableClient
+    ? null
+    : `sls_${randomBytes(32).toString('base64url')}`;
+  const secretHash = secret ? sha256(secret) : null;
+  const authMode = isPublishableClient ? 'publishable' : 'secret';
   const admin = createAdminClient();
 
   const { data, error } = await admin
@@ -152,19 +185,28 @@ export async function POST(request: NextRequest) {
       source_type: sourceType,
       source_system: sourceSystem,
       source_key: sourceKey,
-      auth_mode: 'secret',
+      auth_mode: authMode,
       secret_hash: secretHash,
       status: 'active',
       allowed_event_prefixes: allowedEventPrefixes,
       max_payload_bytes: maxPayloadBytes,
       rate_limit_per_minute: rateLimitPerMinute,
+      privacy_mode: 'strict',
+      honor_gpc: true,
+      require_consent_for_optional: true,
+      privacy_notice_version: privacyNoticeVersion,
       metadata: {
         provisioned_by: auth.user.id,
         provisioned_via: 'app/api/tracking/sources',
+        platform,
+        credential_class: isPublishableClient ? 'publishable_identifier' : 'server_secret',
+        authority: isPublishableClient
+          ? 'non_authoritative_client_telemetry'
+          : 'trusted_server_source',
       },
     })
     .select(
-      'id,name,source_type,source_system,source_key,status,allowed_event_prefixes,max_payload_bytes,rate_limit_per_minute,created_at',
+      'id,name,source_type,source_system,source_key,auth_mode,status,allowed_event_prefixes,max_payload_bytes,rate_limit_per_minute,privacy_notice_version,metadata,created_at',
     )
     .single();
 
@@ -176,11 +218,19 @@ export async function POST(request: NextRequest) {
     {
       ok: true,
       source: data,
-      credentials: {
-        source_key: sourceKey,
-        secret,
-        shown_once: true,
-      },
+      credentials: isPublishableClient
+        ? {
+            source_key: sourceKey,
+            publishable: true,
+            secret: null,
+            shown_once: false,
+          }
+        : {
+            source_key: sourceKey,
+            secret,
+            publishable: false,
+            shown_once: true,
+          },
     },
     {
       status: 201,
