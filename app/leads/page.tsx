@@ -1,8 +1,7 @@
 import Link from "next/link";
-import { Plus } from "lucide-react";
+import { MoreHorizontal, Plus } from "lucide-react";
 
-import { LeadsWorkspaceV2 } from "@/components/leads-workspace-v2";
-import { PageHeader } from "@/components/ui";
+import { LeadsCleanTable } from "@/components/leads-clean-table";
 import {
   getLeadsWorkspacePage,
   parseLeadsWorkspaceParams,
@@ -34,16 +33,32 @@ export default async function LeadsPage({ searchParams }: LeadsPageProps) {
 
   return (
     <div className="space-y-4">
-      <PageHeader
-        eyebrow="CRM"
-        title="Leads"
-        description="Find the next lead that needs action."
-        actions={
-          <Link href="/leads/new" className="btn-primary">
-            <Plus size={15} /> Add lead
+      <section className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <h1 className="text-[22px] font-bold tracking-[-0.035em] text-slate-950 dark:text-white">
+            Leads
+          </h1>
+          <p className="mt-1 text-xs text-slate-500">
+            Manage contacts and move opportunities forward.
+          </p>
+        </div>
+
+        <div className="flex items-center gap-2">
+          <Link
+            href="/leads/new"
+            className="inline-flex h-9 items-center gap-2 rounded-lg bg-slate-950 px-3.5 text-xs font-semibold text-white shadow-sm transition hover:bg-slate-800 dark:bg-white dark:text-slate-950 dark:hover:bg-slate-200"
+          >
+            <Plus size={14} /> Add lead
           </Link>
-        }
-      />
+          <button
+            type="button"
+            aria-label="More lead actions"
+            className="grid h-9 w-9 place-items-center rounded-lg border border-slate-200 bg-white text-slate-500 shadow-sm transition hover:bg-slate-50 hover:text-slate-900 dark:border-slate-800 dark:bg-slate-950 dark:text-slate-400 dark:hover:bg-slate-900 dark:hover:text-white"
+          >
+            <MoreHorizontal size={16} />
+          </button>
+        </div>
+      </section>
 
       {notice === "mock-create" ? (
         <div className="rounded-xl border border-orange-100 bg-orange-50 px-4 py-3 text-xs font-semibold text-orange-700 dark:border-orange-900/50 dark:bg-orange-950/20 dark:text-orange-200">
@@ -57,7 +72,7 @@ export default async function LeadsPage({ searchParams }: LeadsPageProps) {
         </div>
       ) : null}
 
-      <LeadsWorkspaceV2
+      <LeadsCleanTable
         leads={workspace.leads}
         intelligence={workspace.intelligence}
         mock={mock}
