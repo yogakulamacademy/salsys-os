@@ -321,7 +321,7 @@ export async function executePreparedWhatsAppProviderSend(params: {
 
   const admin = createAdminClient();
   const { data: claimData, error: claimError } = await admin.rpc(
-    'claim_whatsapp_provider_send_v1',
+    'claim_whatsapp_provider_send_v2',
     {
       p_organization_id: organizationId,
       p_audit_id: auditId,
