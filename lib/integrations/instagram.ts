@@ -6,6 +6,7 @@ import type {
 const INSTAGRAM_OAUTH_SCOPES = [
   'instagram_business_basic',
   'instagram_business_manage_messages',
+  'instagram_business_manage_comments',
 ];
 
 
