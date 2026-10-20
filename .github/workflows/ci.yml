@@ -43,6 +43,9 @@ jobs:
       - name: Verify Universal Tracking Intelligence SDK
         run: npm run verify:tracking-sdk
 
+      - name: Verify Tracking Live Closeout Contracts
+        run: npm run verify:tracking-live-closeout
+
       - name: Verify Intelligence Accuracy Contracts
         run: npm run verify:intelligence-accuracy
 

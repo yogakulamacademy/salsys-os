@@ -8,6 +8,7 @@
     "start": "next start",
     "typecheck": "tsc --noEmit",
     "verify:tracking-sdk": "node scripts/verify-tracking-sdk.mjs",
+    "verify:tracking-live-closeout": "node scripts/verify-tracking-live-closeout.mjs",
     "verify:intelligence-accuracy": "node scripts/verify-intelligence-accuracy.mjs",
     "verify:intelligence-freshness": "node scripts/verify-intelligence-freshness.mjs",
     "verify:intelligence-calibration": "node scripts/verify-intelligence-calibration.mjs",
