@@ -6,6 +6,10 @@ import org.json.JSONArray
 import org.json.JSONObject
 import java.net.HttpURLConnection
 import java.net.URL
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
+import java.util.TimeZone
 import java.util.UUID
 import java.util.concurrent.Executors
 
@@ -267,5 +271,8 @@ object Salsys {
 
     private fun randomId(prefix: String) = "${prefix}_${UUID.randomUUID()}"
 
-    private fun isoNow(): String = java.time.Instant.now().toString()
+    private fun isoNow(): String =
+        SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.US).apply {
+            timeZone = TimeZone.getTimeZone("UTC")
+        }.format(Date())
 }
