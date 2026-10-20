@@ -17,6 +17,7 @@ function read(relativePath) {
 
 const migration = read('supabase/migrations/20261020101500_whatsapp_growth_operations_v1.sql');
 const freeze = read('supabase/migrations/20261020102000_whatsapp_growth_approval_freeze_v1.sql');
+const rpcHardening = read('supabase/migrations/20261020103000_whatsapp_rpc_execution_hardening_v1.sql');
 const helper = read('lib/automation/whatsapp-growth.ts');
 const actions = read('app/automation/whatsapp/growth/actions.ts');
 const page = read('app/automation/whatsapp/growth/page.tsx');
@@ -59,6 +60,43 @@ for (const [needle, label] of [
   ['requires at least one persisted eligible recipient', 'persisted eligible-recipient requirement'],
 ]) {
   if (!freeze.includes(needle)) fail(`Approval-freeze migration is missing ${label} (${needle}).`);
+}
+
+for (const signature of [
+  'evaluate_whatsapp_broadcast_send_policy_v1(uuid,uuid,uuid,timestamptz)',
+  'prepare_whatsapp_broadcast_provider_send_v1(uuid,uuid,uuid,timestamptz)',
+  'claim_whatsapp_broadcast_provider_send_v1(uuid,uuid,timestamptz)',
+  'claim_whatsapp_provider_send_v2(uuid,uuid,timestamptz)',
+  'refresh_whatsapp_broadcast_campaign_counts_v1(uuid,uuid,timestamptz)',
+  'rearm_whatsapp_broadcast_provider_send_v1(uuid,uuid,timestamptz)',
+  'validate_whatsapp_template_bindings_v1(uuid,uuid,jsonb)',
+  'resolve_whatsapp_binding_value_v1(uuid,uuid,uuid,jsonb)',
+  'resolve_whatsapp_template_components_for_lead_v1(uuid,uuid,uuid,uuid)',
+  'assign_whatsapp_campaign_variant_v1(uuid,uuid,uuid)',
+  'validate_whatsapp_broadcast_campaign_config_v1(uuid,uuid)',
+  'route_whatsapp_broadcast_reply_v1(uuid,uuid,uuid,uuid)',
+]) {
+  const revoke = `revoke execute on function public.${signature} from public, anon, authenticated;`;
+  const grant = `grant execute on function public.${signature} to service_role;`;
+  if (!rpcHardening.includes(revoke)) fail(`RPC hardening is missing direct-user revoke for ${signature}.`);
+  if (!rpcHardening.includes(grant)) fail(`RPC hardening is missing service-role grant for ${signature}.`);
+}
+
+for (const triggerFunction of [
+  'sync_whatsapp_broadcast_recipient_from_audit_v1()',
+  'mark_whatsapp_broadcast_reply_v1()',
+  'enrich_whatsapp_broadcast_provider_audit_v1()',
+  'enrich_whatsapp_broadcast_message_lineage_v1()',
+  'prepare_whatsapp_broadcast_recipient_snapshot_v1()',
+  'guard_whatsapp_campaign_approved_config_v1()',
+  'guard_whatsapp_campaign_variant_mutation_v1()',
+  'invalidate_whatsapp_campaign_snapshot_from_variant_v1()',
+  'guard_whatsapp_recipient_snapshot_lineage_v1()',
+  'guard_whatsapp_campaign_human_approval_v1()',
+]) {
+  if (!rpcHardening.includes(`revoke execute on function public.${triggerFunction} from public, anon, authenticated;`)) {
+    fail(`RPC hardening is missing direct-user revoke for trigger helper ${triggerFunction}.`);
+  }
 }
 
 for (const source of [
@@ -125,4 +163,4 @@ if (!provider.includes("'claim_whatsapp_provider_send_v2'")) {
   fail('Provider adapter must continue to use the campaign-aware guarded claim router.');
 }
 
-console.log('[whatsapp-growth] PASS: explicit personalization, deterministic experiments, persisted approval snapshots, unassigned-only reply routing, operational revenue attribution and approval immutability verified.');
+console.log('[whatsapp-growth] PASS: explicit personalization, deterministic experiments, persisted approval snapshots, service-role-only internal RPCs, unassigned-only reply routing, operational revenue attribution and approval immutability verified.');
