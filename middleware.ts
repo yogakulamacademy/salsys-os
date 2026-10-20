@@ -208,40 +208,41 @@ export async function middleware(request: NextRequest) {
     return response;
   }
 
-  let { data: workspaceContext, error: workspaceError } = await supabase.rpc(
-    "get_current_workspace_context_v1",
-  );
+  // The production database's canonical tenant contract is the binding RPC,
+  // followed by the organization membership row. Do not depend on a separate
+  // workspace-context RPC here: preview/custom hostnames need to be able to
+  // establish the same tenant session from the authenticated identity alone.
+  const { data: boundOrganizationId, error: tenantBindingError } =
+    await supabase.rpc("bind_current_tenant_session_for_current_user");
 
-  let context = Array.isArray(workspaceContext) ? workspaceContext[0] : workspaceContext;
-  let role = String(context?.role ?? "").toLowerCase();
+  let role = "";
 
-  // Preview/custom domains can have a valid Supabase auth session without the
-  // tenant-binding cookie that existed on another hostname. Recover the tenant
-  // only from the authenticated user; never trust a browser-supplied tenant ID.
-  if (workspaceError || !workspaceContext || !role) {
-    const { data: boundOrganizationId, error: tenantBindingError } =
-      await supabase.rpc("bind_current_tenant_session_for_current_user");
+  if (!tenantBindingError && boundOrganizationId) {
+    const organizationId = String(boundOrganizationId);
 
-    if (!tenantBindingError && boundOrganizationId) {
-      response.cookies.set(ACTIVE_WORKSPACE_COOKIE, String(boundOrganizationId), {
-        httpOnly: true,
-        sameSite: "lax",
-        secure: process.env.NODE_ENV === "production",
-        path: "/",
-        maxAge: WORKSPACE_COOKIE_MAX_AGE_SECONDS,
-      });
+    request.cookies.set(ACTIVE_WORKSPACE_COOKIE, organizationId);
+    response.cookies.set(ACTIVE_WORKSPACE_COOKIE, organizationId, {
+      httpOnly: true,
+      sameSite: "lax",
+      secure: process.env.NODE_ENV === "production",
+      path: "/",
+      maxAge: WORKSPACE_COOKIE_MAX_AGE_SECONDS,
+    });
 
-      const retry = await supabase.rpc("get_current_workspace_context_v1");
-      workspaceContext = retry.data;
-      workspaceError = retry.error;
-      context = Array.isArray(workspaceContext)
-        ? workspaceContext[0]
-        : workspaceContext;
-      role = String(context?.role ?? "").toLowerCase();
+    const { data: membership, error: membershipError } = await supabase
+      .from("organization_members")
+      .select("role")
+      .eq("organization_id", organizationId)
+      .eq("user_id", user.id)
+      .eq("active", true)
+      .maybeSingle();
+
+    if (!membershipError && membership) {
+      role = String(membership.role ?? "").trim().toLowerCase();
     }
   }
 
-  if (workspaceError || !workspaceContext || !role) {
+  if (tenantBindingError || !boundOrganizationId || !role) {
     if (pathname.startsWith("/api/")) {
       return NextResponse.json(
         { ok: false, error: "Workspace access denied." },
@@ -249,8 +250,6 @@ export async function middleware(request: NextRequest) {
       );
     }
 
-    // Never redirect /workspace back to itself. Clear the unusable auth state
-    // and return the user to a clean sign-in flow instead of creating a loop.
     await supabase.auth.signOut();
     const redirectResponse = redirectWithAuthCookies(
       request,
