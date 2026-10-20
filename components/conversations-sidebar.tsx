@@ -1,23 +1,8 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-
 import Link from "next/link";
-
-import {
-  Bell,
-  Clock3,
-  ContactRound,
-  Globe2,
-  Instagram,
-  Mail,
-  MessageCircle,
-  Phone,
-  Search,
-  X,
-} from "lucide-react";
-
-import { StageBadge } from "@/components/ui";
+import { Bell, Clock3, MessageCircle, Search, X } from "lucide-react";
 
 import type { Channel, LeadStage } from "@/types/crm";
 
@@ -25,27 +10,16 @@ export type ConversationPriority = "urgent" | "high" | "normal" | "waiting";
 
 export type ConversationLeadSummary = {
   id: string;
-
   name: string;
-
   course: string;
-
   country: string;
-
   stage: LeadStage;
-
   currentContactChannel: Channel;
-
   lastContactedAt: string | null;
-
   unread: boolean;
-
   needsReply: boolean;
-
   needsFirstContact: boolean;
-
   priority: ConversationPriority;
-
   waitingSince: string | null;
 };
 
@@ -53,319 +27,156 @@ type InboxFilter = "all" | "attention" | "unread";
 
 export function ConversationsSidebar({
   leads,
-
   selectedId,
 }: {
   leads: ConversationLeadSummary[];
-
   selectedId?: string;
 }) {
   const [search, setSearch] = useState("");
-
   const [filter, setFilter] = useState<InboxFilter>("all");
-
   const [now, setNow] = useState(0);
 
   useEffect(() => {
-    const updateNow = () => setNow(Date.now());
-
-    updateNow();
-
-    const timer = window.setInterval(updateNow, 60_000);
-
+    const update = () => setNow(Date.now());
+    update();
+    const timer = window.setInterval(update, 60_000);
     return () => window.clearInterval(timer);
   }, []);
 
   const unreadCount = leads.filter((lead) => lead.unread).length;
-
   const attentionCount = leads.filter(
     (lead) => lead.needsReply || lead.needsFirstContact,
   ).length;
 
   const filteredLeads = useMemo(() => {
-    const query = search
-
-      .trim()
-
-      .toLowerCase();
-
+    const query = search.trim().toLowerCase();
     return leads.filter((lead) => {
-      if (
-        filter === "attention" &&
-        !lead.needsReply &&
-        !lead.needsFirstContact
-      ) {
-        return false;
-      }
+      if (filter === "attention" && !lead.needsReply && !lead.needsFirstContact) return false;
+      if (filter === "unread" && !lead.unread) return false;
+      if (!query) return true;
 
-      if (filter === "unread" && !lead.unread) {
-        return false;
-      }
-
-      if (!query) {
-        return true;
-      }
-
-      const searchable = [
-        lead.name,
-
-        lead.course,
-
-        lead.country,
-
-        lead.stage,
-
-        lead.currentContactChannel,
-
-        lead.priority,
-      ]
-
+      return [lead.name, lead.course, lead.country, lead.stage, lead.currentContactChannel]
         .filter(Boolean)
-
         .join(" ")
-
-        .replaceAll(
-          "_",
-
-          " ",
-        )
-
-        .toLowerCase();
-
-      return searchable.includes(query);
+        .replaceAll("_", " ")
+        .toLowerCase()
+        .includes(query);
     });
-  }, [leads, search, filter]);
+  }, [filter, leads, search]);
 
   return (
-    <aside className="conversation-sidebar flex h-full min-h-0 flex-col overflow-hidden bg-white">
-      <div className="conversation-sidebar-header shrink-0 border-b border-slate-100 px-4 pb-3 pt-4">
+    <aside className="flex h-full min-h-0 flex-col overflow-hidden bg-white dark:bg-slate-950">
+      <div className="shrink-0 border-b border-slate-100 px-3 py-3 dark:border-slate-900">
         <div className="flex items-center justify-between gap-3">
           <div>
-            <div className="text-[10px] font-semibold uppercase tracking-[.14em] text-slate-400">
-              Inbox
-            </div>
-
-            <div className="mt-1 text-sm font-semibold text-slate-900">
-              Conversations
-            </div>
+            <div className="text-[12px] font-semibold text-slate-950 dark:text-white">Inbox</div>
+            <div className="mt-0.5 text-[10px] text-slate-400">Find and prioritize conversations</div>
           </div>
-
-          <div className="rounded-full bg-slate-100 px-2.5 py-1 text-[10px] font-semibold text-slate-600">
-            {leads.length}
-          </div>
+          <div className="text-[10px] font-medium text-slate-400">{leads.length}</div>
         </div>
 
-        {/* FILTERS */}
-
-        <div className="conversation-sidebar-filters mt-3 grid grid-cols-3 gap-1 rounded-xl bg-slate-100 p-1">
-          <FilterButton
-            active={filter === "all"}
-            onClick={() => setFilter("all")}
-          >
-            All
-          </FilterButton>
-
-          <FilterButton
-            active={filter === "attention"}
-            onClick={() => setFilter("attention")}
-          >
-            Reply {attentionCount > 0 && `(${attentionCount})`}
-          </FilterButton>
-
-          <FilterButton
-            active={filter === "unread"}
-            onClick={() => setFilter("unread")}
-          >
-            Unread {unreadCount > 0 && `(${unreadCount})`}
-          </FilterButton>
-        </div>
-
-        {/* SEARCH */}
-
-        <div className="conversation-sidebar-search relative mt-3">
-          <Search
-            size={14}
-            className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
-          />
-
+        <div className="relative mt-3">
+          <Search size={14} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
           <input
             value={search}
             onChange={(event) => setSearch(event.target.value)}
-            placeholder="Search conversations..."
-            className="h-10 w-full rounded-xl border border-slate-200 bg-slate-50 pl-9 pr-9 text-xs font-medium outline-none transition focus:border-brand/30 focus:bg-white focus:ring-2 focus:ring-brand/5"
+            placeholder="Search"
+            className="h-9 w-full rounded-lg border border-slate-200 bg-slate-50 pl-9 pr-8 text-[11px] outline-none transition placeholder:text-slate-400 focus:border-slate-300 focus:bg-white dark:border-slate-800 dark:bg-slate-900 dark:text-slate-100 dark:focus:bg-slate-950"
           />
-
-          {search && (
+          {search ? (
             <button
               type="button"
               onClick={() => setSearch("")}
-              className="absolute right-2 top-1/2 grid h-6 w-6 -translate-y-1/2 place-items-center rounded-lg text-slate-400 hover:bg-slate-200"
+              className="absolute right-2 top-1/2 grid h-6 w-6 -translate-y-1/2 place-items-center rounded-md text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-800"
+              aria-label="Clear conversation search"
             >
               <X size={12} />
             </button>
-          )}
+          ) : null}
+        </div>
+
+        <div className="mt-2 flex items-center gap-1.5">
+          <FilterButton active={filter === "all"} onClick={() => setFilter("all")}>All {leads.length}</FilterButton>
+          <FilterButton active={filter === "attention"} onClick={() => setFilter("attention")}>Needs reply {attentionCount}</FilterButton>
+          <FilterButton active={filter === "unread"} onClick={() => setFilter("unread")}>Unread {unreadCount}</FilterButton>
         </div>
       </div>
 
-      <div className="conversation-sidebar-list min-h-0 flex-1 overflow-y-auto overscroll-contain p-2">
+      <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
         {filteredLeads.length === 0 ? (
-          <div className="grid min-h-[250px] place-items-center px-4 text-center">
+          <div className="grid min-h-[240px] place-items-center px-5 text-center">
             <div>
-              <div className="mx-auto grid h-11 w-11 place-items-center rounded-2xl bg-slate-100 text-slate-400">
-                <MessageCircle size={18} />
+              <div className="mx-auto grid h-10 w-10 place-items-center rounded-xl bg-slate-100 text-slate-400 dark:bg-slate-900">
+                <MessageCircle size={17} />
               </div>
-
-              <div className="mt-3 text-xs font-bold text-slate-700">
-                No conversations found
-              </div>
+              <div className="mt-3 text-xs font-semibold text-slate-700 dark:text-slate-200">No matching conversations</div>
+              <div className="mt-1 text-[10px] text-slate-400">Try another search or filter.</div>
             </div>
           </div>
         ) : (
-          <div className="space-y-1.5">
-            {filteredLeads.map((lead) => (
-              <ConversationCard
-                key={lead.id}
-                lead={lead}
-                selected={lead.id === selectedId}
-                now={now}
-              />
-            ))}
-          </div>
+          filteredLeads.map((lead) => (
+            <ConversationRow key={lead.id} lead={lead} selected={lead.id === selectedId} now={now} />
+          ))
         )}
       </div>
     </aside>
   );
 }
 
-function ConversationCard({
+function ConversationRow({
   lead,
-
   selected,
-
   now,
 }: {
   lead: ConversationLeadSummary;
-
   selected: boolean;
-
   now: number;
 }) {
+  const action = lead.needsFirstContact ? "First contact" : lead.needsReply ? "Needs reply" : "Waiting";
+  const actionTone = lead.needsFirstContact ? "text-sky-700" : lead.needsReply ? "text-amber-700" : "text-slate-400";
+
   return (
     <Link
       href={`/conversations?lead=${lead.id}`}
-      className={`conversation-inbox-card group relative block rounded-2xl border p-3 transition-all duration-150 ${
+      className={`group relative block border-b border-slate-100 px-3 py-3 transition dark:border-slate-900 ${
         selected
-          ? "conversation-inbox-card-selected border-brand/20 bg-brand/[0.045]"
-          : lead.unread
-            ? "border-sky-100 bg-sky-50/35 hover:border-sky-200"
-            : "border-transparent bg-white hover:border-slate-200 hover:bg-slate-50"
+          ? "bg-violet-50/60 dark:bg-violet-950/15"
+          : "bg-white hover:bg-slate-50 dark:bg-slate-950 dark:hover:bg-slate-900/50"
       }`}
     >
-      {selected && (
-        <div className="absolute bottom-3 left-0 top-3 w-[3px] rounded-r-full bg-brand" />
-      )}
-
-      {lead.unread && !selected && (
-        <div className="absolute right-3 top-3 h-2 w-2 rounded-full bg-sky-500 ring-4 ring-sky-50" />
-      )}
+      {selected ? <span className="absolute inset-y-3 left-0 w-[2px] rounded-r-full bg-violet-600" /> : null}
 
       <div className="flex gap-3">
-        <div
-          className={`grid h-10 w-10 shrink-0 place-items-center rounded-full text-[11px] font-black ${
-            selected
-              ? "bg-brand/10 text-brand"
-              : lead.unread
-                ? "bg-sky-100 text-sky-700"
-                : "bg-slate-100 text-slate-600"
-          }`}
-        >
+        <div className={`grid h-9 w-9 shrink-0 place-items-center rounded-full text-[10px] font-bold ${selected ? "bg-violet-100 text-violet-700 dark:bg-violet-950/60 dark:text-violet-300" : "bg-slate-100 text-slate-600 dark:bg-slate-900 dark:text-slate-300"}`}>
           {initials(lead.name)}
         </div>
 
         <div className="min-w-0 flex-1">
-          <div className="flex items-start justify-between gap-3 pr-3">
-            <div
-              className={`truncate text-xs ${
-                lead.unread
-                  ? "font-semibold text-slate-950"
-                  : "font-medium text-slate-900"
-              }`}
-            >
+          <div className="flex items-start justify-between gap-3">
+            <div className={`truncate text-[12px] ${lead.unread ? "font-bold text-slate-950 dark:text-white" : "font-semibold text-slate-800 dark:text-slate-100"}`}>
               {lead.name}
             </div>
-
-            <div className="shrink-0 text-[9px] font-semibold text-slate-400">
-              {lead.lastContactedAt
-                ? formatListTime(
-                    lead.lastContactedAt,
-
-                    now,
-                  )
-                : "New"}
+            <div className="shrink-0 text-[9px] text-slate-400">
+              {lead.lastContactedAt ? formatListTime(lead.lastContactedAt, now) : "New"}
             </div>
           </div>
 
-          <div className="mt-1 truncate text-[10px] font-semibold text-slate-500">
-            {lead.course && lead.course !== "Not selected"
-              ? lead.course
-              : "Course not selected"}
+          <div className="mt-1 flex items-center gap-1.5 text-[10px] text-slate-500">
+            <span className="capitalize">{lead.currentContactChannel.replaceAll("_", " ")}</span>
+            <span>·</span>
+            <span className="truncate">{lead.course && lead.course !== "Not selected" ? lead.course : "Course not selected"}</span>
           </div>
 
-          {/* ACTION STATE */}
-
-          <div className="mt-2 flex flex-wrap gap-1.5">
-            {lead.needsFirstContact && (
-              <StatusBadge tone="sky">New lead</StatusBadge>
-            )}
-
-            {lead.needsReply && (
-              <StatusBadge tone="orange">Needs reply</StatusBadge>
-            )}
-
-            {lead.unread && (
-              <StatusBadge tone="blue">
-                <Bell size={8} />
-                Unread
-              </StatusBadge>
-            )}
-
-            {!lead.needsReply && !lead.needsFirstContact && (
-              <StatusBadge tone="slate">Waiting</StatusBadge>
-            )}
-
-            <PriorityBadge priority={lead.priority} />
-          </div>
-
-          {/* CHANNEL / COUNTRY */}
-
-          <div className="mt-2 flex flex-wrap items-center gap-1.5">
-            <ChannelBadge channel={lead.currentContactChannel} />
-
-            {lead.country && lead.country !== "—" && (
-              <span className="inline-flex max-w-[100px] items-center gap-1 truncate rounded-full border border-violet-100 bg-violet-50 px-2 py-0.5 text-[8px] font-bold text-violet-700">
-                <Globe2 size={8} />
-
-                <span className="truncate">{lead.country}</span>
-              </span>
-            )}
-          </div>
-
-          {/* WAITING TIME */}
-
-          {lead.waitingSince && (
-            <div className="mt-2 flex items-center gap-1 text-[9px] font-semibold text-slate-400">
-              <Clock3 size={9} />
-              Waiting{" "}
-              {formatWaitingTime(
-                lead.waitingSince,
-
-                now,
-              )}
+          <div className="mt-2 flex items-center justify-between gap-3">
+            <div className={`inline-flex items-center gap-1 text-[9px] font-semibold ${actionTone}`}>
+              {lead.unread ? <Bell size={9} /> : null}
+              {action}
             </div>
-          )}
-
-          <div className="mt-2">
-            <StageBadge stage={lead.stage} />
+            {lead.waitingSince && (lead.needsReply || lead.needsFirstContact) ? (
+              <div className="inline-flex items-center gap-1 text-[9px] text-slate-400">
+                <Clock3 size={9} /> {formatWaitingTime(lead.waitingSince, now)}
+              </div>
+            ) : null}
           </div>
         </div>
       </div>
@@ -373,27 +184,15 @@ function ConversationCard({
   );
 }
 
-function FilterButton({
-  active,
-
-  onClick,
-
-  children,
-}: {
-  active: boolean;
-
-  onClick: () => void;
-
-  children: React.ReactNode;
-}) {
+function FilterButton({ active, onClick, children }: { active: boolean; onClick: () => void; children: React.ReactNode }) {
   return (
     <button
       type="button"
       onClick={onClick}
-      className={`rounded-lg px-2 py-1.5 text-[9px] font-semibold transition ${
+      className={`rounded-lg px-2.5 py-1.5 text-[9px] font-semibold transition ${
         active
-          ? "bg-white text-slate-900 shadow-sm"
-          : "text-slate-500 hover:text-slate-800"
+          ? "bg-slate-950 text-white dark:bg-white dark:text-slate-950"
+          : "bg-slate-100 text-slate-500 hover:text-slate-800 dark:bg-slate-900 dark:text-slate-400 dark:hover:text-slate-200"
       }`}
     >
       {children}
@@ -401,271 +200,32 @@ function FilterButton({
   );
 }
 
-function PriorityBadge({ priority }: { priority: ConversationPriority }) {
-  if (priority === "waiting") {
-    return null;
-  }
-
-  const className =
-    priority === "urgent"
-      ? "border-red-100 bg-red-50 text-red-700"
-      : priority === "high"
-        ? "border-amber-100 bg-amber-50 text-amber-700"
-        : "border-emerald-100 bg-emerald-50 text-emerald-700";
-
-  return (
-    <span
-      className={`rounded-full border px-2 py-0.5 text-[8px] font-semibold uppercase ${className}`}
-    >
-      {priority}
-    </span>
-  );
-}
-
-function StatusBadge({
-  tone,
-
-  children,
-}: {
-  tone: "blue" | "sky" | "orange" | "slate";
-
-  children: React.ReactNode;
-}) {
-  const colors = {
-    blue: "border-blue-100 bg-blue-50 text-blue-700",
-
-    sky: "border-sky-100 bg-sky-50 text-sky-700",
-
-    orange: "border-orange-100 bg-orange-50 text-orange-700",
-
-    slate: "border-slate-200 bg-slate-50 text-slate-500",
-  };
-
-  return (
-    <span
-      className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[8px] font-semibold uppercase ${colors[tone]}`}
-    >
-      {children}
-    </span>
-  );
-}
-
-function ChannelBadge({ channel }: { channel: Channel }) {
-  const config = channelConfig(channel);
-
-  return (
-    <span
-      className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[8px] font-semibold ${config.className}`}
-    >
-      <ChannelIcon channel={channel} />
-
-      {config.label}
-    </span>
-  );
-}
-
-function channelConfig(channel: Channel) {
-  switch (channel) {
-    case "whatsapp":
-      return {
-        label: "WhatsApp",
-
-        className: "border-emerald-100 bg-emerald-50 text-emerald-700",
-      };
-
-    case "instagram":
-      return {
-        label: "Instagram",
-
-        className: "border-pink-100 bg-pink-50 text-pink-700",
-      };
-
-    case "website":
-      return {
-        label: "Website",
-
-        className: "border-sky-100 bg-sky-50 text-sky-700",
-      };
-
-    case "email":
-      return {
-        label: "Email",
-
-        className: "border-indigo-100 bg-indigo-50 text-indigo-700",
-      };
-
-    case "phone":
-      return {
-        label: "Phone",
-
-        className: "border-amber-100 bg-amber-50 text-amber-700",
-      };
-
-    case "meta_lead_form":
-      return {
-        label: "Meta",
-
-        className: "border-blue-100 bg-blue-50 text-blue-700",
-      };
-
-    default:
-      return {
-        label: "Other",
-
-        className: "border-slate-200 bg-slate-50 text-slate-600",
-      };
-  }
-}
-
-function ChannelIcon({ channel }: { channel: Channel }) {
-  if (channel === "whatsapp") {
-    return <MessageCircle size={9} />;
-  }
-
-  if (channel === "instagram") {
-    return <Instagram size={9} />;
-  }
-
-  if (channel === "email") {
-    return <Mail size={9} />;
-  }
-
-  if (channel === "phone") {
-    return <Phone size={9} />;
-  }
-
-  if (channel === "website") {
-    return <Globe2 size={9} />;
-  }
-
-  return <ContactRound size={9} />;
-}
-
 function initials(name: string) {
-  return (
-    name
-
-      .split(" ")
-
-      .filter(Boolean)
-
-      .map((part) => Array.from(part)[0] ?? "")
-
-      .slice(0, 2)
-
-      .join("")
-
-      .toLocaleUpperCase("en-IN") || "?"
-  );
+  return name.split(" ").filter(Boolean).map((part) => Array.from(part)[0] ?? "").slice(0, 2).join("").toLocaleUpperCase("en-IN") || "?";
 }
 
-function formatWaitingTime(
-  value: string,
-
-  now: number,
-) {
-  if (now <= 0) {
-    return "—";
-  }
-
+function formatWaitingTime(value: string, now: number) {
+  if (now <= 0) return "—";
   const timestamp = new Date(value).getTime();
-
-  if (!Number.isFinite(timestamp)) {
-    return "";
-  }
-
-  const minutes = Math.max(
-    0,
-
-    Math.floor((now - timestamp) / 60000),
-  );
-
-  if (minutes < 60) {
-    return `${minutes}m`;
-  }
-
+  if (!Number.isFinite(timestamp)) return "—";
+  const diff = Math.max(0, now - timestamp);
+  const minutes = Math.floor(diff / 60_000);
+  if (minutes < 60) return `${Math.max(1, minutes)}m`;
   const hours = Math.floor(minutes / 60);
-
-  if (hours < 24) {
-    return `${hours}h`;
-  }
-
-  const days = Math.floor(hours / 24);
-
-  return `${days}d`;
+  if (hours < 24) return `${hours}h`;
+  return `${Math.floor(hours / 24)}d`;
 }
 
-function formatListTime(
-  value: string,
-
-  now: number,
-) {
-  const date = new Date(value);
-
-  if (Number.isNaN(date.getTime())) {
-    return "";
-  }
-
-  const shortDate = () =>
-    new Intl.DateTimeFormat(
-      "en-IN",
-
-      {
-        day: "numeric",
-
-        month: "short",
-
-        timeZone: "Asia/Kolkata",
-      },
-    ).format(date);
-
-  if (now <= 0) {
-    return shortDate();
-  }
-
-  const today = new Date(now);
-
-  const dateKey = new Intl.DateTimeFormat(
-    "en-CA",
-
-    {
-      year: "numeric",
-
-      month: "2-digit",
-
-      day: "2-digit",
-
-      timeZone: "Asia/Kolkata",
-    },
-  ).format(date);
-
-  const todayKey = new Intl.DateTimeFormat(
-    "en-CA",
-
-    {
-      year: "numeric",
-
-      month: "2-digit",
-
-      day: "2-digit",
-
-      timeZone: "Asia/Kolkata",
-    },
-  ).format(today);
-
-  if (dateKey === todayKey) {
-    return new Intl.DateTimeFormat(
-      "en-IN",
-
-      {
-        hour: "numeric",
-
-        minute: "2-digit",
-
-        timeZone: "Asia/Kolkata",
-      },
-    ).format(date);
-  }
-
-  return shortDate();
+function formatListTime(value: string, now: number) {
+  const timestamp = new Date(value).getTime();
+  if (!Number.isFinite(timestamp) || now <= 0) return "—";
+  const diff = Math.max(0, now - timestamp);
+  const minutes = Math.floor(diff / 60_000);
+  if (minutes < 1) return "now";
+  if (minutes < 60) return `${minutes}m`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours}h`;
+  const days = Math.floor(hours / 24);
+  if (days < 7) return `${days}d`;
+  return new Intl.DateTimeFormat("en-IN", { day: "numeric", month: "short" }).format(new Date(timestamp));
 }
