@@ -94,7 +94,7 @@ for (const token of [
   'latest_sdk_name',
   'privacy_receipts_7d',
   'dead_letters_7d',
-  "then 'healthy'",
+  "else 'healthy'",
   'to service_role',
 ]) {
   if (!healthMigration.includes(token)) fail(`Client source health migration is missing ${token}.`);
