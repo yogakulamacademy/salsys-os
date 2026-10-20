@@ -11,7 +11,8 @@
     "verify:intelligence-accuracy": "node scripts/verify-intelligence-accuracy.mjs",
     "verify:intelligence-freshness": "node scripts/verify-intelligence-freshness.mjs",
     "verify:intelligence-calibration": "node scripts/verify-intelligence-calibration.mjs",
-    "verify:whatsapp-operations": "node scripts/verify-whatsapp-operations.mjs"
+    "verify:whatsapp-operations": "node scripts/verify-whatsapp-operations.mjs",
+    "verify:whatsapp-broadcast-runner": "node scripts/verify-whatsapp-broadcast-runner.mjs"
   },
   "dependencies": {
     "@google-analytics/data": "^7.2.0",
