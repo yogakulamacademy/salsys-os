@@ -38,6 +38,7 @@ const PUBLIC_EXACT_PATHS = new Set([
 ]);
 
 const ACTIVE_WORKSPACE_COOKIE = "yk-active-workspace";
+const WORKSPACE_COOKIE_MAX_AGE_SECONDS = 60 * 60 * 24 * 30;
 
 const OAUTH_CALLBACK_PROVIDER_BY_PATH: Record<string, string> = {
   "/api/integrations/google/callback": "google",
@@ -129,7 +130,10 @@ function redirectWithAuthCookies(
 
 function authConfigurationError(pathname: string) {
   if (pathname.startsWith("/api/")) {
-    return NextResponse.json({ ok: false, error: "CRM authentication is not configured." }, { status: 503 });
+    return NextResponse.json(
+      { ok: false, error: "CRM authentication is not configured." },
+      { status: 503 },
+    );
   }
   return new NextResponse("CRM authentication is not configured.", { status: 503 });
 }
@@ -204,29 +208,71 @@ export async function middleware(request: NextRequest) {
     return response;
   }
 
-  if (publicAuthPath) {
-    return redirectWithAuthCookies(request, response, "/workspace");
-  }
-
-  const { data: workspaceContext, error: workspaceError } = await supabase.rpc(
+  let { data: workspaceContext, error: workspaceError } = await supabase.rpc(
     "get_current_workspace_context_v1",
   );
 
-  if (workspaceError || !workspaceContext) {
-    if (pathname.startsWith("/api/")) {
-      return NextResponse.json({ ok: false, error: "Workspace context unavailable." }, { status: 403 });
+  let context = Array.isArray(workspaceContext) ? workspaceContext[0] : workspaceContext;
+  let role = String(context?.role ?? "").toLowerCase();
+
+  // Preview/custom domains can have a valid Supabase auth session without the
+  // tenant-binding cookie that existed on another hostname. Recover the tenant
+  // only from the authenticated user; never trust a browser-supplied tenant ID.
+  if (workspaceError || !workspaceContext || !role) {
+    const { data: boundOrganizationId, error: tenantBindingError } =
+      await supabase.rpc("bind_current_tenant_session_for_current_user");
+
+    if (!tenantBindingError && boundOrganizationId) {
+      response.cookies.set(ACTIVE_WORKSPACE_COOKIE, String(boundOrganizationId), {
+        httpOnly: true,
+        sameSite: "lax",
+        secure: process.env.NODE_ENV === "production",
+        path: "/",
+        maxAge: WORKSPACE_COOKIE_MAX_AGE_SECONDS,
+      });
+
+      const retry = await supabase.rpc("get_current_workspace_context_v1");
+      workspaceContext = retry.data;
+      workspaceError = retry.error;
+      context = Array.isArray(workspaceContext)
+        ? workspaceContext[0]
+        : workspaceContext;
+      role = String(context?.role ?? "").toLowerCase();
     }
-    return redirectWithAuthCookies(request, response, "/workspace");
   }
 
-  const context = Array.isArray(workspaceContext) ? workspaceContext[0] : workspaceContext;
-  const role = String(context?.role ?? "").toLowerCase();
-
-  if (!role) {
+  if (workspaceError || !workspaceContext || !role) {
     if (pathname.startsWith("/api/")) {
-      return NextResponse.json({ ok: false, error: "Workspace access denied." }, { status: 403 });
+      return NextResponse.json(
+        { ok: false, error: "Workspace access denied." },
+        { status: 403 },
+      );
     }
-    return redirectWithAuthCookies(request, response, "/workspace");
+
+    // Never redirect /workspace back to itself. Clear the unusable auth state
+    // and return the user to a clean sign-in flow instead of creating a loop.
+    await supabase.auth.signOut();
+    const redirectResponse = redirectWithAuthCookies(
+      request,
+      response,
+      "/login",
+      {
+        error:
+          "Unable to establish your organization session. Please sign in again.",
+      },
+    );
+    redirectResponse.cookies.set(ACTIVE_WORKSPACE_COOKIE, "", {
+      httpOnly: true,
+      sameSite: "lax",
+      secure: process.env.NODE_ENV === "production",
+      path: "/",
+      maxAge: 0,
+    });
+    return redirectResponse;
+  }
+
+  if (publicAuthPath) {
+    return redirectWithAuthCookies(request, response, "/dashboard");
   }
 
   if (role === "employee" && !isEmployeeAllowedPage(pathname)) {
