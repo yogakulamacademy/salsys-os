@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { GitBranch, Sparkles, Target } from "lucide-react";
 
-import { AttributionExplorer } from "@/components/attribution-explorer";
+import { AttributionIntelligenceExplorer } from "@/components/attribution-intelligence-explorer";
 import type { AttributionWorkspaceFilters } from "@/components/attribution-workspace";
 import { CommercialIntelligencePanel } from "@/components/commercial-intelligence-panel";
 import { PageHeader } from "@/components/ui";
@@ -34,16 +34,16 @@ export default async function AttributionPage({ searchParams }: AttributionPageP
   return (
     <div className="space-y-4">
       <PageHeader
-        eyebrow="Intelligence"
+        eyebrow="Growth intelligence"
         title="Attribution"
-        description="Switch models, compare sources and inspect revenue lineage."
+        description="Explore where credit changes, how trustworthy the evidence is, and what decisions the data can support."
         actions={
           <div className="flex flex-wrap gap-2">
-            <Link href="/commercial-intelligence" className="btn-secondary">
-              <Sparkles size={15} /> Explain performance
-            </Link>
             <Link href="/campaigns" className="btn-secondary">
               <Target size={15} /> Campaigns
+            </Link>
+            <Link href="/commercial-intelligence" className="btn-secondary">
+              <Sparkles size={15} /> Explain performance
             </Link>
             <Link href="/funnel" className="btn-primary">
               <GitBranch size={15} /> Funnel
@@ -52,24 +52,17 @@ export default async function AttributionPage({ searchParams }: AttributionPageP
         }
       />
 
-      <AttributionExplorer workspace={workspace} filters={filters} warning={warning} />
-
-      <details className="group rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-950">
-        <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-4 sm:px-5">
-          <div>
-            <div className="text-[10px] font-black uppercase tracking-[0.12em] text-slate-400">Salsys intelligence</div>
-            <div className="mt-1 text-sm font-black text-slate-900 dark:text-white">Diagnosis and next actions</div>
-          </div>
-          <span className="text-[10px] font-bold text-slate-400 group-open:hidden">Show</span>
-          <span className="hidden text-[10px] font-bold text-slate-400 group-open:inline">Hide</span>
-        </summary>
-        <div className="border-t border-slate-100 p-4 dark:border-slate-900">
-          <CommercialIntelligencePanel brief={intelligence} />
+      <section className="rounded-2xl border border-violet-100 bg-violet-50/45 p-4 sm:p-5 dark:border-violet-900/40 dark:bg-violet-950/10">
+        <div className="mb-3 flex items-center gap-2 text-[10px] font-black uppercase tracking-[0.12em] text-violet-600 dark:text-violet-300">
+          <Sparkles size={13} /> What this means and what to do next
         </div>
-      </details>
+        <CommercialIntelligencePanel brief={intelligence} />
+      </section>
+
+      <AttributionIntelligenceExplorer workspace={workspace} filters={filters} warning={warning} />
 
       <div className="px-1 text-[10px] leading-4 text-slate-400">
-        First Touch, Lead Creation, Last Marketing Touch and Current Channel remain separate models. Unknown attribution stays unknown rather than being guessed.
+        First Touch, Lead Creation, Last Marketing Touch and Current Channel remain separate models. Unknown attribution stays unknown rather than being guessed. Coverage states describe visible known-vs-unknown evidence; they are not statistical confidence intervals.
       </div>
     </div>
   );
