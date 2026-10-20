@@ -3,7 +3,7 @@
 **Date:** 2026-10-20  
 **Canonical repository:** `yogakulamacademy/salsys-os`  
 **Production branch:** `main`  
-**Production head at CRM Core closeout:** `f16d59f22f46fe5d7211b95570a0a11f79873521`
+**Production head at Customer 360 / Identity closeout:** `d6de657f468e8ba01c8f460bd0b09fd49aeb4497`
 
 This file is the current operational checkpoint. Historical milestone files under `docs/checkpoints/` remain evidence records and should not be rewritten to pretend earlier work happened differently.
 
@@ -35,9 +35,39 @@ Production proof for Yogakulam Academy after the closeout migrations:
 
 Main CI run #238 passed and the production Vercel deployment for the closeout SHA is `READY`.
 
-**Next ordered area:** Customer Journey / Person 360 / Identity.
+### Area 2 — Customer Journey / Person 360 / Identity: CLOSED at V1 production-integrity level
 
-This closeout is deliberately scoped. It does not claim tracking, predictive accuracy, channel live proof or R11–R14 autonomy are complete.
+Canonical evidence:
+
+`docs/checkpoints/M-2026-10-20-Customer360-Identity-Closeout-v1.md`
+
+Production proof for Yogakulam Academy after the identity closeout migration:
+
+- 31 leads and 31 Persons;
+- 31 Person-to-lead links;
+- 57 Person identifiers;
+- 39 Person-to-session links;
+- 22 current visitor routing records;
+- every audited Customer 360 / identity integrity counter = `0`;
+- `v_customer360_identity_integrity_health_v1.integrity_issue_count = 0`;
+- `v_customer360_identity_integrity_health_v1.health_status = healthy`;
+- 0 open identity conflicts;
+- 0 tenant mismatches across Person/lead/identifier/session/current visitor routing;
+- 0 duplicate identifiers owned by different Persons;
+- complete Person 360, operational Person 360, Person journey and lead journey coverage;
+- 0 duplicate canonical journey keys;
+- exact-session identity handoff is now one atomic service-role-only database transaction;
+- both identity HTTP routes use the same atomic boundary;
+- visitor routing has composite organization+lead referential protection;
+- identity policies are explicit for every organization and future organizations;
+- default policy threshold is `0.9800`, preventing a lone weak unverified signal from auto-merging people;
+- historical shared-browser visitor reuse remains allowed while the current exact-session route must stay consistent.
+
+Main CI run #243 passed for SHA `d6de657f468e8ba01c8f460bd0b09fd49aeb4497`, and production Vercel deployment `dpl_GfDmtZ5Wi5aBHoZn5f3u1CjjaZib` is `READY`.
+
+**Next ordered area:** Universal Tracking SDK + Consent — live production closeout.
+
+These closeouts are deliberately scoped. They do not claim live tracking cutover, predictive accuracy, remaining channel live proof or R11–R14 autonomy are complete.
 
 ## 1. North-Star progress
 
@@ -153,6 +183,8 @@ Implemented:
 - PHP-specific Event Intelligence relay/runtime has been removed from the universal architecture;
 - runtime-specific SDKs are optional wrappers and must not introduce parallel event semantics.
 
+The identity closeout hardened `/api/events/identify/v1` and `/api/tracking/identify` so both use `attach_exact_session_identity_v1(...)`, a single tenant-bound atomic database boundary for exact-session handoff and Person reconciliation.
+
 ### Pre-existing tracking compatibility audit — completed in code, live proof pending
 
 Canonical evidence record:
@@ -260,8 +292,8 @@ Current production evidence is still insufficient to claim calibrated lead-conve
 The product areas are now being closed one by one:
 
 1. **Core CRM + lead/customer management — CLOSED V1**
-2. **Customer Journey / Person 360 / Identity — NEXT**
-3. Universal Tracking SDK + consent — close live production proof
+2. **Customer Journey / Person 360 / Identity — CLOSED V1**
+3. **Universal Tracking SDK + consent — ACTIVE NEXT; close live production proof**
 4. Funnel + attribution + revenue foundation — close E2E revenue reconciliation
 5. WhatsApp automation — close remaining Operations/Growth production proof
 6. Instagram automation — close provider permission + live E2E proof
