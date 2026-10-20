@@ -1,12 +1,9 @@
 import Link from "next/link";
 
-import { ArrowRight, BarChart3 } from "lucide-react";
+import { ArrowRight, BarChart3, Route } from "lucide-react";
 
-import {
-  CampaignsWorkspace,
-  type CampaignWorkspaceFilters,
-} from "@/components/campaigns-workspace";
-
+import { CampaignsIntelligenceWorkspace } from "@/components/campaigns-intelligence-workspace";
+import type { CampaignWorkspaceFilters } from "@/components/campaigns-workspace";
 import { PageHeader } from "@/components/ui";
 import { getCampaignsWorkspace } from "@/lib/campaigns-data";
 import { isMockMode } from "@/lib/data";
@@ -23,60 +20,49 @@ type CampaignsPageProps = {
 
 const PAGE_SIZE = 50;
 
-export default async function CampaignsPage({
-  searchParams,
-}: CampaignsPageProps) {
+export default async function CampaignsPage({ searchParams }: CampaignsPageProps) {
   const query = await searchParams;
   const filters = parseFilters(query);
   const workspace = await getCampaignsWorkspace(filters);
   const mock = isMockMode();
 
   return (
-    <div className="campaigns-page">
+    <div className="space-y-4">
       <PageHeader
-        eyebrow="Paid acquisition"
+        eyebrow="Growth intelligence"
         title="Campaigns"
-        description="Live campaign performance connected to CRM outcomes. Compare ad spend with attributed leads, qualification, enrollments and actual CRM revenue."
+        description="Understand which campaigns are influencing leads, quality, and revenue."
         actions={
-          <>
-            <Link href="/paid-media-leads" className="btn-secondary">
-              Paid Media Leads
+          <div className="flex flex-wrap gap-2">
+            <Link href="/attribution" className="btn-secondary">
+              <Route size={15} /> Attribution
             </Link>
-
+            <Link href="/paid-media-leads" className="btn-secondary">
+              Paid-media leads
+            </Link>
             <Link href="/funnel" className="btn-primary">
-              Funnel analytics
+              Funnel
               <ArrowRight size={15} />
             </Link>
-          </>
+          </div>
         }
       />
 
-      {(workspace.googleError || workspace.metaError) && (
-        <div className="campaigns-alert campaigns-alert-warning mb-4">
-          <div className="flex items-center gap-2 font-semibold">
-            <BarChart3 size={15} />
-            Some campaign data could not be loaded
-          </div>
-
-          {workspace.googleError && (
-            <div className="mt-1 text-xs">
-              Google Ads: {workspace.googleError}
-            </div>
-          )}
-
-          {workspace.metaError && (
-            <div className="mt-1 text-xs">Meta Ads: {workspace.metaError}</div>
-          )}
+      {(workspace.googleError || workspace.metaError) ? (
+        <div className="rounded-xl border border-amber-100 bg-amber-50 px-4 py-3 text-xs text-amber-800 dark:border-amber-900/50 dark:bg-amber-950/20 dark:text-amber-200">
+          <div className="flex items-center gap-2 font-bold"><BarChart3 size={15} /> Some paid-media data could not be loaded</div>
+          {workspace.googleError ? <div className="mt-1">Google Ads: {workspace.googleError}</div> : null}
+          {workspace.metaError ? <div className="mt-1">Meta Ads: {workspace.metaError}</div> : null}
         </div>
-      )}
+      ) : null}
 
-      {workspace.warning && (
-        <div className="campaigns-alert campaigns-alert-warning mb-4">
-          Campaigns loaded through the legacy fallback. {workspace.warning}
+      {workspace.warning ? (
+        <div className="rounded-xl border border-amber-100 bg-amber-50 px-4 py-3 text-xs text-amber-800 dark:border-amber-900/50 dark:bg-amber-950/20 dark:text-amber-200">
+          Campaign data is using a fallback path. Treat budget decisions as directional until the primary reporting path is healthy. {workspace.warning}
         </div>
-      )}
+      ) : null}
 
-      <CampaignsWorkspace
+      <CampaignsIntelligenceWorkspace
         campaigns={workspace.campaigns}
         summary={workspace.summary}
         platforms={workspace.platforms}
@@ -95,33 +81,10 @@ function parseFilters(query: {
   sort?: string;
   page?: string;
 }): CampaignWorkspaceFilters {
-  const allowedOutcomes = new Set([
-    "all",
-    "with_leads",
-    "no_leads",
-    "qualified",
-    "enrolled",
-    "revenue",
-  ]);
-
-  const allowedSorts = new Set([
-    "spend_desc",
-    "leads_desc",
-    "qualified_desc",
-    "enrolled_desc",
-    "roas_desc",
-    "cac_asc",
-    "name",
-  ]);
-
-  const outcome = allowedOutcomes.has(query.outcome ?? "")
-    ? query.outcome!
-    : "all";
-
-  const sortMode = allowedSorts.has(query.sort ?? "")
-    ? query.sort!
-    : "spend_desc";
-
+  const allowedOutcomes = new Set(["all", "with_leads", "no_leads", "qualified", "enrolled", "revenue"]);
+  const allowedSorts = new Set(["spend_desc", "leads_desc", "qualified_desc", "enrolled_desc", "roas_desc", "cac_asc", "name"]);
+  const outcome = allowedOutcomes.has(query.outcome ?? "") ? query.outcome! : "all";
+  const sortMode = allowedSorts.has(query.sort ?? "") ? query.sort! : "spend_desc";
   const page = Number.parseInt(query.page ?? "1", 10);
 
   return {
