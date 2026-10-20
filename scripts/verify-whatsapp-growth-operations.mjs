@@ -54,6 +54,9 @@ for (const [needle, label] of [
   ['whatsapp_broadcast_recipients_guard_insert_delete', 'approved audience freeze'],
   ["new.status := 'draft'", 'stale snapshot invalidation'],
   ["old.status in ('approved','scheduled','running','paused','completed')", 'post-approval guard'],
+  ['guard_whatsapp_campaign_human_approval_v1', 'database approval boundary'],
+  ['audience counters do not match the persisted approval snapshot', 'persisted audience/counter consistency'],
+  ['requires at least one persisted eligible recipient', 'persisted eligible-recipient requirement'],
 ]) {
   if (!freeze.includes(needle)) fail(`Approval-freeze migration is missing ${label} (${needle}).`);
 }
@@ -122,4 +125,4 @@ if (!provider.includes("'claim_whatsapp_provider_send_v2'")) {
   fail('Provider adapter must continue to use the campaign-aware guarded claim router.');
 }
 
-console.log('[whatsapp-growth] PASS: explicit personalization, deterministic experiments, unassigned-only reply routing, operational revenue attribution and approval immutability verified.');
+console.log('[whatsapp-growth] PASS: explicit personalization, deterministic experiments, persisted approval snapshots, unassigned-only reply routing, operational revenue attribution and approval immutability verified.');
