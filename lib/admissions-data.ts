@@ -1,5 +1,7 @@
 import { createClient } from '@/lib/supabase/server';
 import { requireCurrentOrganizationId } from '@/lib/workspace';
+import { getFollowUps, getLeads } from '@/lib/data';
+import type { FollowUp, LeadOverview } from '@/types/crm';
 
 type UnknownRecord = Record<string, unknown>;
 
@@ -173,6 +175,132 @@ function numberFrom(
   return null;
 }
 
+function isStatementTimeout(message: string | null | undefined) {
+  const normalized = String(message ?? '').toLowerCase();
+  return (
+    normalized.includes('statement timeout') ||
+    normalized.includes('canceling statement due to statement timeout')
+  );
+}
+
+function mapFallbackFollowUp(row: FollowUp) {
+  return {
+    task_id: row.id,
+    lead_id: row.leadId,
+    lead_code: row.leadCode,
+    lead_name: row.leadName,
+    title: row.title,
+    due_at: row.dueAt,
+    current_stage: row.stage,
+    intent: row.intent,
+    current_contact_channel: row.channel,
+  };
+}
+
+function mapFallbackNewLead(row: LeadOverview) {
+  const parts = String(row.name || '').trim().split(/\s+/).filter(Boolean);
+  return {
+    id: row.id,
+    lead_code: row.leadCode,
+    display_name: row.name,
+    first_name: parts[0] ?? null,
+    last_name: parts.length > 1 ? parts.slice(1).join(' ') : null,
+    current_stage: row.stage,
+    first_touch_source: row.firstTouchSource,
+    preferred_location: row.location,
+    created_at: row.createdAt,
+  };
+}
+
+function mapFallbackPayment(row: LeadOverview) {
+  return {
+    lead_id: row.id,
+    lead_code: row.leadCode,
+    lead_name: row.name,
+    current_stage: row.stage,
+    potential_value: row.value ?? null,
+    currency: row.currency ?? null,
+    net_paid: null,
+    outstanding_balance: null,
+    payment_status: 'pending',
+  };
+}
+
+function mapFallbackContact(row: LeadOverview) {
+  return {
+    lead_id: row.id,
+    lead_code: row.leadCode,
+    lead_name: row.name,
+    email: row.email ?? null,
+    whatsapp: row.currentContactChannel === 'whatsapp' ? row.phone ?? null : null,
+    phone: row.phone ?? null,
+  };
+}
+
+function mapFallbackOperational(row: LeadOverview) {
+  return {
+    id: row.id,
+    preferred_batch_id: null,
+    preferred_month: null,
+    last_contacted_at: row.lastContactedAt ?? null,
+    expected_close_date: null,
+  };
+}
+
+async function getLightweightAdmissionsSnapshot(
+  user: AdmissionsSnapshotData['user'],
+): Promise<AdmissionsSnapshotData> {
+  const [leadsResult, followupsResult] = await Promise.allSettled([
+    getLeads(),
+    getFollowUps(),
+  ]);
+
+  const leads =
+    leadsResult.status === 'fulfilled'
+      ? leadsResult.value
+      : [];
+
+  const followups =
+    followupsResult.status === 'fulfilled'
+      ? followupsResult.value
+      : [];
+
+  const newLeads = leads
+    .filter((lead) => lead.stage === 'new')
+    .slice(0, 30)
+    .map(mapFallbackNewLead);
+
+  const paymentPending = leads
+    .filter((lead) => lead.stage === 'payment_pending')
+    .slice(0, 30)
+    .map(mapFallbackPayment);
+
+  return {
+    user,
+    followups: followups.slice(0, 100).map(mapFallbackFollowUp),
+    hotJourney: [],
+    reengaged: [],
+    paymentPending,
+    hotPaidMedia: [],
+    newLeads,
+    priorityQueue: [],
+    automationHealth: null,
+    recentAutoTasks: [],
+    slaOverview: null,
+    slaQueue: [],
+    leadContacts: leads.slice(0, 200).map(mapFallbackContact),
+    inboxAttention: [],
+    inboxReads: [],
+    leadOperational: leads.slice(0, 200).map(mapFallbackOperational),
+    courseBatches: [],
+    teamMembers: [],
+    ownerWorkload: [],
+    batchCapacity: [],
+    needsReplyTotal: null,
+    unreadTotal: null,
+  };
+}
+
 export async function getAdmissionsSnapshot(): Promise<AdmissionsSnapshotData> {
   const supabase = await createClient();
 
@@ -203,6 +331,10 @@ export async function getAdmissionsSnapshot(): Promise<AdmissionsSnapshotData> {
   );
 
   if (snapshotResult.error) {
+    if (isStatementTimeout(snapshotResult.error.message)) {
+      return getLightweightAdmissionsSnapshot(authResult.data.user);
+    }
+
     throw new Error(
       `Unable to load Admissions Desk snapshot: ${snapshotResult.error.message}`
     );
