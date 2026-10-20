@@ -1,7 +1,7 @@
 # SalsysOS North Star Product Context
 
 **Status:** Canonical product/context/progress source of truth  
-**Last updated:** 2026-10-19  
+**Last updated:** 2026-10-20  
 **Repository:** `yogakulamacademy/salsys-os`
 
 > Read this file first when SalsysOS context is incomplete. Use `docs/SalsysOS_Current_Checkpoint.md` for the latest operational state and `docs/checkpoints/` for milestone evidence.
@@ -37,17 +37,19 @@ Principles:
 
 ## 2. Current completion snapshot
 
-Planning estimates as of 2026-10-19:
+Latest conversational planning estimates after the October 20 tracking, messaging, intelligence and CRM closeout work:
 
 | Scope | Estimate |
 |---|---:|
-| Core SalsysOS operating product through R10 | ~92% |
-| Complete North-Star R0-R14 | ~70% |
-| Remaining full North-Star work | ~30% |
+| Core SalsysOS operating product through R10 | ~96% |
+| Complete North-Star R0-R14 | ~77% |
+| Remaining full North-Star work | ~23% |
 
-These are planning estimates, not telemetry-derived metrics.
+These are planning estimates, not telemetry-derived metrics. Rebaseline them only after reviewing the roadmap end-to-end.
 
-Most remaining full-scope work is concentrated in R11-R14: reusable Wellness/Education productization, Realty, commercial SaaS readiness, and go-to-market/first 100 customers.
+The ordered closeout sequence is now active. **Core CRM + lead/customer management is closed at V1 production-integrity level**; production evidence is recorded in `docs/checkpoints/M-2026-10-20-CRM-Core-Closeout-v1.md`. The next ordered area is **Customer Journey / Person 360 / Identity**.
+
+Most remaining full-scope work is concentrated in live production proof, predictive maturity from real outcomes, and R11-R14: reusable Wellness/Education productization, Realty, commercial SaaS readiness, and go-to-market/first 100 customers.
 
 ---
 
@@ -58,7 +60,7 @@ Most remaining full-scope work is concentrated in R11-R14: reusable Wellness/Edu
 | R0 Platform Rebrand | ~95% |
 | R1 Foundation / Tenancy / Security | ~99% |
 | R2 Lead Capture / Identity / Raw Events / Data Quality | ~99% |
-| R3 CRM Sales Execution | ~99% |
+| R3 CRM Sales Execution | **V1 production-integrity closed** |
 | R4 Customer Journey / 360 | ~96% |
 | R5 Attribution / Funnel / Revenue | ~93% |
 | R6 Intent / Product Affinity / Sales Intelligence | ~94% |
@@ -71,7 +73,7 @@ Most remaining full-scope work is concentrated in R11-R14: reusable Wellness/Edu
 | R13 Commercial SaaS Readiness | ~32% |
 | R14 Marketing + First 100 Customers | ~10% |
 
-Use these as planning ranges, not audit percentages.
+Use these as planning ranges, not audit percentages. A closed V1 phase means its explicitly audited production invariants passed; it does not prohibit later enhancements.
 
 ---
 
@@ -151,7 +153,11 @@ The browser must never become authority for confirmed payment, enrollment, refun
 - deterministic prediction ledger;
 - derived OpenSearch projection for `event_feature` and `event_prediction`;
 - guarded Event Intelligence OpenSearch staging support;
-- search outbox support for derived Event Intelligence entity types.
+- search outbox support for derived Event Intelligence entity types;
+- privacy-aware signal-quality and Safe-V2 feature snapshots;
+- prediction freshness guards;
+- realized probability-outcome observation, calibration metrics and drift instrumentation;
+- scheduled outcome observation.
 
 ### Architecture cleanup
 
@@ -248,6 +254,8 @@ Controlled production E2E is complete for:
 - canonical approval reconciliation;
 - one-message pilot auto-disarm.
 
+The later WhatsApp Operations/Growth layer adds shared inbox/quick replies, reusable audience segments, guarded campaign execution, personalization, A/B variants, routing and conversion/revenue attribution.
+
 Default production posture remains fail-closed:
 - messaging policy OFF;
 - autonomous send OFF;
@@ -257,7 +265,17 @@ Default production posture remains fail-closed:
 
 ---
 
-## 9. Privacy + Behavioral Intelligence
+## 9. Instagram Operations milestone
+
+Instagram Operations V1 is implemented using Meta's user-initiated messaging model rather than a cold/bulk DM model.
+
+The product layer includes inbound CRM ingestion, human replies, 24-hour standard DM reachability, quick replies, keyword/event rules, guarded comment-to-private-reply automation, approvals, suppression, frequency limits, idempotency, provider gates, pilot controls and an operations workspace.
+
+Live comment-to-DM proof requires reauthorization of the connected account with `instagram_business_manage_comments` plus the required Meta app/webhook permissions. Do not treat that provider dependency as permission to introduce cold Instagram broadcasts.
+
+---
+
+## 10. Privacy + Behavioral Intelligence
 
 Privacy posture: privacy-by-design technical controls supporting configurable legal/compliance requirements; do not claim universal legal compliance.
 
@@ -279,7 +297,7 @@ Event Intelligence is the technical foundation for this layer.
 
 ---
 
-## 10. Multi-tenant contract
+## 11. Multi-tenant contract
 
 - one organization = one tenant = isolated data boundary;
 - session resolves one trusted tenant;
@@ -291,29 +309,38 @@ Event Intelligence is the technical foundation for this layer.
 
 ---
 
-## 11. Active implementation priority
+## 12. Active ordered implementation priority
 
-Do not add unrelated North-Star features until the Tracking Intelligence E2E foundation is complete.
+Close one product area completely before moving to the next. Do not skip an unresolved production-integrity blocker.
 
 Current order:
 
-1. validate the Universal Tracking Intelligence SDK branch build/CI;
-2. align the current browser implementation with the canonical V1 event schema and SDK naming;
-3. direct-install the universal browser SDK on Yogakulam;
-4. verify consent/GPC and browser event collection on the real website;
-5. verify session/page/CTA/form events in canonical `raw_events`;
-6. connect form success to anonymous-to-lead identity;
-7. instrument reservation/checkout/payment/enrollment with trusted server events;
-8. prove revenue attribution end-to-end;
-9. refresh feature-store state from live behavior;
-10. add tracking-health/anomaly detection;
-11. run controlled Event Intelligence OpenSearch pilot;
-12. evaluate/calibrate predictive models from real outcomes;
-13. resume wider R9/R10/R11 product work.
+1. **Core CRM + lead/customer management — CLOSED V1**
+2. **Customer Journey / Person 360 / Identity — ACTIVE NEXT**
+3. Universal Tracking SDK + consent — close live production proof
+4. Funnel + attribution + revenue foundation — close end-to-end revenue reconciliation
+5. WhatsApp automation — close remaining Operations/Growth live production proof
+6. Instagram automation — close provider permission + live E2E proof
+7. Smart Triggers / workflow engine — final closeout audit
+8. SEO / AEO / search intelligence — final closeout audit
+9. Event Intelligence / feature store — final closeout audit
+10. Predictive-model infrastructure — final readiness/promotion closeout
+11. Proven predictive accuracy from real outcomes — data-dependent calibration proof
+12. Full advanced R11–R14 intelligence/autonomy — later North-Star work
+
+The live tracking target still requires:
+- direct-install the universal browser SDK on Yogakulam;
+- verify consent/GPC and browser event collection;
+- verify session/page/CTA/form events in canonical `raw_events`;
+- connect form success to exact-session anonymous-to-lead identity;
+- instrument reservation/checkout/payment/enrollment with trusted server events;
+- prove revenue attribution end-to-end;
+- refresh feature-store state from live behavior;
+- evaluate/calibrate predictive models only from sufficient real outcomes.
 
 ---
 
-## 12. Checkpoint rule
+## 13. Checkpoint rule
 
 `docs/SalsysOS_Current_Checkpoint.md` is the latest operational checkpoint.
 

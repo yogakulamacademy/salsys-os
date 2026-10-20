@@ -1,26 +1,59 @@
 # SalsysOS Current Checkpoint
 
-**Date:** 2026-10-19  
+**Date:** 2026-10-20  
 **Canonical repository:** `yogakulamacademy/salsys-os`  
-**Production branch at checkpoint start:** `main`  
-**Production head before this documentation sync:** `3407d1347e9061d3093139419e61466f07e34027`
+**Production branch:** `main`  
+**Production head at CRM Core closeout:** `f16d59f22f46fe5d7211b95570a0a11f79873521`
 
 This file is the current operational checkpoint. Historical milestone files under `docs/checkpoints/` remain evidence records and should not be rewritten to pretend earlier work happened differently.
 
+## 0. Ordered product closeout status
+
+The current execution rule is to close one product area completely before moving to the next.
+
+### Area 1 — Core CRM + lead/customer management: CLOSED at V1 production-integrity level
+
+Canonical evidence:
+
+`docs/checkpoints/M-2026-10-20-CRM-Core-Closeout-v1.md`
+
+Production proof for Yogakulam Academy after the closeout migrations:
+
+- lead count: `31`;
+- `v_crm_core_integrity_health_v1.integrity_issue_count = 0`;
+- `v_crm_core_integrity_health_v1.health_status = healthy`;
+- no missing lead contacts, stage history, Person linkage or attribution;
+- no stage/history or stage/status drift;
+- no follow-up cache mismatch;
+- no invalid active lead/task/conversation ownership;
+- no contact/task/attribution/Person/conversation tenant mismatch;
+- no message lineage mismatch;
+- no duplicate primary contact type;
+- canonical lead stage mutations remain routed through `set_lead_stage()`;
+- future committed lead-stage/history drift is blocked by a deferred integrity constraint;
+- active CRM assignments are cleared automatically if an organization member is deactivated/deleted.
+
+Main CI run #238 passed and the production Vercel deployment for the closeout SHA is `READY`.
+
+**Next ordered area:** Customer Journey / Person 360 / Identity.
+
+This closeout is deliberately scoped. It does not claim tracking, predictive accuracy, channel live proof or R11–R14 autonomy are complete.
+
 ## 1. North-Star progress
 
-Planning estimate for the complete R0–R14 North-Star: **~70% complete / ~30% remaining**.
+Latest conversational planning estimate after the recent tracking, messaging and intelligence work: **~77% complete / ~23% remaining** for the complete R0–R14 North-Star.
 
-Planning estimate for the core operating product through R10: **~92% complete / ~8% remaining**.
+Latest conversational planning estimate for the core operating product through R10: **~96% complete / ~4% remaining**.
+
+These percentages are planning estimates, not telemetry-derived completion metrics, and should be rebaselined only when the roadmap is reviewed end-to-end.
 
 The remaining North-Star work is concentrated in:
-- finishing Event Intelligence + predictive maturity;
+- finishing live production proof for tracking/channel integrations;
+- finishing Event Intelligence + predictive maturity from real labeled outcomes;
 - reusable Wellness/Education productization;
 - commercial SaaS provisioning/billing/onboarding/support;
 - Realty vertical productization;
 - GTM and first-100-customer execution.
-
-These percentages are planning estimates, not telemetry-derived completion metrics.
 
 ## 2. Smart Triggers + WhatsApp milestone
 
@@ -52,7 +85,28 @@ Production customer-send posture remains deliberately fail-closed unless explici
 - human approval required;
 - global scheduler OFF.
 
-## 3. Event Intelligence — current implementation state
+The later WhatsApp Operations/Growth layer adds inbox, quick replies, reusable audience segments, approved-template campaigns, guarded broadcast execution, personalization, A/B variants, routing and conversion/revenue attribution. Broader campaign execution remains governed by the same fail-closed safety posture.
+
+## 3. Instagram Operations milestone
+
+Instagram Operations V1 is merged and deployed. It follows Meta's user-initiated messaging model rather than cloning WhatsApp cold/bulk broadcast behavior.
+
+Implemented:
+- inbound Instagram DM -> canonical CRM ingestion;
+- manual outbound replies through the connected Instagram provider;
+- standard 24-hour DM reachability checks;
+- quick replies in the shared conversation composer;
+- keyword/event automation rules;
+- comment webhook ingestion and guarded one-time comment -> private-DM automation;
+- STOP/suppression and per-user frequency limits;
+- human approvals, deterministic idempotency, fail-closed provider gates and pilot cap/allowlist;
+- guarded scheduled runner;
+- canonical outbound CRM lineage and reply reconciliation;
+- tenant-bound Instagram Operations workspace and CI contracts.
+
+Live comment-to-DM proof still requires the connected Instagram account to be reauthorized with `instagram_business_manage_comments` and the relevant Meta webhook/app permissions to be active. This is an external live-proof dependency, not a reason to invent a broad-DM primitive.
+
+## 4. Event Intelligence — current implementation state
 
 Salsys Event Intelligence is now the active tracking/intelligence architecture.
 
@@ -75,13 +129,17 @@ Salsys Event Intelligence is now the active tracking/intelligence architecture.
 - Derived Event Intelligence search projection exists for `event_feature` and `event_prediction`.
 - Event Intelligence feature/prediction updates can enqueue rebuildable OpenSearch outbox documents.
 - Guarded pilot staging support exists.
-- Search outbox constraint now allows Event Intelligence derived entity types.
+- Search outbox constraint allows Event Intelligence derived entity types.
+- privacy-aware signal-quality and Safe-V2 feature snapshots exist;
+- prediction freshness guards exist;
+- realized probability-outcome observation, calibration metrics and drift instrumentation exist;
+- scheduled outcome observation exists.
 
-### Universal Tracking Intelligence SDK V1 — branch implementation
+### Universal Tracking Intelligence SDK V1
 
-The active refactor branch defines **Salsys Universal Tracking Intelligence SDK V1** as the developer-facing tracking layer.
+The developer-facing tracking layer is **Salsys Universal Tracking Intelligence SDK V1**.
 
-Implemented/defined on the branch:
+Implemented:
 
 - product-facing browser entrypoint: `public/salsys-intelligence.js`;
 - browser tracking core: `public/salsys-tracker.js`;
@@ -92,16 +150,16 @@ Implemented/defined on the branch:
 - `docs/event-tracking-v1.md` defines event naming, authority boundaries and the V1 event model;
 - `/api/events/identify/v1` provides tracking-source-authenticated exact-session anonymous -> CRM lead handoff;
 - browser event ingestion restores trusted server-side geo context where available without persisting raw client IP;
-- PHP-specific Event Intelligence relay/runtime has been removed from the refactor branch;
+- PHP-specific Event Intelligence relay/runtime has been removed from the universal architecture;
 - runtime-specific SDKs are optional wrappers and must not introduce parallel event semantics.
 
 ### Pre-existing tracking compatibility audit — completed in code, live proof pending
 
-The pre-existing Yogakulam tracking stack was reviewed before cutover. Canonical evidence record:
+Canonical evidence record:
 
 `docs/checkpoints/M-2026-10-19-Universal-Tracking-Compatibility-Audit-v1.md`
 
-Compatibility work completed on the branch includes:
+Compatibility work includes:
 
 - legacy `yk_vid` visitor continuity migration;
 - legacy `yk_sid` session continuity migration;
@@ -118,7 +176,7 @@ Compatibility work completed on the branch includes:
 - canonical `web.*` -> established touchpoint semantic projection remains intact;
 - universal identity handoff preserves the old exact-session cross-tenant/shared-browser safety rule.
 
-This is a branch/code compatibility checkpoint. It does **not** claim that the live Yogakulam production journey has been cut over or proven yet.
+This compatibility work does **not** claim that the live Yogakulam production website journey has been cut over or proven yet.
 
 ### Architecture decision — platform/language independence
 
@@ -148,9 +206,9 @@ OpenSearch is a **secondary rebuildable retrieval/intelligence index**. It is no
 
 Current global indexing posture remains fail-closed. Do not treat queued/indexed search documents as source evidence.
 
-## 4. End-to-end tracking target
+## 5. End-to-end tracking target
 
-The tracking milestone is **not yet complete**.
+The live tracking milestone is **not yet complete**.
 
 The user-approved architecture is:
 
@@ -166,7 +224,7 @@ A real production journey must prove:
 
 The same journey must be reconcilable in PostgreSQL-backed Tracking, Person 360, Funnel, Attribution and Revenue views.
 
-## 5. Direct website tracking direction
+## 6. Direct website tracking direction
 
 Do not reinstall the core SalsysOS tracker through GTM.
 
@@ -182,7 +240,7 @@ Target implementation:
 - consent-aware analytics/advertising behavior;
 - optional durable first-party outbox without coupling the SDK to one runtime/database.
 
-## 6. Predictive intelligence direction
+## 7. Predictive intelligence direction
 
 The Event Intelligence layer must support traffic, SEO, paid media, lead and revenue intelligence from the same event graph.
 
@@ -195,23 +253,28 @@ Required prediction evidence fields include model key/version/mode, feature stat
 
 Rules-generated scores must never be presented as calibrated probabilities.
 
-## 7. Active next implementation order
+Current production evidence is still insufficient to claim calibrated lead-conversion accuracy. The system must continue to treat unavailable behavioral evidence as unknown, not as negative intent, and must not manufacture probability outputs or model-training evidence.
 
-1. validate the current Universal Tracking Intelligence branch with GitHub CI + deployment build;
-2. direct-install `salsys-intelligence.js` in Yogakulam source with the old tracker removed so events are not double-counted;
-3. verify returning legacy visitor/session/consent migration with controlled real browser tests;
-4. verify consent denial/grant/withdrawal/GPC behavior on the real website;
-5. verify one-and-only-one session/page/CTA/form event flow into canonical `raw_events`;
-6. verify WhatsApp, phone, email, Instagram and enrollment CTA semantic projections;
-7. verify `/api/events/identify/v1` on a real lead and adversarial mismatched tenant/session cases;
-8. instrument reservation/checkout/payment/enrollment using trusted server events;
-9. prove revenue attribution E2E;
-10. refresh feature builders from live Yogakulam behavior;
-11. run a controlled Event Intelligence OpenSearch pilot while PostgreSQL remains authoritative;
-12. add tracking/data-quality anomaly detection;
-13. move from deterministic intelligence toward evaluated predictive models only when enough outcome evidence exists.
+## 8. Active ordered implementation sequence
 
-## 8. Safety defaults
+The product areas are now being closed one by one:
+
+1. **Core CRM + lead/customer management — CLOSED V1**
+2. **Customer Journey / Person 360 / Identity — NEXT**
+3. Universal Tracking SDK + consent — close live production proof
+4. Funnel + attribution + revenue foundation — close E2E revenue reconciliation
+5. WhatsApp automation — close remaining Operations/Growth production proof
+6. Instagram automation — close provider permission + live E2E proof
+7. Smart Triggers / workflow engine — final closeout audit
+8. SEO / AEO / search intelligence — final closeout audit
+9. Event Intelligence / feature store — final closeout audit
+10. Predictive-model infrastructure — final readiness/promotion closeout
+11. Proven predictive accuracy from real outcomes — data-dependent calibration proof
+12. Full advanced R11–R14 intelligence/autonomy — later North-Star work
+
+Do not skip forward while the active area has an unresolved production-integrity blocker.
+
+## 9. Safety defaults
 
 Unless a separate approved checkpoint explicitly changes them:
 - autonomous customer messaging OFF;
@@ -222,7 +285,7 @@ Unless a separate approved checkpoint explicitly changes them:
 - human approval remains required for sensitive/high-impact actions;
 - no fake traffic, rankings, revenue, conversion outcomes or model-training evidence.
 
-## 9. Checkpoint maintenance rule
+## 10. Checkpoint maintenance rule
 
 After every meaningful production milestone:
 - update this file;
