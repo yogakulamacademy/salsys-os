@@ -91,9 +91,6 @@ begin
       continue;
     end if;
 
-    v_positive := null;
-    v_negative := null;
-
     select
       f.conversion_at,
       f.conversion_type,
