@@ -170,7 +170,67 @@ create trigger whatsapp_broadcast_recipients_guard_lineage_update
 before update of lead_id,lead_contact_id,variant_id on public.whatsapp_broadcast_recipients
 for each row execute function public.guard_whatsapp_recipient_snapshot_lineage_v1();
 
+-- The simple WhatsApp Ops workspace and the advanced Growth workspace share the
+-- same campaign table. Enforce the advanced configuration contract at the
+-- database approval boundary so no UI or service path can approve stale or
+-- variable-template recipients that were excluded by snapshot-time checks.
+create or replace function public.guard_whatsapp_campaign_human_approval_v1()
+returns trigger
+language plpgsql
+security definer
+set search_path=public
+as $$
+declare
+  v_validation jsonb := '{}'::jsonb;
+  v_actual_audience integer := 0;
+  v_actual_eligible integer := 0;
+  v_actual_excluded integer := 0;
+begin
+  if new.status not in ('approved','scheduled') then return new; end if;
+
+  if new.approved_at is null or new.approved_by is null then
+    raise exception 'WhatsApp campaign approval requires approved_at and approved_by.';
+  end if;
+
+  v_validation := public.validate_whatsapp_broadcast_campaign_config_v1(
+    new.organization_id,new.id
+  );
+
+  if coalesce((v_validation->>'valid')::boolean,false) is not true then
+    raise exception 'WhatsApp campaign configuration is invalid for approval: %',
+      coalesce(v_validation->'reasons','[]'::jsonb)::text;
+  end if;
+
+  select
+    count(*),
+    count(*) filter (where r.status='eligible'),
+    count(*) filter (where r.status in ('excluded','suppressed'))
+  into v_actual_audience,v_actual_eligible,v_actual_excluded
+  from public.whatsapp_broadcast_recipients r
+  where r.organization_id=new.organization_id and r.campaign_id=new.id;
+
+  if v_actual_eligible < 1 then
+    raise exception 'WhatsApp campaign requires at least one persisted eligible recipient before approval.';
+  end if;
+
+  if new.audience_count is distinct from v_actual_audience
+     or new.eligible_count is distinct from v_actual_eligible
+     or new.excluded_count is distinct from v_actual_excluded then
+    raise exception 'WhatsApp campaign audience counters do not match the persisted approval snapshot. Refresh the audience before approval.';
+  end if;
+
+  return new;
+end;
+$$;
+
+drop trigger if exists whatsapp_broadcast_campaigns_guard_human_approval on public.whatsapp_broadcast_campaigns;
+create trigger whatsapp_broadcast_campaigns_guard_human_approval
+before update of status,approved_at,approved_by
+on public.whatsapp_broadcast_campaigns
+for each row execute function public.guard_whatsapp_campaign_human_approval_v1();
+
 grant execute on function public.guard_whatsapp_campaign_approved_config_v1() to service_role;
 grant execute on function public.guard_whatsapp_campaign_variant_mutation_v1() to service_role;
 grant execute on function public.invalidate_whatsapp_campaign_snapshot_from_variant_v1() to service_role;
 grant execute on function public.guard_whatsapp_recipient_snapshot_lineage_v1() to service_role;
+grant execute on function public.guard_whatsapp_campaign_human_approval_v1() to service_role;
