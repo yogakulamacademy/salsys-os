@@ -6,10 +6,10 @@ import {
   AttributionWorkspace,
   type AttributionWorkspaceFilters,
 } from "@/components/attribution-workspace";
-
+import { CommercialIntelligencePanel } from "@/components/commercial-intelligence-panel";
 import { PageHeader } from "@/components/ui";
-
 import { getAttributionWorkspace } from "@/lib/attribution-data";
+import { buildAttributionIntelligence } from "@/lib/commercial-intelligence";
 
 type AttributionPageProps = {
   searchParams: Promise<{
@@ -35,6 +35,7 @@ export default async function AttributionPage({
   };
 
   const { workspace, warning } = await getAttributionWorkspace(filters);
+  const intelligence = buildAttributionIntelligence(workspace);
 
   return (
     <div className="attribution-polish">
@@ -57,6 +58,8 @@ export default async function AttributionPage({
           </>
         }
       />
+
+      <CommercialIntelligencePanel brief={intelligence} />
 
       <AttributionWorkspace
         workspace={workspace}
