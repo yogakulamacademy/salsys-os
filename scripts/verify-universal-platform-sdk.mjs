@@ -19,7 +19,11 @@ const requiredFiles = [
   'lib/tracking/publishable-client.ts',
   'app/api/events/client/v1/route.ts',
   'app/api/privacy/consent/client/v1/route.ts',
+  'sdk/android/settings.gradle.kts',
+  'sdk/android/build.gradle.kts',
+  'sdk/android/src/main/AndroidManifest.xml',
   'sdk/android/src/main/java/com/salsys/sdk/Salsys.kt',
+  'sdk/ios/Package.swift',
   'sdk/ios/Sources/Salsys/Salsys.swift',
   'docs/universal-platform-sdk-v1.md',
   'supabase/migrations/20261020123000_universal_publishable_client_v1.sql',
@@ -89,6 +93,16 @@ for (const [needle, label] of [
   if (!sourceRoute.includes(needle)) fail(`Tracking source API is missing ${label} (${needle}).`);
 }
 
+const androidBuild = read('sdk/android/build.gradle.kts');
+for (const needle of ['com.android.library', 'org.jetbrains.kotlin.android', 'namespace = "com.salsys.sdk"']) {
+  if (!androidBuild.includes(needle)) fail(`Android packaging is missing ${needle}.`);
+}
+
+const androidManifest = read('sdk/android/src/main/AndroidManifest.xml');
+if (!androidManifest.includes('android.permission.INTERNET')) {
+  fail('Android SDK manifest must declare INTERNET permission.');
+}
+
 const android = read('sdk/android/src/main/java/com/salsys/sdk/Salsys.kt');
 for (const needle of [
   'salsys-android',
@@ -104,6 +118,11 @@ if (android.includes('Authorization: Bearer') || android.includes('Bearer ')) {
   fail('Android SDK must not embed bearer/server credentials.');
 }
 
+const swiftPackage = read('sdk/ios/Package.swift');
+for (const needle of ['name: "Salsys"', '.iOS(.v15)', 'Sources/Salsys']) {
+  if (!swiftPackage.includes(needle)) fail(`Swift Package is missing ${needle}.`);
+}
+
 const ios = read('sdk/ios/Sources/Salsys/Salsys.swift');
 for (const needle of [
   'salsys-ios',
@@ -112,6 +131,7 @@ for (const needle of [
   'X-Salsys-Source-Key',
   'iOS publishable SDK accepts app.* telemetry only',
   'eventQueueKey',
+  'JSONSerialization.isValidJSONObject',
 ]) {
   if (!ios.includes(needle)) fail(`iOS SDK is missing ${needle}.`);
 }
