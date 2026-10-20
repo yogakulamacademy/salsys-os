@@ -16,7 +16,6 @@ type TenantBindingResult =
   | {
       ok: false;
       reason:
-        | 'membership_lookup_failed'
         | 'no_membership'
         | 'multiple_memberships'
         | 'binding_failed';
@@ -28,61 +27,36 @@ function authUrl(path: string, key: 'notice' | 'error', message: string) {
   return `${path}?${params.toString()}`;
 }
 
-async function resolveAndBindOrganization(
+async function bindCurrentUserOrganization(
   supabase: ServerSupabaseClient,
-  userId: string,
 ): Promise<TenantBindingResult> {
-  const { data: memberships, error: membershipError } = await supabase
-    .from('organization_members')
-    .select('organization_id')
-    .eq('user_id', userId)
-    .eq('active', true);
-
-  if (membershipError) {
-    return {
-      ok: false,
-      reason: 'membership_lookup_failed',
-      detail: membershipError.message,
-    };
-  }
-
-  const organizationIds = Array.from(
-    new Set(
-      (memberships ?? [])
-        .map((membership) => String(membership.organization_id ?? '').trim())
-        .filter(Boolean),
-    ),
-  );
-
-  if (organizationIds.length === 0) {
-    return { ok: false, reason: 'no_membership' };
-  }
-
-  if (organizationIds.length > 1) {
-    return { ok: false, reason: 'multiple_memberships' };
-  }
-
-  const organizationId = organizationIds[0];
+  // This SECURITY DEFINER RPC is the canonical production contract for
+  // resolving the authenticated user's single active organization and then
+  // binding the current auth session to that organization. Do not query
+  // organization_members directly before the tenant session is bound because
+  // RLS intentionally hides tenant rows until binding succeeds.
   const { data: boundOrganizationId, error: bindingError } = await supabase.rpc(
-    'bind_current_tenant_session',
-    {
-      p_organization_id: organizationId,
-    },
+    'bind_current_tenant_session_for_current_user',
   );
 
-  if (
-    bindingError ||
-    !boundOrganizationId ||
-    String(boundOrganizationId) !== organizationId
-  ) {
-    return {
-      ok: false,
-      reason: 'binding_failed',
-      detail: bindingError?.message,
-    };
+  if (bindingError || !boundOrganizationId) {
+    const detail = bindingError?.message ?? '';
+
+    if (detail.includes('No active organization membership')) {
+      return { ok: false, reason: 'no_membership', detail };
+    }
+
+    if (detail.includes('Multiple active organization memberships')) {
+      return { ok: false, reason: 'multiple_memberships', detail };
+    }
+
+    return { ok: false, reason: 'binding_failed', detail };
   }
 
-  return { ok: true, organizationId };
+  return {
+    ok: true,
+    organizationId: String(boundOrganizationId),
+  };
 }
 
 function tenantBindingMessage(result: Exclude<TenantBindingResult, { ok: true }>) {
@@ -134,7 +108,7 @@ export async function signInAction(formData: FormData) {
     redirect(authUrl('/login', 'error', 'Invalid email or password'));
   }
 
-  const tenant = await resolveAndBindOrganization(supabase, signInData.user.id);
+  const tenant = await bindCurrentUserOrganization(supabase);
 
   if (!tenant.ok) {
     await supabase.auth.signOut();
@@ -209,7 +183,7 @@ export async function confirmPasswordRecoveryAction(formData: FormData) {
     );
   }
 
-  const tenant = await resolveAndBindOrganization(supabase, verification.user.id);
+  const tenant = await bindCurrentUserOrganization(supabase);
 
   if (!tenant.ok) {
     await supabase.auth.signOut();
@@ -264,7 +238,7 @@ export async function updateRecoveredPasswordAction(formData: FormData) {
     );
   }
 
-  const tenant = await resolveAndBindOrganization(supabase, user.id);
+  const tenant = await bindCurrentUserOrganization(supabase);
 
   if (!tenant.ok) {
     await supabase.auth.signOut();
