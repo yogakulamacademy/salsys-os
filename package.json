@@ -12,6 +12,7 @@
     "verify:universal-platform-sdk": "node scripts/verify-universal-platform-sdk.mjs",
     "verify:web-platform-adapters": "node scripts/verify-web-platform-adapters.mjs",
     "verify:wordpress-adapter": "node scripts/verify-wordpress-adapter.mjs",
+    "verify:tracking-source-ui": "node scripts/verify-tracking-source-ui.mjs",
     "verify:intelligence-accuracy": "node scripts/verify-intelligence-accuracy.mjs",
     "verify:intelligence-freshness": "node scripts/verify-intelligence-freshness.mjs",
     "verify:intelligence-calibration": "node scripts/verify-intelligence-calibration.mjs",
