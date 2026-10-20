@@ -64,6 +64,9 @@ jobs:
       - name: Verify Instagram Operations Contracts
         run: npm run verify:instagram-operations
 
+      - name: Verify CRM Core Closeout Contracts
+        run: npm run verify:crm-core
+
       - name: Typecheck
         run: npm run typecheck
 
