@@ -19,6 +19,8 @@ type IntegrationConnectButtonProps = {
 
 const POPUP_WIDTH = 560;
 const POPUP_HEIGHT = 720;
+const OAUTH_EVENT_TYPE = 'salsysos:integration-oauth';
+const LEGACY_OAUTH_EVENT_TYPE = 'yogakulam:integration-oauth';
 
 export function IntegrationConnectButton({
   provider,
@@ -34,7 +36,7 @@ export function IntegrationConnectButton({
 
   const openPopup =
     useCallback(() => {
-const left =
+      const left =
         Math.max(
           0,
           window.screenX +
@@ -55,7 +57,7 @@ const left =
       const popup =
         window.open(
           `/api/integrations/${provider}/connect?popup=1`,
-          `yogakulam-${provider}-oauth`,
+          `salsysos-${provider}-oauth`,
           [
             `width=${POPUP_WIDTH}`,
             `height=${POPUP_HEIGHT}`,
@@ -94,8 +96,8 @@ const left =
 
       if (
         !event.data ||
-        event.data.type !==
-          'yogakulam:integration-oauth'
+        (event.data.type !== OAUTH_EVENT_TYPE &&
+          event.data.type !== LEGACY_OAUTH_EVENT_TYPE)
       ) {
         return;
       }
