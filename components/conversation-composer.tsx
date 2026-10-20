@@ -1,6 +1,6 @@
 "use client";
 
-import { LockKeyhole, Send } from "lucide-react";
+import { LockKeyhole, Send, Sparkles } from "lucide-react";
 
 import { useEffect, useRef, useState, useTransition } from "react";
 
@@ -27,21 +27,70 @@ type CopilotDraftEvent = CustomEvent<{
   body?: string;
 }>;
 
+type QuickReply = {
+  id: string;
+  title: string;
+  shortcut: string;
+  body: string;
+  category: string | null;
+};
+
+type QuickReplyResponse = {
+  ok?: boolean;
+  quickReplies?: QuickReply[];
+};
+
 export function WhatsAppComposer({
   action,
   windowOpen,
   windowLabel,
+  quickReplies = [],
 }: {
   action: ServerAction;
   windowOpen: boolean;
   windowLabel: string;
+  quickReplies?: QuickReply[];
 }) {
   const [body, setBody] = useState("");
   const [copilotAssisted, setCopilotAssisted] = useState(false);
-
+  const [availableQuickReplies, setAvailableQuickReplies] = useState<QuickReply[]>(quickReplies);
   const [isPending, startTransition] = useTransition();
-
   const formRef = useRef<HTMLFormElement | null>(null);
+
+  useEffect(() => {
+    setAvailableQuickReplies(quickReplies);
+  }, [quickReplies]);
+
+  useEffect(() => {
+    if (!windowOpen || quickReplies.length > 0) return;
+
+    let cancelled = false;
+    const controller = new AbortController();
+
+    fetch("/api/whatsapp/quick-replies", {
+      method: "GET",
+      cache: "no-store",
+      credentials: "same-origin",
+      signal: controller.signal,
+    })
+      .then(async (response) => {
+        if (!response.ok) return null;
+        return (await response.json()) as QuickReplyResponse;
+      })
+      .then((payload) => {
+        if (cancelled || !payload?.ok || !Array.isArray(payload.quickReplies)) return;
+        setAvailableQuickReplies(payload.quickReplies.slice(0, 100));
+      })
+      .catch((error) => {
+        if (error instanceof DOMException && error.name === "AbortError") return;
+        console.warn("WhatsApp quick replies could not be loaded.", error);
+      });
+
+    return () => {
+      cancelled = true;
+      controller.abort();
+    };
+  }, [quickReplies, windowOpen]);
 
   useEffect(() => {
     const applyCopilotDraft = (event: Event) => {
@@ -63,6 +112,14 @@ export function WhatsAppComposer({
     return () => window.removeEventListener("crm:copilot-draft", applyCopilotDraft);
   }, []);
 
+  const applyQuickReply = (reply: QuickReply) => {
+    setBody(reply.body.slice(0, 4096));
+    setCopilotAssisted(false);
+    requestAnimationFrame(() => {
+      formRef.current?.querySelector<HTMLTextAreaElement>('textarea[name="body"]')?.focus();
+    });
+  };
+
   const sendMessage = () => {
     const text = body.trim();
 
@@ -77,7 +134,6 @@ export function WhatsAppComposer({
       formData.set("ai_generated", "true");
     }
 
-    // Clear immediately so the composer behaves like a messaging app.
     setBody("");
     setCopilotAssisted(false);
 
@@ -86,7 +142,6 @@ export function WhatsAppComposer({
         const result = await action(formData);
 
         if (!result?.ok) {
-          // Restore the draft if the server action returns no successful result.
           setBody((current) => current || text);
           if (wasCopilotAssisted) setCopilotAssisted(true);
           return;
@@ -100,7 +155,6 @@ export function WhatsAppComposer({
           });
         }
 
-        // The thread listens for this event and appends the sent bubble locally.
         window.dispatchEvent(
           new CustomEvent("crm:whatsapp-sent", {
             detail: result.message,
@@ -150,6 +204,26 @@ export function WhatsAppComposer({
       }}
       className="conversation-composer border-t border-slate-100 bg-white p-4"
     >
+      {availableQuickReplies.length ? (
+        <div className="mb-2 flex items-center gap-2 overflow-x-auto pb-1">
+          <span className="inline-flex shrink-0 items-center gap-1 text-[10px] font-bold uppercase tracking-wide text-slate-400">
+            <Sparkles size={11} /> Quick replies
+          </span>
+          {availableQuickReplies.slice(0, 12).map((reply) => (
+            <button
+              key={reply.id}
+              type="button"
+              onClick={() => applyQuickReply(reply)}
+              disabled={isPending}
+              title={`${reply.shortcut}${reply.category ? ` · ${reply.category}` : ""}`}
+              className="shrink-0 rounded-full border border-slate-200 bg-white px-3 py-1.5 text-[11px] font-semibold text-slate-600 transition hover:border-violet-200 hover:bg-violet-50 hover:text-violet-700 disabled:opacity-50"
+            >
+              {reply.title}
+            </button>
+          ))}
+        </div>
+      ) : null}
+
       <div className="conversation-composer-shell rounded-xl border border-slate-200 bg-slate-50 p-2 transition focus-within:border-brand/30 focus-within:bg-white focus-within:ring-4 focus-within:ring-brand/5">
         <textarea
           name="body"

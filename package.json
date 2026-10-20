@@ -10,7 +10,8 @@
     "verify:tracking-sdk": "node scripts/verify-tracking-sdk.mjs",
     "verify:intelligence-accuracy": "node scripts/verify-intelligence-accuracy.mjs",
     "verify:intelligence-freshness": "node scripts/verify-intelligence-freshness.mjs",
-    "verify:intelligence-calibration": "node scripts/verify-intelligence-calibration.mjs"
+    "verify:intelligence-calibration": "node scripts/verify-intelligence-calibration.mjs",
+    "verify:whatsapp-operations": "node scripts/verify-whatsapp-operations.mjs"
   },
   "dependencies": {
     "@google-analytics/data": "^7.2.0",

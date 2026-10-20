@@ -1,9 +1,10 @@
 import type { ReactNode } from 'react';
 import Link from 'next/link';
-import { Activity, FileSearch, GitBranch, ListChecks, LockKeyhole, MessageSquareText, Settings2, ShieldCheck, Sparkles, Workflow } from 'lucide-react';
+import { Activity, FileSearch, GitBranch, ListChecks, LockKeyhole, MessageCircleMore, MessageSquareText, Settings2, ShieldCheck, Sparkles, Workflow } from 'lucide-react';
 
 const links = [
   { href: '/automation', label: 'Smart Triggers', icon: GitBranch },
+  { href: '/automation/whatsapp', label: 'WhatsApp Ops', icon: MessageCircleMore },
   { href: '/automation/recipes', label: 'Starter Recipes', icon: Sparkles },
   { href: '/automation/flow-builder', label: 'Flow Builder', icon: Workflow },
   { href: '/automation/approvals', label: 'Approval Queue', icon: ListChecks },
