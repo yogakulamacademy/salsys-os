@@ -234,7 +234,7 @@ export default async function TrackingPage() {
             <div>
               <div className="eyebrow">Website installation</div>
 
-              <div className="section-title mt-1">Tracker snippet</div>
+              <div className="section-title mt-1">SalsysOS tracker snippet</div>
             </div>
 
             <span className="grid h-10 w-10 place-items-center rounded-xl bg-brand/10 text-brand">
@@ -243,9 +243,9 @@ export default async function TrackingPage() {
           </div>
 
           <p className="mt-2 text-sm leading-6 text-slate-500">
-            Add this script to Yogakulam pages directly or through Google Tag
-            Manager. The snippet automatically uses the CRM domain you are
-            currently viewing.
+            Add SalsysOS Universal Tracking once in the website&apos;s shared
+            layout or approved tag-management layer. Keep production analytics
+            in required-consent mode.
           </p>
 
           <TrackerSnippet />
@@ -338,13 +338,15 @@ export default async function TrackingPage() {
           title="Website form → CRM"
           description={
             <>
-              Mark enquiry forms with <InlineCode>data-yk-lead-form</InlineCode>
-              . The tracker adds visitor/session attribution as hidden fields.
-              After the website saves the enquiry, its backend can send the same
-              submission to the secure CRM capture endpoint.
+              Mark actual enquiry forms with{" "}
+              <InlineCode>data-salsys-lead-form</InlineCode>. SalsysOS adds
+              visitor/session attribution as hidden fields without reading
+              arbitrary form values into browser telemetry. After the website
+              saves the enquiry, its backend can send the same submission to
+              the secure CRM capture endpoint.
             </>
           }
-          code={`<form method="post" data-yk-lead-form>
+          code={`<form method="post" data-salsys-lead-form>
   ...your existing fields...
 </form>`}
         />
@@ -366,9 +368,9 @@ export default async function TrackingPage() {
 
           <p className="mt-2 text-sm leading-6 text-slate-500">
             Your website backend should POST JSON to{" "}
-            <InlineCode>/api/leads/capture</InlineCode> with the{" "}
-            <InlineCode>X-Website-Secret</InlineCode> header. Never place that
-            secret in JavaScript, GTM or HTML.
+            <InlineCode>/api/leads/capture</InlineCode> with an authorized{" "}
+            <InlineCode>X-Salsys-Secret</InlineCode> server credential. Never
+            place that secret in JavaScript, GTM or HTML.
           </p>
 
           <div className="tracking-server-note mt-4 rounded-xl bg-emerald-50 p-4 text-xs leading-5 text-emerald-800">
@@ -406,11 +408,11 @@ export default async function TrackingPage() {
           icon={<ExternalLink size={17} />}
           eyebrow="Tagged actions"
           title="Track important CTA clicks"
-          description="Add data attributes to important links. The tracker records the click and keeps the destination/contact channel in metadata."
+          description="Use the SalsysOS declarative event contract for important actions. Standard contact links such as WhatsApp, phone and email are also recognized automatically."
           code={`<a href="https://wa.me/..."
-   data-yk-event="whatsapp_click"
-   data-yk-channel="whatsapp"
-   data-yk-label="200H Course WhatsApp">
+   data-salsys-event="web.cta_clicked"
+   data-salsys-prop-channel="whatsapp"
+   data-salsys-prop-label="200H Course WhatsApp">
   Enquire on WhatsApp
 </a>`}
         />
@@ -418,13 +420,15 @@ export default async function TrackingPage() {
         <SnippetCard
           icon={<Cookie size={17} />}
           eyebrow="Consent"
-          title="Grant analytics consent"
-          description="When your cookie-consent system receives analytics consent, dispatch the tracker consent event. Keep the tracker in required-consent mode for production unless your legal/privacy setup intentionally uses another approach."
-          code={`window.dispatchEvent(
-  new CustomEvent('yk:consent', {
-    detail: { analytics: true }
-  })
-);`}
+          title="Send privacy choices to SalsysOS"
+          description="Use the built-in SalsysOS consent UI or forward the real decision from your existing CMP. Production tracking remains fail-closed until the relevant optional purpose is granted."
+          code={`window.SalsysIntelligence?.consent?.({
+  analytics: 'granted',
+  marketing: 'granted',
+  advertising: 'granted',
+  personalization: 'granted',
+  sale_sharing: 'granted'
+});`}
         />
       </div>
 
@@ -433,21 +437,21 @@ export default async function TrackingPage() {
           icon={<Radio size={17} />}
           eyebrow="Diagnostics"
           title="Browser debugging helpers"
-          description="Use these in DevTools when checking whether the tracker is loaded once, consent is active, and the current visitor/session context exists."
-          code={`// Tracker status
-window.YKTracking?.status?.();
+          description="Use these in DevTools when checking whether SalsysOS is loaded once, consent is active, and the current visitor/session context exists."
+          code={`// SDK configuration and privacy state
+window.SalsysIntelligence?.config?.();
+window.SalsysIntelligence?.privacy?.();
 
-// Current visitor + attribution context
-window.YKTracking?.context?.();
+// Current visitor + session identifiers
+window.SalsysIntelligence?.identifiers?.();
 
-// Confirm only one tracker script is installed
+// Confirm only one Universal Tracking installation
 [...document.querySelectorAll(
-  'script[src*="yogakulam-tracker.js"]'
+  'script[src*="salsys-intelligence.js"], script[src*="salsys-tracker.js"]'
 )].map((script) => ({
   src: script.src,
-  endpoint: script.dataset.endpoint,
-  site: script.dataset.site,
   consentMode: script.dataset.consentMode,
+  formMode: script.dataset.formMode,
   debug: script.dataset.debug
 }));`}
         />
