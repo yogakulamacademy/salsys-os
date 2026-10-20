@@ -55,6 +55,9 @@ jobs:
       - name: Verify WordPress Adapter Contracts
         run: npm run verify:wordpress-adapter
 
+      - name: Verify Tracking Source Management UI
+        run: npm run verify:tracking-source-ui
+
       - name: Verify Intelligence Accuracy Contracts
         run: npm run verify:intelligence-accuracy
 
