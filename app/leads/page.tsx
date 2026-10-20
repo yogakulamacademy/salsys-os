@@ -7,6 +7,7 @@ import {
   parseLeadsWorkspaceParams,
 } from "@/lib/leads-data";
 import { isMockMode } from "@/lib/data";
+import styles from "./leads.module.css";
 
 type LeadsPageProps = {
   searchParams: Promise<{
@@ -32,7 +33,7 @@ export default async function LeadsPage({ searchParams }: LeadsPageProps) {
   const notice = one(params.notice);
 
   return (
-    <div className="space-y-4">
+    <div className={`${styles.workspace} space-y-4`}>
       <section className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <h1 className="text-[22px] font-bold tracking-[-0.035em] text-slate-950 dark:text-white">
