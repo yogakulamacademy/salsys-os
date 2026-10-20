@@ -1,3 +1,8 @@
+:global(.page-transition):has(.workspace) {
+  animation: none !important;
+  transform: none !important;
+}
+
 .workspace :global(.fixed.inset-0.z-\[100\]) {
   position: fixed !important;
   inset: 57px 0 0 0 !important;
