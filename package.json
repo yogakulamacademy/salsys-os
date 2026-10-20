@@ -14,7 +14,8 @@
     "verify:whatsapp-operations": "node scripts/verify-whatsapp-operations.mjs",
     "verify:whatsapp-broadcast-runner": "node scripts/verify-whatsapp-broadcast-runner.mjs",
     "verify:whatsapp-growth": "node scripts/verify-whatsapp-growth-operations.mjs",
-    "verify:instagram-operations": "node scripts/verify-instagram-operations.mjs"
+    "verify:instagram-operations": "node scripts/verify-instagram-operations.mjs",
+    "verify:crm-core": "node scripts/verify-crm-core-closeout.mjs"
   },
   "dependencies": {
     "@google-analytics/data": "^7.2.0",
