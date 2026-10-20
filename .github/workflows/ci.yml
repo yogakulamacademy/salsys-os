@@ -55,6 +55,9 @@ jobs:
       - name: Verify WhatsApp Operations Contracts
         run: npm run verify:whatsapp-operations
 
+      - name: Verify WhatsApp Broadcast Runner Contracts
+        run: npm run verify:whatsapp-broadcast-runner
+
       - name: Typecheck
         run: npm run typecheck
 
