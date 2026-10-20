@@ -257,6 +257,7 @@ async function sendInstagramAutomationRun(
   const responseText = stringValue(claim.response_text);
   const leadId = stringValue(claim.lead_id);
   const conversationId = stringValue(claim.conversation_id);
+  const humanApproved = claim.human_approved === true;
 
   try {
     const runtime = await getInstagramRuntimeForOrganization(organizationId, accountId);
@@ -338,11 +339,12 @@ async function sendInstagramAutomationRun(
               external_message_id: providerMessageId,
               status: 'sent',
               sent_at: new Date().toISOString(),
-              human_approved: Boolean(objectValue(claim.policy).human_approved),
+              human_approved: humanApproved,
               metadata: {
                 provider: 'instagram',
                 instagram_automation_run_id: runId,
                 instagram_automation_trigger: triggerType,
+                human_approved: humanApproved,
               },
             })
             .eq('id', messageId)
