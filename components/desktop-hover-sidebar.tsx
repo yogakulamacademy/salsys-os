@@ -8,6 +8,7 @@ import {
   BookOpen,
   Boxes,
   BrainCircuit,
+  ChevronRight,
   CircleDollarSign,
   ClipboardCheck,
   ContactRound,
@@ -28,6 +29,7 @@ import {
   Target,
   UsersRound,
   Workflow,
+  X,
 } from "lucide-react";
 import {
   type ComponentType,
@@ -53,7 +55,10 @@ type SidebarItem = {
 };
 
 type SidebarGroup = {
+  id: string;
   label: string;
+  icon: IconType;
+  directHref?: string;
   items: SidebarItem[];
 };
 
@@ -97,7 +102,9 @@ function requestAskSalsys() {
 export function DesktopHoverSidebar() {
   const pathname = usePathname();
   const sidebarRef = useRef<HTMLElement | null>(null);
+  const submenuRef = useRef<HTMLElement | null>(null);
   const [open, setOpen] = useState(false);
+  const [submenuGroupId, setSubmenuGroupId] = useState<string | null>(null);
   const [role, setRole] = useState<string | null>(null);
   const [organizationName, setOrganizationName] = useState("SalsysOS");
 
@@ -161,19 +168,28 @@ export function DesktopHoverSidebar() {
 
   useEffect(() => {
     setOpen(false);
+    setSubmenuGroupId(null);
   }, [pathname]);
 
   useEffect(() => {
     function closeFromOutside(event: PointerEvent) {
-      if (!open || !sidebarRef.current) return;
+      if (!open) return;
       const target = event.target;
-      if (target instanceof Node && !sidebarRef.current.contains(target)) {
+      if (!(target instanceof Node)) return;
+
+      const insidePrimary = sidebarRef.current?.contains(target) ?? false;
+      const insideSubmenu = submenuRef.current?.contains(target) ?? false;
+
+      if (!insidePrimary && !insideSubmenu) {
+        setSubmenuGroupId(null);
         setOpen(false);
       }
     }
 
     function closeFromEscape(event: KeyboardEvent) {
-      if (event.key === "Escape") setOpen(false);
+      if (event.key !== "Escape") return;
+      setSubmenuGroupId(null);
+      setOpen(false);
     }
 
     document.addEventListener("pointerdown", closeFromOutside, true);
@@ -189,11 +205,16 @@ export function DesktopHoverSidebar() {
     if (employee) {
       return [
         {
-          label: "Workspace",
-          items: [{ href: "/dashboard", label: "Today", icon: Home }],
+          id: "home",
+          label: "Home",
+          icon: Home,
+          directHref: "/dashboard",
+          items: [],
         },
         {
+          id: "crm",
           label: "CRM",
+          icon: UsersRound,
           items: [
             { href: "/leads", label: "My leads", icon: ContactRound },
             { href: "/pipeline", label: "My pipeline", icon: Boxes },
@@ -201,7 +222,9 @@ export function DesktopHoverSidebar() {
           ],
         },
         {
+          id: "inbox",
           label: "Inbox",
+          icon: Inbox,
           items: [
             {
               href: "/conversations",
@@ -217,11 +240,16 @@ export function DesktopHoverSidebar() {
 
     return [
       {
-        label: "Workspace",
-        items: [{ href: "/home", label: "Home", icon: Home }],
+        id: "home",
+        label: "Home",
+        icon: Home,
+        directHref: "/home",
+        items: [],
       },
       {
+        id: "crm",
         label: "CRM",
+        icon: UsersRound,
         items: [
           { href: "/leads", label: "Leads", icon: ContactRound },
           { href: "/pipeline", label: "Pipeline", icon: Boxes },
@@ -241,17 +269,21 @@ export function DesktopHoverSidebar() {
         ],
       },
       {
+        id: "inbox",
         label: "Inbox",
+        icon: Inbox,
         items: [
           {
             href: "/conversations",
             label: "Conversations",
-            icon: Inbox,
+            icon: MessageSquareText,
           },
         ],
       },
       {
+        id: "growth",
         label: "Growth",
+        icon: Megaphone,
         items: [
           { href: "/campaigns", label: "Campaigns", icon: Target },
           { href: "/paid-media-leads", label: "Paid media", icon: Megaphone },
@@ -260,7 +292,9 @@ export function DesktopHoverSidebar() {
         ],
       },
       {
+        id: "intelligence",
         label: "Intelligence",
+        icon: BrainCircuit,
         items: [
           {
             href: "/commercial-intelligence",
@@ -275,11 +309,15 @@ export function DesktopHoverSidebar() {
         ],
       },
       {
+        id: "automation",
         label: "Automation",
+        icon: Workflow,
         items: [{ href: "/automation", label: "Automations", icon: Workflow }],
       },
       {
+        id: "operations",
         label: "Operations",
+        icon: BookOpen,
         items: [
           {
             href: "/course-management",
@@ -289,7 +327,9 @@ export function DesktopHoverSidebar() {
         ],
       },
       {
+        id: "system",
         label: "System",
+        icon: Settings,
         items: [
           {
             href: "/settings/integrations",
@@ -316,6 +356,33 @@ export function DesktopHoverSidebar() {
 
   const homeHref = employee ? "/dashboard" : "/home";
 
+  const submenuGroup = useMemo(() => {
+    const group = groups.find((candidate) => candidate.id === submenuGroupId);
+    if (!group) return null;
+
+    return {
+      ...group,
+      items: group.items.filter((item) => !item.adminOnly || admin),
+    };
+  }, [admin, groups, submenuGroupId]);
+
+  function groupContainsCurrentRoute(group: SidebarGroup) {
+    if (group.directHref && isActive(pathname, group.directHref)) return true;
+    return group.items.some(
+      (item) => (!item.adminOnly || admin) && isActive(pathname, item.href),
+    );
+  }
+
+  function openSubmenu(group: SidebarGroup) {
+    setOpen(true);
+    setSubmenuGroupId((current) => (current === group.id ? null : group.id));
+  }
+
+  function closeNavigation() {
+    setSubmenuGroupId(null);
+    setOpen(false);
+  }
+
   return (
     <>
       <aside
@@ -330,7 +397,7 @@ export function DesktopHoverSidebar() {
         <div className="flex h-16 shrink-0 items-center border-b border-slate-100 px-3 dark:border-slate-900">
           <Link
             href={homeHref}
-            onClick={() => setOpen(false)}
+            onClick={closeNavigation}
             className="flex min-w-0 items-center gap-3"
             aria-label="SalsysOS home"
           >
@@ -351,59 +418,82 @@ export function DesktopHoverSidebar() {
         </div>
 
         <nav className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden px-2 py-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-          {groups.map((group, groupIndex) => {
-            const visibleItems = group.items.filter(
-              (item) => !item.adminOnly || admin,
-            );
+          <div className="space-y-1">
+            {groups.map((group) => {
+              const Icon = group.icon;
+              const currentRoute = groupContainsCurrentRoute(group);
+              const submenuSelected = submenuGroupId === group.id;
+              const active = currentRoute || submenuSelected;
 
-            if (!visibleItems.length) return null;
+              if (group.directHref) {
+                return (
+                  <Link
+                    key={group.id}
+                    href={group.directHref}
+                    onClick={closeNavigation}
+                    title={open ? undefined : group.label}
+                    className={`group flex h-11 items-center rounded-lg transition ${
+                      open ? "gap-3 px-3" : "justify-center px-0"
+                    } ${
+                      currentRoute
+                        ? "bg-slate-900 text-white shadow-sm dark:bg-white dark:text-slate-950"
+                        : "text-slate-600 hover:bg-slate-100 hover:text-slate-950 dark:text-slate-400 dark:hover:bg-slate-900 dark:hover:text-white"
+                    }`}
+                  >
+                    <Icon
+                      size={19}
+                      strokeWidth={currentRoute ? 2.2 : 1.8}
+                      className="shrink-0"
+                    />
+                    {open ? (
+                      <span className="min-w-0 flex-1 truncate text-[12px] font-semibold">
+                        {group.label}
+                      </span>
+                    ) : null}
+                  </Link>
+                );
+              }
 
-            return (
-              <div key={group.label} className={groupIndex > 0 ? "mt-2" : ""}>
-                {open ? (
-                  <div className="px-2 pb-1 pt-1 text-[9px] font-black uppercase tracking-[0.12em] text-slate-300 dark:text-slate-600">
-                    {group.label}
-                  </div>
-                ) : groupIndex > 0 ? (
-                  <div className="mx-auto my-1 h-px w-7 bg-slate-100 dark:bg-slate-900" />
-                ) : null}
-
-                <div className="space-y-0.5">
-                  {visibleItems.map((item) => {
-                    const Icon = item.icon;
-                    const active = isActive(pathname, item.href);
-
-                    return (
-                      <Link
-                        key={item.href}
-                        href={item.href}
-                        onClick={() => setOpen(false)}
-                        title={open ? undefined : item.label}
-                        className={`group flex h-10 items-center rounded-lg transition ${
-                          open ? "gap-3 px-3" : "justify-center px-0"
-                        } ${
-                          active
-                            ? "bg-slate-900 text-white shadow-sm dark:bg-white dark:text-slate-950"
-                            : "text-slate-600 hover:bg-slate-100 hover:text-slate-950 dark:text-slate-400 dark:hover:bg-slate-900 dark:hover:text-white"
+              return (
+                <button
+                  key={group.id}
+                  type="button"
+                  onClick={() => openSubmenu(group)}
+                  title={open ? undefined : group.label}
+                  aria-expanded={submenuSelected}
+                  aria-controls={`salsys-submenu-${group.id}`}
+                  className={`group flex h-11 w-full items-center rounded-lg transition ${
+                    open ? "gap-3 px-3" : "justify-center px-0"
+                  } ${
+                    currentRoute
+                      ? "bg-slate-900 text-white shadow-sm dark:bg-white dark:text-slate-950"
+                      : submenuSelected
+                        ? "bg-slate-100 text-slate-950 dark:bg-slate-900 dark:text-white"
+                        : "text-slate-600 hover:bg-slate-100 hover:text-slate-950 dark:text-slate-400 dark:hover:bg-slate-900 dark:hover:text-white"
+                  }`}
+                >
+                  <Icon
+                    size={19}
+                    strokeWidth={active ? 2.2 : 1.8}
+                    className="shrink-0"
+                  />
+                  {open ? (
+                    <>
+                      <span className="min-w-0 flex-1 truncate text-left text-[12px] font-semibold">
+                        {group.label}
+                      </span>
+                      <ChevronRight
+                        size={14}
+                        className={`shrink-0 transition-transform ${
+                          submenuSelected ? "translate-x-0.5" : ""
                         }`}
-                      >
-                        <Icon
-                          size={18}
-                          strokeWidth={active ? 2.2 : 1.8}
-                          className="shrink-0"
-                        />
-                        {open ? (
-                          <span className="min-w-0 flex-1 truncate text-[12px] font-semibold">
-                            {item.label}
-                          </span>
-                        ) : null}
-                      </Link>
-                    );
-                  })}
-                </div>
-              </div>
-            );
-          })}
+                      />
+                    </>
+                  ) : null}
+                </button>
+              );
+            })}
+          </div>
         </nav>
 
         <div className="shrink-0 border-t border-slate-100 p-2 dark:border-slate-900">
@@ -411,7 +501,7 @@ export function DesktopHoverSidebar() {
             type="button"
             onClick={() => {
               requestAskSalsys();
-              setOpen(false);
+              closeNavigation();
             }}
             title={open ? undefined : "Ask Salsys"}
             className={`flex h-10 w-full items-center rounded-lg text-slate-600 transition hover:bg-violet-50 hover:text-violet-700 dark:text-slate-400 dark:hover:bg-violet-950/30 dark:hover:text-violet-300 ${
@@ -425,7 +515,7 @@ export function DesktopHoverSidebar() {
           {!employee ? (
             <Link
               href="/settings"
-              onClick={() => setOpen(false)}
+              onClick={closeNavigation}
               title={open ? undefined : "Settings"}
               className={`mt-0.5 flex h-10 items-center rounded-lg text-slate-600 transition hover:bg-slate-100 hover:text-slate-950 dark:text-slate-400 dark:hover:bg-slate-900 dark:hover:text-white ${
                 open ? "gap-3 px-3" : "justify-center"
@@ -442,16 +532,115 @@ export function DesktopHoverSidebar() {
 
           {open ? (
             <div className="mt-2 flex items-center gap-2 px-3 py-1 text-[10px] font-medium text-slate-400">
-              <span className={`h-2 w-2 rounded-full ${mock ? "bg-amber-400" : "bg-emerald-500"}`} />
+              <span
+                className={`h-2 w-2 rounded-full ${
+                  mock ? "bg-amber-400" : "bg-emerald-500"
+                }`}
+              />
               {mock ? "Development" : "Live workspace"}
             </div>
           ) : (
-            <div className="mt-2 flex justify-center py-1" title={mock ? "Development" : "Live workspace"}>
-              <span className={`h-2 w-2 rounded-full ${mock ? "bg-amber-400" : "bg-emerald-500"}`} />
+            <div
+              className="mt-2 flex justify-center py-1"
+              title={mock ? "Development" : "Live workspace"}
+            >
+              <span
+                className={`h-2 w-2 rounded-full ${
+                  mock ? "bg-amber-400" : "bg-emerald-500"
+                }`}
+              />
             </div>
           )}
         </div>
       </aside>
+
+      {open && submenuGroup && submenuGroup.items.length > 0 ? (
+        <aside
+          ref={submenuRef}
+          id={`salsys-submenu-${submenuGroup.id}`}
+          className="fixed inset-y-0 left-[232px] z-[69] hidden w-[272px] flex-col border-r border-slate-200 bg-white shadow-2xl lg:flex dark:border-slate-800 dark:bg-slate-950"
+          aria-label={`${submenuGroup.label} submenu`}
+        >
+          <div className="flex h-16 shrink-0 items-center justify-between border-b border-slate-100 px-4 dark:border-slate-900">
+            <div className="min-w-0">
+              <div className="text-[10px] font-bold uppercase tracking-[0.11em] text-slate-400">
+                SalsysOS
+              </div>
+              <div className="mt-0.5 truncate text-[15px] font-black tracking-[-0.02em] text-slate-950 dark:text-white">
+                {submenuGroup.label}
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => setSubmenuGroupId(null)}
+              className="grid h-8 w-8 place-items-center rounded-lg text-slate-400 transition hover:bg-slate-100 hover:text-slate-900 dark:hover:bg-slate-900 dark:hover:text-white"
+              aria-label={`Close ${submenuGroup.label} submenu`}
+            >
+              <X size={16} />
+            </button>
+          </div>
+
+          <nav className="flex-1 overflow-y-auto p-3">
+            <div className="space-y-1">
+              {submenuGroup.items.map((item) => {
+                const Icon = item.icon;
+                const itemActive = isActive(pathname, item.href);
+
+                return (
+                  <Link
+                    key={item.href}
+                    href={item.href}
+                    onClick={closeNavigation}
+                    className={`group flex items-center gap-3 rounded-xl px-3 py-2.5 transition ${
+                      itemActive
+                        ? "bg-slate-950 text-white dark:bg-white dark:text-slate-950"
+                        : "text-slate-600 hover:bg-slate-100 hover:text-slate-950 dark:text-slate-300 dark:hover:bg-slate-900 dark:hover:text-white"
+                    }`}
+                  >
+                    <span
+                      className={`grid h-8 w-8 shrink-0 place-items-center rounded-lg ${
+                        itemActive
+                          ? "bg-white/10 text-white dark:bg-slate-950/10 dark:text-slate-950"
+                          : "bg-slate-100 text-slate-500 group-hover:bg-white dark:bg-slate-900 dark:text-slate-400 dark:group-hover:bg-slate-800"
+                      }`}
+                    >
+                      <Icon size={16} strokeWidth={itemActive ? 2.2 : 1.8} />
+                    </span>
+                    <span className="min-w-0 flex-1 truncate text-[12px] font-semibold">
+                      {item.label}
+                    </span>
+                    <ChevronRight
+                      size={14}
+                      className={itemActive ? "opacity-80" : "text-slate-300"}
+                    />
+                  </Link>
+                );
+              })}
+            </div>
+          </nav>
+
+          <div className="border-t border-slate-100 p-3 dark:border-slate-900">
+            <button
+              type="button"
+              onClick={() => {
+                requestAskSalsys();
+                closeNavigation();
+              }}
+              className="flex w-full items-center gap-3 rounded-xl border border-violet-100 bg-violet-50/70 px-3 py-2.5 text-left text-violet-700 transition hover:bg-violet-50 dark:border-violet-900/50 dark:bg-violet-950/20 dark:text-violet-200 dark:hover:bg-violet-950/40"
+            >
+              <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-white text-violet-600 shadow-sm dark:bg-slate-900 dark:text-violet-300">
+                <Sparkles size={15} />
+              </span>
+              <span className="min-w-0 flex-1">
+                <span className="block text-[11px] font-bold">Ask Salsys</span>
+                <span className="block truncate text-[9px] text-violet-500/80 dark:text-violet-300/70">
+                  Investigate this workspace
+                </span>
+              </span>
+            </button>
+          </div>
+        </aside>
+      ) : null}
 
       <style jsx global>{`
         @media (min-width: 1024px) {
