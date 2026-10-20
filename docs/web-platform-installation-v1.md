@@ -2,6 +2,22 @@
 
 This guide installs the same Salsys browser intelligence layer across custom-coded sites, WordPress, Webflow and Framer. Shopify uses its Customer Events pixel sandbox and therefore has a dedicated adapter.
 
+## Register the website source first
+
+Before installing browser code, create an origin-bound **Website** tracking source in Salsys for the exact live hostname.
+
+Required website-source posture:
+
+- source type `website`;
+- auth mode `origin`;
+- allowed event prefix `web.`;
+- privacy mode `strict`;
+- GPC honored;
+- consent required for optional processing;
+- current privacy notice version.
+
+No trusted server secret is placed in browser code. If both `www.example.com` and `example.com` serve real traffic, register each hostname separately.
+
 ## Canonical browser snippet
 
 Use exactly one Salsys browser installation per page:
@@ -61,17 +77,27 @@ Frameworks such as React/Next.js/Vue/Angular should mount the browser SDK once a
 
 ## WordPress
 
-Salsys does not require a second PHP tracking engine.
+Salsys includes a WordPress installation adapter at:
 
-Install the canonical browser snippet once using the site's approved global header/custom-code mechanism. Suitable approaches include:
+```text
+integrations/wordpress/salsys-tracking/
+```
 
-- a site-wide custom-code/header feature already used by the WordPress installation;
-- a child theme/layout hook controlled by the site owner;
-- a trusted code-snippet/header manager used by the site's operations team.
+The plugin installs the canonical browser SDK; it is not a second PHP tracking engine.
 
-Do not paste the same Salsys snippet into individual posts/pages if it is already installed globally.
+### Plugin install
 
-For form builders, add `data-salsys-lead-form` to the rendered form when the builder supports custom attributes. If a builder cannot expose a form attribute, use a tiny DOM adapter that marks only the known enquiry form after page load. Never forward all form input values to Salsys tracking.
+1. Register the exact WordPress hostname as a Salsys `website` source.
+2. Copy the `salsys-tracking` directory to `wp-content/plugins/`.
+3. Activate **Salsys Tracking** in WordPress.
+4. Open **Settings -> Salsys Tracking**.
+5. Keep analytics consent on **Required** unless another consent authority has already made the decision before Salsys loads.
+6. If the site already has a CMP, disable the Salsys consent UI so only one visual consent authority is shown.
+7. Optionally configure narrow CSS selectors for actual enquiry forms. The adapter marks those rendered `<form>` nodes with `data-salsys-lead-form` and never copies their field values into tracking events.
+
+This supports rendered forms from common builders such as Elementor Forms, Contact Form 7, WPForms, Gravity Forms and Fluent Forms without requiring a separate integration engine for each builder.
+
+A manual site-wide custom-code/header installation remains supported, but do not use both the plugin and a manual Salsys snippet at the same time.
 
 ## Webflow
 

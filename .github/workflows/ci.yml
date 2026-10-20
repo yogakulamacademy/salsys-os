@@ -52,6 +52,9 @@ jobs:
       - name: Verify Web Platform Adapter Contracts
         run: npm run verify:web-platform-adapters
 
+      - name: Verify WordPress Adapter Contracts
+        run: npm run verify:wordpress-adapter
+
       - name: Verify Intelligence Accuracy Contracts
         run: npm run verify:intelligence-accuracy
 

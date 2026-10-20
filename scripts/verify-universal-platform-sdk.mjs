@@ -85,12 +85,16 @@ for (const needle of ['record_privacy_preference_v1', 'privacyNoticeVersion', 'x
 
 const sourceRoute = read('app/api/tracking/sources/route.ts');
 for (const [needle, label] of [
-  ["['client', 'api', 'webhook', 'system']", 'client source provisioning'],
-  ["authMode = isPublishableClient ? 'publishable' : 'secret'", 'publishable/server credential split'],
+  ["['website', 'client', 'api', 'webhook', 'system']", 'website/client/server source provisioning'],
+  ["isPublishableClient ? 'publishable' : 'secret'", 'publishable/server credential split'],
   ["secret: null", 'no secret returned for publishable clients'],
   ['privacyNoticeVersion', 'privacy notice requirement'],
 ]) {
   if (!sourceRoute.includes(needle)) fail(`Tracking source API is missing ${label} (${needle}).`);
+}
+
+if (!sourceRoute.includes("const authMode = isWebsite ? 'origin'")) {
+  fail('Tracking source API must preserve the origin-bound website auth path.');
 }
 
 const androidBuild = read('sdk/android/build.gradle.kts');
