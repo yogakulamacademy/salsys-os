@@ -1,11 +1,16 @@
 <?php
 /**
- * Yogakulam Growth CRM - website lead capture helper.
+ * LEGACY COMPATIBILITY HELPER - Yogakulam website integration.
+ *
+ * New integrations should use integrations/php/salsysos-crm.php and the
+ * SalsysOS tenant credential contract. This file intentionally preserves the
+ * historical function and environment-variable names until the Yogakulam
+ * production website has completed its controlled migration.
  *
  * Recommended use: call this AFTER your existing enquiry has been saved successfully
  * in the academy website database. A CRM outage must never block the website form.
  *
- * Server environment variables:
+ * Legacy server environment variables:
  *   YOGAKULAM_CRM_URL=https://your-crm.vercel.app
  *   YOGAKULAM_CRM_WEBSITE_SECRET=<same value as Vercel WEBSITE_LEAD_CAPTURE_SECRET>
  */
