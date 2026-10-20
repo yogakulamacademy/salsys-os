@@ -37,7 +37,7 @@ Principles:
 
 ## 2. Current completion snapshot
 
-Latest conversational planning estimates after the October 20 tracking, messaging, intelligence and CRM closeout work:
+Latest conversational planning estimates after the October 20 tracking, messaging, intelligence, CRM and identity closeout work:
 
 | Scope | Estimate |
 |---|---:|
@@ -47,7 +47,12 @@ Latest conversational planning estimates after the October 20 tracking, messagin
 
 These are planning estimates, not telemetry-derived metrics. Rebaseline them only after reviewing the roadmap end-to-end.
 
-The ordered closeout sequence is now active. **Core CRM + lead/customer management is closed at V1 production-integrity level**; production evidence is recorded in `docs/checkpoints/M-2026-10-20-CRM-Core-Closeout-v1.md`. The next ordered area is **Customer Journey / Person 360 / Identity**.
+The ordered closeout sequence is active. **Core CRM + lead/customer management** and **Customer Journey / Person 360 / Identity** are both closed at V1 production-integrity level. Production evidence is recorded in:
+
+- `docs/checkpoints/M-2026-10-20-CRM-Core-Closeout-v1.md`;
+- `docs/checkpoints/M-2026-10-20-Customer360-Identity-Closeout-v1.md`.
+
+The next ordered area is **Universal Tracking SDK + Consent — live production closeout**.
 
 Most remaining full-scope work is concentrated in live production proof, predictive maturity from real outcomes, and R11-R14: reusable Wellness/Education productization, Realty, commercial SaaS readiness, and go-to-market/first 100 customers.
 
@@ -59,9 +64,9 @@ Most remaining full-scope work is concentrated in live production proof, predict
 |---|---|
 | R0 Platform Rebrand | ~95% |
 | R1 Foundation / Tenancy / Security | ~99% |
-| R2 Lead Capture / Identity / Raw Events / Data Quality | ~99% |
+| R2 Lead Capture / Identity / Raw Events / Data Quality | identity integrity V1 closed; broader tracking proof remains |
 | R3 CRM Sales Execution | **V1 production-integrity closed** |
-| R4 Customer Journey / 360 | ~96% |
+| R4 Customer Journey / 360 | **V1 production-integrity closed** |
 | R5 Attribution / Funnel / Revenue | ~93% |
 | R6 Intent / Product Affinity / Sales Intelligence | ~94% |
 | R7 Integrations / Conversion Feedback | ~92% |
@@ -157,7 +162,9 @@ The browser must never become authority for confirmed payment, enrollment, refun
 - privacy-aware signal-quality and Safe-V2 feature snapshots;
 - prediction freshness guards;
 - realized probability-outcome observation, calibration metrics and drift instrumentation;
-- scheduled outcome observation.
+- scheduled outcome observation;
+- atomic exact-session anonymous-to-lead/Person identity handoff via `attach_exact_session_identity_v1`;
+- tenant-bound current visitor routing and conservative explicit identity policy provisioning.
 
 ### Architecture cleanup
 
@@ -305,6 +312,7 @@ Event Intelligence is the technical foundation for this layer.
 - browser tracking tenant resolution comes from trusted configured origin/source;
 - server tracking uses registered authenticated sources;
 - service paths are explicitly tenant scoped;
+- exact-session identity handoff validates organization + lead + session + anonymous visitor inside one service-role-only transaction;
 - OpenSearch documents remain organization-scoped and rebuildable.
 
 ---
@@ -316,8 +324,8 @@ Close one product area completely before moving to the next. Do not skip an unre
 Current order:
 
 1. **Core CRM + lead/customer management — CLOSED V1**
-2. **Customer Journey / Person 360 / Identity — ACTIVE NEXT**
-3. Universal Tracking SDK + consent — close live production proof
+2. **Customer Journey / Person 360 / Identity — CLOSED V1**
+3. **Universal Tracking SDK + consent — ACTIVE NEXT; close live production proof**
 4. Funnel + attribution + revenue foundation — close end-to-end revenue reconciliation
 5. WhatsApp automation — close remaining Operations/Growth live production proof
 6. Instagram automation — close provider permission + live E2E proof
