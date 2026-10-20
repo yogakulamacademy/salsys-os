@@ -49,6 +49,9 @@ jobs:
       - name: Verify Universal Platform SDK Contracts
         run: npm run verify:universal-platform-sdk
 
+      - name: Verify Web Platform Adapter Contracts
+        run: npm run verify:web-platform-adapters
+
       - name: Verify Intelligence Accuracy Contracts
         run: npm run verify:intelligence-accuracy
 
