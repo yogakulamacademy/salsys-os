@@ -21,6 +21,8 @@ const SALSYS_SDK_VERSION = '1.0.0';
 const SALSYS_SESSION_STORAGE_KEY = 'salsys_shopify_session_v1';
 
 let salsysPrivacy = init.customerPrivacy || {};
+let salsysLastVisitorId = null;
+let salsysLastConsentFingerprint = null;
 
 function salsysId(prefix) {
   return `${prefix}_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 14)}`;
@@ -91,10 +93,17 @@ function salsysConsentDecisions(privacy) {
   };
 }
 
-async function sendConsent(privacy) {
-  if (!SALSYS_SOURCE_KEY || SALSYS_SOURCE_KEY === 'REPLACE_WITH_PUBLISHABLE_SOURCE_KEY') return;
+function privacyFingerprint(privacy) {
+  return JSON.stringify(salsysConsentDecisions(privacy));
+}
 
-  const visitorId = `shopify_${salsysId('visitor')}`;
+async function sendConsent(privacy, visitorId, force = false) {
+  if (!visitorId) return false;
+  if (!SALSYS_SOURCE_KEY || SALSYS_SOURCE_KEY === 'REPLACE_WITH_PUBLISHABLE_SOURCE_KEY') return false;
+
+  const fingerprint = `${visitorId}:${privacyFingerprint(privacy)}`;
+  if (!force && fingerprint === salsysLastConsentFingerprint) return true;
+
   const payload = {
     event_id: salsysId('consent'),
     visitor_id: visitorId,
@@ -104,7 +113,7 @@ async function sendConsent(privacy) {
   };
 
   try {
-    await fetch(`${SALSYS_BASE_URL}/api/privacy/consent/client/v1`, {
+    const response = await fetch(`${SALSYS_BASE_URL}/api/privacy/consent/client/v1`, {
       method: 'POST',
       keepalive: true,
       headers: {
@@ -113,9 +122,14 @@ async function sendConsent(privacy) {
       },
       body: JSON.stringify(payload),
     });
+
+    if (!response.ok) return false;
+    salsysLastConsentFingerprint = fingerprint;
+    return true;
   } catch (_error) {
-    // Consent transport is best-effort here; Shopify remains the visual/privacy
-    // authority and the Salsys event endpoint still privacy-gates persistence.
+    // Shopify remains the visual/privacy authority. Salsys will not persist the
+    // matching optional event until its own privacy receipt exists.
+    return false;
   }
 }
 
@@ -181,15 +195,24 @@ async function sendEvent(event) {
 
   const location = locationSnapshot(event);
   const sessionId = await getSessionId();
-  const visitorId = trimText(event && event.clientId, 180);
+  const shopifyClientId = trimText(event && event.clientId, 170);
+  const visitorId = shopifyClientId ? `shopify_${shopifyClientId}` : null;
   if (!visitorId || !sessionId || !location.hostname) return;
+
+  salsysLastVisitorId = visitorId;
+
+  // The privacy receipt is bound to the exact anonymous visitor ID used by the
+  // event. Send/refresh it before the optional event so the server privacy gate
+  // can make a deterministic decision without bypassing Shopify consent.
+  const consentReady = await sendConsent(salsysPrivacy, visitorId);
+  if (!consentReady) return;
 
   const payload = {
     event_id: `shopify_${trimText(event.id, 140) || salsysId('evt')}`,
     event_name: eventName,
     schema_version: 1,
     occurred_at: trimText(event.timestamp, 80) || new Date().toISOString(),
-    anonymous_visitor_id: `shopify_${visitorId}`,
+    anonymous_visitor_id: visitorId,
     session_key: sessionId,
     site: location.hostname,
     properties: {
@@ -232,10 +255,11 @@ async function sendEvent(event) {
 
 customerPrivacy.subscribe('visitorConsentCollected', (event) => {
   salsysPrivacy = event.customerPrivacy || {};
-  void sendConsent(salsysPrivacy);
+  salsysLastConsentFingerprint = null;
+  if (salsysLastVisitorId) {
+    void sendConsent(salsysPrivacy, salsysLastVisitorId, true);
+  }
 });
-
-void sendConsent(salsysPrivacy);
 
 Object.keys(EVENT_MAP).forEach((shopifyEventName) => {
   analytics.subscribe(shopifyEventName, (event) => {
