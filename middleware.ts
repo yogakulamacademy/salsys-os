@@ -40,12 +40,6 @@ const PUBLIC_EXACT_PATHS = new Set([
 const ACTIVE_WORKSPACE_COOKIE = "yk-active-workspace";
 const WORKSPACE_COOKIE_MAX_AGE_SECONDS = 60 * 60 * 24 * 30;
 
-const OAUTH_CALLBACK_PROVIDER_BY_PATH: Record<string, string> = {
-  "/api/integrations/google/callback": "google",
-  "/api/integrations/meta/callback": "meta",
-  "/api/integrations/instagram/callback": "instagram",
-};
-
 const EMPLOYEE_EXACT_PATHS = new Set([
   "/dashboard",
   "/leads",
@@ -91,8 +85,15 @@ function isTenantResetPasswordPath(pathname: string) {
   return /^\/reset-password\/[^/]+$/.test(pathname);
 }
 
-function isPasswordResetCompletionPath(pathname: string) {
-  return pathname === "/reset-password" || isTenantResetPasswordPath(pathname);
+function isPublicAuthPath(pathname: string) {
+  return (
+    pathname === "/login" ||
+    isTenantLoginPath(pathname) ||
+    pathname === "/forgot-password" ||
+    isTenantForgotPasswordPath(pathname) ||
+    pathname === "/reset-password" ||
+    isTenantResetPasswordPath(pathname)
+  );
 }
 
 function isAdminOnlyPage(pathname: string) {
@@ -138,10 +139,26 @@ function authConfigurationError(pathname: string) {
   return new NextResponse("CRM authentication is not configured.", { status: 503 });
 }
 
+function workspaceServiceUnavailable(pathname: string) {
+  if (pathname.startsWith("/api/")) {
+    return NextResponse.json(
+      { ok: false, error: "Workspace service is temporarily unavailable." },
+      { status: 503 },
+    );
+  }
+
+  return new NextResponse(
+    "SalsysOS is temporarily unable to verify your workspace. Please retry in a moment.",
+    { status: 503 },
+  );
+}
+
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
-  if (isPublicPath(pathname)) {
+  if (isPublicPath(pathname) || isPublicAuthPath(pathname)) {
+    // Do not place the login/recovery form behind a Supabase middleware lookup.
+    // The server action performs authentication and tenant binding itself.
     return NextResponse.next();
   }
 
@@ -181,21 +198,18 @@ export async function middleware(request: NextRequest) {
 
   const {
     data: { user },
+    error: authError,
   } = await supabase.auth.getUser();
 
-  const publicAuthPath =
-    pathname === "/login" ||
-    isTenantLoginPath(pathname) ||
-    pathname === "/forgot-password" ||
-    isTenantForgotPasswordPath(pathname) ||
-    pathname === "/reset-password" ||
-    isTenantResetPasswordPath(pathname);
+  if (authError && !user) {
+    return workspaceServiceUnavailable(pathname);
+  }
 
   if (!user) {
-    if (publicAuthPath) return response;
     if (pathname.startsWith("/api/")) {
       return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
     }
+
     const loginUrl = request.nextUrl.clone();
     loginUrl.pathname = "/login";
     loginUrl.searchParams.set("next", `${pathname}${request.nextUrl.search}`);
@@ -204,45 +218,27 @@ export async function middleware(request: NextRequest) {
     return redirectResponse;
   }
 
-  if (isPasswordResetCompletionPath(pathname)) {
-    return response;
+  const { data: memberships, error: membershipError } = await supabase
+    .from("organization_members")
+    .select("organization_id,role")
+    .eq("user_id", user.id)
+    .eq("active", true);
+
+  if (membershipError) {
+    return workspaceServiceUnavailable(pathname);
   }
 
-  // The production database's canonical tenant contract is the binding RPC,
-  // followed by the organization membership row. Do not depend on a separate
-  // workspace-context RPC here: preview/custom hostnames need to be able to
-  // establish the same tenant session from the authenticated identity alone.
-  const { data: boundOrganizationId, error: tenantBindingError } =
-    await supabase.rpc("bind_current_tenant_session_for_current_user");
+  const membershipRows = memberships ?? [];
+  const cookieOrganizationId =
+    request.cookies.get(ACTIVE_WORKSPACE_COOKIE)?.value?.trim() ?? "";
 
-  let role = "";
+  const selectedMembership =
+    membershipRows.find(
+      (membership) =>
+        String(membership.organization_id ?? "").trim() === cookieOrganizationId,
+    ) ?? (membershipRows.length === 1 ? membershipRows[0] : null);
 
-  if (!tenantBindingError && boundOrganizationId) {
-    const organizationId = String(boundOrganizationId);
-
-    request.cookies.set(ACTIVE_WORKSPACE_COOKIE, organizationId);
-    response.cookies.set(ACTIVE_WORKSPACE_COOKIE, organizationId, {
-      httpOnly: true,
-      sameSite: "lax",
-      secure: process.env.NODE_ENV === "production",
-      path: "/",
-      maxAge: WORKSPACE_COOKIE_MAX_AGE_SECONDS,
-    });
-
-    const { data: membership, error: membershipError } = await supabase
-      .from("organization_members")
-      .select("role")
-      .eq("organization_id", organizationId)
-      .eq("user_id", user.id)
-      .eq("active", true)
-      .maybeSingle();
-
-    if (!membershipError && membership) {
-      role = String(membership.role ?? "").trim().toLowerCase();
-    }
-  }
-
-  if (tenantBindingError || !boundOrganizationId || !role) {
+  if (!selectedMembership) {
     if (pathname.startsWith("/api/")) {
       return NextResponse.json(
         { ok: false, error: "Workspace access denied." },
@@ -257,7 +253,9 @@ export async function middleware(request: NextRequest) {
       "/login",
       {
         error:
-          "Unable to establish your organization session. Please sign in again.",
+          membershipRows.length > 1
+            ? "This account is linked to multiple organizations. Please contact your SalsysOS administrator."
+            : "Your account is not assigned to an active organization.",
       },
     );
     redirectResponse.cookies.set(ACTIVE_WORKSPACE_COOKIE, "", {
@@ -270,9 +268,34 @@ export async function middleware(request: NextRequest) {
     return redirectResponse;
   }
 
-  if (publicAuthPath) {
-    return redirectWithAuthCookies(request, response, "/dashboard");
+  const organizationId = String(selectedMembership.organization_id ?? "").trim();
+  const role = String(selectedMembership.role ?? "").trim().toLowerCase();
+
+  if (!organizationId || !role) {
+    return workspaceServiceUnavailable(pathname);
   }
+
+  const { error: tenantBindingError } = await supabase.rpc(
+    "bind_current_tenant_session",
+    {
+      p_organization_id: organizationId,
+    },
+  );
+
+  if (tenantBindingError) {
+    // A transient database/provider failure should not destroy an otherwise
+    // valid authenticated session. Let the user retry instead of signing out.
+    return workspaceServiceUnavailable(pathname);
+  }
+
+  request.cookies.set(ACTIVE_WORKSPACE_COOKIE, organizationId);
+  response.cookies.set(ACTIVE_WORKSPACE_COOKIE, organizationId, {
+    httpOnly: true,
+    sameSite: "lax",
+    secure: process.env.NODE_ENV === "production",
+    path: "/",
+    maxAge: WORKSPACE_COOKIE_MAX_AGE_SECONDS,
+  });
 
   if (role === "employee" && !isEmployeeAllowedPage(pathname)) {
     return redirectWithAuthCookies(request, response, "/dashboard");
