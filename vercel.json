@@ -10,6 +10,10 @@
       "schedule": "25 */6 * * *"
     },
     {
+      "path": "/api/intelligence/prediction-outcomes",
+      "schedule": "40 */6 * * *"
+    },
+    {
       "path": "/api/analytics/ga4/sync",
       "schedule": "30 4 * * *"
     },
