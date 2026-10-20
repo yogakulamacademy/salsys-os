@@ -9,9 +9,103 @@ import { ACTIVE_WORKSPACE_COOKIE } from '@/lib/workspace';
 
 const ORGANIZATION_COOKIE_MAX_AGE_SECONDS = 60 * 60 * 24 * 30;
 
+type ServerSupabaseClient = Awaited<ReturnType<typeof createClient>>;
+
+type TenantBindingResult =
+  | { ok: true; organizationId: string }
+  | {
+      ok: false;
+      reason:
+        | 'membership_lookup_failed'
+        | 'no_membership'
+        | 'multiple_memberships'
+        | 'binding_failed';
+      detail?: string;
+    };
+
 function authUrl(path: string, key: 'notice' | 'error', message: string) {
   const params = new URLSearchParams({ [key]: message });
   return `${path}?${params.toString()}`;
+}
+
+async function resolveAndBindOrganization(
+  supabase: ServerSupabaseClient,
+  userId: string,
+): Promise<TenantBindingResult> {
+  const { data: memberships, error: membershipError } = await supabase
+    .from('organization_members')
+    .select('organization_id')
+    .eq('user_id', userId)
+    .eq('active', true);
+
+  if (membershipError) {
+    return {
+      ok: false,
+      reason: 'membership_lookup_failed',
+      detail: membershipError.message,
+    };
+  }
+
+  const organizationIds = Array.from(
+    new Set(
+      (memberships ?? [])
+        .map((membership) => String(membership.organization_id ?? '').trim())
+        .filter(Boolean),
+    ),
+  );
+
+  if (organizationIds.length === 0) {
+    return { ok: false, reason: 'no_membership' };
+  }
+
+  if (organizationIds.length > 1) {
+    return { ok: false, reason: 'multiple_memberships' };
+  }
+
+  const organizationId = organizationIds[0];
+  const { data: boundOrganizationId, error: bindingError } = await supabase.rpc(
+    'bind_current_tenant_session',
+    {
+      p_organization_id: organizationId,
+    },
+  );
+
+  if (
+    bindingError ||
+    !boundOrganizationId ||
+    String(boundOrganizationId) !== organizationId
+  ) {
+    return {
+      ok: false,
+      reason: 'binding_failed',
+      detail: bindingError?.message,
+    };
+  }
+
+  return { ok: true, organizationId };
+}
+
+function tenantBindingMessage(result: Exclude<TenantBindingResult, { ok: true }>) {
+  if (result.reason === 'no_membership') {
+    return 'Your account is not assigned to an active organization.';
+  }
+
+  if (result.reason === 'multiple_memberships') {
+    return 'This account is linked to multiple organizations. Please contact your SalsysOS administrator.';
+  }
+
+  return 'Unable to establish your organization session. Please try again.';
+}
+
+async function setWorkspaceCookie(organizationId: string) {
+  const cookieStore = await cookies();
+  cookieStore.set(ACTIVE_WORKSPACE_COOKIE, organizationId, {
+    httpOnly: true,
+    sameSite: 'lax',
+    secure: process.env.NODE_ENV === 'production',
+    path: '/',
+    maxAge: ORGANIZATION_COOKIE_MAX_AGE_SECONDS,
+  });
 }
 
 export async function signInAction(formData: FormData) {
@@ -40,31 +134,16 @@ export async function signInAction(formData: FormData) {
     redirect(authUrl('/login', 'error', 'Invalid email or password'));
   }
 
-  const { data: boundOrganizationId, error: tenantBindingError } =
-    await supabase.rpc('bind_current_tenant_session_for_current_user');
+  const tenant = await resolveAndBindOrganization(supabase, signInData.user.id);
 
-  if (tenantBindingError || !boundOrganizationId) {
+  if (!tenant.ok) {
     await supabase.auth.signOut();
-
-    const rawMessage = tenantBindingError?.message ?? '';
-    const message = rawMessage.includes('Multiple active organization memberships')
-      ? 'This account is linked to multiple organizations. Please contact your SalsysOS administrator.'
-      : rawMessage.includes('No active organization membership')
-        ? 'Your account is not assigned to an active organization.'
-        : 'Unable to establish your organization session. Please try again.';
-
-    redirect(authUrl('/login', 'error', message));
+    const cookieStore = await cookies();
+    cookieStore.delete(ACTIVE_WORKSPACE_COOKIE);
+    redirect(authUrl('/login', 'error', tenantBindingMessage(tenant)));
   }
 
-  const cookieStore = await cookies();
-  cookieStore.set(ACTIVE_WORKSPACE_COOKIE, String(boundOrganizationId), {
-    httpOnly: true,
-    sameSite: 'lax',
-    secure: process.env.NODE_ENV === 'production',
-    path: '/',
-    maxAge: ORGANIZATION_COOKIE_MAX_AGE_SECONDS,
-  });
-
+  await setWorkspaceCookie(tenant.organizationId);
   redirect(next);
 }
 
@@ -130,12 +209,9 @@ export async function confirmPasswordRecoveryAction(formData: FormData) {
     );
   }
 
-  // Resolve the tenant from the authenticated recovery identity only.
-  // No organization slug or organization ID is accepted from the browser.
-  const { data: boundOrganizationId, error: tenantBindingError } =
-    await supabase.rpc('bind_current_tenant_session_for_current_user');
+  const tenant = await resolveAndBindOrganization(supabase, verification.user.id);
 
-  if (tenantBindingError || !boundOrganizationId) {
+  if (!tenant.ok) {
     await supabase.auth.signOut();
     const cookieStore = await cookies();
     cookieStore.delete(ACTIVE_WORKSPACE_COOKIE);
@@ -148,15 +224,7 @@ export async function confirmPasswordRecoveryAction(formData: FormData) {
     );
   }
 
-  const cookieStore = await cookies();
-  cookieStore.set(ACTIVE_WORKSPACE_COOKIE, String(boundOrganizationId), {
-    httpOnly: true,
-    sameSite: 'lax',
-    secure: process.env.NODE_ENV === 'production',
-    path: '/',
-    maxAge: ORGANIZATION_COOKIE_MAX_AGE_SECONDS,
-  });
-
+  await setWorkspaceCookie(tenant.organizationId);
   redirect('/reset-password');
 }
 
@@ -196,12 +264,9 @@ export async function updateRecoveredPasswordAction(formData: FormData) {
     );
   }
 
-  // Re-assert canonical tenant binding from the authenticated user before
-  // rotating credentials. This does not trust any tenant identifier from UI.
-  const { data: boundOrganizationId, error: tenantBindingError } =
-    await supabase.rpc('bind_current_tenant_session_for_current_user');
+  const tenant = await resolveAndBindOrganization(supabase, user.id);
 
-  if (tenantBindingError || !boundOrganizationId) {
+  if (!tenant.ok) {
     await supabase.auth.signOut();
     const cookieStore = await cookies();
     cookieStore.delete(ACTIVE_WORKSPACE_COOKIE);
