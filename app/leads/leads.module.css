@@ -1,0 +1,97 @@
+.workspace :global(.fixed.inset-0.z-\[100\]) {
+  align-items: center;
+  padding: 16px;
+}
+
+.workspace :global(.fixed.inset-0.z-\[100\] > button) {
+  background: rgba(15, 23, 42, 0.12) !important;
+  backdrop-filter: none !important;
+}
+
+.workspace :global(.fixed.inset-0.z-\[100\] > aside) {
+  width: min(680px, calc(100vw - 32px)) !important;
+  max-width: none !important;
+  height: auto !important;
+  max-height: calc(100vh - 32px);
+  margin-left: auto;
+  overflow-y: auto;
+  border: 1px solid rgb(226 232 240);
+  border-radius: 20px;
+  box-shadow: 0 24px 70px rgba(15, 23, 42, 0.18);
+}
+
+.workspace :global(.fixed.inset-0.z-\[100\] > aside > div:first-child) {
+  padding: 18px 20px !important;
+}
+
+.workspace :global(.fixed.inset-0.z-\[100\] > aside > div:nth-child(2)) {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 16px;
+  padding: 20px !important;
+}
+
+.workspace :global(.fixed.inset-0.z-\[100\] > aside > div:nth-child(2) > div:first-child),
+.workspace :global(.fixed.inset-0.z-\[100\] > aside > div:nth-child(2) > section:nth-child(2)) {
+  grid-column: 1 / -1;
+}
+
+.workspace :global(.fixed.inset-0.z-\[100\] > aside > div:nth-child(2) > section:nth-child(3)) {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0 24px;
+  border: 1px solid rgb(226 232 240);
+  border-radius: 14px;
+  padding: 4px 16px;
+}
+
+.workspace :global(.fixed.inset-0.z-\[100\] > aside > div:nth-child(2) > section:nth-child(3) > div) {
+  min-height: 54px;
+  align-items: center;
+  padding: 10px 0 !important;
+}
+
+.workspace :global(.fixed.inset-0.z-\[100\] > aside > div:nth-child(2) > section:nth-child(2)) {
+  padding: 16px 18px !important;
+  border-radius: 14px !important;
+}
+
+.workspace :global(.fixed.inset-0.z-\[100\] > aside > div:nth-child(2) > div:first-child > a) {
+  height: 42px !important;
+}
+
+@media (max-width: 700px) {
+  .workspace :global(.fixed.inset-0.z-\[100\]) {
+    align-items: stretch;
+    padding: 0;
+  }
+
+  .workspace :global(.fixed.inset-0.z-\[100\] > aside) {
+    width: 100% !important;
+    max-height: 100vh;
+    height: 100% !important;
+    border-radius: 0;
+    border-top: 0;
+    border-right: 0;
+    border-bottom: 0;
+  }
+
+  .workspace :global(.fixed.inset-0.z-\[100\] > aside > div:nth-child(2)) {
+    display: block;
+  }
+
+  .workspace :global(.fixed.inset-0.z-\[100\] > aside > div:nth-child(2) > section:nth-child(2)),
+  .workspace :global(.fixed.inset-0.z-\[100\] > aside > div:nth-child(2) > section:nth-child(3)) {
+    margin-top: 16px;
+  }
+
+  .workspace :global(.fixed.inset-0.z-\[100\] > aside > div:nth-child(2) > section:nth-child(3)) {
+    grid-template-columns: 1fr;
+  }
+}
+
+:global(.dark) .workspace :global(.fixed.inset-0.z-\[100\] > aside),
+:global(.dark) .workspace :global(.fixed.inset-0.z-\[100\] > aside > div:nth-child(2) > section:nth-child(3)) {
+  border-color: rgb(30 41 59);
+}
