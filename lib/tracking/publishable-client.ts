@@ -54,10 +54,25 @@ const PUBLIC_CLIENT_PII_KEYS = new Set([
   'ip_address',
 ]);
 
+const PUBLIC_CLIENT_PII_KEY_PATTERN =
+  /(?:^|[_-])(?:email|e_mail|phone|telephone|mobile|first_name|last_name|full_name|name|address|street|postal|postcode|zip|dob|birth|person_id|lead_id|customer_id|user_id|ip_address|ip)(?:$|[_-])/i;
+
 function cleanText(value: unknown, max: number) {
   return typeof value === 'string' && value.trim()
     ? value.trim().slice(0, max)
     : null;
+}
+
+function isPublicClientPiiKey(key: string) {
+  const normalized = key.trim().toLowerCase();
+  if (!normalized) return false;
+  return (
+    PUBLIC_CLIENT_PII_KEYS.has(normalized) ||
+    PUBLIC_CLIENT_PII_KEY_PATTERN.test(normalized) ||
+    /(?:email|phone|mobile|telephone|postal|postcode|zipcode|birthdate|fullname|firstname|lastname|streetaddress)$/i.test(
+      normalized,
+    )
+  );
 }
 
 function redactPublicClientValue(value: unknown, depth = 0): unknown {
@@ -72,7 +87,7 @@ function redactPublicClientValue(value: unknown, depth = 0): unknown {
     for (const [rawKey, rawValue] of Object.entries(value as Record<string, unknown>).slice(0, 200)) {
       const key = rawKey.trim().slice(0, 120);
       if (!key) continue;
-      if (PUBLIC_CLIENT_PII_KEYS.has(key.toLowerCase())) {
+      if (isPublicClientPiiKey(key)) {
         out[key] = '[redacted]';
       } else {
         out[key] = redactPublicClientValue(rawValue, depth + 1);
