@@ -4,6 +4,7 @@ import process from 'node:process';
 
 const root = process.cwd();
 const migrationPath = 'supabase/migrations/20261020101500_event_intelligence_outcome_calibration_v1.sql';
+const privacyGuardPath = 'supabase/migrations/20261020101600_event_intelligence_calibration_privacy_guard_v1.sql';
 const deterministicPath = 'supabase/migrations/20261019143000_event_intelligence_deterministic_predictions_v1.sql';
 
 function fail(message) {
@@ -18,6 +19,7 @@ function read(relativePath) {
 }
 
 const sql = read(migrationPath);
+const privacyGuard = read(privacyGuardPath);
 const deterministic = read(deterministicPath);
 
 for (const [needle, label] of [
@@ -26,7 +28,7 @@ for (const [needle, label] of [
   ['v_lead_conversion_facts', 'canonical conversion fact source'],
   ["h.to_stage::text in ('lost','unqualified')", 'terminal negative outcome source'],
   ["'first_authoritative_sales_resolution_after_prediction'", 'explicit target definition'],
-  ['profiling_allowed', 'privacy-aware outcome evaluation'],
+  ['profiling_allowed', 'privacy-aware outcome observation'],
   ["'predictions_mutated',false", 'immutable prediction audit contract'],
   ['v_event_intelligence_probability_evaluation_v1', 'probability evaluation view'],
   ["p.probability is not null", 'true probability-only evaluation guard'],
@@ -51,6 +53,15 @@ for (const [needle, label] of [
   if (!sql.includes(needle)) fail(`Outcome/calibration migration is missing ${label} (${needle}).`);
 }
 
+for (const [needle, label] of [
+  ['v_event_intelligence_probability_evaluation_v1', 'guarded evaluation replacement'],
+  ['v_r10_lead_signal_quality_v1', 'current signal-quality source'],
+  ['q.profiling_allowed=true', 'current profiling permission gate'],
+  ["p.subject_type='lead'", 'lead-only probability scope'],
+]) {
+  if (!privacyGuard.includes(needle)) fail(`Calibration privacy guard is missing ${label} (${needle}).`);
+}
+
 if (sql.includes('score as probability') || sql.includes('p.score as probability')) {
   fail('Deterministic ranking score must never be silently converted into a probability.');
 }
@@ -63,4 +74,4 @@ if (!sql.includes('Metrics are observational only; sample is too small for an ac
   fail('Small samples must not be presented as validated model accuracy.');
 }
 
-console.log('[intelligence-calibration] PASS: authoritative realized outcomes, privacy-aware probability evaluation, sample-gated calibration, and drift contracts verified.');
+console.log('[intelligence-calibration] PASS: authoritative realized outcomes, current privacy gates, probability-only evaluation, sample-gated calibration, and drift contracts verified.');
