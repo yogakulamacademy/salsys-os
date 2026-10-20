@@ -51,10 +51,18 @@ security definer
 set search_path=public
 as $$
 declare
-  v_campaign_id uuid := coalesce(new.campaign_id,old.campaign_id);
-  v_organization_id uuid := coalesce(new.organization_id,old.organization_id);
+  v_campaign_id uuid;
+  v_organization_id uuid;
   v_campaign public.whatsapp_broadcast_campaigns%rowtype;
 begin
+  if tg_op='DELETE' then
+    v_campaign_id := old.campaign_id;
+    v_organization_id := old.organization_id;
+  else
+    v_campaign_id := new.campaign_id;
+    v_organization_id := new.organization_id;
+  end if;
+
   select * into v_campaign
   from public.whatsapp_broadcast_campaigns c
   where c.id=v_campaign_id and c.organization_id=v_organization_id
@@ -69,7 +77,8 @@ begin
     raise exception 'WhatsApp campaign variants are immutable after human approval or execution starts.';
   end if;
 
-  return coalesce(new,old);
+  if tg_op='DELETE' then return old; end if;
+  return new;
 end;
 $$;
 
@@ -85,16 +94,26 @@ security definer
 set search_path=public
 as $$
 declare
-  v_campaign_id uuid := coalesce(new.campaign_id,old.campaign_id);
-  v_organization_id uuid := coalesce(new.organization_id,old.organization_id);
+  v_campaign_id uuid;
+  v_organization_id uuid;
 begin
+  if tg_op='DELETE' then
+    v_campaign_id := old.campaign_id;
+    v_organization_id := old.organization_id;
+  else
+    v_campaign_id := new.campaign_id;
+    v_organization_id := new.organization_id;
+  end if;
+
   update public.whatsapp_broadcast_campaigns
   set status='draft',approved_by=null,approved_at=null
   where id=v_campaign_id
     and organization_id=v_organization_id
     and status in ('draft','ready')
     and approved_at is null;
-  return coalesce(new,old);
+
+  if tg_op='DELETE' then return old; end if;
+  return new;
 end;
 $$;
 
@@ -110,22 +129,34 @@ security definer
 set search_path=public
 as $$
 declare
-  v_campaign_id uuid := coalesce(new.campaign_id,old.campaign_id);
-  v_organization_id uuid := coalesce(new.organization_id,old.organization_id);
+  v_campaign_id uuid;
+  v_organization_id uuid;
   v_campaign public.whatsapp_broadcast_campaigns%rowtype;
 begin
+  if tg_op='DELETE' then
+    v_campaign_id := old.campaign_id;
+    v_organization_id := old.organization_id;
+  else
+    v_campaign_id := new.campaign_id;
+    v_organization_id := new.organization_id;
+  end if;
+
   select * into v_campaign
   from public.whatsapp_broadcast_campaigns c
   where c.id=v_campaign_id and c.organization_id=v_organization_id;
 
-  if v_campaign.id is null then return coalesce(new,old); end if;
+  if v_campaign.id is null then
+    if tg_op='DELETE' then return old; end if;
+    return new;
+  end if;
 
   if v_campaign.approved_at is not null
      or v_campaign.status in ('approved','scheduled','running','paused','completed') then
     raise exception 'Approved WhatsApp audience membership and experiment assignment are immutable.';
   end if;
 
-  return coalesce(new,old);
+  if tg_op='DELETE' then return old; end if;
+  return new;
 end;
 $$;
 
