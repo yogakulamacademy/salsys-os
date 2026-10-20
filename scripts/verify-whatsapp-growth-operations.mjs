@@ -76,8 +76,7 @@ for (const source of [
 for (const [needle, label] of [
   ['constant:', 'explicit constant binding syntax'],
   ['Unsupported template binding source', 'binding-source fail closed'],
-  ['header bindings must be contiguous', 'header positional validation'],
-  ['body bindings must be contiguous', 'body positional validation'],
+  ['bindings must be contiguous starting at', 'positional binding validation'],
   ['round_robin_if_unassigned', 'round-robin routing mode'],
 ]) {
   if (!helper.includes(needle)) fail(`Growth config helper is missing ${label} (${needle}).`);
