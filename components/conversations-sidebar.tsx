@@ -168,12 +168,15 @@ function ConversationRow({
           </div>
 
           <div className="mt-2 flex items-center justify-between gap-3">
-            <div className={`inline-flex items-center gap-1 text-[9px] font-semibold ${actionTone}`}>
-              {lead.unread ? <Bell size={9} /> : null}
-              {action}
+            <div className="flex min-w-0 items-center gap-1.5">
+              <div className={`inline-flex items-center gap-1 text-[9px] font-semibold ${actionTone}`}>
+                {lead.unread ? <Bell size={9} /> : null}
+                {action}
+              </div>
+              <StageLabel stage={lead.stage} />
             </div>
             {lead.waitingSince && (lead.needsReply || lead.needsFirstContact) ? (
-              <div className="inline-flex items-center gap-1 text-[9px] text-slate-400">
+              <div className="inline-flex shrink-0 items-center gap-1 text-[9px] text-slate-400">
                 <Clock3 size={9} /> {formatWaitingTime(lead.waitingSince, now)}
               </div>
             ) : null}
@@ -181,6 +184,27 @@ function ConversationRow({
         </div>
       </div>
     </Link>
+  );
+}
+
+function StageLabel({ stage }: { stage: LeadStage }) {
+  const label = stage.replaceAll("_", " ");
+
+  const tone =
+    stage === "enrolled"
+      ? "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900/60 dark:bg-emerald-950/30 dark:text-emerald-300"
+      : stage === "payment_pending" || stage === "high_intent"
+        ? "border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-900/60 dark:bg-amber-950/30 dark:text-amber-300"
+        : stage === "qualified" || stage === "engaged"
+          ? "border-violet-200 bg-violet-50 text-violet-700 dark:border-violet-900/60 dark:bg-violet-950/30 dark:text-violet-300"
+          : stage === "contacted" || stage === "new"
+            ? "border-sky-200 bg-sky-50 text-sky-700 dark:border-sky-900/60 dark:bg-sky-950/30 dark:text-sky-300"
+            : "border-slate-200 bg-slate-50 text-slate-600 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-300";
+
+  return (
+    <span className={`max-w-[112px] truncate rounded-full border px-1.5 py-0.5 text-[8px] font-semibold capitalize leading-none ${tone}`}>
+      {label}
+    </span>
   );
 }
 
