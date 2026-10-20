@@ -9,6 +9,16 @@ import { getWorkspaceContextForUser } from '@/lib/workspace';
 export const dynamic = 'force-dynamic';
 
 const CLIENT_PLATFORMS = new Set(['android', 'ios', 'shopify', 'web']);
+const WEBSITE_PLATFORMS = new Set([
+  'custom_web',
+  'wordpress',
+  'webflow',
+  'framer',
+  'react',
+  'nextjs',
+  'vue',
+  'angular',
+]);
 
 function jsonError(message: string, status: number) {
   return NextResponse.json(
@@ -40,6 +50,22 @@ function slug(value: string) {
 
 function sha256(value: string) {
   return createHash('sha256').update(value, 'utf8').digest('hex');
+}
+
+function normalizeHostname(value: unknown) {
+  const raw = cleanText(value, 300)?.toLowerCase() ?? null;
+  if (!raw) return null;
+
+  try {
+    const url = new URL(raw.includes('://') ? raw : `https://${raw}`);
+    const hostname = url.hostname.toLowerCase().replace(/\.$/, '');
+    if (!hostname || hostname.length > 253) return null;
+    if (!/^[a-z0-9.-]+$/.test(hostname)) return null;
+    if (hostname.startsWith('.') || hostname.endsWith('.') || hostname.includes('..')) return null;
+    return hostname;
+  } catch {
+    return null;
+  }
 }
 
 async function adminWorkspace() {
@@ -109,24 +135,43 @@ export async function POST(request: NextRequest) {
   const name = cleanText(raw.name, 120);
   const requestedType = cleanText(raw.sourceType ?? raw.source_type, 30);
   const sourceType =
-    requestedType && ['client', 'api', 'webhook', 'system'].includes(requestedType)
+    requestedType && ['website', 'client', 'api', 'webhook', 'system'].includes(requestedType)
       ? requestedType
       : 'api';
 
   if (!name) return jsonError('Source name is required.', 400);
 
-  const platform = cleanText(raw.platform, 40)?.toLowerCase() ?? null;
+  const requestedPlatform = cleanText(raw.platform, 40)?.toLowerCase() ?? null;
+  const isWebsite = sourceType === 'website';
   const isPublishableClient = sourceType === 'client';
 
-  if (isPublishableClient && (!platform || !CLIENT_PLATFORMS.has(platform))) {
+  if (isPublishableClient && (!requestedPlatform || !CLIENT_PLATFORMS.has(requestedPlatform))) {
     return jsonError('Client sources require platform: android, ios, shopify, or web.', 400);
   }
 
-  const defaultSourceSystem = isPublishableClient
-    ? platform === 'android' || platform === 'ios'
-      ? 'app'
-      : 'website'
-    : slug(name);
+  if (isWebsite && requestedPlatform && !WEBSITE_PLATFORMS.has(requestedPlatform)) {
+    return jsonError(
+      'Website platform must be custom_web, wordpress, webflow, framer, react, nextjs, vue, or angular.',
+      400,
+    );
+  }
+
+  const platform = isWebsite ? requestedPlatform ?? 'custom_web' : requestedPlatform;
+  const hostname = isWebsite
+    ? normalizeHostname(raw.hostname ?? raw.origin ?? raw.url)
+    : null;
+
+  if (isWebsite && !hostname) {
+    return jsonError('Website sources require a valid hostname or origin.', 400);
+  }
+
+  const defaultSourceSystem = isWebsite
+    ? 'website'
+    : isPublishableClient
+      ? platform === 'android' || platform === 'ios'
+        ? 'app'
+        : 'website'
+      : slug(name);
 
   const sourceSystem =
     cleanText(raw.sourceSystem ?? raw.source_system, 80) || defaultSourceSystem;
@@ -140,7 +185,9 @@ export async function POST(request: NextRequest) {
         .slice(0, 50)
     : [];
 
-  if (isPublishableClient) {
+  if (isWebsite) {
+    allowedEventPrefixes = ['web.'];
+  } else if (isPublishableClient) {
     const platformPrefix = platform === 'android' || platform === 'ios' ? 'app.' : 'web.';
     allowedEventPrefixes = allowedEventPrefixes.filter((prefix) => prefix === platformPrefix);
     if (allowedEventPrefixes.length === 0) allowedEventPrefixes = [platformPrefix];
@@ -165,16 +212,20 @@ export async function POST(request: NextRequest) {
     120,
   );
 
-  if (isPublishableClient && !privacyNoticeVersion) {
-    return jsonError('Client sources require a privacy notice version.', 400);
+  if ((isWebsite || isPublishableClient) && !privacyNoticeVersion) {
+    return jsonError(
+      `${isWebsite ? 'Website' : 'Client'} sources require a privacy notice version.`,
+      400,
+    );
   }
 
   const sourceKey = `src_${randomBytes(18).toString('base64url')}`;
-  const secret = isPublishableClient
+  const hasPublicCredential = isWebsite || isPublishableClient;
+  const secret = hasPublicCredential
     ? null
     : `sls_${randomBytes(32).toString('base64url')}`;
   const secretHash = secret ? sha256(secret) : null;
-  const authMode = isPublishableClient ? 'publishable' : 'secret';
+  const authMode = isWebsite ? 'origin' : isPublishableClient ? 'publishable' : 'secret';
   const admin = createAdminClient();
 
   const { data, error } = await admin
@@ -186,6 +237,7 @@ export async function POST(request: NextRequest) {
       source_system: sourceSystem,
       source_key: sourceKey,
       auth_mode: authMode,
+      hostname,
       secret_hash: secretHash,
       status: 'active',
       allowed_event_prefixes: allowedEventPrefixes,
@@ -199,38 +251,55 @@ export async function POST(request: NextRequest) {
         provisioned_by: auth.user.id,
         provisioned_via: 'app/api/tracking/sources',
         platform,
-        credential_class: isPublishableClient ? 'publishable_identifier' : 'server_secret',
-        authority: isPublishableClient
+        credential_class: isWebsite
+          ? 'origin_bound_browser'
+          : isPublishableClient
+            ? 'publishable_identifier'
+            : 'server_secret',
+        authority: isWebsite || isPublishableClient
           ? 'non_authoritative_client_telemetry'
           : 'trusted_server_source',
       },
     })
     .select(
-      'id,name,source_type,source_system,source_key,auth_mode,status,allowed_event_prefixes,max_payload_bytes,rate_limit_per_minute,privacy_notice_version,metadata,created_at',
+      'id,name,source_type,source_system,source_key,auth_mode,hostname,status,allowed_event_prefixes,max_payload_bytes,rate_limit_per_minute,privacy_notice_version,metadata,created_at',
     )
     .single();
 
   if (error || !data) {
+    if (error?.code === '23505' && isWebsite && hostname) {
+      return jsonError(`A tracking source for ${hostname} already exists in this workspace.`, 409);
+    }
     return jsonError(error?.message ?? 'Unable to create tracking source.', 500);
   }
+
+  const credentials = isWebsite
+    ? {
+        source_key: sourceKey,
+        origin_bound: true,
+        publishable: false,
+        secret: null,
+        shown_once: false,
+      }
+    : isPublishableClient
+      ? {
+          source_key: sourceKey,
+          publishable: true,
+          secret: null,
+          shown_once: false,
+        }
+      : {
+          source_key: sourceKey,
+          secret,
+          publishable: false,
+          shown_once: true,
+        };
 
   return NextResponse.json(
     {
       ok: true,
       source: data,
-      credentials: isPublishableClient
-        ? {
-            source_key: sourceKey,
-            publishable: true,
-            secret: null,
-            shown_once: false,
-          }
-        : {
-            source_key: sourceKey,
-            secret,
-            publishable: false,
-            shown_once: true,
-          },
+      credentials,
     },
     {
       status: 201,
