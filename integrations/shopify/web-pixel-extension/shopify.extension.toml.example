@@ -1,0 +1,31 @@
+# Copy these fields into a Shopify CLI-generated web pixel extension.
+# Shopify CLI generates/manages the required uid value for the real extension.
+
+type = "web_pixel_extension"
+name = "Salsys Web Pixel"
+runtime_context = "strict"
+
+[customer_privacy]
+analytics = true
+marketing = false
+preferences = false
+sale_of_data = "disabled"
+
+[settings]
+type = "object"
+
+[settings.fields.sourceKey]
+name = "Salsys publishable source key"
+description = "Public Salsys source identifier for this Shopify store. Never use a server secret here."
+type = "single_line_text_field"
+validations = [
+  { name = "min", value = "1" }
+]
+
+[settings.fields.baseUrl]
+name = "Salsys endpoint"
+description = "Salsys base URL. Keep the default unless using a verified self-hosted endpoint."
+type = "single_line_text_field"
+validations = [
+  { name = "min", value = "1" }
+]
