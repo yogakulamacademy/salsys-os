@@ -152,9 +152,34 @@ export function WhatsAppTemplateComposer({
     }
   }
 
+  function handleModeKeyDown(event: React.KeyboardEvent<HTMLDivElement>) {
+    if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
+
+    const tabs = Array.from(
+      event.currentTarget.querySelectorAll<HTMLButtonElement>('[role="tab"]'),
+    );
+    const activeIndex = tabs.findIndex((tab) => tab === document.activeElement);
+    if (activeIndex < 0 || tabs.length === 0) return;
+
+    event.preventDefault();
+    let nextIndex = activeIndex;
+    if (event.key === "ArrowRight") nextIndex = (activeIndex + 1) % tabs.length;
+    if (event.key === "ArrowLeft") nextIndex = (activeIndex - 1 + tabs.length) % tabs.length;
+    if (event.key === "Home") nextIndex = 0;
+    if (event.key === "End") nextIndex = tabs.length - 1;
+
+    tabs[nextIndex]?.focus();
+    tabs[nextIndex]?.click();
+  }
+
   return (
     <div className="conversation-template-composer shrink-0 border-t border-[#DCE4DF] bg-white">
-      <div className="flex items-center gap-5 border-b border-[#EEF2EF] px-4 pt-2" role="tablist" aria-label="Compose mode">
+      <div
+        className="flex items-center gap-5 border-b border-[#EEF2EF] px-4 pt-2"
+        role="tablist"
+        aria-label="Compose mode"
+        onKeyDown={handleModeKeyDown}
+      >
         <ModeTab
           active={composeMode === "template"}
           onClick={() => setComposeMode("template")}
@@ -195,6 +220,12 @@ export function WhatsAppTemplateComposer({
               setNoteError(null);
               setNoteSuccess(null);
             }}
+            onKeyDown={(event) => {
+              if ((event.ctrlKey || event.metaKey) && event.key === "Enter") {
+                event.preventDefault();
+                void saveInternalNote();
+              }
+            }}
             rows={3}
             maxLength={4000}
             placeholder="Add context for your team…"
@@ -207,7 +238,7 @@ export function WhatsAppTemplateComposer({
               ) : noteSuccess ? (
                 <span className="text-[#216551]">{noteSuccess}</span>
               ) : (
-                <span className="text-[#70581F]">{note.length}/4000 · Saving does not send.</span>
+                <span className="text-[#70581F]">{note.length}/4000 · Ctrl/⌘ + Enter adds note · Saving does not send.</span>
               )}
             </div>
             <button
@@ -289,7 +320,10 @@ export function WhatsAppTemplateComposer({
             <form
               action={action}
               onSubmit={(event) => {
-                if (!connectionReady) event.preventDefault();
+                const submitter = (event.nativeEvent as SubmitEvent).submitter as HTMLElement | null;
+                const explicitSend =
+                  submitter?.getAttribute("data-whatsapp-template-send") === "true";
+                if (!connectionReady || !explicitSend) event.preventDefault();
               }}
               className="p-4"
             >
@@ -388,11 +422,12 @@ export function WhatsAppTemplateComposer({
                     </div>
 
                     <div className="mt-3 text-[9px] leading-4 text-[#71847A]">
-                      The approved template text cannot be freely edited. Sending still requires an explicit submit.
+                      The approved template text cannot be freely edited. Keyboard Enter never sends; sending requires clicking the button below.
                     </div>
 
                     <button
                       type="submit"
+                      data-whatsapp-template-send="true"
                       disabled={!connectionReady}
                       className="mt-4 flex h-9 w-full items-center justify-center gap-2 rounded-lg bg-[#153E33] px-3 text-[10px] font-semibold text-white transition hover:bg-[#216551] disabled:cursor-not-allowed disabled:bg-[#EDF0EC] disabled:text-[#59685F]"
                     >
