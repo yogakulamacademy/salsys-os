@@ -8,7 +8,7 @@ export function InstagramPolicyNotes() {
           <span className="grid h-8 w-8 place-items-center rounded-xl bg-violet-50 text-violet-700">
             <ShieldCheck size={15} />
           </span>
-          Instagram messaging rules
+          Official API guardrails & messaging rules
         </span>
         <span className="text-xs font-semibold text-violet-700 group-open:hidden">View rules</span>
         <span className="hidden text-xs font-semibold text-violet-700 group-open:inline">Hide rules</span>
