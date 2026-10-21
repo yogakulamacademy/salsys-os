@@ -5,6 +5,8 @@ import { ArrowLeft, PanelRightClose, PanelRightOpen, Sparkles, X } from "lucide-
 import type { ReactNode } from "react";
 import { useEffect, useRef, useState } from "react";
 
+import { WhatsAppConnectionNotice } from "@/components/whatsapp-connection-notice";
+
 export function ConversationWorkspaceShell({
   inbox,
   chat,
@@ -82,12 +84,12 @@ export function ConversationWorkspaceShell({
       </div>
 
       <div
-        className={`relative min-h-0 min-w-0 overflow-hidden ${
-          hasConversation ? "block" : "hidden md:block"
+        className={`min-h-0 min-w-0 overflow-hidden ${
+          hasConversation ? "flex flex-col" : "hidden md:block"
         }`}
       >
         {hasConversation ? (
-          <div className="flex h-11 items-center justify-between border-b border-[#DCE4DF] bg-white px-3 md:hidden dark:border-slate-800 dark:bg-slate-950">
+          <div className="flex h-11 shrink-0 items-center justify-between border-b border-[#DCE4DF] bg-white px-3 md:hidden dark:border-slate-800 dark:bg-slate-950">
             <Link
               href="/conversations"
               className="inline-flex items-center gap-1.5 rounded-lg px-2 py-1.5 text-[10px] font-semibold text-[#216551] hover:bg-[#EDF3E6] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#216551]"
@@ -98,37 +100,41 @@ export function ConversationWorkspaceShell({
           </div>
         ) : null}
 
-        <div className="h-full min-h-0">{chat}</div>
+        {hasConversation ? <WhatsAppConnectionNotice /> : null}
 
-        {hasConversation ? (
-          <>
-            <button
-              type="button"
-              onClick={() => setDesktopContextOpen((value) => !value)}
-              className="absolute right-3 top-3 z-30 hidden h-8 items-center gap-1.5 rounded-lg border border-[#DCE4DF] bg-white/95 px-2.5 text-[10px] font-semibold text-[#596E64] shadow-sm backdrop-blur transition hover:bg-[#EDF3E6] hover:text-[#216551] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#216551] dark:border-slate-800 dark:bg-slate-950/95 dark:text-slate-400 dark:hover:bg-slate-900 dark:hover:text-white xl:inline-flex"
-              aria-label={showDesktopContext ? "Hide CRM inspector" : "Show CRM inspector"}
-              title={showDesktopContext ? "Hide CRM inspector" : "Show CRM inspector"}
-            >
-              {showDesktopContext ? (
-                <PanelRightClose size={14} />
-              ) : (
-                <PanelRightOpen size={14} />
-              )}
-              {showDesktopContext ? "Hide context" : "Lead context"}
-            </button>
+        <div className="relative min-h-0 flex-1 overflow-hidden">
+          <div className="h-full min-h-0">{chat}</div>
 
-            <button
-              ref={drawerTriggerRef}
-              type="button"
-              onClick={() => setMobileContextOpen(true)}
-              className="absolute right-3 top-3 z-30 inline-flex h-8 items-center gap-1.5 rounded-lg border border-[#DCE4DF] bg-white/95 px-2.5 text-[10px] font-semibold text-[#216551] shadow-sm backdrop-blur focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#216551] xl:hidden dark:border-slate-800 dark:bg-slate-950/95"
-              aria-label="Open CRM inspector"
-              aria-expanded={mobileContextOpen}
-            >
-              <Sparkles size={13} /> Lead context
-            </button>
-          </>
-        ) : null}
+          {hasConversation ? (
+            <>
+              <button
+                type="button"
+                onClick={() => setDesktopContextOpen((value) => !value)}
+                className="absolute right-3 top-3 z-30 hidden h-8 items-center gap-1.5 rounded-lg border border-[#DCE4DF] bg-white/95 px-2.5 text-[10px] font-semibold text-[#596E64] shadow-sm backdrop-blur transition hover:bg-[#EDF3E6] hover:text-[#216551] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#216551] dark:border-slate-800 dark:bg-slate-950/95 dark:text-slate-400 dark:hover:bg-slate-900 dark:hover:text-white xl:inline-flex"
+                aria-label={showDesktopContext ? "Hide CRM inspector" : "Show CRM inspector"}
+                title={showDesktopContext ? "Hide CRM inspector" : "Show CRM inspector"}
+              >
+                {showDesktopContext ? (
+                  <PanelRightClose size={14} />
+                ) : (
+                  <PanelRightOpen size={14} />
+                )}
+                {showDesktopContext ? "Hide context" : "Lead context"}
+              </button>
+
+              <button
+                ref={drawerTriggerRef}
+                type="button"
+                onClick={() => setMobileContextOpen(true)}
+                className="absolute right-3 top-3 z-30 inline-flex h-8 items-center gap-1.5 rounded-lg border border-[#DCE4DF] bg-white/95 px-2.5 text-[10px] font-semibold text-[#216551] shadow-sm backdrop-blur focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#216551] xl:hidden dark:border-slate-800 dark:bg-slate-950/95"
+                aria-label="Open CRM inspector"
+                aria-expanded={mobileContextOpen}
+              >
+                <Sparkles size={13} /> Lead context
+              </button>
+            </>
+          ) : null}
+        </div>
       </div>
 
       {showDesktopContext ? (
