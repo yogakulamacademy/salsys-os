@@ -1,6 +1,6 @@
 "use client";
 
-import { LockKeyhole, Save, Send, Sparkles } from "lucide-react";
+import { FileText, LockKeyhole, MessageSquareText, RefreshCw, Save, Send, Sparkles } from "lucide-react";
 
 import { useCallback, useEffect, useRef, useState, useTransition } from "react";
 
@@ -41,7 +41,12 @@ type QuickReplyResponse = {
   quickReplies?: QuickReply[];
 };
 
+type NoteResponse =
+  | { ok: true; data?: unknown }
+  | { ok: false; error: string };
+
 type DraftState = "idle" | "unsaved" | "saved" | "memory-only";
+type ComposeMode = "reply" | "note";
 
 export function WhatsAppComposer({
   action,
@@ -57,10 +62,15 @@ export function WhatsAppComposer({
   quickReplies?: QuickReply[];
 }) {
   const [resolvedLeadId, setResolvedLeadId] = useState(leadId || "");
+  const [mode, setMode] = useState<ComposeMode>("reply");
   const [body, setBody] = useState("");
   const [copilotAssisted, setCopilotAssisted] = useState(false);
   const [availableQuickReplies, setAvailableQuickReplies] = useState<QuickReply[]>(quickReplies);
   const [draftState, setDraftState] = useState<DraftState>("idle");
+  const [noteBody, setNoteBody] = useState("");
+  const [noteSaving, setNoteSaving] = useState(false);
+  const [noteError, setNoteError] = useState<string | null>(null);
+  const [noteSuccess, setNoteSuccess] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
   const formRef = useRef<HTMLFormElement | null>(null);
   const saveTimerRef = useRef<number | null>(null);
@@ -105,6 +115,10 @@ export function WhatsAppComposer({
     setBody("");
     setCopilotAssisted(false);
     setDraftState("idle");
+    setNoteBody("");
+    setNoteError(null);
+    setNoteSuccess(null);
+    setMode("reply");
     if (!draftKey) return;
 
     try {
@@ -194,6 +208,7 @@ export function WhatsAppComposer({
         return;
       }
 
+      setMode("reply");
       updateDraft(detail.body);
       setCopilotAssisted(true);
 
@@ -214,10 +229,43 @@ export function WhatsAppComposer({
     });
   };
 
+  async function saveInternalNote() {
+    const value = noteBody.trim();
+    if (!value || noteSaving || !resolvedLeadId) return;
+
+    setNoteSaving(true);
+    setNoteError(null);
+    setNoteSuccess(null);
+
+    try {
+      const response = await fetch(
+        `/api/leads/${encodeURIComponent(resolvedLeadId)}/activity`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ type: "internal_note", body: value }),
+        },
+      );
+      const result = (await response.json()) as NoteResponse;
+      if (!response.ok || !result.ok) {
+        throw new Error(result.ok ? "Unable to save internal note." : result.error);
+      }
+
+      setNoteBody("");
+      setNoteSuccess("Internal note saved. Nothing was sent to the lead.");
+    } catch (reason) {
+      // Preserve the note on failure so a private team note is never lost
+      // because storage or the network is temporarily unavailable.
+      setNoteError(reason instanceof Error ? reason.message : "Unable to save internal note.");
+    } finally {
+      setNoteSaving(false);
+    }
+  }
+
   const sendMessage = () => {
     const text = body.trim();
 
-    if (!text || isPending || !connectionReady) {
+    if (!text || isPending || !connectionReady || mode !== "reply") {
       return;
     }
 
@@ -301,96 +349,185 @@ export function WhatsAppComposer({
       }}
       className="conversation-composer bg-white p-3"
     >
-      <div className="mb-2 flex items-center justify-between gap-3 px-1">
-        <div>
-          <div className="text-[10px] font-semibold text-[#18362D]">Reply draft</div>
-          <div className="mt-0.5 text-[9px] text-[#596E64]">
-            Nothing is sent until you click Send.
-          </div>
-        </div>
-        <span className="rounded-md border border-[#DCE4DF] bg-[#F6F8F7] px-2 py-1 text-[8px] font-semibold text-[#596E64]">
-          WhatsApp
-        </span>
-      </div>
-
-      {availableQuickReplies.length ? (
-        <div className="mb-2 flex items-center gap-2 overflow-x-auto pb-1">
-          <span className="inline-flex shrink-0 items-center gap-1 text-[9px] font-bold uppercase tracking-wide text-[#71847A]">
-            <Sparkles size={10} /> Quick replies
+      <div className="overflow-hidden rounded-lg border border-[#D4DFD2] bg-white shadow-[0_1px_3px_rgba(21,62,51,0.04)]">
+        <div className="flex items-center gap-5 border-b border-[#EEF2EF] px-3 pt-2" role="tablist" aria-label="Compose mode">
+          <ComposerTab active={mode === "reply"} onClick={() => setMode("reply")} icon={<MessageSquareText size={11} />}>
+            Reply draft
+          </ComposerTab>
+          <ComposerTab active={mode === "note"} onClick={() => setMode("note")} icon={<FileText size={11} />}>
+            Internal note
+          </ComposerTab>
+          <span className="ml-auto mb-2 rounded-md border border-[#DCE4DF] bg-[#F6F8F7] px-2 py-1 text-[8px] font-semibold text-[#596E64]">
+            WhatsApp
           </span>
-          {availableQuickReplies.slice(0, 12).map((reply) => (
-            <button
-              key={reply.id}
-              type="button"
-              onClick={() => applyQuickReply(reply)}
+        </div>
+
+        {mode === "reply" ? (
+          <div role="tabpanel" className="p-3">
+            <div className="mb-2">
+              <div className="text-[10px] font-semibold text-[#18362D]">Prepare a WhatsApp response</div>
+              <div className="mt-0.5 text-[9px] text-[#596E64]">
+                Draft only. Nothing is sent until you explicitly click Send.
+              </div>
+            </div>
+
+            {availableQuickReplies.length ? (
+              <div className="mb-2 flex items-center gap-2 overflow-x-auto pb-1">
+                <span className="inline-flex shrink-0 items-center gap-1 text-[9px] font-bold uppercase tracking-wide text-[#71847A]">
+                  <Sparkles size={10} /> Quick replies
+                </span>
+                {availableQuickReplies.slice(0, 12).map((reply) => (
+                  <button
+                    key={reply.id}
+                    type="button"
+                    onClick={() => applyQuickReply(reply)}
+                    disabled={isPending}
+                    title={`${reply.shortcut}${reply.category ? ` · ${reply.category}` : ""}`}
+                    className="shrink-0 rounded-full border border-[#DCE4DF] bg-white px-3 py-1.5 text-[10px] font-semibold text-[#596E64] transition hover:bg-[#EDF3E6] hover:text-[#216551] disabled:opacity-50"
+                  >
+                    {reply.title}
+                  </button>
+                ))}
+              </div>
+            ) : null}
+
+            <label className="sr-only" htmlFor={`whatsapp-reply-draft-${resolvedLeadId || "selected"}`}>
+              Write a WhatsApp reply draft
+            </label>
+            <textarea
+              id={`whatsapp-reply-draft-${resolvedLeadId || "selected"}`}
+              name="body"
+              value={body}
+              onChange={(event) => updateDraft(event.target.value)}
               disabled={isPending}
-              title={`${reply.shortcut}${reply.category ? ` · ${reply.category}` : ""}`}
-              className="shrink-0 rounded-full border border-[#DCE4DF] bg-white px-3 py-1.5 text-[10px] font-semibold text-[#596E64] transition hover:bg-[#EDF3E6] hover:text-[#216551] disabled:opacity-50"
-            >
-              {reply.title}
-            </button>
-          ))}
-        </div>
-      ) : null}
+              required={mode === "reply"}
+              rows={2}
+              maxLength={4096}
+              autoComplete="off"
+              placeholder={isPending ? "Sending…" : "Prepare a reply…"}
+              className="max-h-40 min-h-[62px] w-full resize-none rounded-lg border border-[#DCE4DF] bg-white px-3 py-2 text-[12px] leading-5 text-[#18362D] outline-none placeholder:text-[#71847A] focus:border-[#216551] focus:ring-2 focus:ring-[#216551]/10 disabled:opacity-60"
+            />
 
-      <div className="conversation-composer-shell rounded-lg border border-[#D4DFD2] bg-white p-2 shadow-[0_1px_3px_rgba(21,62,51,0.04)] transition focus-within:border-[#216551] focus-within:ring-2 focus-within:ring-[#216551]/10">
-        <label className="sr-only" htmlFor={`whatsapp-reply-draft-${resolvedLeadId || "selected"}`}>
-          Write a WhatsApp reply draft
-        </label>
-        <textarea
-          id={`whatsapp-reply-draft-${resolvedLeadId || "selected"}`}
-          name="body"
-          value={body}
-          onChange={(event) => updateDraft(event.target.value)}
-          disabled={isPending}
-          required
-          rows={2}
-          maxLength={4096}
-          autoComplete="off"
-          placeholder={isPending ? "Sending…" : "Prepare a reply…"}
-          className="max-h-40 min-h-[62px] w-full resize-none bg-transparent px-2 py-2 text-[12px] leading-5 text-[#18362D] outline-none placeholder:text-[#71847A] disabled:opacity-60"
-        />
+            <div className="mt-2 flex flex-wrap items-center justify-between gap-3">
+              <div className="flex flex-wrap items-center gap-3 text-[9px] font-medium text-[#71847A]">
+                <span>Enter adds a new line</span>
+                <span>{body.length}/4096</span>
+                {copilotAssisted ? <span className="text-[#216551]">AI-assisted draft</span> : null}
+              </div>
 
-        <div className="flex flex-wrap items-center justify-between gap-3 border-t border-[#EEF2EF] px-1 pt-2">
-          <div className="flex flex-wrap items-center gap-3 text-[9px] font-medium text-[#71847A]">
-            <span>Enter adds a new line</span>
-            <span>{body.length}/4096</span>
-            {copilotAssisted ? <span className="text-[#216551]">AI-assisted draft</span> : null}
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => persistDraft(body)}
+                  disabled={!body.trim() || isPending}
+                  className="inline-flex h-8 items-center justify-center gap-1.5 rounded-lg border border-[#DCE4DF] bg-white px-3 text-[9px] font-semibold text-[#596E64] transition hover:bg-[#EDF3E6] hover:text-[#216551] disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  <Save size={11} /> Save draft
+                </button>
+                <button
+                  type="submit"
+                  disabled={!body.trim() || isPending || !connectionReady}
+                  title={connectionReady ? "Send WhatsApp message" : connectionDisabledReason(connectionState)}
+                  className="inline-flex h-8 items-center justify-center gap-1.5 rounded-lg bg-[#153E33] px-3.5 text-[10px] font-semibold text-white transition hover:bg-[#216551] disabled:cursor-not-allowed disabled:bg-[#EDF0EC] disabled:text-[#59685F]"
+                >
+                  <Send size={13} />
+                  {isPending ? "Sending…" : "Send"}
+                </button>
+              </div>
+            </div>
+
+            <div className="mt-2 flex flex-wrap items-center justify-between gap-2 text-[9px] font-medium">
+              <span className="text-[#216551]">{draftStatus(draftState)}</span>
+              <span className="text-[#71847A]">
+                {isPending
+                  ? "Sending through the verified WhatsApp action…"
+                  : connectionReady
+                    ? `${windowLabel} · Drafting never sends automatically.`
+                    : connectionDisabledReason(connectionState)}
+              </span>
+            </div>
           </div>
-
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={() => persistDraft(body)}
-              disabled={!body.trim() || isPending}
-              className="inline-flex h-8 items-center justify-center gap-1.5 rounded-lg border border-[#DCE4DF] bg-white px-3 text-[9px] font-semibold text-[#596E64] transition hover:bg-[#EDF3E6] hover:text-[#216551] disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              <Save size={11} /> Save draft
-            </button>
-            <button
-              type="submit"
-              disabled={!body.trim() || isPending || !connectionReady}
-              title={connectionReady ? "Send WhatsApp message" : connectionDisabledReason(connectionState)}
-              className="inline-flex h-8 items-center justify-center gap-1.5 rounded-lg bg-[#153E33] px-3.5 text-[10px] font-semibold text-white transition hover:bg-[#216551] disabled:cursor-not-allowed disabled:bg-[#EDF0EC] disabled:text-[#59685F]"
-            >
-              <Send size={13} />
-              {isPending ? "Sending…" : "Send"}
-            </button>
+        ) : (
+          <div role="tabpanel" className="bg-[#FFFCF2] p-3">
+            <div className="mb-2 flex items-start justify-between gap-3">
+              <div>
+                <div className="text-[10px] font-semibold text-[#18362D]">Private team note</div>
+                <p className="mt-0.5 text-[9px] leading-4 text-[#70581F]">
+                  Stored as internal CRM activity. Never sent through WhatsApp or any other channel.
+                </p>
+              </div>
+              <span className="rounded border border-[#E6DDBE] bg-white px-2 py-1 text-[8px] font-semibold text-[#70581F]">Private</span>
+            </div>
+            <label className="sr-only" htmlFor={`whatsapp-internal-note-${resolvedLeadId || "selected"}`}>
+              Write an internal note
+            </label>
+            <textarea
+              id={`whatsapp-internal-note-${resolvedLeadId || "selected"}`}
+              value={noteBody}
+              onChange={(event) => {
+                setNoteBody(event.target.value.slice(0, 4000));
+                setNoteError(null);
+                setNoteSuccess(null);
+              }}
+              rows={3}
+              maxLength={4000}
+              placeholder="Add context for your team…"
+              className="min-h-[76px] w-full resize-y rounded-lg border border-[#D8D3BD] bg-white px-3 py-2 text-[11px] leading-5 text-[#18362D] outline-none placeholder:text-[#7A806E] focus:border-[#216551] focus:ring-2 focus:ring-[#216551]/10"
+            />
+            <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
+              <div className="min-w-0 text-[9px]">
+                {noteError ? (
+                  <span className="text-red-700">{noteError} Your note is still here.</span>
+                ) : noteSuccess ? (
+                  <span className="text-[#216551]">{noteSuccess}</span>
+                ) : (
+                  <span className="text-[#70581F]">{noteBody.length}/4000 · Saving does not send.</span>
+                )}
+              </div>
+              <button
+                type="button"
+                onClick={() => void saveInternalNote()}
+                disabled={!noteBody.trim() || noteSaving || !resolvedLeadId}
+                className="inline-flex h-8 items-center justify-center gap-1.5 rounded-lg bg-[#153E33] px-3 text-[9px] font-semibold text-white transition hover:bg-[#216551] disabled:cursor-not-allowed disabled:bg-[#EDF0EC] disabled:text-[#59685F]"
+              >
+                {noteSaving ? <RefreshCw size={10} className="animate-spin" /> : null}
+                {noteSaving ? "Saving…" : "Add note"}
+              </button>
+            </div>
           </div>
-        </div>
-      </div>
-
-      <div className="conversation-composer-meta mt-2 flex flex-wrap items-center justify-between gap-2 px-1 text-[9px] font-medium">
-        <span className="text-[#216551]">{draftStatus(draftState)}</span>
-        <span className="text-[#71847A]">
-          {isPending
-            ? "Sending through the verified WhatsApp action…"
-            : connectionReady
-              ? `${windowLabel} · Drafting never sends automatically.`
-              : connectionDisabledReason(connectionState)}
-        </span>
+        )}
       </div>
     </form>
+  );
+}
+
+function ComposerTab({
+  active,
+  onClick,
+  icon,
+  children,
+}: {
+  active: boolean;
+  onClick: () => void;
+  icon: React.ReactNode;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      role="tab"
+      aria-selected={active}
+      tabIndex={active ? 0 : -1}
+      onClick={onClick}
+      className={`inline-flex h-9 items-center gap-1.5 border-b-2 text-[9px] font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#216551] ${
+        active
+          ? "border-[#216551] text-[#216551]"
+          : "border-transparent text-[#596E64] hover:text-[#18362D]"
+      }`}
+    >
+      {icon}
+      {children}
+    </button>
   );
 }
 
