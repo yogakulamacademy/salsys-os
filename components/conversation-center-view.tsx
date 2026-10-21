@@ -1,7 +1,8 @@
 "use client";
 
-import { Activity, MessageCircle, Sparkles } from "lucide-react";
-import { useMemo, useState } from "react";
+import { Activity, MessageCircle, RefreshCw, Sparkles } from "lucide-react";
+import { useSearchParams } from "next/navigation";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { ConversationThread } from "@/components/conversation-thread";
 import type { Channel, LeadStage } from "@/types/crm";
@@ -18,6 +19,31 @@ type ConversationMessage = {
   sentAt?: string | null;
   deliveredAt?: string | null;
   readAt?: string | null;
+};
+
+type ActivityRow = {
+  id: string;
+  activity_type: string;
+  channel: string | null;
+  actor_type: string;
+  actor_id: string | null;
+  title: string | null;
+  details: string | null;
+  metadata: Record<string, unknown> | null;
+  occurred_at: string;
+  created_at: string;
+};
+
+type ActivityResponse =
+  | { ok: true; data: ActivityRow[] }
+  | { ok: false; error: string };
+
+type TimelineItem = {
+  id: string;
+  title: string;
+  detail: string;
+  timestamp: string;
+  meta: string;
 };
 
 type ViewMode = "conversation" | "activity";
@@ -41,25 +67,80 @@ export function ConversationCenterView({
   country?: string;
   stage: LeadStage;
 }) {
+  const searchParams = useSearchParams();
+  const leadId = searchParams.get("lead");
   const [view, setView] = useState<ViewMode>("conversation");
+  const [crmActivity, setCrmActivity] = useState<ActivityRow[]>([]);
+  const [activityLoading, setActivityLoading] = useState(false);
+  const [activityLoaded, setActivityLoaded] = useState(false);
+  const [activityError, setActivityError] = useState<string | null>(null);
+
+  const loadActivity = useCallback(async () => {
+    if (!leadId) {
+      setActivityLoaded(true);
+      return;
+    }
+
+    setActivityLoading(true);
+    setActivityError(null);
+    try {
+      const response = await fetch(`/api/leads/${encodeURIComponent(leadId)}/activity`, {
+        cache: "no-store",
+      });
+      const body = (await response.json()) as ActivityResponse;
+      if (!response.ok || !body.ok) {
+        throw new Error(body.ok ? "Unable to load activity." : body.error);
+      }
+      setCrmActivity(Array.isArray(body.data) ? body.data : []);
+      setActivityLoaded(true);
+    } catch (reason) {
+      setActivityError(reason instanceof Error ? reason.message : "Unable to load activity.");
+      setActivityLoaded(true);
+    } finally {
+      setActivityLoading(false);
+    }
+  }, [leadId]);
+
+  useEffect(() => {
+    setCrmActivity([]);
+    setActivityLoaded(false);
+    setActivityError(null);
+  }, [leadId]);
+
+  useEffect(() => {
+    if (view !== "activity" || activityLoaded || activityLoading) return;
+    void loadActivity();
+  }, [activityLoaded, activityLoading, loadActivity, view]);
 
   const activity = useMemo(() => {
-    const rows = messages.map((message) => ({
-      id: message.id,
-      title:
-        message.direction === "inbound"
-          ? `Inbound ${humanize(message.channel)} message`
-          : `Outbound ${humanize(message.channel)} message`,
-      detail: message.body,
-      timestamp: message.timestamp,
-      meta:
-        message.direction === "outbound" && message.status
-          ? `Admissions · ${humanize(message.status)}`
-          : message.sender,
+    const rows: TimelineItem[] = crmActivity.map((item) => ({
+      id: `crm-${item.id}`,
+      title: item.title || humanize(item.activity_type),
+      detail: item.details || activityDetail(item),
+      timestamp: item.occurred_at || item.created_at,
+      meta: [humanize(item.activity_type), item.actor_type ? humanize(item.actor_type) : null]
+        .filter(Boolean)
+        .join(" · "),
     }));
 
+    for (const message of messages) {
+      rows.push({
+        id: `message-${message.id}`,
+        title:
+          message.direction === "inbound"
+            ? `Inbound ${humanize(message.channel)} message`
+            : `Outbound ${humanize(message.channel)} message`,
+        detail: message.body,
+        timestamp: message.timestamp,
+        meta:
+          message.direction === "outbound" && message.status
+            ? `Admissions · ${humanize(message.status)}`
+            : message.sender,
+      });
+    }
+
     if (originTimestamp) {
-      rows.unshift({
+      rows.push({
         id: `origin-${originTimestamp}`,
         title: `${humanize(originChannel || "other")} inquiry created`,
         detail:
@@ -72,8 +153,10 @@ export function ConversationCenterView({
       });
     }
 
-    return rows;
-  }, [messages, originChannel, originCourse, originDetail, originTimestamp]);
+    return rows
+      .filter((item) => Boolean(item.timestamp))
+      .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+  }, [crmActivity, messages, originChannel, originCourse, originDetail, originTimestamp]);
 
   const courseSelected = Boolean(course && course !== "Not selected");
 
@@ -87,7 +170,7 @@ export function ConversationCenterView({
           <TabButton active={view === "activity"} onClick={() => setView("activity")} icon={<Activity size={13} />}>
             Activity
             <span className="ml-1 rounded bg-[#F0F3EF] px-1.5 py-0.5 text-[8px] font-medium text-[#596E64]">
-              {activity.length}
+              {activityLoading ? "…" : activity.length}
             </span>
           </TabButton>
         </div>
@@ -102,36 +185,62 @@ export function ConversationCenterView({
             originCourse={originCourse}
             originDetail={originDetail}
           />
-        ) : activity.length ? (
-          <ol className="mx-auto max-w-2xl space-y-0" aria-label="Conversation activity">
-            {activity.map((item, index) => (
-              <li key={item.id} className="relative flex gap-3 pb-6">
-                {index < activity.length - 1 ? (
-                  <span className="absolute bottom-0 left-[5px] top-3 w-px bg-[#DCE4DF]" aria-hidden="true" />
-                ) : null}
-                <span className="relative mt-1.5 h-[11px] w-[11px] shrink-0 rounded-full border-[3px] border-[#F9FBF8] bg-[#719269]" aria-hidden="true" />
-                <div className="min-w-0 flex-1 rounded-lg border border-[#E2E8E3] bg-white px-3.5 py-3 shadow-[0_1px_2px_rgba(21,62,51,0.03)]">
-                  <div className="flex flex-wrap items-start justify-between gap-2">
-                    <div className="text-[11px] font-semibold text-[#18362D]">{item.title}</div>
-                    <time className="text-[9px] text-[#71847A]" dateTime={item.timestamp}>
-                      {formatDateTime(item.timestamp)}
-                    </time>
-                  </div>
-                  <p className="mt-1.5 whitespace-pre-wrap break-words text-[10px] leading-5 text-[#596E64]">
-                    {item.detail}
-                  </p>
-                  <div className="mt-2 text-[9px] text-[#829087]">{item.meta}</div>
-                </div>
-              </li>
-            ))}
-          </ol>
         ) : (
-          <div className="grid min-h-[260px] place-items-center text-center">
-            <div>
-              <Activity size={22} className="mx-auto text-[#719269]" />
-              <div className="mt-3 text-xs font-semibold text-[#18362D]">No activity recorded</div>
-              <p className="mt-1 text-[10px] text-[#596E64]">CRM activity will appear here when authoritative events exist.</p>
-            </div>
+          <div className="mx-auto max-w-2xl">
+            {activityLoading ? (
+              <div className="mb-4 flex items-center gap-2 rounded-lg border border-[#E2E8E3] bg-white px-3 py-2.5 text-[10px] text-[#596E64]">
+                <RefreshCw size={12} className="animate-spin text-[#216551]" /> Loading CRM activity…
+              </div>
+            ) : null}
+
+            {activityError ? (
+              <div className="mb-4 flex items-center justify-between gap-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2.5 text-[10px] text-amber-800">
+                <span>{activityError} Message history is still shown below.</span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setActivityLoaded(false);
+                    void loadActivity();
+                  }}
+                  className="shrink-0 rounded-md border border-amber-300 bg-white px-2 py-1 text-[9px] font-semibold"
+                >
+                  Retry
+                </button>
+              </div>
+            ) : null}
+
+            {activity.length ? (
+              <ol className="space-y-0" aria-label="Conversation activity">
+                {activity.map((item, index) => (
+                  <li key={item.id} className="relative flex gap-3 pb-6">
+                    {index < activity.length - 1 ? (
+                      <span className="absolute bottom-0 left-[5px] top-3 w-px bg-[#DCE4DF]" aria-hidden="true" />
+                    ) : null}
+                    <span className="relative mt-1.5 h-[11px] w-[11px] shrink-0 rounded-full border-[3px] border-[#F9FBF8] bg-[#719269]" aria-hidden="true" />
+                    <div className="min-w-0 flex-1 rounded-lg border border-[#E2E8E3] bg-white px-3.5 py-3 shadow-[0_1px_2px_rgba(21,62,51,0.03)]">
+                      <div className="flex flex-wrap items-start justify-between gap-2">
+                        <div className="text-[11px] font-semibold text-[#18362D]">{item.title}</div>
+                        <time className="text-[9px] text-[#71847A]" dateTime={item.timestamp}>
+                          {formatDateTime(item.timestamp)}
+                        </time>
+                      </div>
+                      <p className="mt-1.5 whitespace-pre-wrap break-words text-[10px] leading-5 text-[#596E64]">
+                        {item.detail}
+                      </p>
+                      <div className="mt-2 text-[9px] text-[#829087]">{item.meta}</div>
+                    </div>
+                  </li>
+                ))}
+              </ol>
+            ) : !activityLoading ? (
+              <div className="grid min-h-[260px] place-items-center text-center">
+                <div>
+                  <Activity size={22} className="mx-auto text-[#719269]" />
+                  <div className="mt-3 text-xs font-semibold text-[#18362D]">No activity recorded</div>
+                  <p className="mt-1 text-[10px] text-[#596E64]">CRM activity will appear here when authoritative events exist.</p>
+                </div>
+              </div>
+            ) : null}
           </div>
         )}
       </div>
@@ -183,6 +292,15 @@ function TabButton({
       {children}
     </button>
   );
+}
+
+function activityDetail(item: ActivityRow) {
+  if (item.details?.trim()) return item.details;
+
+  const dueAt = typeof item.metadata?.due_at === "string" ? item.metadata.due_at : null;
+  if (dueAt) return `Due ${formatDateTime(dueAt)}.`;
+
+  return "CRM activity recorded.";
 }
 
 function humanize(value: string) {
