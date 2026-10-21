@@ -22,6 +22,7 @@ const helper = read('lib/whatsapp-operations.ts');
 const api = read('app/api/whatsapp/quick-replies/route.ts');
 const composer = read('components/conversation-composer.tsx');
 const layout = read('app/automation/layout.tsx');
+const navigation = read('components/automation/automation-navigation.tsx');
 
 for (const [needle, label] of [
   ['whatsapp_audience_segments', 'audience segments'],
@@ -89,7 +90,7 @@ for (const [needle, label] of [
   if (!page.includes(needle)) fail(`WhatsApp Operations page is missing ${label} (${needle}).`);
 }
 
-if (!layout.includes("href: '/automation/whatsapp'")) {
+if (!layout.includes('AutomationNavigation') || !navigation.includes("href: '/automation/whatsapp'")) {
   fail('Automation navigation does not expose WhatsApp Ops.');
 }
 
