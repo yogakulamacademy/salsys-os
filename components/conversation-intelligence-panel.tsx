@@ -1,6 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { createPortal } from "react-dom";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   AlertTriangle,
@@ -10,6 +11,7 @@ import {
   RefreshCw,
   Sparkles,
   Target,
+  X,
   Zap,
 } from "lucide-react";
 
@@ -87,10 +89,13 @@ export function ConversationIntelligencePanel({
   const [error, setError] = useState<string | null>(null);
   const [scheduling, setScheduling] = useState(false);
   const [customScheduling, setCustomScheduling] = useState(false);
+  const [customFollowupOpen, setCustomFollowupOpen] = useState(false);
   const [completingTaskId, setCompletingTaskId] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [actionSuccess, setActionSuccess] = useState<string | null>(null);
   const [loadedAt, setLoadedAt] = useState(0);
+  const customFollowupTriggerRef = useRef<HTMLButtonElement | null>(null);
+  const customFollowupDialogRef = useRef<HTMLDivElement | null>(null);
 
   const load = useCallback(async (quiet = false) => {
     if (quiet) setRefreshing(true);
@@ -127,6 +132,58 @@ export function ConversationIntelligencePanel({
     window.addEventListener("focus", onFocus);
     return () => window.removeEventListener("focus", onFocus);
   }, [load, loadedAt]);
+
+  useEffect(() => {
+    if (!customFollowupOpen) return;
+
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    const dialog = customFollowupDialogRef.current;
+
+    const focusable = () =>
+      dialog
+        ? Array.from(
+            dialog.querySelectorAll<HTMLElement>(
+              'button:not([disabled]),input:not([disabled]),textarea:not([disabled]),select:not([disabled]),a[href],[tabindex]:not([tabindex="-1"])',
+            ),
+          )
+        : [];
+
+    requestAnimationFrame(() => {
+      const actionInput = dialog?.querySelector<HTMLInputElement>('input[name="title"]');
+      actionInput?.focus();
+      actionInput?.select();
+    });
+
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape" && !customScheduling) {
+        event.preventDefault();
+        setCustomFollowupOpen(false);
+        return;
+      }
+
+      if (event.key !== "Tab") return;
+      const items = focusable();
+      if (!items.length) return;
+      const first = items[0];
+      const last = items[items.length - 1];
+
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    };
+
+    document.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.removeEventListener("keydown", onKeyDown);
+      document.body.style.overflow = previousOverflow;
+      customFollowupTriggerRef.current?.focus();
+    };
+  }, [customFollowupOpen, customScheduling]);
 
   const objective = useMemo(
     () => buildResponseObjective({ data, stage, priority, needsReply, needsFirstContact, waitingSince }),
@@ -219,6 +276,7 @@ export function ConversationIntelligencePanel({
     try {
       await createFollowup({ title, dueAt, description });
       form.reset();
+      setCustomFollowupOpen(false);
     } catch (reason) {
       setActionError(
         reason instanceof Error ? reason.message : "Unable to schedule follow-up.",
@@ -272,213 +330,297 @@ export function ConversationIntelligencePanel({
   }
 
   return (
-    <section className="overflow-hidden rounded-xl border border-[#DDE7DF] bg-white">
-      <div className="border-b border-[#E8EEEA] bg-[#F7FAF8] px-3.5 py-3">
-        <div className="flex items-start justify-between gap-3">
-          <div>
-            <div className="flex items-center gap-1.5 text-[9px] font-bold uppercase tracking-[0.12em] text-[#216551]">
-              <Sparkles size={11} /> Inbox intelligence
-            </div>
-            <div className="mt-1 text-[12px] font-semibold text-[#203B31]">
-              What should happen next?
-            </div>
-          </div>
-          <button
-            type="button"
-            onClick={() => void load(true)}
-            disabled={refreshing}
-            className="grid h-7 w-7 place-items-center rounded-md text-[#829087] transition hover:bg-white hover:text-[#216551] disabled:opacity-50"
-            aria-label="Refresh conversation intelligence"
-            title="Refresh intelligence"
-          >
-            <RefreshCw size={12} className={refreshing ? "animate-spin" : ""} />
-          </button>
-        </div>
-      </div>
-
-      <div className="p-3.5">
-        {error ? (
-          <div className="mb-3 flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-[10px] leading-4 text-amber-800">
-            <AlertTriangle size={12} className="mt-0.5 shrink-0" />
-            <span>{error} Showing only conversation-state guidance.</span>
-          </div>
-        ) : null}
-
-        <div className={`rounded-lg border px-3 py-3 ${objective.toneClass}`}>
-          <div className="flex items-start gap-2.5">
-            <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-white/80 text-[#216551] shadow-sm">
-              <Target size={14} />
-            </span>
-            <div className="min-w-0 flex-1">
-              <div className="text-[9px] font-bold uppercase tracking-[0.1em] text-[#728179]">
-                {objective.sourceLabel}
+    <>
+      <section className="overflow-hidden rounded-xl border border-[#DDE7DF] bg-white">
+        <div className="border-b border-[#E8EEEA] bg-[#F7FAF8] px-3.5 py-3">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <div className="flex items-center gap-1.5 text-[9px] font-bold uppercase tracking-[0.12em] text-[#216551]">
+                <Sparkles size={11} /> Inbox intelligence
               </div>
               <div className="mt-1 text-[12px] font-semibold text-[#203B31]">
-                {objective.title}
+                What should happen next?
               </div>
-              <div className="mt-1 text-[10px] leading-4 text-[#61736A]">
-                {objective.detail}
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div className="mt-3 grid grid-cols-2 gap-2">
-          <Signal label="Priority" value={pretty(data?.salesIntelligence?.priority_band || priority)} />
-          <Signal label="Intent" value={pretty(data?.salesIntelligence?.derived_intent || "Not available")} />
-          <Signal label="Engagement" value={numberText(data?.salesIntelligence?.engagement_score)} />
-          <Signal label="Next follow-up" value={nextFollowup ? relativeTime(nextFollowup) : "Not scheduled"} />
-          <Signal label="Lead owner" value={data?.lead.owner || "Unassigned"} />
-          <Signal label="Follow-up" value={openTask ? pretty(openTask.status) : "None open"} />
-        </div>
-
-        {data?.salesIntelligence?.priority_reason ? (
-          <div className="mt-3 rounded-lg bg-[#F5F8F6] px-3 py-2 text-[9px] leading-4 text-[#718078]">
-            <strong className="font-semibold text-[#496057]">Why now:</strong>{" "}
-            {data.salesIntelligence.priority_reason}
-          </div>
-        ) : null}
-
-        {openTask ? (
-          <div className="mt-3 rounded-lg border border-[#E6ECE8] px-3 py-2.5">
-            <div className="flex items-center justify-between gap-2">
-              <div className="text-[9px] font-bold uppercase tracking-[0.08em] text-[#89968F]">
-                Open follow-up
-              </div>
-              <span className="rounded bg-[#F3F7F4] px-1.5 py-0.5 text-[8px] font-semibold capitalize text-[#60736A]">
-                {openTask.status}
-              </span>
-            </div>
-            <div className="mt-1.5 text-[10px] font-semibold text-[#40564C]">
-              {openTask.title}
-            </div>
-            {openTask.due_at ? (
-              <div className="mt-1 flex items-center gap-1 text-[9px] text-[#7A8981]">
-                <Clock3 size={10} /> {relativeTime(openTask.due_at)} · {formatDateTime(openTask.due_at)}
-              </div>
-            ) : (
-              <div className="mt-1 text-[9px] text-[#7A8981]">No due date recorded</div>
-            )}
-            <div className="mt-1 text-[9px] text-[#7A8981]">
-              Follow-up owner: {openTask.assigned_to ? "Assigned CRM user" : "Unassigned"}
             </div>
             <button
               type="button"
-              onClick={() => void completeFollowup(openTask.id)}
-              disabled={Boolean(completingTaskId)}
-              className="mt-2 inline-flex h-7 w-full items-center justify-center gap-1.5 rounded-md border border-[#DDE7DF] bg-white px-2 text-[9px] font-semibold text-[#456158] transition hover:bg-[#EDF3E6] hover:text-[#216551] disabled:cursor-not-allowed disabled:opacity-60"
+              onClick={() => void load(true)}
+              disabled={refreshing}
+              className="grid h-7 w-7 place-items-center rounded-md text-[#829087] transition hover:bg-white hover:text-[#216551] disabled:opacity-50"
+              aria-label="Refresh conversation intelligence"
+              title="Refresh intelligence"
             >
-              {completingTaskId === openTask.id ? (
-                <RefreshCw size={10} className="animate-spin" />
-              ) : (
-                <CheckCircle2 size={10} />
-              )}
-              {completingTaskId === openTask.id ? "Completing…" : "Mark complete"}
+              <RefreshCw size={12} className={refreshing ? "animate-spin" : ""} />
             </button>
           </div>
-        ) : null}
+        </div>
 
-        {actionError ? (
-          <div className="mt-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-[9px] text-red-700">
-            {actionError}
-          </div>
-        ) : null}
-        {actionSuccess ? (
-          <div className="mt-3 flex items-center gap-1.5 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-[9px] text-emerald-700">
-            <CheckCircle2 size={11} /> {actionSuccess}
-          </div>
-        ) : null}
+        <div className="p-3.5">
+          {error ? (
+            <div className="mb-3 flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-[10px] leading-4 text-amber-800">
+              <AlertTriangle size={12} className="mt-0.5 shrink-0" />
+              <span>{error} Showing only conversation-state guidance.</span>
+            </div>
+          ) : null}
 
-        <div className="mt-3 grid gap-2">
-          <button
-            type="button"
-            onClick={scheduleRecommendedFollowup}
-            disabled={scheduling || customScheduling}
-            className="inline-flex h-9 items-center justify-center gap-1.5 rounded-lg bg-[#216551] px-3 text-[10px] font-semibold text-white transition hover:bg-[#174D3B] disabled:cursor-not-allowed disabled:opacity-60"
-          >
-            {scheduling ? <RefreshCw size={12} className="animate-spin" /> : <CalendarClock size={12} />}
-            {scheduling ? "Scheduling…" : objective.scheduleLabel}
-          </button>
-
-          <details className="group rounded-lg border border-[#DDE7DF] bg-white">
-            <summary className="flex cursor-pointer list-none items-center justify-between px-3 py-2.5 text-[9px] font-semibold text-[#456158] hover:bg-[#F7FAF8]">
-              Plan a custom follow-up
-              <CalendarClock size={11} className="text-[#718078]" />
-            </summary>
-            <form
-              className="space-y-2.5 border-t border-[#EEF2EF] p-3"
-              onSubmit={(event) => {
-                event.preventDefault();
-                void scheduleCustomFollowup(event.currentTarget);
-              }}
-            >
-              <label className="block">
-                <span className="mb-1 block text-[8px] font-semibold uppercase tracking-[0.08em] text-[#718078]">
-                  Action
-                </span>
-                <input
-                  name="title"
-                  required
-                  maxLength={240}
-                  defaultValue={objective.followupTitle}
-                  className="input"
-                  placeholder="e.g. Confirm course interest"
-                />
-              </label>
-              <label className="block">
-                <span className="mb-1 block text-[8px] font-semibold uppercase tracking-[0.08em] text-[#718078]">
-                  Due date & time
-                </span>
-                <input
-                  name="due_at"
-                  type="datetime-local"
-                  required
-                  defaultValue={localDateTimeValue(objective.recommendedHours)}
-                  className="input"
-                />
-              </label>
-              <div className="rounded-md bg-[#F5F8F6] px-2.5 py-2 text-[9px] text-[#596E64]">
-                <strong className="font-semibold text-[#40564C]">Owner:</strong>{" "}
-                current signed-in user. The canonical follow-up RPC assigns the task to the operator creating it.
+          <div className={`rounded-lg border px-3 py-3 ${objective.toneClass}`}>
+            <div className="flex items-start gap-2.5">
+              <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-white/80 text-[#216551] shadow-sm">
+                <Target size={14} />
+              </span>
+              <div className="min-w-0 flex-1">
+                <div className="text-[9px] font-bold uppercase tracking-[0.1em] text-[#728179]">
+                  {objective.sourceLabel}
+                </div>
+                <div className="mt-1 text-[12px] font-semibold text-[#203B31]">
+                  {objective.title}
+                </div>
+                <div className="mt-1 text-[10px] leading-4 text-[#61736A]">
+                  {objective.detail}
+                </div>
               </div>
-              <label className="block">
-                <span className="mb-1 block text-[8px] font-semibold uppercase tracking-[0.08em] text-[#718078]">
-                  Note (optional)
+            </div>
+          </div>
+
+          <div className="mt-3 grid grid-cols-2 gap-2">
+            <Signal label="Priority" value={pretty(data?.salesIntelligence?.priority_band || priority)} />
+            <Signal label="Intent" value={pretty(data?.salesIntelligence?.derived_intent || "Not available")} />
+            <Signal label="Engagement" value={numberText(data?.salesIntelligence?.engagement_score)} />
+            <Signal label="Next follow-up" value={nextFollowup ? relativeTime(nextFollowup) : "Not scheduled"} />
+            <Signal label="Lead owner" value={data?.lead.owner || "Unassigned"} />
+            <Signal label="Follow-up" value={openTask ? pretty(openTask.status) : "None open"} />
+          </div>
+
+          {data?.salesIntelligence?.priority_reason ? (
+            <div className="mt-3 rounded-lg bg-[#F5F8F6] px-3 py-2 text-[9px] leading-4 text-[#718078]">
+              <strong className="font-semibold text-[#496057]">Why now:</strong>{" "}
+              {data.salesIntelligence.priority_reason}
+            </div>
+          ) : null}
+
+          {openTask ? (
+            <div className="mt-3 rounded-lg border border-[#E6ECE8] px-3 py-2.5">
+              <div className="flex items-center justify-between gap-2">
+                <div className="text-[9px] font-bold uppercase tracking-[0.08em] text-[#89968F]">
+                  Open follow-up
+                </div>
+                <span className="rounded bg-[#F3F7F4] px-1.5 py-0.5 text-[8px] font-semibold capitalize text-[#60736A]">
+                  {openTask.status}
                 </span>
-                <textarea
-                  name="description"
-                  rows={2}
-                  maxLength={4000}
-                  className="input min-h-[58px] resize-y"
-                  placeholder="Internal context for this follow-up…"
-                />
-              </label>
+              </div>
+              <div className="mt-1.5 text-[10px] font-semibold text-[#40564C]">
+                {openTask.title}
+              </div>
+              {openTask.due_at ? (
+                <div className="mt-1 flex items-center gap-1 text-[9px] text-[#7A8981]">
+                  <Clock3 size={10} /> {relativeTime(openTask.due_at)} · {formatDateTime(openTask.due_at)}
+                </div>
+              ) : (
+                <div className="mt-1 text-[9px] text-[#7A8981]">No due date recorded</div>
+              )}
+              <div className="mt-1 text-[9px] text-[#7A8981]">
+                Follow-up owner: {openTask.assigned_to ? "Assigned CRM user" : "Unassigned"}
+              </div>
               <button
-                type="submit"
-                disabled={customScheduling || scheduling}
-                className="inline-flex h-8 w-full items-center justify-center gap-1.5 rounded-lg bg-[#153E33] px-3 text-[9px] font-semibold text-white transition hover:bg-[#216551] disabled:cursor-not-allowed disabled:opacity-60"
+                type="button"
+                onClick={() => void completeFollowup(openTask.id)}
+                disabled={Boolean(completingTaskId)}
+                className="mt-2 inline-flex h-7 w-full items-center justify-center gap-1.5 rounded-md border border-[#DDE7DF] bg-white px-2 text-[9px] font-semibold text-[#456158] transition hover:bg-[#EDF3E6] hover:text-[#216551] disabled:cursor-not-allowed disabled:opacity-60"
               >
-                {customScheduling ? <RefreshCw size={10} className="animate-spin" /> : <CalendarClock size={10} />}
-                {customScheduling ? "Saving…" : "Save follow-up"}
+                {completingTaskId === openTask.id ? (
+                  <RefreshCw size={10} className="animate-spin" />
+                ) : (
+                  <CheckCircle2 size={10} />
+                )}
+                {completingTaskId === openTask.id ? "Completing…" : "Mark complete"}
               </button>
-            </form>
-          </details>
+            </div>
+          ) : null}
 
-          <LeadInspectorButton
-            leadId={leadId}
-            label="Open full lead intelligence"
-            className="inline-flex h-9 items-center justify-center gap-1.5 rounded-lg border border-[#DDE7DF] bg-white px-3 text-[10px] font-semibold text-[#456158] transition hover:bg-[#F0F7F3] hover:text-[#216551]"
-          />
-        </div>
+          {actionError && !customFollowupOpen ? (
+            <div className="mt-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-[9px] text-red-700">
+              {actionError}
+            </div>
+          ) : null}
+          {actionSuccess ? (
+            <div className="mt-3 flex items-center gap-1.5 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-[9px] text-emerald-700">
+              <CheckCircle2 size={11} /> {actionSuccess}
+            </div>
+          ) : null}
 
-        <div className="mt-3 flex items-start gap-2 border-t border-[#EEF2EF] pt-3 text-[9px] leading-4 text-[#849188]">
-          <Zap size={11} className="mt-0.5 shrink-0 text-[#6A927B]" />
-          <span>
-            Guidance uses stored CRM evidence. Follow-ups create CRM tasks only; AI drafting remains human-reviewed and nothing is sent automatically.
-          </span>
+          <div className="mt-3 grid gap-2">
+            <button
+              type="button"
+              onClick={scheduleRecommendedFollowup}
+              disabled={scheduling || customScheduling}
+              className="inline-flex h-9 items-center justify-center gap-1.5 rounded-lg bg-[#216551] px-3 text-[10px] font-semibold text-white transition hover:bg-[#174D3B] disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {scheduling ? <RefreshCw size={12} className="animate-spin" /> : <CalendarClock size={12} />}
+              {scheduling ? "Scheduling…" : objective.scheduleLabel}
+            </button>
+
+            <button
+              ref={customFollowupTriggerRef}
+              type="button"
+              onClick={() => {
+                setActionError(null);
+                setActionSuccess(null);
+                setCustomFollowupOpen(true);
+              }}
+              disabled={scheduling || customScheduling}
+              className="inline-flex h-9 items-center justify-center gap-1.5 rounded-lg border border-[#DDE7DF] bg-white px-3 text-[10px] font-semibold text-[#456158] transition hover:bg-[#F7FAF8] hover:text-[#216551] disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              <CalendarClock size={11} /> Plan a custom follow-up
+            </button>
+
+            <LeadInspectorButton
+              leadId={leadId}
+              label="Open full lead intelligence"
+              className="inline-flex h-9 items-center justify-center gap-1.5 rounded-lg border border-[#DDE7DF] bg-white px-3 text-[10px] font-semibold text-[#456158] transition hover:bg-[#F0F7F3] hover:text-[#216551]"
+            />
+          </div>
+
+          <div className="mt-3 flex items-start gap-2 border-t border-[#EEF2EF] pt-3 text-[9px] leading-4 text-[#849188]">
+            <Zap size={11} className="mt-0.5 shrink-0 text-[#6A927B]" />
+            <span>
+              Guidance uses stored CRM evidence. Follow-ups create CRM tasks only; AI drafting remains human-reviewed and nothing is sent automatically.
+            </span>
+          </div>
         </div>
-      </div>
-    </section>
+      </section>
+
+      {customFollowupOpen && typeof document !== "undefined"
+        ? createPortal(
+            <div className="fixed inset-0 z-[100] grid place-items-center p-4 sm:p-6">
+              <button
+                type="button"
+                aria-label="Close follow-up planner"
+                onClick={() => {
+                  if (!customScheduling) setCustomFollowupOpen(false);
+                }}
+                className="absolute inset-0 bg-[#153E33]/28 backdrop-blur-[2px]"
+              />
+
+              <div
+                ref={customFollowupDialogRef}
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="custom-followup-title"
+                aria-describedby="custom-followup-description"
+                className="relative z-10 flex max-h-[min(720px,90dvh)] w-full max-w-[560px] flex-col overflow-hidden rounded-2xl border border-[#D7E1DB] bg-white shadow-[0_28px_80px_rgba(21,62,51,0.24)]"
+              >
+                <div className="flex items-start justify-between gap-4 border-b border-[#E5ECE7] px-5 py-4 sm:px-6 sm:py-5">
+                  <div>
+                    <h2 id="custom-followup-title" className="text-[18px] font-semibold text-[#18362D]">
+                      Plan the next step
+                    </h2>
+                    <p id="custom-followup-description" className="mt-1 text-[10px] leading-5 text-[#596E64]">
+                      CRM follow-up only · this schedules an internal task and does not send a customer message.
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (!customScheduling) setCustomFollowupOpen(false);
+                    }}
+                    disabled={customScheduling}
+                    className="grid h-8 w-8 shrink-0 place-items-center rounded-lg text-[#596E64] transition hover:bg-[#EDF3E6] hover:text-[#216551] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#216551] disabled:opacity-50"
+                    aria-label="Close follow-up planner"
+                  >
+                    <X size={17} />
+                  </button>
+                </div>
+
+                <form
+                  className="min-h-0 overflow-y-auto"
+                  onSubmit={(event) => {
+                    event.preventDefault();
+                    void scheduleCustomFollowup(event.currentTarget);
+                  }}
+                >
+                  <div className="space-y-4 px-5 py-5 sm:px-6">
+                    <label className="block">
+                      <span className="mb-1.5 block text-[10px] font-semibold text-[#344E42]">
+                        Next action
+                      </span>
+                      <input
+                        name="title"
+                        required
+                        maxLength={240}
+                        defaultValue={objective.followupTitle}
+                        className="input h-10"
+                        placeholder="e.g. Confirm course interest"
+                      />
+                    </label>
+
+                    <label className="block">
+                      <span className="mb-1.5 block text-[10px] font-semibold text-[#344E42]">
+                        Follow-up date and time
+                      </span>
+                      <input
+                        name="due_at"
+                        type="datetime-local"
+                        required
+                        defaultValue={localDateTimeValue(objective.recommendedHours)}
+                        className="input h-10"
+                      />
+                    </label>
+
+                    <div>
+                      <div className="mb-1.5 text-[10px] font-semibold text-[#344E42]">Owner</div>
+                      <div className="rounded-lg border border-[#D9E2DD] bg-[#F7F9F7] px-3 py-2.5 text-[10px] text-[#40564C]">
+                        <div className="font-semibold">Current signed-in user</div>
+                        <div className="mt-0.5 leading-4 text-[#718078]">
+                          The canonical follow-up action assigns the CRM task to the operator creating it.
+                        </div>
+                      </div>
+                    </div>
+
+                    <label className="block">
+                      <span className="mb-1.5 block text-[10px] font-semibold text-[#344E42]">
+                        Note <span className="font-normal text-[#829087]">(optional)</span>
+                      </span>
+                      <textarea
+                        name="description"
+                        rows={3}
+                        maxLength={4000}
+                        className="input min-h-[88px] resize-y"
+                        placeholder="Internal context for this follow-up…"
+                      />
+                    </label>
+
+                    {actionError ? (
+                      <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2.5 text-[10px] leading-4 text-red-700">
+                        {actionError}
+                      </div>
+                    ) : null}
+                  </div>
+
+                  <div className="flex items-center justify-end gap-2 border-t border-[#E5ECE7] bg-[#FBFCFB] px-5 py-3.5 sm:px-6">
+                    <button
+                      type="button"
+                      onClick={() => setCustomFollowupOpen(false)}
+                      disabled={customScheduling}
+                      className="inline-flex h-9 items-center justify-center rounded-lg border border-[#D9E2DD] bg-white px-4 text-[10px] font-semibold text-[#456158] transition hover:bg-[#F3F6F3] disabled:opacity-50"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="submit"
+                      disabled={customScheduling || scheduling}
+                      className="inline-flex h-9 items-center justify-center gap-1.5 rounded-lg bg-[#153E33] px-4 text-[10px] font-semibold text-white transition hover:bg-[#216551] disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      {customScheduling ? <RefreshCw size={11} className="animate-spin" /> : <CalendarClock size={11} />}
+                      {customScheduling ? "Saving…" : "Save follow-up"}
+                    </button>
+                  </div>
+                </form>
+              </div>
+            </div>,
+            document.body,
+          )
+        : null}
+    </>
   );
 }
 
