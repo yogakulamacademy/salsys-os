@@ -85,7 +85,7 @@ export function CrmNavigation() {
 
   return (
     <>
-      <details className="group rounded-xl border border-[#E4EAE6] bg-white lg:hidden">
+      <details className="group rounded-xl border border-[#E4EAE6] bg-white min-[881px]:hidden">
         <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 text-sm font-semibold text-[#192E29] [&::-webkit-details-marker]:hidden">
           <span className="flex items-center gap-2.5">
             <span className="grid h-8 w-8 place-items-center rounded-lg bg-[#EAF4ED] text-[#216551]">
@@ -104,7 +104,7 @@ export function CrmNavigation() {
         </div>
       </details>
 
-      <aside className="hidden min-h-[calc(100vh-7rem)] border-r border-[#E4EAE6] pr-4 lg:block">
+      <aside className="hidden min-h-[calc(100vh-7rem)] border-r border-[#E4EAE6] pr-4 min-[881px]:block">
         <div className="sticky top-20 pb-8">
           <div className="mb-6 px-3 pt-1">
             <div className="text-[15px] font-semibold text-[#192E29]">CRM Operations</div>
