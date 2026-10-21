@@ -195,10 +195,35 @@ export function ConversationCenterView({
 
   const courseSelected = Boolean(course && course !== "Not selected");
 
+  function handleViewKeyDown(event: React.KeyboardEvent<HTMLDivElement>) {
+    if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
+
+    const tabs = Array.from(
+      event.currentTarget.querySelectorAll<HTMLButtonElement>('[role="tab"]'),
+    );
+    const activeIndex = tabs.findIndex((tab) => tab === document.activeElement);
+    if (activeIndex < 0 || tabs.length === 0) return;
+
+    event.preventDefault();
+    let nextIndex = activeIndex;
+    if (event.key === "ArrowRight") nextIndex = (activeIndex + 1) % tabs.length;
+    if (event.key === "ArrowLeft") nextIndex = (activeIndex - 1 + tabs.length) % tabs.length;
+    if (event.key === "Home") nextIndex = 0;
+    if (event.key === "End") nextIndex = tabs.length - 1;
+
+    tabs[nextIndex]?.focus();
+    tabs[nextIndex]?.click();
+  }
+
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       <div className="shrink-0 border-b border-[#DCE4DF] bg-white px-5 dark:border-slate-900 dark:bg-slate-950">
-        <div className="flex items-center gap-6" role="tablist" aria-label="Conversation view">
+        <div
+          className="flex items-center gap-6"
+          role="tablist"
+          aria-label="Conversation view"
+          onKeyDown={handleViewKeyDown}
+        >
           <TabButton
             active={view === "conversation"}
             onClick={() => setView("conversation")}
