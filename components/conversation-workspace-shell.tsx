@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { ArrowLeft, PanelRightClose, PanelRightOpen, Sparkles, X } from "lucide-react";
+import { useRouter } from "next/navigation";
 import type { ReactNode } from "react";
 import { useEffect, useRef, useState } from "react";
 
@@ -18,6 +19,7 @@ export function ConversationWorkspaceShell({
   context: ReactNode;
   hasConversation: boolean;
 }) {
+  const router = useRouter();
   const [desktopContextOpen, setDesktopContextOpen] = useState(true);
   const [mobileContextOpen, setMobileContextOpen] = useState(false);
   const drawerRef = useRef<HTMLElement | null>(null);
@@ -44,12 +46,22 @@ export function ConversationWorkspaceShell({
           'textarea[name="body"], textarea[id^="reply-draft-"], textarea[id^="whatsapp-reply-draft-"]',
         );
         reply?.focus();
+        return;
+      }
+
+      if (
+        event.key === "Escape" &&
+        !mobileContextOpen &&
+        window.matchMedia("(max-width: 620px)").matches
+      ) {
+        event.preventDefault();
+        router.push("/conversations");
       }
     };
 
     document.addEventListener("keydown", onShortcut);
     return () => document.removeEventListener("keydown", onShortcut);
-  }, [hasConversation]);
+  }, [hasConversation, mobileContextOpen, router]);
 
   useEffect(() => {
     if (!mobileContextOpen) return;
