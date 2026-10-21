@@ -25,6 +25,33 @@ export function ConversationWorkspaceShell({
   const showDesktopContext = hasConversation && desktopContextOpen;
 
   useEffect(() => {
+    if (!hasConversation) return;
+
+    const onShortcut = (event: KeyboardEvent) => {
+      if (event.altKey && event.key.toLowerCase() === "i") {
+        event.preventDefault();
+        if (window.matchMedia("(min-width: 1171px)").matches) {
+          setDesktopContextOpen((value) => !value);
+        } else {
+          setMobileContextOpen((value) => !value);
+        }
+        return;
+      }
+
+      if (event.altKey && event.key.toLowerCase() === "r") {
+        event.preventDefault();
+        const reply = document.querySelector<HTMLTextAreaElement>(
+          'textarea[name="body"], textarea[id^="reply-draft-"], textarea[id^="whatsapp-reply-draft-"]',
+        );
+        reply?.focus();
+      }
+    };
+
+    document.addEventListener("keydown", onShortcut);
+    return () => document.removeEventListener("keydown", onShortcut);
+  }, [hasConversation]);
+
+  useEffect(() => {
     if (!mobileContextOpen) return;
 
     const previousActive = document.activeElement as HTMLElement | null;
@@ -71,13 +98,15 @@ export function ConversationWorkspaceShell({
 
   return (
     <div
-      className={`relative min-h-[620px] overflow-hidden rounded-2xl border border-[#DCE4DF] bg-white shadow-[0_4px_18px_rgba(21,62,51,0.03)] dark:border-slate-800 dark:bg-slate-950 md:grid md:h-[calc(100dvh-190px)] md:grid-cols-[270px_minmax(0,1fr)] xl:grid-cols-[285px_minmax(310px,1fr)] ${
-        showDesktopContext ? "xl:grid-cols-[285px_minmax(310px,1fr)_284px]" : ""
+      className={`relative min-h-[540px] overflow-hidden rounded-2xl border border-[#DCE4DF] bg-white shadow-[0_4px_18px_rgba(21,62,51,0.03)] dark:border-slate-800 dark:bg-slate-950 min-[621px]:grid min-[621px]:h-[calc(100dvh-199px)] min-[621px]:min-h-[590px] min-[621px]:grid-cols-[270px_minmax(0,1fr)] min-[1171px]:grid-cols-[285px_minmax(310px,1fr)] min-[1700px]:grid-cols-[320px_minmax(400px,1fr)] ${
+        showDesktopContext
+          ? "min-[1171px]:grid-cols-[285px_minmax(310px,1fr)_284px] min-[1700px]:grid-cols-[320px_minmax(400px,1fr)_310px]"
+          : ""
       }`}
     >
       <div
         className={`min-h-0 overflow-hidden border-r border-[#DCE4DF] dark:border-slate-800 ${
-          hasConversation ? "hidden md:block" : "block"
+          hasConversation ? "hidden min-[621px]:block" : "block"
         }`}
       >
         {inbox}
@@ -85,11 +114,11 @@ export function ConversationWorkspaceShell({
 
       <div
         className={`min-h-0 min-w-0 overflow-hidden ${
-          hasConversation ? "flex flex-col" : "hidden md:block"
+          hasConversation ? "flex flex-col" : "hidden min-[621px]:block"
         }`}
       >
         {hasConversation ? (
-          <div className="flex h-11 shrink-0 items-center justify-between border-b border-[#DCE4DF] bg-white px-3 md:hidden dark:border-slate-800 dark:bg-slate-950">
+          <div className="flex h-11 shrink-0 items-center justify-between border-b border-[#DCE4DF] bg-white px-3 dark:border-slate-800 dark:bg-slate-950 min-[621px]:hidden">
             <Link
               href="/conversations"
               className="inline-flex items-center gap-1.5 rounded-lg px-2 py-1.5 text-[10px] font-semibold text-[#216551] hover:bg-[#EDF3E6] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#216551]"
@@ -110,9 +139,9 @@ export function ConversationWorkspaceShell({
               <button
                 type="button"
                 onClick={() => setDesktopContextOpen((value) => !value)}
-                className="absolute right-3 top-3 z-30 hidden h-8 items-center gap-1.5 rounded-lg border border-[#DCE4DF] bg-white/95 px-2.5 text-[10px] font-semibold text-[#596E64] shadow-sm backdrop-blur transition hover:bg-[#EDF3E6] hover:text-[#216551] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#216551] dark:border-slate-800 dark:bg-slate-950/95 dark:text-slate-400 dark:hover:bg-slate-900 dark:hover:text-white xl:inline-flex"
+                className="absolute right-3 top-3 z-30 hidden h-8 items-center gap-1.5 rounded-lg border border-[#DCE4DF] bg-white/95 px-2.5 text-[10px] font-semibold text-[#596E64] shadow-sm backdrop-blur transition hover:bg-[#EDF3E6] hover:text-[#216551] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#216551] dark:border-slate-800 dark:bg-slate-950/95 dark:text-slate-400 dark:hover:bg-slate-900 dark:hover:text-white min-[1171px]:inline-flex"
                 aria-label={showDesktopContext ? "Hide CRM inspector" : "Show CRM inspector"}
-                title={showDesktopContext ? "Hide CRM inspector" : "Show CRM inspector"}
+                title={`${showDesktopContext ? "Hide CRM inspector" : "Show CRM inspector"} · Alt+I`}
               >
                 {showDesktopContext ? (
                   <PanelRightClose size={14} />
@@ -126,9 +155,10 @@ export function ConversationWorkspaceShell({
                 ref={drawerTriggerRef}
                 type="button"
                 onClick={() => setMobileContextOpen(true)}
-                className="absolute right-3 top-3 z-30 inline-flex h-8 items-center gap-1.5 rounded-lg border border-[#DCE4DF] bg-white/95 px-2.5 text-[10px] font-semibold text-[#216551] shadow-sm backdrop-blur focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#216551] xl:hidden dark:border-slate-800 dark:bg-slate-950/95"
+                className="absolute right-3 top-3 z-30 inline-flex h-8 items-center gap-1.5 rounded-lg border border-[#DCE4DF] bg-white/95 px-2.5 text-[10px] font-semibold text-[#216551] shadow-sm backdrop-blur focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#216551] dark:border-slate-800 dark:bg-slate-950/95 min-[1171px]:hidden"
                 aria-label="Open CRM inspector"
                 aria-expanded={mobileContextOpen}
+                title="Open CRM inspector · Alt+I"
               >
                 <Sparkles size={13} /> Lead context
               </button>
@@ -138,13 +168,13 @@ export function ConversationWorkspaceShell({
       </div>
 
       {showDesktopContext ? (
-        <aside className="hidden min-h-0 overflow-y-auto border-l border-[#DCE4DF] bg-[#FDFEFB] [scrollbar-width:thin] dark:border-slate-800 dark:bg-slate-900/20 xl:block">
+        <aside className="hidden min-h-0 overflow-y-auto border-l border-[#DCE4DF] bg-[#FDFEFB] [scrollbar-width:thin] dark:border-slate-800 dark:bg-slate-900/20 min-[1171px]:block">
           {context}
         </aside>
       ) : null}
 
       {hasConversation && mobileContextOpen ? (
-        <div className="fixed inset-0 z-50 xl:hidden">
+        <div className="fixed inset-0 z-50 min-[1171px]:hidden">
           <button
             type="button"
             aria-label="Close CRM inspector"
@@ -156,7 +186,7 @@ export function ConversationWorkspaceShell({
             role="dialog"
             aria-modal="true"
             aria-label="CRM inspector"
-            className="absolute inset-y-0 right-0 flex w-full max-w-[390px] flex-col border-l border-[#DCE4DF] bg-[#FDFEFB] shadow-[-18px_0_45px_rgba(19,46,38,0.16)] dark:border-slate-800 dark:bg-slate-950"
+            className="absolute inset-y-0 right-0 flex w-full max-w-[350px] flex-col border-l border-[#DCE4DF] bg-[#FDFEFB] shadow-[-18px_0_45px_rgba(19,46,38,0.16)] dark:border-slate-800 dark:bg-slate-950 min-[621px]:max-w-[320px]"
           >
             <div className="flex h-12 shrink-0 items-center justify-between border-b border-[#DCE4DF] bg-white px-4 dark:border-slate-800 dark:bg-slate-950">
               <div className="flex items-center gap-2 text-[11px] font-semibold text-[#18362D] dark:text-slate-100">
