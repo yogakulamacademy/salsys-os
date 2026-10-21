@@ -35,6 +35,7 @@ type FacebookSdk = {
         setup: Record<string, never>;
         featureType?: 'whatsapp_business_app_onboarding';
         sessionInfoVersion?: '3';
+        version?: 'v4';
       };
     },
   ): void;
@@ -456,10 +457,11 @@ export function WhatsAppEmbeddedSignupButton({
               setup: {},
               featureType: 'whatsapp_business_app_onboarding',
               sessionInfoVersion: '3',
+              version: 'v4',
             }
           : {
               setup: {},
-              sessionInfoVersion: '3',
+              version: 'v4',
             },
       },
     );
