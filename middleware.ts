@@ -149,6 +149,64 @@ function isMissingAuthSessionError(error: { name?: string; message?: string } | 
   );
 }
 
+function isInvalidOrExpiredAuthSessionError(
+  error: { name?: string; message?: string; code?: string } | null,
+) {
+  if (!error) return false;
+
+  const name = String(error.name ?? "").toLowerCase();
+  const message = String(error.message ?? "").toLowerCase();
+  const code = String(error.code ?? "").toLowerCase();
+  const haystack = `${name} ${code} ${message}`;
+
+  return [
+    "refresh token not found",
+    "invalid refresh token",
+    "refresh_token_not_found",
+    "invalid_refresh_token",
+    "jwt expired",
+    "token has expired",
+    "invalid jwt",
+    "invalid token",
+    "session from session_id claim in jwt does not exist",
+    "user from sub claim in jwt does not exist",
+    "bad_jwt",
+  ].some((token) => haystack.includes(token));
+}
+
+function expireSessionCookies(request: NextRequest, response: NextResponse) {
+  const deletionOptions = {
+    path: "/",
+    maxAge: 0,
+    expires: new Date(0),
+  };
+
+  for (const cookie of request.cookies.getAll()) {
+    if (cookie.name.startsWith("sb-") && cookie.name.includes("-auth-token")) {
+      response.cookies.set(cookie.name, "", deletionOptions);
+    }
+  }
+
+  response.cookies.set(ACTIVE_WORKSPACE_COOKIE, "", deletionOptions);
+  return response;
+}
+
+function redirectToLoginWithClearedSession(
+  request: NextRequest,
+  response: NextResponse,
+) {
+  const redirectResponse = redirectToLogin(request, response);
+  return expireSessionCookies(request, redirectResponse);
+}
+
+function unauthorizedWithClearedSession(request: NextRequest) {
+  const response = NextResponse.json(
+    { ok: false, error: "Unauthorized" },
+    { status: 401 },
+  );
+  return expireSessionCookies(request, response);
+}
+
 function authConfigurationError(pathname: string) {
   if (pathname.startsWith("/api/")) {
     return NextResponse.json(
@@ -222,15 +280,19 @@ export async function middleware(request: NextRequest) {
   } = await supabase.auth.getUser();
 
   if (!user) {
-    if (authError && !isMissingAuthSessionError(authError)) {
+    if (
+      authError &&
+      !isMissingAuthSessionError(authError) &&
+      !isInvalidOrExpiredAuthSessionError(authError)
+    ) {
       return workspaceServiceUnavailable(pathname);
     }
 
     if (pathname.startsWith("/api/")) {
-      return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
+      return unauthorizedWithClearedSession(request);
     }
 
-    return redirectToLogin(request, response);
+    return redirectToLoginWithClearedSession(request, response);
   }
 
   // Canonical tenant resolution must happen before reading tenant-scoped
@@ -242,6 +304,13 @@ export async function middleware(request: NextRequest) {
 
   if (bindingError || !boundOrganizationId) {
     const detail = String(bindingError?.message ?? "");
+
+    if (isInvalidOrExpiredAuthSessionError(bindingError)) {
+      if (pathname.startsWith("/api/")) {
+        return unauthorizedWithClearedSession(request);
+      }
+      return redirectToLoginWithClearedSession(request, response);
+    }
 
     if (
       detail.includes("No active organization membership") ||
@@ -289,6 +358,12 @@ export async function middleware(request: NextRequest) {
     .maybeSingle();
 
   if (membershipError || !membership) {
+    if (isInvalidOrExpiredAuthSessionError(membershipError)) {
+      if (pathname.startsWith("/api/")) {
+        return unauthorizedWithClearedSession(request);
+      }
+      return redirectToLoginWithClearedSession(request, response);
+    }
     return workspaceServiceUnavailable(pathname);
   }
 
