@@ -53,7 +53,7 @@ export async function POST(
     const lead = await getLead(id);
 
     // Preserve the exact Lead-level permission boundary used by the rest of
-    // the CRM before invoking the canonical follow-up mutation RPC.
+    // the CRM before invoking canonical task mutation RPCs.
     if (!lead) {
       return NextResponse.json(
         { ok: false, error: "Lead not found or access denied." },
@@ -67,19 +67,74 @@ export async function POST(
           title?: unknown;
           dueAt?: unknown;
           description?: unknown;
+          taskId?: unknown;
         }
       | null;
 
-    if (body?.action !== "create_followup") {
+    const action = text(body?.action);
+    const supabase = await createClient();
+
+    if (action === "complete_followup") {
+      const taskId = text(body?.taskId);
+      if (!taskId) {
+        return NextResponse.json(
+          { ok: false, error: "A follow-up task is required." },
+          { status: 400, headers: privateHeaders },
+        );
+      }
+
+      // Bind the requested task to the lead in this route before calling the
+      // canonical completion RPC. This prevents a task ID from another lead
+      // being completed through a mismatched Conversation URL.
+      const { data: task, error: taskError } = await supabase
+        .from("tasks")
+        .select("id,lead_id,status")
+        .eq("id", taskId)
+        .eq("lead_id", id)
+        .maybeSingle();
+
+      if (taskError || !task) {
+        return NextResponse.json(
+          { ok: false, error: taskError?.message ?? "Follow-up not found or access denied." },
+          { status: 404, headers: privateHeaders },
+        );
+      }
+
+      if (task.status === "completed") {
+        return NextResponse.json(
+          { ok: true, data: task },
+          { headers: privateHeaders },
+        );
+      }
+
+      const { data, error } = await supabase.rpc("complete_followup_task", {
+        p_task_id: taskId,
+      });
+
+      if (error) {
+        return NextResponse.json(
+          { ok: false, error: error.message },
+          { status: 400, headers: privateHeaders },
+        );
+      }
+
+      revalidateConversationPaths(id);
+      return NextResponse.json(
+        { ok: true, data },
+        { headers: privateHeaders },
+      );
+    }
+
+    if (action !== "create_followup") {
       return NextResponse.json(
         { ok: false, error: "Unsupported Inspector action." },
         { status: 400, headers: privateHeaders },
       );
     }
 
-    const title = text(body.title);
-    const description = text(body.description);
-    const rawDueAt = text(body.dueAt);
+    const title = text(body?.title);
+    const description = text(body?.description);
+    const rawDueAt = text(body?.dueAt);
     const dueAt = rawDueAt ? new Date(rawDueAt) : null;
 
     if (!title || !dueAt || Number.isNaN(dueAt.getTime())) {
@@ -105,7 +160,6 @@ export async function POST(
       );
     }
 
-    const supabase = await createClient();
     const { data, error } = await supabase.rpc("create_followup_task", {
       p_lead_id: id,
       p_title: title,
@@ -120,13 +174,7 @@ export async function POST(
       );
     }
 
-    revalidatePath(`/leads/${id}`);
-    revalidatePath("/leads");
-    revalidatePath("/follow-ups");
-    revalidatePath("/admissions");
-    revalidatePath("/pipeline");
-    revalidatePath("/funnel");
-    revalidatePath("/dashboard");
+    revalidateConversationPaths(id);
 
     return NextResponse.json(
       { ok: true, data },
@@ -139,6 +187,17 @@ export async function POST(
       { status: 500, headers: privateHeaders },
     );
   }
+}
+
+function revalidateConversationPaths(leadId: string) {
+  revalidatePath(`/leads/${leadId}`);
+  revalidatePath("/leads");
+  revalidatePath("/follow-ups");
+  revalidatePath("/conversations");
+  revalidatePath("/admissions");
+  revalidatePath("/pipeline");
+  revalidatePath("/funnel");
+  revalidatePath("/dashboard");
 }
 
 function sameOrigin(request: NextRequest) {
