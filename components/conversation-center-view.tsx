@@ -75,10 +75,6 @@ export function ConversationCenterView({
   const [activityLoading, setActivityLoading] = useState(false);
   const [activityLoaded, setActivityLoaded] = useState(false);
   const [activityError, setActivityError] = useState<string | null>(null);
-  const [noteBody, setNoteBody] = useState("");
-  const [noteSaving, setNoteSaving] = useState(false);
-  const [noteError, setNoteError] = useState<string | null>(null);
-  const [noteSuccess, setNoteSuccess] = useState<string | null>(null);
 
   useEffect(() => {
     if (queryLeadId) {
@@ -86,10 +82,6 @@ export function ConversationCenterView({
       return;
     }
 
-    // The server selects the highest-priority conversation when the URL does
-    // not yet contain ?lead=. Resolve that same selected row without changing
-    // the user's scroll position or filters, so Activity/notes still target
-    // the visible lead on the initial inbox load.
     const selectedLink = document.querySelector<HTMLAnchorElement>(
       'a[aria-current="page"][href*="/conversations?lead="]',
     );
@@ -99,7 +91,9 @@ export function ConversationCenterView({
     }
 
     try {
-      setResolvedLeadId(new URL(selectedLink.href, window.location.origin).searchParams.get("lead"));
+      setResolvedLeadId(
+        new URL(selectedLink.href, window.location.origin).searchParams.get("lead"),
+      );
     } catch {
       setResolvedLeadId(null);
     }
@@ -114,17 +108,22 @@ export function ConversationCenterView({
     setActivityLoading(true);
     setActivityError(null);
     try {
-      const response = await fetch(`/api/leads/${encodeURIComponent(resolvedLeadId)}/activity`, {
-        cache: "no-store",
-      });
+      const response = await fetch(
+        `/api/leads/${encodeURIComponent(resolvedLeadId)}/activity`,
+        { cache: "no-store" },
+      );
       const body = (await response.json()) as ActivityResponse;
       if (!response.ok || !body.ok) {
         throw new Error(body.ok ? "Unable to load activity." : body.error);
       }
-      setCrmActivity(Array.isArray(body.data) ? body.data : body.data ? [body.data] : []);
+      setCrmActivity(
+        Array.isArray(body.data) ? body.data : body.data ? [body.data] : [],
+      );
       setActivityLoaded(true);
     } catch (reason) {
-      setActivityError(reason instanceof Error ? reason.message : "Unable to load activity.");
+      setActivityError(
+        reason instanceof Error ? reason.message : "Unable to load activity.",
+      );
       setActivityLoaded(true);
     } finally {
       setActivityLoading(false);
@@ -135,9 +134,6 @@ export function ConversationCenterView({
     setCrmActivity([]);
     setActivityLoaded(false);
     setActivityError(null);
-    setNoteBody("");
-    setNoteError(null);
-    setNoteSuccess(null);
   }, [resolvedLeadId]);
 
   useEffect(() => {
@@ -145,54 +141,16 @@ export function ConversationCenterView({
     void loadActivity();
   }, [activityLoaded, activityLoading, loadActivity, view]);
 
-  async function saveInternalNote() {
-    const note = noteBody.trim();
-    if (!note || noteSaving) return;
-    if (!resolvedLeadId) {
-      setNoteError("Select a conversation before adding an internal note.");
-      return;
-    }
-
-    setNoteSaving(true);
-    setNoteError(null);
-    setNoteSuccess(null);
-
-    try {
-      const response = await fetch(
-        `/api/leads/${encodeURIComponent(resolvedLeadId)}/activity`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ type: "internal_note", body: note }),
-        },
-      );
-      const result = (await response.json()) as ActivityResponse;
-      if (!response.ok || !result.ok) {
-        throw new Error(result.ok ? "Unable to save internal note." : result.error);
-      }
-
-      setNoteBody("");
-      setNoteSuccess("Internal note saved. Nothing was sent to the lead.");
-      setActivityLoaded(false);
-      await loadActivity();
-    } catch (reason) {
-      // Intentionally preserve noteBody on any failure so the operator never
-      // loses a private note because storage or the network was unavailable.
-      setNoteError(
-        reason instanceof Error ? reason.message : "Unable to save internal note.",
-      );
-    } finally {
-      setNoteSaving(false);
-    }
-  }
-
   const activity = useMemo(() => {
     const rows: TimelineItem[] = crmActivity.map((item) => ({
       id: `crm-${item.id}`,
       title: item.title || humanize(item.activity_type),
       detail: item.details || activityDetail(item),
       timestamp: item.occurred_at || item.created_at,
-      meta: [humanize(item.activity_type), item.actor_type ? humanize(item.actor_type) : null]
+      meta: [
+        humanize(item.activity_type),
+        item.actor_type ? humanize(item.actor_type) : null,
+      ]
         .filter(Boolean)
         .join(" · "),
     }));
@@ -229,7 +187,10 @@ export function ConversationCenterView({
 
     return rows
       .filter((item) => Boolean(item.timestamp))
-      .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+      .sort(
+        (a, b) =>
+          new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime(),
+      );
   }, [crmActivity, messages, originChannel, originCourse, originDetail, originTimestamp]);
 
   const courseSelected = Boolean(course && course !== "Not selected");
@@ -238,10 +199,18 @@ export function ConversationCenterView({
     <div className="flex min-h-0 flex-1 flex-col">
       <div className="shrink-0 border-b border-[#DCE4DF] bg-white px-5 dark:border-slate-900 dark:bg-slate-950">
         <div className="flex items-center gap-6" role="tablist" aria-label="Conversation view">
-          <TabButton active={view === "conversation"} onClick={() => setView("conversation")} icon={<MessageCircle size={13} />}>
+          <TabButton
+            active={view === "conversation"}
+            onClick={() => setView("conversation")}
+            icon={<MessageCircle size={13} />}
+          >
             Conversation
           </TabButton>
-          <TabButton active={view === "activity"} onClick={() => setView("activity")} icon={<Activity size={13} />}>
+          <TabButton
+            active={view === "activity"}
+            onClick={() => setView("activity")}
+            icon={<Activity size={13} />}
+          >
             Activity
             <span className="ml-1 rounded bg-[#F0F3EF] px-1.5 py-0.5 text-[8px] font-medium text-[#596E64]">
               {activityLoading ? "…" : activity.length}
@@ -261,59 +230,10 @@ export function ConversationCenterView({
           />
         ) : (
           <div className="mx-auto max-w-2xl">
-            <section className="mb-5 rounded-lg border border-[#DCE4DF] bg-[#FFFCF2] p-3.5" aria-label="Internal note composer">
-              <div className="flex items-start justify-between gap-3">
-                <div>
-                  <div className="text-[10px] font-semibold text-[#18362D]">Internal note</div>
-                  <p className="mt-0.5 text-[9px] leading-4 text-[#70581F]">
-                    Private CRM context for your team. Never sent to the lead.
-                  </p>
-                </div>
-                <span className="rounded border border-[#E6DDBE] bg-white px-2 py-1 text-[8px] font-semibold text-[#70581F]">
-                  Private
-                </span>
-              </div>
-              <label className="sr-only" htmlFor="conversation-internal-note">
-                Write an internal note
-              </label>
-              <textarea
-                id="conversation-internal-note"
-                value={noteBody}
-                onChange={(event) => {
-                  setNoteBody(event.target.value.slice(0, 4000));
-                  if (noteError) setNoteError(null);
-                  if (noteSuccess) setNoteSuccess(null);
-                }}
-                rows={2}
-                maxLength={4000}
-                placeholder="Add context for your team…"
-                className="mt-3 min-h-[68px] w-full resize-y rounded-lg border border-[#D8D3BD] bg-white px-3 py-2 text-[11px] leading-5 text-[#18362D] outline-none placeholder:text-[#7A806E] focus:border-[#216551] focus:ring-2 focus:ring-[#216551]/10"
-              />
-              <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
-                <div className="min-w-0 text-[9px] text-[#70581F]">
-                  {noteError ? (
-                    <span className="text-red-700">{noteError} Your note is still here.</span>
-                  ) : noteSuccess ? (
-                    <span className="text-[#216551]">{noteSuccess}</span>
-                  ) : (
-                    <span>{noteBody.length}/4000 · Saving does not send a message.</span>
-                  )}
-                </div>
-                <button
-                  type="button"
-                  onClick={() => void saveInternalNote()}
-                  disabled={!noteBody.trim() || noteSaving || !resolvedLeadId}
-                  className="inline-flex h-8 items-center justify-center gap-1.5 rounded-lg bg-[#153E33] px-3 text-[9px] font-semibold text-white transition hover:bg-[#216551] disabled:cursor-not-allowed disabled:bg-[#EDF0EC] disabled:text-[#59685F]"
-                >
-                  {noteSaving ? <RefreshCw size={10} className="animate-spin" /> : null}
-                  {noteSaving ? "Saving…" : "Add note"}
-                </button>
-              </div>
-            </section>
-
             {activityLoading ? (
               <div className="mb-4 flex items-center gap-2 rounded-lg border border-[#E2E8E3] bg-white px-3 py-2.5 text-[10px] text-[#596E64]">
-                <RefreshCw size={12} className="animate-spin text-[#216551]" /> Loading CRM activity…
+                <RefreshCw size={12} className="animate-spin text-[#216551]" />
+                Loading CRM activity…
               </div>
             ) : null}
 
@@ -338,30 +258,47 @@ export function ConversationCenterView({
                 {activity.map((item, index) => (
                   <li key={item.id} className="relative flex gap-3 pb-6">
                     {index < activity.length - 1 ? (
-                      <span className="absolute bottom-0 left-[5px] top-3 w-px bg-[#DCE4DF]" aria-hidden="true" />
+                      <span
+                        className="absolute bottom-0 left-[5px] top-3 w-px bg-[#DCE4DF]"
+                        aria-hidden="true"
+                      />
                     ) : null}
-                    <span className="relative mt-1.5 h-[11px] w-[11px] shrink-0 rounded-full border-[3px] border-[#F9FBF8] bg-[#719269]" aria-hidden="true" />
+                    <span
+                      className="relative mt-1.5 h-[11px] w-[11px] shrink-0 rounded-full border-[3px] border-[#F9FBF8] bg-[#719269]"
+                      aria-hidden="true"
+                    />
                     <div className="min-w-0 flex-1 rounded-lg border border-[#E2E8E3] bg-white px-3.5 py-3 shadow-[0_1px_2px_rgba(21,62,51,0.03)]">
                       <div className="flex flex-wrap items-start justify-between gap-2">
-                        <div className="text-[11px] font-semibold text-[#18362D]">{item.title}</div>
-                        <time className="text-[9px] text-[#71847A]" dateTime={item.timestamp}>
+                        <div className="text-[11px] font-semibold text-[#18362D]">
+                          {item.title}
+                        </div>
+                        <time
+                          className="text-[9px] text-[#71847A]"
+                          dateTime={item.timestamp}
+                        >
                           {formatDateTime(item.timestamp)}
                         </time>
                       </div>
                       <p className="mt-1.5 whitespace-pre-wrap break-words text-[10px] leading-5 text-[#596E64]">
                         {item.detail}
                       </p>
-                      <div className="mt-2 text-[9px] text-[#829087]">{item.meta}</div>
+                      <div className="mt-2 text-[9px] text-[#829087]">
+                        {item.meta}
+                      </div>
                     </div>
                   </li>
                 ))}
               </ol>
             ) : !activityLoading ? (
-              <div className="grid min-h-[220px] place-items-center text-center">
+              <div className="grid min-h-[260px] place-items-center text-center">
                 <div>
                   <Activity size={22} className="mx-auto text-[#719269]" />
-                  <div className="mt-3 text-xs font-semibold text-[#18362D]">No activity recorded</div>
-                  <p className="mt-1 text-[10px] text-[#596E64]">CRM activity will appear here when authoritative events exist.</p>
+                  <div className="mt-3 text-xs font-semibold text-[#18362D]">
+                    No activity recorded
+                  </div>
+                  <p className="mt-1 text-[10px] text-[#596E64]">
+                    CRM activity will appear here when authoritative events exist.
+                  </p>
                 </div>
               </div>
             ) : null}
@@ -421,14 +358,17 @@ function TabButton({
 function activityDetail(item: ActivityRow) {
   if (item.details?.trim()) return item.details;
 
-  const dueAt = typeof item.metadata?.due_at === "string" ? item.metadata.due_at : null;
+  const dueAt =
+    typeof item.metadata?.due_at === "string" ? item.metadata.due_at : null;
   if (dueAt) return `Due ${formatDateTime(dueAt)}.`;
 
   return "CRM activity recorded.";
 }
 
 function humanize(value: string) {
-  return value.replaceAll("_", " ").replace(/\b\w/g, (char) => char.toUpperCase());
+  return value
+    .replaceAll("_", " ")
+    .replace(/\b\w/g, (char) => char.toUpperCase());
 }
 
 function formatDateTime(value: string) {
