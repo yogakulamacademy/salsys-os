@@ -319,6 +319,11 @@ export function WhatsAppTemplateComposer({
           {!loadError && usableTemplates.length > 0 ? (
             <form
               action={action}
+              onKeyDown={(event) => {
+                if (event.key === "Enter" && !(event.target instanceof HTMLButtonElement)) {
+                  event.preventDefault();
+                }
+              }}
               onSubmit={(event) => {
                 const submitter = (event.nativeEvent as SubmitEvent).submitter as HTMLElement | null;
                 const explicitSend =
