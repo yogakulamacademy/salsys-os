@@ -13,11 +13,11 @@ import {
   sendWhatsAppTemplateAction,
   updateConversationLeadContextAction,
 } from "@/app/conversations/actions";
+import { ConversationCenterView } from "@/components/conversation-center-view";
 import { ConversationCopilot } from "@/components/conversation-copilot";
 import { WhatsAppComposer } from "@/components/conversation-composer";
 import { ConversationIntelligencePanel } from "@/components/conversation-intelligence-panel";
 import { ConversationReadMarker } from "@/components/conversation-read-marker";
-import { ConversationThread } from "@/components/conversation-thread";
 import { ConversationWorkspaceShell } from "@/components/conversation-workspace-shell";
 import { ConversationsRealtime } from "@/components/conversations-realtime";
 import { ConversationsSidebar } from "@/components/conversations-sidebar";
@@ -64,8 +64,6 @@ export default async function ConversationsPage({
     ? conversationSummary.find((lead) => lead.id === selectedId) ?? null
     : null;
   const organizationId = workspaceContext?.activeOrganizationId ?? null;
-  const canStartWhatsApp =
-    Boolean(selected?.phone) && selected?.currentContactChannel !== "whatsapp";
 
   const attentionCount = conversationSummary.filter(
     (lead) => lead.needsReply || lead.needsFirstContact,
@@ -102,7 +100,9 @@ export default async function ConversationsPage({
               : null;
 
   const shouldLoadWhatsAppTemplates = Boolean(
-    selected && (canStartWhatsApp || (whatsappWindow && !whatsappWindow.open)),
+    selected?.currentContactChannel === "whatsapp" &&
+      whatsappWindow &&
+      !whatsappWindow.open,
   );
 
   const whatsappTemplateCatalog =
@@ -132,14 +132,14 @@ export default async function ConversationsPage({
   const chat = !selected ? (
     <section className="grid h-full min-h-[560px] place-items-center bg-white p-8 text-center dark:bg-slate-950">
       <div>
-        <div className="mx-auto grid h-12 w-12 place-items-center rounded-xl bg-[#E8F2EB] text-[#5E8770] dark:bg-slate-900">
+        <div className="mx-auto grid h-12 w-12 place-items-center rounded-xl bg-[#EDF3E6] text-[#216551] dark:bg-slate-900">
           <MessageCircle size={20} />
         </div>
-        <div className="mt-4 text-sm font-semibold text-[#263D35] dark:text-slate-100">
+        <div className="mt-4 text-sm font-semibold text-[#18362D] dark:text-slate-100">
           Select a conversation
         </div>
-        <p className="mt-1 max-w-sm text-xs leading-5 text-[#87948D]">
-          See what needs attention, reply with context, and plan the next human action without leaving the inbox.
+        <p className="mt-1 max-w-sm text-xs leading-5 text-[#596E64]">
+          Understand the inquiry, qualify the lead, and prepare the next action without leaving the inbox.
         </p>
       </div>
     </section>
@@ -147,16 +147,17 @@ export default async function ConversationsPage({
     <section className="flex h-full min-h-0 min-w-0 flex-col overflow-hidden bg-white dark:bg-slate-950">
       <ConversationReadMarker leadId={selected.id} />
 
-      <div className="shrink-0 border-b border-[#E8EEEA] bg-white px-4 py-3 pr-32 dark:border-slate-900 dark:bg-slate-950">
+      <header className="shrink-0 border-b border-[#DCE4DF] bg-white px-4 py-3.5 pr-28 dark:border-slate-900 dark:bg-slate-950 sm:px-5">
         <div className="flex min-w-0 items-center gap-3">
-          <div className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-[#E4F2E8] text-[10px] font-bold text-[#216551] dark:bg-slate-900 dark:text-slate-200">
+          <div className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-[#E4F2E8] text-[11px] font-bold text-[#216551] dark:bg-slate-900 dark:text-slate-200">
             {initials(selected.name)}
           </div>
           <div className="min-w-0 flex-1">
             <div className="flex flex-wrap items-center gap-2">
-              <div className="truncate text-[13px] font-semibold text-[#192E29] dark:text-white">
+              <h2 className="truncate text-[14px] font-semibold text-[#18362D] dark:text-white">
                 {selected.name}
-              </div>
+              </h2>
+              <StageBadge stage={selected.stage} />
               {selectedSummary?.needsReply ? (
                 <span className="rounded-full bg-amber-50 px-2 py-0.5 text-[8px] font-semibold text-amber-700">
                   Needs reply
@@ -166,44 +167,40 @@ export default async function ConversationsPage({
                   First contact
                 </span>
               ) : null}
-              {selectedSummary?.priority === "urgent" || selectedSummary?.priority === "high" ? (
-                <span className="rounded-full bg-[#E9F4EC] px-2 py-0.5 text-[8px] font-semibold capitalize text-[#216551]">
-                  {selectedSummary.priority} priority
-                </span>
-              ) : null}
             </div>
-            <div className="mt-1 flex items-center gap-2 text-[10px] text-[#89968F]">
+            <div className="mt-1 flex flex-wrap items-center gap-1.5 text-[10px] text-[#596E64]">
               <span className="capitalize">
-                {selected.currentContactChannel.replaceAll("_", " ")}
+                {selected.leadCreationChannel.replaceAll("_", " ")} inquiry
               </span>
-              <span>·</span>
-              <span className="truncate">{selected.course || "Course not selected"}</span>
-              {selected.country ? (
-                <>
-                  <span>·</span>
-                  <span>{selected.country}</span>
-                </>
-              ) : null}
+              <span aria-hidden="true">·</span>
+              <span>{selected.country || "Country not recorded"}</span>
+              <span aria-hidden="true">·</span>
+              <span className="truncate">
+                {selected.course && selected.course !== "Not selected"
+                  ? selected.course
+                  : "No course selected"}
+              </span>
             </div>
           </div>
         </div>
-      </div>
+      </header>
 
-      <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-5 sm:px-6">
-        <ConversationThread
-          messages={selected.lastMessages}
-          originChannel={selected.leadCreationChannel}
-          originTimestamp={selected.createdAt}
-          originCourse={selected.course}
-          originDetail={
-            selected.leadCreationChannel === "website"
-              ? "Form enquiry received and added to the CRM."
-              : undefined
-          }
-        />
-      </div>
+      <ConversationCenterView
+        messages={selected.lastMessages}
+        originChannel={selected.leadCreationChannel}
+        originTimestamp={selected.createdAt}
+        originCourse={selected.course}
+        originDetail={
+          selected.leadCreationChannel === "website"
+            ? "Form enquiry received and added to the CRM."
+            : undefined
+        }
+        course={selected.course}
+        country={selected.country}
+        stage={selected.stage}
+      />
 
-      <div className="shrink-0 border-t border-[#E8EEEA] bg-white dark:border-slate-900 dark:bg-slate-950">
+      <div className="shrink-0 border-t border-[#DCE4DF] bg-white dark:border-slate-900 dark:bg-slate-950">
         {selected.currentContactChannel === "whatsapp" &&
         whatsappWindow &&
         !whatsappWindow.open ? (
@@ -212,18 +209,7 @@ export default async function ConversationsPage({
               Reply window closed
             </div>
             <div className="mt-0.5 text-[10px] text-amber-700/80 dark:text-amber-400">
-              Choose an approved template to continue this conversation.
-            </div>
-          </div>
-        ) : null}
-
-        {canStartWhatsApp ? (
-          <div className="border-b border-sky-100 bg-sky-50 px-4 py-2.5 dark:border-sky-900/40 dark:bg-sky-950/15">
-            <div className="text-[11px] font-semibold text-sky-800 dark:text-sky-300">
-              Start WhatsApp
-            </div>
-            <div className="mt-0.5 text-[10px] text-sky-700/80 dark:text-sky-400">
-              Use an approved template to begin messaging this submitted phone number.
+              An approved template is required before another WhatsApp message can be sent.
             </div>
           </div>
         ) : null}
@@ -248,18 +234,18 @@ export default async function ConversationsPage({
               phone={selected.phone}
             />
           ) : null
-        ) : canStartWhatsApp && whatsappTemplateAction ? (
-          <WhatsAppTemplateComposer
-            action={whatsappTemplateAction}
-            templates={whatsappTemplateCatalog.templates}
-            loadError={whatsappTemplateCatalog.error}
-            mode="start"
-            phone={selected.phone}
-          />
         ) : interactionAction ? (
           <form action={interactionAction} className="p-3">
+            <div className="mb-2 flex items-center justify-between gap-3">
+              <div>
+                <div className="text-[10px] font-semibold text-[#18362D]">Record contact</div>
+                <div className="mt-0.5 text-[9px] text-[#596E64]">
+                  Logging an interaction does not send a message.
+                </div>
+              </div>
+            </div>
             <div className="grid gap-2 sm:grid-cols-[110px_130px_minmax(0,1fr)_auto]">
-              <select className="input" name="direction" defaultValue="outbound">
+              <select className="input" name="direction" defaultValue="outbound" aria-label="Interaction direction">
                 <option value="outbound">Outbound</option>
                 <option value="inbound">Inbound</option>
               </select>
@@ -267,6 +253,7 @@ export default async function ConversationsPage({
                 className="input"
                 name="channel"
                 defaultValue={selected.currentContactChannel}
+                aria-label="Interaction channel"
               >
                 {channels.map(([value, label]) => (
                   <option key={value} value={value}>
@@ -278,7 +265,8 @@ export default async function ConversationsPage({
                 className="input"
                 name="body"
                 required
-                placeholder="Log a message, email or call note..."
+                placeholder="Record a message, email or call note…"
+                aria-label="Interaction note"
               />
               <button className="btn-primary" type="submit">
                 Log
@@ -291,51 +279,42 @@ export default async function ConversationsPage({
   );
 
   const context = selected ? (
-    <div className="conversation-context-pane p-3.5">
-      <div className="flex items-start justify-between gap-3 px-0.5">
-        <div className="min-w-0">
-          <div className="text-[9px] font-bold uppercase tracking-[0.12em] text-[#87978E]">
-            Customer context
-          </div>
-          <div className="mt-1 truncate text-sm font-semibold text-[#203B31] dark:text-white">
-            {selected.name}
-          </div>
+    <div className="conversation-context-pane min-h-full bg-[#FDFEFB]">
+      <div className="sticky top-0 z-10 flex items-center justify-between border-b border-[#DCE4DF] bg-[#FDFEFB]/95 px-4 py-3 backdrop-blur dark:border-slate-800 dark:bg-slate-950/95">
+        <div>
+          <div className="text-[11px] font-semibold text-[#18362D] dark:text-white">Lead context</div>
+          <div className="mt-0.5 text-[9px] text-[#596E64]">CRM inspector</div>
         </div>
         <StageBadge stage={selected.stage} />
       </div>
 
-      <div className="mt-3">
-        <ConversationIntelligencePanel
-          leadId={selected.id}
-          stage={selected.stage}
-          priority={selectedSummary?.priority ?? "normal"}
-          needsReply={Boolean(selectedSummary?.needsReply)}
-          needsFirstContact={Boolean(selectedSummary?.needsFirstContact)}
-          waitingSince={selectedSummary?.waitingSince ?? null}
-        />
-      </div>
-
-      {copilotChannel ? (
-        <div className="mt-3">
-          <ConversationCopilot
-            leadId={selected.id}
-            channel={copilotChannel}
-            enabled={copilotEnabled}
-            disabledReason={
-              copilotChannel === "whatsapp" && !whatsappWindow?.open
-                ? "The WhatsApp service window is closed. Use an approved template instead of a free-text draft."
-                : undefined
-            }
-          />
+      <section className="border-b border-[#DCE4DF] px-4 py-4 dark:border-slate-800">
+        <div className="flex items-center gap-3">
+          <div className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-[#E4F2E8] text-[11px] font-bold text-[#216551] dark:bg-slate-900">
+            {initials(selected.name)}
+          </div>
+          <div className="min-w-0">
+            <div className="truncate text-[13px] font-semibold text-[#18362D] dark:text-white">
+              {selected.name}
+            </div>
+            <div className="mt-0.5 text-[9px] capitalize text-[#596E64]">
+              {selected.leadCreationChannel.replaceAll("_", " ")} inquiry
+            </div>
+          </div>
         </div>
-      ) : null}
+      </section>
 
-      <section className="mt-3 rounded-xl border border-[#E4EAE6] bg-white px-3.5 py-2 dark:border-slate-800 dark:bg-slate-950">
-        <div className="space-y-0 divide-y divide-[#EEF2EF] dark:divide-slate-800">
+      <section className="border-b border-[#DCE4DF] px-4 py-4 dark:border-slate-800">
+        <SectionHeading>Lead details</SectionHeading>
+        <dl className="mt-3 space-y-0 divide-y divide-[#EEF2EF] dark:divide-slate-800">
+          <ContextLine label="Country" value={selected.country || "Not recorded"} />
           <ContextLine label="Course" value={selected.course || "Not selected"} />
-          <ContextLine label="Country" value={selected.country || "Not set"} />
           <ContextLine
-            label="Channel"
+            label="Source"
+            value={selected.leadCreationChannel.replaceAll("_", " ")}
+          />
+          <ContextLine
+            label="Current channel"
             value={selected.currentContactChannel.replaceAll("_", " ")}
           />
           <ContextLine
@@ -346,74 +325,105 @@ export default async function ConversationsPage({
                 : "Not contacted"
             }
           />
-        </div>
+        </dl>
       </section>
 
-      {leadContextAction ? (
-        <details className="group mt-3 rounded-xl border border-[#E4EAE6] bg-white dark:border-slate-800 dark:bg-slate-950">
-          <summary className="flex cursor-pointer list-none items-center justify-between px-3 py-3 text-[11px] font-semibold text-[#4D6258] dark:text-slate-200">
-            Edit lead details
-            <ChevronDown
-              size={14}
-              className="text-[#89968F] transition group-open:rotate-180"
-            />
-          </summary>
-          <form
-            action={leadContextAction}
-            className="space-y-3 border-t border-[#EEF2EF] p-3 dark:border-slate-900"
-          >
-            <label className="block">
-              <span className="mb-1 block text-[9px] font-semibold uppercase tracking-[0.08em] text-[#89968F]">
-                Course
-              </span>
-              <select
-                className="input"
-                name="course_id"
-                defaultValue={selected.interestedCourseId ?? ""}
-              >
-                <option value="">Not selected</option>
-                {courses.map((course) => (
-                  <option key={course.id} value={course.id}>
-                    {course.name}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className="block">
-              <span className="mb-1 block text-[9px] font-semibold uppercase tracking-[0.08em] text-[#89968F]">
-                Country
-              </span>
-              <input
-                className="input"
-                name="country"
-                defaultValue={selected.country || ""}
-                placeholder="e.g. Germany"
-              />
-            </label>
-            <button
-              className="btn-primary flex w-full items-center justify-center gap-2"
-              type="submit"
-            >
-              <Save size={13} /> Save details
-            </button>
-          </form>
-        </details>
+      <section className="border-b border-[#DCE4DF] px-3.5 py-4 dark:border-slate-800">
+        <ConversationIntelligencePanel
+          leadId={selected.id}
+          stage={selected.stage}
+          priority={selectedSummary?.priority ?? "normal"}
+          needsReply={Boolean(selectedSummary?.needsReply)}
+          needsFirstContact={Boolean(selectedSummary?.needsFirstContact)}
+          waitingSince={selectedSummary?.waitingSince ?? null}
+        />
+      </section>
+
+      {copilotChannel ? (
+        <section className="border-b border-[#DCE4DF] px-3.5 py-4 dark:border-slate-800">
+          <ConversationCopilot
+            leadId={selected.id}
+            channel={copilotChannel}
+            enabled={copilotEnabled}
+            disabledReason={
+              copilotChannel === "whatsapp" && !whatsappWindow?.open
+                ? "The WhatsApp service window is closed. Use an approved template instead of a free-text draft."
+                : undefined
+            }
+          />
+        </section>
       ) : null}
 
-      <div className="mt-3 grid gap-2">
-        <Link
-          href={`/leads/${selected.id}`}
-          className="flex items-center justify-between rounded-lg border border-[#E4EAE6] bg-white px-3 py-2.5 text-[10px] font-semibold text-[#52665C] transition hover:bg-[#F5F8F6] hover:text-[#216551] dark:border-slate-800 dark:bg-slate-950 dark:text-slate-200 dark:hover:bg-slate-900"
-        >
-          Open lead profile <ArrowUpRight size={13} />
-        </Link>
-        <Link
-          href="/follow-ups"
-          className="flex items-center justify-between rounded-lg border border-[#E4EAE6] bg-white px-3 py-2.5 text-[10px] font-semibold text-[#52665C] transition hover:bg-[#F5F8F6] hover:text-[#216551] dark:border-slate-800 dark:bg-slate-950 dark:text-slate-200 dark:hover:bg-slate-900"
-        >
-          Follow-up queue <CalendarClock size={13} />
-        </Link>
-      </div>
+      {leadContextAction ? (
+        <section className="border-b border-[#DCE4DF] px-4 py-4 dark:border-slate-800">
+          <details className="group rounded-lg border border-[#DCE4DF] bg-white dark:border-slate-800 dark:bg-slate-950">
+            <summary className="flex cursor-pointer list-none items-center justify-between px-3 py-3 text-[10px] font-semibold text-[#40564C] dark:text-slate-200">
+              Edit lead details
+              <ChevronDown
+                size={14}
+                className="text-[#71847A] transition group-open:rotate-180"
+              />
+            </summary>
+            <form
+              action={leadContextAction}
+              className="space-y-3 border-t border-[#EEF2EF] p-3 dark:border-slate-900"
+            >
+              <label className="block">
+                <span className="mb-1 block text-[9px] font-semibold uppercase tracking-[0.08em] text-[#596E64]">
+                  Course
+                </span>
+                <select
+                  className="input"
+                  name="course_id"
+                  defaultValue={selected.interestedCourseId ?? ""}
+                >
+                  <option value="">Not selected</option>
+                  {courses.map((course) => (
+                    <option key={course.id} value={course.id}>
+                      {course.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="block">
+                <span className="mb-1 block text-[9px] font-semibold uppercase tracking-[0.08em] text-[#596E64]">
+                  Country
+                </span>
+                <input
+                  className="input"
+                  name="country"
+                  defaultValue={selected.country || ""}
+                  placeholder="e.g. Germany"
+                />
+              </label>
+              <button
+                className="btn-primary flex w-full items-center justify-center gap-2"
+                type="submit"
+              >
+                <Save size={13} /> Save details
+              </button>
+            </form>
+          </details>
+        </section>
+      ) : null}
+
+      <section className="px-4 py-4">
+        <SectionHeading>More</SectionHeading>
+        <div className="mt-3 grid gap-2">
+          <Link
+            href={`/leads/${selected.id}`}
+            className="flex items-center justify-between rounded-lg border border-[#DCE4DF] bg-white px-3 py-2.5 text-[10px] font-semibold text-[#40564C] transition hover:bg-[#EDF3E6] hover:text-[#216551] dark:border-slate-800 dark:bg-slate-950 dark:text-slate-200 dark:hover:bg-slate-900"
+          >
+            Open lead profile <ArrowUpRight size={13} />
+          </Link>
+          <Link
+            href="/follow-ups"
+            className="flex items-center justify-between rounded-lg border border-[#DCE4DF] bg-white px-3 py-2.5 text-[10px] font-semibold text-[#40564C] transition hover:bg-[#EDF3E6] hover:text-[#216551] dark:border-slate-800 dark:bg-slate-950 dark:text-slate-200 dark:hover:bg-slate-900"
+          >
+            Follow-up queue <CalendarClock size={13} />
+          </Link>
+        </div>
+      </section>
     </div>
   ) : null;
 
@@ -423,14 +433,14 @@ export default async function ConversationsPage({
 
       <section className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <div className="text-[10px] font-bold uppercase tracking-[0.16em] text-[#87998E]">
+          <div className="text-[10px] font-bold uppercase tracking-[0.16em] text-[#596E64]">
             Inbox · Admissions Operations
           </div>
-          <h1 className="mt-1.5 text-[29px] font-semibold tracking-[-0.04em] text-[#192E29] dark:text-white">
+          <h1 className="mt-1.5 text-[29px] font-semibold tracking-[-0.04em] text-[#18362D] dark:text-white">
             Conversations
           </h1>
-          <p className="mt-1 text-[13px] leading-5 text-[#6D7C76]">
-            Prioritize the right reply, understand the lead, and move every conversation toward a clear next step.
+          <p className="mt-1 text-[13px] leading-5 text-[#596E64]">
+            Find the right lead, understand the context, prepare the response, and record the next step.
           </p>
         </div>
 
@@ -438,14 +448,8 @@ export default async function ConversationsPage({
           <InboxMetric label="Needs reply" value={attentionCount} attention={attentionCount > 0} />
           <InboxMetric label="Unread" value={unreadCount} attention={unreadCount > 0} />
           <InboxMetric label="Priority" value={priorityCount} attention={priorityCount > 0} />
-          <span
-            className={`rounded-lg px-2.5 py-2 text-[9px] font-semibold ${
-              mock
-                ? "bg-orange-50 text-orange-700"
-                : "bg-[#E9F4EC] text-[#216551]"
-            }`}
-          >
-            {mock ? "Mock inbox" : "Live messaging"}
+          <span className="rounded-lg border border-[#DCE4DF] bg-white px-2.5 py-2 text-[9px] font-semibold text-[#596E64] dark:border-slate-800 dark:bg-slate-950 dark:text-slate-300">
+            {mock ? "Demo data" : "CRM workspace"}
           </span>
         </div>
       </section>
@@ -471,6 +475,14 @@ export default async function ConversationsPage({
   );
 }
 
+function SectionHeading({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="text-[9px] font-bold uppercase tracking-[0.12em] text-[#596E64]">
+      {children}
+    </div>
+  );
+}
+
 function InboxMetric({
   label,
   value,
@@ -485,10 +497,10 @@ function InboxMetric({
       className={`rounded-lg border px-2.5 py-1.5 ${
         attention
           ? "border-[#D6E6DB] bg-[#F2F8F4]"
-          : "border-[#E4EAE6] bg-white"
+          : "border-[#DCE4DF] bg-white"
       }`}
     >
-      <div className="text-[8px] font-semibold uppercase tracking-[0.08em] text-[#89968F]">
+      <div className="text-[8px] font-semibold uppercase tracking-[0.08em] text-[#596E64]">
         {label}
       </div>
       <div className={`mt-0.5 text-[12px] font-semibold ${attention ? "text-[#216551]" : "text-[#40564C]"}`}>
@@ -501,10 +513,10 @@ function InboxMetric({
 function ContextLine({ label, value }: { label: string; value: string }) {
   return (
     <div className="flex items-start justify-between gap-4 py-2.5">
-      <span className="text-[10px] text-[#89968F]">{label}</span>
-      <span className="max-w-[170px] text-right text-[11px] font-medium capitalize text-[#40564C] dark:text-slate-200">
+      <dt className="text-[10px] text-[#596E64]">{label}</dt>
+      <dd className="m-0 max-w-[170px] text-right text-[10px] font-medium capitalize text-[#18362D] dark:text-slate-200">
         {value}
-      </span>
+      </dd>
     </div>
   );
 }
