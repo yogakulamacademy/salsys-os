@@ -254,12 +254,30 @@ export function WhatsAppComposer({
       setNoteBody("");
       setNoteSuccess("Internal note saved. Nothing was sent to the lead.");
     } catch (reason) {
-      // Preserve the note on failure so a private team note is never lost
-      // because storage or the network is temporarily unavailable.
       setNoteError(reason instanceof Error ? reason.message : "Unable to save internal note.");
     } finally {
       setNoteSaving(false);
     }
+  }
+
+  function handleModeKeyDown(event: React.KeyboardEvent<HTMLDivElement>) {
+    if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
+
+    const tabs = Array.from(
+      event.currentTarget.querySelectorAll<HTMLButtonElement>('[role="tab"]'),
+    );
+    const activeIndex = tabs.findIndex((tab) => tab === document.activeElement);
+    if (activeIndex < 0 || tabs.length === 0) return;
+
+    event.preventDefault();
+    let nextIndex = activeIndex;
+    if (event.key === "ArrowRight") nextIndex = (activeIndex + 1) % tabs.length;
+    if (event.key === "ArrowLeft") nextIndex = (activeIndex - 1 + tabs.length) % tabs.length;
+    if (event.key === "Home") nextIndex = 0;
+    if (event.key === "End") nextIndex = tabs.length - 1;
+
+    tabs[nextIndex]?.focus();
+    tabs[nextIndex]?.click();
   }
 
   const sendMessage = () => {
@@ -350,7 +368,12 @@ export function WhatsAppComposer({
       className="conversation-composer bg-white p-3"
     >
       <div className="overflow-hidden rounded-lg border border-[#D4DFD2] bg-white shadow-[0_1px_3px_rgba(21,62,51,0.04)]">
-        <div className="flex items-center gap-5 border-b border-[#EEF2EF] px-3 pt-2" role="tablist" aria-label="Compose mode">
+        <div
+          className="flex items-center gap-5 border-b border-[#EEF2EF] px-3 pt-2"
+          role="tablist"
+          aria-label="Compose mode"
+          onKeyDown={handleModeKeyDown}
+        >
           <ComposerTab active={mode === "reply"} onClick={() => setMode("reply")} icon={<MessageSquareText size={11} />}>
             Reply draft
           </ComposerTab>
@@ -399,6 +422,12 @@ export function WhatsAppComposer({
               name="body"
               value={body}
               onChange={(event) => updateDraft(event.target.value)}
+              onKeyDown={(event) => {
+                if ((event.ctrlKey || event.metaKey) && event.key === "Enter") {
+                  event.preventDefault();
+                  persistDraft(body);
+                }
+              }}
               disabled={isPending}
               required={mode === "reply"}
               rows={2}
@@ -411,6 +440,7 @@ export function WhatsAppComposer({
             <div className="mt-2 flex flex-wrap items-center justify-between gap-3">
               <div className="flex flex-wrap items-center gap-3 text-[9px] font-medium text-[#71847A]">
                 <span>Enter adds a new line</span>
+                <span>Ctrl/⌘ + Enter saves draft</span>
                 <span>{body.length}/4096</span>
                 {copilotAssisted ? <span className="text-[#216551]">AI-assisted draft</span> : null}
               </div>
@@ -469,6 +499,12 @@ export function WhatsAppComposer({
                 setNoteError(null);
                 setNoteSuccess(null);
               }}
+              onKeyDown={(event) => {
+                if ((event.ctrlKey || event.metaKey) && event.key === "Enter") {
+                  event.preventDefault();
+                  void saveInternalNote();
+                }
+              }}
               rows={3}
               maxLength={4000}
               placeholder="Add context for your team…"
@@ -481,7 +517,7 @@ export function WhatsAppComposer({
                 ) : noteSuccess ? (
                   <span className="text-[#216551]">{noteSuccess}</span>
                 ) : (
-                  <span className="text-[#70581F]">{noteBody.length}/4000 · Saving does not send.</span>
+                  <span className="text-[#70581F]">{noteBody.length}/4000 · Ctrl/⌘ + Enter adds note · Saving does not send.</span>
                 )}
               </div>
               <button
