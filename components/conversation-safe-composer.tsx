@@ -112,8 +112,12 @@ export function ConversationSafeComposer({
 
       setNote("");
       setNoteSuccess("Internal note saved. Nothing was sent to the lead.");
+      window.dispatchEvent(
+        new CustomEvent("crm:activity-changed", {
+          detail: { leadId },
+        }),
+      );
     } catch (reason) {
-      // Keep the note in the textarea on any failure.
       setNoteError(reason instanceof Error ? reason.message : "Unable to save internal note.");
     } finally {
       setNoteSaving(false);
