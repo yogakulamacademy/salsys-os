@@ -43,6 +43,16 @@ export type LeadInspectorPayment = {
   notes?: string;
 };
 
+export type LeadInspectorTask = {
+  id: string;
+  title: string;
+  description: string | null;
+  status: string;
+  due_at: string | null;
+  assigned_to: string | null;
+  created_at: string;
+};
+
 export type LeadInspectorSalesIntelligence = {
   derived_intent: string | null;
   intent_confidence: string | null;
@@ -79,6 +89,7 @@ export type LeadInspectorPayload = {
   generatedAt: string;
   lead: LeadDetail & Record<string, unknown>;
   payments: LeadInspectorPayment[];
+  openTasks: LeadInspectorTask[];
   person: Person360Summary | null;
   journey: PersonJourneyEvent[];
   journeyTotal: number;
@@ -87,6 +98,7 @@ export type LeadInspectorPayload = {
   salesIntelligence: LeadInspectorSalesIntelligence | null;
   availability: {
     payments: LeadInspectorAvailability;
+    openTasks: LeadInspectorAvailability;
     person360: LeadInspectorAvailability;
     journey: LeadInspectorAvailability;
     contactHistory: LeadInspectorAvailability;
@@ -147,12 +159,20 @@ export async function getLeadInspectorData(
 
   const [
     paymentsResult,
+    tasksResult,
     journeyResult,
     contactLogsResult,
     contactSummaryResult,
     salesIntelligenceResult,
   ] = await Promise.allSettled([
     getLeadPayments(normalizedLeadId),
+    supabase
+      .from("tasks")
+      .select("id,title,description,status,due_at,assigned_to,created_at")
+      .eq("lead_id", normalizedLeadId)
+      .in("status", ["open", "snoozed"])
+      .order("due_at", { ascending: true, nullsFirst: false })
+      .limit(10),
     getPersonJourneyForLead(normalizedLeadId, { limit: 120 }),
     supabase
       .from("v_lead_contact_logs")
@@ -180,6 +200,18 @@ export async function getLeadInspectorData(
     paymentsResult.status === "fulfilled" ? paymentsResult.value : [];
   if (paymentsResult.status === "rejected") {
     warnings.push("Payment history is temporarily unavailable.");
+  }
+
+  let openTasks: LeadInspectorTask[] = [];
+  let openTasksUnavailable = false;
+  if (tasksResult.status === "rejected") {
+    openTasksUnavailable = true;
+    warnings.push("Open follow-ups are temporarily unavailable.");
+  } else if (tasksResult.value.error) {
+    openTasksUnavailable = true;
+    warnings.push("Open follow-ups are temporarily unavailable.");
+  } else {
+    openTasks = (tasksResult.value.data ?? []) as LeadInspectorTask[];
   }
 
   const personJourney =
@@ -238,6 +270,7 @@ export async function getLeadInspectorData(
     generatedAt: new Date().toISOString(),
     lead: lead as LeadDetail & Record<string, unknown>,
     payments: payments as LeadInspectorPayment[],
+    openTasks,
     person,
     journey,
     journeyTotal,
@@ -251,6 +284,11 @@ export async function getLeadInspectorData(
           : payments.length > 0
             ? "available"
             : "empty",
+      openTasks: openTasksUnavailable
+        ? "unavailable"
+        : openTasks.length > 0
+          ? "available"
+          : "empty",
       person360:
         journeyResult.status === "rejected"
           ? "unavailable"
