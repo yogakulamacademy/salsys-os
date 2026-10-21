@@ -42,15 +42,18 @@ type InspectorResponse =
           payment_status?: string | null;
           recommended_course_name?: string | null;
         } | null;
-        openFollowups?: Array<{
+        openTasks?: Array<{
           id: string;
           title: string;
+          description?: string | null;
           status: string;
           due_at: string | null;
+          assigned_to?: string | null;
+          created_at?: string;
         }>;
         availability: {
           salesIntelligence: Availability;
-          openFollowups?: Availability;
+          openTasks?: Availability;
         };
       };
     }
@@ -78,11 +81,12 @@ export function ConversationIntelligencePanel({
   waitingSince: string | null;
 }) {
   const router = useRouter();
-  const [data, setData] = useState<Extract<InspectorResponse, { ok: true }>['data'] | null>(null);
+  const [data, setData] = useState<Extract<InspectorResponse, { ok: true }>["data"] | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [scheduling, setScheduling] = useState(false);
+  const [completingTaskId, setCompletingTaskId] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [actionSuccess, setActionSuccess] = useState<string | null>(null);
   const [loadedAt, setLoadedAt] = useState(0);
@@ -130,6 +134,7 @@ export function ConversationIntelligencePanel({
 
   const nextFollowup =
     data?.salesIntelligence?.next_followup_at || data?.lead.nextFollowupAt || null;
+  const openTask = data?.openTasks?.[0] ?? null;
 
   async function scheduleRecommendedFollowup() {
     if (scheduling) return;
@@ -163,6 +168,38 @@ export function ConversationIntelligencePanel({
       );
     } finally {
       setScheduling(false);
+    }
+  }
+
+  async function completeFollowup(taskId: string) {
+    if (completingTaskId) return;
+    setCompletingTaskId(taskId);
+    setActionError(null);
+    setActionSuccess(null);
+
+    try {
+      const response = await fetch(`/api/leads/${encodeURIComponent(leadId)}/inspector`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "complete_followup",
+          taskId,
+        }),
+      });
+      const body = (await response.json()) as ActionResponse;
+      if (!response.ok || !body.ok) {
+        throw new Error(body.ok ? "Unable to complete follow-up." : body.error);
+      }
+
+      setActionSuccess("Follow-up marked complete.");
+      await load(true);
+      router.refresh();
+    } catch (reason) {
+      setActionError(
+        reason instanceof Error ? reason.message : "Unable to complete follow-up.",
+      );
+    } finally {
+      setCompletingTaskId(null);
     }
   }
 
@@ -234,6 +271,8 @@ export function ConversationIntelligencePanel({
           <Signal label="Intent" value={pretty(data?.salesIntelligence?.derived_intent || "Not available")} />
           <Signal label="Engagement" value={numberText(data?.salesIntelligence?.engagement_score)} />
           <Signal label="Next follow-up" value={nextFollowup ? relativeTime(nextFollowup) : "Not scheduled"} />
+          <Signal label="Owner" value={data?.lead.owner || "Unassigned"} />
+          <Signal label="Follow-up" value={openTask ? pretty(openTask.status) : "None open"} />
         </div>
 
         {data?.salesIntelligence?.priority_reason ? (
@@ -243,19 +282,42 @@ export function ConversationIntelligencePanel({
           </div>
         ) : null}
 
-        {data?.openFollowups?.length ? (
+        {openTask ? (
           <div className="mt-3 rounded-lg border border-[#E6ECE8] px-3 py-2.5">
-            <div className="text-[9px] font-bold uppercase tracking-[0.08em] text-[#89968F]">
-              Open follow-up
+            <div className="flex items-center justify-between gap-2">
+              <div className="text-[9px] font-bold uppercase tracking-[0.08em] text-[#89968F]">
+                Open follow-up
+              </div>
+              <span className="rounded bg-[#F3F7F4] px-1.5 py-0.5 text-[8px] font-semibold capitalize text-[#60736A]">
+                {openTask.status}
+              </span>
             </div>
             <div className="mt-1.5 text-[10px] font-semibold text-[#40564C]">
-              {data.openFollowups[0].title}
+              {openTask.title}
             </div>
-            {data.openFollowups[0].due_at ? (
+            {openTask.due_at ? (
               <div className="mt-1 flex items-center gap-1 text-[9px] text-[#7A8981]">
-                <Clock3 size={10} /> {relativeTime(data.openFollowups[0].due_at)} · {formatDateTime(data.openFollowups[0].due_at)}
+                <Clock3 size={10} /> {relativeTime(openTask.due_at)} · {formatDateTime(openTask.due_at)}
               </div>
-            ) : null}
+            ) : (
+              <div className="mt-1 text-[9px] text-[#7A8981]">No due date recorded</div>
+            )}
+            <div className="mt-1 text-[9px] text-[#7A8981]">
+              Owner: {data?.lead.owner || (openTask.assigned_to ? "Assigned CRM user" : "Unassigned")}
+            </div>
+            <button
+              type="button"
+              onClick={() => void completeFollowup(openTask.id)}
+              disabled={Boolean(completingTaskId)}
+              className="mt-2 inline-flex h-7 w-full items-center justify-center gap-1.5 rounded-md border border-[#DDE7DF] bg-white px-2 text-[9px] font-semibold text-[#456158] transition hover:bg-[#EDF3E6] hover:text-[#216551] disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {completingTaskId === openTask.id ? (
+                <RefreshCw size={10} className="animate-spin" />
+              ) : (
+                <CheckCircle2 size={10} />
+              )}
+              {completingTaskId === openTask.id ? "Completing…" : "Mark complete"}
+            </button>
           </div>
         ) : null}
 
@@ -316,7 +378,7 @@ function buildResponseObjective({
   needsFirstContact,
   waitingSince,
 }: {
-  data: Extract<InspectorResponse, { ok: true }>['data'] | null;
+  data: Extract<InspectorResponse, { ok: true }>["data"] | null;
   stage: LeadStage;
   priority: ConversationPriority;
   needsReply: boolean;
@@ -343,7 +405,7 @@ function buildResponseObjective({
     return {
       title: "Reply to the latest inbound message",
       detail: waitingSince
-        ? `The lead is waiting for a response. Keep the reply focused on the latest request and move toward a clear next step.`
+        ? "The lead is waiting for a response. Keep the reply focused on the latest request and move toward a clear next step."
         : "The latest conversation state indicates that the admissions team owes the next response.",
       sourceLabel: "Conversation-state guidance",
       source: "presentation" as const,
