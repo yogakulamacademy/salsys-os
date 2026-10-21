@@ -25,6 +25,7 @@ type CompletePayload = {
   code?: unknown;
   waba_id?: unknown;
   phone_number_id?: unknown;
+  onboarding_mode?: unknown;
 };
 
 function jsonError(message: string, status: number) {
@@ -84,6 +85,10 @@ export async function POST(request: NextRequest) {
   const code = text(payload.code);
   const wabaId = text(payload.waba_id);
   const phoneNumberId = text(payload.phone_number_id) || null;
+  const onboardingMode =
+    text(payload.onboarding_mode) === 'cloud_api'
+      ? 'cloud_api'
+      : 'coexistence';
 
   if (!intent || !code || !/^\d+$/.test(wabaId)) {
     return jsonError(
@@ -122,12 +127,6 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  /*
-   * Re-resolve tenant authority from the current authenticated session.
-   * The OAuth state may identify a tenant, but it never becomes authority
-   * by itself. Completion is allowed only when it still matches the
-   * session-bound active tenant and the user still has admin/owner access.
-   */
   try {
     const { organizationId: activeOrganizationId } =
       await requireIntegrationAdminTenant(supabase, user.id);
@@ -175,16 +174,22 @@ export async function POST(request: NextRequest) {
       code,
       wabaId,
       phoneNumberId,
+      onboardingMode,
     });
 
     revalidatePath('/settings/integrations');
+    revalidatePath('/settings/integrations/whatsapp');
 
     return NextResponse.json(
       {
         ok: true,
         message: result.displayPhoneNumber
-          ? `WhatsApp ${result.displayPhoneNumber} connected successfully.`
-          : 'WhatsApp Business connected successfully.',
+          ? onboardingMode === 'coexistence'
+            ? `WhatsApp ${result.displayPhoneNumber} connected to SalsysOS in coexistence mode.`
+            : `WhatsApp ${result.displayPhoneNumber} connected successfully.`
+          : onboardingMode === 'coexistence'
+            ? 'WhatsApp Business app connected to SalsysOS in coexistence mode.'
+            : 'WhatsApp Business connected successfully.',
         connectionId: result.connectionId,
       },
       {
@@ -208,6 +213,7 @@ export async function POST(request: NextRequest) {
       detail: {
         message: message.slice(0, 500),
         auth_mode: 'embedded_signup',
+        onboarding_mode: onboardingMode,
       },
     });
 
