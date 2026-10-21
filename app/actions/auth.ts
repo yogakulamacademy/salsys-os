@@ -8,6 +8,7 @@ import { createClient } from '@/lib/supabase/server';
 import { ACTIVE_WORKSPACE_COOKIE } from '@/lib/workspace';
 
 const ORGANIZATION_COOKIE_MAX_AGE_SECONDS = 60 * 60 * 24 * 30;
+const AUTH_RETRY_DELAY_MS = 450;
 
 type ServerSupabaseClient = Awaited<ReturnType<typeof createClient>>;
 
@@ -22,9 +23,65 @@ type TenantBindingResult =
       detail?: string;
     };
 
+type AuthErrorLike = {
+  name?: string;
+  message?: string;
+  status?: number;
+  code?: string;
+} | null;
+
 function authUrl(path: string, key: 'notice' | 'error', message: string) {
   const params = new URLSearchParams({ [key]: message });
   return `${path}?${params.toString()}`;
+}
+
+function loginAuthUrl(
+  key: 'notice' | 'error',
+  message: string,
+  next?: string,
+) {
+  const params = new URLSearchParams({ [key]: message });
+  if (next) params.set('next', next);
+  return `/login?${params.toString()}`;
+}
+
+function isTransientAuthError(error: AuthErrorLike) {
+  if (!error) return false;
+
+  const status = Number(error.status ?? 0);
+  if (status === 408 || status === 429 || status >= 500) return true;
+
+  const detail = `${error.name ?? ''} ${error.code ?? ''} ${error.message ?? ''}`.toLowerCase();
+
+  return (
+    detail.includes('timeout') ||
+    detail.includes('timed out') ||
+    detail.includes('network') ||
+    detail.includes('fetch failed') ||
+    detail.includes('failed to fetch') ||
+    detail.includes('temporarily unavailable') ||
+    detail.includes('request_timeout') ||
+    detail.includes('retryable')
+  );
+}
+
+function wait(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function signInWithTransientRetry(
+  supabase: ServerSupabaseClient,
+  email: string,
+  password: string,
+) {
+  let result = await supabase.auth.signInWithPassword({ email, password });
+
+  if (result.error && isTransientAuthError(result.error)) {
+    await wait(AUTH_RETRY_DELAY_MS);
+    result = await supabase.auth.signInWithPassword({ email, password });
+  }
+
+  return result;
 }
 
 async function bindCurrentUserOrganization(
@@ -97,15 +154,25 @@ export async function signInAction(formData: FormData) {
       : '/dashboard';
 
   if (!email || !password) {
-    redirect(authUrl('/login', 'error', 'Enter your email and password'));
+    redirect(loginAuthUrl('error', 'Enter your email and password', next));
   }
 
   const supabase = await createClient();
   const { data: signInData, error: signInError } =
-    await supabase.auth.signInWithPassword({ email, password });
+    await signInWithTransientRetry(supabase, email, password);
 
   if (signInError || !signInData.user) {
-    redirect(authUrl('/login', 'error', 'Invalid email or password'));
+    if (isTransientAuthError(signInError)) {
+      redirect(
+        loginAuthUrl(
+          'error',
+          'Sign-in service is temporarily unavailable. Your password was not rejected. Please try again in a moment.',
+          next,
+        ),
+      );
+    }
+
+    redirect(loginAuthUrl('error', 'Invalid email or password', next));
   }
 
   const tenant = await bindCurrentUserOrganization(supabase);
@@ -114,7 +181,7 @@ export async function signInAction(formData: FormData) {
     await supabase.auth.signOut();
     const cookieStore = await cookies();
     cookieStore.delete(ACTIVE_WORKSPACE_COOKIE);
-    redirect(authUrl('/login', 'error', tenantBindingMessage(tenant)));
+    redirect(loginAuthUrl('error', tenantBindingMessage(tenant), next));
   }
 
   await setWorkspaceCookie(tenant.organizationId);
