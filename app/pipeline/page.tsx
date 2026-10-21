@@ -12,6 +12,7 @@ import {
   ShieldAlert,
 } from "lucide-react";
 
+import { LeadInspectorButton } from "@/components/crm/lead-inspector";
 import { PipelineBoard } from "@/components/pipeline-board";
 import {
   PipelineInsights,
@@ -191,16 +192,18 @@ export default async function PipelinePage() {
 
           <div className="pipeline-stuck-grid">
             {stuckLeads.slice(0, 6).map((lead) => (
-              <Link
+              <div
                 key={lead.lead_id}
-                href={`/leads/${lead.lead_id}`}
                 className="pipeline-stuck-card group"
               >
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
-                    <div className="pipeline-stuck-name">
+                    <Link
+                      href={`/leads/${lead.lead_id}`}
+                      className="pipeline-stuck-name hover:underline"
+                    >
                       {lead.lead_name || lead.lead_code || "Lead"}
-                    </div>
+                    </Link>
                     <div className="pipeline-stuck-course">
                       {lead.course_name || "Course not set"}
                     </div>
@@ -223,10 +226,20 @@ export default async function PipelinePage() {
                   )}
                 </div>
 
-                <div className="pipeline-open-link">
-                  Open lead <ArrowRight size={12} />
+                <div className="mt-3 flex items-center justify-between gap-2">
+                  <LeadInspectorButton
+                    leadId={lead.lead_id}
+                    label="Inspect"
+                    className="inline-flex h-8 items-center gap-1.5 rounded-md border border-slate-200 bg-white px-2.5 text-[11px] font-semibold text-slate-600 transition hover:border-emerald-200 hover:bg-emerald-50 hover:text-emerald-700"
+                  />
+                  <Link
+                    href={`/leads/${lead.lead_id}`}
+                    className="pipeline-open-link"
+                  >
+                    Open lead <ArrowRight size={12} />
+                  </Link>
                 </div>
-              </Link>
+              </div>
             ))}
           </div>
         </section>
