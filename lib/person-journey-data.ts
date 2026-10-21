@@ -169,6 +169,39 @@ const PERSON_JOURNEY_SELECT = `
   metadata
 `;
 
+// Person 360 and the canonical journey are enrichment reads. Keep their latency
+// bounded so a slow derived view cannot hold the operational Lead Inspector in
+// a loading state until the database statement timeout expires.
+const ENRICHMENT_SOFT_TIMEOUT_MS = 2_500;
+const LATEST_LEAD_SIGNAL_SOFT_TIMEOUT_MS = 2_000;
+
+type DerivedReadResult<T> = {
+  data: T | null;
+  error: { message: string } | null;
+};
+
+type DerivedListReadResult<T> = {
+  data: T[] | null;
+  error: { message: string } | null;
+  count: number | null;
+};
+
+function withSoftTimeout<T>(
+  operation: PromiseLike<T>,
+  milliseconds: number,
+  fallback: T,
+): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | null = null;
+
+  const timeout = new Promise<T>((resolve) => {
+    timer = setTimeout(() => resolve(fallback), milliseconds);
+  });
+
+  return Promise.race([Promise.resolve(operation), timeout]).finally(() => {
+    if (timer) clearTimeout(timer);
+  });
+}
+
 export async function getPersonJourneyForLead(
   leadId: string,
   options?: {
@@ -283,28 +316,46 @@ export async function getPersonJourneyForLead(
     ? Math.min(Math.max(Math.trunc(requestedLimit), 1), 500)
     : 200;
 
-  const [personResult, journeyResult] = await Promise.all([
-    db
-      .from("v_person_360")
-      .select(PERSON_360_SELECT)
-      .eq("organization_id", organizationId)
-      .eq("person_id", personId)
-      .maybeSingle(),
+  const personQuery = db
+    .from("v_person_360")
+    .select(PERSON_360_SELECT)
+    .eq("organization_id", organizationId)
+    .eq("person_id", personId)
+    .maybeSingle();
 
-    db
-      .from("v_person_journey")
-      .select(PERSON_JOURNEY_SELECT, {
-        count: "exact",
-      })
-      .eq("organization_id", organizationId)
-      .eq("person_id", personId)
-      .order("event_at", {
-        ascending: false,
-      })
-      .order("journey_event_key", {
-        ascending: false,
-      })
-      .limit(limit),
+  const journeyQuery = db
+    .from("v_person_journey")
+    .select(PERSON_JOURNEY_SELECT, {
+      count: "exact",
+    })
+    .eq("organization_id", organizationId)
+    .eq("person_id", personId)
+    .order("event_at", {
+      ascending: false,
+    })
+    .order("journey_event_key", {
+      ascending: false,
+    })
+    .limit(limit);
+
+  const [personResult, journeyResult] = await Promise.all([
+    withSoftTimeout<DerivedReadResult<Record<string, unknown>>>(
+      personQuery,
+      ENRICHMENT_SOFT_TIMEOUT_MS,
+      {
+        data: null,
+        error: { message: "Person 360 enrichment exceeded the soft timeout." },
+      },
+    ),
+    withSoftTimeout<DerivedListReadResult<PersonJourneyEvent>>(
+      journeyQuery,
+      ENRICHMENT_SOFT_TIMEOUT_MS,
+      {
+        data: null,
+        error: { message: "Person journey enrichment exceeded the soft timeout." },
+        count: null,
+      },
+    ),
   ]);
 
   /*
@@ -340,27 +391,40 @@ export async function getPersonJourneyForLead(
   const latestLeadId = String(person?.latest_lead_id ?? "").trim();
 
   if (person && latestLeadId) {
-    const { data: latestLeadJourney, error: latestLeadJourneyError } = await db
-      .from("v_lead_journey_intelligence")
-      .select("engagement_score,behaviour_temperature,behaviour_reason")
-      .eq("organization_id", organizationId)
-      .eq("lead_id", latestLeadId)
-      .maybeSingle();
+    const latestLeadJourneyResult = await withSoftTimeout<
+      DerivedReadResult<{
+        engagement_score?: number | string | null;
+        behaviour_temperature?: string | null;
+        behaviour_reason?: string | null;
+      }>
+    >(
+      db
+        .from("v_lead_journey_intelligence")
+        .select("engagement_score,behaviour_temperature,behaviour_reason")
+        .eq("organization_id", organizationId)
+        .eq("lead_id", latestLeadId)
+        .maybeSingle(),
+      LATEST_LEAD_SIGNAL_SOFT_TIMEOUT_MS,
+      {
+        data: null,
+        error: { message: "Latest lead journey enrichment exceeded the soft timeout." },
+      },
+    );
 
-    if (latestLeadJourneyError) {
+    if (latestLeadJourneyResult.error) {
       console.error(
         "Latest lead journey signal read degraded:",
-        latestLeadJourneyError.message,
+        latestLeadJourneyResult.error.message,
       );
-    } else if (latestLeadJourney) {
+    } else if (latestLeadJourneyResult.data) {
       person = {
         ...person,
         latest_lead_engagement_score:
-          latestLeadJourney.engagement_score ?? null,
+          latestLeadJourneyResult.data.engagement_score ?? null,
         latest_lead_behaviour_temperature:
-          latestLeadJourney.behaviour_temperature ?? null,
+          latestLeadJourneyResult.data.behaviour_temperature ?? null,
         latest_lead_behaviour_reason:
-          latestLeadJourney.behaviour_reason ?? null,
+          latestLeadJourneyResult.data.behaviour_reason ?? null,
       };
     }
   }
