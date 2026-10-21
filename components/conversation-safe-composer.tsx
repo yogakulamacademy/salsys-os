@@ -120,10 +120,35 @@ export function ConversationSafeComposer({
     }
   }
 
+  function handleModeKeyDown(event: React.KeyboardEvent<HTMLDivElement>) {
+    if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
+
+    const tabs = Array.from(
+      event.currentTarget.querySelectorAll<HTMLButtonElement>('[role="tab"]'),
+    );
+    const activeIndex = tabs.findIndex((tab) => tab === document.activeElement);
+    if (activeIndex < 0 || tabs.length === 0) return;
+
+    event.preventDefault();
+    let nextIndex = activeIndex;
+    if (event.key === "ArrowRight") nextIndex = (activeIndex + 1) % tabs.length;
+    if (event.key === "ArrowLeft") nextIndex = (activeIndex - 1 + tabs.length) % tabs.length;
+    if (event.key === "Home") nextIndex = 0;
+    if (event.key === "End") nextIndex = tabs.length - 1;
+
+    tabs[nextIndex]?.focus();
+    tabs[nextIndex]?.click();
+  }
+
   return (
     <section className="bg-white p-3" aria-label="Conversation composer">
       <div className="overflow-hidden rounded-lg border border-[#D4DFD2] bg-white shadow-[0_1px_3px_rgba(21,62,51,0.04)]">
-        <div className="flex items-center gap-5 border-b border-[#EEF2EF] px-3 pt-2" role="tablist" aria-label="Compose mode">
+        <div
+          className="flex items-center gap-5 border-b border-[#EEF2EF] px-3 pt-2"
+          role="tablist"
+          aria-label="Compose mode"
+          onKeyDown={handleModeKeyDown}
+        >
           <ModeTab active={mode === "reply"} onClick={() => setMode("reply")} icon={<MessageSquareText size={11} />}>
             Reply draft
           </ModeTab>
@@ -150,13 +175,21 @@ export function ConversationSafeComposer({
               id={`reply-draft-${leadId}`}
               value={replyDraft}
               onChange={(event) => updateReplyDraft(event.target.value)}
+              onKeyDown={(event) => {
+                if ((event.ctrlKey || event.metaKey) && event.key === "Enter") {
+                  event.preventDefault();
+                  persistDraft(replyDraft);
+                }
+              }}
               rows={3}
               maxLength={5000}
               placeholder="Prepare a reply… it stays here until you choose an eligible sending channel."
               className="min-h-[76px] w-full resize-y rounded-lg border border-[#DCE4DF] bg-white px-3 py-2 text-[11px] leading-5 text-[#18362D] outline-none placeholder:text-[#71847A] focus:border-[#216551] focus:ring-2 focus:ring-[#216551]/10"
             />
             <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
-              <div className="text-[9px] text-[#71847A]">{draftStatus(draftState)} · {replyDraft.length}/5000</div>
+              <div className="text-[9px] text-[#71847A]">
+                {draftStatus(draftState)} · {replyDraft.length}/5000 · Ctrl/⌘ + Enter saves
+              </div>
               <button
                 type="button"
                 onClick={() => persistDraft(replyDraft)}
@@ -185,6 +218,12 @@ export function ConversationSafeComposer({
                 setNoteError(null);
                 setNoteSuccess(null);
               }}
+              onKeyDown={(event) => {
+                if ((event.ctrlKey || event.metaKey) && event.key === "Enter") {
+                  event.preventDefault();
+                  void saveInternalNote();
+                }
+              }}
               rows={3}
               maxLength={4000}
               placeholder="Add context for your team…"
@@ -192,7 +231,7 @@ export function ConversationSafeComposer({
             />
             <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
               <div className="min-w-0 text-[9px]">
-                {noteError ? <span className="text-red-700">{noteError} Your note is still here.</span> : noteSuccess ? <span className="text-[#216551]">{noteSuccess}</span> : <span className="text-[#70581F]">{note.length}/4000 · Saving does not send.</span>}
+                {noteError ? <span className="text-red-700">{noteError} Your note is still here.</span> : noteSuccess ? <span className="text-[#216551]">{noteSuccess}</span> : <span className="text-[#70581F]">{note.length}/4000 · Ctrl/⌘ + Enter adds note · Saving does not send.</span>}
               </div>
               <button
                 type="button"
