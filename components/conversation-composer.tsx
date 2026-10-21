@@ -253,6 +253,11 @@ export function WhatsAppComposer({
 
       setNoteBody("");
       setNoteSuccess("Internal note saved. Nothing was sent to the lead.");
+      window.dispatchEvent(
+        new CustomEvent("crm:activity-changed", {
+          detail: { leadId: resolvedLeadId },
+        }),
+      );
     } catch (reason) {
       setNoteError(reason instanceof Error ? reason.message : "Unable to save internal note.");
     } finally {
