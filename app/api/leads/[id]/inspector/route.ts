@@ -89,6 +89,15 @@ export async function POST(
       );
     }
 
+    // The quick scheduler is for future work. Keep a small clock-skew margin
+    // while preventing accidental creation of already-overdue tasks.
+    if (dueAt.getTime() < Date.now() - 60_000) {
+      return NextResponse.json(
+        { ok: false, error: "Choose a follow-up time in the future." },
+        { status: 400, headers: privateHeaders },
+      );
+    }
+
     if (title.length > 240 || (description?.length ?? 0) > 4000) {
       return NextResponse.json(
         { ok: false, error: "Follow-up details are too long." },
@@ -115,6 +124,8 @@ export async function POST(
     revalidatePath("/leads");
     revalidatePath("/follow-ups");
     revalidatePath("/admissions");
+    revalidatePath("/pipeline");
+    revalidatePath("/funnel");
     revalidatePath("/dashboard");
 
     return NextResponse.json(
