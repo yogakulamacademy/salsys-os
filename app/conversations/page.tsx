@@ -11,8 +11,8 @@ import { logLeadInteractionAction } from "@/app/actions/crm";
 import {
   sendWhatsAppMessageAction,
   sendWhatsAppTemplateAction,
-  updateConversationLeadContextAction,
 } from "@/app/conversations/actions";
+import { updateConversationLeadContextWithActivityAction } from "@/app/conversations/context-actions";
 import { ConversationCenterView } from "@/components/conversation-center-view";
 import { ConversationCopilot } from "@/components/conversation-copilot";
 import { WhatsAppComposer } from "@/components/conversation-composer";
@@ -73,7 +73,7 @@ export default async function ConversationsPage({
     ? sendWhatsAppTemplateAction.bind(null, selectedId)
     : undefined;
   const leadContextAction = selectedId
-    ? updateConversationLeadContextAction.bind(null, selectedId)
+    ? updateConversationLeadContextWithActivityAction.bind(null, selectedId)
     : undefined;
 
   const noticeText =
