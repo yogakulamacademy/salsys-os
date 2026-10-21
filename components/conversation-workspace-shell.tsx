@@ -85,7 +85,10 @@ export function ConversationWorkspaceShell({
     if (!mobileContextOpen) return;
 
     const previousActive = document.activeElement as HTMLElement | null;
+    const previousOverflow = document.body.style.overflow;
     const drawer = drawerRef.current;
+    document.body.style.overflow = "hidden";
+
     const focusables = () =>
       drawer
         ? Array.from(
@@ -122,6 +125,7 @@ export function ConversationWorkspaceShell({
     document.addEventListener("keydown", onKeyDown);
     return () => {
       document.removeEventListener("keydown", onKeyDown);
+      document.body.style.overflow = previousOverflow;
       (drawerTriggerRef.current ?? previousActive)?.focus?.();
     };
   }, [mobileContextOpen]);
