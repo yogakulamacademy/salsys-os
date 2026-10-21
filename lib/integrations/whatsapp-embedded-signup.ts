@@ -28,6 +28,8 @@ type MetaTokenResponse = {
 
 type MetaPhoneNumber = {
   id?: string;
+  is_on_biz_app?: boolean;
+  platform_type?: string;
 };
 
 type MetaPhoneListResponse = {
@@ -46,6 +48,7 @@ export type CompleteWhatsAppEmbeddedSignupInput = {
   code: string;
   wabaId: string;
   phoneNumberId?: string | null;
+  onboardingMode?: 'coexistence' | 'cloud_api';
 };
 
 function requiredEnv(name: string) {
@@ -94,10 +97,7 @@ async function readJson<T>(response: Response): Promise<T | null> {
 }
 
 function metaErrorMessage(
-  payload:
-    | MetaTokenResponse
-    | MetaPhoneListResponse
-    | null,
+  payload: MetaTokenResponse | MetaPhoneListResponse | null,
   fallback: string,
 ) {
   return payload?.error?.message?.trim() || fallback;
@@ -108,9 +108,7 @@ export function whatsappEmbeddedSignupPublicConfiguration() {
 
   return {
     appId: requiredEnv('META_APP_ID'),
-    configId: requiredEnv(
-      'WHATSAPP_EMBEDDED_SIGNUP_CONFIG_ID',
-    ),
+    configId: requiredEnv('WHATSAPP_EMBEDDED_SIGNUP_CONFIG_ID'),
     graphVersion,
   };
 }
@@ -171,12 +169,14 @@ async function exchangeEmbeddedSignupCode(code: string) {
   };
 }
 
-async function discoverSinglePhoneNumberId({
+async function discoverPhoneNumberId({
   wabaId,
   accessToken,
+  onboardingMode,
 }: {
   wabaId: string;
   accessToken: string;
+  onboardingMode: 'coexistence' | 'cloud_api';
 }) {
   const version = metaGraphVersion();
 
@@ -186,7 +186,7 @@ async function discoverSinglePhoneNumberId({
     response = await fetch(
       `https://graph.facebook.com/${version}/${encodeURIComponent(
         wabaId,
-      )}/phone_numbers?fields=id&limit=100`,
+      )}/phone_numbers?fields=id,is_on_biz_app,platform_type&limit=100`,
       {
         method: 'GET',
         headers: {
@@ -212,19 +212,33 @@ async function discoverSinglePhoneNumberId({
     );
   }
 
-  const ids = (payload?.data ?? [])
-    .map((phone) => String(phone.id ?? '').trim())
-    .filter((id) => /^\d+$/.test(id));
+  const phones = (payload?.data ?? []).filter((phone) =>
+    /^\d+$/.test(String(phone.id ?? '').trim()),
+  );
 
-  if (ids.length !== 1) {
+  if (phones.length === 0) {
     throw new Error(
-      ids.length === 0
-        ? 'Meta did not return a phone number for this WhatsApp Business Account.'
-        : 'Meta did not identify which WhatsApp phone number was selected. Please run Embedded Signup again and select one phone number.',
+      'Meta did not return a phone number for this WhatsApp Business Account.',
     );
   }
 
-  return ids[0];
+  if (phones.length === 1) {
+    return String(phones[0]?.id ?? '').trim();
+  }
+
+  if (onboardingMode === 'coexistence') {
+    const businessAppPhones = phones.filter(
+      (phone) => phone.is_on_biz_app === true,
+    );
+
+    if (businessAppPhones.length === 1) {
+      return String(businessAppPhones[0]?.id ?? '').trim();
+    }
+  }
+
+  throw new Error(
+    'Meta did not identify which WhatsApp phone number was selected. Please run Embedded Signup again and select one phone number.',
+  );
 }
 
 export async function completeWhatsAppEmbeddedSignup(
@@ -240,6 +254,8 @@ export async function completeWhatsAppEmbeddedSignup(
     input.phoneNumberId,
     'Phone Number ID',
   );
+  const onboardingMode =
+    input.onboardingMode === 'cloud_api' ? 'cloud_api' : 'coexistence';
 
   if (!organizationId || !actorUserId) {
     throw new Error('Workspace authorization is incomplete.');
@@ -271,10 +287,7 @@ export async function completeWhatsAppEmbeddedSignup(
       .flatMap((scope) => scope.targetIds),
   );
 
-  if (
-    targetedWabaIds.size > 0 &&
-    !targetedWabaIds.has(wabaId)
-  ) {
+  if (targetedWabaIds.size > 0 && !targetedWabaIds.has(wabaId)) {
     throw new Error(
       'The WhatsApp Business Account returned by Embedded Signup is not included in the granted Meta assets.',
     );
@@ -282,9 +295,10 @@ export async function completeWhatsAppEmbeddedSignup(
 
   const phoneNumberId =
     suppliedPhoneNumberId ??
-    (await discoverSinglePhoneNumberId({
+    (await discoverPhoneNumberId({
       wabaId,
       accessToken: token.accessToken,
+      onboardingMode,
     }));
 
   const tokenExpiresAt =
@@ -306,6 +320,8 @@ export async function completeWhatsAppEmbeddedSignup(
     tokenExpiresAt,
     tokenType: token.tokenType,
     providerMetadata: {
+      onboarding_mode: onboardingMode,
+      coexistence_requested: onboardingMode === 'coexistence',
       token_subject_type: inspection.type,
       token_subject_id: inspection.userId,
       application: inspection.application,
