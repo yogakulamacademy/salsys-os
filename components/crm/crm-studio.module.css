@@ -72,6 +72,27 @@
   box-shadow: 0 0 0 3px rgba(33, 101, 81, 0.08);
 }
 
+.studio :global(.eyebrow) {
+  color: #87998e;
+  font-size: 10px;
+  letter-spacing: 0.15em;
+}
+
+.studio h1 {
+  color: var(--crm-ink);
+  font-weight: 650;
+  letter-spacing: -0.04em;
+}
+
+.studio h2,
+.studio h3 {
+  color: var(--crm-ink);
+}
+
+.studio p {
+  text-wrap: pretty;
+}
+
 .studio :global(.text-violet-700),
 .studio :global(.text-violet-600),
 .studio :global(.text-violet-500),
@@ -112,6 +133,45 @@
   border-color: rgba(33, 101, 81, 0.38) !important;
 }
 
+/* Existing Pipeline components keep their data and behavior; only their visual
+   tokens are remapped into the CRM Operations Studio language. */
+.studio :global(.pipeline-polish) {
+  --pipeline-purple: #216551;
+  --pipeline-purple-soft: #f0f7f3;
+  --pipeline-purple-border: #cfe4d6;
+  --pipeline-surface: #ffffff;
+  --pipeline-surface-soft: #f6f8f7;
+  --pipeline-border: #e4eae6;
+  --pipeline-text: #192e29;
+  --pipeline-muted: #6d7c76;
+}
+
+.studio :global(.pipeline-metric-card),
+.studio :global(.pipeline-stuck-section),
+.studio :global(.pipeline-insights-polish),
+.studio :global(.pipeline-board-toolbar) {
+  border-radius: 12px !important;
+  border-color: var(--crm-line) !important;
+  box-shadow: none !important;
+}
+
+.studio :global(.pipeline-metric-card.is-accent) {
+  border-color: #cfe4d6 !important;
+  background: linear-gradient(180deg, #fff 0%, #f6fbf7 100%) !important;
+}
+
+.studio :global(.pipeline-metric-icon) {
+  color: var(--crm-brand) !important;
+  background: #edf3ef !important;
+}
+
+.studio :global(.pipeline-warning) {
+  border-color: #e8e0cb !important;
+  border-radius: 8px !important;
+  background: #fcf8ef !important;
+  color: #8e794d !important;
+}
+
 .studio :global(.pipeline-board-polish) :global(.pipeline-stage-column) {
   border-radius: 10px;
   border-color: #e0e9e0;
@@ -136,16 +196,6 @@
 
 .studio :global(table) {
   font-variant-numeric: tabular-nums;
-}
-
-.studio h1,
-.studio h2,
-.studio h3 {
-  color: var(--crm-ink);
-}
-
-.studio p {
-  text-wrap: pretty;
 }
 
 @media (max-width: 1023px) {
