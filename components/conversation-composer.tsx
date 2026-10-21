@@ -134,6 +134,10 @@ export function WhatsAppComposer({
       formData.set("ai_generated", "true");
     }
 
+    /*
+     * Clear optimistically only after the user explicitly clicks Send.
+     * Any server/provider failure restores the exact draft below.
+     */
     setBody("");
     setCopilotAssisted(false);
 
@@ -170,23 +174,22 @@ export function WhatsAppComposer({
 
   if (!windowOpen) {
     return (
-      <div className="conversation-composer conversation-composer-locked border-t border-slate-100 bg-white p-4">
-        <div className="conversation-window-alert flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 p-3.5">
-          <div className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-amber-100 text-amber-700">
-            <LockKeyhole size={16} />
+      <div className="conversation-composer conversation-composer-locked bg-white p-3.5">
+        <div className="conversation-window-alert flex items-start gap-3 rounded-lg border border-[#E7D8BD] bg-[#FCF6EA] p-3">
+          <div className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-white/70 text-[#825018]">
+            <LockKeyhole size={15} />
           </div>
 
           <div className="min-w-0 flex-1">
-            <div className="text-sm font-semibold text-amber-800">
-              24-hour WhatsApp window expired
+            <div className="text-[11px] font-semibold text-[#6B501F]">
+              WhatsApp reply window closed
             </div>
 
-            <p className="mt-1 text-xs leading-5 text-amber-700">
-              A free-form reply cannot be sent now. An approved WhatsApp
-              template is required to restart the conversation.
+            <p className="mt-1 text-[10px] leading-5 text-[#715B31]">
+              Free-form sending is disabled. Use an approved template only after the channel and template state are verified.
             </p>
 
-            <div className="mt-2 text-[10px] font-medium text-amber-600">
+            <div className="mt-1.5 text-[9px] font-medium text-[#825018]">
               {windowLabel}
             </div>
           </div>
@@ -202,12 +205,24 @@ export function WhatsAppComposer({
         event.preventDefault();
         sendMessage();
       }}
-      className="conversation-composer border-t border-slate-100 bg-white p-4"
+      className="conversation-composer bg-white p-3"
     >
+      <div className="mb-2 flex items-center justify-between gap-3 px-1">
+        <div>
+          <div className="text-[10px] font-semibold text-[#18362D]">Reply draft</div>
+          <div className="mt-0.5 text-[9px] text-[#596E64]">
+            Nothing is sent until you click Send.
+          </div>
+        </div>
+        <span className="rounded-md border border-[#DCE4DF] bg-[#F6F8F7] px-2 py-1 text-[8px] font-semibold text-[#596E64]">
+          WhatsApp
+        </span>
+      </div>
+
       {availableQuickReplies.length ? (
         <div className="mb-2 flex items-center gap-2 overflow-x-auto pb-1">
-          <span className="inline-flex shrink-0 items-center gap-1 text-[10px] font-bold uppercase tracking-wide text-slate-400">
-            <Sparkles size={11} /> Quick replies
+          <span className="inline-flex shrink-0 items-center gap-1 text-[9px] font-bold uppercase tracking-wide text-[#71847A]">
+            <Sparkles size={10} /> Quick replies
           </span>
           {availableQuickReplies.slice(0, 12).map((reply) => (
             <button
@@ -216,7 +231,7 @@ export function WhatsAppComposer({
               onClick={() => applyQuickReply(reply)}
               disabled={isPending}
               title={`${reply.shortcut}${reply.category ? ` · ${reply.category}` : ""}`}
-              className="shrink-0 rounded-full border border-slate-200 bg-white px-3 py-1.5 text-[11px] font-semibold text-slate-600 transition hover:border-violet-200 hover:bg-violet-50 hover:text-violet-700 disabled:opacity-50"
+              className="shrink-0 rounded-full border border-[#DCE4DF] bg-white px-3 py-1.5 text-[10px] font-semibold text-[#596E64] transition hover:bg-[#EDF3E6] hover:text-[#216551] disabled:opacity-50"
             >
               {reply.title}
             </button>
@@ -224,50 +239,48 @@ export function WhatsAppComposer({
         </div>
       ) : null}
 
-      <div className="conversation-composer-shell rounded-xl border border-slate-200 bg-slate-50 p-2 transition focus-within:border-brand/30 focus-within:bg-white focus-within:ring-4 focus-within:ring-brand/5">
+      <div className="conversation-composer-shell rounded-lg border border-[#D4DFD2] bg-white p-2 shadow-[0_1px_3px_rgba(21,62,51,0.04)] transition focus-within:border-[#216551] focus-within:ring-2 focus-within:ring-[#216551]/10">
+        <label className="sr-only" htmlFor="whatsapp-reply-draft">
+          Write a WhatsApp reply draft
+        </label>
         <textarea
+          id="whatsapp-reply-draft"
           name="body"
           value={body}
           onChange={(event) => setBody(event.target.value.slice(0, 4096))}
-          onKeyDown={(event) => {
-            if (event.key === "Enter" && !event.shiftKey) {
-              event.preventDefault();
-              sendMessage();
-            }
-          }}
           disabled={isPending}
           required
           rows={2}
           maxLength={4096}
           autoComplete="off"
-          placeholder={isPending ? "Sending..." : "Reply on WhatsApp..."}
-          className="max-h-40 min-h-[58px] w-full resize-none bg-transparent px-2 py-2 text-sm leading-5 outline-none placeholder:text-slate-400 disabled:opacity-60"
+          placeholder={isPending ? "Sending…" : "Prepare a reply…"}
+          className="max-h-40 min-h-[62px] w-full resize-none bg-transparent px-2 py-2 text-[12px] leading-5 text-[#18362D] outline-none placeholder:text-[#71847A] disabled:opacity-60"
         />
 
-        <div className="flex flex-wrap items-center justify-between gap-3 px-1 pb-1">
-          <div className="flex items-center gap-3 text-[10px] font-medium text-slate-400">
-            <span>Enter to send · Shift + Enter for new line</span>
+        <div className="flex flex-wrap items-center justify-between gap-3 border-t border-[#EEF2EF] px-1 pt-2">
+          <div className="flex flex-wrap items-center gap-3 text-[9px] font-medium text-[#71847A]">
+            <span>Enter adds a new line</span>
             <span>{body.length}/4096</span>
-            {copilotAssisted ? <span className="text-violet-600">AI-assisted draft</span> : null}
+            {copilotAssisted ? <span className="text-[#216551]">AI-assisted draft</span> : null}
           </div>
 
           <button
             type="submit"
             disabled={!body.trim() || isPending}
-            className="btn-primary !rounded-lg !px-4 !py-2 disabled:cursor-not-allowed disabled:opacity-50"
+            className="inline-flex h-8 items-center justify-center gap-1.5 rounded-lg bg-[#153E33] px-3.5 text-[10px] font-semibold text-white transition hover:bg-[#216551] disabled:cursor-not-allowed disabled:bg-[#EDF0EC] disabled:text-[#59685F]"
           >
-            <Send size={14} />
-            {isPending ? "Sending..." : "Send"}
+            <Send size={13} />
+            {isPending ? "Sending…" : "Send"}
           </button>
         </div>
       </div>
 
-      <div className="conversation-composer-meta mt-2 flex flex-wrap items-center justify-between gap-2 text-[10px] font-medium">
-        <span className="text-emerald-600">{windowLabel}</span>
-        <span className="text-slate-400">
+      <div className="conversation-composer-meta mt-2 flex flex-wrap items-center justify-between gap-2 px-1 text-[9px] font-medium">
+        <span className="text-[#216551]">{windowLabel}</span>
+        <span className="text-[#71847A]">
           {isPending
-            ? "Sending through WhatsApp Cloud API..."
-            : "Sent through WhatsApp Cloud API + logged in CRM"}
+            ? "Sending through the verified WhatsApp action…"
+            : "Drafting does not send or change CRM stage."}
         </span>
       </div>
     </form>
