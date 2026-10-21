@@ -86,6 +86,7 @@ export function ConversationIntelligencePanel({
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [scheduling, setScheduling] = useState(false);
+  const [customScheduling, setCustomScheduling] = useState(false);
   const [completingTaskId, setCompletingTaskId] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [actionSuccess, setActionSuccess] = useState<string | null>(null);
@@ -136,6 +137,39 @@ export function ConversationIntelligencePanel({
     data?.salesIntelligence?.next_followup_at || data?.lead.nextFollowupAt || null;
   const openTask = data?.openTasks?.[0] ?? null;
 
+  async function createFollowup({
+    title,
+    dueAt,
+    description,
+    successMessage,
+  }: {
+    title: string;
+    dueAt: Date;
+    description?: string;
+    successMessage?: string;
+  }) {
+    const response = await fetch(`/api/leads/${encodeURIComponent(leadId)}/inspector`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        action: "create_followup",
+        title,
+        dueAt: dueAt.toISOString(),
+        description: description || null,
+      }),
+    });
+    const body = (await response.json()) as ActionResponse;
+    if (!response.ok || !body.ok) {
+      throw new Error(body.ok ? "Unable to schedule follow-up." : body.error);
+    }
+
+    setActionSuccess(
+      successMessage || `Follow-up scheduled for ${formatDateTime(dueAt.toISOString())}.`,
+    );
+    await load(true);
+    router.refresh();
+  }
+
   async function scheduleRecommendedFollowup() {
     if (scheduling) return;
     setScheduling(true);
@@ -144,30 +178,53 @@ export function ConversationIntelligencePanel({
 
     const dueAt = new Date(Date.now() + objective.recommendedHours * 60 * 60 * 1000);
     try {
-      const response = await fetch(`/api/leads/${encodeURIComponent(leadId)}/inspector`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          action: "create_followup",
-          title: objective.followupTitle,
-          dueAt: dueAt.toISOString(),
-          description: `Created from Inbox recommendation: ${objective.title}`,
-        }),
+      await createFollowup({
+        title: objective.followupTitle,
+        dueAt,
+        description: `Created from Inbox recommendation: ${objective.title}`,
       });
-      const body = (await response.json()) as ActionResponse;
-      if (!response.ok || !body.ok) {
-        throw new Error(body.ok ? "Unable to schedule follow-up." : body.error);
-      }
-
-      setActionSuccess(`Follow-up scheduled for ${formatDateTime(dueAt.toISOString())}.`);
-      await load(true);
-      router.refresh();
     } catch (reason) {
       setActionError(
         reason instanceof Error ? reason.message : "Unable to schedule follow-up.",
       );
     } finally {
       setScheduling(false);
+    }
+  }
+
+  async function scheduleCustomFollowup(form: HTMLFormElement) {
+    if (customScheduling) return;
+    const formData = new FormData(form);
+    const title = String(formData.get("title") ?? "").trim();
+    const rawDueAt = String(formData.get("due_at") ?? "").trim();
+    const description = String(formData.get("description") ?? "").trim();
+    const dueAt = new Date(rawDueAt);
+
+    if (!title) {
+      setActionError("Enter a follow-up action.");
+      return;
+    }
+    if (!rawDueAt || Number.isNaN(dueAt.getTime())) {
+      setActionError("Choose a valid follow-up date and time.");
+      return;
+    }
+    if (dueAt.getTime() < Date.now() - 60_000) {
+      setActionError("Choose a follow-up time in the future.");
+      return;
+    }
+
+    setCustomScheduling(true);
+    setActionError(null);
+    setActionSuccess(null);
+    try {
+      await createFollowup({ title, dueAt, description });
+      form.reset();
+    } catch (reason) {
+      setActionError(
+        reason instanceof Error ? reason.message : "Unable to schedule follow-up.",
+      );
+    } finally {
+      setCustomScheduling(false);
     }
   }
 
@@ -271,7 +328,7 @@ export function ConversationIntelligencePanel({
           <Signal label="Intent" value={pretty(data?.salesIntelligence?.derived_intent || "Not available")} />
           <Signal label="Engagement" value={numberText(data?.salesIntelligence?.engagement_score)} />
           <Signal label="Next follow-up" value={nextFollowup ? relativeTime(nextFollowup) : "Not scheduled"} />
-          <Signal label="Owner" value={data?.lead.owner || "Unassigned"} />
+          <Signal label="Lead owner" value={data?.lead.owner || "Unassigned"} />
           <Signal label="Follow-up" value={openTask ? pretty(openTask.status) : "None open"} />
         </div>
 
@@ -303,7 +360,7 @@ export function ConversationIntelligencePanel({
               <div className="mt-1 text-[9px] text-[#7A8981]">No due date recorded</div>
             )}
             <div className="mt-1 text-[9px] text-[#7A8981]">
-              Owner: {data?.lead.owner || (openTask.assigned_to ? "Assigned CRM user" : "Unassigned")}
+              Follow-up owner: {openTask.assigned_to ? "Assigned CRM user" : "Unassigned"}
             </div>
             <button
               type="button"
@@ -336,12 +393,76 @@ export function ConversationIntelligencePanel({
           <button
             type="button"
             onClick={scheduleRecommendedFollowup}
-            disabled={scheduling}
+            disabled={scheduling || customScheduling}
             className="inline-flex h-9 items-center justify-center gap-1.5 rounded-lg bg-[#216551] px-3 text-[10px] font-semibold text-white transition hover:bg-[#174D3B] disabled:cursor-not-allowed disabled:opacity-60"
           >
             {scheduling ? <RefreshCw size={12} className="animate-spin" /> : <CalendarClock size={12} />}
             {scheduling ? "Scheduling…" : objective.scheduleLabel}
           </button>
+
+          <details className="group rounded-lg border border-[#DDE7DF] bg-white">
+            <summary className="flex cursor-pointer list-none items-center justify-between px-3 py-2.5 text-[9px] font-semibold text-[#456158] hover:bg-[#F7FAF8]">
+              Plan a custom follow-up
+              <CalendarClock size={11} className="text-[#718078]" />
+            </summary>
+            <form
+              className="space-y-2.5 border-t border-[#EEF2EF] p-3"
+              onSubmit={(event) => {
+                event.preventDefault();
+                void scheduleCustomFollowup(event.currentTarget);
+              }}
+            >
+              <label className="block">
+                <span className="mb-1 block text-[8px] font-semibold uppercase tracking-[0.08em] text-[#718078]">
+                  Action
+                </span>
+                <input
+                  name="title"
+                  required
+                  maxLength={240}
+                  defaultValue={objective.followupTitle}
+                  className="input"
+                  placeholder="e.g. Confirm course interest"
+                />
+              </label>
+              <label className="block">
+                <span className="mb-1 block text-[8px] font-semibold uppercase tracking-[0.08em] text-[#718078]">
+                  Due date & time
+                </span>
+                <input
+                  name="due_at"
+                  type="datetime-local"
+                  required
+                  defaultValue={localDateTimeValue(objective.recommendedHours)}
+                  className="input"
+                />
+              </label>
+              <div className="rounded-md bg-[#F5F8F6] px-2.5 py-2 text-[9px] text-[#596E64]">
+                <strong className="font-semibold text-[#40564C]">Owner:</strong>{" "}
+                current signed-in user. The canonical follow-up RPC assigns the task to the operator creating it.
+              </div>
+              <label className="block">
+                <span className="mb-1 block text-[8px] font-semibold uppercase tracking-[0.08em] text-[#718078]">
+                  Note (optional)
+                </span>
+                <textarea
+                  name="description"
+                  rows={2}
+                  maxLength={4000}
+                  className="input min-h-[58px] resize-y"
+                  placeholder="Internal context for this follow-up…"
+                />
+              </label>
+              <button
+                type="submit"
+                disabled={customScheduling || scheduling}
+                className="inline-flex h-8 w-full items-center justify-center gap-1.5 rounded-lg bg-[#153E33] px-3 text-[9px] font-semibold text-white transition hover:bg-[#216551] disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {customScheduling ? <RefreshCw size={10} className="animate-spin" /> : <CalendarClock size={10} />}
+                {customScheduling ? "Saving…" : "Save follow-up"}
+              </button>
+            </form>
+          </details>
 
           <LeadInspectorButton
             leadId={leadId}
@@ -353,7 +474,7 @@ export function ConversationIntelligencePanel({
         <div className="mt-3 flex items-start gap-2 border-t border-[#EEF2EF] pt-3 text-[9px] leading-4 text-[#849188]">
           <Zap size={11} className="mt-0.5 shrink-0 text-[#6A927B]" />
           <span>
-            Guidance uses stored CRM evidence. AI drafting remains human-reviewed; nothing is sent automatically.
+            Guidance uses stored CRM evidence. Follow-ups create CRM tasks only; AI drafting remains human-reviewed and nothing is sent automatically.
           </span>
         </div>
       </div>
@@ -502,4 +623,10 @@ function relativeTime(value: string) {
   if (hours < 24) return `${hours}h ${suffix}`;
   const days = Math.round(hours / 24);
   return `${days}d ${suffix}`;
+}
+
+function localDateTimeValue(hoursFromNow: number) {
+  const date = new Date(Date.now() + hoursFromNow * 60 * 60 * 1000);
+  const local = new Date(date.getTime() - date.getTimezoneOffset() * 60_000);
+  return local.toISOString().slice(0, 16);
 }
