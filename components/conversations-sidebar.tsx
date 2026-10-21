@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { Flag, MessageCircle, Search, X } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import type { Channel, LeadStage } from "@/types/crm";
 
@@ -36,12 +36,42 @@ export function ConversationsSidebar({
   const [filter, setFilter] = useState<InboxFilter>("all");
   const [priorityOnly, setPriorityOnly] = useState(false);
   const [now, setNow] = useState(0);
+  const searchRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
     const update = () => setNow(Date.now());
     update();
     const timer = window.setInterval(update, 60_000);
     return () => window.clearInterval(timer);
+  }, []);
+
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (
+        event.key !== "/" ||
+        event.altKey ||
+        event.ctrlKey ||
+        event.metaKey ||
+        event.shiftKey
+      ) {
+        return;
+      }
+
+      const target = event.target as HTMLElement | null;
+      if (
+        target?.matches("input, textarea, select") ||
+        target?.isContentEditable
+      ) {
+        return;
+      }
+
+      event.preventDefault();
+      searchRef.current?.focus();
+      searchRef.current?.select();
+    };
+
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
   }, []);
 
   const unreadCount = leads.filter((lead) => lead.unread).length;
@@ -82,6 +112,28 @@ export function ConversationsSidebar({
     });
   }, [filter, leads, priorityOnly, search]);
 
+  function handleFilterKeyDown(event: React.KeyboardEvent<HTMLDivElement>) {
+    if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) {
+      return;
+    }
+
+    const tabs = Array.from(
+      event.currentTarget.querySelectorAll<HTMLButtonElement>('[role="tab"]'),
+    );
+    const activeIndex = tabs.findIndex((tab) => tab === document.activeElement);
+    if (activeIndex < 0 || tabs.length === 0) return;
+
+    event.preventDefault();
+    let nextIndex = activeIndex;
+    if (event.key === "ArrowRight") nextIndex = (activeIndex + 1) % tabs.length;
+    if (event.key === "ArrowLeft") nextIndex = (activeIndex - 1 + tabs.length) % tabs.length;
+    if (event.key === "Home") nextIndex = 0;
+    if (event.key === "End") nextIndex = tabs.length - 1;
+
+    tabs[nextIndex]?.focus();
+    tabs[nextIndex]?.click();
+  }
+
   return (
     <aside className="flex h-full min-h-0 flex-col overflow-hidden bg-white dark:bg-slate-950">
       <div className="shrink-0 px-4 pt-4">
@@ -101,12 +153,17 @@ export function ConversationsSidebar({
             className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[#71847A]"
           />
           <input
+            ref={searchRef}
             value={search}
             onChange={(event) => setSearch(event.target.value)}
             placeholder="Search conversations…"
-            className="h-9 w-full rounded-lg border border-[#D7E0D9] bg-[#FCFDFB] pl-9 pr-8 text-[11px] text-[#18362D] outline-none transition placeholder:text-[#71847A] focus:border-[#216551] focus:ring-2 focus:ring-[#216551]/15 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-100"
+            className="h-9 w-full rounded-lg border border-[#D7E0D9] bg-[#FCFDFB] pl-9 pr-14 text-[11px] text-[#18362D] outline-none transition placeholder:text-[#71847A] focus:border-[#216551] focus:ring-2 focus:ring-[#216551]/15 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-100"
           />
-          {search ? (
+          {!search ? (
+            <kbd className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 rounded border border-[#DCE4DF] bg-white px-1.5 py-0.5 text-[9px] font-medium text-[#71847A] dark:border-slate-700 dark:bg-slate-950">
+              /
+            </kbd>
+          ) : (
             <button
               type="button"
               onClick={() => setSearch("")}
@@ -115,13 +172,14 @@ export function ConversationsSidebar({
             >
               <X size={12} />
             </button>
-          ) : null}
+          )}
         </label>
 
         <div
           className="mt-3 grid grid-cols-3 border-b border-[#DCE4DF]"
           role="tablist"
           aria-label="Conversation filters"
+          onKeyDown={handleFilterKeyDown}
         >
           <InboxTab
             active={filter === "all"}
