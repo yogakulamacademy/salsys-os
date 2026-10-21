@@ -134,6 +134,16 @@ function authConfigurationError(pathname: string) {
   return new NextResponse("CRM authentication is not configured.", { status: 503 });
 }
 
+function workspaceResolutionError(message: string, status = 503) {
+  return new NextResponse(message, {
+    status,
+    headers: {
+      "Cache-Control": "no-store",
+      "Content-Type": "text/plain; charset=utf-8",
+    },
+  });
+}
+
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
@@ -216,6 +226,11 @@ export async function middleware(request: NextRequest) {
     if (pathname.startsWith("/api/")) {
       return NextResponse.json({ ok: false, error: "Workspace context unavailable." }, { status: 403 });
     }
+    if (normalizePathname(pathname) === "/workspace") {
+      return workspaceResolutionError(
+        "Workspace context is temporarily unavailable. Refresh the page or sign out and sign in again.",
+      );
+    }
     return redirectWithAuthCookies(request, response, "/workspace");
   }
 
@@ -225,6 +240,9 @@ export async function middleware(request: NextRequest) {
   if (!role) {
     if (pathname.startsWith("/api/")) {
       return NextResponse.json({ ok: false, error: "Workspace access denied." }, { status: 403 });
+    }
+    if (normalizePathname(pathname) === "/workspace") {
+      return workspaceResolutionError("Workspace access denied.", 403);
     }
     return redirectWithAuthCookies(request, response, "/workspace");
   }
