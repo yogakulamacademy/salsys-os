@@ -1,0 +1,13 @@
+import type { ReactNode } from 'react';
+
+import { CrmNavigation } from '@/components/crm/crm-navigation';
+import styles from '@/components/crm/crm-studio.module.css';
+
+export function CrmWorkspaceFrame({ children }: { children: ReactNode }) {
+  return (
+    <div className={`${styles.studio} grid gap-5 lg:grid-cols-[220px_minmax(0,1fr)] xl:grid-cols-[236px_minmax(0,1fr)] xl:gap-6`}>
+      <CrmNavigation />
+      <div className="min-w-0 pb-8">{children}</div>
+    </div>
+  );
+}
