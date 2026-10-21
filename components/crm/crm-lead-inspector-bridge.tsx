@@ -28,7 +28,12 @@ export function CrmLeadInspectorBridge({ children }: { children: React.ReactNode
       if (!(target instanceof Element)) return;
 
       const anchor = target.closest<HTMLAnchorElement>("a[href]");
-      if (!anchor || !host.contains(anchor)) return;
+      if (!anchor) return;
+
+      // Read the ref again inside the callback so TypeScript and runtime both
+      // account for the host being detached during a navigation transition.
+      const currentHost = hostRef.current;
+      if (!currentHost || !currentHost.contains(anchor)) return;
       if (anchor.dataset.nativeLeadNavigation === "true") return;
       if (anchor.target === "_blank" || anchor.hasAttribute("download")) return;
 
