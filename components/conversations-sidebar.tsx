@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { Bell, Clock3, MessageCircle, Search, Sparkles, X } from "lucide-react";
+import { Flag, MessageCircle, Search, X } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 
 import type { Channel, LeadStage } from "@/types/crm";
@@ -23,7 +23,7 @@ export type ConversationLeadSummary = {
   waitingSince: string | null;
 };
 
-type InboxFilter = "all" | "priority" | "attention" | "unread";
+type InboxFilter = "all" | "reply" | "unread";
 
 export function ConversationsSidebar({
   leads,
@@ -34,6 +34,7 @@ export function ConversationsSidebar({
 }) {
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState<InboxFilter>("all");
+  const [priorityOnly, setPriorityOnly] = useState(false);
   const [now, setNow] = useState(0);
 
   useEffect(() => {
@@ -44,27 +45,25 @@ export function ConversationsSidebar({
   }, []);
 
   const unreadCount = leads.filter((lead) => lead.unread).length;
-  const attentionCount = leads.filter(
-    (lead) => lead.needsReply || lead.needsFirstContact,
-  ).length;
+  const replyCount = leads.filter((lead) => lead.needsReply).length;
   const priorityCount = leads.filter(
     (lead) => lead.priority === "urgent" || lead.priority === "high",
   ).length;
 
   const filteredLeads = useMemo(() => {
     const query = search.trim().toLowerCase();
+
     return leads.filter((lead) => {
+      if (filter === "reply" && !lead.needsReply) return false;
+      if (filter === "unread" && !lead.unread) return false;
       if (
-        filter === "priority" &&
+        priorityOnly &&
         lead.priority !== "urgent" &&
         lead.priority !== "high"
       ) {
         return false;
       }
-      if (filter === "attention" && !lead.needsReply && !lead.needsFirstContact) {
-        return false;
-      }
-      if (filter === "unread" && !lead.unread) return false;
+
       if (!query) return true;
 
       return [
@@ -81,86 +80,120 @@ export function ConversationsSidebar({
         .toLowerCase()
         .includes(query);
     });
-  }, [filter, leads, search]);
+  }, [filter, leads, priorityOnly, search]);
 
   return (
     <aside className="flex h-full min-h-0 flex-col overflow-hidden bg-white dark:bg-slate-950">
-      <div className="shrink-0 border-b border-[#E8EEEA] px-3 py-3 dark:border-slate-900">
+      <div className="shrink-0 px-4 pt-4">
         <div className="flex items-center justify-between gap-3">
-          <div>
-            <div className="text-[12px] font-semibold text-[#203B31] dark:text-white">Inbox</div>
-            <div className="mt-0.5 text-[10px] text-[#89968F]">
-              Work the conversations that matter now
-            </div>
+          <div className="text-[13px] font-semibold text-[#18362D] dark:text-white">
+            Your inbox
           </div>
-          <div className="rounded-md bg-[#F3F7F4] px-2 py-1 text-[9px] font-semibold text-[#60736A]">
-            {leads.length}
+          <div className="text-[10px] font-medium text-[#596E64] dark:text-slate-400">
+            {leads.length} conversations
           </div>
         </div>
 
-        <div className="relative mt-3">
+        <label className="relative mt-3 block">
+          <span className="sr-only">Search conversations</span>
           <Search
             size={14}
-            className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[#8C9991]"
+            className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[#71847A]"
           />
           <input
             value={search}
             onChange={(event) => setSearch(event.target.value)}
-            placeholder="Search leads, course, stage…"
-            className="h-9 w-full rounded-lg border border-[#DDE7DF] bg-[#F7F9F8] pl-9 pr-8 text-[11px] text-[#344E42] outline-none transition placeholder:text-[#9AA69F] focus:border-[#AAC7B4] focus:bg-white dark:border-slate-800 dark:bg-slate-900 dark:text-slate-100 dark:focus:bg-slate-950"
+            placeholder="Search conversations…"
+            className="h-9 w-full rounded-lg border border-[#D7E0D9] bg-[#FCFDFB] pl-9 pr-8 text-[11px] text-[#18362D] outline-none transition placeholder:text-[#71847A] focus:border-[#216551] focus:ring-2 focus:ring-[#216551]/15 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-100"
           />
           {search ? (
             <button
               type="button"
               onClick={() => setSearch("")}
-              className="absolute right-2 top-1/2 grid h-6 w-6 -translate-y-1/2 place-items-center rounded-md text-[#89968F] hover:bg-[#EAF1EC]"
+              className="absolute right-2 top-1/2 grid h-6 w-6 -translate-y-1/2 place-items-center rounded-md text-[#71847A] hover:bg-[#EDF3E6] hover:text-[#216551]"
               aria-label="Clear conversation search"
             >
               <X size={12} />
             </button>
           ) : null}
-        </div>
+        </label>
 
-        <div className="mt-2 flex flex-wrap items-center gap-1.5">
-          <FilterButton active={filter === "all"} onClick={() => setFilter("all")}>
-            All {leads.length}
-          </FilterButton>
-          <FilterButton
-            active={filter === "priority"}
-            onClick={() => setFilter("priority")}
-            attention={priorityCount > 0}
+        <div
+          className="mt-3 grid grid-cols-3 border-b border-[#DCE4DF]"
+          role="tablist"
+          aria-label="Conversation filters"
+        >
+          <InboxTab
+            active={filter === "all"}
+            onClick={() => setFilter("all")}
+            count={leads.length}
           >
-            Priority {priorityCount}
-          </FilterButton>
-          <FilterButton
-            active={filter === "attention"}
-            onClick={() => setFilter("attention")}
-            attention={attentionCount > 0}
+            All
+          </InboxTab>
+          <InboxTab
+            active={filter === "reply"}
+            onClick={() => setFilter("reply")}
+            count={replyCount}
           >
-            Reply {attentionCount}
-          </FilterButton>
-          <FilterButton
+            Needs reply
+          </InboxTab>
+          <InboxTab
             active={filter === "unread"}
             onClick={() => setFilter("unread")}
+            count={unreadCount}
           >
-            Unread {unreadCount}
-          </FilterButton>
+            Unread
+          </InboxTab>
         </div>
       </div>
 
-      <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
+      <div className="flex shrink-0 items-center justify-between gap-3 border-b border-[#DCE4DF] px-4 py-2.5 text-[9px] text-[#596E64] dark:border-slate-900 dark:text-slate-400">
+        <span aria-live="polite">
+          {filteredLeads.length} conversation{filteredLeads.length === 1 ? "" : "s"}
+        </span>
+        <label className="flex items-center gap-1.5">
+          <span className="sr-only">Priority filter</span>
+          <select
+            value={priorityOnly ? "priority" : "all"}
+            onChange={(event) => setPriorityOnly(event.target.value === "priority")}
+            className="h-7 rounded-md border border-transparent bg-white px-1.5 text-[10px] text-[#596E64] outline-none focus:border-[#216551] focus:ring-2 focus:ring-[#216551]/15 dark:bg-slate-950 dark:text-slate-300"
+          >
+            <option value="all">All priorities</option>
+            <option value="priority">Priority only ({priorityCount})</option>
+          </select>
+        </label>
+      </div>
+
+      <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-1.5 [scrollbar-width:thin]">
         {filteredLeads.length === 0 ? (
-          <div className="grid min-h-[240px] place-items-center px-5 text-center">
+          <div className="grid min-h-[260px] place-items-center px-5 text-center">
             <div>
-              <div className="mx-auto grid h-10 w-10 place-items-center rounded-xl bg-[#EFF4F0] text-[#82968A] dark:bg-slate-900">
+              <div className="mx-auto grid h-10 w-10 place-items-center rounded-xl bg-[#EDF3E6] text-[#216551] dark:bg-slate-900">
                 <MessageCircle size={17} />
               </div>
-              <div className="mt-3 text-xs font-semibold text-[#40564C] dark:text-slate-200">
-                No matching conversations
+              <div className="mt-3 text-xs font-semibold text-[#18362D] dark:text-slate-200">
+                {filter === "unread" && !search && !priorityOnly
+                  ? "You’re all caught up"
+                  : "No matching conversations"}
               </div>
-              <div className="mt-1 text-[10px] text-[#8A978F]">
-                Try another search or operational view.
+              <div className="mt-1 text-[10px] leading-5 text-[#596E64] dark:text-slate-400">
+                {filter === "unread" && !search && !priorityOnly
+                  ? "There are no unread conversations right now."
+                  : "Try another search or remove a filter."}
               </div>
+              {search || filter !== "all" || priorityOnly ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSearch("");
+                    setFilter("all");
+                    setPriorityOnly(false);
+                  }}
+                  className="mt-3 rounded-lg border border-[#D7E0D9] bg-white px-3 py-1.5 text-[10px] font-semibold text-[#216551] hover:bg-[#EDF3E6] dark:border-slate-800 dark:bg-slate-950"
+                >
+                  View all conversations
+                </button>
+              ) : null}
             </div>
           </div>
         ) : (
@@ -173,6 +206,10 @@ export function ConversationsSidebar({
             />
           ))
         )}
+      </div>
+
+      <div className="shrink-0 border-t border-[#DCE4DF] px-4 py-2.5 text-[9px] text-[#71847A] dark:border-slate-900 dark:text-slate-500">
+        Search and filters do not change CRM records.
       </div>
     </aside>
   );
@@ -187,84 +224,84 @@ function ConversationRow({
   selected: boolean;
   now: number;
 }) {
-  const action = lead.needsFirstContact
-    ? "First contact"
-    : lead.needsReply
-      ? "Reply now"
-      : "Waiting on lead";
-  const actionTone = lead.needsFirstContact
-    ? "text-sky-700"
-    : lead.needsReply
-      ? "text-amber-700"
-      : "text-[#829087]";
   const highPriority = lead.priority === "urgent" || lead.priority === "high";
+  const stage = lead.stage.replaceAll("_", " ");
+  const sourceLabel = lead.currentContactChannel.replaceAll("_", " ");
+  const contextPreview =
+    lead.course && lead.course !== "Not selected"
+      ? lead.course
+      : `${sourceLabel} inquiry · Course not selected`;
 
   return (
     <Link
       href={`/conversations?lead=${lead.id}`}
-      className={`group relative block border-b border-[#EEF2EF] px-3 py-3 transition dark:border-slate-900 ${
+      aria-current={selected ? "page" : undefined}
+      className={`group relative mb-1 block rounded-lg border px-3 py-3 transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#216551] focus-visible:ring-offset-1 ${
         selected
-          ? "bg-[#F0F7F3] dark:bg-emerald-950/10"
-          : "bg-white hover:bg-[#F8FAF8] dark:bg-slate-950 dark:hover:bg-slate-900/50"
+          ? "border-[#DCE6D1] bg-[#EDF3E6] dark:border-emerald-900/40 dark:bg-emerald-950/15"
+          : "border-transparent bg-white hover:bg-[#F6F8F7] dark:bg-slate-950 dark:hover:bg-slate-900/50"
       }`}
     >
       {selected ? (
-        <span className="absolute inset-y-3 left-0 w-[2px] rounded-r-full bg-[#216551]" />
+        <span className="absolute bottom-4 left-0 top-4 w-[3px] rounded-r-full bg-[#216551]" />
       ) : null}
 
-      <div className="flex gap-3">
+      <div className="flex gap-2.5">
         <div
-          className={`grid h-9 w-9 shrink-0 place-items-center rounded-full text-[10px] font-bold ${
+          className={`mt-0.5 grid h-8 w-8 shrink-0 place-items-center rounded-full text-[10px] font-bold ${
             selected
-              ? "bg-[#DDEFE3] text-[#216551]"
-              : "bg-[#F0F4F1] text-[#60736A] dark:bg-slate-900 dark:text-slate-300"
+              ? "bg-[#D7E3C9] text-[#216551]"
+              : "bg-[#EDF1EB] text-[#596E64] dark:bg-slate-900 dark:text-slate-300"
           }`}
         >
           {initials(lead.name)}
         </div>
 
         <div className="min-w-0 flex-1">
-          <div className="flex items-start justify-between gap-3">
-            <div
-              className={`truncate text-[12px] ${
-                lead.unread
-                  ? "font-bold text-[#192E29] dark:text-white"
-                  : "font-semibold text-[#344E42] dark:text-slate-100"
-              }`}
-            >
+          <div className="flex items-center justify-between gap-2">
+            <div className="min-w-0 truncate text-[12px] font-semibold text-[#18362D] dark:text-slate-100">
+              {lead.unread ? (
+                <span
+                  className="mr-1.5 inline-block h-1.5 w-1.5 rounded-full bg-[#216551] align-middle"
+                  aria-label="Unread"
+                />
+              ) : null}
               {lead.name}
             </div>
-            <div className="shrink-0 text-[9px] text-[#8A978F]">
+            <div className="shrink-0 text-[9px] text-[#71847A] dark:text-slate-500">
               {lead.lastContactedAt
                 ? formatListTime(lead.lastContactedAt, now)
                 : "New"}
             </div>
           </div>
 
-          <div className="mt-1 flex items-center gap-1.5 text-[10px] text-[#718078]">
-            <span className="capitalize">
-              {lead.currentContactChannel.replaceAll("_", " ")}
-            </span>
-            <span>·</span>
-            <span className="truncate">
-              {lead.course && lead.course !== "Not selected"
-                ? lead.course
-                : "Course not selected"}
-            </span>
+          <div className="mt-1 truncate text-[10px] capitalize text-[#596E64] dark:text-slate-400">
+            {contextPreview}
           </div>
 
-          <div className="mt-2 flex items-center justify-between gap-3">
-            <div className="flex min-w-0 items-center gap-1.5">
-              <div className={`inline-flex items-center gap-1 text-[9px] font-semibold ${actionTone}`}>
-                {lead.unread ? <Bell size={9} /> : null}
-                {action}
-              </div>
-              {highPriority ? <PriorityLabel priority={lead.priority} /> : <StageLabel stage={lead.stage} />}
-            </div>
-            {lead.waitingSince && (lead.needsReply || lead.needsFirstContact) ? (
-              <div className="inline-flex shrink-0 items-center gap-1 text-[9px] text-[#87948D]">
-                <Clock3 size={9} /> {formatWaitingTime(lead.waitingSince, now)}
-              </div>
+          <div className="mt-2.5 flex min-w-0 items-center gap-1.5">
+            {lead.needsReply ? (
+              <span className="inline-flex items-center gap-1 text-[9px] font-semibold text-[#825018]">
+                <span className="h-1 w-1 rounded-full bg-[#9B6B25]" /> Needs reply
+              </span>
+            ) : lead.needsFirstContact ? (
+              <span className="text-[9px] font-semibold text-sky-700">First contact</span>
+            ) : (
+              <span className="text-[9px] text-[#71847A]">Reviewed</span>
+            )}
+
+            <span className="max-w-[108px] truncate rounded border border-[#D6E1D0] bg-[#F1F5ED] px-1.5 py-0.5 text-[9px] font-medium capitalize leading-none text-[#365844] dark:border-slate-800 dark:bg-slate-900 dark:text-slate-300">
+              {stage}
+            </span>
+
+            {highPriority ? (
+              <span
+                className="ml-auto inline-flex shrink-0 items-center text-[#825018]"
+                title={`${lead.priority} priority`}
+                aria-label={`${lead.priority} priority`}
+              >
+                <Flag size={12} />
+              </span>
             ) : null}
           </div>
         </div>
@@ -273,60 +310,34 @@ function ConversationRow({
   );
 }
 
-function PriorityLabel({ priority }: { priority: ConversationPriority }) {
-  return (
-    <span className="inline-flex items-center gap-1 rounded-full border border-[#CFE3D5] bg-[#E9F4EC] px-1.5 py-0.5 text-[8px] font-semibold capitalize leading-none text-[#216551]">
-      <Sparkles size={8} /> {priority}
-    </span>
-  );
-}
-
-function StageLabel({ stage }: { stage: LeadStage }) {
-  const label = stage.replaceAll("_", " ");
-  const tone =
-    stage === "enrolled"
-      ? "border-emerald-200 bg-emerald-50 text-emerald-700"
-      : stage === "payment_pending" || stage === "high_intent"
-        ? "border-amber-200 bg-amber-50 text-amber-700"
-        : stage === "qualified" || stage === "engaged"
-          ? "border-[#CFE3D5] bg-[#EDF6EF] text-[#39705B]"
-          : stage === "contacted" || stage === "new"
-            ? "border-sky-200 bg-sky-50 text-sky-700"
-            : "border-slate-200 bg-slate-50 text-slate-600";
-
-  return (
-    <span
-      className={`max-w-[112px] truncate rounded-full border px-1.5 py-0.5 text-[8px] font-semibold capitalize leading-none ${tone}`}
-    >
-      {label}
-    </span>
-  );
-}
-
-function FilterButton({
+function InboxTab({
   active,
   onClick,
+  count,
   children,
-  attention = false,
 }: {
   active: boolean;
   onClick: () => void;
+  count: number;
   children: React.ReactNode;
-  attention?: boolean;
 }) {
   return (
     <button
       type="button"
+      role="tab"
+      aria-selected={active}
+      tabIndex={active ? 0 : -1}
       onClick={onClick}
-      className={`rounded-lg px-2.5 py-1.5 text-[9px] font-semibold transition ${
+      className={`border-b-2 px-1 pb-2.5 pt-1 text-[10px] transition ${
         active
-          ? "bg-[#216551] text-white"
-          : attention
-            ? "bg-[#E9F4EC] text-[#216551] hover:bg-[#DDEFE3]"
-            : "bg-[#F1F4F2] text-[#687A70] hover:text-[#344E42] dark:bg-slate-900 dark:text-slate-400"
+          ? "border-[#216551] font-semibold text-[#153E33]"
+          : "border-transparent text-[#596E64] hover:text-[#18362D]"
       }`}
     >
       {children}
+      <span className="ml-1 rounded bg-[#F0F3EF] px-1 py-0.5 text-[9px] font-medium text-[#596E64]">
+        {count}
+      </span>
     </button>
   );
 }
@@ -343,29 +354,21 @@ function initials(name: string) {
   );
 }
 
-function formatWaitingTime(value: string, now: number) {
-  if (now <= 0) return "—";
-  const timestamp = new Date(value).getTime();
-  if (!Number.isFinite(timestamp)) return "—";
-  const diff = Math.max(0, now - timestamp);
-  const minutes = Math.floor(diff / 60_000);
-  if (minutes < 60) return `${Math.max(1, minutes)}m`;
-  const hours = Math.floor(minutes / 60);
-  if (hours < 24) return `${hours}h`;
-  return `${Math.floor(hours / 24)}d`;
-}
-
 function formatListTime(value: string, now: number) {
   const timestamp = new Date(value).getTime();
   if (!Number.isFinite(timestamp) || now <= 0) return "—";
+
   const diff = Math.max(0, now - timestamp);
   const minutes = Math.floor(diff / 60_000);
   if (minutes < 1) return "now";
   if (minutes < 60) return `${minutes}m`;
+
   const hours = Math.floor(minutes / 60);
   if (hours < 24) return `${hours}h`;
+
   const days = Math.floor(hours / 24);
   if (days < 7) return `${days}d`;
+
   return new Intl.DateTimeFormat("en-IN", {
     day: "numeric",
     month: "short",
