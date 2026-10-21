@@ -34,43 +34,40 @@ type NavigationGroup = {
 const groups: NavigationGroup[] = [
   {
     label: 'Workspace',
-    items: [{ href: '/automation', label: 'Overview', icon: LayoutDashboard }],
-  },
-  {
-    label: 'Build',
     items: [
-      { href: '/automation/flow-builder', label: 'Flows', icon: Workflow },
-      { href: '/automation/triggers', label: 'Smart Triggers', icon: GitBranch },
-      { href: '/automation/recipes', label: 'Starter Recipes', icon: Sparkles },
+      { href: '/automation', label: 'Overview', icon: LayoutDashboard },
+      { href: '/automation/flow-builder', label: 'Flow builder', icon: Workflow },
+      { href: '/automation/triggers', label: 'Smart triggers', icon: GitBranch },
+      { href: '/automation/recipes', label: 'Starter recipes', icon: Sparkles },
     ],
   },
   {
-    label: 'Messaging',
+    label: 'Channels',
     items: [
-      { href: '/automation/whatsapp', label: 'WhatsApp Ops', icon: MessageCircleMore },
-      { href: '/automation/templates', label: 'WhatsApp Templates', icon: MessageSquareText },
-      { href: '/automation/whatsapp/growth', label: 'WhatsApp Growth', icon: BarChart3 },
-      { href: '/automation/instagram', label: 'Instagram Ops', icon: Instagram },
+      { href: '/automation/whatsapp', label: 'WhatsApp ops', icon: MessageCircleMore },
+      { href: '/automation/templates', label: 'WhatsApp templates', icon: MessageSquareText },
+      { href: '/automation/whatsapp/growth', label: 'WhatsApp growth', icon: BarChart3 },
+      { href: '/automation/instagram', label: 'Instagram ops', icon: Instagram },
     ],
   },
   {
     label: 'Governance',
     items: [
-      { href: '/automation/approvals', label: 'Approval Queue', icon: ListChecks },
-      { href: '/automation/pilot', label: 'Controlled Rollout', icon: LockKeyhole },
-      { href: '/automation/readiness', label: 'Launch Readiness', icon: ShieldCheck },
+      { href: '/automation/approvals', label: 'Approval queue', icon: ListChecks },
+      { href: '/automation/pilot', label: 'Pilot control', icon: LockKeyhole },
+      { href: '/automation/readiness', label: 'Launch readiness', icon: ShieldCheck },
     ],
   },
   {
-    label: 'Monitoring',
+    label: 'Observability',
     items: [
-      { href: '/automation/runs', label: 'Execution Monitor', icon: Activity },
-      { href: '/automation/audits', label: 'Provider Health', icon: FileSearch },
+      { href: '/automation/runs', label: 'Runtime monitor', icon: Activity },
+      { href: '/automation/audits', label: 'Provider & audit', icon: FileSearch },
     ],
   },
   {
-    label: 'System',
-    items: [{ href: '/automation/settings', label: 'Settings', icon: Settings2 }],
+    label: 'Settings',
+    items: [{ href: '/automation/settings', label: 'Automation settings', icon: Settings2 }],
   },
 ];
 
@@ -86,7 +83,7 @@ function NavigationLinks({ mobile = false }: { mobile?: boolean }) {
     <div className={mobile ? 'space-y-5' : 'space-y-5'}>
       {groups.map((group) => (
         <div key={group.label}>
-          <div className="mb-1.5 px-3 text-[10px] font-bold uppercase tracking-[0.17em] text-slate-400">
+          <div className="mb-1.5 px-3 text-[9px] font-bold uppercase tracking-[0.16em] text-[#8a9790]">
             {group.label}
           </div>
           <div className="space-y-0.5">
@@ -96,18 +93,19 @@ function NavigationLinks({ mobile = false }: { mobile?: boolean }) {
                 <Link
                   key={href}
                   href={href}
-                  className={`group flex items-center gap-3 rounded-xl px-3 py-2.5 text-[13px] font-semibold transition ${
+                  className={`group relative flex items-center gap-2.5 rounded-[7px] px-3 py-2.5 text-[12px] transition ${
                     active
-                      ? 'bg-violet-50 text-violet-700 shadow-[inset_0_0_0_1px_rgba(124,58,237,0.08)]'
-                      : 'text-slate-600 hover:bg-slate-50 hover:text-slate-950'
+                      ? 'bg-[#eaf4ed] font-semibold text-[#216551]'
+                      : 'font-medium text-[#64746c] hover:bg-[#f3f6f3] hover:text-[#216551]'
                   }`}
                 >
+                  {active ? <span className="absolute -left-4 h-[18px] w-[3px] rounded-r bg-[#216551]" /> : null}
                   <Icon
-                    size={17}
+                    size={16}
                     className={
                       active
-                        ? 'text-violet-600'
-                        : 'text-slate-400 transition group-hover:text-slate-600'
+                        ? 'text-[#216551]'
+                        : 'text-[#91a096] transition group-hover:text-[#216551]'
                     }
                   />
                   <span>{label}</span>
@@ -129,31 +127,31 @@ export function AutomationNavigation() {
 
   return (
     <>
-      <details className="group rounded-2xl border border-slate-200 bg-white shadow-sm lg:hidden">
-        <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3.5 text-sm font-semibold text-slate-900 [&::-webkit-details-marker]:hidden">
+      <details className="group rounded-xl border border-[#e4eae6] bg-white lg:hidden">
+        <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3.5 text-sm font-semibold text-[#192e29] [&::-webkit-details-marker]:hidden">
           <span className="flex items-center gap-2.5">
-            <span className="grid h-8 w-8 place-items-center rounded-xl bg-violet-50 text-violet-700">
+            <span className="grid h-8 w-8 place-items-center rounded-lg bg-[#eaf4ed] text-[#216551]">
               <Workflow size={16} />
             </span>
             {current?.label || 'Automation'}
           </span>
-          <ChevronDown size={16} className="text-slate-400 transition group-open:rotate-180" />
+          <ChevronDown size={16} className="text-[#91a096] transition group-open:rotate-180" />
         </summary>
-        <div className="border-t border-slate-100 p-3">
-          <div className="mb-4 rounded-xl bg-slate-50 px-3 py-2.5">
-            <div className="text-sm font-bold text-slate-950">Automation</div>
-            <div className="mt-0.5 text-xs text-slate-500">Build, govern and monitor safe messaging workflows.</div>
+        <div className="border-t border-[#e4eae6] p-3">
+          <div className="mb-4 rounded-lg bg-[#f6f8f7] px-3 py-2.5">
+            <div className="text-sm font-bold text-[#192e29]">Automation</div>
+            <div className="mt-0.5 text-xs leading-5 text-[#6d7c76]">Build, govern and monitor reliable messaging workflows.</div>
           </div>
           <NavigationLinks mobile />
         </div>
       </details>
 
-      <aside className="hidden min-h-[calc(100vh-7rem)] border-r border-slate-200 pr-4 lg:block">
+      <aside className="hidden min-h-[calc(100vh-7rem)] border-r border-[#e4eae6] pr-4 lg:block">
         <div className="sticky top-20 pb-8">
           <div className="mb-6 px-3 pt-1">
-            <div className="text-[15px] font-bold text-slate-950">Automation</div>
-            <p className="mt-1 max-w-[180px] text-xs leading-5 text-slate-500">
-              Build, govern and monitor safe messaging workflows.
+            <div className="text-[15px] font-bold text-[#192e29]">Automation</div>
+            <p className="mt-1 max-w-[185px] text-[11px] leading-5 text-[#6d7c76]">
+              Build, govern and monitor reliable messaging workflows.
             </p>
           </div>
           <NavigationLinks />
