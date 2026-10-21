@@ -8,17 +8,12 @@ import {
   Check,
   ChevronDown,
   Columns3,
-  Copy,
   Filter,
-  ListFilter,
   MoreHorizontal,
-  Plus,
   Search,
-  Share2,
-  SlidersHorizontal,
-  Sparkles,
   X,
 } from "lucide-react";
+import type { ReactNode } from "react";
 import {
   useCallback,
   useEffect,
@@ -28,6 +23,7 @@ import {
   useTransition,
 } from "react";
 
+import { LeadInspector } from "@/components/crm/lead-inspector";
 import { ChannelBadge, IntentLabel, StageBadge } from "@/components/ui";
 import type {
   LeadListIntelligence,
@@ -50,15 +46,16 @@ type ColumnKey =
   | "source"
   | "stage"
   | "owner"
+  | "signals"
   | "created";
 
 const DEFAULT_COLUMNS: ColumnKey[] = [
   "lead",
   "course",
   "contact",
-  "source",
   "stage",
   "owner",
+  "signals",
   "created",
 ];
 
@@ -69,6 +66,7 @@ const COLUMN_LABELS: Record<ColumnKey, string> = {
   source: "Source",
   stage: "Stage",
   owner: "Owner",
+  signals: "Signals",
   created: "Created",
 };
 
@@ -99,9 +97,7 @@ export function LeadsCleanTable({
   const [showFilters, setShowFilters] = useState(false);
   const [showColumns, setShowColumns] = useState(false);
   const [showViews, setShowViews] = useState(false);
-  const [showMore, setShowMore] = useState(false);
   const [visibleColumns, setVisibleColumns] = useState<ColumnKey[]>(DEFAULT_COLUMNS);
-  const [copied, setCopied] = useState(false);
   const toolbarRef = useRef<HTMLDivElement | null>(null);
 
   const intelligenceByLead = useMemo(
@@ -109,23 +105,15 @@ export function LeadsCleanTable({
     [intelligence],
   );
 
+  // Preserve the authoritative server order. The read model already owns the
+  // requested sort mode; the browser should not silently replace it.
   const rows = useMemo<EnrichedLead[]>(
     () =>
-      leads
-        .map((lead) => ({
-          lead,
-          intel: intelligenceByLead.get(lead.id) ?? null,
-        }))
-        .sort(
-          (a, b) =>
-            Date.parse(b.lead.createdAt || "") - Date.parse(a.lead.createdAt || ""),
-        ),
+      leads.map((lead) => ({
+        lead,
+        intel: intelligenceByLead.get(lead.id) ?? null,
+      })),
     [leads, intelligenceByLead],
-  );
-
-  const selectedLead = useMemo(
-    () => rows.find((row) => row.lead.id === selectedId) ?? null,
-    [rows, selectedId],
   );
 
   const updateUrl = useCallback(
@@ -153,9 +141,7 @@ export function LeadsCleanTable({
     [pathname, router, searchParams],
   );
 
-  useEffect(() => {
-    setQuery(filters.query);
-  }, [filters.query]);
+  useEffect(() => setQuery(filters.query), [filters.query]);
 
   useEffect(() => {
     const normalized = query.trim();
@@ -174,14 +160,14 @@ export function LeadsCleanTable({
       if (toolbarRef.current?.contains(target)) return;
       setShowViews(false);
       setShowColumns(false);
-      setShowMore(false);
     }
 
     document.addEventListener("pointerdown", handleOutside, true);
     return () => document.removeEventListener("pointerdown", handleOutside, true);
   }, []);
 
-  const allSelected = rows.length > 0 && rows.every((row) => selectedRows.has(row.lead.id));
+  const allSelected =
+    rows.length > 0 && rows.every((row) => selectedRows.has(row.lead.id));
 
   const filtersActive = Boolean(
     filters.query ||
@@ -226,16 +212,6 @@ export function LeadsCleanTable({
     });
   }
 
-  async function shareView() {
-    try {
-      await navigator.clipboard.writeText(window.location.href);
-      setCopied(true);
-      window.setTimeout(() => setCopied(false), 1500);
-    } catch {
-      setCopied(false);
-    }
-  }
-
   function toggleColumn(column: ColumnKey) {
     if (column === "lead") return;
     setVisibleColumns((current) =>
@@ -248,11 +224,11 @@ export function LeadsCleanTable({
   return (
     <>
       <section
-        className={`overflow-hidden rounded-[18px] border border-slate-200 bg-white shadow-[0_1px_2px_rgba(15,23,42,0.03)] transition-opacity dark:border-slate-800 dark:bg-slate-950 ${
+        className={`overflow-hidden rounded-[18px] border border-[#E1E8E3] bg-white shadow-[0_1px_2px_rgba(15,23,42,0.03)] transition-opacity dark:border-slate-800 dark:bg-slate-950 ${
           isPending ? "opacity-70" : "opacity-100"
         }`}
       >
-        <div ref={toolbarRef} className="border-b border-slate-100 px-4 py-3 dark:border-slate-900">
+        <div ref={toolbarRef} className="border-b border-[#EDF1EE] px-4 py-3">
           <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
             <div className="flex flex-wrap items-center gap-2">
               <div className="relative">
@@ -261,36 +237,37 @@ export function LeadsCleanTable({
                   onClick={() => {
                     setShowViews((value) => !value);
                     setShowColumns(false);
-                    setShowMore(false);
                   }}
-                  className="inline-flex h-9 items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 text-[12px] font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50 dark:border-slate-800 dark:bg-slate-950 dark:text-slate-200 dark:hover:bg-slate-900"
+                  className="inline-flex h-9 items-center gap-2 rounded-lg border border-[#DDE7DF] bg-white px-3 text-[11px] font-semibold text-[#50675C] shadow-sm transition hover:bg-[#F5F8F6]"
                 >
-                  <Search size={14} />
-                  {quickViewLabel(filters.quickView)} ({summaryForView(summary, filters.quickView)})
-                  <ChevronDown size={13} className="text-slate-400" />
+                  {quickViewLabel(filters.quickView)}
+                  <span className="rounded-full bg-[#EEF4F0] px-1.5 py-0.5 text-[9px] text-[#61786C]">
+                    {summaryForView(summary, filters.quickView)}
+                  </span>
+                  <ChevronDown size={13} className="text-[#91A097]" />
                 </button>
 
                 {showViews ? (
                   <Popover className="left-0 top-11 w-64">
-                    <PopoverLabel>Views</PopoverLabel>
-                    {[
+                    <PopoverLabel>Operational views</PopoverLabel>
+                    {([
                       ["all", "All leads", summary.all],
                       ["unassigned", "Unassigned", summary.unassigned],
                       ["stuck", "Stuck", summary.stuck],
                       ["followup_overdue", "Overdue follow-ups", summary.followupOverdue],
                       ["payment_pending", "Payment pending", summary.paymentPending],
-                    ].map(([value, label, count]) => (
+                    ] as const).map(([value, label, count]) => (
                       <button
-                        key={String(value)}
+                        key={value}
                         type="button"
                         onClick={() => {
-                          updateUrl({ view: value === "all" ? null : String(value), page: 1 });
+                          updateUrl({ view: value === "all" ? null : value, page: 1 });
                           setShowViews(false);
                         }}
-                        className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-xs font-medium text-slate-600 transition hover:bg-slate-50 dark:text-slate-300 dark:hover:bg-slate-900"
+                        className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-xs font-medium text-[#5E7168] transition hover:bg-[#F3F7F4]"
                       >
-                        <span className="flex-1">{String(label)}</span>
-                        <span className="text-[10px] text-slate-400">{String(count)}</span>
+                        <span className="flex-1">{label}</span>
+                        <span className="text-[10px] text-[#9AA79F]">{count}</span>
                         {filters.quickView === value ? <Check size={13} /> : null}
                       </button>
                     ))}
@@ -298,84 +275,39 @@ export function LeadsCleanTable({
                 ) : null}
               </div>
 
-              <button
-                type="button"
-                onClick={() => {
-                  setShowFilters(true);
-                  setShowViews(false);
-                }}
-                className="inline-flex h-9 items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 text-[12px] font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50 dark:border-slate-800 dark:bg-slate-950 dark:text-slate-200 dark:hover:bg-slate-900"
-              >
-                <Plus size={14} /> New view
-              </button>
-
-              <button
-                type="button"
-                onClick={() => void shareView()}
-                className="inline-flex h-9 items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 text-[12px] font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50 dark:border-slate-800 dark:bg-slate-950 dark:text-slate-200 dark:hover:bg-slate-900"
-              >
-                {copied ? <Check size={14} /> : <Share2 size={14} />}
-                {copied ? "Copied" : "Share view"}
-              </button>
-
-              <div className="relative">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setShowMore((value) => !value);
-                    setShowViews(false);
-                    setShowColumns(false);
-                  }}
-                  aria-label="More lead view options"
-                  className="grid h-9 w-9 place-items-center rounded-lg border border-slate-200 bg-white text-slate-500 shadow-sm transition hover:bg-slate-50 hover:text-slate-900 dark:border-slate-800 dark:bg-slate-950 dark:text-slate-400 dark:hover:bg-slate-900 dark:hover:text-white"
-                >
-                  <MoreHorizontal size={16} />
-                </button>
-                {showMore ? (
-                  <Popover className="left-0 top-11 w-52">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        resetFilters();
-                        setShowMore(false);
-                      }}
-                      className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-xs font-medium text-slate-600 hover:bg-slate-50 dark:text-slate-300 dark:hover:bg-slate-900"
-                    >
-                      <ListFilter size={14} /> Reset view
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => void shareView()}
-                      className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-xs font-medium text-slate-600 hover:bg-slate-50 dark:text-slate-300 dark:hover:bg-slate-900"
-                    >
-                      <Copy size={14} /> Copy view link
-                    </button>
-                  </Popover>
-                ) : null}
-              </div>
+              <QuickViewButton
+                label="Needs action"
+                active={filters.quickView === "stuck" || filters.quickView === "followup_overdue"}
+                onClick={() => updateUrl({ view: "followup_overdue", page: 1 })}
+              />
+              <QuickViewButton
+                label="Payment"
+                active={filters.quickView === "payment_pending"}
+                onClick={() => updateUrl({ view: "payment_pending", page: 1 })}
+              />
             </div>
 
             <div className="flex flex-wrap items-center gap-2">
               <label className="relative min-w-[220px] flex-1 xl:flex-none">
-                <Search size={14} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                <Search size={14} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[#98A49D]" />
                 <input
                   value={query}
                   onChange={(event) => setQuery(event.target.value)}
                   placeholder="Search leads"
-                  className="h-9 w-full rounded-lg border border-slate-200 bg-white pl-9 pr-3 text-xs text-slate-700 outline-none transition placeholder:text-slate-400 focus:border-slate-400 dark:border-slate-800 dark:bg-slate-950 dark:text-slate-200"
+                  className="h-9 w-full rounded-lg border border-[#DDE7DF] bg-white pl-9 pr-3 text-xs text-[#40564C] outline-none transition placeholder:text-[#A0ABA5] focus:border-[#8BB59A]"
                 />
               </label>
 
               <button
                 type="button"
                 onClick={() => setShowFilters((value) => !value)}
-                className={`inline-flex h-9 items-center gap-2 rounded-lg px-2.5 text-[12px] font-medium transition ${
+                className={`inline-flex h-9 items-center gap-2 rounded-lg px-2.5 text-[11px] font-semibold transition ${
                   showFilters || filtersActive
-                    ? "bg-slate-100 text-slate-950 dark:bg-slate-900 dark:text-white"
-                    : "text-slate-600 hover:bg-slate-50 dark:text-slate-300 dark:hover:bg-slate-900"
+                    ? "bg-[#EAF3ED] text-[#216551]"
+                    : "text-[#64776E] hover:bg-[#F4F7F5]"
                 }`}
               >
-                <Filter size={15} /> Filter
+                <Filter size={14} /> Filter
               </button>
 
               <div className="relative">
@@ -384,20 +316,16 @@ export function LeadsCleanTable({
                   onClick={() => {
                     setShowColumns((value) => !value);
                     setShowViews(false);
-                    setShowMore(false);
                   }}
-                  className="inline-flex h-9 items-center gap-2 rounded-lg px-2.5 text-[12px] font-medium text-slate-600 transition hover:bg-slate-50 dark:text-slate-300 dark:hover:bg-slate-900"
+                  className="inline-flex h-9 items-center gap-2 rounded-lg px-2.5 text-[11px] font-semibold text-[#64776E] transition hover:bg-[#F4F7F5]"
                 >
-                  <Columns3 size={15} /> Visible fields
+                  <Columns3 size={14} /> Fields
                 </button>
                 {showColumns ? (
                   <Popover className="right-0 top-11 w-56">
                     <PopoverLabel>Visible fields</PopoverLabel>
                     {(Object.keys(COLUMN_LABELS) as ColumnKey[]).map((column) => (
-                      <label
-                        key={column}
-                        className="flex cursor-pointer items-center gap-2 rounded-lg px-2.5 py-2 text-xs text-slate-600 hover:bg-slate-50 dark:text-slate-300 dark:hover:bg-slate-900"
-                      >
+                      <label key={column} className="flex cursor-pointer items-center gap-2 rounded-lg px-2.5 py-2 text-xs text-[#5E7168] hover:bg-[#F3F7F4]">
                         <input
                           type="checkbox"
                           checked={visibleColumns.includes(column)}
@@ -415,14 +343,27 @@ export function LeadsCleanTable({
           </div>
 
           {showFilters ? (
-            <div className="mt-3 flex flex-wrap items-end gap-2 rounded-xl bg-slate-50 p-3 dark:bg-slate-900/50">
+            <div className="mt-3 flex flex-wrap items-end gap-2 rounded-xl bg-[#F5F8F6] p-3">
               <FilterSelect label="Stage" value={filters.stage || "all"} options={options.stages} onChange={(value) => updateUrl({ stage: value, page: 1 })} />
               <FilterSelect label="Source" value={filters.source || "all"} options={options.sources} onChange={(value) => updateUrl({ source: value, page: 1 })} />
               <FilterSelect label="Channel" value={filters.channel || "all"} options={options.channels} onChange={(value) => updateUrl({ channel: value, page: 1 })} />
               <FilterSelect label="Owner" value={filters.owner || "all"} options={options.owners} onChange={(value) => updateUrl({ owner: value, page: 1 })} />
               <FilterSelect label="Course" value={filters.course || "all"} options={options.courses} onChange={(value) => updateUrl({ course: value, page: 1 })} />
+              <FilterSelect label="Aging" value={filters.aging || "all"} options={["healthy", "warning", "stuck", "untracked"]} onChange={(value) => updateUrl({ aging: value, page: 1 })} />
+              <label className="min-w-[150px]">
+                <span className="mb-1 block text-[9px] font-semibold uppercase tracking-[0.08em] text-[#8A978F]">Sort</span>
+                <select
+                  value={filters.sort}
+                  onChange={(event) => updateUrl({ sort: event.target.value, page: 1 })}
+                  className="h-9 w-full rounded-lg border border-[#DDE7DF] bg-white px-2.5 text-[11px] font-medium text-[#52665C] outline-none"
+                >
+                  <option value="stage_age_desc">Stage age</option>
+                  <option value="followup_asc">Next follow-up</option>
+                  <option value="name">Name</option>
+                </select>
+              </label>
               {filtersActive ? (
-                <button type="button" onClick={resetFilters} className="mb-px inline-flex h-9 items-center gap-1.5 rounded-lg px-3 text-xs font-semibold text-slate-500 hover:bg-white hover:text-slate-950 dark:hover:bg-slate-950 dark:hover:text-white">
+                <button type="button" onClick={resetFilters} className="mb-px inline-flex h-9 items-center gap-1.5 rounded-lg px-3 text-xs font-semibold text-[#687B71] hover:bg-white hover:text-[#216551]">
                   <X size={13} /> Clear
                 </button>
               ) : null}
@@ -431,17 +372,17 @@ export function LeadsCleanTable({
         </div>
 
         {selectedRows.size > 0 ? (
-          <div className="flex flex-wrap items-center gap-3 border-b border-slate-100 bg-slate-50 px-4 py-2.5 text-xs dark:border-slate-900 dark:bg-slate-900/40">
-            <span className="font-semibold text-slate-900 dark:text-white">{selectedRows.size} selected</span>
-            <Link href="/follow-ups" className="rounded-lg px-2.5 py-1.5 font-medium text-slate-600 hover:bg-white dark:text-slate-300 dark:hover:bg-slate-950">Create follow-up</Link>
-            <button type="button" onClick={() => setSelectedRows(new Set())} className="ml-auto text-slate-400 hover:text-slate-900 dark:hover:text-white">Clear selection</button>
+          <div className="flex flex-wrap items-center gap-3 border-b border-[#EDF1EE] bg-[#F6F9F7] px-4 py-2.5 text-xs">
+            <span className="font-semibold text-[#2C443B]">{selectedRows.size} selected</span>
+            <Link href="/follow-ups" className="rounded-lg px-2.5 py-1.5 font-medium text-[#5E7168] hover:bg-white">Create follow-up</Link>
+            <button type="button" onClick={() => setSelectedRows(new Set())} className="ml-auto text-[#89978F] hover:text-[#216551]">Clear selection</button>
           </div>
         ) : null}
 
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[980px] border-collapse">
+          <table className="w-full min-w-[1080px] border-collapse">
             <thead>
-              <tr className="border-b border-slate-100 bg-slate-50/70 text-left dark:border-slate-900 dark:bg-slate-900/30">
+              <tr className="border-b border-[#EDF1EE] bg-[#F8FAF8] text-left">
                 <th className="w-10 px-4 py-2.5">
                   <input type="checkbox" checked={allSelected} onChange={toggleAll} aria-label="Select all visible leads" className="h-3.5 w-3.5 rounded border-slate-300" />
                 </th>
@@ -451,6 +392,7 @@ export function LeadsCleanTable({
                 {visibleColumns.includes("source") ? <HeaderCell>Source</HeaderCell> : null}
                 {visibleColumns.includes("stage") ? <HeaderCell>Stage</HeaderCell> : null}
                 {visibleColumns.includes("owner") ? <HeaderCell>Owner</HeaderCell> : null}
+                {visibleColumns.includes("signals") ? <HeaderCell>Signals</HeaderCell> : null}
                 {visibleColumns.includes("created") ? <HeaderCell>Created</HeaderCell> : null}
                 <th className="w-10 px-2 py-2.5" />
               </tr>
@@ -458,14 +400,20 @@ export function LeadsCleanTable({
 
             <tbody>
               {rows.length ? (
-                rows.map((row, index) => {
-                  const { lead, intel } = row;
+                rows.map(({ lead, intel }) => {
                   const checked = selectedRows.has(lead.id);
                   return (
                     <tr
                       key={lead.id}
+                      tabIndex={0}
                       onClick={() => setSelectedId(lead.id)}
-                      className={`group cursor-pointer border-b border-slate-100 transition last:border-b-0 hover:bg-slate-50/80 dark:border-slate-900 dark:hover:bg-slate-900/40 ${checked ? "bg-violet-50/40 dark:bg-violet-950/10" : ""}`}
+                      onKeyDown={(event) => {
+                        if (event.key === "Enter" || event.key === " ") {
+                          event.preventDefault();
+                          setSelectedId(lead.id);
+                        }
+                      }}
+                      className={`group cursor-pointer border-b border-[#F0F3F1] transition last:border-b-0 hover:bg-[#F7FAF8] focus:bg-[#F4F8F5] focus:outline-none ${checked ? "bg-[#F1F7F3]" : ""}`}
                     >
                       <td className="px-4 py-3" onClick={(event) => event.stopPropagation()}>
                         <input type="checkbox" checked={checked} onChange={() => toggleRow(lead.id)} aria-label={`Select ${lead.name || lead.leadCode}`} className="h-3.5 w-3.5 rounded border-slate-300" />
@@ -474,15 +422,10 @@ export function LeadsCleanTable({
                       {visibleColumns.includes("lead") ? (
                         <td className="px-3 py-3">
                           <div className="flex min-w-[190px] items-center gap-3">
-                            <span className={`grid h-8 w-8 shrink-0 place-items-center rounded-full text-[10px] font-bold ${avatarTone(lead.currentContactChannel)}`}>
-                              {initials(lead.name || lead.leadCode)}
-                            </span>
+                            <span className={`grid h-8 w-8 shrink-0 place-items-center rounded-full text-[10px] font-bold ${avatarTone(lead.currentContactChannel)}`}>{initials(lead.name || lead.leadCode)}</span>
                             <div className="min-w-0">
-                              <div className="flex items-center gap-2">
-                                <span className="max-w-[220px] truncate text-[12px] font-semibold text-slate-950 dark:text-white">{lead.name || lead.leadCode}</span>
-                                {index === 0 ? <span className="rounded-full bg-violet-50 px-1.5 py-0.5 text-[8px] font-bold text-violet-600 dark:bg-violet-950/30 dark:text-violet-300">Newest</span> : null}
-                              </div>
-                              <div className="mt-0.5 truncate text-[10px] text-slate-400">{lead.leadCode}{lead.country ? ` · ${lead.country}` : ""}</div>
+                              <div className="max-w-[220px] truncate text-[12px] font-semibold text-[#243B33]">{lead.name || lead.leadCode}</div>
+                              <div className="mt-0.5 truncate text-[10px] text-[#93A098]">{lead.leadCode}{lead.country ? ` · ${lead.country}` : ""}</div>
                             </div>
                           </div>
                         </td>
@@ -490,22 +433,22 @@ export function LeadsCleanTable({
 
                       {visibleColumns.includes("course") ? (
                         <td className="px-3 py-3">
-                          <div className="max-w-[220px] truncate text-[12px] font-medium text-slate-700 dark:text-slate-200">{lead.course || "—"}</div>
-                          <div className="mt-0.5 max-w-[220px] truncate text-[10px] text-slate-400">{intel?.batch_code || lead.location || "Not selected"}</div>
+                          <div className="max-w-[220px] truncate text-[12px] font-medium text-[#52665C]">{lead.course || "—"}</div>
+                          <div className="mt-0.5 max-w-[220px] truncate text-[10px] text-[#93A098]">{intel?.batch_code || lead.location || "Not selected"}</div>
                         </td>
                       ) : null}
 
                       {visibleColumns.includes("contact") ? (
                         <td className="px-3 py-3">
-                          <div className="max-w-[220px] truncate text-[11px] text-slate-700 dark:text-slate-200">{lead.email || lead.phone || "—"}</div>
+                          <div className="max-w-[220px] truncate text-[11px] text-[#52665C]">{lead.email || lead.phone || "—"}</div>
                           <div className="mt-1"><ChannelBadge channel={lead.currentContactChannel} /></div>
                         </td>
                       ) : null}
 
                       {visibleColumns.includes("source") ? (
                         <td className="px-3 py-3">
-                          <div className="max-w-[160px] truncate text-[11px] font-medium text-slate-700 dark:text-slate-200">{pretty(lead.firstTouchSource || "Unknown")}</div>
-                          <div className="mt-0.5 max-w-[160px] truncate text-[10px] text-slate-400">{lead.firstTouchCampaign || lead.firstTouchMedium || "—"}</div>
+                          <div className="max-w-[160px] truncate text-[11px] font-medium text-[#52665C]">{pretty(lead.firstTouchSource || "Unknown")}</div>
+                          <div className="mt-0.5 max-w-[160px] truncate text-[10px] text-[#93A098]">{lead.firstTouchCampaign || lead.firstTouchMedium || "—"}</div>
                         </td>
                       ) : null}
 
@@ -517,20 +460,31 @@ export function LeadsCleanTable({
 
                       {visibleColumns.includes("owner") ? (
                         <td className="px-3 py-3">
-                          <div className="text-[11px] font-medium text-slate-700 dark:text-slate-200">{intel?.owner_name || lead.owner || "Unassigned"}</div>
-                          <div className="mt-0.5 text-[10px] text-slate-400">{nextAction(lead, intel)}</div>
+                          <div className="text-[11px] font-medium text-[#52665C]">{intel?.owner_name || lead.owner || "Unassigned"}</div>
+                          <div className="mt-0.5 text-[10px] text-[#93A098]">{nextAction(lead, intel)}</div>
+                        </td>
+                      ) : null}
+
+                      {visibleColumns.includes("signals") ? (
+                        <td className="px-3 py-3">
+                          <div className="flex flex-wrap items-center gap-1.5">
+                            <AgingPill status={intel?.aging_status} />
+                            {isOverdue(lead.nextFollowupAt) ? <SignalPill tone="attention">Follow-up overdue</SignalPill> : null}
+                            {lead.stage === "payment_pending" ? <SignalPill tone="money">Payment</SignalPill> : null}
+                            {!intel?.owner_name && !lead.owner ? <SignalPill tone="neutral">Unassigned</SignalPill> : null}
+                          </div>
                         </td>
                       ) : null}
 
                       {visibleColumns.includes("created") ? (
                         <td className="px-3 py-3">
-                          <div className="whitespace-nowrap text-[11px] font-medium text-slate-700 dark:text-slate-200">{relativeDate(lead.createdAt)}</div>
-                          <div className="mt-0.5 whitespace-nowrap text-[10px] text-slate-400">{formatDate(lead.createdAt)}</div>
+                          <div className="whitespace-nowrap text-[11px] font-medium text-[#52665C]">{relativeDate(lead.createdAt)}</div>
+                          <div className="mt-0.5 whitespace-nowrap text-[10px] text-[#93A098]">{formatDate(lead.createdAt)}</div>
                         </td>
                       ) : null}
 
                       <td className="px-2 py-3 text-right">
-                        <button type="button" onClick={(event) => { event.stopPropagation(); setSelectedId(lead.id); }} aria-label={`Open ${lead.name || lead.leadCode}`} className="grid h-8 w-8 place-items-center rounded-lg text-slate-300 opacity-0 transition hover:bg-white hover:text-slate-800 group-hover:opacity-100 dark:hover:bg-slate-950 dark:hover:text-white">
+                        <button type="button" onClick={(event) => { event.stopPropagation(); setSelectedId(lead.id); }} aria-label={`Inspect ${lead.name || lead.leadCode}`} className="grid h-8 w-8 place-items-center rounded-lg text-[#9BA79F] opacity-0 transition hover:bg-white hover:text-[#216551] group-hover:opacity-100 group-focus:opacity-100">
                           <MoreHorizontal size={15} />
                         </button>
                       </td>
@@ -540,8 +494,8 @@ export function LeadsCleanTable({
               ) : (
                 <tr>
                   <td colSpan={visibleColumns.length + 2} className="px-6 py-16 text-center">
-                    <div className="text-sm font-semibold text-slate-700 dark:text-slate-200">No leads match this view</div>
-                    <button type="button" onClick={resetFilters} className="mt-2 text-xs font-semibold text-violet-600 hover:underline dark:text-violet-300">Clear filters</button>
+                    <div className="text-sm font-semibold text-[#40564C]">No leads match this view</div>
+                    <button type="button" onClick={resetFilters} className="mt-2 text-xs font-semibold text-[#216551] hover:underline">Clear filters</button>
                   </td>
                 </tr>
               )}
@@ -549,87 +503,47 @@ export function LeadsCleanTable({
           </table>
         </div>
 
-        <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 px-4 py-3 dark:border-slate-900">
-          <div className="text-[11px] text-slate-400">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-t border-[#EDF1EE] px-4 py-3">
+          <div className="text-[11px] text-[#91A097]">
             {pagination.total > 0 ? `${pagination.from}–${pagination.to} of ${pagination.total}` : "0 leads"}
-            {mock ? " · Demo" : " · Live"} · newest first
+            {mock ? " · Demo" : " · Live"} · {sortLabel(filters.sort)}
           </div>
           {pagination.totalPages > 1 ? (
             <div className="flex items-center gap-2">
-              <button type="button" disabled={isPending || pagination.page <= 1} onClick={() => updateUrl({ page: pagination.page - 1 })} className="inline-flex h-8 items-center gap-1 rounded-lg border border-slate-200 px-2.5 text-[11px] font-medium text-slate-600 disabled:opacity-40 dark:border-slate-800 dark:text-slate-300"><ArrowLeft size={12} /> Previous</button>
-              <span className="text-[10px] text-slate-400">{pagination.page} / {pagination.totalPages}</span>
-              <button type="button" disabled={isPending || pagination.page >= pagination.totalPages} onClick={() => updateUrl({ page: pagination.page + 1 })} className="inline-flex h-8 items-center gap-1 rounded-lg border border-slate-200 px-2.5 text-[11px] font-medium text-slate-600 disabled:opacity-40 dark:border-slate-800 dark:text-slate-300">Next <ArrowRight size={12} /></button>
+              <button type="button" disabled={isPending || pagination.page <= 1} onClick={() => updateUrl({ page: pagination.page - 1 })} className="inline-flex h-8 items-center gap-1 rounded-lg border border-[#DDE7DF] px-2.5 text-[11px] font-medium text-[#61736A] disabled:opacity-40"><ArrowLeft size={12} /> Previous</button>
+              <span className="text-[10px] text-[#91A097]">{pagination.page} / {pagination.totalPages}</span>
+              <button type="button" disabled={isPending || pagination.page >= pagination.totalPages} onClick={() => updateUrl({ page: pagination.page + 1 })} className="inline-flex h-8 items-center gap-1 rounded-lg border border-[#DDE7DF] px-2.5 text-[11px] font-medium text-[#61736A] disabled:opacity-40">Next <ArrowRight size={12} /></button>
             </div>
           ) : null}
         </div>
       </section>
 
-      {selectedLead ? <LeadDrawer row={selectedLead} onClose={() => setSelectedId(null)} /> : null}
+      <LeadInspector leadId={selectedId} onClose={() => setSelectedId(null)} />
     </>
   );
 }
 
-function LeadDrawer({ row, onClose }: { row: EnrichedLead; onClose: () => void }) {
-  const { lead, intel } = row;
-
-  return (
-    <div className="fixed inset-0 z-[100] flex justify-end">
-      <button type="button" onClick={onClose} aria-label="Close lead preview" className="absolute inset-0 bg-slate-950/20 backdrop-blur-[1px]" />
-      <aside className="relative h-full w-full max-w-[440px] overflow-y-auto border-l border-slate-200 bg-white shadow-2xl dark:border-slate-800 dark:bg-slate-950">
-        <div className="sticky top-0 z-10 flex items-start gap-3 border-b border-slate-100 bg-white/95 px-5 py-5 backdrop-blur dark:border-slate-900 dark:bg-slate-950/95">
-          <span className={`grid h-11 w-11 shrink-0 place-items-center rounded-full text-xs font-bold ${avatarTone(lead.currentContactChannel)}`}>{initials(lead.name || lead.leadCode)}</span>
-          <div className="min-w-0 flex-1">
-            <div className="truncate text-base font-bold text-slate-950 dark:text-white">{lead.name || lead.leadCode}</div>
-            <div className="mt-1 flex flex-wrap gap-1.5"><StageBadge stage={lead.stage} /><IntentLabel intent={lead.intent} /></div>
-          </div>
-          <button type="button" onClick={onClose} className="grid h-8 w-8 place-items-center rounded-lg text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-900"><X size={16} /></button>
-        </div>
-
-        <div className="space-y-5 p-5">
-          <div className="grid grid-cols-2 gap-2">
-            <Link href={`/leads/${lead.id}`} className="inline-flex h-10 items-center justify-center rounded-lg bg-slate-950 px-3 text-xs font-semibold text-white dark:bg-white dark:text-slate-950">Open profile</Link>
-            <Link href={`/conversations?lead=${lead.id}`} className="inline-flex h-10 items-center justify-center rounded-lg border border-slate-200 px-3 text-xs font-semibold text-slate-700 dark:border-slate-800 dark:text-slate-200">Conversation</Link>
-          </div>
-
-          <section className="rounded-xl border border-violet-100 bg-violet-50/50 p-4 dark:border-violet-900/50 dark:bg-violet-950/15">
-            <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-[0.08em] text-violet-600 dark:text-violet-300"><Sparkles size={12} /> Next action</div>
-            <div className="mt-2 text-sm font-semibold text-slate-950 dark:text-white">{nextAction(lead, intel)}</div>
-            <div className="mt-1 text-[11px] leading-5 text-slate-500">Based on current CRM stage, ownership and follow-up state.</div>
-          </section>
-
-          <section className="space-y-3">
-            <DrawerField label="Course" value={lead.course || "Not selected"} />
-            <DrawerField label="Batch / location" value={intel?.batch_code || lead.location || "Not selected"} />
-            <DrawerField label="Email" value={lead.email || "—"} />
-            <DrawerField label="Phone" value={lead.phone || "—"} />
-            <DrawerField label="Source" value={pretty(lead.firstTouchSource || "Unknown")} />
-            <DrawerField label="Campaign" value={lead.firstTouchCampaign || "—"} />
-            <DrawerField label="Owner" value={intel?.owner_name || lead.owner || "Unassigned"} />
-            <DrawerField label="Created" value={formatDateTime(lead.createdAt)} />
-          </section>
-        </div>
-      </aside>
-    </div>
-  );
+function HeaderCell({ children }: { children: ReactNode }) {
+  return <th className="px-3 py-2.5 text-[10px] font-medium text-[#7E8D85]">{children}</th>;
 }
 
-function HeaderCell({ children }: { children: React.ReactNode }) {
-  return <th className="px-3 py-2.5 text-[10px] font-medium text-slate-500 dark:text-slate-400">{children}</th>;
+function Popover({ children, className }: { children: ReactNode; className: string }) {
+  return <div className={`absolute z-50 rounded-xl border border-[#DDE7DF] bg-white p-1.5 shadow-xl ${className}`}>{children}</div>;
 }
 
-function Popover({ children, className }: { children: React.ReactNode; className: string }) {
-  return <div className={`absolute z-50 rounded-xl border border-slate-200 bg-white p-1.5 shadow-xl dark:border-slate-800 dark:bg-slate-950 ${className}`}>{children}</div>;
+function PopoverLabel({ children }: { children: ReactNode }) {
+  return <div className="px-2.5 pb-1.5 pt-1 text-[9px] font-bold uppercase tracking-[0.1em] text-[#93A098]">{children}</div>;
 }
 
-function PopoverLabel({ children }: { children: React.ReactNode }) {
-  return <div className="px-2.5 pb-1.5 pt-1 text-[9px] font-bold uppercase tracking-[0.1em] text-slate-400">{children}</div>;
+function QuickViewButton({ label, active, onClick }: { label: string; active: boolean; onClick: () => void }) {
+  return <button type="button" onClick={onClick} className={`h-9 rounded-lg px-3 text-[11px] font-semibold transition ${active ? "bg-[#EAF3ED] text-[#216551]" : "text-[#64776E] hover:bg-[#F4F7F5]"}`}>{label}</button>;
 }
 
 function FilterSelect({ label, value, options, onChange }: { label: string; value: string; options: string[]; onChange: (value: string) => void }) {
   return (
-    <label className="min-w-[150px]">
-      <span className="mb-1 block text-[9px] font-semibold uppercase tracking-[0.08em] text-slate-400">{label}</span>
-      <select value={value} onChange={(event) => onChange(event.target.value)} className="h-9 w-full rounded-lg border border-slate-200 bg-white px-2.5 text-[11px] font-medium text-slate-700 outline-none dark:border-slate-800 dark:bg-slate-950 dark:text-slate-200">
+    <label className="min-w-[145px]">
+      <span className="mb-1 block text-[9px] font-semibold uppercase tracking-[0.08em] text-[#8A978F]">{label}</span>
+      <select value={value} onChange={(event) => onChange(event.target.value)} className="h-9 w-full rounded-lg border border-[#DDE7DF] bg-white px-2.5 text-[11px] font-medium text-[#52665C] outline-none">
         <option value="all">All</option>
         {options.map((option) => <option key={option} value={option}>{pretty(option)}</option>)}
       </select>
@@ -637,13 +551,25 @@ function FilterSelect({ label, value, options, onChange }: { label: string; valu
   );
 }
 
-function DrawerField({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="flex items-start justify-between gap-4 border-b border-slate-100 pb-3 last:border-0 dark:border-slate-900">
-      <span className="text-[10px] font-medium text-slate-400">{label}</span>
-      <span className="max-w-[240px] text-right text-[11px] font-medium text-slate-700 dark:text-slate-200">{value}</span>
-    </div>
-  );
+function AgingPill({ status }: { status: LeadListIntelligence["aging_status"] | undefined }) {
+  if (!status || status === "untracked") return <SignalPill tone="neutral">Untracked</SignalPill>;
+  if (status === "stuck") return <SignalPill tone="attention">Stuck</SignalPill>;
+  if (status === "warning") return <SignalPill tone="warning">Aging</SignalPill>;
+  return <SignalPill tone="healthy">Healthy</SignalPill>;
+}
+
+function SignalPill({ children, tone }: { children: ReactNode; tone: "attention" | "warning" | "money" | "neutral" | "healthy" }) {
+  const className =
+    tone === "attention"
+      ? "bg-red-50 text-red-700"
+      : tone === "warning"
+        ? "bg-amber-50 text-amber-700"
+        : tone === "money"
+          ? "bg-violet-50 text-violet-700"
+          : tone === "healthy"
+            ? "bg-emerald-50 text-emerald-700"
+            : "bg-slate-100 text-slate-600";
+  return <span className={`rounded-full px-2 py-1 text-[9px] font-semibold ${className}`}>{children}</span>;
 }
 
 function quickViewLabel(view: LeadsWorkspaceFilters["quickView"]) {
@@ -662,23 +588,22 @@ function summaryForView(summary: LeadsWorkspaceSummary, view: LeadsWorkspaceFilt
   return summary.all;
 }
 
+function sortLabel(sort: LeadsWorkspaceFilters["sort"]) {
+  if (sort === "followup_asc") return "next follow-up first";
+  if (sort === "name") return "name order";
+  return "highest stage age first";
+}
+
 function initials(value: string) {
-  const result = value
-    .split(/\s+/)
-    .filter(Boolean)
-    .map((part) => part[0])
-    .slice(0, 2)
-    .join("")
-    .toUpperCase();
-  return result || "L";
+  return value.split(/\s+/).filter(Boolean).map((part) => part[0]).slice(0, 2).join("").toUpperCase() || "L";
 }
 
 function avatarTone(channel: LeadOverview["currentContactChannel"]) {
-  if (channel === "whatsapp") return "bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300";
-  if (channel === "instagram") return "bg-fuchsia-100 text-fuchsia-700 dark:bg-fuchsia-950/40 dark:text-fuchsia-300";
-  if (channel === "email") return "bg-sky-100 text-sky-700 dark:bg-sky-950/40 dark:text-sky-300";
-  if (channel === "phone") return "bg-amber-100 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300";
-  return "bg-violet-100 text-violet-700 dark:bg-violet-950/40 dark:text-violet-300";
+  if (channel === "whatsapp") return "bg-emerald-100 text-emerald-700";
+  if (channel === "instagram") return "bg-fuchsia-100 text-fuchsia-700";
+  if (channel === "email") return "bg-sky-100 text-sky-700";
+  if (channel === "phone") return "bg-amber-100 text-amber-700";
+  return "bg-violet-100 text-violet-700";
 }
 
 function nextAction(lead: LeadOverview, intel: LeadListIntelligence | null) {
@@ -692,10 +617,14 @@ function nextAction(lead: LeadOverview, intel: LeadListIntelligence | null) {
   return "Continue conversation";
 }
 
+function isOverdue(value?: string) {
+  if (!value) return false;
+  const timestamp = Date.parse(value);
+  return Number.isFinite(timestamp) && timestamp < Date.now();
+}
+
 function pretty(value: string) {
-  return value
-    .replace(/[_-]+/g, " ")
-    .replace(/\b\w/g, (character) => character.toUpperCase());
+  return value.replace(/[_-]+/g, " ").replace(/\b\w/g, (character) => character.toUpperCase());
 }
 
 function relativeDate(value: string) {
@@ -716,10 +645,4 @@ function formatDate(value: string) {
   const timestamp = Date.parse(value || "");
   if (!Number.isFinite(timestamp)) return "—";
   return new Intl.DateTimeFormat("en-IN", { day: "2-digit", month: "short", year: "numeric" }).format(new Date(timestamp));
-}
-
-function formatDateTime(value: string) {
-  const timestamp = Date.parse(value || "");
-  if (!Number.isFinite(timestamp)) return "—";
-  return new Intl.DateTimeFormat("en-IN", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" }).format(new Date(timestamp));
 }
