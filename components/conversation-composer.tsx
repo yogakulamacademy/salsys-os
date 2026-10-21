@@ -2,7 +2,7 @@
 
 import { LockKeyhole, Save, Send, Sparkles } from "lucide-react";
 
-import { useEffect, useRef, useState, useTransition } from "react";
+import { useCallback, useEffect, useRef, useState, useTransition } from "react";
 
 import { markCopilotAssistedMessageAction } from "@/app/conversations/copilot-audit-actions";
 import { useWhatsAppConnectionStatus } from "@/components/use-whatsapp-connection-status";
@@ -51,11 +51,12 @@ export function WhatsAppComposer({
   quickReplies = [],
 }: {
   action: ServerAction;
-  leadId: string;
+  leadId?: string;
   windowOpen: boolean;
   windowLabel: string;
   quickReplies?: QuickReply[];
 }) {
+  const [resolvedLeadId, setResolvedLeadId] = useState(leadId || "");
   const [body, setBody] = useState("");
   const [copilotAssisted, setCopilotAssisted] = useState(false);
   const [availableQuickReplies, setAvailableQuickReplies] = useState<QuickReply[]>(quickReplies);
@@ -65,7 +66,35 @@ export function WhatsAppComposer({
   const saveTimerRef = useRef<number | null>(null);
   const { state: connectionState } = useWhatsAppConnectionStatus();
   const connectionReady = connectionState === "connected";
-  const draftKey = `salsysos:conversation-draft:v1:${leadId}:whatsapp`;
+  const draftKey = resolvedLeadId
+    ? `salsysos:conversation-draft:v1:${resolvedLeadId}:whatsapp`
+    : "";
+
+  useEffect(() => {
+    if (leadId) {
+      setResolvedLeadId(leadId);
+      return;
+    }
+
+    const fromQuery = new URLSearchParams(window.location.search).get("lead");
+    if (fromQuery) {
+      setResolvedLeadId(fromQuery);
+      return;
+    }
+
+    const selectedLink = document.querySelector<HTMLAnchorElement>(
+      'a[aria-current="page"][href*="/conversations?lead="]',
+    );
+    if (!selectedLink) return;
+
+    try {
+      setResolvedLeadId(
+        new URL(selectedLink.href, window.location.origin).searchParams.get("lead") || "",
+      );
+    } catch {
+      setResolvedLeadId("");
+    }
+  }, [leadId]);
 
   useEffect(() => {
     setAvailableQuickReplies(quickReplies);
@@ -76,6 +105,7 @@ export function WhatsAppComposer({
     setBody("");
     setCopilotAssisted(false);
     setDraftState("idle");
+    if (!draftKey) return;
 
     try {
       const saved = window.localStorage.getItem(draftKey);
@@ -84,8 +114,6 @@ export function WhatsAppComposer({
         setDraftState("saved");
       }
     } catch {
-      // Drafting still works in component memory even if browser storage is
-      // unavailable. We never clear the textarea because a storage write failed.
       setDraftState("memory-only");
     }
 
@@ -125,27 +153,38 @@ export function WhatsAppComposer({
     };
   }, [quickReplies, windowOpen]);
 
-  const persistDraft = (value = body) => {
-    try {
-      if (value.trim()) window.localStorage.setItem(draftKey, value);
-      else window.localStorage.removeItem(draftKey);
-      setDraftState(value.trim() ? "saved" : "idle");
-      return true;
-    } catch {
-      setDraftState("memory-only");
-      return false;
-    }
-  };
+  const persistDraft = useCallback(
+    (value: string) => {
+      if (!draftKey) {
+        setDraftState("memory-only");
+        return false;
+      }
 
-  const updateDraft = (value: string) => {
-    const next = value.slice(0, 4096);
-    setBody(next);
-    setDraftState("unsaved");
-    if (saveTimerRef.current) window.clearTimeout(saveTimerRef.current);
-    saveTimerRef.current = window.setTimeout(() => {
-      persistDraft(next);
-    }, 500);
-  };
+      try {
+        if (value.trim()) window.localStorage.setItem(draftKey, value);
+        else window.localStorage.removeItem(draftKey);
+        setDraftState(value.trim() ? "saved" : "idle");
+        return true;
+      } catch {
+        setDraftState("memory-only");
+        return false;
+      }
+    },
+    [draftKey],
+  );
+
+  const updateDraft = useCallback(
+    (value: string) => {
+      const next = value.slice(0, 4096);
+      setBody(next);
+      setDraftState("unsaved");
+      if (saveTimerRef.current) window.clearTimeout(saveTimerRef.current);
+      saveTimerRef.current = window.setTimeout(() => {
+        persistDraft(next);
+      }, 500);
+    },
+    [persistDraft],
+  );
 
   useEffect(() => {
     const applyCopilotDraft = (event: Event) => {
@@ -155,8 +194,7 @@ export function WhatsAppComposer({
         return;
       }
 
-      const next = detail.body.slice(0, 4096);
-      updateDraft(next);
+      updateDraft(detail.body);
       setCopilotAssisted(true);
 
       requestAnimationFrame(() => {
@@ -166,7 +204,7 @@ export function WhatsAppComposer({
 
     window.addEventListener("crm:copilot-draft", applyCopilotDraft);
     return () => window.removeEventListener("crm:copilot-draft", applyCopilotDraft);
-  });
+  }, [updateDraft]);
 
   const applyQuickReply = (reply: QuickReply) => {
     updateDraft(reply.body);
@@ -190,10 +228,6 @@ export function WhatsAppComposer({
       formData.set("ai_generated", "true");
     }
 
-    /*
-     * Clear optimistically only after an explicit Send click. Any provider or
-     * server failure restores the exact draft and saves it locally when possible.
-     */
     setBody("");
     setCopilotAssisted(false);
 
@@ -210,9 +244,9 @@ export function WhatsAppComposer({
 
         persistDraft("");
 
-        if (wasCopilotAssisted && result.message.id) {
+        if (wasCopilotAssisted && result.message.id && resolvedLeadId) {
           await markCopilotAssistedMessageAction({
-            leadId,
+            leadId: resolvedLeadId,
             messageId: result.message.id,
             channel: "whatsapp",
           });
@@ -300,11 +334,11 @@ export function WhatsAppComposer({
       ) : null}
 
       <div className="conversation-composer-shell rounded-lg border border-[#D4DFD2] bg-white p-2 shadow-[0_1px_3px_rgba(21,62,51,0.04)] transition focus-within:border-[#216551] focus-within:ring-2 focus-within:ring-[#216551]/10">
-        <label className="sr-only" htmlFor={`whatsapp-reply-draft-${leadId}`}>
+        <label className="sr-only" htmlFor={`whatsapp-reply-draft-${resolvedLeadId || "selected"}`}>
           Write a WhatsApp reply draft
         </label>
         <textarea
-          id={`whatsapp-reply-draft-${leadId}`}
+          id={`whatsapp-reply-draft-${resolvedLeadId || "selected"}`}
           name="body"
           value={body}
           onChange={(event) => updateDraft(event.target.value)}
@@ -327,7 +361,7 @@ export function WhatsAppComposer({
           <div className="flex items-center gap-2">
             <button
               type="button"
-              onClick={() => persistDraft()}
+              onClick={() => persistDraft(body)}
               disabled={!body.trim() || isPending}
               className="inline-flex h-8 items-center justify-center gap-1.5 rounded-lg border border-[#DCE4DF] bg-white px-3 text-[9px] font-semibold text-[#596E64] transition hover:bg-[#EDF3E6] hover:text-[#216551] disabled:cursor-not-allowed disabled:opacity-50"
             >
@@ -367,7 +401,9 @@ function draftStatus(state: DraftState) {
   return "Draft only";
 }
 
-function connectionDisabledReason(state: ReturnType<typeof useWhatsAppConnectionStatus>["state"]) {
+function connectionDisabledReason(
+  state: "loading" | "connected" | "disconnected" | "unavailable",
+) {
   if (state === "loading") return "Verifying WhatsApp connection…";
   if (state === "disconnected") return "Send disabled until WhatsApp is connected.";
   if (state === "unavailable") return "Send disabled until WhatsApp connection can be verified.";
