@@ -1,0 +1,443 @@
+"use client";
+
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
+import {
+  AlertTriangle,
+  CalendarClock,
+  CheckCircle2,
+  Clock3,
+  RefreshCw,
+  Sparkles,
+  Target,
+  Zap,
+} from "lucide-react";
+
+import { LeadInspectorButton } from "@/components/crm/lead-inspector";
+import type { LeadStage } from "@/types/crm";
+
+type Availability = "available" | "empty" | "unavailable";
+
+type InspectorResponse =
+  | {
+      ok: true;
+      data: {
+        generatedAt: string;
+        lead: {
+          name?: string;
+          nextFollowupAt?: string;
+          owner?: string;
+        };
+        salesIntelligence: {
+          priority_score?: number | string | null;
+          priority_band?: string | null;
+          priority_reason?: string | null;
+          derived_intent?: string | null;
+          intent_confidence?: string | null;
+          engagement_score?: number | string | null;
+          behaviour_temperature?: string | null;
+          next_action_code?: string | null;
+          next_best_action?: string | null;
+          next_followup_at?: string | null;
+          payment_status?: string | null;
+          recommended_course_name?: string | null;
+        } | null;
+        openFollowups?: Array<{
+          id: string;
+          title: string;
+          status: string;
+          due_at: string | null;
+        }>;
+        availability: {
+          salesIntelligence: Availability;
+          openFollowups?: Availability;
+        };
+      };
+    }
+  | { ok: false; error: string };
+
+type ActionResponse =
+  | { ok: true; data?: unknown }
+  | { ok: false; error: string };
+
+type ConversationPriority = "urgent" | "high" | "normal" | "waiting";
+
+export function ConversationIntelligencePanel({
+  leadId,
+  stage,
+  priority,
+  needsReply,
+  needsFirstContact,
+  waitingSince,
+}: {
+  leadId: string;
+  stage: LeadStage;
+  priority: ConversationPriority;
+  needsReply: boolean;
+  needsFirstContact: boolean;
+  waitingSince: string | null;
+}) {
+  const router = useRouter();
+  const [data, setData] = useState<Extract<InspectorResponse, { ok: true }>['data'] | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [scheduling, setScheduling] = useState(false);
+  const [actionError, setActionError] = useState<string | null>(null);
+  const [actionSuccess, setActionSuccess] = useState<string | null>(null);
+  const [loadedAt, setLoadedAt] = useState(0);
+
+  const load = useCallback(async (quiet = false) => {
+    if (quiet) setRefreshing(true);
+    else setLoading(true);
+    setError(null);
+
+    try {
+      const response = await fetch(`/api/leads/${encodeURIComponent(leadId)}/inspector`, {
+        cache: "no-store",
+      });
+      const body = (await response.json()) as InspectorResponse;
+      if (!response.ok || !body.ok) {
+        throw new Error(body.ok ? "Unable to load intelligence." : body.error);
+      }
+      setData(body.data);
+      setLoadedAt(Date.now());
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "Unable to load intelligence.");
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  }, [leadId]);
+
+  useEffect(() => {
+    void load(false);
+  }, [load]);
+
+  useEffect(() => {
+    const onFocus = () => {
+      if (!loadedAt || Date.now() - loadedAt < 60_000) return;
+      void load(true);
+    };
+    window.addEventListener("focus", onFocus);
+    return () => window.removeEventListener("focus", onFocus);
+  }, [load, loadedAt]);
+
+  const objective = useMemo(
+    () => buildResponseObjective({ data, stage, priority, needsReply, needsFirstContact, waitingSince }),
+    [data, stage, priority, needsReply, needsFirstContact, waitingSince],
+  );
+
+  const nextFollowup =
+    data?.salesIntelligence?.next_followup_at || data?.lead.nextFollowupAt || null;
+
+  async function scheduleRecommendedFollowup() {
+    if (scheduling) return;
+    setScheduling(true);
+    setActionError(null);
+    setActionSuccess(null);
+
+    const dueAt = new Date(Date.now() + objective.recommendedHours * 60 * 60 * 1000);
+    try {
+      const response = await fetch(`/api/leads/${encodeURIComponent(leadId)}/inspector`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "create_followup",
+          title: objective.followupTitle,
+          dueAt: dueAt.toISOString(),
+          description: `Created from Inbox recommendation: ${objective.title}`,
+        }),
+      });
+      const body = (await response.json()) as ActionResponse;
+      if (!response.ok || !body.ok) {
+        throw new Error(body.ok ? "Unable to schedule follow-up." : body.error);
+      }
+
+      setActionSuccess(`Follow-up scheduled for ${formatDateTime(dueAt.toISOString())}.`);
+      await load(true);
+      router.refresh();
+    } catch (reason) {
+      setActionError(
+        reason instanceof Error ? reason.message : "Unable to schedule follow-up.",
+      );
+    } finally {
+      setScheduling(false);
+    }
+  }
+
+  if (loading) {
+    return (
+      <section className="rounded-xl border border-[#DDE7DF] bg-white p-3.5">
+        <div className="flex items-center gap-2 text-[10px] font-semibold text-[#60736A]">
+          <RefreshCw size={12} className="animate-spin text-[#216551]" />
+          Loading lead intelligence…
+        </div>
+      </section>
+    );
+  }
+
+  return (
+    <section className="overflow-hidden rounded-xl border border-[#DDE7DF] bg-white">
+      <div className="border-b border-[#E8EEEA] bg-[#F7FAF8] px-3.5 py-3">
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <div className="flex items-center gap-1.5 text-[9px] font-bold uppercase tracking-[0.12em] text-[#216551]">
+              <Sparkles size={11} /> Inbox intelligence
+            </div>
+            <div className="mt-1 text-[12px] font-semibold text-[#203B31]">
+              What should happen next?
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={() => void load(true)}
+            disabled={refreshing}
+            className="grid h-7 w-7 place-items-center rounded-md text-[#829087] transition hover:bg-white hover:text-[#216551] disabled:opacity-50"
+            aria-label="Refresh conversation intelligence"
+            title="Refresh intelligence"
+          >
+            <RefreshCw size={12} className={refreshing ? "animate-spin" : ""} />
+          </button>
+        </div>
+      </div>
+
+      <div className="p-3.5">
+        {error ? (
+          <div className="mb-3 flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-[10px] leading-4 text-amber-800">
+            <AlertTriangle size={12} className="mt-0.5 shrink-0" />
+            <span>{error} Showing only conversation-state guidance.</span>
+          </div>
+        ) : null}
+
+        <div className={`rounded-lg border px-3 py-3 ${objective.toneClass}`}>
+          <div className="flex items-start gap-2.5">
+            <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-white/80 text-[#216551] shadow-sm">
+              <Target size={14} />
+            </span>
+            <div className="min-w-0 flex-1">
+              <div className="text-[9px] font-bold uppercase tracking-[0.1em] text-[#728179]">
+                {objective.sourceLabel}
+              </div>
+              <div className="mt-1 text-[12px] font-semibold text-[#203B31]">
+                {objective.title}
+              </div>
+              <div className="mt-1 text-[10px] leading-4 text-[#61736A]">
+                {objective.detail}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="mt-3 grid grid-cols-2 gap-2">
+          <Signal label="Priority" value={pretty(data?.salesIntelligence?.priority_band || priority)} />
+          <Signal label="Intent" value={pretty(data?.salesIntelligence?.derived_intent || "Not available")} />
+          <Signal label="Engagement" value={numberText(data?.salesIntelligence?.engagement_score)} />
+          <Signal label="Next follow-up" value={nextFollowup ? relativeTime(nextFollowup) : "Not scheduled"} />
+        </div>
+
+        {data?.salesIntelligence?.priority_reason ? (
+          <div className="mt-3 rounded-lg bg-[#F5F8F6] px-3 py-2 text-[9px] leading-4 text-[#718078]">
+            <strong className="font-semibold text-[#496057]">Why now:</strong>{" "}
+            {data.salesIntelligence.priority_reason}
+          </div>
+        ) : null}
+
+        {data?.openFollowups?.length ? (
+          <div className="mt-3 rounded-lg border border-[#E6ECE8] px-3 py-2.5">
+            <div className="text-[9px] font-bold uppercase tracking-[0.08em] text-[#89968F]">
+              Open follow-up
+            </div>
+            <div className="mt-1.5 text-[10px] font-semibold text-[#40564C]">
+              {data.openFollowups[0].title}
+            </div>
+            {data.openFollowups[0].due_at ? (
+              <div className="mt-1 flex items-center gap-1 text-[9px] text-[#7A8981]">
+                <Clock3 size={10} /> {relativeTime(data.openFollowups[0].due_at)} · {formatDateTime(data.openFollowups[0].due_at)}
+              </div>
+            ) : null}
+          </div>
+        ) : null}
+
+        {actionError ? (
+          <div className="mt-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-[9px] text-red-700">
+            {actionError}
+          </div>
+        ) : null}
+        {actionSuccess ? (
+          <div className="mt-3 flex items-center gap-1.5 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-[9px] text-emerald-700">
+            <CheckCircle2 size={11} /> {actionSuccess}
+          </div>
+        ) : null}
+
+        <div className="mt-3 grid gap-2">
+          <button
+            type="button"
+            onClick={scheduleRecommendedFollowup}
+            disabled={scheduling}
+            className="inline-flex h-9 items-center justify-center gap-1.5 rounded-lg bg-[#216551] px-3 text-[10px] font-semibold text-white transition hover:bg-[#174D3B] disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            {scheduling ? <RefreshCw size={12} className="animate-spin" /> : <CalendarClock size={12} />}
+            {scheduling ? "Scheduling…" : objective.scheduleLabel}
+          </button>
+
+          <LeadInspectorButton
+            leadId={leadId}
+            label="Open full lead intelligence"
+            className="inline-flex h-9 items-center justify-center gap-1.5 rounded-lg border border-[#DDE7DF] bg-white px-3 text-[10px] font-semibold text-[#456158] transition hover:bg-[#F0F7F3] hover:text-[#216551]"
+          />
+        </div>
+
+        <div className="mt-3 flex items-start gap-2 border-t border-[#EEF2EF] pt-3 text-[9px] leading-4 text-[#849188]">
+          <Zap size={11} className="mt-0.5 shrink-0 text-[#6A927B]" />
+          <span>
+            Guidance uses stored CRM evidence. AI drafting remains human-reviewed; nothing is sent automatically.
+          </span>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function Signal({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-lg bg-[#F5F8F6] px-2.5 py-2">
+      <div className="text-[8px] font-semibold uppercase tracking-[0.08em] text-[#8A978F]">{label}</div>
+      <div className="mt-1 truncate text-[10px] font-semibold text-[#344E42]">{value}</div>
+    </div>
+  );
+}
+
+function buildResponseObjective({
+  data,
+  stage,
+  priority,
+  needsReply,
+  needsFirstContact,
+  waitingSince,
+}: {
+  data: Extract<InspectorResponse, { ok: true }>['data'] | null;
+  stage: LeadStage;
+  priority: ConversationPriority;
+  needsReply: boolean;
+  needsFirstContact: boolean;
+  waitingSince: string | null;
+}) {
+  const intelligence = data?.salesIntelligence;
+  if (intelligence?.next_best_action) {
+    const urgent = priority === "urgent" || intelligence.priority_band === "urgent";
+    return {
+      title: intelligence.next_best_action,
+      detail: intelligence.priority_reason || "Use the canonical next-best-action as the objective for the next human reply.",
+      sourceLabel: "Canonical next best action",
+      source: "canonical" as const,
+      recommendedHours: urgent ? 4 : priority === "high" ? 8 : 24,
+      followupTitle: `Follow up: ${intelligence.next_best_action}`.slice(0, 220),
+      scheduleLabel: urgent ? "Schedule follow-up · 4h" : priority === "high" ? "Schedule follow-up · 8h" : "Schedule follow-up · tomorrow",
+      toneClass: urgent ? "border-amber-200 bg-amber-50/80" : "border-emerald-200 bg-emerald-50/70",
+    };
+  }
+
+  if (needsReply) {
+    const hours = priority === "urgent" ? 2 : priority === "high" ? 4 : 8;
+    return {
+      title: "Reply to the latest inbound message",
+      detail: waitingSince
+        ? `The lead is waiting for a response. Keep the reply focused on the latest request and move toward a clear next step.`
+        : "The latest conversation state indicates that the admissions team owes the next response.",
+      sourceLabel: "Conversation-state guidance",
+      source: "presentation" as const,
+      recommendedHours: hours,
+      followupTitle: "Reply to latest inbound message",
+      scheduleLabel: `Schedule reply follow-up · ${hours}h`,
+      toneClass: priority === "urgent" ? "border-amber-200 bg-amber-50/80" : "border-[#D8E6DC] bg-[#F2F8F4]",
+    };
+  }
+
+  if (needsFirstContact) {
+    return {
+      title: "Make first contact",
+      detail: "No completed contact is recorded yet. Start the conversation and capture the outcome while intent is still fresh.",
+      sourceLabel: "Conversation-state guidance",
+      source: "presentation" as const,
+      recommendedHours: 4,
+      followupTitle: "Make first contact",
+      scheduleLabel: "Schedule first contact · 4h",
+      toneClass: "border-[#D8E6DC] bg-[#F2F8F4]",
+    };
+  }
+
+  if (stage === "payment_pending") {
+    return {
+      title: "Resolve the payment blocker",
+      detail: "Keep the conversation focused on the exact payment question, blocker, or confirmation needed to complete enrollment.",
+      sourceLabel: "Conversation-state guidance",
+      source: "presentation" as const,
+      recommendedHours: 4,
+      followupTitle: "Check payment status",
+      scheduleLabel: "Schedule payment check · 4h",
+      toneClass: "border-amber-200 bg-amber-50/80",
+    };
+  }
+
+  if (stage === "qualified" || stage === "high_intent") {
+    return {
+      title: "Move toward a concrete enrollment step",
+      detail: "Clarify the remaining decision: course, batch, accommodation, payment, or a committed follow-up time.",
+      sourceLabel: "Conversation-state guidance",
+      source: "presentation" as const,
+      recommendedHours: 24,
+      followupTitle: "Progress enrollment decision",
+      scheduleLabel: "Schedule follow-up · tomorrow",
+      toneClass: "border-emerald-200 bg-emerald-50/70",
+    };
+  }
+
+  return {
+    title: "Keep the conversation moving",
+    detail: "Use the latest message, current stage, and verified lead context to end with one clear next step.",
+    sourceLabel: "Conversation-state guidance",
+    source: "presentation" as const,
+    recommendedHours: 24,
+    followupTitle: "Continue admissions conversation",
+    scheduleLabel: "Schedule follow-up · tomorrow",
+    toneClass: "border-[#D8E6DC] bg-[#F2F8F4]",
+  };
+}
+
+function pretty(value: string) {
+  return String(value || "")
+    .replace(/[_-]+/g, " ")
+    .replace(/\b\w/g, (character) => character.toUpperCase());
+}
+
+function numberText(value: number | string | null | undefined) {
+  if (value == null || value === "") return "Not available";
+  const number = Number(value);
+  return Number.isFinite(number) ? number.toLocaleString("en-IN") : String(value);
+}
+
+function formatDateTime(value: string) {
+  const timestamp = Date.parse(value);
+  if (!Number.isFinite(timestamp)) return "Not recorded";
+  return new Intl.DateTimeFormat("en-IN", {
+    day: "2-digit",
+    month: "short",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(new Date(timestamp));
+}
+
+function relativeTime(value: string) {
+  const timestamp = Date.parse(value);
+  if (!Number.isFinite(timestamp)) return "Not recorded";
+  const diff = timestamp - Date.now();
+  const abs = Math.abs(diff);
+  const minutes = Math.max(1, Math.round(abs / 60_000));
+  const suffix = diff < 0 ? "overdue" : "from now";
+  if (minutes < 60) return `${minutes}m ${suffix}`;
+  const hours = Math.round(minutes / 60);
+  if (hours < 24) return `${hours}h ${suffix}`;
+  const days = Math.round(hours / 24);
+  return `${days}d ${suffix}`;
+}
