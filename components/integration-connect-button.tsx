@@ -34,7 +34,7 @@ export function IntegrationConnectButton({
 
   const openPopup =
     useCallback(() => {
-const left =
+      const left =
         Math.max(
           0,
           window.screenX +
@@ -187,7 +187,7 @@ const left =
     };
   }, [opening]);
 
-  const reconnect =
+  const refresh =
     mode === 'reconnect';
 
   const providerLabel =
@@ -200,32 +200,29 @@ const left =
   return (
     <button
       type="button"
-      onClick={
-        openPopup
-      }
-      disabled={
-        opening
-      }
+      onClick={openPopup}
+      disabled={opening}
       className={
-        reconnect
+        refresh
           ? 'btn-secondary'
           : 'inline-flex items-center gap-2 rounded-lg bg-violet-600 px-3 py-2 text-xs font-semibold text-white transition hover:bg-violet-700 disabled:cursor-wait disabled:opacity-60'
       }
+      title={
+        refresh
+          ? `Refresh authorization for the connected ${providerLabel} account. Remove it first to connect a different account.`
+          : `Connect a ${providerLabel} account to this workspace.`
+      }
     >
-      {reconnect ? (
-        <RefreshCw
-          size={14}
-        />
+      {refresh ? (
+        <RefreshCw size={14} />
       ) : (
-        <Link2
-          size={14}
-        />
+        <Link2 size={14} />
       )}
 
       {opening
         ? `Opening ${providerLabel}...`
-        : reconnect
-          ? `Reconnect ${providerLabel}`
+        : refresh
+          ? `Refresh ${providerLabel}`
           : `Connect ${providerLabel}`}
     </button>
   );
