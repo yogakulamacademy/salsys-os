@@ -2,12 +2,13 @@
 
 import Link from "next/link";
 import { createPortal } from "react-dom";
+import type { FormEvent, ReactNode } from "react";
 import {
   Activity,
   AlertCircle,
   ArrowRight,
   CalendarClock,
-  CircleDollarSign,
+  CheckCircle2,
   Clock3,
   ExternalLink,
   Loader2,
@@ -16,13 +17,16 @@ import {
   MessageCircle,
   Phone,
   Route,
+  Sparkles,
   UserRound,
   X,
+  Zap,
 } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 type InspectorTab = "overview" | "journey" | "activity";
 type Availability = "available" | "empty" | "unavailable";
+type FocusTone = "attention" | "opportunity" | "neutral";
 
 type InspectorPayment = {
   id: string;
@@ -76,6 +80,8 @@ type InspectorPerson = {
   latest_lead_behaviour_reason?: string | null;
   last_session_at?: string | null;
   last_message_at?: string | null;
+  last_inbound_at?: string | null;
+  last_outbound_at?: string | null;
 };
 
 type InspectorLead = {
@@ -152,6 +158,17 @@ type ApiResponse =
   | { ok: true; data: InspectorPayload }
   | { ok: false; error: string };
 
+type ActionResponse =
+  | { ok: true; data?: unknown }
+  | { ok: false; error: string };
+
+type LeadFocus = {
+  action: string;
+  detail: string;
+  tone: FocusTone;
+  reasons: string[];
+};
+
 export function LeadInspector({
   leadId,
   onClose,
@@ -164,14 +181,37 @@ export function LeadInspector({
   const [payload, setPayload] = useState<InspectorPayload | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [followupOpen, setFollowupOpen] = useState(false);
+  const [followupTitle, setFollowupTitle] = useState("");
+  const [followupDueAt, setFollowupDueAt] = useState("");
+  const [followupDescription, setFollowupDescription] = useState("");
+  const [actionLoading, setActionLoading] = useState(false);
+  const [actionError, setActionError] = useState<string | null>(null);
+  const [actionSuccess, setActionSuccess] = useState<string | null>(null);
 
   useEffect(() => setMounted(true), []);
+
+  const loadLead = useCallback(async (id: string, signal?: AbortSignal) => {
+    const response = await fetch(`/api/leads/${encodeURIComponent(id)}/inspector`, {
+      cache: "no-store",
+      signal,
+    });
+    const body = (await response.json()) as ApiResponse;
+    if (!response.ok || !body.ok) {
+      throw new Error(body.ok ? "Unable to load lead." : body.error);
+    }
+    setPayload(body.data);
+    return body.data;
+  }, []);
 
   useEffect(() => {
     if (!leadId) {
       setPayload(null);
       setError(null);
       setLoading(false);
+      setFollowupOpen(false);
+      setActionError(null);
+      setActionSuccess(null);
       return;
     }
 
@@ -179,19 +219,12 @@ export function LeadInspector({
     setPayload(null);
     setError(null);
     setLoading(true);
+    setFollowupOpen(false);
+    setActionError(null);
+    setActionSuccess(null);
 
     const controller = new AbortController();
-    void fetch(`/api/leads/${encodeURIComponent(leadId)}/inspector`, {
-      cache: "no-store",
-      signal: controller.signal,
-    })
-      .then(async (response) => {
-        const body = (await response.json()) as ApiResponse;
-        if (!response.ok || !body.ok) {
-          throw new Error(body.ok ? "Unable to load lead." : body.error);
-        }
-        setPayload(body.data);
-      })
+    void loadLead(leadId, controller.signal)
       .catch((reason) => {
         if (controller.signal.aborted) return;
         setError(reason instanceof Error ? reason.message : "Unable to load lead.");
@@ -201,34 +234,96 @@ export function LeadInspector({
       });
 
     return () => controller.abort();
-  }, [leadId]);
+  }, [leadId, loadLead]);
+
+  useEffect(() => {
+    if (!payload) return;
+    const focus = buildLeadFocus(payload);
+    setFollowupTitle(defaultFollowupTitle(payload, focus));
+    setFollowupDueAt(defaultDateTimeLocal(24));
+    setFollowupDescription("");
+  }, [payload?.lead.id]);
 
   useEffect(() => {
     if (!leadId) return;
     const previous = document.body.style.overflow;
     document.body.style.overflow = "hidden";
     function onKeyDown(event: KeyboardEvent) {
-      if (event.key === "Escape") onClose();
+      if (event.key !== "Escape") return;
+      if (followupOpen) {
+        setFollowupOpen(false);
+        return;
+      }
+      onClose();
     }
     window.addEventListener("keydown", onKeyDown);
     return () => {
       document.body.style.overflow = previous;
       window.removeEventListener("keydown", onKeyDown);
     };
-  }, [leadId, onClose]);
+  }, [leadId, followupOpen, onClose]);
+
+  async function submitFollowup(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!leadId || !followupTitle.trim() || !followupDueAt) return;
+
+    const due = new Date(followupDueAt);
+    if (Number.isNaN(due.getTime())) {
+      setActionError("Choose a valid follow-up date and time.");
+      return;
+    }
+
+    setActionLoading(true);
+    setActionError(null);
+    setActionSuccess(null);
+
+    try {
+      const response = await fetch(`/api/leads/${encodeURIComponent(leadId)}/inspector`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "create_followup",
+          title: followupTitle.trim(),
+          dueAt: due.toISOString(),
+          description: followupDescription.trim() || null,
+        }),
+      });
+      const body = (await response.json()) as ActionResponse;
+      if (!response.ok || !body.ok) {
+        throw new Error(body.ok ? "Unable to create follow-up." : body.error);
+      }
+
+      setActionSuccess("Follow-up scheduled and synced to the lead.");
+      setFollowupOpen(false);
+      await loadLead(leadId);
+    } catch (reason) {
+      setActionError(
+        reason instanceof Error ? reason.message : "Unable to create follow-up.",
+      );
+    } finally {
+      setActionLoading(false);
+    }
+  }
 
   if (!mounted || !leadId) return null;
 
+  const focus = payload ? buildLeadFocus(payload) : null;
+
   return createPortal(
-    <div className="fixed inset-0 z-[140] flex justify-end" role="dialog" aria-modal="true" aria-label="Lead Inspector">
+    <div
+      className="fixed inset-0 z-[140] flex justify-end"
+      role="dialog"
+      aria-modal="true"
+      aria-label="Lead Inspector"
+    >
       <button
         type="button"
         onClick={onClose}
         aria-label="Close Lead Inspector"
-        className="absolute inset-0 bg-slate-950/20"
+        className="absolute inset-0 bg-slate-950/20 backdrop-blur-[1px]"
       />
 
-      <aside className="relative flex h-full w-full flex-col border-l border-[#DDE7DF] bg-[#FBFCFB] shadow-[-18px_0_50px_rgba(19,46,38,0.14)] sm:max-w-[590px]">
+      <aside className="relative flex h-full w-full flex-col border-l border-[#DDE7DF] bg-[#FBFCFB] shadow-[-18px_0_50px_rgba(19,46,38,0.14)] sm:max-w-[620px]">
         <div className="border-b border-[#E4EAE6] bg-white px-5 pb-0 pt-5 sm:px-6">
           <div className="flex items-start gap-3">
             <span className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-[#E4F2E8] text-xs font-bold text-[#216551]">
@@ -263,15 +358,140 @@ export function LeadInspector({
 
           {payload ? (
             <div className="mt-4 flex flex-wrap gap-2">
-              <Link href={`/leads/${payload.lead.id}`} className="inline-flex h-8 items-center gap-1.5 rounded-md bg-[#216551] px-3 text-[11px] font-semibold text-white transition hover:bg-[#174D3B]">
-                Open profile <ArrowRight size={12} />
-              </Link>
-              <Link href={`/conversations?lead=${payload.lead.id}`} className="inline-flex h-8 items-center gap-1.5 rounded-md border border-[#DDE7DF] bg-white px-3 text-[11px] font-semibold text-[#456158] transition hover:bg-[#F0F7F3]">
+              <Link
+                href={`/conversations?lead=${payload.lead.id}`}
+                className="inline-flex h-8 items-center gap-1.5 rounded-md bg-[#216551] px-3 text-[11px] font-semibold text-white transition hover:bg-[#174D3B]"
+              >
                 <MessageCircle size={12} /> Conversation
               </Link>
-              <Link href={`/leads/${payload.lead.id}/edit`} className="inline-flex h-8 items-center gap-1.5 rounded-md border border-[#DDE7DF] bg-white px-3 text-[11px] font-semibold text-[#456158] transition hover:bg-[#F0F7F3]">
-                Edit lead
+              <button
+                type="button"
+                onClick={() => {
+                  setFollowupOpen((value) => !value);
+                  setActionError(null);
+                  setActionSuccess(null);
+                }}
+                className="inline-flex h-8 items-center gap-1.5 rounded-md border border-[#DDE7DF] bg-white px-3 text-[11px] font-semibold text-[#456158] transition hover:bg-[#F0F7F3]"
+              >
+                <CalendarClock size={12} /> Follow-up
+              </button>
+              <Link
+                href={`/leads/${payload.lead.id}`}
+                data-native-lead-navigation="true"
+                className="inline-flex h-8 items-center gap-1.5 rounded-md border border-[#DDE7DF] bg-white px-3 text-[11px] font-semibold text-[#456158] transition hover:bg-[#F0F7F3]"
+              >
+                Open profile <ArrowRight size={12} />
               </Link>
+              <Link
+                href={`/leads/${payload.lead.id}/edit`}
+                className="inline-flex h-8 items-center gap-1.5 rounded-md border border-[#DDE7DF] bg-white px-3 text-[11px] font-semibold text-[#456158] transition hover:bg-[#F0F7F3]"
+              >
+                Edit
+              </Link>
+            </div>
+          ) : null}
+
+          {payload && followupOpen ? (
+            <form
+              onSubmit={submitFollowup}
+              className="mt-4 rounded-xl border border-[#D7E6DC] bg-[#F6FAF7] p-3.5"
+            >
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <div className="text-[10px] font-bold uppercase tracking-[0.11em] text-[#216551]">
+                    Schedule next action
+                  </div>
+                  <div className="mt-1 text-[10px] leading-4 text-[#728179]">
+                    Creates the canonical CRM follow-up and updates the lead&apos;s next follow-up time.
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setFollowupOpen(false)}
+                  className="grid h-7 w-7 place-items-center rounded-md text-[#7B8A82] hover:bg-white"
+                  aria-label="Close follow-up form"
+                >
+                  <X size={14} />
+                </button>
+              </div>
+
+              <div className="mt-3 grid gap-2.5 sm:grid-cols-[minmax(0,1fr)_190px]">
+                <label>
+                  <span className="mb-1 block text-[9px] font-semibold uppercase tracking-[0.08em] text-[#849188]">
+                    Follow-up
+                  </span>
+                  <input
+                    value={followupTitle}
+                    onChange={(event) => setFollowupTitle(event.target.value)}
+                    maxLength={240}
+                    required
+                    className="h-9 w-full rounded-lg border border-[#DDE7DF] bg-white px-3 text-[11px] text-[#344E42] outline-none transition focus:border-[#7AA88B]"
+                    placeholder="What should happen next?"
+                  />
+                </label>
+                <label>
+                  <span className="mb-1 block text-[9px] font-semibold uppercase tracking-[0.08em] text-[#849188]">
+                    Due
+                  </span>
+                  <input
+                    type="datetime-local"
+                    value={followupDueAt}
+                    onChange={(event) => setFollowupDueAt(event.target.value)}
+                    required
+                    className="h-9 w-full rounded-lg border border-[#DDE7DF] bg-white px-2.5 text-[11px] text-[#344E42] outline-none transition focus:border-[#7AA88B]"
+                  />
+                </label>
+              </div>
+
+              <div className="mt-2 flex flex-wrap gap-1.5">
+                <QuickDue label="+2h" onClick={() => setFollowupDueAt(defaultDateTimeLocal(2))} />
+                <QuickDue label="Tomorrow" onClick={() => setFollowupDueAt(defaultDateTimeLocal(24))} />
+                <QuickDue label="+3 days" onClick={() => setFollowupDueAt(defaultDateTimeLocal(72))} />
+                <QuickDue label="+7 days" onClick={() => setFollowupDueAt(defaultDateTimeLocal(168))} />
+              </div>
+
+              <label className="mt-2.5 block">
+                <span className="mb-1 block text-[9px] font-semibold uppercase tracking-[0.08em] text-[#849188]">
+                  Note · optional
+                </span>
+                <textarea
+                  value={followupDescription}
+                  onChange={(event) => setFollowupDescription(event.target.value)}
+                  maxLength={4000}
+                  rows={2}
+                  className="w-full resize-y rounded-lg border border-[#DDE7DF] bg-white px-3 py-2 text-[11px] leading-5 text-[#344E42] outline-none transition focus:border-[#7AA88B]"
+                  placeholder="Context for the admissions team"
+                />
+              </label>
+
+              <div className="mt-3 flex items-center justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => setFollowupOpen(false)}
+                  className="h-8 rounded-md px-3 text-[10px] font-semibold text-[#6E7E76] hover:bg-white"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={actionLoading}
+                  className="inline-flex h-8 items-center gap-1.5 rounded-md bg-[#216551] px-3 text-[10px] font-semibold text-white transition hover:bg-[#174D3B] disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {actionLoading ? <Loader2 size={12} className="animate-spin" /> : <CalendarClock size={12} />}
+                  Schedule
+                </button>
+              </div>
+            </form>
+          ) : null}
+
+          {actionError ? (
+            <div className="mt-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-[10px] text-red-700">
+              {actionError}
+            </div>
+          ) : null}
+          {actionSuccess ? (
+            <div className="mt-3 flex items-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-[10px] text-emerald-700">
+              <CheckCircle2 size={13} /> {actionSuccess}
             </div>
           ) : null}
 
@@ -286,11 +506,15 @@ export function LeadInspector({
                 type="button"
                 onClick={() => setTab(value)}
                 className={`relative inline-flex h-10 items-center gap-1.5 text-[11px] font-semibold transition ${
-                  tab === value ? "text-[#216551]" : "text-[#7A8981] hover:text-[#40594F]"
+                  tab === value
+                    ? "text-[#216551]"
+                    : "text-[#7A8981] hover:text-[#40594F]"
                 }`}
               >
                 <Icon size={13} /> {label}
-                {tab === value ? <span className="absolute inset-x-0 bottom-0 h-0.5 rounded-full bg-[#216551]" /> : null}
+                {tab === value ? (
+                  <span className="absolute inset-x-0 bottom-0 h-0.5 rounded-full bg-[#216551]" />
+                ) : null}
               </button>
             ))}
           </nav>
@@ -310,7 +534,17 @@ export function LeadInspector({
                 </div>
               ) : null}
 
-              {tab === "overview" ? <OverviewTab payload={payload} /> : null}
+              {tab === "overview" ? (
+                <OverviewTab
+                  payload={payload}
+                  focus={focus ?? buildLeadFocus(payload)}
+                  onSchedule={() => {
+                    setFollowupOpen(true);
+                    setActionError(null);
+                    setActionSuccess(null);
+                  }}
+                />
+              ) : null}
               {tab === "journey" ? <JourneyTab payload={payload} /> : null}
               {tab === "activity" ? <ActivityTab payload={payload} /> : null}
             </>
@@ -341,7 +575,10 @@ export function LeadInspectorButton({
           event.stopPropagation();
           setOpen(true);
         }}
-        className={className || "inline-flex h-8 items-center gap-1.5 rounded-md border border-[#DDE7DF] bg-white px-2.5 text-[11px] font-semibold text-[#456158] transition hover:bg-[#F0F7F3] hover:text-[#216551]"}
+        className={
+          className ||
+          "inline-flex h-8 items-center gap-1.5 rounded-md border border-[#DDE7DF] bg-white px-2.5 text-[11px] font-semibold text-[#456158] transition hover:bg-[#F0F7F3] hover:text-[#216551]"
+        }
       >
         {label} <ExternalLink size={11} />
       </button>
@@ -350,7 +587,15 @@ export function LeadInspectorButton({
   );
 }
 
-function OverviewTab({ payload }: { payload: InspectorPayload }) {
+function OverviewTab({
+  payload,
+  focus,
+  onSchedule,
+}: {
+  payload: InspectorPayload;
+  focus: LeadFocus;
+  onSchedule: () => void;
+}) {
   const { lead, person, payments } = payload;
   const recordedPaid = useMemo(() => sumPaidByCurrency(payments), [payments]);
   const potential = lead.potentialValue ?? lead.value;
@@ -361,11 +606,21 @@ function OverviewTab({ payload }: { payload: InspectorPayload }) {
 
   return (
     <div className="space-y-4">
+      <FocusCard payload={payload} focus={focus} onSchedule={onSchedule} />
+
       <Section title="Opportunity" eyebrow="Current CRM state">
         <div className="grid gap-x-5 gap-y-4 sm:grid-cols-2">
           <DataPoint label="Course" value={lead.course || "Not selected"} />
-          <DataPoint label="Preferred location" value={lead.preferredLocation || lead.location || "Not selected"} icon={<MapPin size={13} />} />
-          <DataPoint label="Preferred month" value={lead.preferredMonth || "Not captured"} icon={<CalendarClock size={13} />} />
+          <DataPoint
+            label="Preferred location"
+            value={lead.preferredLocation || lead.location || "Not selected"}
+            icon={<MapPin size={13} />}
+          />
+          <DataPoint
+            label="Preferred month"
+            value={lead.preferredMonth || "Not captured"}
+            icon={<CalendarClock size={13} />}
+          />
           <DataPoint label="Mode" value={lead.preferredMode || "Not captured"} />
           <DataPoint label="Owner" value={lead.owner || "Unassigned"} />
           <DataPoint label="Intent" value={pretty(lead.intent || "unknown")} />
@@ -376,17 +631,37 @@ function OverviewTab({ payload }: { payload: InspectorPayload }) {
         <div className="space-y-3">
           <CompactRow icon={<Mail size={13} />} label="Email" value={lead.email || "Not captured"} />
           <CompactRow icon={<Phone size={13} />} label="Phone" value={lead.phone || "Not captured"} />
-          <CompactRow icon={<MessageCircle size={13} />} label="Current channel" value={pretty(lead.currentContactChannel || "unknown")} />
-          <CompactRow icon={<Clock3 size={13} />} label="Last contacted" value={formatDateTime(lead.lastContactedAt)} />
-          <CompactRow icon={<CalendarClock size={13} />} label="Next follow-up" value={formatDateTime(lead.nextFollowupAt)} />
+          <CompactRow
+            icon={<MessageCircle size={13} />}
+            label="Current channel"
+            value={pretty(lead.currentContactChannel || "unknown")}
+          />
+          <CompactRow
+            icon={<Clock3 size={13} />}
+            label="Last contacted"
+            value={formatDateTime(lead.lastContactedAt)}
+          />
+          <CompactRow
+            icon={<CalendarClock size={13} />}
+            label="Next follow-up"
+            value={formatDateTime(lead.nextFollowupAt)}
+          />
         </div>
       </Section>
 
       <Section title="Acquisition" eyebrow="Attribution context">
         <div className="grid gap-x-5 gap-y-4 sm:grid-cols-2">
-          <DataPoint label="First touch" value={pretty(lead.firstTouchSource || "unknown")} sub={lead.firstTouchCampaign || undefined} />
+          <DataPoint
+            label="First touch"
+            value={pretty(lead.firstTouchSource || "unknown")}
+            sub={lead.firstTouchCampaign || undefined}
+          />
           <DataPoint label="First medium" value={pretty(lead.firstTouchMedium || "unknown")} />
-          <DataPoint label="Last touch" value={pretty(lead.lastTouchSource || "unknown")} sub={lead.lastTouchCampaign || undefined} />
+          <DataPoint
+            label="Last touch"
+            value={pretty(lead.lastTouchSource || "unknown")}
+            sub={lead.lastTouchCampaign || undefined}
+          />
           <DataPoint label="Landing page" value={lead.landingPage || "Not captured"} />
           <DataPoint label="Lead origin" value={pretty(lead.leadOrigin || "unknown")} />
           <DataPoint label="Visitor location" value={visitorLocation || "Not captured"} />
@@ -395,19 +670,36 @@ function OverviewTab({ payload }: { payload: InspectorPayload }) {
 
       <Section title="Revenue & payments" eyebrow="Recorded financial evidence">
         <div className="grid gap-3 sm:grid-cols-2">
-          <MetricBox label="Potential value" value={potential != null && potentialCurrency ? formatMoney(potential, potentialCurrency) : "Not recorded"} />
+          <MetricBox
+            label="Potential value"
+            value={
+              potential != null && potentialCurrency
+                ? formatMoney(potential, potentialCurrency)
+                : "Not recorded"
+            }
+          />
           <MetricBox label="Recorded paid" value={formatCurrencyMap(recordedPaid)} />
         </div>
-        <AvailabilityNote availability={payload.availability.payments} empty="No payment records are stored for this lead." unavailable="Payment history could not be loaded. No zero value is assumed." />
+        <AvailabilityNote
+          availability={payload.availability.payments}
+          empty="No payment records are stored for this lead."
+          unavailable="Payment history could not be loaded. No zero value is assumed."
+        />
         {payments.length ? (
           <div className="mt-3 divide-y divide-[#EDF1EE] rounded-lg border border-[#E4EAE6] bg-white px-3">
             {payments.slice(0, 6).map((payment) => (
               <div key={payment.id} className="flex items-center justify-between gap-3 py-3">
                 <div>
-                  <div className="text-[11px] font-semibold text-[#2C443B]">{pretty(payment.paymentKind)} · {pretty(payment.status)}</div>
-                  <div className="mt-0.5 text-[10px] text-[#849188]">{payment.provider || "Provider not recorded"} · {formatDateTime(payment.paidAt || payment.createdAt)}</div>
+                  <div className="text-[11px] font-semibold text-[#2C443B]">
+                    {pretty(payment.paymentKind)} · {pretty(payment.status)}
+                  </div>
+                  <div className="mt-0.5 text-[10px] text-[#849188]">
+                    {payment.provider || "Provider not recorded"} · {formatDateTime(payment.paidAt || payment.createdAt)}
+                  </div>
                 </div>
-                <div className="text-[12px] font-semibold text-[#192E29]">{formatMoney(payment.amount, payment.currency)}</div>
+                <div className="text-[12px] font-semibold text-[#192E29]">
+                  {formatMoney(payment.amount, payment.currency)}
+                </div>
               </div>
             ))}
           </div>
@@ -415,7 +707,11 @@ function OverviewTab({ payload }: { payload: InspectorPayload }) {
       </Section>
 
       <Section title="Person 360" eyebrow="Cross-journey signals">
-        <AvailabilityNote availability={payload.availability.person360} empty="This lead is not yet linked to a Person 360 record." unavailable="Person 360 intelligence is temporarily unavailable." />
+        <AvailabilityNote
+          availability={payload.availability.person360}
+          empty="This lead is not yet linked to a Person 360 record."
+          unavailable="Person 360 intelligence is temporarily unavailable."
+        />
         {person ? (
           <>
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
@@ -425,11 +721,26 @@ function OverviewTab({ payload }: { payload: InspectorPayload }) {
               <MetricBox label="Enrollments" value={numberText(person.enrollment_count)} />
             </div>
             <div className="mt-3 grid gap-x-5 gap-y-4 sm:grid-cols-2">
-              <DataPoint label="Behaviour temperature" value={pretty(person.latest_lead_behaviour_temperature || "not available")} />
-              <DataPoint label="Engagement score" value={person.latest_lead_engagement_score == null ? "Not available" : String(person.latest_lead_engagement_score)} />
+              <DataPoint
+                label="Behaviour temperature"
+                value={pretty(person.latest_lead_behaviour_temperature || "not available")}
+              />
+              <DataPoint
+                label="Engagement score"
+                value={
+                  person.latest_lead_engagement_score == null
+                    ? "Not available"
+                    : String(person.latest_lead_engagement_score)
+                }
+              />
               <DataPoint label="Sessions · 30d" value={numberText(person.sessions_30d)} />
               <DataPoint label="Page views" value={numberText(person.page_view_count)} />
             </div>
+            {person.latest_lead_behaviour_reason ? (
+              <div className="mt-3 rounded-lg bg-[#F4F7F5] px-3 py-2.5 text-[10px] leading-5 text-[#62746B]">
+                {person.latest_lead_behaviour_reason}
+              </div>
+            ) : null}
           </>
         ) : null}
       </Section>
@@ -444,37 +755,130 @@ function OverviewTab({ payload }: { payload: InspectorPayload }) {
   );
 }
 
+function FocusCard({
+  payload,
+  focus,
+  onSchedule,
+}: {
+  payload: InspectorPayload;
+  focus: LeadFocus;
+  onSchedule: () => void;
+}) {
+  const toneClass =
+    focus.tone === "attention"
+      ? "border-amber-200 bg-amber-50/80"
+      : focus.tone === "opportunity"
+        ? "border-emerald-200 bg-emerald-50/70"
+        : "border-[#D9E6DD] bg-[#F4F9F5]";
+  const iconClass =
+    focus.tone === "attention"
+      ? "bg-amber-100 text-amber-700"
+      : "bg-[#DDEFE3] text-[#216551]";
+
+  return (
+    <section className={`rounded-xl border p-4 ${toneClass}`}>
+      <div className="flex items-start gap-3">
+        <span className={`grid h-9 w-9 shrink-0 place-items-center rounded-lg ${iconClass}`}>
+          <Sparkles size={16} />
+        </span>
+        <div className="min-w-0 flex-1">
+          <div className="text-[9px] font-bold uppercase tracking-[0.13em] text-[#74837A]">
+            Suggested focus · current evidence
+          </div>
+          <div className="mt-1 text-[14px] font-semibold text-[#203B31]">{focus.action}</div>
+          <div className="mt-1 text-[10px] leading-5 text-[#63756B]">{focus.detail}</div>
+        </div>
+      </div>
+
+      <div className="mt-3 flex flex-wrap gap-1.5">
+        {focus.reasons.map((reason) => (
+          <span
+            key={reason}
+            className="rounded-md border border-white/70 bg-white/70 px-2 py-1 text-[9px] font-medium text-[#607269]"
+          >
+            {reason}
+          </span>
+        ))}
+      </div>
+
+      <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-black/5 pt-3">
+        <Link
+          href={`/conversations?lead=${payload.lead.id}`}
+          className="inline-flex h-8 items-center gap-1.5 rounded-md bg-[#216551] px-3 text-[10px] font-semibold text-white hover:bg-[#174D3B]"
+        >
+          <Zap size={12} /> Act now
+        </Link>
+        <button
+          type="button"
+          onClick={onSchedule}
+          className="inline-flex h-8 items-center gap-1.5 rounded-md border border-[#CADBCF] bg-white px-3 text-[10px] font-semibold text-[#456158] hover:bg-[#F8FBF9]"
+        >
+          <CalendarClock size={12} /> Schedule follow-up
+        </button>
+        <span className="ml-auto text-[9px] text-[#849188]">
+          Guidance only · no score or stage is changed automatically
+        </span>
+      </div>
+    </section>
+  );
+}
+
 function JourneyTab({ payload }: { payload: InspectorPayload }) {
   if (payload.availability.journey === "unavailable") {
-    return <EmptyState title="Journey unavailable" body="The canonical Person journey could not be loaded. The Inspector is not substituting inferred events." />;
+    return (
+      <EmptyState
+        title="Journey unavailable"
+        body="The canonical Person journey could not be loaded. The Inspector is not substituting inferred events."
+      />
+    );
   }
   if (!payload.journey.length) {
-    return <EmptyState title="No journey events yet" body="No canonical Person journey evidence is currently linked to this lead." />;
+    return (
+      <EmptyState
+        title="No journey events yet"
+        body="No canonical Person journey evidence is currently linked to this lead."
+      />
+    );
   }
 
   return (
     <div>
       <div className="mb-4 flex items-center justify-between gap-3">
         <div>
-          <div className="text-[10px] font-bold uppercase tracking-[0.12em] text-[#8B988F]">Canonical customer journey</div>
-          <div className="mt-1 text-sm font-semibold text-[#192E29]">{payload.journeyTotal.toLocaleString()} recorded events</div>
+          <div className="text-[10px] font-bold uppercase tracking-[0.12em] text-[#8B988F]">
+            Canonical customer journey
+          </div>
+          <div className="mt-1 text-sm font-semibold text-[#192E29]">
+            {payload.journeyTotal.toLocaleString()} recorded events
+          </div>
         </div>
-        <span className="rounded-full bg-[#E9F4EC] px-2.5 py-1 text-[10px] font-semibold text-[#216551]">Newest first</span>
+        <span className="rounded-full bg-[#E9F4EC] px-2.5 py-1 text-[10px] font-semibold text-[#216551]">
+          Newest first
+        </span>
       </div>
 
       <div className="relative space-y-0 before:absolute before:bottom-3 before:left-[7px] before:top-3 before:w-px before:bg-[#DCE7DF]">
         {payload.journey.map((event) => (
-          <div key={event.journey_event_key} className="relative grid grid-cols-[16px_minmax(0,1fr)] gap-3 pb-5 last:pb-0">
+          <div
+            key={event.journey_event_key}
+            className="relative grid grid-cols-[16px_minmax(0,1fr)] gap-3 pb-5 last:pb-0"
+          >
             <span className="relative z-10 mt-1.5 h-[15px] w-[15px] rounded-full border-[4px] border-[#FBFCFB] bg-[#7AA88B]" />
             <div className="rounded-lg border border-[#E4EAE6] bg-white p-3.5">
               <div className="flex flex-wrap items-start justify-between gap-2">
                 <div>
                   <div className="text-[12px] font-semibold text-[#233C33]">{event.title}</div>
-                  <div className="mt-0.5 text-[10px] text-[#85928B]">{pretty(event.event_category)} · {pretty(event.event_type)}</div>
+                  <div className="mt-0.5 text-[10px] text-[#85928B]">
+                    {pretty(event.event_category)} · {pretty(event.event_type)}
+                  </div>
                 </div>
-                <div className="text-[10px] font-medium text-[#85928B]">{formatDateTime(event.event_at)}</div>
+                <div className="text-[10px] font-medium text-[#85928B]">
+                  {formatDateTime(event.event_at)}
+                </div>
               </div>
-              {event.summary ? <div className="mt-2 text-[11px] leading-5 text-[#607068]">{event.summary}</div> : null}
+              {event.summary ? (
+                <div className="mt-2 text-[11px] leading-5 text-[#607068]">{event.summary}</div>
+              ) : null}
               {event.channel || event.source ? (
                 <div className="mt-2 flex flex-wrap gap-1.5">
                   {event.channel ? <SmallTag>{pretty(event.channel)}</SmallTag> : null}
@@ -502,7 +906,11 @@ function ActivityTab({ payload }: { payload: InspectorPayload }) {
             <MetricBox label="Follow-up" value={numberText(payload.contactSummary.follow_up_needed_contacts)} />
           </div>
         ) : null}
-        <AvailabilityNote availability={payload.availability.contactHistory} empty="No structured contact logs are stored yet." unavailable="Contact history could not be loaded. No empty-state assumption is being made." />
+        <AvailabilityNote
+          availability={payload.availability.contactHistory}
+          empty="No structured contact logs are stored yet."
+          unavailable="Contact history could not be loaded. No empty-state assumption is being made."
+        />
         {payload.contactLogs.length ? (
           <div className="mt-3 space-y-2.5">
             {payload.contactLogs.map((log) => (
@@ -511,10 +919,15 @@ function ActivityTab({ payload }: { payload: InspectorPayload }) {
                   <SmallTag>{pretty(log.method)}</SmallTag>
                   <SmallTag>{pretty(log.direction)}</SmallTag>
                   <SmallTag>{pretty(log.outcome)}</SmallTag>
-                  <span className="ml-auto text-[10px] text-[#89968F]">{formatDateTime(log.contacted_at)}</span>
+                  <span className="ml-auto text-[10px] text-[#89968F]">
+                    {formatDateTime(log.contacted_at)}
+                  </span>
                 </div>
                 <div className="mt-2 text-[11px] leading-5 text-[#52665C]">{log.comment}</div>
-                <div className="mt-2 text-[10px] text-[#89968F]">Logged by {log.employee_name || "System"}{log.call_duration_seconds ? ` · ${formatDuration(log.call_duration_seconds)}` : ""}</div>
+                <div className="mt-2 text-[10px] text-[#89968F]">
+                  Logged by {log.employee_name || "System"}
+                  {log.call_duration_seconds ? ` · ${formatDuration(log.call_duration_seconds)}` : ""}
+                </div>
               </div>
             ))}
           </div>
@@ -522,14 +935,39 @@ function ActivityTab({ payload }: { payload: InspectorPayload }) {
       </Section>
 
       <Section title="Recent messages" eyebrow="Conversation activity">
-        {!messages.length ? <div className="text-[11px] leading-5 text-[#7D8C84]">No recent CRM messages are stored for this lead.</div> : null}
+        {!messages.length ? (
+          <div className="text-[11px] leading-5 text-[#7D8C84]">
+            No recent CRM messages are stored for this lead.
+          </div>
+        ) : null}
         <div className="space-y-2.5">
           {messages.map((message) => (
-            <div key={message.id} className={`flex ${message.direction === "outbound" ? "justify-end" : "justify-start"}`}>
-              <div className={`max-w-[88%] rounded-xl px-3.5 py-3 text-[11px] leading-5 ${message.direction === "outbound" ? "bg-[#216551] text-white" : "border border-[#E4EAE6] bg-white text-[#52665C]"}`}>
-                <div className={`mb-1 text-[9px] font-semibold uppercase tracking-[0.08em] ${message.direction === "outbound" ? "text-white/65" : "text-[#8B988F]"}`}>{message.sender} · {pretty(message.channel)}</div>
+            <div
+              key={message.id}
+              className={`flex ${message.direction === "outbound" ? "justify-end" : "justify-start"}`}
+            >
+              <div
+                className={`max-w-[88%] rounded-xl px-3.5 py-3 text-[11px] leading-5 ${
+                  message.direction === "outbound"
+                    ? "bg-[#216551] text-white"
+                    : "border border-[#E4EAE6] bg-white text-[#52665C]"
+                }`}
+              >
+                <div
+                  className={`mb-1 text-[9px] font-semibold uppercase tracking-[0.08em] ${
+                    message.direction === "outbound" ? "text-white/65" : "text-[#8B988F]"
+                  }`}
+                >
+                  {message.sender} · {pretty(message.channel)}
+                </div>
                 <div>{message.body}</div>
-                <div className={`mt-1 text-right text-[9px] ${message.direction === "outbound" ? "text-white/60" : "text-[#8B988F]"}`}>{formatDateTime(message.timestamp)}</div>
+                <div
+                  className={`mt-1 text-right text-[9px] ${
+                    message.direction === "outbound" ? "text-white/60" : "text-[#8B988F]"
+                  }`}
+                >
+                  {formatDateTime(message.timestamp)}
+                </div>
               </div>
             </div>
           ))}
@@ -539,7 +977,15 @@ function ActivityTab({ payload }: { payload: InspectorPayload }) {
   );
 }
 
-function Section({ title, eyebrow, children }: { title: string; eyebrow: string; children: React.ReactNode }) {
+function Section({
+  title,
+  eyebrow,
+  children,
+}: {
+  title: string;
+  eyebrow: string;
+  children: ReactNode;
+}) {
   return (
     <section className="rounded-xl border border-[#E4EAE6] bg-white p-4">
       <div className="text-[9px] font-bold uppercase tracking-[0.13em] text-[#8B988F]">{eyebrow}</div>
@@ -549,17 +995,30 @@ function Section({ title, eyebrow, children }: { title: string; eyebrow: string;
   );
 }
 
-function DataPoint({ label, value, sub, icon }: { label: string; value: string; sub?: string; icon?: React.ReactNode }) {
+function DataPoint({
+  label,
+  value,
+  sub,
+  icon,
+}: {
+  label: string;
+  value: string;
+  sub?: string;
+  icon?: ReactNode;
+}) {
   return (
     <div className="min-w-0">
-      <div className="flex items-center gap-1.5 text-[9px] font-semibold uppercase tracking-[0.08em] text-[#8A978F]">{icon}{label}</div>
+      <div className="flex items-center gap-1.5 text-[9px] font-semibold uppercase tracking-[0.08em] text-[#8A978F]">
+        {icon}
+        {label}
+      </div>
       <div className="mt-1 break-words text-[11px] font-semibold text-[#344E42]">{value}</div>
       {sub ? <div className="mt-0.5 break-words text-[10px] text-[#87948D]">{sub}</div> : null}
     </div>
   );
 }
 
-function CompactRow({ icon, label, value }: { icon: React.ReactNode; label: string; value: string }) {
+function CompactRow({ icon, label, value }: { icon: ReactNode; label: string; value: string }) {
   return (
     <div className="grid grid-cols-[20px_120px_minmax(0,1fr)] items-start gap-2 border-b border-[#EFF2F0] pb-3 last:border-0 last:pb-0">
       <span className="mt-0.5 text-[#7C9487]">{icon}</span>
@@ -587,10 +1046,24 @@ function TextBlock({ label, value }: { label: string; value: string }) {
   );
 }
 
-function AvailabilityNote({ availability, empty, unavailable }: { availability: Availability; empty: string; unavailable: string }) {
+function AvailabilityNote({
+  availability,
+  empty,
+  unavailable,
+}: {
+  availability: Availability;
+  empty: string;
+  unavailable: string;
+}) {
   if (availability === "available") return null;
   return (
-    <div className={`mt-3 rounded-lg px-3 py-2 text-[10px] leading-5 ${availability === "unavailable" ? "border border-amber-200 bg-amber-50 text-amber-800" : "bg-[#F5F7F6] text-[#77877E]"}`}>
+    <div
+      className={`mt-3 rounded-lg px-3 py-2 text-[10px] leading-5 ${
+        availability === "unavailable"
+          ? "border border-amber-200 bg-amber-50 text-amber-800"
+          : "bg-[#F5F7F6] text-[#77877E]"
+      }`}
+    >
       {availability === "unavailable" ? unavailable : empty}
     </div>
   );
@@ -620,17 +1093,153 @@ function InspectorLoading() {
 function InspectorError({ message }: { message: string }) {
   return (
     <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-4 text-[11px] leading-5 text-red-700">
-      <div className="flex gap-2"><AlertCircle size={15} className="mt-0.5 shrink-0" /><div><strong className="font-semibold">Unable to load Lead Inspector.</strong><div className="mt-1">{message}</div></div></div>
+      <div className="flex gap-2">
+        <AlertCircle size={15} className="mt-0.5 shrink-0" />
+        <div>
+          <strong className="font-semibold">Unable to load Lead Inspector.</strong>
+          <div className="mt-1">{message}</div>
+        </div>
+      </div>
     </div>
   );
 }
 
-function StatePill({ value }: { value: string }) {
-  return <span className="rounded-full bg-[#E9F4EC] px-2.5 py-1 text-[9px] font-semibold text-[#216551]">{pretty(value)}</span>;
+function QuickDue({ label, onClick }: { label: string; onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="rounded-md border border-[#DDE7DF] bg-white px-2 py-1 text-[9px] font-semibold text-[#61736A] transition hover:border-[#AAC7B4] hover:text-[#216551]"
+    >
+      {label}
+    </button>
+  );
 }
 
-function SmallTag({ children }: { children: React.ReactNode }) {
-  return <span className="rounded-md bg-[#F0F5F1] px-2 py-1 text-[9px] font-semibold text-[#62786C]">{children}</span>;
+function StatePill({ value }: { value: string }) {
+  return (
+    <span className="rounded-full bg-[#E9F4EC] px-2.5 py-1 text-[9px] font-semibold text-[#216551]">
+      {pretty(value)}
+    </span>
+  );
+}
+
+function SmallTag({ children }: { children: ReactNode }) {
+  return (
+    <span className="rounded-md bg-[#F0F5F1] px-2 py-1 text-[9px] font-semibold text-[#62786C]">
+      {children}
+    </span>
+  );
+}
+
+function buildLeadFocus(payload: InspectorPayload): LeadFocus {
+  const { lead, person } = payload;
+  const reasons: string[] = [];
+  const now = Date.now();
+  const dueAt = lead.nextFollowupAt ? Date.parse(lead.nextFollowupAt) : Number.NaN;
+  const latest = latestMessage(lead.lastMessages ?? []);
+  const temperature = person?.latest_lead_behaviour_temperature;
+
+  if (Number.isFinite(dueAt)) {
+    reasons.push(dueAt < now ? `Follow-up overdue ${relativeDistance(dueAt, now)}` : `Follow-up ${relativeDistance(now, dueAt)}`);
+  } else {
+    reasons.push("No follow-up scheduled");
+  }
+
+  if (temperature) reasons.push(`${pretty(temperature)} behaviour`);
+  if (lead.owner) reasons.push(`Owner: ${lead.owner}`);
+  else reasons.push("Unassigned");
+  if (payload.journeyTotal > 0) reasons.push(`${payload.journeyTotal} journey events`);
+
+  if (Number.isFinite(dueAt) && dueAt < now) {
+    return {
+      action: "Follow up now",
+      detail: "The scheduled next action is past due. Re-open the conversation or set a new committed follow-up time.",
+      tone: "attention",
+      reasons: reasons.slice(0, 4),
+    };
+  }
+
+  if (latest?.direction === "inbound") {
+    return {
+      action: "Reply to the latest inbound message",
+      detail: "The most recent stored CRM message came from the lead, so the clearest next action is to continue that conversation.",
+      tone: "opportunity",
+      reasons: reasons.slice(0, 4),
+    };
+  }
+
+  if (lead.stage === "payment_pending") {
+    return {
+      action: "Resolve the pending payment",
+      detail: "This opportunity is already in the payment stage. Confirm the blocker, payment path, or a specific follow-up time.",
+      tone: "attention",
+      reasons: reasons.slice(0, 4),
+    };
+  }
+
+  if (!lead.owner) {
+    return {
+      action: "Assign clear ownership",
+      detail: "The lead is currently unassigned. Ownership should be clear before the next admissions action is missed.",
+      tone: "attention",
+      reasons: reasons.slice(0, 4),
+    };
+  }
+
+  if (lead.stage === "new" && !lead.lastContactedAt) {
+    return {
+      action: "Make first contact",
+      detail: "No previous contact time is recorded for this new lead. Start the conversation and capture the outcome.",
+      tone: "opportunity",
+      reasons: reasons.slice(0, 4),
+    };
+  }
+
+  if (lead.stage === "qualified" || lead.stage === "high_intent") {
+    return {
+      action: "Move the conversation toward enrollment",
+      detail: "The lead is already in an advanced admissions stage. Clarify the remaining decision, batch, or payment step.",
+      tone: "opportunity",
+      reasons: reasons.slice(0, 4),
+    };
+  }
+
+  return {
+    action: "Continue the active conversation",
+    detail: "Use the current CRM stage, journey evidence, and conversation context to decide the next human action.",
+    tone: "neutral",
+    reasons: reasons.slice(0, 4),
+  };
+}
+
+function defaultFollowupTitle(payload: InspectorPayload, focus: LeadFocus) {
+  const name = payload.lead.name || payload.lead.leadCode || "lead";
+  if (focus.action === "Resolve the pending payment") return `Check payment with ${name}`;
+  if (focus.action === "Make first contact") return `Contact ${name}`;
+  if (focus.action === "Reply to the latest inbound message") return `Follow up with ${name}`;
+  return `Follow up with ${name}`;
+}
+
+function latestMessage(messages: NonNullable<InspectorLead["lastMessages"]>) {
+  return [...messages].sort((a, b) => Date.parse(b.timestamp) - Date.parse(a.timestamp))[0] ?? null;
+}
+
+function defaultDateTimeLocal(hoursFromNow: number) {
+  const date = new Date(Date.now() + hoursFromNow * 60 * 60 * 1000);
+  date.setSeconds(0, 0);
+  const pad = (value: number) => String(value).padStart(2, "0");
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+}
+
+function relativeDistance(from: number, to: number) {
+  const diff = Math.max(0, to - from);
+  const minutes = Math.round(diff / 60_000);
+  if (minutes < 60) return `in ${Math.max(1, minutes)}m`;
+  const hours = Math.round(minutes / 60);
+  if (hours < 24) return `in ${hours}h`;
+  const days = Math.round(hours / 24);
+  return `in ${days}d`;
 }
 
 function sumPaidByCurrency(payments: InspectorPayment[]) {
@@ -654,7 +1263,11 @@ function formatMoney(amount: number | string, currency: string) {
   const number = Number(amount);
   if (!Number.isFinite(number)) return "—";
   try {
-    return new Intl.NumberFormat("en-IN", { style: "currency", currency: String(currency).toUpperCase(), maximumFractionDigits: 0 }).format(number);
+    return new Intl.NumberFormat("en-IN", {
+      style: "currency",
+      currency: String(currency).toUpperCase(),
+      maximumFractionDigits: 0,
+    }).format(number);
   } catch {
     return `${String(currency).toUpperCase()} ${number.toLocaleString("en-IN")}`;
   }
@@ -673,14 +1286,28 @@ function pretty(value: string) {
 }
 
 function initials(value: string) {
-  return value.split(/\s+/).filter(Boolean).map((part) => part[0]).slice(0, 2).join("").toUpperCase() || "L";
+  return (
+    value
+      .split(/\s+/)
+      .filter(Boolean)
+      .map((part) => part[0])
+      .slice(0, 2)
+      .join("")
+      .toUpperCase() || "L"
+  );
 }
 
 function formatDateTime(value?: string | null) {
   if (!value) return "Not recorded";
   const timestamp = Date.parse(value);
   if (!Number.isFinite(timestamp)) return "Not recorded";
-  return new Intl.DateTimeFormat("en-IN", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" }).format(new Date(timestamp));
+  return new Intl.DateTimeFormat("en-IN", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(new Date(timestamp));
 }
 
 function formatDuration(seconds: number) {
