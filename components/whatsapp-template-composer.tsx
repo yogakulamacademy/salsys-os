@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import {
   AlertTriangle,
@@ -65,6 +65,7 @@ export function WhatsAppTemplateComposer({
     () => templates.filter((template) => template.supported),
     [templates],
   );
+  const [resolvedLeadId, setResolvedLeadId] = useState(leadId || "");
   const [composeMode, setComposeMode] = useState<ComposeMode>("template");
   const [selectedKey, setSelectedKey] = useState(
     usableTemplates[0]
@@ -88,27 +89,60 @@ export function WhatsAppTemplateComposer({
   const { state: connectionState } = useWhatsAppConnectionStatus();
   const connectionReady = connectionState === "connected";
 
+  useEffect(() => {
+    if (leadId) {
+      setResolvedLeadId(leadId);
+      return;
+    }
+
+    const fromQuery = new URLSearchParams(window.location.search).get("lead");
+    if (fromQuery) {
+      setResolvedLeadId(fromQuery);
+      return;
+    }
+
+    const selectedLink = document.querySelector<HTMLAnchorElement>(
+      'a[aria-current="page"][href*="/conversations?lead="]',
+    );
+    if (!selectedLink) return;
+
+    try {
+      setResolvedLeadId(
+        new URL(selectedLink.href, window.location.origin).searchParams.get("lead") || "",
+      );
+    } catch {
+      setResolvedLeadId("");
+    }
+  }, [leadId]);
+
   async function saveInternalNote() {
     const value = note.trim();
-    if (!value || noteSaving || !leadId) return;
+    if (!value || noteSaving || !resolvedLeadId) return;
 
     setNoteSaving(true);
     setNoteError(null);
     setNoteSuccess(null);
 
     try {
-      const response = await fetch(`/api/leads/${encodeURIComponent(leadId)}/activity`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ type: "internal_note", body: value }),
-      });
+      const response = await fetch(
+        `/api/leads/${encodeURIComponent(resolvedLeadId)}/activity`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ type: "internal_note", body: value }),
+        },
+      );
       const result = (await response.json()) as NoteResponse;
       if (!response.ok || !result.ok) {
         throw new Error(result.ok ? "Unable to save internal note." : result.error);
       }
       setNote("");
       setNoteSuccess("Internal note saved. Nothing was sent to the lead.");
-      window.dispatchEvent(new CustomEvent("crm:activity-changed", { detail: { leadId } }));
+      window.dispatchEvent(
+        new CustomEvent("crm:activity-changed", {
+          detail: { leadId: resolvedLeadId },
+        }),
+      );
     } catch (reason) {
       setNoteError(
         reason instanceof Error ? reason.message : "Unable to save internal note.",
@@ -150,11 +184,11 @@ export function WhatsAppTemplateComposer({
               Private
             </span>
           </div>
-          <label className="sr-only" htmlFor={`whatsapp-template-note-${leadId || "selected"}`}>
+          <label className="sr-only" htmlFor={`whatsapp-template-note-${resolvedLeadId || "selected"}`}>
             Write an internal note
           </label>
           <textarea
-            id={`whatsapp-template-note-${leadId || "selected"}`}
+            id={`whatsapp-template-note-${resolvedLeadId || "selected"}`}
             value={note}
             onChange={(event) => {
               setNote(event.target.value.slice(0, 4000));
@@ -179,7 +213,7 @@ export function WhatsAppTemplateComposer({
             <button
               type="button"
               onClick={() => void saveInternalNote()}
-              disabled={!note.trim() || noteSaving || !leadId}
+              disabled={!note.trim() || noteSaving || !resolvedLeadId}
               className="inline-flex h-8 items-center justify-center gap-1.5 rounded-lg bg-[#153E33] px-3 text-[9px] font-semibold text-white transition hover:bg-[#216551] disabled:cursor-not-allowed disabled:bg-[#EDF0EC] disabled:text-[#59685F]"
             >
               {noteSaving ? <RefreshCw size={10} className="animate-spin" /> : null}
