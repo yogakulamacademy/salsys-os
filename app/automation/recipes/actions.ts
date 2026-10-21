@@ -3,6 +3,7 @@
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 
+import { initializeAutomationFlowDraft } from '@/lib/automation/initialize-flow-draft';
 import { useMockData } from '@/lib/config';
 import { createClient } from '@/lib/supabase/server';
 import { requireCurrentOrganizationId } from '@/lib/workspace';
@@ -157,18 +158,38 @@ export async function installSmartTriggerRecipeAction(formData: FormData) {
     }),
   ]);
 
-  if (triggerError || actionError) {
+  try {
+    if (triggerError || actionError) {
+      throw triggerError || actionError;
+    }
+
+    await initializeAutomationFlowDraft({
+      organizationId,
+      workflowId: workflow.id,
+      userId: user.id,
+      eventName: recipe.eventName,
+      followupTitle: recipe.followupTitle,
+      followupDelayMinutes: recipe.delayMinutes,
+    });
+  } catch (error) {
     await supabase
       .from('automation_workflows')
       .delete()
       .eq('organization_id', organizationId)
       .eq('id', workflow.id);
 
-    go('error', triggerError?.message || actionError?.message || 'Unable to configure starter recipe.');
+    go(
+      'error',
+      error instanceof Error
+        ? error.message
+        : 'Unable to configure starter recipe.',
+    );
   }
 
   revalidatePath('/automation');
+  revalidatePath('/automation/triggers');
   revalidatePath('/automation/recipes');
+  revalidatePath('/automation/flow-builder');
   revalidatePath('/automation/readiness');
-  go('notice', `${recipe.name} installed as a draft. Runtime and customer messaging remain disabled.`);
+  go('notice', `${recipe.name} installed as an editable draft flow. Runtime and customer messaging remain disabled.`);
 }
