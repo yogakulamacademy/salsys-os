@@ -80,10 +80,10 @@ for (const [needle, label] of [
 }
 
 for (const [needle, label] of [
-  ['Inbox, broadcasts & audiences', 'operations workspace'],
+  ['Inbox, Broadcasts & Audiences', 'operations workspace'],
   ['Create audience segment', 'segment builder'],
   ['Create broadcast campaign', 'campaign builder'],
-  ['Broadcast campaign control', 'campaign controls'],
+  ['Broadcast campaigns', 'campaign controls'],
   ['Quick replies', 'quick reply manager'],
   ['Messaging safety posture', 'safety posture'],
 ]) {
