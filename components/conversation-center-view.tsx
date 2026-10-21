@@ -38,6 +38,10 @@ type ActivityResponse =
   | { ok: true; data: ActivityRow[] | ActivityRow }
   | { ok: false; error: string };
 
+type ActivityChangedEvent = CustomEvent<{
+  leadId?: string;
+}>;
+
 type TimelineItem = {
   id: string;
   title: string;
@@ -140,6 +144,17 @@ export function ConversationCenterView({
     if (view !== "activity" || activityLoaded || activityLoading) return;
     void loadActivity();
   }, [activityLoaded, activityLoading, loadActivity, view]);
+
+  useEffect(() => {
+    const onActivityChanged = (event: Event) => {
+      const detail = (event as ActivityChangedEvent).detail;
+      if (detail?.leadId && detail.leadId !== resolvedLeadId) return;
+      setActivityLoaded(false);
+    };
+
+    window.addEventListener("crm:activity-changed", onActivityChanged);
+    return () => window.removeEventListener("crm:activity-changed", onActivityChanged);
+  }, [resolvedLeadId]);
 
   const activity = useMemo(() => {
     const rows: TimelineItem[] = crmActivity.map((item) => ({
