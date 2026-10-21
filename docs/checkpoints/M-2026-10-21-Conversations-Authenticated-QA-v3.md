@@ -11,11 +11,11 @@ This checkpoint records the authenticated visual QA follow-up after the user suc
 - Repository: `yogakulamacademy/salsys-os`
 - Branch: `uiux/crm-operations-studio-v1`
 - PR: #98
-- Functional head: `5e1f200636e9dfcf7362c02426d1d38c76292ef0`
-- Vercel deployment: `dpl_57Cp89TDUSo1V6XCwRT8KTecBxie`
-- Preview: `https://salsys-7aonf07h4-salsysos.vercel.app`
+- Latest functional head: `394197d3f7186a53264a2c97b78d46ea50c8f9fa`
+- Vercel deployment: `dpl_DqpXqjidTwkXdAedSJBr4zYoeGA8`
+- Preview: `https://salsys-4l36qvnyp-salsysos.vercel.app`
 - Deployment state: **READY**
-- Build compiled successfully, passed type checking and generated all 53 static pages.
+- Build completed successfully after compilation, type validation, static-page generation and output deployment.
 
 ## Authenticated QA confirmed
 
@@ -51,14 +51,22 @@ The indicator is now scoped to `CRM realtime` / `CRM reconnecting…`, with acce
 
 The tablet/mobile Lead Context drawer already trapped keyboard focus, closed with Escape and restored focus to its trigger. It now also locks background page scrolling while the modal drawer is open and restores the previous body overflow state when closed.
 
-## Runtime evidence found during QA
+## Runtime evidence and performance guard
 
 Vercel Preview runtime logs for the authenticated screenshot session recorded degraded Person 360 reads on the Lead Inspector endpoint:
 
 - `GET /api/leads/<lead>/inspector`
 - `Person 360 read degraded: canceling statement due to statement timeout`
 
-The Lead Inspector data adapter already treats Person 360 / journey as non-authoritative enrichment and degrades those reads rather than taking down the Lead record. However, the expensive Person 360 statement can still delay the Inbox Intelligence request before the graceful fallback becomes visible. This is now a performance follow-up, not a data-truth or authorization failure.
+Person 360 / canonical journey are derived enrichment, not the authorization or transactional source of truth. The adapter already degraded these reads without taking down the Lead record, but the database statement could still delay the Inspector before fallback was visible.
+
+The latest functional head now places a soft latency ceiling around these non-authoritative reads:
+
+- Person 360: 2.5 seconds
+- Person journey: 2.5 seconds
+- targeted latest-lead journey signal: 2.0 seconds
+
+Authentication, active-organization resolution, `can_access_lead`, Lead authorization and lead-to-person binding remain outside these soft timeouts and continue to fail closed. The change only prevents optional derived intelligence from holding the operational Inspector in a long loading state.
 
 ## Interaction verification still required
 
@@ -66,8 +74,9 @@ The Lead Inspector data adapter already treats Person 360 / journey as non-autho
 2. Open and close Lead Context on mobile/tablet; verify background does not scroll, Escape closes it and focus returns correctly.
 3. Switch Conversation -> Activity, add an Internal note, and confirm Activity refreshes with the new record.
 4. Type a Reply draft, navigate away/back and refresh; confirm the draft remains in browser storage and is never interpreted as sent.
-5. Validate a real connected WhatsApp conversation later, including service-window and approved-template gating, without autonomous sending.
-6. Authenticated smoke-test Admissions, Leads, Pipeline and Follow-ups before merge.
+5. Confirm Inbox Intelligence reaches either real intelligence or an explicit degraded/empty state promptly rather than staying in a long loading state.
+6. Validate a real connected WhatsApp conversation later, including service-window and approved-template gating, without autonomous sending.
+7. Authenticated smoke-test Admissions, Leads, Pipeline and Follow-ups before merge.
 
 ## Release boundary
 
