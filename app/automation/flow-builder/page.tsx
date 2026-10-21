@@ -1,12 +1,15 @@
+import Link from 'next/link';
 import {
   AlertTriangle,
+  ArrowRight,
   CheckCircle2,
+  Plus,
   RefreshCw,
   Rocket,
-  ShieldCheck,
   Workflow,
 } from 'lucide-react';
 
+import { createSmartTriggerWorkflowAction } from '@/app/automation/actions';
 import { ConnectionCreator } from '@/app/automation/flow-builder/connection-creator';
 import { FlowCanvas } from '@/app/automation/flow-builder/flow-canvas';
 import {
@@ -174,7 +177,7 @@ export default async function FlowBuilderPage({
       }
     }
   } catch (error) {
-    loadError = error instanceof Error ? error.message : 'Unable to load the conversation flow builder.';
+    loadError = error instanceof Error ? error.message : 'Unable to load the flow builder.';
   }
 
   const draftVersion = Number(workflow?.current_draft_version ?? 1);
@@ -191,9 +194,9 @@ export default async function FlowBuilderPage({
   return (
     <div className="space-y-6">
       <PageHeader
-        eyebrow="Automation · Flow Builder"
-        title="Conversation Flow Builder"
-        description={`Arrange, validate and publish the persisted conversation journey for ${organizationName}. Publishing still leaves runtime execution OFF until explicitly enabled.`}
+        eyebrow="Automation · Flows"
+        title="Flow Builder"
+        description={`Create and publish customer journeys for ${organizationName}. Runtime stays off until you explicitly enable it.`}
       />
 
       {query.notice ? (
@@ -207,15 +210,6 @@ export default async function FlowBuilderPage({
           {query.error || loadError}
         </div>
       ) : null}
-
-      <div className="rounded-2xl border border-violet-200 bg-violet-50 p-4 text-sm leading-6 text-violet-900">
-        <div className="flex items-start gap-3">
-          <ShieldCheck className="mt-0.5 shrink-0" size={18} />
-          <div>
-            <strong>Fail-closed publishing:</strong> draft editing never executes a flow. Validation checks graph structure and guarded WhatsApp requirements. Publishing rechecks the exact definition hash, clones a fresh draft for future edits, and forces runtime execution OFF.
-          </div>
-        </div>
-      </div>
 
       {canManage && workflows.length > 0 ? (
         <section className="card-pad">
@@ -234,7 +228,7 @@ export default async function FlowBuilderPage({
                 ))}
               </select>
             </label>
-            <button type="submit" className="btn-secondary">Open workflow</button>
+            <button type="submit" className="btn-secondary">Open flow</button>
           </form>
         </section>
       ) : null}
@@ -242,7 +236,62 @@ export default async function FlowBuilderPage({
       {!canManage ? (
         <div className="card-pad text-sm text-slate-600">Organization admin access is required.</div>
       ) : !workflow ? (
-        <div className="card-pad text-sm text-slate-600">Create a non-archived Smart Trigger workflow before editing its draft flow.</div>
+        <section className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
+          <div className="grid gap-0 lg:grid-cols-[1.15fr_0.85fr]">
+            <div className="p-7 sm:p-9">
+              <div className="grid h-12 w-12 place-items-center rounded-2xl bg-violet-50 text-violet-700">
+                <Workflow size={22} />
+              </div>
+              <h2 className="mt-5 text-2xl font-bold tracking-tight text-slate-950">Create your first automation flow</h2>
+              <p className="mt-2 max-w-xl text-sm leading-6 text-slate-500">
+                Start with a simple lead follow-up flow, then add conditions, waits, approvals and WhatsApp actions as needed.
+              </p>
+
+              <div className="mt-6 flex flex-wrap gap-3">
+                <form action={createSmartTriggerWorkflowAction}>
+                  <input type="hidden" name="return_to" value="flow_builder" />
+                  <input type="hidden" name="name" value="New lead follow-up" />
+                  <input type="hidden" name="description" value="Create an internal follow-up when a new lead enters SalsysOS." />
+                  <input type="hidden" name="event_name" value="lead.created" />
+                  <input type="hidden" name="followup_title" value="Follow up with new lead" />
+                  <input type="hidden" name="followup_delay_minutes" value="0" />
+                  <button type="submit" className="btn-primary">
+                    <Plus size={15} />
+                    Create starter flow
+                  </button>
+                </form>
+
+                <Link href="/automation/recipes" className="btn-secondary">
+                  Browse recipes
+                  <ArrowRight size={15} />
+                </Link>
+              </div>
+
+              <p className="mt-5 text-xs leading-5 text-slate-400">
+                Starts as a draft. Nothing runs or sends a customer message until the flow is validated, published and runtime is enabled.
+              </p>
+            </div>
+
+            <div className="border-t border-slate-100 bg-slate-50/70 p-7 lg:border-l lg:border-t-0 sm:p-9">
+              <div className="text-xs font-bold uppercase tracking-[0.16em] text-slate-400">Starter journey</div>
+              <div className="mt-5 space-y-3">
+                {[
+                  ['1', 'New lead created', 'Trigger'],
+                  ['2', 'Create follow-up', 'Internal action'],
+                  ['3', 'Completed', 'End'],
+                ].map(([step, label, kind]) => (
+                  <div key={step} className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-white p-3.5">
+                    <div className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-violet-50 text-xs font-bold text-violet-700">{step}</div>
+                    <div className="min-w-0">
+                      <div className="text-sm font-semibold text-slate-900">{label}</div>
+                      <div className="text-xs text-slate-400">{kind}</div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </section>
       ) : (
         <>
           <section className="card-pad">
@@ -253,10 +302,13 @@ export default async function FlowBuilderPage({
                   <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-bold text-slate-600">
                     {workflow.status.replaceAll('_', ' ')}
                   </span>
+                  <span className={`rounded-full px-2.5 py-1 text-xs font-bold ${workflow.runtime_flow_enabled ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-500'}`}>
+                    Runtime {workflow.runtime_flow_enabled ? 'on' : 'off'}
+                  </span>
                 </div>
                 <p className="mt-1 text-sm text-slate-500">
-                  Draft Version {draftVersion} · {nodes.length} nodes · {edges.length} edges
-                  {workflow.current_published_version ? ` · Published Version ${workflow.current_published_version}` : ''}
+                  Draft {draftVersion} · {nodes.length} nodes · {edges.length} connections
+                  {workflow.current_published_version ? ` · Published ${workflow.current_published_version}` : ''}
                 </p>
               </div>
 
@@ -266,7 +318,7 @@ export default async function FlowBuilderPage({
                   <input type="hidden" name="version_number" value={draftVersion} />
                   <button type="submit" className="btn-secondary">
                     <RefreshCw size={15} />
-                    Validate draft
+                    Validate
                   </button>
                 </form>
 
@@ -280,7 +332,7 @@ export default async function FlowBuilderPage({
                     title={validationFresh ? 'Publish this exact validated definition' : 'Validate the current draft before publishing'}
                   >
                     <Rocket size={15} />
-                    Publish validated version
+                    Publish
                   </button>
                 </form>
               </div>
@@ -296,10 +348,10 @@ export default async function FlowBuilderPage({
                   )}
                   <div className="text-sm font-bold text-slate-900">
                     {validationFresh
-                      ? 'Current draft is validated and publish-eligible'
+                      ? 'Ready to publish'
                       : storedValid
-                        ? 'Draft changed after its last validation'
-                        : 'Current draft is not yet publish-eligible'}
+                        ? 'Draft changed — validate again'
+                        : 'Validate before publishing'}
                   </div>
                 </div>
                 {flowVersion?.validated_at ? (
@@ -311,19 +363,15 @@ export default async function FlowBuilderPage({
 
               {validationErrors.length > 0 ? (
                 <div className="mt-3 rounded-xl border border-rose-200 bg-rose-50 px-3 py-3 text-xs leading-5 text-rose-800">
-                  <strong>Errors:</strong> {validationErrors.join(' · ')}
+                  <strong>Fix:</strong> {validationErrors.join(' · ')}
                 </div>
               ) : null}
 
               {validationWarnings.length > 0 ? (
                 <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50 px-3 py-3 text-xs leading-5 text-amber-800">
-                  <strong>Warnings:</strong> {validationWarnings.join(' · ')}
+                  <strong>Review:</strong> {validationWarnings.join(' · ')}
                 </div>
               ) : null}
-
-              <p className="mt-3 text-xs leading-5 text-slate-500">
-                Publish never enables runtime. After publication, SalsysOS creates the next draft version and requires an explicit runtime activation in Automation Settings.
-              </p>
             </div>
           </section>
 
@@ -334,8 +382,12 @@ export default async function FlowBuilderPage({
                   <Workflow size={18} />
                 </div>
                 <div>
-                  <h2 className="font-bold text-slate-950">No draft graph exists for Version {draftVersion}</h2>
-                  <p className="mt-1 text-sm text-slate-500">Create or clone a draft definition before editing.</p>
+                  <h2 className="font-bold text-slate-950">This workflow has no visual draft yet</h2>
+                  <p className="mt-1 text-sm text-slate-500">Open Smart Triggers or install a starter recipe to create an editable flow definition.</p>
+                  <div className="mt-4 flex flex-wrap gap-2">
+                    <Link href="/automation/triggers" className="btn-secondary">Open Smart Triggers</Link>
+                    <Link href="/automation/recipes" className="btn-secondary">Starter recipes</Link>
+                  </div>
                 </div>
               </div>
             </div>
@@ -345,11 +397,9 @@ export default async function FlowBuilderPage({
                 <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
                   <div>
                     <h2 className="font-bold text-slate-950">Draft canvas</h2>
-                    <p className="mt-1 text-sm text-slate-500">
-                      Editing changes only Version {draftVersion}; validate again after every structural or action change.
-                    </p>
+                    <p className="mt-1 text-sm text-slate-500">Edit the journey, then validate it before publishing.</p>
                   </div>
-                  <div className="rounded-full bg-amber-50 px-3 py-1 text-xs font-bold text-amber-700">Structure-only editing</div>
+                  <div className="rounded-full bg-slate-100 px-3 py-1 text-xs font-bold text-slate-600">Draft {draftVersion}</div>
                 </div>
 
                 <FlowCanvas
