@@ -84,6 +84,37 @@ type InspectorPerson = {
   last_outbound_at?: string | null;
 };
 
+type InspectorSalesIntelligence = {
+  derived_intent: string | null;
+  intent_confidence: string | null;
+  intent_basis: string | null;
+  intent_reason_codes: string[] | null;
+  engagement_score: number | string | null;
+  behaviour_temperature: string | null;
+  high_intent_events_7d: number | string | null;
+  whatsapp_clicks_7d: number | string | null;
+  reservation_starts_7d: number | string | null;
+  payment_starts_7d: number | string | null;
+  days_since_last_visit: number | string | null;
+  has_returned_after_becoming_lead: boolean | null;
+  is_reengaged: boolean | null;
+  priority_score: number | string | null;
+  priority_band: string | null;
+  priority_reason: string | null;
+  next_action_code: string | null;
+  next_best_action: string | null;
+  payment_status: string | null;
+  outstanding_balance: number | string | null;
+  recommended_course_code: string | null;
+  recommended_course_name: string | null;
+  recommended_affinity_score: number | string | null;
+  recommendation_basis: string | null;
+  recommendation_reason_codes: string[] | null;
+  last_inbound_at: string | null;
+  last_outbound_at: string | null;
+  next_followup_at: string | null;
+};
+
 type InspectorLead = {
   id: string;
   leadCode: string;
@@ -145,11 +176,13 @@ type InspectorPayload = {
     no_answer_contacts: number | null;
     follow_up_needed_contacts: number | null;
   } | null;
+  salesIntelligence: InspectorSalesIntelligence | null;
   availability: {
     payments: Availability;
     person360: Availability;
     journey: Availability;
     contactHistory: Availability;
+    salesIntelligence: Availability;
   };
   warnings: string[];
 };
@@ -167,6 +200,7 @@ type LeadFocus = {
   detail: string;
   tone: FocusTone;
   reasons: string[];
+  source: "canonical" | "presentation";
 };
 
 export function LeadInspector({
@@ -490,7 +524,10 @@ export function LeadInspector({
             </div>
           ) : null}
           {actionSuccess ? (
-            <div className="mt-3 flex items-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-[10px] text-emerald-700">
+            <div
+              aria-live="polite"
+              className="mt-3 flex items-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-[10px] text-emerald-700"
+            >
               <CheckCircle2 size={13} /> {actionSuccess}
             </div>
           ) : null}
@@ -596,7 +633,7 @@ function OverviewTab({
   focus: LeadFocus;
   onSchedule: () => void;
 }) {
-  const { lead, person, payments } = payload;
+  const { lead, person, payments, salesIntelligence } = payload;
   const recordedPaid = useMemo(() => sumPaidByCurrency(payments), [payments]);
   const potential = lead.potentialValue ?? lead.value;
   const potentialCurrency = lead.potentialCurrency ?? lead.currency;
@@ -607,6 +644,82 @@ function OverviewTab({
   return (
     <div className="space-y-4">
       <FocusCard payload={payload} focus={focus} onSchedule={onSchedule} />
+
+      <Section title="Sales intelligence" eyebrow="Canonical decision support">
+        <AvailabilityNote
+          availability={payload.availability.salesIntelligence}
+          empty="No canonical sales-intelligence row is available for this lead yet."
+          unavailable="Canonical sales intelligence could not be loaded. The Inspector is falling back to visible CRM state only."
+        />
+        {salesIntelligence ? (
+          <>
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+              <MetricBox
+                label="Priority"
+                value={salesIntelligence.priority_band ? pretty(salesIntelligence.priority_band) : "Not available"}
+              />
+              <MetricBox
+                label="Priority score"
+                value={numberText(salesIntelligence.priority_score)}
+              />
+              <MetricBox
+                label="Derived intent"
+                value={salesIntelligence.derived_intent ? pretty(salesIntelligence.derived_intent) : "Not available"}
+              />
+              <MetricBox
+                label="Confidence"
+                value={salesIntelligence.intent_confidence ? pretty(salesIntelligence.intent_confidence) : "Not available"}
+              />
+            </div>
+
+            <div className="mt-3 grid gap-x-5 gap-y-4 sm:grid-cols-2">
+              <DataPoint
+                label="Engagement score"
+                value={numberText(salesIntelligence.engagement_score)}
+              />
+              <DataPoint
+                label="Behaviour"
+                value={salesIntelligence.behaviour_temperature ? pretty(salesIntelligence.behaviour_temperature) : "Not available"}
+              />
+              <DataPoint
+                label="Intent basis"
+                value={salesIntelligence.intent_basis ? pretty(salesIntelligence.intent_basis) : "Not available"}
+              />
+              <DataPoint
+                label="Payment state"
+                value={salesIntelligence.payment_status ? pretty(salesIntelligence.payment_status) : "Not available"}
+              />
+            </div>
+
+            {salesIntelligence.priority_reason ? (
+              <div className="mt-3 rounded-lg bg-[#F4F7F5] px-3 py-2.5 text-[10px] leading-5 text-[#62746B]">
+                <strong className="font-semibold text-[#40564C]">Why now:</strong>{" "}
+                {salesIntelligence.priority_reason}
+              </div>
+            ) : null}
+
+            {salesIntelligence.recommended_course_name ? (
+              <div className="mt-3 rounded-lg border border-[#DCE8DF] bg-[#F8FBF9] px-3 py-2.5">
+                <div className="text-[9px] font-semibold uppercase tracking-[0.08em] text-[#85928B]">
+                  Course recommendation evidence
+                </div>
+                <div className="mt-1 text-[11px] font-semibold text-[#344E42]">
+                  {salesIntelligence.recommended_course_name}
+                  {salesIntelligence.recommended_course_code
+                    ? ` · ${salesIntelligence.recommended_course_code}`
+                    : ""}
+                </div>
+                <div className="mt-1 text-[10px] text-[#718078]">
+                  Affinity {numberText(salesIntelligence.recommended_affinity_score)}
+                  {salesIntelligence.recommendation_basis
+                    ? ` · ${pretty(salesIntelligence.recommendation_basis)}`
+                    : ""}
+                </div>
+              </div>
+            ) : null}
+          </>
+        ) : null}
+      </Section>
 
       <Section title="Opportunity" eyebrow="Current CRM state">
         <div className="grid gap-x-5 gap-y-4 sm:grid-cols-2">
@@ -623,7 +736,7 @@ function OverviewTab({
           />
           <DataPoint label="Mode" value={lead.preferredMode || "Not captured"} />
           <DataPoint label="Owner" value={lead.owner || "Unassigned"} />
-          <DataPoint label="Intent" value={pretty(lead.intent || "unknown")} />
+          <DataPoint label="Stored intent" value={pretty(lead.intent || "unknown")} />
         </div>
       </Section>
 
@@ -644,7 +757,7 @@ function OverviewTab({
           <CompactRow
             icon={<CalendarClock size={13} />}
             label="Next follow-up"
-            value={formatDateTime(lead.nextFollowupAt)}
+            value={formatDateTime(salesIntelligence?.next_followup_at || lead.nextFollowupAt)}
           />
         </div>
       </Section>
@@ -783,7 +896,9 @@ function FocusCard({
         </span>
         <div className="min-w-0 flex-1">
           <div className="text-[9px] font-bold uppercase tracking-[0.13em] text-[#74837A]">
-            Suggested focus · current evidence
+            {focus.source === "canonical"
+              ? "Canonical next best action"
+              : "Suggested focus · current evidence"}
           </div>
           <div className="mt-1 text-[14px] font-semibold text-[#203B31]">{focus.action}</div>
           <div className="mt-1 text-[10px] leading-5 text-[#63756B]">{focus.detail}</div>
@@ -816,7 +931,9 @@ function FocusCard({
           <CalendarClock size={12} /> Schedule follow-up
         </button>
         <span className="ml-auto text-[9px] text-[#849188]">
-          Guidance only · no score or stage is changed automatically
+          {focus.source === "canonical"
+            ? "Existing sales intelligence · no automatic write"
+            : "Guidance only · no score or stage is changed automatically"}
         </span>
       </div>
     </section>
@@ -1133,15 +1250,68 @@ function SmallTag({ children }: { children: ReactNode }) {
 }
 
 function buildLeadFocus(payload: InspectorPayload): LeadFocus {
-  const { lead, person } = payload;
-  const reasons: string[] = [];
+  const { lead, person, salesIntelligence } = payload;
   const now = Date.now();
+
+  if (salesIntelligence?.next_best_action) {
+    const reasons: string[] = [];
+    if (salesIntelligence.priority_band) {
+      const score = salesIntelligence.priority_score == null
+        ? ""
+        : ` · ${numberText(salesIntelligence.priority_score)}`;
+      reasons.push(`${pretty(salesIntelligence.priority_band)} priority${score}`);
+    }
+    if (salesIntelligence.derived_intent) {
+      reasons.push(
+        `${pretty(salesIntelligence.derived_intent)} intent${
+          salesIntelligence.intent_confidence
+            ? ` · ${pretty(salesIntelligence.intent_confidence)} confidence`
+            : ""
+        }`,
+      );
+    }
+    if (salesIntelligence.behaviour_temperature) {
+      reasons.push(`${pretty(salesIntelligence.behaviour_temperature)} behaviour`);
+    }
+    if (salesIntelligence.payment_status) {
+      reasons.push(`Payment: ${pretty(salesIntelligence.payment_status)}`);
+    }
+    if (salesIntelligence.is_reengaged) reasons.push("Re-engaged");
+    if (salesIntelligence.recommended_course_name) {
+      reasons.push(`Affinity: ${salesIntelligence.recommended_course_name}`);
+    }
+
+    const priority = String(salesIntelligence.priority_band || "").toLowerCase();
+    const derivedIntent = String(salesIntelligence.derived_intent || "").toLowerCase();
+    const tone: FocusTone =
+      priority === "critical" || priority === "high" || lead.stage === "payment_pending"
+        ? "attention"
+        : derivedIntent === "high" || derivedIntent === "very_high" || salesIntelligence.is_reengaged
+          ? "opportunity"
+          : "neutral";
+
+    return {
+      action: salesIntelligence.next_best_action,
+      detail:
+        salesIntelligence.priority_reason ||
+        "This is the next action returned by the existing canonical lead sales-intelligence model.",
+      tone,
+      reasons: reasons.slice(0, 4),
+      source: "canonical",
+    };
+  }
+
+  const reasons: string[] = [];
   const dueAt = lead.nextFollowupAt ? Date.parse(lead.nextFollowupAt) : Number.NaN;
   const latest = latestMessage(lead.lastMessages ?? []);
   const temperature = person?.latest_lead_behaviour_temperature;
 
   if (Number.isFinite(dueAt)) {
-    reasons.push(dueAt < now ? `Follow-up overdue ${relativeDistance(dueAt, now)}` : `Follow-up ${relativeDistance(now, dueAt)}`);
+    reasons.push(
+      dueAt < now
+        ? `Follow-up ${formatDelta(dueAt, now)} overdue`
+        : `Follow-up in ${formatDelta(now, dueAt)}`,
+    );
   } else {
     reasons.push("No follow-up scheduled");
   }
@@ -1157,6 +1327,7 @@ function buildLeadFocus(payload: InspectorPayload): LeadFocus {
       detail: "The scheduled next action is past due. Re-open the conversation or set a new committed follow-up time.",
       tone: "attention",
       reasons: reasons.slice(0, 4),
+      source: "presentation",
     };
   }
 
@@ -1166,6 +1337,7 @@ function buildLeadFocus(payload: InspectorPayload): LeadFocus {
       detail: "The most recent stored CRM message came from the lead, so the clearest next action is to continue that conversation.",
       tone: "opportunity",
       reasons: reasons.slice(0, 4),
+      source: "presentation",
     };
   }
 
@@ -1175,6 +1347,7 @@ function buildLeadFocus(payload: InspectorPayload): LeadFocus {
       detail: "This opportunity is already in the payment stage. Confirm the blocker, payment path, or a specific follow-up time.",
       tone: "attention",
       reasons: reasons.slice(0, 4),
+      source: "presentation",
     };
   }
 
@@ -1184,6 +1357,7 @@ function buildLeadFocus(payload: InspectorPayload): LeadFocus {
       detail: "The lead is currently unassigned. Ownership should be clear before the next admissions action is missed.",
       tone: "attention",
       reasons: reasons.slice(0, 4),
+      source: "presentation",
     };
   }
 
@@ -1193,6 +1367,7 @@ function buildLeadFocus(payload: InspectorPayload): LeadFocus {
       detail: "No previous contact time is recorded for this new lead. Start the conversation and capture the outcome.",
       tone: "opportunity",
       reasons: reasons.slice(0, 4),
+      source: "presentation",
     };
   }
 
@@ -1202,6 +1377,7 @@ function buildLeadFocus(payload: InspectorPayload): LeadFocus {
       detail: "The lead is already in an advanced admissions stage. Clarify the remaining decision, batch, or payment step.",
       tone: "opportunity",
       reasons: reasons.slice(0, 4),
+      source: "presentation",
     };
   }
 
@@ -1210,14 +1386,19 @@ function buildLeadFocus(payload: InspectorPayload): LeadFocus {
     detail: "Use the current CRM stage, journey evidence, and conversation context to decide the next human action.",
     tone: "neutral",
     reasons: reasons.slice(0, 4),
+    source: "presentation",
   };
 }
 
 function defaultFollowupTitle(payload: InspectorPayload, focus: LeadFocus) {
   const name = payload.lead.name || payload.lead.leadCode || "lead";
-  if (focus.action === "Resolve the pending payment") return `Check payment with ${name}`;
-  if (focus.action === "Make first contact") return `Contact ${name}`;
-  if (focus.action === "Reply to the latest inbound message") return `Follow up with ${name}`;
+  const actionCode = payload.salesIntelligence?.next_action_code;
+  if (actionCode?.includes("payment") || focus.action === "Resolve the pending payment") {
+    return `Check payment with ${name}`;
+  }
+  if (actionCode?.includes("first") || focus.action === "Make first contact") {
+    return `Contact ${name}`;
+  }
   return `Follow up with ${name}`;
 }
 
@@ -1232,14 +1413,14 @@ function defaultDateTimeLocal(hoursFromNow: number) {
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
 }
 
-function relativeDistance(from: number, to: number) {
+function formatDelta(from: number, to: number) {
   const diff = Math.max(0, to - from);
   const minutes = Math.round(diff / 60_000);
-  if (minutes < 60) return `in ${Math.max(1, minutes)}m`;
+  if (minutes < 60) return `${Math.max(1, minutes)}m`;
   const hours = Math.round(minutes / 60);
-  if (hours < 24) return `in ${hours}h`;
+  if (hours < 24) return `${hours}h`;
   const days = Math.round(hours / 24);
-  return `in ${days}d`;
+  return `${days}d`;
 }
 
 function sumPaidByCurrency(payments: InspectorPayment[]) {
