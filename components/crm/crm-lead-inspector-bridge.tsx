@@ -46,7 +46,7 @@ export function CrmLeadInspectorBridge({ children }: { children: React.ReactNode
       if (!(target instanceof Element)) return;
 
       const anchor = target.closest<HTMLAnchorElement>("a[href]");
-      if (!anchor || !host.contains(anchor)) return;
+      if (!anchor || !host?.contains(anchor)) return;
       if (anchor.dataset.nativeLeadNavigation === "true") return;
       if (anchor.target === "_blank" || anchor.hasAttribute("download")) return;
 
