@@ -33,13 +33,14 @@ export default async function LeadsPage({ searchParams }: LeadsPageProps) {
   const notice = one(params.notice);
 
   return (
-    <div className={`${styles.workspace} space-y-4`}>
-      <section className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+    <div className={`${styles.workspace} space-y-5`}>
+      <section className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <h1 className="text-[22px] font-bold tracking-[-0.035em] text-slate-950 dark:text-white">
+          <div className="text-[10px] font-bold uppercase tracking-[0.16em] text-[#87998E]">CRM · Operations</div>
+          <h1 className="mt-1.5 text-[29px] font-semibold tracking-[-0.04em] text-[#192E29] dark:text-white">
             Leads
           </h1>
-          <p className="mt-1 text-xs text-slate-500">
+          <p className="mt-1 text-[13px] leading-5 text-[#6D7C76]">
             Manage contacts and move opportunities forward.
           </p>
         </div>
@@ -47,14 +48,14 @@ export default async function LeadsPage({ searchParams }: LeadsPageProps) {
         <div className="flex items-center gap-2">
           <Link
             href="/leads/new"
-            className="inline-flex h-9 items-center gap-2 rounded-lg bg-slate-950 px-3.5 text-xs font-semibold text-white shadow-sm transition hover:bg-slate-800 dark:bg-white dark:text-slate-950 dark:hover:bg-slate-200"
+            className="inline-flex h-9 items-center gap-2 rounded-[7px] bg-[#216551] px-3.5 text-xs font-semibold text-white shadow-[0_2px_5px_rgba(21,62,51,.12)] transition hover:bg-[#174D3B]"
           >
             <Plus size={14} /> Add lead
           </Link>
           <button
             type="button"
             aria-label="More lead actions"
-            className="grid h-9 w-9 place-items-center rounded-lg border border-slate-200 bg-white text-slate-500 shadow-sm transition hover:bg-slate-50 hover:text-slate-900 dark:border-slate-800 dark:bg-slate-950 dark:text-slate-400 dark:hover:bg-slate-900 dark:hover:text-white"
+            className="grid h-9 w-9 place-items-center rounded-[7px] border border-[#E4EAE6] bg-white text-[#6D7C76] transition hover:bg-[#F0F7F3] hover:text-[#216551] dark:border-slate-800 dark:bg-slate-950"
           >
             <MoreHorizontal size={16} />
           </button>
@@ -62,13 +63,13 @@ export default async function LeadsPage({ searchParams }: LeadsPageProps) {
       </section>
 
       {notice === "mock-create" ? (
-        <div className="rounded-xl border border-orange-100 bg-orange-50 px-4 py-3 text-xs font-semibold text-orange-700 dark:border-orange-900/50 dark:bg-orange-950/20 dark:text-orange-200">
+        <div className="rounded-lg border border-amber-200 bg-[#FCF4E5] px-4 py-3 text-xs font-semibold text-[#9B6720]">
           Demo mode is active, so the test lead was not saved.
         </div>
       ) : null}
 
       {workspace.warning ? (
-        <div className="rounded-xl border border-amber-100 bg-amber-50 px-4 py-3 text-xs font-semibold text-amber-700 dark:border-amber-900/50 dark:bg-amber-950/20 dark:text-amber-200">
+        <div className="rounded-lg border border-amber-200 bg-[#FCF4E5] px-4 py-3 text-xs font-semibold text-[#9B6720]">
           {workspace.warning}
         </div>
       ) : null}
