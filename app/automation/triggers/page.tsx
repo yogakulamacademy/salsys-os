@@ -1,11 +1,12 @@
+import Link from 'next/link';
 import {
   Archive,
+  ArrowRight,
   BellRing,
-  Bot,
   CheckCircle2,
   Clock3,
+  FileText,
   GitBranch,
-  ListChecks,
   Plus,
   ShieldCheck,
   Sparkles,
@@ -16,7 +17,6 @@ import {
   archiveSmartTriggerWorkflowAction,
   createSmartTriggerWorkflowAction,
 } from '@/app/automation/actions';
-import { PageHeader, StatCard } from '@/components/ui';
 import { getSupabasePublicConfig, useMockData } from '@/lib/config';
 import { createClient } from '@/lib/supabase/server';
 import { getCurrentWorkspaceContext } from '@/lib/workspace';
@@ -57,9 +57,66 @@ function pretty(value: string) {
 
 function statusClass(status: Workflow['status']) {
   if (status === 'active') return 'bg-emerald-50 text-emerald-700 ring-emerald-200';
-  if (status === 'draft') return 'bg-amber-50 text-amber-700 ring-amber-200';
-  if (status === 'paused') return 'bg-sky-50 text-sky-700 ring-sky-200';
+  if (status === 'draft') return 'bg-violet-50 text-violet-700 ring-violet-200';
+  if (status === 'paused') return 'bg-amber-50 text-amber-700 ring-amber-200';
   return 'bg-slate-100 text-slate-600 ring-slate-200';
+}
+
+function relativeTime(value: string) {
+  const diff = Date.now() - new Date(value).getTime();
+  const minutes = Math.max(0, Math.floor(diff / 60000));
+  if (minutes < 1) return 'Just now';
+  if (minutes < 60) return `${minutes}m ago`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours}h ago`;
+  return `${Math.floor(hours / 24)}d ago`;
+}
+
+function Metric({
+  label,
+  value,
+  note,
+  icon: Icon,
+  tone,
+}: {
+  label: string;
+  value: string | number;
+  note: string;
+  icon: React.ComponentType<{ size?: number }>;
+  tone: 'violet' | 'emerald' | 'amber' | 'sky' | 'rose';
+}) {
+  const toneClass =
+    tone === 'emerald'
+      ? 'bg-emerald-50 text-emerald-700'
+      : tone === 'amber'
+        ? 'bg-amber-50 text-amber-700'
+        : tone === 'sky'
+          ? 'bg-sky-50 text-sky-700'
+          : tone === 'rose'
+            ? 'bg-rose-50 text-rose-700'
+            : 'bg-violet-50 text-violet-700';
+
+  return (
+    <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-[0_1px_2px_rgba(15,23,42,0.02)]">
+      <div className="flex items-start justify-between gap-3">
+        <div className={`grid h-10 w-10 place-items-center rounded-xl ${toneClass}`}>
+          <Icon size={18} />
+        </div>
+        <div className="flex h-8 items-end gap-1 opacity-50" aria-hidden="true">
+          {[3, 5, 4, 8, 6, 9, 7].map((height, index) => (
+            <span
+              key={index}
+              className={`w-1 rounded-full ${tone === 'emerald' ? 'bg-emerald-300' : tone === 'amber' ? 'bg-amber-300' : tone === 'sky' ? 'bg-sky-300' : tone === 'rose' ? 'bg-rose-300' : 'bg-violet-300'}`}
+              style={{ height: `${height * 2.5}px` }}
+            />
+          ))}
+        </div>
+      </div>
+      <div className="mt-3 text-xs font-semibold text-slate-500">{label}</div>
+      <div className="mt-0.5 text-[28px] font-bold tracking-tight text-slate-950">{value}</div>
+      <div className="mt-1 text-xs text-slate-500">{note}</div>
+    </div>
+  );
 }
 
 export default async function AutomationPage({
@@ -133,8 +190,7 @@ export default async function AutomationPage({
 
           canManage = manageData === true;
 
-          const error =
-            workflowError || triggerError || actionError || runError || approvalError;
+          const error = workflowError || triggerError || actionError || runError || approvalError;
           if (error) {
             loadError = error.message;
           } else {
@@ -146,22 +202,30 @@ export default async function AutomationPage({
           }
         }
       } catch (error) {
-        loadError =
-          error instanceof Error ? error.message : 'Unable to load Smart Triggers.';
+        loadError = error instanceof Error ? error.message : 'Unable to load Smart Triggers.';
       }
     }
   }
 
   const active = workflows.filter((workflow) => workflow.status === 'active').length;
   const drafts = workflows.filter((workflow) => workflow.status === 'draft').length;
+  const visibleWorkflows = workflows.filter((workflow) => workflow.status !== 'archived');
 
   return (
-    <div className="space-y-6">
-      <PageHeader
-        eyebrow="Automation"
-        title="Smart Triggers"
-        description={`Build tenant-safe workflows for ${organizationName}. V1 is intentionally human-controlled: workflows are created as drafts and customer messaging is not auto-enabled.`}
-      />
+    <div className="space-y-5">
+      <header className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
+        <div>
+          <div className="text-[11px] font-bold uppercase tracking-[0.16em] text-slate-400">Automation</div>
+          <h1 className="mt-1 text-3xl font-bold tracking-tight text-slate-950">Smart Triggers</h1>
+          <p className="mt-1.5 text-sm text-slate-500">
+            Build event-based workflows for {organizationName}. New workflows stay in draft until reviewed and activated.
+          </p>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <a href="#create-trigger" className="btn-primary"><Plus size={15} /> New trigger</a>
+          <Link href="/automation/recipes" className="btn-secondary"><Sparkles size={15} /> Starter recipes</Link>
+        </div>
+      </header>
 
       {query.notice ? (
         <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-800">
@@ -175,225 +239,163 @@ export default async function AutomationPage({
         </div>
       ) : null}
 
-      <div className="grid gap-4 md:grid-cols-5">
-        <StatCard label="Workflows" value={String(workflows.length)} icon={<GitBranch size={18} />} />
-        <StatCard label="Active" value={String(active)} icon={<CheckCircle2 size={18} />} note="Runtime eligible" />
-        <StatCard label="Drafts" value={String(drafts)} icon={<Clock3 size={18} />} note="Cannot run" />
-        <StatCard label="Runs" value={String(runs)} icon={<Zap size={18} />} note="Execution ledger" />
-        <StatCard label="Awaiting approval" value={String(awaitingApproval)} icon={<ShieldCheck size={18} />} note="Human gate" />
-      </div>
-
-      <div className="rounded-2xl border border-violet-200 bg-violet-50 px-4 py-4 text-sm leading-6 text-violet-900">
+      <div className="flex flex-col gap-3 rounded-2xl border border-emerald-200 bg-emerald-50/70 px-4 py-3.5 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-start gap-3">
-          <ShieldCheck className="mt-0.5 shrink-0" size={18} />
+          <div className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-emerald-500 text-white">
+            <ShieldCheck size={17} />
+          </div>
           <div>
-            <strong>Safe rollout mode:</strong> this workspace can define automation logic, but V1 runtime execution and customer auto-send remain disabled until we validate event matching, deduplication, stop-on-reply, suppressions, and approval behavior.
+            <div className="text-sm font-bold text-emerald-950">Safe rollout mode</div>
+            <div className="mt-0.5 text-xs leading-5 text-emerald-800">
+              Smart Triggers are created as drafts. Customer messaging does not start from this screen.
+            </div>
           </div>
         </div>
+        <Link href="/automation/settings" className="btn-secondary shrink-0 !py-2 text-xs">View safety settings <ArrowRight size={13} /></Link>
       </div>
 
-      <div className="grid gap-6 xl:grid-cols-[minmax(0,0.9fr)_minmax(0,1.6fr)]">
-        <section className="card-pad">
-          <div className="flex items-start gap-3">
-            <div className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-violet-50 text-violet-700">
-              <Plus size={18} />
+      <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+        <Metric label="Workflows" value={visibleWorkflows.length} note="Configured workflows" icon={GitBranch} tone="violet" />
+        <Metric label="Active" value={active} note="Currently active" icon={CheckCircle2} tone="emerald" />
+        <Metric label="Drafts" value={drafts} note="Complete and review" icon={FileText} tone="amber" />
+        <Metric label="Runs" value={runs} note="Recorded executions" icon={Zap} tone="sky" />
+        <Metric label="Awaiting approval" value={awaitingApproval} note="Requires human review" icon={Clock3} tone="rose" />
+      </section>
+
+      <section className="grid gap-4 xl:grid-cols-[minmax(360px,.92fr)_minmax(0,1.08fr)]">
+        <div id="create-trigger" className="rounded-2xl border border-slate-200 bg-white p-5 shadow-[0_1px_2px_rgba(15,23,42,0.02)]">
+          <div className="flex items-start justify-between gap-3">
+            <div className="flex items-start gap-3">
+              <div className="grid h-10 w-10 place-items-center rounded-xl bg-violet-50 text-violet-700"><Plus size={18} /></div>
+              <div>
+                <h2 className="text-base font-bold text-slate-950">Create Smart Trigger</h2>
+                <p className="mt-0.5 text-xs text-slate-500">Define the event and internal follow-up to create.</p>
+              </div>
             </div>
-            <div>
-              <h2 className="text-base font-bold text-slate-950">Create first Smart Trigger</h2>
-              <p className="mt-1 text-sm leading-6 text-slate-500">
-                Start with a safe deterministic workflow: when a new lead is created, create a follow-up task.
-              </p>
-            </div>
+            <Link href="/automation/recipes" className="text-xs font-semibold text-violet-700 hover:text-violet-900">Use a recipe</Link>
           </div>
 
           {canManage ? (
             <form action={createSmartTriggerWorkflowAction} className="mt-5 space-y-4">
               <label className="block">
-                <span className="mb-1.5 block text-xs font-bold uppercase tracking-wide text-slate-500">Workflow name</span>
-                <input
-                  name="name"
-                  required
-                  maxLength={180}
-                  defaultValue="New lead follow-up"
-                  className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-900 outline-none transition focus:border-violet-400 focus:ring-2 focus:ring-violet-100"
-                />
+                <span className="mb-1.5 block text-xs font-bold text-slate-700">1. Workflow name <span className="text-rose-500">*</span></span>
+                <input name="name" required maxLength={180} placeholder="e.g. New lead follow-up" className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-violet-400 focus:ring-2 focus:ring-violet-100" />
               </label>
 
               <label className="block">
-                <span className="mb-1.5 block text-xs font-bold uppercase tracking-wide text-slate-500">Description</span>
-                <textarea
-                  name="description"
-                  rows={3}
-                  defaultValue="Create a follow-up task when a new lead enters SalsysOS."
-                  className="w-full resize-y rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm leading-6 text-slate-900 outline-none transition focus:border-violet-400 focus:ring-2 focus:ring-violet-100"
-                />
+                <span className="mb-1.5 block text-xs font-bold text-slate-700">2. Description</span>
+                <textarea name="description" rows={3} placeholder="Explain what this workflow does and when it should run..." className="w-full resize-y rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm leading-6 text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-violet-400 focus:ring-2 focus:ring-violet-100" />
               </label>
 
               <label className="block">
-                <span className="mb-1.5 block text-xs font-bold uppercase tracking-wide text-slate-500">When</span>
-                <select
-                  name="event_name"
-                  defaultValue="lead.created"
-                  className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-900 outline-none transition focus:border-violet-400 focus:ring-2 focus:ring-violet-100"
-                >
+                <span className="mb-1.5 block text-xs font-bold text-slate-700">3. Event trigger <span className="text-rose-500">*</span></span>
+                <select name="event_name" defaultValue="lead.created" className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-900 outline-none transition focus:border-violet-400 focus:ring-2 focus:ring-violet-100">
                   <option value="lead.created">New lead created</option>
                   <option value="message.received">Inbound message received</option>
                   <option value="lead.stage_changed">Lead stage changed</option>
                   <option value="payment.pending">Payment pending</option>
                 </select>
+                <span className="mt-1 block text-[11px] text-slate-400">This event starts the workflow.</span>
               </label>
 
-              <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                <div className="flex items-center gap-2 text-sm font-bold text-slate-900">
-                  <ListChecks size={16} />
-                  Then create follow-up
-                </div>
-
+              <div className="rounded-xl border border-slate-200 bg-slate-50/70 p-4">
+                <div className="text-xs font-bold text-slate-700">4. Follow-up action <span className="text-rose-500">*</span></div>
+                <div className="mt-1 text-[11px] text-slate-400">This creates an internal CRM follow-up. Customer messages can be added later in Flow Builder.</div>
                 <label className="mt-3 block">
-                  <span className="mb-1.5 block text-xs font-bold uppercase tracking-wide text-slate-500">Follow-up title</span>
-                  <input
-                    name="followup_title"
-                    required
-                    defaultValue="Follow up with new lead"
-                    className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-900 outline-none"
-                  />
+                  <span className="mb-1.5 block text-[11px] font-semibold text-slate-500">Follow-up title</span>
+                  <input name="followup_title" required defaultValue="Follow up with new lead" className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-900 outline-none focus:border-violet-400 focus:ring-2 focus:ring-violet-100" />
                 </label>
-
                 <label className="mt-3 block">
-                  <span className="mb-1.5 block text-xs font-bold uppercase tracking-wide text-slate-500">Delay in minutes</span>
-                  <input
-                    name="followup_delay_minutes"
-                    type="number"
-                    min="0"
-                    max="10080"
-                    defaultValue="0"
-                    className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-900 outline-none"
-                  />
+                  <span className="mb-1.5 block text-[11px] font-semibold text-slate-500">Delay</span>
+                  <select name="followup_delay_minutes" defaultValue="0" className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-900">
+                    <option value="0">Immediately</option>
+                    <option value="10">After 10 minutes</option>
+                    <option value="30">After 30 minutes</option>
+                    <option value="60">After 1 hour</option>
+                    <option value="1440">After 1 day</option>
+                  </select>
                 </label>
               </div>
 
-              <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-3 text-xs leading-5 text-amber-800">
-                <strong>Draft only:</strong> saving this workflow does not create a task, send a message, or call an AI model. Runtime activation comes after controlled validation.
+              <div className="flex items-center justify-between gap-3 border-t border-slate-100 pt-4">
+                <div className="text-[11px] leading-4 text-slate-400">Saved as draft. Review in Flow Builder before activation.</div>
+                <button type="submit" className="btn-primary shrink-0"><FileText size={14} /> Save draft</button>
               </div>
-
-              <button type="submit" className="btn-primary">
-                <Sparkles size={15} />
-                Save draft workflow
-              </button>
             </form>
           ) : (
-            <div className="mt-5 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600">
-              Organization admin access is required to manage Smart Triggers.
-            </div>
+            <div className="mt-5 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600">Organization admin access is required to manage Smart Triggers.</div>
           )}
-        </section>
+        </div>
 
-        <section className="card-pad">
-          <div className="flex items-start justify-between gap-4">
-            <div className="flex items-start gap-3">
-              <div className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-slate-100 text-slate-700">
-                <Bot size={18} />
-              </div>
-              <div>
-                <h2 className="text-base font-bold text-slate-950">Workflow library</h2>
-                <p className="mt-1 text-sm text-slate-500">Tenant-scoped definitions and safety controls.</p>
-              </div>
+        <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-[0_1px_2px_rgba(15,23,42,0.02)]">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <h2 className="text-base font-bold text-slate-950">Workflow library</h2>
+              <p className="mt-0.5 text-xs text-slate-500">Manage your Smart Trigger workflows and open their visual flow.</p>
             </div>
-            <div className="rounded-full bg-violet-50 px-3 py-1 text-xs font-bold text-violet-700">
-              Smart Trigger V1
-            </div>
+            <Link href="/automation/flow-builder" className="btn-secondary !py-2 text-xs">Open Flow Builder <ArrowRight size={13} /></Link>
           </div>
 
-          {workflows.length === 0 ? (
-            <div className="mt-6 rounded-2xl border border-dashed border-slate-200 px-6 py-10 text-center">
+          {visibleWorkflows.length === 0 ? (
+            <div className="mt-5 rounded-2xl border border-dashed border-slate-200 px-6 py-12 text-center">
               <BellRing className="mx-auto text-slate-300" size={28} />
               <div className="mt-3 text-sm font-semibold text-slate-800">No Smart Triggers yet</div>
-              <div className="mt-1 text-sm text-slate-500">Create the first draft workflow on the left.</div>
+              <div className="mt-1 text-xs text-slate-500">Create your first draft using the form on the left.</div>
             </div>
           ) : (
-            <div className="mt-5 space-y-3">
-              {workflows.map((workflow) => {
-                const workflowTriggers = triggers.filter(
-                  (trigger) => trigger.workflow_id === workflow.id,
-                );
-                const workflowActions = actions.filter(
-                  (action) => action.workflow_id === workflow.id,
-                );
+            <div className="mt-4 space-y-2">
+              {visibleWorkflows.map((workflow) => {
+                const workflowTriggers = triggers.filter((trigger) => trigger.workflow_id === workflow.id);
+                const workflowActions = actions.filter((action) => action.workflow_id === workflow.id);
+                const triggerLabel = workflowTriggers[0]?.event_name
+                  ? pretty(workflowTriggers[0].event_name as string)
+                  : workflowTriggers[0]
+                    ? pretty(workflowTriggers[0].trigger_type)
+                    : 'No trigger configured';
+                const actionLabel = workflowActions[0]
+                  ? pretty(workflowActions[0].action_type)
+                  : 'No action configured';
 
                 return (
-                  <article key={workflow.id} className="rounded-2xl border border-slate-200 bg-white p-4">
-                    <div className="flex flex-wrap items-start justify-between gap-3">
-                      <div className="min-w-0">
-                        <div className="flex flex-wrap items-center gap-2">
-                          <Zap size={15} className="text-violet-500" />
-                          <h3 className="font-bold text-slate-900">{workflow.name}</h3>
-                          <span className={`inline-flex rounded-full px-2 py-1 text-[10px] font-bold ring-1 ring-inset ${statusClass(workflow.status)}`}>
-                            {pretty(workflow.status)}
-                          </span>
-                          <span className="rounded-full bg-slate-100 px-2 py-1 text-[10px] font-semibold text-slate-600">
-                            {pretty(workflow.approval_mode)}
-                          </span>
+                  <article key={workflow.id} className="group rounded-xl border border-slate-200 bg-white px-3.5 py-3 transition hover:border-violet-200 hover:bg-slate-50/50">
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                      <div className="flex min-w-0 items-center gap-3">
+                        <div className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-violet-50 text-violet-700"><Zap size={17} /></div>
+                        <div className="min-w-0">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <h3 className="truncate text-sm font-bold text-slate-900">{workflow.name}</h3>
+                            <span className={`inline-flex rounded-full px-2 py-0.5 text-[10px] font-bold ring-1 ring-inset ${statusClass(workflow.status)}`}>{pretty(workflow.status)}</span>
+                          </div>
+                          <div className="mt-1 flex flex-wrap gap-x-2 gap-y-1 text-[11px] text-slate-500">
+                            <span>{triggerLabel}</span><span>→</span><span>{actionLabel}</span>
+                          </div>
+                          <div className="mt-1 text-[10px] text-slate-400">Updated {relativeTime(workflow.updated_at)}</div>
                         </div>
-                        {workflow.description ? (
-                          <p className="mt-2 text-sm leading-6 text-slate-600">{workflow.description}</p>
+                      </div>
+                      <div className="flex shrink-0 items-center gap-2">
+                        <Link href={`/automation/flow-builder?workflow=${workflow.id}`} className="btn-secondary !px-3 !py-2 text-xs">{workflow.status === 'draft' ? 'Edit' : 'View'}</Link>
+                        {canManage ? (
+                          <form action={archiveSmartTriggerWorkflowAction}>
+                            <input type="hidden" name="workflow_id" value={workflow.id} />
+                            <button type="submit" className="grid h-9 w-9 place-items-center rounded-xl border border-slate-200 bg-white text-slate-400 transition hover:border-rose-200 hover:text-rose-600" title="Archive workflow"><Archive size={14} /></button>
+                          </form>
                         ) : null}
                       </div>
                     </div>
-
-                    <div className="mt-4 grid gap-3 md:grid-cols-2">
-                      <div className="rounded-xl border border-slate-100 bg-slate-50 p-3">
-                        <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400">When</div>
-                        {workflowTriggers.length ? (
-                          workflowTriggers.map((trigger, index) => (
-                            <div key={`${workflow.id}-trigger-${index}`} className="mt-1 text-sm font-semibold text-slate-800">
-                              {trigger.event_name ? pretty(trigger.event_name) : pretty(trigger.trigger_type)}
-                            </div>
-                          ))
-                        ) : (
-                          <div className="mt-1 text-sm text-slate-500">No trigger configured</div>
-                        )}
-                      </div>
-
-                      <div className="rounded-xl border border-slate-100 bg-slate-50 p-3">
-                        <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Then</div>
-                        {workflowActions.length ? (
-                          workflowActions.map((action, index) => (
-                            <div key={`${workflow.id}-action-${index}`} className="mt-1 text-sm font-semibold text-slate-800">
-                              {pretty(action.action_type)}
-                            </div>
-                          ))
-                        ) : (
-                          <div className="mt-1 text-sm text-slate-500">No action configured</div>
-                        )}
-                      </div>
-                    </div>
-
-                    <div className="mt-3 flex flex-wrap gap-2 text-[11px] font-medium text-slate-500">
-                      <span>Stop on reply: {workflow.stop_on_reply ? 'Yes' : 'No'}</span>
-                      <span>·</span>
-                      <span>Max attempts: {workflow.max_attempts}</span>
-                      <span>·</span>
-                      <span>Timezone: {workflow.timezone}</span>
-                    </div>
-
-                    {canManage && workflow.status !== 'archived' ? (
-                      <div className="mt-4 flex flex-wrap gap-2 border-t border-slate-100 pt-3">
-                        <form action={archiveSmartTriggerWorkflowAction}>
-                          <input type="hidden" name="workflow_id" value={workflow.id} />
-                          <button type="submit" className="btn-secondary !px-3 !py-2 text-xs">
-                            <Archive size={14} />
-                            Archive
-                          </button>
-                        </form>
-                      </div>
-                    ) : null}
                   </article>
                 );
               })}
             </div>
           )}
-        </section>
-      </div>
+
+          <div className="mt-4 rounded-xl border border-violet-100 bg-violet-50/60 p-4 text-center">
+            <Sparkles className="mx-auto text-violet-600" size={18} />
+            <div className="mt-2 text-sm font-bold text-violet-950">Need inspiration?</div>
+            <div className="mt-1 text-xs text-violet-700">Start from a reusable workflow pattern and customize it for {organizationName}.</div>
+            <Link href="/automation/recipes" className="mt-3 inline-flex items-center gap-1.5 text-xs font-bold text-violet-700 hover:text-violet-950">Browse starter recipes <ArrowRight size={13} /></Link>
+          </div>
+        </div>
+      </section>
     </div>
   );
 }
