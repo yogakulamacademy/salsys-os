@@ -12,7 +12,6 @@ import {
 } from 'lucide-react';
 
 import { createSmartTriggerWorkflowAction } from '@/app/automation/actions';
-import { ConnectionCreator } from '@/app/automation/flow-builder/connection-creator';
 import { FlowCanvas } from '@/app/automation/flow-builder/flow-canvas';
 import {
   publishAutomationFlowAction,
@@ -227,31 +226,31 @@ export default async function FlowBuilderPage({
       ) : null}
 
       {canManage && workflows.length > 0 ? (
-        <section className="rounded-2xl border border-slate-200 bg-white p-3.5">
-          <form method="get" className="flex flex-col gap-3 sm:flex-row sm:items-center">
+        <section className="flex flex-col gap-3 rounded-2xl border border-slate-200 bg-white p-3.5 xl:flex-row xl:items-end xl:justify-between">
+          <form method="get" className="flex min-w-0 flex-1 flex-col gap-3 sm:flex-row sm:items-end">
             <label className="min-w-0 flex-1">
               <span className="mb-1 block text-[10px] font-bold uppercase tracking-wide text-slate-400">Open workflow</span>
               <select name="workflow" defaultValue={workflow?.id ?? ''} className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm font-semibold text-slate-900">
                 {workflows.map((candidate) => <option key={candidate.id} value={candidate.id}>{candidate.name} · {candidate.status.replaceAll('_', ' ')}</option>)}
               </select>
             </label>
-            <button type="submit" className="btn-secondary sm:mt-4">Open flow</button>
-
-            {workflow ? (
-              <div className="flex flex-wrap gap-2 sm:mt-4 sm:border-l sm:border-slate-200 sm:pl-3">
-                <form action={validateAutomationFlowAction}>
-                  <input type="hidden" name="workflow_id" value={workflow.id} />
-                  <input type="hidden" name="version_number" value={draftVersion} />
-                  <button type="submit" className="btn-secondary"><RefreshCw size={14} /> Validate flow</button>
-                </form>
-                <form action={publishAutomationFlowAction}>
-                  <input type="hidden" name="workflow_id" value={workflow.id} />
-                  <input type="hidden" name="version_number" value={draftVersion} />
-                  <button type="submit" disabled={!validationFresh} className="btn-primary disabled:cursor-not-allowed disabled:opacity-50" title={validationFresh ? 'Publish this validated definition' : 'Validate the current draft before publishing'}><Rocket size={14} /> Publish</button>
-                </form>
-              </div>
-            ) : null}
+            <button type="submit" className="btn-secondary">Open flow</button>
           </form>
+
+          {workflow ? (
+            <div className="flex flex-wrap gap-2 xl:border-l xl:border-slate-200 xl:pl-3">
+              <form action={validateAutomationFlowAction}>
+                <input type="hidden" name="workflow_id" value={workflow.id} />
+                <input type="hidden" name="version_number" value={draftVersion} />
+                <button type="submit" className="btn-secondary"><RefreshCw size={14} /> Validate flow</button>
+              </form>
+              <form action={publishAutomationFlowAction}>
+                <input type="hidden" name="workflow_id" value={workflow.id} />
+                <input type="hidden" name="version_number" value={draftVersion} />
+                <button type="submit" disabled={!validationFresh} className="btn-primary disabled:cursor-not-allowed disabled:opacity-50" title={validationFresh ? 'Publish this validated definition' : 'Validate the current draft before publishing'}><Rocket size={14} /> Publish</button>
+              </form>
+            </div>
+          ) : null}
         </section>
       ) : null}
 
@@ -327,10 +326,7 @@ export default async function FlowBuilderPage({
               </div>
             </div>
           ) : (
-            <div className="space-y-4">
-              <FlowCanvas workflowId={workflow.id} versionNumber={draftVersion} initialNodes={nodes} edges={edges} whatsappTemplates={whatsappTemplates} />
-              <ConnectionCreator workflowId={workflow.id} versionNumber={draftVersion} nodes={nodes.map((node) => ({ id: node.id, node_key: node.node_key, node_type: node.node_type, label: node.label }))} />
-            </div>
+            <FlowCanvas workflowId={workflow.id} versionNumber={draftVersion} initialNodes={nodes} edges={edges} whatsappTemplates={whatsappTemplates} />
           )}
         </>
       )}
