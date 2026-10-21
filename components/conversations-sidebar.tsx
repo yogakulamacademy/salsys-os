@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { Flag, MessageCircle, Search, X } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 
@@ -32,10 +33,13 @@ export function ConversationsSidebar({
   leads: ConversationLeadSummary[];
   selectedId?: string;
 }) {
+  const searchParams = useSearchParams();
+  const explicitLeadId = searchParams.get("lead");
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState<InboxFilter>("all");
   const [priorityOnly, setPriorityOnly] = useState(false);
   const [now, setNow] = useState(0);
+  const [mobileViewport, setMobileViewport] = useState(false);
   const searchRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
@@ -43,6 +47,14 @@ export function ConversationsSidebar({
     update();
     const timer = window.setInterval(update, 60_000);
     return () => window.clearInterval(timer);
+  }, []);
+
+  useEffect(() => {
+    const media = window.matchMedia("(max-width: 620px)");
+    const update = () => setMobileViewport(media.matches);
+    update();
+    media.addEventListener("change", update);
+    return () => media.removeEventListener("change", update);
   }, []);
 
   useEffect(() => {
@@ -255,14 +267,20 @@ export function ConversationsSidebar({
             </div>
           </div>
         ) : (
-          filteredLeads.map((lead) => (
-            <ConversationRow
-              key={lead.id}
-              lead={lead}
-              selected={lead.id === selectedId}
-              now={now}
-            />
-          ))
+          filteredLeads.map((lead) => {
+            const selected =
+              lead.id === selectedId &&
+              (!mobileViewport || explicitLeadId === lead.id);
+
+            return (
+              <ConversationRow
+                key={lead.id}
+                lead={lead}
+                selected={selected}
+                now={now}
+              />
+            );
+          })
         )}
       </div>
 
