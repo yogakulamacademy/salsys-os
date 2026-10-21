@@ -102,11 +102,16 @@ export function LiveRefresh({ enabled }: { enabled: boolean }) {
   }
 
   return (
-    <div className="fixed bottom-4 right-4 z-50 hidden items-center gap-2 rounded-full border border-slate-200 bg-white/95 px-3 py-1.5 text-[11px] font-semibold text-slate-500 shadow-sm backdrop-blur lg:flex">
+    <div
+      className="fixed bottom-4 right-4 z-50 hidden items-center gap-2 rounded-full border border-slate-200 bg-white/95 px-3 py-1.5 text-[11px] font-semibold text-slate-500 shadow-sm backdrop-blur lg:flex"
+      title="Realtime status for CRM records only. This does not indicate WhatsApp connection or message delivery status."
+      aria-label={connected ? 'CRM realtime connected' : 'CRM realtime reconnecting'}
+    >
       <span
         className={`h-2 w-2 rounded-full ${connected ? 'bg-emerald-500' : 'bg-amber-400'}`}
+        aria-hidden="true"
       />
-      {connected ? 'Live sync' : 'Connecting…'}
+      {connected ? 'CRM realtime' : 'CRM reconnecting…'}
     </div>
   );
 }
