@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { ArrowLeft, PanelRightClose, PanelRightOpen, Sparkles, X } from "lucide-react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import type { ReactNode } from "react";
 import { useEffect, useRef, useState } from "react";
 
@@ -20,17 +20,27 @@ export function ConversationWorkspaceShell({
   hasConversation: boolean;
 }) {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [desktopContextOpen, setDesktopContextOpen] = useState(true);
   const [mobileContextOpen, setMobileContextOpen] = useState(false);
   const drawerRef = useRef<HTMLElement | null>(null);
   const drawerTriggerRef = useRef<HTMLButtonElement | null>(null);
   const showDesktopContext = hasConversation && desktopContextOpen;
+  const hasExplicitLeadSelection = Boolean(searchParams.get("lead"));
+  const mobileConversationOpen = hasConversation && hasExplicitLeadSelection;
 
   useEffect(() => {
     if (!hasConversation) return;
 
     const onShortcut = (event: KeyboardEvent) => {
       if (event.altKey && event.key.toLowerCase() === "i") {
+        if (
+          window.matchMedia("(max-width: 620px)").matches &&
+          !mobileConversationOpen
+        ) {
+          return;
+        }
+
         event.preventDefault();
         if (window.matchMedia("(min-width: 1171px)").matches) {
           setDesktopContextOpen((value) => !value);
@@ -41,6 +51,13 @@ export function ConversationWorkspaceShell({
       }
 
       if (event.altKey && event.key.toLowerCase() === "r") {
+        if (
+          window.matchMedia("(max-width: 620px)").matches &&
+          !mobileConversationOpen
+        ) {
+          return;
+        }
+
         event.preventDefault();
         const reply = document.querySelector<HTMLTextAreaElement>(
           'textarea[name="body"], textarea[id^="reply-draft-"], textarea[id^="whatsapp-reply-draft-"]',
@@ -51,6 +68,7 @@ export function ConversationWorkspaceShell({
 
       if (
         event.key === "Escape" &&
+        mobileConversationOpen &&
         !mobileContextOpen &&
         window.matchMedia("(max-width: 620px)").matches
       ) {
@@ -61,7 +79,7 @@ export function ConversationWorkspaceShell({
 
     document.addEventListener("keydown", onShortcut);
     return () => document.removeEventListener("keydown", onShortcut);
-  }, [hasConversation, mobileContextOpen, router]);
+  }, [hasConversation, mobileContextOpen, mobileConversationOpen, router]);
 
   useEffect(() => {
     if (!mobileContextOpen) return;
@@ -118,7 +136,7 @@ export function ConversationWorkspaceShell({
     >
       <div
         className={`min-h-0 overflow-hidden border-r border-[#DCE4DF] dark:border-slate-800 ${
-          hasConversation ? "hidden min-[621px]:block" : "block"
+          mobileConversationOpen ? "hidden min-[621px]:block" : "block"
         }`}
       >
         {inbox}
@@ -126,7 +144,11 @@ export function ConversationWorkspaceShell({
 
       <div
         className={`min-h-0 min-w-0 overflow-hidden ${
-          hasConversation ? "flex flex-col" : "hidden min-[621px]:block"
+          hasConversation
+            ? mobileConversationOpen
+              ? "flex flex-col"
+              : "hidden min-[621px]:flex min-[621px]:flex-col"
+            : "hidden min-[621px]:block"
         }`}
       >
         {hasConversation ? (
