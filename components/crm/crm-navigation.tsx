@@ -4,7 +4,6 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
   ChevronDown,
-  Inbox,
   LayoutDashboard,
   ListTodo,
   Rows3,
@@ -33,10 +32,7 @@ const groups: Group[] = [
   },
   {
     label: 'Actions',
-    items: [
-      { href: '/follow-ups', label: 'Follow-ups', icon: ListTodo },
-      { href: '/conversations', label: 'Inbox', icon: Inbox },
-    ],
+    items: [{ href: '/follow-ups', label: 'Follow-ups', icon: ListTodo }],
   },
 ];
 
