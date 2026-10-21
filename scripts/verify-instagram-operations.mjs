@@ -25,6 +25,8 @@ const manualAction = read('app/conversations/instagram-actions.ts');
 const runner = read('app/api/automation/instagram/runner/route.ts');
 const actions = read('app/automation/instagram/actions.ts');
 const page = read('app/automation/instagram/page.tsx');
+const policyNotes = read('components/automation/instagram-policy-notes.tsx');
+const instagramUi = `${page}\n${policyNotes}`;
 const quickReplies = read('app/api/instagram/quick-replies/route.ts');
 const bridge = read('components/instagram-outbound-bridge.tsx');
 const vercel = read('vercel.json');
@@ -166,7 +168,7 @@ for (const [needle, label] of [
   ['Suppression / STOP', 'suppression UI'],
   ['Comment permission', 'comment permission health'],
 ]) {
-  if (!page.includes(needle)) fail(`Instagram workspace is missing ${label} (${needle}).`);
+  if (!instagramUi.includes(needle)) fail(`Instagram workspace is missing ${label} (${needle}).`);
 }
 
 for (const [needle, label] of [
@@ -184,7 +186,7 @@ for (const [needle, label] of [
   if (!bridge.includes(needle)) fail(`Instagram conversation bridge is missing ${label} (${needle}).`);
 }
 
-const sourceCorpus = [migration, hardening, runtime, webhook, actions, page].join('\n');
+const sourceCorpus = [migration, hardening, runtime, webhook, actions, page, policyNotes].join('\n');
 for (const forbidden of ['instagram_broadcast_campaigns', 'cold_instagram_dm', 'bulk_instagram_dm']) {
   if (sourceCorpus.includes(forbidden)) {
     fail(`Instagram Operations V1 must not introduce a cold/bulk broadcast primitive (${forbidden}).`);
