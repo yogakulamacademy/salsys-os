@@ -4,6 +4,7 @@ import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 
 import { useMockData } from '@/lib/config';
+import { initializeAutomationFlowDraft } from '@/lib/automation/initialize-flow-draft';
 import { createClient } from '@/lib/supabase/server';
 import { requireCurrentOrganizationId } from '@/lib/workspace';
 
@@ -11,8 +12,12 @@ function textValue(formData: FormData, key: string) {
   return String(formData.get(key) ?? '').trim();
 }
 
-function automationRedirect(type: 'notice' | 'error', message: string): never {
-  redirect(`/automation?${type}=${encodeURIComponent(message)}`);
+function automationRedirect(
+  type: 'notice' | 'error',
+  message: string,
+  path = '/automation/triggers',
+): never {
+  redirect(`${path}?${type}=${encodeURIComponent(message)}`);
 }
 
 async function currentContext() {
@@ -52,6 +57,7 @@ export async function createSmartTriggerWorkflowAction(formData: FormData) {
     0,
     Math.min(Number(textValue(formData, 'followup_delay_minutes') || '0') || 0, 10080),
   );
+  const returnTo = textValue(formData, 'return_to');
 
   if (!name) {
     automationRedirect('error', 'Workflow name is required.');
@@ -70,6 +76,7 @@ export async function createSmartTriggerWorkflowAction(formData: FormData) {
       origin: 'custom',
       stop_on_reply: true,
       max_attempts: 2,
+      runtime_flow_enabled: false,
       created_by: user.id,
       metadata: {
         builder_version: 'v1',
@@ -107,7 +114,20 @@ export async function createSmartTriggerWorkflowAction(formData: FormData) {
     }),
   ]);
 
-  if (triggerError || actionError) {
+  try {
+    if (triggerError || actionError) {
+      throw triggerError || actionError;
+    }
+
+    await initializeAutomationFlowDraft({
+      organizationId,
+      workflowId: workflow.id,
+      userId: user.id,
+      eventName,
+      followupTitle,
+      followupDelayMinutes,
+    });
+  } catch (error) {
     await supabase
       .from('automation_workflows')
       .delete()
@@ -116,15 +136,24 @@ export async function createSmartTriggerWorkflowAction(formData: FormData) {
 
     automationRedirect(
       'error',
-      triggerError?.message || actionError?.message || 'Unable to configure workflow.',
+      error instanceof Error ? error.message : 'Unable to configure workflow.',
     );
   }
 
   revalidatePath('/automation');
-  automationRedirect(
-    'notice',
-    'Smart Trigger saved as a draft. Nothing will run automatically until the runtime is enabled and the workflow is activated.',
-  );
+  revalidatePath('/automation/triggers');
+  revalidatePath('/automation/flow-builder');
+  revalidatePath('/automation/readiness');
+
+  const notice =
+    'Draft flow created. Nothing will run automatically until the flow is validated, published and runtime is explicitly enabled.';
+
+  if (returnTo === 'flow_builder') {
+    const query = new URLSearchParams({ workflow: workflow.id, notice });
+    redirect(`/automation/flow-builder?${query.toString()}`);
+  }
+
+  automationRedirect('notice', notice);
 }
 
 export async function archiveSmartTriggerWorkflowAction(formData: FormData) {
@@ -149,5 +178,7 @@ export async function archiveSmartTriggerWorkflowAction(formData: FormData) {
   }
 
   revalidatePath('/automation');
+  revalidatePath('/automation/triggers');
+  revalidatePath('/automation/flow-builder');
   automationRedirect('notice', 'Workflow archived.');
 }
