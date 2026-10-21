@@ -18,6 +18,7 @@ import { ConversationCopilot } from "@/components/conversation-copilot";
 import { WhatsAppComposer } from "@/components/conversation-composer";
 import { ConversationIntelligencePanel } from "@/components/conversation-intelligence-panel";
 import { ConversationReadMarker } from "@/components/conversation-read-marker";
+import { ConversationSafeComposer } from "@/components/conversation-safe-composer";
 import { ConversationWorkspaceShell } from "@/components/conversation-workspace-shell";
 import { ConversationsRealtime } from "@/components/conversations-realtime";
 import { ConversationsSidebar } from "@/components/conversations-sidebar";
@@ -28,17 +29,6 @@ import { getCourses, isMockMode } from "@/lib/data";
 import { formatDateTime } from "@/lib/format";
 import { getCurrentWorkspaceContext } from "@/lib/workspace";
 import { getApprovedWhatsAppTemplates } from "@/lib/whatsapp-templates";
-import type { Channel } from "@/types/crm";
-
-const channels: Array<[Channel, string]> = [
-  ["instagram", "Instagram"],
-  ["whatsapp", "WhatsApp"],
-  ["website", "Website"],
-  ["email", "Email"],
-  ["phone", "Phone"],
-  ["meta_lead_form", "Meta Lead Form"],
-  ["other", "Other"],
-];
 
 export default async function ConversationsPage({
   searchParams,
@@ -218,6 +208,7 @@ export default async function ConversationsPage({
           whatsappWindow?.open && whatsappAction ? (
             <WhatsAppComposer
               action={whatsappAction}
+              leadId={selected.id}
               windowOpen
               windowLabel={whatsappWindow.label}
             />
@@ -234,46 +225,13 @@ export default async function ConversationsPage({
               phone={selected.phone}
             />
           ) : null
-        ) : interactionAction ? (
-          <form action={interactionAction} className="p-3">
-            <div className="mb-2 flex items-center justify-between gap-3">
-              <div>
-                <div className="text-[10px] font-semibold text-[#18362D]">Record contact</div>
-                <div className="mt-0.5 text-[9px] text-[#596E64]">
-                  Logging an interaction does not send a message.
-                </div>
-              </div>
-            </div>
-            <div className="grid gap-2 sm:grid-cols-[110px_130px_minmax(0,1fr)_auto]">
-              <select className="input" name="direction" defaultValue="outbound" aria-label="Interaction direction">
-                <option value="outbound">Outbound</option>
-                <option value="inbound">Inbound</option>
-              </select>
-              <select
-                className="input"
-                name="channel"
-                defaultValue={selected.currentContactChannel}
-                aria-label="Interaction channel"
-              >
-                {channels.map(([value, label]) => (
-                  <option key={value} value={value}>
-                    {label}
-                  </option>
-                ))}
-              </select>
-              <input
-                className="input"
-                name="body"
-                required
-                placeholder="Record a message, email or call note…"
-                aria-label="Interaction note"
-              />
-              <button className="btn-primary" type="submit">
-                Log
-              </button>
-            </div>
-          </form>
-        ) : null}
+        ) : (
+          <ConversationSafeComposer
+            leadId={selected.id}
+            channel={selected.currentContactChannel}
+            interactionAction={interactionAction}
+          />
+        )}
       </div>
     </section>
   );
