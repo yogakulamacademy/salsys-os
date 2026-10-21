@@ -13,7 +13,7 @@ import {
 } from "lucide-react";
 
 import { LeadInspectorButton } from "@/components/crm/lead-inspector";
-import { PipelineBoard } from "@/components/pipeline-board";
+import { PipelineBoardStudio } from "@/components/crm/pipeline-board-studio";
 import {
   PipelineInsights,
   type PipelineAgingPoint,
@@ -245,7 +245,7 @@ export default async function PipelinePage() {
         </section>
       )}
 
-      <PipelineBoard leads={boardLeads} />
+      <PipelineBoardStudio leads={boardLeads} />
     </div>
   );
 }
