@@ -129,6 +129,26 @@ function redirectWithAuthCookies(
   return redirectResponse;
 }
 
+function redirectToLogin(request: NextRequest, response: NextResponse) {
+  const loginUrl = request.nextUrl.clone();
+  loginUrl.pathname = "/login";
+  loginUrl.searchParams.set("next", `${request.nextUrl.pathname}${request.nextUrl.search}`);
+  const redirectResponse = NextResponse.redirect(loginUrl);
+  response.cookies.getAll().forEach((cookie) => redirectResponse.cookies.set(cookie));
+  return redirectResponse;
+}
+
+function isMissingAuthSessionError(error: { name?: string; message?: string } | null) {
+  if (!error) return false;
+  const name = String(error.name ?? "").toLowerCase();
+  const message = String(error.message ?? "").toLowerCase();
+  return (
+    name.includes("authsessionmissing") ||
+    message.includes("auth session missing") ||
+    message.includes("session missing")
+  );
+}
+
 function authConfigurationError(pathname: string) {
   if (pathname.startsWith("/api/")) {
     return NextResponse.json(
@@ -201,90 +221,80 @@ export async function middleware(request: NextRequest) {
     error: authError,
   } = await supabase.auth.getUser();
 
-  if (authError && !user) {
-    return workspaceServiceUnavailable(pathname);
-  }
-
   if (!user) {
+    if (authError && !isMissingAuthSessionError(authError)) {
+      return workspaceServiceUnavailable(pathname);
+    }
+
     if (pathname.startsWith("/api/")) {
       return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
     }
 
-    const loginUrl = request.nextUrl.clone();
-    loginUrl.pathname = "/login";
-    loginUrl.searchParams.set("next", `${pathname}${request.nextUrl.search}`);
-    const redirectResponse = NextResponse.redirect(loginUrl);
-    response.cookies.getAll().forEach((cookie) => redirectResponse.cookies.set(cookie));
-    return redirectResponse;
+    return redirectToLogin(request, response);
   }
 
-  const { data: memberships, error: membershipError } = await supabase
+  // Canonical tenant resolution must happen before reading tenant-scoped
+  // membership rows. organization_members is protected by RLS and can be
+  // invisible until the authenticated auth session is bound to its tenant.
+  const { data: boundOrganizationId, error: bindingError } = await supabase.rpc(
+    "bind_current_tenant_session_for_current_user",
+  );
+
+  if (bindingError || !boundOrganizationId) {
+    const detail = String(bindingError?.message ?? "");
+
+    if (
+      detail.includes("No active organization membership") ||
+      detail.includes("Multiple active organization memberships")
+    ) {
+      if (pathname.startsWith("/api/")) {
+        return NextResponse.json(
+          { ok: false, error: "Workspace access denied." },
+          { status: 403 },
+        );
+      }
+
+      await supabase.auth.signOut();
+      const redirectResponse = redirectWithAuthCookies(
+        request,
+        response,
+        "/login",
+        {
+          error: detail.includes("Multiple active organization memberships")
+            ? "This account is linked to multiple organizations. Please contact your SalsysOS administrator."
+            : "Your account is not assigned to an active organization.",
+        },
+      );
+      redirectResponse.cookies.set(ACTIVE_WORKSPACE_COOKIE, "", {
+        httpOnly: true,
+        sameSite: "lax",
+        secure: process.env.NODE_ENV === "production",
+        path: "/",
+        maxAge: 0,
+      });
+      return redirectResponse;
+    }
+
+    return workspaceServiceUnavailable(pathname);
+  }
+
+  const organizationId = String(boundOrganizationId).trim();
+
+  const { data: membership, error: membershipError } = await supabase
     .from("organization_members")
     .select("organization_id,role")
     .eq("user_id", user.id)
-    .eq("active", true);
+    .eq("organization_id", organizationId)
+    .eq("active", true)
+    .maybeSingle();
 
-  if (membershipError) {
+  if (membershipError || !membership) {
     return workspaceServiceUnavailable(pathname);
   }
 
-  const membershipRows = memberships ?? [];
-  const cookieOrganizationId =
-    request.cookies.get(ACTIVE_WORKSPACE_COOKIE)?.value?.trim() ?? "";
-
-  const selectedMembership =
-    membershipRows.find(
-      (membership) =>
-        String(membership.organization_id ?? "").trim() === cookieOrganizationId,
-    ) ?? (membershipRows.length === 1 ? membershipRows[0] : null);
-
-  if (!selectedMembership) {
-    if (pathname.startsWith("/api/")) {
-      return NextResponse.json(
-        { ok: false, error: "Workspace access denied." },
-        { status: 403 },
-      );
-    }
-
-    await supabase.auth.signOut();
-    const redirectResponse = redirectWithAuthCookies(
-      request,
-      response,
-      "/login",
-      {
-        error:
-          membershipRows.length > 1
-            ? "This account is linked to multiple organizations. Please contact your SalsysOS administrator."
-            : "Your account is not assigned to an active organization.",
-      },
-    );
-    redirectResponse.cookies.set(ACTIVE_WORKSPACE_COOKIE, "", {
-      httpOnly: true,
-      sameSite: "lax",
-      secure: process.env.NODE_ENV === "production",
-      path: "/",
-      maxAge: 0,
-    });
-    return redirectResponse;
-  }
-
-  const organizationId = String(selectedMembership.organization_id ?? "").trim();
-  const role = String(selectedMembership.role ?? "").trim().toLowerCase();
+  const role = String(membership.role ?? "").trim().toLowerCase();
 
   if (!organizationId || !role) {
-    return workspaceServiceUnavailable(pathname);
-  }
-
-  const { error: tenantBindingError } = await supabase.rpc(
-    "bind_current_tenant_session",
-    {
-      p_organization_id: organizationId,
-    },
-  );
-
-  if (tenantBindingError) {
-    // A transient database/provider failure should not destroy an otherwise
-    // valid authenticated session. Let the user retry instead of signing out.
     return workspaceServiceUnavailable(pathname);
   }
 
