@@ -86,7 +86,7 @@ function NavigationLinks({ mobile = false }: { mobile?: boolean }) {
     <div className={mobile ? 'space-y-5' : 'space-y-5'}>
       {groups.map((group) => (
         <div key={group.label}>
-          <div className="mb-1.5 px-2 text-[10px] font-bold uppercase tracking-[0.15em] text-slate-400">
+          <div className="mb-1.5 px-3 text-[10px] font-bold uppercase tracking-[0.17em] text-slate-400">
             {group.label}
           </div>
           <div className="space-y-0.5">
@@ -96,13 +96,20 @@ function NavigationLinks({ mobile = false }: { mobile?: boolean }) {
                 <Link
                   key={href}
                   href={href}
-                  className={`flex items-center gap-2.5 rounded-xl px-2.5 py-2 text-sm font-medium transition ${
+                  className={`group flex items-center gap-3 rounded-xl px-3 py-2.5 text-[13px] font-semibold transition ${
                     active
-                      ? 'bg-violet-50 text-violet-800 ring-1 ring-inset ring-violet-100'
+                      ? 'bg-violet-50 text-violet-700 shadow-[inset_0_0_0_1px_rgba(124,58,237,0.08)]'
                       : 'text-slate-600 hover:bg-slate-50 hover:text-slate-950'
                   }`}
                 >
-                  <Icon size={16} className={active ? 'text-violet-600' : 'text-slate-400'} />
+                  <Icon
+                    size={17}
+                    className={
+                      active
+                        ? 'text-violet-600'
+                        : 'text-slate-400 transition group-hover:text-slate-600'
+                    }
+                  />
                   <span>{label}</span>
                 </Link>
               );
@@ -122,29 +129,32 @@ export function AutomationNavigation() {
 
   return (
     <>
-      <details className="group rounded-2xl border border-slate-200 bg-white lg:hidden">
-        <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 text-sm font-semibold text-slate-900 [&::-webkit-details-marker]:hidden">
-          <span className="flex items-center gap-2">
-            <Workflow size={16} className="text-violet-600" />
+      <details className="group rounded-2xl border border-slate-200 bg-white shadow-sm lg:hidden">
+        <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3.5 text-sm font-semibold text-slate-900 [&::-webkit-details-marker]:hidden">
+          <span className="flex items-center gap-2.5">
+            <span className="grid h-8 w-8 place-items-center rounded-xl bg-violet-50 text-violet-700">
+              <Workflow size={16} />
+            </span>
             {current?.label || 'Automation'}
           </span>
           <ChevronDown size={16} className="text-slate-400 transition group-open:rotate-180" />
         </summary>
         <div className="border-t border-slate-100 p-3">
+          <div className="mb-4 rounded-xl bg-slate-50 px-3 py-2.5">
+            <div className="text-sm font-bold text-slate-950">Automation</div>
+            <div className="mt-0.5 text-xs text-slate-500">Build, govern and monitor safe messaging workflows.</div>
+          </div>
           <NavigationLinks mobile />
         </div>
       </details>
 
-      <aside className="hidden lg:block">
-        <div className="sticky top-20 rounded-2xl border border-slate-200 bg-white p-3 shadow-sm">
-          <div className="mb-5 px-2 pt-1">
-            <div className="flex items-center gap-2 text-sm font-bold text-slate-950">
-              <span className="grid h-7 w-7 place-items-center rounded-lg bg-violet-50 text-violet-700">
-                <Workflow size={15} />
-              </span>
-              Automation
-            </div>
-            <p className="mt-1.5 text-xs leading-5 text-slate-500">Build, govern and monitor messaging workflows.</p>
+      <aside className="hidden min-h-[calc(100vh-7rem)] border-r border-slate-200 pr-4 lg:block">
+        <div className="sticky top-20 pb-8">
+          <div className="mb-6 px-3 pt-1">
+            <div className="text-[15px] font-bold text-slate-950">Automation</div>
+            <p className="mt-1 max-w-[180px] text-xs leading-5 text-slate-500">
+              Build, govern and monitor safe messaging workflows.
+            </p>
           </div>
           <NavigationLinks />
         </div>
