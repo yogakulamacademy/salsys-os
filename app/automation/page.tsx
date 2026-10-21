@@ -1,17 +1,14 @@
 import Link from 'next/link';
 import {
-  Activity,
   ArrowRight,
-  BookOpen,
-  CheckCircle2,
+  Check,
+  CircleDot,
   Clock3,
   GitBranch,
-  ListChecks,
+  Instagram,
   MessageCircleMore,
   MessageSquareText,
   Plus,
-  RefreshCw,
-  ShieldAlert,
   ShieldCheck,
   Sparkles,
   Workflow,
@@ -24,6 +21,7 @@ import { getCurrentWorkspaceContext } from '@/lib/workspace';
 type WorkflowRow = { status: string };
 type TemplateRow = { approval_status: string; active: boolean };
 type SyncRow = { status: string; started_at: string; provider_error: string | null };
+type RunRow = { id: string; status: string; created_at: string };
 
 function relativeTime(value: string | null) {
   if (!value) return 'Not synced yet';
@@ -41,46 +39,22 @@ function MetricCard({
   value,
   note,
   icon: Icon,
-  tone,
-  href,
 }: {
   label: string;
   value: string | number;
   note: string;
   icon: React.ComponentType<{ size?: number; className?: string }>;
-  tone: 'violet' | 'amber' | 'emerald' | 'rose';
-  href?: string;
 }) {
-  const tones = {
-    violet: 'bg-violet-50 text-violet-700',
-    amber: 'bg-amber-50 text-amber-700',
-    emerald: 'bg-emerald-50 text-emerald-700',
-    rose: 'bg-rose-50 text-rose-700',
-  };
-
-  const content = (
-    <div className="group h-full rounded-2xl border border-slate-200 bg-white p-4 shadow-[0_1px_2px_rgba(15,23,42,0.02)] transition hover:border-slate-300 hover:shadow-sm">
-      <div className="flex items-start justify-between gap-3">
-        <div className={`grid h-10 w-10 shrink-0 place-items-center rounded-xl ${tones[tone]}`}>
-          <Icon size={18} />
-        </div>
-        <div className="flex h-8 items-end gap-1 opacity-50" aria-hidden="true">
-          {[2, 5, 3, 7, 4, 8, 6].map((height, index) => (
-            <span
-              key={index}
-              className={`w-1 rounded-full ${tone === 'rose' ? 'bg-rose-300' : tone === 'amber' ? 'bg-amber-300' : tone === 'emerald' ? 'bg-emerald-300' : 'bg-violet-300'}`}
-              style={{ height: `${height * 3}px` }}
-            />
-          ))}
-        </div>
+  return (
+    <div className="rounded-xl border border-[#e4eae6] bg-white px-4 py-4">
+      <div className="flex items-center justify-between gap-3 text-[11px] font-semibold text-[#6d7c76]">
+        <span>{label}</span>
+        <Icon size={16} className="text-[#91a496]" />
       </div>
-      <div className="mt-3 text-xs font-semibold text-slate-500">{label}</div>
-      <div className="mt-0.5 text-[28px] font-bold tracking-tight text-slate-950">{value}</div>
-      <div className="mt-1 text-xs text-slate-500">{note}</div>
+      <div className="mt-2 text-[29px] font-semibold leading-none tracking-[-1px] text-[#192e29]">{value}</div>
+      <div className="mt-2 text-[10px] leading-4 text-[#8a988f]">{note}</div>
     </div>
   );
-
-  return href ? <Link href={href}>{content}</Link> : content;
 }
 
 export default async function AutomationOverviewPage() {
@@ -95,6 +69,7 @@ export default async function AutomationOverviewPage() {
   let awaitingApproval = 0;
   let activeWhatsAppAccounts = 0;
   let latestSync: SyncRow | null = null;
+  let runs: RunRow[] = [];
   let loadError: string | null = null;
 
   if (user) {
@@ -104,7 +79,10 @@ export default async function AutomationOverviewPage() {
       organizationName = workspace.activeWorkspace?.organizationName || organizationName;
 
       if (organizationId) {
-        const [workflowResult, approvalResult, templateResult, syncResult, whatsappResult] =
+        const since = new Date(Date.now() - 6 * 24 * 60 * 60 * 1000);
+        since.setHours(0, 0, 0, 0);
+
+        const [workflowResult, approvalResult, templateResult, syncResult, whatsappResult, runResult] =
           await Promise.all([
             supabase
               .from('automation_workflows')
@@ -131,6 +109,12 @@ export default async function AutomationOverviewPage() {
               .select('id', { count: 'exact', head: true })
               .eq('organization_id', organizationId)
               .eq('active', true),
+            supabase
+              .from('automation_action_runs')
+              .select('id,status,created_at')
+              .eq('organization_id', organizationId)
+              .gte('created_at', since.toISOString())
+              .order('created_at', { ascending: true }),
           ]);
 
         const error =
@@ -138,7 +122,8 @@ export default async function AutomationOverviewPage() {
           approvalResult.error ||
           templateResult.error ||
           syncResult.error ||
-          whatsappResult.error;
+          whatsappResult.error ||
+          runResult.error;
         if (error) throw error;
 
         workflows = (workflowResult.data ?? []) as WorkflowRow[];
@@ -146,6 +131,7 @@ export default async function AutomationOverviewPage() {
         awaitingApproval = approvalResult.count ?? 0;
         activeWhatsAppAccounts = whatsappResult.count ?? 0;
         latestSync = (syncResult.data ?? null) as SyncRow | null;
+        runs = (runResult.data ?? []) as RunRow[];
       }
     } catch (error) {
       loadError = error instanceof Error ? error.message : 'Unable to load automation overview.';
@@ -153,356 +139,257 @@ export default async function AutomationOverviewPage() {
   }
 
   const activeFlows = workflows.filter((row) => row.status === 'active').length;
-  const draftFlows = workflows.filter((row) => row.status === 'draft').length;
   const activeTemplates = templates.filter((row) => row.active);
   const approvedTemplates = activeTemplates.filter((row) => row.approval_status === 'approved').length;
   const pendingTemplates = activeTemplates.filter((row) => row.approval_status === 'pending').length;
   const rejectedTemplates = activeTemplates.filter((row) => row.approval_status === 'rejected').length;
   const syncNeedsAttention = latestSync?.status === 'failed' ? 1 : 0;
   const providerNeedsAttention = activeWhatsAppAccounts === 0 ? 1 : 0;
-  const attentionCount =
-    awaitingApproval + pendingTemplates + rejectedTemplates + syncNeedsAttention + providerNeedsAttention;
+  const attentionCount = awaitingApproval + pendingTemplates + rejectedTemplates + syncNeedsAttention + providerNeedsAttention;
 
-  const attentionItems = [
-    activeWhatsAppAccounts === 0
-      ? {
-          title: 'WhatsApp sender is not connected',
-          detail: 'Connect an active WhatsApp Business sender before customer messaging can run.',
-          href: '/settings/integrations',
-          label: 'Connect sender',
-          tone: 'rose' as const,
-        }
-      : null,
-    awaitingApproval > 0
-      ? {
-          title: `${awaitingApproval} automation action${awaitingApproval === 1 ? '' : 's'} awaiting approval`,
-          detail: 'Human review is required before these customer-impacting actions can continue.',
-          href: '/automation/approvals',
-          label: 'Review',
-          tone: 'amber' as const,
-        }
-      : null,
-    pendingTemplates > 0
-      ? {
-          title: `${pendingTemplates} WhatsApp template${pendingTemplates === 1 ? '' : 's'} pending review`,
-          detail: 'Pending templates are not eligible for outbound automation.',
-          href: '/automation/templates',
-          label: 'Review',
-          tone: 'amber' as const,
-        }
-      : null,
-    rejectedTemplates > 0
-      ? {
-          title: `${rejectedTemplates} WhatsApp template${rejectedTemplates === 1 ? '' : 's'} rejected`,
-          detail: 'Review rejected templates before depending on them in customer flows.',
-          href: '/automation/templates',
-          label: 'Review',
-          tone: 'rose' as const,
-        }
-      : null,
-    latestSync?.status === 'failed'
-      ? {
-          title: 'Template synchronization failed',
-          detail: 'The latest Meta template synchronization did not finish successfully.',
-          href: '/automation/templates',
-          label: 'View details',
-          tone: 'rose' as const,
-        }
-      : null,
-  ].filter(Boolean) as Array<{
-    title: string;
-    detail: string;
-    href: string;
-    label: string;
-    tone: 'amber' | 'rose';
-  }>;
-
-  const workspaceLinks = [
+  const launchChecks = [
     {
+      label: 'Create your first flow',
+      hint: workflows.length ? `${workflows.length} workflow${workflows.length === 1 ? '' : 's'} available` : 'Design the conversation',
+      ok: workflows.length > 0,
       href: '/automation/flow-builder',
-      title: 'Flows',
-      value: `${activeFlows} active`,
-      copy: 'Build and manage workflows',
-      icon: Workflow,
-      tone: 'violet',
     },
     {
-      href: '/automation/triggers',
-      title: 'Smart Triggers',
-      value: `${workflows.length} workflows`,
-      copy: 'Event-based automation',
-      icon: Zap,
-      tone: 'sky',
+      label: 'Connect a WhatsApp sender',
+      hint: activeWhatsAppAccounts ? `${activeWhatsAppAccounts} active sender${activeWhatsAppAccounts === 1 ? '' : 's'}` : 'No active sender verified',
+      ok: activeWhatsAppAccounts > 0,
+      href: '/settings/integrations',
     },
     {
-      href: '/automation/whatsapp',
-      title: 'WhatsApp Ops',
-      value: activeWhatsAppAccounts ? 'Connected' : 'Not connected',
-      copy: 'Manage messaging operations',
-      icon: MessageCircleMore,
-      tone: activeWhatsAppAccounts ? 'emerald' : 'rose',
+      label: 'Sync an approved template',
+      hint: approvedTemplates ? `${approvedTemplates} approved template${approvedTemplates === 1 ? '' : 's'}` : 'No approved template available',
+      ok: approvedTemplates > 0,
+      href: '/automation/templates',
     },
     {
-      href: '/automation/approvals',
-      title: 'Approval Queue',
-      value: `${awaitingApproval} pending`,
-      copy: 'Review human-gated actions',
-      icon: ListChecks,
-      tone: awaitingApproval ? 'amber' : 'emerald',
+      label: 'Prepare an active workflow',
+      hint: activeFlows ? `${activeFlows} active workflow${activeFlows === 1 ? '' : 's'}` : 'Keep the first flow in draft until reviewed',
+      ok: activeFlows > 0,
+      href: '/automation/flow-builder',
     },
     {
+      label: 'Review current attention items',
+      hint: attentionCount === 0 ? 'No detected blockers in this overview' : `${attentionCount} item${attentionCount === 1 ? '' : 's'} need review`,
+      ok: attentionCount === 0,
       href: '/automation/readiness',
-      title: 'Launch Readiness',
-      value: attentionCount === 0 ? 'Ready to review' : `${attentionCount} checks`,
-      copy: 'Validate before going live',
-      icon: ShieldCheck,
-      tone: attentionCount === 0 ? 'emerald' : 'violet',
     },
-  ] as const;
+  ];
+  const passedLaunchChecks = launchChecks.filter((item) => item.ok).length;
 
-  const iconTone = (tone: string) => {
-    if (tone === 'emerald') return 'bg-emerald-50 text-emerald-700';
-    if (tone === 'amber') return 'bg-amber-50 text-amber-700';
-    if (tone === 'rose') return 'bg-rose-50 text-rose-700';
-    if (tone === 'sky') return 'bg-sky-50 text-sky-700';
-    return 'bg-violet-50 text-violet-700';
-  };
+  const dayBuckets = Array.from({ length: 7 }, (_, index) => {
+    const date = new Date();
+    date.setHours(0, 0, 0, 0);
+    date.setDate(date.getDate() - (6 - index));
+    const next = new Date(date);
+    next.setDate(next.getDate() + 1);
+    const count = runs.filter((run) => {
+      const value = new Date(run.created_at).getTime();
+      return value >= date.getTime() && value < next.getTime();
+    }).length;
+    return {
+      label: new Intl.DateTimeFormat('en', { weekday: 'short' }).format(date),
+      count,
+    };
+  });
+  const maxRuns = Math.max(1, ...dayBuckets.map((day) => day.count));
+
+  const recipes = [
+    {
+      title: 'Qualify an inbound lead',
+      copy: 'Capture intent, create the next action and keep a human checkpoint in the journey.',
+      icon: GitBranch,
+      meta: 'Sales · WhatsApp',
+    },
+    {
+      title: 'Turn comments into conversations',
+      copy: 'Start from an Instagram engagement event and route the right response safely.',
+      icon: Instagram,
+      meta: 'Engagement · Instagram',
+    },
+    {
+      title: 'Follow up at the right moment',
+      copy: 'Use a controlled delay and an approved next step instead of manual reminders.',
+      icon: Clock3,
+      meta: 'Retention · WhatsApp',
+    },
+  ];
 
   return (
-    <div className="space-y-5">
-      <header className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
+    <div className="space-y-6">
+      <header className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
         <div>
-          <div className="text-[11px] font-bold uppercase tracking-[0.16em] text-slate-400">Automation</div>
-          <h1 className="mt-1 text-3xl font-bold tracking-tight text-slate-950">Automation Overview</h1>
-          <p className="mt-1.5 text-sm text-slate-500">
-            Build, monitor and manage safe customer messaging workflows for {organizationName}.
-          </p>
+          <div className="text-[10px] font-bold uppercase tracking-[0.15em] text-[#89978f]">Automation Studio</div>
+          <h1 className="mt-1 text-[29px] font-semibold leading-tight text-[#192e29]">Automation Overview</h1>
+          <p className="mt-1.5 text-[12px] text-[#6d7c76]">Your command center for thoughtful, reliable automation at {organizationName}.</p>
         </div>
         <div className="flex flex-wrap gap-2">
-          <Link href="/automation/flow-builder" className="btn-primary">
-            <Plus size={15} />
-            New flow
-          </Link>
-          <Link href="/automation/readiness" className="btn-secondary">
-            <BookOpen size={15} />
-            Automation guide
-          </Link>
+          <Link href="/automation/readiness" className="btn-secondary">View readiness</Link>
+          <Link href="/automation/flow-builder" className="btn-primary"><Plus size={14} /> Create automation</Link>
         </div>
       </header>
 
       {loadError ? (
-        <div className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-medium text-rose-800">
-          Automation data is temporarily unavailable. Refresh the page to try again.
+        <div className="rounded-lg border border-[#efd9d5] bg-[#fcf0ef] px-4 py-3 text-[11px] font-medium text-[#ae4545]">
+          Automation data is temporarily unavailable. Refresh the page before making operational decisions.
         </div>
-      ) : (
-        <div
-          className={`flex flex-col gap-4 rounded-2xl border px-4 py-3.5 sm:flex-row sm:items-center sm:justify-between ${
-            attentionCount === 0
-              ? 'border-emerald-200 bg-emerald-50/70'
-              : 'border-amber-200 bg-amber-50/70'
-          }`}
-        >
-          <div className="flex items-start gap-3">
-            <div
-              className={`mt-0.5 grid h-8 w-8 shrink-0 place-items-center rounded-full ${
-                attentionCount === 0 ? 'bg-emerald-500 text-white' : 'bg-amber-500 text-white'
-              }`}
-            >
-              {attentionCount === 0 ? <CheckCircle2 size={18} /> : <ShieldAlert size={18} />}
-            </div>
-            <div>
-              <div className="text-sm font-bold text-slate-900">
-                {attentionCount === 0 ? 'No detected automation issues' : `${attentionCount} item${attentionCount === 1 ? '' : 's'} need attention`}
-              </div>
-              <div className="mt-0.5 text-xs leading-5 text-slate-600">
-                {attentionCount === 0
-                  ? 'Current approvals, templates, sender connection and provider sync do not require action.'
-                  : 'Review the items below before increasing automation or customer messaging activity.'}
-              </div>
-            </div>
-          </div>
-          <Link href="/automation/readiness" className="btn-secondary shrink-0 !py-2 text-xs">
-            View system health <ArrowRight size={14} />
+      ) : null}
+
+      <section className="grid min-h-[220px] overflow-hidden rounded-[13px] bg-[#163f35] text-white lg:grid-cols-[1.2fr_1fr]">
+        <div className="relative z-10 p-7 lg:p-8">
+          <div className="text-[9px] font-bold uppercase tracking-[0.15em] text-[#a8c7b3]">Purposeful automation. Human control.</div>
+          <h2 className="mt-3 text-[27px] font-medium leading-[1.25] tracking-[-0.7px] !text-white">A little less busywork.<br />A lot more possibility.</h2>
+          <p className="mt-3 max-w-md text-[11px] leading-5 text-[#bed3c6]">Build conversations that move your business forward. Start with a flow and keep your team in control.</p>
+          <Link href="/automation/flow-builder" className="mt-5 inline-flex items-center gap-2 rounded-[7px] border border-[#dff2c5] bg-[#dff2c5] px-4 py-2.5 text-[11px] font-semibold text-[#254834] transition hover:bg-white">
+            <Plus size={14} /> Build your first flow
           </Link>
         </div>
-      )}
-
-      <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        <MetricCard
-          label="Active flows"
-          value={activeFlows}
-          note={`${draftFlows} draft${draftFlows === 1 ? '' : 's'} in progress`}
-          icon={Workflow}
-          tone="violet"
-          href="/automation/flow-builder"
-        />
-        <MetricCard
-          label="Pending approvals"
-          value={awaitingApproval}
-          note="Requires human review"
-          icon={Clock3}
-          tone="amber"
-          href="/automation/approvals"
-        />
-        <MetricCard
-          label="Approved templates"
-          value={approvedTemplates}
-          note="Ready for eligible sends"
-          icon={MessageSquareText}
-          tone="emerald"
-          href="/automation/templates"
-        />
-        <MetricCard
-          label="Needs attention"
-          value={attentionCount}
-          note="Across safety and messaging"
-          icon={ShieldAlert}
-          tone="rose"
-        />
+        <div className="relative hidden min-h-[210px] items-center justify-center gap-5 bg-[radial-gradient(#90b39a29_1px,transparent_1px)] [background-size:17px_17px] lg:flex">
+          <div className="absolute left-0 right-0 top-1/2 h-px bg-[#769d8055]" />
+          {[
+            ['Conversation', 'A new connection', MessageCircleMore],
+            ['Smart action', 'The right next step', Zap],
+            ['Human review', 'You have the last word', ShieldCheck],
+          ].map(([title, copy, Icon], index) => {
+            const NodeIcon = Icon as React.ComponentType<{ size?: number }>;
+            return (
+              <div key={title as string} className={`relative z-10 min-w-[105px] rounded-[9px] border border-[#66867670] bg-white/[0.06] px-3 py-3 text-[#d5e7db] backdrop-blur-sm ${index === 1 ? '-translate-y-5' : ''}`}>
+                <div className="mb-3 inline-grid h-8 w-8 place-items-center rounded-[7px] bg-[#335a48] text-[#cee4b4]"><NodeIcon size={16} /></div>
+                <strong className="block text-[10px] font-semibold">{title as string}</strong>
+                <span className="mt-0.5 block text-[8px] text-[#91b09c]">{copy as string}</span>
+              </div>
+            );
+          })}
+          <div className="absolute bottom-4 right-5 flex items-center gap-1 text-[8px] text-[#93b29e]"><ShieldCheck size={10} /> Safe by design</div>
+        </div>
       </section>
 
-      <section className="grid gap-4 xl:grid-cols-[minmax(0,1.25fr)_minmax(320px,.75fr)]">
-        <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-[0_1px_2px_rgba(15,23,42,0.02)]">
-          <div className="flex items-start justify-between gap-4">
-            <div className="flex items-start gap-3">
-              <div className="grid h-10 w-10 place-items-center rounded-xl bg-rose-50 text-rose-600">
-                <ShieldAlert size={18} />
-              </div>
-              <div>
-                <h2 className="text-base font-bold text-slate-950">What needs attention</h2>
-                <p className="mt-0.5 text-xs text-slate-500">Items that require review or action to keep messaging safe.</p>
-              </div>
-            </div>
-          </div>
+      <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        <MetricCard label="Active automations" value={activeFlows} note="Live workflow status from this workspace" icon={Workflow} />
+        <MetricCard label="Executions" value={runs.length} note="Recorded automation actions in the last 7 days" icon={Zap} />
+        <MetricCard label="Delivery success rate" value="—" note="No valid provider-delivery denominator on this overview" icon={MessageSquareText} />
+        <MetricCard label="Awaiting approval" value={awaitingApproval} note="Human decision required" icon={ShieldCheck} />
+      </section>
 
-          {attentionItems.length ? (
-            <div className="mt-4 space-y-2">
-              {attentionItems.slice(0, 4).map((item) => (
-                <div key={`${item.href}-${item.title}`} className="flex flex-col gap-3 rounded-xl border border-slate-200 px-3.5 py-3 sm:flex-row sm:items-center sm:justify-between">
-                  <div className="flex min-w-0 items-start gap-3">
-                    <span className={`mt-1.5 h-2.5 w-2.5 shrink-0 rounded-full ${item.tone === 'rose' ? 'bg-rose-500' : 'bg-amber-500'}`} />
-                    <div className="min-w-0">
-                      <div className="text-sm font-semibold text-slate-900">{item.title}</div>
-                      <div className="mt-0.5 text-xs leading-5 text-slate-500">{item.detail}</div>
-                    </div>
-                  </div>
-                  <Link href={item.href} className="btn-secondary shrink-0 !px-3 !py-2 text-xs">
-                    {item.label} <ArrowRight size={13} />
-                  </Link>
-                </div>
-              ))}
+      <section className="grid gap-4 xl:grid-cols-[1.45fr_1fr]">
+        <div className="rounded-xl border border-[#e4eae6] bg-white">
+          <div className="flex items-center justify-between border-b border-[#e4eae6] px-5 py-4">
+            <div>
+              <h2 className="text-[16px] font-semibold">Execution activity</h2>
+              <p className="mt-1 text-[11px] text-[#6d7c76]">Observed action runs from the last 7 days.</p>
             </div>
-          ) : (
-            <div className="mt-4 flex items-start gap-3 rounded-xl border border-emerald-100 bg-emerald-50/70 px-4 py-4">
-              <CheckCircle2 size={18} className="mt-0.5 shrink-0 text-emerald-600" />
+            <span className="rounded-md border border-[#e4eae6] px-2 py-1 text-[9px] text-[#6d7c76]">Last 7 days</span>
+          </div>
+          <div className="p-5">
+            {runs.length ? (
               <div>
-                <div className="text-sm font-semibold text-emerald-900">Nothing requires immediate review</div>
-                <div className="mt-1 text-xs leading-5 text-emerald-700">Continue building flows or review launch readiness before enabling more automation.</div>
+                <div className="flex h-[190px] items-end gap-3 border-b border-[#e4eae6] px-2 pb-0">
+                  {dayBuckets.map((day) => (
+                    <div key={day.label} className="flex h-full flex-1 items-end justify-center">
+                      <div className="w-full max-w-10 rounded-t bg-[#82af91]" style={{ height: `${Math.max(6, Math.round((day.count / maxRuns) * 100))}%` }} title={`${day.count} runs`} />
+                    </div>
+                  ))}
+                </div>
+                <div className="mt-2 grid grid-cols-7 text-center text-[9px] text-[#98a29b]">
+                  {dayBuckets.map((day) => <span key={day.label}>{day.label}</span>)}
+                </div>
               </div>
-            </div>
-          )}
+            ) : (
+              <div className="grid h-[215px] place-items-center rounded-lg bg-[#f8faf8] text-center">
+                <div>
+                  <div className="text-[12px] font-semibold text-[#6d7c76]">No execution data yet</div>
+                  <p className="mt-1 text-[10px] text-[#98a29b]">Recorded automation activity will appear here when it exists.</p>
+                </div>
+              </div>
+            )}
+          </div>
         </div>
 
-        <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-[0_1px_2px_rgba(15,23,42,0.02)]">
-          <div className="flex items-start gap-3">
-            <div className="grid h-10 w-10 place-items-center rounded-xl bg-violet-50 text-violet-700">
-              <Zap size={18} />
-            </div>
+        <div className="rounded-xl border border-[#e4eae6] bg-white">
+          <div className="flex items-center justify-between border-b border-[#e4eae6] px-5 py-4">
             <div>
-              <h2 className="text-base font-bold text-slate-950">Quick actions</h2>
-              <p className="mt-0.5 text-xs text-slate-500">Common tasks to keep automation moving.</p>
+              <h2 className="text-[16px] font-semibold">Your path to launch</h2>
+              <p className="mt-1 text-[11px] text-[#6d7c76]">A few checks for a confident first run.</p>
             </div>
+            <span className="rounded-md border border-[#e4eae6] px-2 py-1 text-[9px] text-[#6d7c76]">{passedLaunchChecks} / 5</span>
           </div>
-          <div className="mt-4 space-y-2">
-            {[
-              ['/automation/flow-builder', 'Create flow', 'Start a new customer messaging workflow', Workflow],
-              ['/automation/triggers', 'Create smart trigger', 'Automate based on customer events', Zap],
-              ['/automation/templates', 'Sync templates', 'Sync approved WhatsApp templates from Meta', RefreshCw],
-              ['/automation/approvals', 'Review approval queue', 'Check customer-impacting actions', ListChecks],
-            ].map(([href, title, copy, Icon]) => {
-              const ActionIcon = Icon as React.ComponentType<{ size?: number }>;
-              return (
-                <Link key={href as string} href={href as string} className="group flex items-center gap-3 rounded-xl border border-slate-200 px-3.5 py-3 transition hover:bg-slate-50">
-                  <div className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-violet-50 text-violet-700">
-                    <ActionIcon size={16} />
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <div className="text-sm font-semibold text-slate-900">{title as string}</div>
-                    <div className="truncate text-xs text-slate-500">{copy as string}</div>
-                  </div>
-                  <ArrowRight size={14} className="text-slate-300 transition group-hover:translate-x-0.5 group-hover:text-violet-500" />
-                </Link>
-              );
-            })}
+          <div className="px-5 pt-4">
+            <div className="h-[5px] overflow-hidden rounded-full bg-[#edf1ed]"><div className="h-full rounded-full bg-[#69a87e]" style={{ width: `${passedLaunchChecks * 20}%` }} /></div>
+          </div>
+          <div className="px-5 pb-3 pt-2">
+            {launchChecks.map((item, index) => (
+              <Link key={item.label} href={item.href} className="flex items-center gap-3 border-b border-[#edf1ed] py-3 last:border-0">
+                <span className={`grid h-[23px] w-[23px] shrink-0 place-items-center rounded-full border text-[9px] ${item.ok ? 'border-[#b8d3bf] bg-[#f0f7f3] text-[#216551]' : 'border-[#dce5de] text-[#9aaa9e]'}`}>{item.ok ? <Check size={12} /> : index + 1}</span>
+                <div className="min-w-0 flex-1">
+                  <div className="text-[11px] font-semibold text-[#192e29]">{item.label}</div>
+                  <div className="mt-0.5 truncate text-[9px] text-[#98a399]">{item.hint}</div>
+                </div>
+                <ArrowRight size={13} className="text-[#91a096]" />
+              </Link>
+            ))}
           </div>
         </div>
       </section>
 
       <section>
-        <div className="mb-3 flex items-center gap-2">
-          <Sparkles size={17} className="text-violet-600" />
-          <div>
-            <h2 className="text-base font-bold text-slate-950">Jump back into your automation work</h2>
-            <p className="text-xs text-slate-500">Quick access to the workspaces you use most.</p>
-          </div>
+        <div className="mb-3 flex items-center justify-between gap-4">
+          <h2 className="text-[14px] font-semibold">A head start for your next flow</h2>
+          <Link href="/automation/recipes" className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-[#216551]">Explore all recipes <ArrowRight size={13} /></Link>
         </div>
-        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
-          {workspaceLinks.map(({ href, title, value, copy, icon: Icon, tone }) => (
-            <Link key={href} href={href} className="group rounded-2xl border border-slate-200 bg-white p-3.5 transition hover:-translate-y-0.5 hover:border-violet-200 hover:shadow-sm">
-              <div className="flex items-start justify-between gap-2">
-                <div className={`grid h-9 w-9 place-items-center rounded-xl ${iconTone(tone)}`}>
-                  <Icon size={17} />
-                </div>
-                <ArrowRight size={14} className="text-slate-300 group-hover:text-violet-500" />
+        <div className="grid gap-4 md:grid-cols-3">
+          {recipes.map(({ title, copy, icon: Icon, meta }, index) => (
+            <article key={title} className="flex min-h-[200px] flex-col rounded-xl border border-[#e4eae6] bg-white p-5 transition hover:border-[#a1c3ad] hover:shadow-[0_8px_30px_#142b2310]">
+              <div className={`grid h-[34px] w-[34px] place-items-center rounded-[9px] ${index === 1 ? 'bg-[#edf2fa] text-[#7b94ba]' : index === 2 ? 'bg-[#f2eff8] text-[#9480ae]' : 'bg-[#ecf5ed] text-[#5d836a]'}`}><Icon size={17} /></div>
+              <span className="mt-4 w-fit rounded-md border border-[#e4eae6] px-2 py-1 text-[9px] text-[#69796f]">{meta.split(' · ')[1]}</span>
+              <h3 className="mt-3 text-[13px] font-semibold">{title}</h3>
+              <p className="mt-1.5 flex-1 text-[11px] leading-5 text-[#6d7c76]">{copy}</p>
+              <div className="mt-4 flex items-center justify-between border-t border-[#e4eae6] pt-3">
+                <span className="text-[9px] text-[#93a096]">{meta.split(' · ')[0]}</span>
+                <Link href="/automation/recipes" className="inline-flex items-center gap-1 text-[10px] font-semibold text-[#216551]">Use recipe <ArrowRight size={12} /></Link>
               </div>
-              <div className="mt-3 text-sm font-bold text-slate-900">{title}</div>
-              <div className={`mt-0.5 text-xs font-semibold ${tone === 'emerald' ? 'text-emerald-600' : tone === 'rose' ? 'text-rose-600' : tone === 'amber' ? 'text-amber-600' : 'text-violet-600'}`}>{value}</div>
-              <div className="mt-1 text-[11px] leading-4 text-slate-500">{copy}</div>
-            </Link>
+            </article>
           ))}
         </div>
       </section>
 
-      <section className="grid gap-3 xl:grid-cols-3">
-        <div className="rounded-2xl border border-slate-200 bg-white p-4">
-          <div className="flex items-center gap-2 text-sm font-bold text-slate-900"><Activity size={16} className="text-violet-600" /> Provider sync snapshot</div>
-          <div className="mt-4 flex items-center justify-between gap-3 border-t border-slate-100 pt-3 text-sm">
-            <span className="text-slate-500">WhatsApp templates</span>
-            <span className="font-semibold text-slate-900">{relativeTime(latestSync?.started_at ?? null)}</span>
+      <section className="grid gap-4 xl:grid-cols-[1.45fr_1fr]">
+        <div className="rounded-xl border border-[#e4eae6] bg-white">
+          <div className="flex items-center justify-between border-b border-[#e4eae6] px-5 py-4">
+            <h2 className="text-[16px] font-semibold">Your channels</h2>
+            <Link href="/automation/audits" className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-[#216551]">Manage providers <ArrowRight size={12} /></Link>
           </div>
-          <div className="mt-2 flex items-center justify-between gap-3 text-xs">
-            <span className="text-slate-500">Latest status</span>
-            <span className={latestSync?.status === 'failed' ? 'font-semibold text-rose-600' : 'font-semibold text-emerald-600'}>{latestSync?.status ? latestSync.status.replaceAll('_', ' ') : 'No sync yet'}</span>
+          <div className="flex items-center gap-3 border-b border-[#e4eae6] px-5 py-4">
+            <span className="grid h-8 w-8 place-items-center rounded-lg bg-[#ecf5ed] text-[#216551]"><MessageCircleMore size={16} /></span>
+            <div className="min-w-0 flex-1"><div className="text-[11px] font-semibold">WhatsApp</div><div className="mt-0.5 text-[9px] text-[#6d7c76]">{activeWhatsAppAccounts ? `${activeWhatsAppAccounts} active sender${activeWhatsAppAccounts === 1 ? '' : 's'}` : 'No active sender verified'}</div></div>
+            <span className={`rounded-md px-2 py-1 text-[9px] font-semibold ${activeWhatsAppAccounts ? 'bg-[#eaf5ed] text-[#397052]' : 'bg-[#fcf4e5] text-[#9b6720]'}`}>{activeWhatsAppAccounts ? 'Connected' : 'Not connected'}</span>
+            <Link href="/automation/whatsapp" aria-label="Open WhatsApp operations"><ArrowRight size={13} className="text-[#91a096]" /></Link>
           </div>
-        </div>
-
-        <div className="rounded-2xl border border-slate-200 bg-white p-4">
-          <div className="flex items-center gap-2 text-sm font-bold text-slate-900"><ShieldCheck size={16} className="text-violet-600" /> Safety posture</div>
-          <div className="mt-4 space-y-2 border-t border-slate-100 pt-3 text-xs">
-            <div className="flex items-center justify-between"><span className="text-slate-500">Human approvals</span><span className="font-semibold text-slate-900">{awaitingApproval ? `${awaitingApproval} pending` : 'Clear'}</span></div>
-            <div className="flex items-center justify-between"><span className="text-slate-500">Approved templates</span><span className="font-semibold text-slate-900">{approvedTemplates}</span></div>
-            <div className="flex items-center justify-between"><span className="text-slate-500">Active WhatsApp senders</span><span className="font-semibold text-slate-900">{activeWhatsAppAccounts}</span></div>
+          <div className="flex items-center gap-3 px-5 py-4">
+            <span className="grid h-8 w-8 place-items-center rounded-lg bg-[#f2eff8] text-[#9480ae]"><Instagram size={16} /></span>
+            <div className="min-w-0 flex-1"><div className="text-[11px] font-semibold">Instagram</div><div className="mt-0.5 text-[9px] text-[#6d7c76]">Review connection and event eligibility in the channel workspace</div></div>
+            <span className="rounded-md bg-[#f0f3f1] px-2 py-1 text-[9px] font-semibold text-[#69796f]">Review setup</span>
+            <Link href="/automation/instagram" aria-label="Open Instagram operations"><ArrowRight size={13} className="text-[#91a096]" /></Link>
           </div>
         </div>
 
-        <div className="rounded-2xl border border-violet-200 bg-violet-50/60 p-4">
-          <div className="flex items-center gap-2 text-sm font-bold text-violet-950"><GitBranch size={16} /> Recommended next step</div>
-          <p className="mt-3 text-xs leading-5 text-violet-800">
-            {activeWhatsAppAccounts === 0
-              ? 'Connect a WhatsApp Business sender before building customer-message actions.'
-              : approvedTemplates === 0
-                ? 'Sync at least one approved WhatsApp template before configuring outbound template actions.'
-                : workflows.length === 0
-                  ? 'Create your first flow, validate it, then review launch readiness before enabling runtime.'
-                  : attentionCount > 0
-                    ? 'Resolve the current attention items before expanding automated customer messaging.'
-                    : 'Review launch readiness and controlled rollout before increasing automation volume.'}
-          </p>
-          <Link href="/automation/readiness" className="mt-3 inline-flex items-center gap-1.5 text-xs font-bold text-violet-700 hover:text-violet-950">
-            Open launch readiness <ArrowRight size={13} />
-          </Link>
-        </div>
+        <aside className="flex gap-3 rounded-xl border border-[#deeadb] bg-[#f1f6ef] p-5">
+          <ShieldCheck size={22} className="mt-0.5 shrink-0 text-[#6f9575]" />
+          <div>
+            <h3 className="text-[12px] font-semibold">Automation with a safety net</h3>
+            <p className="mt-1.5 text-[10px] leading-5 text-[#81917f]">Provider checks, consent rules and human approval protect customer-facing workflows. Unknown readiness should stop execution rather than guess.</p>
+            <Link href="/automation/settings" className="mt-3 inline-flex items-center gap-1.5 text-[11px] font-semibold text-[#216551]">Review your guardrails <ArrowRight size={12} /></Link>
+          </div>
+        </aside>
       </section>
+
+      <div className="flex flex-col justify-between gap-2 border-t border-[#e4eae6] pt-4 text-[9px] text-[#9aa69e] sm:flex-row">
+        <span>Latest template sync: {relativeTime(latestSync?.started_at ?? null)}{latestSync?.status ? ` · ${latestSync.status.replaceAll('_', ' ')}` : ''}</span>
+        <span>{attentionCount ? `${attentionCount} item${attentionCount === 1 ? '' : 's'} currently need review` : 'No detected overview blockers'}</span>
+      </div>
     </div>
   );
 }
