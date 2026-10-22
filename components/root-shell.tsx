@@ -41,9 +41,11 @@ export function RootShell({ children }: { children: ReactNode }) {
     return <>{children}</>;
   }
 
-  // CRM Studio is a workspace inside SalsysOS, not a replacement for the
-  // product-level navigation. Keep the global SalsysOS rail/drawer mounted and
-  // let CRM own only its inner workspace shell.
+  // CRM Studio is a module inside SalsysOS. The product-level SalsysOS rail
+  // remains permanently mounted on the left; CRM owns only the workspace to
+  // its right. The expanded main menu may overlay the CRM workspace exactly as
+  // it does for the rest of the product, while the collapsed 64px rail remains
+  // visible at all times on desktop.
   if (isCrmStudioPath(pathname)) {
     return (
       <div className="salsys-meta-sidebar-shell crm-studio-global-shell">
@@ -59,6 +61,12 @@ export function RootShell({ children }: { children: ReactNode }) {
             .crm-studio-global-host > div > aside[aria-label='CRM Operations navigation'] + div {
               margin-left: calc(238px + 4rem) !important;
               width: calc(100% - 238px - 4rem) !important;
+            }
+          }
+
+          @media (min-width: 651px) and (max-width: 1023px) {
+            .crm-studio-global-host > div > aside[aria-label='CRM Operations navigation'] {
+              left: 0 !important;
             }
           }
         `}</style>
