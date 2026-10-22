@@ -33,6 +33,9 @@ type FacebookSdk = {
       override_default_response_type: true;
       extras: {
         setup: Record<string, never>;
+        featureType?: 'whatsapp_business_app_onboarding';
+        sessionInfoVersion?: '3';
+        version?: 'v4';
       };
     },
   ): void;
@@ -48,6 +51,7 @@ declare global {
 type SessionInfo = {
   wabaId: string;
   phoneNumberId: string | null;
+  coexistence: boolean;
 };
 
 type StartResponse = {
@@ -67,6 +71,7 @@ type WhatsAppEmbeddedSignupButtonProps = {
   configId: string;
   graphVersion: string;
   mode?: 'connect' | 'reconnect';
+  onboardingMode?: 'coexistence' | 'cloud_api';
 };
 
 let sdkLoadPromise: Promise<void> | null = null;
@@ -162,6 +167,7 @@ export function WhatsAppEmbeddedSignupButton({
   configId,
   graphVersion,
   mode = 'connect',
+  onboardingMode = 'coexistence',
 }: WhatsAppEmbeddedSignupButtonProps) {
   const [sdkReady, setSdkReady] = useState(false);
   const [opening, setOpening] = useState(false);
@@ -176,6 +182,7 @@ export function WhatsAppEmbeddedSignupButton({
   const intentPromiseRef = useRef<Promise<string> | null>(null);
 
   const configured = Boolean(appId && configId);
+  const coexistence = onboardingMode === 'coexistence';
 
   useEffect(() => {
     let active = true;
@@ -239,6 +246,10 @@ export function WhatsAppEmbeddedSignupButton({
             waba_id: sessionRef.current.wabaId,
             phone_number_id:
               sessionRef.current.phoneNumberId,
+            onboarding_mode:
+              sessionRef.current.coexistence
+                ? 'coexistence'
+                : 'cloud_api',
           }),
         },
       );
@@ -255,7 +266,10 @@ export function WhatsAppEmbeddedSignupButton({
       target.searchParams.delete('error');
       target.searchParams.set(
         'notice',
-        payload.message || 'WhatsApp Business connected successfully.',
+        payload.message ||
+          (sessionRef.current.coexistence
+            ? 'WhatsApp Business app connected in coexistence mode.'
+            : 'WhatsApp Business connected successfully.'),
       );
       window.location.assign(target.toString());
     } catch (completeError) {
@@ -302,7 +316,11 @@ export function WhatsAppEmbeddedSignupButton({
           ? (record.data as Record<string, unknown>)
           : {};
 
-      if (eventName === 'FINISH') {
+      const coexistenceFinish =
+        eventName === 'FINISH_WHATSAPP_BUSINESS_APP_ONBOARDING';
+      const standardFinish = eventName === 'FINISH';
+
+      if (standardFinish || coexistenceFinish) {
         const wabaId =
           typeof eventData.waba_id === 'string'
             ? eventData.waba_id.trim()
@@ -326,6 +344,7 @@ export function WhatsAppEmbeddedSignupButton({
             phoneNumberId && /^\d+$/.test(phoneNumberId)
               ? phoneNumberId
               : null,
+          coexistence: coexistenceFinish,
         };
 
         void completeIfReady();
@@ -433,12 +452,27 @@ export function WhatsAppEmbeddedSignupButton({
         config_id: configId,
         response_type: 'code',
         override_default_response_type: true,
-        extras: {
-          setup: {},
-        },
+        extras: coexistence
+          ? {
+              setup: {},
+              featureType: 'whatsapp_business_app_onboarding',
+              sessionInfoVersion: '3',
+              version: 'v4',
+            }
+          : {
+              setup: {},
+              version: 'v4',
+            },
       },
     );
-  }, [completeIfReady, configId, configured, sdkReady, startIntent]);
+  }, [
+    coexistence,
+    completeIfReady,
+    configId,
+    configured,
+    sdkReady,
+    startIntent,
+  ]);
 
   const reconnect = mode === 'reconnect';
   const busy = opening || completing;
@@ -464,13 +498,23 @@ export function WhatsAppEmbeddedSignupButton({
         {completing
           ? 'Saving WhatsApp...'
           : opening
-            ? 'Complete setup in Meta...'
+            ? coexistence
+              ? 'Complete coexistence setup in Meta...'
+              : 'Complete setup in Meta...'
             : !configured
               ? 'WhatsApp onboarding not configured'
               : reconnect
                 ? 'Reconnect WhatsApp'
-                : 'Continue with Meta'}
+                : coexistence
+                  ? 'Connect WhatsApp Business app'
+                  : 'Continue with Meta'}
       </button>
+
+      {!reconnect && coexistence ? (
+        <p className="max-w-sm text-[10px] leading-4 text-slate-500">
+          Coexistence keeps the same eligible number active in the WhatsApp Business app while SalsysOS connects it to the Cloud API.
+        </p>
+      ) : null}
 
       {error ? (
         <div className="max-w-sm text-[11px] leading-5 text-rose-600">
