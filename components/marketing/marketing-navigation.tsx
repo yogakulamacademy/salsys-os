@@ -4,11 +4,21 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
   Activity,
+  BarChart3,
+  CheckCircle2,
   ChevronDown,
+  CircleDollarSign,
   FileSearch,
+  Gauge,
   GitBranch,
+  Globe2,
   LineChart,
+  Link2,
   Megaphone,
+  Search,
+  Settings2,
+  ShieldCheck,
+  Sparkles,
   Target,
   UsersRound,
 } from 'lucide-react';
@@ -17,6 +27,7 @@ type NavigationItem = {
   href: string;
   label: string;
   icon: React.ComponentType<{ size?: number; className?: string }>;
+  badge?: string;
 };
 
 type NavigationGroup = {
@@ -26,27 +37,58 @@ type NavigationGroup = {
 
 const groups: NavigationGroup[] = [
   {
+    label: 'Overview',
+    items: [
+      { href: '/marketing', label: 'Marketing Command Center', icon: Gauge },
+    ],
+  },
+  {
     label: 'Paid growth',
     items: [
-      { href: '/campaigns', label: 'Campaigns', icon: Target },
-      { href: '/paid-media-leads', label: 'Paid media leads', icon: UsersRound },
-      { href: '/re-engaged', label: 'Lead activity', icon: Activity },
+      { href: '/campaigns', label: 'Campaigns', icon: Megaphone },
+      { href: '/paid-media-leads', label: 'Paid Media Leads', icon: UsersRound },
+      { href: '/re-engaged', label: 'Re-engaged Leads', icon: Activity },
     ],
   },
   {
     label: 'Organic growth',
-    items: [{ href: '/seo', label: 'SEO / AEO', icon: FileSearch }],
+    items: [
+      { href: '/seo', label: 'SEO Overview', icon: Globe2 },
+      { href: '/seo/search-performance', label: 'Search Performance', icon: Search },
+      { href: '/seo/content-opportunities', label: 'Content Opportunities', icon: Sparkles },
+      { href: '/seo/technical', label: 'Technical SEO', icon: ShieldCheck },
+      { href: '/seo/ai-answer-visibility', label: 'AI Answer Visibility', icon: Sparkles, badge: 'Preview' },
+    ],
   },
   {
     label: 'Analysis',
     items: [
-      { href: '/attribution', label: 'Attribution', icon: LineChart },
-      { href: '/funnel', label: 'Funnels', icon: GitBranch },
+      { href: '/analytics', label: 'Analytics', icon: LineChart },
+      { href: '/funnel', label: 'Funnel', icon: GitBranch },
+      { href: '/attribution', label: 'Attribution', icon: Link2 },
+      { href: '/revenue', label: 'Revenue', icon: CircleDollarSign },
+    ],
+  },
+  {
+    label: 'Measurement',
+    items: [
+      { href: '/tracking', label: 'Tracking', icon: Globe2 },
+      { href: '/tracking/conversion-health', label: 'Conversion Health', icon: CheckCircle2 },
+      { href: '/tracking/data-coverage', label: 'Data Coverage', icon: ShieldCheck },
+    ],
+  },
+  {
+    label: 'Settings',
+    items: [
+      { href: '/marketing/integrations', label: 'Marketing Integrations', icon: Link2 },
+      { href: '/marketing/tracking-sources', label: 'Tracking Sources', icon: Settings2 },
     ],
   },
 ];
 
 function isActive(pathname: string, href: string) {
+  if (href === '/seo') return pathname === '/seo';
+  if (href === '/tracking') return pathname === '/tracking';
   return pathname === href || pathname.startsWith(`${href}/`);
 }
 
@@ -61,7 +103,7 @@ function NavigationLinks({ mobile = false }: { mobile?: boolean }) {
             {group.label}
           </div>
           <div className="space-y-0.5">
-            {group.items.map(({ href, label, icon: Icon }) => {
+            {group.items.map(({ href, label, icon: Icon, badge }) => {
               const active = isActive(pathname, href);
               return (
                 <Link
@@ -82,7 +124,12 @@ function NavigationLinks({ mobile = false }: { mobile?: boolean }) {
                         : 'text-[#91a096] transition group-hover:text-[#216551]'
                     }
                   />
-                  <span>{label}</span>
+                  <span className="min-w-0 flex-1">{label}</span>
+                  {badge ? (
+                    <span className="rounded bg-[#eee8f5] px-1.5 py-0.5 text-[8px] font-semibold text-[#866d9d]">
+                      {badge}
+                    </span>
+                  ) : null}
                 </Link>
               );
             })}
@@ -105,7 +152,7 @@ export function MarketingNavigation() {
         <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3.5 text-sm font-semibold text-[#192e29] [&::-webkit-details-marker]:hidden">
           <span className="flex items-center gap-2.5">
             <span className="grid h-8 w-8 place-items-center rounded-lg bg-[#eaf4ed] text-[#216551]">
-              <Megaphone size={16} />
+              <BarChart3 size={16} />
             </span>
             {current?.label || 'Marketing'}
           </span>
