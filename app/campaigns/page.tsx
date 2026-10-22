@@ -1,6 +1,4 @@
-import Link from "next/link";
-
-import { ArrowRight, BarChart3, Route } from "lucide-react";
+import { BarChart3 } from "lucide-react";
 
 import { CampaignsIntelligenceWorkspace } from "@/components/campaigns-intelligence-workspace";
 import type { CampaignWorkspaceFilters } from "@/components/campaigns-workspace";
@@ -29,23 +27,9 @@ export default async function CampaignsPage({ searchParams }: CampaignsPageProps
   return (
     <div className="space-y-4">
       <PageHeader
-        eyebrow="Growth intelligence"
-        title="Campaigns"
-        description="Understand which campaigns are influencing leads, quality, and revenue."
-        actions={
-          <div className="flex flex-wrap gap-2">
-            <Link href="/attribution" className="btn-secondary">
-              <Route size={15} /> Attribution
-            </Link>
-            <Link href="/paid-media-leads" className="btn-secondary">
-              Paid-media leads
-            </Link>
-            <Link href="/funnel" className="btn-primary">
-              Funnel
-              <ArrowRight size={15} />
-            </Link>
-          </div>
-        }
+        eyebrow="Campaigns"
+        title="Campaign Performance"
+        description="Connect advertising spend with CRM outcomes and revenue."
       />
 
       {(workspace.googleError || workspace.metaError) ? (
