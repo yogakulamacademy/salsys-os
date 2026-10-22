@@ -21,18 +21,17 @@ $crmResult = yogakulam_crm_capture_lead([
     'timezone' => $_POST['timezone'] ?? null,
     'message' => $_POST['message'] ?? $_POST['query'] ?? null,
 
-    // SAL is the preferred website compatibility prefix during the Salsys cutover.
-    // The universal SDK still uses salsys_* canonically, and old yk_* values remain
-    // readable so existing visitors/sessions do not lose continuity.
-    'sal_visitor_id' => $_POST['sal_visitor_id'] ?? $_POST['salsys_visitor_id'] ?? $_POST['yk_visitor_id'] ?? null,
-    'sal_session_id' => $_POST['sal_session_id'] ?? $_POST['salsys_session_id'] ?? $_POST['yk_session_id'] ?? null,
-    'sal_first_touch' => $_POST['sal_first_touch'] ?? $_POST['salsys_first_touch'] ?? $_POST['yk_first_touch'] ?? null,
-    'sal_session_touch' => $_POST['sal_session_touch'] ?? $_POST['salsys_session_touch'] ?? $_POST['yk_session_touch'] ?? null,
+    // Canonical Salsys tracking fields. Legacy yk_* fallbacks remain temporary
+    // migration safety for existing live sessions until the website cutover is complete.
+    'salsys_visitor_id' => $_POST['salsys_visitor_id'] ?? $_POST['yk_visitor_id'] ?? null,
+    'salsys_session_id' => $_POST['salsys_session_id'] ?? $_POST['yk_session_id'] ?? null,
+    'salsys_first_touch' => $_POST['salsys_first_touch'] ?? $_POST['yk_first_touch'] ?? null,
+    'salsys_session_touch' => $_POST['salsys_session_touch'] ?? $_POST['yk_session_touch'] ?? null,
 
     'metadata' => [
         'website_enquiry_id' => $websiteEnquiryId,
         'page' => $_SERVER['HTTP_REFERER'] ?? null,
-        'tracking_alias' => 'sal',
+        'tracking_namespace' => 'salsys',
     ],
 ]);
 
