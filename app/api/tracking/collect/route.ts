@@ -277,7 +277,7 @@ export async function POST(request: NextRequest) {
           p_consent_marketing: payload.consent.marketing,
           p_consent_mode: payload.consent.mode || null,
           p_consent_source:
-            payload.consent.source || "yk_tracker",
+            payload.consent.source || "salsys_tracker",
           p_raw_event_id: rawEventResult.event_id,
           p_metadata: {
             adapter: "app/api/tracking/collect",
