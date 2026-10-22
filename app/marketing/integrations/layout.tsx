@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react';
 
 import { ExecutiveDecisionBrief } from '@/components/marketing/executive-decision-brief';
+import { IntegrationHealthInspectorGrid } from '@/components/marketing/integration-health-inspector-grid';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { createClient } from '@/lib/supabase/server';
 import { getWorkspaceContextForUser } from '@/lib/workspace';
@@ -14,19 +15,22 @@ type ConnectionRow = {
 };
 
 export default async function MarketingIntegrationsLayout({ children }: { children: ReactNode }) {
-  const summary = await getIntegrationHealth();
+  const health = await getIntegrationHealth();
 
   return (
     <div className="space-y-4">
       <ExecutiveDecisionBrief
         eyebrow="Integration health brief"
-        title={summary.title}
-        summary={summary.summary}
-        confidenceLabel={summary.confidenceLabel}
+        title={health.title}
+        summary={health.summary}
+        confidenceLabel={health.confidenceLabel}
         confidenceDetail="Integration health describes connection state visible to SalsysOS. It does not claim that every downstream API, historical sync or event stream is complete unless supporting evidence is available."
-        signals={summary.signals}
-        actions={summary.actions}
+        signals={health.signals}
+        actions={health.actions}
       />
+
+      <IntegrationHealthInspectorGrid items={health.items} />
+
       {children}
     </div>
   );
@@ -60,7 +64,6 @@ async function getIntegrationHealth() {
     }));
     const connected = states.filter((item) => item.connection?.status === 'connected').length;
     const attention = states.filter((item) => item.connection && ['error', 'expired', 'revoked'].includes(item.connection.status)).length;
-    const missing = states.filter((item) => !item.connection || ['disconnected', 'revoked'].includes(item.connection.status)).length;
     const coverage = (connected / EXPECTED_PROVIDERS.length) * 100;
     const priority = states.find((item) => item.connection && ['error', 'expired'].includes(item.connection.status))
       ?? states.find((item) => !item.connection || ['disconnected', 'revoked'].includes(item.connection?.status ?? ''))
@@ -87,6 +90,11 @@ async function getIntegrationHealth() {
         tone: item.connection?.status === 'connected' ? 'positive' as const : ['error', 'expired'].includes(item.connection?.status ?? '') ? 'risk' as const : 'watch' as const,
       })),
       actions: priority ? [{ label: `Review ${label(priority.provider)}`, href: `/settings/integrations${priority.provider === 'whatsapp' ? '/whatsapp' : ''}` }] : [],
+      items: states.map((item) => ({
+        provider: item.provider,
+        status: item.connection?.status ?? null,
+        updatedAt: item.connection?.updated_at ?? null,
+      })),
     };
   } catch (error) {
     return unavailable(error instanceof Error ? error.message : 'Integration health is unavailable.');
@@ -105,6 +113,7 @@ function unavailable(detail: string) {
       { label: 'WhatsApp', value: 'Unknown', detail, tone: 'watch' as const },
     ],
     actions: [{ label: 'Open integration controls', href: '/settings/integrations' }],
+    items: EXPECTED_PROVIDERS.map((provider) => ({ provider, status: null, updatedAt: null })),
   };
 }
 
