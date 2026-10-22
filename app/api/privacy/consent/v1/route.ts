@@ -43,6 +43,14 @@ function browserOrigin(request: NextRequest) {
   return request.headers.get('origin')?.trim() || null;
 }
 
+function publicSiteId(request: NextRequest) {
+  return (
+    request.nextUrl.searchParams.get('site_id')?.trim() ||
+    request.headers.get('x-salsys-site-id')?.trim() ||
+    null
+  );
+}
+
 function text(value: unknown, max: number) {
   return typeof value === 'string' && value.trim()
     ? value.trim().slice(0, max)
@@ -51,7 +59,8 @@ function text(value: unknown, max: number) {
 
 export async function OPTIONS(request: NextRequest) {
   const origin = browserOrigin(request);
-  const source = await resolveBrowserTrackingSource(origin);
+  const siteId = publicSiteId(request);
+  const source = await resolveBrowserTrackingSource(origin, siteId);
 
   return new NextResponse(null, {
     status: source ? 204 : 403,
@@ -61,11 +70,21 @@ export async function OPTIONS(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   const origin = browserOrigin(request);
-  const source = await resolveBrowserTrackingSource(origin);
+  const siteId = publicSiteId(request);
+  const source = await resolveBrowserTrackingSource(origin, siteId);
   const cors = corsHeadersForTrackingOrigin(origin, Boolean(source));
 
   if (!source) {
-    return json({ ok: false, error: 'Unrecognized browser tracking origin.' }, 403, cors);
+    return json(
+      {
+        ok: false,
+        error: siteId
+          ? 'Tracking Site ID does not match this browser origin.'
+          : 'Unrecognized browser tracking origin.',
+      },
+      403,
+      cors,
+    );
   }
 
   const rate = await consumeTrackingRateLimit(source);
@@ -155,10 +174,15 @@ export async function POST(request: NextRequest) {
             event_id: eventId,
             origin,
             gpc,
+            public_site_id: source.publicSiteId,
+            site_id_verified: source.siteIdVerified,
           },
           p_metadata: {
             tracking_source_id: source.id,
             source_key: source.sourceKey,
+            organization_site_id: source.organizationSiteId,
+            public_site_id: source.publicSiteId,
+            site_id_verified: source.siteIdVerified,
             user_agent_present: Boolean(request.headers.get('user-agent')),
           },
         },
@@ -179,6 +203,8 @@ export async function POST(request: NextRequest) {
       {
         ok: true,
         visitor_id: visitorId,
+        site_id: source.publicSiteId,
+        site_id_verified: source.siteIdVerified,
         gpc,
         notice_version: sourceRow?.privacy_notice_version ?? null,
         receipts,
