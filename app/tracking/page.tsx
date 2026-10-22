@@ -1,3 +1,5 @@
+import Link from "next/link";
+
 import {
   Activity,
   AlertTriangle,
@@ -365,16 +367,26 @@ export default async function TrackingPage() {
           </div>
 
           <p className="mt-2 text-sm leading-6 text-slate-500">
-            Your website backend should POST JSON to{" "}
-            <InlineCode>/api/leads/capture</InlineCode> with the{" "}
-            <InlineCode>X-Website-Secret</InlineCode> header. Never place that
-            secret in JavaScript, GTM or HTML.
+            This card describes the legacy lead-capture handoff to{" "}
+            <InlineCode>/api/leads/capture</InlineCode>. For universal server-side
+            tracking, create a Server Events API source and use{" "}
+            <InlineCode>/api/events/v1</InlineCode> with a source key + backend-only secret.
           </p>
 
+          <div className="mt-4 flex flex-wrap gap-2">
+            <Link
+              href="/tracking/sources#server-tracking"
+              className="inline-flex items-center gap-2 rounded-xl bg-emerald-700 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-emerald-800"
+            >
+              Set up Server Tracking
+              <ExternalLink size={15} />
+            </Link>
+          </div>
+
           <div className="tracking-server-note mt-4 rounded-xl bg-emerald-50 p-4 text-xs leading-5 text-emerald-800">
-            Duplicate submissions are idempotent, and repeat enquiries with the
-            same email/phone are matched to the existing CRM lead instead of
-            creating another lead.
+            Server Events API supports web.*, lead.*, booking.*, payment.* and
+            enrollment.* events. Keep the secret on the backend only. Reuse the
+            same event_id on retries so duplicate deliveries stay idempotent.
           </div>
 
           <div className="tracking-handoff-card mt-4 rounded-xl border border-slate-200 p-4">
@@ -391,11 +403,11 @@ export default async function TrackingPage() {
 
               <span className="text-slate-300">→</span>
 
-              <Pill>CRM lead</Pill>
+              <Pill>Server event</Pill>
 
               <span className="text-slate-300">→</span>
 
-              <Pill>Historical touchpoints linked</Pill>
+              <Pill>CRM / revenue evidence</Pill>
             </div>
           </div>
         </div>
