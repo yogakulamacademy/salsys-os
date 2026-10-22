@@ -1,6 +1,6 @@
 'use client';
 
-import { Check, Copy, KeyRound, Pencil, RotateCcw, Save, Server, X } from 'lucide-react';
+import { Check, Copy, KeyRound, Pencil, RotateCcw, Save, Server, Trash2, X } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 
 type ServerSource = {
@@ -48,12 +48,22 @@ function formatWhen(value: string | null) {
   }).format(date);
 }
 
+function canDeleteSource(source: ServerSource) {
+  return (
+    Number(source.accepted_event_count ?? 0) === 0 &&
+    Number(source.duplicate_event_count ?? 0) === 0 &&
+    Number(source.rejected_event_count ?? 0) === 0 &&
+    !source.last_seen_at
+  );
+}
+
 export function ServerTrackingSourceManager() {
   const [sources, setSources] = useState<ServerSource[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [rotatingId, setRotatingId] = useState<string | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
   const [revealedSecret, setRevealedSecret] = useState<{
     sourceId: string;
     sourceKey: string;
@@ -114,6 +124,31 @@ export function ServerTrackingSourceManager() {
     }
   }
 
+  async function deleteSource(source: ServerSource) {
+    const confirmed = window.confirm(
+      `Delete “${source.name}” (${source.source_key ?? source.source_system}) permanently? This is only allowed because the source has never received an event.`,
+    );
+    if (!confirmed) return;
+
+    setDeletingId(source.id);
+    setError(null);
+    try {
+      const response = await fetch(`/api/tracking/sources/${encodeURIComponent(source.id)}`, {
+        method: 'DELETE',
+      });
+      const body = await response.json().catch(() => ({}));
+      if (!response.ok || !body?.ok) {
+        throw new Error(typeof body?.error === 'string' ? body.error : 'Unable to delete server tracking source.');
+      }
+      if (revealedSecret?.sourceId === source.id) setRevealedSecret(null);
+      await load();
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : 'Unable to delete server tracking source.');
+    } finally {
+      setDeletingId(null);
+    }
+  }
+
   const sourceWithSecret = useMemo(
     () => sources.find((source) => source.id === revealedSecret?.sourceId) ?? null,
     [sources, revealedSecret],
@@ -126,7 +161,7 @@ export function ServerTrackingSourceManager() {
           <div className="eyebrow">Manage server tracking</div>
           <h2 className="section-title mt-1">Edit existing Server Events API sources</h2>
           <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-500">
-            Rename a backend source, change its event permissions and limits, pause delivery, or rotate its secret. Existing secrets are never displayed again.
+            Rename a backend source, change its event permissions and limits, pause delivery, rotate its secret, or delete an unused source. Sources with event history are protected from permanent deletion.
           </p>
         </div>
         <button
@@ -213,6 +248,16 @@ export function ServerTrackingSourceManager() {
                     >
                       <KeyRound size={13} /> {rotatingId === source.id ? 'Rotating…' : 'Rotate secret'}
                     </button>
+                    {canDeleteSource(source) ? (
+                      <button
+                        type="button"
+                        disabled={deletingId === source.id}
+                        onClick={() => void deleteSource(source)}
+                        className="inline-flex items-center gap-1.5 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs font-semibold text-rose-700 disabled:opacity-50"
+                      >
+                        <Trash2 size={13} /> {deletingId === source.id ? 'Deleting…' : 'Delete'}
+                      </button>
+                    ) : null}
                   </div>
                 </div>
               </div>
