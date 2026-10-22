@@ -189,6 +189,54 @@ export async function PATCH(
   );
 }
 
+export async function DELETE(
+  request: NextRequest,
+  context: { params: Promise<{ id: string }> },
+) {
+  if (!sameOrigin(request)) return jsonError('Invalid request origin.', 403);
+
+  const auth = await adminWorkspace();
+  if ('error' in auth) return auth.error;
+
+  const { id } = await context.params;
+  const source = await loadServerSource(id, auth.organizationId);
+  if (!source) return jsonError('Server tracking source not found.', 404);
+
+  const hasHistory =
+    Number(source.accepted_event_count ?? 0) > 0 ||
+    Number(source.duplicate_event_count ?? 0) > 0 ||
+    Number(source.rejected_event_count ?? 0) > 0 ||
+    Boolean(source.last_seen_at);
+
+  if (hasHistory) {
+    return jsonError(
+      'This source already has tracking history and cannot be permanently deleted. Pause it instead to preserve reporting and audit history.',
+      409,
+    );
+  }
+
+  const admin = createAdminClient();
+  const { data, error } = await admin
+    .from('tracking_sources')
+    .delete()
+    .eq('id', id)
+    .eq('organization_id', auth.organizationId)
+    .select('id,name')
+    .single();
+
+  if (error || !data) {
+    return jsonError(
+      error?.message ?? 'Unable to delete unused server tracking source.',
+      500,
+    );
+  }
+
+  return NextResponse.json(
+    { ok: true, deleted: data },
+    { headers: { 'Cache-Control': 'no-store' } },
+  );
+}
+
 export async function POST(
   request: NextRequest,
   context: { params: Promise<{ id: string }> },
