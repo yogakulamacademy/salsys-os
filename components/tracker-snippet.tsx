@@ -8,21 +8,27 @@ type WebsiteSource = {
   name: string;
   hostname: string | null;
   siteId: string;
+  aliases: string[];
 };
 
 function sourceFromRow(row: Record<string, unknown>): WebsiteSource | null {
-  if (row.source_type !== 'website') return null;
+  if (row.source_type !== 'website' || row.status !== 'active') return null;
   const metadata =
     row.metadata && typeof row.metadata === 'object' && !Array.isArray(row.metadata)
       ? (row.metadata as Record<string, unknown>)
       : {};
+  if (metadata.merged_alias === true) return null;
   const siteId = typeof metadata.public_site_id === 'string' ? metadata.public_site_id : '';
   if (!siteId) return null;
+  const aliases = Array.isArray(metadata.site_aliases)
+    ? metadata.site_aliases.filter((value): value is string => typeof value === 'string')
+    : [];
   return {
     id: String(row.id),
     name: String(row.name ?? row.hostname ?? 'Website'),
     hostname: typeof row.hostname === 'string' ? row.hostname : null,
     siteId,
+    aliases,
   };
 }
 
@@ -131,8 +137,13 @@ export function TrackerSnippet() {
           </select>
         </label>
         <div className="mt-3 text-xs text-slate-500">
-          Public Site ID: <code className="font-semibold text-slate-800">{selected.siteId}</code>. The ID is not a secret; Salsys verifies it against the browser origin.
+          Public Site ID: <code className="font-semibold text-slate-800">{selected.siteId}</code>. The ID is not a secret; Salsys verifies it against the canonical domain and its registered aliases.
         </div>
+        {selected.aliases.length ? (
+          <div className="mt-2 text-xs text-slate-500">
+            Also valid on: <span className="font-medium text-slate-700">{selected.aliases.join(', ')}</span>
+          </div>
+        ) : null}
       </div>
 
       <div className="tracking-snippet-block">
