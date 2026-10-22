@@ -19,6 +19,11 @@ const WEBSITE_PLATFORMS = new Set([
   'vue',
   'angular',
 ]);
+const SITE_ENVIRONMENTS = new Set([
+  'production',
+  'staging',
+  'development',
+]);
 
 function jsonError(message: string, status: number) {
   return NextResponse.json(
@@ -41,11 +46,13 @@ function cleanText(value: unknown, max: number) {
 }
 
 function slug(value: string) {
-  return value
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '_')
-    .replace(/^_+|_+$/g, '')
-    .slice(0, 60) || 'external_system';
+  return (
+    value
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '_')
+      .replace(/^_+|_+$/g, '')
+      .slice(0, 60) || 'external_system'
+  );
 }
 
 function sha256(value: string) {
@@ -61,7 +68,13 @@ function normalizeHostname(value: unknown) {
     const hostname = url.hostname.toLowerCase().replace(/\.$/, '');
     if (!hostname || hostname.length > 253) return null;
     if (!/^[a-z0-9.-]+$/.test(hostname)) return null;
-    if (hostname.startsWith('.') || hostname.endsWith('.') || hostname.includes('..')) return null;
+    if (
+      hostname.startsWith('.') ||
+      hostname.endsWith('.') ||
+      hostname.includes('..')
+    ) {
+      return null;
+    }
     return hostname;
   } catch {
     return null;
@@ -105,7 +118,7 @@ export async function GET() {
   const { data, error } = await admin
     .from('tracking_sources')
     .select(
-      'id,name,source_type,source_system,source_key,auth_mode,hostname,status,allowed_event_prefixes,max_payload_bytes,rate_limit_per_minute,accepted_event_count,duplicate_event_count,rejected_event_count,last_seen_at,last_rejected_at,privacy_mode,honor_gpc,require_consent_for_optional,privacy_notice_version,metadata,created_at,updated_at',
+      'id,organization_site_id,name,source_type,source_system,source_key,auth_mode,hostname,status,allowed_event_prefixes,max_payload_bytes,rate_limit_per_minute,accepted_event_count,duplicate_event_count,rejected_event_count,last_seen_at,last_rejected_at,privacy_mode,honor_gpc,require_consent_for_optional,privacy_notice_version,metadata,created_at,updated_at',
     )
     .eq('organization_id', auth.organizationId)
     .order('created_at', { ascending: true });
@@ -135,7 +148,8 @@ export async function POST(request: NextRequest) {
   const name = cleanText(raw.name, 120);
   const requestedType = cleanText(raw.sourceType ?? raw.source_type, 30);
   const sourceType =
-    requestedType && ['website', 'client', 'api', 'webhook', 'system'].includes(requestedType)
+    requestedType &&
+    ['website', 'client', 'api', 'webhook', 'system'].includes(requestedType)
       ? requestedType
       : 'api';
 
@@ -145,24 +159,53 @@ export async function POST(request: NextRequest) {
   const isWebsite = sourceType === 'website';
   const isPublishableClient = sourceType === 'client';
 
-  if (isPublishableClient && (!requestedPlatform || !CLIENT_PLATFORMS.has(requestedPlatform))) {
-    return jsonError('Client sources require platform: android, ios, shopify, or web.', 400);
+  if (
+    isPublishableClient &&
+    (!requestedPlatform || !CLIENT_PLATFORMS.has(requestedPlatform))
+  ) {
+    return jsonError(
+      'Client sources require platform: android, ios, shopify, or web.',
+      400,
+    );
   }
 
-  if (isWebsite && requestedPlatform && !WEBSITE_PLATFORMS.has(requestedPlatform)) {
+  if (
+    isWebsite &&
+    requestedPlatform &&
+    !WEBSITE_PLATFORMS.has(requestedPlatform)
+  ) {
     return jsonError(
       'Website platform must be custom_web, wordpress, webflow, framer, react, nextjs, vue, or angular.',
       400,
     );
   }
 
-  const platform = isWebsite ? requestedPlatform ?? 'custom_web' : requestedPlatform;
+  const platform = isWebsite
+    ? requestedPlatform ?? 'custom_web'
+    : requestedPlatform;
   const hostname = isWebsite
     ? normalizeHostname(raw.hostname ?? raw.origin ?? raw.url)
     : null;
 
   if (isWebsite && !hostname) {
-    return jsonError('Website sources require a valid hostname or origin.', 400);
+    return jsonError(
+      'Website sources require a valid hostname or origin.',
+      400,
+    );
+  }
+
+  const requestedEnvironment =
+    cleanText(raw.environment ?? raw.siteEnvironment ?? raw.site_environment, 30)
+      ?.toLowerCase() ?? 'production';
+  const environment = SITE_ENVIRONMENTS.has(requestedEnvironment)
+    ? requestedEnvironment
+    : null;
+
+  if (isWebsite && !environment) {
+    return jsonError(
+      'Website environment must be production, staging, or development.',
+      400,
+    );
   }
 
   const defaultSourceSystem = isWebsite
@@ -188,9 +231,14 @@ export async function POST(request: NextRequest) {
   if (isWebsite) {
     allowedEventPrefixes = ['web.'];
   } else if (isPublishableClient) {
-    const platformPrefix = platform === 'android' || platform === 'ios' ? 'app.' : 'web.';
-    allowedEventPrefixes = allowedEventPrefixes.filter((prefix) => prefix === platformPrefix);
-    if (allowedEventPrefixes.length === 0) allowedEventPrefixes = [platformPrefix];
+    const platformPrefix =
+      platform === 'android' || platform === 'ios' ? 'app.' : 'web.';
+    allowedEventPrefixes = allowedEventPrefixes.filter(
+      (prefix) => prefix === platformPrefix,
+    );
+    if (allowedEventPrefixes.length === 0) {
+      allowedEventPrefixes = [platformPrefix];
+    }
   }
 
   const requestedLimit = Number(
@@ -225,13 +273,89 @@ export async function POST(request: NextRequest) {
     ? null
     : `sls_${randomBytes(32).toString('base64url')}`;
   const secretHash = secret ? sha256(secret) : null;
-  const authMode = isWebsite ? 'origin' : isPublishableClient ? 'publishable' : 'secret';
+  const authMode = isWebsite
+    ? 'origin'
+    : isPublishableClient
+      ? 'publishable'
+      : 'secret';
   const admin = createAdminClient();
+
+  if (isWebsite && hostname && environment) {
+    const { data: provision, error: provisionError } = await admin.rpc(
+      'provision_browser_tracking_source_v1',
+      {
+        p_organization_id: auth.organizationId,
+        p_name: name,
+        p_hostname: hostname,
+        p_source_key: sourceKey,
+        p_source_system: sourceSystem,
+        p_platform: platform,
+        p_max_payload_bytes: maxPayloadBytes,
+        p_rate_limit_per_minute: rateLimitPerMinute,
+        p_privacy_notice_version: privacyNoticeVersion,
+        p_provisioned_by: auth.user.id,
+        p_environment: environment,
+      },
+    );
+
+    if (provisionError || !provision?.ok) {
+      if (provisionError?.code === '23505') {
+        return jsonError(
+          `The hostname ${hostname} is already registered to another workspace or source.`,
+          409,
+        );
+      }
+      return jsonError(
+        provisionError?.message ?? 'Unable to provision website tracking source.',
+        500,
+      );
+    }
+
+    const { data, error } = await admin
+      .from('tracking_sources')
+      .select(
+        'id,organization_site_id,name,source_type,source_system,source_key,auth_mode,hostname,status,allowed_event_prefixes,max_payload_bytes,rate_limit_per_minute,privacy_notice_version,metadata,created_at',
+      )
+      .eq('id', String(provision.tracking_source_id))
+      .eq('organization_id', auth.organizationId)
+      .single();
+
+    if (error || !data) {
+      return jsonError(
+        error?.message ?? 'Website source was provisioned but could not be reloaded.',
+        500,
+      );
+    }
+
+    return NextResponse.json(
+      {
+        ok: true,
+        source: data,
+        site: {
+          id: String(provision.organization_site_id),
+          hostname: String(provision.hostname),
+          environment: String(provision.environment),
+        },
+        credentials: {
+          source_key: data.source_key,
+          origin_bound: true,
+          publishable: false,
+          secret: null,
+          shown_once: false,
+        },
+      },
+      {
+        status: 201,
+        headers: { 'Cache-Control': 'no-store' },
+      },
+    );
+  }
 
   const { data, error } = await admin
     .from('tracking_sources')
     .insert({
       organization_id: auth.organizationId,
+      organization_site_id: null,
       name,
       source_type: sourceType,
       source_system: sourceSystem,
@@ -251,49 +375,36 @@ export async function POST(request: NextRequest) {
         provisioned_by: auth.user.id,
         provisioned_via: 'app/api/tracking/sources',
         platform,
-        credential_class: isWebsite
-          ? 'origin_bound_browser'
-          : isPublishableClient
-            ? 'publishable_identifier'
-            : 'server_secret',
-        authority: isWebsite || isPublishableClient
+        credential_class: isPublishableClient
+          ? 'publishable_identifier'
+          : 'server_secret',
+        authority: isPublishableClient
           ? 'non_authoritative_client_telemetry'
           : 'trusted_server_source',
       },
     })
     .select(
-      'id,name,source_type,source_system,source_key,auth_mode,hostname,status,allowed_event_prefixes,max_payload_bytes,rate_limit_per_minute,privacy_notice_version,metadata,created_at',
+      'id,organization_site_id,name,source_type,source_system,source_key,auth_mode,hostname,status,allowed_event_prefixes,max_payload_bytes,rate_limit_per_minute,privacy_notice_version,metadata,created_at',
     )
     .single();
 
   if (error || !data) {
-    if (error?.code === '23505' && isWebsite && hostname) {
-      return jsonError(`A tracking source for ${hostname} already exists in this workspace.`, 409);
-    }
     return jsonError(error?.message ?? 'Unable to create tracking source.', 500);
   }
 
-  const credentials = isWebsite
+  const credentials = isPublishableClient
     ? {
-        source_key: sourceKey,
-        origin_bound: true,
-        publishable: false,
+        source_key: data.source_key,
+        publishable: true,
         secret: null,
         shown_once: false,
       }
-    : isPublishableClient
-      ? {
-          source_key: sourceKey,
-          publishable: true,
-          secret: null,
-          shown_once: false,
-        }
-      : {
-          source_key: sourceKey,
-          secret,
-          publishable: false,
-          shown_once: true,
-        };
+    : {
+        source_key: data.source_key,
+        secret,
+        publishable: false,
+        shown_once: true,
+      };
 
   return NextResponse.json(
     {
