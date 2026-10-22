@@ -70,7 +70,7 @@ export async function CrmWorkspaceFrame({ children }: { children: ReactNode }) {
   const identity = await resolveShellIdentity();
 
   return (
-    <div className={styles.studio}>
+    <div className={styles.studio} style={{ background: '#f8faf9' }}>
       <LiveRefresh enabled={!useMockData} />
       <CrmNavigation
         workspaceName={identity.workspaceName}
@@ -78,10 +78,21 @@ export async function CrmWorkspaceFrame({ children }: { children: ReactNode }) {
         profileRole={identity.profileRole}
       />
 
-      <div className={styles.contentShell}>
+      <div className={styles.contentShell} style={{ background: '#fbfcfb' }}>
         <CrmTopbar profileInitials={initials(identity.profileName)} />
         <CrmLeadInspectorBridge>
-          <main className={styles.main}>{children}</main>
+          <main
+            className={styles.main}
+            style={{
+              maxWidth: 1540,
+              paddingTop: 26,
+              paddingRight: 28,
+              paddingBottom: 48,
+              paddingLeft: 28,
+            }}
+          >
+            {children}
+          </main>
         </CrmLeadInspectorBridge>
       </div>
     </div>
