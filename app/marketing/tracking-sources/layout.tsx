@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react';
 
 import { ExecutiveDecisionBrief } from '@/components/marketing/executive-decision-brief';
+import { TrackingSourceInspectorGrid } from '@/components/marketing/tracking-source-inspector-grid';
 import { getTrackingPlatformWorkspace } from '@/lib/tracking-platform-data';
 
 export default async function MarketingTrackingSourcesLayout({ children }: { children: ReactNode }) {
@@ -8,10 +9,10 @@ export default async function MarketingTrackingSourcesLayout({ children }: { chi
   const total = workspace.sources.length;
   const healthy = workspace.sources.filter((source) => source.healthStatus === 'healthy').length;
   const idle = workspace.sources.filter((source) => source.healthStatus === 'idle').length;
-  const unhealthy = workspace.sources.filter((source) => ['misconfigured', 'error'].includes(source.healthStatus)).length;
+  const unhealthy = workspace.sources.filter((source) => ['misconfigured', 'degraded'].includes(source.healthStatus)).length;
   const notLive = workspace.sources.filter((source) => ['not_live', 'inactive'].includes(source.healthStatus)).length;
   const coverage = total > 0 ? (healthy / total) * 100 : null;
-  const priority = workspace.sources.find((source) => ['misconfigured', 'error'].includes(source.healthStatus))
+  const priority = workspace.sources.find((source) => ['misconfigured', 'degraded'].includes(source.healthStatus))
     ?? workspace.sources.find((source) => source.healthStatus === 'idle')
     ?? workspace.sources.find((source) => ['not_live', 'inactive'].includes(source.healthStatus))
     ?? null;
@@ -66,8 +67,32 @@ export default async function MarketingTrackingSourcesLayout({ children }: { chi
             tone: unhealthy > 0 ? 'risk' : 'positive',
           },
         ]}
-        actions={priority ? [{ label: 'Review source health', href: '#source-health', detail: `Inspect ${priority.name}` }] : []}
+        actions={priority ? [{ label: 'Review source health', href: '#source-inspector', detail: `Inspect ${priority.name}` }] : []}
       />
+
+      <div id="source-inspector">
+        <TrackingSourceInspectorGrid
+          sources={workspace.sources.map((source) => ({
+            id: source.id,
+            name: source.name,
+            platform: source.platform ?? source.sourceSystem ?? source.sourceType,
+            hostname: source.hostname,
+            healthStatus: source.healthStatus,
+            events24h: source.events24h,
+            events7d: source.events7d,
+            visitors7d: source.visitors7d,
+            sessions7d: source.sessions7d,
+            acceptedEventCount: source.acceptedEventCount,
+            duplicateEventCount: source.duplicateEventCount,
+            rejectedEventCount: source.rejectedEventCount,
+            lastSeenAt: source.lastSeenAt,
+            sdkName: source.sdkName,
+            sdkVersion: source.sdkVersion,
+            privacyNoticeVersion: source.privacyNoticeVersion,
+          }))}
+        />
+      </div>
+
       {children}
     </div>
   );
