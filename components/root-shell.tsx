@@ -36,16 +36,10 @@ function isCrmStudioPath(pathname: string) {
 export function RootShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
 
-  // Public/auth routes stay shellless.
   if (isShelllessPath(pathname)) {
     return <>{children}</>;
   }
 
-  // CRM Studio is a module inside SalsysOS. The product-level SalsysOS rail
-  // remains permanently mounted on the left; CRM owns only the workspace to
-  // its right. The expanded main menu may overlay the CRM workspace exactly as
-  // it does for the rest of the product, while the collapsed 64px rail remains
-  // visible at all times on desktop.
   if (isCrmStudioPath(pathname)) {
     return (
       <div className="salsys-meta-sidebar-shell crm-studio-global-shell">
@@ -53,20 +47,17 @@ export function RootShell({ children }: { children: ReactNode }) {
         <div className="crm-studio-global-host">{children}</div>
 
         <style jsx global>{`
-          @media (min-width: 1024px) {
-            .crm-studio-global-host > div > aside[aria-label='CRM Operations navigation'] {
-              left: 4rem !important;
-            }
-
-            .crm-studio-global-host > div > aside[aria-label='CRM Operations navigation'] + div {
-              margin-left: calc(238px + 4rem) !important;
-              width: calc(100% - 238px - 4rem) !important;
-            }
+          .crm-studio-global-host {
+            min-height: 100vh;
+            padding: 20px 20px 0;
+            background: #ffffff;
           }
 
-          @media (min-width: 651px) and (max-width: 1023px) {
-            .crm-studio-global-host > div > aside[aria-label='CRM Operations navigation'] {
-              left: 0 !important;
+          @media (min-width: 1024px) {
+            .crm-studio-global-host {
+              margin-left: 4rem;
+              width: calc(100% - 4rem);
+              padding: 20px 24px 0;
             }
           }
         `}</style>
