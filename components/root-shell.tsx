@@ -19,25 +19,22 @@ function isShelllessPath(pathname: string) {
 
 function isMarketingPath(pathname: string) {
   return [
+    '/marketing',
     '/campaigns',
     '/attribution',
     '/funnel',
     '/paid-media-leads',
     '/re-engaged',
     '/seo',
+    '/analytics',
+    '/revenue',
+    '/tracking',
   ].some((href) => pathname === href || pathname.startsWith(`${href}/`));
 }
 
 export function RootShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
 
-  // Do not mount the authenticated AppShell on public/auth pages. AppShell
-  // resolves profile + tenant context in effects. If it mounts while the user is
-  // still signed out, those effects settle to an empty workspace and React can
-  // preserve that same AppShell instance across the post-login navigation.
-  // Keeping auth pages shellless guarantees a fresh AppShell mount after a
-  // successful sign-in, so navigation and workspace identity resolve immediately
-  // without requiring a manual browser reload.
   if (isShelllessPath(pathname)) {
     return <>{children}</>;
   }
