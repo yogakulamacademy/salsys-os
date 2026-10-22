@@ -6,6 +6,17 @@ import type { ReactNode } from 'react';
 import { AppShell } from '@/components/app-shell';
 import { DesktopHoverSidebar } from '@/components/desktop-hover-sidebar';
 
+const CRM_STUDIO_PREFIXES = [
+  '/crm',
+  '/leads',
+  '/admissions',
+  '/follow-ups',
+  '/pipeline',
+  '/customer-360',
+  '/contact-intelligence',
+  '/data-quality',
+] as const;
+
 function isShelllessPath(pathname: string) {
   return (
     pathname === '/' ||
@@ -16,17 +27,19 @@ function isShelllessPath(pathname: string) {
   );
 }
 
+function isCrmStudioPath(pathname: string) {
+  return CRM_STUDIO_PREFIXES.some(
+    (prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`),
+  );
+}
+
 export function RootShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
 
-  // Do not mount the authenticated AppShell on public/auth pages. AppShell
-  // resolves profile + tenant context in effects. If it mounts while the user is
-  // still signed out, those effects settle to an empty workspace and React can
-  // preserve that same AppShell instance across the post-login navigation.
-  // Keeping auth pages shellless guarantees a fresh AppShell mount after a
-  // successful sign-in, so navigation and workspace identity resolve immediately
-  // without requiring a manual browser reload.
-  if (isShelllessPath(pathname)) {
+  // Public/auth pages render without the authenticated application shell.
+  // CRM Operations also owns its complete shell so the Studio navigation,
+  // spacing and top bar are never nested inside the legacy two-rail AppShell.
+  if (isShelllessPath(pathname) || isCrmStudioPath(pathname)) {
     return <>{children}</>;
   }
 
