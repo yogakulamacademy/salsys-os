@@ -3,52 +3,83 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
+  Activity,
+  AlertTriangle,
   ChevronDown,
+  CircleDollarSign,
+  ContactRound,
+  DatabaseZap,
   LayoutDashboard,
   ListTodo,
   Rows3,
   UserRoundSearch,
+  UsersRound,
 } from 'lucide-react';
 
-type Item = {
+type NavigationItem = {
   href: string;
   label: string;
   icon: React.ComponentType<{ size?: number; className?: string }>;
 };
 
-type Group = {
+type NavigationGroup = {
   label: string;
-  items: Item[];
+  items: NavigationItem[];
 };
 
-const groups: Group[] = [
+const groups: NavigationGroup[] = [
   {
     label: 'Workspace',
     items: [
-      { href: '/admissions', label: 'Admissions Desk', icon: LayoutDashboard },
-      { href: '/leads', label: 'Leads', icon: UserRoundSearch },
-      { href: '/pipeline', label: 'Pipeline', icon: Rows3 },
+      { href: '/crm', label: 'Command Center', icon: LayoutDashboard },
+      { href: '/admissions', label: 'Admissions Desk', icon: Activity },
+      { href: '/follow-ups', label: 'Follow-ups', icon: ListTodo },
     ],
   },
   {
-    label: 'Actions',
-    items: [{ href: '/follow-ups', label: 'Follow-ups', icon: ListTodo }],
+    label: 'Customers & Sales',
+    items: [
+      { href: '/leads', label: 'Leads', icon: UserRoundSearch },
+      { href: '/pipeline', label: 'Sales Pipeline', icon: Rows3 },
+      { href: '/customer-360', label: 'Customer 360', icon: UsersRound },
+    ],
+  },
+  {
+    label: 'Intelligence',
+    items: [
+      { href: '/contact-intelligence', label: 'Contact Intelligence', icon: ContactRound },
+      { href: '/data-quality', label: 'Data Quality', icon: DatabaseZap },
+    ],
+  },
+  {
+    label: 'Quick Views',
+    items: [
+      { href: '/leads?stage=payment_pending', label: 'Payment-stage leads', icon: CircleDollarSign },
+      { href: '/leads?view=attention', label: 'Stage-aging alerts', icon: AlertTriangle },
+    ],
   },
 ];
 
-function isActive(pathname: string, href: string) {
-  if (href === '/leads') return pathname === '/leads' || pathname.startsWith('/leads/');
-  return pathname === href || pathname.startsWith(`${href}/`);
+function pathOnly(href: string) {
+  return href.split('?')[0];
 }
 
-function Links() {
+function isActive(pathname: string, href: string) {
+  if (href.includes('?')) return false;
+  const path = pathOnly(href);
+  if (path === '/crm') return pathname === path;
+  if (path === '/leads') return pathname === '/leads' || pathname.startsWith('/leads/');
+  return pathname === path || pathname.startsWith(`${path}/`);
+}
+
+function NavigationLinks({ mobile = false }: { mobile?: boolean }) {
   const pathname = usePathname();
 
   return (
-    <div className="space-y-5">
+    <div className={mobile ? 'space-y-5' : 'space-y-5'}>
       {groups.map((group) => (
         <div key={group.label}>
-          <div className="mb-1.5 px-3 text-[10px] font-bold uppercase tracking-[0.16em] text-[#8A978F]">
+          <div className="mb-1.5 px-3 text-[9px] font-bold uppercase tracking-[0.16em] text-[#8a9790]">
             {group.label}
           </div>
           <div className="space-y-0.5">
@@ -56,18 +87,24 @@ function Links() {
               const active = isActive(pathname, href);
               return (
                 <Link
-                  key={href}
+                  key={`${href}-${label}`}
                   href={href}
-                  className={`group relative flex min-h-9 items-center gap-3 rounded-lg px-3 py-2.5 text-[13px] font-medium transition ${
+                  aria-current={active ? 'page' : undefined}
+                  className={`group relative flex items-center gap-2.5 rounded-[7px] px-3 py-2.5 text-[12px] transition ${
                     active
-                      ? 'bg-[#EAF4ED] text-[#216551]'
-                      : 'text-[#64746C] hover:bg-[#F3F6F3] hover:text-[#216551]'
+                      ? 'bg-[#eaf4ed] font-semibold text-[#216551]'
+                      : 'font-medium text-[#64746c] hover:bg-[#f3f6f3] hover:text-[#216551]'
                   }`}
                 >
-                  {active ? (
-                    <span className="absolute -left-4 inset-y-2 w-[3px] rounded-r bg-[#216551]" aria-hidden="true" />
-                  ) : null}
-                  <Icon size={17} className={active ? 'text-[#216551]' : 'text-[#86968D]'} />
+                  {active ? <span className="absolute -left-4 h-[18px] w-[3px] rounded-r bg-[#216551]" /> : null}
+                  <Icon
+                    size={16}
+                    className={
+                      active
+                        ? 'text-[#216551]'
+                        : 'text-[#91a096] transition group-hover:text-[#216551]'
+                    }
+                  />
                   <span>{label}</span>
                 </Link>
               );
@@ -81,38 +118,42 @@ function Links() {
 
 export function CrmNavigation() {
   const pathname = usePathname();
-  const current = groups.flatMap((group) => group.items).find((item) => isActive(pathname, item.href));
+  const current = groups
+    .flatMap((group) => group.items)
+    .find((item) => isActive(pathname, item.href));
 
   return (
     <>
-      <details className="group rounded-xl border border-[#E4EAE6] bg-white min-[768px]:hidden">
-        <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 text-sm font-semibold text-[#192E29] [&::-webkit-details-marker]:hidden">
+      <details className="group rounded-xl border border-[#e4eae6] bg-white min-[768px]:hidden">
+        <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3.5 text-sm font-semibold text-[#192e29] [&::-webkit-details-marker]:hidden">
           <span className="flex items-center gap-2.5">
-            <span className="grid h-8 w-8 place-items-center rounded-lg bg-[#EAF4ED] text-[#216551]">
-              <UserRoundSearch size={16} />
+            <span className="grid h-8 w-8 place-items-center rounded-lg bg-[#eaf4ed] text-[#216551]">
+              <UsersRound size={16} />
             </span>
             {current?.label || 'CRM Operations'}
           </span>
-          <ChevronDown size={16} className="text-[#7D8D84] transition group-open:rotate-180" />
+          <ChevronDown size={16} className="text-[#91a096] transition group-open:rotate-180" />
         </summary>
-        <div className="border-t border-[#E4EAE6] p-3">
-          <div className="mb-4 rounded-lg bg-[#F6F8F7] px-3 py-2.5">
-            <div className="text-sm font-semibold text-[#192E29]">CRM Operations</div>
-            <div className="mt-0.5 text-xs leading-5 text-[#6D7C76]">Find, prioritize and move customer opportunities forward.</div>
+        <div className="border-t border-[#e4eae6] p-3">
+          <div className="mb-4 rounded-lg bg-[#f6f8f7] px-3 py-2.5">
+            <div className="text-sm font-bold text-[#192e29]">CRM Operations</div>
+            <div className="mt-0.5 text-xs leading-5 text-[#6d7c76]">
+              Manage leads, admissions, pipeline and customer intelligence.
+            </div>
           </div>
-          <Links />
+          <NavigationLinks mobile />
         </div>
       </details>
 
-      <aside className="hidden min-h-[calc(100vh-7rem)] border-r border-[#E4EAE6] pr-4 min-[768px]:block">
+      <aside className="hidden min-h-[calc(100vh-7rem)] border-r border-[#e4eae6] pr-4 min-[768px]:block" aria-label="CRM Operations navigation">
         <div className="sticky top-20 pb-8">
           <div className="mb-6 px-3 pt-1">
-            <div className="text-[15px] font-semibold text-[#192E29]">CRM Operations</div>
-            <p className="mt-1 max-w-[190px] text-xs leading-5 text-[#6D7C76]">
-              Leads, admissions decisions and pipeline movement in one workspace.
+            <div className="text-[15px] font-bold text-[#192e29]">CRM Operations</div>
+            <p className="mt-1 max-w-[185px] text-[11px] leading-5 text-[#6d7c76]">
+              Manage leads, admissions, pipeline and customer intelligence.
             </p>
           </div>
-          <Links />
+          <NavigationLinks />
         </div>
       </aside>
     </>
