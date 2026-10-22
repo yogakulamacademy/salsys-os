@@ -21,7 +21,14 @@ type CreatedSource = {
     hostname?: string | null;
     metadata?: Record<string, unknown>;
   };
+  site?: {
+    id: string;
+    public_site_id: string;
+    hostname: string;
+    environment: string;
+  };
   credentials: {
+    site_id?: string;
     source_key: string;
     publishable?: boolean;
     origin_bound?: boolean;
@@ -29,7 +36,17 @@ type CreatedSource = {
   };
 };
 
-function installationText(platform: string, sourceKey: string, hostname: string) {
+function websiteSnippet(siteId: string) {
+  const encoded = encodeURIComponent(siteId);
+  return `<script\n  src="https://salsysos.com/salsys-intelligence.js"\n  data-salsys-site="${siteId}"\n  data-endpoint="https://salsysos.com/api/events/browser/v1?site_id=${encoded}"\n  data-consent-endpoint="https://salsysos.com/api/privacy/consent/v1?site_id=${encoded}"\n  data-consent-mode="required"\n  data-form-mode="lead-only"\n  defer>\n</script>\n<script\n  src="https://salsysos.com/salsys-consent.js"\n  data-consent-banner="auto"\n  data-consent-settings="floating"\n  defer>\n</script>`;
+}
+
+function installationText(
+  platform: string,
+  sourceKey: string,
+  hostname: string,
+  siteId: string,
+) {
   if (platform === 'android') {
     return `Salsys.initialize(\n  applicationContext,\n  SalsysConfig(sourceKey = "${sourceKey}")\n)\n\nSalsys.setConsent(mapOf("analytics" to "granted"))\nSalsys.track("app.screen_viewed", mapOf("screen" to "home"))`;
   }
@@ -43,10 +60,10 @@ function installationText(platform: string, sourceKey: string, hostname: string)
   }
 
   if (platform === 'wordpress') {
-    return `Website source registered for ${hostname}.\n\nInstall the Salsys Tracking WordPress plugin and keep analytics consent on Required.\nNo Salsys server secret belongs in WordPress HTML or JavaScript.`;
+    return `Salsys Site ID: ${siteId}\nRegistered hostname: ${hostname}\n\nFor immediate installation, add this snippet through your approved global header/custom-code mechanism:\n\n${websiteSnippet(siteId)}\n\nThe Site ID is public, but Salsys still verifies it against the registered hostname.`;
   }
 
-  return `<script\n  src="https://salsysos.com/salsys-intelligence.js"\n  data-consent-mode="required"\n  data-form-mode="lead-only"\n  defer>\n</script>\n<script\n  src="https://salsysos.com/salsys-consent.js"\n  data-consent-banner="auto"\n  data-consent-settings="floating"\n  defer>\n</script>`;
+  return websiteSnippet(siteId);
 }
 
 export function TrackingSourceCreator() {
@@ -98,6 +115,7 @@ export function TrackingSourceCreator() {
   }
 
   const sourceKey = created?.credentials?.source_key ?? '';
+  const siteId = created?.site?.public_site_id ?? created?.credentials?.site_id ?? '';
 
   return (
     <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
@@ -105,7 +123,7 @@ export function TrackingSourceCreator() {
         <div className="eyebrow">Add data source</div>
         <h2 className="section-title mt-1">Connect another platform</h2>
         <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-500">
-          Website sources are origin-bound. Android, iOS and Shopify use a publishable source key. Trusted payment, enrollment and revenue events still require the server Events API.
+          Every website receives a unique public Salsys Site ID and remains bound to its registered hostname. Android, iOS and Shopify use a publishable source key. Trusted payment, enrollment and revenue events still require the server Events API.
         </p>
       </div>
 
@@ -179,9 +197,16 @@ export function TrackingSourceCreator() {
           <div className="text-sm font-semibold text-emerald-900">Source created</div>
           <p className="mt-1 text-xs leading-5 text-emerald-800">
             {isWebsite
-              ? 'The browser source is bound to the registered origin; no browser secret is required.'
+              ? 'This public Site ID identifies the registered website. Salsys verifies both the Site ID and browser origin before accepting events.'
               : 'The source key below is publishable. Keep trusted Salsys server secrets out of client applications.'}
           </p>
+
+          {isWebsite && siteId ? (
+            <div className="mt-3 rounded-xl border border-emerald-200 bg-white p-3">
+              <div className="text-[10px] font-semibold uppercase tracking-[.08em] text-emerald-700">Salsys Site ID</div>
+              <div className="mt-1 font-mono text-sm font-semibold text-slate-900">{siteId}</div>
+            </div>
+          ) : null}
 
           {!isWebsite ? (
             <div className="mt-3 rounded-xl bg-white p-3 font-mono text-xs text-slate-700 break-all">
@@ -190,7 +215,7 @@ export function TrackingSourceCreator() {
           ) : null}
 
           <pre className="mt-3 overflow-x-auto whitespace-pre-wrap rounded-xl bg-slate-950 p-4 text-xs leading-5 text-slate-100">
-            {installationText(platform, sourceKey, hostname.trim())}
+            {installationText(platform, sourceKey, hostname.trim(), siteId)}
           </pre>
 
           <p className="mt-3 text-xs leading-5 text-emerald-800">
