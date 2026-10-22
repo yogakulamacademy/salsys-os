@@ -327,19 +327,23 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    const publicSiteId = String(provision.public_site_id);
+
     return NextResponse.json(
       {
         ok: true,
         source: data,
         site: {
           id: String(provision.organization_site_id),
+          public_site_id: publicSiteId,
           hostname: String(provision.hostname),
           environment: String(provision.environment),
         },
         credentials: {
+          site_id: publicSiteId,
           source_key: data.source_key,
           origin_bound: true,
-          publishable: false,
+          publishable: true,
           secret: null,
           shown_once: false,
         },
