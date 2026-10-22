@@ -225,10 +225,14 @@ export function DesktopHoverSidebar() {
         label: "CRM",
         icon: UsersRound,
         items: [
-          { href: "/leads", label: "Leads", icon: ContactRound },
+          { href: "/crm", label: "Command Center", icon: Home },
           { href: "/admissions", label: "Admissions Desk", icon: ClipboardCheck },
-          { href: "/pipeline", label: "Pipeline", icon: Boxes },
+          { href: "/leads", label: "Leads", icon: ContactRound },
+          { href: "/pipeline", label: "Sales Pipeline", icon: Boxes },
+          { href: "/customer-360", label: "Customer 360", icon: UsersRound },
           { href: "/follow-ups", label: "Follow-ups", icon: ListTodo },
+          { href: "/contact-intelligence", label: "Contact Intelligence", icon: BrainCircuit },
+          { href: "/data-quality", label: "Data Quality", icon: FileSearch },
         ],
       },
       {
@@ -257,7 +261,6 @@ export function DesktopHoverSidebar() {
         items: [
           { href: "/commercial-intelligence", label: "Commercial intelligence", icon: Sparkles },
           { href: "/analytics", label: "Analytics", icon: BarChart3 },
-          { href: "/contact-intelligence", label: "Contact performance", icon: ContactRound },
           { href: "/revenue", label: "Revenue", icon: CircleDollarSign },
           { href: "/team-performance", label: "Team performance", icon: UsersRound, adminOnly: true },
         ],
