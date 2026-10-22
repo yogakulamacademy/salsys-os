@@ -1,6 +1,6 @@
 # SalsysOS Checkpoint Index
 
-**Last synchronized:** 2026-10-21
+**Last synchronized:** 2026-10-22
 
 This directory contains milestone evidence. Historical checkpoint files should remain truthful to the state that was verified at the time. Do not rewrite old milestones merely to match a newer plan.
 
@@ -9,15 +9,28 @@ This directory contains milestone evidence. Historical checkpoint files should r
 Read in this order:
 
 1. `../SalsysOS_Current_Checkpoint.md` — latest operational checkpoint.
-2. `../SalsysOS_North_Star_Product_Context.md` — canonical product direction and roadmap state.
-3. `../tracking-attribution-setup.md` — current universal first-party tracking/Event Intelligence deployment plan.
-4. `M-2026-10-21-CRM-Operations-Studio-UX-v1.md` — active non-production CRM/Inbox UX checkpoint on PR #98.
+2. `M-2026-10-22-Universal-Tracking-Server-Integration-v1.md` — latest Universal Tracking + Server Integration production/platform checkpoint and live Yogakulam PHP cutover status.
+3. `../SalsysOS_North_Star_Product_Context.md` — canonical product direction and roadmap state.
+4. `../tracking-attribution-setup.md` — current universal first-party tracking/Event Intelligence deployment plan.
+5. `M-2026-10-21-CRM-Operations-Studio-UX-v1.md` — active non-production CRM/Inbox UX checkpoint on its separate UX line.
+
+## Active Universal Tracking checkpoint
+
+- `M-2026-10-22-Universal-Tracking-Server-Integration-v1.md`
+
+Current status: the SalsysOS universal server Events API, canonical site/www alias consolidation, server-source create/edit/pause/rotate/delete management, and platform-first guided installation UX are deployed. The external Yogakulam PHP/Hostinger contact-form integration is still being installed and tested, so live acquisition-to-revenue tracking closeout is **not** claimed yet.
+
+The current safe contact-form integration direction is:
+
+`validate -> DB insert -> enquiry ID -> server-confirmed web.form_submitted -> existing CRM lead capture -> emails -> success response`
+
+The existing CRM capture path remains responsible for lead creation until duplicate semantics across ingestion paths are explicitly proven.
 
 ## Active CRM / UX checkpoint
 
 - `M-2026-10-21-CRM-Operations-Studio-UX-v1.md`
 
-Current status: the CRM Operations Studio, reusable Lead Inspector, intelligent Inbox, accessible Pipeline movement and preview-auth recovery work are active on `uiux/crm-operations-studio-v1`. PR #98 targets `uiux/salsysos-experience-v1`, not `main`. Real browser sign-in on the latest preview is still a required verification step before this UX checkpoint can be considered ready for merge.
+Current status: CRM/Inbox UX work remains historically tracked on its own branch/checkpoint line. Do not infer merge state from this index; verify current branch/PR state before resuming UX work.
 
 ## Active Event Intelligence checkpoints
 
@@ -28,7 +41,7 @@ Current status: the CRM Operations Studio, reusable Lead Inspector, intelligent 
 - `M-2026-10-19-Event-Intelligence-Predictions-v1.md`
 - `M-2026-10-19-Event-Intelligence-OpenSearch-Projection-v1.md`
 
-Current Event Intelligence status: universal ingestion + feature/prediction/OpenSearch projection foundations are merged; direct Yogakulam first-party SDK/relay and full acquisition-to-revenue E2E proof are still pending.
+Current Event Intelligence status: universal ingestion + feature/prediction/OpenSearch projection foundations are merged; direct Yogakulam live E2E acquisition-to-revenue proof is still pending.
 
 ## Completed Smart Triggers production checkpoints
 
