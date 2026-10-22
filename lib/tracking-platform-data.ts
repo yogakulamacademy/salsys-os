@@ -9,6 +9,8 @@ export type TrackingPlatformSource = {
   name: string;
   sourceType: string;
   sourceSystem: string;
+  sourceKey: string | null;
+  authMode: string | null;
   platform: string | null;
   hostname: string | null;
   publicSiteId: string | null;
@@ -53,6 +55,20 @@ function listValue(value: unknown) {
     : [];
 }
 
+function recentHealth(
+  row: Record<string, unknown>,
+): 'healthy' | 'idle' | 'not_live' | 'degraded' | 'inactive' {
+  if (String(row.status ?? '') !== 'active') return 'inactive';
+  const accepted = numberValue(row.accepted_event_count);
+  const rejected = numberValue(row.rejected_event_count);
+  if (rejected > 0 && accepted === 0) return 'degraded';
+  if (accepted === 0) return 'not_live';
+  const lastSeen = textValue(row.last_seen_at);
+  if (!lastSeen) return 'not_live';
+  const age = Date.now() - new Date(lastSeen).getTime();
+  return Number.isFinite(age) && age <= 24 * 60 * 60 * 1000 ? 'healthy' : 'idle';
+}
+
 function websiteHealth(row: Record<string, unknown>): TrackingPlatformSource['healthStatus'] {
   if (String(row.status ?? '') !== 'active') return 'inactive';
   if (
@@ -63,14 +79,13 @@ function websiteHealth(row: Record<string, unknown>): TrackingPlatformSource['he
   ) {
     return 'misconfigured';
   }
-  if (numberValue(row.rejected_event_count) > 0 && numberValue(row.accepted_event_count) === 0) {
-    return 'degraded';
-  }
-  if (numberValue(row.accepted_event_count) === 0) return 'not_live';
-  const lastSeen = textValue(row.last_seen_at);
-  if (!lastSeen) return 'not_live';
-  const age = Date.now() - new Date(lastSeen).getTime();
-  return Number.isFinite(age) && age <= 24 * 60 * 60 * 1000 ? 'healthy' : 'idle';
+  return recentHealth(row);
+}
+
+function serverHealth(row: Record<string, unknown>): TrackingPlatformSource['healthStatus'] {
+  if (String(row.status ?? '') !== 'active') return 'inactive';
+  if (String(row.auth_mode ?? '') !== 'secret') return 'misconfigured';
+  return recentHealth(row);
 }
 
 export async function getTrackingPlatformWorkspace(): Promise<TrackingPlatformWorkspace> {
@@ -106,10 +121,10 @@ export async function getTrackingPlatformWorkspace(): Promise<TrackingPlatformWo
     admin
       .from('tracking_sources')
       .select(
-        'id,name,source_type,source_system,auth_mode,hostname,status,allowed_event_prefixes,accepted_event_count,duplicate_event_count,rejected_event_count,last_seen_at,privacy_mode,require_consent_for_optional,privacy_notice_version,metadata',
+        'id,name,source_type,source_system,source_key,auth_mode,hostname,status,allowed_event_prefixes,accepted_event_count,duplicate_event_count,rejected_event_count,last_seen_at,privacy_mode,require_consent_for_optional,privacy_notice_version,metadata',
       )
       .eq('organization_id', workspace.organizationId)
-      .in('source_type', ['website', 'client'])
+      .in('source_type', ['website', 'client', 'api', 'webhook', 'system'])
       .order('created_at', { ascending: true }),
     admin
       .from('v_tracking_client_source_health_v1')
@@ -141,14 +156,18 @@ export async function getTrackingPlatformWorkspace(): Promise<TrackingPlatformWo
       row.metadata && typeof row.metadata === 'object' && !Array.isArray(row.metadata)
         ? (row.metadata as Record<string, unknown>)
         : {};
-    const isClient = String(row.source_type) === 'client';
+    const sourceType = String(row.source_type ?? '');
+    const isClient = sourceType === 'client';
+    const isWebsite = sourceType === 'website';
     const health = clientHealth.get(id);
 
     return {
       id,
       name: String(row.name ?? 'Tracking source'),
-      sourceType: String(row.source_type ?? ''),
+      sourceType,
       sourceSystem: String(row.source_system ?? ''),
+      sourceKey: textValue(row.source_key),
+      authMode: textValue(row.auth_mode),
       platform: textValue(metadata.platform),
       hostname: textValue(row.hostname),
       publicSiteId: textValue(metadata.public_site_id),
@@ -156,7 +175,9 @@ export async function getTrackingPlatformWorkspace(): Promise<TrackingPlatformWo
       status: String(row.status ?? ''),
       healthStatus: isClient
         ? ((textValue(health?.health_status) ?? 'not_live') as TrackingPlatformSource['healthStatus'])
-        : websiteHealth(row),
+        : isWebsite
+          ? websiteHealth(row)
+          : serverHealth(row),
       allowedEventPrefixes: listValue(row.allowed_event_prefixes),
       privacyNoticeVersion: textValue(row.privacy_notice_version),
       sdkName: textValue(health?.latest_sdk_name),
