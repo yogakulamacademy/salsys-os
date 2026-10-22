@@ -21,7 +21,10 @@ import {
   Megaphone,
   MessageSquareText,
   PlugZap,
+  Settings,
+  ShieldCheck,
   Sparkles,
+  Tags,
   Target,
   UsersRound,
   Workflow,
@@ -39,6 +42,7 @@ const MARKETING_GROUP_ORDER = ["OVERVIEW", "PAID GROWTH", "ORGANIC GROWTH", "ANA
 
 function activePath(pathname: string, href: string) {
   if (href === "/home") return pathname === "/home" || pathname === "/dashboard";
+  if (href === "/settings") return pathname === "/settings";
   return pathname === href || pathname.startsWith(`${href}/`);
 }
 
@@ -139,24 +143,29 @@ export function DesktopHoverSidebarV3() {
         { href: "/pipeline", label: "Pipeline", icon: Boxes },
         { href: "/follow-ups", label: "Follow-ups", icon: ListTodo },
       ] },
-      { id: "marketing", label: "Marketing", icon: Megaphone, description: "Understand acquisition, campaign performance and customer growth.", items: [
-        { href: "/commercial-intelligence", label: "Marketing Command Center", icon: BarChart3, group: "OVERVIEW" },
-        { href: "/campaigns", label: "Campaigns", icon: Target, group: "PAID GROWTH" },
-        { href: "/paid-media-leads", label: "Paid Media Leads", icon: UsersRound, group: "PAID GROWTH" },
-        { href: "/re-engaged", label: "Re-engaged Leads", icon: Activity, group: "PAID GROWTH" },
-        { href: "/seo", label: "SEO Overview", icon: FileSearch, group: "ORGANIC GROWTH" },
-        { href: "/analytics", label: "Analytics", icon: BarChart3, group: "ANALYSIS" },
-        { href: "/funnel", label: "Funnel", icon: GitBranch, group: "ANALYSIS" },
-        { href: "/attribution", label: "Attribution", icon: LineChart, group: "ANALYSIS" },
-        { href: "/revenue", label: "Revenue", icon: CircleDollarSign, group: "ANALYSIS" },
-        { href: "/settings/integrations", label: "Marketing Integrations", icon: PlugZap, group: "SETTINGS", adminOnly: true },
-      ] },
       { id: "inbox", label: "Inbox", icon: Inbox, items: [{ href: "/conversations", label: "Conversations", icon: MessageSquareText }] },
-      { id: "automation", label: "Automation", icon: Workflow, items: [{ href: "/automation", label: "Automations", icon: Workflow }] },
-      { id: "operations", label: "Operations", icon: BookOpen, items: [{ href: "/course-management", label: "Course Management", icon: BookOpen }] },
+      { id: "marketing", label: "Marketing", icon: Megaphone, description: "Understand acquisition, campaign performance and customer growth.", items: [
+        { href: "/campaigns", label: "Campaigns", icon: Target },
+        { href: "/attribution", label: "Attribution", icon: LineChart },
+        { href: "/funnel", label: "Funnels", icon: GitBranch },
+        { href: "/paid-media-leads", label: "Paid media", icon: Megaphone },
+        { href: "/re-engaged", label: "Lead activity", icon: Activity },
+        { href: "/seo", label: "SEO / AEO", icon: FileSearch },
+      ] },
       { id: "intelligence", label: "Intelligence", icon: BrainCircuit, items: [
-        { href: "/contact-intelligence", label: "Customer 360", icon: BrainCircuit },
-        { href: "/team-performance", label: "Team Performance", icon: UsersRound, adminOnly: true },
+        { href: "/commercial-intelligence", label: "Commercial intelligence", icon: Sparkles },
+        { href: "/analytics", label: "Analytics", icon: BarChart3 },
+        { href: "/contact-intelligence", label: "Contact performance", icon: ContactRound },
+        { href: "/revenue", label: "Revenue", icon: CircleDollarSign },
+        { href: "/team-performance", label: "Team performance", icon: UsersRound, adminOnly: true },
+      ] },
+      { id: "automation", label: "Automation", icon: Workflow, items: [{ href: "/automation", label: "Automations", icon: Workflow }] },
+      { id: "operations", label: "Operations", icon: BookOpen, items: [{ href: "/course-management", label: "Course management", icon: BookOpen }] },
+      { id: "system", label: "System", icon: Settings, items: [
+        { href: "/settings/integrations", label: "Integrations", icon: PlugZap, adminOnly: true },
+        { href: "/tracking", label: "Tracking", icon: Tags },
+        { href: "/settings/team", label: "Team & access", icon: ShieldCheck, adminOnly: true },
+        { href: "/system-health", label: "System health", icon: Activity, adminOnly: true },
       ] },
     ];
   }, [admin, employee, privileged]);
