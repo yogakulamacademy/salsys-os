@@ -100,7 +100,7 @@ function InvestigationContext({ query }: { query: string }) {
         <div className="flex flex-wrap gap-2">
           <Link href={`/campaigns?q=${encoded}`} className="btn-secondary">Campaigns</Link>
           <Link href="/paid-media-leads" className="btn-secondary">Generated leads</Link>
-          <Link href="/revenue" className="btn-secondary">Revenue</Link>
+          <Link href={`/revenue?investigation=1&source=${encoded}&from=attribution`} className="btn-secondary">Revenue</Link>
           <Link href="/attribution" className="btn-secondary">Clear context</Link>
         </div>
       </div>
