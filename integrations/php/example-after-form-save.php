@@ -21,12 +21,11 @@ $crmResult = yogakulam_crm_capture_lead([
     'timezone' => $_POST['timezone'] ?? null,
     'message' => $_POST['message'] ?? $_POST['query'] ?? null,
 
-    // Canonical Salsys tracking fields. Legacy yk_* fallbacks remain temporary
-    // migration safety for existing live sessions until the website cutover is complete.
-    'salsys_visitor_id' => $_POST['salsys_visitor_id'] ?? $_POST['yk_visitor_id'] ?? null,
-    'salsys_session_id' => $_POST['salsys_session_id'] ?? $_POST['yk_session_id'] ?? null,
-    'salsys_first_touch' => $_POST['salsys_first_touch'] ?? $_POST['yk_first_touch'] ?? null,
-    'salsys_session_touch' => $_POST['salsys_session_touch'] ?? $_POST['yk_session_touch'] ?? null,
+    // Canonical Salsys tracking fields injected by the Universal Tracking SDK.
+    'salsys_visitor_id' => $_POST['salsys_visitor_id'] ?? null,
+    'salsys_session_id' => $_POST['salsys_session_id'] ?? null,
+    'salsys_first_touch' => $_POST['salsys_first_touch'] ?? null,
+    'salsys_session_touch' => $_POST['salsys_session_touch'] ?? null,
 
     'metadata' => [
         'website_enquiry_id' => $websiteEnquiryId,
