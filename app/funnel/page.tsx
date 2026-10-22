@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { RefreshCw, Sparkles } from "lucide-react";
 
-import { FunnelIntelligenceWorkspace } from "@/components/funnel-intelligence-workspace";
+import { FunnelIntelligenceWorkspaceV2 } from "@/components/funnel-intelligence-workspace-v2";
 import { ExecutiveDecisionBrief } from "@/components/marketing/executive-decision-brief";
 import { PageHeader } from "@/components/ui";
 import {
@@ -44,7 +44,7 @@ export default async function FunnelPage() {
         />
       ) : null}
 
-      <FunnelIntelligenceWorkspace workspace={workspace} />
+      <FunnelIntelligenceWorkspaceV2 workspace={workspace} />
     </div>
   );
 }
