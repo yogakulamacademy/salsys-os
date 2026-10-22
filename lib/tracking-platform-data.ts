@@ -11,6 +11,8 @@ export type TrackingPlatformSource = {
   sourceSystem: string;
   platform: string | null;
   hostname: string | null;
+  publicSiteId: string | null;
+  siteEnvironment: string | null;
   status: string;
   healthStatus: 'healthy' | 'idle' | 'not_live' | 'degraded' | 'misconfigured' | 'inactive';
   allowedEventPrefixes: string[];
@@ -149,6 +151,8 @@ export async function getTrackingPlatformWorkspace(): Promise<TrackingPlatformWo
       sourceSystem: String(row.source_system ?? ''),
       platform: textValue(metadata.platform),
       hostname: textValue(row.hostname),
+      publicSiteId: textValue(metadata.public_site_id),
+      siteEnvironment: textValue(metadata.environment),
       status: String(row.status ?? ''),
       healthStatus: isClient
         ? ((textValue(health?.health_status) ?? 'not_live') as TrackingPlatformSource['healthStatus'])
