@@ -10,7 +10,18 @@ import {
   type RevenueOpportunityRow,
 } from "@/lib/revenue-data";
 
-export default async function RevenuePage() {
+type RevenuePageProps = {
+  searchParams: Promise<{
+    investigation?: string;
+    source?: string;
+    from?: string;
+  }>;
+};
+
+export default async function RevenuePage({ searchParams }: RevenuePageProps) {
+  const query = await searchParams;
+  const investigationSource = query.investigation === "1" ? query.source?.trim() || null : null;
+  const investigationFrom = query.from?.trim() || "revenue";
   const currentMonth = new Date().toISOString().slice(0, 7);
   const [workspace, fxRate] = await Promise.all([
     getRevenueWorkspace(currentMonth),
@@ -18,6 +29,9 @@ export default async function RevenuePage() {
   ]);
 
   const { totalsByCurrency, stages, monthly, sources, locations, actualMonthly, unvaluedLeads, topOpportunities, closingThisMonth } = workspace;
+
+  const focusedTopOpportunities = focusOpportunities(topOpportunities, investigationSource);
+  const focusedClosingThisMonth = focusOpportunities(closingThisMonth, investigationSource);
 
   const stageChartData = stages
     .map((row) => ({
@@ -106,6 +120,21 @@ export default async function RevenuePage() {
         actions={brief.actions}
       />
 
+      {investigationSource ? (
+        <section className="rounded-2xl border border-[#dbe6dc] bg-white px-4 py-4 shadow-[0_8px_24px_rgba(16,45,39,.035)] sm:px-5">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <div className="text-[9px] font-black uppercase tracking-[.14em] text-[#829186]">Revenue evidence focus</div>
+              <div className="mt-1 text-sm font-semibold text-[#102d27]">Commercial records attributed to “{investigationSource}” are prioritized below.</div>
+              <p className="mt-1 text-[10px] leading-5 text-[#758279]">
+                Opportunity focus uses the stored first-touch source only. If no matching first-touch opportunities are visible, the list falls back to the broader commercial cohort rather than inventing a match.
+              </p>
+            </div>
+            <Link href={`/attribution?q=${encodeURIComponent(investigationSource)}`} className="btn-secondary">Review attribution <ArrowRight size={13} /></Link>
+          </div>
+        </section>
+      ) : null}
+
       {workspace.warning ? (
         <div className="rounded-xl border border-amber-100 bg-amber-50 px-4 py-3 text-xs font-semibold text-amber-800 dark:border-amber-900/50 dark:bg-amber-950/20 dark:text-amber-200">
           {workspace.warning}
@@ -143,8 +172,21 @@ export default async function RevenuePage() {
       />
 
       <div className="grid gap-4 xl:grid-cols-2">
-        <OpportunityCard title="Highest-value opportunities" rows={topOpportunities.slice(0, 6)} empty="No valued opportunities yet." />
-        <OpportunityCard title="Expected to close this month" rows={closingThisMonth.slice(0, 6)} empty="No opportunities have an expected close date this month." closing />
+        <OpportunityCard
+          title={investigationSource ? `Highest-value opportunities · ${investigationSource}` : "Highest-value opportunities"}
+          rows={focusedTopOpportunities.slice(0, 6)}
+          empty="No valued opportunities yet."
+          investigationSource={investigationSource}
+          investigationFrom={investigationFrom}
+        />
+        <OpportunityCard
+          title={investigationSource ? `Expected to close · ${investigationSource}` : "Expected to close this month"}
+          rows={focusedClosingThisMonth.slice(0, 6)}
+          empty="No opportunities have an expected close date this month."
+          closing
+          investigationSource={investigationSource}
+          investigationFrom={investigationFrom}
+        />
       </div>
 
       <div className="px-1 text-[10px] leading-4 text-slate-400">
@@ -236,11 +278,15 @@ function OpportunityCard({
   rows,
   empty,
   closing = false,
+  investigationSource,
+  investigationFrom,
 }: {
   title: string;
   rows: RevenueOpportunityRow[];
   empty: string;
   closing?: boolean;
+  investigationSource: string | null;
+  investigationFrom: string;
 }) {
   return (
     <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-950">
@@ -254,32 +300,45 @@ function OpportunityCard({
 
       {rows.length ? (
         <div className="divide-y divide-slate-100 dark:divide-slate-900">
-          {rows.map((row) => (
-            <Link
-              key={row.id}
-              href={`/leads/${row.id}`}
-              className="group flex items-center gap-3 px-4 py-3.5 transition hover:bg-slate-50 dark:hover:bg-slate-900/60"
-            >
-              <span className="min-w-0 flex-1">
-                <span className="block truncate text-[11px] font-black text-slate-800 dark:text-slate-100">{row.lead_name || row.lead_code}</span>
-                <span className="mt-0.5 block truncate text-[9px] text-slate-400">
-                  {pretty(row.current_stage)} · {row.preferred_location || "Unknown location"}
-                  {closing && row.expected_close_date ? ` · ${formatDate(row.expected_close_date)}` : ""}
+          {rows.map((row) => {
+            const href = investigationSource
+              ? `/leads/${row.id}?investigation=1&source=${encodeURIComponent(investigationSource)}&from=${encodeURIComponent(investigationFrom)}`
+              : `/leads/${row.id}`;
+            return (
+              <Link
+                key={row.id}
+                href={href}
+                className="group flex items-center gap-3 px-4 py-3.5 transition hover:bg-slate-50 dark:hover:bg-slate-900/60"
+              >
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate text-[11px] font-black text-slate-800 dark:text-slate-100">{row.lead_name || row.lead_code}</span>
+                  <span className="mt-0.5 block truncate text-[9px] text-slate-400">
+                    {pretty(row.current_stage)} · {row.preferred_location || "Unknown location"}
+                    {row.first_touch_source ? ` · ${pretty(row.first_touch_source)}` : ""}
+                    {closing && row.expected_close_date ? ` · ${formatDate(row.expected_close_date)}` : ""}
+                  </span>
                 </span>
-              </span>
-              <span className="shrink-0 text-right">
-                <span className="block text-[11px] font-black text-slate-800 dark:text-slate-100">{formatMoney(row.weighted_value, row.currency)}</span>
-                <span className="mt-0.5 block text-[8px] font-semibold uppercase tracking-[0.06em] text-slate-400">weighted</span>
-              </span>
-              <ArrowRight size={13} className="shrink-0 text-slate-300 transition group-hover:translate-x-0.5 group-hover:text-violet-500" />
-            </Link>
-          ))}
+                <span className="shrink-0 text-right">
+                  <span className="block text-[11px] font-black text-slate-800 dark:text-slate-100">{formatMoney(row.weighted_value, row.currency)}</span>
+                  <span className="mt-0.5 block text-[8px] font-semibold uppercase tracking-[0.06em] text-slate-400">weighted</span>
+                </span>
+                <ArrowRight size={13} className="shrink-0 text-slate-300 transition group-hover:translate-x-0.5 group-hover:text-violet-500" />
+              </Link>
+            );
+          })}
         </div>
       ) : (
         <div className="px-4 py-10 text-center text-xs font-semibold text-slate-400">{empty}</div>
       )}
     </section>
   );
+}
+
+function focusOpportunities(rows: RevenueOpportunityRow[], source: string | null) {
+  if (!source) return rows;
+  const target = source.trim().toLowerCase();
+  const matched = rows.filter((row) => (row.first_touch_source || "").trim().toLowerCase().includes(target));
+  return matched.length ? matched : rows;
 }
 
 type FxRateResult = {
