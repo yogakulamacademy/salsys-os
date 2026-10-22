@@ -19,7 +19,7 @@ type CreatedServerSource = {
   };
 };
 
-const SERVER_EVENT_PREFIXES = ['lead.', 'booking.', 'payment.', 'enrollment.'];
+const SERVER_EVENT_PREFIXES = ['web.', 'lead.', 'booking.', 'payment.', 'enrollment.'];
 
 function serverExamples(sourceKey: string, secret: string) {
   const endpoint = 'https://salsysos.com/api/events/v1';
@@ -60,6 +60,8 @@ $event = [
     'occurred_at' => gmdate('c'),
     'external_message_id' => $bookingReference,
     'site' => $_SERVER['HTTP_HOST'] ?? null,
+    'anonymous_visitor_id' => $_POST['salsys_visitor_id'] ?? null,
+    'session_key' => $_POST['salsys_session_id'] ?? null,
     'properties' => [
         'name' => $name,
         'email' => $email,
@@ -106,6 +108,8 @@ curl_close($ch);
     occurred_at: new Date().toISOString(),
     external_message_id: payment.id,
     site: 'www.example.com',
+    anonymous_visitor_id: request.body.salsys_visitor_id || null,
+    session_key: request.body.salsys_session_id || null,
     properties: {
       booking_reference: payment.bookingReference,
       amount: payment.amount,
@@ -209,8 +213,9 @@ export function ServerTrackingSourceCreator() {
         </div>
       </div>
 
-      <div className="mt-5 grid gap-3 md:grid-cols-4">
+      <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
         {[
+          ['web.*', 'Server-observed requests'],
           ['lead.*', 'Form / CRM leads'],
           ['booking.*', 'Booking lifecycle'],
           ['payment.*', 'Payment truth'],
@@ -221,6 +226,10 @@ export function ServerTrackingSourceCreator() {
             <div className="mt-1 text-[11px] text-slate-500">{description}</div>
           </div>
         ))}
+      </div>
+
+      <div className="mt-3 rounded-xl border border-sky-200 bg-sky-50 px-3 py-2 text-xs leading-5 text-sky-800">
+        Server-observed <code>web.*</code> events can cover requests when JavaScript is blocked, but they should be marked as backend-observed and will not contain every client-only signal such as viewport interactions or blocked CTA clicks.
       </div>
 
       <form onSubmit={submit} className="mt-5 grid gap-4 lg:grid-cols-2">
@@ -319,9 +328,10 @@ export function ServerTrackingSourceCreator() {
             {activeExample}
           </pre>
 
-          <div className="mt-4 grid gap-3 md:grid-cols-3">
+          <div className="mt-4 grid gap-3 md:grid-cols-4">
             <Rule title="Stable event_id" text="Generate it from the business action. Reuse the same ID on retries so duplicate deliveries stay idempotent." />
             <Rule title="Link browser + server" text="When available, forward salsys_visitor_id and salsys_session_id from the form into the server event for journey attribution." />
+            <Rule title="Blocked-browser fallback" text="For server-observed web requests, generate/retain first-party visitor and session IDs on the website backend before sending web.* events." />
             <Rule title="Commercial authority" text="Payment and enrollment completion should come from backend confirmation/webhooks, not from a browser success page." />
           </div>
         </div>
