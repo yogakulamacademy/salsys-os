@@ -3,7 +3,7 @@ import { GitBranch, Sparkles, Target } from "lucide-react";
 
 import { AttributionIntelligenceExplorer } from "@/components/attribution-intelligence-explorer";
 import type { AttributionWorkspaceFilters } from "@/components/attribution-workspace";
-import { CommercialIntelligencePanel } from "@/components/commercial-intelligence-panel";
+import { ExecutiveDecisionBrief } from "@/components/marketing/executive-decision-brief";
 import { PageHeader } from "@/components/ui";
 import { getAttributionWorkspace } from "@/lib/attribution-data";
 import { buildAttributionIntelligence } from "@/lib/commercial-intelligence";
@@ -34,9 +34,9 @@ export default async function AttributionPage({ searchParams }: AttributionPageP
   return (
     <div className="space-y-4">
       <PageHeader
-        eyebrow="Growth intelligence"
+        eyebrow="Decision intelligence"
         title="Attribution"
-        description="Explore where credit changes, how trustworthy the evidence is, and what decisions the data can support."
+        description="Understand who gets credit, how much evidence supports it, and where missing attribution could change the decision."
         actions={
           <div className="flex flex-wrap gap-2">
             <Link href="/campaigns" className="btn-secondary">
@@ -52,12 +52,27 @@ export default async function AttributionPage({ searchParams }: AttributionPageP
         }
       />
 
-      <section className="rounded-2xl border border-violet-100 bg-violet-50/45 p-4 sm:p-5 dark:border-violet-900/40 dark:bg-violet-950/10">
-        <div className="mb-3 flex items-center gap-2 text-[10px] font-black uppercase tracking-[0.12em] text-violet-600 dark:text-violet-300">
-          <Sparkles size={13} /> What this means and what to do next
-        </div>
-        <CommercialIntelligencePanel brief={intelligence} />
-      </section>
+      <ExecutiveDecisionBrief
+        eyebrow="Attribution decision brief"
+        title={intelligence.summary}
+        summary={buildAttributionNarrative(intelligence.readinessScore, intelligence.readinessDetail)}
+        confidenceLabel={`${Math.round(intelligence.readinessScore)}/100 evidence readiness`}
+        confidenceDetail={intelligence.methodology}
+        signals={intelligence.signals.slice(0, 4).map((signal) => ({
+          label: signal.label,
+          value: signal.value,
+          detail: signal.detail,
+          tone: mapTone(signal.tone),
+        }))}
+        actions={intelligence.actions
+          .filter((action) => action.href)
+          .slice(0, 3)
+          .map((action) => ({
+            label: action.title,
+            href: action.href!,
+            detail: action.detail,
+          }))}
+      />
 
       <AttributionIntelligenceExplorer workspace={workspace} filters={filters} warning={warning} />
 
@@ -66,4 +81,21 @@ export default async function AttributionPage({ searchParams }: AttributionPageP
       </div>
     </div>
   );
+}
+
+function buildAttributionNarrative(score: number, readinessDetail: string) {
+  if (score >= 85) {
+    return `Attribution evidence is strong enough for directional source decisions. ${readinessDetail}`;
+  }
+  if (score >= 60) {
+    return `The model is useful, but source comparisons should still be read with the visible coverage gaps in mind. ${readinessDetail}`;
+  }
+  return `Attribution is currently incomplete. Prioritize evidence repair before making aggressive channel or budget changes. ${readinessDetail}`;
+}
+
+function mapTone(tone: "positive" | "info" | "watch" | "risk") {
+  if (tone === "positive") return "positive" as const;
+  if (tone === "watch") return "watch" as const;
+  if (tone === "risk") return "risk" as const;
+  return "neutral" as const;
 }
