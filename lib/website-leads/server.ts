@@ -74,28 +74,18 @@ export function sanitizeWebsiteLeadPayload(input: unknown): WebsiteLeadPayload {
     timezone: safeText(raw.timezone, 120),
     message: safeText(raw.message ?? raw.query ?? raw.enquiry ?? raw.inquiry, 8000),
     anonymousVisitorId: safeText(
-      raw.anonymousVisitorId ??
-        raw.anonymous_visitor_id ??
-        raw.salsys_visitor_id ??
-        raw.yk_visitor_id,
+      raw.anonymousVisitorId ?? raw.anonymous_visitor_id ?? raw.salsys_visitor_id,
       180,
     ),
     sessionKey: safeText(
-      raw.sessionKey ??
-        raw.session_key ??
-        raw.salsys_session_id ??
-        raw.yk_session_id,
+      raw.sessionKey ?? raw.session_key ?? raw.salsys_session_id,
       180,
     ),
     firstTouch: safeObject(
-      raw.firstTouch ??
-        raw.first_touch ??
-        parseMaybeJson(raw.salsys_first_touch ?? raw.yk_first_touch),
+      raw.firstTouch ?? raw.first_touch ?? parseMaybeJson(raw.salsys_first_touch),
     ),
     sessionTouch: safeObject(
-      raw.sessionTouch ??
-        raw.session_touch ??
-        parseMaybeJson(raw.salsys_session_touch ?? raw.yk_session_touch),
+      raw.sessionTouch ?? raw.session_touch ?? parseMaybeJson(raw.salsys_session_touch),
     ),
     metadata: safeObject(raw.metadata),
   };
