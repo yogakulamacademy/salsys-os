@@ -28,6 +28,14 @@ function browserOrigin(request: NextRequest) {
   return request.headers.get('origin')?.trim() || null;
 }
 
+function publicSiteId(request: NextRequest) {
+  return (
+    request.nextUrl.searchParams.get('site_id')?.trim() ||
+    request.headers.get('x-salsys-site-id')?.trim() ||
+    null
+  );
+}
+
 function browserGpc(request: NextRequest, context: Record<string, unknown>) {
   const secGpc = request.headers.get('sec-gpc');
   if (secGpc === '1') return true;
@@ -45,14 +53,6 @@ function decodeHeader(value: string | null) {
   }
 }
 
-/**
- * Location enrichment is derived only from trusted hosting/proxy headers.
- * No raw client IP address is persisted by this route.
- *
- * Vercel headers are first because they are used by the current deployment.
- * Common proxy aliases are accepted so the ingestion contract itself does not
- * depend on a single hosting platform.
- */
 function requestGeo(request: NextRequest) {
   return {
     country:
@@ -78,7 +78,8 @@ function requestGeo(request: NextRequest) {
 
 export async function OPTIONS(request: NextRequest) {
   const origin = browserOrigin(request);
-  const source = await resolveBrowserTrackingSource(origin);
+  const siteId = publicSiteId(request);
+  const source = await resolveBrowserTrackingSource(origin, siteId);
 
   return new NextResponse(null, {
     status: source ? 204 : 403,
@@ -88,7 +89,8 @@ export async function OPTIONS(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   const origin = browserOrigin(request);
-  const source = await resolveBrowserTrackingSource(origin);
+  const siteId = publicSiteId(request);
+  const source = await resolveBrowserTrackingSource(origin, siteId);
   const cors = corsHeadersForTrackingOrigin(origin, Boolean(source));
 
   if (!source) {
@@ -96,7 +98,9 @@ export async function POST(request: NextRequest) {
       {
         ok: false,
         accepted: false,
-        error: 'Unrecognized browser tracking origin.',
+        error: siteId
+          ? 'Tracking Site ID does not match this browser origin.'
+          : 'Unrecognized browser tracking origin.',
       },
       403,
       cors,
@@ -140,8 +144,6 @@ export async function POST(request: NextRequest) {
     const geo = requestGeo(request);
     const admin = createAdminClient();
 
-    // Privacy is enforced before raw-event persistence. Optional events that are
-    // not permitted are not copied into raw_events at all.
     const { data: privacyGate, error: privacyGateError } = await admin.rpc(
       'privacy_gate_tracking_event_v1',
       {
@@ -194,6 +196,8 @@ export async function POST(request: NextRequest) {
         gpc,
         origin,
         organization_site_id: source.organizationSiteId,
+        public_site_id: source.publicSiteId,
+        site_id_verified: source.siteIdVerified,
         site_environment: source.siteEnvironment,
         user_agent: request.headers.get('user-agent'),
         geo_country: geo.country,
@@ -206,6 +210,8 @@ export async function POST(request: NextRequest) {
         adapter: 'app/api/events/browser/v1',
         source_key: source.sourceKey,
         organization_site_id: source.organizationSiteId,
+        public_site_id: source.publicSiteId,
+        site_id_verified: source.siteIdVerified,
         site_environment: source.siteEnvironment,
         privacy_gate_reason: privacyGate?.reason ?? null,
         privacy_purpose:
@@ -253,6 +259,8 @@ export async function POST(request: NextRequest) {
         event_family: data?.event_family ?? null,
         contract_status: data?.contract_status ?? null,
         reason: data?.reason ?? null,
+        site_id: source.publicSiteId,
+        site_id_verified: source.siteIdVerified,
         processing,
         received_at: new Date().toISOString(),
       },
