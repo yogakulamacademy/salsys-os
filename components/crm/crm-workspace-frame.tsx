@@ -4,6 +4,7 @@ import { CrmLeadInspectorBridge } from '@/components/crm/crm-lead-inspector-brid
 import { CrmNavigation } from '@/components/crm/crm-navigation';
 import { CrmTopbar } from '@/components/crm/crm-topbar';
 import styles from '@/components/crm/crm-studio.module.css';
+import { LiveRefresh } from '@/components/live-refresh';
 import { useMockData } from '@/lib/config';
 import { createClient } from '@/lib/supabase/server';
 import { getCurrentWorkspaceContext } from '@/lib/workspace';
@@ -70,6 +71,7 @@ export async function CrmWorkspaceFrame({ children }: { children: ReactNode }) {
 
   return (
     <div className={styles.studio}>
+      <LiveRefresh enabled={!useMockData} />
       <CrmNavigation
         workspaceName={identity.workspaceName}
         profileName={identity.profileName}
