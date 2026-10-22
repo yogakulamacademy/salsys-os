@@ -37,7 +37,7 @@ const PUBLIC_EXACT_PATHS = new Set([
   "/api/intelligence/lead-scoring-snapshot",
 ]);
 
-const ACTIVE_WORKSPACE_COOKIE = "yk-active-workspace";
+const ACTIVE_WORKSPACE_COOKIE = "salsys-active-workspace";
 const WORKSPACE_COOKIE_MAX_AGE_SECONDS = 60 * 60 * 24 * 30;
 
 const EMPLOYEE_EXACT_PATHS = new Set([
