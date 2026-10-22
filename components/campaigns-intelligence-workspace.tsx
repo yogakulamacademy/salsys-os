@@ -12,6 +12,7 @@ import type {
   CampaignWorkspaceRow,
   CampaignWorkspaceSummary,
 } from '@/components/campaigns-workspace';
+import { MarketingInspector } from '@/components/marketing/marketing-inspector';
 import styles from '@/components/marketing/campaigns-reference.module.css';
 
 export function CampaignsIntelligenceWorkspace({
@@ -157,24 +158,98 @@ function Pulse({ label, value, note, word = false }: { label: string; value: str
 }
 
 function CampaignDrawer({ campaign, onClose }: { campaign: CampaignWorkspaceRow; onClose: () => void }) {
-  const matchCoverage = campaign.clicks > 0 ? Math.min(100, (campaign.leads / campaign.clicks) * 100) : 0;
-  const downstreamCoverage = campaign.leads > 0 ? Math.min(100, ((campaign.qualified + campaign.enrolled) / Math.max(1, campaign.leads * 2)) * 100) : 0;
-  return <div className={styles.overlay} role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}>
-    <aside className={styles.drawer} role="dialog" aria-modal="true" aria-label={`${campaign.name} campaign evidence`}>
-      <div className={styles.drawerHead}><div><div className="eyebrow">Campaign evidence</div><h2>{campaign.name}</h2><p>{campaign.platform} · {campaign.externalId}</p></div><button type="button" className={styles.close} onClick={onClose}><X size={17} /></button></div>
-      <div className={styles.drawerMetrics}>
-        <DrawerMetric label="Spend" value={formatMoney(campaign.spend, campaign.spendCurrency)} /><DrawerMetric label="Clicks" value={campaign.clicks.toLocaleString('en-IN')} /><DrawerMetric label="CRM Leads" value={campaign.leads.toLocaleString('en-IN')} />
-        <DrawerMetric label="Qualified" value={campaign.qualified.toLocaleString('en-IN')} /><DrawerMetric label="Enrolled" value={campaign.enrolled.toLocaleString('en-IN')} /><DrawerMetric label="ROAS" value={campaign.roas === null ? 'Partial' : `${campaign.roas.toFixed(1)}×`} />
-      </div>
-      <section className={styles.section}><h3>Lead quality</h3><div className={styles.coverage}><div className={styles.coverageTop}><strong>Lead → qualified</strong><span>{percent(campaign.qualified, campaign.leads)}</span></div><span className={styles.track}><i style={{ width: `${campaign.leads ? campaign.qualified / campaign.leads * 100 : 0}%` }} /></span></div><div className={styles.coverage}><div className={styles.coverageTop}><strong>Lead → enrolled</strong><span>{percent(campaign.enrolled, campaign.leads)}</span></div><span className={styles.track}><i style={{ width: `${campaign.leads ? campaign.enrolled / campaign.leads * 100 : 0}%` }} /></span></div></section>
-      <section className={styles.section}><h3>Commercial impact</h3><div className={styles.drawerMetrics}><DrawerMetric label="CPL" value={optionalMoney(campaign.cpl, campaign.spendCurrency)} /><DrawerMetric label="CPQL" value={optionalMoney(campaign.cpql, campaign.spendCurrency)} /><DrawerMetric label="CAC" value={optionalMoney(campaign.cac, campaign.spendCurrency)} /></div><DrawerMetric label="CRM revenue" value={formatRevenue(campaign.revenueInr, campaign.revenueUsd)} /></section>
-      <section className={styles.section}><h3>Evidence coverage</h3><div className={styles.coverage}><div className={styles.coverageTop}><strong>Click → deterministic CRM lead</strong><span>{matchCoverage.toFixed(1)}%</span></div><span className={styles.track}><i style={{ width: `${matchCoverage}%` }} /></span></div><div className={styles.coverage}><div className={styles.coverageTop}><strong>Downstream CRM outcome evidence</strong><span>{downstreamCoverage.toFixed(1)}%</span></div><span className={styles.track}><i style={{ width: `${downstreamCoverage}%` }} /></span></div><p className={styles.sub}>Coverage indicators describe available evidence. They are not statistical confidence scores.</p></section>
-      <div className={styles.actions}><Link className={`${styles.action} ${styles.primary}`} href="/paid-media-leads">View generated leads</Link><Link className={styles.action} href="/attribution">Open attribution</Link><button className={styles.action} type="button" onClick={onClose}>Close</button></div>
-    </aside>
-  </div>;
+  const leadRate = campaign.clicks > 0 ? (campaign.leads / campaign.clicks) * 100 : null;
+  const qualificationRate = campaign.leads > 0 ? (campaign.qualified / campaign.leads) * 100 : null;
+  const enrollmentRate = campaign.leads > 0 ? (campaign.enrolled / campaign.leads) * 100 : null;
+  const sameCurrencyRevenue = campaign.spendCurrency.toUpperCase() === 'USD' ? campaign.revenueUsd : campaign.revenueInr;
+  const commercialEvidence = campaign.roas !== null || campaign.cac !== null || sameCurrencyRevenue > 0;
+  const statusTone = campaign.spend > 0 && campaign.qualified === 0
+    ? 'risk' as const
+    : campaign.enrolled > 0
+      ? 'positive' as const
+      : campaign.leads > 0
+        ? 'watch' as const
+        : 'neutral' as const;
+
+  return (
+    <MarketingInspector
+      open
+      onClose={onClose}
+      eyebrow="Campaign evidence"
+      title={campaign.name}
+      subtitle={`${campaign.platform} · ${campaign.externalId}`}
+      statusLabel={campaign.roas === null ? 'Partial evidence' : campaign.enrolled > 0 ? 'Enrolling' : campaign.leads > 0 ? 'Generating leads' : 'No matched leads'}
+      statusTone={statusTone}
+      whatHappened={campaignNarrative(campaign)}
+      whyItMatters={campaignWhyItMatters(campaign)}
+      metrics={[
+        { label: 'Spend', value: formatMoney(campaign.spend, campaign.spendCurrency), note: 'paid-media spend' },
+        { label: 'Clicks', value: campaign.clicks.toLocaleString('en-IN'), note: leadRate === null ? 'lead rate unavailable' : `${leadRate.toFixed(1)}% click → lead` },
+        { label: 'CRM leads', value: campaign.leads.toLocaleString('en-IN'), note: 'deterministically attributed' },
+        { label: 'Qualified', value: campaign.qualified.toLocaleString('en-IN'), note: qualificationRate === null ? 'no lead denominator' : `${qualificationRate.toFixed(1)}% of leads` },
+        { label: 'Enrolled', value: campaign.enrolled.toLocaleString('en-IN'), note: enrollmentRate === null ? 'no lead denominator' : `${enrollmentRate.toFixed(1)}% of leads` },
+        { label: 'ROAS', value: campaign.roas === null ? 'Partial' : `${campaign.roas.toFixed(1)}×`, note: campaign.roas === null ? 'withheld until evidence is comparable' : 'same-currency evidence' },
+      ]}
+      evidence={[
+        {
+          label: 'Lead quality',
+          value: qualificationRate === null ? 'Unknown' : `${qualificationRate.toFixed(1)}% qualified`,
+          detail: qualificationRate === null ? 'No matched lead denominator is available.' : `${campaign.qualified} of ${campaign.leads} matched leads reached qualification.`,
+          tone: qualificationRate === null ? 'watch' : qualificationRate > 0 ? 'positive' : 'risk',
+        },
+        {
+          label: 'Enrollment evidence',
+          value: enrollmentRate === null ? 'Unknown' : `${enrollmentRate.toFixed(1)}% enrolled`,
+          detail: enrollmentRate === null ? 'No matched lead denominator is available.' : `${campaign.enrolled} of ${campaign.leads} matched leads enrolled.`,
+          tone: campaign.enrolled > 0 ? 'positive' : campaign.leads > 0 ? 'watch' : 'neutral',
+        },
+        {
+          label: 'Commercial efficiency',
+          value: commercialEvidence ? optionalMoney(campaign.cac, campaign.spendCurrency) : 'Partial / unknown',
+          detail: campaign.cac === null ? 'CAC is withheld when there is no valid comparable denominator.' : `Observed CAC is ${optionalMoney(campaign.cac, campaign.spendCurrency)}.`,
+          tone: commercialEvidence ? 'neutral' : 'watch',
+        },
+        {
+          label: 'CRM revenue',
+          value: formatRevenue(campaign.revenueInr, campaign.revenueUsd),
+          detail: 'INR and USD remain separate; SalsysOS does not combine currencies into a synthetic total.',
+          tone: campaign.revenueInr > 0 || campaign.revenueUsd > 0 ? 'positive' : 'watch',
+        },
+      ]}
+      recommendedAction={campaignRecommendedAction(campaign)}
+      actions={[
+        { label: 'View generated leads', href: '/paid-media-leads', primary: true },
+        { label: 'Open attribution', href: '/attribution' },
+      ]}
+      related={[
+        { label: 'Attribution', href: '/attribution', detail: 'Inspect source credit and unknown attribution.' },
+        { label: 'Revenue', href: '/revenue', detail: 'Validate cash, pipeline and currency-separated revenue.' },
+        { label: 'Funnel', href: '/funnel', detail: 'Compare this campaign context with overall stage progression.' },
+      ]}
+    />
+  );
 }
 
-function DrawerMetric({ label, value }: { label: string; value: string }) { return <div className={styles.metric}><span>{label}</span><strong>{value}</strong></div>; }
+function campaignNarrative(campaign: CampaignWorkspaceRow) {
+  if (campaign.spend > 0 && campaign.qualified === 0) return `${campaign.name} has recorded spend and ${campaign.leads} matched CRM lead${campaign.leads === 1 ? '' : 's'}, but none of those leads are currently qualified.`;
+  if (campaign.enrolled > 0) return `${campaign.name} has produced ${campaign.enrolled} observed enrollment${campaign.enrolled === 1 ? '' : 's'} from ${campaign.leads} deterministically matched CRM lead${campaign.leads === 1 ? '' : 's'}.`;
+  if (campaign.leads > 0) return `${campaign.name} is generating matched CRM leads, but the downstream enrollment signal is still limited in the current reporting scope.`;
+  return `${campaign.name} has recorded paid-media activity, but no deterministically matched CRM leads are available in the current reporting scope.`;
+}
+
+function campaignWhyItMatters(campaign: CampaignWorkspaceRow) {
+  if (campaign.spend > 0 && campaign.qualified === 0) return 'Spend without qualified outcomes deserves review because lead volume alone can hide poor downstream quality. This is evidence for investigation, not proof that the campaign should be paused.';
+  if (campaign.enrolled > 0) return 'Observed enrollments provide stronger downstream evidence than clicks or leads alone. Budget decisions should still consider attribution coverage, CAC and whether the revenue evidence is complete.';
+  if (campaign.leads > 0) return 'The campaign has acquisition evidence, but budget expansion should wait for stronger downstream qualification or enrollment evidence unless there is another business reason to prioritize it.';
+  return 'Without deterministic CRM matches, CPL/ROAS-style conclusions can be misleading. The next step is to verify attribution and capture coverage before judging campaign quality.';
+}
+
+function campaignRecommendedAction(campaign: CampaignWorkspaceRow) {
+  if (campaign.spend > 0 && campaign.qualified === 0) return 'Inspect the matched leads and campaign targeting/landing path before increasing spend. Check whether poor qualification reflects audience quality, lead capture, or incomplete CRM attribution.';
+  if (campaign.enrolled > 0 && campaign.cac !== null) return `Compare the observed CAC of ${optionalMoney(campaign.cac, campaign.spendCurrency)} with other campaigns in the same currency and course context before reallocating budget.`;
+  if (campaign.leads > 0) return 'Review lead quality and attribution evidence, then monitor whether qualified and enrolled outcomes accumulate before making a scaling decision.';
+  return 'Verify click-ID capture, campaign matching and landing-page lead capture before treating the absence of CRM leads as a performance conclusion.';
+}
 
 function pageHref(current: ReturnType<typeof useSearchParams>, page: number) { const params = new URLSearchParams(current.toString()); if (page <= 1) params.delete('page'); else params.set('page', String(page)); const query = params.toString(); return query ? `/campaigns?${query}` : '/campaigns'; }
 function percent(value: number, denominator: number) { return denominator > 0 ? `${((value / denominator) * 100).toFixed(1)}%` : '—'; }
