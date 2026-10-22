@@ -1,3 +1,4 @@
+import { TemplateCreateButton } from '@/app/automation/templates/template-create-button';
 import {
   TemplateWorkspace,
   type TemplateSyncRunRow,
@@ -81,7 +82,8 @@ export default async function WhatsAppTemplatesPage() {
     loadError = error instanceof Error ? error.message : 'Unable to load WhatsApp template workspace.';
   }
 
-  const canSync = role ? ['owner', 'admin'].includes(role) : false;
+  const canManage = role ? ['owner', 'admin'].includes(role) : false;
+  const canCreate = canManage && Boolean(account);
 
   return (
     <div className="space-y-4">
@@ -91,12 +93,22 @@ export default async function WhatsAppTemplatesPage() {
         </div>
       ) : null}
 
+      <div className="flex flex-col gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <div className="text-sm font-bold text-slate-900">Create templates in SalsysOS</div>
+          <div className="mt-0.5 text-xs leading-5 text-slate-500">
+            Submit a text template directly to Meta, then synchronize its approval status back into this workspace.
+          </div>
+        </div>
+        <TemplateCreateButton disabled={!canCreate} />
+      </div>
+
       <TemplateWorkspace
         templates={templates}
         latestSync={latestSync}
         accountPhone={account?.display_phone_number ?? null}
         accountConnected={Boolean(account)}
-        canSync={canSync}
+        canSync={canManage}
       />
     </div>
   );
