@@ -78,8 +78,8 @@ const trackerChecks = [
   ['web.cta_clicked', 'CTA event'],
   ['web.form_started', 'form-start event'],
   ['web.form_submitted', 'form-submit event'],
-  ['salsys_visitor_id', 'neutral visitor field'],
-  ['salsys_session_id', 'neutral session field'],
+  ['salsys_visitor_id', 'canonical visitor field'],
+  ['salsys_session_id', 'canonical session field'],
   ['gclid', 'Google click ID capture'],
   ['fbclid', 'Meta click ID capture'],
   ['globalPrivacyControl', 'GPC support'],
@@ -91,16 +91,29 @@ for (const [needle, label] of trackerChecks) {
 
 const intelligenceChecks = [
   ['SalsysIntelligence', 'product-facing global'],
-  ['data-salsys-lead-form', 'neutral lead-form marker'],
-  ['data-yk-lead-form', 'legacy lead-form migration marker'],
+  ['data-salsys-lead-form', 'canonical lead-form marker'],
   ['FORM_MODE', 'lead-form tracking mode'],
-  ['instagram_click', 'Instagram CTA compatibility'],
-  ['enrollment_cta_click', 'enrollment CTA compatibility'],
-  ['yk:consent', 'legacy consent migration bridge'],
-  ['yk_tracking_ready', 'controlled legacy dataLayer readiness bridge'],
+  ['salsys:consent', 'canonical consent event bridge'],
+  ['salsys_tracking_ready', 'canonical dataLayer readiness event'],
+  ["data-legacy-aliases', 'false", 'legacy-alias disablement'],
 ];
 for (const [needle, label] of intelligenceChecks) {
   if (!intelligence.includes(needle)) fail(`Universal entrypoint is missing ${label} (${needle}).`);
+}
+
+for (const forbidden of [
+  'data-yk-lead-form',
+  'yk:consent',
+  'yk_tracking_ready',
+  'YKTracking',
+  'yk_visitor_id',
+  'yk_session_id',
+  'yk_first_touch',
+  'yk_session_touch',
+]) {
+  if (intelligence.includes(forbidden)) {
+    fail(`Universal entrypoint must not contain legacy Yogakulam tracking alias ${forbidden}.`);
+  }
 }
 
 const consentUiChecks = [
@@ -189,4 +202,4 @@ if (fs.existsSync(path.join(root, 'integrations/php/event-intelligence'))) {
   fail('PHP Event Intelligence runtime must not be part of the universal tracking architecture.');
 }
 
-console.log('[tracking-sdk] PASS: Universal Tracking Intelligence SDK V1 + Consent UI contract verified.');
+console.log('[tracking-sdk] PASS: Canonical Salsys Universal Tracking Intelligence SDK V1 + Consent UI contract verified.');
