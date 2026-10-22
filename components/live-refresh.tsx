@@ -1,34 +1,59 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 
-const watchedTables = [
-  'leads',
-  'tasks',
-  'messages',
-  'activities',
-  'lead_stage_history',
-  'conversations',
+type LiveRouteConfig = {
+  prefixes: string[];
+  tables: string[];
+};
+
+/*
+ * Keep the generic refresh fallback intentionally small and route-scoped.
+ * Specialized screens (for example Conversations message delivery/status)
+ * can own their own local realtime updates without subscribing to every CRM
+ * table or forcing duplicate route refreshes.
+ */
+const LIVE_ROUTE_CONFIG: LiveRouteConfig[] = [
+  {
+    prefixes: ['/dashboard'],
+    tables: [
+      'leads',
+      'tasks',
+      'messages',
+      'activities',
+      'lead_stage_history',
+      'conversations',
+    ],
+  },
+  {
+    prefixes: ['/admissions', '/leads', '/pipeline'],
+    tables: ['leads', 'tasks', 'activities', 'lead_stage_history'],
+  },
+  {
+    prefixes: ['/follow-ups'],
+    tables: ['tasks', 'leads', 'activities'],
+  },
+  {
+    // Message INSERT/UPDATE handling on the selected thread is specialized.
+    // The generic listener only keeps conversation-level server data fresh.
+    prefixes: ['/conversations'],
+    tables: ['conversations', 'leads', 'activities'],
+  },
 ];
 
-const LIVE_ROUTE_PREFIXES = [
-  '/dashboard',
-  '/admissions',
-  '/leads',
-  '/pipeline',
-  '/conversations',
-  '/follow-ups',
-];
+const MIN_REFRESH_INTERVAL_MS = 3_000;
+const EVENT_DEBOUNCE_MS = 350;
 
-const MIN_REFRESH_INTERVAL_MS = 15_000;
-const EVENT_DEBOUNCE_MS = 1_000;
-
-function supportsLiveRefresh(pathname: string) {
-  return LIVE_ROUTE_PREFIXES.some(
-    (prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`),
+function routeTables(pathname: string) {
+  const match = LIVE_ROUTE_CONFIG.find((config) =>
+    config.prefixes.some(
+      (prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`),
+    ),
   );
+
+  return match?.tables ?? [];
 }
 
 export function LiveRefresh({ enabled }: { enabled: boolean }) {
@@ -36,9 +61,12 @@ export function LiveRefresh({ enabled }: { enabled: boolean }) {
   const pathname = usePathname();
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastRefreshAt = useRef(Date.now());
+  const refreshQueuedWhileHidden = useRef(false);
   const [connected, setConnected] = useState(false);
 
-  const routeEnabled = enabled && supportsLiveRefresh(pathname);
+  const tables = useMemo(() => routeTables(pathname), [pathname]);
+  const tableKey = tables.join('|');
+  const routeEnabled = enabled && tables.length > 0;
 
   useEffect(() => {
     if (!routeEnabled) {
@@ -49,8 +77,20 @@ export function LiveRefresh({ enabled }: { enabled: boolean }) {
     const supabase = createClient();
     const channel = supabase.channel(`crm-live-refresh:${pathname}`);
 
+    const performRefresh = () => {
+      if (document.visibilityState !== 'visible') {
+        refreshQueuedWhileHidden.current = true;
+        return;
+      }
+
+      refreshQueuedWhileHidden.current = false;
+      lastRefreshAt.current = Date.now();
+      router.refresh();
+    };
+
     const scheduleRefresh = () => {
       if (document.visibilityState !== 'visible') {
+        refreshQueuedWhileHidden.current = true;
         return;
       }
 
@@ -65,16 +105,21 @@ export function LiveRefresh({ enabled }: { enabled: boolean }) {
       );
 
       timer.current = setTimeout(() => {
-        if (document.visibilityState !== 'visible') {
-          return;
-        }
-
-        lastRefreshAt.current = Date.now();
-        router.refresh();
+        timer.current = null;
+        performRefresh();
       }, delay);
     };
 
-    for (const table of watchedTables) {
+    const handleVisibilityChange = () => {
+      if (
+        document.visibilityState === 'visible' &&
+        refreshQueuedWhileHidden.current
+      ) {
+        performRefresh();
+      }
+    };
+
+    for (const table of tables) {
       channel.on(
         'postgres_changes',
         { event: '*', schema: 'public', table },
@@ -86,16 +131,19 @@ export function LiveRefresh({ enabled }: { enabled: boolean }) {
       setConnected(status === 'SUBSCRIBED');
     });
 
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
     return () => {
       if (timer.current) {
         clearTimeout(timer.current);
         timer.current = null;
       }
 
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
       setConnected(false);
       void supabase.removeChannel(channel);
     };
-  }, [pathname, routeEnabled, router]);
+  }, [pathname, routeEnabled, router, tableKey]);
 
   if (!routeEnabled) {
     return null;
