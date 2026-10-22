@@ -10,6 +10,8 @@ import { createAdminClient } from '@/lib/supabase/admin';
 export type TrackingSourceRuntime = {
   id: string;
   organizationId: string;
+  organizationSiteId: string | null;
+  siteEnvironment: 'production' | 'staging' | 'development' | null;
   sourceKey: string;
   sourceSystem: string;
   sourceType: 'website' | 'api' | 'webhook' | 'system';
@@ -109,29 +111,25 @@ export function sanitizeGenericTrackingEvent(
   }
 
   const raw = input as Record<string, unknown>;
-  const eventId =
-    text(raw.eventId ?? raw.event_id, 160);
-  const eventName =
-    text(raw.eventName ?? raw.event_name ?? raw.eventType ?? raw.event_type, 120);
+  const eventId = text(raw.eventId ?? raw.event_id, 160);
+  const eventName = text(
+    raw.eventName ?? raw.event_name ?? raw.eventType ?? raw.event_type,
+    120,
+  );
 
   if (!eventId || !eventName) {
     throw new Error('event_id and event_name are required.');
   }
 
-  const rawVersion = Number(
-    raw.schemaVersion ?? raw.schema_version ?? 1,
-  );
+  const rawVersion = Number(raw.schemaVersion ?? raw.schema_version ?? 1);
   const schemaVersion =
     Number.isInteger(rawVersion) && rawVersion >= 1 && rawVersion <= 100
       ? rawVersion
       : 1;
 
-  const payloadSource =
-    raw.properties ?? raw.payload ?? {};
-  const contextSource =
-    raw.context ?? {};
-  const metadataSource =
-    raw.metadata ?? {};
+  const payloadSource = raw.properties ?? raw.payload ?? {};
+  const contextSource = raw.context ?? {};
+  const metadataSource = raw.metadata ?? {};
 
   const sanitizedPayload = sanitizeUnknown(payloadSource);
   const sanitizedContext = sanitizeUnknown(contextSource);
@@ -141,25 +139,33 @@ export function sanitizeGenericTrackingEvent(
     eventId,
     eventName: eventName.toLowerCase(),
     schemaVersion,
-    occurredAt:
-      text(raw.occurredAt ?? raw.occurred_at, 80),
-    anonymousVisitorId:
-      text(raw.anonymousVisitorId ?? raw.anonymous_visitor_id, 180),
-    sessionKey:
-      text(raw.sessionKey ?? raw.session_key, 180),
-    externalMessageId:
-      text(raw.externalMessageId ?? raw.external_message_id, 240),
+    occurredAt: text(raw.occurredAt ?? raw.occurred_at, 80),
+    anonymousVisitorId: text(
+      raw.anonymousVisitorId ?? raw.anonymous_visitor_id,
+      180,
+    ),
+    sessionKey: text(raw.sessionKey ?? raw.session_key, 180),
+    externalMessageId: text(
+      raw.externalMessageId ?? raw.external_message_id,
+      240,
+    ),
     site: text(raw.site, 240),
     payload:
-      sanitizedPayload && typeof sanitizedPayload === 'object' && !Array.isArray(sanitizedPayload)
+      sanitizedPayload &&
+      typeof sanitizedPayload === 'object' &&
+      !Array.isArray(sanitizedPayload)
         ? (sanitizedPayload as Record<string, unknown>)
         : { value: sanitizedPayload },
     context:
-      sanitizedContext && typeof sanitizedContext === 'object' && !Array.isArray(sanitizedContext)
+      sanitizedContext &&
+      typeof sanitizedContext === 'object' &&
+      !Array.isArray(sanitizedContext)
         ? (sanitizedContext as Record<string, unknown>)
         : {},
     metadata:
-      sanitizedMetadata && typeof sanitizedMetadata === 'object' && !Array.isArray(sanitizedMetadata)
+      sanitizedMetadata &&
+      typeof sanitizedMetadata === 'object' &&
+      !Array.isArray(sanitizedMetadata)
         ? (sanitizedMetadata as Record<string, unknown>)
         : {},
   };
@@ -178,9 +184,22 @@ export async function resolveBrowserTrackingSource(
 
   if (error || !data?.ok) return null;
 
+  const environment = data.site_environment
+    ? String(data.site_environment)
+    : null;
+
   return {
     id: String(data.tracking_source_id),
     organizationId: String(data.organization_id),
+    organizationSiteId: data.organization_site_id
+      ? String(data.organization_site_id)
+      : null,
+    siteEnvironment:
+      environment === 'production' ||
+      environment === 'staging' ||
+      environment === 'development'
+        ? environment
+        : null,
     sourceKey: String(data.source_key),
     sourceSystem: String(data.source_system),
     sourceType: 'website',
@@ -192,9 +211,7 @@ export async function resolveBrowserTrackingSource(
 }
 
 function sha256(value: string) {
-  return createHash('sha256')
-    .update(value, 'utf8')
-    .digest('hex');
+  return createHash('sha256').update(value, 'utf8').digest('hex');
 }
 
 function safeHexEqual(left: string, right: string) {
@@ -221,7 +238,7 @@ export async function authenticateServerTrackingSource(
   const { data, error } = await admin
     .from('tracking_sources')
     .select(
-      'id,organization_id,source_key,source_system,source_type,auth_mode,hostname,secret_hash,status,max_payload_bytes,rate_limit_per_minute',
+      'id,organization_id,organization_site_id,source_key,source_system,source_type,auth_mode,hostname,secret_hash,status,max_payload_bytes,rate_limit_per_minute',
     )
     .eq('source_key', normalizedKey)
     .eq('status', 'active')
@@ -237,6 +254,10 @@ export async function authenticateServerTrackingSource(
   return {
     id: String(data.id),
     organizationId: String(data.organization_id),
+    organizationSiteId: data.organization_site_id
+      ? String(data.organization_site_id)
+      : null,
+    siteEnvironment: null,
     sourceKey: String(data.source_key),
     sourceSystem: String(data.source_system),
     sourceType: data.source_type as TrackingSourceRuntime['sourceType'],
@@ -279,9 +300,10 @@ export function corsHeadersForTrackingOrigin(
 ) {
   const headers: Record<string, string> = {
     'Access-Control-Allow-Methods': 'POST, OPTIONS',
-    'Access-Control-Allow-Headers': 'Content-Type, X-Salsys-Source-Key, Authorization',
+    'Access-Control-Allow-Headers':
+      'Content-Type, X-Salsys-Source-Key, Authorization',
     'Access-Control-Max-Age': '86400',
-    'Vary': 'Origin',
+    Vary: 'Origin',
     'Cache-Control': 'no-store',
   };
 
