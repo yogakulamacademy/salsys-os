@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
+  Activity,
   ChevronDown,
   LayoutDashboard,
   ListTodo,
@@ -25,6 +26,7 @@ const groups: Group[] = [
   {
     label: 'Workspace',
     items: [
+      { href: '/crm', label: 'Command Center', icon: Activity },
       { href: '/admissions', label: 'Admissions Desk', icon: LayoutDashboard },
       { href: '/leads', label: 'Leads', icon: UserRoundSearch },
       { href: '/pipeline', label: 'Pipeline', icon: Rows3 },
@@ -89,7 +91,7 @@ export function CrmNavigation() {
         <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 text-sm font-semibold text-[#192E29] [&::-webkit-details-marker]:hidden">
           <span className="flex items-center gap-2.5">
             <span className="grid h-8 w-8 place-items-center rounded-lg bg-[#EAF4ED] text-[#216551]">
-              <UserRoundSearch size={16} />
+              <Activity size={16} />
             </span>
             {current?.label || 'CRM Operations'}
           </span>
@@ -98,7 +100,7 @@ export function CrmNavigation() {
         <div className="border-t border-[#E4EAE6] p-3">
           <div className="mb-4 rounded-lg bg-[#F6F8F7] px-3 py-2.5">
             <div className="text-sm font-semibold text-[#192E29]">CRM Operations</div>
-            <div className="mt-0.5 text-xs leading-5 text-[#6D7C76]">Find, prioritize and move customer opportunities forward.</div>
+            <div className="mt-0.5 text-xs leading-5 text-[#6D7C76]">Prioritize, assign and move customer opportunities from one operating workspace.</div>
           </div>
           <Links />
         </div>
@@ -109,7 +111,7 @@ export function CrmNavigation() {
           <div className="mb-6 px-3 pt-1">
             <div className="text-[15px] font-semibold text-[#192E29]">CRM Operations</div>
             <p className="mt-1 max-w-[190px] text-xs leading-5 text-[#6D7C76]">
-              Leads, admissions decisions and pipeline movement in one workspace.
+              Start with the Command Center, then move into leads, admissions, tasks and pipeline decisions.
             </p>
           </div>
           <Links />
