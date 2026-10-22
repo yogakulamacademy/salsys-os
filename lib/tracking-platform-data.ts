@@ -149,7 +149,17 @@ export async function getTrackingPlatformWorkspace(): Promise<TrackingPlatformWo
     }
   }
 
-  const sources: TrackingPlatformSource[] = (sourceResult.data ?? []).map((rawRow) => {
+  const visibleRows = (sourceResult.data ?? []).filter((rawRow) => {
+    const row = rawRow as Record<string, unknown>;
+    if (String(row.source_type ?? '') !== 'website') return true;
+    const metadata =
+      row.metadata && typeof row.metadata === 'object' && !Array.isArray(row.metadata)
+        ? (row.metadata as Record<string, unknown>)
+        : {};
+    return metadata.merged_alias !== true;
+  });
+
+  const sources: TrackingPlatformSource[] = visibleRows.map((rawRow) => {
     const row = rawRow as Record<string, unknown>;
     const id = String(row.id);
     const metadata =
