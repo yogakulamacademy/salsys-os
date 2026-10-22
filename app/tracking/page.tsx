@@ -340,13 +340,13 @@ export default async function TrackingPage() {
           title="Website form → CRM"
           description={
             <>
-              Mark enquiry forms with <InlineCode>data-yk-lead-form</InlineCode>
+              Mark enquiry forms with <InlineCode>data-salsys-lead-form</InlineCode>
               . The tracker adds visitor/session attribution as hidden fields.
               After the website saves the enquiry, its backend can send the same
               submission to the secure CRM capture endpoint.
             </>
           }
-          code={`<form method="post" data-yk-lead-form>
+          code={`<form method="post" data-salsys-lead-form>
   ...your existing fields...
 </form>`}
         />
@@ -420,9 +420,9 @@ export default async function TrackingPage() {
           title="Track important CTA clicks"
           description="Add data attributes to important links. The tracker records the click and keeps the destination/contact channel in metadata."
           code={`<a href="https://wa.me/..."
-   data-yk-event="whatsapp_click"
-   data-yk-channel="whatsapp"
-   data-yk-label="200H Course WhatsApp">
+   data-salsys-track="whatsapp_click"
+   data-salsys-prop-channel="whatsapp"
+   aria-label="200H Course WhatsApp">
   Enquire on WhatsApp
 </a>`}
         />
@@ -433,8 +433,8 @@ export default async function TrackingPage() {
           title="Grant analytics consent"
           description="When your cookie-consent system receives analytics consent, dispatch the tracker consent event. Keep the tracker in required-consent mode for production unless your legal/privacy setup intentionally uses another approach."
           code={`window.dispatchEvent(
-  new CustomEvent('yk:consent', {
-    detail: { analytics: true }
+  new CustomEvent('salsys:consent', {
+    detail: { analytics: 'granted' }
   })
 );`}
         />
@@ -446,18 +446,20 @@ export default async function TrackingPage() {
           eyebrow="Diagnostics"
           title="Browser debugging helpers"
           description="Use these in DevTools when checking whether the tracker is loaded once, consent is active, and the current visitor/session context exists."
-          code={`// Tracker status
-window.YKTracking?.status?.();
+          code={`// Tracker configuration
+window.SalsysIntelligence?.config?.();
 
 // Current visitor + attribution context
-window.YKTracking?.context?.();
+window.SalsysIntelligence?.identifiers?.();
 
-// Confirm only one tracker script is installed
+// Current privacy state
+window.SalsysIntelligence?.privacy?.();
+
+// Confirm only the Salsys tracker entrypoint is installed
 [...document.querySelectorAll(
-  'script[src*="yogakulam-tracker.js"]'
+  'script[src*="salsys-intelligence.js"]'
 )].map((script) => ({
   src: script.src,
-  endpoint: script.dataset.endpoint,
   site: script.dataset.site,
   consentMode: script.dataset.consentMode,
   debug: script.dataset.debug

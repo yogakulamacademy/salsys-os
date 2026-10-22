@@ -3,7 +3,7 @@ import "server-only";
 import { cookies } from "next/headers";
 import { createClient } from "@/lib/supabase/server";
 
-export const ACTIVE_WORKSPACE_COOKIE = "yk-active-workspace";
+export const ACTIVE_WORKSPACE_COOKIE = "salsys-active-workspace";
 export const ACTIVE_ORGANIZATION_COOKIE = ACTIVE_WORKSPACE_COOKIE;
 
 type ServerSupabaseClient = Awaited<ReturnType<typeof createClient>>;

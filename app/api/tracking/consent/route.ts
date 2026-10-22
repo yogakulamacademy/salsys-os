@@ -223,7 +223,7 @@ export async function POST(request: NextRequest) {
 
           p_consent_source:
             payload.consent.source ||
-            "yk_tracker",
+            "salsys_tracker",
 
           p_raw_event_id:
             null,
