@@ -193,6 +193,8 @@ export async function POST(request: NextRequest) {
         ...event.context,
         gpc,
         origin,
+        organization_site_id: source.organizationSiteId,
+        site_environment: source.siteEnvironment,
         user_agent: request.headers.get('user-agent'),
         geo_country: geo.country,
         geo_region: geo.region,
@@ -203,8 +205,11 @@ export async function POST(request: NextRequest) {
         ...event.metadata,
         adapter: 'app/api/events/browser/v1',
         source_key: source.sourceKey,
+        organization_site_id: source.organizationSiteId,
+        site_environment: source.siteEnvironment,
         privacy_gate_reason: privacyGate?.reason ?? null,
-        privacy_purpose: privacyGate?.mapped_purpose ?? privacyGate?.purpose ?? null,
+        privacy_purpose:
+          privacyGate?.mapped_purpose ?? privacyGate?.purpose ?? null,
         geo_enrichment: Boolean(
           geo.country || geo.region || geo.city || geo.timezone,
         ),
@@ -231,7 +236,9 @@ export async function POST(request: NextRequest) {
 
       processing = processingError
         ? { ok: false, processed: false, reason: 'processor_rpc_failed' }
-        : processingData && typeof processingData === 'object' && !Array.isArray(processingData)
+        : processingData &&
+            typeof processingData === 'object' &&
+            !Array.isArray(processingData)
           ? (processingData as Record<string, unknown>)
           : null;
     }
@@ -261,7 +268,10 @@ export async function POST(request: NextRequest) {
       {
         ok: false,
         accepted: false,
-        error: error instanceof Error ? error.message : 'Browser event ingestion failed.',
+        error:
+          error instanceof Error
+            ? error.message
+            : 'Browser event ingestion failed.',
       },
       400,
       {
