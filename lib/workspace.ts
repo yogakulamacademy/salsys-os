@@ -3,8 +3,9 @@ import "server-only";
 import { cookies } from "next/headers";
 import { createClient } from "@/lib/supabase/server";
 
-export const ACTIVE_WORKSPACE_COOKIE = "yk-active-workspace";
+export const ACTIVE_WORKSPACE_COOKIE = "salsysos-active-workspace";
 export const ACTIVE_ORGANIZATION_COOKIE = ACTIVE_WORKSPACE_COOKIE;
+export const LEGACY_ACTIVE_WORKSPACE_COOKIE = "yk-active-workspace";
 
 type ServerSupabaseClient = Awaited<ReturnType<typeof createClient>>;
 
@@ -43,7 +44,9 @@ export async function getWorkspaceContextForUser(
 ): Promise<WorkspaceContext> {
   const cookieStore = await cookies();
   const boundOrganizationId =
-    cookieStore.get(ACTIVE_WORKSPACE_COOKIE)?.value?.trim() ?? "";
+    cookieStore.get(ACTIVE_WORKSPACE_COOKIE)?.value?.trim() ||
+    cookieStore.get(LEGACY_ACTIVE_WORKSPACE_COOKIE)?.value?.trim() ||
+    "";
 
   if (boundOrganizationId) {
     await bindCurrentTenantSession(supabase, boundOrganizationId);

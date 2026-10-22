@@ -15,7 +15,12 @@ export const metadata: Metadata = {
 const themeBootScript = `
 (function () {
   try {
-    var saved = localStorage.getItem('yk-theme') || 'light';
+    var key = 'salsysos-theme';
+    var legacyKey = 'yk-theme';
+    var saved = localStorage.getItem(key) || localStorage.getItem(legacyKey) || 'light';
+    if (!localStorage.getItem(key) && (saved === 'dark' || saved === 'light')) {
+      localStorage.setItem(key, saved);
+    }
     var dark = saved === 'dark' || (!saved && window.matchMedia('(prefers-color-scheme: dark)').matches);
     document.documentElement.classList.toggle('dark', dark);
     document.documentElement.style.colorScheme = dark ? 'dark' : 'light';
