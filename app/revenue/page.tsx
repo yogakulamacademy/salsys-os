@@ -1,9 +1,14 @@
 import Link from "next/link";
 import { AlertTriangle, ArrowRight, CalendarClock, Sparkles } from "lucide-react";
 
+import { ExecutiveDecisionBrief } from "@/components/marketing/executive-decision-brief";
 import { RevenueInsights } from "@/components/revenue-insights";
 import { PageHeader } from "@/components/ui";
-import { getRevenueWorkspace, type RevenueOpportunityRow } from "@/lib/revenue-data";
+import {
+  getRevenueWorkspace,
+  type RevenueCurrencySummary,
+  type RevenueOpportunityRow,
+} from "@/lib/revenue-data";
 
 export default async function RevenuePage() {
   const currentMonth = new Date().toISOString().slice(0, 7);
@@ -71,17 +76,34 @@ export default async function RevenuePage() {
     }))
     .filter((row) => row.gross !== 0 || row.refunds !== 0 || row.net !== 0);
 
+  const brief = buildRevenueDecisionBrief(
+    totalsByCurrency,
+    unvaluedLeads,
+    topOpportunities,
+    closingThisMonth,
+  );
+
   return (
     <div className="space-y-4">
       <PageHeader
-        eyebrow="Intelligence"
+        eyebrow="Decision intelligence"
         title="Revenue"
-        description="Explore pipeline, cash, refunds and outstanding balances."
+        description="Understand collected cash, open pipeline, outstanding balances and the opportunities most likely to need action now."
         actions={
           <Link href="/commercial-intelligence" className="btn-secondary">
             <Sparkles size={15} /> Explain performance
           </Link>
         }
+      />
+
+      <ExecutiveDecisionBrief
+        eyebrow="Revenue decision brief"
+        title={brief.title}
+        summary={brief.summary}
+        confidenceLabel={brief.confidenceLabel}
+        confidenceDetail={brief.confidenceDetail}
+        signals={brief.signals}
+        actions={brief.actions}
       />
 
       {workspace.warning ? (
@@ -130,6 +152,83 @@ export default async function RevenuePage() {
       </div>
     </div>
   );
+}
+
+function buildRevenueDecisionBrief(
+  summaries: RevenueCurrencySummary[],
+  unvaluedLeads: number,
+  topOpportunities: RevenueOpportunityRow[],
+  closingThisMonth: RevenueOpportunityRow[],
+) {
+  const active = summaries.filter((row) => row.actual || row.pipeline || row.weighted || row.outstanding);
+  const actual = formatSummaryMetric(active, "actual");
+  const pipeline = formatSummaryMetric(active, "pipeline");
+  const weighted = formatSummaryMetric(active, "weighted");
+  const outstanding = formatSummaryMetric(active, "outstanding");
+  const paymentCount = active.reduce((sum, row) => sum + row.successfulPayments, 0);
+  const opportunityCount = active.reduce((sum, row) => sum + row.opportunities, 0);
+
+  const title = unvaluedLeads > 0
+    ? `${unvaluedLeads} open ${unvaluedLeads === 1 ? "lead is" : "leads are"} limiting forecast readiness.`
+    : closingThisMonth.length > 0
+      ? `${closingThisMonth.length} ${closingThisMonth.length === 1 ? "opportunity is" : "opportunities are"} expected to close this month.`
+      : "Revenue evidence is reconciled; focus on pipeline quality and collection timing.";
+
+  const summary = unvaluedLeads > 0
+    ? `Collected revenue and open commercial value are visible, but forecasts remain incomplete until those leads receive explicit potential values. Currency truth stays separate in the underlying ledger.`
+    : `SalsysOS is separating collected revenue, outstanding balances, open pipeline and deterministic weighted planning value so the team can act without double-counting commercial value.`;
+
+  return {
+    title,
+    summary,
+    confidenceLabel: unvaluedLeads > 0 ? "Forecast readiness incomplete" : "Forecast inputs complete",
+    confidenceDetail: `Revenue amounts remain in their original currencies. Weighted pipeline uses configured stage weights for planning and is not presented as a calibrated conversion probability. ${paymentCount.toLocaleString("en-IN")} successful payments are represented in the current summaries.`,
+    signals: [
+      {
+        label: "Collected revenue",
+        value: actual,
+        detail: `${paymentCount.toLocaleString("en-IN")} successful payments across visible currencies.`,
+        tone: paymentCount > 0 ? ("positive" as const) : ("neutral" as const),
+      },
+      {
+        label: "Open pipeline",
+        value: pipeline,
+        detail: `${opportunityCount.toLocaleString("en-IN")} valued opportunities before stage weighting.`,
+        tone: opportunityCount > 0 ? ("positive" as const) : ("neutral" as const),
+      },
+      {
+        label: "Weighted planning value",
+        value: weighted,
+        detail: "Deterministic stage-weighted planning value; not probability.",
+        tone: "neutral" as const,
+      },
+      {
+        label: "Outstanding balances",
+        value: outstanding,
+        detail: closingThisMonth.length
+          ? `${closingThisMonth.length} expected close ${closingThisMonth.length === 1 ? "record" : "records"} this month.`
+          : "No expected-close cohort is visible this month.",
+        tone: active.some((row) => row.outstanding > 0) ? ("watch" as const) : ("positive" as const),
+      },
+    ],
+    actions: [
+      { label: "Work pipeline", href: "/pipeline", detail: "Review value, stage, ownership and expected close date." },
+      { label: "Inspect attribution", href: "/attribution", detail: "Compare commercial value with acquisition evidence." },
+      ...(topOpportunities[0]
+        ? [{ label: "Open top opportunity", href: `/leads/${topOpportunities[0].id}`, detail: "Review the highest-value visible opportunity." }]
+        : []),
+    ],
+  };
+}
+
+function formatSummaryMetric(
+  rows: RevenueCurrencySummary[],
+  key: "actual" | "pipeline" | "weighted" | "outstanding",
+) {
+  const values = rows
+    .filter((row) => toNumber(row[key]) !== 0)
+    .map((row) => formatMoney(row[key], row.currency));
+  return values.length ? values.join(" · ") : "—";
 }
 
 function OpportunityCard({
