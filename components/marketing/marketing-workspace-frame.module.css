@@ -13,8 +13,12 @@
 
   min-height: calc(100vh - 64px);
   color: var(--marketing-ink);
-  background: var(--marketing-bg);
+  background:
+    radial-gradient(circle at 78% -10%, rgba(220, 238, 222, .42), transparent 29%),
+    radial-gradient(circle at 28% -8%, rgba(234, 227, 243, .28), transparent 24%),
+    var(--marketing-bg);
   gap: 0 !important;
+  -webkit-font-smoothing: antialiased;
 }
 
 .studio > :global(:last-child) {
@@ -22,65 +26,92 @@
   padding: 27px 28px 28px;
 }
 
+.studio :global(.btn-primary),
+.studio :global(.btn-secondary),
+.studio :global(button),
+.studio :global(a) {
+  transition-property: color, background-color, border-color, box-shadow, transform, opacity;
+  transition-duration: 180ms;
+  transition-timing-function: ease;
+}
+
 .studio :global(.btn-primary) {
   border-radius: 7px;
-  background: var(--marketing-brand);
+  background: linear-gradient(180deg, #1a4a3d 0%, var(--marketing-brand) 100%);
   border-color: var(--marketing-brand);
-  box-shadow: none;
+  box-shadow: 0 4px 12px rgba(21, 61, 51, .10);
   font-size: 10px;
   font-weight: 650;
   min-height: 34px;
 }
 
 .studio :global(.btn-primary:hover) {
-  background: #265544;
-  box-shadow: none;
+  background: linear-gradient(180deg, #285d4b 0%, #204f40 100%);
+  box-shadow: 0 7px 18px rgba(21, 61, 51, .14);
+  transform: translateY(-1px);
 }
 
 .studio :global(.btn-secondary) {
   border-color: var(--marketing-line);
   border-radius: 7px;
-  background: #fff;
+  background: rgba(255,255,255,.9);
   color: var(--marketing-ink);
   font-size: 10px;
   font-weight: 600;
   min-height: 34px;
-  box-shadow: none;
+  box-shadow: 0 1px 2px rgba(20, 43, 35, .02);
+  backdrop-filter: blur(8px);
 }
 
 .studio :global(.btn-secondary:hover) {
   border-color: #b4c4b2;
   background: #f1f5ed;
   color: var(--marketing-brand-dark);
+  box-shadow: 0 5px 15px rgba(20, 43, 35, .05);
+  transform: translateY(-1px);
 }
 
 .studio :global(.card),
 .studio :global(.card-pad) {
   border-color: var(--marketing-line);
-  border-radius: 11px;
-  background: #fff;
-  box-shadow: none;
+  border-radius: 12px;
+  background: rgba(255,255,255,.96);
+  box-shadow: 0 8px 26px rgba(20, 43, 35, .025);
 }
 
 .studio :global(.card:hover),
 .studio :global(.card-pad:hover) {
-  transform: none;
-  border-color: #d8e2db;
-  box-shadow: none;
+  border-color: #d2ddd4;
+  box-shadow: 0 14px 34px rgba(20, 43, 35, .045);
 }
 
 .studio :global(.input) {
   border-color: var(--marketing-line);
   border-radius: 7px;
-  background: #fff;
+  background: rgba(255,255,255,.95);
   color: var(--marketing-ink);
   font-size: 10px;
-  box-shadow: none;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.9);
 }
 
 .studio :global(.input:focus) {
   border-color: #a48aba;
   box-shadow: 0 0 0 3px rgba(164, 138, 186, 0.12);
+}
+
+.studio :global(input),
+.studio :global(select),
+.studio :global(textarea) {
+  transition: border-color 160ms ease, box-shadow 160ms ease, background-color 160ms ease;
+}
+
+.studio :global(input:focus-visible),
+.studio :global(select:focus-visible),
+.studio :global(textarea:focus-visible),
+.studio :global(button:focus-visible),
+.studio :global(a:focus-visible) {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(126, 100, 150, .14);
 }
 
 .studio h1,
@@ -92,6 +123,11 @@
 .studio h1 {
   font-weight: 600;
   letter-spacing: -1px;
+}
+
+.studio h2,
+.studio h3 {
+  letter-spacing: -.02em;
 }
 
 .studio p {
@@ -113,11 +149,11 @@
 
 .studio :global(.rounded-3xl),
 .studio :global(.rounded-2xl) {
-  border-radius: 11px;
+  border-radius: 12px;
 }
 
 .studio :global(.rounded-xl) {
-  border-radius: 8px;
+  border-radius: 9px;
 }
 
 .studio :global(.border-slate-200),
@@ -183,19 +219,52 @@
 
 .studio :global(.shadow-sm),
 .studio :global([class*="shadow-[0_1px_2px"]) {
-  box-shadow: none;
+  box-shadow: 0 5px 18px rgba(20, 43, 35, .03);
+}
+
+.studio :global(section.rounded-2xl),
+.studio :global(div.rounded-2xl.border) {
+  box-shadow: 0 7px 24px rgba(20, 43, 35, .025);
 }
 
 .studio :global(table) {
   font-size: 10px;
+  font-variant-numeric: tabular-nums;
 }
 
 .studio :global(thead) {
   color: #8a9585;
 }
 
+.studio :global(thead th) {
+  letter-spacing: .035em;
+}
+
+.studio :global(tbody tr) {
+  transition: background-color 140ms ease, box-shadow 140ms ease;
+}
+
 .studio :global(tbody tr:hover) {
   background-color: #f7faf2;
+}
+
+.studio :global(.recharts-wrapper) {
+  filter: drop-shadow(0 3px 10px rgba(20, 43, 35, .025));
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .studio > :global(:last-child) > :global(*) {
+    animation: marketing-enter 320ms ease both;
+  }
+
+  .studio > :global(:last-child) > :global(*:nth-child(2)) { animation-delay: 35ms; }
+  .studio > :global(:last-child) > :global(*:nth-child(3)) { animation-delay: 65ms; }
+  .studio > :global(:last-child) > :global(*:nth-child(4)) { animation-delay: 90ms; }
+}
+
+@keyframes marketing-enter {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
 }
 
 @media (max-width: 1023px) {
