@@ -35,13 +35,13 @@ export function TemplateSyncButton({ disabled = false }: { disabled?: boolean })
 
       setMessage({
         tone: 'success',
-        text: `Sync complete: ${payload.templatesSeen ?? 0} seen, ${payload.templatesUpserted ?? 0} updated, ${payload.templatesDeactivated ?? 0} deactivated.`,
+        text: `${payload.templatesSeen ?? 0} checked · ${payload.templatesUpserted ?? 0} updated`,
       });
       router.refresh();
     } catch (error) {
       setMessage({
         tone: 'error',
-        text: error instanceof Error ? error.message : 'Unable to synchronize WhatsApp templates.',
+        text: error instanceof Error ? error.message : 'Unable to sync templates.',
       });
     } finally {
       setSyncing(false);
@@ -49,18 +49,19 @@ export function TemplateSyncButton({ disabled = false }: { disabled?: boolean })
   }
 
   return (
-    <div className="space-y-2">
+    <div className="space-y-1.5">
       <button
         type="button"
         disabled={disabled || syncing}
         onClick={syncTemplates}
+        title={disabled ? 'Admin permission required' : 'Synchronize templates from Meta'}
         className="btn-primary"
       >
         {syncing ? <Loader2 size={15} className="animate-spin" /> : <RefreshCw size={15} />}
-        {syncing ? 'Synchronizing…' : 'Sync from Meta'}
+        {syncing ? 'Syncing…' : 'Sync templates'}
       </button>
       {message ? (
-        <p className={`max-w-xl text-xs leading-5 ${message.tone === 'success' ? 'text-emerald-700' : 'text-rose-700'}`}>
+        <p className={`max-w-[240px] text-xs ${message.tone === 'success' ? 'text-emerald-700' : 'text-rose-700'}`}>
           {message.text}
         </p>
       ) : null}

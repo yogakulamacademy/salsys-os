@@ -56,7 +56,7 @@ export async function movePipelineLeadStage(
     p_new_stage: newStage,
     p_changed_by_type: "human",
     p_changed_by_id: claims.claims.sub,
-    p_reason: "Moved via pipeline drag and drop",
+    p_reason: "Moved via pipeline board",
   });
 
   if (error) {

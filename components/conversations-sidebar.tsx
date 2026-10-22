@@ -1,23 +1,9 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-
 import Link from "next/link";
-
-import {
-  Bell,
-  Clock3,
-  ContactRound,
-  Globe2,
-  Instagram,
-  Mail,
-  MessageCircle,
-  Phone,
-  Search,
-  X,
-} from "lucide-react";
-
-import { StageBadge } from "@/components/ui";
+import { useSearchParams } from "next/navigation";
+import { Flag, MessageCircle, Search, X } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import type { Channel, LeadStage } from "@/types/crm";
 
@@ -25,347 +11,374 @@ export type ConversationPriority = "urgent" | "high" | "normal" | "waiting";
 
 export type ConversationLeadSummary = {
   id: string;
-
   name: string;
-
   course: string;
-
   country: string;
-
   stage: LeadStage;
-
   currentContactChannel: Channel;
-
   lastContactedAt: string | null;
-
   unread: boolean;
-
   needsReply: boolean;
-
   needsFirstContact: boolean;
-
   priority: ConversationPriority;
-
   waitingSince: string | null;
 };
 
-type InboxFilter = "all" | "attention" | "unread";
+type InboxFilter = "all" | "reply" | "unread";
 
 export function ConversationsSidebar({
   leads,
-
   selectedId,
 }: {
   leads: ConversationLeadSummary[];
-
   selectedId?: string;
 }) {
+  const searchParams = useSearchParams();
+  const explicitLeadId = searchParams.get("lead");
   const [search, setSearch] = useState("");
-
   const [filter, setFilter] = useState<InboxFilter>("all");
-
+  const [priorityOnly, setPriorityOnly] = useState(false);
   const [now, setNow] = useState(0);
+  const [mobileViewport, setMobileViewport] = useState(false);
+  const searchRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
-    const updateNow = () => setNow(Date.now());
-
-    updateNow();
-
-    const timer = window.setInterval(updateNow, 60_000);
-
+    const update = () => setNow(Date.now());
+    update();
+    const timer = window.setInterval(update, 60_000);
     return () => window.clearInterval(timer);
   }, []);
 
-  const unreadCount = leads.filter((lead) => lead.unread).length;
+  useEffect(() => {
+    const media = window.matchMedia("(max-width: 620px)");
+    const update = () => setMobileViewport(media.matches);
+    update();
+    media.addEventListener("change", update);
+    return () => media.removeEventListener("change", update);
+  }, []);
 
-  const attentionCount = leads.filter(
-    (lead) => lead.needsReply || lead.needsFirstContact,
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (
+        event.key !== "/" ||
+        event.altKey ||
+        event.ctrlKey ||
+        event.metaKey ||
+        event.shiftKey
+      ) {
+        return;
+      }
+
+      const target = event.target as HTMLElement | null;
+      if (
+        target?.matches("input, textarea, select") ||
+        target?.isContentEditable
+      ) {
+        return;
+      }
+
+      event.preventDefault();
+      searchRef.current?.focus();
+      searchRef.current?.select();
+    };
+
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, []);
+
+  const unreadCount = leads.filter((lead) => lead.unread).length;
+  const replyCount = leads.filter((lead) => lead.needsReply).length;
+  const priorityCount = leads.filter(
+    (lead) => lead.priority === "urgent" || lead.priority === "high",
   ).length;
 
   const filteredLeads = useMemo(() => {
-    const query = search
-
-      .trim()
-
-      .toLowerCase();
+    const query = search.trim().toLowerCase();
 
     return leads.filter((lead) => {
+      if (filter === "reply" && !lead.needsReply) return false;
+      if (filter === "unread" && !lead.unread) return false;
       if (
-        filter === "attention" &&
-        !lead.needsReply &&
-        !lead.needsFirstContact
+        priorityOnly &&
+        lead.priority !== "urgent" &&
+        lead.priority !== "high"
       ) {
         return false;
       }
 
-      if (filter === "unread" && !lead.unread) {
-        return false;
-      }
+      if (!query) return true;
 
-      if (!query) {
-        return true;
-      }
-
-      const searchable = [
+      return [
         lead.name,
-
         lead.course,
-
         lead.country,
-
         lead.stage,
-
         lead.currentContactChannel,
-
         lead.priority,
       ]
-
         .filter(Boolean)
-
         .join(" ")
-
-        .replaceAll(
-          "_",
-
-          " ",
-        )
-
-        .toLowerCase();
-
-      return searchable.includes(query);
+        .replaceAll("_", " ")
+        .toLowerCase()
+        .includes(query);
     });
-  }, [leads, search, filter]);
+  }, [filter, leads, priorityOnly, search]);
+
+  function handleFilterKeyDown(event: React.KeyboardEvent<HTMLDivElement>) {
+    if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) {
+      return;
+    }
+
+    const tabs = Array.from(
+      event.currentTarget.querySelectorAll<HTMLButtonElement>('[role="tab"]'),
+    );
+    const activeIndex = tabs.findIndex((tab) => tab === document.activeElement);
+    if (activeIndex < 0 || tabs.length === 0) return;
+
+    event.preventDefault();
+    let nextIndex = activeIndex;
+    if (event.key === "ArrowRight") nextIndex = (activeIndex + 1) % tabs.length;
+    if (event.key === "ArrowLeft") nextIndex = (activeIndex - 1 + tabs.length) % tabs.length;
+    if (event.key === "Home") nextIndex = 0;
+    if (event.key === "End") nextIndex = tabs.length - 1;
+
+    tabs[nextIndex]?.focus();
+    tabs[nextIndex]?.click();
+  }
 
   return (
-    <aside className="conversation-sidebar flex h-full min-h-0 flex-col overflow-hidden bg-white">
-      <div className="conversation-sidebar-header shrink-0 border-b border-slate-100 px-4 pb-3 pt-4">
+    <aside className="flex h-full min-h-0 flex-col overflow-hidden bg-white dark:bg-slate-950">
+      <div className="shrink-0 px-4 pt-4">
         <div className="flex items-center justify-between gap-3">
-          <div>
-            <div className="text-[10px] font-semibold uppercase tracking-[.14em] text-slate-400">
-              Inbox
-            </div>
-
-            <div className="mt-1 text-sm font-semibold text-slate-900">
-              Conversations
-            </div>
+          <div className="text-[13px] font-semibold text-[#18362D] dark:text-white">
+            Your inbox
           </div>
-
-          <div className="rounded-full bg-slate-100 px-2.5 py-1 text-[10px] font-semibold text-slate-600">
-            {leads.length}
+          <div className="text-[10px] font-medium text-[#596E64] dark:text-slate-400">
+            {leads.length} conversations
           </div>
         </div>
 
-        {/* FILTERS */}
-
-        <div className="conversation-sidebar-filters mt-3 grid grid-cols-3 gap-1 rounded-xl bg-slate-100 p-1">
-          <FilterButton
-            active={filter === "all"}
-            onClick={() => setFilter("all")}
-          >
-            All
-          </FilterButton>
-
-          <FilterButton
-            active={filter === "attention"}
-            onClick={() => setFilter("attention")}
-          >
-            Reply {attentionCount > 0 && `(${attentionCount})`}
-          </FilterButton>
-
-          <FilterButton
-            active={filter === "unread"}
-            onClick={() => setFilter("unread")}
-          >
-            Unread {unreadCount > 0 && `(${unreadCount})`}
-          </FilterButton>
-        </div>
-
-        {/* SEARCH */}
-
-        <div className="conversation-sidebar-search relative mt-3">
+        <label className="relative mt-3 block">
+          <span className="sr-only">Search conversations</span>
           <Search
             size={14}
-            className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
+            className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[#71847A]"
           />
-
           <input
+            ref={searchRef}
             value={search}
             onChange={(event) => setSearch(event.target.value)}
-            placeholder="Search conversations..."
-            className="h-10 w-full rounded-xl border border-slate-200 bg-slate-50 pl-9 pr-9 text-xs font-medium outline-none transition focus:border-brand/30 focus:bg-white focus:ring-2 focus:ring-brand/5"
+            placeholder="Search conversations…"
+            className="h-9 w-full rounded-lg border border-[#D7E0D9] bg-[#FCFDFB] pl-9 pr-14 text-[11px] text-[#18362D] outline-none transition placeholder:text-[#71847A] focus:border-[#216551] focus:ring-2 focus:ring-[#216551]/15 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-100"
           />
-
-          {search && (
+          {!search ? (
+            <kbd className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 rounded border border-[#DCE4DF] bg-white px-1.5 py-0.5 text-[9px] font-medium text-[#71847A] dark:border-slate-700 dark:bg-slate-950">
+              /
+            </kbd>
+          ) : (
             <button
               type="button"
               onClick={() => setSearch("")}
-              className="absolute right-2 top-1/2 grid h-6 w-6 -translate-y-1/2 place-items-center rounded-lg text-slate-400 hover:bg-slate-200"
+              className="absolute right-2 top-1/2 grid h-6 w-6 -translate-y-1/2 place-items-center rounded-md text-[#71847A] hover:bg-[#EDF3E6] hover:text-[#216551]"
+              aria-label="Clear conversation search"
             >
               <X size={12} />
             </button>
           )}
+        </label>
+
+        <div
+          className="mt-3 grid grid-cols-3 border-b border-[#DCE4DF]"
+          role="tablist"
+          aria-label="Conversation filters"
+          onKeyDown={handleFilterKeyDown}
+        >
+          <InboxTab
+            active={filter === "all"}
+            onClick={() => setFilter("all")}
+            count={leads.length}
+          >
+            All
+          </InboxTab>
+          <InboxTab
+            active={filter === "reply"}
+            onClick={() => setFilter("reply")}
+            count={replyCount}
+          >
+            Needs reply
+          </InboxTab>
+          <InboxTab
+            active={filter === "unread"}
+            onClick={() => setFilter("unread")}
+            count={unreadCount}
+          >
+            Unread
+          </InboxTab>
         </div>
       </div>
 
-      <div className="conversation-sidebar-list min-h-0 flex-1 overflow-y-auto overscroll-contain p-2">
-        {filteredLeads.length === 0 ? (
-          <div className="grid min-h-[250px] place-items-center px-4 text-center">
-            <div>
-              <div className="mx-auto grid h-11 w-11 place-items-center rounded-2xl bg-slate-100 text-slate-400">
-                <MessageCircle size={18} />
-              </div>
+      <div className="flex shrink-0 items-center justify-between gap-3 border-b border-[#DCE4DF] px-4 py-2.5 text-[9px] text-[#596E64] dark:border-slate-900 dark:text-slate-400">
+        <span aria-live="polite">
+          {filteredLeads.length} conversation{filteredLeads.length === 1 ? "" : "s"}
+        </span>
+        <label className="flex items-center gap-1.5">
+          <span className="sr-only">Priority filter</span>
+          <select
+            value={priorityOnly ? "priority" : "all"}
+            onChange={(event) => setPriorityOnly(event.target.value === "priority")}
+            className="h-7 rounded-md border border-transparent bg-white px-1.5 text-[10px] text-[#596E64] outline-none focus:border-[#216551] focus:ring-2 focus:ring-[#216551]/15 dark:bg-slate-950 dark:text-slate-300"
+          >
+            <option value="all">All priorities</option>
+            <option value="priority">Priority only ({priorityCount})</option>
+          </select>
+        </label>
+      </div>
 
-              <div className="mt-3 text-xs font-bold text-slate-700">
-                No conversations found
+      <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-1.5 [scrollbar-width:thin]">
+        {filteredLeads.length === 0 ? (
+          <div className="grid min-h-[260px] place-items-center px-5 text-center">
+            <div>
+              <div className="mx-auto grid h-10 w-10 place-items-center rounded-xl bg-[#EDF3E6] text-[#216551] dark:bg-slate-900">
+                <MessageCircle size={17} />
               </div>
+              <div className="mt-3 text-xs font-semibold text-[#18362D] dark:text-slate-200">
+                {filter === "unread" && !search && !priorityOnly
+                  ? "You’re all caught up"
+                  : "No matching conversations"}
+              </div>
+              <div className="mt-1 text-[10px] leading-5 text-[#596E64] dark:text-slate-400">
+                {filter === "unread" && !search && !priorityOnly
+                  ? "There are no unread conversations right now."
+                  : "Try another search or remove a filter."}
+              </div>
+              {search || filter !== "all" || priorityOnly ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSearch("");
+                    setFilter("all");
+                    setPriorityOnly(false);
+                  }}
+                  className="mt-3 rounded-lg border border-[#D7E0D9] bg-white px-3 py-1.5 text-[10px] font-semibold text-[#216551] hover:bg-[#EDF3E6] dark:border-slate-800 dark:bg-slate-950"
+                >
+                  View all conversations
+                </button>
+              ) : null}
             </div>
           </div>
         ) : (
-          <div className="space-y-1.5">
-            {filteredLeads.map((lead) => (
-              <ConversationCard
+          filteredLeads.map((lead) => {
+            const selected =
+              lead.id === selectedId &&
+              (!mobileViewport || explicitLeadId === lead.id);
+
+            return (
+              <ConversationRow
                 key={lead.id}
                 lead={lead}
-                selected={lead.id === selectedId}
+                selected={selected}
                 now={now}
               />
-            ))}
-          </div>
+            );
+          })
         )}
+      </div>
+
+      <div className="shrink-0 border-t border-[#DCE4DF] px-4 py-2.5 text-[9px] text-[#71847A] dark:border-slate-900 dark:text-slate-500">
+        Search and filters do not change CRM records.
       </div>
     </aside>
   );
 }
 
-function ConversationCard({
+function ConversationRow({
   lead,
-
   selected,
-
   now,
 }: {
   lead: ConversationLeadSummary;
-
   selected: boolean;
-
   now: number;
 }) {
+  const highPriority = lead.priority === "urgent" || lead.priority === "high";
+  const stage = lead.stage.replaceAll("_", " ");
+  const sourceLabel = lead.currentContactChannel.replaceAll("_", " ");
+  const contextPreview =
+    lead.course && lead.course !== "Not selected"
+      ? lead.course
+      : `${sourceLabel} inquiry · Course not selected`;
+
   return (
     <Link
       href={`/conversations?lead=${lead.id}`}
-      className={`conversation-inbox-card group relative block rounded-2xl border p-3 transition-all duration-150 ${
+      aria-current={selected ? "page" : undefined}
+      className={`group relative mb-1 block rounded-lg border px-3 py-3 transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#216551] focus-visible:ring-offset-1 ${
         selected
-          ? "conversation-inbox-card-selected border-brand/20 bg-brand/[0.045]"
-          : lead.unread
-            ? "border-sky-100 bg-sky-50/35 hover:border-sky-200"
-            : "border-transparent bg-white hover:border-slate-200 hover:bg-slate-50"
+          ? "border-[#DCE6D1] bg-[#EDF3E6] dark:border-emerald-900/40 dark:bg-emerald-950/15"
+          : "border-transparent bg-white hover:bg-[#F6F8F7] dark:bg-slate-950 dark:hover:bg-slate-900/50"
       }`}
     >
-      {selected && (
-        <div className="absolute bottom-3 left-0 top-3 w-[3px] rounded-r-full bg-brand" />
-      )}
+      {selected ? (
+        <span className="absolute bottom-4 left-0 top-4 w-[3px] rounded-r-full bg-[#216551]" />
+      ) : null}
 
-      {lead.unread && !selected && (
-        <div className="absolute right-3 top-3 h-2 w-2 rounded-full bg-sky-500 ring-4 ring-sky-50" />
-      )}
-
-      <div className="flex gap-3">
+      <div className="flex gap-2.5">
         <div
-          className={`grid h-10 w-10 shrink-0 place-items-center rounded-full text-[11px] font-black ${
+          className={`mt-0.5 grid h-8 w-8 shrink-0 place-items-center rounded-full text-[10px] font-bold ${
             selected
-              ? "bg-brand/10 text-brand"
-              : lead.unread
-                ? "bg-sky-100 text-sky-700"
-                : "bg-slate-100 text-slate-600"
+              ? "bg-[#D7E3C9] text-[#216551]"
+              : "bg-[#EDF1EB] text-[#596E64] dark:bg-slate-900 dark:text-slate-300"
           }`}
         >
           {initials(lead.name)}
         </div>
 
         <div className="min-w-0 flex-1">
-          <div className="flex items-start justify-between gap-3 pr-3">
-            <div
-              className={`truncate text-xs ${
-                lead.unread
-                  ? "font-semibold text-slate-950"
-                  : "font-medium text-slate-900"
-              }`}
-            >
+          <div className="flex items-center justify-between gap-2">
+            <div className="min-w-0 truncate text-[12px] font-semibold text-[#18362D] dark:text-slate-100">
+              {lead.unread ? (
+                <span
+                  className="mr-1.5 inline-block h-1.5 w-1.5 rounded-full bg-[#216551] align-middle"
+                  aria-label="Unread"
+                />
+              ) : null}
               {lead.name}
             </div>
-
-            <div className="shrink-0 text-[9px] font-semibold text-slate-400">
+            <div className="shrink-0 text-[9px] text-[#71847A] dark:text-slate-500">
               {lead.lastContactedAt
-                ? formatListTime(
-                    lead.lastContactedAt,
-
-                    now,
-                  )
+                ? formatListTime(lead.lastContactedAt, now)
                 : "New"}
             </div>
           </div>
 
-          <div className="mt-1 truncate text-[10px] font-semibold text-slate-500">
-            {lead.course && lead.course !== "Not selected"
-              ? lead.course
-              : "Course not selected"}
+          <div className="mt-1 truncate text-[10px] capitalize text-[#596E64] dark:text-slate-400">
+            {contextPreview}
           </div>
 
-          {/* ACTION STATE */}
-
-          <div className="mt-2 flex flex-wrap gap-1.5">
-            {lead.needsFirstContact && (
-              <StatusBadge tone="sky">New lead</StatusBadge>
-            )}
-
-            {lead.needsReply && (
-              <StatusBadge tone="orange">Needs reply</StatusBadge>
-            )}
-
-            {lead.unread && (
-              <StatusBadge tone="blue">
-                <Bell size={8} />
-                Unread
-              </StatusBadge>
-            )}
-
-            {!lead.needsReply && !lead.needsFirstContact && (
-              <StatusBadge tone="slate">Waiting</StatusBadge>
-            )}
-
-            <PriorityBadge priority={lead.priority} />
-          </div>
-
-          {/* CHANNEL / COUNTRY */}
-
-          <div className="mt-2 flex flex-wrap items-center gap-1.5">
-            <ChannelBadge channel={lead.currentContactChannel} />
-
-            {lead.country && lead.country !== "—" && (
-              <span className="inline-flex max-w-[100px] items-center gap-1 truncate rounded-full border border-violet-100 bg-violet-50 px-2 py-0.5 text-[8px] font-bold text-violet-700">
-                <Globe2 size={8} />
-
-                <span className="truncate">{lead.country}</span>
+          <div className="mt-2.5 flex min-w-0 items-center gap-1.5">
+            {lead.needsReply ? (
+              <span className="inline-flex items-center gap-1 text-[9px] font-semibold text-[#825018]">
+                <span className="h-1 w-1 rounded-full bg-[#9B6B25]" /> Needs reply
               </span>
+            ) : lead.needsFirstContact ? (
+              <span className="text-[9px] font-semibold text-sky-700">First contact</span>
+            ) : (
+              <span className="text-[9px] text-[#71847A]">Reviewed</span>
             )}
-          </div>
 
-          {/* WAITING TIME */}
+            <span className="max-w-[108px] truncate rounded border border-[#D6E1D0] bg-[#F1F5ED] px-1.5 py-0.5 text-[9px] font-medium capitalize leading-none text-[#365844] dark:border-slate-800 dark:bg-slate-900 dark:text-slate-300">
+              {stage}
+            </span>
 
-          {lead.waitingSince && (
-            <div className="mt-2 flex items-center gap-1 text-[9px] font-semibold text-slate-400">
-              <Clock3 size={9} />
-              Waiting{" "}
-              {formatWaitingTime(
-                lead.waitingSince,
-
-                now,
-              )}
-            </div>
-          )}
-
-          <div className="mt-2">
-            <StageBadge stage={lead.stage} />
+            {highPriority ? (
+              <span
+                className="ml-auto inline-flex shrink-0 items-center text-[#825018]"
+                title={`${lead.priority} priority`}
+                aria-label={`${lead.priority} priority`}
+              >
+                <Flag size={12} />
+              </span>
+            ) : null}
           </div>
         </div>
       </div>
@@ -373,299 +386,67 @@ function ConversationCard({
   );
 }
 
-function FilterButton({
+function InboxTab({
   active,
-
   onClick,
-
+  count,
   children,
 }: {
   active: boolean;
-
   onClick: () => void;
-
+  count: number;
   children: React.ReactNode;
 }) {
   return (
     <button
       type="button"
+      role="tab"
+      aria-selected={active}
+      tabIndex={active ? 0 : -1}
       onClick={onClick}
-      className={`rounded-lg px-2 py-1.5 text-[9px] font-semibold transition ${
+      className={`border-b-2 px-1 pb-2.5 pt-1 text-[10px] transition ${
         active
-          ? "bg-white text-slate-900 shadow-sm"
-          : "text-slate-500 hover:text-slate-800"
+          ? "border-[#216551] font-semibold text-[#153E33]"
+          : "border-transparent text-[#596E64] hover:text-[#18362D]"
       }`}
     >
       {children}
+      <span className="ml-1 rounded bg-[#F0F3EF] px-1 py-0.5 text-[9px] font-medium text-[#596E64]">
+        {count}
+      </span>
     </button>
   );
-}
-
-function PriorityBadge({ priority }: { priority: ConversationPriority }) {
-  if (priority === "waiting") {
-    return null;
-  }
-
-  const className =
-    priority === "urgent"
-      ? "border-red-100 bg-red-50 text-red-700"
-      : priority === "high"
-        ? "border-amber-100 bg-amber-50 text-amber-700"
-        : "border-emerald-100 bg-emerald-50 text-emerald-700";
-
-  return (
-    <span
-      className={`rounded-full border px-2 py-0.5 text-[8px] font-semibold uppercase ${className}`}
-    >
-      {priority}
-    </span>
-  );
-}
-
-function StatusBadge({
-  tone,
-
-  children,
-}: {
-  tone: "blue" | "sky" | "orange" | "slate";
-
-  children: React.ReactNode;
-}) {
-  const colors = {
-    blue: "border-blue-100 bg-blue-50 text-blue-700",
-
-    sky: "border-sky-100 bg-sky-50 text-sky-700",
-
-    orange: "border-orange-100 bg-orange-50 text-orange-700",
-
-    slate: "border-slate-200 bg-slate-50 text-slate-500",
-  };
-
-  return (
-    <span
-      className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[8px] font-semibold uppercase ${colors[tone]}`}
-    >
-      {children}
-    </span>
-  );
-}
-
-function ChannelBadge({ channel }: { channel: Channel }) {
-  const config = channelConfig(channel);
-
-  return (
-    <span
-      className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[8px] font-semibold ${config.className}`}
-    >
-      <ChannelIcon channel={channel} />
-
-      {config.label}
-    </span>
-  );
-}
-
-function channelConfig(channel: Channel) {
-  switch (channel) {
-    case "whatsapp":
-      return {
-        label: "WhatsApp",
-
-        className: "border-emerald-100 bg-emerald-50 text-emerald-700",
-      };
-
-    case "instagram":
-      return {
-        label: "Instagram",
-
-        className: "border-pink-100 bg-pink-50 text-pink-700",
-      };
-
-    case "website":
-      return {
-        label: "Website",
-
-        className: "border-sky-100 bg-sky-50 text-sky-700",
-      };
-
-    case "email":
-      return {
-        label: "Email",
-
-        className: "border-indigo-100 bg-indigo-50 text-indigo-700",
-      };
-
-    case "phone":
-      return {
-        label: "Phone",
-
-        className: "border-amber-100 bg-amber-50 text-amber-700",
-      };
-
-    case "meta_lead_form":
-      return {
-        label: "Meta",
-
-        className: "border-blue-100 bg-blue-50 text-blue-700",
-      };
-
-    default:
-      return {
-        label: "Other",
-
-        className: "border-slate-200 bg-slate-50 text-slate-600",
-      };
-  }
-}
-
-function ChannelIcon({ channel }: { channel: Channel }) {
-  if (channel === "whatsapp") {
-    return <MessageCircle size={9} />;
-  }
-
-  if (channel === "instagram") {
-    return <Instagram size={9} />;
-  }
-
-  if (channel === "email") {
-    return <Mail size={9} />;
-  }
-
-  if (channel === "phone") {
-    return <Phone size={9} />;
-  }
-
-  if (channel === "website") {
-    return <Globe2 size={9} />;
-  }
-
-  return <ContactRound size={9} />;
 }
 
 function initials(name: string) {
   return (
     name
-
       .split(" ")
-
       .filter(Boolean)
-
       .map((part) => Array.from(part)[0] ?? "")
-
       .slice(0, 2)
-
       .join("")
-
       .toLocaleUpperCase("en-IN") || "?"
   );
 }
 
-function formatWaitingTime(
-  value: string,
-
-  now: number,
-) {
-  if (now <= 0) {
-    return "—";
-  }
-
+function formatListTime(value: string, now: number) {
   const timestamp = new Date(value).getTime();
+  if (!Number.isFinite(timestamp) || now <= 0) return "—";
 
-  if (!Number.isFinite(timestamp)) {
-    return "";
-  }
-
-  const minutes = Math.max(
-    0,
-
-    Math.floor((now - timestamp) / 60000),
-  );
-
-  if (minutes < 60) {
-    return `${minutes}m`;
-  }
+  const diff = Math.max(0, now - timestamp);
+  const minutes = Math.floor(diff / 60_000);
+  if (minutes < 1) return "now";
+  if (minutes < 60) return `${minutes}m`;
 
   const hours = Math.floor(minutes / 60);
-
-  if (hours < 24) {
-    return `${hours}h`;
-  }
+  if (hours < 24) return `${hours}h`;
 
   const days = Math.floor(hours / 24);
+  if (days < 7) return `${days}d`;
 
-  return `${days}d`;
-}
-
-function formatListTime(
-  value: string,
-
-  now: number,
-) {
-  const date = new Date(value);
-
-  if (Number.isNaN(date.getTime())) {
-    return "";
-  }
-
-  const shortDate = () =>
-    new Intl.DateTimeFormat(
-      "en-IN",
-
-      {
-        day: "numeric",
-
-        month: "short",
-
-        timeZone: "Asia/Kolkata",
-      },
-    ).format(date);
-
-  if (now <= 0) {
-    return shortDate();
-  }
-
-  const today = new Date(now);
-
-  const dateKey = new Intl.DateTimeFormat(
-    "en-CA",
-
-    {
-      year: "numeric",
-
-      month: "2-digit",
-
-      day: "2-digit",
-
-      timeZone: "Asia/Kolkata",
-    },
-  ).format(date);
-
-  const todayKey = new Intl.DateTimeFormat(
-    "en-CA",
-
-    {
-      year: "numeric",
-
-      month: "2-digit",
-
-      day: "2-digit",
-
-      timeZone: "Asia/Kolkata",
-    },
-  ).format(today);
-
-  if (dateKey === todayKey) {
-    return new Intl.DateTimeFormat(
-      "en-IN",
-
-      {
-        hour: "numeric",
-
-        minute: "2-digit",
-
-        timeZone: "Asia/Kolkata",
-      },
-    ).format(date);
-  }
-
-  return shortDate();
+  return new Intl.DateTimeFormat("en-IN", {
+    day: "numeric",
+    month: "short",
+  }).format(new Date(timestamp));
 }

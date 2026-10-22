@@ -38,12 +38,7 @@ const PUBLIC_EXACT_PATHS = new Set([
 ]);
 
 const ACTIVE_WORKSPACE_COOKIE = "yk-active-workspace";
-
-const OAUTH_CALLBACK_PROVIDER_BY_PATH: Record<string, string> = {
-  "/api/integrations/google/callback": "google",
-  "/api/integrations/meta/callback": "meta",
-  "/api/integrations/instagram/callback": "instagram",
-};
+const WORKSPACE_COOKIE_MAX_AGE_SECONDS = 60 * 60 * 24 * 30;
 
 const EMPLOYEE_EXACT_PATHS = new Set([
   "/dashboard",
@@ -90,8 +85,15 @@ function isTenantResetPasswordPath(pathname: string) {
   return /^\/reset-password\/[^/]+$/.test(pathname);
 }
 
-function isPasswordResetCompletionPath(pathname: string) {
-  return pathname === "/reset-password" || isTenantResetPasswordPath(pathname);
+function isPublicAuthPath(pathname: string) {
+  return (
+    pathname === "/login" ||
+    isTenantLoginPath(pathname) ||
+    pathname === "/forgot-password" ||
+    isTenantForgotPasswordPath(pathname) ||
+    pathname === "/reset-password" ||
+    isTenantResetPasswordPath(pathname)
+  );
 }
 
 function isAdminOnlyPage(pathname: string) {
@@ -127,27 +129,114 @@ function redirectWithAuthCookies(
   return redirectResponse;
 }
 
+function redirectToLogin(request: NextRequest, response: NextResponse) {
+  const loginUrl = request.nextUrl.clone();
+  loginUrl.pathname = "/login";
+  loginUrl.searchParams.set("next", `${request.nextUrl.pathname}${request.nextUrl.search}`);
+  const redirectResponse = NextResponse.redirect(loginUrl);
+  response.cookies.getAll().forEach((cookie) => redirectResponse.cookies.set(cookie));
+  return redirectResponse;
+}
+
+function isMissingAuthSessionError(error: { name?: string; message?: string } | null) {
+  if (!error) return false;
+  const name = String(error.name ?? "").toLowerCase();
+  const message = String(error.message ?? "").toLowerCase();
+  return (
+    name.includes("authsessionmissing") ||
+    message.includes("auth session missing") ||
+    message.includes("session missing")
+  );
+}
+
+function isInvalidOrExpiredAuthSessionError(
+  error: { name?: string; message?: string; code?: string } | null,
+) {
+  if (!error) return false;
+
+  const name = String(error.name ?? "").toLowerCase();
+  const message = String(error.message ?? "").toLowerCase();
+  const code = String(error.code ?? "").toLowerCase();
+  const haystack = `${name} ${code} ${message}`;
+
+  return [
+    "refresh token not found",
+    "invalid refresh token",
+    "refresh_token_not_found",
+    "invalid_refresh_token",
+    "jwt expired",
+    "token has expired",
+    "invalid jwt",
+    "invalid token",
+    "session from session_id claim in jwt does not exist",
+    "user from sub claim in jwt does not exist",
+    "bad_jwt",
+  ].some((token) => haystack.includes(token));
+}
+
+function expireSessionCookies(request: NextRequest, response: NextResponse) {
+  const deletionOptions = {
+    path: "/",
+    maxAge: 0,
+    expires: new Date(0),
+  };
+
+  for (const cookie of request.cookies.getAll()) {
+    if (cookie.name.startsWith("sb-") && cookie.name.includes("-auth-token")) {
+      response.cookies.set(cookie.name, "", deletionOptions);
+    }
+  }
+
+  response.cookies.set(ACTIVE_WORKSPACE_COOKIE, "", deletionOptions);
+  return response;
+}
+
+function redirectToLoginWithClearedSession(
+  request: NextRequest,
+  response: NextResponse,
+) {
+  const redirectResponse = redirectToLogin(request, response);
+  return expireSessionCookies(request, redirectResponse);
+}
+
+function unauthorizedWithClearedSession(request: NextRequest) {
+  const response = NextResponse.json(
+    { ok: false, error: "Unauthorized" },
+    { status: 401 },
+  );
+  return expireSessionCookies(request, response);
+}
+
 function authConfigurationError(pathname: string) {
   if (pathname.startsWith("/api/")) {
-    return NextResponse.json({ ok: false, error: "CRM authentication is not configured." }, { status: 503 });
+    return NextResponse.json(
+      { ok: false, error: "CRM authentication is not configured." },
+      { status: 503 },
+    );
   }
   return new NextResponse("CRM authentication is not configured.", { status: 503 });
 }
 
-function workspaceResolutionError(message: string, status = 503) {
-  return new NextResponse(message, {
-    status,
-    headers: {
-      "Cache-Control": "no-store",
-      "Content-Type": "text/plain; charset=utf-8",
-    },
-  });
+function workspaceServiceUnavailable(pathname: string) {
+  if (pathname.startsWith("/api/")) {
+    return NextResponse.json(
+      { ok: false, error: "Workspace service is temporarily unavailable." },
+      { status: 503 },
+    );
+  }
+
+  return new NextResponse(
+    "SalsysOS is temporarily unable to verify your workspace. Please retry in a moment.",
+    { status: 503 },
+  );
 }
 
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
-  if (isPublicPath(pathname)) {
+  if (isPublicPath(pathname) || isPublicAuthPath(pathname)) {
+    // Do not place the login/recovery form behind a Supabase middleware lookup.
+    // The server action performs authentication and tenant binding itself.
     return NextResponse.next();
   }
 
@@ -187,65 +276,111 @@ export async function middleware(request: NextRequest) {
 
   const {
     data: { user },
+    error: authError,
   } = await supabase.auth.getUser();
 
-  const publicAuthPath =
-    pathname === "/login" ||
-    isTenantLoginPath(pathname) ||
-    pathname === "/forgot-password" ||
-    isTenantForgotPasswordPath(pathname) ||
-    pathname === "/reset-password" ||
-    isTenantResetPasswordPath(pathname);
-
   if (!user) {
-    if (publicAuthPath) return response;
-    if (pathname.startsWith("/api/")) {
-      return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
+    if (
+      authError &&
+      !isMissingAuthSessionError(authError) &&
+      !isInvalidOrExpiredAuthSessionError(authError)
+    ) {
+      return workspaceServiceUnavailable(pathname);
     }
-    const loginUrl = request.nextUrl.clone();
-    loginUrl.pathname = "/login";
-    loginUrl.searchParams.set("next", `${pathname}${request.nextUrl.search}`);
-    const redirectResponse = NextResponse.redirect(loginUrl);
-    response.cookies.getAll().forEach((cookie) => redirectResponse.cookies.set(cookie));
-    return redirectResponse;
+
+    if (pathname.startsWith("/api/")) {
+      return unauthorizedWithClearedSession(request);
+    }
+
+    return redirectToLoginWithClearedSession(request, response);
   }
 
-  if (isPasswordResetCompletionPath(pathname)) {
-    return response;
-  }
-
-  if (publicAuthPath) {
-    return redirectWithAuthCookies(request, response, "/workspace");
-  }
-
-  const { data: workspaceContext, error: workspaceError } = await supabase.rpc(
-    "get_current_workspace_context_v1",
+  // Canonical tenant resolution must happen before reading tenant-scoped
+  // membership rows. organization_members is protected by RLS and can be
+  // invisible until the authenticated auth session is bound to its tenant.
+  const { data: boundOrganizationId, error: bindingError } = await supabase.rpc(
+    "bind_current_tenant_session_for_current_user",
   );
 
-  if (workspaceError || !workspaceContext) {
-    if (pathname.startsWith("/api/")) {
-      return NextResponse.json({ ok: false, error: "Workspace context unavailable." }, { status: 403 });
+  if (bindingError || !boundOrganizationId) {
+    const detail = String(bindingError?.message ?? "");
+
+    if (isInvalidOrExpiredAuthSessionError(bindingError)) {
+      if (pathname.startsWith("/api/")) {
+        return unauthorizedWithClearedSession(request);
+      }
+      return redirectToLoginWithClearedSession(request, response);
     }
-    if (normalizePathname(pathname) === "/workspace") {
-      return workspaceResolutionError(
-        "Workspace context is temporarily unavailable. Refresh the page or sign out and sign in again.",
+
+    if (
+      detail.includes("No active organization membership") ||
+      detail.includes("Multiple active organization memberships")
+    ) {
+      if (pathname.startsWith("/api/")) {
+        return NextResponse.json(
+          { ok: false, error: "Workspace access denied." },
+          { status: 403 },
+        );
+      }
+
+      await supabase.auth.signOut();
+      const redirectResponse = redirectWithAuthCookies(
+        request,
+        response,
+        "/login",
+        {
+          error: detail.includes("Multiple active organization memberships")
+            ? "This account is linked to multiple organizations. Please contact your SalsysOS administrator."
+            : "Your account is not assigned to an active organization.",
+        },
       );
+      redirectResponse.cookies.set(ACTIVE_WORKSPACE_COOKIE, "", {
+        httpOnly: true,
+        sameSite: "lax",
+        secure: process.env.NODE_ENV === "production",
+        path: "/",
+        maxAge: 0,
+      });
+      return redirectResponse;
     }
-    return redirectWithAuthCookies(request, response, "/workspace");
+
+    return workspaceServiceUnavailable(pathname);
   }
 
-  const context = Array.isArray(workspaceContext) ? workspaceContext[0] : workspaceContext;
-  const role = String(context?.role ?? "").toLowerCase();
+  const organizationId = String(boundOrganizationId).trim();
 
-  if (!role) {
-    if (pathname.startsWith("/api/")) {
-      return NextResponse.json({ ok: false, error: "Workspace access denied." }, { status: 403 });
+  const { data: membership, error: membershipError } = await supabase
+    .from("organization_members")
+    .select("organization_id,role")
+    .eq("user_id", user.id)
+    .eq("organization_id", organizationId)
+    .eq("active", true)
+    .maybeSingle();
+
+  if (membershipError || !membership) {
+    if (isInvalidOrExpiredAuthSessionError(membershipError)) {
+      if (pathname.startsWith("/api/")) {
+        return unauthorizedWithClearedSession(request);
+      }
+      return redirectToLoginWithClearedSession(request, response);
     }
-    if (normalizePathname(pathname) === "/workspace") {
-      return workspaceResolutionError("Workspace access denied.", 403);
-    }
-    return redirectWithAuthCookies(request, response, "/workspace");
+    return workspaceServiceUnavailable(pathname);
   }
+
+  const role = String(membership.role ?? "").trim().toLowerCase();
+
+  if (!organizationId || !role) {
+    return workspaceServiceUnavailable(pathname);
+  }
+
+  request.cookies.set(ACTIVE_WORKSPACE_COOKIE, organizationId);
+  response.cookies.set(ACTIVE_WORKSPACE_COOKIE, organizationId, {
+    httpOnly: true,
+    sameSite: "lax",
+    secure: process.env.NODE_ENV === "production",
+    path: "/",
+    maxAge: WORKSPACE_COOKIE_MAX_AGE_SECONDS,
+  });
 
   if (role === "employee" && !isEmployeeAllowedPage(pathname)) {
     return redirectWithAuthCookies(request, response, "/dashboard");

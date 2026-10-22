@@ -4,6 +4,7 @@ import { usePathname } from 'next/navigation';
 import type { ReactNode } from 'react';
 
 import { AppShell } from '@/components/app-shell';
+import { DesktopHoverSidebar } from '@/components/desktop-hover-sidebar';
 
 function isShelllessPath(pathname: string) {
   return (
@@ -29,5 +30,12 @@ export function RootShell({ children }: { children: ReactNode }) {
     return <>{children}</>;
   }
 
-  return <AppShell>{children}</AppShell>;
+  return (
+    <div className="salsys-meta-sidebar-shell">
+      <DesktopHoverSidebar />
+      <div className="legacy-shell-host">
+        <AppShell>{children}</AppShell>
+      </div>
+    </div>
+  );
 }

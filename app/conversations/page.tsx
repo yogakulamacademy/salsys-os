@@ -1,136 +1,98 @@
-import type { ReactNode } from "react";
-
 import Link from "next/link";
-
 import {
   ArrowUpRight,
-  BookOpen,
   CalendarClock,
-  ContactRound,
-  Instagram,
-  Mail,
-  MapPin,
+  ChevronDown,
   MessageCircle,
-  Phone,
   Save,
 } from "lucide-react";
 
-import { ConversationReadMarker } from "@/components/conversation-read-marker";
-
 import { logLeadInteractionAction } from "@/app/actions/crm";
-
 import {
   sendWhatsAppMessageAction,
   sendWhatsAppTemplateAction,
-  updateConversationLeadContextAction,
 } from "@/app/conversations/actions";
-
-import { ConversationThread } from "@/components/conversation-thread";
-
-import { ConversationsSidebar } from "@/components/conversations-sidebar";
-
+import { updateConversationLeadContextWithActivityAction } from "@/app/conversations/context-actions";
+import { ConversationCenterView } from "@/components/conversation-center-view";
+import { ConversationCopilot } from "@/components/conversation-copilot";
 import { WhatsAppComposer } from "@/components/conversation-composer";
-
-import { PageHeader, StageBadge } from "@/components/ui";
-
-import { getCourses, isMockMode } from "@/lib/data";
-
-import { getConversationsWorkspace } from "@/lib/conversations-data";
-
-import { formatDateTime } from "@/lib/format";
-
-import type { Channel } from "@/types/crm";
-
-import { WhatsAppTemplateComposer } from "@/components/whatsapp-template-composer";
-
-import { getApprovedWhatsAppTemplates } from "@/lib/whatsapp-templates";
-import { getCurrentWorkspaceContext } from "@/lib/workspace";
-
+import { ConversationIntelligencePanel } from "@/components/conversation-intelligence-panel";
+import { ConversationReadMarker } from "@/components/conversation-read-marker";
+import { ConversationSafeComposer } from "@/components/conversation-safe-composer";
+import { ConversationWorkspaceShell } from "@/components/conversation-workspace-shell";
 import { ConversationsRealtime } from "@/components/conversations-realtime";
-
-const channels: Array<[Channel, string]> = [
-  ["instagram", "Instagram"],
-
-  ["whatsapp", "WhatsApp"],
-
-  ["website", "Website"],
-
-  ["email", "Email"],
-
-  ["phone", "Phone"],
-
-  ["meta_lead_form", "Meta Lead Form"],
-
-  ["other", "Other"],
-];
+import { ConversationsSidebar } from "@/components/conversations-sidebar";
+import { StageBadge } from "@/components/ui";
+import { WhatsAppTemplateComposer } from "@/components/whatsapp-template-composer";
+import { getConversationsWorkspace } from "@/lib/conversations-data";
+import { getCourses, isMockMode } from "@/lib/data";
+import { formatDateTime } from "@/lib/format";
+import { getCurrentWorkspaceContext } from "@/lib/workspace";
+import { getApprovedWhatsAppTemplates } from "@/lib/whatsapp-templates";
 
 export default async function ConversationsPage({
   searchParams,
 }: {
   searchParams: Promise<{
     lead?: string;
-
     notice?: string;
-
     error?: string;
-
     wamid?: string;
   }>;
 }) {
   const query = await searchParams;
-
   const mock = isMockMode();
 
   const [workspace, courses, workspaceContext] = await Promise.all([
     getConversationsWorkspace(query.lead),
-
     getCourses(),
-
-    mock
-      ? Promise.resolve(null)
-      : getCurrentWorkspaceContext(),
+    mock ? Promise.resolve(null) : getCurrentWorkspaceContext(),
   ]);
 
-  const { conversationSummary, selectedId, selected, whatsappWindow, metrics } =
-    workspace;
+  const { conversationSummary, selectedId, selected, whatsappWindow } = workspace;
+  const selectedSummary = selectedId
+    ? conversationSummary.find((lead) => lead.id === selectedId) ?? null
+    : null;
+  const organizationId = workspaceContext?.activeOrganizationId ?? null;
 
-  const organizationId =
-    workspaceContext?.activeOrganizationId ?? null;
-
-  const canStartWhatsApp =
-    Boolean(selected?.phone) && selected?.currentContactChannel !== "whatsapp";
+  const attentionCount = conversationSummary.filter(
+    (lead) => lead.needsReply || lead.needsFirstContact,
+  ).length;
+  const unreadCount = conversationSummary.filter((lead) => lead.unread).length;
+  const priorityCount = conversationSummary.filter(
+    (lead) => lead.priority === "urgent" || lead.priority === "high",
+  ).length;
 
   const interactionAction = selectedId
     ? logLeadInteractionAction.bind(null, selectedId)
     : undefined;
-
   const whatsappAction = selectedId
     ? sendWhatsAppMessageAction.bind(null, selectedId)
     : undefined;
-
   const whatsappTemplateAction = selectedId
     ? sendWhatsAppTemplateAction.bind(null, selectedId)
     : undefined;
-
   const leadContextAction = selectedId
-    ? updateConversationLeadContextAction.bind(null, selectedId)
+    ? updateConversationLeadContextWithActivityAction.bind(null, selectedId)
     : undefined;
 
   const noticeText =
     query.notice === "whatsapp-sent"
-      ? "WhatsApp message sent and logged in the CRM."
+      ? "WhatsApp message sent."
       : query.notice === "whatsapp-template-sent"
-        ? "WhatsApp template sent successfully."
+        ? "WhatsApp template sent."
         : query.notice === "whatsapp-started"
-          ? "WhatsApp conversation started from the lead’s submitted phone number."
+          ? "WhatsApp conversation started."
           : query.notice === "lead-context-updated"
-            ? "Lead course and country updated."
+            ? "Lead details updated."
             : query.notice
               ? "Interaction logged."
               : null;
 
   const shouldLoadWhatsAppTemplates = Boolean(
-    selected && (canStartWhatsApp || (whatsappWindow && !whatsappWindow.open)),
+    selected?.currentContactChannel === "whatsapp" &&
+      whatsappWindow &&
+      !whatsappWindow.open,
   );
 
   const whatsappTemplateCatalog =
@@ -141,1668 +103,390 @@ export default async function ConversationsPage({
             templates: [],
             error: "Unable to resolve the active workspace for WhatsApp templates.",
           }
-      : {
-          templates: [],
+      : { templates: [], error: null };
 
-          error: null,
-        };
+  const copilotChannel =
+    selected?.currentContactChannel === "whatsapp" ||
+    selected?.currentContactChannel === "instagram"
+      ? selected.currentContactChannel
+      : null;
 
-  const whatsappCount = metrics.whatsappCount;
+  const copilotEnabled =
+    copilotChannel === "instagram" ||
+    (copilotChannel === "whatsapp" && Boolean(whatsappWindow?.open));
 
-  const highIntentCount = metrics.highIntentCount;
+  const inbox = (
+    <ConversationsSidebar leads={conversationSummary} selectedId={selectedId} />
+  );
 
-  return (
-    <div className="conversations-polish">
-      <ConversationsRealtime />
+  const chat = !selected ? (
+    <section className="grid h-full min-h-[560px] place-items-center bg-white p-8 text-center dark:bg-slate-950">
+      <div>
+        <div className="mx-auto grid h-12 w-12 place-items-center rounded-xl bg-[#EDF3E6] text-[#216551] dark:bg-slate-900">
+          <MessageCircle size={20} />
+        </div>
+        <div className="mt-4 text-sm font-semibold text-[#18362D] dark:text-slate-100">
+          Select a conversation
+        </div>
+        <p className="mt-1 max-w-sm text-xs leading-5 text-[#596E64]">
+          Understand the inquiry, qualify the lead, and prepare the next action without leaving the inbox.
+        </p>
+      </div>
+    </section>
+  ) : (
+    <section className="flex h-full min-h-0 min-w-0 flex-col overflow-hidden bg-white dark:bg-slate-950">
+      <ConversationReadMarker leadId={selected.id} />
 
-      <PageHeader
-        eyebrow="Unified inbox"
-        title="Conversations"
-        description="Handle WhatsApp, Instagram and CRM conversations from one admissions workspace."
-        actions={
-          <span
-            className={`
+      <header className="shrink-0 border-b border-[#DCE4DF] bg-white px-4 py-3.5 pr-28 dark:border-slate-900 dark:bg-slate-950 sm:px-5">
+        <div className="flex min-w-0 items-center gap-3">
+          <div className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-[#E4F2E8] text-[11px] font-bold text-[#216551] dark:bg-slate-900 dark:text-slate-200">
+            {initials(selected.name)}
+          </div>
+          <div className="min-w-0 flex-1">
+            <div className="flex flex-wrap items-center gap-2">
+              <h2 className="truncate text-[14px] font-semibold text-[#18362D] dark:text-white">
+                {selected.name}
+              </h2>
+              <StageBadge stage={selected.stage} />
+              {selectedSummary?.needsReply ? (
+                <span className="rounded-full bg-amber-50 px-2 py-0.5 text-[8px] font-semibold text-amber-700">
+                  Needs reply
+                </span>
+              ) : selectedSummary?.needsFirstContact ? (
+                <span className="rounded-full bg-sky-50 px-2 py-0.5 text-[8px] font-semibold text-sky-700">
+                  First contact
+                </span>
+              ) : null}
+            </div>
+            <div className="mt-1 flex flex-wrap items-center gap-1.5 text-[10px] text-[#596E64]">
+              <span className="capitalize">
+                {selected.leadCreationChannel.replaceAll("_", " ")} inquiry
+              </span>
+              <span aria-hidden="true">·</span>
+              <span>{selected.country || "Country not recorded"}</span>
+              <span aria-hidden="true">·</span>
+              <span className="truncate">
+                {selected.course && selected.course !== "Not selected"
+                  ? selected.course
+                  : "No course selected"}
+              </span>
+            </div>
+          </div>
+        </div>
+      </header>
 
-
-
-
-
-
-
-              rounded-xl
-
-
-
-
-
-
-
-              px-3
-
-
-
-
-
-
-
-              py-2
-
-
-
-
-
-
-
-              text-xs
-
-
-
-
-
-
-
-              font-bold
-
-
-
-
-
-
-
-              ${
-                mock
-                  ? "bg-orange-50 text-orange-700"
-                  : "bg-emerald-50 text-emerald-700"
-              }
-
-
-
-
-
-
-
-            `}
-          >
-            {mock ? "Mock inbox" : "Live messaging"}
-          </span>
+      <ConversationCenterView
+        messages={selected.lastMessages}
+        originChannel={selected.leadCreationChannel}
+        originTimestamp={selected.createdAt}
+        originCourse={selected.course}
+        originDetail={
+          selected.leadCreationChannel === "website"
+            ? "Form enquiry received and added to the CRM."
+            : undefined
         }
+        course={selected.course}
+        country={selected.country}
+        stage={selected.stage}
       />
 
-      {/* ===================================================
-
-
-
-
-
-
-
-          INBOX METRICS
-
-
-
-
-
-
-
-      =================================================== */}
-
-      <div className="conversation-metrics mb-4 grid gap-3 sm:grid-cols-3">
-        <InboxMetric
-          label="Active conversations"
-          value={metrics.activeConversations}
-        />
-
-        <InboxMetric label="WhatsApp" value={whatsappCount} />
-
-        <InboxMetric label="High intent + payment" value={highIntentCount} />
-      </div>
-
-      {/* ===================================================
-
-
-
-
-
-
-
-          NOTICES
-
-
-
-
-
-
-
-      =================================================== */}
-
-      {query.error && (
-        <div className="mb-4 animate-rise rounded-xl border border-red-100 bg-red-50 px-4 py-3 text-sm font-medium text-red-700">
-          {query.error}
-        </div>
-      )}
-
-      {noticeText && (
-        <div className="mb-4 animate-rise rounded-xl border border-emerald-100 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-700">
-          {noticeText}
-        </div>
-      )}
-
-      {/* ===================================================
-
-
-
-
-
-
-
-          CONVERSATION WORKSPACE
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-          Desktop:
-
-
-
-
-
-
-
-          - fixed viewport height
-
-
-
-
-
-
-
-          - contacts scroll independently
-
-
-
-
-
-
-
-          - messages scroll independently
-
-
-
-
-
-
-
-          - context scrolls independently
-
-
-
-
-
-
-
-      =================================================== */}
-
-      <div
-        className="
-
-
-
-
-
-
-
-          conversation-workspace
-
-
-
-
-
-
-
-          grid
-
-
-
-
-
-
-
-          overflow-hidden
-
-
-
-
-
-
-
-          rounded-2xl
-
-
-
-
-
-
-
-          border
-
-
-
-
-
-
-
-          border-slate-200
-
-
-
-
-
-
-
-          bg-white
-
-
-
-
-
-
-
-          shadow-card
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-          lg:h-[calc(100dvh-270px)]
-
-
-
-
-
-
-
-          lg:min-h-[560px]
-
-
-
-
-
-
-
-          lg:grid-cols-[320px_minmax(0,1fr)_300px]
-
-
-
-
-
-
-
-        "
-      >
-        {/* ===============================================
-
-
-
-
-
-
-
-            LEFT — CONVERSATION LIST
-
-
-
-
-
-
-
-        =============================================== */}
-
-        <div
-          className="
-
-
-
-
-
-
-
-            conversation-list-pane
-
-
-
-
-
-
-
-            min-h-0
-
-
-
-
-
-
-
-            overflow-y-auto
-
-
-
-
-
-
-
-            overscroll-contain
-
-
-
-
-
-
-
-            border-r
-
-
-
-
-
-
-
-            border-slate-200
-
-
-
-
-
-
-
-            bg-slate-50/40
-
-
-
-
-
-
-
-          "
-        >
-          <ConversationsSidebar
-            leads={conversationSummary}
-            selectedId={selectedId}
-          />
-        </div>
-
-        {!selected ? (
-          <section className="col-span-2 grid min-h-[560px] place-items-center p-8 text-center">
-            <div>
-              <div className="mx-auto grid h-14 w-14 place-items-center rounded-2xl bg-brand/10 text-brand">
-                <MessageCircle size={23} />
-              </div>
-
-              <div className="mt-4 text-lg font-bold text-slate-800">
-                No conversation selected
-              </div>
-
-              <p className="mt-2 max-w-md text-sm leading-6 text-slate-500">
-                Incoming WhatsApp messages and CRM interactions will appear
-                here.
-              </p>
-
-              <Link href="/leads" className="btn-primary mt-4">
-                Open leads
-              </Link>
+      <div className="shrink-0 border-t border-[#DCE4DF] bg-white dark:border-slate-900 dark:bg-slate-950">
+        {selected.currentContactChannel === "whatsapp" &&
+        whatsappWindow &&
+        !whatsappWindow.open ? (
+          <div className="border-b border-amber-100 bg-amber-50 px-4 py-2.5 dark:border-amber-900/40 dark:bg-amber-950/15">
+            <div className="text-[11px] font-semibold text-amber-800 dark:text-amber-300">
+              Reply window closed
             </div>
-          </section>
+            <div className="mt-0.5 text-[10px] text-amber-700/80 dark:text-amber-400">
+              An approved template is required before another WhatsApp message can be sent.
+            </div>
+          </div>
+        ) : null}
+
+        {selected.currentContactChannel === "whatsapp" ? (
+          whatsappWindow?.open && whatsappAction ? (
+            <WhatsAppComposer
+              action={whatsappAction}
+              leadId={selected.id}
+              windowOpen
+              windowLabel={whatsappWindow.label}
+            />
+          ) : whatsappTemplateAction ? (
+            <WhatsAppTemplateComposer
+              action={whatsappTemplateAction}
+              templates={whatsappTemplateCatalog.templates}
+              loadError={whatsappTemplateCatalog.error}
+              windowLabel={
+                whatsappWindow?.label ??
+                "Choose an approved template to continue."
+              }
+              mode="followup"
+              phone={selected.phone}
+            />
+          ) : null
         ) : (
-          <>
-            {/* ===========================================
-
-
-
-
-
-
-
-                CENTER — CHAT
-
-
-
-
-
-
-
-            =========================================== */}
-
-            <section
-              className="
-
-
-
-
-
-
-
-                conversation-chat-pane
-
-
-
-
-
-
-
-                flex
-
-
-
-
-
-
-
-                min-h-0
-
-
-
-
-
-
-
-                min-w-0
-
-
-
-
-
-
-
-                flex-col
-
-
-
-
-
-
-
-                overflow-hidden
-
-
-
-
-
-
-
-                bg-white
-
-
-
-
-
-
-
-              "
-            >
-              <ConversationReadMarker leadId={selected.id} />
-
-              {/* CHAT HEADER */}
-
-              <div
-                className="
-
-
-
-
-
-
-
-                  conversation-chat-header
-
-
-
-
-
-
-
-                  shrink-0
-
-
-
-
-
-
-
-                  border-b
-
-
-
-
-
-
-
-                  border-slate-100
-
-
-
-
-
-
-
-                  bg-white
-
-
-
-
-
-
-
-                  px-4
-
-
-
-
-
-
-
-                  py-3
-
-
-
-
-
-
-
-                "
-              >
-                <div className="flex items-start justify-between gap-4">
-                  <div className="flex min-w-0 items-center gap-3">
-                    <div className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-brand/10 text-xs font-semibold text-brand">
-                      {initials(selected.name)}
-                    </div>
-
-                    <div className="min-w-0">
-                      <div className="truncate text-sm font-semibold text-slate-900">
-                        {selected.name}
-                      </div>
-
-                      <div className="mt-2 flex flex-wrap items-center gap-1.5">
-                        <ChannelBadge
-                          channel={selected.currentContactChannel}
-                        />
-
-                        <StageBadge stage={selected.stage} />
-
-                        <ContextBadge tone="course">
-                          <BookOpen size={11} />
-
-                          {selected.course || "Course not selected"}
-                        </ContextBadge>
-
-                        <ContextBadge tone="country">
-                          <MapPin size={11} />
-
-                          {selected.country || "Country not set"}
-                        </ContextBadge>
-                      </div>
-                    </div>
-                  </div>
-
-                  <Link
-                    href={`/leads/${selected.id}`}
-                    className="btn-secondary !px-3 !py-2"
-                  >
-                    Lead profile
-                    <ArrowUpRight size={13} />
-                  </Link>
-                </div>
-              </div>
-
-              {/* WHATSAPP WINDOW STATUS */}
-
-              {whatsappWindow && (
-                <div
-                  className={`
-
-
-
-
-
-
-
-                    shrink-0
-
-
-
-
-
-
-
-                    border-b
-
-
-
-
-
-
-
-                    px-4
-
-
-
-
-
-
-
-                    py-2
-
-
-
-
-
-
-
-                    text-[10px]
-
-
-
-
-
-
-
-                    font-semibold
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-                    ${
-                      whatsappWindow.open
-                        ? "border-emerald-100 bg-emerald-50/70 text-emerald-700"
-                        : "border-amber-100 bg-amber-50/70 text-amber-700"
-                    }
-
-
-
-
-
-
-
-                  `}
-                >
-                  {whatsappWindow.label}
-                </div>
-              )}
-
-              {canStartWhatsApp && (
-                <div className="border-b border-sky-100 bg-sky-50/70 px-4 py-2 text-[10px] font-semibold text-sky-700">
-                  Website/form lead · phone number available · start WhatsApp
-                  using an approved template.
-                </div>
-              )}
-
-              {/* MESSAGE HISTORY */}
-
-              <div
-                className="
-
-
-
-
-
-
-
-                  conversation-message-area
-
-
-
-
-
-
-
-                  min-h-0
-
-
-
-
-
-
-
-                  flex-1
-
-
-
-
-
-
-
-                  overflow-y-auto
-
-
-
-
-
-
-
-                  overscroll-contain
-
-
-
-
-
-
-
-                  px-4
-
-
-
-
-
-
-
-                  py-5
-
-
-
-
-
-
-
-                  sm:px-6
-
-
-
-
-
-
-
-                "
-              >
-                <ConversationThread
-                  messages={selected.lastMessages}
-                  originChannel={selected.leadCreationChannel}
-                  originTimestamp={selected.createdAt}
-                  originCourse={selected.course}
-                  originDetail={
-                    selected.leadCreationChannel === "website"
-                      ? "Form enquiry received and added to the CRM."
-                      : undefined
-                  }
-                />
-              </div>
-
-              {/* COMPOSER */}
-
-              <div className="shrink-0">
-                {selected.currentContactChannel === "whatsapp" ? (
-                  whatsappWindow?.open && whatsappAction ? (
-                    <WhatsAppComposer
-                      action={whatsappAction}
-                      windowOpen
-                      windowLabel={whatsappWindow.label}
-                    />
-                  ) : whatsappTemplateAction ? (
-                    <WhatsAppTemplateComposer
-                      action={whatsappTemplateAction}
-                      templates={whatsappTemplateCatalog.templates}
-                      loadError={whatsappTemplateCatalog.error}
-                      windowLabel={
-                        whatsappWindow?.label ??
-                        "Use an approved WhatsApp template to continue the conversation."
-                      }
-                      mode="followup"
-                      phone={selected.phone}
-                    />
-                  ) : null
-                ) : canStartWhatsApp && whatsappTemplateAction ? (
-                  <WhatsAppTemplateComposer
-                    action={whatsappTemplateAction}
-                    templates={whatsappTemplateCatalog.templates}
-                    loadError={whatsappTemplateCatalog.error}
-                    mode="start"
-                    phone={selected.phone}
-                  />
-                ) : interactionAction ? (
-                  <form
-                    action={interactionAction}
-                    className="border-t border-slate-100 bg-white p-4"
-                  >
-                    <div className="grid gap-2 sm:grid-cols-[125px_145px_minmax(0,1fr)_auto]">
-                      <select
-                        className="input"
-                        name="direction"
-                        defaultValue="outbound"
-                      >
-                        <option value="outbound">Outbound</option>
-
-                        <option value="inbound">Inbound</option>
-                      </select>
-
-                      <select
-                        className="input"
-                        name="channel"
-                        defaultValue={selected.currentContactChannel}
-                      >
-                        {channels.map(([value, label]) => (
-                          <option key={value} value={value}>
-                            {label}
-                          </option>
-                        ))}
-                      </select>
-
-                      <input
-                        className="input"
-                        name="body"
-                        required
-                        placeholder="Log a message, email or call note..."
-                      />
-
-                      <button className="btn-primary" type="submit">
-                        Log
-                      </button>
-                    </div>
-
-                    <div className="mt-2 text-[10px] font-semibold text-slate-400">
-                      Non-WhatsApp channels are logged manually for now.
-                    </div>
-                  </form>
-                ) : null}
-              </div>
-            </section>
-
-            {/* ===========================================
-
-
-
-
-
-
-
-                RIGHT — LEAD CONTEXT
-
-
-
-
-
-
-
-            =========================================== */}
-
-            <aside
-              className="
-
-
-
-
-
-
-
-                conversation-context-pane
-
-
-
-
-
-
-
-                hidden
-
-
-
-
-
-
-
-                min-h-0
-
-
-
-
-
-
-
-                overflow-y-auto
-
-
-
-
-
-
-
-                overscroll-contain
-
-
-
-
-
-
-
-                border-l
-
-
-
-
-
-
-
-                border-slate-200
-
-
-
-
-
-
-
-                bg-slate-50/55
-
-
-
-
-
-
-
-                p-4
-
-
-
-
-
-
-
-                lg:block
-
-
-
-
-
-
-
-              "
-            >
-              <div>
-                <div className="eyebrow">Lead context</div>
-
-                <div className="mt-3 flex items-start justify-between gap-3">
-                  <div className="min-w-0">
-                    <div className="truncate text-sm font-semibold text-slate-900">
-                      {selected.name}
-                    </div>
-
-                    <div className="mt-1 text-[10px] font-semibold text-slate-400">
-                      Update the important admissions details without leaving
-                      the conversation.
-                    </div>
-                  </div>
-
-                  <StageBadge stage={selected.stage} />
-                </div>
-              </div>
-
-              {/* QUICK EDIT */}
-
-              {leadContextAction && (
-                <div className="conversation-context-card mt-5 rounded-2xl border border-slate-200 bg-white p-4">
-                  <div className="text-[10px] font-bold uppercase tracking-[.12em] text-slate-400">
-                    Quick edit
-                  </div>
-
-                  <div className="mt-1 text-sm font-semibold text-slate-800">
-                    Admissions details
-                  </div>
-
-                  <form action={leadContextAction} className="mt-4 space-y-4">
-                    <label className="block">
-                      <span className="mb-1.5 flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-[.1em] text-sky-700">
-                        <BookOpen size={12} />
-                        Course
-                      </span>
-
-                      <select
-                        className="input"
-                        name="course_id"
-                        defaultValue={selected.interestedCourseId ?? ""}
-                      >
-                        <option value="">Not selected</option>
-
-                        {courses.map((course) => (
-                          <option key={course.id} value={course.id}>
-                            {course.name}
-                          </option>
-                        ))}
-                      </select>
-                    </label>
-
-                    <label className="block">
-                      <span className="mb-1.5 flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-[.1em] text-violet-700">
-                        <MapPin size={12} />
-                        Country
-                      </span>
-
-                      <input
-                        className="input"
-                        name="country"
-                        defaultValue={selected.country || ""}
-                        placeholder="e.g. Germany"
-                      />
-                    </label>
-
-                    <button
-                      className="btn-primary flex w-full items-center justify-center gap-2"
-                      type="submit"
-                    >
-                      <Save size={14} />
-                      Save details
-                    </button>
-                  </form>
-                </div>
-              )}
-
-              {/* CURRENT DETAILS */}
-
-              <div className="mt-5 space-y-3">
-                <ContextRow
-                  label="Course"
-                  value={selected.course || "Not selected"}
-                  tone="blue"
-                />
-
-                <ContextRow
-                  label="Country"
-                  value={selected.country || "Not set"}
-                  tone="violet"
-                />
-
-                <ContextRow
-                  label="Current channel"
-                  value={selected.currentContactChannel.replaceAll(
-                    "_",
-
-                    " ",
-                  )}
-                  tone={
-                    selected.currentContactChannel === "whatsapp"
-                      ? "green"
-                      : selected.currentContactChannel === "instagram"
-                        ? "pink"
-                        : "slate"
-                  }
-                />
-
-                <ContextRow
-                  label="Last contacted"
-                  value={
-                    selected.lastContactedAt
-                      ? formatDateTime(selected.lastContactedAt)
-                      : "Not contacted"
-                  }
-                  tone="amber"
-                />
-              </div>
-
-              {/* QUICK ACTIONS */}
-
-              <div className="conversation-quick-actions mt-5 border-t border-slate-200 pt-4">
-                <div className="text-[10px] font-bold uppercase tracking-[.12em] text-slate-400">
-                  Quick actions
-                </div>
-
-                <div className="mt-3 space-y-2">
-                  <Link
-                    href={`/leads/${selected.id}`}
-                    className="flex items-center justify-between rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-xs font-bold text-slate-700 transition duration-150 hover:-translate-y-0.5 hover:border-brand/20 hover:shadow-sm"
-                  >
-                    Open full lead
-                    <ArrowUpRight size={13} />
-                  </Link>
-
-                  <Link
-                    href="/follow-ups"
-                    className="flex items-center justify-between rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-xs font-bold text-slate-700 transition duration-150 hover:-translate-y-0.5 hover:border-brand/20 hover:shadow-sm"
-                  >
-                    Follow-up queue
-                    <CalendarClock size={13} />
-                  </Link>
-                </div>
-              </div>
-
-              {/* AI PLACEHOLDER */}
-
-              <div className="conversation-ai-note mt-5 rounded-2xl border border-brand/10 bg-brand/[0.045] p-4">
-                <div className="text-[10px] font-bold uppercase tracking-[.12em] text-brand/60">
-                  AI layer next
-                </div>
-
-                <div className="mt-2 text-sm font-semibold text-slate-800">
-                  Reply suggestions
-                </div>
-
-                <p className="mt-1 text-[11px] leading-5 text-slate-500">
-                  AI qualification, conversation summaries, next-best action and
-                  suggested replies will appear here after the messaging
-                  workspace is finalized.
-                </p>
-              </div>
-            </aside>
-          </>
+          <ConversationSafeComposer
+            leadId={selected.id}
+            channel={selected.currentContactChannel}
+            interactionAction={interactionAction}
+          />
         )}
       </div>
+    </section>
+  );
+
+  const context = selected ? (
+    <div className="conversation-context-pane min-h-full bg-[#FDFEFB]">
+      <div className="sticky top-0 z-10 flex items-center justify-between border-b border-[#DCE4DF] bg-[#FDFEFB]/95 px-4 py-3 backdrop-blur dark:border-slate-800 dark:bg-slate-950/95">
+        <div>
+          <div className="text-[11px] font-semibold text-[#18362D] dark:text-white">Lead context</div>
+          <div className="mt-0.5 text-[9px] text-[#596E64]">CRM inspector</div>
+        </div>
+        <StageBadge stage={selected.stage} />
+      </div>
+
+      <section className="border-b border-[#DCE4DF] px-4 py-4 dark:border-slate-800">
+        <div className="flex items-center gap-3">
+          <div className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-[#E4F2E8] text-[11px] font-bold text-[#216551] dark:bg-slate-900">
+            {initials(selected.name)}
+          </div>
+          <div className="min-w-0">
+            <div className="truncate text-[13px] font-semibold text-[#18362D] dark:text-white">
+              {selected.name}
+            </div>
+            <div className="mt-0.5 text-[9px] capitalize text-[#596E64]">
+              {selected.leadCreationChannel.replaceAll("_", " ")} inquiry
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section className="border-b border-[#DCE4DF] px-4 py-4 dark:border-slate-800">
+        <SectionHeading>Lead details</SectionHeading>
+        <dl className="mt-3 space-y-0 divide-y divide-[#EEF2EF] dark:divide-slate-800">
+          <ContextLine label="Country" value={selected.country || "Not recorded"} />
+          <ContextLine label="Course" value={selected.course || "Not selected"} />
+          <ContextLine
+            label="Source"
+            value={selected.leadCreationChannel.replaceAll("_", " ")}
+          />
+          <ContextLine
+            label="Current channel"
+            value={selected.currentContactChannel.replaceAll("_", " ")}
+          />
+          <ContextLine
+            label="Last contacted"
+            value={
+              selected.lastContactedAt
+                ? formatDateTime(selected.lastContactedAt)
+                : "Not contacted"
+            }
+          />
+        </dl>
+      </section>
+
+      <section className="border-b border-[#DCE4DF] px-3.5 py-4 dark:border-slate-800">
+        <ConversationIntelligencePanel
+          leadId={selected.id}
+          stage={selected.stage}
+          priority={selectedSummary?.priority ?? "normal"}
+          needsReply={Boolean(selectedSummary?.needsReply)}
+          needsFirstContact={Boolean(selectedSummary?.needsFirstContact)}
+          waitingSince={selectedSummary?.waitingSince ?? null}
+        />
+      </section>
+
+      {copilotChannel ? (
+        <section className="border-b border-[#DCE4DF] px-3.5 py-4 dark:border-slate-800">
+          <ConversationCopilot
+            leadId={selected.id}
+            channel={copilotChannel}
+            enabled={copilotEnabled}
+            disabledReason={
+              copilotChannel === "whatsapp" && !whatsappWindow?.open
+                ? "The WhatsApp service window is closed. Use an approved template instead of a free-text draft."
+                : undefined
+            }
+          />
+        </section>
+      ) : null}
+
+      {leadContextAction ? (
+        <section className="border-b border-[#DCE4DF] px-4 py-4 dark:border-slate-800">
+          <details className="group rounded-lg border border-[#DCE4DF] bg-white dark:border-slate-800 dark:bg-slate-950">
+            <summary className="flex cursor-pointer list-none items-center justify-between px-3 py-3 text-[10px] font-semibold text-[#40564C] dark:text-slate-200">
+              Edit lead details
+              <ChevronDown
+                size={14}
+                className="text-[#71847A] transition group-open:rotate-180"
+              />
+            </summary>
+            <form
+              action={leadContextAction}
+              className="space-y-3 border-t border-[#EEF2EF] p-3 dark:border-slate-900"
+            >
+              <label className="block">
+                <span className="mb-1 block text-[9px] font-semibold uppercase tracking-[0.08em] text-[#596E64]">
+                  Course
+                </span>
+                <select
+                  className="input"
+                  name="course_id"
+                  defaultValue={selected.interestedCourseId ?? ""}
+                >
+                  <option value="">Not selected</option>
+                  {courses.map((course) => (
+                    <option key={course.id} value={course.id}>
+                      {course.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="block">
+                <span className="mb-1 block text-[9px] font-semibold uppercase tracking-[0.08em] text-[#596E64]">
+                  Country
+                </span>
+                <input
+                  className="input"
+                  name="country"
+                  defaultValue={selected.country || ""}
+                  placeholder="e.g. Germany"
+                />
+              </label>
+              <button
+                className="btn-primary flex w-full items-center justify-center gap-2"
+                type="submit"
+              >
+                <Save size={13} /> Save details
+              </button>
+            </form>
+          </details>
+        </section>
+      ) : null}
+
+      <section className="px-4 py-4">
+        <SectionHeading>More</SectionHeading>
+        <div className="mt-3 grid gap-2">
+          <Link
+            href={`/leads/${selected.id}`}
+            className="flex items-center justify-between rounded-lg border border-[#DCE4DF] bg-white px-3 py-2.5 text-[10px] font-semibold text-[#40564C] transition hover:bg-[#EDF3E6] hover:text-[#216551] dark:border-slate-800 dark:bg-slate-950 dark:text-slate-200 dark:hover:bg-slate-900"
+          >
+            Open lead profile <ArrowUpRight size={13} />
+          </Link>
+          <Link
+            href="/follow-ups"
+            className="flex items-center justify-between rounded-lg border border-[#DCE4DF] bg-white px-3 py-2.5 text-[10px] font-semibold text-[#40564C] transition hover:bg-[#EDF3E6] hover:text-[#216551] dark:border-slate-800 dark:bg-slate-950 dark:text-slate-200 dark:hover:bg-slate-900"
+          >
+            Follow-up queue <CalendarClock size={13} />
+          </Link>
+        </div>
+      </section>
+    </div>
+  ) : null;
+
+  return (
+    <div className="conversations-polish space-y-4">
+      <ConversationsRealtime />
+
+      <section className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+          <div className="text-[10px] font-bold uppercase tracking-[0.16em] text-[#596E64]">
+            Inbox · Admissions Operations
+          </div>
+          <h1 className="mt-1.5 text-[29px] font-semibold tracking-[-0.04em] text-[#18362D] dark:text-white">
+            Conversations
+          </h1>
+          <p className="mt-1 text-[13px] leading-5 text-[#596E64]">
+            Find the right lead, understand the context, prepare the response, and record the next step.
+          </p>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-2">
+          <InboxMetric label="Needs reply" value={attentionCount} attention={attentionCount > 0} />
+          <InboxMetric label="Unread" value={unreadCount} attention={unreadCount > 0} />
+          <InboxMetric label="Priority" value={priorityCount} attention={priorityCount > 0} />
+          <span className="rounded-lg border border-[#DCE4DF] bg-white px-2.5 py-2 text-[9px] font-semibold text-[#596E64] dark:border-slate-800 dark:bg-slate-950 dark:text-slate-300">
+            {mock ? "Demo data" : "CRM workspace"}
+          </span>
+        </div>
+      </section>
+
+      {query.error ? (
+        <div className="rounded-lg border border-red-100 bg-red-50 px-3 py-2.5 text-xs font-medium text-red-700 dark:border-red-900/40 dark:bg-red-950/15 dark:text-red-300">
+          {query.error}
+        </div>
+      ) : null}
+      {noticeText ? (
+        <div className="rounded-lg border border-emerald-100 bg-emerald-50 px-3 py-2.5 text-xs font-medium text-emerald-700 dark:border-emerald-900/40 dark:bg-emerald-950/15 dark:text-emerald-300">
+          {noticeText}
+        </div>
+      ) : null}
+
+      <ConversationWorkspaceShell
+        inbox={inbox}
+        chat={chat}
+        context={context}
+        hasConversation={Boolean(selected)}
+      />
     </div>
   );
 }
 
-/* =========================================================
-
-
-
-
-
-
-
-   METRIC
-
-
-
-
-
-
-
-\========================================================= */
+function SectionHeading({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="text-[9px] font-bold uppercase tracking-[0.12em] text-[#596E64]">
+      {children}
+    </div>
+  );
+}
 
 function InboxMetric({
   label,
-
   value,
+  attention,
 }: {
   label: string;
-
   value: number;
+  attention?: boolean;
 }) {
-  return (
-    <div className="conversation-metric card flex items-center justify-between px-4 py-3.5 animate-rise">
-      <div className="text-xs font-semibold text-slate-500">{label}</div>
-
-      <div className="text-lg font-semibold tracking-tight text-slate-900">
-        {value.toLocaleString()}
-      </div>
-    </div>
-  );
-}
-
-/* =========================================================
-
-
-
-
-
-
-
-   CONTEXT ROW
-
-
-
-
-
-
-
-\========================================================= */
-
-function ContextRow({
-  label,
-
-  value,
-
-  tone = "slate",
-}: {
-  label: string;
-
-  value: string;
-
-  tone?: "blue" | "violet" | "green" | "pink" | "amber" | "slate";
-}) {
-  const tones = {
-    blue: "border-sky-100 bg-sky-50/70 text-sky-800",
-
-    violet: "border-violet-100 bg-violet-50/70 text-violet-800",
-
-    green: "border-emerald-100 bg-emerald-50/70 text-emerald-800",
-
-    pink: "border-pink-100 bg-pink-50/70 text-pink-800",
-
-    amber: "border-amber-100 bg-amber-50/70 text-amber-800",
-
-    slate: "border-slate-100 bg-white text-slate-700",
-  };
-
   return (
     <div
-      className={`
-
-
-
-
-
-
-
-        conversation-context-row
-
-
-
-
-
-
-
-        rounded-xl
-
-
-
-
-
-
-
-        border
-
-
-
-
-
-
-
-        p-3
-
-
-
-
-
-
-
-        ${tones[tone]}
-
-
-
-
-
-
-
-      `}
+      className={`rounded-lg border px-2.5 py-1.5 ${
+        attention
+          ? "border-[#D6E6DB] bg-[#F2F8F4]"
+          : "border-[#DCE4DF] bg-white"
+      }`}
     >
-      <div className="text-[9px] font-bold uppercase tracking-[.12em] opacity-60">
+      <div className="text-[8px] font-semibold uppercase tracking-[0.08em] text-[#596E64]">
         {label}
       </div>
-
-      <div className="mt-1.5 break-words text-xs font-bold capitalize">
-        {value}
+      <div className={`mt-0.5 text-[12px] font-semibold ${attention ? "text-[#216551]" : "text-[#40564C]"}`}>
+        {value.toLocaleString("en-IN")}
       </div>
     </div>
   );
 }
 
-/* =========================================================
-
-
-
-
-
-
-
-   HEADER CONTEXT BADGE
-
-
-
-
-
-
-
-\========================================================= */
-
-function ContextBadge({
-  tone,
-
-  children,
-}: {
-  tone: "course" | "country";
-
-  children: ReactNode;
-}) {
-  const className =
-    tone === "course"
-      ? "border-sky-100 bg-sky-50 text-sky-700"
-      : "border-violet-100 bg-violet-50 text-violet-700";
-
+function ContextLine({ label, value }: { label: string; value: string }) {
   return (
-    <span
-      className={`
-
-
-
-
-
-
-
-        inline-flex
-
-
-
-
-
-
-
-        items-center
-
-
-
-
-
-
-
-        gap-1
-
-
-
-
-
-
-
-        rounded-full
-
-
-
-
-
-
-
-        border
-
-
-
-
-
-
-
-        px-2
-
-
-
-
-
-
-
-        py-1
-
-
-
-
-
-
-
-        text-[9px]
-
-
-
-
-
-
-
-        font-bold
-
-
-
-
-
-
-
-        ${className}
-
-
-
-
-
-
-
-      `}
-    >
-      {children}
-    </span>
+    <div className="flex items-start justify-between gap-4 py-2.5">
+      <dt className="text-[10px] text-[#596E64]">{label}</dt>
+      <dd className="m-0 max-w-[170px] text-right text-[10px] font-medium capitalize text-[#18362D] dark:text-slate-200">
+        {value}
+      </dd>
+    </div>
   );
 }
-
-/* =========================================================
-
-
-
-
-
-
-
-   CHANNEL BADGE
-
-
-
-
-
-
-
-\========================================================= */
-
-function ChannelBadge({ channel }: { channel: string }) {
-  const classes =
-    channel === "whatsapp"
-      ? "border-emerald-100 bg-emerald-50 text-emerald-700"
-      : channel === "instagram"
-        ? "border-pink-100 bg-pink-50 text-pink-700"
-        : channel === "email"
-          ? "border-sky-100 bg-sky-50 text-sky-700"
-          : channel === "phone"
-            ? "border-amber-100 bg-amber-50 text-amber-700"
-            : channel === "website"
-              ? "border-indigo-100 bg-indigo-50 text-indigo-700"
-              : "border-slate-200 bg-slate-50 text-slate-600";
-
-  return (
-    <span
-      className={`
-
-
-
-
-
-
-
-        inline-flex
-
-
-
-
-
-
-
-        items-center
-
-
-
-
-
-
-
-        gap-1
-
-
-
-
-
-
-
-        rounded-full
-
-
-
-
-
-
-
-        border
-
-
-
-
-
-
-
-        px-2
-
-
-
-
-
-
-
-        py-1
-
-
-
-
-
-
-
-        text-[9px]
-
-
-
-
-
-
-
-        font-bold
-
-
-
-
-
-
-
-        capitalize
-
-
-
-
-
-
-
-        ${classes}
-
-
-
-
-
-
-
-      `}
-    >
-      <ChannelIcon channel={channel} />
-
-      {channel.replaceAll(
-        "_",
-
-        " ",
-      )}
-    </span>
-  );
-}
-
-/* =========================================================
-
-
-
-
-
-
-
-   CHANNEL ICON
-
-
-
-
-
-
-
-\========================================================= */
-
-function ChannelIcon({ channel }: { channel: string }) {
-  if (channel === "instagram") {
-    return <Instagram size={11} />;
-  }
-
-  if (channel === "whatsapp") {
-    return <MessageCircle size={11} />;
-  }
-
-  if (channel === "email") {
-    return <Mail size={11} />;
-  }
-
-  if (channel === "phone") {
-    return <Phone size={11} />;
-  }
-
-  return <ContactRound size={11} />;
-}
-
-/* =========================================================
-
-
-
-
-
-
-
-   INITIALS
-
-
-
-
-
-
-
-\========================================================= */
 
 function initials(name: string) {
   return (
     name
-
       .split(" ")
-
       .filter(Boolean)
-
       .map((part) => Array.from(part)[0] ?? "")
-
       .slice(0, 2)
-
       .join("")
-
       .toLocaleUpperCase("en-IN") || "?"
   );
 }
