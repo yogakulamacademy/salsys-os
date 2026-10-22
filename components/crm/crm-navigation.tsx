@@ -5,31 +5,29 @@ import { usePathname } from 'next/navigation';
 import {
   Activity,
   AlertTriangle,
+  ChevronDown,
   CircleDollarSign,
   ContactRound,
   DatabaseZap,
   LayoutDashboard,
   ListTodo,
-  Menu,
   Rows3,
   UserRoundSearch,
   UsersRound,
 } from 'lucide-react';
 
-import styles from '@/components/crm/crm-studio.module.css';
-
-type Item = {
+type NavigationItem = {
   href: string;
   label: string;
   icon: React.ComponentType<{ size?: number; className?: string }>;
 };
 
-type Group = {
+type NavigationGroup = {
   label: string;
-  items: Item[];
+  items: NavigationItem[];
 };
 
-const groups: Group[] = [
+const groups: NavigationGroup[] = [
   {
     label: 'Workspace',
     items: [
@@ -56,16 +54,8 @@ const groups: Group[] = [
   {
     label: 'Quick Views',
     items: [
-      {
-        href: '/leads?stage=payment_pending',
-        label: 'Payment-stage leads',
-        icon: CircleDollarSign,
-      },
-      {
-        href: '/leads?view=attention',
-        label: 'Stage-aging alerts',
-        icon: AlertTriangle,
-      },
+      { href: '/leads?stage=payment_pending', label: 'Payment-stage leads', icon: CircleDollarSign },
+      { href: '/leads?view=attention', label: 'Stage-aging alerts', icon: AlertTriangle },
     ],
   },
 ];
@@ -77,74 +67,44 @@ function pathOnly(href: string) {
 function isActive(pathname: string, href: string) {
   if (href.includes('?')) return false;
   const path = pathOnly(href);
-  if (path === '/leads') {
-    return pathname === '/leads' || pathname.startsWith('/leads/');
-  }
+  if (path === '/crm') return pathname === path;
+  if (path === '/leads') return pathname === '/leads' || pathname.startsWith('/leads/');
   return pathname === path || pathname.startsWith(`${path}/`);
 }
 
-function NavigationLinks() {
+function NavigationLinks({ mobile = false }: { mobile?: boolean }) {
   const pathname = usePathname();
 
   return (
-    <nav
-      className={styles.navScroll}
-      aria-label="CRM Operations navigation"
-      style={{ padding: '4px 16px 28px', overflowY: 'auto' }}
-    >
-      {groups.map((group, groupIndex) => (
-        <div key={group.label} style={{ marginTop: groupIndex === 0 ? 0 : 24 }}>
-          <div
-            style={{
-              padding: '0 12px 8px',
-              color: '#8a9990',
-              fontSize: 9,
-              fontWeight: 800,
-              letterSpacing: '0.16em',
-              textTransform: 'uppercase',
-            }}
-          >
+    <div className={mobile ? 'space-y-5' : 'space-y-5'}>
+      {groups.map((group) => (
+        <div key={group.label}>
+          <div className="mb-1.5 px-3 text-[9px] font-bold uppercase tracking-[0.16em] text-[#8a9790]">
             {group.label}
           </div>
-
-          <div style={{ display: 'grid', gap: 3 }}>
+          <div className="space-y-0.5">
             {group.items.map(({ href, label, icon: Icon }) => {
               const active = isActive(pathname, href);
               return (
                 <Link
-                  key={`${group.label}-${href}-${label}`}
+                  key={`${href}-${label}`}
                   href={href}
                   aria-current={active ? 'page' : undefined}
-                  style={{
-                    position: 'relative',
-                    display: 'flex',
-                    minHeight: 40,
-                    alignItems: 'center',
-                    gap: 11,
-                    padding: '9px 12px',
-                    borderRadius: 9,
-                    background: active ? '#e7f1e9' : 'transparent',
-                    color: active ? '#2f6a55' : '#718078',
-                    fontSize: 12,
-                    fontWeight: active ? 650 : 550,
-                    textDecoration: 'none',
-                  }}
+                  className={`group relative flex items-center gap-2.5 rounded-[7px] px-3 py-2.5 text-[12px] transition ${
+                    active
+                      ? 'bg-[#eaf4ed] font-semibold text-[#216551]'
+                      : 'font-medium text-[#64746c] hover:bg-[#f3f6f3] hover:text-[#216551]'
+                  }`}
                 >
-                  {active ? (
-                    <span
-                      aria-hidden="true"
-                      style={{
-                        position: 'absolute',
-                        left: -16,
-                        top: 9,
-                        bottom: 9,
-                        width: 3,
-                        borderRadius: '0 3px 3px 0',
-                        background: '#2f765d',
-                      }}
-                    />
-                  ) : null}
-                  <Icon size={16} className={active ? 'text-[#3a7d63]' : 'text-[#9aa8a0]'} />
+                  {active ? <span className="absolute -left-4 h-[18px] w-[3px] rounded-r bg-[#216551]" /> : null}
+                  <Icon
+                    size={16}
+                    className={
+                      active
+                        ? 'text-[#216551]'
+                        : 'text-[#91a096] transition group-hover:text-[#216551]'
+                    }
+                  />
                   <span>{label}</span>
                 </Link>
               );
@@ -152,17 +112,11 @@ function NavigationLinks() {
           </div>
         </div>
       ))}
-    </nav>
+    </div>
   );
 }
 
-export function CrmNavigation({
-  workspaceName,
-}: {
-  workspaceName: string;
-  profileName: string;
-  profileRole: string;
-}) {
+export function CrmNavigation() {
   const pathname = usePathname();
   const current = groups
     .flatMap((group) => group.items)
@@ -170,78 +124,38 @@ export function CrmNavigation({
 
   return (
     <>
-      <aside
-        className={styles.sidebar}
-        aria-label="CRM Operations navigation"
-        style={{
-          background: '#f4f6f5',
-          borderRight: '1px solid #dfe5e1',
-          boxShadow: 'none',
-        }}
-      >
-        <div style={{ padding: '20px 22px 18px' }}>
-          <Link
-            href="/crm"
-            aria-label="CRM command center"
-            style={{ color: '#243d34', textDecoration: 'none' }}
-          >
-            <div style={{ fontSize: 15, fontWeight: 760, letterSpacing: '-0.015em' }}>CRM</div>
-          </Link>
-          <p
-            style={{
-              margin: '8px 0 0',
-              maxWidth: 184,
-              color: '#7b8881',
-              fontSize: 10,
-              lineHeight: 1.7,
-            }}
-          >
-            Manage leads, admissions, pipeline and customer intelligence.
-          </p>
-          <div
-            style={{
-              marginTop: 12,
-              color: '#9aa69f',
-              fontSize: 9,
-              fontWeight: 700,
-              overflow: 'hidden',
-              textOverflow: 'ellipsis',
-              whiteSpace: 'nowrap',
-            }}
-            title={workspaceName}
-          >
-            {workspaceName}
-          </div>
-        </div>
-
-        <NavigationLinks />
-      </aside>
-
-      <details className={styles.mobileNavigation}>
-        <summary>
-          <Link
-            href="/crm"
-            className={styles.mobileBrand}
-            onClick={(event) => event.stopPropagation()}
-            style={{ color: '#243d34', textDecoration: 'none', fontSize: 15, fontWeight: 760 }}
-          >
-            CRM
-          </Link>
-          <span className={styles.mobileMenuButton}>
-            <Menu size={16} />
-            {current?.label || 'Menu'}
+      <details className="group rounded-xl border border-[#e4eae6] bg-white lg:hidden">
+        <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3.5 text-sm font-semibold text-[#192e29] [&::-webkit-details-marker]:hidden">
+          <span className="flex items-center gap-2.5">
+            <span className="grid h-8 w-8 place-items-center rounded-lg bg-[#eaf4ed] text-[#216551]">
+              <UsersRound size={16} />
+            </span>
+            {current?.label || 'CRM'}
           </span>
+          <ChevronDown size={16} className="text-[#91a096] transition group-open:rotate-180" />
         </summary>
-        <div className={styles.mobileNavigationPanel} style={{ background: '#f4f6f5' }}>
-          <div style={{ padding: '14px 22px 8px' }}>
-            <div style={{ color: '#243d34', fontSize: 14, fontWeight: 760 }}>CRM</div>
-            <p style={{ margin: '5px 0 0', color: '#7b8881', fontSize: 10, lineHeight: 1.6 }}>
-              Leads, admissions and customer intelligence.
+        <div className="border-t border-[#e4eae6] p-3">
+          <div className="mb-4 rounded-lg bg-[#f6f8f7] px-3 py-2.5">
+            <div className="text-sm font-bold text-[#192e29]">CRM</div>
+            <div className="mt-0.5 text-xs leading-5 text-[#6d7c76]">
+              Manage leads, admissions, pipeline and customer intelligence.
+            </div>
+          </div>
+          <NavigationLinks mobile />
+        </div>
+      </details>
+
+      <aside className="hidden min-h-[calc(100vh-7rem)] border-r border-[#e4eae6] pr-4 lg:block" aria-label="CRM Operations navigation">
+        <div className="sticky top-20 pb-8">
+          <div className="mb-6 px-3 pt-1">
+            <div className="text-[15px] font-bold text-[#192e29]">CRM</div>
+            <p className="mt-1 max-w-[185px] text-[11px] leading-5 text-[#6d7c76]">
+              Manage leads, admissions, pipeline and customer intelligence.
             </p>
           </div>
           <NavigationLinks />
         </div>
-      </details>
+      </aside>
     </>
   );
 }
