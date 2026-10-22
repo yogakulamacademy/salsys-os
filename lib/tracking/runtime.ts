@@ -11,6 +11,8 @@ export type TrackingSourceRuntime = {
   id: string;
   organizationId: string;
   organizationSiteId: string | null;
+  publicSiteId: string | null;
+  siteIdVerified: boolean;
   siteEnvironment: 'production' | 'staging' | 'development' | null;
   sourceKey: string;
   sourceSystem: string;
@@ -173,13 +175,17 @@ export function sanitizeGenericTrackingEvent(
 
 export async function resolveBrowserTrackingSource(
   origin: string | null,
+  publicSiteId: string | null = null,
 ): Promise<TrackingSourceRuntime | null> {
   if (!origin) return null;
 
   const admin = createAdminClient();
   const { data, error } = await admin.rpc(
-    'resolve_tracking_source_by_origin_v1',
-    { p_origin: origin },
+    'resolve_tracking_source_by_site_v1',
+    {
+      p_origin: origin,
+      p_public_site_id: publicSiteId,
+    },
   );
 
   if (error || !data?.ok) return null;
@@ -194,6 +200,8 @@ export async function resolveBrowserTrackingSource(
     organizationSiteId: data.organization_site_id
       ? String(data.organization_site_id)
       : null,
+    publicSiteId: data.public_site_id ? String(data.public_site_id) : null,
+    siteIdVerified: Boolean(data.site_id_verified),
     siteEnvironment:
       environment === 'production' ||
       environment === 'staging' ||
@@ -257,6 +265,8 @@ export async function authenticateServerTrackingSource(
     organizationSiteId: data.organization_site_id
       ? String(data.organization_site_id)
       : null,
+    publicSiteId: null,
+    siteIdVerified: false,
     siteEnvironment: null,
     sourceKey: String(data.source_key),
     sourceSystem: String(data.source_system),
@@ -301,7 +311,7 @@ export function corsHeadersForTrackingOrigin(
   const headers: Record<string, string> = {
     'Access-Control-Allow-Methods': 'POST, OPTIONS',
     'Access-Control-Allow-Headers':
-      'Content-Type, X-Salsys-Source-Key, Authorization',
+      'Content-Type, X-Salsys-Site-ID, X-Salsys-Source-Key, Authorization',
     'Access-Control-Max-Age': '86400',
     Vary: 'Origin',
     'Cache-Control': 'no-store',
