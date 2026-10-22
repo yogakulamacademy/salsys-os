@@ -36,11 +36,34 @@ function isCrmStudioPath(pathname: string) {
 export function RootShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
 
-  // Public/auth pages render without the authenticated application shell.
-  // CRM Operations also owns its complete shell so the Studio navigation,
-  // spacing and top bar are never nested inside the legacy two-rail AppShell.
-  if (isShelllessPath(pathname) || isCrmStudioPath(pathname)) {
+  // Public/auth routes stay shellless.
+  if (isShelllessPath(pathname)) {
     return <>{children}</>;
+  }
+
+  // CRM Studio is a workspace inside SalsysOS, not a replacement for the
+  // product-level navigation. Keep the global SalsysOS rail/drawer mounted and
+  // let CRM own only its inner workspace shell.
+  if (isCrmStudioPath(pathname)) {
+    return (
+      <div className="salsys-meta-sidebar-shell crm-studio-global-shell">
+        <DesktopHoverSidebar />
+        <div className="crm-studio-global-host">{children}</div>
+
+        <style jsx global>{`
+          @media (min-width: 1024px) {
+            .crm-studio-global-host > div > aside[aria-label='CRM Operations navigation'] {
+              left: 4rem !important;
+            }
+
+            .crm-studio-global-host > div > aside[aria-label='CRM Operations navigation'] + div {
+              margin-left: calc(238px + 4rem) !important;
+              width: calc(100% - 238px - 4rem) !important;
+            }
+          }
+        `}</style>
+      </div>
+    );
   }
 
   return (
