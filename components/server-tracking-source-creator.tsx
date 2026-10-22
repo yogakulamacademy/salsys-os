@@ -198,7 +198,7 @@ export function ServerTrackingSourceCreator() {
   const activeExample = examples ? examples[tab] : '';
 
   return (
-    <section className="rounded-2xl border border-emerald-200 bg-white p-5 shadow-sm">
+    <section id="server-tracking" className="scroll-mt-24 rounded-2xl border border-emerald-200 bg-white p-5 shadow-sm">
       <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
         <div>
           <div className="eyebrow">Server tracking</div>
