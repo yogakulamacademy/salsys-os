@@ -1,6 +1,7 @@
 import { Activity, RefreshCw } from "lucide-react";
 
 import { AnalyticsExplorer } from "@/components/analytics-explorer";
+import { ExecutiveDecisionBrief } from "@/components/marketing/executive-decision-brief";
 import { PageHeader } from "@/components/ui";
 import { getAnalyticsWorkspace } from "@/lib/analytics-data";
 
@@ -14,13 +15,14 @@ export default async function AnalyticsPage() {
       : "Latest synced period";
 
   const latestRun = syncRuns[0] ?? null;
+  const brief = buildAnalyticsDecisionBrief(workspace);
 
   return (
     <div className="space-y-4">
       <PageHeader
-        eyebrow="Intelligence"
+        eyebrow="Decision intelligence"
         title="Analytics"
-        description="Explore traffic, conversion and CRM outcomes."
+        description="Connect traffic, engagement and CRM outcomes without pretending browser analytics and first-party CRM identity are the same thing."
         actions={
           <div className="flex flex-wrap items-center gap-2">
             <span className="rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-[10px] font-bold text-slate-500 dark:border-slate-800 dark:bg-slate-950 dark:text-slate-400">
@@ -38,6 +40,16 @@ export default async function AnalyticsPage() {
             </span>
           </div>
         }
+      />
+
+      <ExecutiveDecisionBrief
+        eyebrow="Analytics decision brief"
+        title={brief.title}
+        summary={brief.summary}
+        confidenceLabel={brief.confidenceLabel}
+        confidenceDetail={brief.confidenceDetail}
+        signals={brief.signals}
+        actions={brief.actions}
       />
 
       {workspace.warning ? (
@@ -116,6 +128,77 @@ export default async function AnalyticsPage() {
   );
 }
 
+function buildAnalyticsDecisionBrief(workspace: Awaited<ReturnType<typeof getAnalyticsWorkspace>>) {
+  const overview = workspace.overview;
+  const sessions = toNumber(overview.ga4_sessions);
+  const engaged = toNumber(overview.ga4_engaged_sessions);
+  const leads = toNumber(overview.crm_web_leads);
+  const qualified = toNumber(overview.crm_qualified_leads);
+  const enrolled = toNumber(overview.crm_enrolled_leads);
+  const engagementRate = toRatePercent(overview.ga4_engagement_rate);
+  const conversionRate = toRatePercent(overview.website_lead_conversion_rate);
+  const bestSource = [...workspace.sourceRows].sort((a, b) => {
+    if (b.enrolled !== a.enrolled) return b.enrolled - a.enrolled;
+    if (b.qualified !== a.qualified) return b.qualified - a.qualified;
+    return b.leads - a.leads;
+  })[0];
+
+  const hasFreshData = Boolean(workspace.health.latest_analytics_date);
+  const crmSessions = toNumber(overview.crm_sessions);
+  const sessionDelta = sessions > 0 && crmSessions > 0 ? Math.abs(sessions - crmSessions) / Math.max(sessions, crmSessions) * 100 : null;
+
+  const title = bestSource?.source
+    ? `${pretty(bestSource.source)} is the strongest observed source by downstream CRM outcome.`
+    : sessions > 0
+      ? "Traffic is visible; downstream source evidence is still developing."
+      : "Analytics evidence is waiting for a complete synced period.";
+
+  const summary = bestSource
+    ? `${bestSource.leads.toLocaleString("en-IN")} CRM leads, ${bestSource.qualified.toLocaleString("en-IN")} qualified and ${bestSource.enrolled.toLocaleString("en-IN")} enrolled are currently associated with ${pretty(bestSource.source)}${bestSource.medium ? ` / ${pretty(bestSource.medium)}` : ""}. Use the explorer to compare traffic contribution with business outcomes rather than optimizing on sessions alone.`
+    : "SalsysOS will surface source, landing-page, campaign and country patterns as the connected analytics and CRM evidence becomes available.";
+
+  return {
+    title,
+    summary,
+    confidenceLabel: hasFreshData ? "Synced analytics evidence" : "Sync evidence incomplete",
+    confidenceDetail:
+      sessionDelta == null
+        ? "GA4 and CRM use different identity and session definitions. Reconciliation remains explicit instead of forcing the two systems to match."
+        : `GA4 and CRM session totals differ by ${sessionDelta.toFixed(1)}% in the visible scope. This is a reconciliation signal, not automatically a tracking error, because the systems use different identity and session definitions.`,
+    signals: [
+      {
+        label: "GA4 sessions",
+        value: sessions.toLocaleString("en-IN"),
+        detail: `${engaged.toLocaleString("en-IN")} engaged sessions · ${engagementRate == null ? "engagement unknown" : `${engagementRate.toFixed(1)}% engagement`}.`,
+        tone: sessions > 0 ? ("positive" as const) : ("neutral" as const),
+      },
+      {
+        label: "Website lead conversion",
+        value: conversionRate == null ? "—" : `${conversionRate.toFixed(1)}%`,
+        detail: `${leads.toLocaleString("en-IN")} CRM web leads from the current analytics scope.`,
+        tone: conversionRate != null && conversionRate > 0 ? ("positive" as const) : ("neutral" as const),
+      },
+      {
+        label: "Qualified outcomes",
+        value: qualified.toLocaleString("en-IN"),
+        detail: leads > 0 ? `${((qualified / leads) * 100).toFixed(1)}% of CRM web leads.` : "No valid lead denominator yet.",
+        tone: qualified > 0 ? ("positive" as const) : ("neutral" as const),
+      },
+      {
+        label: "Enrollments",
+        value: enrolled.toLocaleString("en-IN"),
+        detail: bestSource ? `${bestSource.enrolled.toLocaleString("en-IN")} currently associated with the strongest source.` : "No source leader yet.",
+        tone: enrolled > 0 ? ("positive" as const) : ("neutral" as const),
+      },
+    ],
+    actions: [
+      { label: "Inspect funnel", href: "/funnel", detail: "See where traffic becomes CRM outcomes." },
+      { label: "Compare attribution", href: "/attribution", detail: "Separate analytics source labels from attribution credit." },
+      { label: "Review data coverage", href: "/tracking/data-coverage", detail: "Check evidence completeness before diagnosing differences." },
+    ],
+  };
+}
+
 function HealthMetric({ label, value }: { label: string; value: string }) {
   return (
     <div className="rounded-xl bg-slate-50 px-3 py-3 dark:bg-slate-900/60">
@@ -128,6 +211,13 @@ function HealthMetric({ label, value }: { label: string; value: string }) {
 function toNumber(value: number | string | null | undefined) {
   const number = Number(value ?? 0);
   return Number.isFinite(number) ? number : 0;
+}
+
+function toRatePercent(value: number | string | null | undefined) {
+  if (value == null || value === "") return null;
+  const number = Number(value);
+  if (!Number.isFinite(number)) return null;
+  return number <= 1 ? number * 100 : number;
 }
 
 function formatNumber(value: number | string | null | undefined) {
