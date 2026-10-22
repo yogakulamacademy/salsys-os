@@ -137,11 +137,14 @@ export function DesktopHoverSidebarV3() {
     if (!privileged) return [];
     return [
       { id: "overview", label: "Overview", icon: Home, directHref: "/home", items: [] },
-      { id: "crm", label: "CRM", icon: UsersRound, description: "Leads, admissions and follow-up work.", items: [
+      { id: "crm", label: "CRM", icon: UsersRound, description: "Command center, leads, pipeline and customer intelligence.", items: [
+        { href: "/crm", label: "Command Center", icon: Activity },
         { href: "/leads", label: "Leads", icon: ContactRound },
         { href: "/admissions", label: "Admissions Desk", icon: ClipboardCheck },
         { href: "/pipeline", label: "Pipeline", icon: Boxes },
         { href: "/follow-ups", label: "Follow-ups", icon: ListTodo },
+        { href: "/customer-360", label: "Customer 360", icon: UsersRound },
+        { href: "/data-quality", label: "Data Quality", icon: ShieldCheck },
       ] },
       { id: "inbox", label: "Inbox", icon: Inbox, items: [{ href: "/conversations", label: "Conversations", icon: MessageSquareText }] },
       { id: "marketing", label: "Marketing", icon: Megaphone, description: "Understand acquisition, campaign performance and customer growth.", items: [
