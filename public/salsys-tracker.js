@@ -1,4 +1,4 @@
-/* Salsys Event Intelligence Browser SDK v1.0.0 */
+/* Salsys Event Intelligence Browser SDK v1.1.0 */
 (function () {
   'use strict';
 
@@ -27,7 +27,6 @@
   var AUTO_PAGE = !(script.dataset && script.dataset.autoPage === 'false');
   var AUTO_SPA = !(script.dataset && script.dataset.autoSpa === 'false');
   var AUTO_FORMS = !(script.dataset && script.dataset.autoForms === 'false');
-  var LEGACY_ALIASES = !(script.dataset && script.dataset.legacyAliases === 'false');
   var DEBUG = Boolean(script.dataset && script.dataset.debug === 'true');
 
   function absoluteEndpoint(value, fallbackPath) {
@@ -54,12 +53,6 @@
     sessionTouch: 'salsys_session_touch_v1',
     sessionStarted: 'salsys_session_started_v1',
     queue: 'salsys_event_queue_v1'
-  };
-
-  var LEGACY_KEYS = {
-    visitorCookie: 'yk_vid',
-    sessionStorage: 'yk_sid',
-    firstTouchStorage: 'yk_first_touch_v1'
   };
 
   function log() {
@@ -143,7 +136,6 @@
 
     if (analyticsGranted()) {
       value = safeGet(window.localStorage, KEYS.persistentVisitor);
-      if (!value && LEGACY_ALIASES) value = getCookie(LEGACY_KEYS.visitorCookie);
     }
 
     if (!value) value = randomId('v');
@@ -161,7 +153,6 @@
 
   function getSessionId() {
     var value = safeGet(window.sessionStorage, KEYS.session);
-    if (!value && LEGACY_ALIASES) value = safeGet(window.sessionStorage, LEGACY_KEYS.sessionStorage);
     if (!value) value = randomId('s');
     safeSet(window.sessionStorage, KEYS.session, value);
     return value;
@@ -293,9 +284,6 @@
     var stored = null;
     if (analyticsGranted()) {
       stored = parseJson(safeGet(window.localStorage, KEYS.firstTouch), null);
-      if (!stored && LEGACY_ALIASES) {
-        stored = parseJson(safeGet(window.localStorage, LEGACY_KEYS.firstTouchStorage), null);
-      }
       if (meaningfulObject(stored)) {
         safeSet(window.localStorage, KEYS.firstTouch, JSON.stringify(stored));
         return stored;
@@ -352,7 +340,7 @@
       properties.metadata && typeof properties.metadata === 'object' ? properties.metadata : {},
       {
         sdk: 'salsys-browser-v1',
-        sdk_version: '1.0.0'
+        sdk_version: '1.1.0'
       }
     );
 
@@ -379,7 +367,7 @@
       context: pageContext(),
       metadata: {
         sdk: 'salsys-browser-v1',
-        sdk_version: '1.0.0',
+        sdk_version: '1.1.0',
         consent_mode: CONSENT_MODE,
         consent_snapshot: privacyState(),
         local_permission: localPermission(eventName)
@@ -554,13 +542,6 @@
     setHidden(form, 'salsys_session_id', sessionId);
     setHidden(form, 'salsys_first_touch', JSON.stringify(firstTouch || {}));
     setHidden(form, 'salsys_session_touch', JSON.stringify(sessionTouch || {}));
-
-    if (LEGACY_ALIASES) {
-      setHidden(form, 'yk_visitor_id', visitorId);
-      setHidden(form, 'yk_session_id', sessionId);
-      setHidden(form, 'yk_first_touch', JSON.stringify(firstTouch || {}));
-      setHidden(form, 'yk_session_touch', JSON.stringify(sessionTouch || {}));
-    }
   }
 
   function decorateForms() {
@@ -686,7 +667,7 @@
 
   var api = {
     __eventIntelligenceV1: true,
-    version: '1.0.0',
+    version: '1.1.0',
     track: track,
     page: function (properties) {
       return track('web.page_viewed', properties || {}, { keepalive: true });
