@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { GitBranch, Sparkles, Target } from "lucide-react";
+import { ArrowRight, GitBranch, Sparkles, Target } from "lucide-react";
 
 import { AttributionIntelligenceExplorer } from "@/components/attribution-intelligence-explorer";
 import type { AttributionWorkspaceFilters } from "@/components/attribution-workspace";
@@ -52,6 +52,8 @@ export default async function AttributionPage({ searchParams }: AttributionPageP
         }
       />
 
+      {filters.query ? <InvestigationContext query={filters.query} /> : null}
+
       <ExecutiveDecisionBrief
         eyebrow="Attribution decision brief"
         title={intelligence.summary}
@@ -80,6 +82,32 @@ export default async function AttributionPage({ searchParams }: AttributionPageP
         First Touch, Lead Creation, Last Marketing Touch and Current Channel remain separate models. Unknown attribution stays unknown rather than being guessed. Coverage states describe visible known-vs-unknown evidence; they are not statistical confidence intervals.
       </div>
     </div>
+  );
+}
+
+function InvestigationContext({ query }: { query: string }) {
+  const encoded = encodeURIComponent(query);
+  return (
+    <section className="rounded-2xl border border-[#d8e4da] bg-[#f4f8f3] px-4 py-4 shadow-[0_8px_24px_rgba(16,45,39,.035)] sm:px-5">
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+        <div className="min-w-0">
+          <div className="text-[9px] font-black uppercase tracking-[.15em] text-[#75907f]">Investigation context preserved</div>
+          <div className="mt-1 text-sm font-semibold text-[#102d27]">Following evidence for “{query}”</div>
+          <p className="mt-1 max-w-2xl text-[10px] leading-5 text-[#758279]">
+            Attribution is filtered to the source or channel carried in from the previous Marketing investigation. Compare models here, then continue into the actual leads, campaign evidence or revenue without losing the thread.
+          </p>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <Link href={`/campaigns?q=${encoded}`} className="btn-secondary">Campaigns</Link>
+          <Link href="/paid-media-leads" className="btn-secondary">Generated leads</Link>
+          <Link href="/revenue" className="btn-secondary">Revenue</Link>
+          <Link href="/attribution" className="btn-secondary">Clear context</Link>
+        </div>
+      </div>
+      <div className="mt-3 flex items-center gap-2 border-t border-[#e0e9e1] pt-3 text-[10px] font-semibold text-[#527263]">
+        <ArrowRight size={12} /> Suggested path: compare credit model → inspect CRM records → confirm revenue evidence.
+      </div>
+    </section>
   );
 }
 
