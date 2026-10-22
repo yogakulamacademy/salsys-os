@@ -77,7 +77,6 @@ export function sanitizeWebsiteLeadPayload(input: unknown): WebsiteLeadPayload {
       raw.anonymousVisitorId ??
         raw.anonymous_visitor_id ??
         raw.salsys_visitor_id ??
-        raw.sal_visitor_id ??
         raw.yk_visitor_id,
       180,
     ),
@@ -85,19 +84,18 @@ export function sanitizeWebsiteLeadPayload(input: unknown): WebsiteLeadPayload {
       raw.sessionKey ??
         raw.session_key ??
         raw.salsys_session_id ??
-        raw.sal_session_id ??
         raw.yk_session_id,
       180,
     ),
     firstTouch: safeObject(
       raw.firstTouch ??
         raw.first_touch ??
-        parseMaybeJson(raw.salsys_first_touch ?? raw.sal_first_touch ?? raw.yk_first_touch),
+        parseMaybeJson(raw.salsys_first_touch ?? raw.yk_first_touch),
     ),
     sessionTouch: safeObject(
       raw.sessionTouch ??
         raw.session_touch ??
-        parseMaybeJson(raw.salsys_session_touch ?? raw.sal_session_touch ?? raw.yk_session_touch),
+        parseMaybeJson(raw.salsys_session_touch ?? raw.yk_session_touch),
     ),
     metadata: safeObject(raw.metadata),
   };
