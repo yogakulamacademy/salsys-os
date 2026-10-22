@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import { Suspense } from 'react';
 import './globals.css';
 import { RootShell } from '@/components/root-shell';
 import { InvestigationContextBar } from '@/components/investigation-context-bar';
@@ -31,7 +32,9 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
       </head>
       <body>
         <RootShell>
-          <InvestigationContextBar />
+          <Suspense fallback={null}>
+            <InvestigationContextBar />
+          </Suspense>
           {children}
         </RootShell>
       </body>
