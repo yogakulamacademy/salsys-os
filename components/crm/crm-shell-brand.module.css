@@ -1,0 +1,99 @@
+.brandScope {
+  --crm-shell-ink: #192e29;
+  --crm-shell-muted: #6d7c76;
+  --crm-shell-subtle: #91a096;
+  --crm-shell-line: #e4eae6;
+  --crm-shell-brand: #216551;
+  --crm-shell-brand-dark: #153e33;
+  --crm-shell-mint: #eaf4ed;
+  --crm-shell-mint-soft: #f0f7f3;
+}
+
+/*
+ * CRM shares the same AppShell as Automation. These selectors only activate
+ * while the CRM workspace is mounted, so the rest of SalsysOS is untouched.
+ */
+:global(body:has(.brandScope) .legacy-shell-host > div) {
+  background: #f6f8f7 !important;
+  color: var(--crm-shell-ink) !important;
+}
+
+:global(body:has(.brandScope) .legacy-shell-host header) {
+  border-color: var(--crm-shell-line) !important;
+  background: rgba(255, 255, 255, 0.96) !important;
+}
+
+:global(body:has(.brandScope) .legacy-shell-host aside) {
+  border-color: var(--crm-shell-line) !important;
+  background: #ffffff !important;
+}
+
+:global(body:has(.brandScope) .legacy-shell-host aside svg),
+:global(body:has(.brandScope) .legacy-shell-host header svg) {
+  color: var(--crm-shell-subtle);
+}
+
+:global(body:has(.brandScope) .legacy-shell-host aside button:hover),
+:global(body:has(.brandScope) .legacy-shell-host aside a:hover) {
+  color: var(--crm-shell-brand) !important;
+}
+
+:global(body:has(.brandScope) .legacy-shell-host aside button:hover svg),
+:global(body:has(.brandScope) .legacy-shell-host aside a:hover svg) {
+  color: var(--crm-shell-brand) !important;
+}
+
+:global(body:has(.brandScope) .legacy-shell-host aside button[aria-pressed='true']) {
+  background: var(--crm-shell-brand-dark) !important;
+  color: #ffffff !important;
+}
+
+:global(body:has(.brandScope) .legacy-shell-host aside button[aria-pressed='true'] svg) {
+  color: #ffffff !important;
+}
+
+:global(body:has(.brandScope) .legacy-shell-host aside a[class*='bg-slate-100']) {
+  background: var(--crm-shell-mint) !important;
+  color: var(--crm-shell-brand) !important;
+}
+
+:global(body:has(.brandScope) .legacy-shell-host aside a[class*='bg-slate-100'] svg) {
+  color: var(--crm-shell-brand) !important;
+}
+
+:global(body:has(.brandScope) .legacy-shell-host header button[class*='border-slate-200']) {
+  border-color: var(--crm-shell-line) !important;
+  background: #ffffff !important;
+  color: var(--crm-shell-muted) !important;
+}
+
+:global(body:has(.brandScope) .legacy-shell-host header button[class*='border-slate-200']:hover) {
+  border-color: #cfdad2 !important;
+  background: var(--crm-shell-mint-soft) !important;
+  color: var(--crm-shell-brand) !important;
+}
+
+:global(body:has(.brandScope) .legacy-shell-host header button[class*='border-slate-200']:hover svg) {
+  color: var(--crm-shell-brand) !important;
+}
+
+:global(body:has(.brandScope) .legacy-shell-host header .text-violet-500),
+:global(body:has(.brandScope) .legacy-shell-host header .text-violet-600),
+:global(body:has(.brandScope) .legacy-shell-host aside .text-violet-500),
+:global(body:has(.brandScope) .legacy-shell-host aside .text-violet-600) {
+  color: var(--crm-shell-brand) !important;
+}
+
+:global(body:has(.brandScope) .legacy-shell-host .bg-violet-50),
+:global(body:has(.brandScope) .legacy-shell-host .bg-violet-50\/70) {
+  background: var(--crm-shell-mint-soft) !important;
+}
+
+:global(body:has(.brandScope) .legacy-shell-host .border-violet-100),
+:global(body:has(.brandScope) .legacy-shell-host .border-violet-200) {
+  border-color: #cfe0d4 !important;
+}
+
+:global(body:has(.brandScope) .legacy-shell-host main) {
+  background: #f6f8f7;
+}
