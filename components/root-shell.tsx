@@ -4,7 +4,8 @@ import { usePathname } from 'next/navigation';
 import type { ReactNode } from 'react';
 
 import { AppShell } from '@/components/app-shell';
-import { DesktopHoverSidebarV3 } from '@/components/desktop-hover-sidebar-v3';
+import { DesktopHoverSidebar } from '@/components/desktop-hover-sidebar';
+import { MarketingWorkspaceFrame } from '@/components/marketing/marketing-workspace-frame';
 
 function isShelllessPath(pathname: string) {
   return (
@@ -14,6 +15,17 @@ function isShelllessPath(pathname: string) {
     pathname === '/reset-password' ||
     pathname.startsWith('/auth/')
   );
+}
+
+function isMarketingPath(pathname: string) {
+  return [
+    '/campaigns',
+    '/attribution',
+    '/funnel',
+    '/paid-media-leads',
+    '/re-engaged',
+    '/seo',
+  ].some((href) => pathname === href || pathname.startsWith(`${href}/`));
 }
 
 export function RootShell({ children }: { children: ReactNode }) {
@@ -30,11 +42,17 @@ export function RootShell({ children }: { children: ReactNode }) {
     return <>{children}</>;
   }
 
+  const content = isMarketingPath(pathname) ? (
+    <MarketingWorkspaceFrame>{children}</MarketingWorkspaceFrame>
+  ) : (
+    children
+  );
+
   return (
     <div className="salsys-meta-sidebar-shell">
-      <DesktopHoverSidebarV3 />
+      <DesktopHoverSidebar />
       <div className="legacy-shell-host">
-        <AppShell>{children}</AppShell>
+        <AppShell>{content}</AppShell>
       </div>
     </div>
   );
