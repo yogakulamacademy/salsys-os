@@ -1,5 +1,12 @@
 import Link from 'next/link';
-import { AlertTriangle, ArrowRight, RefreshCw, Sparkles, TrendingUp } from 'lucide-react';
+import {
+  Activity,
+  ArrowRight,
+  RefreshCw,
+  ShieldCheck,
+  TrendingDown,
+  TrendingUp,
+} from 'lucide-react';
 
 import { getCampaignsWorkspace } from '@/lib/campaigns-data';
 import { getFunnelWorkspace } from '@/lib/funnel-data';
@@ -15,6 +22,28 @@ type AcquisitionRow = {
   leads: number;
   qualified: number;
   enrolled: number;
+};
+
+type DailySignal = {
+  sessions: number;
+  leads: number;
+  qualified: number;
+  enrolled: number;
+};
+
+type Movement = {
+  current: number;
+  previous: number;
+  delta: number | null;
+};
+
+type AttentionItem = {
+  score: number;
+  tone: 'critical' | 'warning' | 'positive' | 'neutral';
+  title: string;
+  detail: string;
+  href: string;
+  label: string;
 };
 
 export default async function MarketingCommandCenterPage() {
@@ -51,11 +80,29 @@ export default async function MarketingCommandCenterPage() {
   const topCampaigns = [...campaigns.campaigns]
     .sort((a, b) => b.enrolled - a.enrolled || b.qualified - a.qualified || b.leads - a.leads)
     .slice(0, 4);
-  const poorCampaign = campaigns.campaigns.find((row) => row.spend > 0 && row.qualified === 0);
+  const poorCampaign = campaigns.campaigns
+    .filter((row) => row.spend > 0 && row.qualified === 0)
+    .sort((a, b) => b.spend - a.spend)[0];
   const missingRoas = campaigns.campaigns.filter((row) => row.spend > 0 && row.roas === null).length;
   const strongest = [...campaigns.campaigns]
     .filter((row) => row.cac !== null && row.enrolled > 0)
     .sort((a, b) => (a.cac ?? Number.POSITIVE_INFINITY) - (b.cac ?? Number.POSITIVE_INFINITY))[0];
+
+  const movement = buildMovement(funnel.funnel.daily);
+  const evidenceKnown = campaigns.summary.campaigns > 0
+    ? Math.max(0, campaigns.summary.campaigns - missingRoas)
+    : 0;
+  const evidenceCoverage = campaigns.summary.campaigns > 0
+    ? (evidenceKnown / campaigns.summary.campaigns) * 100
+    : null;
+  const attention = buildAttentionQueue({
+    poorCampaign,
+    missingRoas,
+    strongest,
+    movement,
+    campaignCount: campaigns.summary.campaigns,
+  });
+  const topAttention = attention[0] ?? null;
 
   const warnings = [campaigns.warning, funnel.warning, revenue.warning].filter(Boolean) as string[];
 
@@ -87,6 +134,31 @@ export default async function MarketingCommandCenterPage() {
         <Pulse label="Paid ROAS" value={roas === null ? 'Partial coverage' : `${roas.toFixed(1)}×`} note={roas === null ? 'Inspect complete campaign evidence' : 'Known INR evidence only'} partial={roas === null} />
       </section>
 
+      <section className={styles.intelligenceStrip} aria-label="Marketing intelligence summary">
+        <IntelligenceCard
+          icon={movement.leads.delta !== null && movement.leads.delta < 0 ? <TrendingDown size={14} /> : <TrendingUp size={14} />}
+          label="Momentum"
+          value={movement.leads.delta === null ? 'Not enough history' : formatDelta(movement.leads.delta, 'Leads')}
+          note={movement.leads.delta === null ? 'Daily history is not sufficient for a recent-vs-prior comparison.' : `${formatNumber(movement.leads.current)} recent leads vs ${formatNumber(movement.leads.previous)} prior.`}
+          tone={movement.leads.delta !== null && movement.leads.delta < -10 ? 'warning' : 'positive'}
+        />
+        <IntelligenceCard
+          icon={<ShieldCheck size={14} />}
+          label="Evidence quality"
+          value={evidenceCoverage === null ? 'Unknown' : `${evidenceCoverage.toFixed(0)}% campaign coverage`}
+          note={missingRoas > 0 ? `${missingRoas} campaign${missingRoas === 1 ? '' : 's'} still lack complete efficiency evidence.` : 'All campaigns in scope have comparable efficiency evidence.'}
+          tone={missingRoas > 0 ? 'warning' : 'positive'}
+        />
+        <IntelligenceCard
+          icon={<Activity size={14} />}
+          label="Priority now"
+          value={topAttention?.title ?? 'No urgent action'}
+          note={topAttention?.detail ?? 'No priority investigation is supported by the current evidence.'}
+          tone={topAttention?.tone === 'critical' || topAttention?.tone === 'warning' ? 'warning' : 'neutral'}
+          href={topAttention?.href}
+        />
+      </section>
+
       <div className={styles.grid}>
         <div className={styles.stack}>
           <section className={styles.panel}>
@@ -115,19 +187,12 @@ export default async function MarketingCommandCenterPage() {
           <section className={`${styles.panel} ${styles.attention}`}>
             <div className={styles.panelHeader}>
               <div><h2>Needs Attention</h2><p>Ranked investigations from current marketing evidence.</p></div>
-              <Sparkles size={16} />
+              <span className={styles.queueCount}>{attention.length} signal{attention.length === 1 ? '' : 's'}</span>
             </div>
             <div className={styles.panelBody}>
-              {poorCampaign ? (
-                <Attention icon={<AlertTriangle size={14} />} title="Spend without qualified outcomes" detail={`${poorCampaign.name} · ${formatMoney(poorCampaign.spend, poorCampaign.spendCurrency)} spend · ${poorCampaign.leads} leads · 0 qualified`} href="/campaigns" label="Inspect campaign" />
-              ) : null}
-              {missingRoas > 0 ? (
-                <Attention icon={<Sparkles size={14} />} title="Campaign efficiency has incomplete evidence" detail={`${missingRoas} campaign${missingRoas === 1 ? '' : 's'} do not have enough known revenue/spend evidence for ROAS.`} href="/attribution" label="Inspect attribution" />
-              ) : null}
-              {strongest ? (
-                <Attention icon={<TrendingUp size={14} />} title="Strong enrollment efficiency" detail={`${strongest.name} · ${strongest.enrolled} enrolled · ${strongest.cac === null ? 'CAC unavailable' : `${formatMoney(strongest.cac, strongest.spendCurrency)} CAC`}`} href="/campaigns" label="Inspect performance" green />
-              ) : null}
-              {!poorCampaign && missingRoas === 0 && !strongest ? <p className={styles.caption}>No priority investigation is supported by the current evidence.</p> : null}
+              {attention.length ? attention.slice(0, 4).map((item, index) => (
+                <Attention key={`${item.title}-${index}`} rank={index + 1} tone={item.tone} title={item.title} detail={item.detail} href={item.href} label={item.label} />
+              )) : <p className={styles.caption}>No priority investigation is supported by the current evidence.</p>}
             </div>
           </section>
         </div>
@@ -170,9 +235,10 @@ export default async function MarketingCommandCenterPage() {
 
       <div className={styles.changeFeed}>
         <strong>What changed</strong>
-        <span>{campaigns.summary.campaigns} campaign{campaigns.summary.campaigns === 1 ? '' : 's'} in scope</span>
-        <span>{formatNumber(qualified)} leads reached qualification</span>
-        <span>{formatNumber(enrolled)} observed enrollments</span>
+        <ChangeItem label="Sessions" movement={movement.sessions} />
+        <ChangeItem label="Leads" movement={movement.leads} />
+        <ChangeItem label="Qualified" movement={movement.qualified} />
+        <ChangeItem label="Enrolled" movement={movement.enrolled} />
         <span>{roas === null ? 'ROAS coverage remains partial' : `Known paid ROAS ${roas.toFixed(1)}×`}</span>
       </div>
     </div>
@@ -183,13 +249,116 @@ function Pulse({ label, value, note, partial = false }: { label: string; value: 
   return <div className={styles.pulseItem}><span className={styles.pulseLabel}>{label}</span><strong className={`${styles.pulseValue} ${partial ? styles.partial : ''}`}>{value}</strong><small className={styles.pulseNote}>{note}</small></div>;
 }
 
-function Attention({ icon, title, detail, href, label, green = false }: { icon: React.ReactNode; title: string; detail: string; href: string; label: string; green?: boolean }) {
-  return <div className={styles.attentionItem}><span className={`${styles.attentionIcon} ${green ? styles.attentionIconGreen : ''}`}>{icon}</span><div className={styles.attentionText}><h3>{title}</h3><p>{detail}</p><Link href={href} className={styles.link}>{label} <ArrowRight size={11} /></Link></div></div>;
+function IntelligenceCard({ icon, label, value, note, tone, href }: { icon: React.ReactNode; label: string; value: string; note: string; tone: 'warning' | 'positive' | 'neutral'; href?: string }) {
+  const content = <><span className={`${styles.intelligenceIcon} ${styles[`intelligenceIcon_${tone}`]}`}>{icon}</span><span className={styles.intelligenceCopy}><small>{label}</small><strong>{value}</strong><em>{note}</em></span>{href ? <ArrowRight size={13} className={styles.intelligenceArrow} /> : null}</>;
+  return href ? <Link href={href} className={styles.intelligenceCard}>{content}</Link> : <div className={styles.intelligenceCard}>{content}</div>;
+}
+
+function Attention({ rank, tone, title, detail, href, label }: { rank: number; tone: AttentionItem['tone']; title: string; detail: string; href: string; label: string }) {
+  return <div className={styles.attentionItem}><span className={`${styles.attentionRank} ${styles[`attentionRank_${tone}`]}`}>{String(rank).padStart(2, '0')}</span><div className={styles.attentionText}><div className={styles.attentionMeta}><span>{tone === 'critical' ? 'High priority' : tone === 'warning' ? 'Review' : tone === 'positive' ? 'Opportunity' : 'Monitor'}</span></div><h3>{title}</h3><p>{detail}</p><Link href={href} className={styles.link}>{label} <ArrowRight size={11} /></Link></div></div>;
 }
 
 function FunnelRow({ label, value, base }: { label: string; value: number; base: number }) {
   const width = base > 0 ? Math.max(value > 0 ? 3 : 0, Math.min(100, (value / base) * 100)) : 0;
   return <div className={styles.funnelRow}><span>{label}</span><span className={styles.funnelBar}><i style={{ width: `${width}%` }} /></span><strong className={styles.funnelCount}>{formatNumber(value)}</strong></div>;
+}
+
+function ChangeItem({ label, movement }: { label: string; movement: Movement }) {
+  if (movement.delta === null) return <span>{label}: not enough history</span>;
+  const sign = movement.delta > 0 ? '+' : '';
+  return <span>{label} {sign}{movement.delta.toFixed(1)}%</span>;
+}
+
+function buildMovement(rows: unknown[]) {
+  const daily = rows.map(asRecord).map((row) => ({
+    sessions: numberValue(row.sessions, row.visitors, row.traffic),
+    leads: numberValue(row.leads, row.lead_count, row.crm_leads),
+    qualified: numberValue(row.qualified, row.qualified_leads, row.qualified_count),
+    enrolled: numberValue(row.enrolled, row.enrolled_leads, row.enrolled_count),
+  })).filter((row) => row.sessions > 0 || row.leads > 0 || row.qualified > 0 || row.enrolled > 0);
+
+  const split = Math.floor(daily.length / 2);
+  if (split < 2) return emptyMovement();
+  const previous = daily.slice(0, split);
+  const current = daily.slice(split);
+
+  return {
+    sessions: movementFor(previous, current, 'sessions'),
+    leads: movementFor(previous, current, 'leads'),
+    qualified: movementFor(previous, current, 'qualified'),
+    enrolled: movementFor(previous, current, 'enrolled'),
+  };
+}
+
+function movementFor(previous: DailySignal[], current: DailySignal[], key: keyof DailySignal): Movement {
+  const previousValue = previous.reduce((sum, row) => sum + row[key], 0);
+  const currentValue = current.reduce((sum, row) => sum + row[key], 0);
+  const delta = previousValue > 0 ? ((currentValue - previousValue) / previousValue) * 100 : null;
+  return { current: currentValue, previous: previousValue, delta };
+}
+
+function emptyMovement() {
+  const empty = { current: 0, previous: 0, delta: null } satisfies Movement;
+  return { sessions: { ...empty }, leads: { ...empty }, qualified: { ...empty }, enrolled: { ...empty } };
+}
+
+function buildAttentionQueue({ poorCampaign, missingRoas, strongest, movement, campaignCount }: { poorCampaign?: CampaignWorkspaceRow; missingRoas: number; strongest?: CampaignWorkspaceRow; movement: ReturnType<typeof buildMovement>; campaignCount: number }): AttentionItem[] {
+  const items: AttentionItem[] = [];
+
+  if (poorCampaign) {
+    items.push({
+      score: 100 + Math.min(50, poorCampaign.spend / 1000),
+      tone: 'critical',
+      title: 'Spend without qualified outcomes',
+      detail: `${poorCampaign.name} · ${formatMoney(poorCampaign.spend, poorCampaign.spendCurrency)} spend · ${poorCampaign.leads} leads · 0 qualified.`,
+      href: '/campaigns',
+      label: 'Inspect campaign',
+    });
+  }
+
+  if (movement.qualified.delta !== null && movement.qualified.delta <= -15) {
+    items.push({
+      score: 92 + Math.min(30, Math.abs(movement.qualified.delta)),
+      tone: 'critical',
+      title: 'Qualification momentum declined',
+      detail: `${formatDelta(movement.qualified.delta, 'Qualified outcomes')} versus the prior half of the observed daily period. Check lead quality and admissions handling before changing budget.`,
+      href: '/funnel',
+      label: 'Inspect funnel',
+    });
+  } else if (movement.leads.delta !== null && movement.leads.delta <= -15) {
+    items.push({
+      score: 84 + Math.min(30, Math.abs(movement.leads.delta)),
+      tone: 'warning',
+      title: 'Lead momentum declined',
+      detail: `${formatDelta(movement.leads.delta, 'Leads')} versus the prior half of the observed daily period. Review acquisition mix and campaign delivery.`,
+      href: '/analytics',
+      label: 'Inspect traffic and leads',
+    });
+  }
+
+  if (missingRoas > 0) {
+    items.push({
+      score: 70 + Math.min(20, missingRoas * 2),
+      tone: 'warning',
+      title: 'Campaign efficiency has incomplete evidence',
+      detail: `${missingRoas} of ${campaignCount || missingRoas} campaign${campaignCount === 1 ? '' : 's'} do not have enough known revenue/spend evidence for ROAS.`,
+      href: '/attribution',
+      label: 'Inspect attribution',
+    });
+  }
+
+  if (strongest) {
+    items.push({
+      score: 45 + Math.min(20, strongest.enrolled * 2),
+      tone: 'positive',
+      title: 'Potential scale opportunity',
+      detail: `${strongest.name} · ${strongest.enrolled} enrolled · ${strongest.cac === null ? 'CAC unavailable' : `${formatMoney(strongest.cac, strongest.spendCurrency)} CAC`}. Review marginal efficiency before increasing spend.`,
+      href: '/campaigns',
+      label: 'Inspect performance',
+    });
+  }
+
+  return items.sort((a, b) => b.score - a.score);
 }
 
 function normalizeSources(rows: unknown[]): AcquisitionRow[] {
@@ -256,4 +425,9 @@ function formatMoney(value: number, currency = 'INR', compact = false) {
 
 function formatPercent(value: number, denominator: number) {
   return denominator > 0 ? `${((value / denominator) * 100).toFixed(1)}%` : '—';
+}
+
+function formatDelta(delta: number, label: string) {
+  if (delta === 0) return `${label} flat`;
+  return `${label} ${delta > 0 ? 'up' : 'down'} ${Math.abs(delta).toFixed(1)}%`;
 }
