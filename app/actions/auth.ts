@@ -139,6 +139,37 @@ async function setWorkspaceCookie(organizationId: string) {
   });
 }
 
+async function shouldEnterRequiredOnboarding(
+  supabase: ServerSupabaseClient,
+  organizationId: string,
+) {
+  // Onboarding is an explicitly provisioned UX requirement, not an inferred
+  // tenant state. Existing organizations have no enforcement row/flag and must
+  // continue to their requested destination unchanged.
+  const { data: canManage, error: permissionError } = await supabase.rpc(
+    'can_manage_organization',
+    { p_organization_id: organizationId },
+  );
+
+  if (permissionError || !canManage) return false;
+
+  const { data: onboarding, error: onboardingError } = await supabase
+    .from('organization_onboarding')
+    .select('status,enforce_on_sign_in')
+    .eq('organization_id', organizationId)
+    .maybeSingle();
+
+  // This check is deliberately fail-open. Onboarding controls setup UX, not
+  // authorization; a temporary onboarding lookup failure must not break login.
+  if (onboardingError || !onboarding) return false;
+
+  return (
+    onboarding.enforce_on_sign_in === true &&
+    onboarding.status !== 'completed' &&
+    onboarding.status !== 'dismissed'
+  );
+}
+
 export async function signInAction(formData: FormData) {
   if (useMockData) redirect('/dashboard');
 
@@ -185,6 +216,11 @@ export async function signInAction(formData: FormData) {
   }
 
   await setWorkspaceCookie(tenant.organizationId);
+
+  if (await shouldEnterRequiredOnboarding(supabase, tenant.organizationId)) {
+    redirect('/onboarding');
+  }
+
   redirect(next);
 }
 
