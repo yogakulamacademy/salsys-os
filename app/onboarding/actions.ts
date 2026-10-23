@@ -3,6 +3,7 @@
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 
+import { createAdminClient } from '@/lib/supabase/admin';
 import { createClient } from '@/lib/supabase/server';
 import { getTrackingPlatformWorkspace } from '@/lib/tracking-platform-data';
 import { getCurrentWorkspaceContext } from '@/lib/workspace';
@@ -225,7 +226,68 @@ export async function verifyOnboardingWebsiteAction() {
 
   revalidatePath('/onboarding');
   revalidatePath('/onboarding/website');
-  redirect('/onboarding?step=channels');
+  redirect('/onboarding/channels');
+}
+
+export async function verifyOnboardingChannelsAction() {
+  const { supabase, organizationId } = await requireManageableWorkspace();
+  const admin = createAdminClient();
+
+  const { data: connections, error: connectionError } = await admin
+    .from('integration_connections')
+    .select('id,provider,status')
+    .eq('organization_id', organizationId)
+    .eq('status', 'connected');
+
+  if (connectionError) {
+    throw new Error(`Unable to verify connected channels: ${connectionError.message}`);
+  }
+
+  if (!connections?.length) {
+    redirect(
+      '/onboarding/channels?error=No%20connected%20channel%20was%20found.%20Connect%20at%20least%20one%20provider%20or%20skip%20this%20step%20for%20now.',
+    );
+  }
+
+  const completedSteps = withCompletedStep(
+    await loadCompletedSteps(supabase, organizationId),
+    'channels',
+  );
+
+  const { error } = await supabase
+    .from('organization_onboarding')
+    .update({
+      status: 'in_progress',
+      current_step: 'team',
+      completed_steps: completedSteps,
+    })
+    .eq('organization_id', organizationId);
+
+  if (error) {
+    throw new Error(`Unable to verify channel onboarding: ${error.message}`);
+  }
+
+  revalidatePath('/onboarding');
+  revalidatePath('/onboarding/channels');
+  redirect('/onboarding?step=team');
+}
+
+export async function skipOnboardingChannelsAction() {
+  const { supabase, organizationId } = await requireManageableWorkspace();
+  const { error } = await supabase
+    .from('organization_onboarding')
+    .update({
+      status: 'in_progress',
+      current_step: 'team',
+    })
+    .eq('organization_id', organizationId);
+
+  if (error) {
+    throw new Error(`Unable to skip channel onboarding: ${error.message}`);
+  }
+
+  revalidatePath('/onboarding');
+  redirect('/onboarding?step=team');
 }
 
 export async function resumeOnboardingStepAction(formData: FormData) {
