@@ -20,36 +20,36 @@ export function CommercialIntelligencePanel({
   brief: CommercialIntelligenceBrief;
 }) {
   return (
-    <section className="card-pad mt-4 overflow-hidden border border-violet-100 bg-white shadow-sm">
+    <section className="ui-panel mt-4 overflow-hidden p-5">
       <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
         <div className="max-w-3xl">
-          <div className="inline-flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[.12em] text-violet-600">
+          <div className="inline-flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--app-brand-700)]">
             <Sparkles size={14} />
             SalsysOS decision intelligence
           </div>
 
-          <h2 className="mt-2 text-lg font-semibold text-slate-900">
+          <h2 className="mt-2 text-[20px] font-semibold text-[var(--app-text-strong)]">
             {brief.title}
           </h2>
 
-          <p className="mt-1 text-sm leading-6 text-slate-500">
+          <p className="mt-1.5 text-[14px] leading-6 text-[var(--app-text-muted)]">
             {brief.summary}
           </p>
         </div>
 
-        <div className="min-w-[220px] rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
+        <div className="min-w-[230px] rounded-2xl border border-[var(--app-border)] bg-[var(--app-surface-soft)] px-4 py-3.5">
           <div className="flex items-center justify-between gap-3">
             <div>
-              <div className="text-[10px] font-semibold uppercase tracking-[.08em] text-slate-400">
+              <div className="text-[11px] font-semibold uppercase tracking-[0.08em] text-[var(--app-text-subtle)]">
                 {brief.readinessLabel}
               </div>
-              <div className="mt-1 text-2xl font-semibold text-slate-900">
+              <div className="mt-1 text-[26px] font-semibold tracking-[-0.03em] text-[var(--app-text-strong)]">
                 {Math.round(brief.readinessScore)}/100
               </div>
             </div>
-            <CircleGauge size={22} className="text-violet-600" />
+            <CircleGauge size={22} className="text-[var(--app-brand-700)]" />
           </div>
-          <p className="mt-2 text-[11px] leading-5 text-slate-500">
+          <p className="mt-2 text-[12px] leading-5 text-[var(--app-text-muted)]">
             {brief.readinessDetail}
           </p>
         </div>
@@ -61,14 +61,14 @@ export function CommercialIntelligencePanel({
             key={`${signal.label}-${signal.value}`}
             className={`rounded-2xl border p-4 ${toneClasses(signal.tone)}`}
           >
-            <div className="flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[.08em]">
+            <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.08em]">
               {toneIcon(signal.tone)}
               {signal.label}
             </div>
-            <div className="mt-2 text-lg font-semibold text-slate-900">
+            <div className="mt-2 text-[18px] font-semibold text-[var(--app-text-strong)]">
               {signal.value}
             </div>
-            <p className="mt-1 text-xs leading-5 text-slate-600">
+            <p className="mt-1 text-[12px] leading-5 text-[var(--app-text-muted)]">
               {signal.detail}
             </p>
           </div>
@@ -76,33 +76,31 @@ export function CommercialIntelligencePanel({
       </div>
 
       {brief.actions.length > 0 && (
-        <div className="mt-5 rounded-2xl border border-slate-200 bg-slate-50/70 p-4">
-          <div className="flex items-center gap-2 text-sm font-semibold text-slate-800">
-            <Lightbulb size={16} className="text-violet-600" />
+        <div className="mt-5 rounded-2xl border border-[var(--app-border)] bg-[var(--app-surface-soft)] p-4">
+          <div className="flex items-center gap-2 text-[14px] font-semibold text-[var(--app-text-strong)]">
+            <Lightbulb size={16} className="text-[var(--app-brand-700)]" />
             Recommended next actions
           </div>
 
           <div className="mt-3 grid gap-3 lg:grid-cols-2">
             {brief.actions.map((action) => {
               const body = (
-                <>
-                  <div className="flex items-start justify-between gap-3">
-                    <div>
-                      <div className="text-sm font-semibold text-slate-800">
-                        {action.title}
-                      </div>
-                      <p className="mt-1 text-xs leading-5 text-slate-500">
-                        {action.detail}
-                      </p>
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <div className="text-[14px] font-semibold text-[var(--app-text-strong)]">
+                      {action.title}
                     </div>
-                    {action.href && (
-                      <ArrowRight size={15} className="mt-0.5 shrink-0 text-slate-400" />
-                    )}
+                    <p className="mt-1 text-[12px] leading-5 text-[var(--app-text-muted)]">
+                      {action.detail}
+                    </p>
                   </div>
-                </>
+                  {action.href && (
+                    <ArrowRight size={15} className="mt-0.5 shrink-0 text-[var(--app-text-subtle)]" />
+                  )}
+                </div>
               );
 
-              const classes = `rounded-xl border p-3 transition ${actionToneClasses(
+              const classes = `rounded-xl border p-3.5 transition ${actionToneClasses(
                 action.tone,
               )}`;
 
@@ -120,8 +118,8 @@ export function CommercialIntelligencePanel({
         </div>
       )}
 
-      <div className="mt-4 border-t border-slate-100 pt-3 text-[11px] leading-5 text-slate-400">
-        <span className="font-semibold text-slate-500">Method:</span>{" "}
+      <div className="mt-4 border-t border-[var(--app-border)] pt-3 text-[12px] leading-5 text-[var(--app-text-subtle)]">
+        <span className="font-semibold text-[var(--app-text-muted)]">Method:</span>{" "}
         {brief.methodology}
       </div>
     </section>
@@ -137,32 +135,32 @@ export function RevenueAttributionReconciliationCard({
   const review = reconciliation.status === "review";
 
   return (
-    <section className="card-pad mt-4 border border-slate-200 bg-white">
+    <section className="ui-panel mt-4 p-5">
       <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
         <div className="max-w-3xl">
-          <div className="eyebrow">Commercial reconciliation</div>
-          <div className="mt-1 flex items-center gap-2 text-base font-semibold text-slate-900">
+          <div className="ui-page-kicker">Commercial reconciliation</div>
+          <div className="mt-1.5 flex items-center gap-2 text-[16px] font-semibold text-[var(--app-text-strong)]">
             {aligned ? (
               <CheckCircle2 size={18} className="text-emerald-600" />
             ) : review ? (
               <AlertTriangle size={18} className="text-amber-600" />
             ) : (
-              <CircleGauge size={18} className="text-slate-400" />
+              <CircleGauge size={18} className="text-[var(--app-text-subtle)]" />
             )}
             {reconciliation.headline}
           </div>
-          <p className="mt-2 text-sm leading-6 text-slate-500">
+          <p className="mt-2 text-[14px] leading-6 text-[var(--app-text-muted)]">
             {reconciliation.detail}
           </p>
         </div>
 
         <div
-          className={`rounded-full px-3 py-1.5 text-xs font-semibold ${
+          className={`rounded-full px-3 py-1.5 text-[12px] font-semibold ${
             aligned
               ? "bg-emerald-50 text-emerald-700"
               : review
                 ? "bg-amber-50 text-amber-700"
-                : "bg-slate-100 text-slate-600"
+                : "bg-[var(--app-surface-muted)] text-[var(--app-text-muted)]"
           }`}
         >
           {aligned ? "Aligned" : review ? "Review" : "Insufficient evidence"}
@@ -174,21 +172,21 @@ export function RevenueAttributionReconciliationCard({
           {reconciliation.currencies.map((row) => (
             <div
               key={row.currency}
-              className="rounded-xl border border-slate-200 bg-slate-50/60 p-4"
+              className="rounded-xl border border-[var(--app-border)] bg-[var(--app-surface-soft)] p-4"
             >
               <div className="flex items-center justify-between gap-3">
-                <div className="text-sm font-semibold text-slate-800">
+                <div className="text-[14px] font-semibold text-[var(--app-text-strong)]">
                   {row.currency}
                 </div>
                 <span
-                  className={`text-xs font-semibold ${
+                  className={`text-[12px] font-semibold ${
                     row.aligned ? "text-emerald-600" : "text-amber-600"
                   }`}
                 >
                   {row.aligned ? "reconciled" : "difference detected"}
                 </span>
               </div>
-              <div className="mt-3 grid grid-cols-3 gap-2 text-xs">
+              <div className="mt-3 grid grid-cols-3 gap-2">
                 <ReconciliationMetric
                   label="Revenue truth"
                   value={formatCurrency(row.revenueActual, row.currency)}
@@ -219,21 +217,17 @@ function ReconciliationMetric({
 }) {
   return (
     <div>
-      <div className="text-[10px] font-semibold uppercase tracking-[.06em] text-slate-400">
+      <div className="text-[11px] font-semibold uppercase tracking-[0.06em] text-[var(--app-text-subtle)]">
         {label}
       </div>
-      <div className="mt-1 font-semibold text-slate-800">{value}</div>
+      <div className="mt-1 text-[13px] font-semibold text-[var(--app-text-strong)]">{value}</div>
     </div>
   );
 }
 
 function toneIcon(tone: IntelligenceTone) {
-  if (tone === "positive") {
-    return <CheckCircle2 size={14} />;
-  }
-  if (tone === "risk" || tone === "watch") {
-    return <AlertTriangle size={14} />;
-  }
+  if (tone === "positive") return <CheckCircle2 size={14} />;
+  if (tone === "risk" || tone === "watch") return <AlertTriangle size={14} />;
   return <CircleGauge size={14} />;
 }
 
@@ -247,7 +241,7 @@ function toneClasses(tone: IntelligenceTone) {
   if (tone === "watch") {
     return "border-amber-100 bg-amber-50/60 text-amber-700";
   }
-  return "border-slate-200 bg-slate-50/60 text-slate-600";
+  return "border-[var(--app-border)] bg-[var(--app-surface-soft)] text-[var(--app-text-muted)]";
 }
 
 function actionToneClasses(tone: IntelligenceTone) {
@@ -260,7 +254,7 @@ function actionToneClasses(tone: IntelligenceTone) {
   if (tone === "positive") {
     return "border-emerald-100 bg-white hover:border-emerald-200 hover:bg-emerald-50/40";
   }
-  return "border-slate-200 bg-white hover:border-violet-200 hover:bg-violet-50/30";
+  return "border-[var(--app-border)] bg-white hover:border-[var(--app-border-strong)] hover:bg-[var(--app-brand-50)]";
 }
 
 function formatCurrency(value: number, currency: string) {
