@@ -16,48 +16,48 @@ export default async function LoginPage({
   const params = await searchParams;
 
   return (
-    <div className="grid min-h-screen place-items-center px-4 py-10">
-      <div className="w-full max-w-md rounded-3xl border border-slate-200 bg-white p-7 shadow-card sm:p-9">
+    <div className="grid min-h-screen place-items-center bg-mist px-4 py-10">
+      <div className="w-full max-w-md rounded-[20px] border border-line bg-surface p-7 shadow-panel sm:p-9">
         <div className="mb-7 flex items-center gap-3">
-          <div className="grid h-12 w-12 place-items-center rounded-2xl bg-brand font-black text-white">
-            S
+          <div className="grid h-12 w-12 place-items-center rounded-xl bg-brand-900 text-[14px] font-bold text-white shadow-sm">
+            SO
           </div>
 
           <div>
-            <div className="font-bold text-slate-950">SalsysOS</div>
-            <div className="text-sm text-slate-400">
+            <div className="text-[15px] font-semibold text-copy-strong">SalsysOS</div>
+            <div className="mt-0.5 text-[12px] text-copy-muted">
               Sales + Analysis Operating System
             </div>
           </div>
         </div>
 
         <div className="mb-6">
-          <div className="eyebrow">Secure account access</div>
+          <div className="ui-page-kicker">Secure account access</div>
 
-          <h1 className="mt-1 text-2xl font-bold text-slate-950">
+          <h1 className="mt-1.5 text-[26px] font-semibold tracking-[-0.035em] text-copy-strong">
             Sign in
           </h1>
 
-          <p className="mt-2 text-sm leading-6 text-slate-500">
+          <p className="mt-2 text-[14px] leading-6 text-copy-muted">
             Use your SalsysOS account to continue. Your organization is
             securely resolved from your authenticated account.
           </p>
         </div>
 
         {params.notice && (
-          <div className="mb-5 rounded-xl border border-emerald-100 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-700">
+          <div className="mb-5 rounded-ui border border-emerald-200 bg-emerald-50 px-4 py-3 text-[13px] font-medium text-emerald-700">
             {params.notice}
           </div>
         )}
 
         {params.error && (
-          <div className="mb-5 rounded-xl border border-red-100 bg-red-50 px-4 py-3 text-sm font-medium text-red-700">
+          <div className="mb-5 rounded-ui border border-red-200 bg-red-50 px-4 py-3 text-[13px] font-medium text-red-700">
             {params.error}
           </div>
         )}
 
         {useMockData && (
-          <div className="mb-5 flex gap-2 rounded-xl border border-orange-100 bg-orange-50 p-3 text-sm text-orange-700">
+          <div className="mb-5 flex gap-2 rounded-ui border border-amber-200 bg-[var(--app-warning-soft)] p-3 text-[13px] text-[var(--app-warning)]">
             <Sparkles size={17} className="mt-0.5 shrink-0" />
 
             <span>
@@ -75,12 +75,10 @@ export default async function LoginPage({
           />
 
           <label className="block">
-            <span className="mb-1.5 block text-sm font-semibold text-slate-700">
-              Email
-            </span>
+            <span className="field-label block">Email</span>
 
             <input
-              className="input"
+              className="input w-full"
               name="email"
               type="email"
               autoComplete="email"
@@ -91,19 +89,17 @@ export default async function LoginPage({
 
           <label className="block">
             <div className="mb-1.5 flex items-center justify-between gap-3">
-              <span className="block text-sm font-semibold text-slate-700">
-                Password
-              </span>
+              <span className="text-[12px] font-semibold text-copy">Password</span>
               <Link
                 href="/forgot-password"
-                className="text-xs font-semibold text-brand hover:underline"
+                className="text-[12px] font-semibold text-brand-700 hover:underline"
               >
                 Forgot password?
               </Link>
             </div>
 
             <input
-              className="input"
+              className="input w-full"
               name="password"
               type="password"
               autoComplete="current-password"
@@ -118,8 +114,8 @@ export default async function LoginPage({
           </button>
         </form>
 
-        <div className="mt-5 flex items-start gap-2 rounded-xl bg-slate-50 px-3 py-3 text-xs leading-5 text-slate-500">
-          <ShieldCheck size={16} className="mt-0.5 shrink-0" />
+        <div className="mt-5 flex items-start gap-2 rounded-ui border border-line bg-surface-soft px-3.5 py-3 text-[12px] leading-5 text-copy-muted">
+          <ShieldCheck size={16} className="mt-0.5 shrink-0 text-brand-700" />
 
           <span>
             Your tenant is established by your authenticated account and
