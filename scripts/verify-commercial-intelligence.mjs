@@ -41,7 +41,8 @@ expectIncludes(commandCenter, 'Commercial Intelligence', 'command center route m
 expectIncludes(commandCenter, 'Smart does not mean speculative', 'interpretation guardrail missing');
 expectIncludes(commandCenter, 'RevenueAttributionReconciliationCard', 'command center reconciliation missing');
 expectIncludes(commandCenter, 'PaidMediaIntelligencePanel', 'paid-media intelligence not surfaced');
-expectIncludes(attributionPage, 'CommercialIntelligencePanel', 'attribution intelligence not surfaced');
+expectIncludes(attributionPage, 'buildAttributionIntelligence', 'attribution intelligence builder not surfaced');
+expectIncludes(attributionPage, 'ExecutiveDecisionBrief', 'attribution decision intelligence not surfaced');
 expectIncludes(funnelLayout, 'buildFunnelIntelligence', 'funnel intelligence not surfaced');
 expectIncludes(revenueLayout, 'buildRevenueIntelligence', 'revenue intelligence not surfaced');
 
