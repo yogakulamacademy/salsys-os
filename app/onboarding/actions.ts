@@ -4,6 +4,7 @@ import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 
 import { createClient } from '@/lib/supabase/server';
+import { getTrackingPlatformWorkspace } from '@/lib/tracking-platform-data';
 import { getCurrentWorkspaceContext } from '@/lib/workspace';
 
 const allowedIndustries = new Set([
@@ -179,6 +180,51 @@ export async function saveOnboardingGoalsAction(formData: FormData) {
 
   revalidatePath('/onboarding');
   redirect('/onboarding?step=website');
+}
+
+export async function verifyOnboardingWebsiteAction() {
+  const { supabase, organizationId } = await requireManageableWorkspace();
+  const tracking = await getTrackingPlatformWorkspace();
+
+  if (tracking.organizationId !== organizationId) {
+    throw new Error('Tracking workspace does not match the active onboarding tenant.');
+  }
+
+  const healthyWebsite = tracking.sources.find(
+    (source) => source.sourceType === 'website' && source.healthStatus === 'healthy',
+  );
+
+  if (!healthyWebsite) {
+    redirect(
+      '/onboarding?step=website&error=No%20healthy%20website%20tracking%20source%20was%20found.%20Install%20tracking%20and%20send%20a%20real%20event%20before%20continuing.',
+    );
+  }
+
+  const completedSteps = withCompletedStep(
+    await loadCompletedSteps(supabase, organizationId),
+    'website',
+  );
+
+  const websiteUrl = healthyWebsite.hostname
+    ? `https://${healthyWebsite.hostname.replace(/^https?:\/\//i, '').replace(/\/$/, '')}`
+    : null;
+
+  const { error } = await supabase
+    .from('organization_onboarding')
+    .update({
+      status: 'in_progress',
+      current_step: 'channels',
+      website_url: websiteUrl,
+      completed_steps: completedSteps,
+    })
+    .eq('organization_id', organizationId);
+
+  if (error) {
+    throw new Error(`Unable to verify website onboarding: ${error.message}`);
+  }
+
+  revalidatePath('/onboarding');
+  redirect('/onboarding?step=channels');
 }
 
 export async function resumeOnboardingStepAction(formData: FormData) {
