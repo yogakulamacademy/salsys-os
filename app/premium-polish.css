@@ -1,0 +1,135 @@
+/*
+ * SalsysOS Premium Polish
+ *
+ * Final visual normalization layer for legacy utility-heavy screens.
+ * Keep semantic status colors intact; normalize hierarchy, readability and chrome.
+ */
+
+.salsys-meta-sidebar-shell .ui-page-kicker {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.11em;
+}
+
+.salsys-meta-sidebar-shell .ui-page-title {
+  font-size: clamp(26px, 2vw, 30px);
+  font-weight: 600;
+  line-height: 1.14;
+  letter-spacing: -0.032em;
+}
+
+.salsys-meta-sidebar-shell .ui-page-description {
+  margin-top: 7px;
+  color: var(--app-text-muted);
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+.salsys-meta-sidebar-shell h1.font-black,
+.salsys-meta-sidebar-shell h2.font-black,
+.salsys-meta-sidebar-shell h3.font-black {
+  font-weight: 650 !important;
+  letter-spacing: -0.028em !important;
+}
+
+/* Keep the top command bar inside the same brand language. */
+.salsys-meta-sidebar-shell .legacy-shell-host header .text-violet-500,
+.salsys-meta-sidebar-shell .legacy-shell-host header .text-violet-600,
+.salsys-meta-sidebar-shell .legacy-shell-host header .text-violet-700 {
+  color: var(--app-brand-700) !important;
+}
+
+.salsys-meta-sidebar-shell .legacy-shell-host header .bg-slate-950 {
+  background: var(--app-brand-900) !important;
+}
+
+.salsys-meta-sidebar-shell .legacy-shell-host header .hover\:bg-slate-800:hover {
+  background: var(--app-brand-800) !important;
+}
+
+.salsys-meta-sidebar-shell .legacy-shell-host header kbd {
+  border-color: var(--app-border) !important;
+  color: var(--app-text-subtle) !important;
+  background: var(--app-surface) !important;
+  font-size: 10px !important;
+  font-weight: 600 !important;
+}
+
+/* Readability floor for dense CRM and growth surfaces. */
+.crm-brand-scope .text-\[8px\],
+.growth-workspace-scope .text-\[8px\] {
+  font-size: 10px !important;
+}
+
+.crm-brand-scope .text-\[9px\],
+.growth-workspace-scope .text-\[9px\] {
+  font-size: 10.5px !important;
+}
+
+.crm-brand-scope .text-\[10px\],
+.growth-workspace-scope .text-\[10px\] {
+  font-size: 11px !important;
+}
+
+.crm-brand-scope .text-\[11px\],
+.growth-workspace-scope .text-\[11px\] {
+  font-size: 12px !important;
+}
+
+.crm-brand-scope table,
+.growth-workspace-scope table {
+  font-size: 13px;
+}
+
+.crm-brand-scope thead th,
+.growth-workspace-scope thead th {
+  color: var(--app-text-muted);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.045em;
+}
+
+.crm-brand-scope tbody td,
+.growth-workspace-scope tbody td {
+  color: var(--app-text);
+}
+
+/* Team Performance now belongs to CRM; calm its old standalone visual language. */
+.team-performance-scope h1.font-black {
+  color: var(--app-text-strong) !important;
+  font-size: clamp(26px, 2vw, 30px) !important;
+  font-weight: 600 !important;
+  letter-spacing: -0.032em !important;
+}
+
+.team-performance-scope .text-orange-600.font-black.uppercase {
+  color: var(--app-brand-700) !important;
+  font-size: 11px !important;
+  font-weight: 600 !important;
+  letter-spacing: 0.11em !important;
+}
+
+.team-performance-scope .text-slate-950 {
+  color: var(--app-text-strong) !important;
+}
+
+.team-performance-scope .text-slate-600,
+.team-performance-scope .text-slate-500 {
+  color: var(--app-text-muted) !important;
+}
+
+.team-performance-scope .border-slate-200,
+.team-performance-scope .border-slate-100 {
+  border-color: var(--app-border) !important;
+}
+
+.team-performance-scope .bg-white {
+  background: var(--app-surface) !important;
+}
+
+@media (max-width: 767px) {
+  .salsys-meta-sidebar-shell .ui-page-title,
+  .team-performance-scope h1.font-black {
+    font-size: 25px !important;
+  }
+}
