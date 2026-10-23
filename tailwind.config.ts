@@ -8,14 +8,54 @@ const config: Config = {
   ],
   theme: {
     extend: {
+      fontFamily: {
+        sans: [
+          'Inter',
+          'ui-sans-serif',
+          'system-ui',
+          '-apple-system',
+          'BlinkMacSystemFont',
+          'Segoe UI',
+          'sans-serif',
+        ],
+      },
       colors: {
-        ink: '#12233B',
-        brand: '#103859',
-        accent: '#EC8316',
-        mist: '#F5F7FA',
+        ink: 'var(--app-text-strong)',
+        brand: {
+          DEFAULT: 'var(--app-brand-700)',
+          50: 'var(--app-brand-50)',
+          100: 'var(--app-brand-100)',
+          600: 'var(--app-brand-600)',
+          700: 'var(--app-brand-700)',
+          800: 'var(--app-brand-800)',
+          900: 'var(--app-brand-900)',
+          950: 'var(--app-brand-950)',
+        },
+        accent: 'var(--app-accent)',
+        mist: 'var(--app-bg)',
+        surface: {
+          DEFAULT: 'var(--app-surface)',
+          soft: 'var(--app-surface-soft)',
+          muted: 'var(--app-surface-muted)',
+        },
+        line: {
+          DEFAULT: 'var(--app-border)',
+          strong: 'var(--app-border-strong)',
+        },
+        copy: {
+          DEFAULT: 'var(--app-text)',
+          strong: 'var(--app-text-strong)',
+          muted: 'var(--app-text-muted)',
+          subtle: 'var(--app-text-subtle)',
+        },
+      },
+      borderRadius: {
+        ui: 'var(--radius-md)',
+        panel: 'var(--radius-xl)',
       },
       boxShadow: {
-        card: '0 1px 2px rgba(16, 24, 40, 0.04), 0 8px 24px rgba(16, 24, 40, 0.06)',
+        card: 'var(--shadow-sm)',
+        panel: 'var(--shadow-md)',
       },
     },
   },
