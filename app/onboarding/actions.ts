@@ -269,7 +269,7 @@ export async function verifyOnboardingChannelsAction() {
 
   revalidatePath('/onboarding');
   revalidatePath('/onboarding/channels');
-  redirect('/onboarding?step=team');
+  redirect('/onboarding/team');
 }
 
 export async function skipOnboardingChannelsAction() {
@@ -287,7 +287,86 @@ export async function skipOnboardingChannelsAction() {
   }
 
   revalidatePath('/onboarding');
-  redirect('/onboarding?step=team');
+  redirect('/onboarding/team');
+}
+
+export async function verifyOnboardingTeamAction() {
+  const { supabase, organizationId } = await requireManageableWorkspace();
+  const admin = createAdminClient();
+
+  const { data: memberships, error: membershipError } = await admin
+    .from('organization_members')
+    .select('user_id,role,active')
+    .eq('organization_id', organizationId)
+    .eq('role', 'admissions')
+    .eq('active', true);
+
+  if (membershipError) {
+    throw new Error(`Unable to verify team access: ${membershipError.message}`);
+  }
+
+  const employeeIds = (memberships ?? []).map((membership) => membership.user_id);
+  let activeEmployeeCount = 0;
+
+  if (employeeIds.length > 0) {
+    const { data: profiles, error: profileError } = await admin
+      .from('profiles')
+      .select('id,active')
+      .in('id', employeeIds)
+      .eq('active', true);
+
+    if (profileError) {
+      throw new Error(`Unable to verify active team profiles: ${profileError.message}`);
+    }
+
+    activeEmployeeCount = profiles?.length ?? 0;
+  }
+
+  if (activeEmployeeCount === 0) {
+    redirect(
+      '/onboarding/team?error=No%20active%20employee%20was%20found.%20Add%20and%20activate%20a%20team%20member%20or%20choose%20the%20solo%20setup%20option.',
+    );
+  }
+
+  const completedSteps = withCompletedStep(
+    await loadCompletedSteps(supabase, organizationId),
+    'team',
+  );
+
+  const { error } = await supabase
+    .from('organization_onboarding')
+    .update({
+      status: 'in_progress',
+      current_step: 'finish',
+      completed_steps: completedSteps,
+    })
+    .eq('organization_id', organizationId);
+
+  if (error) {
+    throw new Error(`Unable to verify team onboarding: ${error.message}`);
+  }
+
+  revalidatePath('/onboarding');
+  revalidatePath('/onboarding/team');
+  redirect('/onboarding?step=finish');
+}
+
+export async function skipOnboardingTeamAction() {
+  const { supabase, organizationId } = await requireManageableWorkspace();
+  const { error } = await supabase
+    .from('organization_onboarding')
+    .update({
+      status: 'in_progress',
+      current_step: 'finish',
+    })
+    .eq('organization_id', organizationId);
+
+  if (error) {
+    throw new Error(`Unable to continue with solo onboarding: ${error.message}`);
+  }
+
+  revalidatePath('/onboarding');
+  redirect('/onboarding?step=finish');
 }
 
 export async function resumeOnboardingStepAction(formData: FormData) {
