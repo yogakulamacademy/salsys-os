@@ -1,15 +1,17 @@
 # SalsysOS Current Checkpoint
 
-**Date:** 2026-10-23  
+**Date:** 2026-10-24  
 **Canonical repository:** `yogakulamacademy/salsys-os`  
 **Production branch:** `main`  
-**Latest verified product-code production head before checkpoint-only documentation commits:** `fb02f28dd0667a757dbd144aa5ab99a6ce4e97f8`  
-**Latest verified production deployment for that product-code head:** `dpl_BzTpgddz8UFmd2xy7XwMXJo8xzjZ` — `READY`
+**Latest verified product-code production head before checkpoint-only documentation commits:** `804e1b8e44dde38776d4c1de4e0835b4f0f4a8ec`  
+**Latest verified production deployment for that product-code head:** `dpl_4MMro9yW7KuR6VMwkUhB76SW2Bdw` — `READY`
 
 This is the canonical operational checkpoint. Historical milestone files under `docs/checkpoints/` remain evidence records and must not be rewritten to make earlier work look different from what was actually verified at the time.
 
 Latest detailed milestones:
 
+- `docs/checkpoints/M-2026-10-24-Onboarding-and-Customer-Provisioning-v1.md` — current onboarding activation + controlled customer-organization provisioning state.
+- `docs/checkpoints/M-2026-10-23-Conversation-Flow-Builder-UX-v1.md` — current Conversation Flow Builder UX production state.
 - `docs/checkpoints/M-2026-10-23-Conversations-Shared-Inbox-Collaboration-v14.md` — current production Conversations/Inbox state.
 - `docs/checkpoints/M-2026-10-22-Universal-Tracking-Server-Integration-v1.md` — current Universal Tracking + server-integration state.
 
@@ -352,6 +354,66 @@ Customer messaging remains deliberately fail-closed unless explicitly armed.
 ### Instagram
 
 Instagram Operations V1 remains implemented with Meta-compatible user-initiated messaging semantics. Broader live proof still depends on the connected account/app permission posture where applicable; do not invent a WhatsApp-style cold-broadcast primitive for Instagram.
+
+## 10A. Automation / Flow Builder UX milestone
+
+Current production evidence:
+
+`docs/checkpoints/M-2026-10-23-Conversation-Flow-Builder-UX-v1.md`
+
+The Conversation Flow Builder redesign is deployed in production and preserves the existing workflow/runtime safety contracts.
+
+Current production UX includes:
+
+- reference-aligned green/mint Flow Builder shell;
+- sticky Step Library;
+- visual journey canvas;
+- collapsible Node Settings inspector;
+- zoom controls and layout persistence;
+- real node/edge mutation actions rather than fake local-only drawing;
+- guarded WhatsApp template configuration;
+- validation and publish readiness preserved;
+- human approval and provider policy preserved.
+
+The redesign intentionally did not invent a fake `Test flow` simulation backend or a fake global `Save draft` primitive where real persisted actions already exist.
+
+This is an enhancement inside Smart Triggers/workflow-engine work and does **not** reorder or close Area 7 by itself.
+
+## 10B. SaaS onboarding + controlled customer provisioning
+
+Current production evidence:
+
+`docs/checkpoints/M-2026-10-24-Onboarding-and-Customer-Provisioning-v1.md`
+
+The onboarding foundation is production-ready for explicitly enrolled new organizations:
+
+- six-step Business / Goals / Website / Channels / Team / Finish flow;
+- persisted resume routing;
+- real Website health evidence;
+- Team verification through existing tenant employee/membership state;
+- Channels and Team optional, with required readiness still based on Business + Goals + healthy Website;
+- completion writes `completed_at` only after readiness checks pass;
+- explicit per-organization `enforce_on_sign_in` flag defaults OFF;
+- sign-in checks onboarding only after canonical tenant binding and only for organization managers/owners/admins as permitted by the existing authority layer;
+- missing/false enforcement state never traps existing tenants.
+
+Controlled Customer Organization Provisioning V1 is also live:
+
+- SalsysOS platform admins can provision customers through `/settings/organizations`;
+- a trusted server action creates the owner Auth identity;
+- service-role-only `provision_customer_organization_v1` provisions organization, owner profile, owner membership, standard functional workspaces and enforced onboarding atomically;
+- Auth creation is rolled back if tenant provisioning fails;
+- existing organizations are not enrolled or mutated by this path.
+
+Latest production evidence:
+
+- production merge commit: `804e1b8e44dde38776d4c1de4e0835b4f0f4a8ec`;
+- deployment: `dpl_4MMro9yW7KuR6VMwkUhB76SW2Bdw` — `READY`;
+- provisioning migration: `20261023184246_customer_organization_provisioning_v1.sql`;
+- provisioning RPC ACL verified service-role-only;
+- Supabase advisor remained at the pre-existing 67 authenticated SECURITY DEFINER warnings; the provisioning RPC did not add a new authenticated-executable finding.
+
+Boundary: this closes **controlled tenant provisioning V1**, not public/self-serve signup. Billing/subscription enforcement, plan entitlements, abuse controls, public signup verification and customer-controlled lifecycle management remain later SaaS-readiness work.
 
 ## 11. Active ordered implementation sequence
 
