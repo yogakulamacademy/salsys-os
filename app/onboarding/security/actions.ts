@@ -63,7 +63,7 @@ export async function replaceProvisionedOwnerPasswordAction(formData: FormData) 
 
   const { error: passwordError } = await supabase.auth.updateUser({
     password,
-    currentPassword,
+    current_password: currentPassword,
   });
 
   if (passwordError) {
