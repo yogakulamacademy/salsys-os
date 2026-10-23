@@ -1,16 +1,17 @@
 # SalsysOS Current Checkpoint
 
-**Date:** 2026-10-22  
+**Date:** 2026-10-23  
 **Canonical repository:** `yogakulamacademy/salsys-os`  
 **Production branch:** `main`  
-**Latest verified product-code production head before checkpoint-only documentation commits:** `2060daf03e2a640820c7f1a83ff38fa7333c4506`  
-**Latest verified production deployment for that product-code head:** `dpl_72Wd8Un2es2xyEHkpNhfDjhgLEU1` — `READY`
+**Latest verified product-code production head before checkpoint-only documentation commits:** `fb02f28dd0667a757dbd144aa5ab99a6ce4e97f8`  
+**Latest verified production deployment for that product-code head:** `dpl_BzTpgddz8UFmd2xy7XwMXJo8xzjZ` — `READY`
 
 This is the canonical operational checkpoint. Historical milestone files under `docs/checkpoints/` remain evidence records and must not be rewritten to make earlier work look different from what was actually verified at the time.
 
-The latest detailed tracking milestone is:
+Latest detailed milestones:
 
-`docs/checkpoints/M-2026-10-22-Universal-Tracking-Server-Integration-v1.md`
+- `docs/checkpoints/M-2026-10-23-Conversations-Shared-Inbox-Collaboration-v14.md` — current production Conversations/Inbox state.
+- `docs/checkpoints/M-2026-10-22-Universal-Tracking-Server-Integration-v1.md` — current Universal Tracking + server-integration state.
 
 ## 0. Ordered product closeout status
 
@@ -23,6 +24,8 @@ Canonical evidence:
 `docs/checkpoints/M-2026-10-20-CRM-Core-Closeout-v1.md`
 
 The CRM integrity closeout remains valid. PostgreSQL-backed lead/customer state, canonical stage mutation, ownership integrity and tenant boundaries remain the source of truth.
+
+The October 23 Conversations/Inbox work is a production enhancement inside this already-closed area; it does not reopen the V1 integrity closeout.
 
 ### Area 2 — Customer Journey / Person 360 / Identity: CLOSED V1
 
@@ -306,6 +309,39 @@ OpenSearch remains a **secondary rebuildable retrieval/intelligence index**, not
 Rules-generated scores must never be presented as calibrated probabilities. Current evidence remains insufficient to claim broadly proven predictive accuracy from real outcomes.
 
 ## 10. Messaging / channel milestones
+
+### Conversations / shared Inbox
+
+Current production evidence:
+
+`docs/checkpoints/M-2026-10-23-Conversations-Shared-Inbox-Collaboration-v14.md`
+
+The Conversations workspace is now a CRM-connected shared sales Inbox with:
+
+- three-column queue / active conversation / Customer context structure;
+- `My Inbox / Team / Unassigned` ownership scopes;
+- `All / Reply / Unread / Snoozed` operational filters;
+- urgent/high/normal/waiting priority filters;
+- CRM-owner assignment/reassignment using the existing canonical owner RPC;
+- personal user-scoped snooze state;
+- internal notes that remain private CRM Activity;
+- teammate @mentions with private per-user notification state;
+- tenant/lead-scoped teammate presence and collision awareness;
+- configurable organization-level conversation response SLA thresholds;
+- supervisor workload visibility based on canonical Team Performance evidence;
+- existing AI/copilot assistance remaining draft-only and human-reviewed.
+
+Authority rules:
+
+- CRM lead owner = shared ownership authority;
+- Inbox snooze = personal state only;
+- presence = advisory state, never a lock;
+- internal notes / mentions = collaboration records, never customer messages;
+- WhatsApp/Instagram provider eligibility and safety policy remain authoritative for sends.
+
+V14 migration tables `conversation_presence`, `conversation_mentions` and `conversation_sla_settings` all have RLS enabled. No new SECURITY DEFINER function was introduced by V14. The Supabase advisor remained at the pre-existing 67 authenticated SECURITY DEFINER warnings after the migration.
+
+Production V14 head `fb02f28dd0667a757dbd144aa5ab99a6ce4e97f8` is deployed via `dpl_BzTpgddz8UFmd2xy7XwMXJo8xzjZ` and was verified `READY`.
 
 ### WhatsApp
 

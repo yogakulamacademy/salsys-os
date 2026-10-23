@@ -1,6 +1,6 @@
 # SalsysOS Checkpoint Index
 
-**Last synchronized:** 2026-10-22
+**Last synchronized:** 2026-10-23
 
 This directory contains milestone evidence. Historical checkpoint files should remain truthful to the state that was verified at the time. Do not rewrite old milestones merely to match a newer plan.
 
@@ -9,10 +9,31 @@ This directory contains milestone evidence. Historical checkpoint files should r
 Read in this order:
 
 1. `../SalsysOS_Current_Checkpoint.md` — latest operational checkpoint.
-2. `M-2026-10-22-Universal-Tracking-Server-Integration-v1.md` — latest Universal Tracking + Server Integration production/platform checkpoint and live Yogakulam PHP cutover status.
-3. `../SalsysOS_North_Star_Product_Context.md` — canonical product direction and roadmap state.
-4. `../tracking-attribution-setup.md` — current universal first-party tracking/Event Intelligence deployment plan.
-5. `M-2026-10-21-CRM-Operations-Studio-UX-v1.md` — active non-production CRM/Inbox UX checkpoint on its separate UX line.
+2. `M-2026-10-23-Conversations-Shared-Inbox-Collaboration-v14.md` — latest production Conversations/Inbox collaboration checkpoint.
+3. `M-2026-10-22-Universal-Tracking-Server-Integration-v1.md` — latest Universal Tracking + Server Integration production/platform checkpoint and live Yogakulam PHP cutover status.
+4. `../SalsysOS_North_Star_Product_Context.md` — canonical product direction and roadmap state.
+5. `../tracking-attribution-setup.md` — current universal first-party tracking/Event Intelligence deployment plan.
+
+## Conversations / Inbox production checkpoint
+
+- `M-2026-10-23-Conversations-Shared-Inbox-Collaboration-v14.md`
+
+Current production state: the Conversations workspace is a CRM-connected shared sales Inbox with the three-column queue/conversation/context layout, ownership-aware `My Inbox / Team / Unassigned` scopes, personal snooze, manager assignment/reassignment, internal notes, teammate @mentions, presence/collision awareness, configurable conversation SLA thresholds and supervisor workload evidence.
+
+Production head recorded by the checkpoint: `fb02f28dd0667a757dbd144aa5ab99a6ce4e97f8`.
+
+Production Vercel deployment: `dpl_BzTpgddz8UFmd2xy7XwMXJo8xzjZ` — **READY**.
+
+Important boundaries remain unchanged:
+
+- CRM lead ownership is authoritative shared ownership state;
+- snooze is personal Inbox state;
+- internal notes/mentions are not customer messages;
+- presence is advisory and does not lock a conversation;
+- WhatsApp/Instagram provider and policy gates remain authoritative;
+- AI/copilot remains human-reviewed and does not autonomously send.
+
+The older `M-2026-10-21-Conversations-Prototype-QA-v2.md` and `M-2026-10-21-CRM-Operations-Studio-UX-v1.md` files are historical preview/UX evidence and must not be interpreted as the current production release state.
 
 ## Active Universal Tracking checkpoint
 
@@ -26,11 +47,12 @@ The current safe contact-form integration direction is:
 
 The existing CRM capture path remains responsible for lead creation until duplicate semantics across ingestion paths are explicitly proven.
 
-## Active CRM / UX checkpoint
+## CRM / UX historical checkpoints
 
 - `M-2026-10-21-CRM-Operations-Studio-UX-v1.md`
+- `M-2026-10-21-Conversations-Prototype-QA-v2.md`
 
-Current status: CRM/Inbox UX work remains historically tracked on its own branch/checkpoint line. Do not infer merge state from this index; verify current branch/PR state before resuming UX work.
+These remain historical evidence of the pre-production/preview UX line. The current production Inbox state is recorded by the October 23 V14 checkpoint above.
 
 ## Active Event Intelligence checkpoints
 
