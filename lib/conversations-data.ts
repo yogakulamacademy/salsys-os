@@ -1,9 +1,7 @@
 import type { Channel, LeadStage } from "@/types/crm";
 
 import type { ConversationLeadSummary } from "@/components/conversations-sidebar";
-
 import { getLead, getLeads, isMockMode } from "@/lib/data";
-
 import { createClient } from "@/lib/supabase/server";
 import { requireCurrentOrganizationId } from "@/lib/workspace";
 
@@ -13,10 +11,7 @@ async function getCurrentOrganizationId(
   supabase: Awaited<ReturnType<typeof createClient>>,
   userId: string,
 ): Promise<string> {
-  return requireCurrentOrganizationId(
-    supabase,
-    userId,
-  );
+  return requireCurrentOrganizationId(supabase, userId);
 }
 
 export type ConversationWorkspaceMessage = {
@@ -33,6 +28,18 @@ export type ConversationWorkspaceMessage = {
   readAt?: string | null;
 };
 
+export type ConversationAssignmentCandidate = {
+  id: string;
+  name: string;
+  role: string;
+};
+
+export type ConversationWorkspaceTeam = {
+  currentUserId: string | null;
+  canManageAssignments: boolean;
+  assignmentCandidates: ConversationAssignmentCandidate[];
+};
+
 export type ConversationWorkspaceSelected = {
   id: string;
   name: string;
@@ -45,6 +52,9 @@ export type ConversationWorkspaceSelected = {
   createdAt: string;
   phone?: string;
   interestedCourseId?: string;
+  ownerUserId: string | null;
+  ownerName: string | null;
+  snoozedUntil: string | null;
   lastMessages: ConversationWorkspaceMessage[];
 };
 
@@ -63,6 +73,7 @@ export type ConversationWorkspaceResult = {
     label: string;
   } | null;
   metrics: ConversationWorkspaceMetrics;
+  team: ConversationWorkspaceTeam;
   optimized: boolean;
 };
 
@@ -79,6 +90,9 @@ type RpcInboxRow = {
   needsFirstContact?: boolean | null;
   priority?: string | null;
   waitingSince?: string | null;
+  ownerUserId?: string | null;
+  ownerName?: string | null;
+  snoozedUntil?: string | null;
 };
 
 type RpcMessageRow = {
@@ -107,7 +121,16 @@ type RpcSelectedRow = {
   createdAt?: string | null;
   phone?: string | null;
   interestedCourseId?: string | null;
+  ownerUserId?: string | null;
+  ownerName?: string | null;
+  snoozedUntil?: string | null;
   lastMessages?: RpcMessageRow[] | null;
+};
+
+type RpcAssignmentCandidate = {
+  id?: string | null;
+  name?: string | null;
+  role?: string | null;
 };
 
 type RpcPayload = {
@@ -122,6 +145,11 @@ type RpcPayload = {
     activeConversations?: number | string | null;
     whatsappCount?: number | string | null;
     highIntentCount?: number | string | null;
+  } | null;
+  team?: {
+    currentUserId?: string | null;
+    canManageAssignments?: boolean | null;
+    assignmentCandidates?: RpcAssignmentCandidate[] | null;
   } | null;
 };
 
@@ -142,7 +170,6 @@ export async function getConversationsWorkspace(
   }
 
   const supabase = await createClient();
-
   const {
     data: { user },
     error: authError,
@@ -154,11 +181,7 @@ export async function getConversationsWorkspace(
     );
   }
 
-  const organizationId = await getCurrentOrganizationId(
-    supabase,
-    user.id,
-  );
-
+  const organizationId = await getCurrentOrganizationId(supabase, user.id);
   const { data, error } = await supabase.rpc("get_conversations_workspace", {
     p_organization_id: organizationId,
     p_selected_lead_id: isUuid(requestedLeadId) ? requestedLeadId : null,
@@ -170,35 +193,26 @@ export async function getConversationsWorkspace(
       "[conversations] Optimized workspace RPC failed; using legacy loader:",
       error.message,
     );
-
     return getLegacyWorkspace(requestedLeadId, false);
   }
 
   const payload = unwrapPayload(data);
-
   const selectedId = textOrUndefined(payload.selectedId);
-
   const conversationSummary = normalizeInbox(payload.inbox, selectedId);
-
   const selected = normalizeSelected(payload.selected);
+  const team = normalizeTeam(payload.team, user.id);
 
   const metrics = {
     activeConversations:
-      toNumber(payload.metrics?.activeConversations) ||
-      conversationSummary.length,
-
+      toNumber(payload.metrics?.activeConversations) || conversationSummary.length,
     whatsappCount: toNumber(payload.metrics?.whatsappCount),
-
     highIntentCount: toNumber(payload.metrics?.highIntentCount),
   };
 
   return {
     conversationSummary,
-
     selectedId,
-
     selected,
-
     whatsappWindow:
       selected?.currentContactChannel === "whatsapp"
         ? buildWhatsAppWindow(
@@ -206,9 +220,8 @@ export async function getConversationsWorkspace(
             payload.whatsapp?.lastInboundAt ?? null,
           )
         : null,
-
     metrics,
-
+    team,
     optimized: true,
   };
 }
@@ -242,90 +255,57 @@ function normalizeInbox(
   rows: RpcInboxRow[] | null | undefined,
   selectedId?: string,
 ): ConversationLeadSummary[] {
-  if (!Array.isArray(rows)) {
-    return [];
-  }
+  if (!Array.isArray(rows)) return [];
 
   return rows
     .filter(
-      (
-        row,
-      ): row is RpcInboxRow & {
-        id: string;
-      } => Boolean(row && typeof row.id === "string"),
+      (row): row is RpcInboxRow & { id: string } =>
+        Boolean(row && typeof row.id === "string"),
     )
     .map((row) => ({
       id: row.id,
-
       name: row.name || "Lead",
-
       course: row.course || "",
-
       country: row.country || "",
-
       stage: asLeadStage(row.stage),
-
       currentContactChannel: asChannel(row.currentContactChannel),
-
       lastContactedAt: row.lastContactedAt ?? null,
-
-      /*
-       * Keep the existing visual behavior:
-       * selecting a conversation clears
-       * the unread dot immediately while
-       * ConversationReadMarker persists it.
-       */
       unread: row.id === selectedId ? false : Boolean(row.unread),
-
       needsReply: Boolean(row.needsReply),
-
       needsFirstContact: Boolean(row.needsFirstContact),
-
       priority: asPriority(row.priority),
-
       waitingSince: row.waitingSince ?? null,
+      ownerUserId: textOrNull(row.ownerUserId),
+      ownerName: textOrNull(row.ownerName),
+      snoozedUntil: textOrNull(row.snoozedUntil),
     }));
 }
 
 function normalizeSelected(
   row: RpcSelectedRow | null | undefined,
 ): ConversationWorkspaceSelected | null {
-  if (!row?.id || !row.createdAt) {
-    return null;
-  }
+  if (!row?.id || !row.createdAt) return null;
 
   const messages = Array.isArray(row.lastMessages)
     ? row.lastMessages
         .filter(
           (
             message,
-          ): message is RpcMessageRow & {
-            id: string;
-            timestamp: string;
-          } => Boolean(message?.id && message.timestamp),
+          ): message is RpcMessageRow & { id: string; timestamp: string } =>
+            Boolean(message?.id && message.timestamp),
         )
         .map(
           (message): ConversationWorkspaceMessage => ({
             id: message.id,
-
             direction: message.direction === "inbound" ? "inbound" : "outbound",
-
             sender: message.sender || "Admissions",
-
             body: message.body || "[Non-text message]",
-
             timestamp: message.timestamp,
-
             channel: asChannel(message.channel),
-
             status: message.status ?? undefined,
-
             externalMessageId: message.externalMessageId ?? null,
-
             sentAt: message.sentAt ?? null,
-
             deliveredAt: message.deliveredAt ?? null,
-
             readAt: message.readAt ?? null,
           }),
         )
@@ -333,28 +313,45 @@ function normalizeSelected(
 
   return {
     id: row.id,
-
     name: row.name || "Lead",
-
     course: row.course || "Not selected",
-
     country: row.country || "—",
-
     stage: asLeadStage(row.stage),
-
     currentContactChannel: asChannel(row.currentContactChannel),
-
     leadCreationChannel: asChannel(row.leadCreationChannel),
-
     lastContactedAt: row.lastContactedAt ?? undefined,
-
     createdAt: row.createdAt,
-
     phone: row.phone ?? undefined,
-
     interestedCourseId: row.interestedCourseId ?? undefined,
-
+    ownerUserId: textOrNull(row.ownerUserId),
+    ownerName: textOrNull(row.ownerName),
+    snoozedUntil: textOrNull(row.snoozedUntil),
     lastMessages: messages,
+  };
+}
+
+function normalizeTeam(
+  team: RpcPayload["team"],
+  fallbackUserId: string | null,
+): ConversationWorkspaceTeam {
+  const candidates = Array.isArray(team?.assignmentCandidates)
+    ? team.assignmentCandidates.flatMap((candidate) => {
+        const id = textOrNull(candidate?.id);
+        if (!id) return [];
+        return [
+          {
+            id,
+            name: textOrNull(candidate?.name) || "CRM User",
+            role: textOrNull(candidate?.role) || "member",
+          },
+        ];
+      })
+    : [];
+
+  return {
+    currentUserId: textOrNull(team?.currentUserId) || fallbackUserId,
+    canManageAssignments: Boolean(team?.canManageAssignments),
+    assignmentCandidates: candidates,
   };
 }
 
@@ -363,7 +360,6 @@ async function getLegacyWorkspace(
   mock: boolean,
 ): Promise<ConversationWorkspaceResult> {
   const allLeads = await getLeads();
-
   const conversationCandidates = allLeads
     .filter(
       (lead) =>
@@ -377,6 +373,14 @@ async function getLegacyWorkspace(
     ? new Map<string, LegacyInboxState>()
     : await getLegacyInboxStateMap();
 
+  const legacyTeam = mock
+    ? {
+        currentUserId: null,
+        ownerByLead: new Map<string, { id: string | null; name: string | null }>(),
+        snoozedByLead: new Map<string, string>(),
+      }
+    : await getLegacyTeamState(conversationCandidates.map((lead) => lead.id));
+
   const conversationLeads = [...conversationCandidates].sort((a, b) =>
     compareLegacyConversationLeads(a, b, inboxStateMap),
   );
@@ -384,75 +388,62 @@ async function getLegacyWorkspace(
   const requestedExists = requestedLeadId
     ? allLeads.some((lead) => lead.id === requestedLeadId)
     : false;
-
   const selectedId = requestedExists
     ? requestedLeadId
     : conversationLeads[0]?.id;
-
   const selectedLead = selectedId ? await getLead(selectedId) : null;
 
   const conversationSummary: ConversationLeadSummary[] = conversationLeads.map(
     (lead) => {
       const state = inboxStateMap.get(lead.id);
-
       const attention = getLegacyAttention(lead, state);
+      const owner = legacyTeam.ownerByLead.get(lead.id);
 
       return {
         id: lead.id,
-
         name: lead.name,
-
         course: lead.course || "",
-
         country: lead.country || "",
-
         stage: lead.stage,
-
         currentContactChannel: lead.currentContactChannel,
-
         lastContactedAt:
           state?.latestMessageAt ||
           lead.lastContactedAt ||
           lead.createdAt ||
           null,
-
         unread: lead.id === selectedId ? false : attention.unread,
-
         needsReply: attention.needsReply,
-
         needsFirstContact: attention.needsFirstContact,
-
         priority: attention.priority,
-
         waitingSince: attention.waitingSince,
+        ownerUserId: owner?.id ?? null,
+        ownerName: owner?.name ?? null,
+        snoozedUntil: legacyTeam.snoozedByLead.get(lead.id) ?? null,
       };
     },
   );
 
+  const selectedOwner = selectedId
+    ? legacyTeam.ownerByLead.get(selectedId)
+    : undefined;
+
   const selected = selectedLead
     ? {
         id: selectedLead.id,
-
         name: selectedLead.name,
-
         course: selectedLead.course || "Not selected",
-
         country: selectedLead.country || "—",
-
         stage: selectedLead.stage,
-
         currentContactChannel: selectedLead.currentContactChannel,
-
         leadCreationChannel: selectedLead.leadCreationChannel,
-
         lastContactedAt: selectedLead.lastContactedAt,
-
         createdAt: selectedLead.createdAt,
-
         phone: selectedLead.phone,
-
         interestedCourseId: selectedLead.interestedCourseId,
-
+        ownerUserId: selectedOwner?.id ?? null,
+        ownerName: selectedOwner?.name ?? null,
+        snoozedUntil:
+          legacyTeam.snoozedByLead.get(selectedLead.id) ?? null,
         lastMessages:
           selectedLead.lastMessages as ConversationWorkspaceMessage[],
       }
@@ -460,11 +451,8 @@ async function getLegacyWorkspace(
 
   return {
     conversationSummary,
-
     selectedId,
-
     selected,
-
     whatsappWindow:
       selected && selected.currentContactChannel === "whatsapp" && !mock
         ? await getLegacyWhatsAppWindow(selected.id)
@@ -475,27 +463,95 @@ async function getLegacyWorkspace(
                 "Mock mode — WhatsApp service-window state is not persisted.",
             }
           : null,
-
     metrics: {
       activeConversations: conversationLeads.length,
-
       whatsappCount: conversationLeads.filter(
         (lead) => lead.currentContactChannel === "whatsapp",
       ).length,
-
       highIntentCount: conversationLeads.filter(
         (lead) =>
           lead.stage === "high_intent" || lead.stage === "payment_pending",
       ).length,
     },
-
+    team: {
+      currentUserId: legacyTeam.currentUserId,
+      canManageAssignments: false,
+      assignmentCandidates: [],
+    },
     optimized: false,
+  };
+}
+
+async function getLegacyTeamState(leadIds: string[]) {
+  const supabase = await createClient();
+  const {
+    data: { user },
+    error: authError,
+  } = await supabase.auth.getUser();
+
+  if (authError || !user || leadIds.length === 0) {
+    return {
+      currentUserId: user?.id ?? null,
+      ownerByLead: new Map<string, { id: string | null; name: string | null }>(),
+      snoozedByLead: new Map<string, string>(),
+    };
+  }
+
+  const [{ data: owners }, { data: snoozes }] = await Promise.all([
+    supabase.from("leads").select("id,owner_user_id").in("id", leadIds),
+    supabase
+      .from("lead_inbox_snoozes")
+      .select("lead_id,snoozed_until")
+      .eq("user_id", user.id)
+      .gt("snoozed_until", new Date().toISOString())
+      .in("lead_id", leadIds),
+  ]);
+
+  const ownerIds = Array.from(
+    new Set(
+      (owners ?? [])
+        .map((row) => String(row.owner_user_id ?? "").trim())
+        .filter(Boolean),
+    ),
+  );
+
+  const { data: profiles } = ownerIds.length
+    ? await supabase.from("profiles").select("id,full_name").in("id", ownerIds)
+    : { data: [] as Array<{ id: string; full_name: string | null }> };
+
+  const nameById = new Map(
+    (profiles ?? []).map((profile) => [
+      String(profile.id),
+      textOrNull(profile.full_name),
+    ]),
+  );
+
+  const ownerByLead = new Map<
+    string,
+    { id: string | null; name: string | null }
+  >();
+  for (const row of owners ?? []) {
+    const ownerId = textOrNull(row.owner_user_id);
+    ownerByLead.set(String(row.id), {
+      id: ownerId,
+      name: ownerId ? nameById.get(ownerId) ?? null : null,
+    });
+  }
+
+  return {
+    currentUserId: user.id,
+    ownerByLead,
+    snoozedByLead: new Map(
+      (snoozes ?? []).map((row) => [
+        String(row.lead_id),
+        String(row.snoozed_until),
+      ]),
+    ),
   };
 }
 
 async function getLegacyInboxStateMap() {
   const supabase = await createClient();
-
   const {
     data: { user },
     error: authError,
@@ -508,17 +564,9 @@ async function getLegacyInboxStateMap() {
   }
 
   const organizationId = await getCurrentOrganizationId(supabase, user.id);
-
   const { data: attentionRows, error: attentionError } = await supabase
     .from("v_lead_inbox_attention")
-    .select(
-      `
-          lead_id,
-          latest_message_at,
-          last_inbound_at,
-          needs_reply
-        `,
-    )
+    .select("lead_id,latest_message_at,last_inbound_at,needs_reply")
     .eq("organization_id", organizationId)
     .limit(1000);
 
@@ -528,44 +576,26 @@ async function getLegacyInboxStateMap() {
     );
   }
 
-  let readRows: Array<{
-    lead_id: string;
-    last_read_at: string | null;
-  }> = [];
+  const { data: readRows, error: readError } = await supabase
+    .from("lead_inbox_reads")
+    .select("lead_id,last_read_at")
+    .eq("user_id", user.id)
+    .limit(1000);
 
-  if (user) {
-    const { data, error } = await supabase
-      .from("lead_inbox_reads")
-      .select(
-        `
-            lead_id,
-            last_read_at
-          `,
-      )
-      .eq("user_id", user.id)
-      .limit(1000);
-
-    if (error) {
-      throw new Error(`Unable to load inbox read state: ${error.message}`);
-    }
-
-    readRows = data ?? [];
+  if (readError) {
+    throw new Error(`Unable to load inbox read state: ${readError.message}`);
   }
 
   const readMap = new Map<string, string | null>(
-    readRows.map((row) => [row.lead_id, row.last_read_at]),
+    (readRows ?? []).map((row) => [row.lead_id, row.last_read_at]),
   );
-
   const result = new Map<string, LegacyInboxState>();
 
   for (const row of attentionRows ?? []) {
     result.set(row.lead_id, {
       latestMessageAt: row.latest_message_at ?? null,
-
       lastInboundAt: row.last_inbound_at ?? null,
-
       needsReply: Boolean(row.needs_reply),
-
       lastReadAt: readMap.get(row.lead_id) ?? null,
     });
   }
@@ -582,14 +612,12 @@ function getLegacyAttention(
   state: LegacyInboxState | undefined,
 ) {
   const needsReply = Boolean(state?.needsReply);
-
   const needsFirstContact = !state?.latestMessageAt && !lead.lastContactedAt;
-
   const unread = Boolean(
     state?.lastInboundAt &&
-    (!state.lastReadAt ||
-      new Date(state.lastInboundAt).getTime() >
-        new Date(state.lastReadAt).getTime()),
+      (!state.lastReadAt ||
+        new Date(state.lastInboundAt).getTime() >
+          new Date(state.lastReadAt).getTime()),
   );
 
   const waitingSince = needsReply
@@ -606,7 +634,6 @@ function getLegacyAttention(
     : 0;
 
   let priority: ConversationPriority = "waiting";
-
   if (needsReply || needsFirstContact) {
     if (
       waitingMinutes >= 240 ||
@@ -654,7 +681,6 @@ function compareLegacyConversationLeads(
   stateMap: Map<string, LegacyInboxState>,
 ) {
   const attentionA = getLegacyAttention(a, stateMap.get(a.id));
-
   const attentionB = getLegacyAttention(b, stateMap.get(b.id));
 
   if (attentionA.needsAttention !== attentionB.needsAttention) {
@@ -667,18 +693,12 @@ function compareLegacyConversationLeads(
     normal: 1,
     waiting: 0,
   };
-
   const rankDifference =
     priorityRank[attentionB.priority] - priorityRank[attentionA.priority];
-
-  if (rankDifference !== 0) {
-    return rankDifference;
-  }
-
+  if (rankDifference !== 0) return rankDifference;
   if (attentionA.unread !== attentionB.unread) {
     return attentionA.unread ? -1 : 1;
   }
-
   if (attentionA.needsAttention && attentionB.needsAttention) {
     return attentionB.waitingMinutes - attentionA.waitingMinutes;
   }
@@ -688,35 +708,28 @@ function compareLegacyConversationLeads(
     a.lastContactedAt ||
     a.createdAt ||
     "";
-
   const activityB =
     stateMap.get(b.id)?.latestMessageAt ||
     b.lastContactedAt ||
     b.createdAt ||
     "";
-
   return new Date(activityB).getTime() - new Date(activityA).getTime();
 }
 
 async function getLegacyWhatsAppWindow(leadId: string) {
   const supabase = await createClient();
-
   const { data: conversation } = await supabase
     .from("conversations")
     .select("id")
     .eq("lead_id", leadId)
     .eq("channel", "whatsapp")
-    .order("last_message_at", {
-      ascending: false,
-      nullsFirst: false,
-    })
+    .order("last_message_at", { ascending: false, nullsFirst: false })
     .limit(1)
     .maybeSingle();
 
   if (!conversation?.id) {
     return {
       open: false,
-
       label:
         "No WhatsApp conversation yet — an approved template is required to start one.",
     };
@@ -727,9 +740,7 @@ async function getLegacyWhatsAppWindow(leadId: string) {
     .select("created_at")
     .eq("conversation_id", conversation.id)
     .eq("direction", "inbound")
-    .order("created_at", {
-      ascending: false,
-    })
+    .order("created_at", { ascending: false })
     .limit(1)
     .maybeSingle();
 
@@ -743,7 +754,6 @@ function buildWhatsAppWindow(
   if (!hasConversation) {
     return {
       open: false,
-
       label:
         "No WhatsApp conversation yet — an approved template is required to start one.",
     };
@@ -752,54 +762,39 @@ function buildWhatsAppWindow(
   if (!lastInboundAt) {
     return {
       open: false,
-
       label: "No inbound WhatsApp message found — use an approved template.",
     };
   }
 
   const inboundAt = new Date(lastInboundAt).getTime();
-
   const age = Date.now() - inboundAt;
-
   if (!Number.isFinite(inboundAt) || age > CUSTOMER_SERVICE_WINDOW_MS) {
     return {
       open: false,
-
       label:
         "24-hour customer-service window expired — approved template required.",
     };
   }
 
-  const remaining = CUSTOMER_SERVICE_WINDOW_MS - age;
-
   return {
     open: true,
-
     label: `WhatsApp customer-service window open · ${formatRemaining(
-      remaining,
+      CUSTOMER_SERVICE_WINDOW_MS - age,
     )} remaining`,
   };
 }
 
 function formatRemaining(milliseconds: number) {
   const totalMinutes = Math.max(0, Math.floor(milliseconds / 60000));
-
   const hours = Math.floor(totalMinutes / 60);
-
   const minutes = totalMinutes % 60;
-
-  if (hours > 0) {
-    return `${hours}h ${minutes}m`;
-  }
-
-  return `${minutes}m`;
+  return hours > 0 ? `${hours}h ${minutes}m` : `${minutes}m`;
 }
 
 function asPriority(value: string | null | undefined): ConversationPriority {
   if (value === "urgent" || value === "high" || value === "normal") {
     return value;
   }
-
   return "waiting";
 }
 
@@ -813,7 +808,6 @@ function asChannel(value: string | null | undefined): Channel {
     "meta_lead_form",
     "other",
   ];
-
   return allowed.includes(value as Channel) ? (value as Channel) : "other";
 }
 
@@ -832,16 +826,15 @@ function asLeadStage(value: string | null | undefined): LeadStage {
     "unqualified",
     "duplicate",
   ];
-
   return allowed.includes(value as LeadStage) ? (value as LeadStage) : "new";
 }
 
 function isUuid(value: string | undefined) {
   return Boolean(
     value &&
-    /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
-      value,
-    ),
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+        value,
+      ),
   );
 }
 
@@ -849,8 +842,11 @@ function textOrUndefined(value: unknown) {
   return typeof value === "string" && value ? value : undefined;
 }
 
+function textOrNull(value: unknown) {
+  return typeof value === "string" && value.trim() ? value.trim() : null;
+}
+
 function toNumber(value: number | string | null | undefined) {
   const number = Number(value ?? 0);
-
   return Number.isFinite(number) ? number : 0;
 }
