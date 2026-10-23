@@ -1,0 +1,158 @@
+/*
+ * SalsysOS analytics visual language.
+ *
+ * Keep multiple series distinguishable while avoiding the historical generic
+ * purple product theme. These rules are deliberately scoped to analytics
+ * surfaces and only remap visual presentation attributes/classes.
+ */
+
+:root {
+  --chart-brand: #216551;
+  --chart-green: #5f8f79;
+  --chart-teal: #4d8e83;
+  --chart-blue: #3f7898;
+  --chart-amber: #c78331;
+  --chart-danger: #b44343;
+  --chart-axis: #7b8d84;
+  --chart-grid: rgba(102, 120, 111, 0.16);
+}
+
+/* Revenue: preserve series distinction while moving off generic violet. */
+.revenue-insights [fill="#6D4CFF"],
+.revenue-insights [fill="#6d4cff"] {
+  fill: var(--chart-brand) !important;
+}
+
+.revenue-insights [stroke="#8B5CF6"],
+.revenue-insights [stroke="#8b5cf6"] {
+  stroke: var(--chart-green) !important;
+}
+
+.revenue-insights [stroke="#A78BFA"],
+.revenue-insights [stroke="#a78bfa"] {
+  stroke: var(--chart-teal) !important;
+}
+
+.revenue-insights [fill="#A78BFA"],
+.revenue-insights [fill="#a78bfa"] {
+  fill: var(--chart-teal) !important;
+}
+
+.revenue-insights [fill="rgba(139,92,246,.10)"],
+.revenue-insights [fill="rgba(139, 92, 246, 0.10)"],
+.revenue-insights [fill="rgba(139,92,246,0.10)"] {
+  fill: rgba(77, 142, 131, 0.1) !important;
+}
+
+.revenue-insights [stroke="#C26A7A"],
+.revenue-insights [stroke="#c26a7a"] {
+  stroke: var(--chart-danger) !important;
+}
+
+.revenue-insights [fill="#ec8316"],
+.revenue-insights [fill="#EC8316"] {
+  fill: var(--chart-amber) !important;
+}
+
+.revenue-insights .revenue-currency-toggle {
+  border-color: var(--app-border) !important;
+  border-radius: var(--radius-md) !important;
+  background: var(--app-surface-soft) !important;
+}
+
+.revenue-insights .revenue-currency-toggle button {
+  min-height: 34px;
+  border-radius: 8px !important;
+  font-size: 12px !important;
+}
+
+.revenue-insights .revenue-chart-card,
+.revenue-insights .revenue-insights-hero {
+  border-color: var(--app-border) !important;
+  border-radius: var(--radius-xl) !important;
+  background: var(--app-surface) !important;
+  box-shadow: var(--shadow-xs) !important;
+}
+
+.revenue-insights .revenue-finance-metric,
+.revenue-insights .revenue-summary-mini {
+  border-color: var(--app-border) !important;
+  background: var(--app-surface-soft) !important;
+}
+
+.revenue-insights .recharts-cartesian-grid line {
+  stroke: var(--chart-grid) !important;
+}
+
+.revenue-insights .recharts-cartesian-axis-tick text {
+  fill: var(--chart-axis) !important;
+}
+
+/* Keep JS-rendered legends in sync with the remapped SVG series. */
+.revenue-insights [style*="background: rgb(109, 76, 255)"],
+.revenue-insights [style*="background-color: rgb(109, 76, 255)"],
+.revenue-insights [style*="background:#6D4CFF"],
+.revenue-insights [style*="background-color:#6D4CFF"] {
+  background: var(--chart-brand) !important;
+  background-color: var(--chart-brand) !important;
+}
+
+.revenue-insights [style*="background: rgb(139, 92, 246)"],
+.revenue-insights [style*="background-color: rgb(139, 92, 246)"],
+.revenue-insights [style*="background:#8B5CF6"],
+.revenue-insights [style*="background-color:#8B5CF6"] {
+  background: var(--chart-green) !important;
+  background-color: var(--chart-green) !important;
+}
+
+.revenue-insights [style*="background: rgb(167, 139, 250)"],
+.revenue-insights [style*="background-color: rgb(167, 139, 250)"],
+.revenue-insights [style*="background:#A78BFA"],
+.revenue-insights [style*="background-color:#A78BFA"] {
+  background: var(--chart-teal) !important;
+  background-color: var(--chart-teal) !important;
+}
+
+/* Attribution: historical violet acted as decoration, not semantic status. */
+.attribution-polish .attribution-coverage-fill {
+  background: linear-gradient(90deg, var(--app-brand-700), var(--chart-green)) !important;
+}
+
+.attribution-polish .attribution-metric,
+.attribution-polish .attribution-card,
+.attribution-polish section.rounded-2xl,
+.attribution-polish div.rounded-2xl.border {
+  border-color: var(--app-border) !important;
+}
+
+.attribution-polish .rounded-xl.border.border-brand\/10.bg-brand\/\[\.04\] {
+  border-color: rgba(33, 101, 81, 0.16) !important;
+  background: var(--app-brand-50) !important;
+}
+
+.attribution-polish [class~="text-[#6D4CFF]"],
+.attribution-polish [class~="text-[#6d4cff]"] {
+  color: var(--app-brand-700) !important;
+}
+
+.attribution-polish [class~="bg-[#6D4CFF]"],
+.attribution-polish [class~="bg-[#6d4cff]"] {
+  background-color: var(--app-brand-700) !important;
+}
+
+/* Generic chart tooltip polish for dashboard/revenue/attribution surfaces. */
+.dashboard-chart-tooltip,
+.pipeline-tooltip,
+.revenue-insights [class*="tooltip"] {
+  border-color: var(--app-border) !important;
+  border-radius: var(--radius-md) !important;
+  background: var(--app-surface) !important;
+  color: var(--app-text) !important;
+  box-shadow: var(--shadow-md) !important;
+}
+
+@media (prefers-color-scheme: dark) {
+  .revenue-insights .recharts-cartesian-axis-tick text {
+    fill: var(--app-text-muted) !important;
+  }
+}
