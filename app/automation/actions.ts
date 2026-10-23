@@ -152,6 +152,7 @@ export async function createSmartTriggerWorkflowAction(formData: FormData) {
   }
 
   const hasRuntimePendingConditions = conditionExpression.mode === 'specific';
+  const hasRuntimePendingAction = actionType !== 'create_followup';
   const { supabase, user, organizationId } = await currentContext();
 
   const { data: workflow, error: workflowError } = await supabase
@@ -172,6 +173,7 @@ export async function createSmartTriggerWorkflowAction(formData: FormData) {
         safety_mode: 'draft_only',
         smart_trigger_conditions: conditionExpression,
         smart_trigger_condition_runtime_pending: hasRuntimePendingConditions,
+        smart_trigger_action_runtime_pending: hasRuntimePendingAction,
       },
     })
     .select('id')
@@ -243,8 +245,12 @@ export async function createSmartTriggerWorkflowAction(formData: FormData) {
   revalidatePath('/automation/flow-builder');
   revalidatePath('/automation/readiness');
 
-  const notice = hasRuntimePendingConditions
-    ? 'Smart Trigger draft saved with AND/OR conditions. Runtime activation stays blocked until the condition expression is validated by the execution engine.'
+  const pendingReasons = [
+    hasRuntimePendingConditions ? 'AND/OR condition evaluation' : '',
+    hasRuntimePendingAction ? `${actionType.replaceAll('_', ' ')} execution` : '',
+  ].filter(Boolean);
+  const notice = pendingReasons.length > 0
+    ? `Smart Trigger draft saved. Runtime activation stays blocked until ${pendingReasons.join(' and ')} is supported by the execution engine.`
     : 'Draft flow created. Nothing will run automatically until the flow is validated, published and runtime is explicitly enabled.';
 
   if (returnTo === 'flow_builder') {
