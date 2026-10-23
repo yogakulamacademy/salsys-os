@@ -18,37 +18,37 @@ export function CrmWorkspaceFrame({ children }: { children: ReactNode }) {
 
       <style>{`
         body:has(.crm-brand-scope) .legacy-shell-host > div {
-          background: #f6f8f7 !important;
-          color: #192e29 !important;
+          background: var(--app-bg) !important;
+          color: var(--app-text) !important;
         }
 
         body:has(.crm-brand-scope) .legacy-shell-host header {
-          border-color: #e4eae6 !important;
-          background: rgba(255, 255, 255, 0.96) !important;
+          border-color: var(--app-border) !important;
+          background: color-mix(in srgb, var(--app-surface) 96%, transparent) !important;
         }
 
         body:has(.crm-brand-scope) .legacy-shell-host aside {
-          border-color: #e4eae6 !important;
-          background: #ffffff !important;
+          border-color: var(--app-border) !important;
+          background: var(--app-surface) !important;
         }
 
         body:has(.crm-brand-scope) .legacy-shell-host aside svg,
         body:has(.crm-brand-scope) .legacy-shell-host header svg {
-          color: #91a096;
+          color: var(--app-text-subtle);
         }
 
         body:has(.crm-brand-scope) .legacy-shell-host aside button:hover,
         body:has(.crm-brand-scope) .legacy-shell-host aside a:hover {
-          color: #216551 !important;
+          color: var(--app-brand-700) !important;
         }
 
         body:has(.crm-brand-scope) .legacy-shell-host aside button:hover svg,
         body:has(.crm-brand-scope) .legacy-shell-host aside a:hover svg {
-          color: #216551 !important;
+          color: var(--app-brand-700) !important;
         }
 
         body:has(.crm-brand-scope) .legacy-shell-host aside button[aria-pressed='true'] {
-          background: #153e33 !important;
+          background: var(--app-brand-900) !important;
           color: #ffffff !important;
         }
 
@@ -57,49 +57,106 @@ export function CrmWorkspaceFrame({ children }: { children: ReactNode }) {
         }
 
         body:has(.crm-brand-scope) .legacy-shell-host aside a[class*='bg-slate-100'] {
-          background: #eaf4ed !important;
-          color: #216551 !important;
+          background: var(--app-brand-50) !important;
+          color: var(--app-brand-700) !important;
         }
 
         body:has(.crm-brand-scope) .legacy-shell-host aside a[class*='bg-slate-100'] svg {
-          color: #216551 !important;
+          color: var(--app-brand-700) !important;
         }
 
         body:has(.crm-brand-scope) .legacy-shell-host header button[class*='border-slate-200'] {
-          border-color: #e4eae6 !important;
-          background: #ffffff !important;
-          color: #6d7c76 !important;
+          border-color: var(--app-border) !important;
+          background: var(--app-surface) !important;
+          color: var(--app-text-muted) !important;
         }
 
         body:has(.crm-brand-scope) .legacy-shell-host header button[class*='border-slate-200']:hover {
-          border-color: #cfdad2 !important;
-          background: #f0f7f3 !important;
-          color: #216551 !important;
+          border-color: var(--app-border-strong) !important;
+          background: var(--app-brand-50) !important;
+          color: var(--app-brand-700) !important;
         }
 
         body:has(.crm-brand-scope) .legacy-shell-host header button[class*='border-slate-200']:hover svg {
-          color: #216551 !important;
+          color: var(--app-brand-700) !important;
         }
 
         body:has(.crm-brand-scope) .legacy-shell-host header .text-violet-500,
         body:has(.crm-brand-scope) .legacy-shell-host header .text-violet-600,
         body:has(.crm-brand-scope) .legacy-shell-host aside .text-violet-500,
         body:has(.crm-brand-scope) .legacy-shell-host aside .text-violet-600 {
-          color: #216551 !important;
+          color: var(--app-brand-700) !important;
         }
 
         body:has(.crm-brand-scope) .legacy-shell-host .bg-violet-50,
         body:has(.crm-brand-scope) .legacy-shell-host .bg-violet-50\\/70 {
-          background: #f0f7f3 !important;
+          background: var(--app-brand-50) !important;
         }
 
         body:has(.crm-brand-scope) .legacy-shell-host .border-violet-100,
         body:has(.crm-brand-scope) .legacy-shell-host .border-violet-200 {
-          border-color: #cfe0d4 !important;
+          border-color: var(--app-border-strong) !important;
         }
 
         body:has(.crm-brand-scope) .legacy-shell-host main {
-          background: #f6f8f7;
+          background: var(--app-bg);
+        }
+
+        /* CRM Studio pages historically used 9–11px table copy. Keep the
+           workspace dense, but align it with the product readability floor. */
+        .crm-brand-scope table {
+          font-size: 13px !important;
+          font-variant-numeric: tabular-nums;
+        }
+
+        .crm-brand-scope table th {
+          color: var(--app-text-muted) !important;
+          font-size: 11px !important;
+          font-weight: 700 !important;
+          letter-spacing: .05em !important;
+        }
+
+        .crm-brand-scope table td {
+          color: var(--app-text) !important;
+          font-size: 12px !important;
+          line-height: 1.5 !important;
+        }
+
+        .crm-brand-scope table thead tr,
+        .crm-brand-scope table tbody tr,
+        .crm-brand-scope table th,
+        .crm-brand-scope table td {
+          border-color: var(--app-border) !important;
+        }
+
+        .crm-brand-scope table tbody tr:hover td {
+          background: var(--app-surface-soft) !important;
+        }
+
+        .crm-brand-scope [class*='pill'],
+        .crm-brand-scope [class*='Pill'] {
+          font-size: 10px !important;
+          line-height: 1.4 !important;
+        }
+
+        .crm-brand-scope [class*='micro'],
+        .crm-brand-scope [class*='Micro'] {
+          font-size: 10px !important;
+          line-height: 1.45 !important;
+        }
+
+        @media (max-width: 767px) {
+          .crm-brand-scope table {
+            font-size: 12px !important;
+          }
+
+          .crm-brand-scope table th {
+            font-size: 10px !important;
+          }
+
+          .crm-brand-scope table td {
+            font-size: 12px !important;
+          }
         }
       `}</style>
     </>
