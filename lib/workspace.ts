@@ -1,11 +1,9 @@
 import "server-only";
 
-import { cache } from "react";
 import { cookies } from "next/headers";
 import { createClient } from "@/lib/supabase/server";
 
 export const ACTIVE_WORKSPACE_COOKIE = "salsys-active-workspace";
-export const ACTIVE_ORGANIZATION_COOKIE = ACTIVE_WORKSPACE_COOKIE;
 
 type ServerSupabaseClient = Awaited<ReturnType<typeof createClient>>;
 
@@ -26,14 +24,6 @@ export type WorkspaceContext = {
   activeWorkspace: WorkspaceMembership | null;
   memberships: WorkspaceMembership[];
   selectionRequired: boolean;
-};
-
-export type AuthenticatedRequestContext = {
-  supabase: ServerSupabaseClient;
-  user: NonNullable<
-    Awaited<ReturnType<ServerSupabaseClient["auth"]["getUser"]>>["data"]["user"]
-  >;
-  organizationId: string;
 };
 
 async function bindCurrentTenantSession(
@@ -182,6 +172,10 @@ export async function requireCurrentOrganizationId(
   supabase: ServerSupabaseClient,
   userId: string,
 ): Promise<string> {
+  // Hot path: resolve/refresh the authenticated tenant in one RPC instead of
+  // querying memberships + organizations for every server-side data loader.
+  // Keep the legacy resolver as a compatibility fallback if the RPC is absent
+  // or temporarily unavailable.
   const fastOrganizationId = await getFastCurrentOrganizationId(supabase);
 
   if (fastOrganizationId) {
@@ -202,31 +196,6 @@ export async function requireCurrentOrganizationId(
 
   return workspace.activeOrganizationId;
 }
-
-export const getAuthenticatedRequestContext = cache(
-  async (): Promise<AuthenticatedRequestContext> => {
-    const supabase = await createClient();
-    const {
-      data: { user },
-      error: authError,
-    } = await supabase.auth.getUser();
-
-    if (authError || !user) {
-      throw new Error("Unable to resolve request context: user is not authenticated.");
-    }
-
-    const organizationId = await requireCurrentOrganizationId(
-      supabase,
-      user.id,
-    );
-
-    return {
-      supabase,
-      user,
-      organizationId,
-    };
-  },
-);
 
 export async function getCurrentWorkspaceContext(
   suppliedSupabase?: ServerSupabaseClient,
