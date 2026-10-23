@@ -87,7 +87,24 @@
 }
 
 .studio h1 {
+  font-size: var(--text-3xl);
+  font-weight: 650;
+  line-height: 1.15;
   letter-spacing: -0.035em;
+}
+
+.studio h2 {
+  font-size: var(--text-xl);
+  font-weight: 650;
+  line-height: 1.25;
+  letter-spacing: -0.02em;
+}
+
+.studio h3 {
+  font-size: var(--text-md);
+  font-weight: 650;
+  line-height: 1.3;
+  letter-spacing: -0.015em;
 }
 
 .studio p {
@@ -96,7 +113,7 @@
 
 .studio :global(.eyebrow) {
   color: var(--app-text-subtle);
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 700;
   letter-spacing: 0.12em;
 }
@@ -140,6 +157,9 @@
   background-color: var(--app-surface-soft);
 }
 
+.studio :global(.text-violet-950),
+.studio :global(.text-violet-900),
+.studio :global(.text-violet-800),
 .studio :global(.text-violet-700),
 .studio :global(.text-violet-600),
 .studio :global(.text-violet-500) {
@@ -157,6 +177,7 @@
   background-color: var(--automation-mint);
 }
 
+.studio :global(.border-violet-100),
 .studio :global(.border-violet-200),
 .studio :global(.border-violet-300) {
   border-color: var(--app-border-strong);
@@ -180,21 +201,33 @@
 }
 
 .studio :global(.hover\:text-violet-500:hover),
+.studio :global(.hover\:text-violet-700:hover),
+.studio :global(.hover\:text-violet-950:hover),
 .studio :global(.group:hover .group-hover\:text-violet-500),
 .studio :global(.group:hover .group-hover\:text-violet-600) {
-  color: var(--automation-brand);
+  color: var(--automation-brand-dark);
 }
 
-/* Keep operational metadata compact but readable. */
+/* Keep operational metadata compact but readable and consistent with CRM. */
 .studio :global(.text-\[8px\]),
 .studio :global(.text-\[9px\]) {
-  font-size: 10px !important;
+  font-size: 11px !important;
   line-height: 1.4 !important;
 }
 
 .studio :global(.text-\[10px\]) {
-  font-size: 11px !important;
+  font-size: 12px !important;
   line-height: 1.45 !important;
+}
+
+.studio :global(.text-\[11px\]) {
+  font-size: 13px !important;
+  line-height: 1.5 !important;
+}
+
+.studio :global(.text-xs) {
+  font-size: 13px;
+  line-height: 1.5;
 }
 
 .studio :global(.shadow-sm),
