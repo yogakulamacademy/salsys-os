@@ -22,7 +22,8 @@
     "verify:whatsapp-growth": "node scripts/verify-whatsapp-growth-operations.mjs",
     "verify:instagram-operations": "node scripts/verify-instagram-operations.mjs",
     "verify:crm-core": "node scripts/verify-crm-core-closeout.mjs",
-    "verify:customer360-identity": "node scripts/verify-customer360-identity-closeout.mjs"
+    "verify:customer360-identity": "node scripts/verify-customer360-identity-closeout.mjs",
+    "verify:onboarding-foundation": "node scripts/verify-onboarding-foundation.mjs"
   },
   "dependencies": {
     "@google-analytics/data": "^7.2.0",
