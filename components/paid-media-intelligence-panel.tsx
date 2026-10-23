@@ -41,18 +41,18 @@ export function PaidMediaIntelligencePanel({
 
   if (providers.length === 0) {
     return (
-      <section className="card-pad mt-4 border border-slate-200 bg-white">
-        <div className="flex items-start gap-3">
-          <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-slate-100 text-slate-500">
+      <section className="ui-panel mt-4 p-5">
+        <div className="flex items-start gap-3.5">
+          <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-[var(--app-brand-50)] text-[var(--app-brand-700)]">
             <Megaphone size={18} />
           </span>
           <div>
-            <div className="eyebrow">Paid media intelligence</div>
-            <div className="section-title mt-1">No connected paid-media evidence</div>
-            <p className="mt-2 text-sm leading-6 text-slate-500">
-              Google Ads and Meta Ads remain hidden from commercial recommendations
-              until the tenant has connected provider data. SalsysOS does not invent
-              spend, CPL, CAC or ROAS when provider evidence is unavailable.
+            <div className="ui-page-kicker">Paid media intelligence</div>
+            <div className="mt-1 text-[16px] font-semibold text-[var(--app-text-strong)]">
+              No connected paid-media evidence
+            </div>
+            <p className="mt-2 text-[14px] leading-6 text-[var(--app-text-muted)]">
+              Google Ads and Meta Ads stay outside commercial recommendations until connected provider data is available. SalsysOS does not invent spend, CPL, CAC or ROAS when evidence is missing.
             </p>
           </div>
         </div>
@@ -66,20 +66,22 @@ export function PaidMediaIntelligencePanel({
   );
 
   return (
-    <section className="card-pad mt-4 border border-slate-200 bg-white">
+    <section className="ui-panel mt-4 p-5">
       <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
         <div>
-          <div className="eyebrow">Paid media intelligence</div>
-          <div className="section-title mt-1">Spend → CRM → Revenue quality</div>
-          <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-500">
+          <div className="ui-page-kicker">Paid media intelligence</div>
+          <div className="mt-1 text-[16px] font-semibold text-[var(--app-text-strong)]">
+            Spend → CRM → Revenue quality
+          </div>
+          <p className="mt-2 max-w-3xl text-[14px] leading-6 text-[var(--app-text-muted)]">
             Provider spend is evaluated against CRM leads, qualification,
-            enrollment and recorded revenue. Attribution coverage is shown beside
-            efficiency so low-lineage campaigns are not mistaken for poor campaigns.
+            enrollment and recorded revenue. Attribution coverage stays visible
+            beside efficiency so incomplete lineage is not mistaken for poor performance.
           </p>
         </div>
 
         <div
-          className={`rounded-full px-3 py-1.5 text-xs font-semibold ${
+          className={`rounded-full px-3 py-1.5 text-[12px] font-semibold ${
             issueCount === 0
               ? "bg-emerald-50 text-emerald-700"
               : "bg-amber-50 text-amber-700"
@@ -95,13 +97,13 @@ export function PaidMediaIntelligencePanel({
         {providers.map((provider) => (
           <article
             key={provider.provider}
-            className="rounded-2xl border border-slate-200 bg-slate-50/50 p-4"
+            className="rounded-2xl border border-[var(--app-border)] bg-[var(--app-surface-soft)] p-4"
           >
             <div className="flex items-center justify-between gap-3">
-              <div className="text-sm font-semibold text-slate-900">
+              <div className="text-[14px] font-semibold text-[var(--app-text-strong)]">
                 {provider.provider}
               </div>
-              <span className="text-xs font-semibold text-slate-400">
+              <span className="text-[12px] font-semibold text-[var(--app-text-subtle)]">
                 {provider.currency}
               </span>
             </div>
@@ -141,14 +143,14 @@ export function PaidMediaIntelligencePanel({
               />
             </div>
 
-            <div className="mt-4 rounded-xl border border-slate-200 bg-white p-3">
-              <div className="text-[10px] font-semibold uppercase tracking-[.08em] text-slate-400">
+            <div className="mt-4 rounded-xl border border-[var(--app-border)] bg-[var(--app-surface)] p-3">
+              <div className="text-[11px] font-semibold uppercase tracking-[0.08em] text-[var(--app-text-subtle)]">
                 Recorded CRM revenue
               </div>
-              <div className="mt-1 text-sm font-semibold text-slate-800">
+              <div className="mt-1 text-[14px] font-semibold text-[var(--app-text-strong)]">
                 {formatRevenue(provider.revenueInr, provider.revenueUsd)}
               </div>
-              <div className="mt-1 text-[11px] text-slate-400">
+              <div className="mt-1 text-[12px] leading-5 text-[var(--app-text-muted)]">
                 {provider.coverageLabel}
               </div>
             </div>
@@ -158,7 +160,7 @@ export function PaidMediaIntelligencePanel({
                 {provider.issues.map((issue) => (
                   <div
                     key={issue}
-                    className="flex items-start gap-2 rounded-lg bg-amber-50 px-3 py-2 text-xs leading-5 text-amber-800"
+                    className="flex items-start gap-2 rounded-lg bg-amber-50 px-3 py-2 text-[12px] leading-5 text-amber-800"
                   >
                     <AlertTriangle size={14} className="mt-0.5 shrink-0" />
                     {issue}
@@ -166,7 +168,7 @@ export function PaidMediaIntelligencePanel({
                 ))}
               </div>
             ) : (
-              <div className="mt-4 flex items-start gap-2 rounded-lg bg-emerald-50 px-3 py-2 text-xs leading-5 text-emerald-800">
+              <div className="mt-4 flex items-start gap-2 rounded-lg bg-emerald-50 px-3 py-2 text-[12px] leading-5 text-emerald-800">
                 <CheckCircle2 size={14} className="mt-0.5 shrink-0" />
                 Current provider evidence has no basic spend/outcome/coverage warning.
               </div>
@@ -175,7 +177,7 @@ export function PaidMediaIntelligencePanel({
         ))}
       </div>
 
-      <div className="mt-4 flex items-start gap-2 border-t border-slate-100 pt-3 text-[11px] leading-5 text-slate-400">
+      <div className="mt-4 flex items-start gap-2 border-t border-[var(--app-border)] pt-3 text-[12px] leading-5 text-[var(--app-text-subtle)]">
         <ShieldCheck size={14} className="mt-0.5 shrink-0" />
         <span>
           SalsysOS does not automatically move advertising budget from these
@@ -306,10 +308,10 @@ function summarizeMeta(data: MetaAdsBusinessData): ProviderSummary {
 function Metric({ label, value }: { label: string; value: string }) {
   return (
     <div>
-      <div className="text-[10px] font-semibold uppercase tracking-[.06em] text-slate-400">
+      <div className="text-[11px] font-semibold uppercase tracking-[0.06em] text-[var(--app-text-subtle)]">
         {label}
       </div>
-      <div className="mt-1 text-sm font-semibold text-slate-800">{value}</div>
+      <div className="mt-1 text-[14px] font-semibold text-[var(--app-text-strong)]">{value}</div>
     </div>
   );
 }
