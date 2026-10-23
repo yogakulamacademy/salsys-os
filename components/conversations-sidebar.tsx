@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { Flag, MessageCircle, Search, X } from "lucide-react";
+import { Clock3, Flag, MessageCircle, Search, UsersRound, X } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import type { Channel, LeadStage } from "@/types/crm";
@@ -22,21 +22,32 @@ export type ConversationLeadSummary = {
   needsFirstContact: boolean;
   priority: ConversationPriority;
   waitingSince: string | null;
+  ownerUserId: string | null;
+  ownerName: string | null;
+  snoozedUntil: string | null;
 };
 
-type InboxFilter = "all" | "reply" | "unread";
+type InboxFilter = "all" | "reply" | "unread" | "snoozed";
+type ScopeFilter = "mine" | "team" | "unassigned";
 type PriorityFilter = "all" | ConversationPriority;
 
 export function ConversationsSidebar({
   leads,
   selectedId,
+  currentUserId,
+  canManageAssignments,
 }: {
   leads: ConversationLeadSummary[];
   selectedId?: string;
+  currentUserId: string | null;
+  canManageAssignments: boolean;
 }) {
   const searchParams = useSearchParams();
   const explicitLeadId = searchParams.get("lead");
   const [search, setSearch] = useState("");
+  const [scope, setScope] = useState<ScopeFilter>(
+    currentUserId && !canManageAssignments ? "mine" : "team",
+  );
   const [filter, setFilter] = useState<InboxFilter>("all");
   const [priorityFilter, setPriorityFilter] = useState<PriorityFilter>("all");
   const [now, setNow] = useState(0);
@@ -84,14 +95,36 @@ export function ConversationsSidebar({
     return () => document.removeEventListener("keydown", onKeyDown);
   }, []);
 
-  const unreadCount = leads.filter((lead) => lead.unread).length;
-  const replyCount = leads.filter((lead) => lead.needsReply).length;
+  const scopedLeads = useMemo(
+    () => leads.filter((lead) => matchesScope(lead, scope, currentUserId)),
+    [currentUserId, leads, scope],
+  );
+
+  const activeScopedLeads = scopedLeads.filter((lead) => !isSnoozed(lead, now));
+  const unreadCount = activeScopedLeads.filter((lead) => lead.unread).length;
+  const replyCount = activeScopedLeads.filter(
+    (lead) => lead.needsReply || lead.needsFirstContact,
+  ).length;
+  const snoozedCount = scopedLeads.filter((lead) => isSnoozed(lead, now)).length;
+
+  const mineCount = leads.filter(
+    (lead) => !isSnoozed(lead, now) && Boolean(currentUserId) && lead.ownerUserId === currentUserId,
+  ).length;
+  const teamCount = leads.filter((lead) => !isSnoozed(lead, now)).length;
+  const unassignedCount = leads.filter(
+    (lead) => !isSnoozed(lead, now) && !lead.ownerUserId,
+  ).length;
 
   const filteredLeads = useMemo(() => {
     const query = search.trim().toLowerCase();
 
     return leads.filter((lead) => {
-      if (filter === "reply" && !lead.needsReply) return false;
+      if (!matchesScope(lead, scope, currentUserId)) return false;
+
+      const snoozed = isSnoozed(lead, now);
+      if (filter === "snoozed" && !snoozed) return false;
+      if (filter !== "snoozed" && snoozed) return false;
+      if (filter === "reply" && !lead.needsReply && !lead.needsFirstContact) return false;
       if (filter === "unread" && !lead.unread) return false;
       if (priorityFilter !== "all" && lead.priority !== priorityFilter) return false;
 
@@ -104,6 +137,7 @@ export function ConversationsSidebar({
         lead.stage,
         lead.currentContactChannel,
         lead.priority,
+        lead.ownerName,
       ]
         .filter(Boolean)
         .join(" ")
@@ -111,7 +145,7 @@ export function ConversationsSidebar({
         .toLowerCase()
         .includes(query);
     });
-  }, [filter, leads, priorityFilter, search]);
+  }, [currentUserId, filter, leads, now, priorityFilter, scope, search]);
 
   function handleFilterKeyDown(event: React.KeyboardEvent<HTMLDivElement>) {
     if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
@@ -133,7 +167,12 @@ export function ConversationsSidebar({
     tabs[nextIndex]?.click();
   }
 
-  const hasFilters = Boolean(search || filter !== "all" || priorityFilter !== "all");
+  const hasFilters = Boolean(
+    search ||
+      scope !== (currentUserId && !canManageAssignments ? "mine" : "team") ||
+      filter !== "all" ||
+      priorityFilter !== "all",
+  );
 
   return (
     <aside className="conversation-sidebar flex h-full min-h-0 flex-col overflow-hidden bg-surface">
@@ -144,12 +183,33 @@ export function ConversationsSidebar({
               Inbox queue
             </div>
             <div className="mt-1 text-[11.5px] leading-5 text-copy-muted">
-              Prioritized by reply needs and recency
+              Ownership, reply state and urgency in one queue
             </div>
           </div>
           <span className="rounded-md bg-brand-50 px-2 py-1 text-[11px] font-semibold text-brand-700">
-            {leads.length}
+            {activeScopedLeads.length}
           </span>
+        </div>
+
+        <div className="mt-3 grid grid-cols-3 rounded-ui bg-surface-soft p-1" aria-label="Inbox ownership scope">
+          <ScopeButton
+            active={scope === "mine"}
+            onClick={() => setScope("mine")}
+            count={mineCount}
+            disabled={!currentUserId}
+          >
+            My inbox
+          </ScopeButton>
+          <ScopeButton active={scope === "team"} onClick={() => setScope("team")} count={teamCount}>
+            Team
+          </ScopeButton>
+          <ScopeButton
+            active={scope === "unassigned"}
+            onClick={() => setScope("unassigned")}
+            count={unassignedCount}
+          >
+            Unassigned
+          </ScopeButton>
         </div>
 
         <label className="relative mt-3 block">
@@ -162,7 +222,7 @@ export function ConversationsSidebar({
             ref={searchRef}
             value={search}
             onChange={(event) => setSearch(event.target.value)}
-            placeholder="Search leads, course, country…"
+            placeholder="Search leads, course, owner…"
             className="h-10 w-full rounded-ui border border-line bg-surface-soft pl-9 pr-14 text-[13px] text-copy-strong outline-none transition placeholder:text-copy-subtle focus:border-brand-600 focus:bg-surface focus:ring-2 focus:ring-brand-700/10"
           />
           {!search ? (
@@ -182,19 +242,22 @@ export function ConversationsSidebar({
         </label>
 
         <div
-          className="mt-3 grid grid-cols-3"
+          className="mt-3 grid grid-cols-4"
           role="tablist"
           aria-label="Conversation filters"
           onKeyDown={handleFilterKeyDown}
         >
-          <InboxTab active={filter === "all"} onClick={() => setFilter("all")} count={leads.length}>
+          <InboxTab active={filter === "all"} onClick={() => setFilter("all")} count={activeScopedLeads.length}>
             All
           </InboxTab>
           <InboxTab active={filter === "reply"} onClick={() => setFilter("reply")} count={replyCount}>
-            Needs reply
+            Reply
           </InboxTab>
           <InboxTab active={filter === "unread"} onClick={() => setFilter("unread")} count={unreadCount}>
             Unread
+          </InboxTab>
+          <InboxTab active={filter === "snoozed"} onClick={() => setFilter("snoozed")} count={snoozedCount}>
+            Snoozed
           </InboxTab>
         </div>
       </div>
@@ -224,29 +287,32 @@ export function ConversationsSidebar({
           <div className="grid min-h-[280px] place-items-center px-6 text-center">
             <div>
               <div className="mx-auto grid h-11 w-11 place-items-center rounded-xl bg-brand-50 text-brand-700">
-                <MessageCircle size={18} />
+                {filter === "snoozed" ? <Clock3 size={18} /> : <MessageCircle size={18} />}
               </div>
               <div className="mt-3 text-[13px] font-semibold text-copy-strong">
-                {filter === "unread" && !search && priorityFilter === "all"
-                  ? "You’re all caught up"
-                  : "No matching conversations"}
+                {filter === "snoozed"
+                  ? "Nothing snoozed"
+                  : filter === "unread" && !search && priorityFilter === "all"
+                    ? "You’re all caught up"
+                    : "No matching conversations"}
               </div>
               <div className="mt-1 text-[12px] leading-5 text-copy-muted">
-                {filter === "unread" && !search && priorityFilter === "all"
-                  ? "There are no unread conversations right now."
-                  : "Try another search or remove a filter."}
+                {filter === "snoozed"
+                  ? "Snoozed conversations return automatically when their timer expires."
+                  : "Try another ownership scope, search or filter."}
               </div>
               {hasFilters ? (
                 <button
                   type="button"
                   onClick={() => {
                     setSearch("");
+                    setScope(currentUserId && !canManageAssignments ? "mine" : "team");
                     setFilter("all");
                     setPriorityFilter("all");
                   }}
                   className="mt-3 rounded-ui border border-line bg-surface px-3 py-2 text-[12px] font-semibold text-brand-700 transition hover:bg-brand-50"
                 >
-                  View all conversations
+                  Reset inbox filters
                 </button>
               ) : null}
             </div>
@@ -262,7 +328,9 @@ export function ConversationsSidebar({
       </div>
 
       <div className="shrink-0 border-t border-line px-4 py-2.5 text-[11px] text-copy-subtle">
-        One CRM lead per conversation · filters never change CRM records
+        <span className="inline-flex items-center gap-1.5">
+          <UsersRound size={12} /> CRM ownership is shared · snooze is personal
+        </span>
       </div>
     </aside>
   );
@@ -284,6 +352,10 @@ function ConversationRow({
     lead.course && lead.course !== "Not selected"
       ? lead.course
       : `${sourceLabel} inquiry · Course not selected`;
+  const snoozed = isSnoozed(lead, now);
+  const waiting = lead.waitingSince && (lead.needsReply || lead.needsFirstContact)
+    ? formatWaitingTime(lead.waitingSince, now)
+    : null;
 
   return (
     <Link
@@ -331,8 +403,12 @@ function ConversationRow({
 
           <div className="mt-1 truncate text-[12px] text-copy-muted">{contextPreview}</div>
 
-          <div className="mt-2.5 flex min-w-0 items-center gap-1.5">
-            {lead.needsReply ? (
+          <div className="mt-2 flex min-w-0 items-center gap-1.5">
+            {snoozed ? (
+              <span className="inline-flex items-center gap-1 rounded-md bg-surface-muted px-1.5 py-0.5 text-[10.5px] font-semibold text-copy-muted">
+                <Clock3 size={10} /> {formatSnooze(lead.snoozedUntil)}
+              </span>
+            ) : lead.needsReply ? (
               <span className="inline-flex items-center gap-1 rounded-md border border-warning/20 bg-warning-soft px-1.5 py-0.5 text-[10.5px] font-semibold text-warning">
                 Needs reply
               </span>
@@ -344,10 +420,20 @@ function ConversationRow({
               <span className="text-[10.5px] text-copy-subtle">Reviewed</span>
             )}
 
-            <span className="max-w-[120px] truncate rounded-md border border-line bg-surface-soft px-1.5 py-0.5 text-[10.5px] font-medium capitalize text-copy-muted">
+            {waiting && !snoozed ? (
+              <span className={`text-[10px] font-medium ${lead.priority === "urgent" ? "text-danger" : lead.priority === "high" ? "text-warning" : "text-copy-subtle"}`}>
+                Waiting {waiting}
+              </span>
+            ) : null}
+          </div>
+
+          <div className="mt-2 flex min-w-0 items-center gap-1.5">
+            <span className="max-w-[118px] truncate rounded-md border border-line bg-surface-soft px-1.5 py-0.5 text-[10.5px] font-medium capitalize text-copy-muted">
               {stage}
             </span>
-
+            <span className={`truncate text-[10.5px] font-medium ${lead.ownerUserId ? "text-copy-muted" : "text-warning"}`}>
+              {lead.ownerName || "Unassigned"}
+            </span>
             <span className="ml-auto truncate text-[10px] capitalize text-copy-subtle">
               {sourceLabel}
             </span>
@@ -355,6 +441,35 @@ function ConversationRow({
         </div>
       </div>
     </Link>
+  );
+}
+
+function ScopeButton({
+  active,
+  onClick,
+  count,
+  disabled,
+  children,
+}: {
+  active: boolean;
+  onClick: () => void;
+  count: number;
+  disabled?: boolean;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      className={`rounded-md px-2 py-1.5 text-[11px] font-semibold transition disabled:cursor-not-allowed disabled:opacity-40 ${
+        active
+          ? "bg-surface text-brand-700 shadow-sm"
+          : "text-copy-muted hover:text-copy-strong"
+      }`}
+    >
+      {children} <span className="ml-0.5 text-[10px] opacity-70">{count}</span>
+    </button>
   );
 }
 
@@ -376,7 +491,7 @@ function InboxTab({
       aria-selected={active}
       tabIndex={active ? 0 : -1}
       onClick={onClick}
-      className={`border-b-2 px-1 pb-2.5 pt-1 text-[12px] transition ${
+      className={`border-b-2 px-1 pb-2.5 pt-1 text-[11px] transition ${
         active
           ? "border-brand-700 font-semibold text-brand-700"
           : "border-transparent text-copy-muted hover:text-copy-strong"
@@ -384,7 +499,7 @@ function InboxTab({
     >
       {children}
       <span
-        className={`ml-1 rounded px-1 py-0.5 text-[10px] font-medium ${
+        className={`ml-1 rounded px-1 py-0.5 text-[9.5px] font-medium ${
           active ? "bg-brand-50 text-brand-700" : "bg-surface-muted text-copy-muted"
         }`}
       >
@@ -392,6 +507,22 @@ function InboxTab({
       </span>
     </button>
   );
+}
+
+function matchesScope(
+  lead: ConversationLeadSummary,
+  scope: ScopeFilter,
+  currentUserId: string | null,
+) {
+  if (scope === "unassigned") return !lead.ownerUserId;
+  if (scope === "mine") return Boolean(currentUserId) && lead.ownerUserId === currentUserId;
+  return true;
+}
+
+function isSnoozed(lead: ConversationLeadSummary, now: number) {
+  if (!lead.snoozedUntil) return false;
+  const until = new Date(lead.snoozedUntil).getTime();
+  return Number.isFinite(until) && until > (now || Date.now());
 }
 
 function initials(name: string) {
@@ -404,6 +535,28 @@ function initials(name: string) {
       .join("")
       .toLocaleUpperCase("en-IN") || "?"
   );
+}
+
+function formatWaitingTime(value: string, now: number) {
+  const timestamp = new Date(value).getTime();
+  if (!Number.isFinite(timestamp)) return "—";
+  const minutes = Math.max(0, Math.floor(((now || Date.now()) - timestamp) / 60_000));
+  if (minutes < 60) return `${Math.max(1, minutes)}m`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours}h`;
+  return `${Math.floor(hours / 24)}d`;
+}
+
+function formatSnooze(value: string | null) {
+  if (!value) return "Snoozed";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "Snoozed";
+  return `Until ${new Intl.DateTimeFormat("en-IN", {
+    day: "numeric",
+    month: "short",
+    hour: "numeric",
+    minute: "2-digit",
+  }).format(date)}`;
 }
 
 function formatListTime(value: string, now: number) {
