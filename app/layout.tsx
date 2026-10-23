@@ -1,8 +1,6 @@
 import type { Metadata } from 'next';
-import { Suspense } from 'react';
 import './globals.css';
 import { RootShell } from '@/components/root-shell';
-import { InvestigationContextBar } from '@/components/investigation-context-bar';
 
 export const metadata: Metadata = {
   metadataBase: new URL('https://salsysos.com'),
@@ -31,12 +29,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
         <script dangerouslySetInnerHTML={{ __html: themeBootScript }} />
       </head>
       <body>
-        <RootShell>
-          <Suspense fallback={null}>
-            <InvestigationContextBar />
-          </Suspense>
-          {children}
-        </RootShell>
+        <RootShell>{children}</RootShell>
       </body>
     </html>
   );
