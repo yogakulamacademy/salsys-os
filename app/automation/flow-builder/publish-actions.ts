@@ -57,14 +57,36 @@ function parseVersion(formData: FormData, workflowId: string) {
   return versionNumber;
 }
 
+async function assertSmartTriggerRuntimeSupport(
+  admin: ReturnType<typeof createAdminClient>,
+  organizationId: string,
+  workflowId: string,
+) {
+  const { data: workflow, error } = await admin
+    .from('automation_workflows')
+    .select('metadata')
+    .eq('organization_id', organizationId)
+    .eq('id', workflowId)
+    .maybeSingle();
+
+  if (error) go(workflowId, 'error', `Unable to check Smart Trigger readiness: ${error.message}`);
+  const metadata = record(workflow?.metadata);
+  if (metadata.smart_trigger_condition_runtime_pending === true) {
+    go(
+      workflowId,
+      'error',
+      'This Smart Trigger draft contains AND/OR condition groups that are saved for review but are not yet supported by the runtime evaluator. Keep it in draft until condition-runtime support is enabled.',
+    );
+  }
+}
+
 export async function validateAutomationFlowAction(formData: FormData) {
   const workflowId = textValue(formData, 'workflow_id');
-  if (!workflowId) {
-    go('', 'error', 'Workflow is required.');
-  }
+  if (!workflowId) go('', 'error', 'Workflow is required.');
 
   const versionNumber = parseVersion(formData, workflowId);
   const { admin, organizationId } = await managementContext(workflowId);
+  await assertSmartTriggerRuntimeSupport(admin, organizationId, workflowId);
 
   const { data, error } = await admin.rpc('validate_automation_flow_version_v2', {
     p_organization_id: organizationId,
@@ -72,9 +94,7 @@ export async function validateAutomationFlowAction(formData: FormData) {
     p_version_number: versionNumber,
   });
 
-  if (error) {
-    go(workflowId, 'error', `Flow validation failed: ${error.message}`);
-  }
+  if (error) go(workflowId, 'error', `Flow validation failed: ${error.message}`);
 
   const result = record(data);
   const valid = result.valid === true;
@@ -105,12 +125,11 @@ export async function validateAutomationFlowAction(formData: FormData) {
 
 export async function publishAutomationFlowAction(formData: FormData) {
   const workflowId = textValue(formData, 'workflow_id');
-  if (!workflowId) {
-    go('', 'error', 'Workflow is required.');
-  }
+  if (!workflowId) go('', 'error', 'Workflow is required.');
 
   const versionNumber = parseVersion(formData, workflowId);
   const { admin, user, organizationId } = await managementContext(workflowId);
+  await assertSmartTriggerRuntimeSupport(admin, organizationId, workflowId);
 
   const { data: version, error: versionError } = await admin
     .from('automation_flow_versions')
@@ -142,9 +161,7 @@ export async function publishAutomationFlowAction(formData: FormData) {
     p_actor_user_id: user.id,
   });
 
-  if (error) {
-    go(workflowId, 'error', `Flow publish failed: ${error.message}`);
-  }
+  if (error) go(workflowId, 'error', `Flow publish failed: ${error.message}`);
 
   const result = record(data);
   const publishedVersion = Number(result.published_version ?? versionNumber);
