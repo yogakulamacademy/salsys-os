@@ -127,7 +127,7 @@ export function LiveRefresh({ enabled }: { enabled: boolean }) {
       );
     }
 
-    channel.subscribe((status) => {
+    channel.subscribe((status: string) => {
       setConnected(status === 'SUBSCRIBED');
     });
 
