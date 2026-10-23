@@ -1,0 +1,304 @@
+/*
+ * CRM Visual System — readable, balanced operational density.
+ * Scoped to .crm-brand-scope so CRM can evolve without changing Growth,
+ * Automation, Settings or public surfaces.
+ */
+
+.crm-brand-scope {
+  --crm-text-body: 15px;
+  --crm-text-support: 13px;
+  --crm-text-meta: 12px;
+  --crm-title-page: 32px;
+  --crm-title-section: 20px;
+  --crm-title-card: 16px;
+  --crm-space-1: 6px;
+  --crm-space-2: 10px;
+  --crm-space-3: 14px;
+  --crm-space-4: 18px;
+  --crm-space-5: 24px;
+  --crm-space-6: 32px;
+
+  color: var(--app-text);
+  font-family: var(--font-sans);
+  font-size: var(--crm-text-body);
+  line-height: 1.55;
+}
+
+.crm-brand-scope main {
+  color: var(--app-text);
+  font-size: var(--crm-text-body);
+}
+
+/* Page hierarchy */
+.crm-brand-scope h1 {
+  color: var(--app-text-strong);
+  font-size: var(--crm-title-page);
+  font-weight: 650;
+  line-height: 1.16;
+  letter-spacing: -0.035em;
+}
+
+.crm-brand-scope h2 {
+  color: var(--app-text-strong);
+  font-size: var(--crm-title-section);
+  font-weight: 650;
+  line-height: 1.25;
+  letter-spacing: -0.022em;
+}
+
+.crm-brand-scope h3 {
+  color: var(--app-text-strong);
+  font-size: var(--crm-title-card);
+  font-weight: 650;
+  line-height: 1.32;
+  letter-spacing: -0.014em;
+}
+
+.crm-brand-scope h4,
+.crm-brand-scope h5,
+.crm-brand-scope h6 {
+  color: var(--app-text-strong);
+  font-weight: 650;
+}
+
+.crm-brand-scope p {
+  color: var(--app-text-muted);
+  font-size: 14px;
+  line-height: 1.62;
+}
+
+.crm-brand-scope small {
+  color: var(--app-text-subtle);
+  font-size: var(--crm-text-meta);
+  line-height: 1.5;
+}
+
+/* Legacy utility sizes inside CRM should remain compact, not microscopic. */
+.crm-brand-scope .text-\[8px\],
+.crm-brand-scope .text-\[9px\],
+.crm-brand-scope .text-\[10px\],
+.crm-brand-scope .text-\[11px\] {
+  font-size: var(--crm-text-meta) !important;
+  line-height: 1.45 !important;
+}
+
+.crm-brand-scope .text-xs,
+.crm-brand-scope .text-\[12px\] {
+  font-size: 12.5px !important;
+  line-height: 1.5 !important;
+}
+
+.crm-brand-scope .text-sm,
+.crm-brand-scope .text-\[13px\],
+.crm-brand-scope .text-\[14px\] {
+  font-size: 14px !important;
+  line-height: 1.55 !important;
+}
+
+.crm-brand-scope .text-base,
+.crm-brand-scope .text-\[15px\] {
+  font-size: 15px !important;
+  line-height: 1.55 !important;
+}
+
+/* Eyebrows and metadata: visible, but quieter than body copy. */
+.crm-brand-scope [class*='kicker'],
+.crm-brand-scope [class*='Kicker'],
+.crm-brand-scope [class*='eyebrow'],
+.crm-brand-scope [class*='Eyebrow'] {
+  color: var(--app-brand-700);
+  font-size: 11px !important;
+  font-weight: 700 !important;
+  letter-spacing: 0.1em !important;
+  line-height: 1.35 !important;
+  text-transform: uppercase;
+}
+
+/* Tables */
+.crm-brand-scope table {
+  color: var(--app-text);
+  font-size: 13.5px !important;
+  font-variant-numeric: tabular-nums;
+}
+
+.crm-brand-scope table th {
+  padding-top: 12px;
+  padding-bottom: 12px;
+  color: var(--app-text-muted) !important;
+  font-size: 12px !important;
+  font-weight: 700 !important;
+  letter-spacing: 0.045em !important;
+  line-height: 1.35 !important;
+}
+
+.crm-brand-scope table td {
+  padding-top: 12px;
+  padding-bottom: 12px;
+  color: var(--app-text) !important;
+  font-size: 13.5px !important;
+  line-height: 1.5 !important;
+}
+
+.crm-brand-scope table thead tr,
+.crm-brand-scope table tbody tr,
+.crm-brand-scope table th,
+.crm-brand-scope table td {
+  border-color: var(--app-border) !important;
+}
+
+.crm-brand-scope table tbody tr:hover td {
+  background: var(--app-surface-soft) !important;
+}
+
+/* Controls */
+.crm-brand-scope button,
+.crm-brand-scope input,
+.crm-brand-scope select,
+.crm-brand-scope textarea {
+  font-family: var(--font-sans);
+  font-size: 14px;
+}
+
+.crm-brand-scope input:not([type='checkbox']):not([type='radio']),
+.crm-brand-scope select {
+  min-height: 40px;
+}
+
+.crm-brand-scope textarea {
+  line-height: 1.55;
+}
+
+.crm-brand-scope button,
+.crm-brand-scope [role='button'] {
+  font-weight: 600;
+}
+
+/* Pills, badges and micro states */
+.crm-brand-scope [class*='pill'],
+.crm-brand-scope [class*='Pill'],
+.crm-brand-scope [class*='badge'],
+.crm-brand-scope [class*='Badge'] {
+  font-size: 12px !important;
+  line-height: 1.35 !important;
+}
+
+.crm-brand-scope [class*='micro'],
+.crm-brand-scope [class*='Micro'],
+.crm-brand-scope [class*='meta'],
+.crm-brand-scope [class*='Meta'] {
+  font-size: 12px !important;
+  line-height: 1.5 !important;
+}
+
+/* Shared surface language */
+.crm-brand-scope .card,
+.crm-brand-scope [class*='panel'],
+.crm-brand-scope [class*='Panel'] {
+  border-color: var(--app-border);
+}
+
+.crm-brand-scope .card {
+  border-radius: var(--radius-xl);
+  background: var(--app-surface);
+  box-shadow: var(--shadow-xs);
+}
+
+.crm-brand-scope [class*='panelHead'] h2,
+.crm-brand-scope [class*='PanelHead'] h2,
+.crm-brand-scope [class*='panelHeader'] h2,
+.crm-brand-scope [class*='PanelHeader'] h2 {
+  font-size: 18px !important;
+}
+
+.crm-brand-scope [class*='panelHead'] p,
+.crm-brand-scope [class*='PanelHead'] p,
+.crm-brand-scope [class*='panelHeader'] p,
+.crm-brand-scope [class*='PanelHeader'] p {
+  font-size: 13px !important;
+  line-height: 1.55 !important;
+}
+
+/* High-visibility CRM command surfaces */
+.crm-brand-scope [class*='commandHero'] h2 {
+  font-size: 25px !important;
+  line-height: 1.28 !important;
+}
+
+.crm-brand-scope [class*='commandHero'] p {
+  font-size: 14px !important;
+  line-height: 1.65 !important;
+}
+
+.crm-brand-scope [class*='heroNode'] b {
+  font-size: 13px !important;
+}
+
+.crm-brand-scope [class*='heroNode'] small {
+  font-size: 12px !important;
+}
+
+.crm-brand-scope [class*='statLabel'] {
+  font-size: 13px !important;
+}
+
+.crm-brand-scope [class*='statValue'] {
+  color: var(--app-text-strong) !important;
+  font-size: 32px !important;
+  font-weight: 650 !important;
+}
+
+.crm-brand-scope [class*='statDesc'] {
+  color: var(--app-text-muted) !important;
+  font-size: 12.5px !important;
+  line-height: 1.5 !important;
+}
+
+.crm-brand-scope [class*='queueTitleLine'] strong {
+  font-size: 14px !important;
+}
+
+.crm-brand-scope [class*='queueMain'] p,
+.crm-brand-scope [class*='sourceRow'],
+.crm-brand-scope [class*='chartNote'],
+.crm-brand-scope [class*='panelFoot'] {
+  font-size: 12.5px !important;
+}
+
+.crm-brand-scope [class*='smallButton'],
+.crm-brand-scope [class*='nakedLink'] {
+  font-size: 13px !important;
+}
+
+/* Keep brand/status semantics consistent. */
+.crm-brand-scope .text-violet-500,
+.crm-brand-scope .text-violet-600,
+.crm-brand-scope .text-violet-700 {
+  color: var(--app-brand-700) !important;
+}
+
+.crm-brand-scope .bg-violet-50,
+.crm-brand-scope .bg-violet-100 {
+  background: var(--app-brand-50) !important;
+}
+
+.crm-brand-scope .border-violet-100,
+.crm-brand-scope .border-violet-200 {
+  border-color: var(--app-border-strong) !important;
+}
+
+@media (max-width: 767px) {
+  .crm-brand-scope {
+    --crm-title-page: 28px;
+    --crm-title-section: 19px;
+    --crm-title-card: 16px;
+  }
+
+  .crm-brand-scope table,
+  .crm-brand-scope table td {
+    font-size: 13px !important;
+  }
+
+  .crm-brand-scope table th {
+    font-size: 11.5px !important;
+  }
+}
