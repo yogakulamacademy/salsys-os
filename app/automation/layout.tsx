@@ -5,9 +5,11 @@ import styles from './automation-studio.module.css';
 
 export default function AutomationLayout({ children }: { children: ReactNode }) {
   return (
-    <div className={`${styles.studio} grid gap-5 lg:grid-cols-[220px_minmax(0,1fr)] xl:grid-cols-[238px_minmax(0,1fr)] xl:gap-6`}>
+    <div
+      className={`${styles.studio} grid gap-6 lg:grid-cols-[232px_minmax(0,1fr)] xl:grid-cols-[252px_minmax(0,1fr)] xl:gap-7`}
+    >
       <AutomationNavigation />
-      <div className="min-w-0 pb-8">{children}</div>
+      <main className="min-w-0 pb-10">{children}</main>
     </div>
   );
 }
