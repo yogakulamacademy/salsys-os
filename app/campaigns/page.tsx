@@ -27,14 +27,14 @@ export default async function CampaignsPage({ searchParams }: CampaignsPageProps
   return (
     <div className="space-y-4">
       <PageHeader
-        eyebrow="Campaigns"
+        eyebrow="Paid acquisition"
         title="Campaign Performance"
-        description="Connect advertising spend with CRM outcomes and revenue."
+        description="See where spend creates qualified demand, where conversion breaks down, and which campaigns reach CRM revenue."
       />
 
       {(workspace.googleError || workspace.metaError) ? (
         <div className="rounded-xl border border-amber-100 bg-amber-50 px-4 py-3 text-xs text-amber-800 dark:border-amber-900/50 dark:bg-amber-950/20 dark:text-amber-200">
-          <div className="flex items-center gap-2 font-bold"><BarChart3 size={15} /> Some paid-media data could not be loaded</div>
+          <div className="flex items-center gap-2 font-semibold"><BarChart3 size={15} /> Some paid-media evidence is temporarily unavailable</div>
           {workspace.googleError ? <div className="mt-1">Google Ads: {workspace.googleError}</div> : null}
           {workspace.metaError ? <div className="mt-1">Meta Ads: {workspace.metaError}</div> : null}
         </div>
@@ -42,7 +42,7 @@ export default async function CampaignsPage({ searchParams }: CampaignsPageProps
 
       {workspace.warning ? (
         <div className="rounded-xl border border-amber-100 bg-amber-50 px-4 py-3 text-xs text-amber-800 dark:border-amber-900/50 dark:bg-amber-950/20 dark:text-amber-200">
-          Campaign data is using a fallback path. Treat budget decisions as directional until the primary reporting path is healthy. {workspace.warning}
+          Campaign reporting is using a fallback path. Treat budget decisions as directional until the primary evidence path is healthy. {workspace.warning}
         </div>
       ) : null}
 
