@@ -19,12 +19,10 @@
 }
 
 /* Primary brand/action */
-[class~="text-[#216551]"],
 [class~="text-[#216551]"] {
   color: var(--app-brand-700);
 }
 
-[class~="bg-[#216551]"],
 [class~="bg-[#216551]"] {
   background-color: var(--app-brand-700);
 }
@@ -94,27 +92,26 @@
 }
 
 /* Old navy brand utility classes should follow the current product brand. */
-[class~="text-[#103859]"],
 [class~="text-[#103859]"] {
   color: var(--app-brand-700);
 }
 
-[class~="bg-[#103859]"],
 [class~="bg-[#103859]"] {
   background-color: var(--app-brand-700);
 }
 
 /*
- * Accessibility/readability floor for legacy microcopy. 9px UI copy was used
- * heavily in early CRM/automation screens. Keep dense metadata compact, but
- * never below 10px in the rendered application.
+ * Accessibility/readability floor for legacy microcopy. Early CRM, inbox and
+ * automation screens used 8–9px metadata. Keep it compact, but never below
+ * 10px in the authenticated application.
  */
+.legacy-shell-host .text-\[8px\],
 .legacy-shell-host .text-\[9px\] {
-  font-size: 10px;
-  line-height: 1.4;
+  font-size: 10px !important;
+  line-height: 1.4 !important;
 }
 
-/* Avoid clickable informational cards looking more interactive than buttons. */
+/* Avoid informational cards looking more interactive than real controls. */
 .legacy-shell-host .card:not(a):not(button):not([role="button"]):hover {
   transform: none;
 }
