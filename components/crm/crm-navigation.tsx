@@ -37,7 +37,7 @@ const groups: NavigationGroup[] = [
     ],
   },
   {
-    label: 'Customers & Sales',
+    label: 'Customers & pipeline',
     items: [
       { href: '/leads', label: 'Leads', icon: UserRoundSearch },
       { href: '/pipeline', label: 'Sales Pipeline', icon: Rows3 },
@@ -48,14 +48,15 @@ const groups: NavigationGroup[] = [
     label: 'Intelligence',
     items: [
       { href: '/contact-intelligence', label: 'Contact Intelligence', icon: ContactRound },
+      { href: '/team-performance', label: 'Team Performance', icon: UsersRound },
       { href: '/data-quality', label: 'Data Quality', icon: DatabaseZap },
     ],
   },
   {
-    label: 'Quick Views',
+    label: 'Saved views',
     items: [
-      { href: '/leads?stage=payment_pending', label: 'Payment-stage leads', icon: CircleDollarSign },
-      { href: '/leads?view=attention', label: 'Stage-aging alerts', icon: AlertTriangle },
+      { href: '/leads?stage=payment_pending', label: 'Payment Pending', icon: CircleDollarSign },
+      { href: '/leads?view=attention', label: 'Aging Alerts', icon: AlertTriangle },
     ],
   },
 ];
@@ -76,27 +77,30 @@ function NavigationLinks({ mobile = false }: { mobile?: boolean }) {
   const pathname = usePathname();
 
   return (
-    <div className={mobile ? 'space-y-5' : 'space-y-5'}>
+    <div className={mobile ? 'space-y-5' : 'space-y-6'}>
       {groups.map((group) => (
-        <div key={group.label}>
-          <div className="mb-1.5 px-3 text-[10px] font-bold uppercase tracking-[0.12em] text-copy-subtle">
+        <section key={group.label}>
+          <div className="mb-2 px-3 text-[11px] font-semibold uppercase tracking-[0.12em] text-copy-subtle">
             {group.label}
           </div>
-          <div className="space-y-0.5">
+          <div className="space-y-1">
             {group.items.map(({ href, label, icon: Icon }) => {
               const active = isActive(pathname, href);
+
               return (
                 <Link
                   key={`${href}-${label}`}
                   href={href}
                   aria-current={active ? 'page' : undefined}
-                  className={`group relative flex items-center gap-2.5 rounded-ui px-3 py-2.5 text-[13px] transition ${
+                  className={`group relative flex min-h-10 items-center gap-2.5 rounded-ui px-3 py-2.5 text-[13px] transition ${
                     active
                       ? 'bg-brand-50 font-semibold text-brand-700'
-                      : 'font-medium text-copy-muted hover:bg-surface-muted hover:text-brand-700'
+                      : 'font-medium text-copy-muted hover:bg-surface-muted hover:text-copy-strong'
                   }`}
                 >
-                  {active ? <span className="absolute -left-4 h-[18px] w-[3px] rounded-r bg-brand-700" /> : null}
+                  {active ? (
+                    <span className="absolute -left-4 h-5 w-[3px] rounded-r bg-brand-700" />
+                  ) : null}
                   <Icon
                     size={16}
                     className={
@@ -110,7 +114,7 @@ function NavigationLinks({ mobile = false }: { mobile?: boolean }) {
               );
             })}
           </div>
-        </div>
+        </section>
       ))}
     </div>
   );
@@ -130,27 +134,32 @@ export function CrmNavigation() {
             <span className="grid h-8 w-8 place-items-center rounded-ui bg-brand-50 text-brand-700">
               <UsersRound size={16} />
             </span>
-            {current?.label || 'CRM Operations'}
+            {current?.label || 'CRM'}
           </span>
           <ChevronDown size={16} className="text-copy-subtle transition group-open:rotate-180" />
         </summary>
         <div className="border-t border-line p-3">
-          <div className="mb-4 rounded-ui bg-surface-soft px-3 py-2.5">
-            <div className="text-sm font-semibold text-copy-strong">CRM Operations</div>
-            <div className="mt-0.5 text-xs leading-5 text-copy-muted">
-              Manage leads, admissions, pipeline and customer intelligence.
+          <div className="mb-4 rounded-ui bg-surface-soft px-3 py-3">
+            <div className="text-sm font-semibold text-copy-strong">CRM</div>
+            <div className="mt-1 text-[13px] leading-5 text-copy-muted">
+              Work leads, admissions, follow-ups and customer intelligence from one place.
             </div>
           </div>
           <NavigationLinks mobile />
         </div>
       </details>
 
-      <aside className="hidden min-h-[calc(100vh-7rem)] border-r border-line pr-4 min-[768px]:block" aria-label="CRM Operations navigation">
+      <aside
+        className="hidden min-h-[calc(100vh-7rem)] border-r border-line pr-4 min-[768px]:block"
+        aria-label="CRM navigation"
+      >
         <div className="sticky top-20 pb-8">
-          <div className="mb-6 px-3 pt-1">
-            <div className="text-[15px] font-semibold text-copy-strong">CRM Operations</div>
-            <p className="mt-1 max-w-[185px] text-[12px] leading-5 text-copy-muted">
-              Manage leads, admissions, pipeline and customer intelligence.
+          <div className="mb-7 px-3 pt-1">
+            <div className="text-[18px] font-semibold tracking-[-0.025em] text-copy-strong">
+              CRM
+            </div>
+            <p className="mt-1.5 max-w-[195px] text-[13px] leading-5 text-copy-muted">
+              Work leads, admissions, follow-ups and customer intelligence from one place.
             </p>
           </div>
           <NavigationLinks />
