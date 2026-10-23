@@ -26,6 +26,7 @@ function isShelllessPath(pathname: string) {
     pathname === '/forgot-password' ||
     pathname === '/reset-password' ||
     pathname === '/onboarding' ||
+    pathname.startsWith('/onboarding/') ||
     pathname.startsWith('/auth/')
   );
 }
