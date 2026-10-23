@@ -6,6 +6,13 @@
 
 This checkpoint records the October 23 Automation workspace UX expansion covering Smart Triggers V2 and the redesigned Starter Recipes gallery. These are product UX and draft-authoring milestones inside the existing Automation/Workflow area; they do **not** close the broader Smart Triggers/workflow-engine product area because some runtime capabilities remain intentionally fail-closed.
 
+## Latest verified Automation UX production head
+
+- production head: `373540f69bd1be066d6348fabc3b57e30ad6f6d0`
+- production deployment: `dpl_GoSY5YHTrmK26maTSPnvtec7Ej6v`
+- deployment state: `READY`
+- aliases include `crm.salsysos.com` and `salsysos.com`
+
 ## Production evidence
 
 ### Smart Triggers V2
@@ -36,9 +43,18 @@ Implemented production UX:
 
 ### Starter Recipes gallery
 
+Initial redesign:
+
 - PR: `#143` — Redesign Starter Recipes gallery UX
 - production merge commit: `fe8a35e962c50956a0a8744886ca9d066f2b8f40`
 - production deployment: `dpl_FtuYKbF4MvSahVtLfC3ZrRJ6v8An`
+- deployment state: `READY`
+
+Final UI QA:
+
+- PR: `#144` — Finalize Starter Recipes UI QA
+- production merge commit: `373540f69bd1be066d6348fabc3b57e30ad6f6d0`
+- production deployment: `dpl_GoSY5YHTrmK26maTSPnvtec7Ej6v`
 - deployment state: `READY`
 - route: `/automation/recipes`
 
@@ -50,13 +66,17 @@ Implemented production UX:
 - richer recipe cards with `WHEN -> THEN`, delay and safety metadata;
 - recipe preview drawer;
 - install confirmation modal;
-- real installed-draft state derived from tenant-scoped workflow metadata;
-- My Drafts view;
-- direct Flow Builder handoff for installed drafts;
+- real installed-recipe state derived from tenant-scoped workflow metadata;
+- My Recipes view with the current workflow status;
+- direct Flow Builder handoff for installed workflows;
 - responsive single-column behavior on smaller screens;
-- improved empty states and advanced-workflow guidance.
+- improved empty states and advanced-workflow guidance;
+- Escape-to-close and background-scroll locking for preview/modal overlays;
+- backdrop dismissal for confirmation/safety modals;
+- accessible filter/search state;
+- truthful `Open workflow` wording instead of implying every installed recipe remains a draft after later activation or pausing.
 
-The production recipe installer backend was intentionally preserved. Recipe installation remains tenant-scoped, admin-gated, duplicate-safe, draft-only, runtime-off, and currently limited to internal `create_followup` actions.
+The production recipe installer backend was intentionally preserved. Recipe installation remains tenant-scoped, admin-gated, duplicate-safe, draft-only at install time, runtime-off, and currently limited to internal `create_followup` actions.
 
 ## Runtime / safety boundary
 
