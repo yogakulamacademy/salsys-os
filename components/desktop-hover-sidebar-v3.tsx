@@ -10,7 +10,6 @@ import {
   BrainCircuit,
   ChevronRight,
   CircleDollarSign,
-  ClipboardCheck,
   ContactRound,
   FileSearch,
   GitBranch,
@@ -35,7 +34,15 @@ import { createClient as createBrowserClient } from "@/lib/supabase/browser";
 
 type IconType = ComponentType<{ size?: number | string; strokeWidth?: number; className?: string }>;
 type Item = { href: string; label: string; icon: IconType; group?: string; adminOnly?: boolean };
-type Group = { id: string; label: string; icon: IconType; directHref?: string; description?: string; items: Item[] };
+type Group = {
+  id: string;
+  label: string;
+  icon: IconType;
+  directHref?: string;
+  activeHrefs?: string[];
+  description?: string;
+  items: Item[];
+};
 type WorkspaceContext = { activeWorkspace: { organizationName: string; role: string } | null };
 
 const MARKETING_GROUP_ORDER = ["OVERVIEW", "PAID GROWTH", "ORGANIC GROWTH", "ANALYSIS", "SETTINGS"] as const;
@@ -131,22 +138,21 @@ export function DesktopHoverSidebarV3() {
           { href: "/pipeline", label: "My pipeline", icon: Boxes },
           { href: "/follow-ups", label: "Follow-ups", icon: ListTodo },
         ] },
-        { id: "inbox", label: "Inbox", icon: Inbox, items: [{ href: "/conversations", label: "Conversations", icon: MessageSquareText }] },
+        { id: "inbox", label: "Inbox", icon: Inbox, directHref: "/conversations", items: [] },
       ];
     }
     if (!privileged) return [];
     return [
       { id: "overview", label: "Overview", icon: Home, directHref: "/home", items: [] },
-      { id: "crm", label: "CRM", icon: UsersRound, description: "Command center, leads, pipeline and customer intelligence.", items: [
-        { href: "/crm", label: "Command Center", icon: Activity },
-        { href: "/leads", label: "Leads", icon: ContactRound },
-        { href: "/admissions", label: "Admissions Desk", icon: ClipboardCheck },
-        { href: "/pipeline", label: "Pipeline", icon: Boxes },
-        { href: "/follow-ups", label: "Follow-ups", icon: ListTodo },
-        { href: "/customer-360", label: "Customer 360", icon: UsersRound },
-        { href: "/data-quality", label: "Data Quality", icon: ShieldCheck },
-      ] },
-      { id: "inbox", label: "Inbox", icon: Inbox, items: [{ href: "/conversations", label: "Conversations", icon: MessageSquareText }] },
+      {
+        id: "crm",
+        label: "CRM",
+        icon: UsersRound,
+        directHref: "/crm",
+        activeHrefs: ["/leads", "/admissions", "/pipeline", "/follow-ups", "/customer-360", "/data-quality"],
+        items: [],
+      },
+      { id: "inbox", label: "Inbox", icon: Inbox, directHref: "/conversations", items: [] },
       { id: "marketing", label: "Marketing", icon: Megaphone, description: "Understand acquisition, campaign performance and customer growth.", items: [
         { href: "/campaigns", label: "Campaigns", icon: Target },
         { href: "/attribution", label: "Attribution", icon: LineChart },
@@ -155,6 +161,7 @@ export function DesktopHoverSidebarV3() {
         { href: "/re-engaged", label: "Lead activity", icon: Activity },
         { href: "/seo", label: "SEO / AEO", icon: FileSearch },
       ] },
+      { id: "automation", label: "Automation", icon: Workflow, directHref: "/automation", items: [] },
       { id: "intelligence", label: "Intelligence", icon: BrainCircuit, items: [
         { href: "/commercial-intelligence", label: "Commercial intelligence", icon: Sparkles },
         { href: "/analytics", label: "Analytics", icon: BarChart3 },
@@ -162,8 +169,7 @@ export function DesktopHoverSidebarV3() {
         { href: "/revenue", label: "Revenue", icon: CircleDollarSign },
         { href: "/team-performance", label: "Team performance", icon: UsersRound, adminOnly: true },
       ] },
-      { id: "automation", label: "Automation", icon: Workflow, items: [{ href: "/automation", label: "Automations", icon: Workflow }] },
-      { id: "operations", label: "Operations", icon: BookOpen, items: [{ href: "/course-management", label: "Course management", icon: BookOpen }] },
+      { id: "operations", label: "Operations", icon: BookOpen, directHref: "/course-management", items: [] },
       { id: "system", label: "System", icon: Settings, items: [
         { href: "/settings/integrations", label: "Integrations", icon: PlugZap, adminOnly: true },
         { href: "/tracking", label: "Tracking", icon: Tags },
@@ -189,6 +195,7 @@ export function DesktopHoverSidebarV3() {
 
   function contains(group: Group) {
     if (group.directHref && activePath(pathname, group.directHref)) return true;
+    if (group.activeHrefs?.some((href) => activePath(pathname, href))) return true;
     return group.items.some((item) => (!item.adminOnly || admin) && activePath(pathname, item.href));
   }
 
