@@ -179,7 +179,7 @@ export async function saveOnboardingGoalsAction(formData: FormData) {
   }
 
   revalidatePath('/onboarding');
-  redirect('/onboarding?step=website');
+  redirect('/onboarding/website');
 }
 
 export async function verifyOnboardingWebsiteAction() {
@@ -196,7 +196,7 @@ export async function verifyOnboardingWebsiteAction() {
 
   if (!healthyWebsite) {
     redirect(
-      '/onboarding?step=website&error=No%20healthy%20website%20tracking%20source%20was%20found.%20Install%20tracking%20and%20send%20a%20real%20event%20before%20continuing.',
+      '/onboarding/website?error=No%20healthy%20website%20tracking%20source%20was%20found.%20Install%20tracking%20and%20send%20a%20real%20event%20before%20continuing.',
     );
   }
 
@@ -224,6 +224,7 @@ export async function verifyOnboardingWebsiteAction() {
   }
 
   revalidatePath('/onboarding');
+  revalidatePath('/onboarding/website');
   redirect('/onboarding?step=channels');
 }
 
