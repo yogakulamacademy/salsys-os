@@ -1,5 +1,6 @@
 import "server-only";
 
+import { cache } from "react";
 import { cookies } from "next/headers";
 import { createClient } from "@/lib/supabase/server";
 
@@ -25,6 +26,14 @@ export type WorkspaceContext = {
   activeWorkspace: WorkspaceMembership | null;
   memberships: WorkspaceMembership[];
   selectionRequired: boolean;
+};
+
+export type AuthenticatedRequestContext = {
+  supabase: ServerSupabaseClient;
+  user: NonNullable<
+    Awaited<ReturnType<ServerSupabaseClient["auth"]["getUser"]>>["data"]["user"]
+  >;
+  organizationId: string;
 };
 
 async function bindCurrentTenantSession(
@@ -173,9 +182,6 @@ export async function requireCurrentOrganizationId(
   supabase: ServerSupabaseClient,
   userId: string,
 ): Promise<string> {
-  // Fast path: resolve and refresh the authenticated tenant binding in one RPC.
-  // This avoids repeating membership + organization queries on every server
-  // data loader. The legacy path remains as a compatibility fallback.
   const fastOrganizationId = await getFastCurrentOrganizationId(supabase);
 
   if (fastOrganizationId) {
@@ -196,6 +202,31 @@ export async function requireCurrentOrganizationId(
 
   return workspace.activeOrganizationId;
 }
+
+export const getAuthenticatedRequestContext = cache(
+  async (): Promise<AuthenticatedRequestContext> => {
+    const supabase = await createClient();
+    const {
+      data: { user },
+      error: authError,
+    } = await supabase.auth.getUser();
+
+    if (authError || !user) {
+      throw new Error("Unable to resolve request context: user is not authenticated.");
+    }
+
+    const organizationId = await requireCurrentOrganizationId(
+      supabase,
+      user.id,
+    );
+
+    return {
+      supabase,
+      user,
+      organizationId,
+    };
+  },
+);
 
 export async function getCurrentWorkspaceContext(
   suppliedSupabase?: ServerSupabaseClient,
