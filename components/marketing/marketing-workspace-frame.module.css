@@ -1,29 +1,28 @@
 .studio {
-  --marketing-bg: #f6f7f3;
-  --marketing-surface: #ffffff;
-  --marketing-ink: #203b32;
-  --marketing-muted: #758279;
-  --marketing-line: #e1e6dd;
-  --marketing-brand: #153d33;
-  --marketing-brand-dark: #102d27;
-  --marketing-mint: #dceede;
-  --marketing-mint-soft: #edf5e9;
-  --marketing-lav: #eae3f3;
-  --marketing-violet: #7e6496;
+  --marketing-bg: var(--app-bg);
+  --marketing-surface: var(--app-surface);
+  --marketing-ink: var(--app-text-strong);
+  --marketing-muted: var(--app-text-muted);
+  --marketing-line: var(--app-border);
+  --marketing-brand: var(--app-brand-700);
+  --marketing-brand-dark: var(--app-brand-900);
+  --marketing-mint: var(--app-brand-100);
+  --marketing-mint-soft: var(--app-brand-50);
 
   min-height: calc(100vh - 64px);
   color: var(--marketing-ink);
   background:
-    radial-gradient(circle at 78% -10%, rgba(220, 238, 222, .42), transparent 29%),
-    radial-gradient(circle at 28% -8%, rgba(234, 227, 243, .28), transparent 24%),
+    radial-gradient(circle at 82% -12%, rgba(33, 101, 81, .07), transparent 30rem),
     var(--marketing-bg);
   gap: 0 !important;
+  font-size: 14px;
+  line-height: 1.5;
   -webkit-font-smoothing: antialiased;
 }
 
 .studio > :global(:last-child) {
   min-width: 0;
-  padding: 27px 28px 28px;
+  padding: 27px 28px 30px;
 }
 
 .studio :global(.btn-primary),
@@ -31,72 +30,70 @@
 .studio :global(button),
 .studio :global(a) {
   transition-property: color, background-color, border-color, box-shadow, transform, opacity;
-  transition-duration: 180ms;
+  transition-duration: 160ms;
   transition-timing-function: ease;
 }
 
 .studio :global(.btn-primary) {
-  border-radius: 7px;
-  background: linear-gradient(180deg, #1a4a3d 0%, var(--marketing-brand) 100%);
+  min-height: 40px;
   border-color: var(--marketing-brand);
-  box-shadow: 0 4px 12px rgba(21, 61, 51, .10);
-  font-size: 10px;
+  border-radius: var(--radius-md);
+  background: var(--marketing-brand);
+  color: #fff;
+  box-shadow: 0 4px 12px rgba(33, 101, 81, .14);
+  font-size: 13px;
   font-weight: 650;
-  min-height: 34px;
 }
 
 .studio :global(.btn-primary:hover) {
-  background: linear-gradient(180deg, #285d4b 0%, #204f40 100%);
-  box-shadow: 0 7px 18px rgba(21, 61, 51, .14);
-  transform: translateY(-1px);
+  background: var(--app-brand-800);
+  box-shadow: 0 6px 16px rgba(33, 101, 81, .18);
 }
 
 .studio :global(.btn-secondary) {
+  min-height: 40px;
   border-color: var(--marketing-line);
-  border-radius: 7px;
-  background: rgba(255,255,255,.9);
+  border-radius: var(--radius-md);
+  background: var(--marketing-surface);
   color: var(--marketing-ink);
-  font-size: 10px;
+  font-size: 13px;
   font-weight: 600;
-  min-height: 34px;
-  box-shadow: 0 1px 2px rgba(20, 43, 35, .02);
-  backdrop-filter: blur(8px);
+  box-shadow: none;
 }
 
 .studio :global(.btn-secondary:hover) {
-  border-color: #b4c4b2;
-  background: #f1f5ed;
+  border-color: var(--app-border-strong);
+  background: var(--marketing-mint-soft);
   color: var(--marketing-brand-dark);
-  box-shadow: 0 5px 15px rgba(20, 43, 35, .05);
-  transform: translateY(-1px);
 }
 
 .studio :global(.card),
 .studio :global(.card-pad) {
   border-color: var(--marketing-line);
-  border-radius: 12px;
-  background: rgba(255,255,255,.96);
-  box-shadow: 0 8px 26px rgba(20, 43, 35, .025);
+  border-radius: var(--radius-xl);
+  background: var(--marketing-surface);
+  box-shadow: var(--shadow-xs);
 }
 
 .studio :global(.card:hover),
 .studio :global(.card-pad:hover) {
-  border-color: #d2ddd4;
-  box-shadow: 0 14px 34px rgba(20, 43, 35, .045);
+  border-color: var(--app-border-strong);
+  box-shadow: var(--shadow-sm);
 }
 
 .studio :global(.input) {
+  min-height: 40px;
   border-color: var(--marketing-line);
-  border-radius: 7px;
-  background: rgba(255,255,255,.95);
+  border-radius: var(--radius-md);
+  background: var(--marketing-surface);
   color: var(--marketing-ink);
-  font-size: 10px;
-  box-shadow: inset 0 1px 0 rgba(255,255,255,.9);
+  font-size: 13px;
+  box-shadow: none;
 }
 
 .studio :global(.input:focus) {
-  border-color: #a48aba;
-  box-shadow: 0 0 0 3px rgba(164, 138, 186, 0.12);
+  border-color: rgba(33, 101, 81, .48);
+  box-shadow: 0 0 0 3px rgba(33, 101, 81, .08);
 }
 
 .studio :global(input),
@@ -111,7 +108,7 @@
 .studio :global(button:focus-visible),
 .studio :global(a:focus-visible) {
   outline: none;
-  box-shadow: 0 0 0 3px rgba(126, 100, 150, .14);
+  box-shadow: 0 0 0 3px rgba(33, 101, 81, .12);
 }
 
 .studio h1,
@@ -121,13 +118,13 @@
 }
 
 .studio h1 {
-  font-weight: 600;
-  letter-spacing: -1px;
+  font-weight: 650;
+  letter-spacing: -0.035em;
 }
 
 .studio h2,
 .studio h3 {
-  letter-spacing: -.02em;
+  letter-spacing: -0.02em;
 }
 
 .studio p {
@@ -135,34 +132,34 @@
 }
 
 .studio :global(.eyebrow) {
-  color: #8a978a;
-  font-size: 8px;
-  font-weight: 650;
-  letter-spacing: 0.18em;
+  color: var(--app-text-subtle);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: .12em;
   text-transform: uppercase;
 }
 
 .studio :global(.section-title) {
-  font-weight: 600;
   color: var(--marketing-brand-dark);
+  font-weight: 650;
 }
 
-.studio :global(.rounded-3xl),
+.studio :global(.rounded-3xl) {
+  border-radius: var(--radius-2xl);
+}
+
 .studio :global(.rounded-2xl) {
-  border-radius: 12px;
+  border-radius: var(--radius-xl);
 }
 
 .studio :global(.rounded-xl) {
-  border-radius: 9px;
+  border-radius: var(--radius-md);
 }
 
 .studio :global(.border-slate-200),
-.studio :global(.border-slate-200\/80) {
-  border-color: var(--marketing-line);
-}
-
+.studio :global(.border-slate-200\/80),
 .studio :global(.border-slate-100) {
-  border-color: #edf0e8;
+  border-color: var(--marketing-line);
 }
 
 .studio :global(.text-slate-950),
@@ -176,36 +173,39 @@
 }
 
 .studio :global(.text-slate-400) {
-  color: #91a096;
+  color: var(--app-text-subtle);
 }
 
 .studio :global(.bg-slate-50),
 .studio :global(.bg-slate-50\/70),
 .studio :global(.bg-slate-50\/60),
 .studio :global(.bg-slate-50\/50) {
-  background-color: #f8faf5;
+  background-color: var(--app-surface-soft);
 }
 
+/* Older marketing surfaces used violet as a generic product accent. Map those
+ * utilities to the canonical SalsysOS brand while preserving true status/data
+ * colors that are authored separately in chart components. */
 .studio :global(.text-violet-700),
 .studio :global(.text-violet-600),
 .studio :global(.text-violet-500) {
-  color: var(--marketing-violet);
+  color: var(--marketing-brand);
 }
 
 .studio :global(.bg-violet-50),
 .studio :global(.bg-violet-50\/70),
 .studio :global(.bg-violet-50\/60),
 .studio :global(.bg-violet-50\/40) {
-  background-color: var(--marketing-lav);
+  background-color: var(--marketing-mint-soft);
 }
 
 .studio :global(.bg-violet-100) {
-  background-color: #e1d8ec;
+  background-color: var(--marketing-mint);
 }
 
 .studio :global(.border-violet-200),
 .studio :global(.border-violet-300) {
-  border-color: #e0d7eb;
+  border-color: var(--app-border-strong);
 }
 
 .studio :global(.bg-violet-600),
@@ -214,56 +214,69 @@
 }
 
 .studio :global(.ring-violet-500) {
-  --tw-ring-color: rgba(164, 138, 186, 0.55);
+  --tw-ring-color: rgba(33, 101, 81, .42);
 }
 
 .studio :global(.shadow-sm),
 .studio :global([class*="shadow-[0_1px_2px"]) {
-  box-shadow: 0 5px 18px rgba(20, 43, 35, .03);
+  box-shadow: var(--shadow-xs);
 }
 
 .studio :global(section.rounded-2xl),
 .studio :global(div.rounded-2xl.border) {
-  box-shadow: 0 7px 24px rgba(20, 43, 35, .025);
+  box-shadow: var(--shadow-xs);
 }
 
 .studio :global(table) {
-  font-size: 10px;
+  font-size: 13px;
   font-variant-numeric: tabular-nums;
 }
 
 .studio :global(thead) {
-  color: #8a9585;
+  color: var(--app-text-muted);
 }
 
 .studio :global(thead th) {
-  letter-spacing: .035em;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: .05em;
 }
 
 .studio :global(tbody tr) {
-  transition: background-color 140ms ease, box-shadow 140ms ease;
+  transition: background-color 140ms ease;
 }
 
 .studio :global(tbody tr:hover) {
-  background-color: #f7faf2;
+  background-color: var(--app-surface-soft);
+}
+
+.studio :global(.text-\[8px\]),
+.studio :global(.text-\[9px\]) {
+  font-size: 10px !important;
+  line-height: 1.4 !important;
+}
+
+.studio :global(.text-\[10px\]) {
+  font-size: 11px !important;
+  line-height: 1.45 !important;
 }
 
 .studio :global(.recharts-wrapper) {
-  filter: drop-shadow(0 3px 10px rgba(20, 43, 35, .025));
+  filter: drop-shadow(0 3px 10px rgba(20, 43, 35, .02));
 }
 
 @media (prefers-reduced-motion: no-preference) {
   .studio > :global(:last-child) > :global(*) {
-    animation: marketing-enter 320ms ease both;
+    animation: marketing-enter 260ms ease both;
   }
 
-  .studio > :global(:last-child) > :global(*:nth-child(2)) { animation-delay: 35ms; }
-  .studio > :global(:last-child) > :global(*:nth-child(3)) { animation-delay: 65ms; }
-  .studio > :global(:last-child) > :global(*:nth-child(4)) { animation-delay: 90ms; }
+  .studio > :global(:last-child) > :global(*:nth-child(2)) { animation-delay: 25ms; }
+  .studio > :global(:last-child) > :global(*:nth-child(3)) { animation-delay: 45ms; }
+  .studio > :global(:last-child) > :global(*:nth-child(4)) { animation-delay: 65ms; }
 }
 
 @keyframes marketing-enter {
-  from { opacity: 0; transform: translateY(4px); }
+  from { opacity: 0; transform: translateY(3px); }
   to { opacity: 1; transform: translateY(0); }
 }
 
