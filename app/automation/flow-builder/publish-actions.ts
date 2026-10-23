@@ -78,6 +78,13 @@ async function assertSmartTriggerRuntimeSupport(
       'This Smart Trigger draft contains AND/OR condition groups that are saved for review but are not yet supported by the runtime evaluator. Keep it in draft until condition-runtime support is enabled.',
     );
   }
+  if (metadata.smart_trigger_action_runtime_pending === true) {
+    go(
+      workflowId,
+      'error',
+      'This Smart Trigger draft uses an internal action whose production runtime executor has not yet been verified. Keep it in draft until action-runtime support is enabled.',
+    );
+  }
 }
 
 export async function validateAutomationFlowAction(formData: FormData) {
