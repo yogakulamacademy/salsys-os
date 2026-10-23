@@ -387,6 +387,18 @@ export async function middleware(request: NextRequest) {
     maxAge: WORKSPACE_COOKIE_MAX_AGE_SECONDS,
   });
 
+  // Provisioned customer owners must replace their temporary password before
+  // any normal application or onboarding page is available. app_metadata is
+  // admin-owned, so browser code cannot clear this requirement. APIs retain
+  // their existing authorization behavior and are not redirected by this UX gate.
+  if (
+    !pathname.startsWith("/api/") &&
+    pathname !== "/onboarding/security" &&
+    user.app_metadata?.require_password_change === true
+  ) {
+    return redirectWithAuthCookies(request, response, "/onboarding/security");
+  }
+
   // Required onboarding is a tenant UX gate, not an API authorization layer.
   // Only explicitly enrolled owner/admin workspaces are gated. Existing tenants
   // without an onboarding row continue unchanged. Lookup failure is fail-open so

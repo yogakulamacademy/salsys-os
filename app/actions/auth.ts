@@ -217,6 +217,10 @@ export async function signInAction(formData: FormData) {
 
   await setWorkspaceCookie(tenant.organizationId);
 
+  if (signInData.user.app_metadata?.require_password_change === true) {
+    redirect('/onboarding/security');
+  }
+
   if (await shouldEnterRequiredOnboarding(supabase, tenant.organizationId)) {
     redirect('/onboarding');
   }
