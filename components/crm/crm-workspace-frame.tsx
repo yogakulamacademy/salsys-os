@@ -8,11 +8,11 @@ export function CrmWorkspaceFrame({ children }: { children: ReactNode }) {
   return (
     <>
       <div
-        className={`crm-brand-scope ${automationStyles.studio} grid gap-5 min-[768px]:grid-cols-[220px_minmax(0,1fr)] xl:grid-cols-[238px_minmax(0,1fr)] xl:gap-6`}
+        className={`crm-brand-scope ${automationStyles.studio} grid gap-6 min-[768px]:grid-cols-[232px_minmax(0,1fr)] xl:grid-cols-[252px_minmax(0,1fr)] xl:gap-7`}
       >
         <CrmNavigation />
         <CrmLeadInspectorBridge>
-          <main className="min-w-0 pb-8">{children}</main>
+          <main className="min-w-0 pb-10">{children}</main>
         </CrmLeadInspectorBridge>
       </div>
 
@@ -100,63 +100,6 @@ export function CrmWorkspaceFrame({ children }: { children: ReactNode }) {
 
         body:has(.crm-brand-scope) .legacy-shell-host main {
           background: var(--app-bg);
-        }
-
-        /* CRM Studio pages historically used 9–11px table copy. Keep the
-           workspace dense, but align it with the product readability floor. */
-        .crm-brand-scope table {
-          font-size: 13px !important;
-          font-variant-numeric: tabular-nums;
-        }
-
-        .crm-brand-scope table th {
-          color: var(--app-text-muted) !important;
-          font-size: 11px !important;
-          font-weight: 700 !important;
-          letter-spacing: .05em !important;
-        }
-
-        .crm-brand-scope table td {
-          color: var(--app-text) !important;
-          font-size: 12px !important;
-          line-height: 1.5 !important;
-        }
-
-        .crm-brand-scope table thead tr,
-        .crm-brand-scope table tbody tr,
-        .crm-brand-scope table th,
-        .crm-brand-scope table td {
-          border-color: var(--app-border) !important;
-        }
-
-        .crm-brand-scope table tbody tr:hover td {
-          background: var(--app-surface-soft) !important;
-        }
-
-        .crm-brand-scope [class*='pill'],
-        .crm-brand-scope [class*='Pill'] {
-          font-size: 10px !important;
-          line-height: 1.4 !important;
-        }
-
-        .crm-brand-scope [class*='micro'],
-        .crm-brand-scope [class*='Micro'] {
-          font-size: 10px !important;
-          line-height: 1.45 !important;
-        }
-
-        @media (max-width: 767px) {
-          .crm-brand-scope table {
-            font-size: 12px !important;
-          }
-
-          .crm-brand-scope table th {
-            font-size: 10px !important;
-          }
-
-          .crm-brand-scope table td {
-            font-size: 12px !important;
-          }
         }
       `}</style>
     </>
