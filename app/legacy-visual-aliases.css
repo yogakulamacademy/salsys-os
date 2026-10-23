@@ -1,0 +1,124 @@
+/*
+ * Transitional visual aliases.
+ *
+ * Older screens used several nearly-identical hard-coded colors. These
+ * selectors normalize them to the SalsysOS semantic design tokens immediately
+ * without changing product/status colors or requiring risky bulk rewrites.
+ * Delete aliases gradually as source screens migrate to semantic Tailwind
+ * classes (`text-copy-*`, `bg-surface-*`, `border-line`, `brand-*`).
+ */
+
+/* Strong product text / headings */
+[class~="text-[#18362D]"],
+[class~="text-[#18362d]"],
+[class~="text-[#192E29]"],
+[class~="text-[#192e29]"],
+[class~="text-[#153D33]"],
+[class~="text-[#153d33]"] {
+  color: var(--app-text-strong);
+}
+
+/* Primary brand/action */
+[class~="text-[#216551]"],
+[class~="text-[#216551]"] {
+  color: var(--app-brand-700);
+}
+
+[class~="bg-[#216551]"],
+[class~="bg-[#216551]"] {
+  background-color: var(--app-brand-700);
+}
+
+/* Body / muted copy */
+[class~="text-[#596E64]"],
+[class~="text-[#596e64]"],
+[class~="text-[#64746C]"],
+[class~="text-[#64746c]"],
+[class~="text-[#6D7C76]"],
+[class~="text-[#6d7c76]"],
+[class~="text-[#71847A]"],
+[class~="text-[#71847a]"] {
+  color: var(--app-text-muted);
+}
+
+/* Subtle copy / icons */
+[class~="text-[#87998E]"],
+[class~="text-[#87998e]"],
+[class~="text-[#89958D]"],
+[class~="text-[#89958d]"],
+[class~="text-[#8A9790]"],
+[class~="text-[#8a9790]"],
+[class~="text-[#91A096]"],
+[class~="text-[#91a096]"],
+[class~="text-[#91A496]"],
+[class~="text-[#91a496]"] {
+  color: var(--app-text-subtle);
+}
+
+/* Neutral borders */
+[class~="border-[#DCE4DF]"],
+[class~="border-[#dce4df]"],
+[class~="border-[#DBE6DC]"],
+[class~="border-[#dbe6dc]"],
+[class~="border-[#D8E4DA]"],
+[class~="border-[#d8e4da]"],
+[class~="border-[#E4EAE6]"],
+[class~="border-[#e4eae6]"],
+[class~="border-[#E5ECE7]"],
+[class~="border-[#e5ece7]"] {
+  border-color: var(--app-border);
+}
+
+/* Soft surfaces */
+[class~="bg-[#F8FAF8]"],
+[class~="bg-[#f8faf8]"],
+[class~="bg-[#F7FAF8]"],
+[class~="bg-[#f7faf8]"],
+[class~="bg-[#F6F8F7]"],
+[class~="bg-[#f6f8f7]"],
+[class~="bg-[#F4F8F3]"],
+[class~="bg-[#f4f8f3]"] {
+  background-color: var(--app-surface-soft);
+}
+
+/* Brand-soft surfaces */
+[class~="bg-[#EAF4ED]"],
+[class~="bg-[#eaf4ed]"],
+[class~="bg-[#EDF3E6]"],
+[class~="bg-[#edf3e6]"],
+[class~="bg-[#E4F2E8]"],
+[class~="bg-[#e4f2e8]"],
+[class~="bg-[#DCEEDE]"],
+[class~="bg-[#dceede]"] {
+  background-color: var(--app-brand-50);
+}
+
+/* Old navy brand utility classes should follow the current product brand. */
+[class~="text-[#103859]"],
+[class~="text-[#103859]"] {
+  color: var(--app-brand-700);
+}
+
+[class~="bg-[#103859]"],
+[class~="bg-[#103859]"] {
+  background-color: var(--app-brand-700);
+}
+
+/*
+ * Accessibility/readability floor for legacy microcopy. 9px UI copy was used
+ * heavily in early CRM/automation screens. Keep dense metadata compact, but
+ * never below 10px in the rendered application.
+ */
+.legacy-shell-host .text-\[9px\] {
+  font-size: 10px;
+  line-height: 1.4;
+}
+
+/* Avoid clickable informational cards looking more interactive than buttons. */
+.legacy-shell-host .card:not(a):not(button):not([role="button"]):hover {
+  transform: none;
+}
+
+.dark [class~="bg-white"] {
+  color-scheme: dark;
+}

@@ -199,11 +199,21 @@ export function DesktopHoverSidebarV3() {
 
   return (
     <>
-      <aside ref={primaryRef} onMouseEnter={() => setOpen(true)} onFocusCapture={() => setOpen(true)} className={`fixed inset-y-0 left-0 z-[70] hidden flex-col border-r border-slate-200 bg-white transition-[width,box-shadow] duration-200 lg:flex dark:border-slate-800 dark:bg-slate-950 ${open ? "w-[232px] shadow-2xl" : "w-16"}`}>
-        <div className="flex h-16 shrink-0 items-center border-b border-slate-100 px-3 dark:border-slate-900">
+      <aside
+        ref={primaryRef}
+        onMouseEnter={() => setOpen(true)}
+        onFocusCapture={() => setOpen(true)}
+        className={`fixed inset-y-0 left-0 z-[70] hidden flex-col border-r border-line bg-surface transition-[width,box-shadow] duration-200 lg:flex ${open ? "w-[232px] shadow-panel" : "w-16"}`}
+      >
+        <div className="flex h-16 shrink-0 items-center border-b border-line px-3">
           <Link href={employee ? "/dashboard" : "/home"} onClick={closeNav} className="flex min-w-0 items-center gap-3">
-            <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-slate-950 text-[12px] font-black text-white dark:bg-white dark:text-slate-950">SO</span>
-            {open ? <span className="min-w-0"><span className="block truncate text-sm font-black text-slate-950 dark:text-white">SalsysOS</span><span className="block max-w-[150px] truncate text-[10px] text-slate-400">{organizationName}</span></span> : null}
+            <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-brand-900 text-[12px] font-bold text-white shadow-sm">SO</span>
+            {open ? (
+              <span className="min-w-0">
+                <span className="block truncate text-sm font-semibold text-copy-strong">SalsysOS</span>
+                <span className="block max-w-[150px] truncate text-[11px] text-copy-subtle">{organizationName}</span>
+              </span>
+            ) : null}
           </Link>
         </div>
 
@@ -213,35 +223,95 @@ export function DesktopHoverSidebarV3() {
               const Icon = group.icon;
               const current = contains(group);
               if (group.directHref) {
-                return <Link key={group.id} href={group.directHref} onClick={closeNav} title={open ? undefined : group.label} className={`flex h-11 items-center rounded-lg transition ${open ? "gap-3 px-3" : "justify-center"} ${current ? "bg-slate-900 text-white dark:bg-white dark:text-slate-950" : "text-slate-600 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-900"}`}><Icon size={19}/>{open ? <span className="text-[12px] font-semibold">{group.label}</span> : null}</Link>;
+                return (
+                  <Link
+                    key={group.id}
+                    href={group.directHref}
+                    onClick={closeNav}
+                    title={open ? undefined : group.label}
+                    className={`flex h-11 items-center rounded-ui transition ${open ? "gap-3 px-3" : "justify-center"} ${current ? "bg-brand-700 text-white shadow-sm" : "text-copy-muted hover:bg-surface-muted hover:text-copy-strong"}`}
+                  >
+                    <Icon size={19} />
+                    {open ? <span className="text-[13px] font-semibold">{group.label}</span> : null}
+                  </Link>
+                );
               }
               const selected = submenuId === group.id;
-              return <button key={group.id} type="button" onClick={() => { setOpen(true); setSubmenuId(selected ? null : group.id); }} title={open ? undefined : group.label} className={`flex h-11 w-full items-center rounded-lg transition ${open ? "gap-3 px-3" : "justify-center"} ${current ? "bg-slate-900 text-white dark:bg-white dark:text-slate-950" : selected ? "bg-slate-100 text-slate-950 dark:bg-slate-900 dark:text-white" : "text-slate-600 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-900"}`}><Icon size={19}/>{open ? <><span className="min-w-0 flex-1 truncate text-left text-[12px] font-semibold">{group.label}</span><ChevronRight size={14}/></> : null}</button>;
+              return (
+                <button
+                  key={group.id}
+                  type="button"
+                  onClick={() => { setOpen(true); setSubmenuId(selected ? null : group.id); }}
+                  title={open ? undefined : group.label}
+                  className={`flex h-11 w-full items-center rounded-ui transition ${open ? "gap-3 px-3" : "justify-center"} ${current ? "bg-brand-700 text-white shadow-sm" : selected ? "bg-brand-50 text-brand-900" : "text-copy-muted hover:bg-surface-muted hover:text-copy-strong"}`}
+                >
+                  <Icon size={19} />
+                  {open ? (
+                    <>
+                      <span className="min-w-0 flex-1 truncate text-left text-[13px] font-semibold">{group.label}</span>
+                      <ChevronRight size={14} />
+                    </>
+                  ) : null}
+                </button>
+              );
             })}
           </div>
         </nav>
 
-        <div className="shrink-0 border-t border-slate-100 p-2 dark:border-slate-900">
-          <button type="button" onClick={() => { askSalsys(); closeNav(); }} className={`flex h-10 w-full items-center rounded-lg text-slate-600 hover:bg-violet-50 hover:text-violet-700 dark:text-slate-400 ${open ? "gap-3 px-3" : "justify-center"}`}><Sparkles size={18}/>{open ? <span className="text-[12px] font-semibold">Ask Salsys</span> : null}</button>
-          <div className={open ? "mt-2 flex items-center gap-2 px-3 py-1 text-[10px] text-slate-400" : "mt-2 flex justify-center py-1"}><span className={`h-2 w-2 rounded-full ${mock ? "bg-amber-400" : "bg-emerald-500"}`}/>{open ? (mock ? "Development" : "Live workspace") : null}</div>
+        <div className="shrink-0 border-t border-line p-2">
+          <button
+            type="button"
+            onClick={() => { askSalsys(); closeNav(); }}
+            className={`flex h-10 w-full items-center rounded-ui text-copy-muted transition hover:bg-brand-50 hover:text-brand-700 ${open ? "gap-3 px-3" : "justify-center"}`}
+          >
+            <Sparkles size={18} />
+            {open ? <span className="text-[13px] font-semibold">Ask Salsys</span> : null}
+          </button>
+          <div className={open ? "mt-2 flex items-center gap-2 px-3 py-1 text-[11px] text-copy-subtle" : "mt-2 flex justify-center py-1"}>
+            <span className={`h-2 w-2 rounded-full ${mock ? "bg-amber-400" : "bg-emerald-500"}`} />
+            {open ? (mock ? "Development" : "Live workspace") : null}
+          </div>
         </div>
       </aside>
 
       {open && submenu && submenu.items.length ? (
-        <aside ref={submenuRef} className={`fixed inset-y-0 left-[232px] z-[69] hidden flex-col border-r border-slate-200 bg-white shadow-2xl lg:flex dark:border-slate-800 dark:bg-slate-950 ${submenu.id === "marketing" ? "w-[292px]" : "w-[272px]"}`}>
-          <div className="flex min-h-20 shrink-0 items-start justify-between border-b border-slate-100 px-5 py-4 dark:border-slate-900">
-            <div><h2 className="text-[18px] font-black tracking-[-0.03em] text-slate-950 dark:text-white">{submenu.label}</h2>{submenu.description ? <p className="mt-1 max-w-[225px] text-[10px] leading-4 text-slate-400">{submenu.description}</p> : null}</div>
-            <button type="button" onClick={() => setSubmenuId(null)} className="grid h-8 w-8 place-items-center rounded-lg text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-900"><X size={16}/></button>
+        <aside
+          ref={submenuRef}
+          className={`fixed inset-y-0 left-[232px] z-[69] hidden flex-col border-r border-line bg-surface shadow-panel lg:flex ${submenu.id === "marketing" ? "w-[292px]" : "w-[272px]"}`}
+        >
+          <div className="flex min-h-20 shrink-0 items-start justify-between border-b border-line px-5 py-4">
+            <div>
+              <h2 className="text-[18px] font-semibold tracking-[-0.025em] text-copy-strong">{submenu.label}</h2>
+              {submenu.description ? <p className="mt-1 max-w-[225px] text-[12px] leading-5 text-copy-muted">{submenu.description}</p> : null}
+            </div>
+            <button type="button" onClick={() => setSubmenuId(null)} className="grid h-8 w-8 place-items-center rounded-ui text-copy-subtle transition hover:bg-surface-muted hover:text-copy-strong">
+              <X size={16} />
+            </button>
           </div>
           <nav className="flex-1 overflow-y-auto px-3 py-4">
-            {groupedItems.map(([groupLabel, items]) => <section key={groupLabel || "default"} className={groupLabel ? "mb-5" : ""}>
-              {groupLabel ? <div className="mb-1.5 px-3 text-[9px] font-bold uppercase tracking-[0.16em] text-slate-400">{groupLabel}</div> : null}
-              <div className="space-y-1">{items.map((item) => {
-                const Icon = item.icon;
-                const current = activePath(pathname, item.href);
-                return <Link key={`${groupLabel}-${item.href}`} href={item.href} onClick={closeNav} className={`flex items-center gap-3 rounded-lg px-3 py-2.5 transition ${current ? "bg-[#dceede] text-[#153d33] dark:bg-emerald-950/40 dark:text-emerald-100" : "text-slate-600 hover:bg-slate-50 hover:text-slate-950 dark:text-slate-300 dark:hover:bg-slate-900"}`}><Icon size={15} className={current ? "text-emerald-700" : "text-slate-400"}/><span className="min-w-0 flex-1 truncate text-[12px] font-semibold">{item.label}</span>{current ? <ChevronRight size={13}/> : null}</Link>;
-              })}</div>
-            </section>)}
+            {groupedItems.map(([groupLabel, items]) => (
+              <section key={groupLabel || "default"} className={groupLabel ? "mb-5" : ""}>
+                {groupLabel ? <div className="mb-1.5 px-3 text-[10px] font-bold uppercase tracking-[0.12em] text-copy-subtle">{groupLabel}</div> : null}
+                <div className="space-y-1">
+                  {items.map((item) => {
+                    const Icon = item.icon;
+                    const current = activePath(pathname, item.href);
+                    return (
+                      <Link
+                        key={`${groupLabel}-${item.href}`}
+                        href={item.href}
+                        onClick={closeNav}
+                        className={`flex items-center gap-3 rounded-ui px-3 py-2.5 transition ${current ? "bg-brand-100 text-brand-900" : "text-copy-muted hover:bg-surface-muted hover:text-copy-strong"}`}
+                      >
+                        <Icon size={15} className={current ? "text-brand-700" : "text-copy-subtle"} />
+                        <span className="min-w-0 flex-1 truncate text-[13px] font-semibold">{item.label}</span>
+                        {current ? <ChevronRight size={13} /> : null}
+                      </Link>
+                    );
+                  })}
+                </div>
+              </section>
+            ))}
           </nav>
         </aside>
       ) : null}
