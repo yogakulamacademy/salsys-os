@@ -38,9 +38,7 @@ type ActivityResponse =
   | { ok: true; data: ActivityRow[] | ActivityRow }
   | { ok: false; error: string };
 
-type ActivityChangedEvent = CustomEvent<{
-  leadId?: string;
-}>;
+type ActivityChangedEvent = CustomEvent<{ leadId?: string }>;
 
 type TimelineItem = {
   id: string;
@@ -162,10 +160,7 @@ export function ConversationCenterView({
       title: item.title || humanize(item.activity_type),
       detail: item.details || activityDetail(item),
       timestamp: item.occurred_at || item.created_at,
-      meta: [
-        humanize(item.activity_type),
-        item.actor_type ? humanize(item.actor_type) : null,
-      ]
+      meta: [humanize(item.activity_type), item.actor_type ? humanize(item.actor_type) : null]
         .filter(Boolean)
         .join(" · "),
     }));
@@ -202,10 +197,7 @@ export function ConversationCenterView({
 
     return rows
       .filter((item) => Boolean(item.timestamp))
-      .sort(
-        (a, b) =>
-          new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime(),
-      );
+      .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
   }, [crmActivity, messages, originChannel, originCourse, originDetail, originTimestamp]);
 
   const courseSelected = Boolean(course && course !== "Not selected");
@@ -232,9 +224,9 @@ export function ConversationCenterView({
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      <div className="shrink-0 border-b border-[#DCE4DF] bg-white px-5 dark:border-slate-900 dark:bg-slate-950">
+      <div className="shrink-0 border-b border-line bg-surface px-5">
         <div
-          className="flex items-center gap-6"
+          className="flex h-11 items-center gap-6"
           role="tablist"
           aria-label="Conversation view"
           onKeyDown={handleViewKeyDown}
@@ -242,24 +234,24 @@ export function ConversationCenterView({
           <TabButton
             active={view === "conversation"}
             onClick={() => setView("conversation")}
-            icon={<MessageCircle size={13} />}
+            icon={<MessageCircle size={14} />}
           >
             Conversation
           </TabButton>
           <TabButton
             active={view === "activity"}
             onClick={() => setView("activity")}
-            icon={<Activity size={13} />}
+            icon={<Activity size={14} />}
           >
-            Activity
-            <span className="ml-1 rounded bg-[#F0F3EF] px-1.5 py-0.5 text-[8px] font-medium text-[#596E64]">
+            CRM activity
+            <span className="ml-1 rounded bg-surface-muted px-1.5 py-0.5 text-[10px] font-medium text-copy-muted">
               {activityLoading ? "…" : activity.length}
             </span>
           </TabButton>
         </div>
       </div>
 
-      <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain bg-[linear-gradient(#F9FBF8_0%,#FFFFFF_68%)] px-4 py-5 sm:px-6">
+      <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain bg-[linear-gradient(#FBFCFB_0%,#FAFCFB_100%)] px-4 py-5 sm:px-6">
         {view === "conversation" ? (
           <ConversationThread
             messages={messages}
@@ -271,14 +263,14 @@ export function ConversationCenterView({
         ) : (
           <div className="mx-auto max-w-2xl">
             {activityLoading ? (
-              <div className="mb-4 flex items-center gap-2 rounded-lg border border-[#E2E8E3] bg-white px-3 py-2.5 text-[10px] text-[#596E64]">
-                <RefreshCw size={12} className="animate-spin text-[#216551]" />
+              <div className="mb-4 flex items-center gap-2 rounded-ui border border-line bg-surface px-3 py-2.5 text-[12px] text-copy-muted">
+                <RefreshCw size={13} className="animate-spin text-brand-700" />
                 Loading CRM activity…
               </div>
             ) : null}
 
             {activityError ? (
-              <div className="mb-4 flex items-center justify-between gap-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2.5 text-[10px] text-amber-800">
+              <div className="mb-4 flex items-center justify-between gap-3 rounded-ui border border-warning/25 bg-warning-soft px-3 py-2.5 text-[12px] text-warning">
                 <span>{activityError} Message history is still shown below.</span>
                 <button
                   type="button"
@@ -286,7 +278,7 @@ export function ConversationCenterView({
                     setActivityLoaded(false);
                     void loadActivity();
                   }}
-                  className="shrink-0 rounded-md border border-amber-300 bg-white px-2 py-1 text-[9px] font-semibold"
+                  className="shrink-0 rounded-md border border-warning/30 bg-surface px-2 py-1 text-[11px] font-semibold"
                 >
                   Retry
                 </button>
@@ -299,44 +291,37 @@ export function ConversationCenterView({
                   <li key={item.id} className="relative flex gap-3 pb-6">
                     {index < activity.length - 1 ? (
                       <span
-                        className="absolute bottom-0 left-[5px] top-3 w-px bg-[#DCE4DF]"
+                        className="absolute bottom-0 left-[5px] top-3 w-px bg-line"
                         aria-hidden="true"
                       />
                     ) : null}
                     <span
-                      className="relative mt-1.5 h-[11px] w-[11px] shrink-0 rounded-full border-[3px] border-[#F9FBF8] bg-[#719269]"
+                      className="relative mt-1.5 h-[11px] w-[11px] shrink-0 rounded-full border-[3px] border-[#FAFCFB] bg-brand-600"
                       aria-hidden="true"
                     />
-                    <div className="min-w-0 flex-1 rounded-lg border border-[#E2E8E3] bg-white px-3.5 py-3 shadow-[0_1px_2px_rgba(21,62,51,0.03)]">
+                    <div className="min-w-0 flex-1 rounded-ui border border-line bg-surface px-4 py-3.5 shadow-[0_1px_2px_rgba(21,62,51,0.03)]">
                       <div className="flex flex-wrap items-start justify-between gap-2">
-                        <div className="text-[11px] font-semibold text-[#18362D]">
-                          {item.title}
-                        </div>
-                        <time
-                          className="text-[9px] text-[#71847A]"
-                          dateTime={item.timestamp}
-                        >
+                        <div className="text-[13px] font-semibold text-copy-strong">{item.title}</div>
+                        <time className="text-[11px] text-copy-subtle" dateTime={item.timestamp}>
                           {formatDateTime(item.timestamp)}
                         </time>
                       </div>
-                      <p className="mt-1.5 whitespace-pre-wrap break-words text-[10px] leading-5 text-[#596E64]">
+                      <p className="mt-1.5 whitespace-pre-wrap break-words text-[12.5px] leading-5 text-copy-muted">
                         {item.detail}
                       </p>
-                      <div className="mt-2 text-[9px] text-[#829087]">
-                        {item.meta}
-                      </div>
+                      <div className="mt-2 text-[11px] text-copy-subtle">{item.meta}</div>
                     </div>
                   </li>
                 ))}
               </ol>
             ) : !activityLoading ? (
-              <div className="grid min-h-[260px] place-items-center text-center">
+              <div className="grid min-h-[280px] place-items-center text-center">
                 <div>
-                  <Activity size={22} className="mx-auto text-[#719269]" />
-                  <div className="mt-3 text-xs font-semibold text-[#18362D]">
+                  <Activity size={23} className="mx-auto text-brand-600" />
+                  <div className="mt-3 text-[13px] font-semibold text-copy-strong">
                     No activity recorded
                   </div>
-                  <p className="mt-1 text-[10px] text-[#596E64]">
+                  <p className="mt-1 text-[12px] text-copy-muted">
                     CRM activity will appear here when authoritative events exist.
                   </p>
                 </div>
@@ -346,18 +331,18 @@ export function ConversationCenterView({
         )}
       </div>
 
-      <div className="mx-4 mb-3 shrink-0 rounded-lg border border-[#E1E8DC] bg-[#F5F7F2] px-3 py-2.5 sm:mx-5">
-        <div className="flex items-start gap-2 text-[10px] leading-5 text-[#596E64]">
-          <Sparkles size={13} className="mt-0.5 shrink-0 text-[#216551]" />
+      <div className="mx-4 mb-3 shrink-0 rounded-ui border border-line bg-brand-50/50 px-3 py-2.5 sm:mx-5">
+        <div className="flex items-start gap-2 text-[12px] leading-5 text-copy-muted">
+          <Sparkles size={14} className="mt-0.5 shrink-0 text-brand-700" />
           <div className="min-w-0">
-            <strong className="font-semibold text-[#18362D]">
+            <strong className="font-semibold text-copy-strong">
               {courseSelected ? "Course interest recorded." : "No course selected."}
             </strong>{" "}
             {courseSelected
               ? `Review ${course} and the latest inquiry before choosing the next action.`
               : "Confirm the lead’s course interest before preparing a specific follow-up."}
-            {country ? <span className="text-[#71847A]"> · {country}</span> : null}
-            <span className="text-[#71847A]"> · {humanize(stage)}</span>
+            {country ? <span className="text-copy-subtle"> · {country}</span> : null}
+            <span className="text-copy-subtle"> · {humanize(stage)}</span>
           </div>
         </div>
       </div>
@@ -383,10 +368,10 @@ function TabButton({
       aria-selected={active}
       tabIndex={active ? 0 : -1}
       onClick={onClick}
-      className={`inline-flex h-11 items-center gap-1.5 border-b-2 text-[10px] transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#216551] focus-visible:ring-offset-2 ${
+      className={`inline-flex h-11 items-center gap-1.5 border-b-2 text-[12px] transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-700/30 focus-visible:ring-offset-2 ${
         active
-          ? "border-[#216551] font-semibold text-[#216551]"
-          : "border-transparent text-[#596E64] hover:text-[#18362D]"
+          ? "border-brand-700 font-semibold text-brand-700"
+          : "border-transparent text-copy-muted hover:text-copy-strong"
       }`}
     >
       {icon}
@@ -398,17 +383,14 @@ function TabButton({
 function activityDetail(item: ActivityRow) {
   if (item.details?.trim()) return item.details;
 
-  const dueAt =
-    typeof item.metadata?.due_at === "string" ? item.metadata.due_at : null;
+  const dueAt = typeof item.metadata?.due_at === "string" ? item.metadata.due_at : null;
   if (dueAt) return `Due ${formatDateTime(dueAt)}.`;
 
   return "CRM activity recorded.";
 }
 
 function humanize(value: string) {
-  return value
-    .replaceAll("_", " ")
-    .replace(/\b\w/g, (char) => char.toUpperCase());
+  return value.replaceAll("_", " ").replace(/\b\w/g, (char) => char.toUpperCase());
 }
 
 function formatDateTime(value: string) {
