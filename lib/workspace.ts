@@ -4,9 +4,13 @@ import { cookies } from "next/headers";
 import { createClient } from "@/lib/supabase/server";
 
 export const ACTIVE_WORKSPACE_COOKIE = "salsys-active-workspace";
-export const ACTIVE_ORGANIZATION_COOKIE = ACTIVE_WORKSPACE_COOKIE;
 
 type ServerSupabaseClient = Awaited<ReturnType<typeof createClient>>;
+
+type FastWorkspaceContextPayload = {
+  organization_id?: unknown;
+  active_organization_id?: unknown;
+};
 
 export type WorkspaceMembership = {
   organizationId: string;
@@ -145,10 +149,39 @@ export async function getWorkspaceContextForUser(
   };
 }
 
+async function getFastCurrentOrganizationId(
+  supabase: ServerSupabaseClient,
+): Promise<string | null> {
+  const { data, error } = await (supabase as any).rpc(
+    "get_current_workspace_context_v1",
+  );
+
+  if (error || !data || typeof data !== "object") {
+    return null;
+  }
+
+  const payload = data as FastWorkspaceContextPayload;
+  const organizationId = String(
+    payload.active_organization_id ?? payload.organization_id ?? "",
+  ).trim();
+
+  return organizationId || null;
+}
+
 export async function requireCurrentOrganizationId(
   supabase: ServerSupabaseClient,
   userId: string,
 ): Promise<string> {
+  // Hot path: resolve/refresh the authenticated tenant in one RPC instead of
+  // querying memberships + organizations for every server-side data loader.
+  // Keep the legacy resolver as a compatibility fallback if the RPC is absent
+  // or temporarily unavailable.
+  const fastOrganizationId = await getFastCurrentOrganizationId(supabase);
+
+  if (fastOrganizationId) {
+    return fastOrganizationId;
+  }
+
   const workspace = await getWorkspaceContextForUser(supabase, userId);
 
   if (workspace.memberships.length === 0) {

@@ -273,11 +273,7 @@ export async function POST(request: NextRequest) {
     ? null
     : `sls_${randomBytes(32).toString('base64url')}`;
   const secretHash = secret ? sha256(secret) : null;
-  const authMode = isWebsite
-    ? 'origin'
-    : isPublishableClient
-      ? 'publishable'
-      : 'secret';
+  const authMode = isWebsite ? 'origin' : isPublishableClient ? 'publishable' : 'secret';
   const admin = createAdminClient();
 
   if (isWebsite && hostname && environment) {
@@ -379,12 +375,16 @@ export async function POST(request: NextRequest) {
         provisioned_by: auth.user.id,
         provisioned_via: 'app/api/tracking/sources',
         platform,
-        credential_class: isPublishableClient
-          ? 'publishable_identifier'
-          : 'server_secret',
-        authority: isPublishableClient
-          ? 'non_authoritative_client_telemetry'
-          : 'trusted_server_source',
+        credential_class: isWebsite
+          ? 'origin_bound_identifier'
+          : isPublishableClient
+            ? 'publishable_identifier'
+            : 'server_secret',
+        authority: isWebsite
+          ? 'origin_bound_browser_telemetry'
+          : isPublishableClient
+            ? 'non_authoritative_client_telemetry'
+            : 'trusted_server_source',
       },
     })
     .select(
