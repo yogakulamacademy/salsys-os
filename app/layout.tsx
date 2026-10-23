@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import './globals.css';
+import './design-system.css';
 import { RootShell } from '@/components/root-shell';
 
 export const metadata: Metadata = {
