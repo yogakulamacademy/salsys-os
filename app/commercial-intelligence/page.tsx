@@ -60,22 +60,22 @@ export default async function CommercialIntelligencePage() {
     revenueBrief.actions.length;
 
   return (
-    <div className="commercial-intelligence-polish">
+    <div className="commercial-intelligence-polish ui-page space-y-4">
       <PageHeader
         eyebrow="Decision intelligence"
         title="Commercial Intelligence"
-        description="One explainable view of funnel leakage, paid-media efficiency, attribution quality, revenue readiness and payment-to-source reconciliation. SalsysOS uses observed facts and deterministic diagnostics here—not invented conversions or uncalibrated probabilities."
+        description="Understand where commercial evidence is strong, where the funnel is leaking, and which next actions are supported by observed data. SalsysOS keeps recommendations explainable and blocks speculative conversion claims."
         actions={
           <div className="flex flex-wrap gap-2">
-            <Link href="/funnel" className="btn-secondary">
+            <Link href="/funnel" className="btn btn-secondary inline-flex items-center gap-2">
               <GitBranch size={15} />
               Funnel
             </Link>
-            <Link href="/attribution" className="btn-secondary">
+            <Link href="/attribution" className="btn btn-secondary inline-flex items-center gap-2">
               <Route size={15} />
               Attribution
             </Link>
-            <Link href="/revenue" className="btn-primary">
+            <Link href="/revenue" className="btn btn-primary inline-flex items-center gap-2">
               <CircleDollarSign size={15} />
               Revenue
               <ArrowRight size={14} />
@@ -84,18 +84,18 @@ export default async function CommercialIntelligencePage() {
         }
       />
 
-      <section className="mt-6 grid gap-3 md:grid-cols-3">
+      <section className="grid gap-4 md:grid-cols-3">
         <SummaryCard
           icon={<Sparkles size={18} />}
           label="Commercial evidence readiness"
           value={`${averageReadiness}/100`}
-          detail="Average of funnel evidence, attribution coverage and forecast data readiness."
+          detail="Average readiness across funnel evidence, attribution coverage and revenue forecasting inputs."
         />
         <SummaryCard
           icon={<Route size={18} />}
           label="Recommended actions"
           value={actionCount.toLocaleString("en-IN")}
-          detail="Explainable actions generated from current observed gaps and opportunities."
+          detail="Explainable next actions generated only from observed gaps and opportunities."
         />
         <SummaryCard
           icon={<CircleDollarSign size={18} />}
@@ -107,7 +107,7 @@ export default async function CommercialIntelligencePage() {
                 ? "Review"
                 : "Pending"
           }
-          detail="Compares canonical Revenue payment truth with Attribution payment totals by currency."
+          detail="Checks canonical Revenue payment truth against Attribution payment totals by currency."
         />
       </section>
 
@@ -122,10 +122,12 @@ export default async function CommercialIntelligencePage() {
       <CommercialIntelligencePanel brief={attributionBrief} />
       <CommercialIntelligencePanel brief={revenueBrief} />
 
-      <section className="card-pad mt-4 border border-slate-200 bg-slate-50/50">
-        <div className="eyebrow">Interpretation guardrail</div>
-        <div className="section-title mt-1">Smart does not mean speculative</div>
-        <p className="mt-2 max-w-4xl text-sm leading-6 text-slate-500">
+      <section className="ui-panel-muted p-5">
+        <div className="ui-page-kicker">Interpretation guardrail</div>
+        <div className="mt-1 text-[16px] font-semibold text-[var(--app-text-strong)]">
+          Smart does not mean speculative
+        </div>
+        <p className="mt-2 max-w-4xl text-[13px] leading-6 text-[var(--app-text-muted)]">
           These diagnostics rank observed bottlenecks, completeness gaps,
           paid-media efficiency and commercial follow-up opportunities. They do
           not label missing behavior as negative intent, do not merge currencies
@@ -151,13 +153,21 @@ function SummaryCard({
   detail: string;
 }) {
   return (
-    <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-      <div className="flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[.08em] text-slate-400">
-        <span className="text-violet-600">{icon}</span>
-        {label}
+    <div className="ui-panel p-5">
+      <div className="flex items-center gap-3">
+        <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-[var(--app-brand-50)] text-[var(--app-brand-700)]">
+          {icon}
+        </span>
+        <div className="text-[11px] font-semibold uppercase tracking-[0.08em] text-[var(--app-text-subtle)]">
+          {label}
+        </div>
       </div>
-      <div className="mt-2 text-2xl font-semibold text-slate-900">{value}</div>
-      <p className="mt-1 text-xs leading-5 text-slate-500">{detail}</p>
+      <div className="mt-3 text-[28px] font-semibold tracking-[-0.035em] text-[var(--app-text-strong)]">
+        {value}
+      </div>
+      <p className="mt-1.5 text-[13px] leading-5 text-[var(--app-text-muted)]">
+        {detail}
+      </p>
     </div>
   );
 }
