@@ -2,7 +2,6 @@ import Link from 'next/link';
 import {
   ArrowRight,
   Check,
-  CircleDot,
   Clock3,
   GitBranch,
   Instagram,
@@ -10,7 +9,6 @@ import {
   MessageSquareText,
   Plus,
   ShieldCheck,
-  Sparkles,
   Workflow,
   Zap,
 } from 'lucide-react';
@@ -138,14 +136,17 @@ export default async function AutomationOverviewPage() {
     }
   }
 
+  const dataAvailable = loadError == null;
   const activeFlows = workflows.filter((row) => row.status === 'active').length;
   const activeTemplates = templates.filter((row) => row.active);
   const approvedTemplates = activeTemplates.filter((row) => row.approval_status === 'approved').length;
   const pendingTemplates = activeTemplates.filter((row) => row.approval_status === 'pending').length;
   const rejectedTemplates = activeTemplates.filter((row) => row.approval_status === 'rejected').length;
-  const syncNeedsAttention = latestSync?.status === 'failed' ? 1 : 0;
-  const providerNeedsAttention = activeWhatsAppAccounts === 0 ? 1 : 0;
-  const attentionCount = awaitingApproval + pendingTemplates + rejectedTemplates + syncNeedsAttention + providerNeedsAttention;
+  const syncNeedsAttention = dataAvailable && latestSync?.status === 'failed' ? 1 : 0;
+  const providerNeedsAttention = dataAvailable && activeWhatsAppAccounts === 0 ? 1 : 0;
+  const attentionCount = dataAvailable
+    ? awaitingApproval + pendingTemplates + rejectedTemplates + syncNeedsAttention + providerNeedsAttention
+    : null;
 
   const launchChecks = [
     {
@@ -174,12 +175,16 @@ export default async function AutomationOverviewPage() {
     },
     {
       label: 'Review current attention items',
-      hint: attentionCount === 0 ? 'No detected blockers in this overview' : `${attentionCount} item${attentionCount === 1 ? '' : 's'} need review`,
+      hint: attentionCount == null
+        ? 'Status unavailable'
+        : attentionCount === 0
+          ? 'No detected blockers in this overview'
+          : `${attentionCount} item${attentionCount === 1 ? '' : 's'} need review`,
       ok: attentionCount === 0,
       href: '/automation/readiness',
     },
   ];
-  const passedLaunchChecks = launchChecks.filter((item) => item.ok).length;
+  const passedLaunchChecks = dataAvailable ? launchChecks.filter((item) => item.ok).length : null;
 
   const dayBuckets = Array.from({ length: 7 }, (_, index) => {
     const date = new Date();
@@ -235,7 +240,7 @@ export default async function AutomationOverviewPage() {
 
       {loadError ? (
         <div className="rounded-lg border border-[#efd9d5] bg-[#fcf0ef] px-4 py-3 text-[11px] font-medium text-[#ae4545]">
-          Automation data is temporarily unavailable. Refresh the page before making operational decisions.
+          Automation data is temporarily unavailable. Metrics and readiness states are hidden until the data can be verified.
         </div>
       ) : null}
 
@@ -269,10 +274,25 @@ export default async function AutomationOverviewPage() {
       </section>
 
       <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        <MetricCard label="Active automations" value={activeFlows} note="Live workflow status from this workspace" icon={Workflow} />
-        <MetricCard label="Executions" value={runs.length} note="Recorded automation actions in the last 7 days" icon={Zap} />
+        <MetricCard
+          label="Active automations"
+          value={dataAvailable ? activeFlows : '—'}
+          note={dataAvailable ? 'Live workflow status from this workspace' : 'Status unavailable until data reloads'}
+          icon={Workflow}
+        />
+        <MetricCard
+          label="Executions"
+          value={dataAvailable ? runs.length : '—'}
+          note={dataAvailable ? 'Recorded automation actions in the last 7 days' : 'Execution history unavailable'}
+          icon={Zap}
+        />
         <MetricCard label="Delivery success rate" value="—" note="No valid provider-delivery denominator on this overview" icon={MessageSquareText} />
-        <MetricCard label="Awaiting approval" value={awaitingApproval} note="Human decision required" icon={ShieldCheck} />
+        <MetricCard
+          label="Awaiting approval"
+          value={dataAvailable ? awaitingApproval : '—'}
+          note={dataAvailable ? 'Human decision required' : 'Approval queue unavailable'}
+          icon={ShieldCheck}
+        />
       </section>
 
       <section className="grid gap-4 xl:grid-cols-[1.45fr_1fr]">
@@ -285,7 +305,14 @@ export default async function AutomationOverviewPage() {
             <span className="rounded-md border border-[#e4eae6] px-2 py-1 text-[9px] text-[#6d7c76]">Last 7 days</span>
           </div>
           <div className="p-5">
-            {runs.length ? (
+            {!dataAvailable ? (
+              <div className="grid h-[215px] place-items-center rounded-lg border border-dashed border-[#dce6e1] bg-[#f8faf8] px-6 text-center">
+                <div>
+                  <div className="text-[12px] font-semibold text-[#6d7c76]">Execution data unavailable</div>
+                  <p className="mt-1 text-[10px] text-[#98a29b]">No zero-value assumption is shown while the source data cannot be verified.</p>
+                </div>
+              </div>
+            ) : runs.length ? (
               <div>
                 <div className="flex h-[190px] items-end gap-3 border-b border-[#e4eae6] px-2 pb-0">
                   {dayBuckets.map((day) => (
@@ -315,23 +342,35 @@ export default async function AutomationOverviewPage() {
               <h2 className="text-[16px] font-semibold">Your path to launch</h2>
               <p className="mt-1 text-[11px] text-[#6d7c76]">A few checks for a confident first run.</p>
             </div>
-            <span className="rounded-md border border-[#e4eae6] px-2 py-1 text-[9px] text-[#6d7c76]">{passedLaunchChecks} / 5</span>
+            <span className="rounded-md border border-[#e4eae6] px-2 py-1 text-[9px] text-[#6d7c76]">{passedLaunchChecks == null ? 'Unavailable' : `${passedLaunchChecks} / 5`}</span>
           </div>
-          <div className="px-5 pt-4">
-            <div className="h-[5px] overflow-hidden rounded-full bg-[#edf1ed]"><div className="h-full rounded-full bg-[#69a87e]" style={{ width: `${passedLaunchChecks * 20}%` }} /></div>
-          </div>
-          <div className="px-5 pb-3 pt-2">
-            {launchChecks.map((item, index) => (
-              <Link key={item.label} href={item.href} className="flex items-center gap-3 border-b border-[#edf1ed] py-3 last:border-0">
-                <span className={`grid h-[23px] w-[23px] shrink-0 place-items-center rounded-full border text-[9px] ${item.ok ? 'border-[#b8d3bf] bg-[#f0f7f3] text-[#216551]' : 'border-[#dce5de] text-[#9aaa9e]'}`}>{item.ok ? <Check size={12} /> : index + 1}</span>
-                <div className="min-w-0 flex-1">
-                  <div className="text-[11px] font-semibold text-[#192e29]">{item.label}</div>
-                  <div className="mt-0.5 truncate text-[9px] text-[#98a399]">{item.hint}</div>
-                </div>
-                <ArrowRight size={13} className="text-[#91a096]" />
-              </Link>
-            ))}
-          </div>
+          {dataAvailable ? (
+            <>
+              <div className="px-5 pt-4">
+                <div className="h-[5px] overflow-hidden rounded-full bg-[#edf1ed]"><div className="h-full rounded-full bg-[#69a87e]" style={{ width: `${(passedLaunchChecks ?? 0) * 20}%` }} /></div>
+              </div>
+              <div className="px-5 pb-3 pt-2">
+                {launchChecks.map((item, index) => (
+                  <Link key={item.label} href={item.href} className="flex items-center gap-3 border-b border-[#edf1ed] py-3 last:border-0">
+                    <span className={`grid h-[23px] w-[23px] shrink-0 place-items-center rounded-full border text-[9px] ${item.ok ? 'border-[#b8d3bf] bg-[#f0f7f3] text-[#216551]' : 'border-[#dce5de] text-[#9aaa9e]'}`}>{item.ok ? <Check size={12} /> : index + 1}</span>
+                    <div className="min-w-0 flex-1">
+                      <div className="text-[11px] font-semibold text-[#192e29]">{item.label}</div>
+                      <div className="mt-0.5 truncate text-[9px] text-[#98a399]">{item.hint}</div>
+                    </div>
+                    <ArrowRight size={13} className="text-[#91a096]" />
+                  </Link>
+                ))}
+              </div>
+            </>
+          ) : (
+            <div className="grid min-h-[210px] place-items-center px-6 text-center">
+              <div>
+                <ShieldCheck size={24} className="mx-auto text-[#91a496]" />
+                <div className="mt-3 text-[12px] font-semibold text-[#6d7c76]">Readiness cannot be verified</div>
+                <p className="mt-1 max-w-sm text-[10px] leading-5 text-[#98a29b]">Launch checks are hidden until automation, provider and approval data can be loaded safely.</p>
+              </div>
+            </div>
+          )}
         </div>
       </section>
 
@@ -364,8 +403,19 @@ export default async function AutomationOverviewPage() {
           </div>
           <div className="flex items-center gap-3 border-b border-[#e4eae6] px-5 py-4">
             <span className="grid h-8 w-8 place-items-center rounded-lg bg-[#ecf5ed] text-[#216551]"><MessageCircleMore size={16} /></span>
-            <div className="min-w-0 flex-1"><div className="text-[11px] font-semibold">WhatsApp</div><div className="mt-0.5 text-[9px] text-[#6d7c76]">{activeWhatsAppAccounts ? `${activeWhatsAppAccounts} active sender${activeWhatsAppAccounts === 1 ? '' : 's'}` : 'No active sender verified'}</div></div>
-            <span className={`rounded-md px-2 py-1 text-[9px] font-semibold ${activeWhatsAppAccounts ? 'bg-[#eaf5ed] text-[#397052]' : 'bg-[#fcf4e5] text-[#9b6720]'}`}>{activeWhatsAppAccounts ? 'Connected' : 'Not connected'}</span>
+            <div className="min-w-0 flex-1">
+              <div className="text-[11px] font-semibold">WhatsApp</div>
+              <div className="mt-0.5 text-[9px] text-[#6d7c76]">
+                {!dataAvailable
+                  ? 'Connection status unavailable'
+                  : activeWhatsAppAccounts
+                    ? `${activeWhatsAppAccounts} active sender${activeWhatsAppAccounts === 1 ? '' : 's'}`
+                    : 'No active sender verified'}
+              </div>
+            </div>
+            <span className={`rounded-md px-2 py-1 text-[9px] font-semibold ${!dataAvailable ? 'bg-[#f0f3f1] text-[#69796f]' : activeWhatsAppAccounts ? 'bg-[#eaf5ed] text-[#397052]' : 'bg-[#fcf4e5] text-[#9b6720]'}`}>
+              {!dataAvailable ? 'Unavailable' : activeWhatsAppAccounts ? 'Connected' : 'Not connected'}
+            </span>
             <Link href="/automation/whatsapp" aria-label="Open WhatsApp operations"><ArrowRight size={13} className="text-[#91a096]" /></Link>
           </div>
           <div className="flex items-center gap-3 px-5 py-4">
@@ -387,8 +437,18 @@ export default async function AutomationOverviewPage() {
       </section>
 
       <div className="flex flex-col justify-between gap-2 border-t border-[#e4eae6] pt-4 text-[9px] text-[#9aa69e] sm:flex-row">
-        <span>Latest template sync: {relativeTime(latestSync?.started_at ?? null)}{latestSync?.status ? ` · ${latestSync.status.replaceAll('_', ' ')}` : ''}</span>
-        <span>{attentionCount ? `${attentionCount} item${attentionCount === 1 ? '' : 's'} currently need review` : 'No detected overview blockers'}</span>
+        <span>
+          {dataAvailable
+            ? `Latest template sync: ${relativeTime(latestSync?.started_at ?? null)}${latestSync?.status ? ` · ${latestSync.status.replaceAll('_', ' ')}` : ''}`
+            : 'Latest template sync: unavailable'}
+        </span>
+        <span>
+          {attentionCount == null
+            ? 'Overview attention status unavailable'
+            : attentionCount
+              ? `${attentionCount} item${attentionCount === 1 ? '' : 's'} currently need review`
+              : 'No detected overview blockers'}
+        </span>
       </div>
     </div>
   );
