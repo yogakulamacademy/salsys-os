@@ -53,6 +53,13 @@ const ADMIN_ONLY_EXACT_PATHS = new Set([
   "/contact-intelligence",
 ]);
 
+const ONBOARDING_SETUP_PATHS = [
+  "/onboarding",
+  "/tracking",
+  "/settings/integrations",
+  "/settings/team",
+] as const;
+
 const UUID_PATTERN =
   "[0-9a-fA-F]{8}-" +
   "[0-9a-fA-F]{4}-" +
@@ -108,6 +115,14 @@ function isAdminOnlyPage(pathname: string) {
 function isEmployeeAllowedPage(pathname: string) {
   const normalized = normalizePathname(pathname);
   return EMPLOYEE_EXACT_PATHS.has(normalized) || EMPLOYEE_LEAD_ROUTE.test(normalized);
+}
+
+function isOnboardingSetupPage(pathname: string) {
+  const normalized = normalizePathname(pathname);
+  return ONBOARDING_SETUP_PATHS.some(
+    (allowedPath) =>
+      normalized === allowedPath || normalized.startsWith(`${allowedPath}/`),
+  );
 }
 
 function redirectWithAuthCookies(
@@ -371,6 +386,31 @@ export async function middleware(request: NextRequest) {
     path: "/",
     maxAge: WORKSPACE_COOKIE_MAX_AGE_SECONDS,
   });
+
+  // Required onboarding is a tenant UX gate, not an API authorization layer.
+  // Only explicitly enrolled owner/admin workspaces are gated. Existing tenants
+  // without an onboarding row continue unchanged. Lookup failure is fail-open so
+  // onboarding cannot turn a transient database issue into an application outage.
+  if (
+    !pathname.startsWith("/api/") &&
+    !isOnboardingSetupPage(pathname) &&
+    (role === "owner" || role === "admin")
+  ) {
+    const { data: onboarding, error: onboardingError } = await supabase
+      .from("organization_onboarding")
+      .select("status,enforce_on_sign_in")
+      .eq("organization_id", organizationId)
+      .maybeSingle();
+
+    if (
+      !onboardingError &&
+      onboarding?.enforce_on_sign_in === true &&
+      onboarding.status !== "completed" &&
+      onboarding.status !== "dismissed"
+    ) {
+      return redirectWithAuthCookies(request, response, "/onboarding");
+    }
+  }
 
   if (role === "employee" && !isEmployeeAllowedPage(pathname)) {
     return redirectWithAuthCookies(request, response, "/dashboard");
