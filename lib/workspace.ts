@@ -8,6 +8,11 @@ export const ACTIVE_ORGANIZATION_COOKIE = ACTIVE_WORKSPACE_COOKIE;
 
 type ServerSupabaseClient = Awaited<ReturnType<typeof createClient>>;
 
+type FastWorkspaceContextPayload = {
+  organization_id?: unknown;
+  active_organization_id?: unknown;
+};
+
 export type WorkspaceMembership = {
   organizationId: string;
   organizationName: string;
@@ -145,10 +150,38 @@ export async function getWorkspaceContextForUser(
   };
 }
 
+async function getFastCurrentOrganizationId(
+  supabase: ServerSupabaseClient,
+): Promise<string | null> {
+  const { data, error } = await (supabase as any).rpc(
+    "get_current_workspace_context_v1",
+  );
+
+  if (error || !data || typeof data !== "object") {
+    return null;
+  }
+
+  const payload = data as FastWorkspaceContextPayload;
+  const organizationId = String(
+    payload.active_organization_id ?? payload.organization_id ?? "",
+  ).trim();
+
+  return organizationId || null;
+}
+
 export async function requireCurrentOrganizationId(
   supabase: ServerSupabaseClient,
   userId: string,
 ): Promise<string> {
+  // Fast path: resolve and refresh the authenticated tenant binding in one RPC.
+  // This avoids repeating membership + organization queries on every server
+  // data loader. The legacy path remains as a compatibility fallback.
+  const fastOrganizationId = await getFastCurrentOrganizationId(supabase);
+
+  if (fastOrganizationId) {
+    return fastOrganizationId;
+  }
+
   const workspace = await getWorkspaceContextForUser(supabase, userId);
 
   if (workspace.memberships.length === 0) {
