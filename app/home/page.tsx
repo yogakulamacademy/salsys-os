@@ -17,7 +17,6 @@ import {
   TrendingUp,
   UserRoundCheck,
   Users,
-  WalletCards,
   type LucideIcon,
 } from "lucide-react";
 
@@ -93,6 +92,12 @@ export default async function HomePage({ searchParams }: HomePageProps) {
   const { metrics, sources: liveSources, revenueSummary, upcomingBatches, unvaluedOpenLeads } = snapshot;
   const primaryRevenue = revenueSummary.find((row) => row.collected > 0) ?? revenueSummary[0] ?? null;
   const periodPrimaryRevenue = pickPeriodRevenue(periodAnalytics, primaryRevenue?.currency ?? null);
+  const hasComparisonBaseline = [
+    periodPrimaryRevenue?.changePercent ?? null,
+    periodAnalytics.leads.changePercent,
+    periodAnalytics.enrollments.changePercent,
+  ].some((value) => value != null);
+
   const acquisitionSources: DashboardPeriodSource[] = periodAnalytics.available.leads
     ? periodAnalytics.sources
     : liveSources.map((source) => ({
@@ -136,7 +141,7 @@ export default async function HomePage({ searchParams }: HomePageProps) {
                 <input type="hidden" name="period" value="custom" />
                 <DateField id="dashboard-from" name="from" label="From" defaultValue={periodAnalytics.period.startDate} />
                 <DateField id="dashboard-to" name="to" label="To" defaultValue={periodAnalytics.period.endDate} />
-                <p className="text-[11px] leading-5 text-[#71847A]">Custom ranges are capped at 366 days. Comparisons use the immediately preceding equal-length period.</p>
+                <p className="text-[11px] leading-5 text-[#71847A]">Custom ranges are capped at 366 days. Comparisons use the immediately preceding equal-length period when a valid baseline exists.</p>
                 <button type="submit" className="inline-flex h-10 w-full items-center justify-center rounded-lg bg-[#153E33] px-4 text-xs font-semibold text-white transition hover:bg-[#216551]">Apply date range</button>
               </form>
             </div>
@@ -155,15 +160,15 @@ export default async function HomePage({ searchParams }: HomePageProps) {
               <div className="text-[10px] font-bold uppercase tracking-[0.19em] text-emerald-200">Commercial momentum</div>
               <h2 className="mt-2 max-w-3xl text-xl font-semibold tracking-[-0.025em] sm:text-[27px]">{heroHeadline(periodAnalytics, periodPrimaryRevenue)}</h2>
               <div className="mt-2 flex flex-wrap items-center gap-2 text-sm text-emerald-50/80">
-                <span>Compared with {periodAnalytics.period.previousLabel}</span>
+                <span>{hasComparisonBaseline ? `Compared with ${periodAnalytics.period.previousLabel}` : "Previous period unavailable"}</span>
                 {periodPrimaryRevenue ? <TrendPill value={periodPrimaryRevenue.changePercent} light /> : null}
               </div>
             </div>
           </div>
           <div className="grid grid-cols-1 gap-4 border-t border-white/10 pt-5 sm:grid-cols-3 xl:border-t-0 xl:pt-0">
-            <HeroStat label="Revenue collected" value={formatPeriodRevenue(periodAnalytics)} detail={<ChangeText value={periodPrimaryRevenue?.changePercent ?? null} fallback="vs previous period" light />} />
-            <HeroStat label="New leads" value={periodAnalytics.available.leads ? periodAnalytics.leads.current.toLocaleString("en-IN") : "—"} detail={<ChangeText value={periodAnalytics.leads.changePercent} fallback="vs previous period" light />} />
-            <HeroStat label="Enrollments" value={periodAnalytics.available.enrollments ? periodAnalytics.enrollments.current.toLocaleString("en-IN") : "—"} detail={<ChangeText value={periodAnalytics.enrollments.changePercent} fallback="vs previous period" light />} />
+            <HeroStat label="Revenue collected" value={formatPeriodRevenue(periodAnalytics)} detail={<ChangeText value={periodPrimaryRevenue?.changePercent ?? null} fallback="Previous period unavailable" light />} />
+            <HeroStat label="New leads" value={periodAnalytics.available.leads ? periodAnalytics.leads.current.toLocaleString("en-IN") : "—"} detail={<ChangeText value={periodAnalytics.leads.changePercent} fallback="Previous period unavailable" light />} />
+            <HeroStat label="Enrollments" value={periodAnalytics.available.enrollments ? periodAnalytics.enrollments.current.toLocaleString("en-IN") : "—"} detail={<ChangeText value={periodAnalytics.enrollments.changePercent} fallback="Previous period unavailable" light />} />
           </div>
         </div>
       </section>
@@ -174,12 +179,40 @@ export default async function HomePage({ searchParams }: HomePageProps) {
           icon={CircleDollarSign}
           label="Revenue collected"
           value={periodPrimaryRevenue ? formatMoney(periodPrimaryRevenue.current, periodPrimaryRevenue.currency) : formatPeriodRevenue(periodAnalytics)}
-          previous={periodPrimaryRevenue ? `vs ${formatMoney(periodPrimaryRevenue.previous, periodPrimaryRevenue.currency)} previous period` : "Selected-period collected revenue"}
+          previous={periodPrimaryRevenue
+            ? periodPrimaryRevenue.changePercent == null
+              ? "Previous period unavailable"
+              : `vs ${formatMoney(periodPrimaryRevenue.previous, periodPrimaryRevenue.currency)} previous period`
+            : "Selected-period collected revenue"}
           change={periodPrimaryRevenue?.changePercent ?? null}
           bars="revenue"
         />
-        <KpiCard href="/leads" icon={Users} label="Leads created" value={periodAnalytics.available.leads ? periodAnalytics.leads.current.toLocaleString("en-IN") : "—"} previous={periodAnalytics.available.leads ? `vs ${periodAnalytics.leads.previous.toLocaleString("en-IN")} previous period` : "Period lead analytics unavailable"} change={periodAnalytics.leads.changePercent} bars="leads" />
-        <KpiCard href="/pipeline" icon={UserRoundCheck} label="Enrollments" value={periodAnalytics.available.enrollments ? periodAnalytics.enrollments.current.toLocaleString("en-IN") : "—"} previous={periodAnalytics.available.enrollments ? `vs ${periodAnalytics.enrollments.previous.toLocaleString("en-IN")} previous period` : "Period enrollment analytics unavailable"} change={periodAnalytics.enrollments.changePercent} bars="leads" />
+        <KpiCard
+          href="/leads"
+          icon={Users}
+          label="Leads created"
+          value={periodAnalytics.available.leads ? periodAnalytics.leads.current.toLocaleString("en-IN") : "—"}
+          previous={periodAnalytics.available.leads
+            ? periodAnalytics.leads.changePercent == null
+              ? "Previous period unavailable"
+              : `vs ${periodAnalytics.leads.previous.toLocaleString("en-IN")} previous period`
+            : "Period lead analytics unavailable"}
+          change={periodAnalytics.leads.changePercent}
+          bars="leads"
+        />
+        <KpiCard
+          href="/pipeline"
+          icon={UserRoundCheck}
+          label="Enrollments"
+          value={periodAnalytics.available.enrollments ? periodAnalytics.enrollments.current.toLocaleString("en-IN") : "—"}
+          previous={periodAnalytics.available.enrollments
+            ? periodAnalytics.enrollments.changePercent == null
+              ? "Previous period unavailable"
+              : `vs ${periodAnalytics.enrollments.previous.toLocaleString("en-IN")} previous period`
+            : "Period enrollment analytics unavailable"}
+          change={periodAnalytics.enrollments.changePercent}
+          bars="leads"
+        />
         <QualifiedRateCard rate={periodAnalytics.leads.conversionRate} qualified={periodAnalytics.leads.qualified} total={periodAnalytics.leads.current} available={periodAnalytics.available.leads} />
       </section>
 
@@ -193,7 +226,7 @@ export default async function HomePage({ searchParams }: HomePageProps) {
                 return (
                   <Link key={item.label} href={item.href} className="group flex items-center gap-3 px-5 py-3.5 transition hover:bg-[#F8FAF8] dark:hover:bg-slate-900/60">
                     <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-[#EDF3E6] text-[#216551]"><Icon size={16} /></span>
-                    <span className="grid h-8 min-w-8 shrink-0 place-items-center rounded-full bg-violet-50 px-2 text-sm font-semibold text-violet-700">{item.value.toLocaleString("en-IN")}</span>
+                    <span className="grid h-8 min-w-8 shrink-0 place-items-center rounded-full bg-[#EAF4EE] px-2 text-sm font-semibold text-[#256551]">{item.value.toLocaleString("en-IN")}</span>
                     <span className="min-w-0 flex-1"><span className="block text-sm font-semibold text-[#253E35] dark:text-slate-100">{item.label}</span><span className="mt-0.5 block truncate text-xs text-[#71847A]">{item.detail}</span></span>
                     <ArrowRight size={14} className="text-[#B0BDB6] group-hover:text-[#216551]" />
                   </Link>
@@ -264,11 +297,11 @@ function QualifiedRateCard({ rate, qualified, total, available }: { rate: number
   const safeRate = Math.max(0, Math.min(100, rate ?? 0));
   const circumference = 2 * Math.PI * 28;
   const dash = circumference * (safeRate / 100);
-  return <Link href="/pipeline" className="group rounded-2xl border border-[#DCE4DF] bg-white p-4 shadow-sm transition hover:border-[#BFD6C6] hover:shadow-md dark:border-slate-800 dark:bg-slate-950"><div className="flex items-start justify-between gap-3"><div><div className="text-[11px] font-semibold text-[#71847A]">Qualified rate</div><div className="mt-2 text-[24px] font-semibold tracking-[-0.04em] text-[#18362D] dark:text-white">{available && rate != null ? `${rate}%` : "—"}</div><div className="mt-1 text-[10px] text-[#8A9A92]">{available ? `${qualified} of ${total} selected-period leads are qualified+` : "Period lead analytics unavailable"}</div></div><div className="relative h-[74px] w-[74px] shrink-0"><svg viewBox="0 0 72 72" className="h-full w-full -rotate-90" role="img" aria-label={available && rate != null ? `${rate}% qualified rate` : "Qualified rate unavailable"}><circle cx="36" cy="36" r="28" fill="none" stroke="#E7EFEA" strokeWidth="7" /><circle cx="36" cy="36" r="28" fill="none" stroke="#216551" strokeWidth="7" strokeLinecap="round" strokeDasharray={`${dash} ${circumference - dash}`} /></svg><div className="absolute inset-0 grid place-items-center text-[10px] font-bold text-[#216551]">{available && rate != null ? `${Math.round(rate)}%` : "—"}</div></div></div><div className="mt-4 h-2 overflow-hidden rounded-full bg-[#EEF2EF]"><div className="h-full rounded-full bg-gradient-to-r from-[#A7D5B8] to-[#216551]" style={{ width: `${safeRate}%` }} /></div></Link>;
+  return <Link href="/pipeline" className="group rounded-2xl border border-[#DCE4DF] bg-white p-4 shadow-sm transition hover:border-[#BFD6C6] hover:shadow-md dark:border-slate-800 dark:bg-slate-950"><div className="flex items-start justify-between gap-3"><div><div className="text-[11px] font-semibold text-[#71847A]">Qualified rate</div><div className="mt-2 text-[24px] font-semibold tracking-[-0.04em] text-[#18362D] dark:text-white">{available && rate != null ? `${rate}%` : "—"}</div><div className="mt-1 text-[10px] text-[#8A9A92]">{available ? `${qualified} of ${total} selected-period leads are qualified+` : "Period lead analytics unavailable"}</div></div><div className="relative h-[74px] w-[74px] shrink-0"><svg viewBox="0 0 72 72" className="h-full w-full -rotate-90" role="img" aria-label={available && rate != null ? `${rate}% qualified rate` : "Qualified rate unavailable"}><circle cx="36" cy="36" r="28" fill="none" stroke="#E7EFEA" strokeWidth="7" /><circle cx="36" cy="36" r="28" fill="none" stroke="#216551" strokeWidth="7" strokeLinecap="round" strokeDasharray={`${dash} ${circumference - dash}`} /></svg><div className="absolute inset-0 grid place-items-center text-[10px] font-bold text-[#216551]">{available && rate != null ? `${Math.round(rate)}%` : "—"}</div></div></div></Link>;
 }
 
 function SectionHeader({ eyebrow, title, actionHref, actionLabel }: { eyebrow: string; title: string; actionHref: string; actionLabel: string }) {
-  return <div className="flex items-center justify-between gap-3 border-b border-[#E7ECE9] px-5 py-4 dark:border-slate-900"><div><div className="text-[10px] font-bold uppercase tracking-[0.13em] text-[#71847A]">{eyebrow}</div><div className="mt-1 text-base font-semibold text-[#18362D] dark:text-white">{title}</div></div><Link href={actionHref} className="inline-flex items-center gap-1 text-[11px] font-semibold text-violet-600 hover:text-violet-700 dark:text-violet-300">{actionLabel}<ArrowRight size={12} /></Link></div>;
+  return <div className="flex items-center justify-between gap-3 border-b border-[#E7ECE9] px-5 py-4 dark:border-slate-900"><div><div className="text-[10px] font-bold uppercase tracking-[0.13em] text-[#71847A]">{eyebrow}</div><div className="mt-1 text-base font-semibold text-[#18362D] dark:text-white">{title}</div></div><Link href={actionHref} className="inline-flex items-center gap-1 text-[11px] font-semibold text-[#256551] hover:text-[#173F34] dark:text-emerald-300">{actionLabel}<ArrowRight size={12} /></Link></div>;
 }
 
 function SnapshotMetric({ label, value, change }: { label: string; value: string; change?: number | null }) {
@@ -293,7 +326,8 @@ function RevenueTrend({ points, currency }: { points: DashboardPeriodAnalytics["
 
 function SourceRow({ source }: { source: DashboardPeriodSource }) {
   const width = Math.max(3, Math.min(100, source.conversionRate ?? 0));
-  return <div className="grid grid-cols-[42px_minmax(0,1fr)_minmax(90px,.8fr)_54px] items-center gap-3 rounded-xl px-2 py-2 transition hover:bg-[#F8FAF8]"><SourceIcon source={source.source} /><div className="min-w-0"><div className="truncate text-sm font-semibold text-[#253E35] dark:text-slate-100">{pretty(source.source)}</div><div className="mt-0.5 text-[10px] text-[#8A9A92]">{source.leads} leads · {source.qualified} qualified</div></div><div className="h-2 overflow-hidden rounded-full bg-[#E9EFEB]"><div className="h-full rounded-full bg-[#176148]" style={{ width: `${width}%` }} /></div><div className="text-right"><div className="text-sm font-semibold text-[#18362D] dark:text-white">{source.conversionRate == null ? "—" : `${source.conversionRate}%`}</div><div className="text-[9px] text-[#8A9A92]">qualified</div></div></div>;
+  const smallSample = source.leads > 0 && source.leads < 10;
+  return <div className="grid grid-cols-[42px_minmax(0,1fr)_minmax(90px,.8fr)_64px] items-center gap-3 rounded-xl px-2 py-2 transition hover:bg-[#F8FAF8]"><SourceIcon source={source.source} /><div className="min-w-0"><div className="truncate text-sm font-semibold text-[#253E35] dark:text-slate-100">{pretty(source.source)}</div><div className="mt-0.5 text-[10px] text-[#8A9A92]">{source.leads} leads · {source.qualified} qualified{smallSample ? " · small sample" : ""}</div></div><div className="h-2 overflow-hidden rounded-full bg-[#E9EFEB]"><div className="h-full rounded-full bg-[#176148]" style={{ width: `${width}%` }} /></div><div className="text-right"><div className="text-sm font-semibold text-[#18362D] dark:text-white">{source.conversionRate == null ? "—" : `${source.conversionRate}%`}</div><div className="text-[9px] text-[#8A9A92]">qualified</div></div></div>;
 }
 
 function SourceIcon({ source }: { source: string }) {
