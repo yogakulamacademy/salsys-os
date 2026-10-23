@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import './globals.css';
 import './design-system.css';
 import './legacy-visual-aliases.css';
+import './analytics-visual-system.css';
 import { RootShell } from '@/components/root-shell';
 
 export const metadata: Metadata = {

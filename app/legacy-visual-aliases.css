@@ -111,6 +111,62 @@
   line-height: 1.4 !important;
 }
 
+/*
+ * Conversation co-pilot: violet was an early generic AI accent. Keep true
+ * risk/status colors intact while moving only decorative co-pilot chrome onto
+ * the canonical product brand.
+ */
+[data-copilot-host="true"] [class~="bg-violet-600"],
+[data-copilot-host="true"] [class~="bg-violet-500"] {
+  background-color: var(--app-brand-700) !important;
+}
+
+[data-copilot-host="true"] [class~="hover:bg-violet-700"]:hover,
+[data-copilot-host="true"] [class~="hover:bg-violet-600"]:hover {
+  background-color: var(--app-brand-800) !important;
+}
+
+[data-copilot-host="true"] [class~="text-violet-700"],
+[data-copilot-host="true"] [class~="text-violet-600"],
+[data-copilot-host="true"] [class~="text-violet-500"] {
+  color: var(--app-brand-700) !important;
+}
+
+[data-copilot-host="true"] [class~="bg-violet-50"],
+[data-copilot-host="true"] [class~="bg-violet-50/50"],
+[data-copilot-host="true"] [class~="bg-violet-50/70"],
+[data-copilot-host="true"] [class~="bg-violet-100"] {
+  background-color: var(--app-brand-50) !important;
+}
+
+[data-copilot-host="true"] [class~="border-violet-100"],
+[data-copilot-host="true"] [class~="border-violet-200"],
+[data-copilot-host="true"] [class~="border-violet-300"] {
+  border-color: var(--app-border-strong) !important;
+}
+
+[data-copilot-host="true"] [class~="ring-violet-200"],
+[data-copilot-host="true"] [class~="ring-violet-300"] {
+  --tw-ring-color: rgba(33, 101, 81, 0.22) !important;
+}
+
+[data-copilot-host="true"] [class~="focus:border-violet-300"]:focus {
+  border-color: rgba(33, 101, 81, 0.48) !important;
+}
+
+[data-copilot-host="true"] [class~="focus:ring-violet-50"]:focus {
+  --tw-ring-color: rgba(33, 101, 81, 0.08) !important;
+}
+
+[data-copilot-host="true"] [class~="from-violet-50"] {
+  --tw-gradient-from: var(--app-brand-50) var(--tw-gradient-from-position) !important;
+  --tw-gradient-to: rgb(243 248 245 / 0) var(--tw-gradient-to-position) !important;
+}
+
+[data-copilot-host="true"] [class~="hover:from-violet-100/70"]:hover {
+  --tw-gradient-from: rgba(229, 240, 233, 0.7) var(--tw-gradient-from-position) !important;
+}
+
 /* Avoid informational cards looking more interactive than real controls. */
 .legacy-shell-host .card:not(a):not(button):not([role="button"]):hover {
   transform: none;
