@@ -76,7 +76,7 @@ export default async function OnboardingSecurityPage({
               Choose your permanent password
             </h2>
             <p className="mt-2 text-[12px] leading-6 text-[#72877c]">
-              Use at least 12 characters. After this is saved, you will continue directly into workspace onboarding.
+              Confirm the temporary password you used to sign in, then choose a different password with at least 12 characters. After this is saved, you will continue directly into workspace onboarding.
             </p>
 
             {user.email ? (
@@ -93,6 +93,18 @@ export default async function OnboardingSecurityPage({
             ) : null}
 
             <form action={replaceProvisionedOwnerPasswordAction} className="mt-6 space-y-4">
+              <label className="block">
+                <span className="mb-2 block text-[11px] font-bold text-[#315a4a]">Current temporary password</span>
+                <input
+                  className="w-full rounded-xl border border-[#d7e4dc] bg-white px-3.5 py-3 text-sm text-[#173d32] outline-none transition focus:border-[#66a98c] focus:ring-4 focus:ring-[#dff2e9]"
+                  name="current_password"
+                  type="password"
+                  autoComplete="current-password"
+                  required
+                  placeholder="Temporary password used to sign in"
+                />
+              </label>
+
               <label className="block">
                 <span className="mb-2 block text-[11px] font-bold text-[#315a4a]">New password</span>
                 <input
