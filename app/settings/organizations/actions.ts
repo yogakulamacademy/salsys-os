@@ -123,6 +123,10 @@ export async function provisionCustomerOrganizationAction(formData: FormData) {
       crm_role: 'admin',
       tenant_role: 'owner',
     },
+    app_metadata: {
+      require_password_change: true,
+      provisioned_customer_owner: true,
+    },
   });
 
   if (createUserError || !created.user) {
@@ -161,7 +165,7 @@ export async function provisionCustomerOrganizationAction(formData: FormData) {
   redirect(
     organizationsUrl(
       'notice',
-      `${organizationName} was provisioned. The owner will enter onboarding on first sign-in.`,
+      `${organizationName} was provisioned. The owner must replace the temporary password before onboarding begins.`,
     ),
   );
 }
