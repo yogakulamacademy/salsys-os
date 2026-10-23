@@ -49,18 +49,18 @@ export function HomePulse({
   );
 
   return (
-    <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-950">
-      <div className="flex flex-col gap-3 border-b border-slate-100 px-4 py-4 sm:flex-row sm:items-center sm:justify-between dark:border-slate-900">
+    <section className="overflow-hidden rounded-panel border border-line bg-surface shadow-card">
+      <div className="flex flex-col gap-3 border-b border-line px-4 py-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <div className="text-[10px] font-black uppercase tracking-[0.12em] text-slate-400">
+          <div className="text-[10px] font-bold uppercase tracking-[0.12em] text-copy-subtle">
             Business pulse
           </div>
-          <div className="mt-1 text-sm font-black tracking-[-0.02em] text-slate-900 dark:text-white">
+          <div className="mt-1 text-[15px] font-semibold tracking-[-0.02em] text-copy-strong">
             Explore what is moving
           </div>
         </div>
 
-        <div className="flex rounded-xl bg-slate-100 p-1 dark:bg-slate-900">
+        <div className="flex rounded-ui border border-line bg-surface-soft p-1">
           <PulseTab
             active={view === "pipeline"}
             onClick={() => setView("pipeline")}
@@ -91,18 +91,18 @@ export function HomePulse({
                 <Link
                   key={item.stage}
                   href="/pipeline"
-                  className="group grid grid-cols-[92px_1fr_42px] items-center gap-3 rounded-lg px-2 py-1.5 transition hover:bg-slate-50 dark:hover:bg-slate-900/70"
+                  className="group grid grid-cols-[92px_1fr_42px] items-center gap-3 rounded-ui px-2 py-1.5 transition hover:bg-surface-soft"
                 >
-                  <span className="truncate text-[11px] font-bold text-slate-600 dark:text-slate-300">
+                  <span className="truncate text-[11px] font-semibold text-copy-muted">
                     {item.label}
                   </span>
-                  <span className="h-2 overflow-hidden rounded-full bg-slate-100 dark:bg-slate-900">
+                  <span className="h-2 overflow-hidden rounded-full bg-surface-muted">
                     <span
-                      className="block h-full rounded-full bg-violet-500 transition-all duration-300 group-hover:bg-violet-600"
+                      className="block h-full rounded-full bg-brand-600 transition-all duration-300 group-hover:bg-brand-700"
                       style={{ width: `${width}%` }}
                     />
                   </span>
-                  <span className="text-right text-xs font-black tabular-nums text-slate-800 dark:text-slate-100">
+                  <span className="text-right text-[12px] font-semibold tabular-nums text-copy-strong">
                     {item.value.toLocaleString("en-IN")}
                   </span>
                 </Link>
@@ -110,7 +110,7 @@ export function HomePulse({
             })}
             <Link
               href="/funnel"
-              className="mt-2 inline-flex items-center gap-1 text-[11px] font-bold text-violet-600 hover:underline dark:text-violet-300"
+              className="mt-2 inline-flex items-center gap-1 text-[11px] font-semibold text-brand-700 hover:underline"
             >
               Explore conversion funnel <ArrowUpRight size={12} />
             </Link>
@@ -129,18 +129,18 @@ export function HomePulse({
                   <Link
                     key={item.source}
                     href="/analytics"
-                    className="group grid grid-cols-[110px_1fr_88px] items-center gap-3 rounded-lg px-2 py-1.5 transition hover:bg-slate-50 dark:hover:bg-slate-900/70"
+                    className="group grid grid-cols-[110px_1fr_88px] items-center gap-3 rounded-ui px-2 py-1.5 transition hover:bg-surface-soft"
                   >
-                    <span className="truncate text-[11px] font-bold text-slate-600 dark:text-slate-300">
+                    <span className="truncate text-[11px] font-semibold text-copy-muted">
                       {item.source || "Unknown"}
                     </span>
-                    <span className="h-2 overflow-hidden rounded-full bg-slate-100 dark:bg-slate-900">
+                    <span className="h-2 overflow-hidden rounded-full bg-surface-muted">
                       <span
-                        className="block h-full rounded-full bg-sky-500 transition-all duration-300 group-hover:bg-sky-600"
+                        className="block h-full rounded-full bg-[#4D8E83] transition-all duration-300 group-hover:bg-brand-700"
                         style={{ width: `${width}%` }}
                       />
                     </span>
-                    <span className="text-right text-[10px] font-semibold text-slate-400">
+                    <span className="text-right text-[10px] font-semibold text-copy-subtle">
                       {item.leads.toLocaleString("en-IN")} · {qualification}% Q+
                     </span>
                   </Link>
@@ -151,7 +151,7 @@ export function HomePulse({
             )}
             <Link
               href="/attribution"
-              className="mt-2 inline-flex items-center gap-1 text-[11px] font-bold text-violet-600 hover:underline dark:text-violet-300"
+              className="mt-2 inline-flex items-center gap-1 text-[11px] font-semibold text-brand-700 hover:underline"
             >
               Inspect attribution <ArrowUpRight size={12} />
             </Link>
@@ -166,19 +166,19 @@ export function HomePulse({
                   <Link
                     key={item.currency}
                     href="/revenue"
-                    className="rounded-xl border border-slate-200 p-4 transition hover:border-violet-200 hover:bg-violet-50/30 dark:border-slate-800 dark:hover:border-violet-900 dark:hover:bg-violet-950/10"
+                    className="rounded-panel border border-line p-4 transition hover:border-line-strong hover:bg-brand-50"
                   >
                     <div className="flex items-center justify-between gap-2">
-                      <span className="text-[10px] font-black uppercase tracking-[0.12em] text-slate-400">
+                      <span className="text-[10px] font-bold uppercase tracking-[0.12em] text-copy-subtle">
                         {item.currency}
                       </span>
-                      <ArrowUpRight size={13} className="text-slate-300" />
+                      <ArrowUpRight size={13} className="text-copy-subtle" />
                     </div>
-                    <div className="mt-2 text-2xl font-black tracking-[-0.04em] text-slate-900 dark:text-white">
+                    <div className="mt-2 text-2xl font-semibold tracking-[-0.04em] text-copy-strong">
                       {formatMoney(item.collected, item.currency)}
                     </div>
-                    <div className="mt-1 text-[11px] text-slate-500">Collected</div>
-                    <div className="mt-4 grid grid-cols-2 gap-3 border-t border-slate-100 pt-3 dark:border-slate-900">
+                    <div className="mt-1 text-[11px] text-copy-muted">Collected</div>
+                    <div className="mt-4 grid grid-cols-2 gap-3 border-t border-line pt-3">
                       <MiniMetric label="Outstanding" value={formatMoney(item.outstanding, item.currency)} />
                       <MiniMetric label="Open pipeline" value={formatMoney(item.pipeline, item.currency)} />
                     </div>
@@ -210,10 +210,10 @@ function PulseTab({
     <button
       type="button"
       onClick={onClick}
-      className={`flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-[10px] font-bold transition ${
+      className={`flex items-center gap-1.5 rounded-[8px] px-2.5 py-1.5 text-[11px] font-semibold transition ${
         active
-          ? "bg-white text-slate-900 shadow-sm dark:bg-slate-800 dark:text-white"
-          : "text-slate-500 hover:text-slate-900 dark:hover:text-white"
+          ? "bg-surface text-brand-700 shadow-sm"
+          : "text-copy-muted hover:text-copy-strong"
       }`}
     >
       {icon}
@@ -225,15 +225,15 @@ function PulseTab({
 function MiniMetric({ label, value }: { label: string; value: string }) {
   return (
     <div>
-      <div className="text-[9px] font-bold uppercase tracking-[0.08em] text-slate-400">{label}</div>
-      <div className="mt-1 truncate text-xs font-black text-slate-800 dark:text-slate-100">{value}</div>
+      <div className="text-[10px] font-semibold uppercase tracking-[0.08em] text-copy-subtle">{label}</div>
+      <div className="mt-1 truncate text-[12px] font-semibold text-copy-strong">{value}</div>
     </div>
   );
 }
 
 function EmptyState({ label }: { label: string }) {
   return (
-    <div className="rounded-xl border border-dashed border-slate-200 px-4 py-10 text-center text-xs font-semibold text-slate-400 dark:border-slate-800">
+    <div className="rounded-panel border border-dashed border-line px-4 py-10 text-center text-[12px] font-semibold text-copy-subtle">
       {label}
     </div>
   );
