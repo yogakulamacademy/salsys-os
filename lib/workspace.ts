@@ -10,6 +10,9 @@ type ServerSupabaseClient = Awaited<ReturnType<typeof createClient>>;
 type FastWorkspaceContextPayload = {
   organization_id?: unknown;
   active_organization_id?: unknown;
+  organization_name?: unknown;
+  organization_slug?: unknown;
+  role?: unknown;
 };
 
 export type WorkspaceMembership = {
@@ -25,6 +28,10 @@ export type WorkspaceContext = {
   memberships: WorkspaceMembership[];
   selectionRequired: boolean;
 };
+
+function cleanText(value: unknown) {
+  return typeof value === "string" ? value.trim() : String(value ?? "").trim();
+}
 
 async function bindCurrentTenantSession(
   supabase: ServerSupabaseClient,
@@ -149,23 +156,52 @@ export async function getWorkspaceContextForUser(
   };
 }
 
-async function getFastCurrentOrganizationId(
+async function getFastCurrentWorkspaceContext(
   supabase: ServerSupabaseClient,
-): Promise<string | null> {
+): Promise<WorkspaceContext | null> {
   const { data, error } = await (supabase as any).rpc(
     "get_current_workspace_context_v1",
   );
 
-  if (error || !data || typeof data !== "object") {
+  if (
+    error ||
+    !data ||
+    typeof data !== "object" ||
+    Array.isArray(data)
+  ) {
     return null;
   }
 
   const payload = data as FastWorkspaceContextPayload;
-  const organizationId = String(
-    payload.active_organization_id ?? payload.organization_id ?? "",
-  ).trim();
+  const organizationId = cleanText(
+    payload.active_organization_id ?? payload.organization_id,
+  );
+  const role = cleanText(payload.role);
 
-  return organizationId || null;
+  if (!organizationId || !role) {
+    return null;
+  }
+
+  const activeWorkspace: WorkspaceMembership = {
+    organizationId,
+    organizationName: cleanText(payload.organization_name),
+    organizationSlug: cleanText(payload.organization_slug),
+    role,
+  };
+
+  return {
+    activeOrganizationId: organizationId,
+    activeWorkspace,
+    memberships: [activeWorkspace],
+    selectionRequired: false,
+  };
+}
+
+async function getFastCurrentOrganizationId(
+  supabase: ServerSupabaseClient,
+): Promise<string | null> {
+  const workspace = await getFastCurrentWorkspaceContext(supabase);
+  return workspace?.activeOrganizationId ?? null;
 }
 
 export async function requireCurrentOrganizationId(
@@ -211,6 +247,15 @@ export async function getCurrentWorkspaceContext(
     throw new Error(
       "Unable to resolve current organization: user is not authenticated.",
     );
+  }
+
+  // Normal authenticated requests already have one session-bound active tenant.
+  // Resolve that tenant, its role and display metadata in one RPC. If the RPC is
+  // unavailable, preserve the full legacy membership resolver as a safe fallback.
+  const fastWorkspace = await getFastCurrentWorkspaceContext(supabase);
+
+  if (fastWorkspace) {
+    return fastWorkspace;
   }
 
   return getWorkspaceContextForUser(supabase, user.id);
