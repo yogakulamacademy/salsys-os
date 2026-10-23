@@ -1,0 +1,166 @@
+/*
+ * SalsysOS Design Audit Polish — V9
+ *
+ * Implements the high-priority findings from the October 2026 UI review:
+ * - one green/neutral visual language
+ * - stronger contrast and readable supporting text
+ * - consistent spacing/control/card treatment
+ * - no arbitrary purple in operational UI
+ *
+ * Semantic warning/success/danger colors stay intact.
+ */
+
+:root {
+  --app-brand-950: #0f2c24;
+  --app-brand-900: #173f34;
+  --app-brand-800: #1d5545;
+  --app-brand-700: #256551;
+  --app-brand-600: #2f7862;
+  --app-brand-100: #dff4ec;
+  --app-brand-50: #f0f8f5;
+
+  --app-bg: #f7f9f8;
+  --app-surface: #ffffff;
+  --app-surface-soft: #fafcfb;
+  --app-surface-muted: #f1f5f3;
+  --app-border: #dce6e1;
+  --app-border-strong: #c5d5cd;
+
+  --app-text: #193e34;
+  --app-text-strong: #173f34;
+  --app-text-muted: #587166;
+  --app-text-subtle: #7d9188;
+
+  --app-warning: #a4520c;
+  --app-warning-soft: #fff6e8;
+}
+
+/* Keep the interface readable for long operational sessions. */
+body {
+  color: var(--app-text);
+  background: var(--app-bg);
+}
+
+main p,
+main li,
+main label,
+main input,
+main select,
+main textarea,
+main button {
+  line-height: 1.5;
+}
+
+/* Shared page hierarchy. */
+.ui-page-title,
+main h1 {
+  font-weight: 650;
+}
+
+.ui-page-description {
+  color: var(--app-text-muted);
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+/* Eyebrows should be quiet but still readable. */
+.eyebrow,
+.header-eyebrow,
+.sidebar-group-label,
+.ui-page-kicker {
+  font-size: 11px;
+  letter-spacing: .1em;
+}
+
+/* Operational links use brand green, not decorative violet. */
+main .text-violet-600:not([data-ai-accent]),
+main .text-violet-700:not([data-ai-accent]),
+main .text-violet-500:not([data-ai-accent]) {
+  color: var(--app-brand-700) !important;
+}
+
+main .hover\:text-violet-700:not([data-ai-accent]):hover,
+main .hover\:text-violet-600:not([data-ai-accent]):hover {
+  color: var(--app-brand-800) !important;
+}
+
+main .bg-violet-50:not([data-ai-accent]),
+main .bg-violet-100:not([data-ai-accent]) {
+  background: var(--app-brand-50) !important;
+}
+
+main .border-violet-100:not([data-ai-accent]),
+main .border-violet-200:not([data-ai-accent]) {
+  border-color: var(--app-border) !important;
+}
+
+/* Home attention badges: neutral brand treatment instead of arbitrary purple. */
+main .bg-violet-50.text-violet-700 {
+  color: var(--app-brand-700) !important;
+  background: var(--app-brand-50) !important;
+}
+
+/* Dark product banners must always retain strong text contrast. */
+main .bg-\[\#153E33\],
+main .bg-\[\#163f35\] {
+  color: #ffffff;
+}
+
+main .bg-\[\#153E33\] h1,
+main .bg-\[\#153E33\] h2,
+main .bg-\[\#153E33\] h3,
+main .bg-\[\#163f35\] h1,
+main .bg-\[\#163f35\] h2,
+main .bg-\[\#163f35\] h3 {
+  color: #ffffff !important;
+}
+
+main .bg-\[\#153E33\] p,
+main .bg-\[\#163f35\] p {
+  color: #d8ece2 !important;
+}
+
+/* Global operational readability floor. */
+main .text-\[8px\],
+main .text-\[9px\],
+main .text-\[10px\] {
+  font-size: 11.5px !important;
+  line-height: 1.45 !important;
+}
+
+main .text-\[11px\] {
+  font-size: 12px !important;
+  line-height: 1.5 !important;
+}
+
+/* Cards: same border, radius and surface language across modules. */
+main .rounded-xl.border.bg-white,
+main .rounded-2xl.border.bg-white {
+  border-color: var(--app-border) !important;
+  background: var(--app-surface) !important;
+}
+
+/* Interactive controls share one height and one visual rhythm. */
+main button:not([class*='h-']):not([class*='min-h-']),
+main a[role='button']:not([class*='h-']):not([class*='min-h-']) {
+  min-height: 40px;
+}
+
+/* Home/overview section actions should read like one product system. */
+main a[class*='text-violet'] {
+  font-weight: 600;
+}
+
+/* Dark-mode equivalents for the token overrides above. */
+.dark {
+  --app-bg: #101713;
+  --app-surface: #151f1a;
+  --app-surface-soft: #19251f;
+  --app-surface-muted: #1d2a23;
+  --app-border: #2c3d34;
+  --app-border-strong: #405248;
+  --app-text: #dce7e1;
+  --app-text-strong: #f4faf6;
+  --app-text-muted: #a3b5ab;
+  --app-text-subtle: #82958a;
+}
