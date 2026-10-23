@@ -348,7 +348,7 @@ export async function verifyOnboardingTeamAction() {
 
   revalidatePath('/onboarding');
   revalidatePath('/onboarding/team');
-  redirect('/onboarding?step=finish');
+  redirect('/onboarding/finish');
 }
 
 export async function skipOnboardingTeamAction() {
@@ -366,7 +366,66 @@ export async function skipOnboardingTeamAction() {
   }
 
   revalidatePath('/onboarding');
-  redirect('/onboarding?step=finish');
+  redirect('/onboarding/finish');
+}
+
+export async function completeOnboardingAction() {
+  const { supabase, organizationId } = await requireManageableWorkspace();
+  const { data: onboarding, error: onboardingError } = await supabase
+    .from('organization_onboarding')
+    .select('completed_steps')
+    .eq('organization_id', organizationId)
+    .maybeSingle();
+
+  if (onboardingError || !onboarding) {
+    throw new Error(
+      `Unable to load onboarding readiness: ${onboardingError?.message ?? 'Onboarding record not found.'}`,
+    );
+  }
+
+  const completedSteps = Array.isArray(onboarding.completed_steps)
+    ? onboarding.completed_steps.map(String)
+    : [];
+  const requiredSteps = ['business', 'goals', 'website'];
+  const missingRequired = requiredSteps.filter((step) => !completedSteps.includes(step));
+
+  if (missingRequired.length > 0) {
+    redirect(
+      `/onboarding/finish?error=${encodeURIComponent(`Complete the required setup first: ${missingRequired.join(', ')}.`)}`,
+    );
+  }
+
+  const tracking = await getTrackingPlatformWorkspace();
+  const healthyWebsite = tracking.sources.some(
+    (source) => source.sourceType === 'website' && source.healthStatus === 'healthy',
+  );
+
+  if (tracking.organizationId !== organizationId || !healthyWebsite) {
+    redirect(
+      '/onboarding/finish?error=Website%20tracking%20is%20no%20longer%20healthy.%20Restore%20a%20healthy%20browser%20source%20before%20finishing%20setup.',
+    );
+  }
+
+  const finalSteps = withCompletedStep(completedSteps, 'finish');
+  const { error } = await supabase
+    .from('organization_onboarding')
+    .update({
+      status: 'completed',
+      current_step: 'finish',
+      completed_steps: finalSteps,
+      completed_at: new Date().toISOString(),
+      dismissed_at: null,
+    })
+    .eq('organization_id', organizationId);
+
+  if (error) {
+    throw new Error(`Unable to complete onboarding: ${error.message}`);
+  }
+
+  revalidatePath('/onboarding');
+  revalidatePath('/onboarding/finish');
+  revalidatePath('/dashboard');
+  redirect('/onboarding/finish?completed=1');
 }
 
 export async function resumeOnboardingStepAction(formData: FormData) {
