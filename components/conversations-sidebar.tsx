@@ -25,6 +25,7 @@ export type ConversationLeadSummary = {
 };
 
 type InboxFilter = "all" | "reply" | "unread";
+type PriorityFilter = "all" | ConversationPriority;
 
 export function ConversationsSidebar({
   leads,
@@ -37,7 +38,7 @@ export function ConversationsSidebar({
   const explicitLeadId = searchParams.get("lead");
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState<InboxFilter>("all");
-  const [priorityOnly, setPriorityOnly] = useState(false);
+  const [priorityFilter, setPriorityFilter] = useState<PriorityFilter>("all");
   const [now, setNow] = useState(0);
   const [mobileViewport, setMobileViewport] = useState(false);
   const searchRef = useRef<HTMLInputElement | null>(null);
@@ -70,10 +71,7 @@ export function ConversationsSidebar({
       }
 
       const target = event.target as HTMLElement | null;
-      if (
-        target?.matches("input, textarea, select") ||
-        target?.isContentEditable
-      ) {
+      if (target?.matches("input, textarea, select") || target?.isContentEditable) {
         return;
       }
 
@@ -88,9 +86,6 @@ export function ConversationsSidebar({
 
   const unreadCount = leads.filter((lead) => lead.unread).length;
   const replyCount = leads.filter((lead) => lead.needsReply).length;
-  const priorityCount = leads.filter(
-    (lead) => lead.priority === "urgent" || lead.priority === "high",
-  ).length;
 
   const filteredLeads = useMemo(() => {
     const query = search.trim().toLowerCase();
@@ -98,13 +93,7 @@ export function ConversationsSidebar({
     return leads.filter((lead) => {
       if (filter === "reply" && !lead.needsReply) return false;
       if (filter === "unread" && !lead.unread) return false;
-      if (
-        priorityOnly &&
-        lead.priority !== "urgent" &&
-        lead.priority !== "high"
-      ) {
-        return false;
-      }
+      if (priorityFilter !== "all" && lead.priority !== priorityFilter) return false;
 
       if (!query) return true;
 
@@ -122,12 +111,10 @@ export function ConversationsSidebar({
         .toLowerCase()
         .includes(query);
     });
-  }, [filter, leads, priorityOnly, search]);
+  }, [filter, leads, priorityFilter, search]);
 
   function handleFilterKeyDown(event: React.KeyboardEvent<HTMLDivElement>) {
-    if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) {
-      return;
-    }
+    if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
 
     const tabs = Array.from(
       event.currentTarget.querySelectorAll<HTMLButtonElement>('[role="tab"]'),
@@ -146,120 +133,118 @@ export function ConversationsSidebar({
     tabs[nextIndex]?.click();
   }
 
+  const hasFilters = Boolean(search || filter !== "all" || priorityFilter !== "all");
+
   return (
-    <aside className="flex h-full min-h-0 flex-col overflow-hidden bg-white dark:bg-slate-950">
-      <div className="shrink-0 px-4 pt-4">
+    <aside className="conversation-sidebar flex h-full min-h-0 flex-col overflow-hidden bg-surface">
+      <div className="shrink-0 border-b border-line px-4 pb-0 pt-4">
         <div className="flex items-center justify-between gap-3">
-          <div className="text-[13px] font-semibold text-[#18362D] dark:text-white">
-            Your inbox
+          <div>
+            <div className="text-[15px] font-semibold tracking-[-0.02em] text-copy-strong">
+              Inbox queue
+            </div>
+            <div className="mt-1 text-[11.5px] leading-5 text-copy-muted">
+              Prioritized by reply needs and recency
+            </div>
           </div>
-          <div className="text-[10px] font-medium text-[#596E64] dark:text-slate-400">
-            {leads.length} conversations
-          </div>
+          <span className="rounded-md bg-brand-50 px-2 py-1 text-[11px] font-semibold text-brand-700">
+            {leads.length}
+          </span>
         </div>
 
         <label className="relative mt-3 block">
           <span className="sr-only">Search conversations</span>
           <Search
-            size={14}
-            className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[#71847A]"
+            size={15}
+            className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-copy-subtle"
           />
           <input
             ref={searchRef}
             value={search}
             onChange={(event) => setSearch(event.target.value)}
-            placeholder="Search conversations…"
-            className="h-9 w-full rounded-lg border border-[#D7E0D9] bg-[#FCFDFB] pl-9 pr-14 text-[11px] text-[#18362D] outline-none transition placeholder:text-[#71847A] focus:border-[#216551] focus:ring-2 focus:ring-[#216551]/15 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-100"
+            placeholder="Search leads, course, country…"
+            className="h-10 w-full rounded-ui border border-line bg-surface-soft pl-9 pr-14 text-[13px] text-copy-strong outline-none transition placeholder:text-copy-subtle focus:border-brand-600 focus:bg-surface focus:ring-2 focus:ring-brand-700/10"
           />
           {!search ? (
-            <kbd className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 rounded border border-[#DCE4DF] bg-white px-1.5 py-0.5 text-[9px] font-medium text-[#71847A] dark:border-slate-700 dark:bg-slate-950">
+            <kbd className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 rounded border border-line bg-surface px-1.5 py-0.5 text-[10px] font-medium text-copy-subtle">
               /
             </kbd>
           ) : (
             <button
               type="button"
               onClick={() => setSearch("")}
-              className="absolute right-2 top-1/2 grid h-6 w-6 -translate-y-1/2 place-items-center rounded-md text-[#71847A] hover:bg-[#EDF3E6] hover:text-[#216551]"
+              className="absolute right-2 top-1/2 grid h-7 w-7 -translate-y-1/2 place-items-center rounded-md text-copy-subtle transition hover:bg-brand-50 hover:text-brand-700"
               aria-label="Clear conversation search"
             >
-              <X size={12} />
+              <X size={13} />
             </button>
           )}
         </label>
 
         <div
-          className="mt-3 grid grid-cols-3 border-b border-[#DCE4DF]"
+          className="mt-3 grid grid-cols-3"
           role="tablist"
           aria-label="Conversation filters"
           onKeyDown={handleFilterKeyDown}
         >
-          <InboxTab
-            active={filter === "all"}
-            onClick={() => setFilter("all")}
-            count={leads.length}
-          >
+          <InboxTab active={filter === "all"} onClick={() => setFilter("all")} count={leads.length}>
             All
           </InboxTab>
-          <InboxTab
-            active={filter === "reply"}
-            onClick={() => setFilter("reply")}
-            count={replyCount}
-          >
+          <InboxTab active={filter === "reply"} onClick={() => setFilter("reply")} count={replyCount}>
             Needs reply
           </InboxTab>
-          <InboxTab
-            active={filter === "unread"}
-            onClick={() => setFilter("unread")}
-            count={unreadCount}
-          >
+          <InboxTab active={filter === "unread"} onClick={() => setFilter("unread")} count={unreadCount}>
             Unread
           </InboxTab>
         </div>
       </div>
 
-      <div className="flex shrink-0 items-center justify-between gap-3 border-b border-[#DCE4DF] px-4 py-2.5 text-[9px] text-[#596E64] dark:border-slate-900 dark:text-slate-400">
-        <span aria-live="polite">
-          {filteredLeads.length} conversation{filteredLeads.length === 1 ? "" : "s"}
-        </span>
-        <label className="flex items-center gap-1.5">
+      <div className="flex shrink-0 items-center justify-between gap-3 border-b border-line bg-surface px-4 py-2.5">
+        <label className="min-w-0 flex-1">
           <span className="sr-only">Priority filter</span>
           <select
-            value={priorityOnly ? "priority" : "all"}
-            onChange={(event) => setPriorityOnly(event.target.value === "priority")}
-            className="h-7 rounded-md border border-transparent bg-white px-1.5 text-[10px] text-[#596E64] outline-none focus:border-[#216551] focus:ring-2 focus:ring-[#216551]/15 dark:bg-slate-950 dark:text-slate-300"
+            value={priorityFilter}
+            onChange={(event) => setPriorityFilter(event.target.value as PriorityFilter)}
+            className="h-8 max-w-[160px] rounded-md border-0 bg-transparent px-0 text-[12px] font-medium text-copy-muted outline-none focus:text-brand-700"
           >
             <option value="all">All priorities</option>
-            <option value="priority">Priority only ({priorityCount})</option>
+            <option value="urgent">Urgent only</option>
+            <option value="high">High priority</option>
+            <option value="normal">Normal priority</option>
+            <option value="waiting">Waiting</option>
           </select>
         </label>
+        <span className="shrink-0 text-[11px] text-copy-subtle" aria-live="polite">
+          {filteredLeads.length} shown
+        </span>
       </div>
 
-      <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-1.5 [scrollbar-width:thin]">
+      <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain [scrollbar-width:thin]">
         {filteredLeads.length === 0 ? (
-          <div className="grid min-h-[260px] place-items-center px-5 text-center">
+          <div className="grid min-h-[280px] place-items-center px-6 text-center">
             <div>
-              <div className="mx-auto grid h-10 w-10 place-items-center rounded-xl bg-[#EDF3E6] text-[#216551] dark:bg-slate-900">
-                <MessageCircle size={17} />
+              <div className="mx-auto grid h-11 w-11 place-items-center rounded-xl bg-brand-50 text-brand-700">
+                <MessageCircle size={18} />
               </div>
-              <div className="mt-3 text-xs font-semibold text-[#18362D] dark:text-slate-200">
-                {filter === "unread" && !search && !priorityOnly
+              <div className="mt-3 text-[13px] font-semibold text-copy-strong">
+                {filter === "unread" && !search && priorityFilter === "all"
                   ? "You’re all caught up"
                   : "No matching conversations"}
               </div>
-              <div className="mt-1 text-[10px] leading-5 text-[#596E64] dark:text-slate-400">
-                {filter === "unread" && !search && !priorityOnly
+              <div className="mt-1 text-[12px] leading-5 text-copy-muted">
+                {filter === "unread" && !search && priorityFilter === "all"
                   ? "There are no unread conversations right now."
                   : "Try another search or remove a filter."}
               </div>
-              {search || filter !== "all" || priorityOnly ? (
+              {hasFilters ? (
                 <button
                   type="button"
                   onClick={() => {
                     setSearch("");
                     setFilter("all");
-                    setPriorityOnly(false);
+                    setPriorityFilter("all");
                   }}
-                  className="mt-3 rounded-lg border border-[#D7E0D9] bg-white px-3 py-1.5 text-[10px] font-semibold text-[#216551] hover:bg-[#EDF3E6] dark:border-slate-800 dark:bg-slate-950"
+                  className="mt-3 rounded-ui border border-line bg-surface px-3 py-2 text-[12px] font-semibold text-brand-700 transition hover:bg-brand-50"
                 >
                   View all conversations
                 </button>
@@ -269,23 +254,15 @@ export function ConversationsSidebar({
         ) : (
           filteredLeads.map((lead) => {
             const selected =
-              lead.id === selectedId &&
-              (!mobileViewport || explicitLeadId === lead.id);
+              lead.id === selectedId && (!mobileViewport || explicitLeadId === lead.id);
 
-            return (
-              <ConversationRow
-                key={lead.id}
-                lead={lead}
-                selected={selected}
-                now={now}
-              />
-            );
+            return <ConversationRow key={lead.id} lead={lead} selected={selected} now={now} />;
           })
         )}
       </div>
 
-      <div className="shrink-0 border-t border-[#DCE4DF] px-4 py-2.5 text-[9px] text-[#71847A] dark:border-slate-900 dark:text-slate-500">
-        Search and filters do not change CRM records.
+      <div className="shrink-0 border-t border-line px-4 py-2.5 text-[11px] text-copy-subtle">
+        One CRM lead per conversation · filters never change CRM records
       </div>
     </aside>
   );
@@ -312,73 +289,68 @@ function ConversationRow({
     <Link
       href={`/conversations?lead=${lead.id}`}
       aria-current={selected ? "page" : undefined}
-      className={`group relative mb-1 block rounded-lg border px-3 py-3 transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#216551] focus-visible:ring-offset-1 ${
-        selected
-          ? "border-[#DCE6D1] bg-[#EDF3E6] dark:border-emerald-900/40 dark:bg-emerald-950/15"
-          : "border-transparent bg-white hover:bg-[#F6F8F7] dark:bg-slate-950 dark:hover:bg-slate-900/50"
+      className={`group relative block border-b border-line/70 px-4 py-3.5 transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand-700/40 ${
+        selected ? "bg-brand-50" : "bg-surface hover:bg-surface-soft"
       }`}
     >
       {selected ? (
-        <span className="absolute bottom-4 left-0 top-4 w-[3px] rounded-r-full bg-[#216551]" />
+        <span className="absolute bottom-2 left-0 top-2 w-[3px] rounded-r-full bg-brand-700" />
       ) : null}
 
       <div className="flex gap-2.5">
         <div
-          className={`mt-0.5 grid h-8 w-8 shrink-0 place-items-center rounded-full text-[10px] font-bold ${
-            selected
-              ? "bg-[#D7E3C9] text-[#216551]"
-              : "bg-[#EDF1EB] text-[#596E64] dark:bg-slate-900 dark:text-slate-300"
+          className={`mt-0.5 grid h-9 w-9 shrink-0 place-items-center rounded-full text-[11px] font-bold ${
+            selected ? "bg-brand-100 text-brand-700" : "bg-surface-muted text-copy-muted"
           }`}
         >
           {initials(lead.name)}
         </div>
 
         <div className="min-w-0 flex-1">
-          <div className="flex items-center justify-between gap-2">
-            <div className="min-w-0 truncate text-[12px] font-semibold text-[#18362D] dark:text-slate-100">
+          <div className="flex items-center gap-2">
+            <div className="min-w-0 flex-1 truncate text-[13px] font-semibold text-copy-strong">
               {lead.unread ? (
                 <span
-                  className="mr-1.5 inline-block h-1.5 w-1.5 rounded-full bg-[#216551] align-middle"
+                  className="mr-1.5 inline-block h-1.5 w-1.5 rounded-full bg-brand-600 align-middle"
                   aria-label="Unread"
                 />
               ) : null}
               {lead.name}
             </div>
-            <div className="shrink-0 text-[9px] text-[#71847A] dark:text-slate-500">
-              {lead.lastContactedAt
-                ? formatListTime(lead.lastContactedAt, now)
-                : "New"}
+            {highPriority ? (
+              <Flag
+                size={12}
+                className={lead.priority === "urgent" ? "shrink-0 text-danger" : "shrink-0 text-warning"}
+                aria-label={`${lead.priority} priority`}
+              />
+            ) : null}
+            <div className="shrink-0 text-[10.5px] text-copy-subtle">
+              {lead.lastContactedAt ? formatListTime(lead.lastContactedAt, now) : "New"}
             </div>
           </div>
 
-          <div className="mt-1 truncate text-[10px] capitalize text-[#596E64] dark:text-slate-400">
-            {contextPreview}
-          </div>
+          <div className="mt-1 truncate text-[12px] text-copy-muted">{contextPreview}</div>
 
           <div className="mt-2.5 flex min-w-0 items-center gap-1.5">
             {lead.needsReply ? (
-              <span className="inline-flex items-center gap-1 text-[9px] font-semibold text-[#825018]">
-                <span className="h-1 w-1 rounded-full bg-[#9B6B25]" /> Needs reply
+              <span className="inline-flex items-center gap-1 rounded-md border border-warning/20 bg-warning-soft px-1.5 py-0.5 text-[10.5px] font-semibold text-warning">
+                Needs reply
               </span>
             ) : lead.needsFirstContact ? (
-              <span className="text-[9px] font-semibold text-sky-700">First contact</span>
+              <span className="rounded-md bg-sky-50 px-1.5 py-0.5 text-[10.5px] font-semibold text-sky-700">
+                First contact
+              </span>
             ) : (
-              <span className="text-[9px] text-[#71847A]">Reviewed</span>
+              <span className="text-[10.5px] text-copy-subtle">Reviewed</span>
             )}
 
-            <span className="max-w-[108px] truncate rounded border border-[#D6E1D0] bg-[#F1F5ED] px-1.5 py-0.5 text-[9px] font-medium capitalize leading-none text-[#365844] dark:border-slate-800 dark:bg-slate-900 dark:text-slate-300">
+            <span className="max-w-[120px] truncate rounded-md border border-line bg-surface-soft px-1.5 py-0.5 text-[10.5px] font-medium capitalize text-copy-muted">
               {stage}
             </span>
 
-            {highPriority ? (
-              <span
-                className="ml-auto inline-flex shrink-0 items-center text-[#825018]"
-                title={`${lead.priority} priority`}
-                aria-label={`${lead.priority} priority`}
-              >
-                <Flag size={12} />
-              </span>
-            ) : null}
+            <span className="ml-auto truncate text-[10px] capitalize text-copy-subtle">
+              {sourceLabel}
+            </span>
           </div>
         </div>
       </div>
@@ -404,14 +376,18 @@ function InboxTab({
       aria-selected={active}
       tabIndex={active ? 0 : -1}
       onClick={onClick}
-      className={`border-b-2 px-1 pb-2.5 pt-1 text-[10px] transition ${
+      className={`border-b-2 px-1 pb-2.5 pt-1 text-[12px] transition ${
         active
-          ? "border-[#216551] font-semibold text-[#153E33]"
-          : "border-transparent text-[#596E64] hover:text-[#18362D]"
+          ? "border-brand-700 font-semibold text-brand-700"
+          : "border-transparent text-copy-muted hover:text-copy-strong"
       }`}
     >
       {children}
-      <span className="ml-1 rounded bg-[#F0F3EF] px-1 py-0.5 text-[9px] font-medium text-[#596E64]">
+      <span
+        className={`ml-1 rounded px-1 py-0.5 text-[10px] font-medium ${
+          active ? "bg-brand-50 text-brand-700" : "bg-surface-muted text-copy-muted"
+        }`}
+      >
         {count}
       </span>
     </button>
