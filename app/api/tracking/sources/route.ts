@@ -273,11 +273,7 @@ export async function POST(request: NextRequest) {
     ? null
     : `sls_${randomBytes(32).toString('base64url')}`;
   const secretHash = secret ? sha256(secret) : null;
-  const authMode = isWebsite
-    ? 'origin'
-    : isPublishableClient
-      ? 'publishable'
-      : 'secret';
+  const authMode = isWebsite ? 'origin' : isPublishableClient ? 'publishable' : 'secret';
   const admin = createAdminClient();
 
   if (isWebsite && hostname && environment) {
