@@ -375,12 +375,16 @@ export async function POST(request: NextRequest) {
         provisioned_by: auth.user.id,
         provisioned_via: 'app/api/tracking/sources',
         platform,
-        credential_class: isPublishableClient
-          ? 'publishable_identifier'
-          : 'server_secret',
-        authority: isPublishableClient
-          ? 'non_authoritative_client_telemetry'
-          : 'trusted_server_source',
+        credential_class: isWebsite
+          ? 'origin_bound_identifier'
+          : isPublishableClient
+            ? 'publishable_identifier'
+            : 'server_secret',
+        authority: isWebsite
+          ? 'origin_bound_browser_telemetry'
+          : isPublishableClient
+            ? 'non_authoritative_client_telemetry'
+            : 'trusted_server_source',
       },
     })
     .select(
