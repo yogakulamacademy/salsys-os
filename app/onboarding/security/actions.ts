@@ -11,8 +11,13 @@ function securityUrl(message: string) {
 }
 
 export async function replaceProvisionedOwnerPasswordAction(formData: FormData) {
+  const currentPassword = String(formData.get('current_password') ?? '');
   const password = String(formData.get('password') ?? '');
   const confirmPassword = String(formData.get('confirm_password') ?? '');
+
+  if (!currentPassword) {
+    redirect(securityUrl('Enter your current temporary password.'));
+  }
 
   if (password.length < 12) {
     redirect(securityUrl('Use a password with at least 12 characters.'));
@@ -20,6 +25,10 @@ export async function replaceProvisionedOwnerPasswordAction(formData: FormData) 
 
   if (password !== confirmPassword) {
     redirect(securityUrl('Passwords do not match.'));
+  }
+
+  if (password === currentPassword) {
+    redirect(securityUrl('Choose a new password that is different from the temporary password.'));
   }
 
   const supabase = await createClient();
@@ -52,13 +61,16 @@ export async function replaceProvisionedOwnerPasswordAction(formData: FormData) 
     redirect('/login?error=Your%20workspace%20does%20not%20permit%20account%20setup.');
   }
 
-  const { error: passwordError } = await supabase.auth.updateUser({ password });
+  const { error: passwordError } = await supabase.auth.updateUser({
+    password,
+    currentPassword,
+  });
 
   if (passwordError) {
     redirect(
       securityUrl(
         passwordError.message ||
-          'Unable to update your password. Choose a different password and try again.',
+          'Unable to update your password. Confirm the temporary password and try again.',
       ),
     );
   }
@@ -79,7 +91,7 @@ export async function replaceProvisionedOwnerPasswordAction(formData: FormData) 
     // silently entering the application with stale provisioning state.
     redirect(
       securityUrl(
-        'Your password was updated, but account setup could not be finalized. Please enter your new password once more to retry.',
+        'Your password was updated, but account setup could not be finalized. Use the password you just created as your current password and choose another new password to retry.',
       ),
     );
   }
