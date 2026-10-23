@@ -231,6 +231,12 @@ function workspaceServiceUnavailable(pathname: string) {
   );
 }
 
+type WorkspaceContextPayload = {
+  organization_id?: unknown;
+  active_organization_id?: unknown;
+  role?: unknown;
+};
+
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
@@ -295,17 +301,17 @@ export async function middleware(request: NextRequest) {
     return redirectToLoginWithClearedSession(request, response);
   }
 
-  // Canonical tenant resolution must happen before reading tenant-scoped
-  // membership rows. organization_members is protected by RLS and can be
-  // invisible until the authenticated auth session is bound to its tenant.
-  const { data: boundOrganizationId, error: bindingError } = await supabase.rpc(
-    "bind_current_tenant_session_for_current_user",
+  // Resolve tenant binding + active membership role in one database round trip.
+  // The RPC is SECURITY DEFINER but validates auth.uid(), auth.role(), session_id,
+  // active tenant binding and active organization membership before returning.
+  const { data: workspaceContext, error: workspaceError } = await supabase.rpc(
+    "get_current_workspace_context_v1",
   );
 
-  if (bindingError || !boundOrganizationId) {
-    const detail = String(bindingError?.message ?? "");
+  if (workspaceError || !workspaceContext || typeof workspaceContext !== "object") {
+    const detail = String(workspaceError?.message ?? "");
 
-    if (isInvalidOrExpiredAuthSessionError(bindingError)) {
+    if (isInvalidOrExpiredAuthSessionError(workspaceError)) {
       if (pathname.startsWith("/api/")) {
         return unauthorizedWithClearedSession(request);
       }
@@ -347,27 +353,11 @@ export async function middleware(request: NextRequest) {
     return workspaceServiceUnavailable(pathname);
   }
 
-  const organizationId = String(boundOrganizationId).trim();
-
-  const { data: membership, error: membershipError } = await supabase
-    .from("organization_members")
-    .select("organization_id,role")
-    .eq("user_id", user.id)
-    .eq("organization_id", organizationId)
-    .eq("active", true)
-    .maybeSingle();
-
-  if (membershipError || !membership) {
-    if (isInvalidOrExpiredAuthSessionError(membershipError)) {
-      if (pathname.startsWith("/api/")) {
-        return unauthorizedWithClearedSession(request);
-      }
-      return redirectToLoginWithClearedSession(request, response);
-    }
-    return workspaceServiceUnavailable(pathname);
-  }
-
-  const role = String(membership.role ?? "").trim().toLowerCase();
+  const context = workspaceContext as WorkspaceContextPayload;
+  const organizationId = String(
+    context.active_organization_id ?? context.organization_id ?? "",
+  ).trim();
+  const role = String(context.role ?? "").trim().toLowerCase();
 
   if (!organizationId || !role) {
     return workspaceServiceUnavailable(pathname);
