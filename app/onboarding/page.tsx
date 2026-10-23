@@ -465,7 +465,7 @@ export default async function OnboardingPage({
   searchParams: Promise<{ step?: string; error?: string }>;
 }) {
   const query = await searchParams;
-  const requestedStep = safeStep(query.step);
+  const requestedStep = query.step ? safeStep(query.step) : null;
   const { configured } = getSupabasePublicConfig();
 
   if (useMockData || !configured) {
@@ -505,9 +505,18 @@ export default async function OnboardingPage({
   const row = (onboardingRow ?? null) as OnboardingRow | null;
   const completedSteps = new Set((row?.completed_steps ?? []).map(String));
 
-  let activeStep = requestedStep;
+  if (row?.status === 'completed') {
+    redirect('/onboarding/finish?completed=1');
+  }
+
+  let activeStep: StepKey = requestedStep ?? row?.current_step ?? 'business';
   if (activeStep !== 'business' && !completedSteps.has('business')) activeStep = 'business';
   if (!['business', 'goals'].includes(activeStep) && !completedSteps.has('goals')) activeStep = 'goals';
+
+  if (activeStep === 'website') redirect('/onboarding/website');
+  if (activeStep === 'channels') redirect('/onboarding/channels');
+  if (activeStep === 'team') redirect('/onboarding/team');
+  if (activeStep === 'finish') redirect('/onboarding/finish');
 
   return (
     <main className="min-h-screen bg-[#f5f8f6] text-[#173d32] lg:flex">
@@ -536,10 +545,8 @@ export default async function OnboardingPage({
 
           {activeStep === 'business' ? (
             <BusinessStep organizationName={organizationName} row={row} />
-          ) : activeStep === 'goals' ? (
-            <GoalsStep row={row} />
           ) : (
-            <NextPhaseStep step={activeStep} />
+            <GoalsStep row={row} />
           )}
         </div>
       </section>
