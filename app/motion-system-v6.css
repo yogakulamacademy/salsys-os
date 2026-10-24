@@ -1,0 +1,248 @@
+/* SalsysOS Motion System V6 ---------------------------------------------
+ * Settings + Integrations + Tracking setup + forms / feedback / empty states.
+ * Motion reflects existing UI state only and never implies successful persistence.
+ */
+
+@keyframes motion-v6-surface-in {
+  from { opacity: 0; transform: translateY(7px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes motion-v6-card-in {
+  from { opacity: 0; transform: translateY(5px) scale(.994); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@keyframes motion-v6-feedback-in {
+  from { opacity: 0; transform: translateY(-4px) scale(.992); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@keyframes motion-v6-empty-in {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes motion-v6-progress-grow {
+  from { transform: scaleX(0); opacity: .55; }
+  to { transform: scaleX(1); opacity: 1; }
+}
+
+/* Shared operational surfaces ------------------------------------------ */
+
+[data-motion-route^='/settings'] .ui-page-header,
+[data-motion-route^='/tracking'] .ui-page-header {
+  animation: motion-v6-surface-in 340ms var(--motion-ease) both;
+}
+
+[data-motion-route^='/settings'] section,
+[data-motion-route^='/tracking'] section,
+[data-motion-route^='/settings'] form,
+[data-motion-route^='/tracking'] form {
+  animation: motion-v6-card-in 320ms var(--motion-ease) both;
+}
+
+[data-motion-route^='/settings'] section:nth-of-type(1),
+[data-motion-route^='/tracking'] section:nth-of-type(1) { animation-delay: 30ms; }
+[data-motion-route^='/settings'] section:nth-of-type(2),
+[data-motion-route^='/tracking'] section:nth-of-type(2) { animation-delay: 55ms; }
+[data-motion-route^='/settings'] section:nth-of-type(3),
+[data-motion-route^='/tracking'] section:nth-of-type(3) { animation-delay: 80ms; }
+[data-motion-route^='/settings'] section:nth-of-type(4),
+[data-motion-route^='/tracking'] section:nth-of-type(4) { animation-delay: 105ms; }
+
+[data-motion-route^='/settings'] button,
+[data-motion-route^='/settings'] a,
+[data-motion-route^='/settings'] input,
+[data-motion-route^='/settings'] textarea,
+[data-motion-route^='/settings'] select,
+[data-motion-route^='/tracking'] button,
+[data-motion-route^='/tracking'] a,
+[data-motion-route^='/tracking'] input,
+[data-motion-route^='/tracking'] textarea,
+[data-motion-route^='/tracking'] select {
+  transition:
+    transform var(--motion-fast) var(--motion-ease),
+    box-shadow var(--motion-fast) var(--motion-ease),
+    border-color var(--motion-fast) ease,
+    background-color var(--motion-fast) ease,
+    color var(--motion-fast) ease,
+    opacity var(--motion-fast) ease;
+}
+
+[data-motion-route^='/settings'] button:active,
+[data-motion-route^='/tracking'] button:active {
+  transform: scale(.985);
+}
+
+[data-motion-route^='/settings'] input:focus,
+[data-motion-route^='/settings'] textarea:focus,
+[data-motion-route^='/settings'] select:focus,
+[data-motion-route^='/tracking'] input:focus,
+[data-motion-route^='/tracking'] textarea:focus,
+[data-motion-route^='/tracking'] select:focus {
+  animation: motion-focus-ring 500ms var(--motion-ease) both;
+}
+
+/* Cards and connection/setup states ------------------------------------ */
+
+[data-motion-route^='/settings'] [class*='rounded-xl'][class*='border'],
+[data-motion-route^='/settings'] [class*='rounded-2xl'][class*='border'],
+[data-motion-route^='/tracking'] [class*='rounded-xl'][class*='border'],
+[data-motion-route^='/tracking'] [class*='rounded-2xl'][class*='border'] {
+  transition:
+    transform var(--motion-base) var(--motion-ease),
+    box-shadow var(--motion-base) var(--motion-ease),
+    border-color var(--motion-fast) ease,
+    background-color var(--motion-fast) ease,
+    opacity var(--motion-fast) ease;
+}
+
+[data-motion-route='/settings/integrations'] [class*='rounded-xl'][class*='border']:hover,
+[data-motion-route='/settings/integrations'] [class*='rounded-2xl'][class*='border']:hover,
+[data-motion-route='/tracking/sources'] [class*='rounded-xl'][class*='border']:hover,
+[data-motion-route='/tracking/sources'] [class*='rounded-2xl'][class*='border']:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 10px 26px rgba(16, 45, 39, .065);
+}
+
+/* Existing status / success / warning feedback ------------------------- */
+
+[data-motion-route^='/settings'] [role='status'],
+[data-motion-route^='/settings'] [aria-live],
+[data-motion-route^='/tracking'] [role='status'],
+[data-motion-route^='/tracking'] [aria-live],
+[data-motion-route^='/settings'] [class*='text-emerald'],
+[data-motion-route^='/settings'] [class*='text-red'],
+[data-motion-route^='/settings'] [class*='text-amber'],
+[data-motion-route^='/tracking'] [class*='text-emerald'],
+[data-motion-route^='/tracking'] [class*='text-red'],
+[data-motion-route^='/tracking'] [class*='text-amber'] {
+  animation: motion-v6-feedback-in 260ms var(--motion-ease) both;
+}
+
+/* Expand/collapse and drawers ------------------------------------------ */
+
+[data-motion-route^='/settings'] details[open] > :not(summary),
+[data-motion-route^='/tracking'] details[open] > :not(summary),
+[data-motion-route^='/settings'] [role='tabpanel'],
+[data-motion-route^='/tracking'] [role='tabpanel'] {
+  animation: motion-v6-surface-in 280ms var(--motion-ease) both;
+}
+
+[data-motion-route^='/settings'] [role='dialog'] > *,
+[data-motion-route^='/tracking'] [role='dialog'] > * {
+  animation: motion-v6-card-in 300ms var(--motion-ease) both;
+}
+
+/* Progress / health indicators ----------------------------------------- */
+
+[data-motion-route^='/tracking'] [role='progressbar'] > *,
+[data-motion-route^='/tracking'] [class*='rounded-full'] > [class*='h-full'],
+[data-motion-route^='/tracking'] [class*='overflow-hidden'] > [class*='bg-'][style*='width'] {
+  transform-origin: left center;
+  animation: motion-v6-progress-grow 650ms var(--motion-ease) both;
+}
+
+/* Tables / lists -------------------------------------------------------- */
+
+[data-motion-route^='/settings'] table tbody tr,
+[data-motion-route^='/tracking'] table tbody tr,
+[data-motion-route^='/settings'] ul > li,
+[data-motion-route^='/tracking'] ul > li {
+  animation: motion-v6-empty-in 280ms var(--motion-ease) both;
+}
+
+[data-motion-route^='/settings'] table tbody tr:nth-child(1),
+[data-motion-route^='/tracking'] table tbody tr:nth-child(1),
+[data-motion-route^='/settings'] ul > li:nth-child(1),
+[data-motion-route^='/tracking'] ul > li:nth-child(1) { animation-delay: 25ms; }
+[data-motion-route^='/settings'] table tbody tr:nth-child(2),
+[data-motion-route^='/tracking'] table tbody tr:nth-child(2),
+[data-motion-route^='/settings'] ul > li:nth-child(2),
+[data-motion-route^='/tracking'] ul > li:nth-child(2) { animation-delay: 45ms; }
+[data-motion-route^='/settings'] table tbody tr:nth-child(3),
+[data-motion-route^='/tracking'] table tbody tr:nth-child(3),
+[data-motion-route^='/settings'] ul > li:nth-child(3),
+[data-motion-route^='/tracking'] ul > li:nth-child(3) { animation-delay: 65ms; }
+[data-motion-route^='/settings'] table tbody tr:nth-child(4),
+[data-motion-route^='/tracking'] table tbody tr:nth-child(4),
+[data-motion-route^='/settings'] ul > li:nth-child(4),
+[data-motion-route^='/tracking'] ul > li:nth-child(4) { animation-delay: 85ms; }
+[data-motion-route^='/settings'] table tbody tr:nth-child(5),
+[data-motion-route^='/tracking'] table tbody tr:nth-child(5),
+[data-motion-route^='/settings'] ul > li:nth-child(5),
+[data-motion-route^='/tracking'] ul > li:nth-child(5) { animation-delay: 105ms; }
+
+/* Empty/setup states ---------------------------------------------------- */
+
+[data-motion-route^='/settings'] [class*='border-dashed'],
+[data-motion-route^='/tracking'] [class*='border-dashed'],
+[data-motion-route^='/settings'] [class*='empty'],
+[data-motion-route^='/tracking'] [class*='empty'] {
+  animation: motion-v6-empty-in 360ms var(--motion-ease) both;
+}
+
+/* Reduced motion -------------------------------------------------------- */
+
+@media (prefers-reduced-motion: reduce) {
+  [data-motion-route^='/settings'] .ui-page-header,
+  [data-motion-route^='/tracking'] .ui-page-header,
+  [data-motion-route^='/settings'] section,
+  [data-motion-route^='/tracking'] section,
+  [data-motion-route^='/settings'] form,
+  [data-motion-route^='/tracking'] form,
+  [data-motion-route^='/settings'] [role='status'],
+  [data-motion-route^='/settings'] [aria-live],
+  [data-motion-route^='/tracking'] [role='status'],
+  [data-motion-route^='/tracking'] [aria-live],
+  [data-motion-route^='/settings'] [class*='text-emerald'],
+  [data-motion-route^='/settings'] [class*='text-red'],
+  [data-motion-route^='/settings'] [class*='text-amber'],
+  [data-motion-route^='/tracking'] [class*='text-emerald'],
+  [data-motion-route^='/tracking'] [class*='text-red'],
+  [data-motion-route^='/tracking'] [class*='text-amber'],
+  [data-motion-route^='/settings'] details[open] > :not(summary),
+  [data-motion-route^='/tracking'] details[open] > :not(summary),
+  [data-motion-route^='/settings'] [role='tabpanel'],
+  [data-motion-route^='/tracking'] [role='tabpanel'],
+  [data-motion-route^='/settings'] [role='dialog'] > *,
+  [data-motion-route^='/tracking'] [role='dialog'] > *,
+  [data-motion-route^='/tracking'] [role='progressbar'] > *,
+  [data-motion-route^='/tracking'] [class*='rounded-full'] > [class*='h-full'],
+  [data-motion-route^='/tracking'] [class*='overflow-hidden'] > [class*='bg-'][style*='width'],
+  [data-motion-route^='/settings'] table tbody tr,
+  [data-motion-route^='/tracking'] table tbody tr,
+  [data-motion-route^='/settings'] ul > li,
+  [data-motion-route^='/tracking'] ul > li,
+  [data-motion-route^='/settings'] [class*='border-dashed'],
+  [data-motion-route^='/tracking'] [class*='border-dashed'] {
+    animation: none !important;
+  }
+
+  [data-motion-route^='/settings'] button,
+  [data-motion-route^='/settings'] a,
+  [data-motion-route^='/settings'] input,
+  [data-motion-route^='/settings'] textarea,
+  [data-motion-route^='/settings'] select,
+  [data-motion-route^='/tracking'] button,
+  [data-motion-route^='/tracking'] a,
+  [data-motion-route^='/tracking'] input,
+  [data-motion-route^='/tracking'] textarea,
+  [data-motion-route^='/tracking'] select,
+  [data-motion-route^='/settings'] [class*='rounded-xl'][class*='border'],
+  [data-motion-route^='/settings'] [class*='rounded-2xl'][class*='border'],
+  [data-motion-route^='/tracking'] [class*='rounded-xl'][class*='border'],
+  [data-motion-route^='/tracking'] [class*='rounded-2xl'][class*='border'] {
+    transition-duration: .01ms !important;
+  }
+
+  [data-motion-route^='/settings'] button:active,
+  [data-motion-route^='/tracking'] button:active,
+  [data-motion-route='/settings/integrations'] [class*='rounded-xl'][class*='border']:hover,
+  [data-motion-route='/settings/integrations'] [class*='rounded-2xl'][class*='border']:hover,
+  [data-motion-route='/tracking/sources'] [class*='rounded-xl'][class*='border']:hover,
+  [data-motion-route='/tracking/sources'] [class*='rounded-2xl'][class*='border']:hover {
+    transform: none !important;
+  }
+}
