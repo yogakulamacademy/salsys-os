@@ -42,12 +42,16 @@ function browserGpc(request: NextRequest) {
 
 export async function OPTIONS(request: NextRequest) {
   const origin = browserOrigin(request);
-  const siteId = publicSiteId(request);
-  const source = await resolveBrowserTrackingSource(origin, siteId);
 
+  /*
+   * CORS preflight is not authorization. Answer it without touching the
+   * database so browsers can proceed to POST. The POST handler below still
+   * performs the strict public Site ID + registered Origin verification
+   * before any lead data is accepted or ingested.
+   */
   return new NextResponse(null, {
-    status: source ? 204 : 403,
-    headers: corsHeadersForTrackingOrigin(origin, Boolean(source)),
+    status: origin ? 204 : 400,
+    headers: corsHeadersForTrackingOrigin(origin, Boolean(origin)),
   });
 }
 
