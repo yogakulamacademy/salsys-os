@@ -11,6 +11,7 @@ const PUBLIC_EXACT_PATHS = new Set([
   "/salsys-intelligence.js",
   "/salsys-consent.js",
   "/api/leads/capture",
+  "/api/leads/browser/v1",
   "/api/events/v1",
   "/api/events/browser/v1",
   "/api/events/client/v1",
