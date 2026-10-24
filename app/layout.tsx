@@ -12,6 +12,8 @@ import './motion-system-v4.css';
 import './motion-system-v5.css';
 import './motion-system-v6.css';
 import './motion-system-v7.css';
+import './interaction-feedback-v8.css';
+import { InteractionFeedbackBridge } from '@/components/interaction-feedback-bridge';
 import { MotionRouteSurface } from '@/components/motion-route-surface';
 import { RootShell } from '@/components/root-shell';
 
@@ -42,6 +44,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
         <script dangerouslySetInnerHTML={{ __html: themeBootScript }} />
       </head>
       <body>
+        <InteractionFeedbackBridge />
         <MotionRouteSurface>
           <RootShell>{children}</RootShell>
         </MotionRouteSurface>
