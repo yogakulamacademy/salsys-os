@@ -14,7 +14,7 @@ import {
   Users,
 } from 'lucide-react';
 
-import { completeOnboardingAction } from '@/app/onboarding/actions';
+import { completeOnboardingWithOptionalSetupAction } from '@/app/onboarding/finish/complete-action';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { createClient } from '@/lib/supabase/server';
 import { getTrackingPlatformWorkspace } from '@/lib/tracking-platform-data';
@@ -101,10 +101,10 @@ function Rail({
 
       <div className="mt-8 hidden rounded-xl border border-white/10 bg-white/5 p-4 lg:block">
         <div className="flex gap-2 text-[11px] font-bold text-[#d9ebe4]">
-          <ShieldCheck size={15} className="text-[#85d7ae]" /> Evidence-based completion
+          <ShieldCheck size={15} className="text-[#85d7ae]" /> Honest completion
         </div>
         <p className="mt-2 text-[10.5px] leading-5 text-[#9fc1b4]">
-          Final completion re-checks required setup against live tenant state. Optional channels and team gaps remain visible after onboarding.
+          Business and priorities complete onboarding. Website, channels and team remain visible as live setup recommendations until their real system evidence is ready.
         </p>
       </div>
     </aside>
@@ -137,7 +137,7 @@ function ReadinessCard({
             <div className="flex flex-wrap items-center gap-2">
               <h2 className="text-sm font-bold text-[#183f33]">{title}</h2>
               <span className={`rounded-full px-2 py-0.5 text-[9px] font-bold ${required ? 'bg-[#eef7f2] text-[#2d6e54]' : 'bg-[#f5f2e7] text-[#7c7043]'}`}>
-                {required ? 'Required' : 'Optional'}
+                {required ? 'Required' : 'Recommended'}
               </span>
             </div>
             <p className="mt-1 text-[10.8px] leading-5 text-[#72877c]">{detail}</p>
@@ -238,7 +238,7 @@ export default async function OnboardingFinishPage({
   const goalsReady = completedSteps.has('goals');
   const channelsReady = (connectionsResult.data?.length ?? 0) > 0;
   const teamReady = activeEmployeeCount > 0;
-  const coreReady = businessReady && goalsReady && healthyWebsite;
+  const coreReady = businessReady && goalsReady;
   const onboardingCompleted = onboarding.status === 'completed';
 
   const cards = [
@@ -262,10 +262,10 @@ export default async function OnboardingFinishPage({
     },
     {
       title: 'Website tracking',
-      status: healthyWebsite ? 'Healthy browser source observed' : 'Healthy website tracking required',
-      detail: 'A real browser source must be healthy now; a saved website URL alone is not enough.',
+      status: healthyWebsite ? 'Healthy browser source observed' : 'Not connected yet',
+      detail: 'Website tracking is recommended, but you can finish onboarding first and connect it later from Home.',
       ready: healthyWebsite,
-      required: true,
+      required: false,
       href: '/onboarding/website',
       icon: <Globe2 size={18} />,
     },
@@ -318,9 +318,9 @@ export default async function OnboardingFinishPage({
                   <div>
                     <div className="text-sm font-bold text-emerald-900">Workspace onboarding is complete.</div>
                     <p className="mt-1 text-[11px] leading-5 text-emerald-800">
-                      Core setup is verified. Optional channel and team gaps can still be completed from Settings without reopening onboarding.
+                      Business context and priorities are saved. Any unfinished website, channel, team or automation setup will remain visible on Home as recommendations until real system evidence confirms it is ready.
                     </p>
-                    <Link href="/dashboard" className="mt-3 inline-flex h-9 items-center gap-2 rounded-lg bg-[#1f654e] px-3 text-[11px] font-bold text-white">
+                    <Link href="/home" className="mt-3 inline-flex h-9 items-center gap-2 rounded-lg bg-[#1f654e] px-3 text-[11px] font-bold text-white">
                       Open SalsysOS <ArrowRight size={13} />
                     </Link>
                   </div>
@@ -333,7 +333,7 @@ export default async function OnboardingFinishPage({
               Review workspace readiness.
             </h1>
             <p className="mt-3 max-w-2xl text-[13px] leading-6 text-[#657b70]">
-              Required items are checked against live tenant state. Channels and team access are recommended but do not block a solo workspace from finishing onboarding.
+              Business profile and priorities are required. Website tracking, connected channels and team access are recommended and can be completed after onboarding.
             </p>
 
             <div className={`mt-6 rounded-2xl border p-5 ${coreReady ? 'border-emerald-200 bg-emerald-50' : 'border-rose-200 bg-rose-50'}`}>
@@ -341,12 +341,12 @@ export default async function OnboardingFinishPage({
                 {coreReady ? <ShieldCheck size={21} className="mt-0.5 shrink-0 text-emerald-700" /> : <CircleAlert size={21} className="mt-0.5 shrink-0 text-rose-600" />}
                 <div>
                   <div className={`text-sm font-bold ${coreReady ? 'text-emerald-900' : 'text-rose-900'}`}>
-                    {coreReady ? 'Core workspace is ready' : 'Required setup still needs attention'}
+                    {coreReady ? 'Core onboarding is ready' : 'Required setup still needs attention'}
                   </div>
                   <p className={`mt-1 text-[11px] leading-5 ${coreReady ? 'text-emerald-800' : 'text-rose-800'}`}>
                     {coreReady
-                      ? 'Business context, goals and healthy website tracking are verified. You can complete onboarding now.'
-                      : 'Finish all required items below before SalsysOS can mark onboarding complete.'}
+                      ? 'Business context and priorities are saved. You can complete onboarding now and finish recommended setup from Home.'
+                      : 'Finish the required Business and Goals steps before SalsysOS can mark onboarding complete.'}
                   </p>
                 </div>
               </div>
@@ -364,7 +364,7 @@ export default async function OnboardingFinishPage({
               </Link>
 
               {!onboardingCompleted ? (
-                <form action={completeOnboardingAction}>
+                <form action={completeOnboardingWithOptionalSetupAction}>
                   <button
                     type="submit"
                     disabled={!coreReady}
@@ -374,8 +374,8 @@ export default async function OnboardingFinishPage({
                   </button>
                 </form>
               ) : (
-                <Link href="/dashboard" className="inline-flex h-10 items-center gap-2 rounded-lg bg-[#1f654e] px-4 text-xs font-bold text-white shadow-sm">
-                  Open dashboard <ArrowRight size={14} />
+                <Link href="/home" className="inline-flex h-10 items-center gap-2 rounded-lg bg-[#1f654e] px-4 text-xs font-bold text-white shadow-sm">
+                  Open SalsysOS <ArrowRight size={14} />
                 </Link>
               )}
             </div>
