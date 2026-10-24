@@ -1,0 +1,65 @@
+/* SalsysOS Interaction Feedback V8 --------------------------------------
+ * Targeted micro-feedback for real pending/copy states.
+ * State is derived from existing UI behavior; this layer does not invent progress.
+ */
+
+@keyframes feedback-v8-progress-sweep {
+  0% { transform: translateX(-120%); }
+  100% { transform: translateX(320%); }
+}
+
+@keyframes feedback-v8-copy-confirm {
+  0% { transform: scale(.97); }
+  65% { transform: scale(1.025); }
+  100% { transform: scale(1); }
+}
+
+button[data-pending='true'],
+[role='button'][data-pending='true'] {
+  position: relative;
+  overflow: hidden;
+  cursor: progress;
+}
+
+button[data-pending='true']::after,
+[role='button'][data-pending='true']::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: 32%;
+  height: 2px;
+  border-radius: 999px;
+  background: currentColor;
+  opacity: .3;
+  transform: translateX(-120%);
+  animation: feedback-v8-progress-sweep 1.05s ease-in-out infinite;
+  pointer-events: none;
+}
+
+button[data-copy-state='copied'],
+[role='button'][data-copy-state='copied'] {
+  animation: feedback-v8-copy-confirm 260ms var(--motion-ease) both;
+  box-shadow: 0 0 0 3px color-mix(in srgb, currentColor 12%, transparent);
+}
+
+button[data-state='success'],
+[role='button'][data-state='success'] {
+  animation: motion-v7-status-pop 280ms var(--motion-ease) both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  button[data-pending='true']::after,
+  [role='button'][data-pending='true']::after,
+  button[data-copy-state='copied'],
+  [role='button'][data-copy-state='copied'],
+  button[data-state='success'],
+  [role='button'][data-state='success'] {
+    animation: none !important;
+  }
+
+  button[data-pending='true']::after,
+  [role='button'][data-pending='true']::after {
+    display: none;
+  }
+}
