@@ -2,7 +2,7 @@ import type { ReactNode } from 'react';
 
 export default function OnboardingLayout({ children }: { children: ReactNode }) {
   return (
-    <>
+    <div data-motion-surface="onboarding" className="motion-route-enter min-h-full">
       <style>{`
         /*
          * Goal cards use native checkboxes so form submission stays server-driven.
@@ -47,6 +47,6 @@ export default function OnboardingLayout({ children }: { children: ReactNode }) 
         }
       `}</style>
       {children}
-    </>
+    </div>
   );
 }

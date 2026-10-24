@@ -6,6 +6,7 @@ import './analytics-visual-system.css';
 import './premium-polish.css';
 import './crm-visual-system.css';
 import './design-audit-polish.css';
+import './motion-system.css';
 import { RootShell } from '@/components/root-shell';
 
 export const metadata: Metadata = {
