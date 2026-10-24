@@ -7,6 +7,7 @@ import './premium-polish.css';
 import './crm-visual-system.css';
 import './design-audit-polish.css';
 import './motion-system.css';
+import { MotionRouteSurface } from '@/components/motion-route-surface';
 import { RootShell } from '@/components/root-shell';
 
 export const metadata: Metadata = {
@@ -36,7 +37,9 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
         <script dangerouslySetInnerHTML={{ __html: themeBootScript }} />
       </head>
       <body>
-        <RootShell>{children}</RootShell>
+        <MotionRouteSurface>
+          <RootShell>{children}</RootShell>
+        </MotionRouteSurface>
       </body>
     </html>
   );
