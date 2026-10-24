@@ -1,0 +1,286 @@
+/* SalsysOS Motion System V4 ---------------------------------------------
+ * Conversations + Leads / Lead Inspector.
+ * Motion reflects existing UI state only; it does not invent progress.
+ */
+
+@keyframes motion-v4-thread-in {
+  from { opacity: 0; transform: translateY(7px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes motion-v4-drawer-in {
+  from { opacity: 0; transform: translate3d(14px, 0, 0); }
+  to { opacity: 1; transform: translate3d(0, 0, 0); }
+}
+
+@keyframes motion-v4-backdrop-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes motion-v4-row-in {
+  from { opacity: 0; transform: translateY(5px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes motion-v4-message-in {
+  from { opacity: 0; transform: translateY(6px) scale(0.992); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@keyframes motion-v4-feedback-in {
+  from { opacity: 0; transform: translateY(-4px) scale(0.99); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+/* Conversations --------------------------------------------------------- */
+
+[data-motion-route='/conversations'] .conversation-workspace {
+  animation: motion-v4-thread-in 380ms var(--motion-ease) both;
+}
+
+[data-motion-route='/conversations'] .conversation-workspace > div,
+[data-motion-route='/conversations'] .conversation-context-pane,
+[data-motion-route='/conversations'] .conversation-context-pane section {
+  transition:
+    border-color var(--motion-fast) ease,
+    background-color var(--motion-fast) ease,
+    box-shadow var(--motion-base) var(--motion-ease),
+    opacity var(--motion-fast) ease;
+}
+
+[data-motion-route='/conversations'] .conversation-thread > * {
+  animation: motion-v4-message-in 320ms var(--motion-ease) both;
+}
+
+[data-motion-route='/conversations'] .conversation-thread > :nth-child(1) { animation-delay: 30ms; }
+[data-motion-route='/conversations'] .conversation-thread > :nth-child(2) { animation-delay: 55ms; }
+[data-motion-route='/conversations'] .conversation-thread > :nth-child(3) { animation-delay: 80ms; }
+[data-motion-route='/conversations'] .conversation-thread > :nth-child(4) { animation-delay: 105ms; }
+[data-motion-route='/conversations'] .conversation-thread > :nth-child(5) { animation-delay: 130ms; }
+[data-motion-route='/conversations'] .conversation-thread > :nth-child(6) { animation-delay: 155ms; }
+
+[data-motion-route='/conversations'] [role='tab'] {
+  transition:
+    color var(--motion-fast) ease,
+    border-color var(--motion-fast) ease,
+    background-color var(--motion-fast) ease,
+    transform var(--motion-fast) var(--motion-ease);
+}
+
+[data-motion-route='/conversations'] [role='tab']:active {
+  transform: translateY(1px);
+}
+
+[data-motion-route='/conversations'] [role='tabpanel'],
+[data-motion-route='/conversations'] ol[aria-label='Conversation activity'] {
+  animation: motion-v4-thread-in 300ms var(--motion-ease) both;
+}
+
+[data-motion-route='/conversations'] ol[aria-label='Conversation activity'] > li {
+  animation: motion-v4-row-in 300ms var(--motion-ease) both;
+}
+
+[data-motion-route='/conversations'] ol[aria-label='Conversation activity'] > li:nth-child(1) { animation-delay: 25ms; }
+[data-motion-route='/conversations'] ol[aria-label='Conversation activity'] > li:nth-child(2) { animation-delay: 50ms; }
+[data-motion-route='/conversations'] ol[aria-label='Conversation activity'] > li:nth-child(3) { animation-delay: 75ms; }
+[data-motion-route='/conversations'] ol[aria-label='Conversation activity'] > li:nth-child(4) { animation-delay: 100ms; }
+[data-motion-route='/conversations'] ol[aria-label='Conversation activity'] > li:nth-child(5) { animation-delay: 125ms; }
+
+[data-motion-route='/conversations'] form,
+[data-motion-route='/conversations'] details,
+[data-motion-route='/conversations'] button,
+[data-motion-route='/conversations'] a {
+  transition:
+    transform var(--motion-fast) var(--motion-ease),
+    box-shadow var(--motion-fast) var(--motion-ease),
+    border-color var(--motion-fast) ease,
+    background-color var(--motion-fast) ease,
+    color var(--motion-fast) ease,
+    opacity var(--motion-fast) ease;
+}
+
+[data-motion-route='/conversations'] button:active {
+  transform: scale(0.985);
+}
+
+[data-motion-route='/conversations'] details[open] > :not(summary) {
+  animation: motion-v4-feedback-in 260ms var(--motion-ease) both;
+}
+
+[data-motion-route='/conversations'] [role='dialog'][aria-label='Customer context'] {
+  animation: motion-v4-drawer-in 300ms var(--motion-ease) both;
+}
+
+[data-motion-route='/conversations'] [role='dialog'][aria-label='Customer context'] + *,
+[data-motion-route='/conversations'] .fixed.inset-0 > button[aria-label='Close customer context'] {
+  animation: motion-v4-backdrop-in 220ms ease both;
+}
+
+[data-motion-route='/conversations'] textarea:focus,
+[data-motion-route='/conversations'] input:focus,
+[data-motion-route='/conversations'] select:focus {
+  animation: motion-focus-ring 500ms var(--motion-ease) both;
+}
+
+/* Leads ----------------------------------------------------------------- */
+
+[data-motion-route='/leads'] .ui-page-header,
+[data-motion-route='/leads'] section {
+  animation: motion-v4-thread-in 360ms var(--motion-ease) both;
+}
+
+[data-motion-route='/leads'] table tbody tr {
+  animation: motion-v4-row-in 300ms var(--motion-ease) both;
+  transition:
+    background-color var(--motion-fast) ease,
+    opacity var(--motion-fast) ease,
+    transform var(--motion-fast) var(--motion-ease);
+}
+
+[data-motion-route='/leads'] table tbody tr:nth-child(1) { animation-delay: 25ms; }
+[data-motion-route='/leads'] table tbody tr:nth-child(2) { animation-delay: 45ms; }
+[data-motion-route='/leads'] table tbody tr:nth-child(3) { animation-delay: 65ms; }
+[data-motion-route='/leads'] table tbody tr:nth-child(4) { animation-delay: 85ms; }
+[data-motion-route='/leads'] table tbody tr:nth-child(5) { animation-delay: 105ms; }
+[data-motion-route='/leads'] table tbody tr:nth-child(6) { animation-delay: 125ms; }
+[data-motion-route='/leads'] table tbody tr:nth-child(7) { animation-delay: 145ms; }
+[data-motion-route='/leads'] table tbody tr:nth-child(8) { animation-delay: 165ms; }
+
+[data-motion-route='/leads'] table tbody tr:hover {
+  transform: translateY(-1px);
+}
+
+[data-motion-route='/leads'] button,
+[data-motion-route='/leads'] a,
+[data-motion-route='/leads'] input,
+[data-motion-route='/leads'] select {
+  transition:
+    transform var(--motion-fast) var(--motion-ease),
+    box-shadow var(--motion-fast) var(--motion-ease),
+    border-color var(--motion-fast) ease,
+    background-color var(--motion-fast) ease,
+    color var(--motion-fast) ease,
+    opacity var(--motion-fast) ease;
+}
+
+[data-motion-route='/leads'] button:active {
+  transform: scale(0.985);
+}
+
+[data-motion-route='/leads'] input:focus,
+[data-motion-route='/leads'] select:focus {
+  animation: motion-focus-ring 500ms var(--motion-ease) both;
+}
+
+[data-motion-route='/leads'] section > div[class*='bg-[#F6F9F7]'],
+[data-motion-route='/leads'] div[class*='bg-[#F5F8F6]'][class*='rounded-xl'] {
+  animation: motion-v4-feedback-in 280ms var(--motion-ease) both;
+}
+
+/* Lead Inspector -------------------------------------------------------- */
+/* Portaled to document.body, so target its explicit dialog label instead
+ * of relying on the route wrapper. */
+
+[role='dialog'][aria-label='Lead Inspector'] > button[aria-label='Close Lead Inspector'] {
+  animation: motion-v4-backdrop-in 220ms ease both;
+}
+
+[role='dialog'][aria-label='Lead Inspector'] > aside {
+  animation: motion-v4-drawer-in 320ms var(--motion-ease) both;
+}
+
+[role='dialog'][aria-label='Lead Inspector'] [role='tab'] {
+  transition:
+    color var(--motion-fast) ease,
+    border-color var(--motion-fast) ease,
+    background-color var(--motion-fast) ease,
+    transform var(--motion-fast) var(--motion-ease);
+}
+
+[role='dialog'][aria-label='Lead Inspector'] [role='tab']:active {
+  transform: translateY(1px);
+}
+
+[role='dialog'][aria-label='Lead Inspector'] form,
+[role='dialog'][aria-label='Lead Inspector'] section,
+[role='dialog'][aria-label='Lead Inspector'] [class*='rounded-xl'],
+[role='dialog'][aria-label='Lead Inspector'] [class*='rounded-2xl'] {
+  transition:
+    transform var(--motion-base) var(--motion-ease),
+    box-shadow var(--motion-base) var(--motion-ease),
+    border-color var(--motion-fast) ease,
+    background-color var(--motion-fast) ease,
+    opacity var(--motion-fast) ease;
+}
+
+[role='dialog'][aria-label='Lead Inspector'] input:focus,
+[role='dialog'][aria-label='Lead Inspector'] textarea:focus,
+[role='dialog'][aria-label='Lead Inspector'] select:focus {
+  animation: motion-focus-ring 500ms var(--motion-ease) both;
+}
+
+[role='dialog'][aria-label='Lead Inspector'] [class*='text-emerald'],
+[role='dialog'][aria-label='Lead Inspector'] [class*='text-red'],
+[role='dialog'][aria-label='Lead Inspector'] [class*='text-amber'] {
+  animation: motion-v4-feedback-in 260ms var(--motion-ease) both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  [data-motion-route='/conversations'] .conversation-workspace,
+  [data-motion-route='/conversations'] .conversation-thread > *,
+  [data-motion-route='/conversations'] [role='tabpanel'],
+  [data-motion-route='/conversations'] ol[aria-label='Conversation activity'],
+  [data-motion-route='/conversations'] ol[aria-label='Conversation activity'] > li,
+  [data-motion-route='/conversations'] details[open] > :not(summary),
+  [data-motion-route='/conversations'] [role='dialog'][aria-label='Customer context'],
+  [data-motion-route='/conversations'] .fixed.inset-0 > button[aria-label='Close customer context'],
+  [data-motion-route='/conversations'] textarea:focus,
+  [data-motion-route='/conversations'] input:focus,
+  [data-motion-route='/conversations'] select:focus,
+  [data-motion-route='/leads'] .ui-page-header,
+  [data-motion-route='/leads'] section,
+  [data-motion-route='/leads'] table tbody tr,
+  [data-motion-route='/leads'] section > div[class*='bg-[#F6F9F7]'],
+  [data-motion-route='/leads'] div[class*='bg-[#F5F8F6]'][class*='rounded-xl'],
+  [data-motion-route='/leads'] input:focus,
+  [data-motion-route='/leads'] select:focus,
+  [role='dialog'][aria-label='Lead Inspector'] > button[aria-label='Close Lead Inspector'],
+  [role='dialog'][aria-label='Lead Inspector'] > aside,
+  [role='dialog'][aria-label='Lead Inspector'] input:focus,
+  [role='dialog'][aria-label='Lead Inspector'] textarea:focus,
+  [role='dialog'][aria-label='Lead Inspector'] select:focus,
+  [role='dialog'][aria-label='Lead Inspector'] [class*='text-emerald'],
+  [role='dialog'][aria-label='Lead Inspector'] [class*='text-red'],
+  [role='dialog'][aria-label='Lead Inspector'] [class*='text-amber'] {
+    animation: none !important;
+  }
+
+  [data-motion-route='/conversations'] .conversation-workspace > div,
+  [data-motion-route='/conversations'] .conversation-context-pane,
+  [data-motion-route='/conversations'] .conversation-context-pane section,
+  [data-motion-route='/conversations'] [role='tab'],
+  [data-motion-route='/conversations'] form,
+  [data-motion-route='/conversations'] details,
+  [data-motion-route='/conversations'] button,
+  [data-motion-route='/conversations'] a,
+  [data-motion-route='/leads'] table tbody tr,
+  [data-motion-route='/leads'] button,
+  [data-motion-route='/leads'] a,
+  [data-motion-route='/leads'] input,
+  [data-motion-route='/leads'] select,
+  [role='dialog'][aria-label='Lead Inspector'] [role='tab'],
+  [role='dialog'][aria-label='Lead Inspector'] form,
+  [role='dialog'][aria-label='Lead Inspector'] section,
+  [role='dialog'][aria-label='Lead Inspector'] [class*='rounded-xl'],
+  [role='dialog'][aria-label='Lead Inspector'] [class*='rounded-2xl'] {
+    transition-duration: 0.01ms !important;
+  }
+
+  [data-motion-route='/conversations'] button:active,
+  [data-motion-route='/leads'] button:active,
+  [data-motion-route='/leads'] table tbody tr:hover,
+  [role='dialog'][aria-label='Lead Inspector'] [role='tab']:active {
+    transform: none !important;
+  }
+}
