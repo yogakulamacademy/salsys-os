@@ -10,6 +10,7 @@ import './motion-system.css';
 import './motion-system-v3.css';
 import './motion-system-v4.css';
 import './motion-system-v5.css';
+import './motion-system-v6.css';
 import { MotionRouteSurface } from '@/components/motion-route-surface';
 import { RootShell } from '@/components/root-shell';
 
