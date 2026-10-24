@@ -8,6 +8,7 @@ import './crm-visual-system.css';
 import './design-audit-polish.css';
 import './motion-system.css';
 import './motion-system-v3.css';
+import './motion-system-v4.css';
 import { MotionRouteSurface } from '@/components/motion-route-surface';
 import { RootShell } from '@/components/root-shell';
 
