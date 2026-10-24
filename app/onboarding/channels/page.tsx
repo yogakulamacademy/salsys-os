@@ -94,8 +94,14 @@ function formatWhen(value: string | null) {
   }).format(date);
 }
 
-function Rail({ organizationName, channelsComplete }: { organizationName: string; channelsComplete: boolean }) {
-  const completeCount = channelsComplete ? 4 : 3;
+function Rail({
+  organizationName,
+  completedSteps,
+}: {
+  organizationName: string;
+  completedSteps: Set<string>;
+}) {
+  const completeCount = completedSteps.size;
   return (
     <aside className="border-b border-[#dfe9e2] bg-[#123f33] px-5 py-5 text-white lg:min-h-screen lg:w-[300px] lg:border-b-0 lg:border-r lg:px-7 lg:py-8">
       <div className="flex items-center gap-3">
@@ -106,13 +112,13 @@ function Rail({ organizationName, channelsComplete }: { organizationName: string
       <div className="mt-7 rounded-xl border border-white/10 bg-white/5 p-4">
         <div className="text-[10px] font-bold uppercase tracking-[0.12em] text-[#9ec7b7]">Setting up</div>
         <div className="mt-1 truncate text-sm font-bold">{organizationName}</div>
-        <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-white/10"><div className="h-full rounded-full bg-[#8de0b7]" style={{ width: `${(completeCount / 6) * 100}%` }} /></div>
+        <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-white/10"><div className="h-full rounded-full bg-[#8de0b7]" style={{ width: `${Math.max(8, (completeCount / 6) * 100)}%` }} /></div>
         <div className="mt-2 text-[10.5px] text-[#b7d6ca]">{completeCount} of 6 setup steps complete</div>
       </div>
 
       <nav className="mt-5 hidden space-y-1 lg:block" aria-label="Onboarding progress">
         {steps.map(([key, label, description], index) => {
-          const complete = index < 3 || (key === 'channels' && channelsComplete);
+          const complete = completedSteps.has(key);
           const active = key === 'channels';
           return (
             <div key={key} className={`flex items-center gap-3 rounded-xl px-3 py-3 ${active ? 'bg-white text-[#153e32]' : 'text-[#c3dcd2]'}`}>
@@ -156,7 +162,6 @@ export default async function OnboardingChannelsPage({ searchParams }: { searchP
   const completed = new Set(Array.isArray(onboarding?.completed_steps) ? onboarding.completed_steps.map(String) : []);
   if (!completed.has('business')) redirect('/onboarding?step=business');
   if (!completed.has('goals')) redirect('/onboarding?step=goals');
-  if (!completed.has('website')) redirect('/onboarding/website');
   if (completed.has('channels')) redirect('/onboarding?step=team');
 
   const goals = new Set(Array.isArray(onboarding?.goals) ? onboarding.goals.map(String) : []);
@@ -181,7 +186,7 @@ export default async function OnboardingChannelsPage({ searchParams }: { searchP
 
   return (
     <main className="min-h-screen bg-[#f5f8f6] text-[#173d32] lg:flex">
-      <Rail organizationName={organizationName} channelsComplete={false} />
+      <Rail organizationName={organizationName} completedSteps={completed} />
 
       <section className="min-w-0 flex-1">
         <div className="border-b border-[#e2ebe5] bg-white/80 px-5 py-3 backdrop-blur sm:px-8">

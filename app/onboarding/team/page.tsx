@@ -154,7 +154,6 @@ export default async function OnboardingTeamPage({
 
   if (!completedSteps.has('business')) redirect('/onboarding?step=business');
   if (!completedSteps.has('goals')) redirect('/onboarding?step=goals');
-  if (!completedSteps.has('website')) redirect('/onboarding/website');
   if (completedSteps.has('team')) redirect('/onboarding?step=finish');
 
   const admin = createAdminClient();
