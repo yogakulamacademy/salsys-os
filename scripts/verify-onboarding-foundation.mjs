@@ -20,7 +20,9 @@ const authAction = read('app/actions/auth.ts');
 const middleware = read('middleware.ts');
 const securityAction = read('app/onboarding/security/actions.ts');
 const securityPage = read('app/onboarding/security/page.tsx');
-const onboardingAction = read('app/onboarding/actions.ts');
+const websiteSkipAction = read('app/onboarding/website/skip-action.ts');
+const finishCompletionAction = read('app/onboarding/finish/complete-action.ts');
+const homeRecommendations = read('components/home-setup-recommendations.tsx');
 const rootShell = read('components/root-shell.tsx');
 const provisioningMigration = read(
   'supabase/migrations/20261023184246_customer_organization_provisioning_v1.sql',
@@ -126,22 +128,60 @@ contains(
   'Security UI must enforce the 12-character minimum.',
 );
 
-// Completion remains evidence-based: Business + Goals + healthy Website are
-// required. Channels and Team may be skipped without being falsely completed.
+// Business + Goals are the only hard onboarding requirements. Website,
+// channels and team may be skipped, but skipping must never falsely mark them
+// complete.
 contains(
-  onboardingAction,
-  "const requiredSteps = ['business', 'goals', 'website'];",
-  'Core onboarding readiness requirements changed unexpectedly.',
+  websiteSkipAction,
+  "current_step: 'channels'",
+  'Skipping website setup must advance to Channels.',
+);
+assert(
+  !websiteSkipAction.includes("completed_steps"),
+  'Skipping website setup must not falsely mark Website complete.',
 );
 contains(
-  onboardingAction,
+  finishCompletionAction,
+  "const requiredSteps = ['business', 'goals'];",
+  'Core onboarding requirements must remain Business + Goals.',
+);
+contains(
+  finishCompletionAction,
   "status: 'completed'",
   'Onboarding completion write is missing.',
 );
 contains(
-  onboardingAction,
+  finishCompletionAction,
   'completed_at:',
   'Onboarding completion timestamp is missing.',
+);
+
+// After onboarding, unfinished recommendations must be driven by live tenant
+// evidence and must not appear on legacy tenants that never completed this flow.
+contains(
+  homeRecommendations,
+  "onboarding?.status !== 'completed'",
+  'Home setup recommendations must be limited to completed new-onboarding tenants.',
+);
+contains(
+  homeRecommendations,
+  "source.healthStatus === 'healthy'",
+  'Website recommendation must use live tracking health evidence.',
+);
+contains(
+  homeRecommendations,
+  "href: '/settings/integrations'",
+  'Channel setup recommendation is missing.',
+);
+contains(
+  homeRecommendations,
+  "href: '/settings/team'",
+  'Team setup recommendation is missing.',
+);
+contains(
+  homeRecommendations,
+  "href: '/automation/recipes'",
+  'First automation recommendation is missing.',
 );
 
 // Onboarding stays focused and shellless.
@@ -176,6 +216,6 @@ contains(
 
 if (!process.exitCode) {
   console.log(
-    '[onboarding-foundation] PASS: provisioning, first-login security, session enforcement and completion contracts verified.',
+    '[onboarding-foundation] PASS: provisioning, first-login security, optional setup, live recommendations and completion contracts verified.',
   );
 }

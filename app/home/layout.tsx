@@ -1,5 +1,12 @@
 import './source-icons.css';
 
-export default function HomeLayout({ children }: { children: React.ReactNode }) {
-  return children;
+import { HomeSetupRecommendations } from '@/components/home-setup-recommendations';
+
+export default async function HomeLayout({ children }: { children: React.ReactNode }) {
+  return (
+    <>
+      <HomeSetupRecommendations />
+      {children}
+    </>
+  );
 }
