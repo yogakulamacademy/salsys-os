@@ -21,6 +21,8 @@ const middleware = read('middleware.ts');
 const securityAction = read('app/onboarding/security/actions.ts');
 const securityPage = read('app/onboarding/security/page.tsx');
 const websiteSkipAction = read('app/onboarding/website/skip-action.ts');
+const channelsPage = read('app/onboarding/channels/page.tsx');
+const teamPage = read('app/onboarding/team/page.tsx');
 const finishCompletionAction = read('app/onboarding/finish/complete-action.ts');
 const homeRecommendations = read('components/home-setup-recommendations.tsx');
 const rootShell = read('components/root-shell.tsx');
@@ -130,15 +132,23 @@ contains(
 
 // Business + Goals are the only hard onboarding requirements. Website,
 // channels and team may be skipped, but skipping must never falsely mark them
-// complete.
+// complete or block downstream optional steps.
 contains(
   websiteSkipAction,
   "current_step: 'channels'",
   'Skipping website setup must advance to Channels.',
 );
 assert(
-  !websiteSkipAction.includes("completed_steps"),
+  !websiteSkipAction.includes('completed_steps'),
   'Skipping website setup must not falsely mark Website complete.',
+);
+assert(
+  !channelsPage.includes("!completed.has('website')"),
+  'Channels must remain reachable when Website was skipped.',
+);
+assert(
+  !teamPage.includes("!completedSteps.has('website')"),
+  'Team must remain reachable when Website was skipped.',
 );
 contains(
   finishCompletionAction,
@@ -216,6 +226,6 @@ contains(
 
 if (!process.exitCode) {
   console.log(
-    '[onboarding-foundation] PASS: provisioning, first-login security, optional setup, live recommendations and completion contracts verified.',
+    '[onboarding-foundation] PASS: provisioning, first-login security, optional setup routing, live recommendations and completion contracts verified.',
   );
 }
