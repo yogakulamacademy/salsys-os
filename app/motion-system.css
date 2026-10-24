@@ -1,0 +1,164 @@
+/* SalsysOS Motion System --------------------------------------------------
+ * Purposeful motion for state, progress and process feedback.
+ * Keep durations short, easing calm, and disable non-essential movement
+ * when the user prefers reduced motion.
+ */
+
+:root {
+  --motion-fast: 160ms;
+  --motion-base: 260ms;
+  --motion-slow: 520ms;
+  --motion-ease: cubic-bezier(0.22, 1, 0.36, 1);
+  --motion-ease-soft: cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+@keyframes motion-surface-in {
+  from { opacity: 0; transform: translateY(7px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes motion-route-in {
+  from { opacity: 0; transform: translate3d(0, 10px, 0); }
+  to { opacity: 1; transform: translate3d(0, 0, 0); }
+}
+
+@keyframes motion-step-in {
+  from { opacity: 0; transform: translateY(10px) scale(0.985); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@keyframes motion-progress-reveal {
+  from { transform: scaleX(0); }
+  to { transform: scaleX(1); }
+}
+
+@keyframes motion-state-pop {
+  0% { opacity: 0; transform: scale(0.72); }
+  68% { opacity: 1; transform: scale(1.08); }
+  100% { opacity: 1; transform: scale(1); }
+}
+
+@keyframes motion-active-breathe {
+  0%, 100% { box-shadow: 0 7px 18px rgba(24, 77, 62, 0.1); }
+  50% { box-shadow: 0 10px 26px rgba(24, 77, 62, 0.17); }
+}
+
+@keyframes motion-soft-pulse {
+  0%, 100% { opacity: 0.78; }
+  50% { opacity: 1; }
+}
+
+.motion-surface-enter {
+  animation: motion-surface-in var(--motion-slow) var(--motion-ease) both;
+}
+
+.motion-route-enter {
+  animation: motion-route-in 360ms var(--motion-ease) both;
+}
+
+.motion-progress-reveal {
+  transform-origin: left center;
+  animation: motion-progress-reveal 720ms var(--motion-ease) both;
+}
+
+.motion-state-pop {
+  animation: motion-state-pop 420ms var(--motion-ease) both;
+}
+
+.motion-step-card {
+  transition:
+    transform var(--motion-base) var(--motion-ease),
+    box-shadow var(--motion-base) var(--motion-ease),
+    border-color var(--motion-fast) ease,
+    background-color var(--motion-fast) ease;
+}
+
+.motion-step-card:hover { transform: translateY(-2px); }
+
+.motion-active-step {
+  animation: motion-active-breathe 3.6s ease-in-out infinite;
+}
+
+.motion-action-arrow {
+  transition: transform var(--motion-fast) var(--motion-ease);
+}
+
+.group:hover .motion-action-arrow,
+.motion-action-arrow:hover { transform: translateX(3px); }
+
+.motion-status-live {
+  animation: motion-soft-pulse 2.4s ease-in-out infinite;
+}
+
+.motion-stagger > * {
+  opacity: 0;
+  animation: motion-step-in 420ms var(--motion-ease) both;
+}
+
+.motion-stagger > :nth-child(1) { animation-delay: 60ms; }
+.motion-stagger > :nth-child(2) { animation-delay: 110ms; }
+.motion-stagger > :nth-child(3) { animation-delay: 160ms; }
+.motion-stagger > :nth-child(4) { animation-delay: 210ms; }
+.motion-stagger > :nth-child(5) { animation-delay: 260ms; }
+.motion-stagger > :nth-child(6) { animation-delay: 310ms; }
+.motion-stagger > :nth-child(7) { animation-delay: 360ms; }
+.motion-stagger > :nth-child(8) { animation-delay: 410ms; }
+
+/* Onboarding ------------------------------------------------------------- */
+
+[data-motion-surface='onboarding'] form {
+  animation: motion-route-in 360ms var(--motion-ease) both;
+}
+
+[data-motion-surface='onboarding'] nav > div {
+  transition:
+    transform var(--motion-base) var(--motion-ease),
+    background-color var(--motion-fast) ease,
+    color var(--motion-fast) ease;
+}
+
+[data-motion-surface='onboarding'] nav > div:hover { transform: translateX(3px); }
+
+[data-motion-surface='onboarding'] aside [style*='width'] {
+  transform-origin: left center;
+  animation: motion-progress-reveal 700ms var(--motion-ease) both;
+}
+
+[data-motion-surface='onboarding'] label > div,
+[data-motion-surface='onboarding'] form > div.rounded-2xl {
+  transition:
+    transform var(--motion-base) var(--motion-ease),
+    border-color var(--motion-fast) ease,
+    background-color var(--motion-fast) ease,
+    box-shadow var(--motion-base) var(--motion-ease);
+}
+
+[data-motion-surface='onboarding'] label:hover > div { transform: translateY(-1px); }
+
+@media (prefers-reduced-motion: reduce) {
+  .motion-surface-enter,
+  .motion-route-enter,
+  .motion-progress-reveal,
+  .motion-state-pop,
+  .motion-active-step,
+  .motion-status-live,
+  .motion-stagger > *,
+  [data-motion-surface='onboarding'] form,
+  [data-motion-surface='onboarding'] aside [style*='width'] {
+    animation: none !important;
+  }
+
+  .motion-step-card,
+  .motion-action-arrow,
+  [data-motion-surface='onboarding'] nav > div,
+  [data-motion-surface='onboarding'] label > div,
+  [data-motion-surface='onboarding'] form > div.rounded-2xl {
+    transition-duration: 0.01ms !important;
+  }
+
+  .motion-step-card:hover,
+  [data-motion-surface='onboarding'] nav > div:hover,
+  [data-motion-surface='onboarding'] label:hover > div {
+    transform: none !important;
+  }
+}
