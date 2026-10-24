@@ -32,7 +32,11 @@ function sourceFromRow(row: Record<string, unknown>): WebsiteSource | null {
   };
 }
 
-function installSnippet(siteId: string, consentMode: 'required' | 'granted') {
+function installSnippet(
+  siteId: string,
+  consentMode: 'required' | 'granted',
+  leadCapture: boolean,
+) {
   const encoded = encodeURIComponent(siteId);
   return `<script
   src="https://salsysos.com/salsys-intelligence.js"
@@ -40,7 +44,7 @@ function installSnippet(siteId: string, consentMode: 'required' | 'granted') {
   data-endpoint="https://salsysos.com/api/events/browser/v1?site_id=${encoded}"
   data-consent-endpoint="https://salsysos.com/api/privacy/consent/v1?site_id=${encoded}"
   data-consent-mode="${consentMode}"
-  data-form-mode="lead-only"${consentMode === 'granted' ? '\n  data-debug="true"' : ''}
+  data-form-mode="lead-only"${leadCapture ? '\n  data-salsys-lead-capture="auto"' : ''}${consentMode === 'granted' ? '\n  data-debug="true"' : ''}
   defer>
 </script>${consentMode === 'required' ? `
 <script
@@ -56,6 +60,7 @@ export function TrackerSnippet() {
   const [selectedId, setSelectedId] = useState('');
   const [loading, setLoading] = useState(true);
   const [copied, setCopied] = useState(false);
+  const [leadCapture, setLeadCapture] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -87,13 +92,13 @@ export function TrackerSnippet() {
   );
 
   const snippet = useMemo(
-    () => (selected ? installSnippet(selected.siteId, 'required') : ''),
-    [selected],
+    () => (selected ? installSnippet(selected.siteId, 'required', leadCapture) : ''),
+    [leadCapture, selected],
   );
 
   const testSnippet = useMemo(
-    () => (selected ? installSnippet(selected.siteId, 'granted') : ''),
-    [selected],
+    () => (selected ? installSnippet(selected.siteId, 'granted', leadCapture) : ''),
+    [leadCapture, selected],
   );
 
   async function copy(text: string) {
@@ -149,6 +154,21 @@ export function TrackerSnippet() {
           </div>
         ) : null}
       </div>
+
+      <label className="flex items-start gap-3 rounded-xl border border-slate-200 bg-white p-4 text-sm text-slate-700">
+        <input
+          type="checkbox"
+          checked={leadCapture}
+          onChange={(event) => setLeadCapture(event.target.checked)}
+          className="mt-0.5 h-4 w-4 rounded border-slate-300"
+        />
+        <span>
+          <span className="font-semibold text-slate-900">Enable Universal Lead Capture</span>
+          <span className="mt-1 block text-xs leading-5 text-slate-500">
+            Adds automatic browser lead capture for POST forms containing email or phone fields. Password forms are ignored. Salsys sends only an allowlist of lead fields such as name, email, phone, country, course and message.
+          </span>
+        </span>
+      </label>
 
       <div className="tracking-snippet-block">
         <div className="mb-2 flex items-center justify-between gap-3">
