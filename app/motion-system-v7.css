@@ -38,13 +38,15 @@
 
 /* Skeleton loading ------------------------------------------------------ */
 
-.motion-skeleton {
+.motion-skeleton,
+[aria-busy='true'].animate-pulse [class*='bg-slate-200'] {
   position: relative;
   overflow: hidden;
   isolation: isolate;
 }
 
-.motion-skeleton::after {
+.motion-skeleton::after,
+[aria-busy='true'].animate-pulse [class*='bg-slate-200']::after {
   content: '';
   position: absolute;
   inset: 0;
@@ -61,7 +63,8 @@
   pointer-events: none;
 }
 
-.dark .motion-skeleton::after {
+.dark .motion-skeleton::after,
+.dark [aria-busy='true'].animate-pulse [class*='bg-slate-200']::after {
   background: linear-gradient(
     90deg,
     transparent 0%,
@@ -188,6 +191,7 @@ button[aria-selected='true'] {
 
 @media (prefers-reduced-motion: reduce) {
   .motion-skeleton::after,
+  [aria-busy='true'].animate-pulse [class*='bg-slate-200']::after,
   button[aria-busy='true'],
   [role='button'][aria-busy='true'],
   [data-pending='true'],
@@ -211,7 +215,8 @@ button[aria-selected='true'] {
     animation: none !important;
   }
 
-  .motion-skeleton::after {
+  .motion-skeleton::after,
+  [aria-busy='true'].animate-pulse [class*='bg-slate-200']::after {
     display: none;
   }
 }
