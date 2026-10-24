@@ -121,15 +121,15 @@ export async function HomeSetupRecommendations() {
     {
       key: 'website',
       title: 'Connect your website',
-      detail: 'Install Universal Tracking and send a real browser event so visits and journeys can be measured.',
+      detail: 'Install tracking and send a real browser event.',
       href: '/tracking/sources',
       icon: Globe2,
       ready: websiteReady,
     },
     {
       key: 'channels',
-      title: 'Connect a customer channel',
-      detail: 'Connect WhatsApp, Instagram, Meta or Google so SalsysOS can work with real channel activity.',
+      title: 'Connect a channel',
+      detail: 'Connect WhatsApp, Instagram, Meta or Google.',
       href: '/settings/integrations',
       icon: MessageCircleMore,
       ready: channelsReady,
@@ -137,15 +137,15 @@ export async function HomeSetupRecommendations() {
     {
       key: 'team',
       title: 'Add your team',
-      detail: 'Invite at least one active admissions user when you are ready to collaborate inside the workspace.',
+      detail: 'Invite at least one active teammate.',
       href: '/settings/team',
       icon: Users,
       ready: teamReady,
     },
     {
       key: 'automation',
-      title: 'Create your first automation',
-      detail: 'Start from a safe recipe or Smart Trigger and keep activation under your existing review controls.',
+      title: 'Create an automation',
+      detail: 'Start with a recipe or Smart Trigger.',
       href: '/automation/recipes',
       icon: Workflow,
       ready: automationReady,
@@ -160,21 +160,23 @@ export async function HomeSetupRecommendations() {
   const completeCount = known.filter((item) => item.ready === true).length;
 
   return (
-    <section className="mb-4 overflow-hidden rounded-2xl border border-[#DCE4DF] bg-white shadow-sm dark:border-slate-800 dark:bg-slate-950">
-      <div className="flex flex-col gap-3 border-b border-[#EEF2EF] px-5 py-4 sm:flex-row sm:items-center sm:justify-between dark:border-slate-900">
-        <div>
-          <div className="flex items-center gap-2 text-[10px] font-black uppercase tracking-[.14em] text-[#216551] dark:text-emerald-300">
-            <Sparkles size={13} />
+    <section className="mb-3 overflow-hidden rounded-xl border border-[#DCE4DF] bg-white shadow-sm dark:border-slate-800 dark:bg-slate-950">
+      <div className="flex flex-col gap-2 border-b border-[#EEF2EF] px-4 py-3 sm:flex-row sm:items-center sm:justify-between dark:border-slate-900">
+        <div className="min-w-0">
+          <div className="flex items-center gap-1.5 text-[9px] font-black uppercase tracking-[.13em] text-[#216551] dark:text-emerald-300">
+            <Sparkles size={11} />
             Setup recommendations
           </div>
-          <h2 className="mt-1 text-lg font-semibold tracking-[-0.02em] text-[#18362D] dark:text-white">
-            Finish setting up SalsysOS
-          </h2>
-          <p className="mt-1 text-xs text-[#71847A] dark:text-slate-400">
-            These stay here until SalsysOS can verify the real setup state. You can keep using the workspace while you finish them.
-          </p>
+          <div className="mt-0.5 flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
+            <h2 className="text-[15px] font-semibold tracking-[-0.02em] text-[#18362D] dark:text-white">
+              Finish setting up SalsysOS
+            </h2>
+            <p className="text-[10.5px] text-[#71847A] dark:text-slate-400">
+              Complete these when you’re ready.
+            </p>
+          </div>
         </div>
-        <div className="shrink-0 rounded-full bg-[#EEF6F1] px-3 py-1.5 text-[10.5px] font-bold text-[#216551] dark:bg-emerald-950/50 dark:text-emerald-300">
+        <div className="shrink-0 rounded-full bg-[#EEF6F1] px-2.5 py-1 text-[9.5px] font-bold text-[#216551] dark:bg-emerald-950/50 dark:text-emerald-300">
           {completeCount} complete · {pending.length} left
         </div>
       </div>
@@ -186,24 +188,24 @@ export async function HomeSetupRecommendations() {
             <Link
               key={item.key}
               href={item.href}
-              className="group flex min-h-[132px] flex-col bg-white p-4 transition hover:bg-[#F8FAF8] dark:bg-slate-950 dark:hover:bg-slate-900/70"
+              className="group flex min-h-[84px] items-center gap-3 bg-white px-3.5 py-3 transition hover:bg-[#F8FAF8] dark:bg-slate-950 dark:hover:bg-slate-900/70"
             >
-              <div className="flex items-start justify-between gap-3">
-                <span className="grid h-9 w-9 place-items-center rounded-xl bg-[#EDF5F0] text-[#216551] dark:bg-emerald-950/50 dark:text-emerald-300">
-                  <Icon size={16} />
-                </span>
-                <ArrowRight size={14} className="text-[#B0BDB6] transition group-hover:translate-x-0.5 group-hover:text-[#216551]" />
+              <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-[#EDF5F0] text-[#216551] dark:bg-emerald-950/50 dark:text-emerald-300">
+                <Icon size={14} />
+              </span>
+              <div className="min-w-0 flex-1">
+                <div className="truncate text-[12px] font-semibold text-[#253E35] dark:text-slate-100">{item.title}</div>
+                <div className="mt-0.5 truncate text-[10px] text-[#71847A] dark:text-slate-400">{item.detail}</div>
               </div>
-              <div className="mt-3 text-sm font-semibold text-[#253E35] dark:text-slate-100">{item.title}</div>
-              <div className="mt-1 text-[11px] leading-5 text-[#71847A] dark:text-slate-400">{item.detail}</div>
+              <ArrowRight size={13} className="shrink-0 text-[#B0BDB6] transition group-hover:translate-x-0.5 group-hover:text-[#216551]" />
             </Link>
           );
         })}
       </div>
 
-      <div className="flex items-center gap-2 border-t border-[#EEF2EF] bg-[#FAFCFB] px-5 py-3 text-[10.5px] text-[#71847A] dark:border-slate-900 dark:bg-slate-950 dark:text-slate-400">
-        <CheckCircle2 size={13} className="text-[#3B956F]" />
-        Recommendations disappear automatically when the underlying setup is verified.
+      <div className="flex items-center gap-1.5 border-t border-[#EEF2EF] bg-[#FAFCFB] px-4 py-2 text-[9.5px] text-[#71847A] dark:border-slate-900 dark:bg-slate-950 dark:text-slate-400">
+        <CheckCircle2 size={11} className="text-[#3B956F]" />
+        Items disappear automatically when verified.
       </div>
     </section>
   );
