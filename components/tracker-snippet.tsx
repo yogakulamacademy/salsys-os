@@ -108,7 +108,11 @@ export function TrackerSnippet() {
   }
 
   if (loading) {
-    return <div className="mt-5 text-sm text-slate-500">Loading registered website IDs…</div>;
+    return (
+      <div role="status" aria-busy="true" className="mt-5 text-sm text-slate-500">
+        Loading registered website IDs…
+      </div>
+    );
   }
 
   if (!selected) {
@@ -155,6 +159,8 @@ export function TrackerSnippet() {
           <button
             type="button"
             onClick={() => copy(snippet)}
+            data-copy-state={copied ? 'copied' : 'idle'}
+            aria-live="polite"
             className="tracking-copy-button btn-secondary !px-3 !py-2 text-xs"
           >
             {copied ? <Check size={14} /> : <Copy size={14} />}
