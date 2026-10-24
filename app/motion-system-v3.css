@@ -1,0 +1,337 @@
+/* SalsysOS Motion System V3 ---------------------------------------------
+ * CRM pipeline + analytics motion layer.
+ * Motion communicates state changes, filtering, process completion and data
+ * reveal. All selectors are route-scoped and preserve existing product logic.
+ */
+
+@keyframes motion-v3-card-in {
+  from { opacity: 0; transform: translateY(8px) scale(0.985); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@keyframes motion-v3-value-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes motion-v3-drop-ready {
+  0%, 100% { box-shadow: inset 0 0 0 1px rgba(33, 101, 81, 0.08); }
+  50% { box-shadow: inset 0 0 0 2px rgba(33, 101, 81, 0.18), 0 8px 22px rgba(33, 101, 81, 0.07); }
+}
+
+@keyframes motion-v3-saving {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.78; transform: scale(0.992); }
+}
+
+@keyframes motion-v3-toast-in {
+  from { opacity: 0; transform: translate3d(0, 10px, 0) scale(0.98); }
+  to { opacity: 1; transform: translate3d(0, 0, 0) scale(1); }
+}
+
+@keyframes motion-v3-bar-up {
+  from { opacity: 0; transform: scaleY(0); }
+  to { opacity: 1; transform: scaleY(1); }
+}
+
+@keyframes motion-v3-bar-across {
+  from { opacity: 0; transform: scaleX(0); }
+  to { opacity: 1; transform: scaleX(1); }
+}
+
+@keyframes motion-v3-panel-in {
+  from { opacity: 0; transform: translate3d(10px, 0, 0); }
+  to { opacity: 1; transform: translate3d(0, 0, 0); }
+}
+
+@keyframes motion-v3-details-in {
+  from { opacity: 0; transform: translateY(-4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* Pipeline --------------------------------------------------------------- */
+
+[data-motion-route='/pipeline'] .pipeline-polish > * {
+  animation: motion-surface-in 380ms var(--motion-ease) both;
+}
+
+[data-motion-route='/pipeline'] .pipeline-primary-metrics > *,
+[data-motion-route='/pipeline'] .pipeline-health-strip > *,
+[data-motion-route='/pipeline'] .pipeline-stuck-grid > * {
+  opacity: 0;
+  animation: motion-v3-card-in 420ms var(--motion-ease) both;
+}
+
+[data-motion-route='/pipeline'] .pipeline-primary-metrics > :nth-child(1),
+[data-motion-route='/pipeline'] .pipeline-health-strip > :nth-child(1),
+[data-motion-route='/pipeline'] .pipeline-stuck-grid > :nth-child(1) { animation-delay: 50ms; }
+[data-motion-route='/pipeline'] .pipeline-primary-metrics > :nth-child(2),
+[data-motion-route='/pipeline'] .pipeline-health-strip > :nth-child(2),
+[data-motion-route='/pipeline'] .pipeline-stuck-grid > :nth-child(2) { animation-delay: 90ms; }
+[data-motion-route='/pipeline'] .pipeline-primary-metrics > :nth-child(3),
+[data-motion-route='/pipeline'] .pipeline-health-strip > :nth-child(3),
+[data-motion-route='/pipeline'] .pipeline-stuck-grid > :nth-child(3) { animation-delay: 130ms; }
+[data-motion-route='/pipeline'] .pipeline-primary-metrics > :nth-child(4),
+[data-motion-route='/pipeline'] .pipeline-stuck-grid > :nth-child(4) { animation-delay: 170ms; }
+[data-motion-route='/pipeline'] .pipeline-primary-metrics > :nth-child(5),
+[data-motion-route='/pipeline'] .pipeline-stuck-grid > :nth-child(5) { animation-delay: 210ms; }
+[data-motion-route='/pipeline'] .pipeline-stuck-grid > :nth-child(6) { animation-delay: 250ms; }
+
+[data-motion-route='/pipeline'] .pipeline-metric-value,
+[data-motion-route='/pipeline'] .pipeline-health-value,
+[data-motion-route='/pipeline'] .pipeline-stuck-count {
+  animation: motion-v3-value-in 460ms var(--motion-ease) both;
+  animation-delay: 130ms;
+}
+
+[data-motion-route='/pipeline'] .pipeline-metric-card,
+[data-motion-route='/pipeline'] .pipeline-health-item,
+[data-motion-route='/pipeline'] .pipeline-stuck-card {
+  transition:
+    transform var(--motion-base) var(--motion-ease),
+    box-shadow var(--motion-base) var(--motion-ease),
+    border-color var(--motion-fast) ease,
+    background-color var(--motion-fast) ease;
+}
+
+[data-motion-route='/pipeline'] .pipeline-metric-card:hover,
+[data-motion-route='/pipeline'] .pipeline-stuck-card:hover {
+  transform: translateY(-2px);
+}
+
+/* Board columns visibly acknowledge an active drag target. */
+[data-motion-route='/pipeline'] [class*='min-h-[455px]'] {
+  transition:
+    transform 190ms var(--motion-ease),
+    border-color 190ms ease,
+    background-color 190ms ease,
+    box-shadow 190ms var(--motion-ease);
+}
+
+[data-motion-route='/pipeline'] [class*='min-h-[455px]'][class*='bg-[#ECF5EE]'] {
+  transform: translateY(-2px);
+  animation: motion-v3-drop-ready 1.35s ease-in-out infinite;
+}
+
+[data-motion-route='/pipeline'] [draggable='true'] {
+  transform-origin: center;
+  animation: motion-v3-card-in 360ms var(--motion-ease) both;
+  transition:
+    transform 180ms var(--motion-ease),
+    opacity 180ms ease,
+    box-shadow 180ms var(--motion-ease),
+    border-color 160ms ease;
+}
+
+[data-motion-route='/pipeline'] [draggable='true']:hover {
+  transform: translateY(-2px);
+}
+
+[data-motion-route='/pipeline'] [draggable='true']:active {
+  transform: rotate(0.35deg) scale(1.012);
+  box-shadow: 0 14px 28px rgba(24, 67, 48, 0.12);
+}
+
+/* Optimistic stage save: card remains in place but visibly processes. */
+[data-motion-route='/pipeline'] [draggable='false']:has(.animate-spin) {
+  animation: motion-v3-saving 1.05s ease-in-out infinite;
+}
+
+[data-motion-route='/pipeline'] [role='status'] {
+  animation: motion-v3-toast-in 320ms var(--motion-ease) both;
+}
+
+[data-motion-route='/pipeline'] input:focus,
+[data-motion-route='/pipeline'] select:focus {
+  animation: motion-focus-ring 500ms var(--motion-ease) both;
+}
+
+[data-motion-route='/pipeline'] button,
+[data-motion-route='/pipeline'] a,
+[data-motion-route='/pipeline'] select {
+  transition:
+    transform var(--motion-fast) var(--motion-ease),
+    border-color var(--motion-fast) ease,
+    background-color var(--motion-fast) ease,
+    color var(--motion-fast) ease,
+    box-shadow var(--motion-fast) var(--motion-ease);
+}
+
+[data-motion-route='/pipeline'] button:active,
+[data-motion-route='/pipeline'] a:active {
+  transform: scale(0.985);
+}
+
+/* Analytics -------------------------------------------------------------- */
+
+[data-motion-route='/analytics'] .shell-main > div > * {
+  animation: motion-surface-in 390ms var(--motion-ease) both;
+}
+
+[data-motion-route='/analytics'] section:first-of-type > div {
+  opacity: 0;
+  animation: motion-v3-card-in 420ms var(--motion-ease) both;
+}
+
+[data-motion-route='/analytics'] section:first-of-type > div:nth-child(1) { animation-delay: 55ms; }
+[data-motion-route='/analytics'] section:first-of-type > div:nth-child(2) { animation-delay: 95ms; }
+[data-motion-route='/analytics'] section:first-of-type > div:nth-child(3) { animation-delay: 135ms; }
+[data-motion-route='/analytics'] section:first-of-type > div:nth-child(4) { animation-delay: 175ms; }
+
+[data-motion-route='/analytics'] .tabular-nums,
+[data-motion-route='/analytics'] section:first-of-type [class*='text-2xl'],
+[data-motion-route='/analytics'] details [class*='font-black'] {
+  animation: motion-v3-value-in 430ms var(--motion-ease) both;
+}
+
+/* Daily trend bars rise from their baseline. */
+[data-motion-route='/analytics'] button span[style*='height'] {
+  transform-origin: bottom center;
+  animation: motion-v3-bar-up 620ms var(--motion-ease) both;
+}
+
+/* Ranked performance bars reveal left-to-right. */
+[data-motion-route='/analytics'] span[style*='width'][class*='h-full'] {
+  transform-origin: left center;
+  animation: motion-v3-bar-across 620ms var(--motion-ease) both;
+}
+
+[data-motion-route='/analytics'] section,
+[data-motion-route='/analytics'] details,
+[data-motion-route='/analytics'] table tbody tr {
+  transition:
+    transform var(--motion-base) var(--motion-ease),
+    opacity var(--motion-fast) ease,
+    background-color var(--motion-fast) ease,
+    border-color var(--motion-fast) ease,
+    box-shadow var(--motion-base) var(--motion-ease);
+}
+
+[data-motion-route='/analytics'] table tbody tr {
+  animation: motion-v3-card-in 360ms var(--motion-ease) both;
+}
+
+[data-motion-route='/analytics'] table tbody tr:nth-child(1) { animation-delay: 45ms; }
+[data-motion-route='/analytics'] table tbody tr:nth-child(2) { animation-delay: 75ms; }
+[data-motion-route='/analytics'] table tbody tr:nth-child(3) { animation-delay: 105ms; }
+[data-motion-route='/analytics'] table tbody tr:nth-child(4) { animation-delay: 135ms; }
+[data-motion-route='/analytics'] table tbody tr:nth-child(5) { animation-delay: 165ms; }
+[data-motion-route='/analytics'] table tbody tr:nth-child(6) { animation-delay: 195ms; }
+
+[data-motion-route='/analytics'] table tbody tr:hover {
+  transform: translateX(2px);
+}
+
+[data-motion-route='/analytics'] details[open] > div {
+  animation: motion-v3-details-in 300ms var(--motion-ease) both;
+}
+
+[data-motion-route='/analytics'] details summary {
+  transition:
+    background-color var(--motion-fast) ease,
+    color var(--motion-fast) ease;
+}
+
+[data-motion-route='/analytics'] details summary:hover {
+  background: rgba(248, 250, 252, 0.75);
+}
+
+/* Analytics detail drawer / side panels. */
+[data-motion-route='/analytics'] [class*='fixed'][class*='right-0'] {
+  animation: motion-v3-panel-in 320ms var(--motion-ease) both;
+}
+
+[data-motion-route='/analytics'] button,
+[data-motion-route='/analytics'] a,
+[data-motion-route='/analytics'] input,
+[data-motion-route='/analytics'] select {
+  transition:
+    transform var(--motion-fast) var(--motion-ease),
+    border-color var(--motion-fast) ease,
+    background-color var(--motion-fast) ease,
+    color var(--motion-fast) ease,
+    box-shadow var(--motion-fast) var(--motion-ease);
+}
+
+[data-motion-route='/analytics'] button:hover {
+  transform: translateY(-1px);
+}
+
+[data-motion-route='/analytics'] button:active {
+  transform: scale(0.985);
+}
+
+[data-motion-route='/analytics'] input:focus,
+[data-motion-route='/analytics'] select:focus {
+  animation: motion-focus-ring 500ms var(--motion-ease) both;
+}
+
+/* Filters/views replace evidence in-place; the new content receives a calm reveal. */
+[data-motion-route='/analytics'] section > div[class*='p-4'],
+[data-motion-route='/analytics'] section > div[class*='sm:p-5'] {
+  animation: motion-result-in 320ms var(--motion-ease) both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  [data-motion-route='/pipeline'] .pipeline-polish > *,
+  [data-motion-route='/pipeline'] .pipeline-primary-metrics > *,
+  [data-motion-route='/pipeline'] .pipeline-health-strip > *,
+  [data-motion-route='/pipeline'] .pipeline-stuck-grid > *,
+  [data-motion-route='/pipeline'] .pipeline-metric-value,
+  [data-motion-route='/pipeline'] .pipeline-health-value,
+  [data-motion-route='/pipeline'] .pipeline-stuck-count,
+  [data-motion-route='/pipeline'] [class*='min-h-[455px]'][class*='bg-[#ECF5EE]'],
+  [data-motion-route='/pipeline'] [draggable='true'],
+  [data-motion-route='/pipeline'] [draggable='false']:has(.animate-spin),
+  [data-motion-route='/pipeline'] [role='status'],
+  [data-motion-route='/pipeline'] input:focus,
+  [data-motion-route='/pipeline'] select:focus,
+  [data-motion-route='/analytics'] .shell-main > div > *,
+  [data-motion-route='/analytics'] section:first-of-type > div,
+  [data-motion-route='/analytics'] .tabular-nums,
+  [data-motion-route='/analytics'] section:first-of-type [class*='text-2xl'],
+  [data-motion-route='/analytics'] details [class*='font-black'],
+  [data-motion-route='/analytics'] button span[style*='height'],
+  [data-motion-route='/analytics'] span[style*='width'][class*='h-full'],
+  [data-motion-route='/analytics'] table tbody tr,
+  [data-motion-route='/analytics'] details[open] > div,
+  [data-motion-route='/analytics'] [class*='fixed'][class*='right-0'],
+  [data-motion-route='/analytics'] input:focus,
+  [data-motion-route='/analytics'] select:focus,
+  [data-motion-route='/analytics'] section > div[class*='p-4'],
+  [data-motion-route='/analytics'] section > div[class*='sm:p-5'] {
+    animation: none !important;
+  }
+
+  [data-motion-route='/pipeline'] .pipeline-metric-card,
+  [data-motion-route='/pipeline'] .pipeline-health-item,
+  [data-motion-route='/pipeline'] .pipeline-stuck-card,
+  [data-motion-route='/pipeline'] [class*='min-h-[455px]'],
+  [data-motion-route='/pipeline'] [draggable='true'],
+  [data-motion-route='/pipeline'] button,
+  [data-motion-route='/pipeline'] a,
+  [data-motion-route='/pipeline'] select,
+  [data-motion-route='/analytics'] section,
+  [data-motion-route='/analytics'] details,
+  [data-motion-route='/analytics'] table tbody tr,
+  [data-motion-route='/analytics'] details summary,
+  [data-motion-route='/analytics'] button,
+  [data-motion-route='/analytics'] a,
+  [data-motion-route='/analytics'] input,
+  [data-motion-route='/analytics'] select {
+    transition-duration: 0.01ms !important;
+  }
+
+  [data-motion-route='/pipeline'] .pipeline-metric-card:hover,
+  [data-motion-route='/pipeline'] .pipeline-stuck-card:hover,
+  [data-motion-route='/pipeline'] [class*='min-h-[455px]'][class*='bg-[#ECF5EE]'],
+  [data-motion-route='/pipeline'] [draggable='true']:hover,
+  [data-motion-route='/pipeline'] [draggable='true']:active,
+  [data-motion-route='/pipeline'] button:active,
+  [data-motion-route='/pipeline'] a:active,
+  [data-motion-route='/analytics'] table tbody tr:hover,
+  [data-motion-route='/analytics'] button:hover,
+  [data-motion-route='/analytics'] button:active {
+    transform: none !important;
+  }
+}
