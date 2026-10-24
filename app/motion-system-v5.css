@@ -1,0 +1,268 @@
+/* SalsysOS Motion System V5 ---------------------------------------------
+ * Funnel + Attribution + Revenue.
+ * Motion mirrors existing evidence/state only; it never invents progress.
+ */
+
+@keyframes motion-v5-surface-in {
+  from { opacity: 0; transform: translateY(7px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes motion-v5-card-in {
+  from { opacity: 0; transform: translateY(5px) scale(0.992); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@keyframes motion-v5-bar-grow {
+  from { transform: scaleX(0); opacity: 0.5; }
+  to { transform: scaleX(1); opacity: 1; }
+}
+
+@keyframes motion-v5-stage-in {
+  from { opacity: 0; transform: translateX(-5px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+@keyframes motion-v5-feedback-in {
+  from { opacity: 0; transform: translateY(-4px) scale(0.99); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+/* Shared decision-intelligence surfaces -------------------------------- */
+
+[data-motion-route='/funnel'] .ui-page-header,
+[data-motion-route='/attribution'] .ui-page-header,
+[data-motion-route='/revenue'] .ui-page-header {
+  animation: motion-v5-surface-in 360ms var(--motion-ease) both;
+}
+
+[data-motion-route='/funnel'] section,
+[data-motion-route='/attribution'] section,
+[data-motion-route='/revenue'] section {
+  animation: motion-v5-card-in 340ms var(--motion-ease) both;
+}
+
+[data-motion-route='/funnel'] section:nth-of-type(1),
+[data-motion-route='/attribution'] section:nth-of-type(1),
+[data-motion-route='/revenue'] section:nth-of-type(1) { animation-delay: 35ms; }
+[data-motion-route='/funnel'] section:nth-of-type(2),
+[data-motion-route='/attribution'] section:nth-of-type(2),
+[data-motion-route='/revenue'] section:nth-of-type(2) { animation-delay: 65ms; }
+[data-motion-route='/funnel'] section:nth-of-type(3),
+[data-motion-route='/attribution'] section:nth-of-type(3),
+[data-motion-route='/revenue'] section:nth-of-type(3) { animation-delay: 95ms; }
+[data-motion-route='/funnel'] section:nth-of-type(4),
+[data-motion-route='/attribution'] section:nth-of-type(4),
+[data-motion-route='/revenue'] section:nth-of-type(4) { animation-delay: 125ms; }
+
+[data-motion-route='/funnel'] button,
+[data-motion-route='/funnel'] a,
+[data-motion-route='/funnel'] input,
+[data-motion-route='/funnel'] select,
+[data-motion-route='/attribution'] button,
+[data-motion-route='/attribution'] a,
+[data-motion-route='/attribution'] input,
+[data-motion-route='/attribution'] select,
+[data-motion-route='/revenue'] button,
+[data-motion-route='/revenue'] a,
+[data-motion-route='/revenue'] input,
+[data-motion-route='/revenue'] select {
+  transition:
+    transform var(--motion-fast) var(--motion-ease),
+    box-shadow var(--motion-fast) var(--motion-ease),
+    border-color var(--motion-fast) ease,
+    background-color var(--motion-fast) ease,
+    color var(--motion-fast) ease,
+    opacity var(--motion-fast) ease;
+}
+
+[data-motion-route='/funnel'] button:active,
+[data-motion-route='/attribution'] button:active,
+[data-motion-route='/revenue'] button:active {
+  transform: scale(0.985);
+}
+
+[data-motion-route='/funnel'] input:focus,
+[data-motion-route='/funnel'] select:focus,
+[data-motion-route='/attribution'] input:focus,
+[data-motion-route='/attribution'] select:focus,
+[data-motion-route='/revenue'] input:focus,
+[data-motion-route='/revenue'] select:focus {
+  animation: motion-focus-ring 500ms var(--motion-ease) both;
+}
+
+[data-motion-route='/funnel'] details[open] > :not(summary),
+[data-motion-route='/attribution'] details[open] > :not(summary),
+[data-motion-route='/revenue'] details[open] > :not(summary) {
+  animation: motion-v5-feedback-in 260ms var(--motion-ease) both;
+}
+
+/* Funnel ---------------------------------------------------------------- */
+
+[data-motion-route='/funnel'] button[class*='min-w-[108px]'] {
+  animation: motion-v5-stage-in 300ms var(--motion-ease) both;
+}
+
+[data-motion-route='/funnel'] button[class*='min-w-[108px]']:nth-of-type(1) { animation-delay: 30ms; }
+[data-motion-route='/funnel'] button[class*='min-w-[108px]']:nth-of-type(2) { animation-delay: 55ms; }
+[data-motion-route='/funnel'] button[class*='min-w-[108px]']:nth-of-type(3) { animation-delay: 80ms; }
+[data-motion-route='/funnel'] button[class*='min-w-[108px]']:nth-of-type(4) { animation-delay: 105ms; }
+[data-motion-route='/funnel'] button[class*='min-w-[108px]']:nth-of-type(5) { animation-delay: 130ms; }
+
+[data-motion-route='/funnel'] span.h-2 > span[style*='width'],
+[data-motion-route='/funnel'] [class*='h-2'][class*='overflow-hidden'] > span[style*='width'] {
+  transform-origin: left center;
+  animation: motion-v5-bar-grow 650ms var(--motion-ease) both;
+}
+
+[data-motion-route='/funnel'] table tbody tr,
+[data-motion-route='/funnel'] [class*='space-y-1'] > button {
+  animation: motion-v5-stage-in 280ms var(--motion-ease) both;
+}
+
+[data-motion-route='/funnel'] table tbody tr:hover,
+[data-motion-route='/funnel'] [class*='space-y-1'] > button:hover {
+  transform: translateY(-1px);
+}
+
+/* Attribution ----------------------------------------------------------- */
+
+[data-motion-route='/attribution'] section[class*='bg-[#f4f8f3]'] {
+  animation: motion-v5-feedback-in 320ms var(--motion-ease) both;
+}
+
+[data-motion-route='/attribution'] table tbody tr,
+[data-motion-route='/attribution'] [class*='space-y-1'] > *,
+[data-motion-route='/attribution'] [class*='grid'] > [class*='rounded'] {
+  animation: motion-v5-stage-in 280ms var(--motion-ease) both;
+}
+
+[data-motion-route='/attribution'] table tbody tr:nth-child(1) { animation-delay: 25ms; }
+[data-motion-route='/attribution'] table tbody tr:nth-child(2) { animation-delay: 45ms; }
+[data-motion-route='/attribution'] table tbody tr:nth-child(3) { animation-delay: 65ms; }
+[data-motion-route='/attribution'] table tbody tr:nth-child(4) { animation-delay: 85ms; }
+[data-motion-route='/attribution'] table tbody tr:nth-child(5) { animation-delay: 105ms; }
+
+[data-motion-route='/attribution'] [class*='h-2'][class*='overflow-hidden'] > span,
+[data-motion-route='/attribution'] [class*='h-1.5'][class*='overflow-hidden'] > span {
+  transform-origin: left center;
+  animation: motion-v5-bar-grow 650ms var(--motion-ease) both;
+}
+
+[data-motion-route='/attribution'] [role='tab'],
+[data-motion-route='/attribution'] [aria-pressed='true'],
+[data-motion-route='/attribution'] [aria-selected='true'] {
+  transition:
+    transform var(--motion-fast) var(--motion-ease),
+    box-shadow var(--motion-fast) var(--motion-ease),
+    border-color var(--motion-fast) ease,
+    background-color var(--motion-fast) ease,
+    color var(--motion-fast) ease;
+}
+
+/* Revenue --------------------------------------------------------------- */
+
+[data-motion-route='/revenue'] table tbody tr,
+[data-motion-route='/revenue'] [class*='grid'] > [class*='rounded'],
+[data-motion-route='/revenue'] [class*='space-y-2'] > * {
+  animation: motion-v5-stage-in 280ms var(--motion-ease) both;
+}
+
+[data-motion-route='/revenue'] table tbody tr:nth-child(1) { animation-delay: 25ms; }
+[data-motion-route='/revenue'] table tbody tr:nth-child(2) { animation-delay: 45ms; }
+[data-motion-route='/revenue'] table tbody tr:nth-child(3) { animation-delay: 65ms; }
+[data-motion-route='/revenue'] table tbody tr:nth-child(4) { animation-delay: 85ms; }
+[data-motion-route='/revenue'] table tbody tr:nth-child(5) { animation-delay: 105ms; }
+[data-motion-route='/revenue'] table tbody tr:nth-child(6) { animation-delay: 125ms; }
+
+[data-motion-route='/revenue'] [class*='h-2'][class*='overflow-hidden'] > span,
+[data-motion-route='/revenue'] [class*='h-1.5'][class*='overflow-hidden'] > span,
+[data-motion-route='/revenue'] [class*='rounded-full'][style*='width'] {
+  transform-origin: left center;
+  animation: motion-v5-bar-grow 650ms var(--motion-ease) both;
+}
+
+[data-motion-route='/revenue'] [class*='text-emerald'],
+[data-motion-route='/revenue'] [class*='text-amber'],
+[data-motion-route='/revenue'] [class*='text-red'] {
+  transition: color var(--motion-fast) ease, opacity var(--motion-fast) ease;
+}
+
+/* Shared table / drill-down feedback ----------------------------------- */
+
+[data-motion-route='/funnel'] table tbody tr,
+[data-motion-route='/attribution'] table tbody tr,
+[data-motion-route='/revenue'] table tbody tr {
+  transition:
+    background-color var(--motion-fast) ease,
+    transform var(--motion-fast) var(--motion-ease),
+    opacity var(--motion-fast) ease;
+}
+
+[data-motion-route='/funnel'] table tbody tr:hover,
+[data-motion-route='/attribution'] table tbody tr:hover,
+[data-motion-route='/revenue'] table tbody tr:hover {
+  transform: translateY(-1px);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  [data-motion-route='/funnel'] .ui-page-header,
+  [data-motion-route='/attribution'] .ui-page-header,
+  [data-motion-route='/revenue'] .ui-page-header,
+  [data-motion-route='/funnel'] section,
+  [data-motion-route='/attribution'] section,
+  [data-motion-route='/revenue'] section,
+  [data-motion-route='/funnel'] button[class*='min-w-[108px]'],
+  [data-motion-route='/funnel'] span.h-2 > span[style*='width'],
+  [data-motion-route='/funnel'] [class*='h-2'][class*='overflow-hidden'] > span[style*='width'],
+  [data-motion-route='/attribution'] section[class*='bg-[#f4f8f3]'],
+  [data-motion-route='/attribution'] table tbody tr,
+  [data-motion-route='/attribution'] [class*='space-y-1'] > *,
+  [data-motion-route='/attribution'] [class*='grid'] > [class*='rounded'],
+  [data-motion-route='/attribution'] [class*='h-2'][class*='overflow-hidden'] > span,
+  [data-motion-route='/attribution'] [class*='h-1.5'][class*='overflow-hidden'] > span,
+  [data-motion-route='/revenue'] table tbody tr,
+  [data-motion-route='/revenue'] [class*='grid'] > [class*='rounded'],
+  [data-motion-route='/revenue'] [class*='space-y-2'] > *,
+  [data-motion-route='/revenue'] [class*='h-2'][class*='overflow-hidden'] > span,
+  [data-motion-route='/revenue'] [class*='h-1.5'][class*='overflow-hidden'] > span,
+  [data-motion-route='/revenue'] [class*='rounded-full'][style*='width'],
+  [data-motion-route='/funnel'] details[open] > :not(summary),
+  [data-motion-route='/attribution'] details[open] > :not(summary),
+  [data-motion-route='/revenue'] details[open] > :not(summary),
+  [data-motion-route='/funnel'] input:focus,
+  [data-motion-route='/funnel'] select:focus,
+  [data-motion-route='/attribution'] input:focus,
+  [data-motion-route='/attribution'] select:focus,
+  [data-motion-route='/revenue'] input:focus,
+  [data-motion-route='/revenue'] select:focus {
+    animation: none !important;
+  }
+
+  [data-motion-route='/funnel'] button,
+  [data-motion-route='/funnel'] a,
+  [data-motion-route='/funnel'] input,
+  [data-motion-route='/funnel'] select,
+  [data-motion-route='/attribution'] button,
+  [data-motion-route='/attribution'] a,
+  [data-motion-route='/attribution'] input,
+  [data-motion-route='/attribution'] select,
+  [data-motion-route='/revenue'] button,
+  [data-motion-route='/revenue'] a,
+  [data-motion-route='/revenue'] input,
+  [data-motion-route='/revenue'] select,
+  [data-motion-route='/funnel'] table tbody tr,
+  [data-motion-route='/attribution'] table tbody tr,
+  [data-motion-route='/revenue'] table tbody tr {
+    transition-duration: 0.01ms !important;
+  }
+
+  [data-motion-route='/funnel'] button:active,
+  [data-motion-route='/attribution'] button:active,
+  [data-motion-route='/revenue'] button:active,
+  [data-motion-route='/funnel'] table tbody tr:hover,
+  [data-motion-route='/attribution'] table tbody tr:hover,
+  [data-motion-route='/revenue'] table tbody tr:hover {
+    transform: none !important;
+  }
+}
