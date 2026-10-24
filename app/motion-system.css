@@ -48,6 +48,28 @@
   50% { opacity: 1; }
 }
 
+@keyframes motion-panel-in {
+  from { opacity: 0; transform: translate3d(8px, 0, 0); }
+  to { opacity: 1; transform: translate3d(0, 0, 0); }
+}
+
+@keyframes motion-node-settle {
+  0% { opacity: 0; transform: translateY(8px) scale(0.97); }
+  72% { opacity: 1; transform: translateY(-1px) scale(1.01); }
+  100% { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@keyframes motion-result-in {
+  from { opacity: 0; transform: translateY(5px) scale(0.985); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@keyframes motion-focus-ring {
+  0% { box-shadow: 0 0 0 0 rgba(35, 105, 80, 0.18); }
+  70% { box-shadow: 0 0 0 7px rgba(35, 105, 80, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(35, 105, 80, 0); }
+}
+
 .motion-surface-enter {
   animation: motion-surface-in var(--motion-slow) var(--motion-ease) both;
 }
@@ -135,6 +157,128 @@
 
 [data-motion-surface='onboarding'] label:hover > div { transform: translateY(-1px); }
 
+/* Automation Studio ------------------------------------------------------ */
+
+[data-motion-route='/automation/triggers'] header,
+[data-motion-route='/automation/flow-builder'] header {
+  animation: motion-route-in 340ms var(--motion-ease) both;
+}
+
+[data-motion-route='/automation/triggers'] section,
+[data-motion-route='/automation/flow-builder'] section {
+  animation: motion-surface-in 420ms var(--motion-ease) both;
+}
+
+[data-motion-route='/automation/triggers'] section:nth-of-type(1) > *,
+[data-motion-route='/automation/flow-builder'] section:nth-of-type(1) > * {
+  animation: motion-step-in 420ms var(--motion-ease) both;
+}
+
+[data-motion-route='/automation/triggers'] section:nth-of-type(1) > :nth-child(1),
+[data-motion-route='/automation/flow-builder'] section:nth-of-type(1) > :nth-child(1) { animation-delay: 50ms; }
+[data-motion-route='/automation/triggers'] section:nth-of-type(1) > :nth-child(2),
+[data-motion-route='/automation/flow-builder'] section:nth-of-type(1) > :nth-child(2) { animation-delay: 90ms; }
+[data-motion-route='/automation/triggers'] section:nth-of-type(1) > :nth-child(3),
+[data-motion-route='/automation/flow-builder'] section:nth-of-type(1) > :nth-child(3) { animation-delay: 130ms; }
+[data-motion-route='/automation/triggers'] section:nth-of-type(1) > :nth-child(4),
+[data-motion-route='/automation/flow-builder'] section:nth-of-type(1) > :nth-child(4) { animation-delay: 170ms; }
+[data-motion-route='/automation/triggers'] section:nth-of-type(1) > :nth-child(5),
+[data-motion-route='/automation/flow-builder'] section:nth-of-type(1) > :nth-child(5) { animation-delay: 210ms; }
+
+[data-motion-route='/automation/triggers'] button,
+[data-motion-route='/automation/triggers'] a,
+[data-motion-route='/automation/flow-builder'] button,
+[data-motion-route='/automation/flow-builder'] a {
+  transition:
+    transform var(--motion-fast) var(--motion-ease),
+    box-shadow var(--motion-fast) var(--motion-ease),
+    border-color var(--motion-fast) ease,
+    background-color var(--motion-fast) ease,
+    color var(--motion-fast) ease;
+}
+
+[data-motion-route='/automation/triggers'] button:active,
+[data-motion-route='/automation/flow-builder'] button:active {
+  transform: scale(0.985);
+}
+
+[data-motion-route='/automation/triggers'] form,
+[data-motion-route='/automation/flow-builder'] form {
+  transition:
+    transform var(--motion-base) var(--motion-ease),
+    border-color var(--motion-fast) ease,
+    box-shadow var(--motion-base) var(--motion-ease),
+    background-color var(--motion-fast) ease;
+}
+
+[data-motion-route='/automation/triggers'] form:focus-within,
+[data-motion-route='/automation/flow-builder'] form:focus-within {
+  transform: translateY(-1px);
+}
+
+/* Smart Triggers: groups, simulation and builder/library state changes. */
+[data-motion-route='/automation/triggers'] [class*='rounded-[12px]'][class*='border'],
+[data-motion-route='/automation/triggers'] [class*='rounded-[11px]'][class*='border'] {
+  transition:
+    transform var(--motion-base) var(--motion-ease),
+    box-shadow var(--motion-base) var(--motion-ease),
+    border-color var(--motion-fast) ease,
+    background-color var(--motion-fast) ease;
+}
+
+[data-motion-route='/automation/triggers'] [class*='rounded-[12px]'][class*='border']:hover {
+  transform: translateY(-1px);
+}
+
+[data-motion-route='/automation/triggers'] [class*='bg-[#f0faf4]'],
+[data-motion-route='/automation/triggers'] [class*='bg-[#f2faf5]'] {
+  animation: motion-result-in 360ms var(--motion-ease) both;
+}
+
+[data-motion-route='/automation/triggers'] [role='dialog'],
+[data-motion-route='/automation/triggers'] [aria-modal='true'] {
+  animation: motion-panel-in 300ms var(--motion-ease) both;
+}
+
+/* Flow Builder: node canvas, palette and inspector response. */
+[data-motion-route='/automation/flow-builder'] [draggable='true'] {
+  transition:
+    transform 180ms var(--motion-ease),
+    box-shadow 180ms var(--motion-ease),
+    border-color 160ms ease,
+    opacity 160ms ease;
+  animation: motion-node-settle 420ms var(--motion-ease) both;
+}
+
+[data-motion-route='/automation/flow-builder'] [draggable='true']:hover {
+  transform: translateY(-2px);
+}
+
+[data-motion-route='/automation/flow-builder'] [draggable='true']:active {
+  transform: scale(1.015);
+  box-shadow: 0 16px 34px rgba(23, 61, 49, 0.14);
+}
+
+[data-motion-route='/automation/flow-builder'] aside,
+[data-motion-route='/automation/flow-builder'] [class*='fixed'][class*='right-0'] {
+  animation: motion-panel-in 320ms var(--motion-ease) both;
+}
+
+[data-motion-route='/automation/flow-builder'] svg line,
+[data-motion-route='/automation/flow-builder'] svg path {
+  transition:
+    stroke var(--motion-fast) ease,
+    opacity var(--motion-fast) ease,
+    stroke-width var(--motion-fast) ease;
+}
+
+[data-motion-route='/automation/flow-builder'] input:focus,
+[data-motion-route='/automation/flow-builder'] select:focus,
+[data-motion-route='/automation/triggers'] input:focus,
+[data-motion-route='/automation/triggers'] select:focus {
+  animation: motion-focus-ring 500ms var(--motion-ease) both;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .motion-surface-enter,
   .motion-route-enter,
@@ -144,7 +288,24 @@
   .motion-status-live,
   .motion-stagger > *,
   [data-motion-surface='onboarding'] form,
-  [data-motion-surface='onboarding'] aside [style*='width'] {
+  [data-motion-surface='onboarding'] aside [style*='width'],
+  [data-motion-route='/automation/triggers'] header,
+  [data-motion-route='/automation/triggers'] section,
+  [data-motion-route='/automation/triggers'] section:nth-of-type(1) > *,
+  [data-motion-route='/automation/triggers'] [class*='bg-[#f0faf4]'],
+  [data-motion-route='/automation/triggers'] [class*='bg-[#f2faf5]'],
+  [data-motion-route='/automation/triggers'] [role='dialog'],
+  [data-motion-route='/automation/triggers'] [aria-modal='true'],
+  [data-motion-route='/automation/flow-builder'] header,
+  [data-motion-route='/automation/flow-builder'] section,
+  [data-motion-route='/automation/flow-builder'] section:nth-of-type(1) > *,
+  [data-motion-route='/automation/flow-builder'] [draggable='true'],
+  [data-motion-route='/automation/flow-builder'] aside,
+  [data-motion-route='/automation/flow-builder'] [class*='fixed'][class*='right-0'],
+  [data-motion-route='/automation/flow-builder'] input:focus,
+  [data-motion-route='/automation/flow-builder'] select:focus,
+  [data-motion-route='/automation/triggers'] input:focus,
+  [data-motion-route='/automation/triggers'] select:focus {
     animation: none !important;
   }
 
@@ -152,13 +313,29 @@
   .motion-action-arrow,
   [data-motion-surface='onboarding'] nav > div,
   [data-motion-surface='onboarding'] label > div,
-  [data-motion-surface='onboarding'] form > div.rounded-2xl {
+  [data-motion-surface='onboarding'] form > div.rounded-2xl,
+  [data-motion-route='/automation/triggers'] button,
+  [data-motion-route='/automation/triggers'] a,
+  [data-motion-route='/automation/triggers'] form,
+  [data-motion-route='/automation/triggers'] [class*='rounded-[12px]'][class*='border'],
+  [data-motion-route='/automation/triggers'] [class*='rounded-[11px]'][class*='border'],
+  [data-motion-route='/automation/flow-builder'] button,
+  [data-motion-route='/automation/flow-builder'] a,
+  [data-motion-route='/automation/flow-builder'] form,
+  [data-motion-route='/automation/flow-builder'] [draggable='true'],
+  [data-motion-route='/automation/flow-builder'] svg line,
+  [data-motion-route='/automation/flow-builder'] svg path {
     transition-duration: 0.01ms !important;
   }
 
   .motion-step-card:hover,
   [data-motion-surface='onboarding'] nav > div:hover,
-  [data-motion-surface='onboarding'] label:hover > div {
+  [data-motion-surface='onboarding'] label:hover > div,
+  [data-motion-route='/automation/triggers'] form:focus-within,
+  [data-motion-route='/automation/triggers'] [class*='rounded-[12px]'][class*='border']:hover,
+  [data-motion-route='/automation/flow-builder'] form:focus-within,
+  [data-motion-route='/automation/flow-builder'] [draggable='true']:hover,
+  [data-motion-route='/automation/flow-builder'] [draggable='true']:active {
     transform: none !important;
   }
 }
