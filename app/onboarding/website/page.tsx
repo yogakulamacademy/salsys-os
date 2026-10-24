@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 
 import { verifyOnboardingWebsiteAction } from '@/app/onboarding/actions';
+import { skipOnboardingWebsiteAction } from '@/app/onboarding/website/skip-action';
 import { createClient } from '@/lib/supabase/server';
 import {
   getTrackingPlatformWorkspace,
@@ -216,7 +217,7 @@ export default async function OnboardingWebsitePage({
 
             <div className="text-[10px] font-bold uppercase tracking-[0.14em] text-[#779184]">Step 3 · Website tracking</div>
             <h1 className="mt-2 text-[30px] font-bold tracking-[-0.04em] text-[#153e32] sm:text-[36px]">Connect your website to SalsysOS.</h1>
-            <p className="mt-3 max-w-2xl text-[13px] leading-6 text-[#657b70]">Install the Universal Tracking SDK, then let SalsysOS confirm the connection from a real accepted browser event. A configured source alone does not count as complete.</p>
+            <p className="mt-3 max-w-2xl text-[13px] leading-6 text-[#657b70]">Install the Universal Tracking SDK, then let SalsysOS confirm the connection from a real accepted browser event. You can also skip this for now and finish it later from Home.</p>
 
             <div className="mt-7 grid gap-4 lg:grid-cols-[minmax(0,1.15fr)_minmax(280px,.85fr)]">
               <section className="rounded-2xl border border-[#dce7df] bg-white p-5 shadow-[0_8px_30px_rgba(25,66,51,0.055)] sm:p-6">
@@ -254,7 +255,7 @@ export default async function OnboardingWebsitePage({
 
                 <div className="mt-5 flex items-start gap-2 rounded-xl border border-[#dce9df] bg-[#f4f9f6] p-3 text-[11px] leading-5 text-[#587466]">
                   {healthy ? <CheckCircle2 size={15} className="mt-0.5 shrink-0 text-[#2c9a68]" /> : <Activity size={15} className="mt-0.5 shrink-0 text-[#4b876b]" />}
-                  {healthy ? 'Connection verified from real production tracking evidence. You can continue to Channels.' : 'After installation, visit the website and generate a real page event. Then return here and verify again.'}
+                  {healthy ? 'Connection verified from real production tracking evidence. You can continue to Channels.' : 'After installation, visit the website and generate a real page event. If you are not ready yet, skip this step and SalsysOS will keep it as a Home recommendation.'}
                 </div>
               </section>
 
@@ -288,6 +289,11 @@ export default async function OnboardingWebsitePage({
             <div className="mt-5 flex flex-col-reverse gap-3 sm:flex-row sm:items-center sm:justify-between">
               <Link href="/onboarding?step=goals" className="inline-flex items-center gap-1 text-[11.5px] font-bold text-[#657c70]"><ArrowLeft size={13} /> Back to priorities</Link>
               <div className="flex flex-wrap gap-2">
+                {!healthy ? (
+                  <form action={skipOnboardingWebsiteAction}>
+                    <button type="submit" className="inline-flex h-10 items-center gap-2 rounded-lg border border-[#d7e3dc] bg-white px-4 text-xs font-bold text-[#5f766a] shadow-sm hover:bg-[#f7faf8]">Skip for now <ArrowRight size={14} /></button>
+                  </form>
+                ) : null}
                 <Link href="/tracking/sources" className="inline-flex h-10 items-center gap-2 rounded-lg border border-[#cfe1d6] bg-white px-4 text-xs font-bold text-[#276b51]">Install / manage tracking <ExternalLink size={13} /></Link>
                 <form action={verifyOnboardingWebsiteAction}>
                   <button type="submit" className="inline-flex h-10 items-center gap-2 rounded-lg bg-[#1f654e] px-4 text-xs font-bold text-white shadow-sm hover:bg-[#185640]">Verify connection & continue <ArrowRight size={14} /></button>
