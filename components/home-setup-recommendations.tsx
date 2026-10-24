@@ -19,6 +19,8 @@ type Recommendation = {
   title: string;
   detail: string;
   href: string;
+  cta: string;
+  pendingLabel: string;
   icon: typeof Globe2;
   ready: boolean | null;
 };
@@ -55,7 +57,7 @@ export async function HomeSetupRecommendations() {
     .eq('organization_id', organizationId)
     .maybeSingle();
 
-  // This recommendation layer is only for customers that have actually
+  // This activation layer is only for customers that have actually
   // completed the new onboarding flow. Legacy tenants remain untouched.
   if (onboarding?.status !== 'completed') return null;
 
@@ -120,92 +122,172 @@ export async function HomeSetupRecommendations() {
   const recommendations: Recommendation[] = [
     {
       key: 'website',
-      title: 'Connect your website',
-      detail: 'Install tracking and send a real browser event.',
+      title: 'Track where leads come from',
+      detail: 'Verify website tracking to understand where enquiries originate.',
       href: '/tracking/sources',
+      cta: 'Connect website',
+      pendingLabel: 'Not connected',
       icon: Globe2,
       ready: websiteReady,
     },
     {
       key: 'channels',
-      title: 'Connect a channel',
-      detail: 'Connect WhatsApp, Instagram, Meta or Google.',
+      title: 'Connect your conversations',
+      detail: 'Link WhatsApp or Instagram messages to CRM leads.',
       href: '/settings/integrations',
+      cta: 'Connect a channel',
+      pendingLabel: 'Not connected',
       icon: MessageCircleMore,
       ready: channelsReady,
     },
     {
       key: 'team',
-      title: 'Add your team',
-      detail: 'Invite at least one active teammate.',
+      title: 'Give every lead an owner',
+      detail: 'Invite teammates to manage enquiries and follow-ups.',
       href: '/settings/team',
+      cta: 'Invite teammate',
+      pendingLabel: 'Not invited',
       icon: Users,
       ready: teamReady,
     },
     {
       key: 'automation',
-      title: 'Create an automation',
-      detail: 'Start with a recipe or Smart Trigger.',
+      title: 'Automate your first follow-up',
+      detail: 'Create an internal workflow draft and test before activation.',
       href: '/automation/recipes',
+      cta: 'Create automation',
+      pendingLabel: 'Not created',
       icon: Workflow,
       ready: automationReady,
     },
   ];
 
-  const known = recommendations.filter((item) => item.ready !== null);
-  const pending = known.filter((item) => item.ready === false);
+  const completeCount = recommendations.filter((item) => item.ready === true).length;
+  if (completeCount === recommendations.length) return null;
 
-  if (pending.length === 0) return null;
-
-  const completeCount = known.filter((item) => item.ready === true).length;
+  const remainingCount = recommendations.length - completeCount;
+  const startKey =
+    recommendations.find((item) => item.ready === false)?.key ??
+    recommendations.find((item) => item.ready !== true)?.key ??
+    null;
+  const progressPercent = Math.round((completeCount / recommendations.length) * 100);
 
   return (
-    <section className="mb-3 overflow-hidden rounded-xl border border-[#DCE4DF] bg-white shadow-sm dark:border-slate-800 dark:bg-slate-950">
-      <div className="flex flex-col gap-2 border-b border-[#EEF2EF] px-4 py-3 sm:flex-row sm:items-center sm:justify-between dark:border-slate-900">
+    <section className="mb-4 overflow-hidden rounded-2xl border border-[#D8E2DC] bg-white shadow-sm dark:border-slate-800 dark:bg-slate-950">
+      <div className="flex flex-col gap-4 px-5 py-4 lg:flex-row lg:items-start lg:justify-between">
         <div className="min-w-0">
-          <div className="flex items-center gap-1.5 text-[9px] font-black uppercase tracking-[.13em] text-[#216551] dark:text-emerald-300">
-            <Sparkles size={11} />
-            Setup recommendations
+          <div className="flex items-center gap-2 text-[10px] font-black uppercase tracking-[.14em] text-[#216551] dark:text-emerald-300">
+            <Sparkles size={12} />
+            Workspace activation
           </div>
-          <div className="mt-0.5 flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
-            <h2 className="text-[15px] font-semibold tracking-[-0.02em] text-[#18362D] dark:text-white">
-              Finish setting up SalsysOS
-            </h2>
-            <p className="text-[10.5px] text-[#71847A] dark:text-slate-400">
-              Complete these when you’re ready.
-            </p>
-          </div>
+          <h2 className="mt-1 text-[19px] font-semibold tracking-[-0.025em] text-[#18362D] dark:text-white">
+            Get SalsysOS ready for action
+          </h2>
+          <p className="mt-0.5 text-[11px] text-[#60786D] dark:text-slate-400">
+            Connect the essentials to track leads, reply faster and automate follow-ups.
+          </p>
         </div>
-        <div className="shrink-0 rounded-full bg-[#EEF6F1] px-2.5 py-1 text-[9.5px] font-bold text-[#216551] dark:bg-emerald-950/50 dark:text-emerald-300">
-          {completeCount} complete · {pending.length} left
+
+        <div className="w-full max-w-[215px] shrink-0">
+          <div className="flex items-center justify-between text-[10px] text-[#4F6B5E] dark:text-slate-400">
+            <span>Setup progress</span>
+            <span className="font-bold text-[#164C3D] dark:text-emerald-300">
+              {completeCount} of {recommendations.length} verified
+            </span>
+          </div>
+          <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-[#EAF0EC] dark:bg-slate-800">
+            <div
+              className="h-full rounded-full bg-[#216551] transition-all"
+              style={{ width: `${progressPercent}%` }}
+            />
+          </div>
+          <div className="mt-1.5 text-right text-[9px] text-[#8A9A92] dark:text-slate-500">
+            {remainingCount} {remainingCount === 1 ? 'step' : 'steps'} remaining
+          </div>
         </div>
       </div>
 
-      <div className="grid gap-px bg-[#EEF2EF] sm:grid-cols-2 xl:grid-cols-4 dark:bg-slate-900">
-        {pending.map((item) => {
+      <div className="grid gap-2 border-t border-[#EEF2EF] px-3 py-3 sm:grid-cols-2 xl:grid-cols-4 dark:border-slate-900">
+        {recommendations.map((item, index) => {
           const Icon = item.icon;
+          const isReady = item.ready === true;
+          const isStart = item.key === startKey;
+          const statusLabel = item.ready === null ? 'Checking' : isReady ? 'Verified' : item.pendingLabel;
+
           return (
-            <Link
+            <div
               key={item.key}
-              href={item.href}
-              className="group flex min-h-[84px] items-center gap-3 bg-white px-3.5 py-3 transition hover:bg-[#F8FAF8] dark:bg-slate-950 dark:hover:bg-slate-900/70"
+              className={[
+                'flex min-h-[158px] flex-col rounded-xl border p-3 transition',
+                isStart
+                  ? 'border-[#184D3E] bg-[#184D3E] text-white shadow-sm'
+                  : isReady
+                    ? 'border-[#D6E6DD] bg-[#F7FBF8] dark:border-emerald-900/60 dark:bg-emerald-950/20'
+                    : 'border-[#DCE4DF] bg-white dark:border-slate-800 dark:bg-slate-950',
+              ].join(' ')}
             >
-              <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-[#EDF5F0] text-[#216551] dark:bg-emerald-950/50 dark:text-emerald-300">
-                <Icon size={14} />
-              </span>
-              <div className="min-w-0 flex-1">
-                <div className="truncate text-[12px] font-semibold text-[#253E35] dark:text-slate-100">{item.title}</div>
-                <div className="mt-0.5 truncate text-[10px] text-[#71847A] dark:text-slate-400">{item.detail}</div>
+              <div className="flex items-start justify-between gap-3">
+                <span
+                  className={[
+                    'grid h-8 w-8 place-items-center rounded-lg',
+                    isStart
+                      ? 'bg-white/12 text-white'
+                      : isReady
+                        ? 'bg-[#E7F4EC] text-[#216551] dark:bg-emerald-950/60 dark:text-emerald-300'
+                        : 'bg-[#EDF5F0] text-[#216551] dark:bg-emerald-950/50 dark:text-emerald-300',
+                  ].join(' ')}
+                >
+                  {isReady ? <CheckCircle2 size={15} /> : <Icon size={15} />}
+                </span>
+
+                {isStart ? (
+                  <span className="rounded-full bg-[#E8F6EC] px-2 py-1 text-[8.5px] font-bold text-[#184D3E]">
+                    Start here
+                  </span>
+                ) : (
+                  <span
+                    className={[
+                      'text-[8.5px] font-bold uppercase tracking-[.08em]',
+                      isReady ? 'text-[#3B8A68]' : 'text-[#8A9A92] dark:text-slate-500',
+                    ].join(' ')}
+                  >
+                    {isReady ? 'Verified' : `Step 0${index + 1}`}
+                  </span>
+                )}
               </div>
-              <ArrowRight size={13} className="shrink-0 text-[#B0BDB6] transition group-hover:translate-x-0.5 group-hover:text-[#216551]" />
-            </Link>
+
+              <div className={['mt-3 text-[13px] font-semibold', isStart ? 'text-white' : 'text-[#173D31] dark:text-slate-100'].join(' ')}>
+                {item.title}
+              </div>
+              <p className={['mt-1 min-h-[36px] text-[10px] leading-[18px]', isStart ? 'text-white/80' : 'text-[#71847A] dark:text-slate-400'].join(' ')}>
+                {item.detail}
+              </p>
+
+              <div className={['mt-auto flex items-center justify-between gap-3 border-t pt-2.5', isStart ? 'border-white/15' : 'border-[#E9EFEB] dark:border-slate-800'].join(' ')}>
+                <Link
+                  href={item.href}
+                  className={[
+                    'inline-flex items-center gap-1 text-[10px] font-semibold transition',
+                    isStart
+                      ? 'rounded-lg bg-white px-2.5 py-1.5 text-[#184D3E] hover:bg-[#F3F8F5]'
+                      : 'text-[#17634D] hover:text-[#0F4738] dark:text-emerald-300',
+                  ].join(' ')}
+                >
+                  {isReady ? 'Manage' : item.cta}
+                  <ArrowRight size={11} />
+                </Link>
+                <span className={['text-[8.5px] font-semibold', isStart ? 'text-white/75' : isReady ? 'text-[#3B8A68]' : 'text-[#8A9A92] dark:text-slate-500'].join(' ')}>
+                  {statusLabel}
+                </span>
+              </div>
+            </div>
           );
         })}
       </div>
 
-      <div className="flex items-center gap-1.5 border-t border-[#EEF2EF] bg-[#FAFCFB] px-4 py-2 text-[9.5px] text-[#71847A] dark:border-slate-900 dark:bg-slate-950 dark:text-slate-400">
-        <CheckCircle2 size={11} className="text-[#3B956F]" />
-        Items disappear automatically when verified.
+      <div className="flex items-center gap-2 border-t border-[#EEF2EF] bg-[#FAFCFB] px-5 py-2.5 text-[9.5px] text-[#71847A] dark:border-slate-900 dark:bg-slate-950 dark:text-slate-400">
+        <CheckCircle2 size={12} className="text-[#3B956F]" />
+        Verified steps update automatically from the real workspace state. Drafts alone do not activate workflows.
       </div>
     </section>
   );
