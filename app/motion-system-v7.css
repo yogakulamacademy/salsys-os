@@ -1,0 +1,222 @@
+/* SalsysOS Motion System V7 ---------------------------------------------
+ * Micro-interactions: skeletons, pending states, semantic feedback,
+ * optimistic updates and filter/page refresh cues.
+ * Motion is bound to existing DOM state only; it never invents success.
+ */
+
+@keyframes motion-v7-shimmer {
+  0% { transform: translateX(-115%); }
+  100% { transform: translateX(115%); }
+}
+
+@keyframes motion-v7-feedback-in {
+  from { opacity: 0; transform: translateY(-4px) scale(.992); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@keyframes motion-v7-status-pop {
+  0% { opacity: 0; transform: scale(.97); }
+  70% { opacity: 1; transform: scale(1.012); }
+  100% { opacity: 1; transform: scale(1); }
+}
+
+@keyframes motion-v7-pending-breathe {
+  0%, 100% { opacity: .82; }
+  50% { opacity: 1; }
+}
+
+@keyframes motion-v7-update-in {
+  from { opacity: .55; transform: translateY(3px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes motion-v7-check-in {
+  0% { opacity: 0; transform: scale(.72) rotate(-7deg); }
+  72% { opacity: 1; transform: scale(1.08) rotate(1deg); }
+  100% { opacity: 1; transform: scale(1) rotate(0); }
+}
+
+/* Skeleton loading ------------------------------------------------------ */
+
+.motion-skeleton,
+[aria-busy='true'].animate-pulse [class*='bg-slate-200'] {
+  position: relative;
+  overflow: hidden;
+  isolation: isolate;
+}
+
+.motion-skeleton::after,
+[aria-busy='true'].animate-pulse [class*='bg-slate-200']::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  transform: translateX(-115%);
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(255, 255, 255, .38) 42%,
+    rgba(255, 255, 255, .7) 50%,
+    rgba(255, 255, 255, .38) 58%,
+    transparent 100%
+  );
+  animation: motion-v7-shimmer 1.55s ease-in-out infinite;
+  pointer-events: none;
+}
+
+.dark .motion-skeleton::after,
+.dark [aria-busy='true'].animate-pulse [class*='bg-slate-200']::after {
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(255, 255, 255, .035) 42%,
+    rgba(255, 255, 255, .09) 50%,
+    rgba(255, 255, 255, .035) 58%,
+    transparent 100%
+  );
+}
+
+[aria-busy='true'].animate-pulse {
+  animation: none;
+}
+
+/* Pending / processing -------------------------------------------------- */
+
+button[aria-busy='true'],
+[role='button'][aria-busy='true'],
+[data-pending='true'] {
+  cursor: progress;
+  animation: motion-v7-pending-breathe 1.15s ease-in-out infinite;
+}
+
+button[aria-busy='true'] svg,
+[role='button'][aria-busy='true'] svg,
+[data-pending='true'] svg {
+  transition: transform var(--motion-base) var(--motion-ease), opacity var(--motion-fast) ease;
+}
+
+form[aria-busy='true'],
+[data-loading='true'],
+[data-refreshing='true'] {
+  transition: opacity var(--motion-fast) ease, filter var(--motion-fast) ease;
+}
+
+form[aria-busy='true'] > :not([role='status']):not([role='alert']),
+[data-loading='true'] > :not([role='status']):not([role='alert']),
+[data-refreshing='true'] > :not([role='status']):not([role='alert']) {
+  opacity: .94;
+}
+
+/* Semantic success / error / status ------------------------------------ */
+
+[role='status'],
+[aria-live='polite'],
+[aria-live='assertive'] {
+  animation: motion-v7-feedback-in 240ms var(--motion-ease) both;
+}
+
+[role='alert'] {
+  animation: motion-v7-status-pop 260ms var(--motion-ease) both;
+}
+
+[role='status'] svg,
+[aria-live='polite'] svg,
+[aria-live='assertive'] svg {
+  animation: motion-v7-check-in 300ms var(--motion-ease) both;
+}
+
+/* Existing optimistic / saving language -------------------------------- */
+
+[class*='saving'],
+[class*='pending'],
+[class*='optimistic'],
+[data-state='saving'],
+[data-state='pending'] {
+  transition:
+    opacity var(--motion-fast) ease,
+    transform var(--motion-fast) var(--motion-ease),
+    background-color var(--motion-fast) ease,
+    border-color var(--motion-fast) ease;
+}
+
+[data-state='saved'],
+[data-state='success'],
+[data-state='complete'],
+[data-state='completed'] {
+  animation: motion-v7-status-pop 280ms var(--motion-ease) both;
+}
+
+/* Dynamic rows / refreshed content ------------------------------------- */
+
+[data-refreshing='false'] > tbody > tr,
+[data-refreshing='false'] > [role='row'],
+[data-updated='true'],
+[data-optimistic='true'] {
+  animation: motion-v7-update-in 260ms var(--motion-ease) both;
+}
+
+/* Tabs, segmented filters and pagination -------------------------------- */
+
+[role='tab'],
+[aria-current='page'],
+button[aria-pressed],
+button[aria-selected] {
+  transition:
+    transform var(--motion-fast) var(--motion-ease),
+    background-color var(--motion-fast) ease,
+    color var(--motion-fast) ease,
+    border-color var(--motion-fast) ease,
+    box-shadow var(--motion-fast) var(--motion-ease);
+}
+
+[role='tab']:active,
+button[aria-pressed]:active,
+button[aria-selected]:active {
+  transform: scale(.985);
+}
+
+[role='tab'][aria-selected='true'],
+button[aria-pressed='true'],
+button[aria-selected='true'] {
+  animation: motion-v7-status-pop 220ms var(--motion-ease) both;
+}
+
+/* Copy / transient utility feedback ------------------------------------ */
+
+[data-copied='true'],
+[data-copy-state='copied'] {
+  animation: motion-v7-status-pop 260ms var(--motion-ease) both;
+}
+
+/* Reduced motion -------------------------------------------------------- */
+
+@media (prefers-reduced-motion: reduce) {
+  .motion-skeleton::after,
+  [aria-busy='true'].animate-pulse [class*='bg-slate-200']::after,
+  button[aria-busy='true'],
+  [role='button'][aria-busy='true'],
+  [data-pending='true'],
+  [role='status'],
+  [role='alert'],
+  [aria-live='polite'],
+  [aria-live='assertive'],
+  [data-state='saved'],
+  [data-state='success'],
+  [data-state='complete'],
+  [data-state='completed'],
+  [data-refreshing='false'] > tbody > tr,
+  [data-refreshing='false'] > [role='row'],
+  [data-updated='true'],
+  [data-optimistic='true'],
+  [role='tab'][aria-selected='true'],
+  button[aria-pressed='true'],
+  button[aria-selected='true'],
+  [data-copied='true'],
+  [data-copy-state='copied'] {
+    animation: none !important;
+  }
+
+  .motion-skeleton::after,
+  [aria-busy='true'].animate-pulse [class*='bg-slate-200']::after {
+    display: none;
+  }
+}
