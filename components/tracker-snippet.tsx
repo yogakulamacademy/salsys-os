@@ -1,6 +1,7 @@
 'use client';
 
-import { Check, Copy } from 'lucide-react';
+import { Check, Copy, FormInput } from 'lucide-react';
+import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
 
 type WebsiteSource = {
@@ -155,6 +156,25 @@ export function TrackerSnippet() {
         ) : null}
       </div>
 
+      <div className="rounded-xl border border-indigo-200 bg-indigo-50/60 p-4">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <div className="flex items-center gap-2 text-sm font-semibold text-indigo-950">
+              <FormInput size={16} /> Detected Forms
+            </div>
+            <p className="mt-1 text-xs leading-5 text-indigo-800">
+              The SDK can discover form structure automatically. Configure field mappings and enable individual forms from Salsys without editing the customer website again.
+            </p>
+          </div>
+          <Link
+            href="/tracking/forms"
+            className="shrink-0 rounded-xl bg-indigo-700 px-3 py-2 text-xs font-semibold text-white hover:bg-indigo-800"
+          >
+            Manage detected forms
+          </Link>
+        </div>
+      </div>
+
       <label className="flex items-start gap-3 rounded-xl border border-slate-200 bg-white p-4 text-sm text-slate-700">
         <input
           type="checkbox"
@@ -165,7 +185,7 @@ export function TrackerSnippet() {
         <span>
           <span className="font-semibold text-slate-900">Enable Universal Lead Capture</span>
           <span className="mt-1 block text-xs leading-5 text-slate-500">
-            Adds automatic browser lead capture for POST forms containing email or phone fields. Password forms are ignored. Salsys sends only an allowlist of lead fields such as name, email, phone, country, course and message.
+            Adds automatic browser lead capture for POST forms containing email or phone fields. Password forms are ignored. Salsys sends only an allowlist of lead fields such as name, email, phone, country, course and message. Per-form dashboard configuration can also enable capture without using auto mode.
           </span>
         </span>
       </label>
