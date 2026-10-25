@@ -89,6 +89,81 @@ function absoluteLandingPage(
   }
 }
 
+function normalizeCourseTrackingValue(value: string) {
+  return value.trim().toLowerCase().replace(/\s+/g, ' ');
+}
+
+async function resolveCourseCode(
+  admin: ReturnType<typeof createAdminClient>,
+  organizationId: string,
+  value: string | null | undefined,
+) {
+  const raw = stringValue(value);
+  if (!raw) {
+    return { raw: null, code: null, matchedBy: null as string | null };
+  }
+
+  const { data: codeRows, error: codeError } = await admin
+    .from('courses')
+    .select('id,code')
+    .eq('organization_id', organizationId)
+    .eq('active', true)
+    .in('code', [raw, raw.toUpperCase()])
+    .limit(1);
+
+  if (codeError) {
+    console.error('Course code lookup failed:', codeError);
+  } else if (Array.isArray(codeRows) && codeRows[0]?.code) {
+    return {
+      raw,
+      code: String(codeRows[0].code),
+      matchedBy: 'course_code',
+    };
+  }
+
+  const normalized = normalizeCourseTrackingValue(raw);
+  const { data: aliasRows, error: aliasError } = await admin
+    .from('course_tracking_aliases')
+    .select('course_id,alias_type,priority')
+    .eq('organization_id', organizationId)
+    .eq('active', true)
+    .eq('normalized_alias_value', normalized)
+    .order('priority', { ascending: false })
+    .limit(1);
+
+  if (aliasError) {
+    console.error('Course alias lookup failed:', aliasError);
+    return { raw, code: null, matchedBy: null as string | null };
+  }
+
+  const alias = Array.isArray(aliasRows) ? aliasRows[0] : null;
+  const courseId = stringValue(alias?.course_id);
+  if (!courseId) {
+    return { raw, code: null, matchedBy: null as string | null };
+  }
+
+  const { data: course, error: courseError } = await admin
+    .from('courses')
+    .select('code')
+    .eq('organization_id', organizationId)
+    .eq('id', courseId)
+    .eq('active', true)
+    .maybeSingle();
+
+  if (courseError) {
+    console.error('Resolved course lookup failed:', courseError);
+    return { raw, code: null, matchedBy: null as string | null };
+  }
+
+  return {
+    raw,
+    code: stringValue(course?.code),
+    matchedBy: course?.code
+      ? `course_alias:${stringValue(alias?.alias_type) ?? 'unknown'}`
+      : null,
+  };
+}
+
 export async function OPTIONS(request: NextRequest) {
   const origin = browserOrigin(request);
 
@@ -201,6 +276,12 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    const courseResolution = await resolveCourseCode(
+      admin,
+      source.organizationId,
+      payload.courseCode,
+    );
+
     const { data, error } = await admin.rpc(
       'ingest_website_lead_for_organization',
       {
@@ -212,7 +293,7 @@ export async function POST(request: NextRequest) {
         p_last_name: payload.lastName ?? null,
         p_email: payload.email ?? null,
         p_phone: payload.phone ?? null,
-        p_course_code: payload.courseCode ?? null,
+        p_course_code: courseResolution.code ?? payload.courseCode ?? null,
         p_preferred_location: payload.preferredLocation ?? null,
         p_preferred_month: payload.preferredMonth ?? null,
         p_preferred_mode: payload.preferredMode ?? null,
@@ -235,6 +316,9 @@ export async function POST(request: NextRequest) {
           privacy_gate_reason: privacyGate?.reason ?? null,
           privacy_purpose:
             privacyGate?.mapped_purpose ?? privacyGate?.purpose ?? null,
+          course_capture_value: courseResolution.raw,
+          course_resolved_code: courseResolution.code,
+          course_resolution: courseResolution.matchedBy,
         },
       },
     );
@@ -380,6 +464,9 @@ export async function POST(request: NextRequest) {
         sessions_linked: row.sessions_linked ?? null,
         touchpoints_linked: row.touchpoints_linked ?? null,
         source_enriched: sourceEnriched,
+        course_capture_value: courseResolution.raw,
+        course_resolved_code: courseResolution.code,
+        course_resolution: courseResolution.matchedBy,
         site_id: source.publicSiteId,
         site_id_verified: source.siteIdVerified,
       },
