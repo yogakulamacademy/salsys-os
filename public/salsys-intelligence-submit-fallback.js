@@ -1,4 +1,4 @@
-/* Salsys configured-form submit fallback v1.0.0 */
+/* Salsys configured-form submit fallback v1.1.0 */
 (function () {
   'use strict';
 
@@ -12,10 +12,29 @@
     return window.SalsysIntelligence || window.Salsys || null;
   }
 
+  function submitHint(node) {
+    if (!node) return '';
+    return [
+      node.textContent,
+      node.value,
+      node.name,
+      node.id,
+      typeof node.className === 'string' ? node.className : '',
+      node.getAttribute ? node.getAttribute('aria-label') : ''
+    ].join(' ');
+  }
+
   function isSubmitControl(node) {
-    if (!node || !node.matches) return false;
-    return node.matches(
-      'button[type="submit"], input[type="submit"], button:not([type]), [data-salsys-submit]'
+    if (!node || !node.matches || node.disabled) return false;
+
+    if (node.matches('input[type="submit"], button[type="submit"], button:not([type]), [data-salsys-submit]')) {
+      return true;
+    }
+
+    if (!node.matches('button[type="button"], input[type="button"]')) return false;
+
+    return /submit|send|enroll|enrol|register|apply|book|continue|proceed|download|request|inquir|enquir/i.test(
+      submitHint(node)
     );
   }
 
@@ -54,7 +73,7 @@
 
   document.addEventListener('click', function (event) {
     var control = event.target && event.target.closest
-      ? event.target.closest('button, input[type="submit"], [data-salsys-submit]')
+      ? event.target.closest('button, input[type="submit"], input[type="button"], [data-salsys-submit]')
       : null;
     if (!isSubmitControl(control)) return;
 
