@@ -76,8 +76,11 @@ function leadOriginForForm(formName: string | null | undefined) {
   return 'Website';
 }
 
-function absoluteLandingPage(hostname: string, value: string | null) {
-  if (!value) return null;
+function absoluteLandingPage(
+  hostname: string | null | undefined,
+  value: string | null,
+) {
+  if (!value || !hostname) return null;
 
   try {
     return new URL(value, `https://${hostname}`).toString();
