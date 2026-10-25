@@ -16,6 +16,9 @@ const CANONICAL_FIELDS = new Set([
   'message',
 ]);
 
+const FORM_SELECT =
+  'id,organization_site_id,tracking_source_id,form_key,form_name,page_path,form_action,method,status,lead_capture_enabled,field_inventory,field_mapping,first_seen_at,last_seen_at,metadata,created_at,updated_at';
+
 function jsonError(message: string, status: number) {
   return NextResponse.json(
     { ok: false, error: message },
@@ -74,6 +77,12 @@ function sanitizeMapping(value: unknown) {
   return mapping;
 }
 
+function reusableFormName(value: unknown) {
+  const name = cleanText(value, 160);
+  if (!name) return null;
+  return name.toLowerCase() === 'anonymous' ? null : name;
+}
+
 export async function GET(request: NextRequest) {
   const auth = await adminWorkspace();
   if ('error' in auth) return auth.error;
@@ -84,9 +93,7 @@ export async function GET(request: NextRequest) {
 
   let query = admin
     .from('tracking_forms')
-    .select(
-      'id,organization_site_id,tracking_source_id,form_key,form_name,page_path,form_action,method,status,lead_capture_enabled,field_inventory,field_mapping,first_seen_at,last_seen_at,metadata,created_at,updated_at',
-    )
+    .select(FORM_SELECT)
     .eq('organization_id', auth.organizationId)
     .order('last_seen_at', { ascending: false });
 
@@ -150,21 +157,46 @@ export async function PATCH(request: NextRequest) {
   if (status === 'ignored') update.lead_capture_enabled = false;
 
   const admin = createAdminClient();
-  const { data, error } = await admin
+  const { data: target, error: targetError } = await admin
     .from('tracking_forms')
-    .update(update)
+    .select(FORM_SELECT)
     .eq('id', id)
     .eq('organization_id', auth.organizationId)
-    .select(
-      'id,organization_site_id,tracking_source_id,form_key,form_name,page_path,form_action,method,status,lead_capture_enabled,field_inventory,field_mapping,first_seen_at,last_seen_at,metadata,created_at,updated_at',
-    )
     .maybeSingle();
 
+  if (targetError) return jsonError(targetError.message, 500);
+  if (!target) return jsonError('Detected form was not found in this workspace.', 404);
+
+  const sharedName = reusableFormName(target.form_name);
+  let updateQuery = admin
+    .from('tracking_forms')
+    .update(update)
+    .eq('organization_id', auth.organizationId)
+    .eq('organization_site_id', target.organization_site_id);
+
+  if (sharedName) {
+    updateQuery = updateQuery
+      .eq('form_name', sharedName)
+      .eq('method', target.method);
+  } else {
+    updateQuery = updateQuery.eq('id', id);
+  }
+
+  const { data: updatedRows, error } = await updateQuery.select(FORM_SELECT);
   if (error) return jsonError(error.message, 500);
-  if (!data) return jsonError('Detected form was not found in this workspace.', 404);
+
+  const rows = updatedRows ?? [];
+  const updated = rows.find((row) => row.id === id) ?? rows[0] ?? null;
+  if (!updated) return jsonError('Detected form was not found in this workspace.', 404);
 
   return NextResponse.json(
-    { ok: true, form: data },
+    {
+      ok: true,
+      form: updated,
+      applied_to: rows.length,
+      reusable_profile: Boolean(sharedName),
+      reusable_form_name: sharedName,
+    },
     { headers: { 'Cache-Control': 'no-store' } },
   );
 }
