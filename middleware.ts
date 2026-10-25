@@ -9,6 +9,8 @@ const PUBLIC_EXACT_PATHS = new Set([
   "/yogakulam-tracker.js",
   "/salsys-tracker.js",
   "/salsys-intelligence.js",
+  "/salsys-intelligence-core-v1.6.0.js",
+  "/salsys-intelligence-submit-fallback.js",
   "/salsys-consent.js",
   "/api/leads/capture",
   "/api/leads/browser/v1",
