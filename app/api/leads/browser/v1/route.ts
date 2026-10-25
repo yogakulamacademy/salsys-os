@@ -40,6 +40,55 @@ function browserGpc(request: NextRequest) {
   return request.headers.get('sec-gpc') === '1';
 }
 
+function stringValue(value: unknown) {
+  if (value === null || value === undefined) return null;
+  const text = String(value).trim();
+  return text || null;
+}
+
+function metadataValue(metadata: unknown, key: string) {
+  if (!metadata || typeof metadata !== 'object' || Array.isArray(metadata)) {
+    return null;
+  }
+
+  return stringValue((metadata as Record<string, unknown>)[key]);
+}
+
+function touchValue(touch: unknown, key: string) {
+  if (!touch || typeof touch !== 'object' || Array.isArray(touch)) return null;
+  return stringValue((touch as Record<string, unknown>)[key]);
+}
+
+function leadOriginForForm(formName: string | null | undefined) {
+  const name = String(formName ?? '').trim().toLowerCase();
+
+  if (name.includes('contact')) return 'Website Contact Form';
+  if (name.includes('brochure') || name.includes('leadpopup')) {
+    return 'Website Brochure Form';
+  }
+  if (name.includes('reservation') || name.includes('booking')) {
+    return 'Website Reservation Form';
+  }
+  if (name.includes('enroll') || name.includes('enrol')) {
+    return 'Website Enrollment Form';
+  }
+
+  return 'Website';
+}
+
+function absoluteLandingPage(
+  hostname: string | null | undefined,
+  value: string | null,
+) {
+  if (!value || !hostname) return null;
+
+  try {
+    return new URL(value, `https://${hostname}`).toString();
+  } catch {
+    return null;
+  }
+}
+
 export async function OPTIONS(request: NextRequest) {
   const origin = browserOrigin(request);
 
@@ -198,6 +247,126 @@ export async function POST(request: NextRequest) {
         ? (result as Record<string, unknown>)
         : {};
 
+    const leadId = stringValue(row.lead_id);
+    let sourceEnriched = false;
+
+    /*
+     * Universal Lead Sources V1
+     *
+     * The proven ingest RPC owns lead creation + identity resolution. The
+     * public browser adapter additionally projects first-party journey context
+     * onto the CRM lead so source information is immediately usable in Leads,
+     * Person 360, funnels and later revenue attribution.
+     *
+     * First-touch fields are immutable once known. Repeat enquiries refresh
+     * only last-touch fields. This prevents a later direct visit from erasing
+     * the lead's original acquisition source.
+     */
+    if (leadId) {
+      let session: Record<string, unknown> | null = null;
+
+      if (payload.sessionKey) {
+        const { data: sessionData, error: sessionError } = await admin
+          .from('web_sessions')
+          .select(
+            'source,medium,campaign_name,landing_page,referrer,utm_source,utm_medium,utm_campaign',
+          )
+          .eq('organization_id', source.organizationId)
+          .eq('session_key', payload.sessionKey)
+          .maybeSingle();
+
+        if (sessionError) {
+          console.error('Universal lead source session lookup failed:', sessionError);
+        } else {
+          session = sessionData;
+        }
+      }
+
+      const firstSource =
+        touchValue(payload.firstTouch, 'source') ??
+        stringValue(session?.utm_source) ??
+        stringValue(session?.source);
+      const firstMedium =
+        touchValue(payload.firstTouch, 'medium') ??
+        stringValue(session?.utm_medium) ??
+        stringValue(session?.medium);
+      const firstCampaign =
+        touchValue(payload.firstTouch, 'campaign') ??
+        stringValue(session?.utm_campaign) ??
+        stringValue(session?.campaign_name);
+
+      const lastSource =
+        touchValue(payload.sessionTouch, 'source') ??
+        stringValue(session?.utm_source) ??
+        stringValue(session?.source) ??
+        firstSource;
+      const lastMedium =
+        touchValue(payload.sessionTouch, 'medium') ??
+        stringValue(session?.utm_medium) ??
+        stringValue(session?.medium) ??
+        firstMedium;
+      const lastCampaign =
+        touchValue(payload.sessionTouch, 'campaign') ??
+        stringValue(session?.utm_campaign) ??
+        stringValue(session?.campaign_name) ??
+        firstCampaign;
+
+      const pagePath = metadataValue(payload.metadata, 'page_path');
+      const landingPage =
+        stringValue(session?.landing_page) ??
+        absoluteLandingPage(source.hostname, pagePath);
+
+      const { data: currentLead, error: currentLeadError } = await admin
+        .from('leads')
+        .select(
+          'landing_page,lead_origin,first_touch_source,first_touch_medium,first_touch_campaign,last_touch_source,last_touch_medium,last_touch_campaign',
+        )
+        .eq('organization_id', source.organizationId)
+        .eq('id', leadId)
+        .maybeSingle();
+
+      if (currentLeadError) {
+        console.error('Universal lead source lead lookup failed:', currentLeadError);
+      } else if (currentLead) {
+        const { error: sourceUpdateError } = await admin
+          .from('leads')
+          .update({
+            landing_page: currentLead.landing_page ?? landingPage,
+            lead_origin:
+              currentLead.lead_origin ?? leadOriginForForm(payload.formName),
+            first_touch_source:
+              currentLead.first_touch_source ?? firstSource,
+            first_touch_medium:
+              currentLead.first_touch_medium ?? firstMedium,
+            first_touch_campaign:
+              currentLead.first_touch_campaign ?? firstCampaign,
+            last_touch_source:
+              lastSource ??
+              currentLead.last_touch_source ??
+              currentLead.first_touch_source ??
+              firstSource,
+            last_touch_medium:
+              lastMedium ??
+              currentLead.last_touch_medium ??
+              currentLead.first_touch_medium ??
+              firstMedium,
+            last_touch_campaign:
+              lastCampaign ??
+              currentLead.last_touch_campaign ??
+              currentLead.first_touch_campaign ??
+              firstCampaign,
+          })
+          .eq('organization_id', source.organizationId)
+          .eq('id', leadId);
+
+        if (sourceUpdateError) {
+          console.error('Universal lead source enrichment failed:', sourceUpdateError);
+        } else {
+          sourceEnriched = true;
+        }
+      }
+    }
+
     return json(
       {
         ok: true,
@@ -210,6 +379,7 @@ export async function POST(request: NextRequest) {
         identity_linked: row.identity_linked ?? null,
         sessions_linked: row.sessions_linked ?? null,
         touchpoints_linked: row.touchpoints_linked ?? null,
+        source_enriched: sourceEnriched,
         site_id: source.publicSiteId,
         site_id_verified: source.siteIdVerified,
       },
