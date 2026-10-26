@@ -1,6 +1,6 @@
 import { ReactNode } from 'react';
 import { ArrowDownRight, ArrowUpRight, Minus } from 'lucide-react';
-import { Channel, IntentLevel, LeadStage } from '@/types/crm';
+import { Channel, IntentLevel, PipelineStage } from '@/types/crm';
 
 export function PageHeader({ eyebrow, title, description, actions }: { eyebrow?: string; title: string; description?: string; actions?: ReactNode }) {
   return (
@@ -42,7 +42,7 @@ export function StatCard({ label, value, delta, note, icon }: { label: string; v
   );
 }
 
-const stageStyles: Record<LeadStage, string> = {
+const stageStyles: Record<PipelineStage, string> = {
   new: 'bg-sky-50 text-sky-700 ring-sky-200',
   contacted: 'bg-cyan-50 text-cyan-700 ring-cyan-200',
   engaged: 'bg-indigo-50 text-indigo-700 ring-indigo-200',
@@ -58,7 +58,7 @@ const stageStyles: Record<LeadStage, string> = {
   duplicate: 'bg-slate-100 text-slate-500 ring-slate-200',
 };
 
-export function StageBadge({ stage }: { stage: LeadStage }) {
+export function StageBadge({ stage }: { stage: PipelineStage }) {
   return <span className={`inline-flex whitespace-nowrap rounded-full px-2.5 py-1 text-[11px] font-semibold capitalize ring-1 ring-inset ${stageStyles[stage]}`}>{stage.replaceAll('_', ' ')}</span>;
 }
 
