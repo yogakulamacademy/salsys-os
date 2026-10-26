@@ -46,6 +46,9 @@ jobs:
       - name: Verify Tracking Live Closeout Contracts
         run: npm run verify:tracking-live-closeout
 
+      - name: Verify Durable Event Ingestion Contracts
+        run: npm run verify:durable-event-ingestion
+
       - name: Verify Universal Platform SDK Contracts
         run: npm run verify:universal-platform-sdk
 

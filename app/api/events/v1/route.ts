@@ -3,14 +3,35 @@ import {
   NextResponse,
 } from 'next/server';
 
-import { createAdminClient } from '@/lib/supabase/admin';
 import {
-  authenticateServerTrackingSource,
-  consumeTrackingRateLimit,
-  sanitizeGenericTrackingEvent,
-} from '@/lib/tracking/runtime';
+  buildDurableTrustedEventEnvelope,
+  DURABLE_EVENT_EDGE_MAX_BYTES,
+  DurableEventPermanentError,
+  DurableEventTransientError,
+  processDurableTrustedEvent,
+  publishDurableTrustedEvent,
+  verifyDurableTrustedSource,
+} from '@/lib/tracking/durable-events';
+import { sanitizeGenericTrackingEvent } from '@/lib/tracking/runtime';
 
 export const dynamic = 'force-dynamic';
+export const runtime = 'nodejs';
+
+const SOURCE_VERIFY_DEADLINE_MS = 800;
+
+type VerificationResult =
+  | {
+      kind: 'verified';
+      source: Awaited<ReturnType<typeof verifyDurableTrustedSource>>;
+    }
+  | {
+      kind: 'deferred';
+      reason: 'timeout' | 'dependency_unavailable';
+    }
+  | {
+      kind: 'rejected';
+      error: DurableEventPermanentError;
+    };
 
 function bearerToken(request: NextRequest) {
   const authorization = request.headers.get('authorization')?.trim() ?? '';
@@ -32,26 +53,50 @@ function json(
   });
 }
 
-export async function POST(request: NextRequest) {
-  const sourceKey = request.headers.get('x-salsys-source-key');
-  const source = await authenticateServerTrackingSource(
-    sourceKey,
-    bearerToken(request),
-  );
+async function verifySourceWithDeadline(
+  envelope: Parameters<typeof verifyDurableTrustedSource>[0],
+): Promise<VerificationResult> {
+  let timeout: ReturnType<typeof setTimeout> | null = null;
 
-  if (!source) {
-    return json(
-      {
-        ok: false,
-        accepted: false,
-        error: 'Unauthorized tracking source.',
-      },
-      401,
-    );
+  const verification = verifyDurableTrustedSource(envelope)
+    .then(
+      (source): VerificationResult => ({
+        kind: 'verified',
+        source,
+      }),
+    )
+    .catch((error): VerificationResult => {
+      if (error instanceof DurableEventPermanentError) {
+        return {
+          kind: 'rejected',
+          error,
+        };
+      }
+
+      return {
+        kind: 'deferred',
+        reason: 'dependency_unavailable',
+      };
+    });
+
+  const deadline = new Promise<VerificationResult>((resolve) => {
+    timeout = setTimeout(() => {
+      resolve({
+        kind: 'deferred',
+        reason: 'timeout',
+      });
+    }, SOURCE_VERIFY_DEADLINE_MS);
+  });
+
+  try {
+    return await Promise.race([verification, deadline]);
+  } finally {
+    if (timeout) clearTimeout(timeout);
   }
+}
 
-  const contentLength = Number(request.headers.get('content-length') || '0');
-  if (contentLength > source.maxPayloadBytes) {
+function permanentErrorResponse(error: DurableEventPermanentError) {
+  if (error.reason === 'payload_too_large') {
     return json(
       {
         ok: false,
@@ -62,8 +107,7 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  const rate = await consumeTrackingRateLimit(source);
-  if (!rate.allowed) {
+  if (error.reason === 'rate_limited') {
     return json(
       {
         ok: false,
@@ -72,108 +116,199 @@ export async function POST(request: NextRequest) {
       },
       429,
       {
-        'X-RateLimit-Limit': String(rate.limit),
-        'X-RateLimit-Remaining': '0',
         'Retry-After': '60',
       },
     );
   }
 
-  try {
-    const event = sanitizeGenericTrackingEvent(await request.json());
-    const admin = createAdminClient();
-
-    const forwardedFor = request.headers.get('x-forwarded-for');
-    const ipPresent = Boolean(forwardedFor?.trim());
-
-    const { data, error } = await admin.rpc(
-      'ingest_tracking_event_v1',
-      {
-        p_organization_id: source.organizationId,
-        p_tracking_source_id: source.id,
-        p_source_event_id: event.eventId,
-        p_event_name: event.eventName,
-        p_ingestion_method: 'events_api_v1',
-        p_occurred_at: event.occurredAt,
-        p_anonymous_visitor_id: event.anonymousVisitorId,
-        p_session_key: event.sessionKey,
-        p_external_message_id: event.externalMessageId,
-        p_site: event.site,
-        p_payload: event.payload,
-        p_context: {
-          ...event.context,
-          user_agent: request.headers.get('user-agent'),
-          ip_present: ipPresent,
-        },
-        p_metadata: {
-          ...event.metadata,
-          adapter: 'app/api/events/v1',
-          source_key: source.sourceKey,
-        },
-        p_schema_version: event.schemaVersion,
-        p_is_browser: false,
-      },
-    );
-
-    if (error) {
-      throw new Error(error.message);
-    }
-
-    const accepted = Boolean(data?.accepted);
-    const duplicate = Boolean(data?.duplicate);
-    const rawEventId = data?.event_id ? String(data.event_id) : null;
-
-    let processing: Record<string, unknown> | null = null;
-
-    if (accepted && rawEventId) {
-      const {
-        data: processingData,
-        error: processingError,
-      } = await admin.rpc(
-        'process_tracking_raw_event_v1',
-        {
-          p_organization_id: source.organizationId,
-          p_raw_event_id: rawEventId,
-        },
-      );
-
-      if (processingError) {
-        processing = {
-          ok: false,
-          processed: false,
-          reason: 'processor_rpc_failed',
-        };
-      } else if (
-        processingData &&
-        typeof processingData === 'object' &&
-        !Array.isArray(processingData)
-      ) {
-        processing = processingData as Record<string, unknown>;
-      }
-    }
-
+  if (
+    error.reason === 'invalid_source_key' ||
+    error.reason === 'invalid_secret' ||
+    error.reason === 'unauthorized_source' ||
+    error.reason === 'unauthorized_secret'
+  ) {
     return json(
       {
-        ok: true,
-        accepted,
-        duplicate,
-        quarantined: !accepted,
-        raw_event_id: rawEventId,
-        event_family: data?.event_family ?? null,
-        contract_status: data?.contract_status ?? null,
-        reason: data?.reason ?? null,
-        processing,
-        received_at: new Date().toISOString(),
+        ok: false,
+        accepted: false,
+        error: 'Unauthorized tracking source.',
       },
-      202,
-      {
-        'X-RateLimit-Limit': String(rate.limit),
-        'X-RateLimit-Remaining': String(rate.remaining),
-      },
+      401,
     );
+  }
+
+  return json(
+    {
+      ok: false,
+      accepted: false,
+      error: 'Event rejected.',
+      reason: error.reason,
+    },
+    400,
+  );
+}
+
+export async function POST(request: NextRequest) {
+  const declaredLength = Number(request.headers.get('content-length') || '0');
+  if (
+    Number.isFinite(declaredLength) &&
+    declaredLength > DURABLE_EVENT_EDGE_MAX_BYTES
+  ) {
+    return json(
+      {
+        ok: false,
+        accepted: false,
+        error: 'Payload too large.',
+      },
+      413,
+    );
+  }
+
+  try {
+    const rawBody = await request.text();
+    const actualLength = Buffer.byteLength(rawBody, 'utf8');
+
+    if (actualLength > DURABLE_EVENT_EDGE_MAX_BYTES) {
+      return json(
+        {
+          ok: false,
+          accepted: false,
+          error: 'Payload too large.',
+        },
+        413,
+      );
+    }
+
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(rawBody);
+    } catch {
+      return json(
+        {
+          ok: false,
+          accepted: false,
+          error: 'Invalid JSON payload.',
+        },
+        400,
+      );
+    }
+
+    const event = sanitizeGenericTrackingEvent(parsed);
+    const forwardedFor = request.headers.get('x-forwarded-for');
+
+    const envelope = buildDurableTrustedEventEnvelope({
+      sourceKey: request.headers.get('x-salsys-source-key'),
+      bearerSecret: bearerToken(request),
+      contentLength: actualLength,
+      userAgent: request.headers.get('user-agent'),
+      ipPresent: Boolean(forwardedFor?.trim()),
+      event,
+    });
+
+    const verification = await verifySourceWithDeadline(envelope);
+
+    if (verification.kind === 'rejected') {
+      return permanentErrorResponse(verification.error);
+    }
+
+    if (
+      verification.kind === 'verified' &&
+      actualLength > verification.source.maxPayloadBytes
+    ) {
+      return json(
+        {
+          ok: false,
+          accepted: false,
+          error: 'Payload too large.',
+        },
+        413,
+      );
+    }
+
+    try {
+      const queued = await publishDurableTrustedEvent(envelope);
+
+      return json(
+        {
+          ok: true,
+          accepted: true,
+          duplicate: false,
+          queued: true,
+          durable: true,
+          verification:
+            verification.kind === 'verified' ? 'verified' : 'deferred',
+          queue_message_id: queued.messageId,
+          queue_deferred: queued.deferred,
+          event_id: event.eventId,
+          received_at: new Date().toISOString(),
+        },
+        202,
+      );
+    } catch (queueError) {
+      if (!(queueError instanceof DurableEventTransientError)) {
+        throw queueError;
+      }
+
+      // Vercel Queue is independent from Supabase. If the queue itself is
+      // temporarily unavailable, make one direct idempotent persistence
+      // attempt so a healthy Supabase can still accept the business event.
+      try {
+        const result = await processDurableTrustedEvent(envelope);
+
+        return json(
+          {
+            ok: true,
+            accepted: result.accepted,
+            duplicate: result.duplicate,
+            quarantined: !result.accepted,
+            queued: false,
+            durable: true,
+            fallback: 'supabase_direct',
+            raw_event_id: result.rawEventId,
+            event_family: result.eventFamily,
+            contract_status: result.contractStatus,
+            reason: result.reason,
+            processing: result.processing,
+            received_at: new Date().toISOString(),
+          },
+          202,
+        );
+      } catch (fallbackError) {
+        if (fallbackError instanceof DurableEventPermanentError) {
+          return permanentErrorResponse(fallbackError);
+        }
+
+        console.error('TRUSTED_EVENT_DURABILITY_UNAVAILABLE', {
+          eventId: event.eventId,
+          sourceKey: envelope.sourceKey,
+          queueError: queueError.message,
+          fallbackError:
+            fallbackError instanceof Error
+              ? fallbackError.message
+              : 'Unknown persistence failure',
+        });
+
+        return json(
+          {
+            ok: false,
+            accepted: false,
+            retryable: true,
+            error: 'Event durability is temporarily unavailable.',
+          },
+          503,
+          {
+            'Retry-After': '30',
+          },
+        );
+      }
+    }
   } catch (error) {
+    if (error instanceof DurableEventPermanentError) {
+      return permanentErrorResponse(error);
+    }
+
     const message =
-      error instanceof Error ? error.message : 'Event ingestion failed.';
+      error instanceof Error ? error.message : 'Invalid event payload.';
 
     return json(
       {
@@ -182,10 +317,6 @@ export async function POST(request: NextRequest) {
         error: message,
       },
       400,
-      {
-        'X-RateLimit-Limit': String(rate.limit),
-        'X-RateLimit-Remaining': String(rate.remaining),
-      },
     );
   }
 }
