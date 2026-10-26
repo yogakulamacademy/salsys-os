@@ -5,13 +5,14 @@ export type LeadStage =
   | 'qualified'
   | 'high_intent'
   | 'payment_pending'
-  | 'closed_won'
   | 'enrolled'
   | 'nurture'
   | 'not_now'
   | 'lost'
   | 'unqualified'
   | 'duplicate';
+
+export type PipelineStage = LeadStage | 'closed_won';
 
 export type IntentLevel = 'unknown' | 'low' | 'medium' | 'high' | 'very_high';
 export type Channel = 'website' | 'instagram' | 'whatsapp' | 'email' | 'phone' | 'meta_lead_form' | 'other';
