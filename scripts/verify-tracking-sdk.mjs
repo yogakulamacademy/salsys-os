@@ -4,8 +4,12 @@ import process from 'node:process';
 import { spawnSync } from 'node:child_process';
 
 const root = process.cwd();
+const intelligenceLoaderPath = 'public/salsys-intelligence.js';
+const intelligenceCorePath = 'public/salsys-intelligence-core-v1.6.0.js';
+
 const requiredFiles = [
-  'public/salsys-intelligence.js',
+  intelligenceLoaderPath,
+  intelligenceCorePath,
   'public/salsys-tracker.js',
   'public/salsys-consent.js',
   'schemas/salsys-event-v1.schema.json',
@@ -34,7 +38,8 @@ function read(relativePath) {
 for (const file of requiredFiles) read(file);
 
 for (const file of [
-  'public/salsys-intelligence.js',
+  intelligenceLoaderPath,
+  intelligenceCorePath,
   'public/salsys-tracker.js',
   'public/salsys-consent.js',
 ]) {
@@ -61,7 +66,9 @@ if (schema?.properties?.event_name?.pattern !== '^[a-z][a-z0-9_]*\\.[a-z][a-z0-9
 }
 
 const tracker = read('public/salsys-tracker.js');
-const intelligence = read('public/salsys-intelligence.js');
+const intelligenceLoader = read(intelligenceLoaderPath);
+const intelligenceCore = read(intelligenceCorePath);
+const intelligence = `${intelligenceLoader}\n${intelligenceCore}`;
 const consentUi = read('public/salsys-consent.js');
 const browserRoute = read('app/api/events/browser/v1/route.ts');
 const serverRoute = read('app/api/events/v1/route.ts');
@@ -71,6 +78,10 @@ const identityCloseout = read(
 );
 const consentRoute = read('app/api/privacy/consent/v1/route.ts');
 const middleware = read('middleware.ts');
+
+if (!intelligenceLoader.includes('salsys-intelligence-core-v1.6.0.js')) {
+  fail('Universal entrypoint loader is not pinned to the expected core runtime.');
+}
 
 const trackerChecks = [
   ['web.session_started', 'session event'],
@@ -193,7 +204,7 @@ for (const publicPath of [
   '/api/events/identify/v1',
   '/api/privacy/consent/v1',
 ]) {
-  if (!middleware.includes(`"${publicPath}"`)) {
+  if (!middleware.includes(`\"${publicPath}\"`)) {
     fail(`Middleware must expose ${publicPath} as a public tracking surface.`);
   }
 }
