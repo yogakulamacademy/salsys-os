@@ -2,7 +2,7 @@ import { LeadStage } from '@/types/crm';
 import { stageOrder } from '@/lib/mock-data';
 
 const labels: Record<LeadStage, string> = {
-  new: 'New', contacted: 'Contacted', engaged: 'Engaged', qualified: 'Qualified', high_intent: 'High intent', payment_pending: 'Payment pending', enrolled: 'Enrolled', nurture: 'Nurture', not_now: 'Not now', lost: 'Lost', unqualified: 'Unqualified', duplicate: 'Duplicate'
+  new: 'New', contacted: 'Contacted', engaged: 'Engaged', qualified: 'Qualified', high_intent: 'High intent', payment_pending: 'Payment pending', closed_won: 'Deal closed', enrolled: 'Enrolled', nurture: 'Nurture', not_now: 'Not now', lost: 'Lost', unqualified: 'Unqualified', duplicate: 'Duplicate'
 };
 
 export function FunnelCard({ counts }: { counts: Record<LeadStage, number> }) {
