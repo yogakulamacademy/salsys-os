@@ -17,6 +17,7 @@ const requiredFiles = [
   'app/api/events/browser/v1/route.ts',
   'app/api/events/identify/v1/route.ts',
   'app/api/privacy/consent/v1/route.ts',
+  'lib/tracking/durable-events.ts',
   'docs/universal-event-protocol-v1.md',
   'docs/universal-tracking-intelligence-sdk.md',
   'docs/universal-consent-ui-v1.md',
@@ -72,6 +73,7 @@ const intelligence = `${intelligenceLoader}\n${intelligenceCore}`;
 const consentUi = read('public/salsys-consent.js');
 const browserRoute = read('app/api/events/browser/v1/route.ts');
 const serverRoute = read('app/api/events/v1/route.ts');
+const durableServerIngestion = read('lib/tracking/durable-events.ts');
 const identifyRoute = read('app/api/events/identify/v1/route.ts');
 const identityCloseout = read(
   'supabase/migrations/20261020114000_customer360_identity_closeout_v1.sql',
@@ -152,11 +154,17 @@ if (!browserRoute.includes('privacy_gate_tracking_event_v1')) {
 if (!browserRoute.includes('ingest_tracking_event_v1')) {
   fail('Browser ingestion must use canonical idempotent event ingestion.');
 }
-if (!serverRoute.includes('authenticateServerTrackingSource')) {
-  fail('Trusted server ingestion must authenticate a tracking source.');
+if (
+  !serverRoute.includes('verifyDurableTrustedSource') ||
+  !serverRoute.includes('verifySourceWithDeadline')
+) {
+  fail('Trusted server ingestion must authenticate a tracking source before or after durable admission.');
 }
-if (!serverRoute.includes('ingest_tracking_event_v1')) {
-  fail('Trusted server ingestion must use canonical idempotent event ingestion.');
+if (
+  !durableServerIngestion.includes('ingest_tracking_event_v1') ||
+  !durableServerIngestion.includes('p_source_event_id: event.eventId')
+) {
+  fail('Trusted server ingestion must use canonical idempotent event ingestion with the stable source event ID.');
 }
 if (!identifyRoute.includes('authenticateServerTrackingSource')) {
   fail('Identity handoff must require an authenticated tracking source.');
