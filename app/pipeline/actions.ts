@@ -3,9 +3,9 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { useMockData } from "@/lib/config";
-import type { LeadStage } from "@/types/crm";
+import type { PipelineStage } from "@/types/crm";
 
-const allowedStages: LeadStage[] = [
+const allowedStages: PipelineStage[] = [
   "new",
   "contacted",
   "engaged",
@@ -27,7 +27,7 @@ export type PipelineStageResult =
 
 export async function movePipelineLeadStage(
   leadId: string,
-  newStage: LeadStage,
+  newStage: PipelineStage,
 ): Promise<PipelineStageResult> {
   if (!leadId) {
     return { ok: false, error: "Lead ID is required." };
