@@ -9,7 +9,7 @@
           "topic": "salsys-trusted-events-v1",
           "retryAfterSeconds": 60,
           "initialDelaySeconds": 0,
-          "maxDeliveries": 20
+          "maxConcurrency": 5
         }
       ]
     }
