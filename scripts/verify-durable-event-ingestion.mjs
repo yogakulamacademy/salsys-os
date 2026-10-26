@@ -22,7 +22,7 @@ const consumer = read('app/api/tracking/durable-events/consume/route.ts');
 const vercel = JSON.parse(read('vercel.json'));
 
 assert(
-  durable.includes("getVercelOidcToken") &&
+  durable.includes('getVercelOidcToken') &&
     durable.includes('vercel-queue.com/api/v3/topic/'),
   'trusted events use the independent Vercel durable queue',
 );
@@ -49,6 +49,14 @@ assert(
   durable.includes('timingSafeEqual') &&
     durable.includes(".eq('status', 'active')"),
   'consumer re-validates active source credentials before persistence',
+);
+
+assert(
+  !durable.includes('drainDurableTrustedEvents') &&
+    !durable.includes('receiveQueuedEvents') &&
+    !durable.includes('acknowledgeQueuedEvent') &&
+    !durable.includes('QUEUE_CONSUMER'),
+  'obsolete manual polling and lease acknowledgement code is absent',
 );
 
 const publishIndex = route.indexOf('publishDurableTrustedEvent(envelope)');
@@ -80,7 +88,7 @@ assert(
 
 assert(
   consumer.includes('DurableEventPermanentError') &&
-    consumer.includes("status: 503"),
+    consumer.includes('status: 503'),
   'consumer acknowledges permanent failures and retries transient failures',
 );
 
@@ -94,9 +102,15 @@ assert(
 );
 
 assert(
-  Number(trigger?.maxDeliveries) >= 10 &&
+  trigger?.maxDeliveries === undefined &&
     Number(trigger?.retryAfterSeconds) >= 30,
-  'queue trigger has bounded retry policy with repeated delivery attempts',
+  'transient failures keep retrying for the queue retention window instead of stopping after a short delivery cap',
+);
+
+assert(
+  Number(trigger?.maxConcurrency) >= 1 &&
+    Number(trigger?.maxConcurrency) <= 10,
+  'queue recovery concurrency is bounded to protect Supabase from backlog stampedes',
 );
 
 if (process.exitCode) {
