@@ -12,13 +12,11 @@ import {
 } from '@/lib/tracking/runtime';
 
 const QUEUE_REGION = process.env.SALSYS_EVENT_QUEUE_REGION?.trim() || 'sin1';
-const QUEUE_TOPIC = process.env.SALSYS_EVENT_QUEUE_TOPIC?.trim() || 'salsys-trusted-events-v1';
-const QUEUE_CONSUMER =
-  process.env.SALSYS_EVENT_QUEUE_CONSUMER?.trim() || 'supabase-ingestion-v1';
+export const DURABLE_EVENT_QUEUE_TOPIC =
+  process.env.SALSYS_EVENT_QUEUE_TOPIC?.trim() || 'salsys-trusted-events-v1';
 
 export const DURABLE_EVENT_EDGE_MAX_BYTES = 64 * 1024;
 const QUEUE_RETENTION_SECONDS = 7 * 24 * 60 * 60;
-const QUEUE_VISIBILITY_TIMEOUT_SECONDS = 120;
 const QUEUE_REQUEST_TIMEOUT_MS = 4000;
 
 export type DurableTrustedEventEnvelope = {
@@ -32,15 +30,6 @@ export type DurableTrustedEventEnvelope = {
     ipPresent: boolean;
   };
   event: GenericTrackingEvent;
-};
-
-type QueueReceivedMessage = {
-  messageId: string;
-  receiptHandle: string;
-  deliveryCount: number;
-  timestamp: string | null;
-  expiresAt: string | null;
-  envelope: DurableTrustedEventEnvelope;
 };
 
 export type DurableEventProcessResult = {
@@ -84,46 +73,13 @@ function safeHexEqual(left: string, right: string) {
   return a.length === b.length && timingSafeEqual(a, b);
 }
 
-function queueBaseUrl() {
-  return `https://${QUEUE_REGION}.vercel-queue.com/api/v3`;
-}
-
-async function getQueueToken() {
-  try {
-    return await getVercelOidcToken();
-  } catch (error) {
-    const message = error instanceof Error ? error.message : 'OIDC token unavailable.';
-    throw new DurableEventTransientError(`Queue authentication failed: ${message}`);
-  }
-}
-
-async function queueFetch(path: string, init: RequestInit) {
-  const token = await getQueueToken();
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), QUEUE_REQUEST_TIMEOUT_MS);
-
-  try {
-    return await fetch(`${queueBaseUrl()}${path}`, {
-      ...init,
-      signal: controller.signal,
-      headers: {
-        Authorization: `Bearer ${token}`,
-        ...(init.headers ?? {}),
-      },
-      cache: 'no-store',
-    });
-  } catch (error) {
-    const message = error instanceof Error ? error.message : 'Queue request failed.';
-    throw new DurableEventTransientError(`Queue request failed: ${message}`);
-  } finally {
-    clearTimeout(timer);
-  }
-}
-
 function normalizeSourceKey(value: string | null) {
   const sourceKey = value?.trim() ?? '';
   if (!/^src_[A-Za-z0-9_-]{12,160}$/.test(sourceKey)) {
-    throw new DurableEventPermanentError('Invalid tracking source key.', 'invalid_source_key');
+    throw new DurableEventPermanentError(
+      'Invalid tracking source key.',
+      'invalid_source_key',
+    );
   }
   return sourceKey;
 }
@@ -131,12 +87,15 @@ function normalizeSourceKey(value: string | null) {
 function normalizeSecret(value: string | null) {
   const secret = value?.trim() ?? '';
   if (secret.length < 16 || secret.length > 1000) {
-    throw new DurableEventPermanentError('Invalid tracking source secret.', 'invalid_secret');
+    throw new DurableEventPermanentError(
+      'Invalid tracking source secret.',
+      'invalid_secret',
+    );
   }
   return secret;
 }
 
-function buildEnvelope(input: {
+export function buildDurableTrustedEventEnvelope(input: {
   sourceKey: string | null;
   bearerSecret: string | null;
   contentLength: number;
@@ -161,24 +120,48 @@ function buildEnvelope(input: {
   };
 }
 
-export async function publishDurableTrustedEvent(input: {
-  sourceKey: string | null;
-  bearerSecret: string | null;
-  contentLength: number;
-  userAgent: string | null;
-  ipPresent: boolean;
-  event: GenericTrackingEvent;
-}) {
-  const envelope = buildEnvelope(input);
-  const response = await queueFetch(`/topic/${encodeURIComponent(QUEUE_TOPIC)}`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Vqs-Retention-Seconds': String(QUEUE_RETENTION_SECONDS),
-      'Vqs-Idempotency-Key': `${envelope.sourceKey}:${envelope.event.eventId}`.slice(0, 256),
-    },
-    body: JSON.stringify(envelope),
-  });
+async function getQueueToken() {
+  try {
+    return await getVercelOidcToken();
+  } catch (error) {
+    const message =
+      error instanceof Error ? error.message : 'OIDC token unavailable.';
+    throw new DurableEventTransientError(
+      `Queue authentication failed: ${message}`,
+    );
+  }
+}
+
+export async function publishDurableTrustedEvent(
+  envelope: DurableTrustedEventEnvelope,
+) {
+  const token = await getQueueToken();
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), QUEUE_REQUEST_TIMEOUT_MS);
+  const queueUrl = `https://${QUEUE_REGION}.vercel-queue.com/api/v3/topic/${encodeURIComponent(DURABLE_EVENT_QUEUE_TOPIC)}`;
+
+  let response: Response;
+  try {
+    response = await fetch(queueUrl, {
+      method: 'POST',
+      signal: controller.signal,
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json',
+        'Vqs-Retention-Seconds': String(QUEUE_RETENTION_SECONDS),
+        'Vqs-Idempotency-Key':
+          `${envelope.sourceKey}:${envelope.event.eventId}`.slice(0, 256),
+      },
+      body: JSON.stringify(envelope),
+      cache: 'no-store',
+    });
+  } catch (error) {
+    const message =
+      error instanceof Error ? error.message : 'Queue request failed.';
+    throw new DurableEventTransientError(`Queue request failed: ${message}`);
+  } finally {
+    clearTimeout(timer);
+  }
 
   if (response.status !== 201 && response.status !== 202) {
     const detail = (await response.text()).slice(0, 500);
@@ -195,7 +178,6 @@ export async function publishDurableTrustedEvent(input: {
   }
 
   return {
-    envelope,
     messageId:
       typeof responseBody.messageId === 'string'
         ? responseBody.messageId
@@ -204,10 +186,24 @@ export async function publishDurableTrustedEvent(input: {
   };
 }
 
-async function resolveTrustedSource(
-  sourceKey: string,
-  secretHash: string,
+export async function verifyDurableTrustedSource(
+  envelope: DurableTrustedEventEnvelope,
 ): Promise<TrackingSourceRuntime> {
+  if (envelope.version !== 1) {
+    throw new DurableEventPermanentError(
+      'Unsupported durable event version.',
+      'unsupported_version',
+    );
+  }
+
+  const sourceKey = normalizeSourceKey(envelope.sourceKey);
+  if (!/^[a-f0-9]{64}$/i.test(envelope.secretHash)) {
+    throw new DurableEventPermanentError(
+      'Unauthorized tracking source.',
+      'unauthorized_secret',
+    );
+  }
+
   const admin = createAdminClient();
   const { data, error } = await admin
     .from('tracking_sources')
@@ -219,15 +215,23 @@ async function resolveTrustedSource(
     .maybeSingle();
 
   if (error) {
-    throw new DurableEventTransientError(`Tracking source lookup failed: ${error.message}`);
+    throw new DurableEventTransientError(
+      `Tracking source lookup failed: ${error.message}`,
+    );
   }
 
   if (!data || data.auth_mode !== 'secret' || !data.secret_hash) {
-    throw new DurableEventPermanentError('Unauthorized tracking source.', 'unauthorized_source');
+    throw new DurableEventPermanentError(
+      'Unauthorized tracking source.',
+      'unauthorized_source',
+    );
   }
 
-  if (!safeHexEqual(secretHash, String(data.secret_hash))) {
-    throw new DurableEventPermanentError('Unauthorized tracking source.', 'unauthorized_secret');
+  if (!safeHexEqual(envelope.secretHash, String(data.secret_hash))) {
+    throw new DurableEventPermanentError(
+      'Unauthorized tracking source.',
+      'unauthorized_secret',
+    );
   }
 
   return {
@@ -252,26 +256,29 @@ async function resolveTrustedSource(
 export async function processDurableTrustedEvent(
   envelope: DurableTrustedEventEnvelope,
 ): Promise<DurableEventProcessResult> {
-  if (envelope.version !== 1) {
-    throw new DurableEventPermanentError('Unsupported durable event version.', 'unsupported_version');
-  }
-
-  const source = await resolveTrustedSource(envelope.sourceKey, envelope.secretHash);
+  const source = await verifyDurableTrustedSource(envelope);
 
   if (envelope.contentLength > source.maxPayloadBytes) {
-    throw new DurableEventPermanentError('Payload too large.', 'payload_too_large');
+    throw new DurableEventPermanentError(
+      'Payload too large.',
+      'payload_too_large',
+    );
   }
 
   let rate: Awaited<ReturnType<typeof consumeTrackingRateLimit>>;
   try {
     rate = await consumeTrackingRateLimit(source);
   } catch (error) {
-    const message = error instanceof Error ? error.message : 'Rate limit lookup failed.';
+    const message =
+      error instanceof Error ? error.message : 'Rate limit lookup failed.';
     throw new DurableEventTransientError(message);
   }
 
   if (!rate.allowed) {
-    throw new DurableEventPermanentError('Rate limit exceeded.', 'rate_limited');
+    throw new DurableEventPermanentError(
+      'Rate limit exceeded.',
+      'rate_limited',
+    );
   }
 
   const admin = createAdminClient();
@@ -304,7 +311,9 @@ export async function processDurableTrustedEvent(
   });
 
   if (error) {
-    throw new DurableEventTransientError(`Event ingestion failed: ${error.message}`);
+    throw new DurableEventTransientError(
+      `Event ingestion failed: ${error.message}`,
+    );
   }
 
   const accepted = Boolean(data?.accepted);
@@ -322,8 +331,9 @@ export async function processDurableTrustedEvent(
     );
 
     if (processingError) {
-      // The raw event is already durable in Postgres. The existing sweeper can
-      // retry projection/processing, so the external queue can safely ack.
+      // The raw event is durable in Postgres at this point. The existing
+      // tracking sweeper can safely retry projection after this queue message
+      // is acknowledged.
       processing = {
         ok: false,
         processed: false,
@@ -343,149 +353,10 @@ export async function processDurableTrustedEvent(
     duplicate,
     rawEventId,
     eventFamily: data?.event_family ? String(data.event_family) : null,
-    contractStatus: data?.contract_status ? String(data.contract_status) : null,
+    contractStatus: data?.contract_status
+      ? String(data.contract_status)
+      : null,
     reason: data?.reason ? String(data.reason) : null,
     processing,
   };
-}
-
-function parseQueueLine(line: string): QueueReceivedMessage {
-  const record = JSON.parse(line) as Record<string, unknown>;
-  const encodedBody = typeof record.body === 'string' ? record.body : '';
-  const decoded = Buffer.from(encodedBody, 'base64').toString('utf8');
-  const envelope = JSON.parse(decoded) as DurableTrustedEventEnvelope;
-
-  if (!record.messageId || !record.receiptHandle || !envelope?.event?.eventId) {
-    throw new DurableEventPermanentError('Malformed queue message.', 'malformed_queue_message');
-  }
-
-  return {
-    messageId: String(record.messageId),
-    receiptHandle: String(record.receiptHandle),
-    deliveryCount: Number(record.deliveryCount ?? 1),
-    timestamp: record.timestamp ? String(record.timestamp) : null,
-    expiresAt: record.expiresAt ? String(record.expiresAt) : null,
-    envelope,
-  };
-}
-
-async function receiveQueuedEvents(limit: number) {
-  const response = await queueFetch(
-    `/topic/${encodeURIComponent(QUEUE_TOPIC)}/consumer/${encodeURIComponent(QUEUE_CONSUMER)}`,
-    {
-      method: 'POST',
-      headers: {
-        Accept: 'application/x-ndjson',
-        'Vqs-Max-Messages': String(Math.max(1, Math.min(10, limit))),
-        'Vqs-Visibility-Timeout-Seconds': String(QUEUE_VISIBILITY_TIMEOUT_SECONDS),
-      },
-    },
-  );
-
-  if (response.status === 204) return [] as QueueReceivedMessage[];
-  if (!response.ok) {
-    const detail = (await response.text()).slice(0, 500);
-    throw new DurableEventTransientError(
-      `Queue receive failed with HTTP ${response.status}${detail ? `: ${detail}` : ''}`,
-    );
-  }
-
-  const body = await response.text();
-  if (!body.trim()) return [] as QueueReceivedMessage[];
-
-  const messages: QueueReceivedMessage[] = [];
-  for (const line of body.split('\n')) {
-    if (!line.trim()) continue;
-    messages.push(parseQueueLine(line));
-  }
-  return messages;
-}
-
-async function acknowledgeQueuedEvent(receiptHandle: string) {
-  const response = await queueFetch(
-    `/topic/${encodeURIComponent(QUEUE_TOPIC)}/consumer/${encodeURIComponent(QUEUE_CONSUMER)}/lease/${encodeURIComponent(receiptHandle)}`,
-    { method: 'DELETE' },
-  );
-
-  if (response.status !== 204) {
-    const detail = (await response.text()).slice(0, 500);
-    throw new DurableEventTransientError(
-      `Queue acknowledge failed with HTTP ${response.status}${detail ? `: ${detail}` : ''}`,
-    );
-  }
-}
-
-export async function drainDurableTrustedEvents(options?: {
-  maxBatches?: number;
-  batchSize?: number;
-}) {
-  const maxBatches = Math.max(1, Math.min(20, options?.maxBatches ?? 5));
-  const batchSize = Math.max(1, Math.min(10, options?.batchSize ?? 10));
-
-  const summary = {
-    ok: true,
-    received: 0,
-    acknowledged: 0,
-    accepted: 0,
-    duplicates: 0,
-    discarded: 0,
-    transientFailures: 0,
-    stoppedForDependencyFailure: false,
-  };
-
-  for (let batch = 0; batch < maxBatches; batch += 1) {
-    const messages = await receiveQueuedEvents(batchSize);
-    if (!messages.length) break;
-
-    summary.received += messages.length;
-
-    for (const message of messages) {
-      try {
-        const result = await processDurableTrustedEvent(message.envelope);
-        if (result.accepted) summary.accepted += 1;
-        if (result.duplicate) summary.duplicates += 1;
-        await acknowledgeQueuedEvent(message.receiptHandle);
-        summary.acknowledged += 1;
-      } catch (error) {
-        if (error instanceof DurableEventPermanentError) {
-          console.warn('DURABLE_TRACKING_EVENT_DISCARDED', {
-            messageId: message.messageId,
-            deliveryCount: message.deliveryCount,
-            eventId: message.envelope.event.eventId,
-            reason: error.reason,
-          });
-          await acknowledgeQueuedEvent(message.receiptHandle);
-          summary.acknowledged += 1;
-          summary.discarded += 1;
-          continue;
-        }
-
-        summary.ok = false;
-        summary.transientFailures += 1;
-        summary.stoppedForDependencyFailure = true;
-        console.error('DURABLE_TRACKING_EVENT_RETRY_PENDING', {
-          messageId: message.messageId,
-          deliveryCount: message.deliveryCount,
-          eventId: message.envelope.event.eventId,
-          error: error instanceof Error ? error.message : 'Unknown transient failure',
-        });
-        return summary;
-      }
-    }
-
-    if (messages.length < batchSize) break;
-  }
-
-  return summary;
-}
-
-export function buildDurableEnvelopeForFallback(input: {
-  sourceKey: string | null;
-  bearerSecret: string | null;
-  contentLength: number;
-  userAgent: string | null;
-  ipPresent: boolean;
-  event: GenericTrackingEvent;
-}) {
-  return buildEnvelope(input);
 }
