@@ -1,5 +1,19 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
+  "functions": {
+    "app/api/tracking/durable-events/consume/route.ts": {
+      "maxDuration": 60,
+      "experimentalTriggers": [
+        {
+          "type": "queue/v2beta",
+          "topic": "salsys-trusted-events-v1",
+          "retryAfterSeconds": 60,
+          "initialDelaySeconds": 0,
+          "maxDeliveries": 20
+        }
+      ]
+    }
+  },
   "crons": [
     {
       "path": "/api/intelligence/system-snapshot",
