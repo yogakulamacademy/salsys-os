@@ -49,6 +49,7 @@ const stageStyles: Record<LeadStage, string> = {
   qualified: 'bg-violet-50 text-violet-700 ring-violet-200',
   high_intent: 'bg-orange-50 text-orange-700 ring-orange-200',
   payment_pending: 'bg-amber-50 text-amber-700 ring-amber-200',
+  closed_won: 'bg-emerald-100 text-emerald-800 ring-emerald-300',
   enrolled: 'bg-emerald-50 text-emerald-700 ring-emerald-200',
   nurture: 'bg-fuchsia-50 text-fuchsia-700 ring-fuchsia-200',
   not_now: 'bg-slate-100 text-slate-600 ring-slate-200',
