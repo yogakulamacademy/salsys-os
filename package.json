@@ -9,6 +9,7 @@
     "typecheck": "tsc --noEmit",
     "verify:tracking-sdk": "node scripts/verify-tracking-sdk.mjs",
     "verify:tracking-live-closeout": "node scripts/verify-tracking-live-closeout.mjs",
+    "verify:durable-event-ingestion": "node scripts/verify-durable-event-ingestion.mjs",
     "verify:universal-platform-sdk": "node scripts/verify-universal-platform-sdk.mjs",
     "verify:web-platform-adapters": "node scripts/verify-web-platform-adapters.mjs",
     "verify:wordpress-adapter": "node scripts/verify-wordpress-adapter.mjs",
