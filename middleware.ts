@@ -44,6 +44,13 @@ const PUBLIC_EXACT_PATHS = new Set([
 const ACTIVE_WORKSPACE_COOKIE = "salsys-active-workspace";
 const WORKSPACE_COOKIE_MAX_AGE_SECONDS = 60 * 60 * 24 * 30;
 
+// Keep the entire protected-route middleware path below Vercel's own timeout.
+// Critical auth/workspace checks fail closed; optional onboarding lookup fails open.
+const MIDDLEWARE_TOTAL_BUDGET_MS = 3200;
+const AUTH_LOOKUP_MAX_MS = 1400;
+const WORKSPACE_LOOKUP_MAX_MS = 1400;
+const ONBOARDING_LOOKUP_MAX_MS = 300;
+
 const EMPLOYEE_EXACT_PATHS = new Set([
   "/dashboard",
   "/leads",
@@ -72,6 +79,42 @@ const UUID_PATTERN =
   "[0-9a-fA-F]{12}";
 
 const EMPLOYEE_LEAD_ROUTE = new RegExp(`^/leads/${UUID_PATTERN}(?:/edit)?$`);
+
+class MiddlewareDependencyTimeout extends Error {
+  constructor(public readonly dependency: string) {
+    super(`${dependency} exceeded the middleware deadline`);
+    this.name = "MiddlewareDependencyTimeout";
+  }
+}
+
+async function withMiddlewareDeadline<T>(
+  operation: PromiseLike<T>,
+  deadlineAt: number,
+  maxWaitMs: number,
+  dependency: string,
+): Promise<T> {
+  const remainingMs = deadlineAt - Date.now();
+  if (remainingMs <= 0) {
+    throw new MiddlewareDependencyTimeout(dependency);
+  }
+
+  const timeoutMs = Math.max(1, Math.min(maxWaitMs, remainingMs));
+  let timer: ReturnType<typeof setTimeout> | undefined;
+
+  try {
+    return await Promise.race([
+      Promise.resolve(operation),
+      new Promise<T>((_, reject) => {
+        timer = setTimeout(
+          () => reject(new MiddlewareDependencyTimeout(dependency)),
+          timeoutMs,
+        );
+      }),
+    ]);
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
+}
 
 function normalizePathname(pathname: string) {
   if (pathname.length > 1 && pathname.endsWith("/")) {
@@ -265,6 +308,7 @@ export async function middleware(request: NextRequest) {
     return NextResponse.next();
   }
 
+  const deadlineAt = Date.now() + MIDDLEWARE_TOTAL_BUDGET_MS;
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const supabaseAnonKey =
     process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ||
@@ -299,10 +343,29 @@ export async function middleware(request: NextRequest) {
     },
   });
 
+  let authResult: Awaited<ReturnType<typeof supabase.auth.getUser>>;
+  try {
+    authResult = await withMiddlewareDeadline(
+      supabase.auth.getUser(),
+      deadlineAt,
+      AUTH_LOOKUP_MAX_MS,
+      "supabase.auth.getUser",
+    );
+  } catch (error) {
+    console.warn("Middleware auth dependency unavailable", {
+      path: pathname,
+      reason:
+        error instanceof MiddlewareDependencyTimeout
+          ? error.dependency
+          : "supabase.auth.getUser",
+    });
+    return workspaceServiceUnavailable(pathname);
+  }
+
   const {
     data: { user },
     error: authError,
-  } = await supabase.auth.getUser();
+  } = authResult;
 
   if (!user) {
     if (
@@ -321,11 +384,28 @@ export async function middleware(request: NextRequest) {
   }
 
   // Resolve tenant binding + active membership role in one database round trip.
-  // The RPC is SECURITY DEFINER but validates auth.uid(), auth.role(), session_id,
-  // active tenant binding and active organization membership before returning.
-  const { data: workspaceContext, error: workspaceError } = await supabase.rpc(
-    "get_current_workspace_context_v1",
-  );
+  // This is security-critical, so timeout/unavailability fails closed with a
+  // controlled 503 rather than allowing the request through or waiting for Vercel.
+  let workspaceResult: Awaited<ReturnType<typeof supabase.rpc>>;
+  try {
+    workspaceResult = await withMiddlewareDeadline(
+      supabase.rpc("get_current_workspace_context_v1"),
+      deadlineAt,
+      WORKSPACE_LOOKUP_MAX_MS,
+      "get_current_workspace_context_v1",
+    );
+  } catch (error) {
+    console.warn("Middleware workspace dependency unavailable", {
+      path: pathname,
+      reason:
+        error instanceof MiddlewareDependencyTimeout
+          ? error.dependency
+          : "get_current_workspace_context_v1",
+    });
+    return workspaceServiceUnavailable(pathname);
+  }
+
+  const { data: workspaceContext, error: workspaceError } = workspaceResult;
 
   if (workspaceError || !workspaceContext || typeof workspaceContext !== "object") {
     const detail = String(workspaceError?.message ?? "");
@@ -348,7 +428,6 @@ export async function middleware(request: NextRequest) {
         );
       }
 
-      await supabase.auth.signOut();
       const redirectResponse = redirectWithAuthCookies(
         request,
         response,
@@ -359,14 +438,7 @@ export async function middleware(request: NextRequest) {
             : "Your account is not assigned to an active organization.",
         },
       );
-      redirectResponse.cookies.set(ACTIVE_WORKSPACE_COOKIE, "", {
-        httpOnly: true,
-        sameSite: "lax",
-        secure: process.env.NODE_ENV === "production",
-        path: "/",
-        maxAge: 0,
-      });
-      return redirectResponse;
+      return expireSessionCookies(request, redirectResponse);
     }
 
     return workspaceServiceUnavailable(pathname);
@@ -403,28 +475,43 @@ export async function middleware(request: NextRequest) {
     return redirectWithAuthCookies(request, response, "/onboarding/security");
   }
 
-  // Required onboarding is a tenant UX gate, not an API authorization layer.
-  // Only explicitly enrolled owner/admin workspaces are gated. Existing tenants
-  // without an onboarding row continue unchanged. Lookup failure is fail-open so
-  // onboarding cannot turn a transient database issue into an application outage.
+  // Optional onboarding gating must never be able to exhaust middleware time.
+  // A timeout/error here fails open because auth + workspace authorization have
+  // already succeeded and onboarding is only a UX gate.
   if (
     !pathname.startsWith("/api/") &&
     !isOnboardingSetupPage(pathname) &&
     (role === "owner" || role === "admin")
   ) {
-    const { data: onboarding, error: onboardingError } = await supabase
-      .from("organization_onboarding")
-      .select("status,enforce_on_sign_in")
-      .eq("organization_id", organizationId)
-      .maybeSingle();
+    try {
+      const { data: onboarding, error: onboardingError } =
+        await withMiddlewareDeadline(
+          supabase
+            .from("organization_onboarding")
+            .select("status,enforce_on_sign_in")
+            .eq("organization_id", organizationId)
+            .maybeSingle(),
+          deadlineAt,
+          ONBOARDING_LOOKUP_MAX_MS,
+          "organization_onboarding",
+        );
 
-    if (
-      !onboardingError &&
-      onboarding?.enforce_on_sign_in === true &&
-      onboarding.status !== "completed" &&
-      onboarding.status !== "dismissed"
-    ) {
-      return redirectWithAuthCookies(request, response, "/onboarding");
+      if (
+        !onboardingError &&
+        onboarding?.enforce_on_sign_in === true &&
+        onboarding.status !== "completed" &&
+        onboarding.status !== "dismissed"
+      ) {
+        return redirectWithAuthCookies(request, response, "/onboarding");
+      }
+    } catch (error) {
+      console.warn("Middleware onboarding lookup skipped", {
+        path: pathname,
+        reason:
+          error instanceof MiddlewareDependencyTimeout
+            ? error.dependency
+            : "organization_onboarding",
+      });
     }
   }
 
