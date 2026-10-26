@@ -9,6 +9,9 @@ import { ACTIVE_WORKSPACE_COOKIE } from '@/lib/workspace';
 
 const ORGANIZATION_COOKIE_MAX_AGE_SECONDS = 60 * 60 * 24 * 30;
 const AUTH_RETRY_DELAY_MS = 450;
+const LOGIN_OPERATION_MAX_MS = 5000;
+const TENANT_BIND_MAX_MS = 5000;
+const ONBOARDING_CHECK_MAX_MS = 800;
 
 type ServerSupabaseClient = Awaited<ReturnType<typeof createClient>>;
 
@@ -29,6 +32,35 @@ type AuthErrorLike = {
   status?: number;
   code?: string;
 } | null;
+
+class AuthDependencyTimeout extends Error {
+  constructor(public readonly dependency: string) {
+    super(`${dependency} timed out`);
+    this.name = 'AuthDependencyTimeout';
+  }
+}
+
+async function withAuthDeadline<T>(
+  operation: PromiseLike<T>,
+  maxWaitMs: number,
+  dependency: string,
+): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+
+  try {
+    return await Promise.race([
+      Promise.resolve(operation),
+      new Promise<T>((_, reject) => {
+        timer = setTimeout(
+          () => reject(new AuthDependencyTimeout(dependency)),
+          maxWaitMs,
+        );
+      }),
+    ]);
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
+}
 
 function authUrl(path: string, key: 'notice' | 'error', message: string) {
   const params = new URLSearchParams({ [key]: message });
@@ -74,11 +106,19 @@ async function signInWithTransientRetry(
   email: string,
   password: string,
 ) {
-  let result = await supabase.auth.signInWithPassword({ email, password });
+  let result = await withAuthDeadline(
+    supabase.auth.signInWithPassword({ email, password }),
+    LOGIN_OPERATION_MAX_MS,
+    'supabase.auth.signInWithPassword',
+  );
 
   if (result.error && isTransientAuthError(result.error)) {
     await wait(AUTH_RETRY_DELAY_MS);
-    result = await supabase.auth.signInWithPassword({ email, password });
+    result = await withAuthDeadline(
+      supabase.auth.signInWithPassword({ email, password }),
+      LOGIN_OPERATION_MAX_MS,
+      'supabase.auth.signInWithPassword retry',
+    );
   }
 
   return result;
@@ -87,33 +127,42 @@ async function signInWithTransientRetry(
 async function bindCurrentUserOrganization(
   supabase: ServerSupabaseClient,
 ): Promise<TenantBindingResult> {
-  // This SECURITY DEFINER RPC is the canonical production contract for
-  // resolving the authenticated user's single active organization and then
-  // binding the current auth session to that organization. Do not query
-  // organization_members directly before the tenant session is bound because
-  // RLS intentionally hides tenant rows until binding succeeds.
-  const { data: boundOrganizationId, error: bindingError } = await supabase.rpc(
-    'bind_current_tenant_session_for_current_user',
-  );
+  try {
+    const { data: boundOrganizationId, error: bindingError } =
+      await withAuthDeadline(
+        supabase.rpc('bind_current_tenant_session_for_current_user'),
+        TENANT_BIND_MAX_MS,
+        'bind_current_tenant_session_for_current_user',
+      );
 
-  if (bindingError || !boundOrganizationId) {
-    const detail = bindingError?.message ?? '';
+    if (bindingError || !boundOrganizationId) {
+      const detail = bindingError?.message ?? '';
 
-    if (detail.includes('No active organization membership')) {
-      return { ok: false, reason: 'no_membership', detail };
+      if (detail.includes('No active organization membership')) {
+        return { ok: false, reason: 'no_membership', detail };
+      }
+
+      if (detail.includes('Multiple active organization memberships')) {
+        return { ok: false, reason: 'multiple_memberships', detail };
+      }
+
+      return { ok: false, reason: 'binding_failed', detail };
     }
 
-    if (detail.includes('Multiple active organization memberships')) {
-      return { ok: false, reason: 'multiple_memberships', detail };
-    }
-
-    return { ok: false, reason: 'binding_failed', detail };
+    return {
+      ok: true,
+      organizationId: String(boundOrganizationId),
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      reason: 'binding_failed',
+      detail:
+        error instanceof AuthDependencyTimeout
+          ? error.message
+          : 'Tenant binding request failed',
+    };
   }
-
-  return {
-    ok: true,
-    organizationId: String(boundOrganizationId),
-  };
 }
 
 function tenantBindingMessage(result: Exclude<TenantBindingResult, { ok: true }>) {
@@ -125,7 +174,7 @@ function tenantBindingMessage(result: Exclude<TenantBindingResult, { ok: true }>
     return 'This account is linked to multiple organizations. Please contact your SalsysOS administrator.';
   }
 
-  return 'Unable to establish your organization session. Please try again.';
+  return 'Unable to establish your organization session. The service may be temporarily unavailable. Please try again.';
 }
 
 async function setWorkspaceCookie(organizationId: string) {
@@ -143,31 +192,36 @@ async function shouldEnterRequiredOnboarding(
   supabase: ServerSupabaseClient,
   organizationId: string,
 ) {
-  // Onboarding is an explicitly provisioned UX requirement, not an inferred
-  // tenant state. Existing organizations have no enforcement row/flag and must
-  // continue to their requested destination unchanged.
-  const { data: canManage, error: permissionError } = await supabase.rpc(
-    'can_manage_organization',
-    { p_organization_id: organizationId },
-  );
+  try {
+    return await withAuthDeadline(
+      (async () => {
+        const { data: canManage, error: permissionError } = await supabase.rpc(
+          'can_manage_organization',
+          { p_organization_id: organizationId },
+        );
 
-  if (permissionError || !canManage) return false;
+        if (permissionError || !canManage) return false;
 
-  const { data: onboarding, error: onboardingError } = await supabase
-    .from('organization_onboarding')
-    .select('status,enforce_on_sign_in')
-    .eq('organization_id', organizationId)
-    .maybeSingle();
+        const { data: onboarding, error: onboardingError } = await supabase
+          .from('organization_onboarding')
+          .select('status,enforce_on_sign_in')
+          .eq('organization_id', organizationId)
+          .maybeSingle();
 
-  // This check is deliberately fail-open. Onboarding controls setup UX, not
-  // authorization; a temporary onboarding lookup failure must not break login.
-  if (onboardingError || !onboarding) return false;
+        if (onboardingError || !onboarding) return false;
 
-  return (
-    onboarding.enforce_on_sign_in === true &&
-    onboarding.status !== 'completed' &&
-    onboarding.status !== 'dismissed'
-  );
+        return (
+          onboarding.enforce_on_sign_in === true &&
+          onboarding.status !== 'completed' &&
+          onboarding.status !== 'dismissed'
+        );
+      })(),
+      ONBOARDING_CHECK_MAX_MS,
+      'login onboarding check',
+    );
+  } catch {
+    return false;
+  }
 }
 
 export async function signInAction(formData: FormData) {
@@ -189,8 +243,29 @@ export async function signInAction(formData: FormData) {
   }
 
   const supabase = await createClient();
-  const { data: signInData, error: signInError } =
-    await signInWithTransientRetry(supabase, email, password);
+
+  let signInData;
+  let signInError: AuthErrorLike;
+
+  try {
+    const result = await signInWithTransientRetry(supabase, email, password);
+    signInData = result.data;
+    signInError = result.error;
+  } catch (error) {
+    console.warn('Login auth dependency unavailable', {
+      reason:
+        error instanceof AuthDependencyTimeout
+          ? error.dependency
+          : 'supabase.auth.signInWithPassword',
+    });
+    redirect(
+      loginAuthUrl(
+        'error',
+        'Sign-in service is temporarily unavailable. Your password was not rejected. Please try again shortly.',
+        next,
+      ),
+    );
+  }
 
   if (signInError || !signInData.user) {
     if (isTransientAuthError(signInError)) {
@@ -209,7 +284,6 @@ export async function signInAction(formData: FormData) {
   const tenant = await bindCurrentUserOrganization(supabase);
 
   if (!tenant.ok) {
-    await supabase.auth.signOut();
     const cookieStore = await cookies();
     cookieStore.delete(ACTIVE_WORKSPACE_COOKIE);
     redirect(loginAuthUrl('error', tenantBindingMessage(tenant), next));
@@ -249,7 +323,6 @@ export async function requestPasswordResetAction(formData: FormData) {
   const supabase = await createClient();
   await supabase.auth.resetPasswordForEmail(email);
 
-  // Deliberately return the same response whether or not the account exists.
   redirect(
     authUrl(
       forgotPath,
