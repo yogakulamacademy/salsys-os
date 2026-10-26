@@ -12,6 +12,7 @@ const allowedStages: LeadStage[] = [
   "qualified",
   "high_intent",
   "payment_pending",
+  "closed_won",
   "enrolled",
   "nurture",
   "not_now",
