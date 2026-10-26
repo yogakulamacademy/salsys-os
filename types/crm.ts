@@ -5,6 +5,7 @@ export type LeadStage =
   | 'qualified'
   | 'high_intent'
   | 'payment_pending'
+  | 'closed_won'
   | 'enrolled'
   | 'nurture'
   | 'not_now'
