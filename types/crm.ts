@@ -12,6 +12,8 @@ export type LeadStage =
   | 'unqualified'
   | 'duplicate';
 
+export type PipelineStage = LeadStage | 'closed_won';
+
 export type IntentLevel = 'unknown' | 'low' | 'medium' | 'high' | 'very_high';
 export type Channel = 'website' | 'instagram' | 'whatsapp' | 'email' | 'phone' | 'meta_lead_form' | 'other';
 

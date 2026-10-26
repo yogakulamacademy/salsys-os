@@ -16,18 +16,19 @@ import { useRouter } from "next/navigation";
 import { movePipelineLeadStage } from "@/app/pipeline/actions";
 import { LeadInspectorButton } from "@/components/crm/lead-inspector";
 import type { PipelineSnapshotBoardLead } from "@/lib/pipeline-data";
-import type { LeadStage } from "@/types/crm";
+import type { PipelineStage } from "@/types/crm";
 
-const columns: Array<{ stage: LeadStage; label: string }> = [
+const columns: Array<{ stage: PipelineStage; label: string }> = [
   { stage: "new", label: "New" },
   { stage: "contacted", label: "Contacted" },
   { stage: "engaged", label: "Engaged" },
   { stage: "qualified", label: "Qualified" },
   { stage: "high_intent", label: "High intent" },
   { stage: "payment_pending", label: "Payment pending" },
+  { stage: "closed_won", label: "Deal closed" },
 ];
 
-const activeStageSet = new Set<LeadStage>(columns.map((column) => column.stage));
+const activeStageSet = new Set<PipelineStage>(columns.map((column) => column.stage));
 
 type AgingFilter = "all" | "healthy" | "warning" | "stuck" | "untracked";
 type Toast = { type: "success" | "error"; message: string };
@@ -43,7 +44,7 @@ export function PipelineBoardStudio({
   const [channel, setChannel] = useState("all");
   const [aging, setAging] = useState<AgingFilter>("all");
   const [draggingId, setDraggingId] = useState<string | null>(null);
-  const [overStage, setOverStage] = useState<LeadStage | null>(null);
+  const [overStage, setOverStage] = useState<PipelineStage | null>(null);
   const [savingLeadId, setSavingLeadId] = useState<string | null>(null);
   const [toast, setToast] = useState<Toast | null>(null);
   const [, startTransition] = useTransition();
@@ -91,14 +92,14 @@ export function PipelineBoardStudio({
     toastTimer.current = setTimeout(() => setToast(null), 3400);
   }
 
-  function moveLead(leadId: string, newStage: LeadStage) {
+  function moveLead(leadId: string, newStage: PipelineStage) {
     if (!activeStageSet.has(newStage)) {
       showToast({ type: "error", message: "That stage is not available on this board." });
       return;
     }
 
     const lead = items.find((item) => item.id === leadId);
-    if (!lead || lead.stage === newStage || savingLeadId === leadId) return;
+    if (!lead || String(lead.stage) === newStage || savingLeadId === leadId) return;
 
     const previous = { ...lead };
     const enteredAt = new Date().toISOString();
@@ -108,7 +109,7 @@ export function PipelineBoardStudio({
         item.id === leadId
           ? {
               ...item,
-              stage: newStage,
+              stage: newStage as PipelineSnapshotBoardLead["stage"],
               agingStatus: "healthy",
               stageEnteredAt: enteredAt,
               stageAgeHours: 0,
@@ -142,7 +143,7 @@ export function PipelineBoardStudio({
     });
   }
 
-  function handleDrop(event: React.DragEvent<HTMLDivElement>, stage: LeadStage) {
+  function handleDrop(event: React.DragEvent<HTMLDivElement>, stage: PipelineStage) {
     event.preventDefault();
     const leadId = event.dataTransfer.getData("text/plain") || draggingId;
     setDraggingId(null);
@@ -213,9 +214,9 @@ export function PipelineBoardStudio({
       </div>
 
       <div className="mt-3 overflow-x-auto pb-4">
-        <div className="grid min-w-[1420px] grid-cols-6 gap-3">
+        <div className="grid min-w-[1660px] grid-cols-7 gap-3">
           {columns.map(({ stage, label }) => {
-            const stageItems = filtered.filter((lead) => lead.stage === stage);
+            const stageItems = filtered.filter((lead) => String(lead.stage) === stage);
             const stageWarning = stageItems.filter((lead) => lead.agingStatus === "warning").length;
             const stageStuck = stageItems.filter((lead) => lead.agingStatus === "stuck").length;
             const isOver = overStage === stage && Boolean(draggingId);
@@ -237,12 +238,17 @@ export function PipelineBoardStudio({
                 className={`min-h-[455px] rounded-xl border p-3 transition ${
                   isOver
                     ? "border-[#8FB29A] bg-[#ECF5EE] shadow-[inset_0_0_0_1px_rgba(33,101,81,.08)]"
-                    : "border-[#E0E9E0] bg-[#F1F5F1]"
+                    : stage === "closed_won"
+                      ? "border-emerald-200 bg-emerald-50/70"
+                      : "border-[#E0E9E0] bg-[#F1F5F1]"
                 }`}
               >
                 <div className="mb-3 flex items-start justify-between gap-2">
                   <div>
                     <div className="text-[12px] font-semibold text-[#2C443B]">{label}</div>
+                    {stage === "closed_won" ? (
+                      <div className="mt-0.5 text-[9px] font-medium text-emerald-700">Auto-archives after 24h</div>
+                    ) : null}
                     <div className="mt-1 flex flex-wrap gap-1">
                       {stageWarning > 0 ? <AgingCount tone="warning">{stageWarning} warning</AgingCount> : null}
                       {stageStuck > 0 ? <AgingCount tone="stuck">{stageStuck} stuck</AgingCount> : null}
@@ -318,7 +324,7 @@ function PipelineLeadCard({
   dragging: boolean;
   onDragStart: (event: React.DragEvent<HTMLDivElement>) => void;
   onDragEnd: () => void;
-  onStageChange: (stage: LeadStage) => void;
+  onStageChange: (stage: PipelineStage) => void;
 }) {
   return (
     <div
@@ -357,9 +363,9 @@ function PipelineLeadCard({
         <label className="block">
           <span className="mb-1 block text-[8px] font-bold uppercase tracking-[0.09em] text-[#98A39C]">Move stage</span>
           <select
-            value={lead.stage}
+            value={String(lead.stage)}
             disabled={saving}
-            onChange={(event) => onStageChange(event.target.value as LeadStage)}
+            onChange={(event) => onStageChange(event.target.value as PipelineStage)}
             className="h-8 w-full rounded-md border border-[#E0E8E2] bg-[#FAFBFA] px-2 text-[10px] font-semibold text-[#53685D] outline-none transition focus:border-[#82A98F] focus:ring-2 focus:ring-[#216551]/10 disabled:cursor-wait disabled:opacity-60"
             aria-label={`Move ${lead.name} to another pipeline stage`}
           >
