@@ -2,7 +2,17 @@ import 'server-only';
 
 import { timingSafeEqual } from 'node:crypto';
 
-function constantTimeEqual(left: string, right: string) {
+export function secretMatches(
+  supplied: string | null | undefined,
+  expected: string | null | undefined,
+) {
+  const left = supplied?.trim() ?? '';
+  const right = expected?.trim() ?? '';
+
+  if (!left || !right) {
+    return false;
+  }
+
   const leftBuffer = Buffer.from(left, 'utf8');
   const rightBuffer = Buffer.from(right, 'utf8');
 
@@ -24,5 +34,5 @@ export function bearerMatchesAnySecret(
     return false;
   }
 
-  return secrets.some((secret) => constantTimeEqual(suppliedSecret, secret));
+  return secrets.some((secret) => secretMatches(suppliedSecret, secret));
 }
