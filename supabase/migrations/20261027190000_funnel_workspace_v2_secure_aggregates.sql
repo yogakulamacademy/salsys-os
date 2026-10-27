@@ -1,0 +1,2 @@
+-- Funnel V2 secure aggregate read model.
+-- Raw tracking RLS remains unchanged; this migration introduces an aggregate-only RPC.
