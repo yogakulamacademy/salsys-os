@@ -1,8 +1,11 @@
 "use client";
 
-import { FileText, MessageSquareText, RefreshCw, Save } from "lucide-react";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { FileText, MessageSquareText, RefreshCw, Save, Send } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { useCallback, useEffect, useRef, useState, useTransition } from "react";
 
+import { markCopilotAssistedMessageAction } from "@/app/conversations/copilot-audit-actions";
+import { sendInstagramMessageAction } from "@/app/conversations/instagram-actions";
 import type { Channel } from "@/types/crm";
 
 type ServerAction =
@@ -15,6 +18,11 @@ type DraftState = "idle" | "unsaved" | "saved" | "memory-only";
 type NoteResponse =
   | { ok: true; data?: unknown }
   | { ok: false; error: string };
+
+type CopilotDraftEvent = CustomEvent<{
+  channel?: string;
+  body?: string;
+}>;
 
 const CHANNELS: Array<[Channel, string]> = [
   ["instagram", "Instagram"],
@@ -35,20 +43,29 @@ export function ConversationSafeComposer({
   channel: Channel;
   interactionAction?: ServerAction;
 }) {
+  const router = useRouter();
   const [mode, setMode] = useState<ComposeMode>("reply");
   const [replyDraft, setReplyDraft] = useState("");
   const [draftState, setDraftState] = useState<DraftState>("idle");
+  const [copilotAssisted, setCopilotAssisted] = useState(false);
+  const [sendError, setSendError] = useState<string | null>(null);
   const [note, setNote] = useState("");
   const [noteSaving, setNoteSaving] = useState(false);
   const [noteError, setNoteError] = useState<string | null>(null);
   const [noteSuccess, setNoteSuccess] = useState<string | null>(null);
+  const [isPending, startTransition] = useTransition();
   const saveTimer = useRef<number | null>(null);
+  const replyTextareaRef = useRef<HTMLTextAreaElement | null>(null);
   const draftKey = `salsysos:conversation-draft:v1:${leadId}:${channel}`;
+  const isInstagram = channel === "instagram";
+  const replyLimit = isInstagram ? 1000 : 5000;
 
   useEffect(() => {
     if (saveTimer.current) window.clearTimeout(saveTimer.current);
     setReplyDraft("");
     setDraftState("idle");
+    setCopilotAssisted(false);
+    setSendError(null);
     setNote("");
     setNoteError(null);
     setNoteSuccess(null);
@@ -56,7 +73,7 @@ export function ConversationSafeComposer({
     try {
       const saved = window.localStorage.getItem(draftKey);
       if (saved) {
-        setReplyDraft(saved.slice(0, 5000));
+        setReplyDraft(saved.slice(0, replyLimit));
         setDraftState("saved");
       }
     } catch {
@@ -66,7 +83,7 @@ export function ConversationSafeComposer({
     return () => {
       if (saveTimer.current) window.clearTimeout(saveTimer.current);
     };
-  }, [draftKey]);
+  }, [draftKey, replyLimit]);
 
   const persistDraft = useCallback(
     (value: string) => {
@@ -83,13 +100,34 @@ export function ConversationSafeComposer({
     [draftKey],
   );
 
-  const updateReplyDraft = (value: string) => {
-    const next = value.slice(0, 5000);
-    setReplyDraft(next);
-    setDraftState("unsaved");
-    if (saveTimer.current) window.clearTimeout(saveTimer.current);
-    saveTimer.current = window.setTimeout(() => persistDraft(next), 500);
-  };
+  const updateReplyDraft = useCallback(
+    (value: string) => {
+      const next = value.slice(0, replyLimit);
+      setReplyDraft(next);
+      setDraftState("unsaved");
+      setSendError(null);
+      if (saveTimer.current) window.clearTimeout(saveTimer.current);
+      saveTimer.current = window.setTimeout(() => persistDraft(next), 500);
+    },
+    [persistDraft, replyLimit],
+  );
+
+  useEffect(() => {
+    if (!isInstagram) return;
+
+    const applyCopilotDraft = (event: Event) => {
+      const detail = (event as CopilotDraftEvent).detail;
+      if (detail?.channel !== "instagram" || !detail.body?.trim()) return;
+
+      setMode("reply");
+      updateReplyDraft(detail.body);
+      setCopilotAssisted(true);
+      requestAnimationFrame(() => replyTextareaRef.current?.focus());
+    };
+
+    window.addEventListener("crm:copilot-draft", applyCopilotDraft);
+    return () => window.removeEventListener("crm:copilot-draft", applyCopilotDraft);
+  }, [isInstagram, updateReplyDraft]);
 
   async function saveInternalNote() {
     const value = note.trim();
@@ -124,6 +162,52 @@ export function ConversationSafeComposer({
     }
   }
 
+  function sendInstagramReply() {
+    const text = replyDraft.trim();
+    if (!isInstagram || !text || isPending) return;
+
+    const wasCopilotAssisted = copilotAssisted;
+    setSendError(null);
+
+    const formData = new FormData();
+    formData.set("body", text);
+    if (wasCopilotAssisted) formData.set("ai_generated", "true");
+
+    startTransition(async () => {
+      try {
+        const result = await sendInstagramMessageAction(leadId, formData);
+        if (!result?.ok) {
+          setSendError("Instagram reply was not sent. Your draft has been kept.");
+          persistDraft(text);
+          return;
+        }
+
+        if (wasCopilotAssisted && result.message.id) {
+          await markCopilotAssistedMessageAction({
+            leadId,
+            messageId: result.message.id,
+            channel: "instagram",
+          });
+        }
+
+        setReplyDraft("");
+        setCopilotAssisted(false);
+        setDraftState("idle");
+        persistDraft("");
+        window.dispatchEvent(
+          new CustomEvent("crm:instagram-sent", {
+            detail: result.message,
+          }),
+        );
+        router.refresh();
+      } catch (reason) {
+        console.error("Instagram send failed:", reason);
+        setSendError("Instagram reply could not be sent. Your draft has been kept.");
+        persistDraft(text);
+      }
+    });
+  }
+
   function handleModeKeyDown(event: React.KeyboardEvent<HTMLDivElement>) {
     if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
 
@@ -154,7 +238,7 @@ export function ConversationSafeComposer({
           onKeyDown={handleModeKeyDown}
         >
           <ModeTab active={mode === "reply"} onClick={() => setMode("reply")} icon={<MessageSquareText size={11} />}>
-            Reply draft
+            {isInstagram ? "Reply" : "Reply draft"}
           </ModeTab>
           <ModeTab active={mode === "note"} onClick={() => setMode("note")} icon={<FileText size={11} />}>
             Internal note
@@ -165,43 +249,76 @@ export function ConversationSafeComposer({
           <div role="tabpanel" className="p-3">
             <div className="mb-2 flex items-start justify-between gap-3">
               <div>
-                <div className="text-[10px] font-semibold text-[#18362D]">Prepare a response</div>
+                <div className="text-[10px] font-semibold text-[#18362D]">
+                  {isInstagram ? "Reply on Instagram" : "Prepare a response"}
+                </div>
                 <p className="mt-0.5 text-[9px] leading-4 text-[#596E64]">
-                  Draft only. Saving here never sends a message or changes the lead stage.
+                  {isInstagram
+                    ? "Salsys checks the customer-initiated Instagram reply window before the provider call. Nothing is sent until you click Send."
+                    : "Draft only. Saving here never sends a message or changes the lead stage."}
                 </p>
               </div>
               <span className="rounded border border-[#DCE4DF] bg-[#F6F8F7] px-2 py-1 text-[8px] font-semibold capitalize text-[#596E64]">
                 {channel.replaceAll("_", " ")}
               </span>
             </div>
-            <label className="sr-only" htmlFor={`reply-draft-${leadId}`}>Write a reply draft</label>
+            <label className="sr-only" htmlFor={`reply-draft-${leadId}`}>
+              {isInstagram ? "Write an Instagram reply" : "Write a reply draft"}
+            </label>
             <textarea
+              ref={replyTextareaRef}
               id={`reply-draft-${leadId}`}
               value={replyDraft}
               onChange={(event) => updateReplyDraft(event.target.value)}
               onKeyDown={(event) => {
                 if ((event.ctrlKey || event.metaKey) && event.key === "Enter") {
                   event.preventDefault();
-                  persistDraft(replyDraft);
+                  if (isInstagram) sendInstagramReply();
+                  else persistDraft(replyDraft);
                 }
               }}
               rows={3}
-              maxLength={5000}
-              placeholder="Prepare a reply… it stays here until you choose an eligible sending channel."
-              className="min-h-[76px] w-full resize-y rounded-lg border border-[#DCE4DF] bg-white px-3 py-2 text-[11px] leading-5 text-[#18362D] outline-none placeholder:text-[#71847A] focus:border-[#216551] focus:ring-2 focus:ring-[#216551]/10"
+              maxLength={replyLimit}
+              disabled={isInstagram && isPending}
+              placeholder={
+                isInstagram
+                  ? "Reply to this Instagram conversation…"
+                  : "Prepare a reply… it stays here until you choose an eligible sending channel."
+              }
+              className="min-h-[76px] w-full resize-y rounded-lg border border-[#DCE4DF] bg-white px-3 py-2 text-[11px] leading-5 text-[#18362D] outline-none placeholder:text-[#71847A] focus:border-[#216551] focus:ring-2 focus:ring-[#216551]/10 disabled:bg-[#F6F8F7] disabled:text-[#71847A]"
             />
+
+            {sendError ? (
+              <div className="mt-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-[9px] leading-4 text-red-700">
+                {sendError}
+              </div>
+            ) : null}
+
             <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
               <div className="text-[9px] text-[#71847A]">
-                {draftStatus(draftState)} · {replyDraft.length}/5000 · Ctrl/⌘ + Enter saves
+                {draftStatus(draftState)} · {replyDraft.length}/{replyLimit} · Ctrl/⌘ + Enter {isInstagram ? "sends" : "saves"}
+                {copilotAssisted && isInstagram ? " · AI-assisted draft reviewed by human" : ""}
               </div>
-              <button
-                type="button"
-                onClick={() => persistDraft(replyDraft)}
-                disabled={!replyDraft.trim()}
-                className="inline-flex h-8 items-center justify-center gap-1.5 rounded-lg border border-[#DCE4DF] bg-white px-3 text-[9px] font-semibold text-[#596E64] transition hover:bg-[#EDF3E6] hover:text-[#216551] disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                <Save size={11} /> Save draft
-              </button>
+              {isInstagram ? (
+                <button
+                  type="button"
+                  onClick={sendInstagramReply}
+                  disabled={!replyDraft.trim() || isPending}
+                  className="inline-flex h-8 items-center justify-center gap-1.5 rounded-lg bg-[#153E33] px-3 text-[9px] font-semibold text-white transition hover:bg-[#216551] disabled:cursor-not-allowed disabled:bg-[#EDF0EC] disabled:text-[#59685F]"
+                >
+                  {isPending ? <RefreshCw size={10} className="animate-spin" /> : <Send size={11} />}
+                  {isPending ? "Sending…" : "Send"}
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => persistDraft(replyDraft)}
+                  disabled={!replyDraft.trim()}
+                  className="inline-flex h-8 items-center justify-center gap-1.5 rounded-lg border border-[#DCE4DF] bg-white px-3 text-[9px] font-semibold text-[#596E64] transition hover:bg-[#EDF3E6] hover:text-[#216551] disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  <Save size={11} /> Save draft
+                </button>
+              )}
             </div>
           </div>
         ) : (
@@ -251,7 +368,7 @@ export function ConversationSafeComposer({
         )}
       </div>
 
-      {interactionAction ? (
+      {interactionAction && !isInstagram ? (
         <details className="mt-2 rounded-lg border border-[#E6ECE8] bg-[#F9FBF9] px-3 py-2">
           <summary className="cursor-pointer text-[9px] font-semibold text-[#596E64]">Record a completed contact</summary>
           <form action={interactionAction} className="mt-2 grid gap-2 border-t border-[#E6ECE8] pt-2 sm:grid-cols-[105px_120px_minmax(0,1fr)_auto]">
