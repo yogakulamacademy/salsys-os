@@ -1,6 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 
 import { syncYogakulamCourseCatalog } from "@/lib/integrations/yogakulam-courses";
+import {
+  bearerMatchesAnySecret,
+  secretMatches,
+} from "@/lib/security/machine-bearer-auth";
 
 export const runtime = "nodejs";
 
@@ -13,18 +17,6 @@ export const dynamic = "force-dynamic";
  */
 export const maxDuration = 300;
 
-function bearerToken(request: NextRequest) {
-  const authorization = request.headers.get("authorization");
-
-  if (!authorization) {
-    return null;
-  }
-
-  const match = authorization.match(/^Bearer\s+(.+)$/i);
-
-  return match?.[1]?.trim() || null;
-}
-
 function manualAuthorized(request: NextRequest) {
   const expected = process.env.COURSE_CATALOG_SYNC_SECRET?.trim();
 
@@ -32,21 +24,21 @@ function manualAuthorized(request: NextRequest) {
     return false;
   }
 
-  const custom = request.headers.get("x-course-catalog-sync-secret")?.trim();
+  const custom = request.headers.get("x-course-catalog-sync-secret");
 
-  const bearer = bearerToken(request);
-
-  return custom === expected || bearer === expected;
+  return (
+    secretMatches(custom, expected) ||
+    bearerMatchesAnySecret(request.headers.get("authorization"), [expected])
+  );
 }
 
 function cronAuthorized(request: NextRequest) {
-  const bearer = bearerToken(request);
+  const secrets = [
+    process.env.CRON_SECRET?.trim(),
+    process.env.COURSE_CATALOG_SYNC_SECRET?.trim(),
+  ].filter((secret): secret is string => Boolean(secret));
 
-  const cronSecret = process.env.CRON_SECRET?.trim();
-
-  const syncSecret = process.env.COURSE_CATALOG_SYNC_SECRET?.trim();
-
-  return Boolean(bearer && (bearer === cronSecret || bearer === syncSecret));
+  return bearerMatchesAnySecret(request.headers.get("authorization"), secrets);
 }
 
 export async function POST(request: NextRequest) {
@@ -69,17 +61,12 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json(result);
   } catch (error) {
-    const message =
-      error instanceof Error
-        ? error.message
-        : "Unknown course catalog sync error";
-
     console.error("Course catalog manual sync failed:", error);
 
     return NextResponse.json(
       {
         ok: false,
-        error: message,
+        error: "Course catalog sync failed.",
       },
       {
         status: 500,
@@ -108,17 +95,12 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json(result);
   } catch (error) {
-    const message =
-      error instanceof Error
-        ? error.message
-        : "Unknown course catalog sync error";
-
     console.error("Course catalog cron sync failed:", error);
 
     return NextResponse.json(
       {
         ok: false,
-        error: message,
+        error: "Course catalog sync failed.",
       },
       {
         status: 500,
