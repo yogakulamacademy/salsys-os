@@ -7,12 +7,10 @@ on:
     paths:
       - 'scripts/verify-production-smoke.mjs'
       - '.github/workflows/production-smoke.yml'
+      - 'app/api/tracking/identify/route.ts'
   push:
     branches:
       - main
-    paths:
-      - 'scripts/verify-production-smoke.mjs'
-      - '.github/workflows/production-smoke.yml'
   schedule:
     - cron: '17 */6 * * *'
   workflow_dispatch:
@@ -26,9 +24,9 @@ concurrency:
 
 jobs:
   smoke:
-    name: Production auth smoke
+    name: Production auth + release provenance smoke
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 12
 
     steps:
       - name: Checkout
@@ -39,9 +37,12 @@ jobs:
         with:
           node-version: 22
 
-      - name: Verify production auth surfaces
+      - name: Verify production release and auth surfaces
         env:
           SALSYSOS_SMOKE_BASE_URL: https://crm.salsysos.com
           SALSYSOS_SMOKE_TIMEOUT_MS: '12000'
           SALSYSOS_SMOKE_ATTEMPTS: '3'
+          SALSYSOS_EXPECTED_COMMIT_SHA: ${{ github.event_name == 'push' && github.sha || '' }}
+          SALSYSOS_SMOKE_DEPLOY_ATTEMPTS: '48'
+          SALSYSOS_SMOKE_DEPLOY_INTERVAL_MS: '10000'
         run: node scripts/verify-production-smoke.mjs
