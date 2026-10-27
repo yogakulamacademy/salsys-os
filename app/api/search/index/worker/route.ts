@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 
+import { bearerMatchesAnySecret } from '@/lib/security/machine-bearer-auth';
 import { runSearchIndexWorker } from '@/lib/search/opensearch';
 
 export const runtime = 'nodejs';
@@ -19,7 +20,7 @@ function isAuthorized(request: NextRequest) {
     throw new Error('SEARCH_INDEX_WORKER_SECRET or CRON_SECRET is not configured.');
   }
 
-  return secrets.some((secret) => authorization === `Bearer ${secret}`);
+  return bearerMatchesAnySecret(authorization, secrets);
 }
 
 function safeError(error: unknown) {
