@@ -108,7 +108,6 @@ export async function GET(request: NextRequest) {
       customerMessageSendGates: 'fail_closed',
     });
   } catch (error) {
-    const message = error instanceof Error ? error.message : 'Unknown controlled scheduler test error';
     console.error('Controlled automation scheduler proof failed:', error);
     return NextResponse.json(
       {
@@ -116,7 +115,7 @@ export async function GET(request: NextRequest) {
         controlledTest: true,
         startedAt,
         finishedAt: new Date().toISOString(),
-        error: message,
+        error: 'Controlled scheduler test failed.',
       },
       { status: 500 },
     );
