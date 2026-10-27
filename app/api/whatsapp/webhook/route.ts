@@ -4,202 +4,161 @@ import { NextRequest, NextResponse } from 'next/server';
 
 import { createAdminClient } from '@/lib/supabase/admin';
 
-
-
 export const runtime = 'nodejs';
-
 export const dynamic = 'force-dynamic';
 
-
+const MAX_META_WEBHOOK_BYTES = 4 * 1024 * 1024;
 
 type JsonObject = Record<string, unknown>;
 
-
+class WebhookRequestError extends Error {
+  constructor(
+    message: string,
+    readonly status: number,
+  ) {
+    super(message);
+  }
+}
 
 function requireEnv(name: string) {
-
   const value = process.env[name]?.trim();
-
-
-
   if (!value) {
-
     throw new Error(`${name} is not configured.`);
-
   }
-
-
-
   return value;
-
 }
 
+function declaredContentLength(request: NextRequest) {
+  const header = request.headers.get('content-length');
+  if (!header) return null;
+  const value = Number(header);
+  return Number.isFinite(value) && value >= 0 ? value : null;
+}
 
-
-export async function GET(request: NextRequest) {
-
-  const mode = request.nextUrl.searchParams.get('hub.mode');
-
-  const token = request.nextUrl.searchParams.get('hub.verify_token');
-
-  const challenge = request.nextUrl.searchParams.get('hub.challenge');
-
-  const verifyToken = process.env.WA_VERIFY_TOKEN?.trim();
-
-
-
-  if (
-
-    mode === 'subscribe' &&
-
-    verifyToken &&
-
-    token === verifyToken &&
-
-    challenge
-
-  ) {
-
-    return new NextResponse(challenge, {
-
-      status: 200,
-
-      headers: {
-
-        'Content-Type': 'text/plain; charset=utf-8',
-
-      },
-
-    });
-
+async function readBoundedRawBody(request: NextRequest, maxBytes: number) {
+  const declared = declaredContentLength(request);
+  if (declared !== null && declared > maxBytes) {
+    throw new WebhookRequestError('Webhook payload too large', 413);
+  }
+  if (!request.body) {
+    throw new WebhookRequestError('Invalid webhook payload', 400);
   }
 
-
-
-  return NextResponse.json(
-
-    {
-
-      ok: false,
-
-      error: 'Webhook verification failed',
-
-    },
-
-    { status: 403 }
-
-  );
-
-}
-
-
-
-export async function POST(request: NextRequest) {
+  const reader = request.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let totalBytes = 0;
 
   try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      if (!value) continue;
+      totalBytes += value.byteLength;
+      if (totalBytes > maxBytes) {
+        await reader.cancel();
+        throw new WebhookRequestError('Webhook payload too large', 413);
+      }
+      chunks.push(value);
+    }
+  } finally {
+    reader.releaseLock();
+  }
 
+  return Buffer.concat(chunks.map((chunk) => Buffer.from(chunk)), totalBytes);
+}
+
+export async function GET(request: NextRequest) {
+  const mode = request.nextUrl.searchParams.get('hub.mode');
+  const token = request.nextUrl.searchParams.get('hub.verify_token');
+  const challenge = request.nextUrl.searchParams.get('hub.challenge');
+  const verifyToken = process.env.WA_VERIFY_TOKEN?.trim();
+
+  if (
+    mode === 'subscribe' &&
+    verifyToken &&
+    token === verifyToken &&
+    challenge
+  ) {
+    return new NextResponse(challenge, {
+      status: 200,
+      headers: {
+        'Content-Type': 'text/plain; charset=utf-8',
+      },
+    });
+  }
+
+  return NextResponse.json(
+    {
+      ok: false,
+      error: 'Webhook verification failed',
+    },
+    { status: 403 },
+  );
+}
+
+export async function POST(request: NextRequest) {
+  try {
     // Meta signs the exact raw request bytes, so validate before parsing JSON.
-
-    const rawBytes = Buffer.from(await request.arrayBuffer());
-
+    const rawBytes = await readBoundedRawBody(request, MAX_META_WEBHOOK_BYTES);
     const rawBody = rawBytes.toString('utf8');
 
-
-
     const signatureHeader = request.headers.get('x-hub-signature-256');
-
     const appSecret = requireEnv('WA_APP_SECRET');
 
-
-
     if (!signatureHeader) {
-
       return NextResponse.json(
-
         {
-
           ok: false,
-
           error: 'Missing webhook signature',
-
         },
-
-        { status: 401 }
-
+        { status: 401 },
       );
-
     }
-
-
 
     const signatureValid = verifyMetaSignature(
-
       rawBytes,
-
       signatureHeader,
-
-      appSecret
-
+      appSecret,
     );
 
-
-
     if (!signatureValid) {
-
       return NextResponse.json(
-
         {
-
           ok: false,
-
           error: 'Invalid webhook signature',
-
         },
-
-        { status: 401 }
-
+        { status: 401 },
       );
-
     }
 
-
-
-    const payload = JSON.parse(rawBody) as JsonObject;
+    let payload: JsonObject;
+    try {
+      payload = JSON.parse(rawBody) as JsonObject;
+    } catch {
+      return NextResponse.json(
+        { ok: false, error: 'Invalid JSON payload' },
+        { status: 400 },
+      );
+    }
 
     const events = extractWebhookEvents(payload);
-
     const supabase = createAdminClient();
 
-
-
     let inserted = 0;
-
     let duplicates = 0;
-
     let processed = 0;
-
     let alreadyProcessed = 0;
-
     let ignored = 0;
 
-
-
     for (const event of events) {
-
-            const eventKey = stringValue(event.event_key);
-
+      const eventKey = stringValue(event.event_key);
       if (!eventKey) {
         throw new Error('Webhook event_key could not be generated.');
       }
 
-      const phoneNumberId = stringValue(
-        event.phone_number_id
-      );
-
+      const phoneNumberId = stringValue(event.phone_number_id);
       if (!phoneNumberId) {
-        throw new Error(
-          'Webhook phone_number_id is missing.'
-        );
+        throw new Error('Webhook phone_number_id is missing.');
       }
 
       const {
@@ -208,128 +167,66 @@ export async function POST(request: NextRequest) {
       } = await supabase
         .from('whatsapp_accounts')
         .select('organization_id')
-        .eq(
-          'phone_number_id',
-          phoneNumberId
-        )
-        .eq(
-          'active',
-          true
-        )
+        .eq('phone_number_id', phoneNumberId)
+        .eq('active', true)
         .maybeSingle();
 
       if (whatsappAccountError) {
         throw whatsappAccountError;
       }
 
-      const organizationId = stringValue(
-        whatsappAccount?.organization_id
-      );
-
+      const organizationId = stringValue(whatsappAccount?.organization_id);
       if (!organizationId) {
         throw new Error(
-          `No active organization mapping found for WhatsApp phone_number_id ${phoneNumberId}.`
+          `No active organization mapping found for WhatsApp phone_number_id ${phoneNumberId}.`,
         );
       }
 
-      event.organization_id =
-        organizationId;
-
+      event.organization_id = organizationId;
       let eventId: string | null = null;
 
-
-
       const {
-
         data: insertedEvent,
-
         error: insertError,
-
       } = await supabase
-
         .from('whatsapp_webhook_events')
-
         .insert(event)
-
         .select('id')
-
         .single();
 
-
-
       if (insertError) {
-
         if (insertError.code !== '23505') {
-
           throw insertError;
-
         }
-
-
 
         duplicates += 1;
 
-
-
         // Meta retries webhooks. On a duplicate, recover the existing raw
-
         // event and run the processor again. Processed events are idempotent;
-
         // failed/received events can safely retry.
-
         const {
-
           data: existingEvent,
-
           error: existingError,
-
         } = await supabase
-
-                    .from('whatsapp_webhook_events')
+          .from('whatsapp_webhook_events')
           .select('id')
-          .eq(
-            'organization_id',
-            organizationId
-          )
-          .eq(
-            'event_key',
-            eventKey
-          )
+          .eq('organization_id', organizationId)
+          .eq('event_key', eventKey)
           .maybeSingle();
 
-
-
         if (existingError) {
-
           throw existingError;
-
         }
 
-
-
         eventId = stringValue(existingEvent?.id);
-
       } else {
-
         inserted += 1;
-
         eventId = stringValue(insertedEvent?.id);
-
       }
-
-
 
       if (!eventId) {
-
-        throw new Error(
-
-          `Unable to resolve stored webhook event for ${eventKey}.`
-
-        );
-
+        throw new Error(`Unable to resolve stored webhook event for ${eventKey}.`);
       }
-
-
 
       /*
        * Phase 2D canonical raw-event dual write.
@@ -340,131 +237,61 @@ export async function POST(request: NextRequest) {
        * The canonical write is intentionally non-blocking so it cannot interrupt
        * the existing WhatsApp webhook / CRM processing path.
        */
-      const sourceEventType =
-        stringValue(event.event_type) || 'unknown';
+      const sourceEventType = stringValue(event.event_type) || 'unknown';
+      const externalMessageId = stringValue(event.external_message_id);
+      const contactWaId = stringValue(event.contact_wa_id);
 
-      const externalMessageId =
-        stringValue(event.external_message_id);
-
-      const contactWaId =
-        stringValue(event.contact_wa_id);
-
-      const {
-        error: rawEventError,
-      } = await supabase.rpc(
+      const { error: rawEventError } = await supabase.rpc(
         'ingest_raw_event',
         {
-          p_organization_id:
-            organizationId,
-
-          p_source_system:
-            'whatsapp',
-
-          p_source_event_id:
-            eventKey,
-
-          p_source_event_type:
-            sourceEventType,
-
-          p_ingestion_method:
-            'whatsapp_webhook',
-
+          p_organization_id: organizationId,
+          p_source_system: 'whatsapp',
+          p_source_event_id: eventKey,
+          p_source_event_type: sourceEventType,
+          p_ingestion_method: 'whatsapp_webhook',
           /*
            * Meta timestamps remain preserved in the provider payload.
            * received_at in raw_events records ingestion time.
            */
-          p_occurred_at:
-            null,
-
-          p_source_account_id:
-            phoneNumberId,
-
-          p_source_subject_id:
-            contactWaId,
-
-          p_anonymous_visitor_id:
-            null,
-
-          p_session_key:
-            null,
-
-          p_external_message_id:
-            externalMessageId,
-
-          p_site:
-            null,
-
-          p_payload:
-            objectValue(event.payload),
-
+          p_occurred_at: null,
+          p_source_account_id: phoneNumberId,
+          p_source_subject_id: contactWaId,
+          p_anonymous_visitor_id: null,
+          p_session_key: null,
+          p_external_message_id: externalMessageId,
+          p_site: null,
+          p_payload: objectValue(event.payload),
           p_context: {
-            object_type:
-              stringValue(event.object_type),
-
-            entry_id:
-              stringValue(event.entry_id),
-
-            field_name:
-              stringValue(event.field_name),
-
-            phone_number_id:
-              phoneNumberId,
-
-            display_phone_number:
-              stringValue(
-                event.display_phone_number
-              ),
-
-            contact_wa_id:
-              contactWaId,
-
-            signature_valid:
-              event.signature_valid === true,
+            object_type: stringValue(event.object_type),
+            entry_id: stringValue(event.entry_id),
+            field_name: stringValue(event.field_name),
+            phone_number_id: phoneNumberId,
+            display_phone_number: stringValue(event.display_phone_number),
+            contact_wa_id: contactWaId,
+            signature_valid: event.signature_valid === true,
           },
-
           p_metadata: {
-            adapter:
-              'app/api/whatsapp/webhook',
-
-            legacy_webhook_event_id:
-              eventId,
+            adapter: 'app/api/whatsapp/webhook',
+            legacy_webhook_event_id: eventId,
           },
-
-          p_schema_version:
-            1,
-        }
+          p_schema_version: 1,
+        },
       );
 
       if (rawEventError) {
-        console.error(
-          'Canonical WhatsApp raw event ingest failed',
-          {
-            organizationId,
-            eventKey,
-            eventType:
-              sourceEventType,
-            message:
-              rawEventError.message,
-          }
-        );
+        console.error('Canonical WhatsApp raw event ingest failed', {
+          organizationId,
+          eventKey,
+          eventType: sourceEventType,
+          message: rawEventError.message,
+        });
       }
-
-
 
       let result: Record<string, unknown>;
 
       try {
-
-        result = await processStoredWebhookEvent(
-
-          supabase,
-
-          eventId
-
-        );
-
+        result = await processStoredWebhookEvent(supabase, eventId);
       } catch (processorError) {
-
         /*
          * Phase 2E1 processing-state synchronization.
          *
@@ -472,102 +299,40 @@ export async function POST(request: NextRequest) {
          * processor error after recording the canonical raw-event failure.
          */
         if (!rawEventError) {
-
           const processorMessage =
-
             processorError instanceof Error
-
               ? processorError.message
-
               : 'WhatsApp webhook processor failed';
 
-          const {
-
-            error: rawProcessingError,
-
-          } = await supabase.rpc(
-
+          const { error: rawProcessingError } = await supabase.rpc(
             'set_raw_event_processing_status',
-
             {
-
-              p_organization_id:
-
-                organizationId,
-
-              p_source_system:
-
-                'whatsapp',
-
-              p_source_event_id:
-
-                eventKey,
-
-              p_status:
-
-                'failed',
-
-              p_processor_name:
-
-                'whatsapp_webhook',
-
-              p_processor_version:
-
-                'phase2e1',
-
-              p_processing_error:
-
-                processorMessage,
-
+              p_organization_id: organizationId,
+              p_source_system: 'whatsapp',
+              p_source_event_id: eventKey,
+              p_status: 'failed',
+              p_processor_name: 'whatsapp_webhook',
+              p_processor_version: 'phase2e1',
+              p_processing_error: processorMessage,
               p_processing_metadata: {
-
-                legacy_webhook_event_id:
-
-                  eventId,
-
-                source_event_type:
-
-                  sourceEventType,
-
+                legacy_webhook_event_id: eventId,
+                source_event_type: sourceEventType,
               },
-
-            }
-
+            },
           );
 
           if (rawProcessingError) {
-
-            console.error(
-
-              'Canonical WhatsApp failure-state sync failed',
-
-              {
-
-                organizationId,
-
-                eventKey,
-
-                eventType:
-
-                  sourceEventType,
-
-                message:
-
-                  rawProcessingError.message,
-
-              }
-
-            );
-
+            console.error('Canonical WhatsApp failure-state sync failed', {
+              organizationId,
+              eventKey,
+              eventType: sourceEventType,
+              message: rawProcessingError.message,
+            });
           }
-
         }
 
         throw processorError;
-
       }
-
-
 
       /*
        * Sync canonical terminal state only after the existing WhatsApp
@@ -577,196 +342,88 @@ export async function POST(request: NextRequest) {
        * preserves the already-terminal "ignored" state.
        */
       const canonicalStatus =
-
         result.ignored === true
-
           ? 'ignored'
-
-          : result.processed === true ||
-
-              result.already_processed === true
-
+          : result.processed === true || result.already_processed === true
             ? 'processed'
-
             : null;
 
-      if (
-
-        !rawEventError &&
-
-        canonicalStatus
-
-      ) {
-
-        const {
-
-          error: rawProcessingError,
-
-        } = await supabase.rpc(
-
+      if (!rawEventError && canonicalStatus) {
+        const { error: rawProcessingError } = await supabase.rpc(
           'set_raw_event_processing_status',
-
           {
-
-            p_organization_id:
-
-              organizationId,
-
-            p_source_system:
-
-              'whatsapp',
-
-            p_source_event_id:
-
-              eventKey,
-
-            p_status:
-
-              canonicalStatus,
-
-            p_processor_name:
-
-              'whatsapp_webhook',
-
-            p_processor_version:
-
-              'phase2e1',
-
-            p_processing_error:
-
-              null,
-
+            p_organization_id: organizationId,
+            p_source_system: 'whatsapp',
+            p_source_event_id: eventKey,
+            p_status: canonicalStatus,
+            p_processor_name: 'whatsapp_webhook',
+            p_processor_version: 'phase2e1',
+            p_processing_error: null,
             p_processing_metadata: {
-
-              legacy_webhook_event_id:
-
-                eventId,
-
-              source_event_type:
-
-                sourceEventType,
-
+              legacy_webhook_event_id: eventId,
+              source_event_type: sourceEventType,
             },
-
-          }
-
+          },
         );
 
         if (rawProcessingError) {
-
-          console.error(
-
-            'Canonical WhatsApp processing-state sync failed',
-
-            {
-
-              organizationId,
-
-              eventKey,
-
-              eventType:
-
-                sourceEventType,
-
-              status:
-
-                canonicalStatus,
-
-              message:
-
-                rawProcessingError.message,
-
-            }
-
-          );
-
+          console.error('Canonical WhatsApp processing-state sync failed', {
+            organizationId,
+            eventKey,
+            eventType: sourceEventType,
+            status: canonicalStatus,
+            message: rawProcessingError.message,
+          });
         }
-
       }
-
-
 
       if (result.already_processed === true) {
-
         alreadyProcessed += 1;
-
       } else if (result.ignored === true) {
-
         ignored += 1;
-
       } else if (result.processed === true) {
-
         processed += 1;
-
       }
-
     }
 
-
-
     return NextResponse.json(
-
       {
-
         ok: true,
-
         received: events.length,
-
         inserted,
-
         duplicates,
-
         processed,
-
         already_processed: alreadyProcessed,
-
         ignored,
-
       },
-
-      { status: 200 }
-
+      { status: 200 },
     );
-
   } catch (error) {
+    if (error instanceof WebhookRequestError) {
+      return NextResponse.json(
+        { ok: false, error: error.message },
+        { status: error.status },
+      );
+    }
 
-    const message =
-
-      error instanceof Error ? error.message : 'WhatsApp webhook failed';
-
-
-
+    const message = error instanceof Error ? error.message : 'WhatsApp webhook failed';
     console.error('WhatsApp webhook error:', message);
 
-
-
     // Returning 500 is intentional here. Meta may retry the webhook.
-
     // The raw-event unique key + CRM idempotency layer make retries safe.
-
     return NextResponse.json(
-
       {
-
         ok: false,
-
-        error: message,
-
+        error: 'WhatsApp webhook failed',
       },
-
-      { status: 500 }
-
+      { status: 500 },
     );
-
   }
-
 }
-
-
 
 async function processStoredWebhookEvent(
   supabase: ReturnType<typeof createAdminClient>,
-  eventId: string
+  eventId: string,
 ) {
   /*
    * Load the stored raw event first so we can route:
@@ -790,7 +447,7 @@ async function processStoredWebhookEvent(
       external_message_id,
       payload,
       processing_status
-      `
+      `,
     )
     .eq('id', eventId)
     .single();
@@ -799,8 +456,7 @@ async function processStoredWebhookEvent(
     throw storedEventError;
   }
 
-  const eventType =
-    stringValue(storedEvent?.event_type) || '';
+  const eventType = stringValue(storedEvent?.event_type) || '';
 
   /*
    * Delivery/read webhooks reference the outbound Meta wamid that we now
@@ -808,11 +464,7 @@ async function processStoredWebhookEvent(
    * free-form or template send.
    */
   if (eventType.startsWith('status:')) {
-    return processStoredWhatsAppStatusEvent(
-      supabase,
-      eventId,
-      storedEvent
-    );
+    return processStoredWhatsAppStatusEvent(supabase, eventId, storedEvent);
   }
 
   /*
@@ -822,7 +474,7 @@ async function processStoredWebhookEvent(
     'ingest_whatsapp_webhook_event',
     {
       p_event_id: eventId,
-    }
+    },
   );
 
   if (error) {
@@ -833,9 +485,7 @@ async function processStoredWebhookEvent(
 
   if (result.ok !== true) {
     const processorError =
-      stringValue(result.error) ||
-      'WhatsApp CRM ingestion failed.';
-
+      stringValue(result.error) || 'WhatsApp CRM ingestion failed.';
     throw new Error(processorError);
   }
 
@@ -845,24 +495,18 @@ async function processStoredWebhookEvent(
 async function processStoredWhatsAppStatusEvent(
   supabase: ReturnType<typeof createAdminClient>,
   eventId: string,
-  storedEvent: Record<string, unknown>
+  storedEvent: Record<string, unknown>,
 ) {
-  const eventType =
-    stringValue(storedEvent.event_type) || '';
-
-  const statusName =
-    eventType.startsWith('status:')
-      ? eventType.slice('status:'.length).trim()
-      : '';
+  const eventType = stringValue(storedEvent.event_type) || '';
+  const statusName = eventType.startsWith('status:')
+    ? eventType.slice('status:'.length).trim()
+    : '';
 
   /*
    * If this exact webhook has already been successfully processed, a Meta
    * retry should be acknowledged without updating the CRM again.
    */
-  if (
-    stringValue(storedEvent.processing_status) ===
-    'processed'
-  ) {
+  if (stringValue(storedEvent.processing_status) === 'processed') {
     return {
       ok: true,
       already_processed: true,
@@ -881,38 +525,24 @@ async function processStoredWhatsAppStatusEvent(
    * but do not let them break webhook delivery.
    */
   if (!supportedStatuses.has(statusName)) {
-    await markWebhookEventProcessed(
-      supabase,
-      eventId
-    );
-
+    await markWebhookEventProcessed(supabase, eventId);
     return {
       ok: true,
       ignored: true,
     };
   }
 
-  const organizationId =
-    stringValue(
-      storedEvent.organization_id
-    );
-
+  const organizationId = stringValue(storedEvent.organization_id);
   if (!organizationId) {
-    throw new Error(
-      'WhatsApp status webhook event organization is missing.'
-    );
+    throw new Error('WhatsApp status webhook event organization is missing.');
   }
 
-  const externalMessageId =
-    stringValue(
-      storedEvent.external_message_id
-    );
-
+  const externalMessageId = stringValue(storedEvent.external_message_id);
   if (!externalMessageId) {
     await markWebhookEventProcessed(
       supabase,
       eventId,
-      'Status event did not contain an external message ID.'
+      'Status event did not contain an external message ID.',
     );
 
     return {
@@ -921,16 +551,9 @@ async function processStoredWhatsAppStatusEvent(
     };
   }
 
-  const payload =
-    objectValue(storedEvent.payload);
-
-  const statusPayload =
-    objectValue(payload.status);
-
-  const statusAt =
-    whatsappStatusTimestamp(
-      statusPayload.timestamp
-    );
+  const payload = objectValue(storedEvent.payload);
+  const statusPayload = objectValue(payload.status);
+  const statusAt = whatsappStatusTimestamp(statusPayload.timestamp);
 
   const {
     data: statusResult,
@@ -938,25 +561,16 @@ async function processStoredWhatsAppStatusEvent(
   } = await supabase.rpc(
     'apply_whatsapp_message_status',
     {
-      p_organization_id:
-        organizationId,
-
-      p_external_message_id:
-        externalMessageId,
-
-      p_status:
-        statusName,
-
-      p_status_at:
-        statusAt,
-
+      p_organization_id: organizationId,
+      p_external_message_id: externalMessageId,
+      p_status: statusName,
+      p_status_at: statusAt,
       /*
        * Save the full Meta status object into message metadata.
        * For failed messages this preserves Meta's error information.
        */
-      p_event_metadata:
-        statusPayload,
-    }
+      p_event_metadata: statusPayload,
+    },
   );
 
   if (statusError) {
@@ -970,50 +584,37 @@ async function processStoredWhatsAppStatusEvent(
    * Do NOT mark the webhook processed in that case. Returning 500 lets Meta
    * retry, while our raw-event unique key keeps the retry idempotent.
    */
-  const matchedMessage =
-    Array.isArray(statusResult)
-      ? statusResult.length > 0
-      : Boolean(statusResult);
+  const matchedMessage = Array.isArray(statusResult)
+    ? statusResult.length > 0
+    : Boolean(statusResult);
 
   if (!matchedMessage) {
     throw new Error(
-      `WhatsApp ${statusName} status could not yet be matched to CRM message ${externalMessageId}.`
+      `WhatsApp ${statusName} status could not yet be matched to CRM message ${externalMessageId}.`,
     );
   }
 
-  await markWebhookEventProcessed(
-    supabase,
-    eventId
-  );
+  await markWebhookEventProcessed(supabase, eventId);
 
   return {
     ok: true,
     processed: true,
-    external_message_id:
-      externalMessageId,
-    message_status:
-      statusName,
+    external_message_id: externalMessageId,
+    message_status: statusName,
   };
 }
 
 async function markWebhookEventProcessed(
   supabase: ReturnType<typeof createAdminClient>,
   eventId: string,
-  processingError: string | null = null
+  processingError: string | null = null,
 ) {
-  const {
-    error,
-  } = await supabase
+  const { error } = await supabase
     .from('whatsapp_webhook_events')
     .update({
-      processing_status:
-        'processed',
-
-      processing_error:
-        processingError,
-
-      processed_at:
-        new Date().toISOString(),
+      processing_status: 'processed',
+      processing_error: processingError,
+      processed_at: new Date().toISOString(),
     })
     .eq('id', eventId);
 
@@ -1022,9 +623,7 @@ async function markWebhookEventProcessed(
   }
 }
 
-function whatsappStatusTimestamp(
-  value: unknown
-) {
+function whatsappStatusTimestamp(value: unknown) {
   /*
    * Meta currently supplies status timestamps as Unix seconds, usually
    * encoded as strings. Accept numbers too so the webhook remains robust.
@@ -1036,488 +635,216 @@ function whatsappStatusTimestamp(
         ? Number(value)
         : Number.NaN;
 
-  if (
-    Number.isFinite(
-      numericValue
-    ) &&
-    numericValue > 0
-  ) {
-    return new Date(
-      numericValue * 1000
-    ).toISOString();
+  if (Number.isFinite(numericValue) && numericValue > 0) {
+    return new Date(numericValue * 1000).toISOString();
   }
 
   return new Date().toISOString();
 }
 
 function verifyMetaSignature(
-
   rawBody: Buffer,
-
   signatureHeader: string,
-
-  appSecret: string
-
+  appSecret: string,
 ) {
-
   const signature = signatureHeader.trim();
 
-
-
   if (!signature.startsWith('sha256=')) {
-
     return false;
-
   }
-
-
 
   const receivedHex = signature.slice('sha256='.length);
 
-
-
   if (!/^[a-f0-9]{64}$/i.test(receivedHex)) {
-
     return false;
-
   }
 
-
-
   const expected = crypto
-
     .createHmac('sha256', Buffer.from(appSecret, 'utf8'))
-
     .update(rawBody)
-
     .digest();
-
-
 
   const received = Buffer.from(receivedHex, 'hex');
 
-
-
   if (received.length !== expected.length) {
-
     return false;
-
   }
 
-
-
   return crypto.timingSafeEqual(received, expected);
-
 }
 
-
-
 function extractWebhookEvents(payload: JsonObject) {
-
   const rows: Array<Record<string, unknown>> = [];
 
-
-
   const objectType = stringValue(payload.object);
-
   const entries = arrayValue(payload.entry);
 
-
-
   for (const entryRaw of entries) {
-
     const entry = objectValue(entryRaw);
-
     const entryId = stringValue(entry.id);
-
     const changes = arrayValue(entry.changes);
 
-
-
     for (const changeRaw of changes) {
-
       const change = objectValue(changeRaw);
-
       const fieldName = stringValue(change.field);
-
       const value = objectValue(change.value);
-
       const metadata = objectValue(value.metadata);
 
-
-
       const phoneNumberId = stringValue(metadata.phone_number_id);
-
-      const displayPhoneNumber = stringValue(
-
-        metadata.display_phone_number
-
-      );
-
-
+      const displayPhoneNumber = stringValue(metadata.display_phone_number);
 
       const contacts = arrayValue(value.contacts);
-
-      const defaultContactWaId = firstString(
-
-        contacts,
-
-        'wa_id'
-
-      );
-
-
+      const defaultContactWaId = firstString(contacts, 'wa_id');
 
       const messages = arrayValue(value.messages);
 
-
-
       for (const messageRaw of messages) {
-
         const message = objectValue(messageRaw);
-
         const messageId = stringValue(message.id);
-
         const from = stringValue(message.from);
-
-        const messageType =
-
-          stringValue(message.type) || 'message';
-
-
+        const messageType = stringValue(message.type) || 'message';
 
         rows.push({
-
           event_key: messageId
-
             ? `message:${messageId}`
-
-            : stableEventKey(
-
-                objectType,
-
-                entryId,
-
-                fieldName,
-
-                message
-
-              ),
-
+            : stableEventKey(objectType, entryId, fieldName, message),
           object_type: objectType,
-
           entry_id: entryId,
-
           field_name: fieldName,
-
           phone_number_id: phoneNumberId,
-
           display_phone_number: displayPhoneNumber,
-
           event_type: `message:${messageType}`,
-
           external_message_id: messageId,
-
           contact_wa_id: from || defaultContactWaId,
-
           signature_valid: true,
-
           payload: {
-
             object: objectType,
-
             entry_id: entryId,
-
             field: fieldName,
-
             metadata,
-
             contacts,
-
             message,
-
           },
-
           processing_status: 'received',
-
         });
-
       }
-
-
 
       const statuses = arrayValue(value.statuses);
 
-
-
       for (const statusRaw of statuses) {
-
         const status = objectValue(statusRaw);
-
         const messageId = stringValue(status.id);
-
-        const statusName =
-
-          stringValue(status.status) || 'unknown';
-
-        const recipientId = stringValue(
-
-          status.recipient_id
-
-        );
-
-
+        const statusName = stringValue(status.status) || 'unknown';
+        const recipientId = stringValue(status.recipient_id);
 
         rows.push({
-
           event_key: messageId
-
             ? `status:${messageId}:${statusName}`
-
-            : stableEventKey(
-
-                objectType,
-
-                entryId,
-
-                fieldName,
-
-                status
-
-              ),
-
+            : stableEventKey(objectType, entryId, fieldName, status),
           object_type: objectType,
-
           entry_id: entryId,
-
           field_name: fieldName,
-
           phone_number_id: phoneNumberId,
-
           display_phone_number: displayPhoneNumber,
-
           event_type: `status:${statusName}`,
-
           external_message_id: messageId,
-
-          contact_wa_id:
-
-            recipientId || defaultContactWaId,
-
+          contact_wa_id: recipientId || defaultContactWaId,
           signature_valid: true,
-
           payload: {
-
             object: objectType,
-
             entry_id: entryId,
-
             field: fieldName,
-
             metadata,
-
             status,
-
           },
-
           processing_status: 'received',
-
         });
-
       }
 
-
-
-      if (
-
-        messages.length === 0 &&
-
-        statuses.length === 0
-
-      ) {
-
+      if (messages.length === 0 && statuses.length === 0) {
         const unknownPayload = {
-
           object: objectType,
-
           entry_id: entryId,
-
           field: fieldName,
-
           value,
-
         };
 
-
-
         rows.push({
-
           event_key: stableEventKey(
-
             objectType,
-
             entryId,
-
             fieldName,
-
-            unknownPayload
-
+            unknownPayload,
           ),
-
           object_type: objectType,
-
           entry_id: entryId,
-
           field_name: fieldName,
-
           phone_number_id: phoneNumberId,
-
           display_phone_number: displayPhoneNumber,
-
           event_type: fieldName || 'unknown',
-
           external_message_id: null,
-
           contact_wa_id: defaultContactWaId,
-
           signature_valid: true,
-
           payload: unknownPayload,
-
           processing_status: 'received',
-
         });
-
       }
-
     }
-
   }
-
-
 
   return rows;
-
 }
-
-
 
 function stableEventKey(
-
   objectType: string | null,
-
   entryId: string | null,
-
   fieldName: string | null,
-
-  payload: unknown
-
+  payload: unknown,
 ) {
-
   const hash = crypto
-
     .createHash('sha256')
-
     .update(JSON.stringify(payload))
-
     .digest('hex');
 
-
-
   return [
-
     'event',
-
     objectType || 'unknown',
-
     entryId || 'unknown',
-
     fieldName || 'unknown',
-
     hash,
-
   ].join(':');
-
 }
-
-
 
 function objectValue(value: unknown): JsonObject {
-
-  if (
-
-    value &&
-
-    typeof value === 'object' &&
-
-    !Array.isArray(value)
-
-  ) {
-
+  if (value && typeof value === 'object' && !Array.isArray(value)) {
     return value as JsonObject;
-
   }
-
-
 
   return {};
-
 }
-
-
 
 function arrayValue(value: unknown): unknown[] {
-
   return Array.isArray(value) ? value : [];
-
 }
-
-
 
 function stringValue(value: unknown): string | null {
-
   if (typeof value !== 'string') {
-
     return null;
-
   }
-
-
 
   const trimmed = value.trim();
-
   return trimmed || null;
-
 }
 
-
-
-function firstString(
-
-  values: unknown[],
-
-  key: string
-
-) {
-
+function firstString(values: unknown[], key: string) {
   for (const value of values) {
-
     const object = objectValue(value);
-
     const result = stringValue(object[key]);
 
-
-
     if (result) {
-
       return result;
-
     }
-
   }
 
-
-
   return null;
-
 }
