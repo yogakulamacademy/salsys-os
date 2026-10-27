@@ -6,6 +6,10 @@ import {
   normalizeMetaAdAccountId,
   syncMetaAdsToSupabase,
 } from "@/lib/meta-ads";
+import {
+  bearerMatchesAnySecret,
+  secretMatches,
+} from "@/lib/security/machine-bearer-auth";
 
 export const dynamic = "force-dynamic";
 
@@ -89,23 +93,20 @@ function isAuthorized(request: NextRequest, allowCron = false) {
 
   const cronSecret = process.env.CRON_SECRET?.trim();
 
-  const headerSecret = request.headers.get("x-meta-ads-sync-secret")?.trim();
+  const headerSecret = request.headers.get("x-meta-ads-sync-secret");
 
-  const authorization = request.headers.get("authorization")?.trim();
+  const authorization = request.headers.get("authorization");
 
-  if (manualSecret && headerSecret === manualSecret) {
+  if (manualSecret && secretMatches(headerSecret, manualSecret)) {
     return true;
   }
 
-  if (manualSecret && authorization === `Bearer ${manualSecret}`) {
-    return true;
-  }
+  const bearerSecrets = [
+    manualSecret,
+    allowCron ? cronSecret : undefined,
+  ].filter((secret): secret is string => Boolean(secret));
 
-  if (allowCron && cronSecret && authorization === `Bearer ${cronSecret}`) {
-    return true;
-  }
-
-  return false;
+  return bearerMatchesAnySecret(authorization, bearerSecrets);
 }
 
 async function getSelectedMetaAssets() {
@@ -286,6 +287,13 @@ async function runSyncForAsset({
     const message =
       error instanceof Error ? error.message : "Unknown Meta Ads sync error";
 
+    console.error(
+      "Meta Ads asset sync failed:",
+      organizationId,
+      adAccountId,
+      error,
+    );
+
     await supabase
       .from("meta_ads_sync_runs")
       .update({
@@ -305,7 +313,7 @@ async function runSyncForAsset({
       integrationAssetId: asset.id,
       adAccountId: `act_${adAccountId}`,
       syncRunId: run.id,
-      error: message,
+      error: "Meta Ads sync failed for this asset.",
     };
   }
 }
@@ -340,8 +348,12 @@ async function runSelectedMetaAssets({
         }),
       );
     } catch (error) {
-      const message =
-        error instanceof Error ? error.message : "Unknown Meta Ads sync error";
+      console.error(
+        "Meta Ads asset sync failed before run creation:",
+        asset.organization_id,
+        asset.external_id,
+        error,
+      );
 
       results.push({
         ok: false,
@@ -352,7 +364,7 @@ async function runSelectedMetaAssets({
           ? `act_${normalizeMetaAdAccountId(asset.external_id)}`
           : "",
         syncRunId: null,
-        error: message,
+        error: "Meta Ads sync failed for this asset.",
       });
     }
   }
@@ -409,16 +421,13 @@ export async function POST(request: NextRequest) {
       status: result.ok ? 200 : 500,
     });
   } catch (error) {
-    const message =
-      error instanceof Error ? error.message : "Unknown Meta Ads sync error";
-
     console.error("Meta Ads manual sync failed:", error);
 
     return NextResponse.json(
       {
         ok: false,
 
-        error: message,
+        error: "Meta Ads sync failed.",
       },
       {
         status: 500,
@@ -460,16 +469,13 @@ export async function GET(request: NextRequest) {
       status: result.ok ? 200 : 500,
     });
   } catch (error) {
-    const message =
-      error instanceof Error ? error.message : "Unknown Meta Ads cron error";
-
     console.error("Meta Ads cron sync failed:", error);
 
     return NextResponse.json(
       {
         ok: false,
 
-        error: message,
+        error: "Meta Ads sync failed.",
       },
       {
         status: 500,
