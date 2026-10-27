@@ -8,57 +8,45 @@ export type Person360Summary = {
   person_id: string;
   organization_id: string;
   person_status: string | null;
-
   primary_email: string | null;
   primary_phone: string | null;
   primary_whatsapp: string | null;
-
   identifier_count: number | string | null;
   verified_identifier_count: number | string | null;
-
   lead_count: number | string | null;
   first_lead_at: string | null;
   latest_lead_at: string | null;
-
   latest_lead_id: string | null;
   latest_lead_code: string | null;
   latest_lead_name: string | null;
-
   current_stage: string | null;
   lead_status: string | null;
   intent: string | null;
   owner_user_id: string | null;
-
   next_followup_at: string | null;
   last_contacted_at: string | null;
   last_inbound_at: string | null;
   last_outbound_at: string | null;
-
   session_count: number | string | null;
   first_session_at: string | null;
   last_session_at: string | null;
   sessions_7d: number | string | null;
   sessions_30d: number | string | null;
-
   touchpoint_count: number | string | null;
   page_view_count: number | string | null;
   high_intent_events_7d: number | string | null;
   first_touchpoint_at: string | null;
   last_touchpoint_at: string | null;
-
   latest_lead_engagement_score: number | string | null;
   latest_lead_behaviour_temperature: string | null;
   latest_lead_behaviour_reason: string | null;
-
   conversation_count: number | string | null;
   message_count: number | string | null;
   last_conversation_activity_at: string | null;
   last_message_at: string | null;
-
   enrollment_count: number | string | null;
   confirmed_or_completed_enrollment_count: number | string | null;
   last_enrollment_at: string | null;
-
   payment_count: number | string | null;
   paid_payment_count: number | string | null;
   last_paid_at: string | null;
@@ -93,17 +81,6 @@ export type PersonJourneyPayload = {
   journeyTotal: number;
 };
 
-/*
- * Do not select the three latest-lead journey fields from v_person_360 here.
- *
- * v_person_360 historically joined v_lead_journey_intelligence to populate
- * them. On a lead detail request, asking PostgREST for those columns forces the
- * planner through the full cross-lead journey aggregation and can exceed the
- * statement timeout as tracking data grows. The rest of Person 360 is cheap
- * when those columns are not projected.
- *
- * We load those three fields separately for the single latest lead below.
- */
 const PERSON_360_SELECT = `
   person_id,
   organization_id,
@@ -169,9 +146,7 @@ const PERSON_JOURNEY_SELECT = `
   metadata
 `;
 
-// Person 360 and the canonical journey are enrichment reads. Keep their latency
-// bounded so a slow derived view cannot hold the operational Lead Inspector in
-// a loading state until the database statement timeout expires.
+const V2_SOFT_TIMEOUT_MS = 2_500;
 const ENRICHMENT_SOFT_TIMEOUT_MS = 2_500;
 const LATEST_LEAD_SIGNAL_SOFT_TIMEOUT_MS = 2_000;
 
@@ -184,6 +159,13 @@ type DerivedListReadResult<T> = {
   data: T[] | null;
   error: { message: string } | null;
   count: number | null;
+};
+
+type PersonJourneyV2Payload = {
+  person_id?: unknown;
+  person?: Record<string, unknown> | null;
+  journey?: PersonJourneyEvent[] | null;
+  journey_total?: unknown;
 };
 
 function withSoftTimeout<T>(
@@ -202,11 +184,16 @@ function withSoftTimeout<T>(
   });
 }
 
+function normalizeLimit(value: unknown) {
+  const requested = Number(value ?? 200);
+  return Number.isFinite(requested)
+    ? Math.min(Math.max(Math.trunc(requested), 1), 500)
+    : 200;
+}
+
 export async function getPersonJourneyForLead(
   leadId: string,
-  options?: {
-    limit?: number;
-  },
+  options?: { limit?: number },
 ): Promise<PersonJourneyPayload> {
   const normalizedLeadId = String(leadId ?? "").trim();
 
@@ -214,51 +201,24 @@ export async function getPersonJourneyForLead(
     throw new Error("A lead ID is required to load Person journey data.");
   }
 
-  /*
-   * Keep mock-mode behavior non-destructive.
-   *
-   * The existing Lead detail page can still render from its mock Lead payload
-   * without forcing a Supabase request for the new Person models.
-   */
   if (useMockData) {
-    return {
-      organizationId: null,
-      leadId: normalizedLeadId,
-      personId: null,
-      person: null,
-      journey: [],
-      journeyTotal: 0,
-    };
+    return emptyPayload(null, normalizedLeadId);
   }
 
   const supabase = await createClient();
-
   const {
     data: { user },
     error: authError,
   } = await supabase.auth.getUser();
 
   if (authError || !user) {
-    throw new Error(
-      "Unable to load Person journey: user is not authenticated.",
-    );
+    throw new Error("Unable to load Person journey: user is not authenticated.");
   }
 
-  const organizationId = await requireCurrentOrganizationId(
-    supabase,
-    user.id,
-  );
-
-  /*
-   * Preserve the same explicit Lead authorization contract used by getLead().
-   * Active-workspace filtering below is an additional boundary, not a
-   * replacement for Lead-level access control.
-   */
+  const organizationId = await requireCurrentOrganizationId(supabase, user.id);
   const { data: canAccess, error: accessError } = await supabase.rpc(
     "can_access_lead",
-    {
-      p_lead_id: normalizedLeadId,
-    },
+    { p_lead_id: normalizedLeadId },
   );
 
   if (accessError) {
@@ -268,53 +228,77 @@ export async function getPersonJourneyForLead(
   }
 
   if (!canAccess) {
+    return emptyPayload(organizationId, normalizedLeadId);
+  }
+
+  const limit = normalizeLimit(options?.limit);
+  const db = supabase as any;
+
+  const v2Result = await withSoftTimeout<
+    DerivedReadResult<PersonJourneyV2Payload>
+  >(
+    db.rpc("get_person_journey_workspace_v2", {
+      p_organization_id: organizationId,
+      p_lead_id: normalizedLeadId,
+      p_limit: limit,
+    }),
+    V2_SOFT_TIMEOUT_MS,
+    {
+      data: null,
+      error: { message: "Person Journey V2 exceeded the soft timeout." },
+    },
+  );
+
+  if (!v2Result.error && v2Result.data) {
+    const payload = v2Result.data;
+    const personId = String(payload.person_id ?? "").trim() || null;
+    const person =
+      payload.person && typeof payload.person === "object"
+        ? (payload.person as unknown as Person360Summary)
+        : null;
+
     return {
       organizationId,
       leadId: normalizedLeadId,
-      personId: null,
-      person: null,
-      journey: [],
-      journeyTotal: 0,
+      personId,
+      person,
+      journey: Array.isArray(payload.journey) ? payload.journey : [],
+      journeyTotal: Number(payload.journey_total ?? 0) || 0,
     };
   }
 
-  /*
-   * These views/tables are migration-driven. Cast the query client locally so
-   * this adapter does not depend on generated Supabase types being refreshed
-   * in the same commit as migration 017/018.
-   */
-  const db = supabase as any;
+  console.error(
+    "Person Journey V2 read degraded:",
+    v2Result.error?.message ?? "Unknown V2 read error.",
+  );
 
+  return getLegacyPersonJourney(
+    db,
+    organizationId,
+    normalizedLeadId,
+    limit,
+  );
+}
+
+async function getLegacyPersonJourney(
+  db: any,
+  organizationId: string,
+  leadId: string,
+  limit: number,
+): Promise<PersonJourneyPayload> {
   const { data: personLink, error: personLinkError } = await db
     .from("person_leads")
     .select("person_id")
     .eq("organization_id", organizationId)
-    .eq("lead_id", normalizedLeadId)
+    .eq("lead_id", leadId)
     .maybeSingle();
 
   if (personLinkError) {
-    throw new Error(
-      `Unable to resolve Lead to Person: ${personLinkError.message}`,
-    );
+    throw new Error(`Unable to resolve Lead to Person: ${personLinkError.message}`);
   }
 
   const personId = String(personLink?.person_id ?? "").trim();
-
-  if (!personId) {
-    return {
-      organizationId,
-      leadId: normalizedLeadId,
-      personId: null,
-      person: null,
-      journey: [],
-      journeyTotal: 0,
-    };
-  }
-
-  const requestedLimit = Number(options?.limit ?? 200);
-  const limit = Number.isFinite(requestedLimit)
-    ? Math.min(Math.max(Math.trunc(requestedLimit), 1), 500)
-    : 200;
+  if (!personId) return emptyPayload(organizationId, leadId);
 
   const personQuery = db
     .from("v_person_360")
@@ -325,17 +309,11 @@ export async function getPersonJourneyForLead(
 
   const journeyQuery = db
     .from("v_person_journey")
-    .select(PERSON_JOURNEY_SELECT, {
-      count: "exact",
-    })
+    .select(PERSON_JOURNEY_SELECT, { count: "exact" })
     .eq("organization_id", organizationId)
     .eq("person_id", personId)
-    .order("event_at", {
-      ascending: false,
-    })
-    .order("journey_event_key", {
-      ascending: false,
-    })
+    .order("event_at", { ascending: false })
+    .order("journey_event_key", { ascending: false })
     .limit(limit);
 
   const [personResult, journeyResult] = await Promise.all([
@@ -358,16 +336,9 @@ export async function getPersonJourneyForLead(
     ),
   ]);
 
-  /*
-   * Person 360 and the canonical journey are derived intelligence read models.
-   * They must never take the operational Lead detail page down. Authentication,
-   * tenant binding, and Lead authorization still fail closed above; only these
-   * non-authoritative enrichments degrade gracefully.
-   */
   if (personResult.error) {
     console.error("Person 360 read degraded:", personResult.error.message);
   }
-
   if (journeyResult.error) {
     console.error("Person journey read degraded:", journeyResult.error.message);
   }
@@ -383,15 +354,9 @@ export async function getPersonJourneyForLead(
         } as Person360Summary)
       : null;
 
-  /*
-   * Recover the three journey signals through a targeted single-lead query.
-   * This preserves the Person 360 UI without forcing the expensive journey
-   * join inside v_person_360 itself.
-   */
   const latestLeadId = String(person?.latest_lead_id ?? "").trim();
-
   if (person && latestLeadId) {
-    const latestLeadJourneyResult = await withSoftTimeout<
+    const signalResult = await withSoftTimeout<
       DerivedReadResult<{
         engagement_score?: number | string | null;
         behaviour_temperature?: string | null;
@@ -411,32 +376,39 @@ export async function getPersonJourneyForLead(
       },
     );
 
-    if (latestLeadJourneyResult.error) {
-      console.error(
-        "Latest lead journey signal read degraded:",
-        latestLeadJourneyResult.error.message,
-      );
-    } else if (latestLeadJourneyResult.data) {
+    if (signalResult.error) {
+      console.error("Latest lead journey signal read degraded:", signalResult.error.message);
+    } else if (signalResult.data) {
       person = {
         ...person,
-        latest_lead_engagement_score:
-          latestLeadJourneyResult.data.engagement_score ?? null,
+        latest_lead_engagement_score: signalResult.data.engagement_score ?? null,
         latest_lead_behaviour_temperature:
-          latestLeadJourneyResult.data.behaviour_temperature ?? null,
-        latest_lead_behaviour_reason:
-          latestLeadJourneyResult.data.behaviour_reason ?? null,
+          signalResult.data.behaviour_temperature ?? null,
+        latest_lead_behaviour_reason: signalResult.data.behaviour_reason ?? null,
       };
     }
   }
 
   return {
     organizationId,
-    leadId: normalizedLeadId,
+    leadId,
     personId,
     person,
-    journey: journeyResult.error
-      ? []
-      : ((journeyResult.data ?? []) as PersonJourneyEvent[]),
+    journey: journeyResult.error ? [] : (journeyResult.data ?? []),
     journeyTotal: journeyResult.error ? 0 : Number(journeyResult.count ?? 0),
+  };
+}
+
+function emptyPayload(
+  organizationId: string | null,
+  leadId: string,
+): PersonJourneyPayload {
+  return {
+    organizationId,
+    leadId,
+    personId: null,
+    person: null,
+    journey: [],
+    journeyTotal: 0,
   };
 }
