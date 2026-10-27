@@ -97,6 +97,33 @@ function isTransientAuthError(error: AuthErrorLike) {
   );
 }
 
+function isWeakPasswordAuthError(error: AuthErrorLike) {
+  if (!error) return false;
+
+  const name = String(error.name ?? '').toLowerCase();
+  const code = String(error.code ?? '').toLowerCase();
+
+  return (
+    code === 'weak_password' ||
+    name === 'authweakpassworderror' ||
+    name === 'weakpassworderror'
+  );
+}
+
+function hasWeakPasswordSignal(data: unknown) {
+  if (!data || typeof data !== 'object') return false;
+
+  const record = data as Record<string, unknown>;
+  const weakPassword = record.weakPassword ?? record.weak_password;
+
+  if (!weakPassword || typeof weakPassword !== 'object') return false;
+
+  const detail = weakPassword as Record<string, unknown>;
+  const reasons = Array.isArray(detail.reasons) ? detail.reasons : [];
+
+  return reasons.length > 0 || Boolean(detail.message);
+}
+
 function wait(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
@@ -262,6 +289,19 @@ export async function signInAction(formData: FormData) {
       loginAuthUrl(
         'error',
         'Sign-in service is temporarily unavailable. Your password was not rejected. Please try again shortly.',
+        next,
+      ),
+    );
+  }
+
+  if (isWeakPasswordAuthError(signInError) || hasWeakPasswordSignal(signInData)) {
+    await supabase.auth.signOut();
+    const cookieStore = await cookies();
+    cookieStore.delete(ACTIVE_WORKSPACE_COOKIE);
+    redirect(
+      loginAuthUrl(
+        'error',
+        'For your security, this password must be changed. Use “Forgot password?” to set a new password before signing in.',
         next,
       ),
     );
@@ -436,6 +476,16 @@ export async function updateRecoveredPasswordAction(formData: FormData) {
   const { error: updateError } = await supabase.auth.updateUser({ password });
 
   if (updateError) {
+    if (isWeakPasswordAuthError(updateError)) {
+      redirect(
+        authUrl(
+          resetPath,
+          'error',
+          'This password is known to be weak or compromised. Choose a different password.',
+        ),
+      );
+    }
+
     redirect(
       authUrl(
         resetPath,
