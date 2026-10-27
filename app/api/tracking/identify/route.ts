@@ -17,6 +17,23 @@ function objectValue(value: unknown): Record<string, unknown> {
     : {};
 }
 
+export async function GET() {
+  const commitSha = process.env.VERCEL_GIT_COMMIT_SHA?.trim() || null;
+
+  return NextResponse.json(
+    {
+      ok: Boolean(commitSha),
+      commit_sha: commitSha,
+    },
+    {
+      status: commitSha ? 200 : 503,
+      headers: {
+        "Cache-Control": "no-store, max-age=0",
+      },
+    },
+  );
+}
+
 export async function OPTIONS(request: NextRequest) {
   const origin = request.headers.get("origin");
 
