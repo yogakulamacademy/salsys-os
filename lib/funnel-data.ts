@@ -113,18 +113,42 @@ export async function getFunnelWorkspace(): Promise<FunnelWorkspace> {
     );
   }
 
-  const { data, error } = await supabase.rpc("get_funnel_workspace", {
+  const v2Result = await supabase.rpc("get_funnel_workspace_v2", {
     p_organization_id: organizationId,
   });
 
-  if (!error) {
+  if (!v2Result.error) {
     return applyProviderVisibility(
-      parseRpcPayload((data ?? {}) as RpcPayload),
+      parseRpcPayload((v2Result.data ?? {}) as RpcPayload),
       visibility,
     );
   }
 
-  console.error("Funnel optimized read degraded:", error.message);
+  console.error("Funnel V2 read degraded:", v2Result.error.message);
+
+  // Rollback/compatibility path: keep the existing aggregate RPC available while
+  // V2 is being deployed or if it ever degrades independently.
+  const legacyRpcResult = await supabase.rpc("get_funnel_workspace", {
+    p_organization_id: organizationId,
+  });
+
+  if (!legacyRpcResult.error) {
+    return applyProviderVisibility(
+      {
+        ...parseRpcPayload((legacyRpcResult.data ?? {}) as RpcPayload),
+        fallback: true,
+        warning:
+          `Funnel V2 unavailable: ${v2Result.error.message}. ` +
+          "Loaded the previous aggregate read model.",
+      },
+      visibility,
+    );
+  }
+
+  console.error(
+    "Funnel compatibility RPC degraded:",
+    legacyRpcResult.error.message,
+  );
 
   const fallback = await getMinimalLegacyWorkspace(
     supabase,
@@ -136,7 +160,8 @@ export async function getFunnelWorkspace(): Promise<FunnelWorkspace> {
       ...fallback,
       fallback: true,
       warning:
-        `Optimized Funnel read model unavailable: ${error.message}. ` +
+        `Funnel read models unavailable: ${v2Result.error.message}; ` +
+        `${legacyRpcResult.error.message}. ` +
         "Loaded a reduced compatibility view to protect database health.",
     },
     visibility,
