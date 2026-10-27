@@ -11,6 +11,8 @@ import {
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
+const MAX_META_WEBHOOK_BYTES = 4 * 1024 * 1024;
+
 type JsonObject = Record<string, unknown>;
 
 type InstagramInboundEvent = {
@@ -35,10 +37,58 @@ type InstagramCommentEvent = {
   raw: JsonObject;
 };
 
+class WebhookRequestError extends Error {
+  constructor(
+    message: string,
+    readonly status: number,
+  ) {
+    super(message);
+  }
+}
+
 function requireEnv(name: string) {
   const value = process.env[name]?.trim();
   if (!value) throw new Error(`${name} is not configured.`);
   return value;
+}
+
+function declaredContentLength(request: NextRequest) {
+  const header = request.headers.get('content-length');
+  if (!header) return null;
+  const value = Number(header);
+  return Number.isFinite(value) && value >= 0 ? value : null;
+}
+
+async function readBoundedRawBody(request: NextRequest, maxBytes: number) {
+  const declared = declaredContentLength(request);
+  if (declared !== null && declared > maxBytes) {
+    throw new WebhookRequestError('Webhook payload too large', 413);
+  }
+  if (!request.body) {
+    throw new WebhookRequestError('Invalid webhook payload', 400);
+  }
+
+  const reader = request.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let totalBytes = 0;
+
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      if (!value) continue;
+      totalBytes += value.byteLength;
+      if (totalBytes > maxBytes) {
+        await reader.cancel();
+        throw new WebhookRequestError('Webhook payload too large', 413);
+      }
+      chunks.push(value);
+    }
+  } finally {
+    reader.releaseLock();
+  }
+
+  return Buffer.concat(chunks.map((chunk) => Buffer.from(chunk)), totalBytes);
 }
 
 export async function GET(request: NextRequest) {
@@ -63,7 +113,7 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     /* Meta signs the exact raw request bytes. Verify before JSON parsing. */
-    const rawBytes = Buffer.from(await request.arrayBuffer());
+    const rawBytes = await readBoundedRawBody(request, MAX_META_WEBHOOK_BYTES);
     const signatureHeader = request.headers.get('x-hub-signature-256');
     const appSecret = requireEnv('INSTAGRAM_APP_SECRET');
 
@@ -227,11 +277,6 @@ export async function POST(request: NextRequest) {
         const instagramUserId = stringValue(crmResult.instagram_user_id) || event.senderId;
 
         if (leadId && conversationId && instagramUserId) {
-          /*
-           * A reply to a one-time comment private reply creates a normal
-           * conversation. Link that newly known Instagram-scoped identity back
-           * to any matching comment automation run for attribution/audit.
-           */
           try {
             await supabase.rpc('reconcile_instagram_private_reply_lead_v1', {
               p_organization_id: organizationId,
@@ -244,11 +289,6 @@ export async function POST(request: NextRequest) {
             console.error('Instagram private-reply reconciliation failed.', error);
           }
 
-          /*
-           * CRM ingestion is authoritative and independent from automation.
-           * A rule/queue failure must not lose or repeatedly retry a valid
-           * customer message through Meta's webhook delivery system.
-           */
           try {
             const automation = await queueInstagramDmAutomation({
               organizationId,
@@ -366,6 +406,13 @@ export async function POST(request: NextRequest) {
       { status: 200 },
     );
   } catch (error) {
+    if (error instanceof WebhookRequestError) {
+      return NextResponse.json(
+        { ok: false, error: error.message },
+        { status: error.status },
+      );
+    }
+
     const message = error instanceof Error ? error.message : 'Instagram webhook failed';
     console.error('Instagram webhook error:', message);
 
