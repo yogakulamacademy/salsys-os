@@ -9,6 +9,7 @@ import {
   syncGa4ToSupabase,
   type Ga4Runtime,
 } from '@/lib/ga4';
+import { bearerMatchesAnySecret } from '@/lib/security/machine-bearer-auth';
 
 export const runtime =
   'nodejs';
@@ -60,11 +61,6 @@ type SyncResult =
 function isAuthorized(
   request: NextRequest,
 ) {
-  const authorization =
-    request.headers.get(
-      'authorization',
-    );
-
   const secrets =
     [
       process.env
@@ -94,10 +90,11 @@ function isAuthorized(
     );
   }
 
-  return secrets.some(
-    (secret) =>
-      authorization ===
-      `Bearer ${secret}`,
+  return bearerMatchesAnySecret(
+    request.headers.get(
+      'authorization',
+    ),
+    secrets,
   );
 }
 
@@ -439,6 +436,13 @@ async function executeSync(
     } catch (
       error
     ) {
+      console.error(
+        'GA4 asset sync failed:',
+        runtimeConfig.organizationId,
+        runtimeConfig.propertyId,
+        error,
+      );
+
       results.push({
         ok:
           false,
@@ -451,9 +455,7 @@ async function executeSync(
         propertyId:
           runtimeConfig.propertyId,
         error:
-          error instanceof Error
-            ? error.message
-            : 'Unknown GA4 sync error',
+          'GA4 sync failed for this asset.',
       });
     }
   }
@@ -523,11 +525,6 @@ export async function GET(
   } catch (
     error
   ) {
-    const message =
-      error instanceof Error
-        ? error.message
-        : 'Unknown GA4 sync error';
-
     console.error(
       'GA4 cron sync failed:',
       error,
@@ -537,7 +534,7 @@ export async function GET(
       {
         ok: false,
         error:
-          message,
+          'GA4 sync failed.',
       },
       {
         status: 500,
@@ -615,11 +612,6 @@ export async function POST(
   } catch (
     error
   ) {
-    const message =
-      error instanceof Error
-        ? error.message
-        : 'Unknown GA4 sync error';
-
     console.error(
       'GA4 manual sync failed:',
       error,
@@ -629,7 +621,7 @@ export async function POST(
       {
         ok: false,
         error:
-          message,
+          'GA4 sync failed.',
       },
       {
         status: 500,
