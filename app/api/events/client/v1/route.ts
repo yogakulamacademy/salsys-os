@@ -13,6 +13,15 @@ export const dynamic = 'force-dynamic';
 
 const ALLOWED_PLATFORMS = new Set(['android', 'ios', 'web', 'shopify']);
 
+class PublicRequestError extends Error {
+  constructor(
+    message: string,
+    readonly status: number,
+  ) {
+    super(message);
+  }
+}
+
 function json(body: Record<string, unknown>, status: number, extra?: Record<string, string>) {
   return NextResponse.json(body, {
     status,
@@ -28,6 +37,59 @@ function text(value: unknown, max: number) {
   return typeof value === 'string' && value.trim()
     ? value.trim().slice(0, max)
     : null;
+}
+
+function declaredContentLength(request: NextRequest) {
+  const header = request.headers.get('content-length');
+  if (!header) return null;
+
+  const value = Number(header);
+  return Number.isFinite(value) && value >= 0 ? value : null;
+}
+
+async function readBoundedJson(request: NextRequest, maxBytes: number) {
+  const declared = declaredContentLength(request);
+  if (declared !== null && declared > maxBytes) {
+    throw new PublicRequestError('Payload too large.', 413);
+  }
+
+  if (!request.body) {
+    throw new PublicRequestError('Invalid JSON payload.', 400);
+  }
+
+  const reader = request.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let totalBytes = 0;
+
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      if (!value) continue;
+
+      totalBytes += value.byteLength;
+      if (totalBytes > maxBytes) {
+        await reader.cancel();
+        throw new PublicRequestError('Payload too large.', 413);
+      }
+      chunks.push(value);
+    }
+  } finally {
+    reader.releaseLock();
+  }
+
+  const body = new Uint8Array(totalBytes);
+  let offset = 0;
+  for (const chunk of chunks) {
+    body.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+
+  try {
+    return JSON.parse(new TextDecoder().decode(body)) as unknown;
+  } catch {
+    throw new PublicRequestError('Invalid JSON payload.', 400);
+  }
 }
 
 function platformFromEvent(
@@ -81,8 +143,8 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  const contentLength = Number(request.headers.get('content-length') || '0');
-  if (contentLength > source.maxPayloadBytes) {
+  const declared = declaredContentLength(request);
+  if (declared !== null && declared > source.maxPayloadBytes) {
     return json(
       { ok: false, accepted: false, error: 'Payload too large.' },
       413,
@@ -102,56 +164,87 @@ export async function POST(request: NextRequest) {
     );
   }
 
+  let raw: unknown;
   try {
-    const event = sanitizePublishableClientTrackingEvent(await request.json());
+    raw = await readBoundedJson(request, source.maxPayloadBytes);
+  } catch (error) {
+    const requestError =
+      error instanceof PublicRequestError
+        ? error
+        : new PublicRequestError('Invalid JSON payload.', 400);
 
-    if (!publishableClientEventAllowed(source, event.eventName)) {
-      return json(
-        {
-          ok: false,
-          accepted: false,
-          error: 'Event is not allowed for this publishable source.',
-        },
-        403,
-      );
-    }
+    return json(
+      { ok: false, accepted: false, error: requestError.message },
+      requestError.status,
+      {
+        'X-RateLimit-Limit': String(rate.limit),
+        'X-RateLimit-Remaining': String(rate.remaining),
+      },
+    );
+  }
 
-    const platform = platformFromEvent(event.context, event.metadata);
-    if (!platform) {
-      return json(
-        {
-          ok: false,
-          accepted: false,
-          error: 'A supported client platform is required.',
-        },
-        400,
-      );
-    }
+  let event: ReturnType<typeof sanitizePublishableClientTrackingEvent>;
+  try {
+    event = sanitizePublishableClientTrackingEvent(raw);
+  } catch {
+    return json(
+      { ok: false, accepted: false, error: 'Invalid client event payload.' },
+      400,
+      {
+        'X-RateLimit-Limit': String(rate.limit),
+        'X-RateLimit-Remaining': String(rate.remaining),
+      },
+    );
+  }
 
-    const sdk = sdkDescriptor(event.metadata);
-    if (!sdk.name || !sdk.version) {
-      return json(
-        {
-          ok: false,
-          accepted: false,
-          error: 'metadata.sdk.name and metadata.sdk.version are required.',
-        },
-        400,
-      );
-    }
+  if (!publishableClientEventAllowed(source, event.eventName)) {
+    return json(
+      {
+        ok: false,
+        accepted: false,
+        error: 'Event is not allowed for this publishable source.',
+      },
+      403,
+    );
+  }
 
-    const configuredPlatform = text(source.metadata.platform, 40)?.toLowerCase() ?? null;
-    if (configuredPlatform && configuredPlatform !== platform) {
-      return json(
-        {
-          ok: false,
-          accepted: false,
-          error: 'Client platform does not match the configured source.',
-        },
-        403,
-      );
-    }
+  const platform = platformFromEvent(event.context, event.metadata);
+  if (!platform) {
+    return json(
+      {
+        ok: false,
+        accepted: false,
+        error: 'A supported client platform is required.',
+      },
+      400,
+    );
+  }
 
+  const sdk = sdkDescriptor(event.metadata);
+  if (!sdk.name || !sdk.version) {
+    return json(
+      {
+        ok: false,
+        accepted: false,
+        error: 'metadata.sdk.name and metadata.sdk.version are required.',
+      },
+      400,
+    );
+  }
+
+  const configuredPlatform = text(source.metadata.platform, 40)?.toLowerCase() ?? null;
+  if (configuredPlatform && configuredPlatform !== platform) {
+    return json(
+      {
+        ok: false,
+        accepted: false,
+        error: 'Client platform does not match the configured source.',
+      },
+      403,
+    );
+  }
+
+  try {
     const gpc = source.honorGpc ? requestGpc(request, event.context) : false;
     const admin = createAdminClient();
 
@@ -267,13 +360,14 @@ export async function POST(request: NextRequest) {
       },
     );
   } catch (error) {
+    console.error('Public client event ingestion failed.', error);
     return json(
       {
         ok: false,
         accepted: false,
-        error: error instanceof Error ? error.message : 'Client event ingestion failed.',
+        error: 'Client event ingestion failed.',
       },
-      400,
+      500,
       {
         'X-RateLimit-Limit': String(rate.limit),
         'X-RateLimit-Remaining': String(rate.remaining),
