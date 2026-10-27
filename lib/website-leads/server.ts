@@ -1,3 +1,5 @@
+import { secretMatches } from '@/lib/security/machine-bearer-auth';
+
 export type WebsiteLeadPayload = {
   externalEventId: string;
   site?: string | null;
@@ -97,6 +99,5 @@ function parseMaybeJson(value: unknown): unknown {
 }
 
 export function isWebsiteCaptureAuthorized(secret: string | null) {
-  const expected = process.env.WEBSITE_LEAD_CAPTURE_SECRET;
-  return Boolean(expected && secret && secret === expected);
+  return secretMatches(secret, process.env.WEBSITE_LEAD_CAPTURE_SECRET);
 }
