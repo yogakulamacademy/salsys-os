@@ -1,0 +1,47 @@
+name: Production Smoke
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'scripts/verify-production-smoke.mjs'
+      - '.github/workflows/production-smoke.yml'
+  push:
+    branches:
+      - main
+    paths:
+      - 'scripts/verify-production-smoke.mjs'
+      - '.github/workflows/production-smoke.yml'
+  schedule:
+    - cron: '17 */6 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: production-smoke-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  smoke:
+    name: Production auth smoke
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+
+      - name: Setup Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 22
+
+      - name: Verify production auth surfaces
+        env:
+          SALSYSOS_SMOKE_BASE_URL: https://crm.salsysos.com
+          SALSYSOS_SMOKE_TIMEOUT_MS: '12000'
+          SALSYSOS_SMOKE_ATTEMPTS: '3'
+        run: node scripts/verify-production-smoke.mjs
