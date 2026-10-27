@@ -55,6 +55,21 @@ for (const [source, label] of [
 
 requireText(universalIdentify, 'source.organizationId', 'universal source-derived tenant binding');
 requireText(legacyIdentify, '.from("leads")', 'legacy server-derived lead organization');
+requireText(legacyIdentify, 'secretMatches', 'legacy timing-safe tracking secret comparison');
+requireText(legacyIdentify, 'request.body.getReader()', 'legacy streamed request-body reader');
+requireText(legacyIdentify, 'totalBytes > maxBytes', 'legacy actual byte-limit enforcement');
+requireText(legacyIdentify, 'error: "Lead identification failed"', 'legacy stable backend failure response');
+
+if (legacyIdentify.includes('supplied !== expected')) {
+  throw new Error('Customer 360 identity verification failed: legacy identify still compares tracking secrets with ordinary string equality.');
+}
+if (legacyIdentify.includes('await request.json()')) {
+  throw new Error('Customer 360 identity verification failed: legacy identify still fully buffers request.json() before enforcing the actual byte limit.');
+}
+if (legacyIdentify.includes('error instanceof Error ? error.message')) {
+  throw new Error('Customer 360 identity verification failed: legacy identify still exposes caught backend exception messages.');
+}
+
 requireText(packageJson, 'verify:customer360-identity', 'package verifier script');
 requireText(ci, 'npm run verify:customer360-identity', 'CI verifier step');
 
