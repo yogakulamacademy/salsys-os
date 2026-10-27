@@ -9,6 +9,10 @@ import {
   syncGoogleAdsToSupabase,
   type GoogleAdsRuntime,
 } from '@/lib/google-ads';
+import {
+  bearerMatchesAnySecret,
+  secretMatches,
+} from '@/lib/security/machine-bearer-auth';
 
 export const runtime =
   'nodejs';
@@ -166,45 +170,44 @@ function isAuthorized(
       ?.trim();
 
   const headerSecret =
-    request.headers
-      .get(
-        'x-google-ads-sync-secret',
-      )
-      ?.trim();
+    request.headers.get(
+      'x-google-ads-sync-secret',
+    );
 
   const authorization =
-    request.headers
-      .get(
-        'authorization',
-      )
-      ?.trim();
+    request.headers.get(
+      'authorization',
+    );
 
   if (
     manualSecret &&
-    headerSecret ===
-      manualSecret
+    secretMatches(
+      headerSecret,
+      manualSecret,
+    )
   ) {
     return true;
   }
 
-  if (
-    manualSecret &&
-    authorization ===
-      `Bearer ${manualSecret}`
-  ) {
-    return true;
-  }
+  const bearerSecrets =
+    [
+      manualSecret,
+      allowCron
+        ? cronSecret
+        : undefined,
+    ].filter(
+      (
+        secret,
+      ): secret is string =>
+        Boolean(
+          secret,
+        ),
+    );
 
-  if (
-    allowCron &&
-    cronSecret &&
-    authorization ===
-      `Bearer ${cronSecret}`
-  ) {
-    return true;
-  }
-
-  return false;
+  return bearerMatchesAnySecret(
+    authorization,
+    bearerSecrets,
+  );
 }
 
 /* =========================================================
@@ -442,6 +445,13 @@ async function runSync({
     } catch (
       error
     ) {
+      console.error(
+        'Google Ads asset sync failed:',
+        runtimeConfig.organizationId,
+        runtimeConfig.customerId,
+        error,
+      );
+
       results.push({
         ok:
           false,
@@ -454,9 +464,7 @@ async function runSync({
         customerId:
           runtimeConfig.customerId,
         error:
-          error instanceof Error
-            ? error.message
-            : 'Unknown Google Ads sync error',
+          'Google Ads sync failed for this asset.',
       });
     }
   }
@@ -567,11 +575,6 @@ export async function POST(
   } catch (
     error
   ) {
-    const message =
-      error instanceof Error
-        ? error.message
-        : 'Unknown Google Ads sync error';
-
     console.error(
       'Google Ads manual sync failed:',
       error,
@@ -582,7 +585,7 @@ export async function POST(
         ok:
           false,
         error:
-          message,
+          'Google Ads sync failed.',
       },
       {
         status:
@@ -652,11 +655,6 @@ export async function GET(
   } catch (
     error
   ) {
-    const message =
-      error instanceof Error
-        ? error.message
-        : 'Unknown Google Ads cron error';
-
     console.error(
       'Google Ads cron sync failed:',
       error,
@@ -667,7 +665,7 @@ export async function GET(
         ok:
           false,
         error:
-          message,
+          'Google Ads sync failed.',
       },
       {
         status:
