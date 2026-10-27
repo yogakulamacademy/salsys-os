@@ -1,6 +1,7 @@
 import "server-only";
 
 import { cookies } from "next/headers";
+import { safeUpstreamErrorMessage } from "@/lib/errors/safe-upstream-error";
 import { createClient } from "@/lib/supabase/server";
 
 export const ACTIVE_WORKSPACE_COOKIE = "salsys-active-workspace";
@@ -43,7 +44,10 @@ async function bindCurrentTenantSession(
 
   if (error) {
     throw new Error(
-      `Unable to bind the authenticated session to its tenant: ${error.message}`,
+      `Unable to bind the authenticated session to its tenant: ${safeUpstreamErrorMessage(
+        error,
+        "Supabase tenant binding failed",
+      )}`,
     );
   }
 }
@@ -68,7 +72,10 @@ export async function getWorkspaceContextForUser(
 
   if (membershipError) {
     throw new Error(
-      `Unable to load organization memberships: ${membershipError.message}`,
+      `Unable to load organization memberships: ${safeUpstreamErrorMessage(
+        membershipError,
+        "Supabase membership lookup failed",
+      )}`,
     );
   }
 
@@ -97,7 +104,10 @@ export async function getWorkspaceContextForUser(
 
   if (organizationError) {
     throw new Error(
-      `Unable to load organizations: ${organizationError.message}`,
+      `Unable to load organizations: ${safeUpstreamErrorMessage(
+        organizationError,
+        "Supabase organization lookup failed",
+      )}`,
     );
   }
 
