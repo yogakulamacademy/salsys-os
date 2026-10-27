@@ -36,6 +36,8 @@ type QuickReply = {
   category: string | null;
 };
 
+const EMPTY_QUICK_REPLIES: QuickReply[] = [];
+
 type QuickReplyResponse = {
   ok?: boolean;
   quickReplies?: QuickReply[];
@@ -53,7 +55,7 @@ export function WhatsAppComposer({
   leadId,
   windowOpen,
   windowLabel,
-  quickReplies = [],
+  quickReplies = EMPTY_QUICK_REPLIES,
 }: {
   action: ServerAction;
   leadId?: string;
@@ -74,6 +76,7 @@ export function WhatsAppComposer({
   const [isPending, startTransition] = useTransition();
   const formRef = useRef<HTMLFormElement | null>(null);
   const saveTimerRef = useRef<number | null>(null);
+  const quickRepliesRequestedRef = useRef(false);
   const { state: connectionState } = useWhatsAppConnectionStatus();
   const connectionReady = connectionState === "connected";
   const draftKey = resolvedLeadId
@@ -137,8 +140,9 @@ export function WhatsAppComposer({
   }, [draftKey]);
 
   useEffect(() => {
-    if (!windowOpen || quickReplies.length > 0) return;
+    if (!windowOpen || quickReplies.length > 0 || quickRepliesRequestedRef.current) return;
 
+    quickRepliesRequestedRef.current = true;
     let cancelled = false;
     const controller = new AbortController();
 
@@ -165,7 +169,7 @@ export function WhatsAppComposer({
       cancelled = true;
       controller.abort();
     };
-  }, [quickReplies, windowOpen]);
+  }, [quickReplies.length, windowOpen]);
 
   const persistDraft = useCallback(
     (value: string) => {
