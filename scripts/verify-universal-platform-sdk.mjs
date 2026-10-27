@@ -21,6 +21,7 @@ const requiredFiles = [
   'app/api/events/browser/v1/route.ts',
   'app/api/events/identify/v1/route.ts',
   'app/api/events/v1/route.ts',
+  'app/api/leads/browser/v1/route.ts',
   'app/api/privacy/consent/client/v1/route.ts',
   'sdk/android/settings.gradle.kts',
   'sdk/android/build.gradle.kts',
@@ -132,6 +133,27 @@ verifyStreamBoundedRoute(
   'Browser event route',
   "error: 'Browser event ingestion failed.'",
 );
+
+const browserLeadRoute = read('app/api/leads/browser/v1/route.ts');
+for (const [needle, label] of [
+  ['resolveBrowserTrackingSource', 'origin/site source resolution'],
+  ['consumeTrackingRateLimit', 'tracking rate limit'],
+  ['privacy_gate_tracking_event_v1', 'privacy gate before lead persistence'],
+  ['ingest_website_lead_for_organization', 'tenant-bound lead ingestion'],
+  ['readBoundedJson', 'streamed request-body limit'],
+]) {
+  if (!browserLeadRoute.includes(needle)) {
+    fail(`Browser lead route is missing ${label} (${needle}).`);
+  }
+}
+verifyStreamBoundedRoute(
+  browserLeadRoute,
+  'Browser lead route',
+  "error: 'Browser lead capture failed.'",
+);
+if (browserLeadRoute.includes('await request.json()')) {
+  fail('Browser lead route must not fully buffer request.json() before enforcing the actual byte limit.');
+}
 
 const identifyRoute = read('app/api/events/identify/v1/route.ts');
 for (const [needle, label] of [
