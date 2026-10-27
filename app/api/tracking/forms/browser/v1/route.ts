@@ -28,6 +28,15 @@ const ALLOWED_FIELD_TYPES = new Set([
   'other',
 ]);
 
+class PublicRequestError extends Error {
+  constructor(
+    message: string,
+    readonly status: number,
+  ) {
+    super(message);
+  }
+}
+
 function json(
   body: Record<string, unknown>,
   status: number,
@@ -49,6 +58,60 @@ function publicSiteId(request: NextRequest) {
     request.headers.get('x-salsys-site-id')?.trim() ||
     null
   );
+}
+
+function declaredContentLength(request: NextRequest) {
+  const header = request.headers.get('content-length');
+  if (!header) return null;
+
+  const value = Number(header);
+  return Number.isFinite(value) && value >= 0 ? value : null;
+}
+
+async function readBoundedJson(request: NextRequest, maxBytes: number) {
+  const declared = declaredContentLength(request);
+  if (declared !== null && declared > maxBytes) {
+    throw new PublicRequestError('Payload too large.', 413);
+  }
+
+  if (!request.body) {
+    throw new PublicRequestError('Invalid form discovery payload.', 400);
+  }
+
+  const reader = request.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let totalBytes = 0;
+
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      if (!value) continue;
+
+      totalBytes += value.byteLength;
+      if (totalBytes > maxBytes) {
+        await reader.cancel();
+        throw new PublicRequestError('Payload too large.', 413);
+      }
+
+      chunks.push(value);
+    }
+  } finally {
+    reader.releaseLock();
+  }
+
+  const body = new Uint8Array(totalBytes);
+  let offset = 0;
+  for (const chunk of chunks) {
+    body.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+
+  try {
+    return JSON.parse(new TextDecoder().decode(body)) as unknown;
+  } catch {
+    throw new PublicRequestError('Invalid form discovery payload.', 400);
+  }
 }
 
 function cleanText(value: unknown, max: number) {
@@ -172,7 +235,10 @@ export async function GET(request: NextRequest) {
     .neq('status', 'ignored')
     .order('last_seen_at', { ascending: false });
 
-  if (error) return json({ ok: false, error: error.message }, 500, cors);
+  if (error) {
+    console.error('Browser form discovery read failed.', error);
+    return json({ ok: false, error: 'Unable to load form discovery configuration.' }, 500, cors);
+  }
 
   return json(
     {
@@ -191,9 +257,9 @@ export async function POST(request: NextRequest) {
     return json({ ok: false, accepted: false, error: 'Unrecognized browser tracking origin.' }, 403, cors);
   }
 
-  const contentLength = Number(request.headers.get('content-length') || '0');
   const maxBytes = Math.min(source.maxPayloadBytes, 48_000);
-  if (contentLength > maxBytes) {
+  const declared = declaredContentLength(request);
+  if (declared !== null && declared > maxBytes) {
     return json({ ok: false, accepted: false, error: 'Payload too large.' }, 413, cors);
   }
 
@@ -206,7 +272,22 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  const body = await request.json().catch(() => null);
+  let body: unknown;
+  try {
+    body = await readBoundedJson(request, maxBytes);
+  } catch (error) {
+    const requestError =
+      error instanceof PublicRequestError
+        ? error
+        : new PublicRequestError('Invalid form discovery payload.', 400);
+
+    return json(
+      { ok: false, accepted: false, error: requestError.message },
+      requestError.status,
+      cors,
+    );
+  }
+
   if (!body || typeof body !== 'object' || Array.isArray(body)) {
     return json({ ok: false, accepted: false, error: 'Invalid form discovery payload.' }, 400, cors);
   }
@@ -214,7 +295,10 @@ export async function POST(request: NextRequest) {
   const rawForms = Array.isArray((body as Record<string, unknown>).forms)
     ? ((body as Record<string, unknown>).forms as unknown[])
     : [];
-  const forms = rawForms.map(sanitizeForm).filter((form): form is NonNullable<ReturnType<typeof sanitizeForm>> => Boolean(form)).slice(0, 30);
+  const forms = rawForms
+    .map(sanitizeForm)
+    .filter((form): form is NonNullable<ReturnType<typeof sanitizeForm>> => Boolean(form))
+    .slice(0, 30);
 
   if (!forms.length) {
     return json({ ok: true, accepted: true, detected: 0, forms: [] }, 202, cors);
@@ -251,7 +335,8 @@ export async function POST(request: NextRequest) {
     });
 
   if (upsertError) {
-    return json({ ok: false, accepted: false, error: upsertError.message }, 500, cors);
+    console.error('Browser form discovery upsert failed.', upsertError);
+    return json({ ok: false, accepted: false, error: 'Form discovery update failed.' }, 500, cors);
   }
 
   const keys = rows.map((row) => row.form_key);
@@ -263,7 +348,8 @@ export async function POST(request: NextRequest) {
     .in('form_key', keys);
 
   if (configError) {
-    return json({ ok: false, accepted: false, error: configError.message }, 500, cors);
+    console.error('Browser form discovery configuration read failed.', configError);
+    return json({ ok: false, accepted: false, error: 'Unable to load form discovery configuration.' }, 500, cors);
   }
 
   return json(
