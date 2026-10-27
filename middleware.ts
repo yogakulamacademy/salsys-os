@@ -172,6 +172,12 @@ function isOnboardingSetupPage(pathname: string) {
   );
 }
 
+function privateNoStore<T extends NextResponse>(response: T): T {
+  response.headers.set("Cache-Control", "private, no-store, max-age=0");
+  response.headers.set("Pragma", "no-cache");
+  return response;
+}
+
 function redirectWithAuthCookies(
   request: NextRequest,
   response: NextResponse,
@@ -188,7 +194,7 @@ function redirectWithAuthCookies(
   }
   const redirectResponse = NextResponse.redirect(redirectUrl);
   response.cookies.getAll().forEach((cookie) => redirectResponse.cookies.set(cookie));
-  return redirectResponse;
+  return privateNoStore(redirectResponse);
 }
 
 function redirectToLogin(request: NextRequest, response: NextResponse) {
@@ -197,7 +203,7 @@ function redirectToLogin(request: NextRequest, response: NextResponse) {
   loginUrl.searchParams.set("next", `${request.nextUrl.pathname}${request.nextUrl.search}`);
   const redirectResponse = NextResponse.redirect(loginUrl);
   response.cookies.getAll().forEach((cookie) => redirectResponse.cookies.set(cookie));
-  return redirectResponse;
+  return privateNoStore(redirectResponse);
 }
 
 function isMissingAuthSessionError(error: { name?: string; message?: string } | null) {
@@ -250,7 +256,7 @@ function expireSessionCookies(request: NextRequest, response: NextResponse) {
   }
 
   response.cookies.set(ACTIVE_WORKSPACE_COOKIE, "", deletionOptions);
-  return response;
+  return privateNoStore(response);
 }
 
 function redirectToLoginWithClearedSession(
@@ -270,27 +276,28 @@ function unauthorizedWithClearedSession(request: NextRequest) {
 }
 
 function authConfigurationError(pathname: string) {
-  if (pathname.startsWith("/api/")) {
-    return NextResponse.json(
-      { ok: false, error: "CRM authentication is not configured." },
-      { status: 503 },
-    );
-  }
-  return new NextResponse("CRM authentication is not configured.", { status: 503 });
+  const response = pathname.startsWith("/api/")
+    ? NextResponse.json(
+        { ok: false, error: "CRM authentication is not configured." },
+        { status: 503 },
+      )
+    : new NextResponse("CRM authentication is not configured.", { status: 503 });
+
+  return privateNoStore(response);
 }
 
 function workspaceServiceUnavailable(pathname: string) {
-  if (pathname.startsWith("/api/")) {
-    return NextResponse.json(
-      { ok: false, error: "Workspace service is temporarily unavailable." },
-      { status: 503 },
-    );
-  }
+  const response = pathname.startsWith("/api/")
+    ? NextResponse.json(
+        { ok: false, error: "Workspace service is temporarily unavailable." },
+        { status: 503 },
+      )
+    : new NextResponse(
+        "SalsysOS is temporarily unable to verify your workspace. Please retry in a moment.",
+        { status: 503 },
+      );
 
-  return new NextResponse(
-    "SalsysOS is temporarily unable to verify your workspace. Please retry in a moment.",
-    { status: 503 },
-  );
+  return privateNoStore(response);
 }
 
 type WorkspaceContextPayload = {
@@ -303,8 +310,8 @@ export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
   if (isPublicPath(pathname) || isPublicAuthPath(pathname)) {
-    // Do not place the login/recovery form behind a Supabase middleware lookup.
-    // The server action performs authentication and tenant binding itself.
+    // Do not place login/recovery/public ingestion behind auth middleware.
+    // Public caching behavior remains owned by the route/asset itself.
     return NextResponse.next();
   }
 
@@ -383,9 +390,6 @@ export async function middleware(request: NextRequest) {
     return redirectToLoginWithClearedSession(request, response);
   }
 
-  // Resolve tenant binding + active membership role in one database round trip.
-  // This is security-critical, so timeout/unavailability fails closed with a
-  // controlled 503 rather than allowing the request through or waiting for Vercel.
   let workspaceResult: Awaited<ReturnType<typeof supabase.rpc>>;
   try {
     workspaceResult = await withMiddlewareDeadline(
@@ -422,9 +426,11 @@ export async function middleware(request: NextRequest) {
       detail.includes("Multiple active organization memberships")
     ) {
       if (pathname.startsWith("/api/")) {
-        return NextResponse.json(
-          { ok: false, error: "Workspace access denied." },
-          { status: 403 },
+        return privateNoStore(
+          NextResponse.json(
+            { ok: false, error: "Workspace access denied." },
+            { status: 403 },
+          ),
         );
       }
 
@@ -463,10 +469,6 @@ export async function middleware(request: NextRequest) {
     maxAge: WORKSPACE_COOKIE_MAX_AGE_SECONDS,
   });
 
-  // Provisioned customer owners must replace their temporary password before
-  // any normal application or onboarding page is available. app_metadata is
-  // admin-owned, so browser code cannot clear this requirement. APIs retain
-  // their existing authorization behavior and are not redirected by this UX gate.
   if (
     !pathname.startsWith("/api/") &&
     pathname !== "/onboarding/security" &&
@@ -475,9 +477,6 @@ export async function middleware(request: NextRequest) {
     return redirectWithAuthCookies(request, response, "/onboarding/security");
   }
 
-  // Optional onboarding gating must never be able to exhaust middleware time.
-  // A timeout/error here fails open because auth + workspace authorization have
-  // already succeeded and onboarding is only a UX gate.
   if (
     !pathname.startsWith("/api/") &&
     !isOnboardingSetupPage(pathname) &&
@@ -523,7 +522,7 @@ export async function middleware(request: NextRequest) {
     return redirectWithAuthCookies(request, response, "/dashboard");
   }
 
-  return response;
+  return privateNoStore(response);
 }
 
 export const config = {
