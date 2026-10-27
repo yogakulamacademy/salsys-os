@@ -15,16 +15,28 @@ type RealtimeMessage = {
   created_at?: string;
 };
 
+const MIN_REFRESH_INTERVAL_MS = 5_000;
+
 export function ConversationsRealtime() {
   const router = useRouter();
 
   useEffect(() => {
     const supabase = createClient();
     let refreshTimer: ReturnType<typeof setTimeout> | null = null;
+    let lastRefreshAt = 0;
 
     const refreshInbox = () => {
-      if (refreshTimer) clearTimeout(refreshTimer);
-      refreshTimer = setTimeout(() => router.refresh(), 300);
+      if (document.visibilityState !== 'visible' || refreshTimer) return;
+
+      const elapsed = Date.now() - lastRefreshAt;
+      const delay = Math.max(0, MIN_REFRESH_INTERVAL_MS - elapsed);
+
+      refreshTimer = setTimeout(() => {
+        refreshTimer = null;
+        if (document.visibilityState !== 'visible') return;
+        lastRefreshAt = Date.now();
+        router.refresh();
+      }, delay);
     };
 
     const channel = supabase
