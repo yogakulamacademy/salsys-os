@@ -25,14 +25,37 @@ Known non-blocking build warnings remain separate follow-up items:
 - deprecated `node-domexception` transitive package warning;
 - npm `cache-dir` environment configuration warning.
 
+## First normal cache-enabled production build
+
+Merge commit `ff9a00bd491148232a8a56f142c266080f797516` produced the first normal Git-triggered production deployment after the reserved cache-bypass key was archived.
+
+Vercel explicitly reported:
+
+- build cache restored from the preceding correctness-baseline deployment;
+- dependency installation `up to date` in approximately 749 ms;
+- Next.js optimized compilation completed in approximately 16.9 seconds;
+- build completed successfully and created a new build cache for the next deployment;
+- deployment reached READY.
+
+Compared with the uncached 37.7-second optimized compilation baseline, the first cache-enabled compile was approximately 55% faster.
+
+The prior 113 KiB and 268 KiB webpack cache-serialization warnings were not emitted during this restored-cache build. The `protobufjs` install-script warning and npm `cache-dir` warning remained and are tracked separately.
+
+Post-deployment verification:
+
+- `main` CI passed;
+- CodeQL completed successfully;
+- production runtime error window remained at zero;
+- critical unauthenticated auth/recovery surfaces continued to return their expected secure states.
+
 ## Acceptance criteria for cache restoration
 
 A normal Git-triggered production deployment must:
 
 1. no longer report `VERCEL_FORCE_NO_BUILD_CACHE`;
 2. restore/cache build artifacts normally;
-3. pass CI, CodeQL, and Production Smoke;
+3. pass CI and CodeQL and preserve Production Smoke behavior;
 4. reach Vercel READY;
 5. introduce no new production runtime errors.
 
-A following normal production build should be compared against the first normal build to confirm actual cache reuse and quantify the improvement.
+The next normal production build is the repeat-cache measurement. It should restore cache from the first normal cache-enabled deployment and be compared against the 16.9-second compile above before this checkpoint is closed.
