@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 
+import { bearerMatchesAnySecret } from '@/lib/security/machine-bearer-auth';
 import { createAdminClient } from '@/lib/supabase/admin';
 
 export const runtime = 'nodejs';
@@ -85,7 +86,7 @@ function isAuthorized(request: NextRequest) {
     throw new Error('SYSTEM_INTELLIGENCE_SYNC_SECRET or CRON_SECRET is not configured.');
   }
 
-  return secrets.some((secret) => authorization === `Bearer ${secret}`);
+  return bearerMatchesAnySecret(authorization, secrets);
 }
 
 function nullableFiniteNumber(value: unknown) {
