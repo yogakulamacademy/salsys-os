@@ -20,6 +20,7 @@ const actions = read('app/automation/whatsapp/actions.ts');
 const page = read('app/automation/whatsapp/page.tsx');
 const helper = read('lib/whatsapp-operations.ts');
 const api = read('app/api/whatsapp/quick-replies/route.ts');
+const webhook = read('app/api/whatsapp/webhook/route.ts');
 const composer = read('components/conversation-composer.tsx');
 const layout = read('app/automation/layout.tsx');
 const navigation = read('components/automation/automation-navigation.tsx');
@@ -77,6 +78,24 @@ for (const [needle, label] of [
   ['require_verified_primary_whatsapp', 'verified contact filter'],
 ]) {
   if (!helper.includes(needle)) fail(`Audience resolver is missing ${label} (${needle}).`);
+}
+
+for (const [needle, label] of [
+  ['verifyMetaSignature', 'signed webhook validation'],
+  ['readBoundedRawBody', 'bounded raw webhook reader'],
+  ['totalBytes > maxBytes', 'actual webhook byte limit'],
+  ['MAX_META_WEBHOOK_BYTES', 'Meta webhook size ceiling'],
+  ["error: 'WhatsApp webhook failed'", 'stable external webhook failure'],
+  ['ingest_whatsapp_webhook_event', 'canonical WhatsApp CRM ingestion'],
+  ['apply_whatsapp_message_status', 'message status processing'],
+]) {
+  if (!webhook.includes(needle)) fail(`WhatsApp webhook is missing ${label} (${needle}).`);
+}
+if (webhook.includes('await request.arrayBuffer()')) {
+  fail('WhatsApp webhook must not fully buffer request.arrayBuffer() before enforcing the actual byte limit.');
+}
+if (webhook.includes('error: message')) {
+  fail('WhatsApp webhook must not expose caught internal exception messages to Meta.');
 }
 
 for (const [needle, label] of [
