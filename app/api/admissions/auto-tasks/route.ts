@@ -173,6 +173,7 @@ async function runAutoTasks(request: NextRequest) {
         hardFailure = true;
 
         const message = errorMessage(error);
+        console.error("Admissions auto-task organization run failed:", organizationId, error);
 
         if (runId) {
           await supabase
@@ -198,7 +199,7 @@ async function runAutoTasks(request: NextRequest) {
           created,
           failed,
           rows,
-          error: message,
+          error: "Automatic admissions task run failed.",
         });
       }
     }
@@ -229,13 +230,13 @@ async function runAutoTasks(request: NextRequest) {
       },
     );
   } catch (error) {
-    const message = errorMessage(error);
+    console.error("Admissions auto-task run failed:", error);
 
     return NextResponse.json(
       {
         ok: false,
         runId: null,
-        error: message,
+        error: "Automatic admissions task run failed.",
       },
       {
         status: 500,
