@@ -97,15 +97,35 @@ for (const [needle, label] of [
 
 for (const [needle, label] of [
   ['verifyMetaSignature', 'signed webhook validation'],
+  ['readBoundedRawBody', 'bounded raw webhook reader'],
+  ['totalBytes > maxBytes', 'actual webhook byte limit'],
+  ['MAX_META_WEBHOOK_BYTES', 'Meta webhook size ceiling'],
   ['queueInstagramDmAutomation', 'DM automation enqueue'],
   ['queueInstagramCommentAutomation', 'comment automation enqueue'],
   ["field !== 'comments'", 'comment webhook parsing'],
   ['instagram_comment_events', 'comment persistence'],
   ['reconcile_instagram_private_reply_lead_v1', 'private-reply identity reconciliation'],
-  ['CRM ingestion is authoritative and independent from automation', 'automation isolation from CRM ingestion'],
+  ["error: 'Instagram webhook failed'", 'stable external webhook failure'],
 ]) {
   if (!webhook.includes(needle)) fail(`Instagram webhook is missing ${label} (${needle}).`);
 }
+if (webhook.includes('await request.arrayBuffer()')) {
+  fail('Instagram webhook must not fully buffer request.arrayBuffer() before enforcing the actual byte limit.');
+}
+
+const crmIngestIndex = webhook.indexOf("'ingest_instagram_dm_event'");
+const crmProcessedIndex = webhook.indexOf('if (crmResult.processed === true)');
+const dmAutomationIndex = webhook.indexOf('await queueInstagramDmAutomation({');
+if (
+  crmIngestIndex < 0 ||
+  crmProcessedIndex < 0 ||
+  dmAutomationIndex < 0 ||
+  crmIngestIndex > crmProcessedIndex ||
+  crmProcessedIndex > dmAutomationIndex
+) {
+  fail('Instagram DM automation must only enqueue after authoritative CRM ingestion reports processed.');
+}
+
 for (const forbidden of [
   'runInstagramAutomations(',
   'provider_send_enabled: true',
