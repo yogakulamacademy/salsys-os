@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 
+import { bearerMatchesAnySecret } from "@/lib/security/machine-bearer-auth";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 export const dynamic = "force-dynamic";
@@ -36,9 +37,7 @@ function isAuthorized(request: NextRequest) {
     return false;
   }
 
-  const authorization = request.headers.get("authorization")?.trim();
-
-  return authorization === `Bearer ${cronSecret}`;
+  return bearerMatchesAnySecret(request.headers.get("authorization"), [cronSecret]);
 }
 
 function errorMessage(error: unknown) {
