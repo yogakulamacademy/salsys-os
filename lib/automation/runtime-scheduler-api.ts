@@ -145,7 +145,6 @@ export async function runRuntimeSchedulerApi(
       },
     };
   } catch (error) {
-    const message = error instanceof Error ? error.message : 'Unknown automation scheduler error';
     console.error('Automation runtime scheduler failed:', error);
 
     return {
@@ -155,7 +154,7 @@ export async function runRuntimeSchedulerApi(
         enabled: schedulerEnabled(),
         startedAt,
         finishedAt: new Date().toISOString(),
-        error: message,
+        error: 'Automation scheduler failed.',
       },
     };
   }
