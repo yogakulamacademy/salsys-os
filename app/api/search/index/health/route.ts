@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 
+import { bearerMatchesAnySecret } from '@/lib/security/machine-bearer-auth';
 import { getOpenSearchHealth } from '@/lib/search/health';
 
 export const runtime = 'nodejs';
@@ -12,7 +13,7 @@ function isAuthorized(request: NextRequest) {
     .filter((value): value is string => Boolean(value));
 
   if (secrets.length === 0) throw new Error('Search health authorization is not configured.');
-  return secrets.some((secret) => authorization === `Bearer ${secret}`);
+  return bearerMatchesAnySecret(authorization, secrets);
 }
 
 function safeError(error: unknown) {

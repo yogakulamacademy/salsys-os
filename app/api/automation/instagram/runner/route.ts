@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 
 import { runInstagramAutomations } from '@/lib/automation/instagram-operations';
+import { bearerMatchesAnySecret } from '@/lib/security/machine-bearer-auth';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -19,7 +20,7 @@ function isAuthorized(request: NextRequest) {
     throw new Error('INSTAGRAM_AUTOMATION_RUNNER_SECRET or CRON_SECRET is not configured.');
   }
 
-  return secrets.some((secret) => authorization === `Bearer ${secret}`);
+  return bearerMatchesAnySecret(authorization, secrets);
 }
 
 export async function GET(request: NextRequest) {
