@@ -1,6 +1,6 @@
 import { KeyRound, ShieldCheck } from 'lucide-react';
 
-import { confirmPasswordRecoveryAction } from '@/app/actions/auth';
+import { confirmPasswordRecoveryWithGrantAction } from '@/app/actions/password-recovery';
 
 export default async function RecoveryConfirmPage({
   searchParams,
@@ -40,7 +40,7 @@ export default async function RecoveryConfirmPage({
             This password reset link is incomplete. Request a new reset email.
           </div>
         ) : (
-          <form action={confirmPasswordRecoveryAction} className="space-y-4">
+          <form action={confirmPasswordRecoveryWithGrantAction} className="space-y-4">
             <input type="hidden" name="token_hash" value={tokenHash} />
             <button className="btn-primary w-full" type="submit">
               <KeyRound size={16} /> Continue securely
