@@ -1,0 +1,45 @@
+name: Temporary Recovery Codemod
+
+on:
+  push:
+    branches:
+      - ph0-recovery-one-time-grant
+    paths:
+      - 'scripts/patch-legacy-recovery-actions.mjs'
+      - '.github/workflows/temporary-recovery-codemod.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: github.repository == 'yogakulamacademy/salsys-os' && github.actor == 'yogakulamacademy'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Checkout controlled branch
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          ref: ph0-recovery-one-time-grant
+
+      - name: Setup Node.js
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: 22
+
+      - name: Patch legacy recovery actions
+        run: node scripts/patch-legacy-recovery-actions.mjs
+
+      - name: Commit exact auth action patch
+        shell: bash
+        run: |
+          if git diff --quiet -- app/actions/auth.ts; then
+            echo "No auth action change required."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add app/actions/auth.ts
+          git commit -m "PH-0: neutralize legacy recovery actions"
+          git push origin HEAD:ph0-recovery-one-time-grant
