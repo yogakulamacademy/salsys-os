@@ -228,6 +228,63 @@ export async function POST(request: NextRequest) {
     try {
       const queued = await publishDurableTrustedEvent(envelope);
 
+      // Queue acceptance protects the event from a transient database outage,
+      // but a queue trigger can still be misconfigured or temporarily fail to
+      // invoke. When the source was verified at the edge, also make one
+      // idempotent write-through attempt to the canonical ingest path. If the
+      // queue later delivers the same event, ingest_tracking_event_v1 treats it
+      // as a duplicate rather than creating a second business event.
+      if (verification.kind === 'verified') {
+        try {
+          const result = await processDurableTrustedEvent(envelope);
+
+          return json(
+            {
+              ok: true,
+              accepted: result.accepted,
+              duplicate: result.duplicate,
+              quarantined: !result.accepted,
+              queued: true,
+              durable: true,
+              write_through: 'supabase_direct',
+              verification: 'verified',
+              queue_message_id: queued.messageId,
+              queue_deferred: queued.deferred,
+              raw_event_id: result.rawEventId,
+              event_family: result.eventFamily,
+              contract_status: result.contractStatus,
+              reason: result.reason,
+              processing: result.processing,
+              event_id: event.eventId,
+              received_at: new Date().toISOString(),
+            },
+            202,
+          );
+        } catch (writeThroughError) {
+          if (writeThroughError instanceof DurableEventPermanentError) {
+            console.warn('TRUSTED_EVENT_WRITE_THROUGH_REJECTED', {
+              eventId: event.eventId,
+              sourceKey: envelope.sourceKey,
+              reason: writeThroughError.reason,
+            });
+
+            return permanentErrorResponse(writeThroughError);
+          }
+
+          console.warn('TRUSTED_EVENT_WRITE_THROUGH_DEFERRED', {
+            eventId: event.eventId,
+            sourceKey: envelope.sourceKey,
+            error:
+              writeThroughError instanceof Error
+                ? writeThroughError.message
+                : 'Unknown write-through failure',
+          });
+        }
+      }
+
+      // If source verification had to be deferred, or direct write-through hit
+      // a transient dependency failure, the accepted queue copy remains the
+      // durable retry path.
       return json(
         {
           ok: true,
