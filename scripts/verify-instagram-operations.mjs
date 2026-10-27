@@ -115,7 +115,7 @@ if (webhook.includes('await request.arrayBuffer()')) {
 
 const crmIngestIndex = webhook.indexOf("'ingest_instagram_dm_event'");
 const crmProcessedIndex = webhook.indexOf('if (crmResult.processed === true)');
-const dmAutomationIndex = webhook.indexOf('queueInstagramDmAutomation');
+const dmAutomationIndex = webhook.indexOf('await queueInstagramDmAutomation({');
 if (
   crmIngestIndex < 0 ||
   crmProcessedIndex < 0 ||
