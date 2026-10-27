@@ -25,6 +25,7 @@ const requiredFiles = [
   'app/api/leads/capture/route.ts',
   'app/api/tracking/collect/route.ts',
   'app/api/tracking/consent/route.ts',
+  'app/api/tracking/forms/browser/v1/route.ts',
   'app/api/privacy/consent/client/v1/route.ts',
   'sdk/android/settings.gradle.kts',
   'sdk/android/build.gradle.kts',
@@ -216,6 +217,32 @@ verifyStreamBoundedRoute(
 );
 if (legacyConsentRoute.includes('await request.json()')) {
   fail('Legacy tracking consent route must not fully buffer request.json() before enforcing the actual byte limit.');
+}
+
+const browserFormRoute = read('app/api/tracking/forms/browser/v1/route.ts');
+for (const [needle, label] of [
+  ['resolveBrowserTrackingSource', 'origin/site source resolution'],
+  ['consumeTrackingRateLimit', 'tracking rate limit'],
+  ['readBoundedJson', 'streamed request-body limit'],
+  ["error: 'Form discovery update failed.'", 'stable write failure response'],
+  ["error: 'Unable to load form discovery configuration.'", 'stable read failure response'],
+]) {
+  if (!browserFormRoute.includes(needle)) {
+    fail(`Browser form discovery route is missing ${label} (${needle}).`);
+  }
+}
+verifyStreamBoundedRoute(
+  browserFormRoute,
+  'Browser form discovery route',
+  "error: 'Form discovery update failed.'",
+);
+if (browserFormRoute.includes('await request.json()')) {
+  fail('Browser form discovery route must not fully buffer request.json() before enforcing the actual byte limit.');
+}
+for (const rawLeak of ['error: upsertError.message', 'error: configError.message', 'error: error.message']) {
+  if (browserFormRoute.includes(rawLeak)) {
+    fail(`Browser form discovery route must not expose backend error details (${rawLeak}).`);
+  }
 }
 
 const identifyRoute = read('app/api/events/identify/v1/route.ts');
