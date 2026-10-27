@@ -69,18 +69,36 @@ for (const [needle, label] of [
   ['ingest_tracking_event_v1', 'canonical event ingestion'],
   ["authority: 'non_authoritative_client_telemetry'", 'non-authoritative provenance'],
   ["metadata.sdk.name and metadata.sdk.version are required", 'SDK identity requirement'],
+  ['readBoundedJson', 'streamed request-body limit'],
+  ['request.body.getReader()', 'streamed body reader'],
+  ['totalBytes > maxBytes', 'actual byte-limit enforcement'],
+  ["error: 'Client event ingestion failed.'", 'stable backend failure response'],
 ]) {
   if (!eventRoute.includes(needle)) fail(`Client event route is missing ${label} (${needle}).`);
+}
+if (eventRoute.includes('error instanceof Error ? error.message')) {
+  fail('Client event route must not echo caught backend exception messages to public callers.');
 }
 
 const consentRoute = read('app/api/privacy/consent/client/v1/route.ts');
 for (const purpose of ['analytics', 'marketing', 'advertising', 'sale_sharing', 'personalization']) {
   if (!consentRoute.includes(`'${purpose}'`)) fail(`Client consent route must support ${purpose}.`);
 }
-for (const needle of ['record_privacy_preference_v1', 'privacyNoticeVersion', 'x-salsys-source-key']) {
+for (const [needle, label] of [
+  ['record_privacy_preference_v1', 'privacy preference persistence'],
+  ['privacyNoticeVersion', 'privacy notice version'],
+  ['x-salsys-source-key', 'publishable source key'],
+  ['readBoundedJson', 'streamed request-body limit'],
+  ['request.body.getReader()', 'streamed body reader'],
+  ['totalBytes > maxBytes', 'actual byte-limit enforcement'],
+  ["error: 'Unable to save privacy preferences.'", 'stable backend failure response'],
+]) {
   if (!consentRoute.toLowerCase().includes(needle.toLowerCase())) {
-    fail(`Client consent route is missing ${needle}.`);
+    fail(`Client consent route is missing ${label} (${needle}).`);
   }
+}
+if (consentRoute.includes('error instanceof Error ? error.message')) {
+  fail('Client consent route must not echo caught backend exception messages to public callers.');
 }
 
 const sourceRoute = read('app/api/tracking/sources/route.ts');
