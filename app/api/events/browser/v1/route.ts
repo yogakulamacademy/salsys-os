@@ -10,6 +10,15 @@ import {
 
 export const dynamic = 'force-dynamic';
 
+class PublicRequestError extends Error {
+  constructor(
+    message: string,
+    readonly status: number,
+  ) {
+    super(message);
+  }
+}
+
 function json(
   body: Record<string, unknown>,
   status: number,
@@ -42,6 +51,59 @@ function browserGpc(request: NextRequest, context: Record<string, unknown>) {
 
   const contextGpc = context.gpc;
   return contextGpc === true || contextGpc === 1 || contextGpc === '1';
+}
+
+function declaredContentLength(request: NextRequest) {
+  const header = request.headers.get('content-length');
+  if (!header) return null;
+
+  const value = Number(header);
+  return Number.isFinite(value) && value >= 0 ? value : null;
+}
+
+async function readBoundedJson(request: NextRequest, maxBytes: number) {
+  const declared = declaredContentLength(request);
+  if (declared !== null && declared > maxBytes) {
+    throw new PublicRequestError('Payload too large.', 413);
+  }
+
+  if (!request.body) {
+    throw new PublicRequestError('Invalid JSON payload.', 400);
+  }
+
+  const reader = request.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let totalBytes = 0;
+
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      if (!value) continue;
+
+      totalBytes += value.byteLength;
+      if (totalBytes > maxBytes) {
+        await reader.cancel();
+        throw new PublicRequestError('Payload too large.', 413);
+      }
+      chunks.push(value);
+    }
+  } finally {
+    reader.releaseLock();
+  }
+
+  const body = new Uint8Array(totalBytes);
+  let offset = 0;
+  for (const chunk of chunks) {
+    body.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+
+  try {
+    return JSON.parse(new TextDecoder().decode(body)) as unknown;
+  } catch {
+    throw new PublicRequestError('Invalid JSON payload.', 400);
+  }
 }
 
 function decodeHeader(value: string | null) {
@@ -107,8 +169,8 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  const contentLength = Number(request.headers.get('content-length') || '0');
-  if (contentLength > source.maxPayloadBytes) {
+  const declared = declaredContentLength(request);
+  if (declared !== null && declared > source.maxPayloadBytes) {
     return json(
       {
         ok: false,
@@ -138,8 +200,50 @@ export async function POST(request: NextRequest) {
     );
   }
 
+  let raw: unknown;
   try {
-    const event = sanitizeGenericTrackingEvent(await request.json());
+    raw = await readBoundedJson(request, source.maxPayloadBytes);
+  } catch (error) {
+    const requestError =
+      error instanceof PublicRequestError
+        ? error
+        : new PublicRequestError('Invalid JSON payload.', 400);
+
+    return json(
+      {
+        ok: false,
+        accepted: false,
+        error: requestError.message,
+      },
+      requestError.status,
+      {
+        ...cors,
+        'X-RateLimit-Limit': String(rate.limit),
+        'X-RateLimit-Remaining': String(rate.remaining),
+      },
+    );
+  }
+
+  let event: ReturnType<typeof sanitizeGenericTrackingEvent>;
+  try {
+    event = sanitizeGenericTrackingEvent(raw);
+  } catch {
+    return json(
+      {
+        ok: false,
+        accepted: false,
+        error: 'Invalid browser event payload.',
+      },
+      400,
+      {
+        ...cors,
+        'X-RateLimit-Limit': String(rate.limit),
+        'X-RateLimit-Remaining': String(rate.remaining),
+      },
+    );
+  }
+
+  try {
     const gpc = browserGpc(request, event.context);
     const geo = requestGeo(request);
     const admin = createAdminClient();
@@ -272,16 +376,14 @@ export async function POST(request: NextRequest) {
       },
     );
   } catch (error) {
+    console.error('Browser event ingestion failed.', error);
     return json(
       {
         ok: false,
         accepted: false,
-        error:
-          error instanceof Error
-            ? error.message
-            : 'Browser event ingestion failed.',
+        error: 'Browser event ingestion failed.',
       },
-      400,
+      500,
       {
         ...cors,
         'X-RateLimit-Limit': String(rate.limit),
