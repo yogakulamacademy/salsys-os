@@ -6,9 +6,18 @@
 -- service-role RPC becomes a thin guard that marks unsupported envelopes as
 -- processed/ignored so Meta receives a successful webhook response and does not
 -- amplify retries into database load.
+--
+-- The rename is conditional because this migration may be applied to an
+-- environment where the emergency production guard has already been installed.
 
-alter function public.ingest_instagram_dm_event(uuid,text,text,text,timestamptz)
-rename to ingest_instagram_dm_event_core_v1;
+do $migration$
+begin
+  if to_regprocedure('public.ingest_instagram_dm_event_core_v1(uuid,text,text,text,timestamptz)') is null
+     and to_regprocedure('public.ingest_instagram_dm_event(uuid,text,text,text,timestamptz)') is not null then
+    execute 'alter function public.ingest_instagram_dm_event(uuid,text,text,text,timestamptz) rename to ingest_instagram_dm_event_core_v1';
+  end if;
+end
+$migration$;
 
 create or replace function public.ingest_instagram_dm_event(
   p_raw_event_id uuid,
