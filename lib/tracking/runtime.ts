@@ -5,6 +5,7 @@ import {
   timingSafeEqual,
 } from 'node:crypto';
 
+import { safeUpstreamErrorMessage } from '@/lib/errors/safe-upstream-error';
 import { createAdminClient } from '@/lib/supabase/admin';
 
 export type TrackingSourceRuntime = {
@@ -292,7 +293,12 @@ export async function consumeTrackingRateLimit(
   );
 
   if (error) {
-    throw new Error(`Unable to enforce tracking rate limit: ${error.message}`);
+    throw new Error(
+      `Unable to enforce tracking rate limit: ${safeUpstreamErrorMessage(
+        error,
+        'Supabase rate-limit check failed',
+      )}`,
+    );
   }
 
   return {
