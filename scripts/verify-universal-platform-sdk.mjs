@@ -26,6 +26,7 @@ const requiredFiles = [
   'app/api/tracking/collect/route.ts',
   'app/api/tracking/consent/route.ts',
   'app/api/tracking/forms/browser/v1/route.ts',
+  'app/api/privacy/consent/v1/route.ts',
   'app/api/privacy/consent/client/v1/route.ts',
   'sdk/android/settings.gradle.kts',
   'sdk/android/build.gradle.kts',
@@ -122,6 +123,31 @@ verifyStreamBoundedRoute(
   'Client consent route',
   "error: 'Unable to save privacy preferences.'",
 );
+
+const browserConsentRoute = read('app/api/privacy/consent/v1/route.ts');
+for (const [needle, label] of [
+  ['resolveBrowserTrackingSource', 'origin/site source resolution'],
+  ['consumeTrackingRateLimit', 'tracking rate limit'],
+  ['record_privacy_preference_v1', 'privacy preference persistence'],
+  ['readBoundedJson', 'streamed request-body limit'],
+]) {
+  if (!browserConsentRoute.includes(needle)) {
+    fail(`Browser consent route is missing ${label} (${needle}).`);
+  }
+}
+verifyStreamBoundedRoute(
+  browserConsentRoute,
+  'Browser consent route',
+  "error: 'Unable to save privacy preferences.'",
+);
+if (browserConsentRoute.includes('await request.json()')) {
+  fail('Browser consent route must not fully buffer request.json() before enforcing the actual byte limit.');
+}
+for (const rawLeak of ['sourceError.message', 'error.message']) {
+  if (browserConsentRoute.includes(rawLeak)) {
+    fail(`Browser consent route must not expose backend error details (${rawLeak}).`);
+  }
+}
 
 const browserRoute = read('app/api/events/browser/v1/route.ts');
 for (const [needle, label] of [
