@@ -8,6 +8,15 @@ import {
 
 export const dynamic = 'force-dynamic';
 
+class PublicRequestError extends Error {
+  constructor(
+    message: string,
+    readonly status: number,
+  ) {
+    super(message);
+  }
+}
+
 function bearerToken(request: NextRequest) {
   const authorization = request.headers.get('authorization')?.trim() ?? '';
   if (!authorization.toLowerCase().startsWith('bearer ')) return null;
@@ -40,6 +49,59 @@ function json(
   });
 }
 
+function declaredContentLength(request: NextRequest) {
+  const header = request.headers.get('content-length');
+  if (!header) return null;
+
+  const value = Number(header);
+  return Number.isFinite(value) && value >= 0 ? value : null;
+}
+
+async function readBoundedJson(request: NextRequest, maxBytes: number) {
+  const declared = declaredContentLength(request);
+  if (declared !== null && declared > maxBytes) {
+    throw new PublicRequestError('Payload too large.', 413);
+  }
+
+  if (!request.body) {
+    throw new PublicRequestError('Invalid JSON payload.', 400);
+  }
+
+  const reader = request.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let totalBytes = 0;
+
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      if (!value) continue;
+
+      totalBytes += value.byteLength;
+      if (totalBytes > maxBytes) {
+        await reader.cancel();
+        throw new PublicRequestError('Payload too large.', 413);
+      }
+      chunks.push(value);
+    }
+  } finally {
+    reader.releaseLock();
+  }
+
+  const body = new Uint8Array(totalBytes);
+  let offset = 0;
+  for (const chunk of chunks) {
+    body.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+
+  try {
+    return JSON.parse(new TextDecoder().decode(body)) as unknown;
+  } catch {
+    throw new PublicRequestError('Invalid JSON payload.', 400);
+  }
+}
+
 /**
  * Universal trusted identity handoff.
  *
@@ -65,8 +127,9 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  const contentLength = Number(request.headers.get('content-length') || '0');
-  if (contentLength > Math.min(source.maxPayloadBytes, 16_000)) {
+  const maxBytes = Math.min(source.maxPayloadBytes, 16_000);
+  const declared = declaredContentLength(request);
+  if (declared !== null && declared > maxBytes) {
     return json(
       {
         ok: false,
@@ -94,30 +157,72 @@ export async function POST(request: NextRequest) {
     );
   }
 
+  let raw: unknown;
   try {
-    const raw = await request.json();
-    if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
-      throw new Error('Invalid identity payload.');
-    }
+    raw = await readBoundedJson(request, maxBytes);
+  } catch (error) {
+    const requestError =
+      error instanceof PublicRequestError
+        ? error
+        : new PublicRequestError('Invalid JSON payload.', 400);
 
-    const input = raw as Record<string, unknown>;
-    const eventId = text(input.event_id ?? input.eventId, 160);
-    const leadId = text(input.lead_id ?? input.leadId, 100);
-    const visitorId = text(
-      input.anonymous_visitor_id ?? input.anonymousVisitorId ?? input.visitor_id,
-      180,
+    return json(
+      {
+        ok: false,
+        linked: false,
+        error: requestError.message,
+      },
+      requestError.status,
+      {
+        'X-RateLimit-Limit': String(rate.limit),
+        'X-RateLimit-Remaining': String(rate.remaining),
+      },
     );
-    const sessionKey = text(
-      input.session_key ?? input.sessionKey ?? input.session_id,
-      180,
+  }
+
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
+    return json(
+      {
+        ok: false,
+        linked: false,
+        error: 'Invalid identity payload.',
+      },
+      400,
+      {
+        'X-RateLimit-Limit': String(rate.limit),
+        'X-RateLimit-Remaining': String(rate.remaining),
+      },
     );
+  }
 
-    if (!leadId || !visitorId || !sessionKey) {
-      throw new Error(
-        'lead_id, anonymous_visitor_id and session_key are required.',
-      );
-    }
+  const input = raw as Record<string, unknown>;
+  const eventId = text(input.event_id ?? input.eventId, 160);
+  const leadId = text(input.lead_id ?? input.leadId, 100);
+  const visitorId = text(
+    input.anonymous_visitor_id ?? input.anonymousVisitorId ?? input.visitor_id,
+    180,
+  );
+  const sessionKey = text(
+    input.session_key ?? input.sessionKey ?? input.session_id,
+    180,
+  );
 
+  if (!leadId || !visitorId || !sessionKey) {
+    return json(
+      {
+        ok: false,
+        linked: false,
+        error: 'lead_id, anonymous_visitor_id and session_key are required.',
+      },
+      400,
+      {
+        'X-RateLimit-Limit': String(rate.limit),
+        'X-RateLimit-Remaining': String(rate.remaining),
+      },
+    );
+  }
+
+  try {
     const admin = createAdminClient();
     const { data, error } = await admin.rpc('attach_exact_session_identity_v1', {
       p_organization_id: source.organizationId,
@@ -152,13 +257,14 @@ export async function POST(request: NextRequest) {
       },
     );
   } catch (error) {
+    console.error('Trusted identity handoff failed.', error);
     return json(
       {
         ok: false,
         linked: false,
-        error: error instanceof Error ? error.message : 'Identity handoff failed.',
+        error: 'Identity handoff failed.',
       },
-      400,
+      500,
       {
         'X-RateLimit-Limit': String(rate.limit),
         'X-RateLimit-Remaining': String(rate.remaining),

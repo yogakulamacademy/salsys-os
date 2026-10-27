@@ -18,6 +18,9 @@ function read(relativePath) {
 const requiredFiles = [
   'lib/tracking/publishable-client.ts',
   'app/api/events/client/v1/route.ts',
+  'app/api/events/browser/v1/route.ts',
+  'app/api/events/identify/v1/route.ts',
+  'app/api/events/v1/route.ts',
   'app/api/privacy/consent/client/v1/route.ts',
   'sdk/android/settings.gradle.kts',
   'sdk/android/build.gradle.kts',
@@ -61,6 +64,22 @@ for (const forbiddenAuthority of ['payment.', 'enrollment.', 'booking.', 'lead.'
   }
 }
 
+function verifyStreamBoundedRoute(route, label, stableFailure) {
+  for (const [needle, requirement] of [
+    ['request.body.getReader()', 'streamed body reader'],
+    ['totalBytes > maxBytes', 'actual byte-limit enforcement'],
+    [stableFailure, 'stable backend failure response'],
+  ]) {
+    if (!route.includes(needle)) {
+      fail(`${label} is missing ${requirement} (${needle}).`);
+    }
+  }
+
+  if (route.includes('error instanceof Error ? error.message')) {
+    fail(`${label} must not echo caught backend exception messages to callers.`);
+  }
+}
+
 const eventRoute = read('app/api/events/client/v1/route.ts');
 for (const [needle, label] of [
   ['privacy_gate_tracking_event_v1', 'privacy gate before persistence'],
@@ -69,18 +88,83 @@ for (const [needle, label] of [
   ['ingest_tracking_event_v1', 'canonical event ingestion'],
   ["authority: 'non_authoritative_client_telemetry'", 'non-authoritative provenance'],
   ["metadata.sdk.name and metadata.sdk.version are required", 'SDK identity requirement'],
+  ['readBoundedJson', 'streamed request-body limit'],
 ]) {
   if (!eventRoute.includes(needle)) fail(`Client event route is missing ${label} (${needle}).`);
 }
+verifyStreamBoundedRoute(
+  eventRoute,
+  'Client event route',
+  "error: 'Client event ingestion failed.'",
+);
 
 const consentRoute = read('app/api/privacy/consent/client/v1/route.ts');
 for (const purpose of ['analytics', 'marketing', 'advertising', 'sale_sharing', 'personalization']) {
   if (!consentRoute.includes(`'${purpose}'`)) fail(`Client consent route must support ${purpose}.`);
 }
-for (const needle of ['record_privacy_preference_v1', 'privacyNoticeVersion', 'x-salsys-source-key']) {
+for (const [needle, label] of [
+  ['record_privacy_preference_v1', 'privacy preference persistence'],
+  ['privacyNoticeVersion', 'privacy notice version'],
+  ['x-salsys-source-key', 'publishable source key'],
+  ['readBoundedJson', 'streamed request-body limit'],
+]) {
   if (!consentRoute.toLowerCase().includes(needle.toLowerCase())) {
-    fail(`Client consent route is missing ${needle}.`);
+    fail(`Client consent route is missing ${label} (${needle}).`);
   }
+}
+verifyStreamBoundedRoute(
+  consentRoute,
+  'Client consent route',
+  "error: 'Unable to save privacy preferences.'",
+);
+
+const browserRoute = read('app/api/events/browser/v1/route.ts');
+for (const [needle, label] of [
+  ['resolveBrowserTrackingSource', 'origin/site source resolution'],
+  ['consumeTrackingRateLimit', 'tracking rate limit'],
+  ['privacy_gate_tracking_event_v1', 'privacy gate before persistence'],
+  ['readBoundedJson', 'streamed request-body limit'],
+]) {
+  if (!browserRoute.includes(needle)) fail(`Browser event route is missing ${label} (${needle}).`);
+}
+verifyStreamBoundedRoute(
+  browserRoute,
+  'Browser event route',
+  "error: 'Browser event ingestion failed.'",
+);
+
+const identifyRoute = read('app/api/events/identify/v1/route.ts');
+for (const [needle, label] of [
+  ['authenticateServerTrackingSource', 'trusted source authentication'],
+  ['attach_exact_session_identity_v1', 'atomic identity handoff'],
+  ['readBoundedJson', 'streamed request-body limit'],
+]) {
+  if (!identifyRoute.includes(needle)) fail(`Identity route is missing ${label} (${needle}).`);
+}
+verifyStreamBoundedRoute(
+  identifyRoute,
+  'Identity route',
+  "error: 'Identity handoff failed.'",
+);
+
+const trustedEventRoute = read('app/api/events/v1/route.ts');
+for (const [needle, label] of [
+  ['verifyDurableTrustedSource', 'trusted source verification'],
+  ['publishDurableTrustedEvent', 'durable queue publish'],
+  ['processDurableTrustedEvent', 'idempotent write-through/fallback'],
+  ['readBoundedText', 'streamed request-body limit'],
+]) {
+  if (!trustedEventRoute.includes(needle)) {
+    fail(`Trusted event route is missing ${label} (${needle}).`);
+  }
+}
+verifyStreamBoundedRoute(
+  trustedEventRoute,
+  'Trusted event route',
+  "error: 'Trusted event ingestion failed.'",
+);
+if (trustedEventRoute.includes('await request.text()')) {
+  fail('Trusted event route must not fully buffer request.text() before enforcing the actual byte limit.');
 }
 
 const sourceRoute = read('app/api/tracking/sources/route.ts');
