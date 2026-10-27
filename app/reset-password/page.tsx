@@ -1,6 +1,40 @@
+import { cookies } from 'next/headers';
 import { KeyRound, ShieldCheck } from 'lucide-react';
 
-import { updateRecoveredPasswordAction } from '@/app/actions/auth';
+import { updateRecoveredPasswordWithGrantAction } from '@/app/actions/password-recovery';
+import {
+  hasValidPasswordRecoveryGrant,
+  PASSWORD_RECOVERY_GRANT_COOKIE,
+} from '@/lib/auth/password-recovery-grant';
+import { useMockData } from '@/lib/config';
+import { createClient } from '@/lib/supabase/server';
+
+async function hasVerifiedRecoveryGrant() {
+  if (useMockData) return true;
+
+  const supabase = await createClient();
+  const {
+    data: { user },
+    error: userError,
+  } = await supabase.auth.getUser();
+
+  if (userError || !user) return false;
+
+  const { data: organizationId, error: tenantError } = await supabase.rpc(
+    'current_tenant_organization_id',
+  );
+
+  if (tenantError || !organizationId) return false;
+
+  const cookieStore = await cookies();
+  const recoveryToken = cookieStore.get(PASSWORD_RECOVERY_GRANT_COOKIE)?.value;
+
+  return hasValidPasswordRecoveryGrant(
+    recoveryToken,
+    user.id,
+    String(organizationId),
+  );
+}
 
 export default async function ResetPasswordPage({
   searchParams,
@@ -8,6 +42,7 @@ export default async function ResetPasswordPage({
   searchParams: Promise<{ error?: string }>;
 }) {
   const query = await searchParams;
+  const recoveryGrantValid = await hasVerifiedRecoveryGrant();
 
   return (
     <div className="grid min-h-screen place-items-center bg-mist px-4 py-10">
@@ -20,35 +55,53 @@ export default async function ResetPasswordPage({
           </div>
         </div>
 
-        <div className="mb-6">
-          <div className="ui-page-kicker">Password recovery</div>
-          <h1 className="mt-1.5 text-[26px] font-semibold tracking-[-0.035em] text-copy-strong">Choose a new password</h1>
-          <p className="mt-2 text-[14px] leading-6 text-copy-muted">
-            Your recovery session has been securely matched to your account and organization. Choose a new password to finish recovery.
-          </p>
-        </div>
+        {recoveryGrantValid ? (
+          <>
+            <div className="mb-6">
+              <div className="ui-page-kicker">Password recovery</div>
+              <h1 className="mt-1.5 text-[26px] font-semibold tracking-[-0.035em] text-copy-strong">Choose a new password</h1>
+              <p className="mt-2 text-[14px] leading-6 text-copy-muted">
+                Your recovery session has been securely matched to your account and organization. Choose a new password to finish recovery.
+              </p>
+            </div>
 
-        {query.error && <div className="mb-5 rounded-ui border border-red-200 bg-red-50 px-4 py-3 text-[13px] font-medium text-red-700">{query.error}</div>}
+            {query.error && <div className="mb-5 rounded-ui border border-red-200 bg-red-50 px-4 py-3 text-[13px] font-medium text-red-700">{query.error}</div>}
 
-        <form action={updateRecoveredPasswordAction} className="space-y-4">
-          <label className="block">
-            <span className="field-label block">New password</span>
-            <input className="input w-full" name="password" type="password" autoComplete="new-password" minLength={12} required placeholder="At least 12 characters" />
-          </label>
+            <form action={updateRecoveredPasswordWithGrantAction} className="space-y-4">
+              <label className="block">
+                <span className="field-label block">New password</span>
+                <input className="input w-full" name="password" type="password" autoComplete="new-password" minLength={12} required placeholder="At least 12 characters" />
+              </label>
 
-          <label className="block">
-            <span className="field-label block">Confirm new password</span>
-            <input className="input w-full" name="confirm_password" type="password" autoComplete="new-password" minLength={12} required placeholder="Repeat your new password" />
-          </label>
+              <label className="block">
+                <span className="field-label block">Confirm new password</span>
+                <input className="input w-full" name="confirm_password" type="password" autoComplete="new-password" minLength={12} required placeholder="Repeat your new password" />
+              </label>
 
-          <button className="btn-primary w-full" type="submit">
-            <KeyRound size={16} /> Update password
-          </button>
-        </form>
+              <button className="btn-primary w-full" type="submit">
+                <KeyRound size={16} /> Update password
+              </button>
+            </form>
+          </>
+        ) : (
+          <>
+            <div className="mb-6">
+              <div className="ui-page-kicker">Password recovery</div>
+              <h1 className="mt-1.5 text-[26px] font-semibold tracking-[-0.035em] text-copy-strong">Recovery session required</h1>
+              <p className="mt-2 text-[14px] leading-6 text-copy-muted">
+                This page only accepts a verified, short-lived password recovery session. Request a new reset email and continue from the secure link in that message.
+              </p>
+            </div>
+
+            <a className="btn-primary w-full" href="/forgot-password">
+              <KeyRound size={16} /> Request a new reset link
+            </a>
+          </>
+        )}
 
         <div className="mt-5 flex items-start gap-2 rounded-ui border border-line bg-surface-soft px-3.5 py-3 text-[12px] leading-5 text-copy-muted">
           <ShieldCheck size={16} className="mt-0.5 shrink-0 text-brand-700" />
-          <span>Recovery sessions are not carried forward as normal CRM sessions. You will sign in again after your password is changed.</span>
+          <span>Recovery grants are single-use and expire after 15 minutes. You will sign in again after your password is changed.</span>
         </div>
       </div>
     </div>

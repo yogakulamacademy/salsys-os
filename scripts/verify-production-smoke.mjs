@@ -84,11 +84,15 @@ const checks = [
     },
   },
   {
-    name: 'reset password surface remains available without mutating state',
+    name: 'reset password page fails closed without a verified recovery grant',
     path: '/reset-password',
     verify: ({ response, body }) => {
       assert(response.status === 200, `/reset-password expected 200, got ${response.status}`);
-      assert(includesAll(body, ['Choose a new password', 'Update password']), '/reset-password missing expected recovery UI');
+      assert(
+        includesAll(body, ['Recovery session required', 'Request a new reset link']),
+        '/reset-password did not show the recovery-required state',
+      );
+      assert(!body.includes('Update password'), '/reset-password exposed password update controls without a recovery grant');
     },
   },
   {

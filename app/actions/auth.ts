@@ -372,138 +372,22 @@ export async function requestPasswordResetAction(formData: FormData) {
   );
 }
 
-export async function confirmPasswordRecoveryAction(formData: FormData) {
-  const tokenHash = String(formData.get('token_hash') ?? '').trim();
-
-  if (!tokenHash) {
-    redirect(
-      authUrl(
-        '/login',
-        'error',
-        'This password reset link is invalid. Request a new one.',
-      ),
-    );
-  }
-
-  const supabase = await createClient();
-  const { data: verification, error: verificationError } =
-    await supabase.auth.verifyOtp({
-      token_hash: tokenHash,
-      type: 'recovery',
-    });
-
-  if (verificationError || !verification.user) {
-    await supabase.auth.signOut();
-    redirect(
-      authUrl(
-        '/login',
-        'error',
-        'This password reset link is invalid or expired. Request a new one.',
-      ),
-    );
-  }
-
-  const tenant = await bindCurrentUserOrganization(supabase);
-
-  if (!tenant.ok) {
-    await supabase.auth.signOut();
-    const cookieStore = await cookies();
-    cookieStore.delete(ACTIVE_WORKSPACE_COOKIE);
-    redirect(
-      authUrl(
-        '/login',
-        'error',
-        'Unable to establish your organization recovery session. Contact your SalsysOS administrator.',
-      ),
-    );
-  }
-
-  await setWorkspaceCookie(tenant.organizationId);
-  redirect('/reset-password');
-}
-
-export async function updateRecoveredPasswordAction(formData: FormData) {
-  const password = String(formData.get('password') ?? '');
-  const confirmPassword = String(formData.get('confirm_password') ?? '');
-  const resetPath = '/reset-password';
-  const loginPath = '/login';
-
-  if (password.length < 12) {
-    redirect(
-      authUrl(
-        resetPath,
-        'error',
-        'Use a password with at least 12 characters.',
-      ),
-    );
-  }
-
-  if (password !== confirmPassword) {
-    redirect(authUrl(resetPath, 'error', 'Passwords do not match.'));
-  }
-
-  const supabase = await createClient();
-  const {
-    data: { user },
-    error: userError,
-  } = await supabase.auth.getUser();
-
-  if (userError || !user) {
-    redirect(
-      authUrl(
-        loginPath,
-        'error',
-        'Your password reset session expired. Request a new reset link.',
-      ),
-    );
-  }
-
-  const tenant = await bindCurrentUserOrganization(supabase);
-
-  if (!tenant.ok) {
-    await supabase.auth.signOut();
-    const cookieStore = await cookies();
-    cookieStore.delete(ACTIVE_WORKSPACE_COOKIE);
-    redirect(
-      authUrl(
-        loginPath,
-        'error',
-        'This password reset session is not valid for an active organization.',
-      ),
-    );
-  }
-
-  const { error: updateError } = await supabase.auth.updateUser({ password });
-
-  if (updateError) {
-    if (isWeakPasswordAuthError(updateError)) {
-      redirect(
-        authUrl(
-          resetPath,
-          'error',
-          'This password is known to be weak or compromised. Choose a different password.',
-        ),
-      );
-    }
-
-    redirect(
-      authUrl(
-        resetPath,
-        'error',
-        'Unable to update your password. Use a different password or request a new reset link.',
-      ),
-    );
-  }
-
-  await supabase.auth.signOut();
-  const cookieStore = await cookies();
-  cookieStore.delete(ACTIVE_WORKSPACE_COOKIE);
-
+export async function confirmPasswordRecoveryAction(_formData: FormData) {
   redirect(
     authUrl(
-      loginPath,
-      'notice',
-      'Password updated. Sign in with your new password.',
+      '/forgot-password',
+      'error',
+      'Password recovery security was upgraded. Request a new reset link.',
+    ),
+  );
+}
+
+export async function updateRecoveredPasswordAction(_formData: FormData) {
+  redirect(
+    authUrl(
+      '/forgot-password',
+      'error',
+      'Password recovery security was upgraded. Request a new reset link.',
     ),
   );
 }
