@@ -1,5 +1,6 @@
 import 'server-only';
 
+import { safeUpstreamErrorMessage } from '@/lib/errors/safe-upstream-error';
 import { createAdminClient } from '@/lib/supabase/admin';
 import {
   sanitizeGenericTrackingEvent,
@@ -186,7 +187,12 @@ export async function consumePublishableClientRateLimit(
   });
 
   if (error) {
-    throw new Error(`Unable to enforce tracking rate limit: ${error.message}`);
+    throw new Error(
+      `Unable to enforce tracking rate limit: ${safeUpstreamErrorMessage(
+        error,
+        'Supabase rate-limit check failed',
+      )}`,
+    );
   }
 
   return {
