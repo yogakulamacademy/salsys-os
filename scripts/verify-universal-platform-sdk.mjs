@@ -23,6 +23,8 @@ const requiredFiles = [
   'app/api/events/v1/route.ts',
   'app/api/leads/browser/v1/route.ts',
   'app/api/leads/capture/route.ts',
+  'app/api/tracking/collect/route.ts',
+  'app/api/tracking/consent/route.ts',
   'app/api/privacy/consent/client/v1/route.ts',
   'sdk/android/settings.gradle.kts',
   'sdk/android/build.gradle.kts',
@@ -175,6 +177,45 @@ verifyStreamBoundedRoute(
 );
 if (serverLeadRoute.includes('await request.json()')) {
   fail('Server lead route must not fully buffer request.json() before enforcing the actual byte limit.');
+}
+
+const legacyCollectRoute = read('app/api/tracking/collect/route.ts');
+for (const [needle, label] of [
+  ['isTrackingOriginAllowed', 'allowlisted origin boundary'],
+  ['ingest_raw_event', 'canonical raw-event ingestion'],
+  ['process_website_raw_event', 'canonical website normalization'],
+  ['readBoundedJson', 'streamed request-body limit'],
+]) {
+  if (!legacyCollectRoute.includes(needle)) {
+    fail(`Legacy tracking collect route is missing ${label} (${needle}).`);
+  }
+}
+verifyStreamBoundedRoute(
+  legacyCollectRoute,
+  'Legacy tracking collect route',
+  'error: "Tracking ingest failed"',
+);
+if (legacyCollectRoute.includes('await request.json()')) {
+  fail('Legacy tracking collect route must not fully buffer request.json() before enforcing the actual byte limit.');
+}
+
+const legacyConsentRoute = read('app/api/tracking/consent/route.ts');
+for (const [needle, label] of [
+  ['isTrackingOriginAllowed', 'allowlisted origin boundary'],
+  ['ingest_tracking_consent_event', 'consent ledger persistence'],
+  ['readBoundedJson', 'streamed request-body limit'],
+]) {
+  if (!legacyConsentRoute.includes(needle)) {
+    fail(`Legacy tracking consent route is missing ${label} (${needle}).`);
+  }
+}
+verifyStreamBoundedRoute(
+  legacyConsentRoute,
+  'Legacy tracking consent route',
+  'error: "Tracking consent ingest failed"',
+);
+if (legacyConsentRoute.includes('await request.json()')) {
+  fail('Legacy tracking consent route must not fully buffer request.json() before enforcing the actual byte limit.');
 }
 
 const identifyRoute = read('app/api/events/identify/v1/route.ts');
