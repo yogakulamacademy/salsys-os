@@ -9,6 +9,7 @@ import {
   syncGscToSupabase,
   type GscRuntime,
 } from '@/lib/gsc';
+import { bearerMatchesAnySecret } from '@/lib/security/machine-bearer-auth';
 
 export const runtime =
   'nodejs';
@@ -60,11 +61,6 @@ type SyncResult =
 function isAuthorized(
   request: NextRequest,
 ) {
-  const authorization =
-    request.headers.get(
-      'authorization',
-    );
-
   const secrets =
     [
       process.env
@@ -94,10 +90,11 @@ function isAuthorized(
     );
   }
 
-  return secrets.some(
-    (secret) =>
-      authorization ===
-      `Bearer ${secret}`,
+  return bearerMatchesAnySecret(
+    request.headers.get(
+      'authorization',
+    ),
+    secrets,
   );
 }
 
@@ -457,6 +454,13 @@ async function executeSync(
     } catch (
       error
     ) {
+      console.error(
+        'GSC asset sync failed:',
+        runtimeConfig.organizationId,
+        runtimeConfig.siteUrl,
+        error,
+      );
+
       results.push({
         ok:
           false,
@@ -469,9 +473,7 @@ async function executeSync(
         siteUrl:
           runtimeConfig.siteUrl,
         error:
-          error instanceof Error
-            ? error.message
-            : 'Unknown GSC sync error',
+          'GSC sync failed for this asset.',
       });
     }
   }
@@ -542,11 +544,6 @@ export async function GET(
   } catch (
     error
   ) {
-    const message =
-      error instanceof Error
-        ? error.message
-        : 'Unknown GSC sync error';
-
     console.error(
       'GSC cron sync failed:',
       error,
@@ -556,7 +553,7 @@ export async function GET(
       {
         ok: false,
         error:
-          message,
+          'GSC sync failed.',
       },
       {
         status: 500,
@@ -635,11 +632,6 @@ export async function POST(
   } catch (
     error
   ) {
-    const message =
-      error instanceof Error
-        ? error.message
-        : 'Unknown GSC sync error';
-
     console.error(
       'GSC manual sync failed:',
       error,
@@ -649,7 +641,7 @@ export async function POST(
       {
         ok: false,
         error:
-          message,
+          'GSC sync failed.',
       },
       {
         status: 500,
