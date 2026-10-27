@@ -1,6 +1,9 @@
 const baseUrl = (process.env.SALSYSOS_SMOKE_BASE_URL || 'https://crm.salsysos.com').replace(/\/$/, '');
 const timeoutMs = Number(process.env.SALSYSOS_SMOKE_TIMEOUT_MS || 12000);
 const maxAttempts = Number(process.env.SALSYSOS_SMOKE_ATTEMPTS || 3);
+const expectedCommitSha = String(process.env.SALSYSOS_EXPECTED_COMMIT_SHA || '').trim();
+const deployAttempts = Number(process.env.SALSYSOS_SMOKE_DEPLOY_ATTEMPTS || 48);
+const deployIntervalMs = Number(process.env.SALSYSOS_SMOKE_DEPLOY_INTERVAL_MS || 10000);
 
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -19,7 +22,7 @@ async function fetchWithRetry(path) {
         signal: controller.signal,
         headers: {
           'user-agent': 'SalsysOS-Production-Smoke/1.0',
-          accept: 'text/html,application/xhtml+xml',
+          accept: 'text/html,application/xhtml+xml,application/json',
         },
       });
       const body = await response.text();
@@ -51,6 +54,49 @@ function assert(condition, message) {
 
 function includesAll(body, fragments) {
   return fragments.every((fragment) => body.includes(fragment));
+}
+
+async function waitForExpectedCommit() {
+  if (!expectedCommitSha) {
+    console.log('Production provenance check skipped: no expected commit SHA supplied.');
+    return;
+  }
+
+  let lastObserved = null;
+  let lastError = null;
+
+  for (let attempt = 1; attempt <= deployAttempts; attempt += 1) {
+    try {
+      const { response, body } = await fetchWithRetry('/api/tracking/identify');
+      if (response.status === 200) {
+        const payload = JSON.parse(body);
+        const observed = typeof payload?.commit_sha === 'string' ? payload.commit_sha.trim() : '';
+        lastObserved = observed || null;
+
+        if (observed === expectedCommitSha) {
+          console.log(`PASS production release provenance (${observed})`);
+          return;
+        }
+      } else {
+        lastError = new Error(`/api/tracking/identify returned ${response.status}`);
+      }
+    } catch (error) {
+      lastError = error;
+    }
+
+    if (attempt < deployAttempts) {
+      const observedLabel = lastObserved || 'not available';
+      console.log(
+        `WAIT production release provenance ${attempt}/${deployAttempts}: expected ${expectedCommitSha}, observed ${observedLabel}`,
+      );
+      await sleep(deployIntervalMs);
+    }
+  }
+
+  const detail = lastError instanceof Error ? ` Last error: ${lastError.message}` : '';
+  throw new Error(
+    `Production did not converge to expected commit ${expectedCommitSha}. Last observed: ${lastObserved || 'none'}.${detail}`,
+  );
 }
 
 async function runCheck(name, path, verify) {
@@ -109,6 +155,14 @@ const checks = [
 ];
 
 console.log(`SalsysOS production smoke target: ${baseUrl}`);
+
+try {
+  await waitForExpectedCommit();
+} catch (error) {
+  const message = error instanceof Error ? error.message : String(error);
+  console.error(`FAIL production release provenance: ${message}`);
+  process.exit(1);
+}
 
 let failures = 0;
 for (const check of checks) {
