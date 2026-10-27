@@ -22,6 +22,7 @@ const requiredFiles = [
   'app/api/events/identify/v1/route.ts',
   'app/api/events/v1/route.ts',
   'app/api/leads/browser/v1/route.ts',
+  'app/api/leads/capture/route.ts',
   'app/api/privacy/consent/client/v1/route.ts',
   'sdk/android/settings.gradle.kts',
   'sdk/android/build.gradle.kts',
@@ -153,6 +154,27 @@ verifyStreamBoundedRoute(
 );
 if (browserLeadRoute.includes('await request.json()')) {
   fail('Browser lead route must not fully buffer request.json() before enforcing the actual byte limit.');
+}
+
+const serverLeadRoute = read('app/api/leads/capture/route.ts');
+for (const [needle, label] of [
+  ['isWebsiteCaptureAuthorized', 'legacy website-secret authentication'],
+  ['validate_integration_api_secret', 'Salsys integration credential validation'],
+  ['ingest_website_lead_for_organization', 'tenant-bound Salsys lead ingestion'],
+  ['ingest_website_lead', 'legacy lead ingestion compatibility'],
+  ['readBoundedJson', 'streamed request-body limit'],
+]) {
+  if (!serverLeadRoute.includes(needle)) {
+    fail(`Server lead route is missing ${label} (${needle}).`);
+  }
+}
+verifyStreamBoundedRoute(
+  serverLeadRoute,
+  'Server lead route',
+  'error: "Website lead capture failed"',
+);
+if (serverLeadRoute.includes('await request.json()')) {
+  fail('Server lead route must not fully buffer request.json() before enforcing the actual byte limit.');
 }
 
 const identifyRoute = read('app/api/events/identify/v1/route.ts');
