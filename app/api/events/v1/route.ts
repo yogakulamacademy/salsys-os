@@ -19,6 +19,15 @@ export const runtime = 'nodejs';
 
 const SOURCE_VERIFY_DEADLINE_MS = 800;
 
+class PublicRequestError extends Error {
+  constructor(
+    message: string,
+    readonly status: number,
+  ) {
+    super(message);
+  }
+}
+
 type VerificationResult =
   | {
       kind: 'verified';
@@ -51,6 +60,58 @@ function json(
       ...extraHeaders,
     },
   });
+}
+
+function declaredContentLength(request: NextRequest) {
+  const header = request.headers.get('content-length');
+  if (!header) return null;
+
+  const value = Number(header);
+  return Number.isFinite(value) && value >= 0 ? value : null;
+}
+
+async function readBoundedText(request: NextRequest, maxBytes: number) {
+  const declared = declaredContentLength(request);
+  if (declared !== null && declared > maxBytes) {
+    throw new PublicRequestError('Payload too large.', 413);
+  }
+
+  if (!request.body) {
+    throw new PublicRequestError('Invalid JSON payload.', 400);
+  }
+
+  const reader = request.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let totalBytes = 0;
+
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      if (!value) continue;
+
+      totalBytes += value.byteLength;
+      if (totalBytes > maxBytes) {
+        await reader.cancel();
+        throw new PublicRequestError('Payload too large.', 413);
+      }
+      chunks.push(value);
+    }
+  } finally {
+    reader.releaseLock();
+  }
+
+  const body = new Uint8Array(totalBytes);
+  let offset = 0;
+  for (const chunk of chunks) {
+    body.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+
+  return {
+    text: new TextDecoder().decode(body),
+    byteLength: totalBytes,
+  };
 }
 
 async function verifySourceWithDeadline(
@@ -149,9 +210,9 @@ function permanentErrorResponse(error: DurableEventPermanentError) {
 }
 
 export async function POST(request: NextRequest) {
-  const declaredLength = Number(request.headers.get('content-length') || '0');
+  const declaredLength = declaredContentLength(request);
   if (
-    Number.isFinite(declaredLength) &&
+    declaredLength !== null &&
     declaredLength > DURABLE_EVENT_EDGE_MAX_BYTES
   ) {
     return json(
@@ -164,36 +225,57 @@ export async function POST(request: NextRequest) {
     );
   }
 
+  let rawBody: string;
+  let actualLength: number;
   try {
-    const rawBody = await request.text();
-    const actualLength = Buffer.byteLength(rawBody, 'utf8');
+    const bounded = await readBoundedText(request, DURABLE_EVENT_EDGE_MAX_BYTES);
+    rawBody = bounded.text;
+    actualLength = bounded.byteLength;
+  } catch (error) {
+    const requestError =
+      error instanceof PublicRequestError
+        ? error
+        : new PublicRequestError('Invalid JSON payload.', 400);
 
-    if (actualLength > DURABLE_EVENT_EDGE_MAX_BYTES) {
-      return json(
-        {
-          ok: false,
-          accepted: false,
-          error: 'Payload too large.',
-        },
-        413,
-      );
-    }
+    return json(
+      {
+        ok: false,
+        accepted: false,
+        error: requestError.message,
+      },
+      requestError.status,
+    );
+  }
 
-    let parsed: unknown;
-    try {
-      parsed = JSON.parse(rawBody);
-    } catch {
-      return json(
-        {
-          ok: false,
-          accepted: false,
-          error: 'Invalid JSON payload.',
-        },
-        400,
-      );
-    }
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(rawBody);
+  } catch {
+    return json(
+      {
+        ok: false,
+        accepted: false,
+        error: 'Invalid JSON payload.',
+      },
+      400,
+    );
+  }
 
-    const event = sanitizeGenericTrackingEvent(parsed);
+  let event: ReturnType<typeof sanitizeGenericTrackingEvent>;
+  try {
+    event = sanitizeGenericTrackingEvent(parsed);
+  } catch {
+    return json(
+      {
+        ok: false,
+        accepted: false,
+        error: 'Invalid event payload.',
+      },
+      400,
+    );
+  }
+
+  try {
     const forwardedFor = request.headers.get('x-forwarded-for');
 
     const envelope = buildDurableTrustedEventEnvelope({
@@ -364,16 +446,14 @@ export async function POST(request: NextRequest) {
       return permanentErrorResponse(error);
     }
 
-    const message =
-      error instanceof Error ? error.message : 'Invalid event payload.';
-
+    console.error('Trusted event ingestion failed.', error);
     return json(
       {
         ok: false,
         accepted: false,
-        error: message,
+        error: 'Trusted event ingestion failed.',
       },
-      400,
+      500,
     );
   }
 }
