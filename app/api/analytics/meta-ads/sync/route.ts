@@ -6,6 +6,7 @@ import {
   normalizeMetaAdAccountId,
   syncMetaAdsToSupabase,
 } from "@/lib/meta-ads";
+import { readBoundedJson } from "@/lib/security/bounded-json-body";
 import {
   bearerMatchesAnySecret,
   secretMatches,
@@ -15,6 +16,7 @@ export const dynamic = "force-dynamic";
 
 export const maxDuration = 300;
 
+const ANALYTICS_SYNC_BODY_MAX_BYTES = 16 * 1024;
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
 
 type SelectedMetaAsset = {
@@ -400,10 +402,24 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    const body = (await request.json().catch(() => ({}))) as {
+    const parsedBody = await readBoundedJson<{
       startDate?: string;
       endDate?: string;
-    };
+    }>(request, ANALYTICS_SYNC_BODY_MAX_BYTES);
+
+    if (!parsedBody.ok) {
+      return NextResponse.json(
+        {
+          ok: false,
+          error: parsedBody.error,
+        },
+        {
+          status: parsedBody.status,
+        },
+      );
+    }
+
+    const body = parsedBody.value;
 
     const yesterday = isoDate(new Date(Date.now() - 86400000));
 
