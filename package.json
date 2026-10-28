@@ -25,7 +25,8 @@
     "verify:crm-core": "node scripts/verify-crm-core-closeout.mjs",
     "verify:customer360-identity": "node scripts/verify-customer360-identity-closeout.mjs",
     "verify:onboarding-foundation": "node scripts/verify-onboarding-foundation.mjs",
-    "verify:authenticated-production-e2e-contract": "node scripts/verify-authenticated-production-e2e-contract.mjs"
+    "verify:authenticated-production-e2e-contract": "node scripts/verify-authenticated-production-e2e-contract.mjs",
+    "verify:analytics-sync-body-limits": "node scripts/verify-analytics-sync-body-limits.mjs"
   },
   "dependencies": {
     "@google-analytics/data": "^7.2.0",
