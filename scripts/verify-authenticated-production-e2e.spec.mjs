@@ -43,10 +43,6 @@ test('password login establishes the expected production tenant session', async 
     page.getByRole('button', { name: 'Sign in' }).click(),
   ]);
 
-  await expect(page.getByText('My admissions workspace', { exact: true })).toBeVisible({
-    timeout: 20_000,
-  });
-
   const cookies = await context.cookies(baseURL);
   const workspaceCookie = cookies.find((cookie) => cookie.name === WORKSPACE_COOKIE);
 
@@ -57,5 +53,4 @@ test('password login establishes the expected production tenant session', async 
 
   await page.reload({ waitUntil: 'domcontentloaded' });
   await page.waitForURL((url) => url.pathname === '/dashboard', { timeout: 20_000 });
-  await expect(page.getByText('My admissions workspace', { exact: true })).toBeVisible();
 });

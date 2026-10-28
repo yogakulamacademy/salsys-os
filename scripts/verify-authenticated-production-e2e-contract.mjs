@@ -37,7 +37,7 @@ requireText(spec, "input[name=\"email\"]", 'email form selector');
 requireText(spec, "input[name=\"password\"]", 'password form selector');
 requireText(spec, "getByRole('button', { name: 'Sign in' })", 'real login submission');
 requireText(spec, "url.pathname === '/dashboard'", 'dashboard redirect assertion');
-requireText(spec, "'My admissions workspace'", 'authenticated dashboard marker');
+forbidText(spec, "'My admissions workspace'", 'role-specific admissions dashboard marker');
 requireText(spec, "'salsys-active-workspace'", 'tenant workspace cookie assertion');
 requireText(spec, "SALSYSOS_E2E_ORGANIZATION_ID", 'expected tenant environment binding');
 requireText(spec, 'workspaceCookie?.value).toBe(expectedOrganizationId)', 'exact tenant cookie match');
