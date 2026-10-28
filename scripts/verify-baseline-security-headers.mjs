@@ -13,6 +13,7 @@ for (const [needle, label] of [
   ["key: 'Permissions-Policy'", 'Permissions-Policy header'],
   ["value: 'camera=(), microphone=(), geolocation=()'", 'restricted browser capabilities'],
   ["source: '/:path*'", 'global header scope'],
+  ['poweredByHeader: false', 'disabled Next.js powered-by response header'],
 ]) {
   assert(nextConfig.includes(needle), `Missing ${label}`);
 }
