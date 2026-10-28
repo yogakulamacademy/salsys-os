@@ -146,7 +146,7 @@ const PERSON_JOURNEY_SELECT = `
   metadata
 `;
 
-const V2_SOFT_TIMEOUT_MS = 2_500;
+const WORKSPACE_SOFT_TIMEOUT_MS = 2_500;
 const ENRICHMENT_SOFT_TIMEOUT_MS = 2_500;
 const LATEST_LEAD_SIGNAL_SOFT_TIMEOUT_MS = 2_000;
 
@@ -161,7 +161,7 @@ type DerivedListReadResult<T> = {
   count: number | null;
 };
 
-type PersonJourneyV2Payload = {
+type PersonJourneyWorkspacePayload = {
   person_id?: unknown;
   person?: Record<string, unknown> | null;
   journey?: PersonJourneyEvent[] | null;
@@ -189,6 +189,27 @@ function normalizeLimit(value: unknown) {
   return Number.isFinite(requested)
     ? Math.min(Math.max(Math.trunc(requested), 1), 500)
     : 200;
+}
+
+function workspacePayload(
+  organizationId: string,
+  leadId: string,
+  payload: PersonJourneyWorkspacePayload,
+): PersonJourneyPayload {
+  const personId = String(payload.person_id ?? "").trim() || null;
+  const person =
+    payload.person && typeof payload.person === "object"
+      ? (payload.person as unknown as Person360Summary)
+      : null;
+
+  return {
+    organizationId,
+    leadId,
+    personId,
+    person,
+    journey: Array.isArray(payload.journey) ? payload.journey : [],
+    journeyTotal: Number(payload.journey_total ?? 0) || 0,
+  };
 }
 
 export async function getPersonJourneyForLead(
@@ -233,16 +254,37 @@ export async function getPersonJourneyForLead(
 
   const limit = normalizeLimit(options?.limit);
   const db = supabase as any;
+  const workspaceArgs = {
+    p_organization_id: organizationId,
+    p_lead_id: normalizedLeadId,
+    p_limit: limit,
+  };
+
+  const v3Result = await withSoftTimeout<
+    DerivedReadResult<PersonJourneyWorkspacePayload>
+  >(
+    db.rpc("get_person_journey_workspace_v3", workspaceArgs),
+    WORKSPACE_SOFT_TIMEOUT_MS,
+    {
+      data: null,
+      error: { message: "Person Journey V3 exceeded the soft timeout." },
+    },
+  );
+
+  if (!v3Result.error && v3Result.data) {
+    return workspacePayload(organizationId, normalizedLeadId, v3Result.data);
+  }
+
+  console.error(
+    "Person Journey V3 read degraded:",
+    v3Result.error?.message ?? "Unknown V3 read error.",
+  );
 
   const v2Result = await withSoftTimeout<
-    DerivedReadResult<PersonJourneyV2Payload>
+    DerivedReadResult<PersonJourneyWorkspacePayload>
   >(
-    db.rpc("get_person_journey_workspace_v2", {
-      p_organization_id: organizationId,
-      p_lead_id: normalizedLeadId,
-      p_limit: limit,
-    }),
-    V2_SOFT_TIMEOUT_MS,
+    db.rpc("get_person_journey_workspace_v2", workspaceArgs),
+    WORKSPACE_SOFT_TIMEOUT_MS,
     {
       data: null,
       error: { message: "Person Journey V2 exceeded the soft timeout." },
@@ -250,21 +292,7 @@ export async function getPersonJourneyForLead(
   );
 
   if (!v2Result.error && v2Result.data) {
-    const payload = v2Result.data;
-    const personId = String(payload.person_id ?? "").trim() || null;
-    const person =
-      payload.person && typeof payload.person === "object"
-        ? (payload.person as unknown as Person360Summary)
-        : null;
-
-    return {
-      organizationId,
-      leadId: normalizedLeadId,
-      personId,
-      person,
-      journey: Array.isArray(payload.journey) ? payload.journey : [],
-      journeyTotal: Number(payload.journey_total ?? 0) || 0,
-    };
+    return workspacePayload(organizationId, normalizedLeadId, v2Result.data);
   }
 
   console.error(
