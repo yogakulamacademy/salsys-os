@@ -2,11 +2,14 @@ import { createHash, randomBytes } from 'node:crypto';
 
 import { NextRequest, NextResponse } from 'next/server';
 
+import { readBoundedJson } from '@/lib/security/bounded-json-body';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { createClient } from '@/lib/supabase/server';
 import { getWorkspaceContextForUser } from '@/lib/workspace';
 
 export const dynamic = 'force-dynamic';
+
+const TRACKING_ADMIN_BODY_MAX_BYTES = 32 * 1024;
 
 const SERVER_SOURCE_TYPES = new Set(['api', 'webhook', 'system']);
 const ALLOWED_SERVER_PREFIXES = new Set([
@@ -107,7 +110,13 @@ export async function PATCH(
   const source = await loadServerSource(id, auth.organizationId);
   if (!source) return jsonError('Server tracking source not found.', 404);
 
-  const body = await request.json().catch(() => null);
+  const parsedBody = await readBoundedJson<Record<string, unknown>>(
+    request,
+    TRACKING_ADMIN_BODY_MAX_BYTES,
+  );
+  if (!parsedBody.ok) return jsonError(parsedBody.error, parsedBody.status);
+
+  const body = parsedBody.value;
   if (!body || typeof body !== 'object' || Array.isArray(body)) {
     return jsonError('Invalid source payload.', 400);
   }
@@ -250,7 +259,13 @@ export async function POST(
   const source = await loadServerSource(id, auth.organizationId);
   if (!source) return jsonError('Server tracking source not found.', 404);
 
-  const body = await request.json().catch(() => null);
+  const parsedBody = await readBoundedJson<Record<string, unknown>>(
+    request,
+    TRACKING_ADMIN_BODY_MAX_BYTES,
+  );
+  if (!parsedBody.ok) return jsonError(parsedBody.error, parsedBody.status);
+
+  const body = parsedBody.value;
   if (!body || typeof body !== 'object' || Array.isArray(body)) {
     return jsonError('Invalid action payload.', 400);
   }
