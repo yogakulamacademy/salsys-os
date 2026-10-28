@@ -27,6 +27,9 @@ const DEFAULT_LIMIT =
 const DEFAULT_LEASE_SECONDS =
   300;
 
+const MAX_POST_BYTES =
+  4_096;
+
 const UUID_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
@@ -36,6 +39,16 @@ type RequestBody = {
   limit?: unknown;
   leaseSeconds?: unknown;
 };
+
+
+class PublicRequestError extends Error {
+  constructor(
+    message: string,
+    readonly status: number,
+  ) {
+    super(message);
+  }
+}
 
 
 function constantTimeEqual(
@@ -138,6 +151,126 @@ function optionalInteger(
 }
 
 
+function declaredContentLength(
+  request: NextRequest,
+) {
+  const header =
+    request.headers.get(
+      "content-length",
+    );
+
+  if (!header) {
+    return null;
+  }
+
+  const value =
+    Number(header);
+
+  return Number.isFinite(value) &&
+    value >= 0
+    ? value
+    : null;
+}
+
+
+async function readBoundedJsonBody(
+  request: NextRequest,
+) {
+  const declared =
+    declaredContentLength(
+      request,
+    );
+
+  if (
+    declared !== null &&
+    declared > MAX_POST_BYTES
+  ) {
+    throw new PublicRequestError(
+      "Payload too large.",
+      413,
+    );
+  }
+
+  if (!request.body) {
+    throw new PublicRequestError(
+      "Request body must be valid JSON.",
+      400,
+    );
+  }
+
+  const reader =
+    request.body.getReader();
+
+  const chunks:
+    Uint8Array[] = [];
+
+  let totalBytes =
+    0;
+
+  try {
+    while (true) {
+      const {
+        done,
+        value,
+      } = await reader.read();
+
+      if (done) break;
+      if (!value) continue;
+
+      totalBytes +=
+        value.byteLength;
+
+      if (
+        totalBytes >
+        MAX_POST_BYTES
+      ) {
+        await reader.cancel();
+
+        throw new PublicRequestError(
+          "Payload too large.",
+          413,
+        );
+      }
+
+      chunks.push(value);
+    }
+  } finally {
+    reader.releaseLock();
+  }
+
+  const bytes =
+    new Uint8Array(
+      totalBytes,
+    );
+
+  let offset =
+    0;
+
+  for (const chunk of chunks) {
+    bytes.set(
+      chunk,
+      offset,
+    );
+
+    offset +=
+      chunk.byteLength;
+  }
+
+  try {
+    return JSON.parse(
+      new TextDecoder().decode(
+        bytes,
+      ),
+    ) as RequestBody;
+  } catch {
+    throw new PublicRequestError(
+      "Request body must be valid JSON.",
+      400,
+    );
+  }
+}
+
+
 export async function POST(
   request: NextRequest,
 ) {
@@ -178,9 +311,27 @@ export async function POST(
 
   try {
     body =
-      await request.json() as
-        RequestBody;
-  } catch {
+      await readBoundedJsonBody(
+        request,
+      );
+  } catch (error) {
+    if (
+      error instanceof
+      PublicRequestError
+    ) {
+      return NextResponse.json(
+        {
+          ok: false,
+          error:
+            error.message,
+        },
+        {
+          status:
+            error.status,
+        },
+      );
+    }
+
     return NextResponse.json(
       {
         ok: false,
