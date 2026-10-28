@@ -3,6 +3,7 @@ import crypto from 'crypto';
 import { NextRequest, NextResponse } from 'next/server';
 
 import { createAdminClient } from '@/lib/supabase/admin';
+import { secretMatches } from '@/lib/security/machine-bearer-auth';
 import {
   queueInstagramCommentAutomation,
   queueInstagramDmAutomation,
@@ -97,7 +98,11 @@ export async function GET(request: NextRequest) {
   const challenge = request.nextUrl.searchParams.get('hub.challenge');
   const verifyToken = process.env.INSTAGRAM_VERIFY_TOKEN?.trim();
 
-  if (mode === 'subscribe' && verifyToken && token === verifyToken && challenge) {
+  if (
+    mode === 'subscribe' &&
+    secretMatches(token, verifyToken) &&
+    challenge
+  ) {
     return new NextResponse(challenge, {
       status: 200,
       headers: { 'Content-Type': 'text/plain; charset=utf-8' },
