@@ -2,6 +2,7 @@ import crypto from 'crypto';
 
 import { NextRequest, NextResponse } from 'next/server';
 
+import { secretMatches } from '@/lib/security/machine-bearer-auth';
 import { createAdminClient } from '@/lib/supabase/admin';
 
 export const runtime = 'nodejs';
@@ -75,8 +76,7 @@ export async function GET(request: NextRequest) {
 
   if (
     mode === 'subscribe' &&
-    verifyToken &&
-    token === verifyToken &&
+    secretMatches(token, verifyToken) &&
     challenge
   ) {
     return new NextResponse(challenge, {
