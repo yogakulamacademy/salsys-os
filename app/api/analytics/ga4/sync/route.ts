@@ -9,6 +9,7 @@ import {
   syncGa4ToSupabase,
   type Ga4Runtime,
 } from '@/lib/ga4';
+import { readBoundedJson } from '@/lib/security/bounded-json-body';
 import { bearerMatchesAnySecret } from '@/lib/security/machine-bearer-auth';
 
 export const runtime =
@@ -19,6 +20,9 @@ export const dynamic =
 
 export const maxDuration =
   300;
+
+const ANALYTICS_SYNC_BODY_MAX_BYTES =
+  16 * 1024;
 
 type SyncRange = {
   startDate: string;
@@ -53,10 +57,6 @@ type SyncResult =
       propertyId: string;
       error: string;
     };
-
-/* =========================================================
-   AUTHORIZATION
-========================================================= */
 
 function isAuthorized(
   request: NextRequest,
@@ -98,10 +98,6 @@ function isAuthorized(
   );
 }
 
-/* =========================================================
-   DATE HELPERS
-========================================================= */
-
 function isoDate(
   date: Date,
 ) {
@@ -113,12 +109,7 @@ function isoDate(
     );
 }
 
-function defaultRange():
-SyncRange {
-  /*
-   * Re-sync the latest 7 completed UTC days.
-   * GA4 can revise recent historical data.
-   */
+function defaultRange(): SyncRange {
   const now =
     new Date();
 
@@ -224,218 +215,115 @@ function validateRange(
   }
 }
 
-/* =========================================================
-   ONE TENANT + ONE SELECTED ASSET
-========================================================= */
-
 async function executeRuntimeSync(
   range: SyncRange,
   runtimeConfig: Ga4Runtime,
 ): Promise<
   Extract<
     SyncResult,
-    {
-      ok: true;
-    }
+    { ok: true }
   >
 > {
-  const {
-    startDate,
-    endDate,
-  } =
-    range;
+  const { startDate, endDate } = range;
+  const supabase = createGa4AdminClient();
 
-  const supabase =
-    createGa4AdminClient();
+  const { data: syncRun, error: insertError } = await supabase
+    .from('ga4_sync_runs')
+    .insert({
+      organization_id: runtimeConfig.organizationId,
+      connection_id: runtimeConfig.connectionId,
+      integration_asset_id: runtimeConfig.assetId,
+      property_id: runtimeConfig.propertyId,
+      status: 'running',
+      from_date: startDate,
+      to_date: endDate,
+    })
+    .select('id')
+    .single();
 
-  const {
-    data:
-      syncRun,
-    error:
-      insertError,
-  } =
-    await supabase
-      .from(
-        'ga4_sync_runs',
-      )
-      .insert({
-        organization_id:
-          runtimeConfig.organizationId,
-        connection_id:
-          runtimeConfig.connectionId,
-        integration_asset_id:
-          runtimeConfig.assetId,
-        property_id:
-          runtimeConfig.propertyId,
-        status:
-          'running',
-        from_date:
-          startDate,
-        to_date:
-          endDate,
-      })
-      .select(
-        'id',
-      )
-      .single();
-
-  if (
-    insertError ||
-    !syncRun
-  ) {
+  if (insertError || !syncRun) {
     throw new Error(
-      `Unable to create GA4 sync log: ${
-        insertError?.message ??
-        'Unknown error'
-      }`,
+      `Unable to create GA4 sync log: ${insertError?.message ?? 'Unknown error'}`,
     );
   }
 
   try {
-    const counts =
-      await syncGa4ToSupabase(
-        {
-          startDate,
-          endDate,
-        },
-        runtimeConfig,
-      );
+    const counts = await syncGa4ToSupabase(
+      { startDate, endDate },
+      runtimeConfig,
+    );
 
-    const {
-      error:
-        updateError,
-    } =
-      await supabase
-        .from(
-          'ga4_sync_runs',
-        )
-        .update({
-          status:
-            'completed',
-          overview_rows:
-            counts.overviewRows,
-          source_rows:
-            counts.sourceRows,
-          landing_page_rows:
-            counts.landingPageRows,
-          campaign_rows:
-            counts.campaignRows,
-          country_rows:
-            counts.countryRows,
-          total_rows:
-            counts.totalRows,
-          completed_at:
-            new Date()
-              .toISOString(),
-          error_message:
-            null,
-        })
-        .eq(
-          'id',
-          syncRun.id,
-        )
-        .eq(
-          'organization_id',
-          runtimeConfig.organizationId,
-        );
+    const { error: updateError } = await supabase
+      .from('ga4_sync_runs')
+      .update({
+        status: 'completed',
+        overview_rows: counts.overviewRows,
+        source_rows: counts.sourceRows,
+        landing_page_rows: counts.landingPageRows,
+        campaign_rows: counts.campaignRows,
+        country_rows: counts.countryRows,
+        total_rows: counts.totalRows,
+        completed_at: new Date().toISOString(),
+        error_message: null,
+      })
+      .eq('id', syncRun.id)
+      .eq('organization_id', runtimeConfig.organizationId);
 
-    if (
-      updateError
-    ) {
+    if (updateError) {
       throw new Error(
         `GA4 data synced, but the sync log could not be finalized: ${updateError.message}`,
       );
     }
 
     return {
-      ok:
-        true,
-      organizationId:
-        runtimeConfig.organizationId,
-      connectionId:
-        runtimeConfig.connectionId,
-      integrationAssetId:
-        runtimeConfig.assetId,
-      propertyId:
-        runtimeConfig.propertyId,
+      ok: true,
+      organizationId: runtimeConfig.organizationId,
+      connectionId: runtimeConfig.connectionId,
+      integrationAssetId: runtimeConfig.assetId,
+      propertyId: runtimeConfig.propertyId,
       startDate,
       endDate,
       counts,
     };
-  } catch (
-    error
-  ) {
+  } catch (error) {
     const message =
       error instanceof Error
         ? error.message
         : 'Unknown GA4 sync error';
 
     await supabase
-      .from(
-        'ga4_sync_runs',
-      )
+      .from('ga4_sync_runs')
       .update({
-        status:
-          'failed',
-        completed_at:
-          new Date()
-            .toISOString(),
-        error_message:
-          message,
+        status: 'failed',
+        completed_at: new Date().toISOString(),
+        error_message: message,
       })
-      .eq(
-        'id',
-        syncRun.id,
-      )
-      .eq(
-        'organization_id',
-        runtimeConfig.organizationId,
-      );
+      .eq('id', syncRun.id)
+      .eq('organization_id', runtimeConfig.organizationId);
 
     throw error;
   }
 }
 
-/* =========================================================
-   ALL MATCHING TENANTS / ASSETS
-========================================================= */
-
 async function executeSync(
   range: SyncRange,
-  filter:
-    RuntimeFilter = {},
+  filter: RuntimeFilter = {},
 ) {
-  validateRange(
-    range.startDate,
-    range.endDate,
-  );
+  validateRange(range.startDate, range.endDate);
 
-  const runtimes =
-    await resolveGa4Runtimes({
-      organizationId:
-        filter.organizationId,
-      assetId:
-        filter.assetId,
-    });
+  const runtimes = await resolveGa4Runtimes({
+    organizationId: filter.organizationId,
+    assetId: filter.assetId,
+  });
 
-  const results:
-    SyncResult[] =
-    [];
+  const results: SyncResult[] = [];
 
-  for (
-    const runtimeConfig
-    of runtimes
-  ) {
+  for (const runtimeConfig of runtimes) {
     try {
       results.push(
-        await executeRuntimeSync(
-          range,
-          runtimeConfig,
-        ),
+        await executeRuntimeSync(range, runtimeConfig),
       );
-    } catch (
-      error
-    ) {
+    } catch (error) {
       console.error(
         'GA4 asset sync failed:',
         runtimeConfig.organizationId,
@@ -444,188 +332,112 @@ async function executeSync(
       );
 
       results.push({
-        ok:
-          false,
-        organizationId:
-          runtimeConfig.organizationId,
-        connectionId:
-          runtimeConfig.connectionId,
-        integrationAssetId:
-          runtimeConfig.assetId,
-        propertyId:
-          runtimeConfig.propertyId,
-        error:
-          'GA4 sync failed for this asset.',
+        ok: false,
+        organizationId: runtimeConfig.organizationId,
+        connectionId: runtimeConfig.connectionId,
+        integrationAssetId: runtimeConfig.assetId,
+        propertyId: runtimeConfig.propertyId,
+        error: 'GA4 sync failed for this asset.',
       });
     }
   }
 
-  const successful =
-    results.filter(
-      (
-        result,
-      ) =>
-        result.ok,
-    ).length;
-
-  const failed =
-    results.length -
-    successful;
+  const successful = results.filter((result) => result.ok).length;
+  const failed = results.length - successful;
 
   return {
-    ok:
-      failed === 0,
-    startDate:
-      range.startDate,
-    endDate:
-      range.endDate,
-    selectedAssets:
-      runtimes.length,
+    ok: failed === 0,
+    startDate: range.startDate,
+    endDate: range.endDate,
+    selectedAssets: runtimes.length,
     successful,
     failed,
     results,
   };
 }
 
-/* =========================================================
-   GET — VERCEL CRON
-========================================================= */
-
 export async function GET(
   request: NextRequest,
 ) {
   try {
-    if (
-      !isAuthorized(
-        request,
-      )
-    ) {
+    if (!isAuthorized(request)) {
       return NextResponse.json(
-        {
-          ok: false,
-          error:
-            'Unauthorized',
-        },
-        {
-          status: 401,
-        },
+        { ok: false, error: 'Unauthorized' },
+        { status: 401 },
       );
     }
 
-    const result =
-      await executeSync(
-        defaultRange(),
-      );
+    const result = await executeSync(defaultRange());
 
     return NextResponse.json({
       ...result,
-      trigger:
-        'cron',
+      trigger: 'cron',
     });
-  } catch (
-    error
-  ) {
-    console.error(
-      'GA4 cron sync failed:',
-      error,
-    );
+  } catch (error) {
+    console.error('GA4 cron sync failed:', error);
 
     return NextResponse.json(
-      {
-        ok: false,
-        error:
-          'GA4 sync failed.',
-      },
-      {
-        status: 500,
-      },
+      { ok: false, error: 'GA4 sync failed.' },
+      { status: 500 },
     );
   }
 }
-
-/* =========================================================
-   POST — MANUAL / BACKFILL
-========================================================= */
 
 export async function POST(
   request: NextRequest,
 ) {
   try {
-    if (
-      !isAuthorized(
-        request,
-      )
-    ) {
+    if (!isAuthorized(request)) {
       return NextResponse.json(
-        {
-          ok: false,
-          error:
-            'Unauthorized',
-        },
-        {
-          status: 401,
-        },
+        { ok: false, error: 'Unauthorized' },
+        { status: 401 },
       );
     }
 
-    const defaults =
-      defaultRange();
+    const defaults = defaultRange();
 
-    let body: {
+    const parsedBody = await readBoundedJson<{
       startDate?: string;
       endDate?: string;
       organizationId?: string;
       integrationAssetId?: string;
-    } = {};
+    }>(request, ANALYTICS_SYNC_BODY_MAX_BYTES);
 
-    try {
-      body =
-        await request
-          .json();
-    } catch {
-      body = {};
-    }
-
-    const result =
-      await executeSync(
+    if (!parsedBody.ok) {
+      return NextResponse.json(
         {
-          startDate:
-            body.startDate ??
-            defaults.startDate,
-          endDate:
-            body.endDate ??
-            defaults.endDate,
+          ok: false,
+          error: parsedBody.error,
         },
         {
-          organizationId:
-            body.organizationId,
-          assetId:
-            body.integrationAssetId,
+          status: parsedBody.status,
         },
       );
+    }
+
+    const body = parsedBody.value;
+
+    const result = await executeSync(
+      {
+        startDate: body.startDate ?? defaults.startDate,
+        endDate: body.endDate ?? defaults.endDate,
+      },
+      {
+        organizationId: body.organizationId,
+        assetId: body.integrationAssetId,
+      },
+    );
 
     return NextResponse.json({
       ...result,
-      trigger:
-        'manual',
+      trigger: 'manual',
     });
-  } catch (
-    error
-  ) {
-    console.error(
-      'GA4 manual sync failed:',
-      error,
-    );
+  } catch (error) {
+    console.error('GA4 manual sync failed:', error);
 
     return NextResponse.json(
-      {
-        ok: false,
-        error:
-          'GA4 sync failed.',
-      },
-      {
-        status: 500,
-      },
+      { ok: false, error: 'GA4 sync failed.' },
+      { status: 500 },
     );
   }
 }
