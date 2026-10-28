@@ -26,7 +26,8 @@
     "verify:customer360-identity": "node scripts/verify-customer360-identity-closeout.mjs",
     "verify:onboarding-foundation": "node scripts/verify-onboarding-foundation.mjs",
     "verify:authenticated-production-e2e-contract": "node scripts/verify-authenticated-production-e2e-contract.mjs",
-    "verify:analytics-sync-body-limits": "node scripts/verify-analytics-sync-body-limits.mjs"
+    "verify:analytics-sync-body-limits": "node scripts/verify-analytics-sync-body-limits.mjs",
+    "verify:baseline-security-headers": "node scripts/verify-baseline-security-headers.mjs"
   },
   "dependencies": {
     "@google-analytics/data": "^7.2.0",
