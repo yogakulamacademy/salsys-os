@@ -97,6 +97,9 @@ jobs:
       - name: Verify Onboarding Foundation Contracts
         run: npm run verify:onboarding-foundation
 
+      - name: Verify Authenticated Production E2E Contract
+        run: npm run verify:authenticated-production-e2e-contract
+
       - name: Typecheck
         run: npm run typecheck
 
