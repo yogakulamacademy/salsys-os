@@ -1,0 +1,98 @@
+CREATE OR REPLACE FUNCTION public.get_funnel_intelligence_workspace_v3(p_organization_id uuid, p_days integer DEFAULT 30)
+ RETURNS jsonb
+ LANGUAGE plpgsql
+ STABLE SECURITY DEFINER
+ SET search_path TO 'public', 'auth', 'pg_temp'
+AS $function$
+declare
+  v_days integer := greatest(1, least(coalesce(p_days, 30), 365));
+  v_start timestamptz := now() - make_interval(days => greatest(1, least(coalesce(p_days, 30), 365)));
+  v_result jsonb;
+  v_service boolean := auth.role() = 'service_role';
+  v_can_read_web boolean;
+begin
+  if p_organization_id is null then raise exception 'Organization ID is required'; end if;
+  if not public.is_organization_member(p_organization_id) then raise exception 'Not authorized for organization %', p_organization_id; end if;
+  v_can_read_web := v_service or public.is_crm_user();
+
+  with accessible_leads as materialized (
+    select l.id
+    from public.leads l
+    where l.organization_id = p_organization_id
+      and (v_service or public.can_access_lead(l.id))
+  ),
+  lead_base as materialized (
+    select l.id, l.created_at, l.current_stage::text as current_stage,
+      coalesce(l.lead_creation_channel::text, 'unknown') as lead_creation_channel,
+      coalesce(nullif(btrim(l.first_touch_source), ''), 'unknown') as first_touch_source
+    from public.leads l join accessible_leads al on al.id=l.id
+    where l.organization_id=p_organization_id and l.created_at>=v_start
+  ),
+  paid_by_lead as (
+    select p.lead_id,
+      bool_or(p.payment_kind::text <> 'refund' and p.status::text='paid') as is_paid,
+      coalesce(sum(p.amount) filter(where p.payment_kind::text<>'refund' and p.status::text='paid' and upper(coalesce(p.currency,''))='INR'),0)::numeric revenue_inr,
+      coalesce(sum(p.amount) filter(where p.payment_kind::text<>'refund' and p.status::text='paid' and upper(coalesce(p.currency,''))='USD'),0)::numeric revenue_usd
+    from public.payments p join lead_base l on l.id=p.lead_id
+    where p.organization_id=p_organization_id
+      and (v_service or p.enrollment_id is null or exists(select 1 from public.enrollments e0 where e0.id=p.enrollment_id and e0.organization_id=p.organization_id and e0.lead_id=p.lead_id))
+    group by p.lead_id
+  ),
+  enrollment_by_lead as (
+    select e.lead_id,bool_or(e.status::text in('confirmed','completed')) as is_enrolled
+    from public.enrollments e join lead_base l on l.id=e.lead_id
+    where e.organization_id=p_organization_id
+      and (v_service or e.course_id is null or exists(select 1 from public.courses c where c.id=e.course_id and c.organization_id=e.organization_id))
+      and (v_service or e.batch_id is null or exists(select 1 from public.course_batches cb where cb.id=e.batch_id and cb.organization_id=e.organization_id))
+    group by e.lead_id
+  ),
+  lead_facts as materialized (
+    select l.*,coalesce(p.is_paid,false) is_paid,coalesce(e.is_enrolled,false) or l.current_stage='enrolled' is_enrolled,
+      coalesce(p.revenue_inr,0)::numeric revenue_inr,coalesce(p.revenue_usd,0)::numeric revenue_usd,
+      (l.current_stage in('qualified','high_intent','payment_pending','enrolled')) is_qualified
+    from lead_base l left join paid_by_lead p on p.lead_id=l.id left join enrollment_by_lead e on e.lead_id=l.id
+  ),
+  business as (select count(*)::integer leads,count(*) filter(where is_qualified)::integer qualified,count(*) filter(where current_stage='payment_pending')::integer payment_pending,count(*) filter(where is_paid)::integer paid,count(*) filter(where is_enrolled)::integer enrolled,coalesce(sum(revenue_inr),0)::numeric revenue_inr,coalesce(sum(revenue_usd),0)::numeric revenue_usd from lead_facts),
+  website_leads as (select count(*)::integer leads,count(*) filter(where is_qualified)::integer qualified,count(*) filter(where current_stage='payment_pending')::integer payment_pending,count(*) filter(where is_paid)::integer paid,count(*) filter(where is_enrolled)::integer enrolled from lead_facts where lead_creation_channel='website'),
+  whatsapp_leads as (select count(*)::integer leads,count(*) filter(where is_qualified)::integer qualified,count(*) filter(where current_stage='payment_pending')::integer payment_pending,count(*) filter(where is_paid)::integer paid,count(*) filter(where is_enrolled)::integer enrolled from lead_facts where lead_creation_channel='whatsapp'),
+  web as (
+    select count(*)::integer sessions,count(distinct ws.anonymous_visitor_id)::integer visitors,count(distinct ws.lead_id) filter(where ws.lead_id is not null)::integer linked_leads
+    from public.web_sessions ws
+    where v_can_read_web and ws.organization_id=p_organization_id and ws.started_at>=v_start
+      and (v_service or ws.lead_id is null or exists(select 1 from accessible_leads al where al.id=ws.lead_id))
+  ),
+  web_events as (
+    select count(distinct t.web_session_id) filter(where t.web_session_id is not null and t.event_type in('form_start','lead_form_submit','enrollment_cta_click','whatsapp_click','instagram_click','course_enquire_click','reservation_start','payment_start','brochure_download'))::integer engaged_sessions,
+      count(distinct t.web_session_id) filter(where t.event_type='form_start' and t.web_session_id is not null)::integer form_start_sessions,
+      count(distinct t.web_session_id) filter(where t.event_type='lead_form_submit' and t.web_session_id is not null)::integer form_submit_sessions
+    from public.touchpoints t where t.organization_id=p_organization_id and t.occurred_at>=v_start
+      and (v_service or (t.lead_id is not null and exists(select 1 from accessible_leads al where al.id=t.lead_id)))
+  ),
+  source_rows as (select lf.first_touch_source source,count(*)::integer leads,count(*) filter(where lf.is_qualified)::integer qualified,count(*) filter(where lf.is_paid)::integer paid,count(*) filter(where lf.is_enrolled)::integer enrolled,coalesce(sum(lf.revenue_inr),0)::numeric revenue_inr,coalesce(sum(lf.revenue_usd),0)::numeric revenue_usd from lead_facts lf group by lf.first_touch_source),
+  source_json as (select coalesce(jsonb_agg(to_jsonb(s) order by s.leads desc,s.source asc),'[]'::jsonb) rows from source_rows s),
+  daily_days as (select generate_series((current_date-(v_days-1))::date,current_date,interval '1 day')::date date),
+  daily_web as (
+    select (ws.started_at at time zone 'Asia/Kolkata')::date date,count(*)::integer sessions from public.web_sessions ws
+    where v_can_read_web and ws.organization_id=p_organization_id and ws.started_at>=v_start
+      and (v_service or ws.lead_id is null or exists(select 1 from accessible_leads al where al.id=ws.lead_id)) group by 1
+  ),
+  daily_leads as (select (lf.created_at at time zone 'Asia/Kolkata')::date date,count(*)::integer leads,count(*) filter(where lf.is_qualified)::integer qualified,count(*) filter(where lf.is_enrolled)::integer enrolled from lead_facts lf group by 1),
+  daily_json as (select coalesce(jsonb_agg(jsonb_build_object('date',d.date,'sessions',coalesce(w.sessions,0),'leads',coalesce(l.leads,0),'qualified',coalesce(l.qualified,0),'enrolled',coalesce(l.enrolled,0)) order by d.date),'[]'::jsonb) rows from daily_days d left join daily_web w on w.date=d.date left join daily_leads l on l.date=d.date),
+  measurement as (select count(*)::integer total_leads,count(*) filter(where first_touch_source<>'unknown')::integer known_first_touch,count(*) filter(where first_touch_source='unknown')::integer unknown_first_touch from lead_facts)
+  select jsonb_build_object(
+    'status',jsonb_build_object('available',true,'window_days',v_days,'generated_at',now()),
+    'overview',jsonb_build_object('visitors',w.visitors,'sessions',w.sessions,'leads',b.leads,'qualified',b.qualified,'payment_pending',b.payment_pending,'paid',b.paid,'enrolled',b.enrolled,'revenue_inr',b.revenue_inr,'revenue_usd',b.revenue_usd),
+    'journeys',jsonb_build_array(
+      jsonb_build_object('key','business','label','Cross-channel business','description','All CRM leads created in the selected reporting window.','stages',jsonb_build_array(jsonb_build_object('key','leads','label','CRM leads','count',b.leads,'unit','people'),jsonb_build_object('key','qualified','label','Qualified','count',b.qualified,'unit','people'),jsonb_build_object('key','payment_pending','label','Payment pending','count',b.payment_pending,'unit','people'),jsonb_build_object('key','paid','label','Paid','count',b.paid,'unit','people'),jsonb_build_object('key','enrolled','label','Enrolled','count',b.enrolled,'unit','people'))),
+      jsonb_build_object('key','website','label','Website form','description','Observed website sessions and form events, followed by website-created CRM leads.','stages',jsonb_build_array(jsonb_build_object('key','sessions','label','Sessions','count',w.sessions,'unit','sessions'),jsonb_build_object('key','engaged','label','Engaged','count',we.engaged_sessions,'unit','sessions'),jsonb_build_object('key','form_start','label','Form starts','count',we.form_start_sessions,'unit','sessions'),jsonb_build_object('key','form_submit','label','Submissions','count',we.form_submit_sessions,'unit','sessions'),jsonb_build_object('key','leads','label','CRM leads','count',wl.leads,'unit','people'),jsonb_build_object('key','qualified','label','Qualified','count',wl.qualified,'unit','people'),jsonb_build_object('key','paid','label','Paid','count',wl.paid,'unit','people'),jsonb_build_object('key','enrolled','label','Enrolled','count',wl.enrolled,'unit','people'))),
+      jsonb_build_object('key','whatsapp','label','WhatsApp','description','CRM leads created through WhatsApp and their downstream sales outcomes.','stages',jsonb_build_array(jsonb_build_object('key','leads','label','CRM leads','count',wa.leads,'unit','people'),jsonb_build_object('key','qualified','label','Qualified','count',wa.qualified,'unit','people'),jsonb_build_object('key','payment_pending','label','Payment pending','count',wa.payment_pending,'unit','people'),jsonb_build_object('key','paid','label','Paid','count',wa.paid,'unit','people'),jsonb_build_object('key','enrolled','label','Enrolled','count',wa.enrolled,'unit','people')))
+    ),
+    'sources',sj.rows,'daily',dj.rows,
+    'measurement',jsonb_build_object('total_leads',m.total_leads,'known_first_touch',m.known_first_touch,'unknown_first_touch',m.unknown_first_touch,'first_touch_coverage',case when m.total_leads>0 then round((m.known_first_touch::numeric/m.total_leads::numeric)*100,1) else null end,'web_linked_leads',w.linked_leads,'website_created_leads',wl.leads,'form_submit_sessions',we.form_submit_sessions)
+  ) into v_result
+  from business b cross join website_leads wl cross join whatsapp_leads wa cross join web w cross join web_events we cross join source_json sj cross join daily_json dj cross join measurement m;
+  return v_result;
+end;$function$;
+
+revoke all on function public.get_funnel_intelligence_workspace_v3(uuid,integer) from public, anon;
+grant execute on function public.get_funnel_intelligence_workspace_v3(uuid,integer) to authenticated, service_role;
