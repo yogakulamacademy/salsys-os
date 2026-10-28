@@ -9,6 +9,7 @@ import {
   syncGoogleAdsToSupabase,
   type GoogleAdsRuntime,
 } from '@/lib/google-ads';
+import { readBoundedJson } from '@/lib/security/bounded-json-body';
 import {
   bearerMatchesAnySecret,
   secretMatches,
@@ -22,6 +23,9 @@ export const dynamic =
 
 export const maxDuration =
   300;
+
+const ANALYTICS_SYNC_BODY_MAX_BYTES =
+  16 * 1024;
 
 const ISO_DATE =
   /^\d{4}-\d{2}-\d{2}$/;
@@ -524,17 +528,35 @@ export async function POST(
   }
 
   try {
+    const parsedBody =
+      await readBoundedJson<{
+        startDate?: string;
+        endDate?: string;
+        organizationId?: string;
+        integrationAssetId?: string;
+      }>(
+        request,
+        ANALYTICS_SYNC_BODY_MAX_BYTES,
+      );
+
+    if (
+      !parsedBody.ok
+    ) {
+      return NextResponse.json(
+        {
+          ok: false,
+          error:
+            parsedBody.error,
+        },
+        {
+          status:
+            parsedBody.status,
+        },
+      );
+    }
+
     const body =
-      await request
-        .json()
-        .catch(
-          () => ({}),
-        ) as {
-          startDate?: string;
-          endDate?: string;
-          organizationId?: string;
-          integrationAssetId?: string;
-        };
+      parsedBody.value;
 
     const yesterday =
       isoDate(

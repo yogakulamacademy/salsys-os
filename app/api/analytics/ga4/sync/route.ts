@@ -9,6 +9,7 @@ import {
   syncGa4ToSupabase,
   type Ga4Runtime,
 } from '@/lib/ga4';
+import { readBoundedJson } from '@/lib/security/bounded-json-body';
 import { bearerMatchesAnySecret } from '@/lib/security/machine-bearer-auth';
 
 export const runtime =
@@ -19,6 +20,9 @@ export const dynamic =
 
 export const maxDuration =
   300;
+
+const ANALYTICS_SYNC_BODY_MAX_BYTES =
+  16 * 1024;
 
 type SyncRange = {
   startDate: string;
@@ -571,20 +575,35 @@ export async function POST(
     const defaults =
       defaultRange();
 
-    let body: {
-      startDate?: string;
-      endDate?: string;
-      organizationId?: string;
-      integrationAssetId?: string;
-    } = {};
+    const parsedBody =
+      await readBoundedJson<{
+        startDate?: string;
+        endDate?: string;
+        organizationId?: string;
+        integrationAssetId?: string;
+      }>(
+        request,
+        ANALYTICS_SYNC_BODY_MAX_BYTES,
+      );
 
-    try {
-      body =
-        await request
-          .json();
-    } catch {
-      body = {};
+    if (
+      !parsedBody.ok
+    ) {
+      return NextResponse.json(
+        {
+          ok: false,
+          error:
+            parsedBody.error,
+        },
+        {
+          status:
+            parsedBody.status,
+        },
+      );
     }
+
+    const body =
+      parsedBody.value;
 
     const result =
       await executeSync(
