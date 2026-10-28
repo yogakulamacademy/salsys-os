@@ -47,6 +47,17 @@ requireText(spec, "screenshot: 'off'", 'disabled screenshots');
 requireText(spec, "trace: 'off'", 'disabled traces');
 requireText(spec, "video: 'off'", 'disabled video');
 
+requireText(spec, 'PERF_BASELINE', 'structured production performance telemetry');
+requireText(spec, "'/dashboard'", 'dashboard performance route');
+requireText(spec, "'/crm'", 'CRM performance route');
+requireText(spec, "'/leads'", 'Leads performance route');
+requireText(spec, "'/conversations'", 'Conversations performance route');
+requireText(spec, "'/admissions'", 'Admissions performance route');
+requireText(spec, "waitUntil: 'domcontentloaded'", 'DOM-content-loaded timing boundary');
+requireText(spec, "not.toBe('/login')", 'performance navigation preserves authentication');
+forbidText(spec, 'toBeLessThan(', 'hard production latency threshold');
+forbidText(spec, 'toBeLessThanOrEqual(', 'hard production latency threshold');
+
 for (const suspicious of [
   /[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i,
   /password\s*=\s*['"][^'"]+['"]/i,
