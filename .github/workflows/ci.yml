@@ -103,6 +103,9 @@ jobs:
       - name: Verify Analytics Sync Body Limits
         run: npm run verify:analytics-sync-body-limits
 
+      - name: Verify Baseline Browser Security Headers
+        run: npm run verify:baseline-security-headers
+
       - name: Typecheck
         run: npm run typecheck
 
@@ -114,7 +117,7 @@ jobs:
 
       - name: Upload build log
         if: always()
-        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
+        uses: actions/upload-artifact@330a01c490aca1516048c5d4 # v5
         with:
           name: build-log
           path: build.log
