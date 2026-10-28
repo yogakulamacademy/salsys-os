@@ -1,10 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
 
+import { readBoundedJson } from '@/lib/security/bounded-json-body';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { createClient } from '@/lib/supabase/server';
 import { getWorkspaceContextForUser } from '@/lib/workspace';
 
 export const dynamic = 'force-dynamic';
+
+const TRACKING_ADMIN_BODY_MAX_BYTES = 32 * 1024;
 
 const CANONICAL_FIELDS = new Set([
   'firstName',
@@ -130,7 +133,13 @@ export async function PATCH(request: NextRequest) {
   const auth = await adminWorkspace();
   if ('error' in auth) return auth.error;
 
-  const body = await request.json().catch(() => null);
+  const parsedBody = await readBoundedJson<Record<string, unknown>>(
+    request,
+    TRACKING_ADMIN_BODY_MAX_BYTES,
+  );
+  if (!parsedBody.ok) return jsonError(parsedBody.error, parsedBody.status);
+
+  const body = parsedBody.value;
   if (!body || typeof body !== 'object' || Array.isArray(body)) {
     return jsonError('Invalid form configuration payload.', 400);
   }
