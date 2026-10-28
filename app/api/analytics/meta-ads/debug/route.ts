@@ -1,5 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 
+import {
+  bearerMatchesAnySecret,
+  secretMatches,
+} from '@/lib/security/machine-bearer-auth';
+
 export const dynamic = 'force-dynamic';
 
 function cleanAccountId(value: string) {
@@ -11,20 +16,14 @@ function isAuthorized(request: NextRequest) {
   const cronSecret = process.env.CRON_SECRET?.trim();
   const headerSecret = request.headers.get('x-meta-ads-sync-secret')?.trim();
   const authorization = request.headers.get('authorization')?.trim();
+  const bearerSecrets = [manualSecret, cronSecret].filter(
+    (value): value is string => Boolean(value),
+  );
 
-  if (manualSecret && headerSecret === manualSecret) {
-    return true;
-  }
-
-  if (manualSecret && authorization === `Bearer ${manualSecret}`) {
-    return true;
-  }
-
-  if (cronSecret && authorization === `Bearer ${cronSecret}`) {
-    return true;
-  }
-
-  return false;
+  return (
+    secretMatches(headerSecret, manualSecret) ||
+    bearerMatchesAnySecret(authorization, bearerSecrets)
+  );
 }
 
 type MetaGraphPayload = {
