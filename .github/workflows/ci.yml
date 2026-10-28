@@ -103,6 +103,9 @@ jobs:
       - name: Verify Analytics Sync Body Limits
         run: npm run verify:analytics-sync-body-limits
 
+      - name: Verify Baseline Browser Security Headers
+        run: npm run verify:baseline-security-headers
+
       - name: Typecheck
         run: npm run typecheck
 
