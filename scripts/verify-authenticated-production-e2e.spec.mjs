@@ -2,6 +2,13 @@ import { expect, test } from '@playwright/test';
 
 const WORKSPACE_COOKIE = 'salsys-active-workspace';
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const PERFORMANCE_ROUTES = [
+  '/dashboard',
+  '/crm',
+  '/leads',
+  '/conversations',
+  '/admissions',
+];
 
 function requireEnv(name) {
   const value = process.env[name]?.trim();
@@ -16,6 +23,48 @@ const expectedOrganizationId = requireEnv('SALSYSOS_E2E_ORGANIZATION_ID');
 
 if (!UUID_PATTERN.test(expectedOrganizationId)) {
   throw new Error('SALSYSOS_E2E_ORGANIZATION_ID must be a valid UUID.');
+}
+
+function logPerformanceBaseline({
+  route,
+  finalPath,
+  status,
+  domContentLoadedMs,
+  accessible,
+}) {
+  console.log(
+    `PERF_BASELINE route=${route} final_path=${finalPath} status=${status ?? 'none'} domcontentloaded_ms=${domContentLoadedMs} accessible=${accessible}`,
+  );
+}
+
+async function measureAuthenticatedRoute(page, route) {
+  const startedAt = Date.now();
+  const response = await page.goto(route, {
+    waitUntil: 'domcontentloaded',
+    timeout: 30_000,
+  });
+  const domContentLoadedMs = Date.now() - startedAt;
+  const finalPath = new URL(page.url()).pathname;
+  const status = response?.status() ?? null;
+  const accessible = Boolean(response?.ok() && finalPath === route);
+
+  logPerformanceBaseline({
+    route,
+    finalPath,
+    status,
+    domContentLoadedMs,
+    accessible,
+  });
+
+  expect(finalPath, `${route} should not lose the authenticated session`).not.toBe('/login');
+
+  return {
+    route,
+    finalPath,
+    status,
+    domContentLoadedMs,
+    accessible,
+  };
 }
 
 test.use({
@@ -53,4 +102,8 @@ test('password login establishes the expected production tenant session', async 
 
   await page.reload({ waitUntil: 'domcontentloaded' });
   await page.waitForURL((url) => url.pathname === '/dashboard', { timeout: 20_000 });
+
+  for (const route of PERFORMANCE_ROUTES) {
+    await measureAuthenticatedRoute(page, route);
+  }
 });
