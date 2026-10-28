@@ -11,6 +11,8 @@ function requireText(source, needle, label) {
 }
 
 const migration = read('supabase/migrations/20261020114000_customer360_identity_closeout_v1.sql');
+const personJourneyV3Migration = read('supabase/migrations/20261028001957_add_person_journey_workspace_v3_scoped.sql');
+const personJourneyData = read('lib/person-journey-data.ts');
 const universalIdentify = read('app/api/events/identify/v1/route.ts');
 const legacyIdentify = read('app/api/tracking/identify/route.ts');
 const packageJson = read('package.json');
@@ -38,6 +40,32 @@ for (const [needle, label] of [
   ['to service_role', 'service-role-only atomic identity RPC'],
 ]) {
   requireText(migration, needle, label);
+}
+
+for (const [needle, label] of [
+  ['get_person_journey_workspace_v3', 'scoped Person Journey V3 RPC'],
+  ['security definer', 'V3 controlled elevated read boundary'],
+  ['set search_path = public, auth, pg_temp', 'V3 fixed search path'],
+  ['is_organization_member(p_organization_id)', 'V3 organization authorization guard'],
+  ['can_access_lead(p_lead_id)', 'V3 lead authorization guard'],
+  ['can_view_lead_pii()', 'V3 PII visibility guard'],
+  ['v_lead_journey_intelligence', 'V3 latest-lead behavioral signal'],
+  ['v_person_journey', 'V3 canonical journey source'],
+  ['from anon', 'V3 anon execute revocation'],
+  ['to authenticated', 'V3 authenticated execute grant'],
+]) {
+  requireText(personJourneyV3Migration.toLowerCase(), needle.toLowerCase(), label);
+}
+
+requireText(personJourneyData, 'get_person_journey_workspace_v3', 'application V3 RPC call');
+requireText(personJourneyData, 'get_person_journey_workspace_v2', 'application V2 fallback RPC call');
+requireText(personJourneyData, 'Person Journey V3 read degraded:', 'V3 degradation logging');
+requireText(personJourneyData, 'Person Journey V2 read degraded:', 'V2 degradation logging');
+
+const v3Index = personJourneyData.indexOf('db.rpc("get_person_journey_workspace_v3"');
+const v2Index = personJourneyData.indexOf('db.rpc("get_person_journey_workspace_v2"');
+if (v3Index < 0 || v2Index < 0 || v3Index >= v2Index) {
+  throw new Error('Customer 360 identity verification failed: Person Journey V3 must be attempted before V2 fallback.');
 }
 
 for (const [source, label] of [
