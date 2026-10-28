@@ -5,6 +5,8 @@ import { createAdminClient } from "@/lib/supabase/admin";
 
 export const dynamic = "force-dynamic";
 
+const EXTERNAL_RUN_ERROR = "Automatic admissions task run failed.";
+
 type RunnerRow = {
   lead_id?: string | null;
   lead_code?: string | null;
@@ -173,6 +175,7 @@ async function runAutoTasks(request: NextRequest) {
         hardFailure = true;
 
         const message = errorMessage(error);
+        console.error("Admissions auto-task organization run failed:", organizationId, error);
 
         if (runId) {
           await supabase
@@ -198,7 +201,7 @@ async function runAutoTasks(request: NextRequest) {
           created,
           failed,
           rows,
-          error: message,
+          error: EXTERNAL_RUN_ERROR,
         });
       }
     }
@@ -229,13 +232,13 @@ async function runAutoTasks(request: NextRequest) {
       },
     );
   } catch (error) {
-    const message = errorMessage(error);
+    console.error("Admissions auto-task run failed:", error);
 
     return NextResponse.json(
       {
         ok: false,
         runId: null,
-        error: message,
+        error: EXTERNAL_RUN_ERROR,
       },
       {
         status: 500,
