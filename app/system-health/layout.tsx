@@ -6,6 +6,7 @@ import { isMockMode } from "@/lib/data";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { getWorkspaceContextForUser } from "@/lib/workspace";
+import OperationalReadinessSection from "./operational-readiness-section";
 
 type IntegrityStatus = "healthy" | "warning" | string;
 
@@ -42,6 +43,7 @@ export default async function SystemHealthLayout({
       {children}
       <div className="system-health-polish mt-4">
         <DataIntegritySection rows={rows} error={error} />
+        <OperationalReadinessSection organizationId={organizationId} />
       </div>
     </>
   );
