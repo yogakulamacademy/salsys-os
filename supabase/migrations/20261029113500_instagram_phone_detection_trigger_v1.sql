@@ -53,8 +53,7 @@ begin
   end if;
 
   v_has_phone_intent := new.body ~* '\m(whatsapp|phone|mobile|contact|call|number|cell)\M';
-  v_remainder := regexp_replace(new.body, regexp_replace(v_candidate, '([\[\]().+*?^$|{}\\-])', '\\\1', 'g'), '', 'g');
-  v_remainder := regexp_replace(v_remainder, '[^[:alnum:]]', '', 'g');
+  v_remainder := regexp_replace(replace(new.body, v_candidate, ''), '[^[:alnum:]]', '', 'g');
 
   if not v_international
      and not v_has_phone_intent
