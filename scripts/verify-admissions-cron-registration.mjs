@@ -33,6 +33,12 @@ for (const [needle, label] of [
   }
 }
 
+if (route.includes('crm.yogakulam.com/api/admissions/auto-tasks')) {
+  throw new Error(
+    'Admissions cron verification failed: legacy crm.yogakulam.com admissions endpoint must not be used by the current admissions runner.',
+  );
+}
+
 for (const expected of [
   '/api/intelligence/system-snapshot',
   '/api/intelligence/lead-scoring-snapshot',
@@ -55,4 +61,4 @@ if (!Array.isArray(durableTrigger) || durableTrigger.length === 0) {
   throw new Error('Admissions cron verification failed: durable tracking queue trigger disappeared.');
 }
 
-console.log('Admissions cron registration contracts verified.');
+console.log('Admissions cron registration and scheduler-authority contracts verified.');
