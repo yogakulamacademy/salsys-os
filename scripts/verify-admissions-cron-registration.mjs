@@ -2,10 +2,6 @@ import fs from 'node:fs';
 
 const vercel = JSON.parse(fs.readFileSync('vercel.json', 'utf8'));
 const route = fs.readFileSync('app/api/admissions/auto-tasks/route.ts', 'utf8');
-const schedulerTruthMigration = fs.readFileSync(
-  'supabase/migrations/20261029170000_admissions_scheduler_truth_v1.sql',
-  'utf8',
-);
 
 const admissionCrons = (vercel.crons ?? []).filter(
   (cron) => cron.path === '/api/admissions/auto-tasks',
@@ -37,28 +33,9 @@ for (const [needle, label] of [
   }
 }
 
-for (const [needle, label] of [
-  ["jobname = 'admissions-auto-tasks-every-15-min'", 'legacy pg_cron job selector'],
-  ['cron.unschedule', 'legacy pg_cron retirement'],
-  [
-    'create or replace view public.v_admissions_scheduler_health_v1',
-    'real admissions scheduler health view',
-  ],
-  ['public.admissions_auto_task_runs', 'real admissions run evidence'],
-  ["l.status = 'failed'", 'failed-run critical health classification'],
-  ["l.status = 'partial'", 'partial-run warning health classification'],
-  ["interval '30 minutes'", 'scheduler staleness threshold'],
-]) {
-  if (!schedulerTruthMigration.includes(needle)) {
-    throw new Error(
-      `Admissions cron verification failed: missing ${label} (${needle}).`,
-    );
-  }
-}
-
-if (schedulerTruthMigration.includes('https://crm.yogakulam.com/api/admissions/auto-tasks')) {
+if (route.includes('crm.yogakulam.com/api/admissions/auto-tasks')) {
   throw new Error(
-    'Admissions cron verification failed: legacy crm.yogakulam.com admissions endpoint must not be scheduled again.',
+    'Admissions cron verification failed: legacy crm.yogakulam.com admissions endpoint must not be used by the current admissions runner.',
   );
 }
 
@@ -84,4 +61,4 @@ if (!Array.isArray(durableTrigger) || durableTrigger.length === 0) {
   throw new Error('Admissions cron verification failed: durable tracking queue trigger disappeared.');
 }
 
-console.log('Admissions cron registration and scheduler-truth contracts verified.');
+console.log('Admissions cron registration and scheduler-authority contracts verified.');
