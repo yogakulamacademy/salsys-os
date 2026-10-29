@@ -30,6 +30,7 @@ export type ConversationLeadSummary = {
 type InboxFilter = "all" | "reply" | "unread" | "snoozed";
 type ScopeFilter = "mine" | "team" | "unassigned";
 type PriorityFilter = "all" | ConversationPriority;
+type ChannelFilter = "all" | "website" | "instagram" | "whatsapp";
 
 export function ConversationsSidebar({
   leads,
@@ -50,6 +51,7 @@ export function ConversationsSidebar({
   );
   const [filter, setFilter] = useState<InboxFilter>("all");
   const [priorityFilter, setPriorityFilter] = useState<PriorityFilter>("all");
+  const [channelFilter, setChannelFilter] = useState<ChannelFilter>("all");
   const [now, setNow] = useState(0);
   const [mobileViewport, setMobileViewport] = useState(false);
   const searchRef = useRef<HTMLInputElement | null>(null);
@@ -119,7 +121,8 @@ export function ConversationsSidebar({
     const query = search.trim().toLowerCase();
 
     return leads.filter((lead) => {
-      if (!matchesScope(lead, scope, currentUserId)) return false;
+      const selectedOutsideScope = lead.id === selectedId;
+      if (!matchesScope(lead, scope, currentUserId) && !selectedOutsideScope) return false;
 
       const snoozed = isSnoozed(lead, now);
       if (filter === "snoozed" && !snoozed) return false;
@@ -127,6 +130,7 @@ export function ConversationsSidebar({
       if (filter === "reply" && !lead.needsReply && !lead.needsFirstContact) return false;
       if (filter === "unread" && !lead.unread) return false;
       if (priorityFilter !== "all" && lead.priority !== priorityFilter) return false;
+      if (channelFilter !== "all" && lead.currentContactChannel !== channelFilter) return false;
 
       if (!query) return true;
 
@@ -145,7 +149,7 @@ export function ConversationsSidebar({
         .toLowerCase()
         .includes(query);
     });
-  }, [currentUserId, filter, leads, now, priorityFilter, scope, search]);
+  }, [channelFilter, currentUserId, filter, leads, now, priorityFilter, scope, search, selectedId]);
 
   function handleFilterKeyDown(event: React.KeyboardEvent<HTMLDivElement>) {
     if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
@@ -171,7 +175,8 @@ export function ConversationsSidebar({
     search ||
       scope !== (currentUserId && !canManageAssignments ? "mine" : "team") ||
       filter !== "all" ||
-      priorityFilter !== "all",
+      priorityFilter !== "all" ||
+      channelFilter !== "all",
   );
 
   return (
@@ -262,13 +267,26 @@ export function ConversationsSidebar({
         </div>
       </div>
 
-      <div className="flex shrink-0 items-center justify-between gap-3 border-b border-line bg-surface px-4 py-2.5">
-        <label className="min-w-0 flex-1">
+      <div className="grid shrink-0 grid-cols-2 gap-2 border-b border-line bg-surface px-4 py-2.5">
+        <label className="min-w-0">
+          <span className="sr-only">Channel filter</span>
+          <select
+            value={channelFilter}
+            onChange={(event) => setChannelFilter(event.target.value as ChannelFilter)}
+            className="h-8 w-full rounded-md border border-line bg-surface-soft px-2 text-[11px] font-medium text-copy-muted outline-none focus:border-brand-600 focus:text-brand-700"
+          >
+            <option value="all">All channels</option>
+            <option value="website">Website</option>
+            <option value="instagram">Instagram</option>
+            <option value="whatsapp">WhatsApp</option>
+          </select>
+        </label>
+        <label className="min-w-0">
           <span className="sr-only">Priority filter</span>
           <select
             value={priorityFilter}
             onChange={(event) => setPriorityFilter(event.target.value as PriorityFilter)}
-            className="h-8 max-w-[160px] rounded-md border-0 bg-transparent px-0 text-[12px] font-medium text-copy-muted outline-none focus:text-brand-700"
+            className="h-8 w-full rounded-md border border-line bg-surface-soft px-2 text-[11px] font-medium text-copy-muted outline-none focus:border-brand-600 focus:text-brand-700"
           >
             <option value="all">All priorities</option>
             <option value="urgent">Urgent only</option>
@@ -277,7 +295,7 @@ export function ConversationsSidebar({
             <option value="waiting">Waiting</option>
           </select>
         </label>
-        <span className="shrink-0 text-[11px] text-copy-subtle" aria-live="polite">
+        <span className="col-span-2 text-right text-[10.5px] text-copy-subtle" aria-live="polite">
           {filteredLeads.length} shown
         </span>
       </div>
@@ -292,7 +310,7 @@ export function ConversationsSidebar({
               <div className="mt-3 text-[13px] font-semibold text-copy-strong">
                 {filter === "snoozed"
                   ? "Nothing snoozed"
-                  : filter === "unread" && !search && priorityFilter === "all"
+                  : filter === "unread" && !search && priorityFilter === "all" && channelFilter === "all"
                     ? "You’re all caught up"
                     : "No matching conversations"}
               </div>
@@ -309,6 +327,7 @@ export function ConversationsSidebar({
                     setScope(currentUserId && !canManageAssignments ? "mine" : "team");
                     setFilter("all");
                     setPriorityFilter("all");
+                    setChannelFilter("all");
                   }}
                   className="mt-3 rounded-ui border border-line bg-surface px-3 py-2 text-[12px] font-semibold text-brand-700 transition hover:bg-brand-50"
                 >
