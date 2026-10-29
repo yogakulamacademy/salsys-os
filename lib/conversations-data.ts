@@ -134,6 +134,8 @@ type RpcAssignmentCandidate = {
 };
 
 type RpcPayload = {
+  __legacyFallbackRequired?: boolean | null;
+  __workspaceError?: string | null;
   inbox?: RpcInboxRow[] | null;
   selectedId?: string | null;
   selected?: RpcSelectedRow | null;
@@ -178,15 +180,21 @@ export async function getConversationsWorkspace(
     },
   );
 
+  // Auth/session/workspace-context failures deliberately bubble from the RPC.
+  // They must remain fail-closed and must never be disguised by the legacy loader.
   if (error) {
+    throw new Error(`Unable to load conversation workspace: ${error.message}`);
+  }
+
+  const payload = unwrapPayload(data);
+  if (payload.__legacyFallbackRequired) {
     console.warn(
-      "[conversations] Single-RPC workspace loader failed; using legacy loader:",
-      error.message,
+      "[conversations] Inner workspace read failed; using legacy loader:",
+      payload.__workspaceError || "unknown workspace error",
     );
     return getLegacyWorkspace(requestedLeadId, false);
   }
 
-  const payload = unwrapPayload(data);
   const selectedId = textOrUndefined(payload.selectedId);
   const conversationSummary = normalizeInbox(payload.inbox, selectedId);
   const selected = normalizeSelected(payload.selected);
