@@ -151,6 +151,9 @@ jobs:
       - name: Verify PH-3 Operational Readiness Closeout
         run: npm run verify:ph3-operational-readiness-closeout
 
+      - name: Verify PH-5 Recovery Readiness Contract
+        run: npm run verify:recovery-readiness
+
       - name: Typecheck
         run: npm run typecheck
 
