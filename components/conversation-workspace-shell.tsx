@@ -24,7 +24,8 @@ export function ConversationWorkspaceShell({
   const [desktopContextOpen, setDesktopContextOpen] = useState(true);
   const [mobileContextOpen, setMobileContextOpen] = useState(false);
   const drawerRef = useRef<HTMLElement | null>(null);
-  const drawerTriggerRef = useRef<HTMLButtonElement | null>(null);
+  const mobileBarTriggerRef = useRef<HTMLButtonElement | null>(null);
+  const tabletTriggerRef = useRef<HTMLButtonElement | null>(null);
   const showDesktopContext = hasConversation && desktopContextOpen;
   const hasExplicitLeadSelection = Boolean(searchParams.get("lead"));
   const mobileConversationOpen = hasConversation && hasExplicitLeadSelection;
@@ -114,7 +115,10 @@ export function ConversationWorkspaceShell({
     return () => {
       document.removeEventListener("keydown", onKeyDown);
       document.body.style.overflow = previousOverflow;
-      (drawerTriggerRef.current ?? previousActive)?.focus?.();
+      const trigger = window.matchMedia("(max-width: 620px)").matches
+        ? mobileBarTriggerRef.current
+        : tabletTriggerRef.current;
+      (trigger ?? previousActive)?.focus?.();
     };
   }, [mobileContextOpen]);
 
@@ -153,7 +157,7 @@ export function ConversationWorkspaceShell({
                 <ArrowLeft size={15} /> Inbox
               </Link>
               <button
-                ref={drawerTriggerRef}
+                ref={mobileBarTriggerRef}
                 type="button"
                 onClick={() => setMobileContextOpen(true)}
                 className="inline-flex min-h-10 items-center gap-1.5 rounded-ui px-2.5 text-[12px] font-semibold text-brand-700 transition hover:bg-brand-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-700/40"
@@ -185,7 +189,7 @@ export function ConversationWorkspaceShell({
                 </button>
 
                 <button
-                  ref={drawerTriggerRef}
+                  ref={tabletTriggerRef}
                   type="button"
                   onClick={() => setMobileContextOpen(true)}
                   className="absolute right-3 top-3 z-30 hidden h-9 items-center gap-1.5 rounded-ui border border-line bg-surface/95 px-2.5 text-[12px] font-semibold text-brand-700 shadow-sm backdrop-blur focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-700/40 min-[621px]:inline-flex min-[1171px]:hidden"
