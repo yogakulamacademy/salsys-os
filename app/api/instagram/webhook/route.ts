@@ -8,6 +8,10 @@ import {
   queueInstagramCommentAutomation,
   queueInstagramDmAutomation,
 } from '@/lib/automation/instagram-operations';
+import {
+  applyInstagramProfileToGenericLead,
+  resolveInstagramMessagingProfile,
+} from '@/lib/integrations/instagram-profile-sync';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -246,11 +250,17 @@ export async function POST(request: NextRequest) {
       }
       if (rawResult.created === true) rawEventsCreated += 1;
 
+      const senderProfile = await resolveInstagramMessagingProfile({
+        organizationId,
+        accountId: event.accountId,
+        instagramUserId: event.senderId,
+      });
+
       const { data: crmData, error: crmError } = await supabase.rpc(
         'ingest_instagram_dm_event',
         {
           p_raw_event_id: rawEventId,
-          p_sender_username: null,
+          p_sender_username: senderProfile?.username ?? null,
           p_message_type: event.messageType,
           p_body: event.body,
           p_message_at: event.occurredAt,
@@ -280,6 +290,14 @@ export async function POST(request: NextRequest) {
         const leadId = stringValue(crmResult.lead_id);
         const conversationId = stringValue(crmResult.conversation_id);
         const instagramUserId = stringValue(crmResult.instagram_user_id) || event.senderId;
+
+        if (leadId && senderProfile) {
+          await applyInstagramProfileToGenericLead({
+            organizationId,
+            leadId,
+            profile: senderProfile,
+          });
+        }
 
         if (leadId && conversationId && instagramUserId) {
           try {
