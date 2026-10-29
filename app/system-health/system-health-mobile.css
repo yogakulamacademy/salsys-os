@@ -28,17 +28,19 @@
   }
 
   .system-health-failures-card .system-health-table tbody td {
-    display: grid;
-    grid-template-columns: 82px minmax(0, 1fr);
-    gap: 10px;
-    align-items: start;
+    position: relative;
+    display: block;
     max-width: none;
+    min-height: 28px;
     border: 0;
-    padding: 6px 0;
+    padding: 6px 0 6px 92px;
   }
 
   .system-health-failures-card .system-health-table tbody td::before {
-    padding-top: 1px;
+    position: absolute;
+    top: 7px;
+    left: 0;
+    width: 80px;
     color: var(--app-text-subtle);
     font-size: 9px;
     font-weight: 700;
@@ -69,6 +71,10 @@
 
   .system-health-failures-card .system-health-table tbody td:first-child {
     padding-top: 0;
+  }
+
+  .system-health-failures-card .system-health-table tbody td:first-child::before {
+    top: 1px;
   }
 
   .system-health-failures-card .system-health-table tbody td:last-child {
