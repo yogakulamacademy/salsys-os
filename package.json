@@ -28,7 +28,8 @@
     "verify:authenticated-production-e2e-contract": "node scripts/verify-authenticated-production-e2e-contract.mjs",
     "verify:analytics-sync-body-limits": "node scripts/verify-analytics-sync-body-limits.mjs",
     "verify:baseline-security-headers": "node scripts/verify-baseline-security-headers.mjs",
-    "verify:oauth-connect-fetch-metadata": "node scripts/verify-oauth-connect-fetch-metadata.mjs"
+    "verify:oauth-connect-fetch-metadata": "node scripts/verify-oauth-connect-fetch-metadata.mjs",
+    "verify:client-secret-boundary": "node scripts/verify-client-secret-boundary.mjs"
   },
   "dependencies": {
     "@google-analytics/data": "^7.2.0",
