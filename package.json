@@ -40,7 +40,8 @@
     "verify:system-health-integrity-ui": "node scripts/verify-system-health-integrity-ui.mjs",
     "verify:meta-ads-operational-health-v1": "node scripts/verify-meta-ads-operational-health-v1.mjs",
     "verify:admissions-cron-registration": "node scripts/verify-admissions-cron-registration.mjs",
-    "verify:admissions-rule-key-ambiguity": "node scripts/verify-admissions-rule-key-ambiguity.mjs"
+    "verify:admissions-rule-key-ambiguity": "node scripts/verify-admissions-rule-key-ambiguity.mjs",
+    "verify:browser-form-discovery-dedupe": "node scripts/verify-browser-form-discovery-dedupe.mjs"
   },
   "dependencies": {
     "@google-analytics/data": "^7.2.0",
