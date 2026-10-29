@@ -16,7 +16,7 @@ for (const [needle, label] of [
   ['workspace.activeWorkspace.role !== "admin"', 'admin role enforcement'],
   ['createAdminClient()', 'service-role reader'],
   ['.eq("organization_id", organizationId)', 'explicit tenant scope'],
-  ['Data Integrity', 'Data Integrity section'],
+  ['Data integrity', 'Data integrity section'],
   ['Core integrity checks', 'integrity heading'],
   ['Actionable issues', 'actionable issue metric'],
   ['Open identity conflicts', 'identity conflict detail'],
