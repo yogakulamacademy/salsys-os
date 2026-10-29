@@ -9,6 +9,7 @@ import {
   ChevronDown,
   Columns3,
   Filter,
+  Loader2,
   MoreHorizontal,
   Search,
   X,
@@ -24,7 +25,7 @@ import {
 } from "react";
 
 import { LeadInspector } from "@/components/crm/lead-inspector";
-import { ChannelBadge, IntentLabel, StageBadge } from "@/components/ui";
+import { ChannelBadge, EmptyState, IntentLabel, StageBadge } from "@/components/ui";
 import type {
   LeadListIntelligence,
   LeadsWorkspaceFilters,
@@ -224,11 +225,11 @@ export function LeadsCleanTable({
   return (
     <>
       <section
-        className={`overflow-hidden rounded-[18px] border border-[#E1E8E3] bg-white shadow-[0_1px_2px_rgba(15,23,42,0.03)] transition-opacity dark:border-slate-800 dark:bg-slate-950 ${
-          isPending ? "opacity-70" : "opacity-100"
+        className={`overflow-hidden rounded-panel border border-line bg-surface shadow-xs transition-opacity ${
+          isPending ? "opacity-80" : "opacity-100"
         }`}
       >
-        <div ref={toolbarRef} className="border-b border-[#EDF1EE] px-4 py-3">
+        <div ref={toolbarRef} className="border-b border-line px-4 py-3">
           <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
             <div className="flex flex-wrap items-center gap-2">
               <div className="relative">
@@ -238,13 +239,13 @@ export function LeadsCleanTable({
                     setShowViews((value) => !value);
                     setShowColumns(false);
                   }}
-                  className="inline-flex h-9 items-center gap-2 rounded-lg border border-[#DDE7DF] bg-white px-3 text-[11px] font-semibold text-[#50675C] shadow-sm transition hover:bg-[#F5F8F6]"
+                  className="inline-flex h-9 items-center gap-2 rounded-ui border border-line bg-surface px-3 text-[11px] font-semibold text-copy-muted shadow-sm transition hover:border-line-strong hover:bg-surface-soft hover:text-copy-strong"
                 >
                   {quickViewLabel(filters.quickView)}
-                  <span className="rounded-full bg-[#EEF4F0] px-1.5 py-0.5 text-[9px] text-[#61786C]">
+                  <span className="rounded-full bg-surface-muted px-1.5 py-0.5 text-[9px] text-copy-muted">
                     {summaryForView(summary, filters.quickView)}
                   </span>
-                  <ChevronDown size={13} className="text-[#91A097]" />
+                  <ChevronDown size={13} className="text-copy-subtle" />
                 </button>
 
                 {showViews ? (
@@ -264,10 +265,10 @@ export function LeadsCleanTable({
                           updateUrl({ view: value === "all" ? null : value, page: 1 });
                           setShowViews(false);
                         }}
-                        className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-xs font-medium text-[#5E7168] transition hover:bg-[#F3F7F4]"
+                        className="flex w-full items-center gap-2 rounded-ui px-2.5 py-2 text-left text-xs font-medium text-copy-muted transition hover:bg-surface-soft hover:text-copy-strong"
                       >
                         <span className="flex-1">{label}</span>
-                        <span className="text-[10px] text-[#9AA79F]">{count}</span>
+                        <span className="text-[10px] text-copy-subtle">{count}</span>
                         {filters.quickView === value ? <Check size={13} /> : null}
                       </button>
                     ))}
@@ -289,22 +290,22 @@ export function LeadsCleanTable({
 
             <div className="flex flex-wrap items-center gap-2">
               <label className="relative min-w-[220px] flex-1 xl:flex-none">
-                <Search size={14} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[#98A49D]" />
+                <Search size={14} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-copy-subtle" />
                 <input
                   value={query}
                   onChange={(event) => setQuery(event.target.value)}
                   placeholder="Search leads"
-                  className="h-9 w-full rounded-lg border border-[#DDE7DF] bg-white pl-9 pr-3 text-xs text-[#40564C] outline-none transition placeholder:text-[#A0ABA5] focus:border-[#8BB59A]"
+                  className="h-9 w-full rounded-ui border border-line bg-surface pl-9 pr-3 text-xs text-copy outline-none transition placeholder:text-copy-subtle focus:border-brand-500 focus:ring-2 focus:ring-brand-100"
                 />
               </label>
 
               <button
                 type="button"
                 onClick={() => setShowFilters((value) => !value)}
-                className={`inline-flex h-9 items-center gap-2 rounded-lg px-2.5 text-[11px] font-semibold transition ${
+                className={`inline-flex h-9 items-center gap-2 rounded-ui px-2.5 text-[11px] font-semibold transition ${
                   showFilters || filtersActive
-                    ? "bg-[#EAF3ED] text-[#216551]"
-                    : "text-[#64776E] hover:bg-[#F4F7F5]"
+                    ? "bg-brand-50 text-brand-700"
+                    : "text-copy-muted hover:bg-surface-soft hover:text-copy-strong"
                 }`}
               >
                 <Filter size={14} /> Filter
@@ -317,7 +318,7 @@ export function LeadsCleanTable({
                     setShowColumns((value) => !value);
                     setShowViews(false);
                   }}
-                  className="inline-flex h-9 items-center gap-2 rounded-lg px-2.5 text-[11px] font-semibold text-[#64776E] transition hover:bg-[#F4F7F5]"
+                  className="inline-flex h-9 items-center gap-2 rounded-ui px-2.5 text-[11px] font-semibold text-copy-muted transition hover:bg-surface-soft hover:text-copy-strong"
                 >
                   <Columns3 size={14} /> Fields
                 </button>
@@ -325,13 +326,13 @@ export function LeadsCleanTable({
                   <Popover className="right-0 top-11 w-56">
                     <PopoverLabel>Visible fields</PopoverLabel>
                     {(Object.keys(COLUMN_LABELS) as ColumnKey[]).map((column) => (
-                      <label key={column} className="flex cursor-pointer items-center gap-2 rounded-lg px-2.5 py-2 text-xs text-[#5E7168] hover:bg-[#F3F7F4]">
+                      <label key={column} className="flex cursor-pointer items-center gap-2 rounded-ui px-2.5 py-2 text-xs text-copy-muted hover:bg-surface-soft hover:text-copy-strong">
                         <input
                           type="checkbox"
                           checked={visibleColumns.includes(column)}
                           disabled={column === "lead"}
                           onChange={() => toggleColumn(column)}
-                          className="h-3.5 w-3.5 rounded border-slate-300"
+                          className="h-3.5 w-3.5 rounded border-line"
                         />
                         {COLUMN_LABELS[column]}
                       </label>
@@ -343,7 +344,7 @@ export function LeadsCleanTable({
           </div>
 
           {showFilters ? (
-            <div className="mt-3 flex flex-wrap items-end gap-2 rounded-xl bg-[#F5F8F6] p-3">
+            <div className="mt-3 flex flex-wrap items-end gap-2 rounded-ui bg-surface-soft p-3">
               <FilterSelect label="Stage" value={filters.stage || "all"} options={options.stages} onChange={(value) => updateUrl({ stage: value, page: 1 })} />
               <FilterSelect label="Source" value={filters.source || "all"} options={options.sources} onChange={(value) => updateUrl({ source: value, page: 1 })} />
               <FilterSelect label="Channel" value={filters.channel || "all"} options={options.channels} onChange={(value) => updateUrl({ channel: value, page: 1 })} />
@@ -351,11 +352,11 @@ export function LeadsCleanTable({
               <FilterSelect label="Course" value={filters.course || "all"} options={options.courses} onChange={(value) => updateUrl({ course: value, page: 1 })} />
               <FilterSelect label="Aging" value={filters.aging || "all"} options={["healthy", "warning", "stuck", "untracked"]} onChange={(value) => updateUrl({ aging: value, page: 1 })} />
               <label className="min-w-[150px]">
-                <span className="mb-1 block text-[9px] font-semibold uppercase tracking-[0.08em] text-[#8A978F]">Sort</span>
+                <span className="mb-1 block text-[9px] font-semibold uppercase tracking-[0.08em] text-copy-subtle">Sort</span>
                 <select
                   value={filters.sort}
                   onChange={(event) => updateUrl({ sort: event.target.value, page: 1 })}
-                  className="h-9 w-full rounded-lg border border-[#DDE7DF] bg-white px-2.5 text-[11px] font-medium text-[#52665C] outline-none"
+                  className="h-9 w-full rounded-ui border border-line bg-surface px-2.5 text-[11px] font-medium text-copy outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100"
                 >
                   <option value="stage_age_desc">Stage age</option>
                   <option value="followup_asc">Next follow-up</option>
@@ -363,7 +364,7 @@ export function LeadsCleanTable({
                 </select>
               </label>
               {filtersActive ? (
-                <button type="button" onClick={resetFilters} className="mb-px inline-flex h-9 items-center gap-1.5 rounded-lg px-3 text-xs font-semibold text-[#687B71] hover:bg-white hover:text-[#216551]">
+                <button type="button" onClick={resetFilters} className="mb-px inline-flex h-9 items-center gap-1.5 rounded-ui px-3 text-xs font-semibold text-copy-muted hover:bg-surface hover:text-brand-700">
                   <X size={13} /> Clear
                 </button>
               ) : null}
@@ -371,20 +372,27 @@ export function LeadsCleanTable({
           ) : null}
         </div>
 
+        {isPending ? (
+          <div role="status" aria-live="polite" className="flex items-center gap-2 border-b border-line bg-surface-soft px-4 py-2 text-[11px] font-semibold text-copy-muted">
+            <Loader2 size={13} className="animate-spin text-brand-700" />
+            Updating leads…
+          </div>
+        ) : null}
+
         {selectedRows.size > 0 ? (
-          <div className="flex flex-wrap items-center gap-3 border-b border-[#EDF1EE] bg-[#F6F9F7] px-4 py-2.5 text-xs">
-            <span className="font-semibold text-[#2C443B]">{selectedRows.size} selected</span>
-            <Link href="/follow-ups" className="rounded-lg px-2.5 py-1.5 font-medium text-[#5E7168] hover:bg-white">Create follow-up</Link>
-            <button type="button" onClick={() => setSelectedRows(new Set())} className="ml-auto text-[#89978F] hover:text-[#216551]">Clear selection</button>
+          <div className="flex flex-wrap items-center gap-3 border-b border-line bg-surface-soft px-4 py-2.5 text-xs">
+            <span className="font-semibold text-copy-strong">{selectedRows.size} selected</span>
+            <Link href="/follow-ups" className="rounded-ui px-2.5 py-1.5 font-medium text-copy-muted hover:bg-surface hover:text-copy-strong">Create follow-up</Link>
+            <button type="button" onClick={() => setSelectedRows(new Set())} className="ml-auto text-copy-subtle hover:text-brand-700">Clear selection</button>
           </div>
         ) : null}
 
         <div className="overflow-x-auto">
           <table className="w-full min-w-[1080px] border-collapse">
             <thead>
-              <tr className="border-b border-[#EDF1EE] bg-[#F8FAF8] text-left">
+              <tr className="border-b border-line bg-surface-soft text-left">
                 <th className="w-10 px-4 py-2.5">
-                  <input type="checkbox" checked={allSelected} onChange={toggleAll} aria-label="Select all visible leads" className="h-3.5 w-3.5 rounded border-slate-300" />
+                  <input type="checkbox" checked={allSelected} onChange={toggleAll} aria-label="Select all visible leads" className="h-3.5 w-3.5 rounded border-line" />
                 </th>
                 {visibleColumns.includes("lead") ? <HeaderCell>Lead</HeaderCell> : null}
                 {visibleColumns.includes("course") ? <HeaderCell>Course</HeaderCell> : null}
@@ -413,10 +421,10 @@ export function LeadsCleanTable({
                           setSelectedId(lead.id);
                         }
                       }}
-                      className={`group cursor-pointer border-b border-[#F0F3F1] transition last:border-b-0 hover:bg-[#F7FAF8] focus:bg-[#F4F8F5] focus:outline-none ${checked ? "bg-[#F1F7F3]" : ""}`}
+                      className={`group cursor-pointer border-b border-line transition last:border-b-0 hover:bg-surface-soft focus:bg-surface-soft focus:outline-none ${checked ? "bg-brand-50/70" : ""}`}
                     >
                       <td className="px-4 py-3" onClick={(event) => event.stopPropagation()}>
-                        <input type="checkbox" checked={checked} onChange={() => toggleRow(lead.id)} aria-label={`Select ${lead.name || lead.leadCode}`} className="h-3.5 w-3.5 rounded border-slate-300" />
+                        <input type="checkbox" checked={checked} onChange={() => toggleRow(lead.id)} aria-label={`Select ${lead.name || lead.leadCode}`} className="h-3.5 w-3.5 rounded border-line" />
                       </td>
 
                       {visibleColumns.includes("lead") ? (
@@ -424,8 +432,8 @@ export function LeadsCleanTable({
                           <div className="flex min-w-[190px] items-center gap-3">
                             <span className={`grid h-8 w-8 shrink-0 place-items-center rounded-full text-[10px] font-bold ${avatarTone(lead.currentContactChannel)}`}>{initials(lead.name || lead.leadCode)}</span>
                             <div className="min-w-0">
-                              <div className="max-w-[220px] truncate text-[12px] font-semibold text-[#243B33]">{lead.name || lead.leadCode}</div>
-                              <div className="mt-0.5 truncate text-[10px] text-[#93A098]">{lead.leadCode}{lead.country ? ` · ${lead.country}` : ""}</div>
+                              <div className="max-w-[220px] truncate text-[12px] font-semibold text-copy-strong">{lead.name || lead.leadCode}</div>
+                              <div className="mt-0.5 truncate text-[10px] text-copy-subtle">{lead.leadCode}{lead.country ? ` · ${lead.country}` : ""}</div>
                             </div>
                           </div>
                         </td>
@@ -433,22 +441,22 @@ export function LeadsCleanTable({
 
                       {visibleColumns.includes("course") ? (
                         <td className="px-3 py-3">
-                          <div className="max-w-[220px] truncate text-[12px] font-medium text-[#52665C]">{lead.course || "—"}</div>
-                          <div className="mt-0.5 max-w-[220px] truncate text-[10px] text-[#93A098]">{intel?.batch_code || lead.location || "Not selected"}</div>
+                          <div className="max-w-[220px] truncate text-[12px] font-medium text-copy">{lead.course || "—"}</div>
+                          <div className="mt-0.5 max-w-[220px] truncate text-[10px] text-copy-subtle">{intel?.batch_code || lead.location || "Not selected"}</div>
                         </td>
                       ) : null}
 
                       {visibleColumns.includes("contact") ? (
                         <td className="px-3 py-3">
-                          <div className="max-w-[220px] truncate text-[11px] text-[#52665C]">{lead.email || lead.phone || "—"}</div>
+                          <div className="max-w-[220px] truncate text-[11px] text-copy">{lead.email || lead.phone || "—"}</div>
                           <div className="mt-1"><ChannelBadge channel={lead.currentContactChannel} /></div>
                         </td>
                       ) : null}
 
                       {visibleColumns.includes("source") ? (
                         <td className="px-3 py-3">
-                          <div className="max-w-[160px] truncate text-[11px] font-medium text-[#52665C]">{pretty(lead.firstTouchSource || "Unknown")}</div>
-                          <div className="mt-0.5 max-w-[160px] truncate text-[10px] text-[#93A098]">{lead.firstTouchCampaign || lead.firstTouchMedium || "—"}</div>
+                          <div className="max-w-[160px] truncate text-[11px] font-medium text-copy">{pretty(lead.firstTouchSource || "Unknown")}</div>
+                          <div className="mt-0.5 max-w-[160px] truncate text-[10px] text-copy-subtle">{lead.firstTouchCampaign || lead.firstTouchMedium || "—"}</div>
                         </td>
                       ) : null}
 
@@ -460,8 +468,8 @@ export function LeadsCleanTable({
 
                       {visibleColumns.includes("owner") ? (
                         <td className="px-3 py-3">
-                          <div className="text-[11px] font-medium text-[#52665C]">{intel?.owner_name || lead.owner || "Unassigned"}</div>
-                          <div className="mt-0.5 text-[10px] text-[#93A098]">{nextAction(lead, intel)}</div>
+                          <div className="text-[11px] font-medium text-copy">{intel?.owner_name || lead.owner || "Unassigned"}</div>
+                          <div className="mt-0.5 text-[10px] text-copy-subtle">{nextAction(lead, intel)}</div>
                         </td>
                       ) : null}
 
@@ -478,13 +486,13 @@ export function LeadsCleanTable({
 
                       {visibleColumns.includes("created") ? (
                         <td className="px-3 py-3">
-                          <div className="whitespace-nowrap text-[11px] font-medium text-[#52665C]">{relativeDate(lead.createdAt)}</div>
-                          <div className="mt-0.5 whitespace-nowrap text-[10px] text-[#93A098]">{formatDate(lead.createdAt)}</div>
+                          <div className="whitespace-nowrap text-[11px] font-medium text-copy">{relativeDate(lead.createdAt)}</div>
+                          <div className="mt-0.5 whitespace-nowrap text-[10px] text-copy-subtle">{formatDate(lead.createdAt)}</div>
                         </td>
                       ) : null}
 
                       <td className="px-2 py-3 text-right">
-                        <button type="button" onClick={(event) => { event.stopPropagation(); setSelectedId(lead.id); }} aria-label={`Inspect ${lead.name || lead.leadCode}`} className="grid h-8 w-8 place-items-center rounded-lg text-[#9BA79F] opacity-0 transition hover:bg-white hover:text-[#216551] group-hover:opacity-100 group-focus:opacity-100">
+                        <button type="button" onClick={(event) => { event.stopPropagation(); setSelectedId(lead.id); }} aria-label={`Inspect ${lead.name || lead.leadCode}`} className="grid h-8 w-8 place-items-center rounded-ui text-copy-subtle opacity-0 transition hover:bg-surface hover:text-brand-700 group-hover:opacity-100 group-focus:opacity-100">
                           <MoreHorizontal size={15} />
                         </button>
                       </td>
@@ -493,9 +501,17 @@ export function LeadsCleanTable({
                 })
               ) : (
                 <tr>
-                  <td colSpan={visibleColumns.length + 2} className="px-6 py-16 text-center">
-                    <div className="text-sm font-semibold text-[#40564C]">No leads match this view</div>
-                    <button type="button" onClick={resetFilters} className="mt-2 text-xs font-semibold text-[#216551] hover:underline">Clear filters</button>
+                  <td colSpan={visibleColumns.length + 2} className="px-6 py-10">
+                    <EmptyState
+                      compact
+                      title="No leads match this view"
+                      description="Try adjusting your search or filters to see more leads."
+                      action={filtersActive ? (
+                        <button type="button" onClick={resetFilters} className="btn-secondary">
+                          Clear filters
+                        </button>
+                      ) : undefined}
+                    />
                   </td>
                 </tr>
               )}
@@ -503,16 +519,16 @@ export function LeadsCleanTable({
           </table>
         </div>
 
-        <div className="flex flex-wrap items-center justify-between gap-3 border-t border-[#EDF1EE] px-4 py-3">
-          <div className="text-[11px] text-[#91A097]">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-t border-line px-4 py-3">
+          <div className="text-[11px] text-copy-subtle">
             {pagination.total > 0 ? `${pagination.from}–${pagination.to} of ${pagination.total}` : "0 leads"}
             {mock ? " · Demo" : " · Live"} · {sortLabel(filters.sort)}
           </div>
           {pagination.totalPages > 1 ? (
             <div className="flex items-center gap-2">
-              <button type="button" disabled={isPending || pagination.page <= 1} onClick={() => updateUrl({ page: pagination.page - 1 })} className="inline-flex h-8 items-center gap-1 rounded-lg border border-[#DDE7DF] px-2.5 text-[11px] font-medium text-[#61736A] disabled:opacity-40"><ArrowLeft size={12} /> Previous</button>
-              <span className="text-[10px] text-[#91A097]">{pagination.page} / {pagination.totalPages}</span>
-              <button type="button" disabled={isPending || pagination.page >= pagination.totalPages} onClick={() => updateUrl({ page: pagination.page + 1 })} className="inline-flex h-8 items-center gap-1 rounded-lg border border-[#DDE7DF] px-2.5 text-[11px] font-medium text-[#61736A] disabled:opacity-40">Next <ArrowRight size={12} /></button>
+              <button type="button" disabled={isPending || pagination.page <= 1} onClick={() => updateUrl({ page: pagination.page - 1 })} className="inline-flex h-8 items-center gap-1 rounded-ui border border-line bg-surface px-2.5 text-[11px] font-medium text-copy-muted transition hover:bg-surface-soft hover:text-copy-strong disabled:cursor-not-allowed disabled:opacity-40"><ArrowLeft size={12} /> Previous</button>
+              <span className="text-[10px] text-copy-subtle">{pagination.page} / {pagination.totalPages}</span>
+              <button type="button" disabled={isPending || pagination.page >= pagination.totalPages} onClick={() => updateUrl({ page: pagination.page + 1 })} className="inline-flex h-8 items-center gap-1 rounded-ui border border-line bg-surface px-2.5 text-[11px] font-medium text-copy-muted transition hover:bg-surface-soft hover:text-copy-strong disabled:cursor-not-allowed disabled:opacity-40">Next <ArrowRight size={12} /></button>
             </div>
           ) : null}
         </div>
@@ -524,26 +540,26 @@ export function LeadsCleanTable({
 }
 
 function HeaderCell({ children }: { children: ReactNode }) {
-  return <th className="px-3 py-2.5 text-[10px] font-medium text-[#7E8D85]">{children}</th>;
+  return <th className="px-3 py-2.5 text-[10px] font-medium text-copy-subtle">{children}</th>;
 }
 
 function Popover({ children, className }: { children: ReactNode; className: string }) {
-  return <div className={`absolute z-50 rounded-xl border border-[#DDE7DF] bg-white p-1.5 shadow-xl ${className}`}>{children}</div>;
+  return <div className={`absolute z-50 rounded-ui border border-line bg-surface p-1.5 shadow-panel ${className}`}>{children}</div>;
 }
 
 function PopoverLabel({ children }: { children: ReactNode }) {
-  return <div className="px-2.5 pb-1.5 pt-1 text-[9px] font-bold uppercase tracking-[0.1em] text-[#93A098]">{children}</div>;
+  return <div className="px-2.5 pb-1.5 pt-1 text-[9px] font-bold uppercase tracking-[0.1em] text-copy-subtle">{children}</div>;
 }
 
 function QuickViewButton({ label, active, onClick }: { label: string; active: boolean; onClick: () => void }) {
-  return <button type="button" onClick={onClick} className={`h-9 rounded-lg px-3 text-[11px] font-semibold transition ${active ? "bg-[#EAF3ED] text-[#216551]" : "text-[#64776E] hover:bg-[#F4F7F5]"}`}>{label}</button>;
+  return <button type="button" onClick={onClick} className={`h-9 rounded-ui px-3 text-[11px] font-semibold transition ${active ? "bg-brand-50 text-brand-700" : "text-copy-muted hover:bg-surface-soft hover:text-copy-strong"}`}>{label}</button>;
 }
 
 function FilterSelect({ label, value, options, onChange }: { label: string; value: string; options: string[]; onChange: (value: string) => void }) {
   return (
     <label className="min-w-[145px]">
-      <span className="mb-1 block text-[9px] font-semibold uppercase tracking-[0.08em] text-[#8A978F]">{label}</span>
-      <select value={value} onChange={(event) => onChange(event.target.value)} className="h-9 w-full rounded-lg border border-[#DDE7DF] bg-white px-2.5 text-[11px] font-medium text-[#52665C] outline-none">
+      <span className="mb-1 block text-[9px] font-semibold uppercase tracking-[0.08em] text-copy-subtle">{label}</span>
+      <select value={value} onChange={(event) => onChange(event.target.value)} className="h-9 w-full rounded-ui border border-line bg-surface px-2.5 text-[11px] font-medium text-copy outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100">
         <option value="all">All</option>
         {options.map((option) => <option key={option} value={option}>{pretty(option)}</option>)}
       </select>
