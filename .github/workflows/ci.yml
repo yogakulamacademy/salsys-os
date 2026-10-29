@@ -112,6 +112,9 @@ jobs:
       - name: Verify Client/Server Secret Boundary
         run: npm run verify:client-secret-boundary
 
+      - name: Verify Provider Visibility Single RPC
+        run: npm run verify:provider-visibility-single-rpc
+
       - name: Typecheck
         run: npm run typecheck
 
