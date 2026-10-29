@@ -40,12 +40,23 @@ if (rpcCalls.length !== 1) {
   throw new Error(`Conversations hot path must make exactly one RPC call; found ${rpcCalls.length}.`);
 }
 
+if (!hotPath.includes('throw new Error(`Unable to load conversation workspace: ${error.message}`)')) {
+  throw new Error('Auth/session/tenant RPC failures must remain fatal on the optimized path.');
+}
+
+if (!hotPath.includes('payload.__legacyFallbackRequired')) {
+  throw new Error('Legacy fallback must be gated by the explicit inner-workspace fallback marker.');
+}
+
 for (const required of [
   'create or replace function public.get_current_conversations_workspace_v1(',
   'security invoker',
   'if auth.uid() is null',
   'public.get_current_workspace_context_v1()',
   'public.get_conversations_workspace(',
+  "'__legacyFallbackRequired', true",
+  'exception',
+  'when others then',
   'revoke all on function public.get_current_conversations_workspace_v1(uuid, integer)',
   'grant execute on function public.get_current_conversations_workspace_v1(uuid, integer)',
   'to authenticated;',
@@ -59,8 +70,18 @@ if (migration.toLowerCase().includes('security definer')) {
   throw new Error('Conversations composition wrapper must remain SECURITY INVOKER.');
 }
 
+if (/\n\s*stable\s*\n/i.test(migration)) {
+  throw new Error('Conversations wrapper must remain VOLATILE/default because workspace context may refresh session binding state.');
+}
+
 if (/p_organization_id/i.test(migration)) {
   throw new Error('Current Conversations wrapper must resolve organization server-side, not accept it as input.');
+}
+
+const contextIndex = migration.indexOf('public.get_current_workspace_context_v1()');
+const innerBeginIndex = migration.indexOf('\n  begin\n', contextIndex);
+if (contextIndex < 0 || innerBeginIndex < 0 || innerBeginIndex < contextIndex) {
+  throw new Error('Workspace-context resolution must occur outside the inner fallback exception boundary.');
 }
 
 console.log('Single-RPC Conversations workspace contracts verified.');
