@@ -36,7 +36,8 @@
     "verify:whatsapp-health-canonical-sync": "node scripts/verify-whatsapp-health-canonical-sync.mjs",
     "verify:crm-core-health-v2": "node scripts/verify-crm-core-health-v2.mjs",
     "verify:customer360-health-v2": "node scripts/verify-customer360-health-v2.mjs",
-    "verify:system-integrity-health-v1": "node scripts/verify-system-integrity-health-v1.mjs"
+    "verify:system-integrity-health-v1": "node scripts/verify-system-integrity-health-v1.mjs",
+    "verify:system-health-integrity-ui": "node scripts/verify-system-health-integrity-ui.mjs"
   },
   "dependencies": {
     "@google-analytics/data": "^7.2.0",
