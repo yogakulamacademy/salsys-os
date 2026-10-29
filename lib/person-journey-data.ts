@@ -168,6 +168,13 @@ type PersonJourneyWorkspacePayload = {
   journey_total?: unknown;
 };
 
+type CurrentPersonJourneyWorkspacePayload = PersonJourneyWorkspacePayload & {
+  organization_id?: unknown;
+  access_granted?: unknown;
+  __legacyFallbackRequired?: unknown;
+  __workspaceError?: unknown;
+};
+
 function withSoftTimeout<T>(
   operation: PromiseLike<T>,
   milliseconds: number,
@@ -226,7 +233,74 @@ export async function getPersonJourneyForLead(
     return emptyPayload(null, normalizedLeadId);
   }
 
+  const limit = normalizeLimit(options?.limit);
   const supabase = await createClient();
+  const db = supabase as any;
+  const currentResult = await withSoftTimeout<
+    DerivedReadResult<CurrentPersonJourneyWorkspacePayload>
+  >(
+    db.rpc("get_current_person_journey_workspace_v1", {
+      p_lead_id: normalizedLeadId,
+      p_limit: limit,
+    }),
+    WORKSPACE_SOFT_TIMEOUT_MS,
+    {
+      data: null,
+      error: { message: "Current Person Journey workspace exceeded the soft timeout." },
+    },
+  );
+
+  if (!currentResult.error && currentResult.data) {
+    const current = currentResult.data;
+    const organizationId = String(current.organization_id ?? "").trim();
+
+    if (!organizationId) {
+      throw new Error(
+        "Unable to load Person journey: current workspace did not resolve an organization.",
+      );
+    }
+
+    if (current.access_granted === false) {
+      return emptyPayload(organizationId, normalizedLeadId);
+    }
+
+    if (current.__legacyFallbackRequired !== true) {
+      return workspacePayload(organizationId, normalizedLeadId, current);
+    }
+
+    console.error(
+      "Person Journey V3 read degraded:",
+      String(current.__workspaceError ?? "Unknown V3 read error."),
+    );
+
+    return getPersonJourneyFallback(
+      db,
+      organizationId,
+      normalizedLeadId,
+      limit,
+      false,
+    );
+  }
+
+  console.error(
+    "Current Person Journey workspace read degraded:",
+    currentResult.error?.message ?? "Unknown current-workspace read error.",
+  );
+
+  return getLegacyAuthorizedPersonJourney(
+    supabase,
+    db,
+    normalizedLeadId,
+    limit,
+  );
+}
+
+async function getLegacyAuthorizedPersonJourney(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  db: any,
+  leadId: string,
+  limit: number,
+): Promise<PersonJourneyPayload> {
   const {
     data: { user },
     error: authError,
@@ -239,7 +313,7 @@ export async function getPersonJourneyForLead(
   const organizationId = await requireCurrentOrganizationId(supabase, user.id);
   const { data: canAccess, error: accessError } = await supabase.rpc(
     "can_access_lead",
-    { p_lead_id: normalizedLeadId },
+    { p_lead_id: leadId },
   );
 
   if (accessError) {
@@ -249,36 +323,46 @@ export async function getPersonJourneyForLead(
   }
 
   if (!canAccess) {
-    return emptyPayload(organizationId, normalizedLeadId);
+    return emptyPayload(organizationId, leadId);
   }
 
-  const limit = normalizeLimit(options?.limit);
-  const db = supabase as any;
+  return getPersonJourneyFallback(db, organizationId, leadId, limit, true);
+}
+
+async function getPersonJourneyFallback(
+  db: any,
+  organizationId: string,
+  leadId: string,
+  limit: number,
+  retryV3: boolean,
+): Promise<PersonJourneyPayload> {
   const workspaceArgs = {
     p_organization_id: organizationId,
-    p_lead_id: normalizedLeadId,
+    p_lead_id: leadId,
     p_limit: limit,
   };
 
-  const v3Result = await withSoftTimeout<
-    DerivedReadResult<PersonJourneyWorkspacePayload>
-  >(
-    db.rpc("get_person_journey_workspace_v3", workspaceArgs),
-    WORKSPACE_SOFT_TIMEOUT_MS,
-    {
-      data: null,
-      error: { message: "Person Journey V3 exceeded the soft timeout." },
-    },
-  );
+  if (retryV3) {
+    const v3Result = await withSoftTimeout<
+      DerivedReadResult<PersonJourneyWorkspacePayload>
+    >(
+      db.rpc("get_person_journey_workspace_v3", workspaceArgs),
+      WORKSPACE_SOFT_TIMEOUT_MS,
+      {
+        data: null,
+        error: { message: "Person Journey V3 exceeded the soft timeout." },
+      },
+    );
 
-  if (!v3Result.error && v3Result.data) {
-    return workspacePayload(organizationId, normalizedLeadId, v3Result.data);
+    if (!v3Result.error && v3Result.data) {
+      return workspacePayload(organizationId, leadId, v3Result.data);
+    }
+
+    console.error(
+      "Person Journey V3 read degraded:",
+      v3Result.error?.message ?? "Unknown V3 read error.",
+    );
   }
-
-  console.error(
-    "Person Journey V3 read degraded:",
-    v3Result.error?.message ?? "Unknown V3 read error.",
-  );
 
   const v2Result = await withSoftTimeout<
     DerivedReadResult<PersonJourneyWorkspacePayload>
@@ -292,7 +376,7 @@ export async function getPersonJourneyForLead(
   );
 
   if (!v2Result.error && v2Result.data) {
-    return workspacePayload(organizationId, normalizedLeadId, v2Result.data);
+    return workspacePayload(organizationId, leadId, v2Result.data);
   }
 
   console.error(
@@ -300,12 +384,7 @@ export async function getPersonJourneyForLead(
     v2Result.error?.message ?? "Unknown V2 read error.",
   );
 
-  return getLegacyPersonJourney(
-    db,
-    organizationId,
-    normalizedLeadId,
-    limit,
-  );
+  return getLegacyPersonJourney(db, organizationId, leadId, limit);
 }
 
 async function getLegacyPersonJourney(
