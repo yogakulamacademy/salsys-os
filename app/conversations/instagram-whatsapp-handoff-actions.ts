@@ -10,6 +10,8 @@ type HandoffCapability = {
   detected?: boolean;
   ready?: boolean;
   needs_country_code?: boolean;
+  existing_whatsapp?: boolean;
+  existing_whatsapp_lead_id?: string | null;
 };
 
 function conversationUrl(leadId: string, error: string) {
@@ -74,6 +76,8 @@ export async function getInstagramWhatsAppHandoffStateAction(leadId: string) {
       detected: false,
       ready: false,
       needsCountryCode: false,
+      existingWhatsApp: false,
+      existingWhatsAppLeadId: null,
       templates: [],
       loadError: null,
     };
@@ -95,6 +99,21 @@ export async function getInstagramWhatsAppHandoffStateAction(leadId: string) {
       detected: false,
       ready: false,
       needsCountryCode: false,
+      existingWhatsApp: false,
+      existingWhatsAppLeadId: null,
+      templates: [],
+      loadError: null,
+    };
+  }
+
+  if (capability.existing_whatsapp === true) {
+    return {
+      ok: true as const,
+      detected: true,
+      ready: false,
+      needsCountryCode: false,
+      existingWhatsApp: true,
+      existingWhatsAppLeadId: capability.existing_whatsapp_lead_id ?? null,
       templates: [],
       loadError: null,
     };
@@ -106,6 +125,8 @@ export async function getInstagramWhatsAppHandoffStateAction(leadId: string) {
       detected: true,
       ready: false,
       needsCountryCode: capability.needs_country_code === true,
+      existingWhatsApp: false,
+      existingWhatsAppLeadId: null,
       templates: [],
       loadError: null,
     };
@@ -117,6 +138,8 @@ export async function getInstagramWhatsAppHandoffStateAction(leadId: string) {
     detected: true,
     ready: true,
     needsCountryCode: false,
+    existingWhatsApp: false,
+    existingWhatsAppLeadId: null,
     templates: catalog.templates,
     loadError: catalog.error,
   };
@@ -155,13 +178,19 @@ export async function sendInstagramWhatsAppHandoffTemplateAction(
   );
 
   const capability = (capabilityData ?? {}) as HandoffCapability;
-  if (capabilityError || capability.ready !== true) {
+  if (
+    capabilityError ||
+    capability.existing_whatsapp === true ||
+    capability.ready !== true
+  ) {
     redirect(
       conversationUrl(
         leadId,
-        capability.needs_country_code === true
-          ? 'Add the international country code before starting WhatsApp.'
-          : 'A usable Instagram-shared phone number is required before starting WhatsApp.',
+        capability.existing_whatsapp === true
+          ? 'This phone number is already connected to an existing WhatsApp conversation.'
+          : capability.needs_country_code === true
+            ? 'Add the international country code before starting WhatsApp.'
+            : 'A usable Instagram-shared phone number is required before starting WhatsApp.',
       ),
     );
   }

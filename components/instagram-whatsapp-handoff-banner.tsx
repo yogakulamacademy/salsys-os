@@ -15,6 +15,8 @@ type HandoffState = Awaited<
   ReturnType<typeof getInstagramWhatsAppHandoffStateAction>
 >;
 
+type ConversationInboundEvent = CustomEvent<{ leadId?: string | null }>;
+
 export function InstagramWhatsAppHandoffBanner() {
   const searchParams = useSearchParams();
   const leadId = searchParams.get('lead') || '';
@@ -28,12 +30,25 @@ export function InstagramWhatsAppHandoffBanner() {
     if (!leadId) return;
 
     let active = true;
-    void getInstagramWhatsAppHandoffStateAction(leadId).then((next) => {
-      if (active) setState(next);
-    });
+    const loadState = () => {
+      void getInstagramWhatsAppHandoffStateAction(leadId).then((next) => {
+        if (active) setState(next);
+      });
+    };
+
+    const onInbound = (event: Event) => {
+      const detail = (event as ConversationInboundEvent).detail;
+      if (detail?.leadId !== leadId) return;
+      setDismissedLeadId(null);
+      loadState();
+    };
+
+    loadState();
+    window.addEventListener('crm:conversation-inbound', onInbound);
 
     return () => {
       active = false;
+      window.removeEventListener('crm:conversation-inbound', onInbound);
     };
   }, [leadId]);
 
@@ -73,7 +88,25 @@ export function InstagramWhatsAppHandoffBanner() {
         </button>
       </div>
 
-      {state.ready ? (
+      {state.existingWhatsApp ? (
+        <div className="space-y-3 px-4 py-3.5">
+          <div className="rounded-lg border border-sky-200 bg-sky-50 px-3 py-2.5 text-[10px] leading-4 text-sky-800">
+            This number is already connected to an existing WhatsApp conversation in the CRM. Use that conversation instead of creating a duplicate WhatsApp lead.
+          </div>
+          {state.existingWhatsAppLeadId ? (
+            <Link
+              href={`/conversations?lead=${encodeURIComponent(state.existingWhatsAppLeadId)}`}
+              className="inline-flex h-9 w-full items-center justify-center gap-2 rounded-lg bg-[#153E33] px-3 text-[10px] font-semibold text-white transition hover:bg-[#216551]"
+            >
+              <MessageCircle size={13} /> Open WhatsApp conversation
+            </Link>
+          ) : (
+            <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2.5 text-[10px] leading-4 text-amber-800">
+              The WhatsApp record is owned outside your current lead access. Ask a manager to review the existing conversation.
+            </div>
+          )}
+        </div>
+      ) : state.ready ? (
         <>
           {!expanded ? (
             <div className="space-y-3 px-4 py-3.5">
