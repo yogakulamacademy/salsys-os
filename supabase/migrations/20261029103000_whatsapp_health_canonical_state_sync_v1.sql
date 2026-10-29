@@ -42,10 +42,14 @@ begin
     else new.status
   end;
 
+  -- processed_at is authoritative when present. For canonical dead letters that
+  -- do not set processed_at, last_attempt_at / the terminal row update timestamp
+  -- captures the actual lifecycle transition. The trigger deliberately does not
+  -- fire for unrelated future updated_at changes, so old incidents stay old.
   v_terminal_at := coalesce(
     new.processed_at,
-    new.updated_at,
     new.last_attempt_at,
+    new.updated_at,
     now()
   );
 
@@ -73,7 +77,7 @@ drop trigger if exists trg_sync_whatsapp_webhook_terminal_state_from_raw_v1
   on public.raw_event_processing;
 
 create trigger trg_sync_whatsapp_webhook_terminal_state_from_raw_v1
-after insert or update of status, processed_at, processing_error, updated_at
+after insert or update of status, processed_at
 on public.raw_event_processing
 for each row
 when (new.status in ('processed', 'ignored', 'dead_letter'))
@@ -89,8 +93,8 @@ set processing_status = case
     end,
     processed_at = coalesce(
       p.processed_at,
-      p.updated_at,
       p.last_attempt_at,
+      p.updated_at,
       w.received_at
     ),
     processing_error = p.processing_error
