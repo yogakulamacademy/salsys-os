@@ -29,11 +29,33 @@ async function getAssignmentContext() {
   }
 
   const organizationId = await requireCurrentOrganizationId(supabase, user.id);
-  const { data: canManageData } = await supabase.rpc('can_manage_sales_workspace', {
-    p_organization_id: organizationId,
-  });
 
-  if (canManageData !== true) {
+  const [currentMembershipResult, currentWorkspaceResult] = await Promise.all([
+    supabase
+      .from('organization_members')
+      .select('role')
+      .eq('organization_id', organizationId)
+      .eq('user_id', user.id)
+      .eq('active', true)
+      .maybeSingle(),
+    supabase
+      .from('workspace_memberships')
+      .select('role')
+      .eq('organization_id', organizationId)
+      .eq('workspace_code', 'sales')
+      .eq('user_id', user.id)
+      .eq('active', true)
+      .maybeSingle(),
+  ]);
+
+  const organizationRole = String(currentMembershipResult.data?.role ?? '');
+  const salesRole = String(currentWorkspaceResult.data?.role ?? '');
+  const canManage =
+    organizationRole === 'owner' ||
+    organizationRole === 'admin' ||
+    salesRole === 'manager';
+
+  if (!canManage) {
     return { canManage: false, targets: [] as AssignmentTarget[] };
   }
 
