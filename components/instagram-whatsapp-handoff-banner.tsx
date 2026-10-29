@@ -15,6 +15,8 @@ type HandoffState = Awaited<
   ReturnType<typeof getInstagramWhatsAppHandoffStateAction>
 >;
 
+type ConversationInboundEvent = CustomEvent<{ leadId?: string | null }>;
+
 export function InstagramWhatsAppHandoffBanner() {
   const searchParams = useSearchParams();
   const leadId = searchParams.get('lead') || '';
@@ -28,12 +30,25 @@ export function InstagramWhatsAppHandoffBanner() {
     if (!leadId) return;
 
     let active = true;
-    void getInstagramWhatsAppHandoffStateAction(leadId).then((next) => {
-      if (active) setState(next);
-    });
+    const loadState = () => {
+      void getInstagramWhatsAppHandoffStateAction(leadId).then((next) => {
+        if (active) setState(next);
+      });
+    };
+
+    const onInbound = (event: Event) => {
+      const detail = (event as ConversationInboundEvent).detail;
+      if (detail?.leadId !== leadId) return;
+      setDismissedLeadId(null);
+      loadState();
+    };
+
+    loadState();
+    window.addEventListener('crm:conversation-inbound', onInbound);
 
     return () => {
       active = false;
+      window.removeEventListener('crm:conversation-inbound', onInbound);
     };
   }, [leadId]);
 
