@@ -2,6 +2,7 @@ import Link from "next/link";
 import { MoreHorizontal, Plus } from "lucide-react";
 
 import { LeadsCleanTable } from "@/components/leads-clean-table";
+import { TeamAssignmentPanel } from "@/components/team-assignment-panel";
 import {
   getLeadsWorkspacePage,
   parseLeadsWorkspaceParams,
@@ -12,6 +13,7 @@ import styles from "./leads.module.css";
 type LeadsPageProps = {
   searchParams: Promise<{
     notice?: string | string[];
+    error?: string | string[];
     q?: string | string[];
     stage?: string | string[];
     source?: string | string[];
@@ -31,6 +33,7 @@ export default async function LeadsPage({ searchParams }: LeadsPageProps) {
   const workspace = await getLeadsWorkspacePage(filters);
   const mock = isMockMode();
   const notice = one(params.notice);
+  const error = one(params.error);
 
   return (
     <div className={`${styles.workspace} space-y-5`}>
@@ -50,13 +53,13 @@ export default async function LeadsPage({ searchParams }: LeadsPageProps) {
           >
             <Plus size={15} /> Add lead
           </Link>
-          <button
-            type="button"
-            aria-label="More lead actions"
+          <Link
+            href="/team"
+            aria-label="Open team workspace"
             className="grid h-10 w-10 place-items-center rounded-ui border border-line bg-surface text-copy-muted transition hover:border-line-strong hover:bg-surface-soft hover:text-brand-700"
           >
             <MoreHorizontal size={17} />
-          </button>
+          </Link>
         </div>
       </section>
 
@@ -66,11 +69,25 @@ export default async function LeadsPage({ searchParams }: LeadsPageProps) {
         </div>
       ) : null}
 
+      {notice === "owner-updated" || notice === "owner-unassigned" ? (
+        <div className="rounded-ui border border-emerald-200 bg-emerald-50 px-4 py-3 text-[12px] font-semibold text-emerald-800">
+          {notice === "owner-unassigned" ? "Lead ownership removed." : "Lead owner updated."}
+        </div>
+      ) : null}
+
+      {error ? (
+        <div className="rounded-ui border border-rose-200 bg-rose-50 px-4 py-3 text-[12px] font-semibold text-rose-800">
+          {error}
+        </div>
+      ) : null}
+
       {workspace.warning ? (
         <div className="rounded-ui border border-amber-200 bg-[var(--app-warning-soft)] px-4 py-3 text-[12px] font-semibold text-[var(--app-warning)]">
           {workspace.warning}
         </div>
       ) : null}
+
+      <TeamAssignmentPanel returnTo="/leads" />
 
       <LeadsCleanTable
         leads={workspace.leads}
