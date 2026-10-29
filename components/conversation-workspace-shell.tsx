@@ -145,14 +145,24 @@ export function ConversationWorkspaceShell({
           }`}
         >
           {hasConversation ? (
-            <div className="flex h-12 shrink-0 items-center justify-between border-b border-line bg-surface px-3 min-[621px]:hidden">
+            <div className="flex h-12 shrink-0 items-center justify-between gap-2 border-b border-line bg-surface px-2.5 min-[621px]:hidden">
               <Link
                 href="/conversations"
-                className="inline-flex items-center gap-1.5 rounded-ui px-2 py-1.5 text-[12px] font-semibold text-brand-700 transition hover:bg-brand-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-700/40"
+                className="inline-flex min-h-10 items-center gap-1.5 rounded-ui px-2.5 text-[12px] font-semibold text-brand-700 transition hover:bg-brand-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-700/40"
               >
-                <ArrowLeft size={14} /> Inbox
+                <ArrowLeft size={15} /> Inbox
               </Link>
-              <span className="text-[11px] font-medium text-copy-muted">Conversation</span>
+              <button
+                ref={drawerTriggerRef}
+                type="button"
+                onClick={() => setMobileContextOpen(true)}
+                className="inline-flex min-h-10 items-center gap-1.5 rounded-ui px-2.5 text-[12px] font-semibold text-brand-700 transition hover:bg-brand-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-700/40"
+                aria-label="Open customer context"
+                aria-expanded={mobileContextOpen}
+                title="Open customer context"
+              >
+                <Sparkles size={14} /> Context
+              </button>
             </div>
           ) : null}
 
@@ -178,7 +188,7 @@ export function ConversationWorkspaceShell({
                   ref={drawerTriggerRef}
                   type="button"
                   onClick={() => setMobileContextOpen(true)}
-                  className="absolute right-3 top-3 z-30 inline-flex h-9 items-center gap-1.5 rounded-ui border border-line bg-surface/95 px-2.5 text-[12px] font-semibold text-brand-700 shadow-sm backdrop-blur focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-700/40 min-[1171px]:hidden"
+                  className="absolute right-3 top-3 z-30 hidden h-9 items-center gap-1.5 rounded-ui border border-line bg-surface/95 px-2.5 text-[12px] font-semibold text-brand-700 shadow-sm backdrop-blur focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-700/40 min-[621px]:inline-flex min-[1171px]:hidden"
                   aria-label="Open customer context"
                   aria-expanded={mobileContextOpen}
                   title="Open customer context · Alt+I"
@@ -218,10 +228,10 @@ export function ConversationWorkspaceShell({
                 <button
                   type="button"
                   onClick={() => setMobileContextOpen(false)}
-                  className="grid h-8 w-8 place-items-center rounded-ui text-copy-muted transition hover:bg-brand-50 hover:text-brand-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-700/40"
+                  className="grid h-10 w-10 place-items-center rounded-ui text-copy-muted transition hover:bg-brand-50 hover:text-brand-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-700/40"
                   aria-label="Close customer context"
                 >
-                  <X size={15} />
+                  <X size={16} />
                 </button>
               </div>
               <div className="min-h-0 flex-1 overflow-y-auto [scrollbar-width:thin]">{context}</div>
@@ -300,6 +310,52 @@ export function ConversationWorkspaceShell({
           .conversation-workspace {
             min-height: calc(100dvh - 178px);
             border-radius: 12px;
+          }
+
+          .conversation-workspace section.flex.h-full > header {
+            padding: 10px 12px !important;
+            padding-right: 12px !important;
+          }
+
+          .conversation-workspace section.flex.h-full > header > div {
+            gap: 8px !important;
+          }
+
+          .conversation-workspace section.flex.h-full > header > div > div:first-child {
+            width: 34px !important;
+            height: 34px !important;
+          }
+
+          .conversation-workspace section.flex.h-full > header h2 {
+            max-width: min(48vw, 220px);
+            font-size: 14px !important;
+          }
+
+          .conversation-workspace section.flex.h-full > header [class*='mt-1'] {
+            margin-top: 3px !important;
+            gap: 4px 6px !important;
+            font-size: 11px !important;
+            line-height: 1.35 !important;
+          }
+
+          .conversation-composer button {
+            min-height: 40px;
+          }
+
+          .conversation-composer button[aria-label*='Dismiss'] {
+            min-width: 40px;
+          }
+
+          .conversation-composer textarea {
+            min-height: 74px;
+            max-height: 28dvh;
+          }
+        }
+
+        @media (max-height: 680px) and (max-width: 620px) {
+          .conversation-composer textarea {
+            min-height: 62px;
+            max-height: 22dvh;
           }
         }
       `}</style>
