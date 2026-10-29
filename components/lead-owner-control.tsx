@@ -20,8 +20,22 @@ export async function LeadOwnerControl({ leadId }: { leadId: string }) {
   if (authError || !user) return null;
 
   const organizationId = await requireCurrentOrganizationId(supabase, user.id);
-  const [{ data: canManage }, leadResult] = await Promise.all([
-    supabase.rpc('can_manage_sales_workspace', { p_organization_id: organizationId }),
+  const [currentMembershipResult, currentWorkspaceResult, leadResult] = await Promise.all([
+    supabase
+      .from('organization_members')
+      .select('role')
+      .eq('organization_id', organizationId)
+      .eq('user_id', user.id)
+      .eq('active', true)
+      .maybeSingle(),
+    supabase
+      .from('workspace_memberships')
+      .select('role')
+      .eq('organization_id', organizationId)
+      .eq('workspace_code', 'sales')
+      .eq('user_id', user.id)
+      .eq('active', true)
+      .maybeSingle(),
     supabase
       .from('leads')
       .select('id,owner_user_id,organization_id')
@@ -30,7 +44,14 @@ export async function LeadOwnerControl({ leadId }: { leadId: string }) {
       .maybeSingle(),
   ]);
 
-  if (canManage !== true || leadResult.error || !leadResult.data) return null;
+  const organizationRole = String(currentMembershipResult.data?.role ?? '');
+  const salesRole = String(currentWorkspaceResult.data?.role ?? '');
+  const canManage =
+    organizationRole === 'owner' ||
+    organizationRole === 'admin' ||
+    salesRole === 'manager';
+
+  if (!canManage || leadResult.error || !leadResult.data) return null;
 
   const [membershipsResult, workspaceMembershipsResult] = await Promise.all([
     supabase
