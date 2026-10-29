@@ -170,27 +170,17 @@ export async function getConversationsWorkspace(
   }
 
   const supabase = await createClient();
-  const {
-    data: { user },
-    error: authError,
-  } = await supabase.auth.getUser();
-
-  if (authError || !user) {
-    throw new Error(
-      "Unable to resolve current organization: user is not authenticated.",
-    );
-  }
-
-  const organizationId = await getCurrentOrganizationId(supabase, user.id);
-  const { data, error } = await supabase.rpc("get_conversations_workspace", {
-    p_organization_id: organizationId,
-    p_selected_lead_id: isUuid(requestedLeadId) ? requestedLeadId : null,
-    p_limit: 300,
-  });
+  const { data, error } = await (supabase as any).rpc(
+    "get_current_conversations_workspace_v1",
+    {
+      p_selected_lead_id: isUuid(requestedLeadId) ? requestedLeadId : null,
+      p_limit: 300,
+    },
+  );
 
   if (error) {
     console.warn(
-      "[conversations] Optimized workspace RPC failed; using legacy loader:",
+      "[conversations] Single-RPC workspace loader failed; using legacy loader:",
       error.message,
     );
     return getLegacyWorkspace(requestedLeadId, false);
@@ -200,7 +190,7 @@ export async function getConversationsWorkspace(
   const selectedId = textOrUndefined(payload.selectedId);
   const conversationSummary = normalizeInbox(payload.inbox, selectedId);
   const selected = normalizeSelected(payload.selected);
-  const team = normalizeTeam(payload.team, user.id);
+  const team = normalizeTeam(payload.team, null);
 
   const metrics = {
     activeConversations:
