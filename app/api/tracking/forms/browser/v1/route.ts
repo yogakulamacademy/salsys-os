@@ -295,10 +295,12 @@ export async function POST(request: NextRequest) {
   const rawForms = Array.isArray((body as Record<string, unknown>).forms)
     ? ((body as Record<string, unknown>).forms as unknown[])
     : [];
-  const forms = rawForms
+  const sanitizedForms = rawForms
     .map(sanitizeForm)
-    .filter((form): form is NonNullable<ReturnType<typeof sanitizeForm>> => Boolean(form))
-    .slice(0, 30);
+    .filter((form): form is NonNullable<ReturnType<typeof sanitizeForm>> => Boolean(form));
+  const forms = Array.from(
+    new Map(sanitizedForms.map((form) => [form.formKey, form])).values(),
+  ).slice(0, 30);
 
   if (!forms.length) {
     return json({ ok: true, accepted: true, detected: 0, forms: [] }, 202, cors);

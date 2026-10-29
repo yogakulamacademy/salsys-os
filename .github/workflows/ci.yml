@@ -145,6 +145,9 @@ jobs:
       - name: Verify Admissions Rule Key Ambiguity
         run: npm run verify:admissions-rule-key-ambiguity
 
+      - name: Verify Browser Form Discovery Dedupe
+        run: npm run verify:browser-form-discovery-dedupe
+
       - name: Typecheck
         run: npm run typecheck
 
