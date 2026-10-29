@@ -1,0 +1,77 @@
+@media (max-width: 767px) {
+  .system-health-failures-card .system-health-table-wrap {
+    overflow: visible;
+    padding: 12px;
+  }
+
+  .system-health-failures-card .system-health-table {
+    display: block;
+    min-width: 0;
+    width: 100%;
+  }
+
+  .system-health-failures-card .system-health-table thead {
+    display: none;
+  }
+
+  .system-health-failures-card .system-health-table tbody {
+    display: grid;
+    gap: 12px;
+  }
+
+  .system-health-failures-card .system-health-table tbody tr {
+    display: block;
+    border: 1px solid var(--app-border);
+    border-radius: 14px;
+    background: var(--app-surface);
+    padding: 12px 14px;
+  }
+
+  .system-health-failures-card .system-health-table tbody td {
+    display: grid;
+    grid-template-columns: 82px minmax(0, 1fr);
+    gap: 10px;
+    align-items: start;
+    max-width: none;
+    border: 0;
+    padding: 6px 0;
+  }
+
+  .system-health-failures-card .system-health-table tbody td::before {
+    padding-top: 1px;
+    color: var(--app-copy-subtle);
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    line-height: 1.4;
+    text-transform: uppercase;
+  }
+
+  .system-health-failures-card .system-health-table tbody td:nth-child(1)::before {
+    content: "System";
+  }
+
+  .system-health-failures-card .system-health-table tbody td:nth-child(2)::before {
+    content: "Event";
+  }
+
+  .system-health-failures-card .system-health-table tbody td:nth-child(3)::before {
+    content: "Status";
+  }
+
+  .system-health-failures-card .system-health-table tbody td:nth-child(4)::before {
+    content: "Occurred";
+  }
+
+  .system-health-failures-card .system-health-table tbody td:nth-child(5)::before {
+    content: "Problem";
+  }
+
+  .system-health-failures-card .system-health-table tbody td:first-child {
+    padding-top: 0;
+  }
+
+  .system-health-failures-card .system-health-table tbody td:last-child {
+    padding-bottom: 0;
+  }
+}
