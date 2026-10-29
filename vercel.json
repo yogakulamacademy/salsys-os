@@ -16,6 +16,10 @@
   },
   "crons": [
     {
+      "path": "/api/admissions/auto-tasks",
+      "schedule": "*/15 * * * *"
+    },
+    {
       "path": "/api/intelligence/system-snapshot",
       "schedule": "0 * * * *"
     },
