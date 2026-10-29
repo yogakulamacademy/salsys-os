@@ -34,7 +34,9 @@ import { PaidMediaAcquisition } from "@/components/paid-media-acquisition";
 
 import {
   ChannelBadge,
+  EmptyState,
   IntentLabel,
+  Notice,
   PageHeader,
   StageBadge,
 } from "@/components/ui";
@@ -303,23 +305,20 @@ export default async function LeadDetailPage({
         }
       />
 
-      {query.error && (
-        <div className="mb-4 rounded-xl border border-red-100 bg-red-50 px-4 py-3 text-sm font-medium text-red-700">
+      {query.error ? (
+        <Notice tone="error" className="mb-4">
           {query.error}
-        </div>
-      )}
+        </Notice>
+      ) : null}
 
-      {query.notice && (
-        <div
-          className={`mb-4 rounded-xl border px-4 py-3 text-sm font-medium ${
-            query.notice.startsWith("mock-")
-              ? "border-orange-100 bg-orange-50 text-orange-700"
-              : "border-emerald-100 bg-emerald-50 text-emerald-700"
-          }`}
+      {query.notice ? (
+        <Notice
+          tone={query.notice.startsWith("mock-") ? "warning" : "success"}
+          className="mb-4"
         >
           {noticeText(query.notice)}
-        </div>
-      )}
+        </Notice>
+      ) : null}
 
       <div className="mb-4 flex flex-wrap gap-2">
         <StageBadge stage={lead.stage} />
@@ -540,17 +539,22 @@ export default async function LeadDetailPage({
               />
             </div>
 
-            {contactLogsError && (
-              <div className="mt-4 rounded-xl border border-red-100 bg-red-50 px-4 py-3 text-sm font-medium text-red-700">
-                Unable to load contact history: {contactLogsError}
-              </div>
-            )}
+            {contactLogsError ? (
+              <Notice tone="error" title="Contact history unavailable" className="mt-4">
+                {contactLogsError}
+              </Notice>
+            ) : null}
 
-            {!contactLogsError && contactLogs.length === 0 && (
-              <div className="mt-5 rounded-xl border border-dashed border-slate-200 px-4 py-6 text-center text-sm text-slate-400">
-                No structured contacts logged yet.
+            {!contactLogsError && contactLogs.length === 0 ? (
+              <div className="mt-5">
+                <EmptyState
+                  title="No structured contacts yet"
+                  description="Calls, texts, emails, WhatsApp, and Instagram contacts logged by the admissions team will appear here."
+                  icon={<MessageSquarePlus size={17} />}
+                  compact
+                />
               </div>
-            )}
+            ) : null}
 
             <div className="mt-5 space-y-3">
               {contactLogs.map((log) => (
@@ -652,12 +656,19 @@ export default async function LeadDetailPage({
             </div>
 
             <div className="mt-5 space-y-3">
-              {lead.lastMessages.length === 0 && (
-                <div className="text-sm text-slate-400">
-                  No message interactions stored yet. WhatsApp and other CRM
-                  conversations will appear here.
-                </div>
-              )}
+              {lead.lastMessages.length === 0 ? (
+                <EmptyState
+                  title="No message interactions yet"
+                  description="WhatsApp and other CRM conversations will appear here when messages are stored for this lead."
+                  icon={<MessageCircle size={17} />}
+                  action={
+                    <Link href={`/conversations?lead=${id}`} className="btn-secondary">
+                      Open conversation
+                    </Link>
+                  }
+                  compact
+                />
+              ) : null}
 
               {lead.lastMessages.map((msg) => (
                 <div
