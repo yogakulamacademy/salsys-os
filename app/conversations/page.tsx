@@ -30,6 +30,7 @@ import { WhatsAppTemplateComposer } from "@/components/whatsapp-template-compose
 import { getConversationsWorkspace } from "@/lib/conversations-data";
 import { getCourses, isMockMode } from "@/lib/data";
 import { formatDateTime } from "@/lib/format";
+import { createClient } from "@/lib/supabase/server";
 import { getCurrentWorkspaceContext } from "@/lib/workspace";
 import { getApprovedWhatsAppTemplates } from "@/lib/whatsapp-templates";
 
@@ -65,6 +66,20 @@ export default async function ConversationsPage({
     : null;
   const organizationId = workspaceContext?.activeOrganizationId ?? null;
 
+  const hasTelephoneContact =
+    selectedId && selected
+      ? mock
+        ? Boolean(selected.phone)
+        : await resolveTelephoneCapability(selectedId)
+      : false;
+
+  const canStartWhatsApp = Boolean(
+    selected &&
+      selected.leadCreationChannel === "website" &&
+      selected.currentContactChannel !== "whatsapp" &&
+      hasTelephoneContact,
+  );
+
   const activeConversations = conversationSummary.filter(
     (lead) => !isFuture(lead.snoozedUntil),
   );
@@ -95,9 +110,10 @@ export default async function ConversationsPage({
   const noticeText = noticeFor(query.notice);
 
   const shouldLoadWhatsAppTemplates = Boolean(
-    selected?.currentContactChannel === "whatsapp" &&
+    (selected?.currentContactChannel === "whatsapp" &&
       whatsappWindow &&
-      !whatsappWindow.open,
+      !whatsappWindow.open) ||
+      canStartWhatsApp,
   );
 
   const whatsappTemplateCatalog =
@@ -245,6 +261,15 @@ export default async function ConversationsPage({
               phone={selected.phone}
             />
           ) : null
+        ) : canStartWhatsApp && whatsappTemplateAction ? (
+          <WhatsAppTemplateComposer
+            action={whatsappTemplateAction}
+            leadId={selected.id}
+            templates={whatsappTemplateCatalog.templates}
+            loadError={whatsappTemplateCatalog.error}
+            windowLabel="Use an approved template to start WhatsApp from this website enquiry."
+            mode="start"
+          />
         ) : (
           <ConversationSafeComposer
             leadId={selected.id}
@@ -300,6 +325,16 @@ export default async function ConversationsPage({
             label="Current channel"
             value={selected.currentContactChannel.replaceAll("_", " ")}
           />
+          {selected.leadCreationChannel === "website" && hasTelephoneContact ? (
+            <ContextLine
+              label="WhatsApp"
+              value={
+                selected.currentContactChannel === "whatsapp"
+                  ? "Connected"
+                  : "Available via approved template"
+              }
+            />
+          ) : null}
           <ContextLine
             label="Last contacted"
             value={
@@ -466,6 +501,20 @@ export default async function ConversationsPage({
       />
     </div>
   );
+}
+
+async function resolveTelephoneCapability(leadId: string) {
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc("has_lead_telephone_contact", {
+    p_lead_id: leadId,
+  });
+
+  if (error) {
+    console.error("Unable to resolve lead telephone capability:", error.message);
+    return false;
+  }
+
+  return data === true;
 }
 
 function noticeFor(value?: string) {
