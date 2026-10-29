@@ -109,6 +109,9 @@ jobs:
       - name: Verify OAuth Connect Fetch Metadata
         run: npm run verify:oauth-connect-fetch-metadata
 
+      - name: Verify Client/Server Secret Boundary
+        run: npm run verify:client-secret-boundary
+
       - name: Typecheck
         run: npm run typecheck
 
