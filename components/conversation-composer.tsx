@@ -1,6 +1,16 @@
 "use client";
 
-import { FileText, LockKeyhole, MessageSquareText, RefreshCw, Save, Send, Sparkles } from "lucide-react";
+import {
+  AlertTriangle,
+  FileText,
+  LockKeyhole,
+  MessageSquareText,
+  RefreshCw,
+  Save,
+  Send,
+  Sparkles,
+  X,
+} from "lucide-react";
 
 import { useCallback, useEffect, useRef, useState, useTransition } from "react";
 
@@ -67,12 +77,14 @@ export function WhatsAppComposer({
   const [mode, setMode] = useState<ComposeMode>("reply");
   const [body, setBody] = useState("");
   const [copilotAssisted, setCopilotAssisted] = useState(false);
-  const [availableQuickReplies, setAvailableQuickReplies] = useState<QuickReply[]>(quickReplies);
+  const [availableQuickReplies, setAvailableQuickReplies] =
+    useState<QuickReply[]>(quickReplies);
   const [draftState, setDraftState] = useState<DraftState>("idle");
   const [noteBody, setNoteBody] = useState("");
   const [noteSaving, setNoteSaving] = useState(false);
   const [noteError, setNoteError] = useState<string | null>(null);
   const [noteSuccess, setNoteSuccess] = useState<string | null>(null);
+  const [sendError, setSendError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
   const formRef = useRef<HTMLFormElement | null>(null);
   const saveTimerRef = useRef<number | null>(null);
@@ -102,7 +114,9 @@ export function WhatsAppComposer({
 
     try {
       setResolvedLeadId(
-        new URL(selectedLink.href, window.location.origin).searchParams.get("lead") || "",
+        new URL(selectedLink.href, window.location.origin).searchParams.get(
+          "lead",
+        ) || "",
       );
     } catch {
       setResolvedLeadId("");
@@ -121,6 +135,7 @@ export function WhatsAppComposer({
     setNoteBody("");
     setNoteError(null);
     setNoteSuccess(null);
+    setSendError(null);
     setMode("reply");
     if (!draftKey) return;
 
@@ -140,7 +155,13 @@ export function WhatsAppComposer({
   }, [draftKey]);
 
   useEffect(() => {
-    if (!windowOpen || quickReplies.length > 0 || quickRepliesRequestedRef.current) return;
+    if (
+      !windowOpen ||
+      quickReplies.length > 0 ||
+      quickRepliesRequestedRef.current
+    ) {
+      return;
+    }
 
     quickRepliesRequestedRef.current = true;
     let cancelled = false;
@@ -157,7 +178,13 @@ export function WhatsAppComposer({
         return (await response.json()) as QuickReplyResponse;
       })
       .then((payload) => {
-        if (cancelled || !payload?.ok || !Array.isArray(payload.quickReplies)) return;
+        if (
+          cancelled ||
+          !payload?.ok ||
+          !Array.isArray(payload.quickReplies)
+        ) {
+          return;
+        }
         setAvailableQuickReplies(payload.quickReplies.slice(0, 100));
       })
       .catch((error) => {
@@ -195,6 +222,7 @@ export function WhatsAppComposer({
     (value: string) => {
       const next = value.slice(0, 4096);
       setBody(next);
+      setSendError(null);
       setDraftState("unsaved");
       if (saveTimerRef.current) window.clearTimeout(saveTimerRef.current);
       saveTimerRef.current = window.setTimeout(() => {
@@ -217,19 +245,24 @@ export function WhatsAppComposer({
       setCopilotAssisted(true);
 
       requestAnimationFrame(() => {
-        formRef.current?.querySelector<HTMLTextAreaElement>('textarea[name="body"]')?.focus();
+        formRef.current
+          ?.querySelector<HTMLTextAreaElement>('textarea[name="body"]')
+          ?.focus();
       });
     };
 
     window.addEventListener("crm:copilot-draft", applyCopilotDraft);
-    return () => window.removeEventListener("crm:copilot-draft", applyCopilotDraft);
+    return () =>
+      window.removeEventListener("crm:copilot-draft", applyCopilotDraft);
   }, [updateDraft]);
 
   const applyQuickReply = (reply: QuickReply) => {
     updateDraft(reply.body);
     setCopilotAssisted(false);
     requestAnimationFrame(() => {
-      formRef.current?.querySelector<HTMLTextAreaElement>('textarea[name="body"]')?.focus();
+      formRef.current
+        ?.querySelector<HTMLTextAreaElement>('textarea[name="body"]')
+        ?.focus();
     });
   };
 
@@ -252,7 +285,9 @@ export function WhatsAppComposer({
       );
       const result = (await response.json()) as NoteResponse;
       if (!response.ok || !result.ok) {
-        throw new Error(result.ok ? "Unable to save internal note." : result.error);
+        throw new Error(
+          result.ok ? "Unable to save internal note." : result.error,
+        );
       }
 
       setNoteBody("");
@@ -263,31 +298,53 @@ export function WhatsAppComposer({
         }),
       );
     } catch (reason) {
-      setNoteError(reason instanceof Error ? reason.message : "Unable to save internal note.");
+      setNoteError(
+        reason instanceof Error
+          ? reason.message
+          : "Unable to save internal note.",
+      );
     } finally {
       setNoteSaving(false);
     }
   }
 
   function handleModeKeyDown(event: React.KeyboardEvent<HTMLDivElement>) {
-    if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
+    if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) {
+      return;
+    }
 
     const tabs = Array.from(
       event.currentTarget.querySelectorAll<HTMLButtonElement>('[role="tab"]'),
     );
-    const activeIndex = tabs.findIndex((tab) => tab === document.activeElement);
+    const activeIndex = tabs.findIndex(
+      (tab) => tab === document.activeElement,
+    );
     if (activeIndex < 0 || tabs.length === 0) return;
 
     event.preventDefault();
     let nextIndex = activeIndex;
     if (event.key === "ArrowRight") nextIndex = (activeIndex + 1) % tabs.length;
-    if (event.key === "ArrowLeft") nextIndex = (activeIndex - 1 + tabs.length) % tabs.length;
+    if (event.key === "ArrowLeft") {
+      nextIndex = (activeIndex - 1 + tabs.length) % tabs.length;
+    }
     if (event.key === "Home") nextIndex = 0;
     if (event.key === "End") nextIndex = tabs.length - 1;
 
     tabs[nextIndex]?.focus();
     tabs[nextIndex]?.click();
   }
+
+  const restoreFailedDraft = (
+    text: string,
+    wasCopilotAssisted: boolean,
+  ) => {
+    setBody((current) => current || text);
+    persistDraft(text);
+    if (wasCopilotAssisted) setCopilotAssisted(true);
+    setSendError(
+      "Message was not sent. Your draft has been restored so you can retry safely.",
+    );
+  };
 
   const sendMessage = () => {
     const text = body.trim();
@@ -303,6 +360,7 @@ export function WhatsAppComposer({
       formData.set("ai_generated", "true");
     }
 
+    setSendError(null);
     setBody("");
     setCopilotAssisted(false);
 
@@ -311,13 +369,12 @@ export function WhatsAppComposer({
         const result = await action(formData);
 
         if (!result?.ok) {
-          setBody((current) => current || text);
-          persistDraft(text);
-          if (wasCopilotAssisted) setCopilotAssisted(true);
+          restoreFailedDraft(text, wasCopilotAssisted);
           return;
         }
 
         persistDraft("");
+        setSendError(null);
 
         if (wasCopilotAssisted && result.message.id && resolvedLeadId) {
           await markCopilotAssistedMessageAction({
@@ -334,9 +391,7 @@ export function WhatsAppComposer({
         );
       } catch (error) {
         console.error("WhatsApp send failed:", error);
-        setBody((current) => current || text);
-        persistDraft(text);
-        if (wasCopilotAssisted) setCopilotAssisted(true);
+        restoreFailedDraft(text, wasCopilotAssisted);
       }
     });
   };
@@ -355,7 +410,8 @@ export function WhatsAppComposer({
             </div>
 
             <p className="mt-1 text-[10px] leading-5 text-[#715B31]">
-              Free-form sending is disabled. Use an approved template only after the channel and template state are verified.
+              Free-form sending is disabled. Use an approved template only after
+              the channel and template state are verified.
             </p>
 
             <div className="mt-1.5 text-[9px] font-medium text-[#825018]">
@@ -374,6 +430,7 @@ export function WhatsAppComposer({
         event.preventDefault();
         sendMessage();
       }}
+      aria-busy={isPending}
       className="conversation-composer bg-white p-3"
     >
       <div className="overflow-hidden rounded-lg border border-[#D4DFD2] bg-white shadow-[0_1px_3px_rgba(21,62,51,0.04)]">
@@ -383,13 +440,21 @@ export function WhatsAppComposer({
           aria-label="Compose mode"
           onKeyDown={handleModeKeyDown}
         >
-          <ComposerTab active={mode === "reply"} onClick={() => setMode("reply")} icon={<MessageSquareText size={11} />}>
+          <ComposerTab
+            active={mode === "reply"}
+            onClick={() => setMode("reply")}
+            icon={<MessageSquareText size={11} />}
+          >
             Reply draft
           </ComposerTab>
-          <ComposerTab active={mode === "note"} onClick={() => setMode("note")} icon={<FileText size={11} />}>
+          <ComposerTab
+            active={mode === "note"}
+            onClick={() => setMode("note")}
+            icon={<FileText size={11} />}
+          >
             Internal note
           </ComposerTab>
-          <span className="ml-auto mb-2 rounded-md border border-[#DCE4DF] bg-[#F6F8F7] px-2 py-1 text-[8px] font-semibold text-[#596E64]">
+          <span className="mb-2 ml-auto rounded-md border border-[#DCE4DF] bg-[#F6F8F7] px-2 py-1 text-[8px] font-semibold text-[#596E64]">
             WhatsApp
           </span>
         </div>
@@ -397,11 +462,42 @@ export function WhatsAppComposer({
         {mode === "reply" ? (
           <div role="tabpanel" className="p-3">
             <div className="mb-2">
-              <div className="text-[10px] font-semibold text-[#18362D]">Prepare a WhatsApp response</div>
+              <div className="text-[10px] font-semibold text-[#18362D]">
+                Prepare a WhatsApp response
+              </div>
               <div className="mt-0.5 text-[9px] text-[#596E64]">
                 Draft only. Nothing is sent until you explicitly click Send.
               </div>
             </div>
+
+            {sendError ? (
+              <div
+                role="alert"
+                className="mb-2 flex items-start gap-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-red-800"
+              >
+                <AlertTriangle size={13} className="mt-0.5 shrink-0" />
+                <div className="min-w-0 flex-1 text-[10px] font-medium leading-4">
+                  {sendError}
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setSendError(null)}
+                  className="grid h-6 w-6 shrink-0 place-items-center rounded-md text-red-600 transition hover:bg-red-100"
+                  aria-label="Dismiss send error"
+                >
+                  <X size={12} />
+                </button>
+              </div>
+            ) : isPending ? (
+              <div
+                role="status"
+                className="mb-2 flex items-center gap-2 rounded-lg border border-[#DCE4DF] bg-[#F6F8F7] px-3 py-2 text-[10px] font-medium text-[#596E64]"
+              >
+                <RefreshCw size={12} className="animate-spin" />
+                Sending through the verified WhatsApp action. Your draft remains
+                protected until the send completes.
+              </div>
+            ) : null}
 
             {availableQuickReplies.length ? (
               <div className="mb-2 flex items-center gap-2 overflow-x-auto pb-1">
@@ -423,7 +519,10 @@ export function WhatsAppComposer({
               </div>
             ) : null}
 
-            <label className="sr-only" htmlFor={`whatsapp-reply-draft-${resolvedLeadId || "selected"}`}>
+            <label
+              className="sr-only"
+              htmlFor={`whatsapp-reply-draft-${resolvedLeadId || "selected"}`}
+            >
               Write a WhatsApp reply draft
             </label>
             <textarea
@@ -432,7 +531,10 @@ export function WhatsAppComposer({
               value={body}
               onChange={(event) => updateDraft(event.target.value)}
               onKeyDown={(event) => {
-                if ((event.ctrlKey || event.metaKey) && event.key === "Enter") {
+                if (
+                  (event.ctrlKey || event.metaKey) &&
+                  event.key === "Enter"
+                ) {
                   event.preventDefault();
                   persistDraft(body);
                 }
@@ -451,7 +553,9 @@ export function WhatsAppComposer({
                 <span>Enter adds a new line</span>
                 <span>Ctrl/⌘ + Enter saves draft</span>
                 <span>{body.length}/4096</span>
-                {copilotAssisted ? <span className="text-[#216551]">AI-assisted draft</span> : null}
+                {copilotAssisted ? (
+                  <span className="text-[#216551]">AI-assisted draft</span>
+                ) : null}
               </div>
 
               <div className="flex items-center gap-2">
@@ -466,17 +570,30 @@ export function WhatsAppComposer({
                 <button
                   type="submit"
                   disabled={!body.trim() || isPending || !connectionReady}
-                  title={connectionReady ? "Send WhatsApp message" : connectionDisabledReason(connectionState)}
+                  title={
+                    connectionReady
+                      ? "Send WhatsApp message"
+                      : connectionDisabledReason(connectionState)
+                  }
                   className="inline-flex h-8 items-center justify-center gap-1.5 rounded-lg bg-[#153E33] px-3.5 text-[10px] font-semibold text-white transition hover:bg-[#216551] disabled:cursor-not-allowed disabled:bg-[#EDF0EC] disabled:text-[#59685F]"
                 >
-                  <Send size={13} />
+                  {isPending ? (
+                    <RefreshCw size={12} className="animate-spin" />
+                  ) : (
+                    <Send size={13} />
+                  )}
                   {isPending ? "Sending…" : "Send"}
                 </button>
               </div>
             </div>
 
-            <div className="mt-2 flex flex-wrap items-center justify-between gap-2 text-[9px] font-medium">
-              <span className="text-[#216551]">{draftStatus(draftState)}</span>
+            <div
+              className="mt-2 flex flex-wrap items-center justify-between gap-2 text-[9px] font-medium"
+              aria-live="polite"
+            >
+              <span className="text-[#216551]">
+                {draftStatus(draftState)}
+              </span>
               <span className="text-[#71847A]">
                 {isPending
                   ? "Sending through the verified WhatsApp action…"
@@ -490,14 +607,22 @@ export function WhatsAppComposer({
           <div role="tabpanel" className="bg-[#FFFCF2] p-3">
             <div className="mb-2 flex items-start justify-between gap-3">
               <div>
-                <div className="text-[10px] font-semibold text-[#18362D]">Private team note</div>
+                <div className="text-[10px] font-semibold text-[#18362D]">
+                  Private team note
+                </div>
                 <p className="mt-0.5 text-[9px] leading-4 text-[#70581F]">
-                  Stored as internal CRM activity. Never sent through WhatsApp or any other channel.
+                  Stored as internal CRM activity. Never sent through WhatsApp or
+                  any other channel.
                 </p>
               </div>
-              <span className="rounded border border-[#E6DDBE] bg-white px-2 py-1 text-[8px] font-semibold text-[#70581F]">Private</span>
+              <span className="rounded border border-[#E6DDBE] bg-white px-2 py-1 text-[8px] font-semibold text-[#70581F]">
+                Private
+              </span>
             </div>
-            <label className="sr-only" htmlFor={`whatsapp-internal-note-${resolvedLeadId || "selected"}`}>
+            <label
+              className="sr-only"
+              htmlFor={`whatsapp-internal-note-${resolvedLeadId || "selected"}`}
+            >
               Write an internal note
             </label>
             <textarea
@@ -509,7 +634,10 @@ export function WhatsAppComposer({
                 setNoteSuccess(null);
               }}
               onKeyDown={(event) => {
-                if ((event.ctrlKey || event.metaKey) && event.key === "Enter") {
+                if (
+                  (event.ctrlKey || event.metaKey) &&
+                  event.key === "Enter"
+                ) {
                   event.preventDefault();
                   void saveInternalNote();
                 }
@@ -522,11 +650,16 @@ export function WhatsAppComposer({
             <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
               <div className="min-w-0 text-[9px]">
                 {noteError ? (
-                  <span className="text-red-700">{noteError} Your note is still here.</span>
+                  <span className="text-red-700">
+                    {noteError} Your note is still here.
+                  </span>
                 ) : noteSuccess ? (
                   <span className="text-[#216551]">{noteSuccess}</span>
                 ) : (
-                  <span className="text-[#70581F]">{noteBody.length}/4000 · Ctrl/⌘ + Enter adds note · Saving does not send.</span>
+                  <span className="text-[#70581F]">
+                    {noteBody.length}/4000 · Ctrl/⌘ + Enter adds note · Saving does
+                    not send.
+                  </span>
                 )}
               </div>
               <button
@@ -535,7 +668,9 @@ export function WhatsAppComposer({
                 disabled={!noteBody.trim() || noteSaving || !resolvedLeadId}
                 className="inline-flex h-8 items-center justify-center gap-1.5 rounded-lg bg-[#153E33] px-3 text-[9px] font-semibold text-white transition hover:bg-[#216551] disabled:cursor-not-allowed disabled:bg-[#EDF0EC] disabled:text-[#59685F]"
               >
-                {noteSaving ? <RefreshCw size={10} className="animate-spin" /> : null}
+                {noteSaving ? (
+                  <RefreshCw size={10} className="animate-spin" />
+                ) : null}
                 {noteSaving ? "Saving…" : "Add note"}
               </button>
             </div>
@@ -579,7 +714,9 @@ function ComposerTab({
 function draftStatus(state: DraftState) {
   if (state === "saved") return "Draft saved in this browser";
   if (state === "unsaved") return "Unsaved draft changes";
-  if (state === "memory-only") return "Browser storage unavailable · draft kept in memory";
+  if (state === "memory-only") {
+    return "Browser storage unavailable · draft kept in memory";
+  }
   return "Draft only";
 }
 
@@ -587,7 +724,11 @@ function connectionDisabledReason(
   state: "loading" | "connected" | "disconnected" | "unavailable",
 ) {
   if (state === "loading") return "Verifying WhatsApp connection…";
-  if (state === "disconnected") return "Send disabled until WhatsApp is connected.";
-  if (state === "unavailable") return "Send disabled until WhatsApp connection can be verified.";
+  if (state === "disconnected") {
+    return "Send disabled until WhatsApp is connected.";
+  }
+  if (state === "unavailable") {
+    return "Send disabled until WhatsApp connection can be verified.";
+  }
   return "WhatsApp connection verified.";
 }
