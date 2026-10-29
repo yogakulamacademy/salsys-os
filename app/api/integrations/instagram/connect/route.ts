@@ -11,6 +11,7 @@ import {
   IntegrationTenantError,
   requireIntegrationAdminTenant,
 } from '@/lib/integrations/tenant-context';
+import { isExplicitCrossSiteRequest } from '@/lib/security/fetch-metadata';
 
 export const dynamic = 'force-dynamic';
 
@@ -27,6 +28,13 @@ function pageUrl(
 }
 
 export async function GET(request: NextRequest) {
+  if (isExplicitCrossSiteRequest(request)) {
+    return NextResponse.json(
+      { ok: false, error: 'Cross-site OAuth initiation is not allowed.' },
+      { status: 403, headers: { 'Cache-Control': 'no-store' } },
+    );
+  }
+
   const supabase = await createClient();
   const {
     data: { user },

@@ -106,6 +106,9 @@ jobs:
       - name: Verify Baseline Browser Security Headers
         run: npm run verify:baseline-security-headers
 
+      - name: Verify OAuth Connect Fetch Metadata
+        run: npm run verify:oauth-connect-fetch-metadata
+
       - name: Typecheck
         run: npm run typecheck
 
