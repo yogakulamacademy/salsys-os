@@ -3,6 +3,7 @@ import type { ReactNode } from "react";
 import Link from "next/link";
 
 import {
+  Check,
   CheckCircle2,
   ChevronLeft,
   ChevronRight,
@@ -16,13 +17,13 @@ import {
   snoozeFollowUpAction,
 } from "@/app/actions/crm";
 
+import { SubmitButton } from "@/components/submit-button";
 import {
   ChannelBadge,
   EmptyState,
   Notice,
   PageHeader,
   StageBadge,
-  SubmitButton,
 } from "@/components/ui";
 import { getFollowUpsWorkspace } from "@/lib/followups-data";
 import { isMockMode } from "@/lib/data";
@@ -139,6 +140,7 @@ export default async function FollowUpsPage({
                 title="You’re caught up"
                 description="No due follow-ups are waiting in the queue."
                 icon={<CheckCircle2 size={20} />}
+                compact
               />
             </div>
           ) : (
@@ -150,12 +152,12 @@ export default async function FollowUpsPage({
                     <input type="hidden" name="lead_id" value={task.leadId} />
 
                     <SubmitButton
-                      pendingLabel="Completing..."
+                      pendingLabel=""
                       title="Complete follow-up"
                       aria-label={`Complete follow-up for ${task.leadName}`}
                       className="followup-complete-button"
                     >
-                      Complete
+                      <Check size={16} aria-hidden="true" />
                     </SubmitButton>
                   </form>
 
