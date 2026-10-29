@@ -148,6 +148,9 @@ jobs:
       - name: Verify Browser Form Discovery Dedupe
         run: npm run verify:browser-form-discovery-dedupe
 
+      - name: Verify PH-3 Operational Readiness Closeout
+        run: npm run verify:ph3-operational-readiness-closeout
+
       - name: Typecheck
         run: npm run typecheck
 
