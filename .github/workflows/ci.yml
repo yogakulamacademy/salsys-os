@@ -142,6 +142,9 @@ jobs:
       - name: Verify Admissions Cron Registration
         run: npm run verify:admissions-cron-registration
 
+      - name: Verify Admissions Rule Key Ambiguity
+        run: npm run verify:admissions-rule-key-ambiguity
+
       - name: Typecheck
         run: npm run typecheck
 
