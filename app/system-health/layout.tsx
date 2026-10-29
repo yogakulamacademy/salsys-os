@@ -7,6 +7,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { getWorkspaceContextForUser } from "@/lib/workspace";
 import OperationalReadinessSection from "./operational-readiness-section";
+import "./system-health-mobile.css";
 
 type IntegrityStatus = "healthy" | "warning" | string;
 
