@@ -115,6 +115,9 @@ jobs:
       - name: Verify Provider Visibility Single RPC
         run: npm run verify:provider-visibility-single-rpc
 
+      - name: Verify Conversations Single RPC
+        run: npm run verify:conversations-single-rpc
+
       - name: Typecheck
         run: npm run typecheck
 
