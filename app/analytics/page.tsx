@@ -2,7 +2,7 @@ import { Activity, RefreshCw } from "lucide-react";
 
 import { AnalyticsExplorer } from "@/components/analytics-explorer";
 import { ExecutiveDecisionBrief } from "@/components/marketing/executive-decision-brief";
-import { PageHeader } from "@/components/ui";
+import { Notice, PageHeader } from "@/components/ui";
 import { getAnalyticsWorkspace } from "@/lib/analytics-data";
 
 export default async function AnalyticsPage() {
@@ -52,11 +52,7 @@ export default async function AnalyticsPage() {
         actions={brief.actions}
       />
 
-      {workspace.warning ? (
-        <div className="rounded-xl border border-amber-100 bg-amber-50 px-4 py-3 text-xs font-semibold text-amber-800 dark:border-amber-900/50 dark:bg-amber-950/20 dark:text-amber-200">
-          {workspace.warning}
-        </div>
-      ) : null}
+      {workspace.warning ? <Notice tone="warning">{workspace.warning}</Notice> : null}
 
       <AnalyticsExplorer
         overview={overview}
