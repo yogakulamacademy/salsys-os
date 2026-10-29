@@ -39,7 +39,7 @@
 
   .system-health-failures-card .system-health-table tbody td::before {
     padding-top: 1px;
-    color: var(--app-copy-subtle);
+    color: var(--app-text-subtle);
     font-size: 9px;
     font-weight: 700;
     letter-spacing: 0.08em;
