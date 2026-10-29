@@ -118,6 +118,9 @@ jobs:
       - name: Verify Conversations Single RPC
         run: npm run verify:conversations-single-rpc
 
+      - name: Verify Person Journey Single RPC
+        run: npm run verify:person-journey-single-rpc
+
       - name: Typecheck
         run: npm run typecheck
 
