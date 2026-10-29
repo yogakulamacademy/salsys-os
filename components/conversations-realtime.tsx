@@ -69,7 +69,7 @@ export function ConversationsRealtime() {
           refreshInbox();
         },
       )
-      .subscribe((status) => {
+      .subscribe((status: string) => {
         if (disposed) return;
 
         if (status === 'SUBSCRIBED') {
