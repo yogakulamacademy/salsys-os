@@ -139,6 +139,9 @@ jobs:
       - name: Verify Meta Ads Operational Health V1
         run: npm run verify:meta-ads-operational-health-v1
 
+      - name: Verify Admissions Cron Registration
+        run: npm run verify:admissions-cron-registration
+
       - name: Typecheck
         run: npm run typecheck
 
