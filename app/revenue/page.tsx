@@ -1,9 +1,9 @@
 import Link from "next/link";
-import { AlertTriangle, ArrowRight, CalendarClock, Sparkles } from "lucide-react";
+import { ArrowRight, CalendarClock, Sparkles } from "lucide-react";
 
 import { ExecutiveDecisionBrief } from "@/components/marketing/executive-decision-brief";
 import { RevenueInsights } from "@/components/revenue-insights";
-import { PageHeader } from "@/components/ui";
+import { Notice, PageHeader } from "@/components/ui";
 import {
   getRevenueWorkspace,
   type RevenueCurrencySummary,
@@ -135,28 +135,20 @@ export default async function RevenuePage({ searchParams }: RevenuePageProps) {
         </section>
       ) : null}
 
-      {workspace.warning ? (
-        <div className="rounded-xl border border-amber-100 bg-amber-50 px-4 py-3 text-xs font-semibold text-amber-800 dark:border-amber-900/50 dark:bg-amber-950/20 dark:text-amber-200">
-          {workspace.warning}
-        </div>
-      ) : null}
+      {workspace.warning ? <Notice tone="warning">{workspace.warning}</Notice> : null}
 
       {unvaluedLeads > 0 ? (
-        <Link
-          href="/pipeline"
-          className="flex items-center gap-3 rounded-xl border border-amber-100 bg-amber-50/70 px-4 py-3 transition hover:bg-amber-50 dark:border-amber-900/50 dark:bg-amber-950/20"
+        <Notice
+          tone="warning"
+          title={`${unvaluedLeads} open ${unvaluedLeads === 1 ? "lead is" : "leads are"} missing potential value`}
+          action={
+            <Link href="/pipeline" className="btn-secondary">
+              Review pipeline <ArrowRight size={13} />
+            </Link>
+          }
         >
-          <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-white text-amber-600 shadow-sm dark:bg-slate-900 dark:text-amber-300">
-            <AlertTriangle size={16} />
-          </span>
-          <span className="min-w-0 flex-1">
-            <span className="block text-xs font-black text-amber-900 dark:text-amber-100">
-              {unvaluedLeads} open {unvaluedLeads === 1 ? "lead is" : "leads are"} missing potential value
-            </span>
-            <span className="mt-0.5 block text-[10px] text-amber-700/80 dark:text-amber-300/70">Forecast readiness is incomplete.</span>
-          </span>
-          <ArrowRight size={14} className="text-amber-400" />
-        </Link>
+          Forecast readiness is incomplete.
+        </Notice>
       ) : null}
 
       <RevenueInsights
