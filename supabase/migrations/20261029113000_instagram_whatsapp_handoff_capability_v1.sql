@@ -26,7 +26,7 @@ begin
       from public.lead_contacts lc
       where lc.lead_id = p_lead_id
         and lc.contact_type::text = 'phone'
-        and coalesce((lc.metadata ->> 'detected_from_message')::boolean, false) = true
+        and coalesce(lc.metadata ->> 'detected_from_message', 'false') = 'true'
         and lc.metadata ->> 'source_system' = 'instagram_dm'
     ),
     exists(
@@ -34,9 +34,9 @@ begin
       from public.lead_contacts lc
       where lc.lead_id = p_lead_id
         and lc.contact_type::text = 'phone'
-        and coalesce((lc.metadata ->> 'detected_from_message')::boolean, false) = true
+        and coalesce(lc.metadata ->> 'detected_from_message', 'false') = 'true'
         and lc.metadata ->> 'source_system' = 'instagram_dm'
-        and coalesce((lc.metadata ->> 'international_format')::boolean, false) = true
+        and coalesce(lc.metadata ->> 'international_format', 'false') = 'true'
     )
   into v_detected, v_ready;
 
