@@ -41,7 +41,7 @@ function cleanText(value: unknown) {
   return typeof value === 'string' && value.trim() ? value.trim() : null;
 }
 
-async function fetchInstagramMessagingProfile(
+export async function fetchInstagramMessagingProfile(
   accessToken: string,
   instagramUserId: string,
 ): Promise<InstagramProfile | null> {
@@ -60,18 +60,94 @@ async function fetchInstagramMessagingProfile(
       signal: AbortSignal.timeout(PROFILE_LOOKUP_TIMEOUT_MS),
     });
 
-    if (!response.ok) return null;
+    if (!response.ok) {
+      const errorPayload = await response.text().catch(() => '');
+      console.warn('Instagram messaging profile lookup failed.', {
+        status: response.status,
+        instagramUserId,
+        error: errorPayload.slice(0, 500),
+      });
+      return null;
+    }
 
     const payload = (await response.json()) as Record<string, unknown>;
     const name = cleanText(payload.name);
     const username = cleanText(payload.username);
 
-    if (!name && !username) return null;
+    if (!name && !username) {
+      console.warn('Instagram messaging profile lookup returned no usable identity.', {
+        instagramUserId,
+      });
+      return null;
+    }
 
     return { name, username };
-  } catch {
+  } catch (error) {
+    console.warn('Instagram messaging profile lookup errored.', {
+      instagramUserId,
+      error: error instanceof Error ? error.message : 'Unknown profile lookup error',
+    });
     return null;
   }
+}
+
+export async function resolveInstagramMessagingProfile({
+  organizationId,
+  accountId,
+  instagramUserId,
+}: {
+  organizationId: string;
+  accountId: string;
+  instagramUserId: string;
+}) {
+  try {
+    const runtime = await getInstagramRuntimeForOrganization(organizationId, accountId);
+    return await fetchInstagramMessagingProfile(runtime.accessToken, instagramUserId);
+  } catch (error) {
+    console.warn('Instagram messaging profile runtime resolution failed.', {
+      organizationId,
+      accountId,
+      instagramUserId,
+      error: error instanceof Error ? error.message : 'Unknown Instagram runtime error',
+    });
+    return null;
+  }
+}
+
+export async function applyInstagramProfileToGenericLead({
+  organizationId,
+  leadId,
+  profile,
+}: {
+  organizationId: string;
+  leadId: string;
+  profile: InstagramProfile | null;
+}) {
+  const displayName = profile?.name || profile?.username || null;
+  if (!displayName || displayName === GENERIC_INSTAGRAM_LEAD_NAME) return false;
+
+  const admin = createAdminClient();
+  const { data: updatedRows, error } = await admin
+    .from('leads')
+    .update({
+      display_name: displayName,
+      first_name: displayName,
+    })
+    .eq('organization_id', organizationId)
+    .eq('id', leadId)
+    .eq('display_name', GENERIC_INSTAGRAM_LEAD_NAME)
+    .select('id');
+
+  if (error) {
+    console.warn('Instagram lead profile enrichment update failed.', {
+      organizationId,
+      leadId,
+      error: error.message,
+    });
+    return false;
+  }
+
+  return (updatedRows ?? []).length > 0;
 }
 
 async function runWithConcurrency<T>(
@@ -184,31 +260,15 @@ async function syncOrganizationInstagramLeadNames(
     }
 
     const profile = await fetchInstagramMessagingProfile(runtime.accessToken, instagramUserId);
-    const displayName = profile?.name || profile?.username || null;
+    const updated = await applyInstagramProfileToGenericLead({
+      organizationId,
+      leadId: lead.id,
+      profile,
+    });
 
-    if (!displayName || displayName === GENERIC_INSTAGRAM_LEAD_NAME) {
-      skipped += 1;
-      return;
-    }
-
-    const { data: updatedRows, error: updateError } = await admin
-      .from('leads')
-      .update({ display_name: displayName })
-      .eq('organization_id', organizationId)
-      .eq('id', lead.id)
-      .eq('display_name', GENERIC_INSTAGRAM_LEAD_NAME)
-      .select('id');
-
-    if (updateError) {
-      failed += 1;
-      return;
-    }
-
-    if ((updatedRows ?? []).length > 0) {
-      enriched += 1;
-    } else {
-      skipped += 1;
-    }
+    if (updated) enriched += 1;
+    else if (profile) skipped += 1;
+    else failed += 1;
   });
 
   return {
