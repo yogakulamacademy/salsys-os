@@ -124,6 +124,9 @@ jobs:
       - name: Verify WhatsApp Canonical Health Sync
         run: npm run verify:whatsapp-health-canonical-sync
 
+      - name: Verify CRM Core Health V2
+        run: npm run verify:crm-core-health-v2
+
       - name: Typecheck
         run: npm run typecheck
 

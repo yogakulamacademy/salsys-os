@@ -33,7 +33,8 @@
     "verify:provider-visibility-single-rpc": "node scripts/verify-provider-visibility-single-rpc.mjs",
     "verify:conversations-single-rpc": "node scripts/verify-conversations-single-rpc.mjs",
     "verify:person-journey-single-rpc": "node scripts/verify-person-journey-single-rpc.mjs",
-    "verify:whatsapp-health-canonical-sync": "node scripts/verify-whatsapp-health-canonical-sync.mjs"
+    "verify:whatsapp-health-canonical-sync": "node scripts/verify-whatsapp-health-canonical-sync.mjs",
+    "verify:crm-core-health-v2": "node scripts/verify-crm-core-health-v2.mjs"
   },
   "dependencies": {
     "@google-analytics/data": "^7.2.0",
