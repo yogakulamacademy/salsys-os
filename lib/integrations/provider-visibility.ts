@@ -1,7 +1,6 @@
 import "server-only";
 
 import { createClient } from "@/lib/supabase/server";
-import { requireCurrentOrganizationId } from "@/lib/workspace";
 
 type ServerSupabaseClient =
   Awaited<ReturnType<typeof createClient>>;
@@ -25,30 +24,10 @@ export async function getProviderVisibility(
     suppliedClient ?? (await createClient());
 
   const {
-    data: { user },
-    error: authError,
-  } = await supabase.auth.getUser();
-
-  if (authError || !user) {
-    throw new Error(
-      "Unable to resolve integration visibility: user is not authenticated.",
-    );
-  }
-
-  const organizationId =
-    await requireCurrentOrganizationId(
-      supabase,
-      user.id,
-    );
-
-  const {
     data,
     error,
   } = await supabase.rpc(
-    "get_provider_visibility",
-    {
-      p_organization_id: organizationId,
-    },
+    "get_current_provider_visibility_v1",
   );
 
   if (error) {
@@ -60,9 +39,14 @@ export async function getProviderVisibility(
   const payload =
     (data ?? {}) as ProviderVisibilityRpc;
 
+  if (!payload.organization_id) {
+    throw new Error(
+      "Unable to resolve integration visibility: no active organization was returned.",
+    );
+  }
+
   return {
-    organizationId:
-      payload.organization_id ?? organizationId,
+    organizationId: payload.organization_id,
     googleConnected:
       payload.google_connected === true,
     metaConnected:
