@@ -3,7 +3,6 @@ import type { ReactNode } from "react";
 import Link from "next/link";
 
 import {
-  Check,
   CheckCircle2,
   ChevronLeft,
   ChevronRight,
@@ -17,7 +16,14 @@ import {
   snoozeFollowUpAction,
 } from "@/app/actions/crm";
 
-import { ChannelBadge, PageHeader, StageBadge } from "@/components/ui";
+import {
+  ChannelBadge,
+  EmptyState,
+  Notice,
+  PageHeader,
+  StageBadge,
+  SubmitButton,
+} from "@/components/ui";
 import { getFollowUpsWorkspace } from "@/lib/followups-data";
 import { isMockMode } from "@/lib/data";
 import { formatDateTime } from "@/lib/format";
@@ -64,29 +70,19 @@ export default async function FollowUpsPage({
         }
       />
 
-      {query.error && (
-        <div className="followups-notice followups-notice-error">
-          {query.error}
-        </div>
-      )}
+      {query.error ? <Notice tone="error">{query.error}</Notice> : null}
 
-      {query.notice && (
-        <div
-          className={`followups-notice ${
-            query.notice.startsWith("mock-")
-              ? "followups-notice-warning"
-              : "followups-notice-success"
-          }`}
-        >
+      {query.notice ? (
+        <Notice tone={query.notice.startsWith("mock-") ? "warning" : "success"}>
           {noticeText(query.notice)}
-        </div>
-      )}
+        </Notice>
+      ) : null}
 
-      {workspace.warning && (
-        <div className="followups-notice followups-notice-warning">
+      {workspace.warning ? (
+        <Notice tone="warning" title="Fallback data source">
           Follow-ups loaded using the legacy fallback. {workspace.warning}
-        </div>
-      )}
+        </Notice>
+      ) : null}
 
       <section className="followups-summary-grid">
         <FollowUpSummaryCard
@@ -138,12 +134,12 @@ export default async function FollowUpsPage({
 
         <div className="followups-task-list">
           {tasks.length === 0 ? (
-            <div className="followups-empty-state">
-              <div className="followups-empty-icon">
-                <CheckCircle2 size={20} />
-              </div>
-              <div className="followups-empty-title">You’re caught up</div>
-              <p>No due follow-ups are waiting in the queue.</p>
+            <div className="px-5 py-8">
+              <EmptyState
+                title="You’re caught up"
+                description="No due follow-ups are waiting in the queue."
+                icon={<CheckCircle2 size={20} />}
+              />
             </div>
           ) : (
             tasks.map((task) => (
@@ -153,14 +149,14 @@ export default async function FollowUpsPage({
                     <input type="hidden" name="task_id" value={task.id} />
                     <input type="hidden" name="lead_id" value={task.leadId} />
 
-                    <button
-                      type="submit"
+                    <SubmitButton
+                      pendingLabel="Completing..."
                       title="Complete follow-up"
                       aria-label={`Complete follow-up for ${task.leadName}`}
                       className="followup-complete-button"
                     >
-                      <Check size={16} />
-                    </button>
+                      Complete
+                    </SubmitButton>
                   </form>
 
                   <div className="followup-task-content">
@@ -222,12 +218,12 @@ export default async function FollowUpsPage({
                           aria-label={`New follow-up time for ${task.leadName}`}
                         />
 
-                        <button
-                          type="submit"
+                        <SubmitButton
+                          pendingLabel="Saving..."
                           className="followup-snooze-button"
                         >
                           Snooze
-                        </button>
+                        </SubmitButton>
                       </form>
                     </div>
                   </div>
