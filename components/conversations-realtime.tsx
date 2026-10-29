@@ -52,6 +52,12 @@ export function ConversationsRealtime() {
           const event = payload as { new?: RealtimeMessage };
           const message = event.new;
           if (!message || message.direction === 'outbound') return;
+
+          window.dispatchEvent(
+            new CustomEvent('crm:conversation-inbound', {
+              detail: { leadId: message.lead_id ?? null },
+            }),
+          );
           refreshInbox();
         },
       )
