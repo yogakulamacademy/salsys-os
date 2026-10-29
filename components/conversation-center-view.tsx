@@ -224,9 +224,9 @@ export function ConversationCenterView({
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      <div className="shrink-0 border-b border-line bg-surface px-5">
+      <div className="shrink-0 border-b border-line bg-surface px-3 sm:px-5">
         <div
-          className="flex h-11 items-center gap-6"
+          className="grid h-11 grid-cols-2 items-center sm:flex sm:gap-6"
           role="tablist"
           aria-label="Conversation view"
           onKeyDown={handleViewKeyDown}
@@ -251,7 +251,7 @@ export function ConversationCenterView({
         </div>
       </div>
 
-      <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain bg-[linear-gradient(#FBFCFB_0%,#FAFCFB_100%)] px-4 py-5 sm:px-6">
+      <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain bg-[linear-gradient(#FBFCFB_0%,#FAFCFB_100%)] px-3 py-3.5 sm:px-6 sm:py-5">
         {view === "conversation" ? (
           <ConversationThread
             messages={messages}
@@ -278,7 +278,7 @@ export function ConversationCenterView({
                     setActivityLoaded(false);
                     void loadActivity();
                   }}
-                  className="shrink-0 rounded-md border border-warning/30 bg-surface px-2 py-1 text-[11px] font-semibold"
+                  className="min-h-10 shrink-0 rounded-md border border-warning/30 bg-surface px-3 text-[11px] font-semibold sm:min-h-0 sm:px-2 sm:py-1"
                 >
                   Retry
                 </button>
@@ -299,7 +299,7 @@ export function ConversationCenterView({
                       className="relative mt-1.5 h-[11px] w-[11px] shrink-0 rounded-full border-[3px] border-[#FAFCFB] bg-brand-600"
                       aria-hidden="true"
                     />
-                    <div className="min-w-0 flex-1 rounded-ui border border-line bg-surface px-4 py-3.5 shadow-[0_1px_2px_rgba(21,62,51,0.03)]">
+                    <div className="min-w-0 flex-1 rounded-ui border border-line bg-surface px-3.5 py-3 shadow-[0_1px_2px_rgba(21,62,51,0.03)] sm:px-4 sm:py-3.5">
                       <div className="flex flex-wrap items-start justify-between gap-2">
                         <div className="text-[13px] font-semibold text-copy-strong">{item.title}</div>
                         <time className="text-[11px] text-copy-subtle" dateTime={item.timestamp}>
@@ -331,16 +331,18 @@ export function ConversationCenterView({
         )}
       </div>
 
-      <div className="mx-4 mb-3 shrink-0 rounded-ui border border-line bg-brand-50/50 px-3 py-2.5 sm:mx-5">
-        <div className="flex items-start gap-2 text-[12px] leading-5 text-copy-muted">
-          <Sparkles size={14} className="mt-0.5 shrink-0 text-brand-700" />
+      <div className="mx-3 mb-2 shrink-0 rounded-ui border border-line bg-brand-50/50 px-2.5 py-2 sm:mx-5 sm:mb-3 sm:px-3 sm:py-2.5">
+        <div className="flex items-start gap-2 text-[11.5px] leading-[18px] text-copy-muted sm:text-[12px] sm:leading-5">
+          <Sparkles size={13} className="mt-0.5 shrink-0 text-brand-700 sm:h-[14px] sm:w-[14px]" />
           <div className="min-w-0">
             <strong className="font-semibold text-copy-strong">
               {courseSelected ? "Course interest recorded." : "No course selected."}
             </strong>{" "}
-            {courseSelected
-              ? `Review ${course} and the latest inquiry before choosing the next action.`
-              : "Confirm the lead’s course interest before preparing a specific follow-up."}
+            <span className="hidden sm:inline">
+              {courseSelected
+                ? `Review ${course} and the latest inquiry before choosing the next action.`
+                : "Confirm the lead’s course interest before preparing a specific follow-up."}
+            </span>
             {country ? <span className="text-copy-subtle"> · {country}</span> : null}
             <span className="text-copy-subtle"> · {humanize(stage)}</span>
           </div>
@@ -368,7 +370,7 @@ function TabButton({
       aria-selected={active}
       tabIndex={active ? 0 : -1}
       onClick={onClick}
-      className={`inline-flex h-11 items-center gap-1.5 border-b-2 text-[12px] transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-700/30 focus-visible:ring-offset-2 ${
+      className={`inline-flex h-11 min-w-0 items-center justify-center gap-1.5 border-b-2 px-1 text-[12px] transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-700/30 focus-visible:ring-offset-2 sm:flex-none sm:justify-start sm:px-0 ${
         active
           ? "border-brand-700 font-semibold text-brand-700"
           : "border-transparent text-copy-muted hover:text-copy-strong"
