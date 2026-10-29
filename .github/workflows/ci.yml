@@ -136,6 +136,9 @@ jobs:
       - name: Verify System Health Integrity UI
         run: npm run verify:system-health-integrity-ui
 
+      - name: Verify Meta Ads Operational Health V1
+        run: npm run verify:meta-ads-operational-health-v1
+
       - name: Typecheck
         run: npm run typecheck
 
