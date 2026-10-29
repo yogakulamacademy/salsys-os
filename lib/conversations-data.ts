@@ -134,6 +134,8 @@ type RpcAssignmentCandidate = {
 };
 
 type RpcPayload = {
+  __legacyFallbackRequired?: boolean | null;
+  __workspaceError?: string | null;
   inbox?: RpcInboxRow[] | null;
   selectedId?: string | null;
   selected?: RpcSelectedRow | null;
@@ -170,37 +172,33 @@ export async function getConversationsWorkspace(
   }
 
   const supabase = await createClient();
-  const {
-    data: { user },
-    error: authError,
-  } = await supabase.auth.getUser();
+  const { data, error } = await (supabase as any).rpc(
+    "get_current_conversations_workspace_v1",
+    {
+      p_selected_lead_id: isUuid(requestedLeadId) ? requestedLeadId : null,
+      p_limit: 300,
+    },
+  );
 
-  if (authError || !user) {
-    throw new Error(
-      "Unable to resolve current organization: user is not authenticated.",
-    );
+  // Auth/session/workspace-context failures deliberately bubble from the RPC.
+  // They must remain fail-closed and must never be disguised by the legacy loader.
+  if (error) {
+    throw new Error(`Unable to load conversation workspace: ${error.message}`);
   }
 
-  const organizationId = await getCurrentOrganizationId(supabase, user.id);
-  const { data, error } = await supabase.rpc("get_conversations_workspace", {
-    p_organization_id: organizationId,
-    p_selected_lead_id: isUuid(requestedLeadId) ? requestedLeadId : null,
-    p_limit: 300,
-  });
-
-  if (error) {
+  const payload = unwrapPayload(data);
+  if (payload.__legacyFallbackRequired) {
     console.warn(
-      "[conversations] Optimized workspace RPC failed; using legacy loader:",
-      error.message,
+      "[conversations] Inner workspace read failed; using legacy loader:",
+      payload.__workspaceError || "unknown workspace error",
     );
     return getLegacyWorkspace(requestedLeadId, false);
   }
 
-  const payload = unwrapPayload(data);
   const selectedId = textOrUndefined(payload.selectedId);
   const conversationSummary = normalizeInbox(payload.inbox, selectedId);
   const selected = normalizeSelected(payload.selected);
-  const team = normalizeTeam(payload.team, user.id);
+  const team = normalizeTeam(payload.team, null);
 
   const metrics = {
     activeConversations:
