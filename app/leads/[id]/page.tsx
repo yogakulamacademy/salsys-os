@@ -276,6 +276,14 @@ export default async function LeadDetailPage({
 
       .join(", ") || "—";
 
+  const potentialValueLabel =
+    lead.potentialValue != null && lead.potentialCurrency
+      ? formatMoney(lead.potentialValue, lead.potentialCurrency)
+      : lead.value != null && lead.currency
+        ? formatMoney(lead.value, lead.currency)
+        : "—";
+
+  const followUpOverdue = isOverdueDate(lead.nextFollowupAt);
 
   return (
     <>
@@ -320,18 +328,61 @@ export default async function LeadDetailPage({
         </Notice>
       ) : null}
 
-      <div className="mb-4 flex flex-wrap gap-2">
-        <StageBadge stage={lead.stage} />
+      <div className="card-pad mb-4">
+        <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
+          <div className="min-w-0 flex-1">
+            <div className="eyebrow">Sales action</div>
+            <div className="section-title mt-1">What needs attention now</div>
 
-        <IntentLabel intent={lead.intent} />
+            <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
+              <ActionSignal label="Stage">
+                <StageBadge stage={lead.stage} />
+              </ActionSignal>
 
-        <ChannelBadge channel={lead.currentContactChannel} />
+              <ActionSignal label="Intent">
+                <IntentLabel intent={lead.intent} />
+              </ActionSignal>
 
-        {mock && (
-          <span className="inline-flex rounded-lg bg-orange-50 px-2 py-1 text-[11px] font-semibold text-orange-700">
-            Mock mode
-          </span>
-        )}
+              <ActionSignal label="Owner" value={lead.owner || "Unassigned"} />
+
+              <ActionSignal
+                label="Next follow-up"
+                value={lead.nextFollowupAt ? formatDateTime(lead.nextFollowupAt) : "Not scheduled"}
+                emphasis={followUpOverdue ? "danger" : undefined}
+                note={followUpOverdue ? "Overdue" : undefined}
+              />
+
+              <ActionSignal
+                label="Last contact"
+                value={lead.lastContactedAt ? formatDateTime(lead.lastContactedAt) : "No contact yet"}
+              />
+
+              <ActionSignal label="Potential value" value={potentialValueLabel} />
+            </div>
+          </div>
+
+          <div className="flex shrink-0 flex-wrap gap-2 xl:max-w-[210px] xl:flex-col">
+            <Link href={`/conversations?lead=${id}`} className="btn-primary justify-center">
+              <MessageCircle size={16} />
+              Open conversation
+            </Link>
+
+            <a href="#schedule-follow-up" className="btn-secondary justify-center">
+              <CalendarClock size={16} />
+              Review follow-up
+            </a>
+          </div>
+        </div>
+
+        <div className="mt-4 flex flex-wrap gap-2 border-t border-line pt-4">
+          <ChannelBadge channel={lead.currentContactChannel} />
+
+          {mock && (
+            <span className="inline-flex rounded-lg bg-orange-50 px-2 py-1 text-[11px] font-semibold text-orange-700">
+              Mock mode
+            </span>
+          )}
+        </div>
       </div>
 
       <div className="grid gap-4 xl:grid-cols-[1fr_360px]">
@@ -381,21 +432,7 @@ export default async function LeadDetailPage({
               <Info
                 icon={<CircleDollarSign size={16} />}
                 label="Potential value"
-                value={
-                  lead.potentialValue != null && lead.potentialCurrency
-                    ? formatMoney(
-                        lead.potentialValue,
-
-                        lead.potentialCurrency,
-                      )
-                    : lead.value != null && lead.currency
-                      ? formatMoney(
-                          lead.value,
-
-                          lead.currency,
-                        )
-                      : "—"
-                }
+                value={potentialValueLabel}
               />
             </div>
 
@@ -798,6 +835,46 @@ export default async function LeadDetailPage({
             </div>
           </div>
 
+          <div className="card-pad" id="schedule-follow-up">
+            <div className="eyebrow">Next action</div>
+
+            <div className="section-title mt-1">Schedule follow-up</div>
+
+            <form action={followUpAction} className="mt-4 space-y-3">
+              <input
+                className="input"
+                name="title"
+                required
+                placeholder="e.g. Check deposit payment"
+              />
+
+              <input
+                className="input"
+                name="due_at"
+                type="datetime-local"
+                required
+              />
+
+              <textarea
+                className="input min-h-20 resize-y"
+                name="description"
+                placeholder="Optional note"
+              />
+
+              <button className="btn-primary w-full" type="submit">
+                <CalendarClock size={15} />
+                Create follow-up
+              </button>
+            </form>
+
+            {lead.nextFollowupAt && (
+              <div className={`mt-3 text-xs ${followUpOverdue ? "font-semibold text-rose-600" : "text-slate-400"}`}>
+                Current next follow-up: {formatDateTime(lead.nextFollowupAt)}
+                {followUpOverdue ? " · Overdue" : ""}
+              </div>
+            )}
+          </div>
+
           <div className="card-pad">
             <div className="eyebrow">Admissions activity</div>
 
@@ -937,45 +1014,6 @@ export default async function LeadDetailPage({
             </form>
           </div>
 
-          <div className="card-pad">
-            <div className="eyebrow">Next action</div>
-
-            <div className="section-title mt-1">Schedule follow-up</div>
-
-            <form action={followUpAction} className="mt-4 space-y-3">
-              <input
-                className="input"
-                name="title"
-                required
-                placeholder="e.g. Check deposit payment"
-              />
-
-              <input
-                className="input"
-                name="due_at"
-                type="datetime-local"
-                required
-              />
-
-              <textarea
-                className="input min-h-20 resize-y"
-                name="description"
-                placeholder="Optional note"
-              />
-
-              <button className="btn-primary w-full" type="submit">
-                <CalendarClock size={15} />
-                Create follow-up
-              </button>
-            </form>
-
-            {lead.nextFollowupAt && (
-              <div className="mt-3 text-xs text-slate-400">
-                Current next follow-up: {formatDateTime(lead.nextFollowupAt)}
-              </div>
-            )}
-          </div>
-
           <div className="rounded-2xl bg-brand p-5 text-white shadow-card">
             <div className="text-xs font-bold uppercase tracking-[.14em] text-white/60">
               Agent layer later
@@ -999,6 +1037,36 @@ export default async function LeadDetailPage({
         </aside>
       </div>
     </>
+  );
+}
+
+function ActionSignal({
+  label,
+  value,
+  children,
+  note,
+  emphasis,
+}: {
+  label: string;
+  value?: string;
+  children?: React.ReactNode;
+  note?: string;
+  emphasis?: "danger";
+}) {
+  return (
+    <div className="rounded-xl border border-line bg-surface-soft px-3.5 py-3">
+      <div className="text-[11px] font-semibold uppercase tracking-[.1em] text-copy-subtle">
+        {label}
+      </div>
+      <div
+        className={`mt-2 min-h-5 text-sm font-semibold ${
+          emphasis === "danger" ? "text-rose-600" : "text-copy-strong"
+        }`}
+      >
+        {children ?? value ?? "—"}
+      </div>
+      {note ? <div className="mt-1 text-[11px] font-semibold text-rose-600">{note}</div> : null}
+    </div>
   );
 }
 
@@ -1198,6 +1266,16 @@ function formatContactDuration(seconds: number) {
   const remainingSeconds = seconds % 60;
 
   return remainingSeconds ? `${minutes}m ${remainingSeconds}s` : `${minutes}m`;
+}
+
+function isOverdueDate(value?: string) {
+  if (!value) {
+    return false;
+  }
+
+  const timestamp = new Date(value).getTime();
+
+  return Number.isFinite(timestamp) && timestamp < Date.now();
 }
 
 function istDateTimeLocal(date: Date) {
