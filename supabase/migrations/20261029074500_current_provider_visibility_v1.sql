@@ -5,7 +5,7 @@
 create or replace function public.get_current_provider_visibility_v1()
 returns jsonb
 language plpgsql
-security definer
+security invoker
 set search_path = public, auth, pg_temp
 as $function$
 declare
