@@ -25,7 +25,7 @@ import { ConversationTeamControls } from "@/components/conversation-team-control
 import { ConversationWorkspaceShell } from "@/components/conversation-workspace-shell";
 import { ConversationsRealtime } from "@/components/conversations-realtime";
 import { ConversationsSidebar } from "@/components/conversations-sidebar";
-import { StageBadge } from "@/components/ui";
+import { Notice, StageBadge } from "@/components/ui";
 import { WhatsAppTemplateComposer } from "@/components/whatsapp-template-composer";
 import { getConversationsWorkspace } from "@/lib/conversations-data";
 import { getCourses, isMockMode } from "@/lib/data";
@@ -482,16 +482,8 @@ export default async function ConversationsPage({
         </div>
       </section>
 
-      {query.error ? (
-        <div className="rounded-ui border border-red-100 bg-red-50 px-3 py-2.5 text-[13px] font-medium text-red-700 dark:border-red-900/40 dark:bg-red-950/15 dark:text-red-300">
-          {query.error}
-        </div>
-      ) : null}
-      {noticeText ? (
-        <div className="rounded-ui border border-emerald-100 bg-emerald-50 px-3 py-2.5 text-[13px] font-medium text-emerald-700 dark:border-emerald-900/40 dark:bg-emerald-950/15 dark:text-emerald-300">
-          {noticeText}
-        </div>
-      ) : null}
+      {query.error ? <Notice tone="error">{query.error}</Notice> : null}
+      {noticeText ? <Notice tone="success">{noticeText}</Notice> : null}
 
       <ConversationWorkspaceShell
         inbox={inbox}
