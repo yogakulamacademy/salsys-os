@@ -66,8 +66,6 @@ begin
   v_attachment_title := nullif(btrim(coalesce(v_event.payload #>> '{message,attachments,0,payload,title}', '')), '');
   v_generic_elements := v_event.payload #> '{message,attachments,0,payload,generic,elements}';
 
-  -- Story replies already carry the user's exact text. Preserve it and add
-  -- only a small contextual marker so agents know what the reply refers to.
   if v_message_type = 'story_reply' and v_effective_body is not null then
     v_effective_body := v_effective_body || E'\n\n↳ Replied to your Instagram story';
   end if;
@@ -243,9 +241,12 @@ from public.instagram_crm_message_links l
 join public.raw_events r
   on r.organization_id = l.organization_id
  and r.id = l.raw_event_id
+join public.conversations c
+  on c.organization_id = l.organization_id
+ and c.id = l.conversation_id
 where m.organization_id = l.organization_id
   and m.external_message_id = l.external_message_id
-  and m.channel = 'instagram'
+  and c.channel = 'instagram'
   and m.body like '[Instagram % message]'
   and r.source_event_type in (
     'message:ig_reel',
