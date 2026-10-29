@@ -121,6 +121,9 @@ jobs:
       - name: Verify Person Journey Single RPC
         run: npm run verify:person-journey-single-rpc
 
+      - name: Verify WhatsApp Canonical Health Sync
+        run: npm run verify:whatsapp-health-canonical-sync
+
       - name: Typecheck
         run: npm run typecheck
 
