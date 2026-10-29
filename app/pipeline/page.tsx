@@ -18,7 +18,7 @@ import {
   PipelineInsights,
   type PipelineAgingPoint,
 } from "@/components/pipeline-insights";
-import { PageHeader } from "@/components/ui";
+import { Notice, PageHeader } from "@/components/ui";
 import { getPipelineSnapshot } from "@/lib/pipeline-data";
 
 const activeStages = [
@@ -99,11 +99,11 @@ export default async function PipelinePage() {
         }
       />
 
-      {snapshot.warning && (
-        <div className="pipeline-warning mb-4">
-          Pipeline loaded using the fallback read path: {snapshot.warning}
-        </div>
-      )}
+      {snapshot.warning ? (
+        <Notice tone="warning" title="Pipeline loaded with a fallback path" className="mb-4">
+          {snapshot.warning}
+        </Notice>
+      ) : null}
 
       <section className="pipeline-primary-metrics">
         <PipelineMetricCard
@@ -179,7 +179,7 @@ export default async function PipelinePage() {
             <div>
               <div className="eyebrow">Needs attention</div>
               <div className="section-title mt-1">Most stuck leads</div>
-              <p className="mt-1 text-xs leading-5 text-slate-400">
+              <p className="mt-1 text-xs leading-5 text-copy-subtle">
                 Leads furthest beyond the configured aging threshold for their
                 current stage.
               </p>
@@ -230,7 +230,7 @@ export default async function PipelinePage() {
                   <LeadInspectorButton
                     leadId={lead.lead_id}
                     label="Inspect"
-                    className="inline-flex h-8 items-center gap-1.5 rounded-md border border-slate-200 bg-white px-2.5 text-[11px] font-semibold text-slate-600 transition hover:border-emerald-200 hover:bg-emerald-50 hover:text-emerald-700"
+                    className="inline-flex h-8 items-center gap-1.5 rounded-md border border-line bg-surface px-2.5 text-[11px] font-semibold text-copy-muted transition hover:border-line-strong hover:bg-surface-soft hover:text-brand-700"
                   />
                   <Link
                     href={`/leads/${lead.lead_id}`}
