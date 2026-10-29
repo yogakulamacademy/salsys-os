@@ -1,5 +1,13 @@
-import { ReactNode } from 'react';
-import { ArrowDownRight, ArrowUpRight, Minus } from 'lucide-react';
+import type { ReactNode } from 'react';
+import {
+  AlertCircle,
+  AlertTriangle,
+  ArrowDownRight,
+  ArrowUpRight,
+  CheckCircle2,
+  Info,
+  Minus,
+} from 'lucide-react';
 import { Channel, IntentLevel, PipelineStage } from '@/types/crm';
 
 export function PageHeader({ eyebrow, title, description, actions }: { eyebrow?: string; title: string; description?: string; actions?: ReactNode }) {
@@ -38,6 +46,68 @@ export function StatCard({ label, value, delta, note, icon }: { label: string; v
           {note && <span className="text-copy-subtle">{note}</span>}
         </div>
       )}
+    </div>
+  );
+}
+
+type NoticeTone = 'success' | 'warning' | 'error' | 'info';
+
+const noticeStyles: Record<NoticeTone, { container: string; icon: string }> = {
+  success: {
+    container: 'border-emerald-200 bg-emerald-50 text-emerald-800 dark:border-emerald-900/60 dark:bg-emerald-950/25 dark:text-emerald-200',
+    icon: 'text-emerald-600 dark:text-emerald-300',
+  },
+  warning: {
+    container: 'border-amber-200 bg-amber-50 text-amber-800 dark:border-amber-900/60 dark:bg-amber-950/25 dark:text-amber-200',
+    icon: 'text-amber-600 dark:text-amber-300',
+  },
+  error: {
+    container: 'border-rose-200 bg-rose-50 text-rose-800 dark:border-rose-900/60 dark:bg-rose-950/25 dark:text-rose-200',
+    icon: 'text-rose-600 dark:text-rose-300',
+  },
+  info: {
+    container: 'border-sky-200 bg-sky-50 text-sky-800 dark:border-sky-900/60 dark:bg-sky-950/25 dark:text-sky-200',
+    icon: 'text-sky-600 dark:text-sky-300',
+  },
+};
+
+const noticeIcons: Record<NoticeTone, ReactNode> = {
+  success: <CheckCircle2 size={17} />,
+  warning: <AlertTriangle size={17} />,
+  error: <AlertCircle size={17} />,
+  info: <Info size={17} />,
+};
+
+export function Notice({
+  tone = 'info',
+  title,
+  children,
+  action,
+  className = '',
+}: {
+  tone?: NoticeTone;
+  title?: string;
+  children: ReactNode;
+  action?: ReactNode;
+  className?: string;
+}) {
+  const styles = noticeStyles[tone];
+
+  return (
+    <div
+      role={tone === 'error' ? 'alert' : 'status'}
+      className={`flex items-start gap-3 rounded-ui border px-4 py-3 text-sm ${styles.container} ${className}`}
+    >
+      <span className={`mt-0.5 shrink-0 ${styles.icon}`} aria-hidden="true">
+        {noticeIcons[tone]}
+      </span>
+      <div className="min-w-0 flex-1">
+        {title ? <div className="font-semibold">{title}</div> : null}
+        <div className={`${title ? 'mt-0.5 text-xs leading-5 opacity-90' : 'text-xs font-semibold leading-5'}`}>
+          {children}
+        </div>
+      </div>
+      {action ? <div className="shrink-0">{action}</div> : null}
     </div>
   );
 }
@@ -93,11 +163,29 @@ export function ProgressBar({ value, max = 100 }: { value: number; max?: number 
   return <div className="h-2 overflow-hidden rounded-full bg-surface-muted"><div className="h-full rounded-full bg-brand-700" style={{ width: `${width}%` }} /></div>;
 }
 
-export function EmptyState({ title, description }: { title: string; description: string }) {
+export function EmptyState({
+  title,
+  description,
+  icon,
+  action,
+  compact = false,
+}: {
+  title: string;
+  description: string;
+  icon?: ReactNode;
+  action?: ReactNode;
+  compact?: boolean;
+}) {
   return (
-    <div className="card-pad text-center">
+    <div className={`card-pad text-center ${compact ? '!p-5' : ''}`}>
+      {icon ? (
+        <div className="mx-auto mb-3 grid h-10 w-10 place-items-center rounded-xl bg-surface-muted text-copy-subtle">
+          {icon}
+        </div>
+      ) : null}
       <div className="text-sm font-semibold text-copy-strong">{title}</div>
-      <div className="mt-1 text-sm text-copy-muted">{description}</div>
+      <div className="mx-auto mt-1 max-w-md text-sm leading-5 text-copy-muted">{description}</div>
+      {action ? <div className="mt-4 flex justify-center">{action}</div> : null}
     </div>
   );
 }
