@@ -10,7 +10,7 @@ import {
   UsersRound,
 } from "lucide-react";
 
-import { PageHeader } from "@/components/ui";
+import { EmptyState, Notice, PageHeader } from "@/components/ui";
 import { getAdmissionsSnapshot } from "@/lib/admissions-data";
 
 type PriorityRow = {
@@ -186,17 +186,9 @@ export default async function AdmissionsDeskPage({
         }
       />
 
-      {error ? (
-        <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-700">
-          {error}
-        </div>
-      ) : null}
+      {error ? <Notice tone="error">{error}</Notice> : null}
 
-      {notice ? (
-        <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-700">
-          Admissions updated.
-        </div>
-      ) : null}
+      {notice ? <Notice tone="success">Admissions updated.</Notice> : null}
 
       <div className="flex items-center gap-1 rounded-xl border border-slate-200 bg-white p-1 dark:border-slate-800 dark:bg-slate-950">
         <ViewTab href={admissionsHref({ view: "queue", owner: ownerFilter, band })} active={view === "queue"} label="Priority queue" />
@@ -266,9 +258,12 @@ export default async function AdmissionsDeskPage({
                 ))}
               </div>
             ) : (
-              <div className="px-5 py-10">
-                <div className="text-sm font-semibold text-slate-800 dark:text-slate-100">You&apos;re caught up</div>
-                <div className="mt-1 text-sm text-slate-500">No matching leads need action in this queue. Try changing the filters.</div>
+              <div className="px-5 py-5">
+                <EmptyState
+                  title="You're caught up"
+                  description="No matching leads need action in this queue. Try changing the filters."
+                  compact
+                />
               </div>
             )}
           </section>
@@ -556,12 +551,7 @@ function FilterTab({ href, active, label }: { href: string; active: boolean; lab
 }
 
 function SimpleEmpty({ title, detail }: { title: string; detail: string }) {
-  return (
-    <div className="px-5 py-9">
-      <div className="text-sm font-semibold text-slate-800 dark:text-slate-100">{title}</div>
-      <div className="mt-1 text-sm text-slate-500">{detail}</div>
-    </div>
-  );
+  return <EmptyState title={title} description={detail} compact />;
 }
 
 function admissionsHref({
