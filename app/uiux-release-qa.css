@@ -179,3 +179,38 @@
     max-width: calc(100vw - 24px) !important;
   }
 }
+
+/* Small-screen readability and keyboard focus. Legacy builder microcopy was
+   commonly 9–10px and several compact controls were hard to acquire by touch. */
+.topbar-notification-menu > summary,
+.topbar-profile-menu > summary {
+  min-width: 40px;
+  min-height: 40px;
+}
+
+.topbar-notification-menu > summary:focus-visible,
+.topbar-profile-menu > summary:focus-visible {
+  outline: 2px solid rgba(87, 67, 197, .48);
+  outline-offset: 2px;
+}
+
+@media (max-width: 767px) {
+  [data-motion-route^='/automation'] [class*='text-[9px]'],
+  [data-motion-route^='/onboarding'] [class*='text-[9px]'] {
+    font-size: 11px !important;
+    line-height: 1.4 !important;
+  }
+
+  [data-motion-route^='/automation'] [class*='text-[10px]'],
+  [data-motion-route^='/onboarding'] [class*='text-[10px]'] {
+    font-size: 11px !important;
+    line-height: 1.45 !important;
+  }
+
+  [data-motion-route^='/automation'] button[class*='text-[10px]'],
+  [data-motion-route^='/automation'] summary[class*='text-[10px]'],
+  [data-motion-route^='/onboarding'] button[class*='text-[10px]'],
+  [data-motion-route^='/onboarding'] summary[class*='text-[10px]'] {
+    min-height: 36px;
+  }
+}
