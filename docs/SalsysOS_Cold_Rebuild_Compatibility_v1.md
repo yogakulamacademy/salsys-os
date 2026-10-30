@@ -55,6 +55,25 @@ For a schema-only cold rebuild from zero:
 5. Verify that the later Sales authorization migration replaces `can_access_lead()` with the workspace-aware implementation.
 6. Run the normal security/RLS regression contracts before treating the rebuilt environment as valid.
 
+## PH-5.2B.1c replay evidence
+
+A disposable Supabase branch was created on 2026-10-30 for the isolated cold-rebuild rehearsal. The branch started from migrations `001` through `006`, with production data excluded.
+
+The rehearsal pre-seeded only the seven proven historical prerequisites: the four website-sync columns above plus the three legacy authorization helpers. Supabase then replayed the production migration chain itself.
+
+Observed result:
+
+- migrations `007` through `015` applied successfully;
+- migration `016_journey_workspace_hardening` failed while creating `v_contact_intelligence_touch_journey`;
+- PostgreSQL error: `42703 column e.organization_id does not exist`;
+- the failing statement references `public.enrollments e` with `e.organization_id = l_1.organization_id`;
+- current production defines `public.enrollments.organization_id` as `uuid NOT NULL` with no default;
+- therefore `016` exposes the next independent historical schema-drift boundary after the repaired `007` path.
+
+This result proves that the PH-5.2B.1b/1c compatibility work is sufficient to cross the original `006 -> 007` boundary and continue through the raw-event foundation up to migration `015`. It does **not** yet prove a complete zero-to-current migration replay.
+
+The disposable branch was deleted immediately after evidence capture.
+
 ## Safety boundary
 
 `supabase/recovery/007_legacy_authorization_baseline.sql` is a **cold-recovery bootstrap**, not a normal production migration.
