@@ -11,20 +11,20 @@ export function OperationsJourneyBar() {
             Move from operating capacity and availability into program, batch, enrollment and admissions execution without changing the underlying records.
           </p>
         </div>
-        <div className="flex flex-wrap gap-2">
-          <Link href="/operations" className="btn-secondary">
+        <div className="-mx-1 flex snap-x snap-mandatory gap-2 overflow-x-auto px-1 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden sm:mx-0 sm:flex-wrap sm:overflow-visible sm:px-0 sm:pb-0">
+          <Link href="/operations" className="btn-secondary shrink-0 snap-start">
             <LayoutDashboard size={14} /> Overview
           </Link>
-          <Link href="/availability" className="btn-secondary">
+          <Link href="/availability" className="btn-secondary shrink-0 snap-start">
             <ShieldCheck size={14} /> Availability
           </Link>
-          <Link href="/course-management" className="btn-secondary">
+          <Link href="/course-management" className="btn-secondary shrink-0 snap-start">
             <BookOpen size={14} /> Programs & Batches
           </Link>
-          <Link href="/enrollments" className="btn-secondary">
+          <Link href="/enrollments" className="btn-secondary shrink-0 snap-start">
             <FileCheck2 size={14} /> Enrollments
           </Link>
-          <Link href="/admissions" className="btn-secondary">
+          <Link href="/admissions" className="btn-secondary shrink-0 snap-start">
             <UsersRound size={14} /> Admissions
           </Link>
         </div>
