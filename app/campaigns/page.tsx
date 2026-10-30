@@ -1,4 +1,5 @@
-import { BarChart3 } from "lucide-react";
+import Link from "next/link";
+import { BarChart3, CircleDollarSign, GitBranch, Target } from "lucide-react";
 
 import { CampaignsIntelligenceWorkspace } from "@/components/campaigns-intelligence-workspace";
 import type { CampaignWorkspaceFilters } from "@/components/campaigns-workspace";
@@ -27,9 +28,22 @@ export default async function CampaignsPage({ searchParams }: CampaignsPageProps
   return (
     <div className="space-y-4">
       <PageHeader
-        eyebrow="Paid acquisition"
+        eyebrow="Marketing · Paid acquisition"
         title="Campaign Performance"
         description="See where spend creates qualified demand, where conversion breaks down, and which campaigns reach CRM revenue."
+        actions={
+          <div className="flex flex-wrap gap-2">
+            <Link href="/funnel" className="btn-secondary">
+              <GitBranch size={15} /> Funnel
+            </Link>
+            <Link href="/attribution" className="btn-secondary">
+              <Target size={15} /> Attribution
+            </Link>
+            <Link href="/revenue" className="btn-primary">
+              <CircleDollarSign size={15} /> Revenue
+            </Link>
+          </div>
+        }
       />
 
       {(workspace.googleError || workspace.metaError) ? (
