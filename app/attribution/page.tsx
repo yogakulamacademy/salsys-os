@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ArrowRight, CircleDollarSign, GitBranch, Sparkles, Target } from "lucide-react";
+import { ArrowRight, CircleDollarSign, GitBranch, Megaphone, Sparkles, Target } from "lucide-react";
 
 import { AttributionIntelligenceExplorer } from "@/components/attribution-intelligence-explorer";
 import type { AttributionWorkspaceFilters } from "@/components/attribution-workspace";
@@ -41,6 +41,9 @@ export default async function AttributionPage({ searchParams }: AttributionPageP
           <div className="flex flex-wrap gap-2">
             <Link href="/campaigns" className="btn-secondary">
               <Target size={15} /> Campaigns
+            </Link>
+            <Link href="/paid-media-leads" className="btn-secondary">
+              <Megaphone size={15} /> Acquisition
             </Link>
             <Link href="/funnel" className="btn-secondary">
               <GitBranch size={15} /> Funnel
@@ -102,7 +105,7 @@ function InvestigationContext({ query }: { query: string }) {
         </div>
         <div className="flex flex-wrap gap-2">
           <Link href={`/campaigns?q=${encoded}`} className="btn-secondary">Campaigns</Link>
-          <Link href="/paid-media-leads" className="btn-secondary">Generated leads</Link>
+          <Link href={`/paid-media-leads?q=${encoded}`} className="btn-secondary">Acquisition leads</Link>
           <Link href={`/revenue?investigation=1&source=${encoded}&from=attribution`} className="btn-secondary">Revenue</Link>
           <Link href="/attribution" className="btn-secondary">Clear context</Link>
         </div>
