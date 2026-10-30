@@ -43,7 +43,7 @@
     "verify:admissions-rule-key-ambiguity": "node scripts/verify-admissions-rule-key-ambiguity.mjs",
     "verify:browser-form-discovery-dedupe": "node scripts/verify-browser-form-discovery-dedupe.mjs",
     "verify:ph3-operational-readiness-closeout": "node scripts/verify-ph3-operational-readiness-closeout.mjs",
-    "verify:recovery-readiness": "node scripts/verify-recovery-readiness.mjs && node scripts/verify-recovery-readiness-1g.mjs && node scripts/verify-recovery-readiness-1h.mjs && node scripts/verify-recovery-readiness-1i.mjs && node scripts/verify-recovery-readiness-1j.mjs"
+    "verify:recovery-readiness": "node scripts/verify-recovery-readiness.mjs && node scripts/verify-recovery-readiness-1g.mjs && node scripts/verify-recovery-readiness-1h.mjs && node scripts/verify-recovery-readiness-1i.mjs && node scripts/verify-recovery-readiness-1j.mjs && node scripts/verify-recovery-readiness-1k.mjs"
   },
   "dependencies": {
     "@google-analytics/data": "^7.2.0",
