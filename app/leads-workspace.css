@@ -1,0 +1,152 @@
+/* ========================================================================== 
+   SalsysOS Phase 6D — Leads workspace + Preview Drawer
+   Presentation layer only. Existing filters, read models and inspector APIs remain.
+   ========================================================================== */
+
+.leads-workspace-v2 {
+  --leads-border: var(--salsys-border, #e6e3ef);
+  --leads-border-strong: var(--salsys-border-strong, #d8d4e3);
+  --leads-surface: var(--salsys-surface, #fff);
+  --leads-soft: var(--salsys-primary-softer, #f3f0fb);
+  --leads-selected: var(--salsys-primary-soft, #ede9fa);
+  --leads-primary: var(--salsys-primary, #5743c5);
+  --leads-primary-hover: var(--salsys-primary-hover, #4632aa);
+  --leads-text: var(--salsys-text-primary, #24213c);
+  --leads-muted: var(--salsys-text-secondary, #67627a);
+  --leads-faint: var(--salsys-text-muted, #9691a6);
+}
+
+.leads-workspace-v2 .page-header .eyebrow {
+  color: var(--leads-primary);
+}
+
+.leads-workspace-v2 .page-header h1 {
+  color: var(--leads-text);
+}
+
+.leads-workspace-v2 .page-header p {
+  max-width: 760px;
+  color: var(--leads-muted);
+}
+
+.leads-workspace-v2 > section,
+.leads-workspace-v2 [class*="rounded-panel"] {
+  border-color: var(--leads-border) !important;
+  box-shadow: none !important;
+}
+
+.leads-workspace-v2 table thead tr {
+  background: #fbfafd !important;
+}
+
+.leads-workspace-v2 table th {
+  color: var(--leads-faint) !important;
+  font-weight: 700 !important;
+  letter-spacing: .02em;
+}
+
+.leads-workspace-v2 table tbody tr {
+  border-color: var(--leads-border) !important;
+}
+
+.leads-workspace-v2 table tbody tr:hover,
+.leads-workspace-v2 table tbody tr:focus {
+  background: var(--leads-soft) !important;
+}
+
+.leads-workspace-v2 table tbody tr.bg-brand-50\/70 {
+  background: var(--leads-selected) !important;
+}
+
+.leads-workspace-v2 input:focus,
+.leads-workspace-v2 select:focus {
+  border-color: var(--leads-primary) !important;
+  box-shadow: 0 0 0 3px rgba(87, 67, 197, .10) !important;
+}
+
+.leads-workspace-v2 .bg-brand-50 {
+  background: var(--leads-selected) !important;
+}
+
+.leads-workspace-v2 .text-brand-700,
+.leads-workspace-v2 .hover\:text-brand-700:hover {
+  color: var(--leads-primary) !important;
+}
+
+.leads-workspace-v2 .bg-brand-700 {
+  background: var(--leads-primary) !important;
+}
+
+.leads-workspace-v2 .bg-brand-700:hover,
+.leads-workspace-v2 .hover\:bg-brand-800:hover {
+  background: var(--leads-primary-hover) !important;
+}
+
+.leads-workspace-v2 [class*="shadow-panel"],
+.leads-workspace-v2 [class*="shadow-xs"] {
+  box-shadow: 0 10px 30px rgba(36, 33, 60, .08) !important;
+}
+
+/* Preview Drawer --------------------------------------------------------- */
+[aria-label="Lead Inspector"] > button[aria-label="Close Lead Inspector"] {
+  background: rgba(33, 27, 58, .24) !important;
+  backdrop-filter: blur(2px);
+}
+
+[aria-label="Lead Inspector"] aside {
+  max-width: 640px !important;
+  border-left-color: var(--salsys-border, #e6e3ef) !important;
+  background: var(--salsys-canvas, #f8f7fc) !important;
+  box-shadow: -22px 0 58px rgba(36, 33, 60, .14) !important;
+}
+
+[aria-label="Lead Inspector"] header {
+  border-bottom-color: var(--salsys-border, #e6e3ef) !important;
+  background: var(--salsys-surface, #fff) !important;
+}
+
+[aria-label="Lead Inspector"] header h2 {
+  color: var(--salsys-text-primary, #24213c) !important;
+}
+
+[aria-label="Lead Inspector"] header > div > span:first-child {
+  background: var(--salsys-primary-soft, #ede9fa) !important;
+  color: var(--salsys-primary, #5743c5) !important;
+}
+
+[aria-label="Lead Inspector"] header button:hover {
+  background: var(--salsys-primary-softer, #f3f0fb) !important;
+  color: var(--salsys-primary, #5743c5) !important;
+}
+
+[aria-label="Lead Inspector"] a[href^="/conversations"] {
+  border-color: var(--salsys-border, #e6e3ef) !important;
+  color: var(--salsys-primary, #5743c5) !important;
+}
+
+[aria-label="Lead Inspector"] a[href^="/conversations"]:hover {
+  background: var(--salsys-primary-softer, #f3f0fb) !important;
+}
+
+[aria-label="Lead Inspector"] a[href^="/leads/"] {
+  color: var(--salsys-primary, #5743c5) !important;
+}
+
+@media (max-width: 767px) {
+  [aria-label="Lead Inspector"] aside {
+    max-width: none !important;
+    width: 100% !important;
+  }
+
+  .leads-workspace-v2 table {
+    min-width: 980px !important;
+  }
+}
+
+html.dark [aria-label="Lead Inspector"] aside {
+  background: var(--salsys-canvas, #15131d) !important;
+}
+
+html.dark [aria-label="Lead Inspector"] header {
+  background: var(--salsys-surface, #1c1926) !important;
+}
