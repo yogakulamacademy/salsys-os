@@ -141,6 +141,10 @@
   .leads-workspace-v2 table {
     min-width: 980px !important;
   }
+
+  .leads-workspace-v2 table tbody button[aria-label^="Inspect "] {
+    opacity: 1 !important;
+  }
 }
 
 html.dark [aria-label="Lead Inspector"] aside {
