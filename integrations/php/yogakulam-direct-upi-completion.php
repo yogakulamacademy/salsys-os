@@ -49,6 +49,9 @@ if (!function_exists('trackSalsysDirectUpiCompleted')) {
         ];
 
         $paymentPlan = strtolower(trim((string)($payment['payment_plan'] ?? '')));
+        $paymentKind = in_array($paymentPlan, ['deposit', 'balance', 'full'], true)
+            ? $paymentPlan
+            : 'other';
         $currency = strtoupper(trim((string)($payment['currency'] ?? $booking['currency'] ?? '')));
         $businessAmount = (float)($payment['subtotal'] ?? 0);
 
@@ -59,7 +62,7 @@ if (!function_exists('trackSalsysDirectUpiCompleted')) {
                 $customer,
                 [
                     'provider' => 'direct_upi',
-                    'payment_kind' => $paymentPlan === 'deposit' ? 'deposit' : 'other',
+                    'payment_kind' => $paymentKind,
                     'amount' => $businessAmount,
                     'currency' => $currency,
                 ],
