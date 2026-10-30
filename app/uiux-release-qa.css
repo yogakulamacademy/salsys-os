@@ -1,0 +1,142 @@
+/* ========================================================================== 
+   SalsysOS final UI/UX QA — legacy visual normalization
+   Route-scoped presentation overrides only. No behavior or data changes.
+   ========================================================================== */
+
+/* Automation + onboarding still contain an older green visual vocabulary in
+   arbitrary Tailwind colors. Normalize the common tokens to Violet Cloud while
+   leaving semantic success/warning/error colors intact. */
+
+[data-motion-route^='/automation'],
+[data-motion-route^='/onboarding'] {
+  --qa-primary: var(--salsys-primary, #5743c5);
+  --qa-primary-hover: var(--salsys-primary-hover, #4632aa);
+  --qa-primary-soft: var(--salsys-primary-soft, #ede9fa);
+  --qa-primary-softer: var(--salsys-primary-softer, #f3f0fb);
+  --qa-deep: var(--salsys-text-primary, #24213c);
+  --qa-muted: var(--salsys-text-secondary, #67627a);
+  --qa-faint: var(--salsys-text-muted, #9691a6);
+  --qa-border: var(--salsys-border, #e6e3ef);
+  --qa-border-strong: var(--salsys-border-strong, #d8d4e3);
+  --qa-surface: var(--salsys-surface, #fff);
+  --qa-canvas: var(--salsys-canvas, #f8f7fc);
+}
+
+/* Deep legacy green text -> product text / violet accent. */
+[data-motion-route^='/automation'] [class*='text-[#153e32]'],
+[data-motion-route^='/automation'] [class*='text-[#173b30]'],
+[data-motion-route^='/automation'] [class*='text-[#163e33]'],
+[data-motion-route^='/automation'] [class*='text-[#163f35]'],
+[data-motion-route^='/automation'] [class*='text-[#183f33]'],
+[data-motion-route^='/automation'] [class*='text-[#294839]'],
+[data-motion-route^='/onboarding'] [class*='text-[#153e32]'],
+[data-motion-route^='/onboarding'] [class*='text-[#173d32]'],
+[data-motion-route^='/onboarding'] [class*='text-[#183f33]'],
+[data-motion-route^='/onboarding'] [class*='text-[#113f31]'] {
+  color: var(--qa-deep) !important;
+}
+
+[data-motion-route^='/automation'] [class*='text-[#236950]'],
+[data-motion-route^='/automation'] [class*='text-[#23654f]'],
+[data-motion-route^='/automation'] [class*='text-[#216551]'],
+[data-motion-route^='/automation'] [class*='text-[#1d604c]'],
+[data-motion-route^='/automation'] [class*='text-[#347e60]'],
+[data-motion-route^='/onboarding'] [class*='text-[#23654f]'],
+[data-motion-route^='/onboarding'] [class*='text-[#1f654e]'],
+[data-motion-route^='/onboarding'] [class*='text-[#185640]'],
+[data-motion-route^='/onboarding'] [class*='text-[#174d3d]'],
+[data-motion-route^='/onboarding'] [class*='text-[#286c53]'],
+[data-motion-route^='/onboarding'] [class*='text-[#276b51]'] {
+  color: var(--qa-primary) !important;
+}
+
+/* Muted green copy -> neutral product copy. */
+[data-motion-route^='/automation'] [class*='text-[#6d7c76]'],
+[data-motion-route^='/automation'] [class*='text-[#779183]'],
+[data-motion-route^='/automation'] [class*='text-[#435d4e]'],
+[data-motion-route^='/automation'] [class*='text-[#698176]'],
+[data-motion-route^='/automation'] [class*='text-[#5e7a6b]'],
+[data-motion-route^='/automation'] [class*='text-[#88978e]'],
+[data-motion-route^='/automation'] [class*='text-[#71877b]'],
+[data-motion-route^='/automation'] [class*='text-[#657d6d]'],
+[data-motion-route^='/onboarding'] [class*='text-[#72877c]'],
+[data-motion-route^='/onboarding'] [class*='text-[#779184]'],
+[data-motion-route^='/onboarding'] [class*='text-[#657c70]'],
+[data-motion-route^='/onboarding'] [class*='text-[#657b70]'],
+[data-motion-route^='/onboarding'] [class*='text-[#80958a]'],
+[data-motion-route^='/onboarding'] [class*='text-[#82958b]'],
+[data-motion-route^='/onboarding'] [class*='text-[#6d8278]'] {
+  color: var(--qa-muted) !important;
+}
+
+/* Legacy green borders -> Violet Cloud border system. */
+[data-motion-route^='/automation'] [class*='border-[#dbe7df]'],
+[data-motion-route^='/automation'] [class*='border-[#dde7e0]'],
+[data-motion-route^='/automation'] [class*='border-[#dee8e1]'],
+[data-motion-route^='/automation'] [class*='border-[#e0e9e3]'],
+[data-motion-route^='/automation'] [class*='border-[#dce7df]'],
+[data-motion-route^='/automation'] [class*='border-[#e4eae6]'],
+[data-motion-route^='/automation'] [class*='border-[#e9efeb]'],
+[data-motion-route^='/automation'] [class*='border-[#e1e9e3]'],
+[data-motion-route^='/automation'] [class*='border-[#dce6df]'],
+[data-motion-route^='/onboarding'] [class*='border-[#dce7df]'],
+[data-motion-route^='/onboarding'] [class*='border-[#dfe9e2]'],
+[data-motion-route^='/onboarding'] [class*='border-[#e2ebe5]'],
+[data-motion-route^='/onboarding'] [class*='border-[#d8e4dc]'],
+[data-motion-route^='/onboarding'] [class*='border-[#d7e4dc]'] {
+  border-color: var(--qa-border) !important;
+}
+
+/* Soft green surfaces -> Violet Cloud soft surfaces. */
+[data-motion-route^='/automation'] [class*='bg-[#f3f8f4]'],
+[data-motion-route^='/automation'] [class*='bg-[#eff6f1]'],
+[data-motion-route^='/automation'] [class*='bg-[#f8faf9]'],
+[data-motion-route^='/automation'] [class*='bg-[#f8faf8]'],
+[data-motion-route^='/automation'] [class*='bg-[#e9f5ed]'],
+[data-motion-route^='/automation'] [class*='bg-[#f4f8f5]'],
+[data-motion-route^='/automation'] [class*='bg-[#f0faf4]'],
+[data-motion-route^='/automation'] [class*='bg-[#f0f6f2]'],
+[data-motion-route^='/automation'] [class*='bg-[#eef7f1]'],
+[data-motion-route^='/automation'] [class*='bg-[#edf6f1]'],
+[data-motion-route^='/automation'] [class*='bg-[#f8fbf9]'],
+[data-motion-route^='/onboarding'] [class*='bg-[#edf7f1]'],
+[data-motion-route^='/onboarding'] [class*='bg-[#eef7f2]'],
+[data-motion-route^='/onboarding'] [class*='bg-[#f5f8f6]'],
+[data-motion-route^='/onboarding'] [class*='bg-[#fafcfb]'],
+[data-motion-route^='/onboarding'] [class*='bg-[#f7faf8]'],
+[data-motion-route^='/onboarding'] [class*='bg-[#f2faf5]'] {
+  background-color: var(--qa-primary-softer) !important;
+}
+
+/* Strong legacy green panels/buttons -> deep violet / product violet. */
+[data-motion-route^='/onboarding'] [class*='bg-[#123f33]'] {
+  background-color: var(--salsys-deep, #211b3a) !important;
+}
+
+[data-motion-route^='/automation'] [class*='bg-[#294839]'],
+[data-motion-route^='/automation'] [class*='bg-[#23654f]'],
+[data-motion-route^='/onboarding'] [class*='bg-[#1f654e]'],
+[data-motion-route^='/onboarding'] [class*='bg-[#185640]'] {
+  background-color: var(--qa-primary) !important;
+}
+
+/* Selected/focus treatment should read as the same product everywhere. */
+[data-motion-route^='/automation'] [class*='ring-[rgba(41,139,97'],
+[data-motion-route^='/automation'] [class*='ring-[rgba(38,81,56'] {
+  --tw-ring-color: rgba(87, 67, 197, .14) !important;
+}
+
+/* Mobile usability: old builder icon controls used 28px targets. Keep visual size
+   compact while giving touch users a minimum 36px hit area. */
+@media (max-width: 767px) {
+  [data-motion-route^='/automation'] button[class*='h-7'][class*='w-7'] {
+    min-width: 36px !important;
+    min-height: 36px !important;
+  }
+
+  [data-motion-route^='/automation'] button[class*='h-8'][class*='w-8'],
+  [data-motion-route^='/onboarding'] button[class*='h-8'][class*='w-8'] {
+    min-width: 40px !important;
+    min-height: 40px !important;
+  }
+}
