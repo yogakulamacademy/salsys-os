@@ -11,10 +11,12 @@ function assert(condition, message) {
 }
 
 const runbook = read('docs/SalsysOS_Database_Recovery_Runbook_v1.md');
+const coldRebuild = read('docs/SalsysOS_Cold_Rebuild_Compatibility_v1.md');
 const resilience = read('docs/SalsysOS_Resilience_Principles.md');
 const durableEvents = read('lib/tracking/durable-events.ts');
 const consumer = read('app/api/tracking/durable-events/consume/route.ts');
 const migration007 = read('supabase/migrations/007_tenant_schema_foundation.sql');
+const legacyAuthBootstrap = read('supabase/recovery/007_legacy_authorization_baseline.sql');
 const vercel = JSON.parse(read('vercel.json'));
 
 for (const [needle, label] of [
@@ -32,6 +34,17 @@ for (const [needle, label] of [
   ['admissions_auto_task_runs', 'admissions scheduler real-run evidence'],
 ]) {
   assert(runbook.includes(needle), `runbook missing ${label}.`);
+}
+
+for (const [needle, label] of [
+  ['migrations `001` through `006`', 'cold-rebuild 001-006 boundary'],
+  ['supabase/recovery/007_legacy_authorization_baseline.sql', 'legacy authorization bootstrap reference'],
+  ['Migration `001` granted SELECT access', 'legacy CRM read evidence'],
+  ['Migration `008_identity_resolution.sql`', 'migration 008 tenant-wrapper evidence'],
+  ['later Sales authorization migration replaces `can_access_lead()`', 'later RBAC replacement evidence'],
+  ['cold-recovery bootstrap', 'bootstrap safety boundary'],
+]) {
+  assert(coldRebuild.includes(needle), `cold-rebuild evidence missing ${label}.`);
 }
 
 assert(
@@ -86,6 +99,27 @@ assert(
   'migration 007 must create course_batches.external_batch_id before the tenant-scoped batch index.',
 );
 
+for (const [needle, label] of [
+  ['create or replace function public.is_crm_admin()', 'legacy is_crm_admin bootstrap'],
+  ['p.role = \'admin\'', 'legacy admin role predicate'],
+  ['create or replace function public.can_view_lead_pii()', 'legacy PII visibility bootstrap'],
+  ['or public.is_crm_admin();', 'PII visibility admin gate'],
+  ['create or replace function public.can_access_lead(', 'legacy lead-access bootstrap'],
+  ['and public.is_crm_user()', 'legacy CRM-user read gate'],
+  ['revoke all on function public.can_access_lead(uuid)', 'lead-access public revoke'],
+  ['to authenticated, service_role;', 'explicit bootstrap execute grants'],
+  ['Do not add tenant-table dependencies here', 'pre-007 dependency safety note'],
+]) {
+  assert(legacyAuthBootstrap.includes(needle), `legacy authorization bootstrap missing ${label}.`);
+}
+
+assert(
+  !legacyAuthBootstrap.includes('workspace_role(') &&
+    !legacyAuthBootstrap.includes('organization_workspaces') &&
+    !legacyAuthBootstrap.includes('workspace_memberships'),
+  'pre-007 authorization bootstrap must not depend on later workspace-RBAC tables/functions.',
+);
+
 const durableTrigger =
   vercel.functions?.['app/api/tracking/durable-events/consume/route.ts']?.experimentalTriggers?.[0];
 
@@ -100,4 +134,4 @@ assert(
   'durable trusted-event recovery concurrency must remain capped at 5.',
 );
 
-console.log('PH-5.2 recovery runbook, resilience, and migration replay contracts verified.');
+console.log('PH-5.2 recovery runbook, resilience, schema replay, and legacy authorization bootstrap contracts verified.');
