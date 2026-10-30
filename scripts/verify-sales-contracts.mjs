@@ -20,6 +20,7 @@ const pipelineActions = read('app/pipeline/actions.ts');
 const pipelineBoard = read('components/crm/pipeline-board-studio.tsx');
 const paymentActions = read('app/actions/payments.ts');
 const paymentCard = read('components/payment-card.tsx');
+const paymentActionsClient = read('components/payment-actions-client.tsx');
 const conversationsData = read('lib/conversations-data.ts');
 const conversationsCore = read('lib/conversations-data-core.ts');
 const conversationsSidebar = read('components/conversations-sidebar.tsx');
@@ -55,8 +56,20 @@ for (const [needle, label] of [
   requireText(paymentActions, needle, label);
 }
 
-requireText(paymentCard, 'Payment verification', 'Payment card verification language');
+requireText(paymentCard, 'Customer-reported payments stay separate from verified financial truth.', 'payment claim/truth separation copy');
+requireText(paymentCard, 'PaymentActionsClient', 'dedicated payment action boundary');
 rejectText(paymentCard, 'recordPaymentAction', 'raw record-payment action exposed by Payment card');
+
+for (const [needle, label] of [
+  ['Report customer payment', 'reported-payment UI'],
+  ['Create verification task', 'payment-check task creation UI'],
+  ['Verify received payment', 'authoritative payment verification UI'],
+  ['Owner/Admin only.', 'payment verifier permission cue'],
+  ['Verify & record paid', 'verified paid action'],
+  ['does not mark the payment as paid or change the Opportunity stage', 'claim cannot create financial truth'],
+]) {
+  requireText(paymentActionsClient, needle, label);
+}
 
 for (const [needle, label] of [
   ['conversations-data-core', 'stable Lead-centric Conversations loader boundary'],
