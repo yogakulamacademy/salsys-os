@@ -1,5 +1,8 @@
 import './attribution-responsive.css';
 
-export default function AttributionLayout({ children }: Readonly<{ children: React.ReactNode }>) {
+import { requirePrivilegedWorkspaceAccess } from '@/lib/route-access';
+
+export default async function AttributionLayout({ children }: Readonly<{ children: React.ReactNode }>) {
+  await requirePrivilegedWorkspaceAccess();
   return <div className="attribution-responsive-scope">{children}</div>;
 }
