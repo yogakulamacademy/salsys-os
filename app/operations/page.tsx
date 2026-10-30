@@ -4,6 +4,7 @@ import {
   ArrowRight,
   BookOpen,
   CalendarDays,
+  CircleDollarSign,
   GraduationCap,
   ShieldCheck,
   Users,
@@ -11,14 +12,18 @@ import {
 
 import { OperationsJourneyBar } from "@/components/operations/operations-journey-bar";
 import { PageHeader } from "@/components/ui";
+import { getCommerceReadinessForCurrentWorkspace } from "@/lib/commerce-readiness-data";
 import { getCourseManagementWorkspace } from "@/lib/course-management-data";
 
 export default async function OperationsOverviewPage() {
-  const workspace = await getCourseManagementWorkspace({
-    query: "",
-    location: "all",
-    state: "all",
-  });
+  const [workspace, commerce] = await Promise.all([
+    getCourseManagementWorkspace({
+      query: "",
+      location: "all",
+      state: "all",
+    }),
+    getCommerceReadinessForCurrentWorkspace(),
+  ]);
 
   const { courses, batches, summary } = workspace;
   const activePrograms = courses.filter((course) => course.active).length;
@@ -29,6 +34,11 @@ export default async function OperationsOverviewPage() {
       return ["overbooked", "full", "near_full", "payment_pressure", "demand_exceeds_open_seats"].includes(status);
     })
     .slice(0, 6);
+
+  const commerceNeedsAttention =
+    commerce?.healthStatus === "configuration_blocked" ||
+    commerce?.healthStatus === "warning" ||
+    commerce?.healthStatus === "critical";
 
   return (
     <div className="space-y-4">
@@ -49,6 +59,10 @@ export default async function OperationsOverviewPage() {
         <div className="rounded-xl border border-amber-100 bg-amber-50 px-4 py-3 text-xs text-amber-800 dark:border-amber-900/50 dark:bg-amber-950/20 dark:text-amber-200">
           Operations is using a fallback evidence path. {workspace.degradedReason ?? "Some auxiliary intelligence may be reduced."}
         </div>
+      ) : null}
+
+      {commerceNeedsAttention && commerce ? (
+        <CommercePipelineNotice commerce={commerce} />
       ) : null}
 
       <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-6">
@@ -110,6 +124,50 @@ export default async function OperationsOverviewPage() {
   );
 }
 
+function CommercePipelineNotice({
+  commerce,
+}: {
+  commerce: NonNullable<Awaited<ReturnType<typeof getCommerceReadinessForCurrentWorkspace>>>;
+}) {
+  const details = commerce.details;
+  const bookings = safeNumber(details.booking_completed_30d);
+  const paymentStarts = safeNumber(details.payment_started_30d);
+  const verifiedPayments = safeNumber(details.payment_completed_30d);
+  const enrollments = safeNumber(details.enrollment_completed_30d);
+  const blocker =
+    typeof details.blocker_message === "string"
+      ? details.blocker_message
+      : "The authoritative commerce event chain needs review.";
+
+  return (
+    <section className="rounded-2xl border border-orange-200 bg-orange-50/70 px-4 py-4 text-orange-950">
+      <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+        <div className="flex min-w-0 gap-3">
+          <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-orange-100 text-orange-700">
+            <CircleDollarSign size={17} />
+          </span>
+          <div className="min-w-0">
+            <div className="text-sm font-semibold">Commerce event pipeline needs attention</div>
+            <p className="mt-1 max-w-4xl text-xs leading-5 text-orange-800">{blocker}</p>
+            <div className="mt-3 flex flex-wrap gap-2 text-[10px] font-semibold">
+              <span className="rounded-full bg-white/80 px-2.5 py-1">{bookings} bookings</span>
+              <span className="rounded-full bg-white/80 px-2.5 py-1">{paymentStarts} payment starts</span>
+              <span className="rounded-full bg-white/80 px-2.5 py-1">{verifiedPayments} verified payments</span>
+              <span className="rounded-full bg-white/80 px-2.5 py-1">{enrollments} enrollments</span>
+            </div>
+          </div>
+        </div>
+
+        {commerce.canViewSystemHealth ? (
+          <Link href="/system-health" className="btn-secondary shrink-0 border-orange-200 bg-white/80 text-orange-800 hover:bg-white">
+            Review System Health <ArrowRight size={13} />
+          </Link>
+        ) : null}
+      </div>
+    </section>
+  );
+}
+
 function Metric({ icon, label, value, note, alert = false }: { icon: React.ReactNode; label: string; value: number; note: string; alert?: boolean }) {
   return (
     <div className={`rounded-2xl border bg-surface p-4 shadow-sm ${alert ? "border-amber-200" : "border-line"}`}>
@@ -123,6 +181,11 @@ function Metric({ icon, label, value, note, alert = false }: { icon: React.React
 
 function Info({ title, text }: { title: string; text: string }) {
   return <div className="rounded-xl border border-line bg-surface-muted/60 px-3.5 py-3"><strong className="block text-copy-strong">{title}</strong><span className="mt-1 block">{text}</span></div>;
+}
+
+function safeNumber(value: unknown) {
+  const number = Number(value ?? 0);
+  return Number.isFinite(number) ? number : 0;
 }
 
 function pretty(value: string) {
