@@ -52,14 +52,14 @@ export default async function EnrollmentsPage() {
             <p className="mx-auto mt-1 max-w-xl text-xs leading-5 text-copy-muted">
               Production currently has no authoritative Enrollment rows. Lead stages and payment states remain separate and are not converted into enrollment records automatically.
             </p>
-            <div className="mt-4 flex justify-center gap-2">
+            <div className="mt-4 flex flex-wrap justify-center gap-2">
               <Link href="/course-management" className="btn-secondary">Review batches</Link>
               <Link href="/admissions" className="btn-primary">Open Admissions</Link>
             </div>
           </div>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="min-w-full text-left text-xs">
+          <div className="overflow-x-auto overscroll-x-contain [scrollbar-width:thin]">
+            <table className="min-w-[920px] text-left text-xs">
               <thead className="bg-surface-muted text-[10px] uppercase tracking-wide text-copy-subtle">
                 <tr>
                   <th className="px-5 py-3">Customer / Opportunity</th>
