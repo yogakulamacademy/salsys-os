@@ -1,15 +1,35 @@
 .team-performance-scope > div.space-y-6 > div:first-child {
-  margin-top: 1rem;
-  justify-content: flex-end;
+  margin-top: 0.25rem;
+  align-items: flex-end;
 }
 
 .team-performance-scope > div.space-y-6 > div:first-child > div:first-child {
-  display: none;
+  display: block;
+  min-width: 0;
+}
+
+.team-performance-scope > div.space-y-6 > div:first-child > div:first-child > div:first-child {
+  color: var(--brand-700);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+}
+
+.team-performance-scope > div.space-y-6 > div:first-child h1 {
+  color: var(--copy-strong);
+  font-size: clamp(1.65rem, 2.5vw, 2rem);
+  font-weight: 700;
+  letter-spacing: -0.035em;
+}
+
+.team-performance-scope > div.space-y-6 > div:first-child p {
+  color: var(--copy-muted);
 }
 
 .team-performance-scope > div.space-y-6 > div:first-child > div:last-child {
   width: 100%;
   border-color: var(--line);
+  border-radius: var(--radius-panel);
   background: var(--surface);
   box-shadow: var(--shadow-xs);
 }
@@ -24,7 +44,7 @@
 }
 
 .team-performance-scope > div.space-y-6 > div:first-child > div:last-child a.bg-brand {
-  background: var(--brand-900);
+  background: var(--brand-700);
   color: #fff;
 }
 
@@ -38,7 +58,17 @@
   color: var(--copy);
 }
 
+.team-performance-scope > div.space-y-6 > div:first-child > div:last-child input[type='date']:focus {
+  border-color: var(--brand-700);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--brand-700) 12%, transparent);
+}
+
 .team-performance-scope > div.space-y-6 > div:first-child > div:last-child button[type='submit'] {
+  background: var(--brand-700);
+  color: #fff;
+}
+
+.team-performance-scope > div.space-y-6 > div:first-child > div:last-child button[type='submit']:hover {
   background: var(--brand-900);
 }
 
@@ -78,6 +108,15 @@
   color: var(--copy-muted);
 }
 
+.team-performance-scope .rounded-xl.border.border-slate-100.bg-slate-50\/80 {
+  border-color: var(--line);
+  background: var(--surface-muted);
+}
+
+.team-performance-scope .border-slate-100 {
+  border-color: var(--line);
+}
+
 @media (min-width: 768px) {
   .team-performance-scope > div.space-y-6 > div:first-child > div:last-child {
     width: auto;
@@ -86,7 +125,7 @@
 
 @media (max-width: 640px) {
   .team-performance-scope > div.space-y-6 > div:first-child {
-    margin-top: 0.75rem;
+    margin-top: 0;
   }
 
   .team-performance-scope > div.space-y-6 > div:first-child > div:last-child {
