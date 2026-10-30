@@ -22,7 +22,7 @@ const config: Config = {
       colors: {
         ink: 'var(--app-text-strong)',
         brand: {
-          DEFAULT: 'var(--app-brand-700)',
+          DEFAULT: 'rgb(var(--app-brand-rgb) / <alpha-value>)',
           50: 'var(--app-brand-50)',
           100: 'var(--app-brand-100)',
           600: 'var(--app-brand-600)',
@@ -31,7 +31,7 @@ const config: Config = {
           900: 'var(--app-brand-900)',
           950: 'var(--app-brand-950)',
         },
-        accent: 'var(--app-accent)',
+        accent: 'rgb(var(--app-accent-rgb) / <alpha-value>)',
         mist: 'var(--app-bg)',
         surface: {
           DEFAULT: 'var(--app-surface)',
