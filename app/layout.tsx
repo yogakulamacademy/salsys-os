@@ -15,6 +15,7 @@ import './motion-system-v7.css';
 import './interaction-feedback-v8.css';
 import './salsys-violet-theme.css';
 import './sales-today.css';
+import './leads-workspace.css';
 import { InteractionFeedbackBridge } from '@/components/interaction-feedback-bridge';
 import { MotionRouteSurface } from '@/components/motion-route-surface';
 import { RootShell } from '@/components/root-shell';
