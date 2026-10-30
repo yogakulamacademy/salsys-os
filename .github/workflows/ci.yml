@@ -154,6 +154,9 @@ jobs:
       - name: Verify PH-5 Recovery Readiness Contract
         run: npm run verify:recovery-readiness
 
+      - name: Verify Ad Activation Foundation Contracts
+        run: npm run verify:ad-activation-foundation
+
       - name: Typecheck
         run: npm run typecheck
 
