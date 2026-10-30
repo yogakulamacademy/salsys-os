@@ -21,19 +21,15 @@ type PersonLinkRow = {
 };
 
 type PersonRow = {
+  id: string;
+  status: string | null;
+  created_at: string | null;
+};
+
+type IdentifierRow = {
   person_id: string;
-  person_status: string | null;
-  lead_count: number | string | null;
-  latest_lead_id: string | null;
-  latest_lead_name: string | null;
-  current_stage: string | null;
-  intent: string | null;
-  latest_lead_at: string | null;
-  last_message_at: string | null;
-  enrollment_count: number | string | null;
-  paid_payment_count: number | string | null;
-  paid_amount_by_currency: Record<string, number | string> | null;
-  verified_identifier_count: number | string | null;
+  identifier_type: string;
+  verified: boolean;
 };
 
 export default async function Customer360Page() {
@@ -48,48 +44,50 @@ export default async function Customer360Page() {
   const organizationId = await requireCurrentOrganizationId(supabase, user.id);
   const accessibleLeadIds = new Set(leads.map((lead) => lead.id));
 
-  /*
-   * Read the tenant-scoped identity graph once, then intersect it with the
-   * already-authorized Lead list in memory. Avoid passing hundreds of UUIDs
-   * through PostgREST `in(...)` filters, which can exceed practical request-URL
-   * limits for larger workspaces.
-   */
-  const linksResult = await supabase
-    .from("person_leads")
-    .select("person_id,lead_id,resolution_method,confidence")
-    .eq("organization_id", organizationId);
+  // Keep the Customer index on lightweight canonical tables. The richer
+  // Person 360 views are intentionally reserved for one-customer detail reads;
+  // loading the operational aggregate for the full tenant can exceed the
+  // database statement timeout as the workspace grows.
+  const [linksResult, personsResult, identifiersResult] = await Promise.all([
+    supabase
+      .from("person_leads")
+      .select("person_id,lead_id,resolution_method,confidence")
+      .eq("organization_id", organizationId),
+    supabase
+      .from("persons")
+      .select("id,status,created_at")
+      .eq("organization_id", organizationId),
+    supabase
+      .from("person_identifiers")
+      .select("person_id,identifier_type,verified")
+      .eq("organization_id", organizationId)
+      .eq("verified", true),
+  ]);
 
   if (linksResult.error) {
     throw new Error(`Unable to load customer identity links: ${linksResult.error.message}`);
+  }
+  if (personsResult.error) {
+    throw new Error(`Unable to load customer records: ${personsResult.error.message}`);
+  }
+  if (identifiersResult.error) {
+    throw new Error(`Unable to load customer identity evidence: ${identifiersResult.error.message}`);
   }
 
   const links = ((linksResult.data ?? []) as PersonLinkRow[]).filter((row) =>
     accessibleLeadIds.has(row.lead_id),
   );
   const accessiblePersonIds = new Set(links.map((row) => row.person_id).filter(Boolean));
-
-  /*
-   * Same strategy for Person 360: organization-scoped read first, in-memory
-   * intersection second. RLS/view permissions remain authoritative while the
-   * request stays compact and predictable.
-   */
-  const personResult = await supabase
-    .from("v_person_360_operational")
-    .select(
-      "person_id,person_status,lead_count,latest_lead_id,latest_lead_name,current_stage,intent,latest_lead_at,last_message_at,enrollment_count,paid_payment_count,paid_amount_by_currency,verified_identifier_count",
-    )
-    .eq("organization_id", organizationId)
-    .order("latest_lead_at", { ascending: false, nullsFirst: false });
-
-  if (personResult.error) {
-    throw new Error(`Unable to load Customer 360 records: ${personResult.error.message}`);
-  }
-
-  const persons = ((personResult.data ?? []) as PersonRow[]).filter((row) =>
+  const persons = ((personsResult.data ?? []) as PersonRow[]).filter((row) =>
+    accessiblePersonIds.has(row.id),
+  );
+  const verifiedIdentifiers = ((identifiersResult.data ?? []) as IdentifierRow[]).filter((row) =>
     accessiblePersonIds.has(row.person_id),
   );
+
   const leadById = new Map(leads.map((lead) => [lead.id, lead]));
   const linksByPerson = new Map<string, PersonLinkRow[]>();
+  const identifiersByPerson = new Map<string, IdentifierRow[]>();
 
   for (const link of links) {
     const current = linksByPerson.get(link.person_id) ?? [];
@@ -97,18 +95,42 @@ export default async function Customer360Page() {
     linksByPerson.set(link.person_id, current);
   }
 
-  const customers = persons.map((person) => {
-    const linked = linksByPerson.get(person.person_id) ?? [];
-    const accessibleLeads = linked
-      .map((link) => leadById.get(link.lead_id))
-      .filter((lead): lead is NonNullable<typeof lead> => Boolean(lead));
-    const latestLead =
-      accessibleLeads.find((lead) => lead.id === person.latest_lead_id) ??
-      accessibleLeads[0] ??
-      null;
+  for (const identifier of verifiedIdentifiers) {
+    const current = identifiersByPerson.get(identifier.person_id) ?? [];
+    current.push(identifier);
+    identifiersByPerson.set(identifier.person_id, current);
+  }
 
-    return { person, accessibleLeads, latestLead };
-  });
+  const customers = persons
+    .map((person) => {
+      const linked = linksByPerson.get(person.id) ?? [];
+      const accessibleLeads = linked
+        .map((link) => leadById.get(link.lead_id))
+        .filter((lead): lead is NonNullable<typeof lead> => Boolean(lead));
+
+      const openLead = accessibleLeads.find(
+        (lead) => !["enrolled", "closed_won", "lost", "unqualified", "duplicate"].includes(lead.stage),
+      );
+      const latestLead = openLead ?? accessibleLeads[0] ?? null;
+      const firstOpportunityAt = accessibleLeads
+        .map((lead) => lead.createdAt)
+        .filter(Boolean)
+        .sort()[0] ?? person.created_at;
+
+      return {
+        person,
+        accessibleLeads,
+        latestLead,
+        firstOpportunityAt,
+        verifiedIdentifiers: identifiersByPerson.get(person.id) ?? [],
+      };
+    })
+    .filter((row) => row.accessibleLeads.length > 0)
+    .sort((a, b) => {
+      const aTime = new Date(a.latestLead?.createdAt ?? a.person.created_at ?? 0).getTime();
+      const bTime = new Date(b.latestLead?.createdAt ?? b.person.created_at ?? 0).getTime();
+      return bTime - aTime;
+    });
 
   const linkedLeadIds = new Set(links.map((row) => row.lead_id));
   const unlinkedLeads = leads.filter((lead) => !linkedLeadIds.has(lead.id));
@@ -116,9 +138,7 @@ export default async function Customer360Page() {
   const activeOpportunities = leads.filter(
     (lead) => !["enrolled", "closed_won", "lost", "unqualified", "duplicate"].includes(lead.stage),
   ).length;
-  const verifiedIdentity = customers.filter(
-    ({ person }) => Number(person.verified_identifier_count ?? 0) > 0,
-  ).length;
+  const verifiedIdentity = customers.filter((row) => row.verifiedIdentifiers.length > 0).length;
 
   return (
     <div className="space-y-5">
@@ -167,16 +187,18 @@ export default async function Customer360Page() {
                 <Header>Opportunities</Header>
                 <Header>Current context</Header>
                 <Header>Relationship</Header>
-                <Header>Revenue evidence</Header>
+                <Header>Identity evidence</Header>
                 <th className="w-28 px-4 py-3" />
               </tr>
             </thead>
             <tbody>
               {customers.length ? (
-                customers.map(({ person, accessibleLeads, latestLead }) => {
-                  const displayName = latestLead?.name || person.latest_lead_name || "Customer";
+                customers.map(({ person, accessibleLeads, latestLead, firstOpportunityAt, verifiedIdentifiers }) => {
+                  const displayName = latestLead?.name || "Customer";
+                  const identifierTypes = [...new Set(verifiedIdentifiers.map((row) => pretty(row.identifier_type)))];
+
                   return (
-                    <tr key={person.person_id} className="border-b border-line last:border-b-0 hover:bg-surface-soft/70">
+                    <tr key={person.id} className="border-b border-line last:border-b-0 hover:bg-surface-soft/70">
                       <td className="px-4 py-3.5">
                         <div className="flex items-center gap-3">
                           <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-brand-50 text-[10px] font-bold text-brand-700">
@@ -184,7 +206,7 @@ export default async function Customer360Page() {
                           </span>
                           <div className="min-w-0">
                             <div className="max-w-[220px] truncate text-[12px] font-semibold text-copy-strong">{displayName}</div>
-                            <div className="mt-0.5 text-[10px] text-copy-subtle">Relationship since {formatDate(person.latest_lead_at)}</div>
+                            <div className="mt-0.5 text-[10px] text-copy-subtle">Contact status · {pretty(person.status || "active")}</div>
                           </div>
                         </div>
                       </td>
@@ -200,16 +222,25 @@ export default async function Customer360Page() {
                         </div>
                       </td>
                       <td className="px-4 py-3.5 text-[11px] text-copy-muted">
-                        <div>{Number(person.enrollment_count ?? 0)} enrollment{Number(person.enrollment_count ?? 0) === 1 ? "" : "s"}</div>
-                        <div className="mt-0.5 text-copy-subtle">Last message {formatDate(person.last_message_at)}</div>
+                        <div>Since {formatDate(firstOpportunityAt)}</div>
+                        <div className="mt-0.5 text-copy-subtle">Owner · {latestLead?.owner || "Unassigned"}</div>
                       </td>
                       <td className="px-4 py-3.5 text-[11px] text-copy-muted">
-                        <div>{Number(person.paid_payment_count ?? 0)} paid payment{Number(person.paid_payment_count ?? 0) === 1 ? "" : "s"}</div>
-                        <div className="mt-0.5 text-copy-subtle">{formatCurrencyMap(person.paid_amount_by_currency)}</div>
+                        {verifiedIdentifiers.length ? (
+                          <>
+                            <div>{verifiedIdentifiers.length} verified identifier{verifiedIdentifiers.length === 1 ? "" : "s"}</div>
+                            <div className="mt-0.5 text-copy-subtle">{identifierTypes.slice(0, 2).join(" · ") || "Verified identity"}</div>
+                          </>
+                        ) : (
+                          <>
+                            <div>No verified identifier</div>
+                            <div className="mt-0.5 text-copy-subtle">Identity remains evidence-limited</div>
+                          </>
+                        )}
                       </td>
                       <td className="px-4 py-3.5 text-right">
                         <Link
-                          href={`/customer-360/${person.person_id}${latestLead ? `?opportunity=${latestLead.id}` : ""}`}
+                          href={`/customer-360/${person.id}${latestLead ? `?opportunity=${latestLead.id}` : ""}`}
                           className="inline-flex h-8 items-center gap-1.5 rounded-ui border border-line bg-surface px-2.5 text-[11px] font-semibold text-brand-700 transition hover:border-line-strong hover:bg-brand-50"
                         >
                           Open <ArrowRight size={12} />
@@ -276,12 +307,4 @@ function formatDate(value: string | null | undefined) {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return "—";
   return new Intl.DateTimeFormat("en-IN", { day: "numeric", month: "short", year: "numeric" }).format(date);
-}
-
-function formatCurrencyMap(value: Record<string, number | string> | null) {
-  if (!value || !Object.keys(value).length) return "No collected revenue";
-  return Object.entries(value)
-    .slice(0, 2)
-    .map(([currency, amount]) => `${currency} ${Number(amount || 0).toLocaleString("en-IN", { maximumFractionDigits: 0 })}`)
-    .join(" · ");
 }
