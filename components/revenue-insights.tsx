@@ -304,9 +304,9 @@ export function RevenueInsights({
 
           <FinanceMetric
             icon={<TrendingUp size={17} />}
-            label="Weighted forecast"
+            label="Weighted planning value"
             value={formatMoney(summary.weighted, currency)}
-            note="stage-probability adjusted"
+            note="Deterministic stage-weighted planning value; not probability"
           />
 
           <FinanceMetric
@@ -340,7 +340,7 @@ export function RevenueInsights({
           />
 
           <MiniMetric
-            label="Forecast coverage"
+            label="Stage-weighted coverage"
             value={
               summary.pipeline > 0
                 ? `${Math.round((summary.weighted / summary.pipeline) * 100)}%`
@@ -355,7 +355,7 @@ export function RevenueInsights({
           <ChartHeading
             eyebrow="Forecast"
             title="Monthly revenue outlook"
-            description={`Pipeline, weighted forecast and collected revenue shown in ${currency}.`}
+            description={`Pipeline, deterministic stage-weighted planning value and collected revenue shown in ${currency}.`}
           />
 
           {monthlyRows.length > 0 ? (
@@ -401,7 +401,7 @@ export function RevenueInsights({
                   <Line
                     type="monotone"
                     dataKey="weighted"
-                    name="Weighted"
+                    name="Stage-weighted planning"
                     stroke="#8B5CF6"
                     strokeWidth={2.5}
                     dot={{ r: 3 }}
@@ -429,7 +429,7 @@ export function RevenueInsights({
             items={[
               { label: "Pipeline", color: "#6D4CFF" },
 
-              { label: "Weighted forecast", color: "#8B5CF6" },
+              { label: "Stage-weighted planning", color: "#8B5CF6" },
 
               { label: "Collected", color: "#A78BFA" },
             ]}
@@ -488,7 +488,7 @@ export function RevenueInsights({
 
                   <Bar
                     dataKey="weighted"
-                    name="Weighted"
+                    name="Stage-weighted planning"
                     fill="#ec8316"
                     radius={[0, 6, 6, 0]}
                     animationDuration={750}
@@ -506,7 +506,7 @@ export function RevenueInsights({
         <BreakdownChart
           eyebrow="Attribution"
           title="Revenue by source"
-          description="Top first-touch acquisition sources by weighted forecast."
+          description="Top first-touch acquisition sources by stage-weighted planning value."
           icon={<TrendingUp size={17} />}
           rows={sourceRows}
           currency={currency}
@@ -515,7 +515,7 @@ export function RevenueInsights({
         <BreakdownChart
           eyebrow="Markets"
           title="Revenue by location"
-          description="Locations contributing the most weighted pipeline value."
+          description="Locations contributing the most stage-weighted pipeline value."
           icon={<MapPin size={17} />}
           rows={locationRows}
           currency={currency}
@@ -1136,7 +1136,7 @@ function BreakdownChart({
 
               <Bar
                 dataKey="weighted"
-                name="Weighted"
+                name="Stage-weighted planning"
                 fill="#6D4CFF"
                 radius={[0, 6, 6, 0]}
                 animationDuration={700}
