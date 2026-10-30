@@ -37,11 +37,11 @@ export default async function LeadsPage({ searchParams }: LeadsPageProps) {
   const error = one(params.error);
 
   return (
-    <div className={`${styles.workspace} space-y-5`}>
+    <div className={`leads-workspace-v2 ${styles.workspace} space-y-5`}>
       <PageHeader
-        eyebrow="CRM · Operations"
+        eyebrow="Sales · Opportunities"
         title="Leads"
-        description="Manage contacts, ownership, follow-ups and opportunity progress from one operational workspace."
+        description="Work commercial opportunities from one queue: ownership, stage, intent, acquisition source, next action and sales attention stay connected."
         actions={
           <div className="flex items-center gap-2">
             <Link
