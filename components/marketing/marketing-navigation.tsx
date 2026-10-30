@@ -44,7 +44,7 @@ const groups: NavigationGroup[] = [
     label: 'Paid acquisition',
     items: [
       { href: '/campaigns', label: 'Campaigns', icon: Megaphone },
-      { href: '/paid-media-leads', label: 'Paid Media Leads', icon: UsersRound },
+      { href: '/paid-media-leads', label: 'Acquisition', icon: UsersRound },
       { href: '/re-engaged', label: 'Re-engaged Leads', icon: Activity },
     ],
   },
