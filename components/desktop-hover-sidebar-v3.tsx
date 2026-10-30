@@ -263,9 +263,10 @@ export function DesktopHoverSidebarV3() {
         label: "Operations",
         icon: BookOpen,
         href: "/operations",
-        activeHrefs: ["/course-management", "/enrollments"],
+        activeHrefs: ["/availability", "/course-management", "/enrollments"],
         items: [
           { label: "Overview", href: "/operations" },
+          { label: "Availability", href: "/availability" },
           { label: "Programs & Batches", href: "/course-management" },
           { label: "Enrollments", href: "/enrollments" },
         ],
