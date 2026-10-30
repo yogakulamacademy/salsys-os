@@ -28,10 +28,37 @@ const columns: Array<{ stage: PipelineStage; label: string }> = [
   { stage: "closed_won", label: "Closed won" },
 ];
 
-const activeStageSet = new Set<PipelineStage>(columns.map((column) => column.stage));
+const outcomeStages: Array<{ stage: PipelineStage; label: string }> = [
+  { stage: "enrolled", label: "Enrolled" },
+  { stage: "nurture", label: "Nurture" },
+  { stage: "not_now", label: "Not now" },
+  { stage: "lost", label: "Lost" },
+  { stage: "unqualified", label: "Unqualified" },
+  { stage: "duplicate", label: "Duplicate" },
+];
+
+const moveableStageSet = new Set<PipelineStage>([
+  ...columns.map((column) => column.stage),
+  ...outcomeStages.map((outcome) => outcome.stage),
+]);
+
+const lossReasons = [
+  ["price", "Price / budget"],
+  ["timing", "Timing"],
+  ["no_response", "No response"],
+  ["competitor", "Chose another provider"],
+  ["travel_or_visa", "Travel / visa"],
+  ["not_fit", "Not a fit"],
+  ["other", "Other"],
+] as const;
 
 type AgingFilter = "all" | "healthy" | "warning" | "stuck" | "untracked";
 type Toast = { type: "success" | "error"; message: string };
+type PendingOutcome = {
+  leadId: string;
+  leadName: string;
+  stage: PipelineStage;
+} | null;
 
 export function PipelineBoardStudio({
   leads,
@@ -47,6 +74,9 @@ export function PipelineBoardStudio({
   const [overStage, setOverStage] = useState<PipelineStage | null>(null);
   const [savingLeadId, setSavingLeadId] = useState<string | null>(null);
   const [toast, setToast] = useState<Toast | null>(null);
+  const [pendingOutcome, setPendingOutcome] = useState<PendingOutcome>(null);
+  const [lossReason, setLossReason] = useState("");
+  const [outcomeNote, setOutcomeNote] = useState("");
   const [, startTransition] = useTransition();
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -92,9 +122,15 @@ export function PipelineBoardStudio({
     toastTimer.current = setTimeout(() => setToast(null), 3400);
   }
 
-  function moveLead(leadId: string, newStage: PipelineStage) {
-    if (!activeStageSet.has(newStage)) {
-      showToast({ type: "error", message: "That stage is not available on this board." });
+  function resetOutcomeDialog() {
+    setPendingOutcome(null);
+    setLossReason("");
+    setOutcomeNote("");
+  }
+
+  function moveLead(leadId: string, newStage: PipelineStage, reason?: string) {
+    if (!moveableStageSet.has(newStage)) {
+      showToast({ type: "error", message: "That stage is not available from this board." });
       return;
     }
 
@@ -133,7 +169,7 @@ export function PipelineBoardStudio({
     setSavingLeadId(leadId);
 
     startTransition(async () => {
-      const result = await movePipelineLeadStage(leadId, newStage);
+      const result = await movePipelineLeadStage(leadId, newStage, reason);
       setSavingLeadId(null);
 
       if (!result.ok) {
@@ -148,10 +184,45 @@ export function PipelineBoardStudio({
         type: "success",
         message: result.mock
           ? "Demo mode: stage changed locally only."
-          : `Lead moved to ${formatStage(newStage)}.`,
+          : `Opportunity moved to ${formatStage(newStage)}.`,
       });
       if (!result.mock) router.refresh();
     });
+  }
+
+  function requestOutcome(leadId: string, stage: PipelineStage) {
+    const lead = items.find((item) => item.id === leadId);
+    if (!lead || savingLeadId === leadId) return;
+
+    if (stage === "nurture" || stage === "not_now") {
+      moveLead(leadId, stage, `Moved to ${formatStage(stage)} via pipeline outcome action`);
+      return;
+    }
+
+    setPendingOutcome({ leadId, leadName: lead.name, stage });
+    setLossReason("");
+    setOutcomeNote("");
+  }
+
+  function confirmOutcome() {
+    if (!pendingOutcome) return;
+
+    let reason = `Marked ${formatStage(pendingOutcome.stage)} via pipeline outcome action`;
+
+    if (pendingOutcome.stage === "lost") {
+      if (!lossReason) return;
+      const reasonLabel =
+        lossReasons.find(([value]) => value === lossReason)?.[1] ?? lossReason;
+      reason = `Lost · ${reasonLabel}${outcomeNote.trim() ? ` · ${outcomeNote.trim()}` : ""}`;
+    } else if (pendingOutcome.stage === "enrolled") {
+      reason = `Manually marked Enrolled stage via pipeline; enrollment record remains a separate operational record${outcomeNote.trim() ? ` · ${outcomeNote.trim()}` : ""}`;
+    } else if (outcomeNote.trim()) {
+      reason += ` · ${outcomeNote.trim()}`;
+    }
+
+    const { leadId, stage } = pendingOutcome;
+    resetOutcomeDialog();
+    moveLead(leadId, stage, reason);
   }
 
   function handleDrop(event: React.DragEvent<HTMLDivElement>, stage: PipelineStage) {
@@ -164,27 +235,27 @@ export function PipelineBoardStudio({
 
   return (
     <section className="mt-4">
-      <div className="rounded-xl border border-[#E4EAE6] bg-white p-3">
+      <div className="rounded-xl border border-line bg-surface p-3 shadow-sm">
         <div className="flex flex-col gap-3 xl:flex-row xl:items-center">
-          <label className="flex min-w-0 flex-1 items-center rounded-lg border border-[#E4EAE6] bg-[#F7F9F7] px-3 transition focus-within:border-[#91B09B] focus-within:bg-white focus-within:ring-4 focus-within:ring-[#216551]/5">
-            <Search size={14} className="shrink-0 text-[#89978F]" />
+          <label className="flex min-w-0 flex-1 items-center rounded-ui border border-line bg-surface-soft px-3 transition focus-within:border-brand-300 focus-within:bg-surface focus-within:ring-4 focus-within:ring-brand-500/5">
+            <Search size={14} className="shrink-0 text-copy-subtle" />
             <span className="sr-only">Search pipeline leads</span>
             <input
               value={query}
               onChange={(event) => setQuery(event.target.value)}
               placeholder="Search name, course, country or location…"
-              className="w-full bg-transparent px-2 py-2.5 text-[12px] text-[#344E42] outline-none placeholder:text-[#9AA69F]"
+              className="w-full bg-transparent px-2 py-2.5 text-[12px] text-copy-strong outline-none placeholder:text-copy-subtle"
             />
           </label>
 
           <div className="flex flex-wrap items-center gap-2">
-            <SlidersHorizontal size={14} className="text-[#88968E]" />
+            <SlidersHorizontal size={14} className="text-copy-subtle" />
             <label>
               <span className="sr-only">Filter by channel</span>
               <select
                 value={channel}
                 onChange={(event) => setChannel(event.target.value)}
-                className="h-9 min-w-[145px] rounded-lg border border-[#E4EAE6] bg-white px-2.5 text-[11px] font-medium text-[#51665C] outline-none"
+                className="h-9 min-w-[145px] rounded-ui border border-line bg-surface px-2.5 text-[11px] font-medium text-copy-muted outline-none"
               >
                 <option value="all">All channels</option>
                 {channels.map((item) => (
@@ -199,7 +270,7 @@ export function PipelineBoardStudio({
               <select
                 value={aging}
                 onChange={(event) => setAging(event.target.value as AgingFilter)}
-                className="h-9 min-w-[140px] rounded-lg border border-[#E4EAE6] bg-white px-2.5 text-[11px] font-medium text-[#51665C] outline-none"
+                className="h-9 min-w-[140px] rounded-ui border border-line bg-surface px-2.5 text-[11px] font-medium text-copy-muted outline-none"
               >
                 <option value="all">All aging</option>
                 <option value="healthy">Healthy</option>
@@ -210,18 +281,18 @@ export function PipelineBoardStudio({
             </label>
           </div>
 
-          <div className="whitespace-nowrap text-[10px] font-semibold text-[#89978F]">
+          <div className="whitespace-nowrap text-[10px] font-semibold text-copy-subtle">
             {filtered.length.toLocaleString()} shown
           </div>
         </div>
       </div>
 
-      <div className="mt-3 flex flex-wrap items-center justify-between gap-2 px-1 text-[10px] font-medium text-[#829087]">
+      <div className="mt-3 flex flex-wrap items-center justify-between gap-2 px-1 text-[10px] font-medium text-copy-subtle">
         <span className="inline-flex items-center gap-1.5">
           <GripVertical size={13} />
-          Drag on desktop or use each card&apos;s stage selector on keyboard/touch.
+          Drag on desktop or use each card&apos;s selectors on keyboard/touch.
         </span>
-        <span>Stage changes still pass through the canonical backend mutation.</span>
+        <span>Stage changes pass through the canonical backend mutation and audit history.</span>
       </div>
 
       <div className="mt-3 overflow-x-auto pb-4">
@@ -248,15 +319,15 @@ export function PipelineBoardStudio({
                 onDrop={(event) => handleDrop(event, stage)}
                 className={`min-h-[455px] rounded-xl border p-3 transition ${
                   isOver
-                    ? "border-[#8FB29A] bg-[#ECF5EE] shadow-[inset_0_0_0_1px_rgba(33,101,81,.08)]"
+                    ? "border-brand-300 bg-brand-50 shadow-[inset_0_0_0_1px_rgba(87,67,197,.08)]"
                     : stage === "closed_won"
-                      ? "border-emerald-200 bg-emerald-50/70"
-                      : "border-[#E0E9E0] bg-[#F1F5F1]"
+                      ? "border-emerald-200 bg-emerald-50/60"
+                      : "border-line bg-surface-soft"
                 }`}
               >
                 <div className="mb-3 flex items-start justify-between gap-2">
                   <div>
-                    <div className="text-[12px] font-semibold text-[#2C443B]">{label}</div>
+                    <div className="text-[12px] font-semibold text-copy-strong">{label}</div>
                     {stage === "closed_won" ? (
                       <div className="mt-0.5 text-[9px] font-medium text-emerald-700">Consequential · auto-archives after 24h</div>
                     ) : null}
@@ -265,15 +336,15 @@ export function PipelineBoardStudio({
                       {stageStuck > 0 ? <AgingCount tone="stuck">{stageStuck} stuck</AgingCount> : null}
                     </div>
                   </div>
-                  <span className="rounded-full border border-[#DCE8DE] bg-white px-2.5 py-1 text-[10px] font-semibold text-[#66806D]">
+                  <span className="rounded-full border border-line bg-surface px-2.5 py-1 text-[10px] font-semibold text-copy-muted">
                     {stageItems.length}
                   </span>
                 </div>
 
                 <div className="space-y-2.5">
                   {!stageItems.length ? (
-                    <div className={`grid min-h-[88px] place-items-center rounded-lg border border-dashed px-4 text-center text-[10px] ${isOver ? "border-[#8FB29A] bg-white text-[#216551]" : "border-[#D4DED6] bg-white/70 text-[#99A59D]"}`}>
-                      {isOver ? "Drop lead here" : "No matching leads"}
+                    <div className={`grid min-h-[88px] place-items-center rounded-lg border border-dashed px-4 text-center text-[10px] ${isOver ? "border-brand-300 bg-surface text-brand-700" : "border-line bg-surface/70 text-copy-subtle"}`}>
+                      {isOver ? "Drop opportunity here" : "No matching opportunities"}
                     </div>
                   ) : null}
 
@@ -297,6 +368,7 @@ export function PipelineBoardStudio({
                         setOverStage(null);
                       }}
                       onStageChange={(nextStage) => moveLead(lead.id, nextStage)}
+                      onOutcome={(nextStage) => requestOutcome(lead.id, nextStage)}
                     />
                   ))}
                 </div>
@@ -306,15 +378,77 @@ export function PipelineBoardStudio({
         </div>
       </div>
 
+      {pendingOutcome ? (
+        <div className="fixed inset-0 z-[180] grid place-items-center bg-slate-950/35 p-4 backdrop-blur-[1px]" role="presentation">
+          <div className="w-full max-w-md rounded-2xl border border-line bg-surface p-5 shadow-2xl" role="dialog" aria-modal="true" aria-labelledby="pipeline-outcome-title">
+            <div id="pipeline-outcome-title" className="text-[15px] font-semibold text-copy-strong">
+              {pendingOutcome.stage === "lost"
+                ? `Mark ${pendingOutcome.leadName} as Lost?`
+                : pendingOutcome.stage === "enrolled"
+                  ? `Mark ${pendingOutcome.leadName} as Enrolled stage?`
+                  : `Move ${pendingOutcome.leadName} to ${formatStage(pendingOutcome.stage)}?`}
+            </div>
+
+            <p className="mt-2 text-[12px] leading-5 text-copy-muted">
+              {pendingOutcome.stage === "enrolled"
+                ? "This changes the opportunity stage only. It does not create or confirm an enrollment record, accommodation assignment, or payment."
+                : pendingOutcome.stage === "lost"
+                  ? "A loss reason is required so Sales and Marketing can learn from the outcome."
+                  : "This outcome removes the opportunity from the active Pipeline board and records the stage change in history."}
+            </p>
+
+            {pendingOutcome.stage === "lost" ? (
+              <label className="mt-4 block">
+                <span className="mb-1 block text-[10px] font-semibold uppercase tracking-[0.08em] text-copy-muted">Loss reason</span>
+                <select
+                  value={lossReason}
+                  onChange={(event) => setLossReason(event.target.value)}
+                  className="input"
+                  autoFocus
+                >
+                  <option value="">Select reason…</option>
+                  {lossReasons.map(([value, label]) => (
+                    <option key={value} value={value}>{label}</option>
+                  ))}
+                </select>
+              </label>
+            ) : null}
+
+            <label className="mt-3 block">
+              <span className="mb-1 block text-[10px] font-semibold uppercase tracking-[0.08em] text-copy-muted">{pendingOutcome.stage === "lost" ? "Optional note" : "Note"}</span>
+              <textarea
+                value={outcomeNote}
+                onChange={(event) => setOutcomeNote(event.target.value.slice(0, 500))}
+                rows={3}
+                className="input min-h-20 resize-y"
+                placeholder={pendingOutcome.stage === "enrolled" ? "Optional context about the enrollment stage…" : "Optional context for the stage history…"}
+              />
+            </label>
+
+            <div className="mt-5 flex justify-end gap-2">
+              <button type="button" className="btn-secondary" onClick={resetOutcomeDialog}>Cancel</button>
+              <button
+                type="button"
+                className={pendingOutcome.stage === "lost" ? "inline-flex h-9 items-center justify-center rounded-ui bg-red-600 px-4 text-[11px] font-semibold text-white transition hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-50" : "btn-primary"}
+                disabled={pendingOutcome.stage === "lost" && !lossReason}
+                onClick={confirmOutcome}
+              >
+                Confirm {formatStage(pendingOutcome.stage)}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
       {toast ? (
-        <div className="fixed bottom-5 right-5 z-[160] max-w-sm rounded-lg border border-[#DFE7E1] bg-white px-4 py-3 shadow-xl" role="status" aria-live="polite">
+        <div className="fixed bottom-5 right-5 z-[160] max-w-sm rounded-lg border border-line bg-surface px-4 py-3 shadow-xl" role="status" aria-live="polite">
           <div className="flex items-start gap-2.5">
             {toast.type === "success" ? (
               <CheckCircle2 size={16} className="mt-0.5 shrink-0 text-emerald-600" />
             ) : (
               <AlertTriangle size={16} className="mt-0.5 shrink-0 text-red-600" />
             )}
-            <div className="text-[11px] font-medium leading-5 text-[#40564B]">{toast.message}</div>
+            <div className="text-[11px] font-medium leading-5 text-copy-muted">{toast.message}</div>
           </div>
         </div>
       ) : null}
@@ -329,6 +463,7 @@ function PipelineLeadCard({
   onDragStart,
   onDragEnd,
   onStageChange,
+  onOutcome,
 }: {
   lead: PipelineSnapshotBoardLead;
   saving: boolean;
@@ -336,52 +471,72 @@ function PipelineLeadCard({
   onDragStart: (event: React.DragEvent<HTMLDivElement>) => void;
   onDragEnd: () => void;
   onStageChange: (stage: PipelineStage) => void;
+  onOutcome: (stage: PipelineStage) => void;
 }) {
   return (
     <div
       draggable={!saving}
       onDragStart={onDragStart}
       onDragEnd={onDragEnd}
-      className={`group rounded-lg border bg-white p-3.5 shadow-[0_2px_4px_rgba(18,40,24,0.03)] transition ${agingBorder(lead.agingStatus)} ${dragging ? "scale-[.985] opacity-45" : "hover:border-[#84AF91] hover:shadow-[0_5px_16px_rgba(26,66,37,.06)]"}`}
+      className={`group rounded-lg border bg-surface p-3.5 shadow-[0_2px_4px_rgba(36,33,60,0.03)] transition ${agingBorder(lead.agingStatus)} ${dragging ? "scale-[.985] opacity-45" : "hover:border-brand-300 hover:shadow-[0_5px_16px_rgba(87,67,197,.07)]"}`}
     >
       <div className="flex items-start gap-2">
         <span className={`mt-1 h-2 w-2 shrink-0 rounded-full ${agingDot(lead.agingStatus)}`} aria-label={`${lead.agingStatus} aging`} />
         <div className="min-w-0 flex-1">
-          <Link href={`/leads/${lead.id}`} className="block truncate text-[12px] font-semibold text-[#233C33] hover:text-[#216551] hover:underline">
+          <Link href={`/leads/${lead.id}`} className="block truncate text-[12px] font-semibold text-copy-strong hover:text-brand-700 hover:underline">
             {lead.name}
           </Link>
-          <div className="mt-0.5 truncate text-[9px] text-[#8A978F]">
+          <div className="mt-0.5 truncate text-[9px] text-copy-subtle">
             {[lead.country, lead.location].filter(Boolean).join(" · ") || "Location unavailable"}
           </div>
         </div>
-        <span className="text-[#B0BBB4] opacity-0 transition group-hover:opacity-100">
-          {saving ? <Loader2 size={14} className="animate-spin text-[#216551]" /> : <GripVertical size={14} />}
+        <span className="text-copy-subtle opacity-0 transition group-hover:opacity-100">
+          {saving ? <Loader2 size={14} className="animate-spin text-brand-700" /> : <GripVertical size={14} />}
         </span>
       </div>
 
-      <div className="mt-3 line-clamp-2 min-h-8 text-[10px] leading-4 text-[#607068]">
+      <div className="mt-3 line-clamp-2 min-h-8 text-[10px] leading-4 text-copy-muted">
         {lead.course || "Course not set"}
       </div>
 
       <div className="mt-3 flex flex-wrap items-center gap-1.5">
         <AgingBadge lead={lead} />
-        <span className="inline-flex items-center gap-1 rounded-md bg-[#F3F6F4] px-2 py-1 text-[9px] font-semibold text-[#687A70]">
+        <span className="inline-flex items-center gap-1 rounded-md bg-surface-soft px-2 py-1 text-[9px] font-semibold text-copy-muted">
           <Clock3 size={9} /> {formatAge(lead.stageAgeDays, lead.stageAgeHours)} in stage
         </span>
       </div>
 
-      <div className="mt-3 border-t border-[#EFF2F0] pt-3">
+      <div className="mt-3 space-y-2 border-t border-line pt-3">
         <label className="block">
-          <span className="mb-1 block text-[8px] font-bold uppercase tracking-[0.09em] text-[#98A39C]">Move stage</span>
+          <span className="mb-1 block text-[8px] font-bold uppercase tracking-[0.09em] text-copy-subtle">Move active stage</span>
           <select
             value={String(lead.stage)}
             disabled={saving}
             onChange={(event) => onStageChange(event.target.value as PipelineStage)}
-            className="h-8 w-full rounded-md border border-[#E0E8E2] bg-[#FAFBFA] px-2 text-[10px] font-semibold text-[#53685D] outline-none transition focus:border-[#82A98F] focus:ring-2 focus:ring-[#216551]/10 disabled:cursor-wait disabled:opacity-60"
-            aria-label={`Move ${lead.name} to another pipeline stage`}
+            className="h-8 w-full rounded-md border border-line bg-surface-soft px-2 text-[10px] font-semibold text-copy-muted outline-none transition focus:border-brand-300 focus:ring-2 focus:ring-brand-500/10 disabled:cursor-wait disabled:opacity-60"
+            aria-label={`Move ${lead.name} to another active pipeline stage`}
           >
             {columns.map((column) => (
               <option key={column.stage} value={column.stage}>{column.label}</option>
+            ))}
+          </select>
+        </label>
+
+        <label className="block">
+          <span className="mb-1 block text-[8px] font-bold uppercase tracking-[0.09em] text-copy-subtle">Outcome / park</span>
+          <select
+            value=""
+            disabled={saving}
+            onChange={(event) => {
+              const value = event.target.value as PipelineStage;
+              if (value) onOutcome(value);
+            }}
+            className="h-8 w-full rounded-md border border-line bg-surface px-2 text-[10px] font-semibold text-copy-muted outline-none transition focus:border-brand-300 focus:ring-2 focus:ring-brand-500/10 disabled:cursor-wait disabled:opacity-60"
+            aria-label={`Set an outcome for ${lead.name}`}
+          >
+            <option value="">Choose outcome…</option>
+            {outcomeStages.map((outcome) => (
+              <option key={outcome.stage} value={outcome.stage}>{outcome.label}</option>
             ))}
           </select>
         </label>
@@ -389,7 +544,7 @@ function PipelineLeadCard({
 
       <div className="mt-2 flex items-center justify-between gap-2">
         <LeadInspectorButton leadId={lead.id} label="Inspect" />
-        <span className="text-[9px] font-medium text-[#89978F]">{formatStage(lead.currentContactChannel || "unknown")}</span>
+        <span className="text-[9px] font-medium text-copy-subtle">{formatStage(lead.currentContactChannel || "unknown")}</span>
       </div>
     </div>
   );
@@ -415,7 +570,7 @@ function AgingCount({ children, tone }: { children: React.ReactNode; tone: "warn
 function agingBorder(status: PipelineSnapshotBoardLead["agingStatus"]) {
   if (status === "stuck") return "border-red-200";
   if (status === "warning") return "border-amber-200";
-  return "border-[#DFE8DF]";
+  return "border-line";
 }
 
 function agingDot(status: PipelineSnapshotBoardLead["agingStatus"]) {
