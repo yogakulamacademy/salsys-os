@@ -1,0 +1,78 @@
+/* ========================================================================== 
+   Marketing Inspector final UI/UX QA
+   Portal-safe Violet Cloud normalization and mobile readability.
+   ========================================================================== */
+
+[role='dialog'][aria-modal='true'][class*='max-w-[560px]'] {
+  --mi-primary: var(--brand-700, #5743c5);
+  --mi-primary-deep: var(--brand-900, #33257e);
+  --mi-primary-soft: var(--brand-50, #f3f0fb);
+  --mi-text: var(--copy-strong, #24213c);
+  --mi-muted: var(--copy-muted, #67627a);
+  --mi-subtle: var(--copy-subtle, #9691a6);
+  --mi-line: var(--line, #e6e3ef);
+  --mi-surface: var(--surface, #fff);
+  --mi-surface-soft: var(--surface-soft, #f8f7fc);
+  border-color: var(--mi-line) !important;
+  background: var(--mi-surface-soft) !important;
+  box-shadow: -24px 0 70px rgba(33, 27, 58, .14) !important;
+}
+
+[role='dialog'][aria-modal='true'][class*='max-w-[560px]'] [class*='border-[#dce5dd]'],
+[role='dialog'][aria-modal='true'][class*='max-w-[560px]'] [class*='border-[#e3e9e3]'],
+[role='dialog'][aria-modal='true'][class*='max-w-[560px]'] [class*='border-[#e1e6dd]'],
+[role='dialog'][aria-modal='true'][class*='max-w-[560px]'] [class*='border-[#e2e8e1]'],
+[role='dialog'][aria-modal='true'][class*='max-w-[560px]'] [class*='border-[#cfe0d5]'],
+[role='dialog'][aria-modal='true'][class*='max-w-[560px]'] [class*='border-[#c9d8cb]'] {
+  border-color: var(--mi-line) !important;
+}
+
+[role='dialog'][aria-modal='true'][class*='max-w-[560px]'] [class*='text-[#102d27]'],
+[role='dialog'][aria-modal='true'][class*='max-w-[560px]'] [class*='text-[#153d33]'],
+[role='dialog'][aria-modal='true'][class*='max-w-[560px]'] [class*='text-[#203b32]'] {
+  color: var(--mi-text) !important;
+}
+
+[role='dialog'][aria-modal='true'][class*='max-w-[560px]'] [class*='text-[#355e4f]'] {
+  color: var(--mi-primary-deep) !important;
+}
+
+[role='dialog'][aria-modal='true'][class*='max-w-[560px]'] [class*='text-[#758279]'],
+[role='dialog'][aria-modal='true'][class*='max-w-[560px]'] [class*='text-[#8a978a]'] {
+  color: var(--mi-muted) !important;
+}
+
+[role='dialog'][aria-modal='true'][class*='max-w-[560px]'] [class*='bg-[#f1f7f2]'],
+[role='dialog'][aria-modal='true'][class*='max-w-[560px]'] [class*='bg-[#f2f6ef]'],
+[role='dialog'][aria-modal='true'][class*='max-w-[560px]'] [class*='bg-[#f8faf7]'] {
+  background-color: var(--mi-primary-soft) !important;
+}
+
+[role='dialog'][aria-modal='true'][class*='max-w-[560px]'] a:focus-visible,
+[role='dialog'][aria-modal='true'][class*='max-w-[560px]'] button:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--mi-primary) 52%, transparent);
+  outline-offset: 2px;
+}
+
+/* The marketing inspector backdrop used the old dark green brand tint. */
+.fixed.inset-0.z-\[90\] > button[aria-label='Close inspector'] {
+  background: rgba(33, 27, 58, .22) !important;
+}
+
+@media (max-width: 639px) {
+  [role='dialog'][aria-modal='true'][class*='max-w-[560px]'] [class*='text-[8px]'],
+  [role='dialog'][aria-modal='true'][class*='max-w-[560px]'] [class*='text-[9px]'] {
+    font-size: 11px !important;
+    line-height: 1.4 !important;
+  }
+
+  [role='dialog'][aria-modal='true'][class*='max-w-[560px]'] [class*='text-[10px]'] {
+    font-size: 11.5px !important;
+    line-height: 1.45 !important;
+  }
+
+  [role='dialog'][aria-modal='true'][class*='max-w-[560px]'] button[class*='h-9'][class*='w-9'] {
+    min-width: 40px !important;
+    min-height: 40px !important;
+  }
+}
