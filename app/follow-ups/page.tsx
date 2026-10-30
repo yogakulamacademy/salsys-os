@@ -7,6 +7,7 @@ import {
   CheckCircle2,
   ChevronLeft,
   ChevronRight,
+  CircleDollarSign,
   Clock,
   RotateCcw,
   Sparkles,
@@ -56,9 +57,9 @@ export default async function FollowUpsPage({
   return (
     <div className="followups-polish">
       <PageHeader
-        eyebrow="Task queue"
-        title="Follow-ups"
-        description="Keep every promised response, payment check and scheduled lead touch visible until it is completed."
+        eyebrow="Sales · Tasks & Follow-ups"
+        title="Tasks & Follow-ups"
+        description="Keep every promised response, payment verification and scheduled customer touch visible until it is completed."
         actions={
           <span
             className={`followups-live-badge ${
@@ -81,7 +82,7 @@ export default async function FollowUpsPage({
 
       {workspace.warning ? (
         <Notice tone="warning" title="Fallback data source">
-          Follow-ups loaded using the legacy fallback. {workspace.warning}
+          Tasks loaded using the legacy fallback. {workspace.warning}
         </Notice>
       ) : null}
 
@@ -89,7 +90,7 @@ export default async function FollowUpsPage({
         <FollowUpSummaryCard
           label="Due now"
           value={summary.dueNow.toLocaleString()}
-          note="Open or snoozed tasks at or after their due time"
+          note="Open or rescheduled tasks at or after their due time"
           tone="urgent"
           icon={<Clock size={17} />}
         />
@@ -100,6 +101,14 @@ export default async function FollowUpsPage({
           note="Priority opportunities that need admissions attention"
           tone="priority"
           icon={<Sparkles size={17} />}
+        />
+
+        <FollowUpSummaryCard
+          label="Payment checks"
+          value={summary.paymentChecks.toLocaleString()}
+          note="Customer-reported payments waiting for verification"
+          tone={summary.paymentChecks > 0 ? "priority" : "healthy"}
+          icon={<CircleDollarSign size={17} />}
         />
 
         <FollowUpSummaryCard
@@ -121,14 +130,14 @@ export default async function FollowUpsPage({
             <div className="eyebrow">Priority queue</div>
             <div className="section-title mt-1">Scheduled actions</div>
             <p className="followups-queue-description">
-              Work the most time-sensitive tasks first, then reschedule anything
-              that genuinely needs a later touch.
+              Work the most time-sensitive tasks first, verify reported payments,
+              then reschedule anything that genuinely needs a later touch.
             </p>
           </div>
 
           <div className="followups-count-pill">
             {pagination.total === 0
-              ? "No due follow-ups"
+              ? "No due tasks"
               : `${pagination.from.toLocaleString()}–${pagination.to.toLocaleString()} of ${pagination.total.toLocaleString()}`}
           </div>
         </header>
@@ -138,7 +147,7 @@ export default async function FollowUpsPage({
             <div className="px-5 py-8">
               <EmptyState
                 title="You’re caught up"
-                description="No due follow-ups are waiting in the queue."
+                description="No due tasks are waiting in the queue."
                 icon={<CheckCircle2 size={20} />}
                 compact
               />
@@ -153,8 +162,8 @@ export default async function FollowUpsPage({
 
                     <SubmitButton
                       pendingLabel=""
-                      title="Complete follow-up"
-                      aria-label={`Complete follow-up for ${task.leadName}`}
+                      title="Complete task"
+                      aria-label={`Complete task for ${task.leadName}`}
                       className="followup-complete-button"
                     >
                       <Check size={16} aria-hidden="true" />
@@ -179,6 +188,7 @@ export default async function FollowUpsPage({
                           ) : null}
 
                           <StageBadge stage={task.stage} />
+                          <TaskTypeBadge taskType={task.taskType} />
                         </div>
 
                         <div className="followup-task-title">{task.title}</div>
@@ -201,6 +211,15 @@ export default async function FollowUpsPage({
                         Open conversation
                       </Link>
 
+                      {task.taskType === "payment_check" ? (
+                        <Link
+                          href={`/leads/${task.leadId}`}
+                          className="followup-conversation-link"
+                        >
+                          Review payment
+                        </Link>
+                      ) : null}
+
                       <form
                         action={snoozeFollowUpAction}
                         className="followup-reschedule-form"
@@ -217,14 +236,14 @@ export default async function FollowUpsPage({
                           type="datetime-local"
                           name="due_at"
                           required
-                          aria-label={`New follow-up time for ${task.leadName}`}
+                          aria-label={`New task time for ${task.leadName}`}
                         />
 
                         <SubmitButton
                           pendingLabel="Saving..."
                           className="followup-snooze-button"
                         >
-                          Snooze
+                          Reschedule
                         </SubmitButton>
                       </form>
                     </div>
@@ -298,11 +317,38 @@ function FollowUpSummaryCard({
         <span className="followups-summary-icon">{icon}</span>
         <span className="followups-summary-label">{label}</span>
       </div>
-
       <div className="followups-summary-value">{value}</div>
       <div className="followups-summary-note">{note}</div>
     </div>
   );
+}
+
+function TaskTypeBadge({ taskType }: { taskType: string }) {
+  if (taskType === "payment_check") {
+    return (
+      <span className="inline-flex items-center gap-1 rounded-md border border-amber-200 bg-amber-50 px-2 py-1 text-[9px] font-semibold text-amber-700">
+        <CircleDollarSign size={10} /> Payment verification
+      </span>
+    );
+  }
+
+  if (taskType === "human_review") {
+    return (
+      <span className="rounded-md border border-violet-200 bg-violet-50 px-2 py-1 text-[9px] font-semibold text-violet-700">
+        Human review
+      </span>
+    );
+  }
+
+  if (taskType === "call") {
+    return (
+      <span className="rounded-md border border-line bg-surface-soft px-2 py-1 text-[9px] font-semibold text-copy-muted">
+        Call
+      </span>
+    );
+  }
+
+  return null;
 }
 
 function parsePage(value: string | undefined) {
@@ -316,8 +362,8 @@ function pageHref(page: number) {
 
 function noticeText(notice: string) {
   const messages: Record<string, string> = {
-    completed: "Follow-up completed.",
-    snoozed: "Follow-up rescheduled.",
+    completed: "Task completed.",
+    snoozed: "Task rescheduled.",
     "mock-complete": "Mock mode: task was not changed.",
     "mock-snooze": "Mock mode: task was not changed.",
   };
