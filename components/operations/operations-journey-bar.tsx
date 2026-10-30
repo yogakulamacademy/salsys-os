@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { BookOpen, FileCheck2, LayoutDashboard, UsersRound } from "lucide-react";
+import { BookOpen, FileCheck2, LayoutDashboard, ShieldCheck, UsersRound } from "lucide-react";
 
 export function OperationsJourneyBar() {
   return (
@@ -14,6 +14,9 @@ export function OperationsJourneyBar() {
         <div className="flex flex-wrap gap-2">
           <Link href="/operations" className="btn-secondary">
             <LayoutDashboard size={14} /> Overview
+          </Link>
+          <Link href="/availability" className="btn-secondary">
+            <ShieldCheck size={14} /> Availability
           </Link>
           <Link href="/course-management" className="btn-secondary">
             <BookOpen size={14} /> Programs & Batches
