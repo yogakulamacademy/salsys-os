@@ -19,6 +19,7 @@ const migration007 = read('supabase/migrations/007_tenant_schema_foundation.sql'
 const legacyAuthBootstrap = read('supabase/recovery/007_legacy_authorization_baseline.sql');
 const enrollmentTenantBootstrap = read('supabase/recovery/016_enrollments_tenant_baseline.sql');
 const leadContactLogBootstrap = read('supabase/recovery/016_lead_contact_logs_baseline.sql');
+const journeyViewsBootstrap = read('supabase/recovery/016_journey_views_baseline.sql');
 const vercel = JSON.parse(read('vercel.json'));
 
 for (const [needle, label] of [
@@ -46,8 +47,10 @@ for (const [needle, label] of [
   ['later Sales authorization migration replaces `can_access_lead()`', 'later RBAC replacement evidence'],
   ['supabase/recovery/016_enrollments_tenant_baseline.sql', 'migration 016 enrollment bootstrap reference'],
   ['supabase/recovery/016_lead_contact_logs_baseline.sql', 'migration 016 contact-log bootstrap reference'],
+  ['supabase/recovery/016_journey_views_baseline.sql', 'migration 016 journey-view bootstrap reference'],
   ['migrations `008` through `015`', 'replay-through-015 evidence'],
   ['relation "public.lead_contact_logs" does not exist', 'second migration 016 replay boundary'],
+  ['v_lead_journey_intelligence', 'journey intelligence recovery boundary'],
   ['cold-recovery bootstrap', 'bootstrap safety boundary'],
 ]) {
   assert(coldRebuild.includes(needle), `cold-rebuild evidence missing ${label}.`);
@@ -180,6 +183,40 @@ assert(
   'migration 016 contact-log bootstrap must not invent tenant columns, triggers, or application data.',
 );
 
+for (const [needle, label] of [
+  ['create or replace view public.v_lead_session_journey', 'lead-session journey view bootstrap'],
+  ['create or replace view public.v_lead_journey_intelligence', 'lead journey intelligence view bootstrap'],
+  ['with (security_invoker = true)', 'security-invoker view posture'],
+  ['from public.web_sessions ws', 'session journey web_sessions dependency'],
+  ['join public.leads l', 'journey leads dependency'],
+  ['from public.touchpoints t', 'journey touchpoints dependency'],
+  ['s.organization_id = l.organization_id', 'tenant-aware session-to-lead join'],
+  ['t.organization_id = ws.organization_id', 'tenant-aware touchpoint-to-session join'],
+  ['as behaviour_temperature', 'journey behavior contract'],
+  ['organization_id\nfrom scored;', 'journey organization output'],
+  ['This file is NOT part of the normal production migration ledger.', 'journey recovery-only safety boundary'],
+]) {
+  assert(journeyViewsBootstrap.includes(needle), `migration 016 journey-view bootstrap missing ${label}.`);
+}
+
+assert(
+  !journeyViewsBootstrap.includes('grant ') &&
+    !journeyViewsBootstrap.includes('create trigger') &&
+    !journeyViewsBootstrap.includes('insert into '),
+  'migration 016 journey-view bootstrap must not add grants, triggers, or application data.',
+);
+
+const sessionViewIndex = journeyViewsBootstrap.indexOf(
+  'create or replace view public.v_lead_session_journey',
+);
+const leadJourneyViewIndex = journeyViewsBootstrap.indexOf(
+  'create or replace view public.v_lead_journey_intelligence',
+);
+assert(
+  sessionViewIndex >= 0 && leadJourneyViewIndex > sessionViewIndex,
+  'migration 016 journey-view bootstrap must create v_lead_session_journey before v_lead_journey_intelligence.',
+);
+
 const durableTrigger =
   vercel.functions?.['app/api/tracking/durable-events/consume/route.ts']?.experimentalTriggers?.[0];
 
@@ -194,4 +231,4 @@ assert(
   'durable trusted-event recovery concurrency must remain capped at 5.',
 );
 
-console.log('PH-5.2 recovery runbook, resilience, schema replay, legacy authorization, enrollment tenant, and lead contact log bootstrap contracts verified.');
+console.log('PH-5.2 recovery runbook, resilience, schema replay, legacy authorization, enrollment tenant, lead contact log, and journey view bootstrap contracts verified.');
