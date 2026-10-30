@@ -5,8 +5,8 @@ import {
   ArrowRight,
   BrainCircuit,
   Building2,
+  Database,
   PlugZap,
-  Settings2,
   ShieldCheck,
   SlidersHorizontal,
 } from 'lucide-react';
@@ -37,9 +37,9 @@ export default async function SettingsOverviewPage() {
   return (
     <div className="space-y-6">
       <PageHeader
-        eyebrow="System"
-        title="Settings directory"
-        description="A single place to find CRM rules, team access, AI knowledge, integrations and operational controls."
+        eyebrow="Settings"
+        title="Workspace settings"
+        description="Manage CRM rules, permissions, approved AI knowledge, integrations, tracking and operational system controls."
       />
 
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
@@ -54,8 +54,8 @@ export default async function SettingsOverviewPage() {
           <SettingsCard
             href="/settings/team"
             icon={<ShieldCheck size={19} />}
-            title="Team & Access"
-            description="Create, activate and deactivate tenant-scoped employee access."
+            title="Team & Permissions"
+            description="Create, activate and deactivate tenant-scoped employee access without changing lead ownership."
           />
         ) : null}
 
@@ -79,19 +79,21 @@ export default async function SettingsOverviewPage() {
 
         {admin ? (
           <SettingsCard
-            href="/system-health"
-            icon={<Activity size={19} />}
-            title="System Health"
-            description="Operational health, data integrity and readiness for connected systems."
+            href="/tracking"
+            icon={<Database size={19} />}
+            title="Tracking & Data"
+            description="Review tracking sources, conversion coverage, form capture and data quality evidence."
           />
         ) : null}
 
-        <SettingsCard
-          href="/team"
-          icon={<Settings2 size={19} />}
-          title="Team Workspace"
-          description="Lead assignment, workload balancing, access and team performance."
-        />
+        {admin ? (
+          <SettingsCard
+            href="/system-health"
+            icon={<Activity size={19} />}
+            title="System Health"
+            description="Monitor operational integrations, syncs, webhook processing and recent failures."
+          />
+        ) : null}
 
         {platformAdmin ? (
           <SettingsCard
@@ -103,6 +105,16 @@ export default async function SettingsOverviewPage() {
           />
         ) : null}
       </div>
+
+      {manager && !admin ? (
+        <section className="rounded-panel border border-line bg-surface px-4 py-4 shadow-card sm:px-5">
+          <div className="text-[10px] font-semibold uppercase tracking-[0.14em] text-brand-700">Manager scope</div>
+          <div className="mt-1 text-sm font-semibold text-copy-strong">Operational settings stay permission-bound</div>
+          <p className="mt-1 max-w-2xl text-xs leading-5 text-copy-muted">
+            Managers can review CRM rules here. Provider credentials, team access, tracking administration and system-health controls remain Owner/Admin settings.
+          </p>
+        </section>
+      ) : null}
     </div>
   );
 }
@@ -123,21 +135,21 @@ function SettingsCard({
   return (
     <Link
       href={href}
-      className="group rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition hover:-translate-y-0.5 hover:border-violet-200 hover:shadow-md dark:border-slate-800 dark:bg-slate-950"
+      className="group rounded-panel border border-line bg-surface p-5 shadow-card transition hover:-translate-y-0.5 hover:border-brand-200 hover:shadow-md"
     >
       <div className="flex items-start justify-between gap-4">
-        <span className="grid h-10 w-10 place-items-center rounded-xl bg-violet-50 text-violet-700 dark:bg-violet-950/40 dark:text-violet-300">
+        <span className="grid h-10 w-10 place-items-center rounded-ui bg-brand-50 text-brand-700">
           {icon}
         </span>
         {badge ? (
-          <span className="rounded-full bg-slate-100 px-2 py-1 text-[10px] font-semibold text-slate-500 dark:bg-slate-900">
+          <span className="rounded-full border border-line bg-surface-soft px-2 py-1 text-[10px] font-semibold text-copy-muted">
             {badge}
           </span>
         ) : null}
       </div>
-      <h2 className="mt-4 text-base font-semibold text-slate-950 dark:text-white">{title}</h2>
-      <p className="mt-2 text-sm leading-6 text-slate-500">{description}</p>
-      <span className="mt-4 inline-flex items-center gap-1.5 text-xs font-semibold text-violet-700 dark:text-violet-300">
+      <h2 className="mt-4 text-base font-semibold text-copy-strong">{title}</h2>
+      <p className="mt-2 text-sm leading-6 text-copy-muted">{description}</p>
+      <span className="mt-4 inline-flex items-center gap-1.5 text-xs font-semibold text-brand-700">
         Open <ArrowRight size={13} className="transition group-hover:translate-x-0.5" />
       </span>
     </Link>
