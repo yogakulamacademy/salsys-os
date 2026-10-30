@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { BookOpen, LayoutDashboard, UsersRound } from "lucide-react";
+import { BookOpen, FileCheck2, LayoutDashboard, UsersRound } from "lucide-react";
 
 export function OperationsJourneyBar() {
   return (
@@ -8,7 +8,7 @@ export function OperationsJourneyBar() {
         <div className="min-w-0">
           <div className="text-[9px] font-black uppercase tracking-[.14em] text-copy-subtle">Operations workspace</div>
           <p className="mt-1 text-[11px] leading-5 text-copy-muted">
-            Move from operating capacity and availability into program, batch and admissions execution without changing the underlying records.
+            Move from operating capacity and availability into program, batch, enrollment and admissions execution without changing the underlying records.
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -17,6 +17,9 @@ export function OperationsJourneyBar() {
           </Link>
           <Link href="/course-management" className="btn-secondary">
             <BookOpen size={14} /> Programs & Batches
+          </Link>
+          <Link href="/enrollments" className="btn-secondary">
+            <FileCheck2 size={14} /> Enrollments
           </Link>
           <Link href="/admissions" className="btn-secondary">
             <UsersRound size={14} /> Admissions
