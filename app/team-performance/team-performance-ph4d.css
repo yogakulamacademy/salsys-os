@@ -82,6 +82,120 @@
   color: var(--copy-strong);
 }
 
+/* Team overview is context, not the primary action surface. */
+.team-performance-scope > div.space-y-6 > section:nth-of-type(1) {
+  border: 1px solid var(--line);
+  border-radius: var(--radius-panel);
+  background: color-mix(in srgb, var(--surface-muted) 64%, var(--surface));
+  padding: 14px;
+}
+
+.team-performance-scope > div.space-y-6 > section:nth-of-type(1) > div:first-child {
+  margin-bottom: 10px;
+}
+
+.team-performance-scope > div.space-y-6 > section:nth-of-type(1) > div:last-child {
+  gap: 10px;
+}
+
+.team-performance-scope > div.space-y-6 > section:nth-of-type(1) .rounded-2xl.border.border-slate-200.bg-white.p-5.shadow-sm {
+  padding: 14px;
+  border-color: var(--line);
+  background: var(--surface);
+  box-shadow: none;
+}
+
+.team-performance-scope > div.space-y-6 > section:nth-of-type(1) .text-3xl {
+  margin-top: 8px;
+  font-size: 1.45rem;
+  line-height: 1.15;
+}
+
+.team-performance-scope > div.space-y-6 > section:nth-of-type(1) .h-10.w-10 {
+  width: 2rem;
+  height: 2rem;
+  border-radius: 9px;
+}
+
+.team-performance-scope > div.space-y-6 > section:nth-of-type(1) p {
+  margin-top: 8px;
+  font-size: 10px;
+  line-height: 1.45;
+}
+
+/* Workload balance is the primary operational decision surface. */
+.team-performance-scope > div.space-y-6 > section:nth-of-type(2) {
+  position: relative;
+  overflow: hidden;
+  border-color: color-mix(in srgb, var(--brand-700) 24%, var(--line));
+  background: var(--surface);
+  box-shadow: 0 12px 34px color-mix(in srgb, var(--brand-700) 8%, transparent);
+}
+
+.team-performance-scope > div.space-y-6 > section:nth-of-type(2)::before {
+  content: '';
+  position: absolute;
+  inset: 0 0 auto 0;
+  height: 3px;
+  background: var(--brand-700);
+}
+
+.team-performance-scope > div.space-y-6 > section:nth-of-type(2) > div:first-child {
+  background: color-mix(in srgb, var(--brand-50) 36%, var(--surface));
+  border-color: var(--line);
+}
+
+.team-performance-scope > div.space-y-6 > section:nth-of-type(2) > div:first-child h2 {
+  color: var(--copy-strong);
+  font-size: 15px;
+}
+
+.team-performance-scope > div.space-y-6 > section:nth-of-type(2) > div:first-child p,
+.team-performance-scope > div.space-y-6 > section:nth-of-type(2) > div:first-child > div:last-child {
+  color: var(--copy-muted);
+}
+
+.team-performance-scope > div.space-y-6 > section:nth-of-type(2) > div:first-child > div:last-child {
+  border: 1px solid var(--line);
+  background: var(--surface);
+}
+
+.team-performance-scope > div.space-y-6 > section:nth-of-type(2) .border-brand\/30.bg-brand\/\[0\.025\] {
+  border-color: color-mix(in srgb, var(--brand-700) 30%, var(--line));
+  background: color-mix(in srgb, var(--brand-50) 54%, var(--surface));
+}
+
+.team-performance-scope > div.space-y-6 > section:nth-of-type(2) aside.rounded-2xl.border.border-orange-200 {
+  border-color: color-mix(in srgb, var(--brand-700) 24%, var(--line));
+  background: color-mix(in srgb, var(--brand-50) 58%, var(--surface));
+}
+
+.team-performance-scope > div.space-y-6 > section:nth-of-type(2) aside .text-orange-600,
+.team-performance-scope > div.space-y-6 > section:nth-of-type(2) aside .text-orange-700 {
+  color: var(--brand-700);
+}
+
+.team-performance-scope > div.space-y-6 > section:nth-of-type(2) aside button.bg-orange-600 {
+  background: var(--brand-700);
+}
+
+.team-performance-scope > div.space-y-6 > section:nth-of-type(2) aside button.bg-orange-600:hover {
+  background: var(--brand-900);
+}
+
+.team-performance-scope > div.space-y-6 > section:nth-of-type(2) .border-t.border-slate-100 {
+  border-color: var(--line);
+}
+
+/* Assignment distribution remains important, but visually follows workload intervention. */
+.team-performance-scope > div.space-y-6 > section:nth-of-type(3) {
+  padding-top: 2px;
+}
+
+.team-performance-scope > div.space-y-6 > section:nth-of-type(3) > div:first-child h2 {
+  color: var(--copy-strong);
+}
+
 .team-performance-scope > div.space-y-6 > div[class*='border-emerald-200'][class*='bg-emerald-50'] {
   border-color: color-mix(in srgb, #10b981 24%, transparent);
   background: color-mix(in srgb, #ecfdf5 82%, var(--surface));
@@ -138,5 +252,13 @@
 
   .team-performance-scope > div.space-y-6 > div:first-child > div:last-child form {
     min-width: 100%;
+  }
+
+  .team-performance-scope > div.space-y-6 > section:nth-of-type(1) {
+    padding: 12px;
+  }
+
+  .team-performance-scope > div.space-y-6 > section:nth-of-type(2) > div:nth-child(2) {
+    padding: 14px;
   }
 }
