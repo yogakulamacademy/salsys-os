@@ -6,7 +6,6 @@ import {
   BookOpen,
   BrainCircuit,
   Home,
-  Inbox,
   Megaphone,
   Settings,
   Sparkles,
@@ -16,7 +15,11 @@ import {
 import { type ComponentType, useEffect, useMemo, useRef, useState } from "react";
 import { createClient as createBrowserClient } from "@/lib/supabase/browser";
 
-type IconType = ComponentType<{ size?: number | string; strokeWidth?: number; className?: string }>;
+type IconType = ComponentType<{
+  size?: number | string;
+  strokeWidth?: number;
+  className?: string;
+}>;
 
 type SectionLink = {
   id: string;
@@ -33,7 +36,9 @@ type WorkspaceContext = {
 function activePath(pathname: string, href: string) {
   if (href === "/home") return pathname === "/home";
   if (href === "/dashboard") return pathname === "/dashboard";
-  if (href === "/settings") return pathname === "/settings" || pathname.startsWith("/settings/");
+  if (href === "/settings") {
+    return pathname === "/settings" || pathname.startsWith("/settings/");
+  }
   return pathname === href || pathname.startsWith(`${href}/`);
 }
 
@@ -58,7 +63,8 @@ export function DesktopHoverSidebarV3() {
   const mock = process.env.NEXT_PUBLIC_USE_MOCK_DATA !== "false";
   const employee = !mock && role === "admissions";
   const admin = mock || role === "owner" || role === "admin";
-  const privileged = admin || (!mock && role === "manager");
+  const manager = !mock && role === "manager";
+  const privileged = admin || manager;
 
   useEffect(() => {
     let cancelled = false;
@@ -133,23 +139,23 @@ export function DesktopHoverSidebarV3() {
     if (employee) {
       return [
         {
-          id: "overview",
-          label: "Overview",
+          id: "home",
+          label: "Home",
           icon: Home,
           href: "/dashboard",
         },
         {
-          id: "crm",
-          label: "CRM",
+          id: "sales",
+          label: "Sales",
           icon: UsersRound,
           href: "/leads",
-          activeHrefs: ["/pipeline", "/follow-ups"],
-        },
-        {
-          id: "inbox",
-          label: "Inbox",
-          icon: Inbox,
-          href: "/conversations",
+          activeHrefs: [
+            "/pipeline",
+            "/conversations",
+            "/follow-ups",
+            "/customer-360",
+            "/contact-intelligence",
+          ],
         },
       ];
     }
@@ -158,67 +164,42 @@ export function DesktopHoverSidebarV3() {
 
     return [
       {
-        id: "overview",
-        label: "Overview",
+        id: "home",
+        label: "Home",
         icon: Home,
         href: "/home",
+        activeHrefs: ["/dashboard"],
       },
       {
-        id: "crm",
-        label: "CRM",
+        id: "sales",
+        label: "Sales",
         icon: UsersRound,
         href: "/crm",
         activeHrefs: [
           "/leads",
           "/admissions",
           "/pipeline",
+          "/conversations",
           "/follow-ups",
           "/customer-360",
           "/contact-intelligence",
           "/data-quality",
+          "/re-engaged",
         ],
       },
       {
-        id: "team",
-        label: "Team",
-        icon: UsersRound,
-        href: "/team",
-        activeHrefs: ["/team-performance", "/settings/team"],
-      },
-      {
-        id: "inbox",
-        label: "Inbox",
-        icon: Inbox,
-        href: "/conversations",
-      },
-      {
-        id: "growth",
-        label: "Growth",
+        id: "marketing",
+        label: "Marketing",
         icon: Megaphone,
         href: "/marketing",
-        activeHrefs: [
-          "/campaigns",
-          "/paid-media-leads",
-          "/re-engaged",
-          "/seo",
-          "/analytics",
-          "/funnel",
-          "/attribution",
-          "/revenue",
-          "/tracking",
-        ],
-      },
-      {
-        id: "automation",
-        label: "Automation",
-        icon: Workflow,
-        href: "/automation",
+        activeHrefs: ["/campaigns", "/paid-media-leads", "/seo"],
       },
       {
         id: "intelligence",
         label: "Intelligence",
         icon: BrainCircuit,
         href: "/commercial-intelligence",
+        activeHrefs: ["/analytics", "/funnel", "/attribution", "/revenue"],
       },
       {
         id: "operations",
@@ -227,15 +208,30 @@ export function DesktopHoverSidebarV3() {
         href: "/course-management",
       },
       {
-        id: "system",
-        label: "System",
+        id: "team",
+        label: "Team",
+        icon: UsersRound,
+        href: "/team",
+        activeHrefs: ["/team-performance"],
+      },
+      {
+        id: "automation",
+        label: "Automation",
+        icon: Workflow,
+        href: "/automation",
+      },
+      {
+        id: "settings",
+        label: "Settings",
         icon: Settings,
         href: "/settings/overview",
         activeHrefs: [
           "/settings",
           "/settings/integrations",
+          "/settings/team",
           "/settings/knowledge",
           "/settings/organizations",
+          "/tracking",
           "/system-health",
         ],
       },
