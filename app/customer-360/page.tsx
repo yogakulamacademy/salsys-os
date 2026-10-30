@@ -46,39 +46,48 @@ export default async function Customer360Page() {
   if (!user) return null;
 
   const organizationId = await requireCurrentOrganizationId(supabase, user.id);
-  const leadIds = leads.map((lead) => lead.id);
+  const accessibleLeadIds = new Set(leads.map((lead) => lead.id));
 
-  const linksResult = leadIds.length
-    ? await supabase
-        .from("person_leads")
-        .select("person_id,lead_id,resolution_method,confidence")
-        .eq("organization_id", organizationId)
-        .in("lead_id", leadIds)
-    : { data: [], error: null };
+  /*
+   * Read the tenant-scoped identity graph once, then intersect it with the
+   * already-authorized Lead list in memory. Avoid passing hundreds of UUIDs
+   * through PostgREST `in(...)` filters, which can exceed practical request-URL
+   * limits for larger workspaces.
+   */
+  const linksResult = await supabase
+    .from("person_leads")
+    .select("person_id,lead_id,resolution_method,confidence")
+    .eq("organization_id", organizationId);
 
   if (linksResult.error) {
     throw new Error(`Unable to load customer identity links: ${linksResult.error.message}`);
   }
 
-  const links = (linksResult.data ?? []) as PersonLinkRow[];
-  const personIds = [...new Set(links.map((row) => row.person_id).filter(Boolean))];
+  const links = ((linksResult.data ?? []) as PersonLinkRow[]).filter((row) =>
+    accessibleLeadIds.has(row.lead_id),
+  );
+  const accessiblePersonIds = new Set(links.map((row) => row.person_id).filter(Boolean));
 
-  const personResult = personIds.length
-    ? await supabase
-        .from("v_person_360_operational")
-        .select(
-          "person_id,person_status,lead_count,latest_lead_id,latest_lead_name,current_stage,intent,latest_lead_at,last_message_at,enrollment_count,paid_payment_count,paid_amount_by_currency,verified_identifier_count",
-        )
-        .eq("organization_id", organizationId)
-        .in("person_id", personIds)
-        .order("latest_lead_at", { ascending: false, nullsFirst: false })
-    : { data: [], error: null };
+  /*
+   * Same strategy for Person 360: organization-scoped read first, in-memory
+   * intersection second. RLS/view permissions remain authoritative while the
+   * request stays compact and predictable.
+   */
+  const personResult = await supabase
+    .from("v_person_360_operational")
+    .select(
+      "person_id,person_status,lead_count,latest_lead_id,latest_lead_name,current_stage,intent,latest_lead_at,last_message_at,enrollment_count,paid_payment_count,paid_amount_by_currency,verified_identifier_count",
+    )
+    .eq("organization_id", organizationId)
+    .order("latest_lead_at", { ascending: false, nullsFirst: false });
 
   if (personResult.error) {
     throw new Error(`Unable to load Customer 360 records: ${personResult.error.message}`);
   }
 
-  const persons = (personResult.data ?? []) as PersonRow[];
+  const persons = ((personResult.data ?? []) as PersonRow[]).filter((row) =>
+    accessiblePersonIds.has(row.person_id),
+  );
   const leadById = new Map(leads.map((lead) => [lead.id, lead]));
   const linksByPerson = new Map<string, PersonLinkRow[]>();
 
