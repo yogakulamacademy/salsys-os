@@ -14,6 +14,7 @@ const runbook = read('docs/SalsysOS_Database_Recovery_Runbook_v1.md');
 const resilience = read('docs/SalsysOS_Resilience_Principles.md');
 const durableEvents = read('lib/tracking/durable-events.ts');
 const consumer = read('app/api/tracking/durable-events/consume/route.ts');
+const migration007 = read('supabase/migrations/007_tenant_schema_foundation.sql');
 const vercel = JSON.parse(read('vercel.json'));
 
 for (const [needle, label] of [
@@ -53,6 +54,38 @@ assert(
   'transient durable-event persistence failures must remain retryable.',
 );
 
+const coursePrerequisite = migration007.indexOf(
+  'alter table public.courses\n  add column if not exists external_course_id text;',
+);
+const courseIndex = migration007.indexOf(
+  'create unique index if not exists uq_courses_org_source_external',
+);
+const batchPrerequisite = migration007.indexOf(
+  'alter table public.course_batches\n  add column if not exists external_batch_id text;',
+);
+const batchIndex = migration007.indexOf(
+  'create unique index if not exists uq_course_batches_org_source_external',
+);
+
+for (const [needle, label] of [
+  ['alter table public.courses\n  add column if not exists source_system text;', 'courses.source_system recovery prerequisite'],
+  ['alter table public.courses\n  add column if not exists external_course_id text;', 'courses.external_course_id recovery prerequisite'],
+  ['alter table public.course_batches\n  add column if not exists source_system text;', 'course_batches.source_system recovery prerequisite'],
+  ['alter table public.course_batches\n  add column if not exists external_batch_id text;', 'course_batches.external_batch_id recovery prerequisite'],
+]) {
+  assert(migration007.includes(needle), `migration 007 missing ${label}.`);
+}
+
+assert(
+  coursePrerequisite >= 0 && courseIndex >= 0 && coursePrerequisite < courseIndex,
+  'migration 007 must create courses.external_course_id before the tenant-scoped course index.',
+);
+
+assert(
+  batchPrerequisite >= 0 && batchIndex >= 0 && batchPrerequisite < batchIndex,
+  'migration 007 must create course_batches.external_batch_id before the tenant-scoped batch index.',
+);
+
 const durableTrigger =
   vercel.functions?.['app/api/tracking/durable-events/consume/route.ts']?.experimentalTriggers?.[0];
 
@@ -67,4 +100,4 @@ assert(
   'durable trusted-event recovery concurrency must remain capped at 5.',
 );
 
-console.log('PH-5.2A recovery runbook and readiness contracts verified.');
+console.log('PH-5.2 recovery runbook, resilience, and migration replay contracts verified.');
