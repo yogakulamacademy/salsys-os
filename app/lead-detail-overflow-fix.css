@@ -1,0 +1,35 @@
+/* Phase 6D hotfix — prevent Lead detail content from forcing horizontal viewport overflow. */
+
+.shell-main,
+.shell-main > *,
+.shell-main .card-pad,
+.shell-main .card-pad > * {
+  min-width: 0;
+  max-width: 100%;
+}
+
+/* Grid children default to min-width:auto; long URLs can therefore force the
+   whole two-column Lead detail layout wider than the viewport. */
+.shell-main .grid > * {
+  min-width: 0;
+}
+
+/* CRM values can contain long landing-page URLs, IDs and tracking parameters. */
+.shell-main .card-pad p,
+.shell-main .card-pad dd,
+.shell-main .card-pad a,
+.shell-main .card-pad [class*="font-"] {
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+/* Last-resort containment for legacy detail surfaces while they are migrated. */
+.shell-main {
+  overflow-x: clip;
+}
+
+@media (max-width: 1279px) {
+  .shell-main .card-pad {
+    overflow: hidden;
+  }
+}
