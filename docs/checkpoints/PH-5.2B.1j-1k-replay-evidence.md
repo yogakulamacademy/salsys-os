@@ -95,17 +95,22 @@ Replay result:
 
 ## Next independent boundary
 
-The next migration is:
-
-`039_analytics_seo_tenant_hardening`
+The next migration is `039_analytics_seo_tenant_hardening`.
 
 Replay stops because:
 
 `relation "public.ga4_daily" does not exist`
 
-This is intentionally **not** repaired inside 1k. Migration 039 is a broad analytics/SEO canonicalization boundary and expects a larger historical reporting foundation, including the GA4 daily/reporting family and downstream Analytics/SEO read models.
+This is intentionally **not** repaired inside 1k. Migration 039 is a broad analytics/SEO canonicalization boundary. Its opening statements already depend on a larger historical GA4 foundation including:
 
-The next recovery checkpoint should map the full migration-039 prerequisite set read-only before another paid replay branch is created.
+- `ga4_daily`
+- `ga4_source_medium_daily`
+- `ga4_landing_page_daily`
+- `ga4_campaign_daily`
+- `ga4_country_daily`
+- `ga4_sync_runs`
+
+The migration then rebuilds CRM/Analytics reconciliation and workspace read models on top of that foundation. The next recovery checkpoint should map the complete migration-039 prerequisite set read-only before another paid replay branch is created.
 
 ## Safety evidence
 
