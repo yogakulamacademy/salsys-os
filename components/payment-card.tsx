@@ -69,7 +69,7 @@ export async function PaymentCard({
   }
 
   return (
-    <section className="card-pad">
+    <section id="payment-review" className="card-pad scroll-mt-24">
       <div className="flex items-start justify-between gap-4">
         <div>
           <div className="eyebrow">Finance</div>
