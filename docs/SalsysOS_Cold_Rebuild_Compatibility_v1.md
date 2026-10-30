@@ -1,6 +1,6 @@
 # SalsysOS Cold-Rebuild Compatibility v1
 
-**Checkpoint:** PH-5.2B.1e  
+**Checkpoint:** PH-5.2B.1f  
 **Scope:** historical schema/auth prerequisites required to reconstruct SalsysOS from migrations without changing live production authorization
 
 ## Why this exists
@@ -123,6 +123,41 @@ No recorded migration contains `ALTER TABLE public.lead_contact_logs`, which mea
 
 `supabase/recovery/016_lead_contact_logs_baseline.sql` therefore version-captures that missing object only for isolated cold recovery. It does not add `organization_id`, modern workspace tables, application data, or triggers.
 
+## PH-5.2B.1e replay evidence
+
+A fresh disposable branch replay with the proven `007` prerequisites plus both `016` baselines progressed beyond the missing enrollment tenant column and beyond `lead_contact_logs`.
+
+The next PostgreSQL `42P01` failure was:
+
+`relation "public.v_lead_journey_intelligence" does not exist`
+
+The failing statement was migration `016` creating `v_source_journey_summary` from `public.v_lead_journey_intelligence`.
+
+The branch was deleted immediately after evidence capture, stopping the hourly branch charge.
+
+## PH-5.2B.1f — journey-view recovery baseline
+
+Repository history and the production migration ledger show that `public.v_lead_journey_intelligence` was already consumed before migration `016` but was never created by any recorded migration. Its upstream `public.v_lead_session_journey` was also unversioned at the `015 -> 016` boundary; a later October 28 optimization migration finally captured a deterministic definition for the session-journey view.
+
+Production dependency inspection shows the two views ultimately depend only on:
+
+- `public.leads`
+- `public.web_sessions`
+- `public.touchpoints`
+- `public.v_lead_session_journey` as the direct upstream view for lead-level journey intelligence
+
+The exact base columns consumed by those views are present by migrations `001`, `003`, and `007`, including tenant `organization_id` on all three base tables. Both production views currently use `security_invoker=true`.
+
+`supabase/recovery/016_journey_views_baseline.sql` therefore version-captures the missing historical read-model prerequisites immediately after migration `015` and before migration `016`:
+
+1. create `public.v_lead_session_journey` first;
+2. create `public.v_lead_journey_intelligence` second;
+3. preserve tenant-aware joins through `organization_id`;
+4. preserve `security_invoker=true`;
+5. add no grants, data, triggers, or base-table DDL.
+
+The baseline uses the later version-captured session-journey definition and the verified current production lead-journey column contract because no earlier SQL definition exists in the migration ledger. This is a recovery compatibility artifact, not a claim that these SQL texts were the exact original manually-applied definitions.
+
 ## Cold-rebuild sequence
 
 For a schema-only cold rebuild from zero:
@@ -133,9 +168,10 @@ For a schema-only cold rebuild from zero:
 4. Continue migrations `008` through `015`.
 5. Apply `supabase/recovery/016_enrollments_tenant_baseline.sql`.
 6. Apply `supabase/recovery/016_lead_contact_logs_baseline.sql`.
-7. Continue with migration `016` and the remaining recorded migration chain.
-8. Verify that the later Sales authorization migration replaces `can_access_lead()` with the workspace-aware implementation.
-9. Run the normal security/RLS regression contracts and final schema-parity checks before treating the rebuilt environment as valid.
+7. Apply `supabase/recovery/016_journey_views_baseline.sql`.
+8. Continue with migration `016` and the remaining recorded migration chain.
+9. Verify that the later Sales authorization migration replaces `can_access_lead()` with the workspace-aware implementation.
+10. Run the normal security/RLS regression contracts and final schema-parity checks before treating the rebuilt environment as valid.
 
 ## Safety boundary
 
