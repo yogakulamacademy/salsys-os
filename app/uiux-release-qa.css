@@ -140,3 +140,27 @@
     min-height: 40px !important;
   }
 }
+
+/* Pipeline mobile UX: keep the desktop seven-column board, but turn it into a
+   stage-by-stage horizontal snap carousel on touch screens instead of forcing
+   users to pan across a 1660px canvas. */
+@media (max-width: 767px) {
+  [data-motion-route='/pipeline'] div[class*='mt-3'][class*='overflow-x-auto']:has(> div[class*='min-w-[1660px]']) {
+    scroll-snap-type: x mandatory;
+    scroll-padding-inline: 4px;
+    overscroll-behavior-inline: contain;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  [data-motion-route='/pipeline'] div[class*='min-w-[1660px]'][class*='grid-cols-7'] {
+    min-width: 0 !important;
+    grid-template-columns: none !important;
+    grid-auto-flow: column;
+    grid-auto-columns: minmax(278px, 86vw);
+  }
+
+  [data-motion-route='/pipeline'] div[class*='min-w-[1660px]'][class*='grid-cols-7'] > div {
+    scroll-snap-align: start;
+    scroll-snap-stop: always;
+  }
+}
