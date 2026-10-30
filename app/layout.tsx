@@ -17,6 +17,7 @@ import './salsys-violet-theme.css';
 import './sales-today.css';
 import './leads-workspace.css';
 import './inbox-workspace.css';
+import './lead-detail-overflow-fix.css';
 import { InteractionFeedbackBridge } from '@/components/interaction-feedback-bridge';
 import { MotionRouteSurface } from '@/components/motion-route-surface';
 import { RootShell } from '@/components/root-shell';
