@@ -1,6 +1,6 @@
 # SalsysOS Cold-Rebuild Compatibility v1
 
-**Checkpoint:** PH-5.2B.1d  
+**Checkpoint:** PH-5.2B.1e  
 **Scope:** historical schema/auth prerequisites required to reconstruct SalsysOS from migrations without changing live production authorization
 
 ## Why this exists
@@ -85,18 +85,57 @@ For isolated cold recovery, `supabase/recovery/016_enrollments_tenant_baseline.s
 
 Later performance indexes and later RLS policy revisions are deliberately not pulled backward into this bootstrap. They remain owned by their recorded migrations or a later final schema-parity check.
 
+## PH-5.2B.1d replay evidence
+
+A fresh disposable Supabase branch was created on 2026-10-30 at the quoted branch rate of `$0.01344/hour`. Production data was excluded.
+
+The branch initially exposed only migrations `001` through `006`, which is the intended cold-rebuild boundary. Because Supabase branch replay uses the production migration ledger rather than the corrected Git copy of migration `007`, the harness pre-seeded the same seven proven `007` prerequisites used in PH-5.2B.1c. The branch then replayed migrations `007` through `015` successfully and stopped at migration `016`.
+
+After applying `supabase/recovery/016_enrollments_tenant_baseline.sql`, migration `016` advanced past the original missing `enrollments.organization_id` reference but failed later in the same view definition with PostgreSQL `42P01`:
+
+`relation "public.lead_contact_logs" does not exist`
+
+The failing statement is `create or replace view public.v_contact_intelligence_touch_journey`, whose FROM clause reads `public.lead_contact_logs lcl`.
+
+This proves the enrollment tenant bootstrap repairs the first `016` prerequisite, but migration `016` has at least one additional historical dependency that is also absent from migrations `001` through `015`.
+
+The disposable branch was deleted immediately after the error evidence was captured, stopping the hourly branch charge.
+
+## PH-5.2B.1e — lead contact log baseline
+
+Production audit shows that `public.lead_contact_logs` exists today and is not created or altered by any recorded migration before `016`. Migration `016` itself only replaces journey views; it does not create this base table.
+
+Current production evidence for `lead_contact_logs`:
+
+- 14 columns, headed by `id uuid primary key default gen_random_uuid()` and mandatory `lead_id uuid`;
+- `lead_id` FK -> `leads(id) ON DELETE CASCADE`;
+- nullable `employee_user_id` FK -> `profiles(id) ON DELETE SET NULL`;
+- method/direction/outcome/source/comment/call-duration checks;
+- four ordinary time-oriented indexes plus one partial unique `(source, external_reference)` index;
+- RLS enabled;
+- one authenticated SELECT policy: `can_access_lead(lead_id)`;
+- authenticated has SELECT only;
+- service_role has table write/read privileges;
+- no custom triggers;
+- 37 current production rows.
+
+No recorded migration contains `ALTER TABLE public.lead_contact_logs`, which means the current base-table shape is the strongest available evidence for the historical object that existed before `016`.
+
+`supabase/recovery/016_lead_contact_logs_baseline.sql` therefore version-captures that missing object only for isolated cold recovery. It does not add `organization_id`, modern workspace tables, application data, or triggers.
+
 ## Cold-rebuild sequence
 
 For a schema-only cold rebuild from zero:
 
 1. Apply migrations `001` through `006`.
 2. Apply `supabase/recovery/007_legacy_authorization_baseline.sql`.
-3. Apply the corrected `007_tenant_schema_foundation.sql`.
+3. Apply the corrected `007_tenant_schema_foundation.sql` (or, when using Supabase branch rebase against the production ledger, pre-seed the four website-sync columns before replay).
 4. Continue migrations `008` through `015`.
 5. Apply `supabase/recovery/016_enrollments_tenant_baseline.sql`.
-6. Continue with migration `016` and the remaining recorded migration chain.
-7. Verify that the later Sales authorization migration replaces `can_access_lead()` with the workspace-aware implementation.
-8. Run the normal security/RLS regression contracts and final schema-parity checks before treating the rebuilt environment as valid.
+6. Apply `supabase/recovery/016_lead_contact_logs_baseline.sql`.
+7. Continue with migration `016` and the remaining recorded migration chain.
+8. Verify that the later Sales authorization migration replaces `can_access_lead()` with the workspace-aware implementation.
+9. Run the normal security/RLS regression contracts and final schema-parity checks before treating the rebuilt environment as valid.
 
 ## Safety boundary
 
