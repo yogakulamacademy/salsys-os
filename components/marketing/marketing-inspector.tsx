@@ -71,6 +71,14 @@ export function MarketingInspector({
 
   if (!open) return null;
 
+  const resolveHref = (href: string) => {
+    if (eyebrow !== "Campaign evidence") return href;
+    const campaign = encodeURIComponent(title);
+    if (href === "/paid-media-leads") return `/paid-media-leads?campaign=${campaign}`;
+    if (href === "/attribution") return `/attribution?q=${campaign}`;
+    return href;
+  };
+
   return (
     <div className="fixed inset-0 z-[90]">
       <button
@@ -150,7 +158,7 @@ export function MarketingInspector({
             <InspectorSection title="Related records">
               <div className="grid gap-2">
                 {related.map((item) => (
-                  <Link key={`${item.href}-${item.label}`} href={item.href} className="group flex items-center justify-between gap-3 rounded-xl border border-[#e2e8e1] bg-white px-3.5 py-3 transition hover:border-[#c9d8cb] hover:bg-[#f8faf7]">
+                  <Link key={`${item.href}-${item.label}`} href={resolveHref(item.href)} className="group flex items-center justify-between gap-3 rounded-xl border border-[#e2e8e1] bg-white px-3.5 py-3 transition hover:border-[#c9d8cb] hover:bg-[#f8faf7]">
                     <span>
                       <span className="block text-[11px] font-semibold text-[#203b32]">{item.label}</span>
                       {item.detail ? <span className="mt-0.5 block text-[9px] text-[#758279]">{item.detail}</span> : null}
@@ -169,7 +177,7 @@ export function MarketingInspector({
               {actions.map((action, index) => (
                 <Link
                   key={`${action.href}-${action.label}`}
-                  href={action.href}
+                  href={resolveHref(action.href)}
                   title={action.detail}
                   className={action.primary || index === 0 ? "btn-primary" : "btn-secondary"}
                 >
