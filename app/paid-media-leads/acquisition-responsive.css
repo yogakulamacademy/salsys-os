@@ -1,0 +1,50 @@
+/* Responsive polish for Marketing · Acquisition.
+   Presentation only: preserve all filters, evidence fields and read-model semantics. */
+
+@media (max-width: 640px) {
+  .paid-media-polish .paid-media-quickbar,
+  .paid-media-polish .paid-media-active-filters {
+    min-width: 0;
+  }
+
+  .paid-media-polish .paid-media-quickbar-row,
+  .paid-media-polish .paid-media-active-filters {
+    flex-wrap: nowrap !important;
+    overflow-x: auto;
+    scroll-snap-type: x mandatory;
+    overscroll-behavior-inline: contain;
+    padding-bottom: 6px;
+    scrollbar-width: none;
+  }
+
+  .paid-media-polish .paid-media-quickbar-row::-webkit-scrollbar,
+  .paid-media-polish .paid-media-active-filters::-webkit-scrollbar {
+    display: none;
+  }
+
+  .paid-media-polish .paid-media-quickbar-row > *,
+  .paid-media-polish .paid-media-active-filters > * {
+    flex: 0 0 auto;
+    scroll-snap-align: start;
+  }
+
+  .paid-media-polish .paid-media-filter-grid {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+
+  .paid-media-polish .paid-media-filter-grid > div,
+  .paid-media-polish .paid-media-filter-grid > label {
+    min-width: 0;
+    width: 100%;
+  }
+
+  .paid-media-polish .paid-media-filter-grid .btn-primary,
+  .paid-media-polish .paid-media-filter-grid .btn-secondary {
+    min-height: 42px;
+  }
+
+  .paid-media-polish .paid-media-table-wrap {
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior-inline: contain;
+  }
+}
