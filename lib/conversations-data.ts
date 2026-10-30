@@ -41,13 +41,6 @@ export async function getConversationsWorkspace(
     return workspace;
   }
 
-  if (baseRows.length === 1) {
-    return {
-      ...workspace,
-      conversationSummary: [withSingleOpportunityIdentity(baseRows[0])],
-    };
-  }
-
   try {
     const supabase = await createClient();
     const leadIds = baseRows.map((row) => row.id);
