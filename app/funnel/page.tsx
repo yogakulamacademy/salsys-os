@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { RefreshCw, Sparkles } from "lucide-react";
+import { CircleDollarSign, Sparkles, Target } from "lucide-react";
 
 import { FunnelIntelligenceWorkspaceV2 } from "@/components/funnel-intelligence-workspace-v2";
 import { ExecutiveDecisionBrief } from "@/components/marketing/executive-decision-brief";
@@ -16,18 +16,22 @@ export default async function FunnelPage() {
   return (
     <div className="space-y-4">
       <PageHeader
-        eyebrow="Decision intelligence"
+        eyebrow="Intelligence · Conversion"
         title="Funnel"
         description="See where demand becomes revenue, where momentum is lost, and which evidence deserves attention next."
         actions={
           <div className="flex flex-wrap gap-2">
-            <Link href="/commercial-intelligence" className="btn-secondary">
-              <Sparkles size={15} />
-              Ask Salsys
+            <Link href="/campaigns" className="btn-secondary">
+              <Target size={15} /> Campaigns
             </Link>
-            <Link href="/re-engaged" className="btn-secondary">
-              <RefreshCw size={15} />
-              Lead activity
+            <Link href="/attribution" className="btn-secondary">
+              <Target size={15} /> Attribution
+            </Link>
+            <Link href="/commercial-intelligence" className="btn-secondary">
+              <Sparkles size={15} /> Ask Salsys
+            </Link>
+            <Link href="/revenue" className="btn-primary">
+              <CircleDollarSign size={15} /> Revenue
             </Link>
           </div>
         }
