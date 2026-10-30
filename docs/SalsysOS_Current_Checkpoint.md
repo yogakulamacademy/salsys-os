@@ -1,161 +1,221 @@
 # SalsysOS Current Checkpoint
 
-**Date:** 2026-10-26  
+**Date:** 2026-10-30  
 **Canonical repository:** `yogakulamacademy/salsys-os`  
-**Production branch:** `main`  
-**Current production code head:** `9409a658c5786ae4a6fa209d976c732f0c6de00d`  
+**Active redesign branch:** `phase-6a-violet-foundation`  
+**Current release-candidate head:** `3b2714e413b1ae5378cce1c12abf195237f69999`  
 **Primary Supabase project:** `doaozrkrtgeslddwhclj`  
 **Primary Vercel project:** `prj_oNvjC0PwwNEAHHlES3xyP36lISAy` (`salsys-os`)
 
-This file is the canonical operational checkpoint. Read it together with `docs/SalsysOS_North_Star_Product_Context.md`. Historical files under `docs/checkpoints/` remain immutable evidence records.
-
-## Latest critical milestone
-
-Read this first for the October 26 outage/resilience work:
-
-`docs/checkpoints/M-2026-10-26-Supabase-Incident-and-Durable-Event-Resilience-v1.md`
-
-That checkpoint records:
-
-- the Supabase database interruption and automatic recovery evidence;
-- middleware and login timeout hardening;
-- the trusted event durability redesign;
-- PR #187 and merge commit `9409a658c5786ae4a6fa209d976c732f0c6de00d`;
-- current `booking.completed` / `payment.started` status;
-- the exact next implementation sequence.
-
-Other recent milestone records remain under `docs/checkpoints/` for onboarding, CRM, Customer 360, Conversations, Flow Builder and Universal Tracking.
+This file is the canonical operational checkpoint. Read it together with `docs/SalsysOS_North_Star_Product_Context.md`. Historical files under `docs/checkpoints/` remain immutable evidence records and must not be rewritten to match later implementation state.
 
 ---
 
-## 0. Ordered product closeout status
+## 0. Executive status
 
-The closeout discipline remains: do not claim an area closed until its real production integrity path is proven.
+SalsysOS Phase 6 implementation is in **release-candidate validation** on `phase-6a-violet-foundation`.
 
-1. **Core CRM + lead/customer management — CLOSED V1**
-2. **Customer Journey / Person 360 / Identity — CLOSED V1**
-3. **Universal Tracking SDK + trusted business-event path — ACTIVE**
-4. Funnel + attribution + revenue — next after Tracking closeout
-5. WhatsApp automation — remaining production proof
-6. Instagram automation — provider-permission/live E2E proof
-7. Smart Triggers/workflow engine — final closeout audit
-8. SEO/AEO/search intelligence — final closeout audit
-9. Event Intelligence/feature store — final closeout audit
-10. Predictive-model infrastructure — readiness/promotion closeout
-11. Proven predictive accuracy from real outcomes — data-dependent calibration proof
-12. R11-R14 commercial productization — later North-Star work
+The major UI/UX redesign, responsive QA, role-route hardening, Course Management mutation hardening, and commerce-event observability work are implemented on the branch and have passed the existing build gates.
 
----
+Latest verified release-candidate state:
 
-## 1. Core CRM / Customer 360
+- Vercel deployment for `3b2714e4...` is **READY**;
+- GitHub combined status reports Vercel **success**;
+- durable trusted-event ingestion contracts pass;
+- Sales workspace contracts pass;
+- Next.js production builds complete successfully;
+- no unresolved Vercel preview feedback threads are present;
+- dark-mode foundation and global loading/error/not-found states are present and consistent.
 
-Core CRM remains CLOSED V1. PostgreSQL-backed lead/customer state, stage mutation, ownership, identity and tenant boundaries remain authoritative.
-
-Customer Journey / Person 360 / Identity remains CLOSED V1. Exact-session anonymous-to-known identity handoff remains tenant-bound and atomic. Missing evidence must remain unknown rather than inferred.
-
-The final pipeline stage now includes:
-
-`closed_won` / **Deal Closed**
-
-Authoritative paid behavior:
-
-- lead stage -> `closed_won`;
-- status -> `won`;
-- stage history retained;
-- after 24 hours, hourly sweep changes status to `archived`;
-- lead/revenue/attribution/identity history remains preserved.
-
-This behavior was transaction-tested before merge.
+The main unresolved functional dependency is **outside the Salsys CRM projector**: the live Yogakulam payment-success backend is still not emitting authoritative `payment.completed` and `enrollment.completed` events.
 
 ---
 
-## 2. Universal Tracking — active closeout area
+## 1. Product architecture that must not regress
 
-Universal Tracking is substantially implemented but not closed because the complete trusted checkout -> payment -> enrollment -> revenue journey is not yet fully proven.
+SalsysOS is a **Sales + Analysis Operating System**, not a generic CRM.
 
-Current capabilities include:
+Canonical loop:
 
-- universal browser tracking;
-- Universal Lead Capture;
-- detected forms + reusable form profiles;
-- AJAX fallback;
-- Universal Lead Sources V1;
-- canonical event contracts;
-- browser Site ID + trusted-origin resolution;
-- secret-authenticated trusted server sources;
-- tenant/source isolation;
-- source counters, payload limits and rate limits;
-- stable event IDs and canonical idempotent ingestion;
-- browser/session/identity continuity;
-- privacy-aware browser tracking and consent/GPC controls;
-- trusted booking/payment/enrollment event adapters;
-- independent durable queue buffering for trusted server events.
+`marketing spend -> traffic/visitor -> source/campaign/content -> lead/opportunity -> conversation -> intent/objection/product interest -> salesperson activity -> follow-up -> payment/booking/enrollment -> revenue -> attribution -> conversion feedback -> learning`
 
-### Authority model
+Core rules:
 
-- browser = journey, behavior, intent and attribution evidence;
-- trusted backend/provider = booking/payment/enrollment/refund/revenue truth;
-- browser must never establish confirmed payment, enrollment, refund or final revenue;
-- OpenSearch remains rebuildable/secondary;
-- unknown evidence stays unknown.
-
-### Required end-to-end acceptance journey
-
-`campaign/click id -> visitor -> session -> behavior -> consent -> enquiry -> CRM lead -> Person/session identity -> checkout -> payment -> enrollment -> revenue -> attribution -> features/prediction -> observed outcome`
-
-Tracking cannot be called fully closed until this reconciles across Tracking, Person 360, Funnel, Attribution and Revenue.
+1. Revenue visibility before feature count.
+2. Vertical depth before generic breadth.
+3. Separate observed facts, matched data, attributed outcomes, and inferred/modelled signals.
+4. AI progresses from Assist -> Decide -> Act only with permissions and explainability.
+5. Data quality is product quality.
+6. Privacy and permissions are core architecture.
+7. Deterministic identity matching comes before probabilistic matching.
+8. Unknown evidence remains unknown.
+9. Browser telemetry is journey/intent evidence; trusted backend/provider events establish booking/payment/enrollment/revenue truth.
+10. Revenue must exclude processor fees.
 
 ---
 
-## 3. October 26 Supabase incident — current interpretation
+## 2. Canonical CRM/customer model
 
-The Supabase project experienced a database/data-plane incident.
+Canonical relationship:
 
-Observed/proven facts:
+`persons -> person_leads -> leads/opportunities -> enrollments/bookings -> payments`
 
-- Supabase Health reported `db_not_reachable`;
-- TCP `CONNECT_TIMEOUT` occurred;
-- Data API reached 100% 5xx in the observed window;
-- Auth/PostgREST/Storage became unhealthy because they depend on the database;
-- Postgres logs showed an interrupted / not-properly-shut-down database and automatic recovery;
-- fresh database startup/recovery was observed more than once;
-- application/direct management connections timed out during the incident.
+Important semantics:
 
-Root-cause classification:
+- Customer 360 is an aggregation/read UI, not a new source-of-truth table.
+- Stage belongs to the Opportunity.
+- Intent is Opportunity-aware.
+- One Contact may have multiple active Opportunities.
+- Conversations/messages remain Lead-linked in storage for now.
+- Inbox UX is moving toward Contact-centric presentation while preserving current storage contracts.
+- Booking completed != Payment paid != Enrollment confirmed.
+- Enrollment status, Opportunity stage, and Payment status remain separate.
+- Paid state must never be set by a raw UI status write.
 
-> The Supabase Postgres instance/host path became unreachable and Postgres restarted uncleanly. The exact provider-internal trigger is not visible in tenant logs. Evidence does not support blaming Salsys application code.
+Current Lead stage enum remains:
 
-Do not rewrite this as a proven host hardware/storage cause unless Supabase provides stronger evidence later.
+`new, contacted, engaged, qualified, high_intent, payment_pending, closed_won, enrolled, nurture, not_now, lost, unqualified, duplicate`
 
----
-
-## 4. Middleware and login resilience
-
-### Middleware
-
-Protected routes previously waited on Supabase Auth/workspace resolution long enough for Vercel to return `504 MIDDLEWARE_INVOCATION_TIMEOUT`.
-
-PR #184 introduced bounded dependency budgets. Auth/workspace authority still fails closed; optional onboarding evidence may fail open. Remote `signOut()` is no longer a required blocking call on the membership-error path.
-
-### Login
-
-PR #185 bounded password-auth / tenant-binding dependency waits so login no longer appears to hang indefinitely during upstream failure.
-
-Infrastructure failure should produce a temporary-service response, not a false invalid-password conclusion.
+Do not merge or remove `high_intent`, `closed_won`, or `enrolled` without a dependency audit.
 
 ---
 
-## 5. Durable Trusted Event Ingestion V1 — MERGED
+## 3. Phase 6 UI/UX redesign status
 
-PR #187 is merged to `main` at:
+The Phase 6 redesign uses the **Violet Cloud** system with Hostinger as visual inspiration only.
 
-`9409a658c5786ae4a6fa209d976c732f0c6de00d`
+Key tokens:
 
-The key architecture rule is now:
+- Primary `#5743C5`
+- Hover `#4632AA`
+- Deep `#211B3A`
+- Canvas `#F8F7FC`
+- Selected `#EDE9FA`
+- Text `#24213C` / `#67627A`
+- Border `#E6E3EF`
+- Success `#168060`
+- Warning `#BC7518`
+- Error `#C34C52`
+- Info `#3476C9`
+- AI `#8354D5`
+- Teal `#128C91`
 
-> A durability layer intended to survive Supabase/Postgres failure cannot depend on Supabase/Postgres for initial persistence.
+The redesign intentionally avoided a giant global CSS rewrite. Changes were delivered through small scoped page/component layers.
 
-### Active trusted-event flow
+Major redesigned/normalized surfaces include:
+
+- Home / Command Center
+- Sales Today
+- Leads
+- Pipeline
+- Inbox
+- Tasks & Follow-ups
+- Customer 360
+- Marketing Overview
+- Campaigns
+- Acquisition
+- Search Intelligence
+- Funnel
+- Attribution
+- Revenue / Forecasting
+- Operations Overview
+- Availability
+- Programs & Batches
+- Enrollments
+- Team Overview
+- Team Performance shell/hierarchy
+- Automation
+- Settings Overview
+- Tracking & Data
+- System Health
+
+Responsive QA has also been completed across Sales, Marketing, Intelligence, Operations, Team, Automation, Settings, Tracking, and System Health.
+
+---
+
+## 4. Current route / role contract
+
+Canonical workspace roles in production are:
+
+`owner, admin, manager, admissions, viewer`
+
+Expected product access:
+
+### Owner / Admin
+
+Broad system access, including administrative surfaces such as Tracking & Data, System Health, Team Performance, integrations and permissions.
+
+### Manager
+
+Broad operational access to Sales, Marketing, Intelligence, Operations and Automation review. Some high-impact mutation paths remain Owner/Admin-only.
+
+### Admissions
+
+Operational Sales workspace only:
+
+- Today
+- Leads
+- Pipeline
+- Inbox
+- Tasks & Follow-ups
+
+Admissions should not get direct access to Marketing, Intelligence, Operations administration, Automation administration, Tracking, Team Performance, Contact Intelligence, or Settings administration.
+
+### Viewer
+
+Fail closed for operational workspaces unless a specific read-only surface is explicitly designed later.
+
+Server-side route guards now protect the hidden privileged domains instead of relying only on sidebar visibility.
+
+---
+
+## 5. Permission hardening completed on October 30
+
+### Operations route boundary
+
+Operations Overview, Availability, Programs & Batches and Enrollments now require the canonical privileged workspace role boundary.
+
+### Course Management mutation authority
+
+Production and repository migration:
+
+`supabase/migrations/20261030_harden_course_management_permissions.sql`
+
+Course and Course Batch INSERT/UPDATE/DELETE now require:
+
+`owner/admin/manager`
+
+The v2 batch-admin RPCs enforce the same authority. Legacy v1 admin RPCs are no longer executable by ordinary authenticated users and remain service-role-only where retained.
+
+Reads remain available where needed by legitimate Admissions/capacity workflows.
+
+### CRM admin authority
+
+Production and repository migration:
+
+`supabase/migrations/20261030_include_owner_in_crm_admin_authority.sql`
+
+`can_administer_organization_crm()` now correctly includes:
+
+`owner/admin/manager`
+
+This resolves the earlier Owner exclusion from forecast/aging/integration-administration-style CRM authority.
+
+### Integrations
+
+The suspected Integrations service-role bypass was audited and is **not reproducible**. Exported integration mutations route through `getManagedConnection()`, which re-checks tenant ownership and Owner/Admin authority before service-role writes.
+
+### Team Performance
+
+The `/team-performance` route shell now requires Owner/Admin workspace access.
+
+The large page still contains a redundant legacy `profiles.role === 'admin'` check internally. This is technical debt rather than a current production blocker because the route shell already fails closed and the current Owner profile is also admin. Remove the duplicate legacy check during a safe refactor of that large page.
+
+---
+
+## 6. Universal Tracking / durable trusted-event state
+
+The durable trusted-event architecture remains:
 
 ```text
 Trusted backend/provider
@@ -163,169 +223,114 @@ Trusted backend/provider
 -> sanitize + bounded source verification
 -> independent Vercel durable queue
 -> private queue-triggered consumer
--> re-validate active source + credential fingerprint
+-> active-source / credential-fingerprint revalidation
 -> ingest_tracking_event_v1
 -> PostgreSQL raw_events
--> process_tracking_raw_event_v1 / existing sweeper
+-> process_tracking_raw_event_v1
+-> family processor
 -> business projections
 ```
 
-### Security/durability properties
+Durability rules remain:
 
-- plaintext trusted-source secret is never queued;
-- queue envelope stores only a SHA-256 credential fingerprint;
-- private consumer re-resolves active source before persistence;
-- credential comparison is timing-safe;
-- stable `source_key + event_id` identity supports idempotent replay;
+- plaintext source secrets are never queued;
+- stable event identity supports idempotent replay;
 - queue retention is seven days;
-- transient failures continue retrying through retention rather than a short fixed attempt cap;
-- recovery concurrency is bounded (`maxConcurrency: 5`) to avoid post-outage stampede;
-- revoked/invalid source messages are permanent failures and do not retry forever;
-- if the queue is unavailable but Supabase is healthy, one direct idempotent Supabase persistence attempt is made;
-- if neither queue nor Supabase can accept the event, the API returns retryable HTTP 503 with `Retry-After` and must not claim durable acceptance;
-- after raw-event persistence, projection can be recovered by the existing tracking sweeper.
+- retries remain bounded but survive transient outages;
+- if neither queue nor Supabase can accept an event, the API returns retryable HTTP 503 and must not claim durable acceptance;
+- telemetry failure must not break checkout.
 
-### Regression gate
-
-`scripts/verify-durable-event-ingestion.mjs` protects the durable-ingestion contract and is run in CI and as part of the production build gate.
-
-`docs/durable-event-ingestion-v1.md` is the implementation/runbook reference.
+The build gate still verifies durable-event ingestion contracts.
 
 ---
 
-## 6. CI verifier state
+## 7. Booking / payment / enrollment production truth
 
-The Universal Tracking Intelligence SDK uses:
+### Booking
 
-```text
-public/salsys-intelligence.js
--> loader
--> public/salsys-intelligence-core-v1.6.0.js
-```
+Production currently contains **14 `booking.completed` raw events**.
 
-PR #186 corrected the SDK verifier so it validates loader + core rather than assuming the loader contains the entire runtime.
+Detailed reconciliation found:
 
-During PR #187 CI, another stale verifier assumption was found: it looked for direct `authenticateServerTrackingSource` and `ingest_tracking_event_v1` strings inside `/api/events/v1` even though those boundaries moved to `lib/tracking/durable-events.ts`.
+- 12 processed successfully;
+- 2 dead-lettered with `booking lead resolution required`;
+- 3 processed historical events reference Lead IDs that no longer exist and are now surfaced as orphaned projections in System Health;
+- successful booking projections create booking touchpoints/tracking references against existing Opportunities;
+- booking completion does not imply paid or enrolled.
 
-The verifier was updated to validate the new durable authentication/persistence boundary rather than weakening the security requirement.
+Recent Booking Activity is surfaced in the Leads workspace and includes direct actions for Lead, Conversation and Payment review.
 
----
+### Payment started
 
-## 7. Trusted Yogakulam server source
+Production now has **2 real `payment.started` events** from the live Yogakulam PHP backend:
 
-Current Yogakulam trusted website-backend source:
+- one ICICI payment start;
+- one PayPal payment start.
 
-- source name: `Website backend`;
-- source id: `16f15c43-2a9d-4440-b8e3-fc55e5f5acd6`;
-- source key: `src_TNNyVvK1TDXkPLpBigL_VvVV`;
-- source system: `website_backend`;
-- auth mode: `secret`;
-- status: active.
+Therefore `payment.started` is no longer "production proof pending". The active upstream PHP integration is proven through booking completion and payment preparation.
 
-**Never commit or expose the actual source secret.**
+### Payment completed
 
-Canonical trusted business events currently include:
+Production currently has:
 
-- `booking.started`;
-- `booking.completed`;
-- `payment.started`;
-- `payment.completed`;
-- `payment.failed`;
-- `enrollment.completed`.
+`payment.completed = 0`
 
-Refund wiring remains pending.
+This is the active upstream integration blocker.
 
----
+The canonical Salsys helper is already provider-neutral. The live Yogakulam backend must emit `payment.completed` only after authoritative server-side verification and after the local payment record is committed as paid.
 
-## 8. Yogakulam PHP integration state
+Required provider hooks include:
 
-Important current files:
+- PayPal verified capture/webhook;
+- ICICI verified success/callback/reconciliation;
+- Direct UPI only after authoritative admin/payment verification, never proof upload alone.
 
-- `/includes/salsys/salsys_config.php`;
-- `/includes/salsys/salsys-tracking.php`;
-- private non-public environment file: `private/salsys-env.php`.
+### Enrollment completed
 
-The private environment file must remain outside public web root and must never be committed.
+Production currently has:
 
-Helper functions include:
+`enrollment.completed = 0`
 
-- `salsys_send_event(...)`;
-- `salsys_track_lead_submitted(...)`;
-- `salsys_track_booking_completed(...)`;
-- `salsys_track_payment(...)`;
-- `salsys_track_enrollment_completed(...)`.
+`process_enrollment_raw_event_v1` is already implemented in Salsys and will create/update authoritative Enrollment records from verified enrollment completion events. Do not rebuild the projector.
 
-Telemetry remains fail-open relative to checkout: Salsys failure must not break a customer payment flow.
+The missing dependency is the upstream emitter after the first verified payment/deposit confirms enrollment.
 
 ---
 
-## 9. Booking/payment status
+## 8. Commerce Event Readiness / System Health
 
-### `booking.completed` — PROVEN
+Production has a dedicated Commerce Event Readiness view.
 
-`booking.completed` is accepted in production and links back to CRM identity through the tracking/entity resolver path.
+Current live chain:
 
-### `payment.started` — BUILT, production proof pending
+`14 booking completions -> 2 payment starts -> 0 verified payment completions -> 0 enrollments`
 
-`create-payment.php` emits `payment.started` before the final JSON response.
+Current readiness state:
 
-Important revenue invariant:
+**Configuration blocked — Payment completion missing**
 
-> canonical Salsys amount = business subtotal, not gateway amount including processor fee.
+System Health also now surfaces trusted raw-event failures and orphaned projections:
 
-For PayPal/USD the processing fee remains metadata and must not inflate revenue attribution.
+- dead-letter trusted events;
+- stuck/pending trusted processing;
+- processed events whose recorded Lead no longer exists.
 
-A payment-start test was interrupted by the Supabase incident. Because database/API verification was unavailable, `payment.started` must be re-proven after recovery rather than assumed successful or rewritten again without evidence.
+The current known booking issue counts are:
 
-### `payment.completed` — PENDING
+- `dead_letter`: 2
+- `orphaned`: 3
 
-Must be emitted only from authoritative provider verification:
+This prevents successful historical processing from being mistaken for healthy current projections.
 
-- PayPal capture/webhook after verified capture;
-- ICICI after verified callback/status;
-- Direct UPI proof upload alone is not paid truth; admin/authoritative verification is required.
-
-Authoritative paid state should create/update Salsys payment truth and drive `closed_won`.
-
-### `enrollment.completed` — PENDING
-
-Emit only after authoritative enrollment completion.
-
-### refund — PENDING
-
-Wire only after payment completion flow is proven.
+Operations Overview also explains the commerce blocker instead of showing zero Enrollments without context.
 
 ---
 
-## 10. Test-data state
+## 9. Automation posture
 
-Clearly synthetic CRM records used during the earlier controlled tests were cleaned up.
+Automation remains policy-bound and conservative.
 
-At the cleanup checkpoint:
-
-- 28 clearly synthetic/test leads were removed;
-- remaining obvious test/dummy leads: 0;
-- real recent leads were preserved.
-
-Do not delete real checkout/payment records merely because they were recently created unless they are explicitly confirmed as test data.
-
----
-
-## 11. SaaS onboarding / conversations / automation posture
-
-Controlled customer provisioning and onboarding remain live.
-
-Current onboarding sequence:
-
-`Security -> Business -> Goals -> Website -> Channels -> Team -> Finish`
-
-Hard requirements remain Business + Goals. `Skip != complete` for optional steps.
-
-Home Workspace Activation continues to derive setup state from live evidence rather than fake completion state.
-
-Conversations remains the CRM-connected shared inbox/collaboration surface.
-
-Messaging/automation safety defaults remain:
+Safety defaults:
 
 - autonomous customer messaging OFF unless separately armed;
 - high-impact actions remain approval/policy controlled;
@@ -333,54 +338,90 @@ Messaging/automation safety defaults remain:
 - automatic ad-budget changes OFF by default;
 - no fake execution/success evidence.
 
+Manager access is now explicitly presented as **read-only** where mutation authority remains Owner/Admin-only. The backend authority was not loosened.
+
+---
+
+## 10. Dark mode / global route-state posture
+
+The theme foundation is implemented with:
+
+- `yk-theme` local storage persistence;
+- pre-hydration theme boot script;
+- `.dark` class on the root element;
+- `color-scheme` synchronization;
+- dedicated Violet Cloud dark surface/text/border tokens.
+
+Global route states are present:
+
+- loading -> CRM page skeleton;
+- error -> retry + Command Center recovery;
+- 404 -> Command Center + Back to Sales.
+
+Keyboard focus-visible treatment is normalized to Violet Cloud across common controls.
+
+---
+
+## 11. Known deferred UX / technical debt
+
+These are not current release blockers:
+
+1. **Lead Inspector -> Customer 360 direct link**  
+   The Inspector payload already contains the person-level identity needed for the link. The client drawer type/action row still needs a safe presentation-layer addition.
+
+2. **Team Performance duplicate legacy authority check**  
+   Route shell uses canonical Owner/Admin workspace authority; the large page still contains the old profile-role check and should be cleaned up in a controlled refactor.
+
+3. **Some large legacy components still contain old utility/color classes internally**  
+   Major visible surfaces are normalized through scoped Violet Cloud layers. Avoid mass global replacement.
+
 ---
 
 ## 12. Immediate next implementation sequence
 
 Continue in this order.
 
-### 1. Production proof for durable trusted ingestion
+### 1. Complete the live Yogakulam verified-payment emitter
 
-Send one controlled trusted event through the production `/api/events/v1` path and verify:
+Wire the real authoritative success path in the live PHP checkout backend:
 
-- queued/durable acceptance;
-- private consumer delivery;
-- raw event persisted;
-- processing or sweeper recovery;
-- source counters correct;
-- no duplicate.
+`payment.completed -> enrollment.completed`
 
-### 2. Re-prove `payment.started`
+for ICICI / PayPal / verified UPI paths as applicable.
 
-Perform one fresh Yogakulam payment-start test and verify:
+Do not emit paid truth from browser callbacks or unverified proof uploads.
 
-- `payment.started` accepted;
-- correct YKP payment reference;
-- correct YGK booking reference;
-- provider/payment kind/currency;
-- amount equals business subtotal;
-- processor fee is metadata only;
-- correct lead/person linkage;
-- correct payment state;
-- no duplicate.
+### 2. Verify the complete commerce chain in production
 
-Only then mark `payment.started` PROVEN.
+For one controlled real/test checkout, reconcile:
 
-### 3. Wire `payment.completed`
+- `booking.completed`;
+- `payment.started`;
+- `payment.completed`;
+- authoritative Payment row;
+- `enrollment.completed`;
+- authoritative Enrollment row;
+- Opportunity/customer linkage;
+- Funnel;
+- Attribution;
+- Revenue;
+- Customer 360.
 
-Use authoritative provider verification only.
+### 3. Resolve the two booking dead letters
 
-### 4. Wire `enrollment.completed`
+Investigate the two events currently failing lead resolution. Do not auto-merge identities by name.
 
-Use authoritative enrollment truth only.
+### 4. Decide treatment for the three orphaned historical projections
 
-### 5. Reconcile revenue/attribution
+Preserve audit evidence. Repair/link only if deterministic identity evidence exists; otherwise keep them flagged as integrity issues rather than inventing a customer match.
 
-Verify Funnel, Attribution, Person 360 and revenue views agree and do not include processor fees as revenue.
+### 5. Merge/release the Phase 6 redesign branch after final human preview review
 
-### 6. Add refund processor
+The branch currently has successful build/deployment status and no unresolved preview toolbar feedback.
 
-Only after payment completion is proven.
+### 6. Post-merge cleanup
+
+Safely remove the redundant Team Performance legacy profile-role check and add Lead Inspector -> Customer 360 deep navigation.
 
 ---
 
@@ -389,43 +430,29 @@ Only after payment completion is proven.
 | Area | State |
 |---|---|
 | Core CRM | CLOSED V1 |
-| Customer 360 / exact-session identity | CLOSED V1 |
+| Customer 360 / deterministic identity | CLOSED V1 |
 | Universal browser lead capture | PROVEN |
-| Detected Forms / reusable form profiles | PROVEN |
-| Universal Lead Sources V1 | MERGED / foundation proven |
 | Trusted server source | PROVEN |
-| `booking.completed` | PROVEN |
-| Deal Closed / auto archive | PROVEN |
-| Middleware outage hardening | MERGED |
-| Login outage hardening | MERGED |
-| SDK loader/core verifier correction | MERGED |
-| Durable trusted-event queue | MERGED via PR #187 |
-| Durable ingestion contracts/build gate | MERGED |
-| Production durable-queue smoke proof | PENDING |
-| `payment.started` production proof | PENDING |
-| `payment.completed` | PENDING |
-| `enrollment.completed` | PENDING |
-| Revenue reconciliation / attribution proof | PENDING |
-| Refund processor | PENDING |
+| Durable trusted-event queue | IMPLEMENTED / build-gated |
+| `booking.completed` | PROVEN in production |
+| `payment.started` | PROVEN in production (ICICI + PayPal observed) |
+| `payment.completed` | BLOCKED by upstream verified-success emitter |
+| Enrollment projector | IMPLEMENTED |
+| `enrollment.completed` upstream emission | BLOCKED / 0 production events |
+| Authoritative Enrollment records | 0 until verified enrollment completion arrives |
+| Commerce Event Readiness | IMPLEMENTED |
+| Trusted-event failures in System Health | IMPLEMENTED |
+| Phase 6 Violet Cloud UI redesign | RELEASE CANDIDATE |
+| Responsive QA | COMPLETED across major domains |
+| Route-role hardening | IMPLEMENTED |
+| Course/Batch mutation hardening | IMPLEMENTED in production + repo |
+| Owner CRM admin authority correction | IMPLEMENTED in production + repo |
+| Revenue/attribution E2E reconciliation | PENDING verified payment completion |
+| Refund processor | PENDING after payment completion proof |
 
 ---
 
-## 14. Architectural rules that must not regress
-
-1. Salsys is universal SaaS; Yogakulam PHP is one adapter/customer implementation.
-2. Browser telemetry is journey/intent evidence; trusted backend/provider events establish business truth.
-3. Browser payloads never authorize payment/enrollment/revenue state.
-4. Revenue excludes processor fees.
-5. Stable event IDs and idempotency are mandatory for retry/replay.
-6. Identity resolution stays tenant-scoped and fail-closed on ambiguity.
-7. Telemetry failure must not break checkout.
-8. Supabase-outage durability must not depend on Supabase for first persistence.
-9. Server/source secrets stay backend-only and out of GitHub/logs/queue payloads.
-10. Unknown evidence remains unknown; never claim success without observed proof.
-
----
-
-## 15. Recovery order if context is lost
+## 14. Recovery order if context is lost
 
 Read:
 
@@ -433,18 +460,18 @@ Read:
 2. `docs/SalsysOS_Current_Checkpoint.md`
 3. `docs/checkpoints/M-2026-10-26-Supabase-Incident-and-Durable-Event-Resilience-v1.md`
 4. `docs/durable-event-ingestion-v1.md`
-5. PR #187 / merge commit `9409a658c5786ae4a6fa209d976c732f0c6de00d`
+5. current branch `phase-6a-violet-foundation`
 
-Then continue from Section 12 rather than redesigning the system.
+Then continue from Section 12. Do not redesign or rebuild mature backend contracts that are already implemented.
 
 ---
 
-## 16. Checkpoint maintenance rule
+## 15. Checkpoint maintenance rule
 
 After every meaningful production milestone:
 
 - update this file;
-- update `docs/SalsysOS_North_Star_Product_Context.md` if architecture/roadmap materially changes;
+- update `docs/SalsysOS_North_Star_Product_Context.md` only when architecture/roadmap materially changes;
 - add an immutable historical checkpoint when production proof materially changes state;
-- distinguish BUILT, MERGED, DEPLOYED, TESTED and fully E2E PROVEN states;
-- preserve historical evidence rather than rewriting old milestone records.
+- distinguish PROPOSED, DESIGNED, VALIDATED, IMPLEMENTED, DEPLOYED and E2E PROVEN states;
+- preserve historical evidence instead of rewriting old milestone records.
