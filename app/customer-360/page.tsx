@@ -43,11 +43,11 @@ export default async function Customer360Page() {
 
   const organizationId = await requireCurrentOrganizationId(supabase, user.id);
   const accessibleLeadIds = new Set(leads.map((lead) => lead.id));
+  const warnings: string[] = [];
 
-  // Keep the Customer index on lightweight canonical tables. The richer
-  // Person 360 views are intentionally reserved for one-customer detail reads;
-  // loading the operational aggregate for the full tenant can exceed the
-  // database statement timeout as the workspace grows.
+  // Keep the Customer index on lightweight canonical tables. Rich Person 360
+  // views are reserved for one-customer detail reads so a large tenant cannot
+  // time out the entire customer list.
   const [linksResult, personsResult, identifiersResult] = await Promise.all([
     supabase
       .from("person_leads")
@@ -64,26 +64,26 @@ export default async function Customer360Page() {
       .eq("verified", true),
   ]);
 
-  if (linksResult.error) {
-    throw new Error(`Unable to load customer identity links: ${linksResult.error.message}`);
-  }
-  if (personsResult.error) {
-    throw new Error(`Unable to load customer records: ${personsResult.error.message}`);
-  }
-  if (identifiersResult.error) {
-    throw new Error(`Unable to load customer identity evidence: ${identifiersResult.error.message}`);
-  }
+  if (linksResult.error) warnings.push("Customer identity links are temporarily unavailable.");
+  if (personsResult.error) warnings.push("Customer profile status is temporarily unavailable.");
+  if (identifiersResult.error) warnings.push("Verified identity evidence is temporarily unavailable.");
 
-  const links = ((linksResult.data ?? []) as PersonLinkRow[]).filter((row) =>
+  const links = (((linksResult.error ? [] : linksResult.data) ?? []) as PersonLinkRow[]).filter((row) =>
     accessibleLeadIds.has(row.lead_id),
   );
   const accessiblePersonIds = new Set(links.map((row) => row.person_id).filter(Boolean));
-  const persons = ((personsResult.data ?? []) as PersonRow[]).filter((row) =>
-    accessiblePersonIds.has(row.id),
-  );
-  const verifiedIdentifiers = ((identifiersResult.data ?? []) as IdentifierRow[]).filter((row) =>
-    accessiblePersonIds.has(row.person_id),
-  );
+
+  // If the lightweight persons read degrades, keep the page usable by deriving
+  // minimal Contact shells from the already-authorized identity links.
+  const persons = personsResult.error
+    ? [...accessiblePersonIds].map((id) => ({ id, status: null, created_at: null } as PersonRow))
+    : ((personsResult.data ?? []) as PersonRow[]).filter((row) => accessiblePersonIds.has(row.id));
+
+  const verifiedIdentifiers = identifiersResult.error
+    ? []
+    : ((identifiersResult.data ?? []) as IdentifierRow[]).filter((row) =>
+        accessiblePersonIds.has(row.person_id),
+      );
 
   const leadById = new Map(leads.map((lead) => [lead.id, lead]));
   const linksByPerson = new Map<string, PersonLinkRow[]>();
@@ -158,6 +158,13 @@ export default async function Customer360Page() {
         }
       />
 
+      {warnings.length ? (
+        <section className="rounded-panel border border-amber-200 bg-amber-50/70 px-4 py-3 text-amber-900">
+          <div className="text-xs font-semibold">Customer 360 is partially degraded</div>
+          <div className="mt-1 text-[11px] text-amber-700">{warnings.join(" ")} Core Sales records remain available.</div>
+        </section>
+      ) : null}
+
       <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <Metric icon={<UsersRound size={17} />} label="Contacts" value={customers.length} note="Canonical Person records visible here" />
         <Metric icon={<ContactRound size={17} />} label="Active opportunities" value={activeOpportunities} note="Open sales opportunities across contacts" />
@@ -206,7 +213,7 @@ export default async function Customer360Page() {
                           </span>
                           <div className="min-w-0">
                             <div className="max-w-[220px] truncate text-[12px] font-semibold text-copy-strong">{displayName}</div>
-                            <div className="mt-0.5 text-[10px] text-copy-subtle">Contact status · {pretty(person.status || "active")}</div>
+                            <div className="mt-0.5 text-[10px] text-copy-subtle">Contact status · {pretty(person.status || "available")}</div>
                           </div>
                         </div>
                       </td>
@@ -253,8 +260,8 @@ export default async function Customer360Page() {
                 <tr>
                   <td colSpan={6} className="px-6 py-12 text-center">
                     <UsersRound size={20} className="mx-auto text-copy-subtle" />
-                    <div className="mt-2 text-sm font-semibold text-copy-strong">No canonical customer records yet</div>
-                    <div className="mt-1 text-xs text-copy-subtle">Accessible leads will appear here once identity resolution links them to a Person.</div>
+                    <div className="mt-2 text-sm font-semibold text-copy-strong">No canonical customer records are available</div>
+                    <div className="mt-1 text-xs text-copy-subtle">Use Leads while identity resolution data is unavailable or no Person links exist yet.</div>
                   </td>
                 </tr>
               )}
