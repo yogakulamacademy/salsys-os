@@ -20,9 +20,9 @@ export function MarketingJourneyBar() {
             Move from spend and acquisition evidence into conversion, attribution and organic search without leaving the marketing workflow.
           </p>
         </div>
-        <div className="flex flex-wrap gap-2">
+        <div className="-mx-1 flex snap-x snap-mandatory gap-2 overflow-x-auto px-1 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden sm:mx-0 sm:flex-wrap sm:overflow-visible sm:px-0 sm:pb-0">
           {items.map(({ href, label, icon: Icon }) => (
-            <Link key={href} href={href} className="btn-secondary">
+            <Link key={href} href={href} className="btn-secondary shrink-0 snap-start">
               <Icon size={14} /> {label}
             </Link>
           ))}
