@@ -1,5 +1,10 @@
 import Link from "next/link";
-import { CalendarCheck2, ExternalLink } from "lucide-react";
+import {
+  CalendarCheck2,
+  CircleDollarSign,
+  ExternalLink,
+  MessageCircle,
+} from "lucide-react";
 
 import { getRecentBookingActivity } from "@/lib/booking-activity-data";
 import { Notice } from "@/components/ui";
@@ -39,39 +44,62 @@ export async function RecentBookingActivity() {
       {activity.rows.length > 0 ? (
         <div className="mt-4 grid gap-2 lg:grid-cols-2">
           {activity.rows.map((row) => (
-            <Link
+            <article
               key={row.touchpointId}
-              href={`/leads/${row.leadId}`}
-              className="group flex min-w-0 items-start gap-3 rounded-ui border border-line bg-surface-soft px-3.5 py-3 transition hover:border-brand-200 hover:bg-brand-50/50"
+              className="min-w-0 rounded-ui border border-line bg-surface-soft px-3.5 py-3 transition hover:border-brand-200 hover:bg-brand-50/40"
             >
-              <span className="mt-0.5 grid h-8 w-8 shrink-0 place-items-center rounded-ui bg-violet-100 text-violet-700">
-                <CalendarCheck2 size={15} strokeWidth={1.8} />
-              </span>
+              <div className="flex min-w-0 items-start gap-3">
+                <span className="mt-0.5 grid h-8 w-8 shrink-0 place-items-center rounded-ui bg-violet-100 text-violet-700">
+                  <CalendarCheck2 size={15} strokeWidth={1.8} />
+                </span>
 
-              <span className="min-w-0 flex-1">
-                <span className="flex min-w-0 items-center gap-2">
-                  <span className="truncate text-[12px] font-semibold text-copy-strong">
-                    {row.leadName}
-                  </span>
-                  {row.leadCode ? (
-                    <span className="shrink-0 text-[9px] font-medium text-copy-subtle">
-                      {row.leadCode}
+                <div className="min-w-0 flex-1">
+                  <div className="flex min-w-0 items-center gap-2">
+                    <span className="truncate text-[12px] font-semibold text-copy-strong">
+                      {row.leadName}
                     </span>
-                  ) : null}
-                </span>
+                    {row.leadCode ? (
+                      <span className="shrink-0 text-[9px] font-medium text-copy-subtle">
+                        {row.leadCode}
+                      </span>
+                    ) : null}
+                  </div>
 
-                <span className="mt-1 block truncate text-[11px] font-medium text-violet-700">
-                  {row.bookingReference}
-                </span>
+                  <div className="mt-1 truncate text-[11px] font-medium text-violet-700">
+                    {row.bookingReference}
+                  </div>
 
-                <span className="mt-1 block text-[10px] text-copy-subtle">
-                  {formatDateTime(row.occurredAt)}
-                  {row.source ? ` · ${pretty(row.source)}` : ""}
-                </span>
-              </span>
+                  <div className="mt-1 text-[10px] text-copy-subtle">
+                    {formatDateTime(row.occurredAt)}
+                    {row.source ? ` · ${pretty(row.source)}` : ""}
+                  </div>
+                </div>
+              </div>
 
-              <ExternalLink size={13} className="mt-1 shrink-0 text-copy-subtle transition group-hover:text-brand-700" />
-            </Link>
+              <div className="mt-3 flex flex-wrap gap-2 border-t border-line pt-3">
+                <Link
+                  href={`/leads/${row.leadId}`}
+                  className="inline-flex h-8 items-center gap-1.5 rounded-ui border border-line bg-surface px-2.5 text-[10px] font-semibold text-copy-muted transition hover:border-line-strong hover:text-brand-700"
+                >
+                  <ExternalLink size={12} />
+                  Open Lead
+                </Link>
+                <Link
+                  href={`/conversations?lead=${row.leadId}`}
+                  className="inline-flex h-8 items-center gap-1.5 rounded-ui border border-line bg-surface px-2.5 text-[10px] font-semibold text-copy-muted transition hover:border-line-strong hover:text-brand-700"
+                >
+                  <MessageCircle size={12} />
+                  Conversation
+                </Link>
+                <Link
+                  href={`/leads/${row.leadId}#payment-review`}
+                  className="inline-flex h-8 items-center gap-1.5 rounded-ui bg-violet-50 px-2.5 text-[10px] font-semibold text-violet-700 transition hover:bg-violet-100"
+                >
+                  <CircleDollarSign size={12} />
+                  Payment review
+                </Link>
+              </div>
+            </article>
           ))}
         </div>
       ) : null}
