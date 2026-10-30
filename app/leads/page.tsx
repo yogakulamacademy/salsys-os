@@ -2,6 +2,7 @@ import Link from "next/link";
 import { MoreHorizontal, Plus } from "lucide-react";
 
 import { LeadsCleanTable } from "@/components/leads-clean-table";
+import { RecentBookingActivity } from "@/components/recent-booking-activity";
 import { TeamAssignmentPanel } from "@/components/team-assignment-panel";
 import { Notice, PageHeader } from "@/components/ui";
 import {
@@ -80,6 +81,8 @@ export default async function LeadsPage({ searchParams }: LeadsPageProps) {
           {workspace.warning}
         </Notice>
       ) : null}
+
+      <RecentBookingActivity />
 
       <TeamAssignmentPanel returnTo="/leads" />
 
