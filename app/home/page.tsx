@@ -7,12 +7,7 @@ import {
   CircleDollarSign,
   Clock3,
   CreditCard,
-  Facebook,
-  Globe2,
-  HelpCircle,
   Inbox,
-  Instagram,
-  MessageCircle,
   Sparkles,
   TrendingUp,
   UserRoundCheck,
@@ -41,6 +36,15 @@ type HomePageProps = {
     from?: string | string[];
     to?: string | string[];
   }>;
+};
+
+type AttentionItem = {
+  label: string;
+  value: number;
+  detail: string;
+  href: string;
+  icon: LucideIcon;
+  tone: "info" | "warning" | "critical";
 };
 
 export default async function HomePage({ searchParams }: HomePageProps) {
@@ -89,295 +93,705 @@ export default async function HomePage({ searchParams }: HomePageProps) {
       : getDashboardPeriodAnalytics(query),
   ]);
 
-  const { metrics, sources: liveSources, revenueSummary, upcomingBatches, unvaluedOpenLeads } = snapshot;
-  const primaryRevenue = revenueSummary.find((row) => row.collected > 0) ?? revenueSummary[0] ?? null;
-  const periodPrimaryRevenue = pickPeriodRevenue(periodAnalytics, primaryRevenue?.currency ?? null);
-  const hasComparisonBaseline = [
-    periodPrimaryRevenue?.changePercent ?? null,
-    periodAnalytics.leads.changePercent,
-    periodAnalytics.enrollments.changePercent,
-  ].some((value) => value != null);
+  const {
+    metrics,
+    sources: liveSources,
+    revenueSummary,
+    upcomingBatches,
+    unvaluedOpenLeads,
+  } = snapshot;
 
+  const primaryRevenue =
+    revenueSummary.find((row) => row.collected > 0) ?? revenueSummary[0] ?? null;
+  const periodPrimaryRevenue = pickPeriodRevenue(
+    periodAnalytics,
+    primaryRevenue?.currency ?? null,
+  );
   const acquisitionSources: DashboardPeriodSource[] = periodAnalytics.available.leads
     ? periodAnalytics.sources
     : liveSources.map((source) => ({
         source: source.source,
         leads: source.leads,
         qualified: source.qualified,
-        conversionRate: source.leads ? Math.round((source.qualified / source.leads) * 1000) / 10 : null,
+        conversionRate: source.leads
+          ? Math.round((source.qualified / source.leads) * 1000) / 10
+          : null,
       }));
 
-  const attentionItems: Array<{
-    label: string;
-    value: number;
-    detail: string;
-    href: string;
-    icon: LucideIcon;
-  }> = [
-    { label: "Inbox replies waiting", value: metrics.needsReply, detail: "Across active conversations", href: "/conversations", icon: Inbox },
-    { label: "Follow-ups due", value: metrics.followupsDue, detail: "Scheduled actions now due", href: "/follow-ups", icon: Clock3 },
-    { label: "First touch needed", value: metrics.needsFirstTouch, detail: "New leads without a recorded first contact", href: "/leads?view=unassigned", icon: UserRoundCheck },
-    { label: "Payment decisions", value: metrics.paymentPending, detail: "Opportunities currently at payment", href: "/pipeline", icon: CreditCard },
+  const attentionItems: AttentionItem[] = [
+    {
+      label: "Needs reply",
+      value: metrics.needsReply,
+      detail: "Active conversations waiting on your team",
+      href: "/conversations",
+      icon: Inbox,
+      tone: metrics.waitingOverHour > 0 ? "critical" : "info",
+    },
+    {
+      label: "Overdue follow-ups",
+      value: metrics.followupsDue,
+      detail: "Scheduled sales actions that are due now",
+      href: "/follow-ups",
+      icon: Clock3,
+      tone: metrics.followupsDue > 0 ? "warning" : "info",
+    },
+    {
+      label: "First touch needed",
+      value: metrics.needsFirstTouch,
+      detail: "New opportunities without recorded contact",
+      href: "/leads?view=unassigned",
+      icon: UserRoundCheck,
+      tone: metrics.needsFirstTouch > 0 ? "warning" : "info",
+    },
+    {
+      label: "Payment pending",
+      value: metrics.paymentPending,
+      detail: "Commercial decisions currently at payment",
+      href: "/pipeline",
+      icon: CreditCard,
+      tone: "info",
+    },
   ];
+
   const activeAttention = attentionItems.filter((item) => item.value > 0);
+  const totalAttention = attentionItems.reduce((sum, item) => sum + item.value, 0);
+  const commandStatus = totalAttention > 0 ? "Needs attention" : "Operating normally";
+  const commandSummary = buildCommandSummary(attentionItems);
 
   return (
-    <div className="space-y-4 pb-6">
-      <section className="flex flex-col gap-3 xl:flex-row xl:items-end xl:justify-between">
+    <div className="space-y-5 pb-8">
+      <section className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
         <div>
-          <div className="text-[11px] font-bold uppercase tracking-[0.13em] text-[#216551] dark:text-emerald-300">Home</div>
-          <h1 className="mt-1 text-[30px] font-semibold tracking-[-0.04em] text-[#18362D] dark:text-white">Overview</h1>
-          <p className="mt-1 text-sm text-[#71847A] dark:text-slate-400">Your business at a glance · {periodAnalytics.period.label}</p>
+          <div className="text-[11px] font-semibold uppercase tracking-[0.13em] text-brand-700 dark:text-brand-300">
+            Home
+          </div>
+          <h1 className="mt-1 text-[30px] font-semibold tracking-[-0.04em] text-copy-strong">
+            Command Center
+          </h1>
+          <p className="mt-1 text-sm text-copy-muted">
+            What needs attention, what changed, and where to act next.
+          </p>
         </div>
+
         <div className="flex flex-wrap items-center gap-2">
           <PeriodPresets selected={periodAnalytics.period.preset} />
           <details className="group relative">
-            <summary className="inline-flex h-10 cursor-pointer list-none items-center gap-2 rounded-xl border border-[#DCE4DF] bg-white px-3 text-xs font-semibold text-[#596E64] shadow-sm transition hover:border-[#BFD6C6] dark:border-slate-800 dark:bg-slate-950 dark:text-slate-300">
-              <CalendarDays size={14} className="text-[#216551]" />
+            <summary className="inline-flex h-10 cursor-pointer list-none items-center gap-2 rounded-ui border border-line bg-surface px-3 text-xs font-semibold text-copy-muted shadow-sm transition hover:border-line-strong hover:text-copy-strong">
+              <CalendarDays size={14} className="text-brand-700 dark:text-brand-300" />
               {periodAnalytics.period.label}
             </summary>
-            <div className="absolute right-0 z-30 mt-2 w-[310px] rounded-2xl border border-[#DCE4DF] bg-white p-4 shadow-xl dark:border-slate-800 dark:bg-slate-950">
+            <div className="absolute right-0 z-30 mt-2 w-[310px] rounded-card border border-line bg-surface p-4 shadow-panel">
               <form action="/home" method="get" className="space-y-3">
                 <input type="hidden" name="period" value="custom" />
-                <DateField id="dashboard-from" name="from" label="From" defaultValue={periodAnalytics.period.startDate} />
-                <DateField id="dashboard-to" name="to" label="To" defaultValue={periodAnalytics.period.endDate} />
-                <p className="text-[11px] leading-5 text-[#71847A]">Custom ranges are capped at 366 days. Comparisons use the immediately preceding equal-length period when a valid baseline exists.</p>
-                <button type="submit" className="inline-flex h-10 w-full items-center justify-center rounded-lg bg-[#153E33] px-4 text-xs font-semibold text-white transition hover:bg-[#216551]">Apply date range</button>
+                <DateField
+                  id="dashboard-from"
+                  name="from"
+                  label="From"
+                  defaultValue={periodAnalytics.period.startDate}
+                />
+                <DateField
+                  id="dashboard-to"
+                  name="to"
+                  label="To"
+                  defaultValue={periodAnalytics.period.endDate}
+                />
+                <p className="text-[11px] leading-5 text-copy-subtle">
+                  Custom ranges are capped at 366 days. Comparisons use the immediately
+                  preceding equal-length period when a valid baseline exists.
+                </p>
+                <button
+                  type="submit"
+                  className="inline-flex h-10 w-full items-center justify-center rounded-ui bg-brand-700 px-4 text-xs font-semibold text-white transition hover:bg-brand-800"
+                >
+                  Apply date range
+                </button>
               </form>
             </div>
           </details>
-          <Link href="/commercial-intelligence" className="inline-flex h-10 items-center gap-2 rounded-xl border border-[#DCE4DF] bg-white px-3 text-xs font-semibold text-[#18362D] shadow-sm transition hover:border-[#BFD6C6] hover:bg-[#F7FAF8] dark:border-slate-800 dark:bg-slate-950 dark:text-slate-200">
-            <Sparkles size={14} className="text-[#216551]" /> Commercial intelligence
+          <Link
+            href="/commercial-intelligence"
+            className="inline-flex h-10 items-center gap-2 rounded-ui border border-ai-line bg-ai-soft px-3 text-xs font-semibold text-ai-text transition hover:bg-brand-50 dark:bg-brand-950/30"
+          >
+            <Sparkles size={14} /> Ask Salsys
           </Link>
         </div>
       </section>
 
-      <section className="relative overflow-hidden rounded-2xl border border-[#17493B] bg-[#153E33] px-5 py-6 text-white shadow-sm sm:px-7" style={{ backgroundImage: "radial-gradient(circle at 65% 10%, rgba(73,155,115,.26), transparent 36%), linear-gradient(135deg, rgba(255,255,255,.05), transparent 45%)" }}>
-        <div className="grid gap-6 xl:grid-cols-[1.28fr_1fr] xl:items-center">
-          <div className="flex items-center gap-5">
-            <div className="grid h-20 w-20 shrink-0 place-items-center rounded-2xl border border-white/20 bg-white/10 shadow-inner"><TrendingUp size={35} /></div>
+      <section className="overflow-hidden rounded-card border border-line bg-surface shadow-sm">
+        <div className="grid gap-5 p-5 lg:grid-cols-[minmax(0,1.25fr)_minmax(360px,.75fr)] lg:items-center lg:p-6">
+          <div className="flex items-start gap-4">
+            <span
+              className={`grid h-11 w-11 shrink-0 place-items-center rounded-xl ${
+                totalAttention > 0
+                  ? "bg-amber-50 text-amber-700 dark:bg-amber-950/30 dark:text-amber-300"
+                  : "bg-emerald-50 text-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-300"
+              }`}
+            >
+              <TrendingUp size={20} />
+            </span>
             <div className="min-w-0">
-              <div className="text-[10px] font-bold uppercase tracking-[0.19em] text-emerald-200">Commercial momentum</div>
-              <h2 className="mt-2 max-w-3xl text-xl font-semibold tracking-[-0.025em] sm:text-[27px]">{heroHeadline(periodAnalytics, periodPrimaryRevenue)}</h2>
-              <div className="mt-2 flex flex-wrap items-center gap-2 text-sm text-emerald-50/80">
-                <span>{hasComparisonBaseline ? `Compared with ${periodAnalytics.period.previousLabel}` : "Previous period unavailable"}</span>
-                {periodPrimaryRevenue ? <TrendPill value={periodPrimaryRevenue.changePercent} light /> : null}
+              <div className="text-[10px] font-semibold uppercase tracking-[0.13em] text-copy-subtle">
+                Business status
               </div>
+              <h2 className="mt-1 text-xl font-semibold tracking-[-0.025em] text-copy-strong">
+                {commandStatus}
+              </h2>
+              <p className="mt-1 max-w-3xl text-sm leading-6 text-copy-muted">
+                {commandSummary}
+              </p>
             </div>
           </div>
-          <div className="grid grid-cols-1 gap-4 border-t border-white/10 pt-5 sm:grid-cols-3 xl:border-t-0 xl:pt-0">
-            <HeroStat label="Revenue collected" value={formatPeriodRevenue(periodAnalytics)} detail={<ChangeText value={periodPrimaryRevenue?.changePercent ?? null} fallback="Previous period unavailable" light />} />
-            <HeroStat label="New leads" value={periodAnalytics.available.leads ? periodAnalytics.leads.current.toLocaleString("en-IN") : "—"} detail={<ChangeText value={periodAnalytics.leads.changePercent} fallback="Previous period unavailable" light />} />
-            <HeroStat label="Enrollments" value={periodAnalytics.available.enrollments ? periodAnalytics.enrollments.current.toLocaleString("en-IN") : "—"} detail={<ChangeText value={periodAnalytics.enrollments.changePercent} fallback="Previous period unavailable" light />} />
+
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-2 xl:grid-cols-4">
+            <CompactStat label="Needs reply" value={metrics.needsReply} />
+            <CompactStat label="Follow-ups" value={metrics.followupsDue} />
+            <CompactStat label="Payment" value={metrics.paymentPending} />
+            <CompactStat label="First touch" value={metrics.needsFirstTouch} />
           </div>
         </div>
       </section>
 
       <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        <KpiCard
-          href="/revenue"
-          icon={CircleDollarSign}
-          label="Revenue collected"
-          value={periodPrimaryRevenue ? formatMoney(periodPrimaryRevenue.current, periodPrimaryRevenue.currency) : formatPeriodRevenue(periodAnalytics)}
-          previous={periodPrimaryRevenue
-            ? periodPrimaryRevenue.changePercent == null
-              ? "Previous period unavailable"
-              : `vs ${formatMoney(periodPrimaryRevenue.previous, periodPrimaryRevenue.currency)} previous period`
-            : "Selected-period collected revenue"}
-          change={periodPrimaryRevenue?.changePercent ?? null}
-          bars="revenue"
-        />
-        <KpiCard
-          href="/leads"
-          icon={Users}
-          label="Leads created"
-          value={periodAnalytics.available.leads ? periodAnalytics.leads.current.toLocaleString("en-IN") : "—"}
-          previous={periodAnalytics.available.leads
-            ? periodAnalytics.leads.changePercent == null
-              ? "Previous period unavailable"
-              : `vs ${periodAnalytics.leads.previous.toLocaleString("en-IN")} previous period`
-            : "Period lead analytics unavailable"}
-          change={periodAnalytics.leads.changePercent}
-          bars="leads"
-        />
-        <KpiCard
-          href="/pipeline"
-          icon={UserRoundCheck}
-          label="Enrollments"
-          value={periodAnalytics.available.enrollments ? periodAnalytics.enrollments.current.toLocaleString("en-IN") : "—"}
-          previous={periodAnalytics.available.enrollments
-            ? periodAnalytics.enrollments.changePercent == null
-              ? "Previous period unavailable"
-              : `vs ${periodAnalytics.enrollments.previous.toLocaleString("en-IN")} previous period`
-            : "Period enrollment analytics unavailable"}
-          change={periodAnalytics.enrollments.changePercent}
-          bars="leads"
-        />
-        <QualifiedRateCard rate={periodAnalytics.leads.conversionRate} qualified={periodAnalytics.leads.qualified} total={periodAnalytics.leads.current} available={periodAnalytics.available.leads} />
+        {attentionItems.map((item) => (
+          <AttentionCard key={item.label} item={item} />
+        ))}
       </section>
 
-      <section className="grid gap-4 xl:grid-cols-[minmax(300px,.9fr)_minmax(0,1.15fr)_minmax(330px,.95fr)]">
-        <section className="overflow-hidden rounded-2xl border border-[#DCE4DF] bg-white shadow-sm dark:border-slate-800 dark:bg-slate-950">
-          <SectionHeader eyebrow="Needs your attention" title="Actions waiting" actionHref="/follow-ups" actionLabel="View all" />
-          {activeAttention.length ? (
-            <div className="divide-y divide-[#EEF2EF] dark:divide-slate-900">
-              {activeAttention.map((item) => {
-                const Icon = item.icon;
-                return (
-                  <Link key={item.label} href={item.href} className="group flex items-center gap-3 px-5 py-3.5 transition hover:bg-[#F8FAF8] dark:hover:bg-slate-900/60">
-                    <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-[#EDF3E6] text-[#216551]"><Icon size={16} /></span>
-                    <span className="grid h-8 min-w-8 shrink-0 place-items-center rounded-full bg-[#EAF4EE] px-2 text-sm font-semibold text-[#256551]">{item.value.toLocaleString("en-IN")}</span>
-                    <span className="min-w-0 flex-1"><span className="block text-sm font-semibold text-[#253E35] dark:text-slate-100">{item.label}</span><span className="mt-0.5 block truncate text-xs text-[#71847A]">{item.detail}</span></span>
-                    <ArrowRight size={14} className="text-[#B0BDB6] group-hover:text-[#216551]" />
-                  </Link>
-                );
-              })}
-            </div>
-          ) : <EmptyState text="No overdue follow-ups, waiting replies, or first-touch actions are currently recorded." />}
-          {unvaluedOpenLeads > 0 ? <Link href="/revenue" className="mx-4 mb-4 mt-3 flex items-center gap-3 rounded-xl border border-amber-200 bg-amber-50 px-3.5 py-3 text-xs font-semibold text-amber-800"><CircleDollarSign size={17} className="text-amber-600" />{unvaluedOpenLeads} deals need an estimated value<ArrowRight size={13} className="ml-auto" /></Link> : null}
-        </section>
-
-        <section className="overflow-hidden rounded-2xl border border-[#DCE4DF] bg-white shadow-sm dark:border-slate-800 dark:bg-slate-950">
-          <SectionHeader eyebrow="Revenue" title="Commercial snapshot" actionHref="/revenue" actionLabel="Open revenue" />
+      <section className="grid gap-4 xl:grid-cols-[minmax(0,1.3fr)_minmax(330px,.7fr)]">
+        <section className="overflow-hidden rounded-card border border-line bg-surface shadow-sm">
+          <SectionHeader
+            eyebrow="Business performance"
+            title="Revenue & conversion"
+            actionHref="/revenue"
+            actionLabel="Open revenue"
+          />
           <div className="p-5">
-            <div className="grid grid-cols-2 gap-4 border-b border-[#EEF2EF] pb-4 sm:grid-cols-4 dark:border-slate-900">
-              <SnapshotMetric label="Revenue" value={periodPrimaryRevenue ? formatMoney(periodPrimaryRevenue.current, periodPrimaryRevenue.currency) : "—"} change={periodPrimaryRevenue?.changePercent ?? null} />
-              <SnapshotMetric label="Pipeline" value={primaryRevenue ? formatMoney(primaryRevenue.pipeline, primaryRevenue.currency) : "—"} />
-              <SnapshotMetric label="Weighted" value={primaryRevenue ? formatMoney(primaryRevenue.weighted, primaryRevenue.currency) : "—"} />
-              <SnapshotMetric label="Qualified rate" value={periodAnalytics.leads.conversionRate != null ? `${periodAnalytics.leads.conversionRate}%` : "—"} />
+            <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
+              <SnapshotMetric
+                label="Collected"
+                value={
+                  periodPrimaryRevenue
+                    ? formatMoney(periodPrimaryRevenue.current, periodPrimaryRevenue.currency)
+                    : formatPeriodRevenue(periodAnalytics)
+                }
+                change={periodPrimaryRevenue?.changePercent ?? null}
+              />
+              <SnapshotMetric
+                label="Pipeline"
+                value={
+                  primaryRevenue
+                    ? formatMoney(primaryRevenue.pipeline, primaryRevenue.currency)
+                    : "—"
+                }
+              />
+              <SnapshotMetric
+                label="Weighted"
+                value={
+                  primaryRevenue
+                    ? formatMoney(primaryRevenue.weighted, primaryRevenue.currency)
+                    : "—"
+                }
+              />
+              <SnapshotMetric
+                label="Qualified rate"
+                value={
+                  periodAnalytics.leads.conversionRate != null
+                    ? `${periodAnalytics.leads.conversionRate}%`
+                    : "—"
+                }
+              />
             </div>
-            <RevenueTrend points={periodAnalytics.revenueSeries} currency={periodAnalytics.primaryCurrency} />
+            <RevenueTrend
+              points={periodAnalytics.revenueSeries}
+              currency={periodAnalytics.primaryCurrency}
+            />
           </div>
         </section>
 
-        <section className="overflow-hidden rounded-2xl border border-[#DCE4DF] bg-white shadow-sm dark:border-slate-800 dark:bg-slate-950">
-          <SectionHeader eyebrow="Acquisition" title="Source performance" actionHref="/attribution" actionLabel="Attribution" />
-          <div className="space-y-2 p-4">
-            {acquisitionSources.length ? acquisitionSources.slice(0, 6).map((source) => <SourceRow key={source.source} source={source} />) : <EmptyState text="No lead acquisition is recorded for this period yet." />}
+        <section className="overflow-hidden rounded-card border border-line bg-surface shadow-sm">
+          <SectionHeader
+            eyebrow="Needs your attention"
+            title="Recommended actions"
+            actionHref="/follow-ups"
+            actionLabel="View work"
+          />
+          <div className="divide-y divide-line">
+            {activeAttention.length ? (
+              activeAttention.slice(0, 4).map((item) => (
+                <Link
+                  key={item.label}
+                  href={item.href}
+                  className="group flex items-center gap-3 px-5 py-4 transition hover:bg-surface-muted"
+                >
+                  <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-ai-soft text-ai-text">
+                    <Sparkles size={15} />
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block text-sm font-semibold text-copy-strong">
+                      {recommendedActionTitle(item)}
+                    </span>
+                    <span className="mt-0.5 block text-xs leading-5 text-copy-muted">
+                      {item.value.toLocaleString("en-IN")} · {item.detail}
+                    </span>
+                  </span>
+                  <ArrowRight size={14} className="text-copy-subtle group-hover:text-brand-700" />
+                </Link>
+              ))
+            ) : (
+              <EmptyState text="There are no urgent sales actions in the current snapshot." />
+            )}
           </div>
+          {unvaluedOpenLeads > 0 ? (
+            <Link
+              href="/revenue"
+              className="m-4 flex items-center gap-3 rounded-xl border border-amber-200 bg-amber-50 px-3.5 py-3 text-xs font-semibold text-amber-800 dark:border-amber-900/60 dark:bg-amber-950/20 dark:text-amber-200"
+            >
+              <CircleDollarSign size={17} />
+              {unvaluedOpenLeads} open opportunities need an estimated value
+              <ArrowRight size={13} className="ml-auto" />
+            </Link>
+          ) : null}
+        </section>
+      </section>
+
+      <section className="grid gap-4 lg:grid-cols-2">
+        <section className="overflow-hidden rounded-card border border-line bg-surface shadow-sm">
+          <SectionHeader
+            eyebrow="Marketing"
+            title="Acquisition quality"
+            actionHref="/marketing"
+            actionLabel="Open marketing"
+          />
+          <div className="space-y-1 p-4">
+            {acquisitionSources.length ? (
+              acquisitionSources.slice(0, 6).map((source) => (
+                <SourceRow key={source.source} source={source} />
+              ))
+            ) : (
+              <EmptyState text="No acquisition data is recorded for this period yet." />
+            )}
+          </div>
+        </section>
+
+        <section className="overflow-hidden rounded-card border border-line bg-surface shadow-sm">
+          <SectionHeader
+            eyebrow="Operations"
+            title="Upcoming demand"
+            actionHref="/course-management"
+            actionLabel="Open operations"
+          />
+          {upcomingBatches.length ? (
+            <div className="grid gap-2 p-4 sm:grid-cols-2">
+              {upcomingBatches.slice(0, 6).map((batch) => (
+                <BatchCard key={batch.id} batch={batch} />
+              ))}
+            </div>
+          ) : (
+            <EmptyState text="No upcoming batches are currently available in this workspace." />
+          )}
         </section>
       </section>
 
       <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        <PulseCard label="Active pipeline" value={metrics.activePipeline.toLocaleString("en-IN")} detail="Open opportunities now" href="/pipeline" />
-        <PulseCard label="High intent" value={metrics.highIntent.toLocaleString("en-IN")} detail="High-intent leads now" href="/pipeline" />
-        <PulseCard label="Waiting > 1 hour" value={metrics.waitingOverHour.toLocaleString("en-IN")} detail="Reply backlog aging now" href="/conversations" />
-        <PulseCard label="Upcoming batches" value={upcomingBatches.length.toLocaleString("en-IN")} detail="Scheduled course demand" href="/course-management" />
+        <PulseCard
+          label="Active pipeline"
+          value={metrics.activePipeline.toLocaleString("en-IN")}
+          detail="Open opportunities"
+          href="/pipeline"
+        />
+        <PulseCard
+          label="High intent signal"
+          value={metrics.highIntent.toLocaleString("en-IN")}
+          detail="Existing derived signal"
+          href="/pipeline"
+        />
+        <PulseCard
+          label="Waiting > 1 hour"
+          value={metrics.waitingOverHour.toLocaleString("en-IN")}
+          detail="Aging reply backlog"
+          href="/conversations"
+        />
+        <PulseCard
+          label="Upcoming batches"
+          value={upcomingBatches.length.toLocaleString("en-IN")}
+          detail="Operational demand"
+          href="/course-management"
+        />
       </section>
+    </div>
+  );
+}
 
-      {upcomingBatches.length ? (
-        <section className="overflow-hidden rounded-2xl border border-[#DCE4DF] bg-white shadow-sm dark:border-slate-800 dark:bg-slate-950">
-          <SectionHeader eyebrow="Business context" title="Upcoming course demand" actionHref="/course-management" actionLabel="View all courses" />
-          <div className="flex gap-2 overflow-x-auto p-3">{upcomingBatches.slice(0, 8).map((batch) => <BatchCard key={batch.id} batch={batch} />)}</div>
-        </section>
+function DateField({
+  id,
+  name,
+  label,
+  defaultValue,
+}: {
+  id: string;
+  name: string;
+  label: string;
+  defaultValue: string;
+}) {
+  return (
+    <div>
+      <label htmlFor={id} className="text-[10px] font-semibold uppercase tracking-[0.12em] text-copy-subtle">
+        {label}
+      </label>
+      <input
+        id={id}
+        name={name}
+        type="date"
+        defaultValue={defaultValue}
+        className="mt-1 h-10 w-full rounded-ui border border-line bg-surface px-3 text-sm text-copy-strong outline-none transition focus:border-brand-700 focus:ring-2 focus:ring-brand-700/10"
+      />
+    </div>
+  );
+}
+
+function PeriodPresets({
+  selected,
+}: {
+  selected: DashboardPeriodAnalytics["period"]["preset"];
+}) {
+  const options = [
+    ["7d", "7D"],
+    ["30d", "30D"],
+    ["90d", "90D"],
+    ["ytd", "YTD"],
+  ] as const;
+
+  return (
+    <div className="inline-flex h-10 items-center rounded-ui border border-line bg-surface p-1 shadow-sm">
+      {options.map(([value, label]) => (
+        <Link
+          key={value}
+          href={`/home?period=${value}`}
+          className={`inline-flex h-8 min-w-10 items-center justify-center rounded-md px-2.5 text-[11px] font-semibold transition ${
+            selected === value
+              ? "bg-brand-700 text-white"
+              : "text-copy-muted hover:bg-brand-50 hover:text-brand-700"
+          }`}
+        >
+          {label}
+        </Link>
+      ))}
+    </div>
+  );
+}
+
+function AttentionCard({ item }: { item: AttentionItem }) {
+  const Icon = item.icon;
+  const tone =
+    item.tone === "critical"
+      ? "bg-rose-50 text-rose-700 dark:bg-rose-950/30 dark:text-rose-300"
+      : item.tone === "warning"
+        ? "bg-amber-50 text-amber-700 dark:bg-amber-950/30 dark:text-amber-300"
+        : "bg-brand-50 text-brand-700 dark:bg-brand-950/30 dark:text-brand-300";
+
+  return (
+    <Link
+      href={item.href}
+      className="group rounded-card border border-line bg-surface p-4 shadow-sm transition hover:border-line-strong hover:shadow-panel"
+    >
+      <div className="flex items-start justify-between gap-3">
+        <span className={`grid h-9 w-9 place-items-center rounded-xl ${tone}`}>
+          <Icon size={17} />
+        </span>
+        <ArrowRight size={14} className="mt-1 text-copy-subtle transition group-hover:translate-x-0.5 group-hover:text-brand-700" />
+      </div>
+      <div className="mt-4 text-[25px] font-semibold tracking-[-0.04em] text-copy-strong">
+        {item.value.toLocaleString("en-IN")}
+      </div>
+      <div className="mt-1 text-sm font-semibold text-copy-strong">{item.label}</div>
+      <div className="mt-1 text-xs leading-5 text-copy-muted">{item.detail}</div>
+    </Link>
+  );
+}
+
+function CompactStat({ label, value }: { label: string; value: number }) {
+  return (
+    <div className="rounded-xl bg-surface-muted px-3 py-3">
+      <div className="text-xl font-semibold tracking-[-0.035em] text-copy-strong">
+        {value.toLocaleString("en-IN")}
+      </div>
+      <div className="mt-0.5 text-[10px] font-semibold uppercase tracking-[0.08em] text-copy-subtle">
+        {label}
+      </div>
+    </div>
+  );
+}
+
+function SectionHeader({
+  eyebrow,
+  title,
+  actionHref,
+  actionLabel,
+}: {
+  eyebrow: string;
+  title: string;
+  actionHref: string;
+  actionLabel: string;
+}) {
+  return (
+    <div className="flex items-center justify-between gap-3 border-b border-line px-5 py-4">
+      <div>
+        <div className="text-[10px] font-semibold uppercase tracking-[0.13em] text-copy-subtle">
+          {eyebrow}
+        </div>
+        <div className="mt-1 text-base font-semibold text-copy-strong">{title}</div>
+      </div>
+      <Link
+        href={actionHref}
+        className="inline-flex items-center gap-1 text-[11px] font-semibold text-brand-700 hover:text-brand-800 dark:text-brand-300"
+      >
+        {actionLabel}
+        <ArrowRight size={12} />
+      </Link>
+    </div>
+  );
+}
+
+function SnapshotMetric({
+  label,
+  value,
+  change,
+}: {
+  label: string;
+  value: string;
+  change?: number | null;
+}) {
+  return (
+    <div className="min-w-0">
+      <div className="text-[10px] font-semibold uppercase tracking-[0.08em] text-copy-subtle">
+        {label}
+      </div>
+      <div className="mt-1 truncate text-xl font-semibold tracking-[-0.035em] text-copy-strong">
+        {value}
+      </div>
+      {change !== undefined ? (
+        <div className="mt-1">
+          <TrendPill value={change ?? null} compact />
+        </div>
       ) : null}
     </div>
   );
 }
 
-function DateField({ id, name, label, defaultValue }: { id: string; name: string; label: string; defaultValue: string }) {
-  return <div><label htmlFor={id} className="text-[10px] font-bold uppercase tracking-[0.12em] text-[#71847A]">{label}</label><input id={id} name={name} type="date" defaultValue={defaultValue} className="mt-1 h-10 w-full rounded-lg border border-[#DCE4DF] bg-white px-3 text-sm text-[#18362D] outline-none focus:border-[#216551] focus:ring-2 focus:ring-[#216551]/10 dark:border-slate-700 dark:bg-slate-900 dark:text-white" /></div>;
-}
+function RevenueTrend({
+  points,
+  currency,
+}: {
+  points: DashboardPeriodAnalytics["revenueSeries"];
+  currency: string | null;
+}) {
+  if (!points.length || !currency) {
+    return (
+      <div className="mt-5 grid h-36 place-items-center rounded-xl border border-dashed border-line bg-surface-muted px-6 text-center text-xs text-copy-muted">
+        Revenue trend will appear once paid transactions are recorded in the selected period.
+      </div>
+    );
+  }
 
-function PeriodPresets({ selected }: { selected: DashboardPeriodAnalytics["period"]["preset"] }) {
-  const options = [["7d", "7D"], ["30d", "30D"], ["90d", "90D"], ["ytd", "YTD"]] as const;
-  return <div className="inline-flex h-10 items-center rounded-xl border border-[#DCE4DF] bg-white p-1 shadow-sm dark:border-slate-800 dark:bg-slate-950">{options.map(([value, label]) => <Link key={value} href={`/home?period=${value}`} className={`inline-flex h-8 min-w-10 items-center justify-center rounded-lg px-2.5 text-[11px] font-semibold transition ${selected === value ? "bg-[#153E33] text-white" : "text-[#71847A] hover:bg-[#F1F5F2] hover:text-[#18362D]"}`}>{label}</Link>)}</div>;
-}
-
-function HeroStat({ label, value, detail }: { label: string; value: string; detail: React.ReactNode }) {
-  return <div className="border-white/10 sm:border-l sm:pl-5"><div className="text-[25px] font-semibold tracking-[-0.04em]">{value}</div><div className="mt-1 text-xs text-emerald-50/80">{label}</div><div className="mt-2 text-[11px] font-semibold">{detail}</div></div>;
-}
-
-function KpiCard({ href, icon: Icon, label, value, previous, change, bars }: { href: string; icon: LucideIcon; label: string; value: string; previous: string; change: number | null; bars: "revenue" | "leads" }) {
-  const heights = bars === "revenue" ? [23, 35, 48, 63, 45, 32, 28, 44, 57, 72, 55, 78, 68, 92] : [34, 44, 27, 51, 38, 57, 42, 66, 48, 75, 55, 84, 71, 95];
-  return <Link href={href} className="group rounded-2xl border border-[#DCE4DF] bg-white p-4 shadow-sm transition hover:border-[#BFD6C6] hover:shadow-md dark:border-slate-800 dark:bg-slate-950"><div className="flex items-center gap-2"><span className="grid h-9 w-9 place-items-center rounded-xl bg-[#EDF3E6] text-[#216551]"><Icon size={17} /></span><span className="min-w-0 flex-1 truncate text-[11px] font-semibold text-[#71847A]">{label}</span><TrendPill value={change} /></div><div className="mt-3 text-[24px] font-semibold tracking-[-0.04em] text-[#18362D] dark:text-white">{value}</div><div className="mt-1 truncate text-[10px] text-[#8A9A92]">{previous}</div><div className="mt-4 flex h-8 items-end gap-1" aria-hidden="true">{heights.map((height, index) => <span key={index} className="flex-1 rounded-sm bg-emerald-400/80" style={{ height: `${height}%`, opacity: 0.45 + index / 30 }} />)}</div></Link>;
-}
-
-function QualifiedRateCard({ rate, qualified, total, available }: { rate: number | null; qualified: number; total: number; available: boolean }) {
-  const safeRate = Math.max(0, Math.min(100, rate ?? 0));
-  const circumference = 2 * Math.PI * 28;
-  const dash = circumference * (safeRate / 100);
-  return <Link href="/pipeline" className="group rounded-2xl border border-[#DCE4DF] bg-white p-4 shadow-sm transition hover:border-[#BFD6C6] hover:shadow-md dark:border-slate-800 dark:bg-slate-950"><div className="flex items-start justify-between gap-3"><div><div className="text-[11px] font-semibold text-[#71847A]">Qualified rate</div><div className="mt-2 text-[24px] font-semibold tracking-[-0.04em] text-[#18362D] dark:text-white">{available && rate != null ? `${rate}%` : "—"}</div><div className="mt-1 text-[10px] text-[#8A9A92]">{available ? `${qualified} of ${total} selected-period leads are qualified+` : "Period lead analytics unavailable"}</div></div><div className="relative h-[74px] w-[74px] shrink-0"><svg viewBox="0 0 72 72" className="h-full w-full -rotate-90" role="img" aria-label={available && rate != null ? `${rate}% qualified rate` : "Qualified rate unavailable"}><circle cx="36" cy="36" r="28" fill="none" stroke="#E7EFEA" strokeWidth="7" /><circle cx="36" cy="36" r="28" fill="none" stroke="#216551" strokeWidth="7" strokeLinecap="round" strokeDasharray={`${dash} ${circumference - dash}`} /></svg><div className="absolute inset-0 grid place-items-center text-[10px] font-bold text-[#216551]">{available && rate != null ? `${Math.round(rate)}%` : "—"}</div></div></div></Link>;
-}
-
-function SectionHeader({ eyebrow, title, actionHref, actionLabel }: { eyebrow: string; title: string; actionHref: string; actionLabel: string }) {
-  return <div className="flex items-center justify-between gap-3 border-b border-[#E7ECE9] px-5 py-4 dark:border-slate-900"><div><div className="text-[10px] font-bold uppercase tracking-[0.13em] text-[#71847A]">{eyebrow}</div><div className="mt-1 text-base font-semibold text-[#18362D] dark:text-white">{title}</div></div><Link href={actionHref} className="inline-flex items-center gap-1 text-[11px] font-semibold text-[#256551] hover:text-[#173F34] dark:text-emerald-300">{actionLabel}<ArrowRight size={12} /></Link></div>;
-}
-
-function SnapshotMetric({ label, value, change }: { label: string; value: string; change?: number | null }) {
-  return <div className="min-w-0"><div className="text-[10px] font-bold uppercase tracking-[0.08em] text-[#8A9A92]">{label}</div><div className="mt-1 truncate text-xl font-semibold tracking-[-0.035em] text-[#18362D] dark:text-white">{value}</div>{change !== undefined ? <div className="mt-1"><TrendPill value={change ?? null} compact /></div> : null}</div>;
-}
-
-function RevenueTrend({ points, currency }: { points: DashboardPeriodAnalytics["revenueSeries"]; currency: string | null }) {
-  if (!points.length || !currency) return <div className="mt-4 grid h-40 place-items-center rounded-xl border border-dashed border-[#DCE4DF] bg-[#FAFBFA] px-6 text-center text-xs text-[#71847A]">Revenue trend will appear once paid transactions are recorded in the selected period.</div>;
   let running = 0;
-  const cumulative = points.map((point) => ({ ...point, cumulative: (running += point.value) }));
-  const width = 720, height = 176, padX = 8, padTop = 14, padBottom = 26;
-  const values = cumulative.map((point) => point.cumulative);
-  const minValue = Math.min(0, ...values), maxValue = Math.max(0, ...values), range = Math.max(1, maxValue - minValue);
-  const usableWidth = width - padX * 2, usableHeight = height - padTop - padBottom;
-  const coords = cumulative.map((point, index) => ({ x: padX + (cumulative.length === 1 ? usableWidth / 2 : (index / (cumulative.length - 1)) * usableWidth), y: padTop + (1 - (point.cumulative - minValue) / range) * usableHeight }));
-  const line = coords.map((point) => `${point.x.toFixed(1)},${point.y.toFixed(1)}`).join(" ");
-  const baseline = padTop + (1 - (0 - minValue) / range) * usableHeight;
-  const area = `${coords[0]?.x ?? padX},${baseline} ${line} ${coords.at(-1)?.x ?? width - padX},${baseline}`;
-  const middle = cumulative[Math.floor((cumulative.length - 1) / 2)];
-  return <div className="mt-4"><div className="flex items-end justify-between gap-4"><div><div className="text-[10px] font-bold uppercase tracking-[0.1em] text-[#8A9A92]">Cumulative collected · {currency}</div><div className="mt-1 text-lg font-semibold text-[#18362D] dark:text-white">{formatMoney(running, currency)}</div></div><div className="text-right text-[10px] text-[#8A9A92]">Paid transactions · refunds netted</div></div><div className="mt-3 overflow-hidden rounded-xl bg-gradient-to-b from-[#F6FAF7] to-white px-2 pt-2"><svg viewBox={`0 0 ${width} ${height}`} className="h-44 w-full" role="img" aria-label={`Cumulative ${currency} revenue collected across the selected period`}><defs><linearGradient id="homeRevenueAreaV2" x1="0" x2="0" y1="0" y2="1"><stop offset="0%" stopColor="#216551" stopOpacity="0.2" /><stop offset="100%" stopColor="#216551" stopOpacity="0.01" /></linearGradient></defs><line x1={padX} x2={width - padX} y1={baseline} y2={baseline} stroke="#DCE4DF" strokeWidth="1" /><polygon points={area} fill="url(#homeRevenueAreaV2)" /><polyline points={line} fill="none" stroke="#17834D" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />{coords.map((point, index) => index % Math.max(1, Math.floor(coords.length / 8)) === 0 || index === coords.length - 1 ? <circle key={index} cx={point.x} cy={point.y} r={index === coords.length - 1 ? 4.5 : 2.5} fill="#17834D" stroke="white" strokeWidth="1.5" /> : null)}<text x={padX} y={height - 6} fontSize="10" fill="#8A9A92">{formatShortDate(cumulative[0]?.date)}</text><text x={width / 2} y={height - 6} fontSize="10" textAnchor="middle" fill="#8A9A92">{formatShortDate(middle?.date)}</text><text x={width - padX} y={height - 6} fontSize="10" textAnchor="end" fill="#8A9A92">{formatShortDate(cumulative.at(-1)?.date)}</text></svg></div></div>;
+  const cumulative = points.map((point) => ({
+    ...point,
+    cumulative: (running += point.value),
+  }));
+  const max = Math.max(1, ...cumulative.map((point) => Math.abs(point.cumulative)));
+
+  return (
+    <div className="mt-5">
+      <div className="flex items-end justify-between gap-4">
+        <div>
+          <div className="text-[10px] font-semibold uppercase tracking-[0.1em] text-copy-subtle">
+            Cumulative collected · {currency}
+          </div>
+          <div className="mt-1 text-lg font-semibold text-copy-strong">
+            {formatMoney(running, currency)}
+          </div>
+        </div>
+        <div className="text-right text-[10px] text-copy-subtle">
+          Paid transactions · refunds netted
+        </div>
+      </div>
+      <div className="mt-4 flex h-32 items-end gap-1.5 rounded-xl bg-surface-muted px-3 pb-3 pt-4" aria-label={`Cumulative ${currency} revenue collected across the selected period`}>
+        {cumulative.map((point) => {
+          const height = Math.max(5, Math.round((Math.abs(point.cumulative) / max) * 100));
+          return (
+            <span
+              key={point.date}
+              title={`${formatShortDate(point.date)} · ${formatMoney(point.cumulative, currency)}`}
+              className="min-w-[3px] flex-1 rounded-sm bg-brand-700/70"
+              style={{ height: `${height}%` }}
+            />
+          );
+        })}
+      </div>
+    </div>
+  );
 }
 
 function SourceRow({ source }: { source: DashboardPeriodSource }) {
   const width = Math.max(3, Math.min(100, source.conversionRate ?? 0));
   const smallSample = source.leads > 0 && source.leads < 10;
-  return <div className="grid grid-cols-[42px_minmax(0,1fr)_minmax(90px,.8fr)_64px] items-center gap-3 rounded-xl px-2 py-2 transition hover:bg-[#F8FAF8]"><SourceIcon source={source.source} /><div className="min-w-0"><div className="truncate text-sm font-semibold text-[#253E35] dark:text-slate-100">{pretty(source.source)}</div><div className="mt-0.5 text-[10px] text-[#8A9A92]">{source.leads} leads · {source.qualified} qualified{smallSample ? " · small sample" : ""}</div></div><div className="h-2 overflow-hidden rounded-full bg-[#E9EFEB]"><div className="h-full rounded-full bg-[#176148]" style={{ width: `${width}%` }} /></div><div className="text-right"><div className="text-sm font-semibold text-[#18362D] dark:text-white">{source.conversionRate == null ? "—" : `${source.conversionRate}%`}</div><div className="text-[9px] text-[#8A9A92]">qualified</div></div></div>;
+  return (
+    <div className="grid grid-cols-[minmax(0,1fr)_minmax(90px,.7fr)_64px] items-center gap-3 rounded-xl px-2 py-2.5 transition hover:bg-surface-muted">
+      <div className="min-w-0">
+        <div className="truncate text-sm font-semibold text-copy-strong">
+          {pretty(source.source)}
+        </div>
+        <div className="mt-0.5 text-[10px] text-copy-subtle">
+          {source.leads} leads · {source.qualified} qualified
+          {smallSample ? " · small sample" : ""}
+        </div>
+      </div>
+      <div className="h-2 overflow-hidden rounded-full bg-brand-50 dark:bg-brand-950/30">
+        <div className="h-full rounded-full bg-brand-700" style={{ width: `${width}%` }} />
+      </div>
+      <div className="text-right">
+        <div className="text-sm font-semibold text-copy-strong">
+          {source.conversionRate == null ? "—" : `${source.conversionRate}%`}
+        </div>
+        <div className="text-[9px] text-copy-subtle">qualified</div>
+      </div>
+    </div>
+  );
 }
 
-function SourceIcon({ source }: { source: string }) {
-  const normalized = source.trim().toLowerCase();
-  if (normalized.includes("google")) return <span className="grid h-9 w-9 place-items-center rounded-full border border-[#E4E8E5] bg-white text-base font-bold text-[#4285F4] shadow-sm">G</span>;
-  if (normalized.includes("whatsapp")) return <span className="grid h-9 w-9 place-items-center rounded-full bg-[#E9F8EF] text-[#16A34A]"><MessageCircle size={19} fill="currentColor" strokeWidth={1.6} /></span>;
-  if (normalized.includes("instagram")) return <span className="grid h-9 w-9 place-items-center rounded-full bg-pink-50 text-pink-600"><Instagram size={19} /></span>;
-  if (normalized.includes("facebook") || normalized.includes("meta")) return <span className="grid h-9 w-9 place-items-center rounded-full bg-blue-50 text-blue-600"><Facebook size={18} fill="currentColor" /></span>;
-  if (normalized.includes("unknown") || normalized === "other") return <span className="grid h-9 w-9 place-items-center rounded-full bg-[#F1F5F2] text-[#596E64]"><HelpCircle size={18} /></span>;
-  if (normalized.includes("direct") || normalized.includes("website") || normalized.includes("web")) return <span className="grid h-9 w-9 place-items-center rounded-full bg-[#EAF4EE] text-[#216551]"><Globe2 size={18} /></span>;
-  return <span className="grid h-9 w-9 place-items-center rounded-full bg-[#EAF4EE] text-[#216551]"><Users size={18} /></span>;
-}
-
-function PulseCard({ label, value, detail, href }: { label: string; value: string; detail: string; href: string }) {
-  return <Link href={href} className="flex items-center justify-between gap-4 rounded-2xl border border-[#DCE4DF] bg-white px-4 py-3.5 shadow-sm transition hover:border-[#BFD6C6] hover:bg-[#F9FBFA] dark:border-slate-800 dark:bg-slate-950"><div className="min-w-0"><div className="text-[10px] font-bold uppercase tracking-[0.11em] text-[#71847A]">{label}</div><div className="mt-1 truncate text-xs text-[#71847A]">{detail}</div></div><div className="shrink-0 text-2xl font-semibold tracking-[-0.04em] text-[#18362D] dark:text-white">{value}</div></Link>;
+function PulseCard({
+  label,
+  value,
+  detail,
+  href,
+}: {
+  label: string;
+  value: string;
+  detail: string;
+  href: string;
+}) {
+  return (
+    <Link
+      href={href}
+      className="flex items-center justify-between gap-4 rounded-card border border-line bg-surface px-4 py-3.5 shadow-sm transition hover:border-line-strong hover:bg-surface-muted"
+    >
+      <div className="min-w-0">
+        <div className="text-[10px] font-semibold uppercase tracking-[0.11em] text-copy-subtle">
+          {label}
+        </div>
+        <div className="mt-1 truncate text-xs text-copy-muted">{detail}</div>
+      </div>
+      <div className="shrink-0 text-2xl font-semibold tracking-[-0.04em] text-copy-strong">
+        {value}
+      </div>
+    </Link>
+  );
 }
 
 function BatchCard({ batch }: { batch: DashboardBatchDemand }) {
-  const capacityText = batch.seatsRemaining != null ? `${batch.seatsRemaining} seats left` : batch.capacity != null ? `${batch.capacity} capacity` : "Capacity not set";
-  return <Link href="/course-management" className="w-[250px] shrink-0 rounded-xl border border-[#E4EAE6] bg-[#FBFCFB] p-3 transition hover:border-[#BFD6C6] hover:bg-white hover:shadow-sm dark:border-slate-800 dark:bg-slate-900/50"><div className="flex items-start gap-3"><span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-[#EDF3E6] text-[#216551]"><BookOpen size={16} /></span><div className="min-w-0 flex-1"><div className="line-clamp-2 text-xs font-semibold leading-5 text-[#253E35] dark:text-slate-100">{batch.courseName}</div><div className="mt-0.5 text-[10px] text-[#8A9A92]">{batch.startDate ? formatDate(batch.startDate) : "Date not set"} · {batch.location}</div></div><span className="rounded-md bg-emerald-50 px-1.5 py-1 text-[9px] font-semibold text-emerald-700">{batch.activeDemand} active</span></div><div className="mt-3 flex flex-wrap gap-x-3 gap-y-1 border-t border-[#E7ECE9] pt-2 text-[10px] text-[#71847A]"><span>{batch.enrolled} enrolled</span><span>{batch.paymentPending} payment</span><span>{capacityText}</span></div></Link>;
+  const capacityText =
+    batch.seatsRemaining != null
+      ? `${batch.seatsRemaining} seats left`
+      : batch.capacity != null
+        ? `${batch.capacity} capacity`
+        : "Capacity not set";
+
+  return (
+    <Link
+      href="/course-management"
+      className="rounded-xl border border-line bg-surface-muted p-3 transition hover:border-line-strong hover:bg-surface"
+    >
+      <div className="flex items-start gap-3">
+        <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-brand-50 text-brand-700 dark:bg-brand-950/30 dark:text-brand-300">
+          <BookOpen size={16} />
+        </span>
+        <div className="min-w-0 flex-1">
+          <div className="line-clamp-2 text-xs font-semibold leading-5 text-copy-strong">
+            {batch.courseName}
+          </div>
+          <div className="mt-0.5 text-[10px] text-copy-subtle">
+            {batch.startDate ? formatDate(batch.startDate) : "Date not set"} · {batch.location}
+          </div>
+        </div>
+      </div>
+      <div className="mt-3 flex flex-wrap gap-x-3 gap-y-1 border-t border-line pt-2 text-[10px] text-copy-muted">
+        <span>{batch.activeDemand} active</span>
+        <span>{batch.enrolled} enrolled</span>
+        <span>{batch.paymentPending} payment</span>
+        <span>{capacityText}</span>
+      </div>
+    </Link>
+  );
 }
 
-function TrendPill({ value, light = false, compact = false }: { value: number | null; light?: boolean; compact?: boolean }) {
-  if (value == null) return <span className={`${compact ? "text-[9px]" : "text-[10px]"} font-semibold ${light ? "text-emerald-100/75" : "text-[#8A9A92]"}`}>No baseline</span>;
-  const positive = value > 0, negative = value < 0;
-  const tone = light ? "bg-white/10 text-emerald-50" : positive ? "bg-emerald-50 text-emerald-700" : negative ? "bg-rose-50 text-rose-700" : "bg-[#F1F5F2] text-[#596E64]";
-  return <span className={`inline-flex items-center rounded-full ${compact ? "px-1.5 py-0.5 text-[9px]" : "px-2 py-1 text-[10px]"} font-bold ${tone}`}>{positive ? "↑ " : negative ? "↓ " : ""}{value > 0 ? "+" : ""}{value.toLocaleString("en-IN", { maximumFractionDigits: 1 })}%</span>;
-}
-
-function ChangeText({ value, fallback, light = false }: { value: number | null; fallback: string; light?: boolean }) {
-  const text = changeLabel(value, fallback);
-  const positive = value != null && value > 0, negative = value != null && value < 0;
-  const className = light ? "text-emerald-100/80" : positive ? "text-emerald-600" : negative ? "text-rose-600" : "text-[#71847A]";
-  return <span className={className}>{text}</span>;
-}
-
-function EmptyState({ text }: { text: string }) { return <div className="px-5 py-10 text-sm leading-6 text-[#71847A]">{text}</div>; }
-
-function heroHeadline(analytics: DashboardPeriodAnalytics, revenue: DashboardPeriodRevenue | null) {
-  if (analytics.available.revenue && revenue && revenue.current !== 0) {
-    if (revenue.changePercent != null && revenue.changePercent !== 0) return `Revenue is ${revenue.changePercent > 0 ? "up" : "down"} ${Math.abs(revenue.changePercent).toLocaleString("en-IN", { maximumFractionDigits: 1 })}% versus the previous period`;
-    return `${formatMoney(revenue.current, revenue.currency)} collected in this period`;
+function TrendPill({
+  value,
+  compact = false,
+}: {
+  value: number | null;
+  compact?: boolean;
+}) {
+  if (value == null) {
+    return (
+      <span className={`${compact ? "text-[9px]" : "text-[10px]"} font-semibold text-copy-subtle`}>
+        No baseline
+      </span>
+    );
   }
-  if (analytics.available.leads && analytics.leads.current > 0) return `${analytics.leads.current.toLocaleString("en-IN")} new leads entered the CRM in this period`;
-  return "Your selected period is ready for commercial tracking";
+
+  const positive = value > 0;
+  const negative = value < 0;
+  const tone = positive
+    ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-300"
+    : negative
+      ? "bg-rose-50 text-rose-700 dark:bg-rose-950/30 dark:text-rose-300"
+      : "bg-surface-muted text-copy-muted";
+
+  return (
+    <span
+      className={`inline-flex items-center rounded-full ${
+        compact ? "px-1.5 py-0.5 text-[9px]" : "px-2 py-1 text-[10px]"
+      } font-semibold ${tone}`}
+    >
+      {positive ? "↑ " : negative ? "↓ " : ""}
+      {value > 0 ? "+" : ""}
+      {value.toLocaleString("en-IN", { maximumFractionDigits: 1 })}%
+    </span>
+  );
 }
 
-function pickPeriodRevenue(analytics: DashboardPeriodAnalytics, fallbackCurrency: string | null) {
-  if (analytics.primaryCurrency) return analytics.revenue.find((row) => row.currency === analytics.primaryCurrency) ?? null;
-  if (fallbackCurrency) return analytics.revenue.find((row) => row.currency === fallbackCurrency.toUpperCase()) ?? null;
+function EmptyState({ text }: { text: string }) {
+  return <div className="px-5 py-10 text-sm leading-6 text-copy-muted">{text}</div>;
+}
+
+function recommendedActionTitle(item: AttentionItem) {
+  if (item.label === "Needs reply") return "Clear the reply backlog";
+  if (item.label === "Overdue follow-ups") return "Complete overdue follow-ups";
+  if (item.label === "First touch needed") return "Assign and contact new opportunities";
+  if (item.label === "Payment pending") return "Review payment-pending opportunities";
+  return item.label;
+}
+
+function buildCommandSummary(items: AttentionItem[]) {
+  const active = items.filter((item) => item.value > 0);
+  if (!active.length) return "No reply backlog, overdue follow-up, first-touch, or payment attention is currently recorded.";
+  const top = active
+    .sort((a, b) => b.value - a.value)
+    .slice(0, 3)
+    .map((item) => `${item.value.toLocaleString("en-IN")} ${item.label.toLowerCase()}`);
+  return `${top.join(", ")}. Open the relevant workspace to act on the underlying records.`;
+}
+
+function pickPeriodRevenue(
+  analytics: DashboardPeriodAnalytics,
+  fallbackCurrency: string | null,
+) {
+  if (analytics.primaryCurrency) {
+    return analytics.revenue.find((row) => row.currency === analytics.primaryCurrency) ?? null;
+  }
+  if (fallbackCurrency) {
+    return analytics.revenue.find((row) => row.currency === fallbackCurrency.toUpperCase()) ?? null;
+  }
   return analytics.revenue[0] ?? null;
 }
 
@@ -389,18 +803,42 @@ function formatPeriodRevenue(analytics: DashboardPeriodAnalytics) {
   return selected.map((row) => formatMoney(row.current, row.currency)).join(" · ");
 }
 
-function changeLabel(value: number | null, fallback: string) {
-  if (value == null) return fallback;
-  if (value === 0) return "No change vs previous";
-  return `${value > 0 ? "+" : ""}${value.toLocaleString("en-IN", { maximumFractionDigits: 1 })}% vs previous`;
-}
-
 function formatMoney(value: number, currency: string) {
   const code = currency?.trim().toUpperCase() || "INR";
-  try { return new Intl.NumberFormat("en-IN", { style: "currency", currency: code, maximumFractionDigits: 0 }).format(value || 0); }
-  catch { return `${code} ${Number(value || 0).toLocaleString("en-IN")}`; }
+  try {
+    return new Intl.NumberFormat("en-IN", {
+      style: "currency",
+      currency: code,
+      maximumFractionDigits: 0,
+    }).format(value || 0);
+  } catch {
+    return `${code} ${Number(value || 0).toLocaleString("en-IN")}`;
+  }
 }
 
-function pretty(value: string) { return value.replaceAll("_", " ").replace(/\b\w/g, (letter) => letter.toUpperCase()); }
-function formatDate(value: string) { const date = new Date(value); return Number.isNaN(date.getTime()) ? value : new Intl.DateTimeFormat("en-IN", { day: "numeric", month: "short", year: "numeric" }).format(date); }
-function formatShortDate(value: string | undefined) { if (!value) return ""; const date = new Date(`${value}T00:00:00.000Z`); return Number.isNaN(date.getTime()) ? value : new Intl.DateTimeFormat("en-IN", { day: "numeric", month: "short", timeZone: "UTC" }).format(date); }
+function pretty(value: string) {
+  return value.replaceAll("_", " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
+}
+
+function formatDate(value: string) {
+  const date = new Date(value);
+  return Number.isNaN(date.getTime())
+    ? value
+    : new Intl.DateTimeFormat("en-IN", {
+        day: "numeric",
+        month: "short",
+        year: "numeric",
+      }).format(date);
+}
+
+function formatShortDate(value: string | undefined) {
+  if (!value) return "";
+  const date = new Date(`${value}T00:00:00.000Z`);
+  return Number.isNaN(date.getTime())
+    ? value
+    : new Intl.DateTimeFormat("en-IN", {
+        day: "numeric",
+        month: "short",
+        timeZone: "UTC",
+      }).format(date);
+}
