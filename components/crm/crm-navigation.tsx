@@ -7,11 +7,12 @@ import {
   AlertTriangle,
   ChevronDown,
   CircleDollarSign,
-  ContactRound,
   DatabaseZap,
+  Inbox,
   LayoutDashboard,
   ListTodo,
   Rows3,
+  RotateCcw,
   UserRoundSearch,
   UsersRound,
 } from 'lucide-react';
@@ -31,25 +32,26 @@ const groups: NavigationGroup[] = [
   {
     label: 'Workspace',
     items: [
-      { href: '/crm', label: 'Command Center', icon: LayoutDashboard },
-      { href: '/admissions', label: 'Admissions Desk', icon: Activity },
-      { href: '/follow-ups', label: 'Follow-ups', icon: ListTodo },
+      { href: '/crm', label: 'Sales Overview', icon: LayoutDashboard },
+      { href: '/dashboard', label: 'Today', icon: Activity },
+      { href: '/admissions', label: 'Admissions', icon: UsersRound },
     ],
   },
   {
-    label: 'Customers & pipeline',
+    label: 'Selling',
     items: [
       { href: '/leads', label: 'Leads', icon: UserRoundSearch },
-      { href: '/pipeline', label: 'Sales Pipeline', icon: Rows3 },
-      { href: '/customer-360', label: 'Customer 360', icon: UsersRound },
+      { href: '/pipeline', label: 'Pipeline', icon: Rows3 },
+      { href: '/conversations', label: 'Inbox', icon: Inbox },
+      { href: '/follow-ups', label: 'Tasks & Follow-ups', icon: ListTodo },
     ],
   },
   {
-    label: 'Intelligence',
+    label: 'Customer & quality',
     items: [
-      { href: '/contact-intelligence', label: 'Contact Intelligence', icon: ContactRound },
-      { href: '/team-performance', label: 'Team Performance', icon: UsersRound },
+      { href: '/customer-360', label: 'Customer 360', icon: UsersRound },
       { href: '/data-quality', label: 'Data Quality', icon: DatabaseZap },
+      { href: '/re-engaged', label: 'Re-engaged', icon: RotateCcw },
     ],
   },
   {
@@ -69,6 +71,7 @@ function isActive(pathname: string, href: string) {
   if (href.includes('?')) return false;
   const path = pathOnly(href);
   if (path === '/crm') return pathname === path;
+  if (path === '/dashboard') return pathname === path;
   if (path === '/leads') return pathname === '/leads' || pathname.startsWith('/leads/');
   return pathname === path || pathname.startsWith(`${path}/`);
 }
@@ -134,15 +137,15 @@ export function CrmNavigation() {
             <span className="grid h-9 w-9 place-items-center rounded-ui bg-brand-50 text-brand-700">
               <UsersRound size={17} />
             </span>
-            {current?.label || 'CRM'}
+            {current?.label || 'Sales'}
           </span>
           <ChevronDown size={17} className="text-copy-subtle transition group-open:rotate-180" />
         </summary>
         <div className="border-t border-line p-4">
           <div className="mb-5 rounded-ui bg-surface-soft px-4 py-3.5">
-            <div className="text-[16px] font-semibold text-copy-strong">CRM</div>
+            <div className="text-[16px] font-semibold text-copy-strong">Sales</div>
             <div className="mt-1.5 text-[14px] leading-6 text-copy-muted">
-              Work leads, admissions, follow-ups and customer intelligence from one place.
+              Work priorities, leads, conversations, pipeline and customer context from one place.
             </div>
           </div>
           <NavigationLinks mobile />
@@ -151,15 +154,15 @@ export function CrmNavigation() {
 
       <aside
         className="hidden min-h-[calc(100vh-7rem)] border-r border-line pr-5 min-[768px]:block"
-        aria-label="CRM navigation"
+        aria-label="Sales navigation"
       >
         <div className="sticky top-20 pb-10">
           <div className="mb-8 px-3 pt-1">
             <div className="text-[20px] font-semibold tracking-[-0.025em] text-copy-strong">
-              CRM
+              Sales
             </div>
             <p className="mt-2 max-w-[205px] text-[14px] leading-6 text-copy-muted">
-              Work leads, admissions, follow-ups and customer intelligence from one place.
+              Work priorities, leads, conversations, pipeline and customer context from one place.
             </p>
           </div>
           <NavigationLinks />
