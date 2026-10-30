@@ -164,3 +164,18 @@
     scroll-snap-stop: always;
   }
 }
+
+/* Small-screen popovers: preserve the compact desktop widths but never let
+   top-bar or Automation menus escape the viewport on 320–390px screens. */
+@media (max-width: 639px) {
+  .topbar-notification-menu > div[class*='absolute'][class*='w-[320px]'] {
+    width: min(320px, calc(100vw - 24px)) !important;
+    max-width: calc(100vw - 24px) !important;
+  }
+
+  [data-motion-route='/automation/instagram'] form[class*='absolute'][class*='w-[320px]'] {
+    right: 12px !important;
+    width: min(320px, calc(100vw - 24px)) !important;
+    max-width: calc(100vw - 24px) !important;
+  }
+}
