@@ -75,6 +75,7 @@ type InspectorContactLog = {
 };
 
 type InspectorPerson = {
+  person_id?: string | null;
   session_count?: number | string | null;
   sessions_30d?: number | string | null;
   touchpoint_count?: number | string | null;
@@ -489,6 +490,14 @@ export function LeadInspector({
               >
                 <CalendarClock size={12} /> Follow-up
               </button>
+              {payload.person?.person_id ? (
+                <Link
+                  href={`/customer-360/${encodeURIComponent(payload.person.person_id)}?opportunity=${encodeURIComponent(payload.lead.id)}`}
+                  className="inline-flex h-8 items-center gap-1.5 rounded-md border border-[#DDE7DF] bg-white px-3 text-[11px] font-semibold text-[#456158] transition hover:bg-[#F0F7F3]"
+                >
+                  Customer 360 <ArrowRight size={12} />
+                </Link>
+              ) : null}
               <Link
                 href={`/leads/${payload.lead.id}`}
                 data-native-lead-navigation="true"
