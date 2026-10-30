@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { BarChart3, CircleDollarSign, GitBranch, Target } from "lucide-react";
+import { BarChart3, CircleDollarSign, GitBranch, Megaphone, Target } from "lucide-react";
 
 import { CampaignsIntelligenceWorkspace } from "@/components/campaigns-intelligence-workspace";
 import type { CampaignWorkspaceFilters } from "@/components/campaigns-workspace";
@@ -33,6 +33,9 @@ export default async function CampaignsPage({ searchParams }: CampaignsPageProps
         description="See where spend creates qualified demand, where conversion breaks down, and which campaigns reach CRM revenue."
         actions={
           <div className="flex flex-wrap gap-2">
+            <Link href="/paid-media-leads" className="btn-secondary">
+              <Megaphone size={15} /> Acquisition leads
+            </Link>
             <Link href="/funnel" className="btn-secondary">
               <GitBranch size={15} /> Funnel
             </Link>
