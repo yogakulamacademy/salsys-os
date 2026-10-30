@@ -148,7 +148,52 @@ Then emit the enrollment outcome described below because Yogakulam treats a veri
 
 ---
 
-## 4. Direct UPI proof submitted: no completion event
+## 4. ICICI verified/captured: payment.completed
+
+**File:** the authoritative ICICI success/callback/status-reconciliation path that verifies the gateway result and commits the local `payments` row as `paid`.
+
+**When:** only after all of these are true:
+
+1. the ICICI response/callback has passed the gateway's authenticity/signature/reference checks;
+2. the gateway order/payment reference matches the local pending payment;
+3. amount and currency have been verified against the local payment record;
+4. the local payment transaction has committed successfully as `paid`.
+
+Do **not** emit completion from the browser redirect or from a page that merely displays “payment successful”. The authoritative backend verification/commit is the source of truth.
+
+```php
+$paymentResult = salsys_payment_event(
+    'payment.completed',
+    $payment['payment_reference'],
+    $payment['booking_reference'],
+    [
+        'email' => $payment['email'] ?? '',
+        'phone' => $payment['phone'] ?? '',
+    ],
+    [
+        'provider' => 'icici',
+        'payment_kind' => $payment['payment_kind'] ?? 'other',
+        'amount' => (float)$payment['subtotal'],
+        'currency' => $payment['currency'],
+    ],
+    [
+        'metadata' => [
+            'integration' => 'yogakulam_checkout',
+            'gateway_order_id' => $gatewayOrderId ?? null,
+            'gateway_payment_id' => $gatewayPaymentId ?? null,
+            'verified_by_gateway' => true,
+        ],
+    ]
+);
+```
+
+Use the same stable local `payment_reference` that was emitted in `payment.started`. A callback retry must therefore resolve to the same Salsys payment instead of creating another one.
+
+After the first verified ICICI payment/deposit for the booking, emit the enrollment outcome described below.
+
+---
+
+## 5. Direct UPI proof submitted: no completion event
 
 **File:** Direct UPI proof submission handler.
 
@@ -158,7 +203,7 @@ A pending `payment.started` event may already exist from payment creation.
 
 ---
 
-## 5. Direct UPI admin verification: payment.completed
+## 6. Direct UPI admin verification: payment.completed
 
 **File:** admin payment verification code that performs both:
 
@@ -197,7 +242,7 @@ $paymentResult = salsys_payment_event(
 
 ---
 
-## 6. Enrollment confirmation: enrollment.completed
+## 7. Enrollment confirmation: enrollment.completed
 
 Yogakulam's current confirmation flow states that a verified first payment/deposit confirms enrollment. Therefore emit this immediately after the first authoritative paid payment for that booking.
 
@@ -234,11 +279,11 @@ $enrollmentResult = salsys_enrollment_completed(
 );
 ```
 
-The stable enrollment event ID is derived from `ENR-<booking_reference>`, so a PayPal webhook retry or repeated verification call will not duplicate the enrollment.
+The stable enrollment event ID is derived from `ENR-<booking_reference>`, so a PayPal/ICICI webhook or callback retry, or a repeated UPI verification call, will not duplicate the enrollment.
 
 ---
 
-## 7. Failed payment
+## 8. Failed payment
 
 Only emit `payment.failed` when the gateway/backend has an authoritative failed payment attempt associated with the local `payment_reference`.
 
@@ -259,8 +304,9 @@ For the first controlled checkout test, verify in order:
 1. trusted `Website backend` source `accepted_event_count` increases;
 2. `booking.completed` creates a booking entity reference linked to the correct CRM lead;
 3. `payment.started` creates/updates the pending payment row;
-4. verified payment creates `payments.status = paid` in Salsys;
-5. `enrollment.completed` creates the confirmed enrollment linked to the same lead/payment;
-6. `v_lead_revenue_status` reflects the paid revenue;
-7. `v_crm_source_revenue_30d` attributes that revenue to the lead's acquisition source/campaign;
-8. first-touch attribution remains unchanged while revenue appears downstream.
+4. the authoritative PayPal/ICICI/UPI success path emits `payment.completed` using the **same local payment reference**;
+5. verified payment creates `payments.status = paid` in Salsys;
+6. `enrollment.completed` creates the confirmed enrollment linked to the same lead/payment;
+7. `v_lead_revenue_status` reflects the paid revenue;
+8. `v_crm_source_revenue_30d` attributes that revenue to the lead's acquisition source/campaign;
+9. first-touch attribution remains unchanged while revenue appears downstream.
