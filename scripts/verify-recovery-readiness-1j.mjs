@@ -11,6 +11,7 @@ function assert(condition, message) {
 }
 
 const geoBaseline = read('supabase/recovery/030_lead_geo_baseline.sql');
+const followupsBaseline = read('supabase/recovery/030_followups_tenant_baseline.sql');
 const baseline = read('supabase/recovery/030_sales_read_models_baseline.sql');
 
 for (const [needle, label] of [
@@ -26,6 +27,28 @@ for (const [needle, label] of [
 assert(
   !geoBaseline.includes('insert into public.'),
   'lead geo recovery baseline must not copy production data.',
+);
+
+for (const [needle, label] of [
+  ['alter table public.tasks', 'tasks tenant table repair'],
+  ['add column if not exists organization_id uuid', 'tasks organization column'],
+  ['set organization_id = l.organization_id', 'tasks tenant backfill'],
+  ['tasks_organization_id_fkey', 'tasks tenant FK'],
+  ['references public.organizations(id)', 'tasks organization reference'],
+  ['on delete restrict', 'tasks tenant delete restriction'],
+  ['create or replace view public.v_followups_due', 'tenant-aware followups view'],
+  ['with (security_invoker = true)', 'followups security invoker'],
+  ['t.organization_id', 'followups tenant output'],
+  ['l.organization_id = t.organization_id', 'tenant-safe task/lead join'],
+  ['This file is NOT part of the normal production migration ledger.', 'followups recovery-only safety boundary'],
+  ['Never run it against current production.', 'followups production safety warning'],
+]) {
+  assert(followupsBaseline.includes(needle), `missing ${label}.`);
+}
+
+assert(
+  !followupsBaseline.includes('insert into public.'),
+  'followups recovery baseline must not copy production data.',
 );
 
 for (const [needle, label] of [
