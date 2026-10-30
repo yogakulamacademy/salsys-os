@@ -25,7 +25,7 @@ const columns: Array<{ stage: PipelineStage; label: string }> = [
   { stage: "qualified", label: "Qualified" },
   { stage: "high_intent", label: "High intent" },
   { stage: "payment_pending", label: "Payment pending" },
-  { stage: "closed_won", label: "Deal closed" },
+  { stage: "closed_won", label: "Closed won" },
 ];
 
 const activeStageSet = new Set<PipelineStage>(columns.map((column) => column.stage));
@@ -100,6 +100,17 @@ export function PipelineBoardStudio({
 
     const lead = items.find((item) => item.id === leadId);
     if (!lead || String(lead.stage) === newStage || savingLeadId === leadId) return;
+
+    if (newStage === "closed_won") {
+      const confirmed = window.confirm(
+        `Move ${lead.name} to Closed Won?\n\nThis is a consequential commercial stage change. If payment is the source of truth, use the verified-payment workflow instead so the payment audit and stage history stay linked.`,
+      );
+      if (!confirmed) {
+        setDraggingId(null);
+        setOverStage(null);
+        return;
+      }
+    }
 
     const previous = { ...lead };
     const enteredAt = new Date().toISOString();
@@ -247,7 +258,7 @@ export function PipelineBoardStudio({
                   <div>
                     <div className="text-[12px] font-semibold text-[#2C443B]">{label}</div>
                     {stage === "closed_won" ? (
-                      <div className="mt-0.5 text-[9px] font-medium text-emerald-700">Auto-archives after 24h</div>
+                      <div className="mt-0.5 text-[9px] font-medium text-emerald-700">Consequential · auto-archives after 24h</div>
                     ) : null}
                     <div className="mt-1 flex flex-wrap gap-1">
                       {stageWarning > 0 ? <AgingCount tone="warning">{stageWarning} warning</AgingCount> : null}
