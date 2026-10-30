@@ -358,6 +358,23 @@ alter table public.organization_sites enable row level security;
 -- 4. ADD TENANT OWNERSHIP TO IDENTITY-DEPENDENT CORE TABLES
 -- =============================================================================
 
+-- Cold-recovery compatibility:
+-- production already contained these website-sync columns before migration 007,
+-- but their original DDL was not captured in migrations 001-006. Keep the
+-- definitions aligned with production so a fresh migration replay can reach the
+-- tenant-scoped indexes below without changing live production behavior.
+alter table public.courses
+  add column if not exists source_system text;
+
+alter table public.courses
+  add column if not exists external_course_id text;
+
+alter table public.course_batches
+  add column if not exists source_system text;
+
+alter table public.course_batches
+  add column if not exists external_batch_id text;
+
 alter table public.leads
   add column if not exists organization_id uuid;
 
