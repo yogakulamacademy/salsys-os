@@ -185,3 +185,39 @@
     padding: 16px;
   }
 }
+
+@media (max-width: 640px) {
+  /* Keep batch-management actions compact instead of stacking four rows. */
+  .course-management-scope .card-pad.mt-4:has(select) > div:first-child > div:last-child {
+    width: 100%;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    padding-bottom: 4px;
+    scroll-snap-type: x proximity;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+  }
+
+  .course-management-scope .card-pad.mt-4:has(select) > div:first-child > div:last-child::-webkit-scrollbar {
+    display: none;
+  }
+
+  .course-management-scope .card-pad.mt-4:has(select) > div:first-child > div:last-child > button {
+    flex: 0 0 auto;
+    white-space: nowrap;
+    scroll-snap-align: start;
+  }
+
+  .course-management-scope .rounded-2xl.border.border-slate-200.bg-slate-50\/70.p-5 {
+    padding: 16px;
+  }
+
+  .course-management-scope .rounded-2xl.border.border-slate-200.bg-slate-50\/70.p-5 form > div:last-child {
+    width: 100%;
+  }
+
+  .course-management-scope .rounded-2xl.border.border-slate-200.bg-slate-50\/70.p-5 form > div:last-child .btn-primary,
+  .course-management-scope .rounded-2xl.border.border-slate-200.bg-slate-50\/70.p-5 form > div:last-child .btn-secondary {
+    min-height: 42px;
+  }
+}
