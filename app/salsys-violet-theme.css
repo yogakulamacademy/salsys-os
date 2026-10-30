@@ -8,6 +8,8 @@
 
 :root {
   /* Core brand */
+  --app-brand-rgb: 87 67 197;
+  --app-accent-rgb: 131 84 213;
   --app-brand-950: #211b3a;
   --app-brand-900: #2f255f;
   --app-brand-800: #3d3090;
@@ -75,6 +77,8 @@
 }
 
 .dark {
+  --app-brand-rgb: 128 110 225;
+  --app-accent-rgb: 154 130 236;
   --app-bg: #15131d;
   --app-surface: #1c1926;
   --app-surface-soft: #211d2c;
