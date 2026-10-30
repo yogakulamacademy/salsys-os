@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 
+import { getConversationsWorkspace } from "@/lib/conversations-data";
 import { getMessagingEligibility } from "@/lib/messaging-eligibility";
 import { createClient } from "@/lib/supabase/server";
 import { requireCurrentOrganizationId } from "@/lib/workspace";
@@ -62,11 +63,21 @@ export async function GET(
   }
 
   const organizationId = await requireCurrentOrganizationId(supabase, user.id);
+  const workspace = await getConversationsWorkspace(leadId);
+
+  if (!workspace.selected || workspace.selected.id !== leadId) {
+    return NextResponse.json(
+      { ok: false, error: "Conversation context is unavailable for this lead." },
+      { status: 404 },
+    );
+  }
 
   const eligibility = await getMessagingEligibility({
     leadId,
     organizationId,
     channel,
+    whatsappWindow:
+      channel === "whatsapp" ? workspace.whatsappWindow : undefined,
   });
 
   return NextResponse.json(
