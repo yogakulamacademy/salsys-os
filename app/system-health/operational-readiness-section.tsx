@@ -31,14 +31,20 @@ export default async function OperationalReadinessSection({
   /*
    * The parent System Health layout resolves and authorizes the active
    * owner/admin workspace before rendering this component. Because the admin
-   * client bypasses RLS, the service-role read remains explicitly scoped to
+   * client bypasses RLS, the service-role reads remain explicitly scoped to
    * that already-authorized organizationId.
    */
   const admin = createAdminClient() as any;
-  const result = await admin
-    .from("v_system_operational_readiness_v1")
-    .select("*")
-    .eq("organization_id", organizationId);
+  const [result, commerceResult] = await Promise.all([
+    admin
+      .from("v_system_operational_readiness_v1")
+      .select("*")
+      .eq("organization_id", organizationId),
+    admin
+      .from("v_commerce_event_readiness_v1")
+      .select("*")
+      .eq("organization_id", organizationId),
+  ]);
 
   if (result.error) {
     return (
@@ -55,7 +61,10 @@ export default async function OperationalReadinessSection({
     );
   }
 
-  const rows = ((result.data ?? []) as ReadinessRow[]).sort((a, b) => {
+  const rows = ([
+    ...((result.data ?? []) as ReadinessRow[]),
+    ...(commerceResult.error ? [] : ((commerceResult.data ?? []) as ReadinessRow[])),
+  ]).sort((a, b) => {
     const rank = readinessRank(a.health_status) - readinessRank(b.health_status);
     if (rank !== 0) return rank;
     return a.readiness_name.localeCompare(b.readiness_name);
@@ -64,6 +73,17 @@ export default async function OperationalReadinessSection({
   return (
     <section className="card mt-4 overflow-hidden">
       <SectionHeader />
+
+      {commerceResult.error ? (
+        <div className="mx-4 mt-4 flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 px-3.5 py-3 text-xs text-amber-800">
+          <AlertTriangle size={15} className="mt-0.5 shrink-0" />
+          <div>
+            <div className="font-semibold">Commerce event readiness is temporarily unavailable.</div>
+            <div className="mt-1 leading-5">{commerceResult.error.message}</div>
+          </div>
+        </div>
+      ) : null}
+
       {rows.length ? (
         <div className="grid gap-4 p-4 md:grid-cols-2 xl:grid-cols-3">
           {rows.map((row) => (
@@ -137,6 +157,10 @@ function ReadinessCard({ row }: { row: ReadinessRow }) {
         </div>
       </div>
 
+      {row.readiness_key === "commerce_events" ? (
+        <CommerceEventDetails details={row.details ?? {}} />
+      ) : null}
+
       {readinessNote(row) ? (
         <div className="mt-3 text-xs leading-5 text-slate-500">{readinessNote(row)}</div>
       ) : null}
@@ -145,6 +169,17 @@ function ReadinessCard({ row }: { row: ReadinessRow }) {
         Checked {formatDateTime(row.checked_at)}
       </div>
     </article>
+  );
+}
+
+function CommerceEventDetails({ details }: { details: Record<string, unknown> }) {
+  return (
+    <div className="mt-3 grid grid-cols-2 gap-2 border-t border-slate-200/70 pt-3">
+      <Metric label="Bookings · 30d" value={safeNumber(details.booking_completed_30d).toLocaleString()} />
+      <Metric label="Payment starts · 30d" value={safeNumber(details.payment_started_30d).toLocaleString()} />
+      <Metric label="Verified payments · 30d" value={safeNumber(details.payment_completed_30d).toLocaleString()} warn={safeNumber(details.payment_started_30d) > 0 && safeNumber(details.payment_completed_30d) === 0} />
+      <Metric label="Enrollments · 30d" value={safeNumber(details.enrollment_completed_30d).toLocaleString()} warn={safeNumber(details.payment_completed_30d) > 0 && safeNumber(details.enrollment_completed_30d) === 0} />
+    </div>
   );
 }
 
