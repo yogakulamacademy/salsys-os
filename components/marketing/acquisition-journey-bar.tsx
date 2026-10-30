@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { ArrowRight, CircleDollarSign, GitBranch, Megaphone, Target } from 'lucide-react';
+import { ArrowRight, CircleDollarSign, GitBranch, Home, Megaphone, Search, Target } from 'lucide-react';
 import { useSearchParams } from 'next/navigation';
 
 export function AcquisitionJourneyBar() {
@@ -23,6 +23,9 @@ export function AcquisitionJourneyBar() {
         </div>
 
         <div className="flex flex-wrap gap-2">
+          <Link href="/marketing" className="btn-secondary">
+            <Home size={14} /> Overview
+          </Link>
           <Link href={campaign ? `/campaigns?q=${encodedCampaign}` : '/campaigns'} className="btn-secondary">
             <Megaphone size={14} /> Campaigns
           </Link>
@@ -31,6 +34,9 @@ export function AcquisitionJourneyBar() {
           </Link>
           <Link href={campaign ? `/attribution?q=${encodedCampaign}` : '/attribution'} className="btn-secondary">
             <Target size={14} /> Attribution
+          </Link>
+          <Link href="/seo" className="btn-secondary">
+            <Search size={14} /> Search Intelligence
           </Link>
           <Link href="/revenue" className="btn-primary">
             <CircleDollarSign size={14} /> Revenue <ArrowRight size={13} />
