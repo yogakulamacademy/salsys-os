@@ -22,23 +22,23 @@ export function AcquisitionJourneyBar() {
           </p>
         </div>
 
-        <div className="flex flex-wrap gap-2">
-          <Link href="/marketing" className="btn-secondary">
+        <div className="-mx-1 flex snap-x snap-mandatory gap-2 overflow-x-auto px-1 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden sm:mx-0 sm:flex-wrap sm:overflow-visible sm:px-0 sm:pb-0">
+          <Link href="/marketing" className="btn-secondary shrink-0 snap-start">
             <Home size={14} /> Overview
           </Link>
-          <Link href={campaign ? `/campaigns?q=${encodedCampaign}` : '/campaigns'} className="btn-secondary">
+          <Link href={campaign ? `/campaigns?q=${encodedCampaign}` : '/campaigns'} className="btn-secondary shrink-0 snap-start">
             <Megaphone size={14} /> Campaigns
           </Link>
-          <Link href="/funnel" className="btn-secondary">
+          <Link href="/funnel" className="btn-secondary shrink-0 snap-start">
             <GitBranch size={14} /> Funnel
           </Link>
-          <Link href={campaign ? `/attribution?q=${encodedCampaign}` : '/attribution'} className="btn-secondary">
+          <Link href={campaign ? `/attribution?q=${encodedCampaign}` : '/attribution'} className="btn-secondary shrink-0 snap-start">
             <Target size={14} /> Attribution
           </Link>
-          <Link href="/seo" className="btn-secondary">
+          <Link href="/seo" className="btn-secondary shrink-0 snap-start">
             <Search size={14} /> Search Intelligence
           </Link>
-          <Link href="/revenue" className="btn-primary">
+          <Link href="/revenue" className="btn-primary shrink-0 snap-start">
             <CircleDollarSign size={14} /> Revenue <ArrowRight size={13} />
           </Link>
         </div>
