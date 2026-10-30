@@ -17,6 +17,7 @@ const durableEvents = read('lib/tracking/durable-events.ts');
 const consumer = read('app/api/tracking/durable-events/consume/route.ts');
 const migration007 = read('supabase/migrations/007_tenant_schema_foundation.sql');
 const legacyAuthBootstrap = read('supabase/recovery/007_legacy_authorization_baseline.sql');
+const enrollmentTenantBootstrap = read('supabase/recovery/016_enrollments_tenant_baseline.sql');
 const vercel = JSON.parse(read('vercel.json'));
 
 for (const [needle, label] of [
@@ -42,6 +43,8 @@ for (const [needle, label] of [
   ['Migration `001` granted SELECT access', 'legacy CRM read evidence'],
   ['Migration `008_identity_resolution.sql`', 'migration 008 tenant-wrapper evidence'],
   ['later Sales authorization migration replaces `can_access_lead()`', 'later RBAC replacement evidence'],
+  ['supabase/recovery/016_enrollments_tenant_baseline.sql', 'migration 016 enrollment bootstrap reference'],
+  ['migrations `008` through `015`', 'replay-through-015 evidence'],
   ['cold-recovery bootstrap', 'bootstrap safety boundary'],
 ]) {
   assert(coldRebuild.includes(needle), `cold-rebuild evidence missing ${label}.`);
@@ -120,6 +123,26 @@ assert(
   'pre-007 authorization bootstrap must not depend on later workspace-RBAC tables/functions.',
 );
 
+for (const [needle, label] of [
+  ['alter table public.enrollments\n  add column if not exists organization_id uuid;', 'enrollments.organization_id recovery prerequisite'],
+  ['set organization_id = l.organization_id', 'enrollment tenant backfill from lead'],
+  ['where l.id = e.lead_id', 'enrollment-to-lead backfill join'],
+  ["raise exception\n      '016 recovery abort: enrollments contains rows whose organization cannot be resolved from lead_id'", 'fail-closed unresolved enrollment guard'],
+  ['alter column organization_id set not null;', 'enrollment organization NOT NULL contract'],
+  ['add constraint enrollments_organization_id_fkey', 'enrollment organization FK'],
+  ['references public.organizations(id)', 'enrollment organization FK target'],
+  ['on delete restrict;', 'enrollment organization FK delete behavior'],
+  ['This file is NOT part of the normal production migration ledger.', 'recovery-only safety boundary'],
+]) {
+  assert(enrollmentTenantBootstrap.includes(needle), `migration 016 recovery bootstrap missing ${label}.`);
+}
+
+assert(
+  !enrollmentTenantBootstrap.includes('create index') &&
+    !enrollmentTenantBootstrap.includes('create policy'),
+  'migration 016 recovery bootstrap must not pull later performance indexes or RLS revisions backward.',
+);
+
 const durableTrigger =
   vercel.functions?.['app/api/tracking/durable-events/consume/route.ts']?.experimentalTriggers?.[0];
 
@@ -134,4 +157,4 @@ assert(
   'durable trusted-event recovery concurrency must remain capped at 5.',
 );
 
-console.log('PH-5.2 recovery runbook, resilience, schema replay, and legacy authorization bootstrap contracts verified.');
+console.log('PH-5.2 recovery runbook, resilience, schema replay, legacy authorization, and enrollment tenant bootstrap contracts verified.');
