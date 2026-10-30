@@ -151,3 +151,42 @@ html.dark .conversations-polish .conversation-sidebar a[aria-current='page'],
 html.dark .conversations-polish .conversation-sidebar a[aria-current='true'] {
   background: var(--inbox-primary-soft) !important;
 }
+
+/* Inbox intelligence still used the pre-Violet green brand vocabulary. Keep
+   semantic amber/error states unchanged, but normalize product-brand surfaces. */
+.conversations-polish [class*='text-[#216551]'] {
+  color: var(--inbox-primary) !important;
+}
+
+.conversations-polish [class*='text-[#203B31]'],
+.conversations-polish [class*='text-[#203b31]'] {
+  color: var(--inbox-text) !important;
+}
+
+.conversations-polish [class*='text-[#60736A]'],
+.conversations-polish [class*='text-[#60736a]'],
+.conversations-polish [class*='text-[#61736A]'],
+.conversations-polish [class*='text-[#61736a]'],
+.conversations-polish [class*='text-[#728179]'],
+.conversations-polish [class*='text-[#829087]'] {
+  color: var(--inbox-muted) !important;
+}
+
+.conversations-polish [class*='border-[#DDE7DF]'],
+.conversations-polish [class*='border-[#dde7df]'],
+.conversations-polish [class*='border-[#E8EEEA]'],
+.conversations-polish [class*='border-[#e8eeea]'] {
+  border-color: var(--inbox-border) !important;
+}
+
+.conversations-polish [class*='bg-[#F7FAF8]'],
+.conversations-polish [class*='bg-[#f7faf8]'] {
+  background: color-mix(in srgb, var(--inbox-primary-soft) 52%, var(--inbox-surface)) !important;
+}
+
+@media (max-width: 620px) {
+  .conversations-polish button[class*='h-7'][class*='w-7'] {
+    min-width: 36px !important;
+    min-height: 36px !important;
+  }
+}
