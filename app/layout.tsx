@@ -21,6 +21,7 @@ import './lead-detail-overflow-fix.css';
 import './release-readiness-polish.css';
 import './uiux-release-qa.css';
 import './lead-inspector-uiux-qa.css';
+import './marketing-inspector-uiux-qa.css';
 import { InteractionFeedbackBridge } from '@/components/interaction-feedback-bridge';
 import { MotionRouteSurface } from '@/components/motion-route-surface';
 import { RootShell } from '@/components/root-shell';
