@@ -18,6 +18,7 @@ const consumer = read('app/api/tracking/durable-events/consume/route.ts');
 const migration007 = read('supabase/migrations/007_tenant_schema_foundation.sql');
 const legacyAuthBootstrap = read('supabase/recovery/007_legacy_authorization_baseline.sql');
 const enrollmentTenantBootstrap = read('supabase/recovery/016_enrollments_tenant_baseline.sql');
+const leadContactLogBootstrap = read('supabase/recovery/016_lead_contact_logs_baseline.sql');
 const vercel = JSON.parse(read('vercel.json'));
 
 for (const [needle, label] of [
@@ -44,7 +45,9 @@ for (const [needle, label] of [
   ['Migration `008_identity_resolution.sql`', 'migration 008 tenant-wrapper evidence'],
   ['later Sales authorization migration replaces `can_access_lead()`', 'later RBAC replacement evidence'],
   ['supabase/recovery/016_enrollments_tenant_baseline.sql', 'migration 016 enrollment bootstrap reference'],
+  ['supabase/recovery/016_lead_contact_logs_baseline.sql', 'migration 016 contact-log bootstrap reference'],
   ['migrations `008` through `015`', 'replay-through-015 evidence'],
+  ['relation "public.lead_contact_logs" does not exist', 'second migration 016 replay boundary'],
   ['cold-recovery bootstrap', 'bootstrap safety boundary'],
 ]) {
   assert(coldRebuild.includes(needle), `cold-rebuild evidence missing ${label}.`);
@@ -134,13 +137,47 @@ for (const [needle, label] of [
   ['on delete restrict;', 'enrollment organization FK delete behavior'],
   ['This file is NOT part of the normal production migration ledger.', 'recovery-only safety boundary'],
 ]) {
-  assert(enrollmentTenantBootstrap.includes(needle), `migration 016 recovery bootstrap missing ${label}.`);
+  assert(enrollmentTenantBootstrap.includes(needle), `migration 016 enrollment bootstrap missing ${label}.`);
 }
 
 assert(
   !enrollmentTenantBootstrap.includes('create index') &&
     !enrollmentTenantBootstrap.includes('create policy'),
-  'migration 016 recovery bootstrap must not pull later performance indexes or RLS revisions backward.',
+  'migration 016 enrollment bootstrap must not pull later performance indexes or RLS revisions backward.',
+);
+
+for (const [needle, label] of [
+  ['create table if not exists public.lead_contact_logs', 'lead_contact_logs table bootstrap'],
+  ['lead_id uuid not null', 'lead_contact_logs mandatory lead relationship'],
+  ['references public.leads(id)', 'lead_contact_logs lead FK target'],
+  ['on delete cascade', 'lead_contact_logs lead FK delete behavior'],
+  ['employee_user_id uuid', 'lead_contact_logs employee relationship'],
+  ['references public.profiles(id)', 'lead_contact_logs profile FK target'],
+  ['on delete set null', 'lead_contact_logs profile FK delete behavior'],
+  ['constraint lead_contact_logs_method_check', 'lead_contact_logs method check'],
+  ['constraint lead_contact_logs_direction_check', 'lead_contact_logs direction check'],
+  ['constraint lead_contact_logs_outcome_check', 'lead_contact_logs outcome check'],
+  ['constraint lead_contact_logs_comment_check', 'lead_contact_logs comment check'],
+  ['constraint lead_contact_logs_call_duration_check', 'lead_contact_logs duration check'],
+  ['constraint lead_contact_logs_source_check', 'lead_contact_logs source check'],
+  ['create unique index if not exists uq_lead_contact_logs_external_reference', 'lead_contact_logs external idempotency index'],
+  ['where external_reference is not null;', 'lead_contact_logs partial unique predicate'],
+  ['alter table public.lead_contact_logs enable row level security;', 'lead_contact_logs RLS'],
+  ['create policy lead_contact_logs_read', 'lead_contact_logs read policy'],
+  ['using (public.can_access_lead(lead_id));', 'lead_contact_logs lead-access predicate'],
+  ['revoke all on table public.lead_contact_logs from public, anon, authenticated;', 'lead_contact_logs public/authenticated revoke'],
+  ['grant select on table public.lead_contact_logs to authenticated;', 'lead_contact_logs authenticated read grant'],
+  ['grant all on table public.lead_contact_logs to service_role;', 'lead_contact_logs service-role grant'],
+  ['This file is NOT part of the normal production migration ledger.', 'lead_contact_logs recovery-only safety boundary'],
+]) {
+  assert(leadContactLogBootstrap.includes(needle), `migration 016 contact-log bootstrap missing ${label}.`);
+}
+
+assert(
+  !leadContactLogBootstrap.includes('organization_id') &&
+    !leadContactLogBootstrap.includes('create trigger') &&
+    !leadContactLogBootstrap.includes('insert into public.lead_contact_logs'),
+  'migration 016 contact-log bootstrap must not invent tenant columns, triggers, or application data.',
 );
 
 const durableTrigger =
@@ -157,4 +194,4 @@ assert(
   'durable trusted-event recovery concurrency must remain capped at 5.',
 );
 
-console.log('PH-5.2 recovery runbook, resilience, schema replay, legacy authorization, and enrollment tenant bootstrap contracts verified.');
+console.log('PH-5.2 recovery runbook, resilience, schema replay, legacy authorization, enrollment tenant, and lead contact log bootstrap contracts verified.');
