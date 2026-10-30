@@ -1,6 +1,6 @@
--- PH-5.2B.1g — cold-recovery compatibility only.
+-- PH-5.2B.1g/1h — cold-recovery compatibility only.
 -- Reconstructs historical source columns consumed by migration 018_person_journey
--- and already referenced by migration 015 website normalization.
+-- and migration 020_attribution_workspace_tenant_scope.
 --
 -- Current production defines these columns as nullable text with no defaults.
 -- This file is NOT part of the normal production migration ledger.
@@ -20,4 +20,7 @@ alter table public.leads
   add column if not exists lead_origin text,
   add column if not exists first_touch_source text,
   add column if not exists first_touch_medium text,
-  add column if not exists first_touch_campaign text;
+  add column if not exists first_touch_campaign text,
+  add column if not exists last_touch_source text,
+  add column if not exists last_touch_medium text,
+  add column if not exists last_touch_campaign text;
