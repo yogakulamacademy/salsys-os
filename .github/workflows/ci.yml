@@ -187,6 +187,9 @@ jobs:
       - name: Verify Ad Activation Execution Runner Contracts
         run: npm run verify:ad-activation-execution-runner
 
+      - name: Verify Ad Activation Runner Operational Controls
+        run: npm run verify:ad-activation-runner-operations
+
       - name: Typecheck
         run: npm run typecheck
 
