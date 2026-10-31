@@ -9,6 +9,7 @@ export type MetricDefinition = {
   definition: string;
   evidenceLabel: string;
   deltaDirection?: MetricDeltaDirection;
+  href?: string;
 };
 
 export type MetricStatus = {
@@ -21,21 +22,25 @@ const definitions: Record<string, MetricDefinition> = {
     definition: "Leads currently assigned to the signed-in admissions user, regardless of whether the opportunity is still active.",
     evidenceLabel: "CRM ownership",
     deltaDirection: "neutral",
+    href: "/leads",
   },
   "due today": {
     definition: "Open or snoozed follow-up tasks assigned to the user with a due time later today.",
     evidenceLabel: "Task schedule",
     deltaDirection: "lower_is_better",
+    href: "/follow-ups",
   },
   "high intent": {
     definition: "Assigned leads currently recorded in the high-intent pipeline stage. Stage is an observed CRM state, not a predicted probability.",
     evidenceLabel: "Pipeline stage",
     deltaDirection: "neutral",
+    href: "/pipeline",
   },
   "my conversion": {
     definition: "Share of the user’s assigned leads currently recorded as enrolled. It is a descriptive CRM outcome ratio for the visible assignment set.",
     evidenceLabel: "Assigned CRM outcomes",
     deltaDirection: "higher_is_better",
+    href: "/pipeline",
   },
   "monitored systems": {
     definition: "Operational integrations and processing systems currently included in the system-health monitor.",
