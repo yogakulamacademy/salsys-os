@@ -42,6 +42,10 @@ type AttentionItem = {
   label: string;
   value: number;
   detail: string;
+  reason: string;
+  evidence: string;
+  timing: string;
+  actionLabel: string;
   href: string;
   icon: LucideIcon;
   tone: "info" | "warning" | "critical";
@@ -155,6 +159,10 @@ export default async function HomePage({ searchParams }: HomePageProps) {
       label: "Needs reply",
       value: metrics.needsReply,
       detail: "Active conversations waiting on your team",
+      reason: "A human reply is still outstanding on active customer conversations.",
+      evidence: "Observed conversation state",
+      timing: metrics.waitingOverHour > 0 ? `${metrics.waitingOverHour} waiting >1h` : "Open now",
+      actionLabel: "Open inbox",
       href: "/conversations",
       icon: Inbox,
       tone: metrics.waitingOverHour > 0 ? "critical" : "info",
@@ -163,6 +171,10 @@ export default async function HomePage({ searchParams }: HomePageProps) {
       label: "Overdue follow-ups",
       value: metrics.followupsDue,
       detail: "Scheduled sales actions already due",
+      reason: "The recorded follow-up due time has already passed and the task remains open.",
+      evidence: "Scheduled task evidence",
+      timing: "Past due",
+      actionLabel: "Work follow-ups",
       href: "/follow-ups",
       icon: Clock3,
       tone: metrics.followupsDue > 0 ? "warning" : "info",
@@ -171,6 +183,10 @@ export default async function HomePage({ searchParams }: HomePageProps) {
       label: "First touch needed",
       value: metrics.needsFirstTouch,
       detail: "New opportunities without recorded contact",
+      reason: "These opportunities do not yet have a recorded first outbound touch in CRM.",
+      evidence: "CRM contact history",
+      timing: "First touch pending",
+      actionLabel: "Review new leads",
       href: "/leads?view=unassigned",
       icon: UserRoundCheck,
       tone: metrics.needsFirstTouch > 0 ? "warning" : "info",
@@ -179,6 +195,10 @@ export default async function HomePage({ searchParams }: HomePageProps) {
       label: "Payment pending",
       value: metrics.paymentPending,
       detail: "Opportunities currently at payment stage",
+      reason: "Payment-stage opportunities need proof, questions or collection status reconciled before enrollment is treated as complete.",
+      evidence: "Pipeline & payment state",
+      timing: "Payment stage",
+      actionLabel: "Review payments",
       href: "/admissions?view=payments",
       icon: CreditCard,
       tone: "info",
@@ -339,7 +359,7 @@ export default async function HomePage({ searchParams }: HomePageProps) {
 
         <section className="overflow-hidden rounded-card border border-line bg-surface shadow-sm">
           <SectionHeader eyebrow="Priority now" title="Action queue" actionHref="/admissions" actionLabel="Open admissions" />
-          <div className="divide-y divide-line">
+          <div className="space-y-2 p-3">
             {activeAttention.length ? activeAttention.map((item) => <AttentionRow key={item.label} item={item} />) : <EmptyState text="No urgent reply, follow-up, first-touch or payment actions are recorded right now." />}
           </div>
           {unvaluedOpenLeads > 0 ? (
@@ -399,17 +419,34 @@ function AttentionRow({ item }: { item: AttentionItem }) {
     : item.tone === "warning"
       ? "bg-amber-50 text-amber-700 dark:bg-amber-950/30 dark:text-amber-300"
       : "bg-brand-50 text-brand-700 dark:bg-brand-950/30 dark:text-brand-300";
+  const priorityTone = item.tone === "critical"
+    ? "bg-rose-50 text-rose-700 dark:bg-rose-950/30 dark:text-rose-300"
+    : item.tone === "warning"
+      ? "bg-amber-50 text-amber-700 dark:bg-amber-950/30 dark:text-amber-300"
+      : "bg-surface-muted text-copy-muted";
+  const priorityLabel = item.tone === "critical" ? "Urgent" : item.tone === "warning" ? "Attention" : "Review";
+
   return (
-    <Link href={item.href} className="group flex items-center gap-3 px-5 py-4 transition hover:bg-surface-muted">
-      <span className={`grid h-9 w-9 shrink-0 place-items-center rounded-xl ${tone}`}><Icon size={15} /></span>
-      <span className="min-w-0 flex-1">
-        <span className="flex items-center gap-2">
-          <span className="text-sm font-semibold text-copy-strong">{recommendedActionTitle(item)}</span>
-          <span className="rounded-full bg-surface-muted px-2 py-0.5 text-[10px] font-semibold text-copy-muted">{item.value.toLocaleString("en-IN")}</span>
+    <Link href={item.href} className="group block rounded-xl border border-line bg-surface px-4 py-3.5 transition hover:border-line-strong hover:bg-surface-muted">
+      <span className="flex items-start gap-3">
+        <span className={`grid h-9 w-9 shrink-0 place-items-center rounded-xl ${tone}`}><Icon size={15} /></span>
+        <span className="min-w-0 flex-1">
+          <span className="flex flex-wrap items-center gap-2">
+            <span className="text-sm font-semibold text-copy-strong">{recommendedActionTitle(item)}</span>
+            <span className="rounded-full bg-surface-muted px-2 py-0.5 text-[10px] font-semibold tabular-nums text-copy-muted">{item.value.toLocaleString("en-IN")}</span>
+            <span className={`rounded-full px-2 py-0.5 text-[9px] font-semibold uppercase tracking-[0.08em] ${priorityTone}`}>{priorityLabel}</span>
+          </span>
+          <span className="mt-1 block text-xs leading-5 text-copy-muted">{item.detail}</span>
+          <span className="mt-2 block text-[11px] leading-5 text-copy-subtle">{item.reason}</span>
         </span>
-        <span className="mt-0.5 block text-xs leading-5 text-copy-muted">{item.detail}</span>
       </span>
-      <ArrowRight size={14} className="text-copy-subtle transition group-hover:translate-x-0.5 group-hover:text-brand-700" />
+      <span className="mt-3 flex flex-wrap items-center gap-2 border-t border-line pt-2.5 text-[10px] font-semibold">
+        <span className="rounded-full bg-surface-muted px-2 py-1 text-copy-muted">{item.evidence}</span>
+        <span className="rounded-full bg-surface-muted px-2 py-1 text-copy-muted">{item.timing}</span>
+        <span className="ml-auto inline-flex items-center gap-1 text-brand-700 dark:text-brand-300">
+          {item.actionLabel}<ArrowRight size={12} className="transition group-hover:translate-x-0.5" />
+        </span>
+      </span>
     </Link>
   );
 }
