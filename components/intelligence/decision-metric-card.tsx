@@ -209,6 +209,7 @@ export function DecisionMetricCard({
       metricValue={value}
       metricDetail={detail}
       evidenceLabel={effectiveEvidenceLabel}
+      evidenceState={effectiveEvidenceState}
     >
       {content}
     </DecisionMetricLink>

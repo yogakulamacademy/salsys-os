@@ -3,6 +3,9 @@
 import Link from "next/link";
 import type { MouseEvent, ReactNode } from "react";
 
+import { canonicalizeWorkspaceHref } from "@/lib/canonical-workspace-routes";
+import type { MetricEvidenceState } from "@/lib/metric-definitions";
+
 export const METRIC_INVESTIGATION_STORAGE_KEY = "salsys.metric-investigation.v1";
 
 export type StoredMetricInvestigation = {
@@ -13,6 +16,7 @@ export type StoredMetricInvestigation = {
   metricValue: string;
   metricDetail?: string;
   evidenceLabel?: string;
+  evidenceState?: MetricEvidenceState;
   scopeLabel?: string;
   createdAt: number;
 };
@@ -24,6 +28,7 @@ export function DecisionMetricLink({
   metricValue,
   metricDetail,
   evidenceLabel,
+  evidenceState,
   children,
 }: {
   href: string;
@@ -32,36 +37,50 @@ export function DecisionMetricLink({
   metricValue: string;
   metricDetail?: string;
   evidenceLabel?: string;
+  evidenceState?: MetricEvidenceState;
   children: ReactNode;
 }) {
+  const canonicalHref = canonicalizeWorkspaceHref(href);
+
   function rememberInvestigation(event: MouseEvent<HTMLAnchorElement>) {
-    if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) {
+    if (
+      event.defaultPrevented ||
+      event.button !== 0 ||
+      event.metaKey ||
+      event.ctrlKey ||
+      event.shiftKey ||
+      event.altKey
+    ) {
       return;
     }
 
-    if (!href.startsWith("/")) return;
+    if (!canonicalHref.startsWith("/")) return;
 
     try {
       const sourcePath = `${window.location.pathname}${window.location.search}`;
       const context: StoredMetricInvestigation = {
         sourcePath,
         sourceLabel: routeLabel(window.location.pathname),
-        targetPath: href,
+        targetPath: canonicalHref,
         metricLabel,
         metricValue,
         metricDetail,
         evidenceLabel,
+        evidenceState,
         scopeLabel: reportingScope(window.location.search),
         createdAt: Date.now(),
       };
-      window.sessionStorage.setItem(METRIC_INVESTIGATION_STORAGE_KEY, JSON.stringify(context));
+      window.sessionStorage.setItem(
+        METRIC_INVESTIGATION_STORAGE_KEY,
+        JSON.stringify(context),
+      );
     } catch {
       // Navigation must remain functional even when sessionStorage is unavailable.
     }
   }
 
   return (
-    <Link href={href} className={className} onClick={rememberInvestigation}>
+    <Link href={canonicalHref} className={className} onClick={rememberInvestigation}>
       {children}
     </Link>
   );
