@@ -10,7 +10,6 @@ const legacyWorkspaceRoutes: Record<string, CanonicalRouteTarget> = {
   "/analytics": { pathname: "/marketing", view: "analytics" },
   "/funnel": { pathname: "/marketing", view: "funnel" },
   "/attribution": { pathname: "/marketing", view: "attribution" },
-  "/team-performance": { pathname: "/performance" },
   "/contact-intelligence": { pathname: "/performance", view: "communication" },
 };
 
