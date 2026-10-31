@@ -31,10 +31,10 @@ const groups: NavigationGroup[] = [
     items: [
       { href: '/crm', label: 'Command Center', icon: LayoutDashboard },
       {
-        href: '/admissions',
+        href: '/work-queue',
         label: 'Work Queue',
         icon: ListTodo,
-        matches: ['/dashboard', '/admissions', '/follow-ups'],
+        matches: ['/work-queue', '/dashboard', '/admissions', '/follow-ups'],
       },
     ],
   },
