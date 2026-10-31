@@ -39,6 +39,7 @@ export function StatCard({
   statusLabel,
   definition,
   evidenceLabel,
+  evidenceState,
   trend,
 }: {
   label: string;
@@ -53,6 +54,7 @@ export function StatCard({
   statusLabel?: string;
   definition?: string;
   evidenceLabel?: string;
+  evidenceState?: DecisionMetricCardProps['evidenceState'];
   trend?: number[];
 }) {
   const canonicalStatus = resolveMetricStatus(label, value);
@@ -71,6 +73,7 @@ export function StatCard({
       statusLabel={statusLabel ?? canonicalStatus?.statusLabel}
       definition={definition}
       evidenceLabel={evidenceLabel}
+      evidenceState={evidenceState}
       trend={trend}
     />
   );
