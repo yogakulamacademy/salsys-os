@@ -5,7 +5,7 @@ import { isMockMode } from "@/lib/data";
 import { createClient } from "@/lib/supabase/server";
 
 export default async function DashboardLayout({
-  children,
+  children: _children,
 }: {
   children: ReactNode;
 }) {
@@ -33,13 +33,9 @@ export default async function DashboardLayout({
     redirect("/login");
   }
 
-  if (
-    profile.role === "owner" ||
-    profile.role === "admin" ||
-    profile.role === "manager"
-  ) {
-    redirect("/crm");
+  if (profile.role === "admissions") {
+    redirect("/work-queue/mine");
   }
 
-  return <>{children}</>;
+  redirect("/crm");
 }
