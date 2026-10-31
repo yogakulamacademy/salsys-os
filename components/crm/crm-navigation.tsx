@@ -29,7 +29,12 @@ const groups: NavigationGroup[] = [
   {
     label: 'Workspace',
     items: [
-      { href: '/crm', label: 'Command Center', icon: LayoutDashboard },
+      {
+        href: '/crm',
+        label: 'Command Center',
+        icon: LayoutDashboard,
+        matches: ['/crm', '/crm/performance'],
+      },
       {
         href: '/work-queue',
         label: 'Work Queue',
