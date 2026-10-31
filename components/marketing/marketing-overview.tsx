@@ -154,7 +154,7 @@ export async function MarketingOverview() {
               <TrendingUp size={14} />
             )
           }
-          label="Momentum"
+          label="Lead volume movement"
           value={
             movement.leads.delta === null
               ? "Not enough history"
@@ -163,9 +163,9 @@ export async function MarketingOverview() {
           note={
             movement.leads.delta === null
               ? "Daily history is not sufficient for a recent-vs-prior comparison."
-              : `${formatNumber(movement.leads.current)} recent leads vs ${formatNumber(movement.leads.previous)} prior.`
+              : `${formatNumber(movement.leads.current)} recent leads vs ${formatNumber(movement.leads.previous)} prior. Volume direction is descriptive; assess quality and outcomes separately.`
           }
-          tone={movement.leads.delta !== null && movement.leads.delta < -10 ? "warning" : "positive"}
+          tone="neutral"
         />
         <IntelligenceCard
           icon={<ShieldCheck size={14} />}
@@ -400,10 +400,10 @@ function buildAttentionQueue({ poorCampaign, missingRoas, strongest, movement, c
     });
   } else if (movement.leads.delta !== null && movement.leads.delta <= -15) {
     items.push({
-      score: 84 + Math.min(30, Math.abs(movement.leads.delta)),
-      tone: "warning",
-      title: "Lead momentum declined",
-      detail: `${formatDelta(movement.leads.delta, "Leads")} versus the prior half of the observed daily period. Review acquisition mix and campaign delivery.`,
+      score: 60 + Math.min(15, Math.abs(movement.leads.delta) / 2),
+      tone: "neutral",
+      title: "Lead volume shifted materially",
+      detail: `${formatDelta(movement.leads.delta, "Leads")} versus the prior half of the observed daily period. Volume direction is descriptive, not inherently negative; inspect acquisition mix and campaign delivery if the shift was unexpected.`,
       href: "/marketing?view=analytics",
       label: "Inspect traffic and leads",
     });
