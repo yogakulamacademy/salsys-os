@@ -3,7 +3,7 @@ import fs from "node:fs";
 const runner = fs.readFileSync("lib/ad-activation/execution-runner.ts", "utf8");
 const queue = fs.readFileSync("lib/ad-activation/provider-queue.ts", "utf8");
 const migration = fs.readFileSync(
-  "supabase/migrations/20261031064500_ad_activation_provider_filtered_claim_v2.sql",
+  "supabase/migrations/20261031064442_ad_activation_provider_filtered_claim_v2.sql",
   "utf8",
 );
 const policy = fs.readFileSync("lib/ad-activation/transport-policy.ts", "utf8");

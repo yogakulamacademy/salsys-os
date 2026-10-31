@@ -4,7 +4,7 @@ const controls = fs.readFileSync("lib/ad-activation/runner-controls.ts", "utf8")
 const runner = fs.readFileSync("lib/ad-activation/execution-runner.ts", "utf8");
 const trigger = fs.readFileSync("app/api/ad-activation/meta/runner/route.ts", "utf8");
 const health = fs.readFileSync("app/api/ad-activation/meta/health/route.ts", "utf8");
-const migration = fs.readFileSync("supabase/migrations/20261031070000_ad_activation_runner_controls.sql", "utf8");
+const migration = fs.readFileSync("supabase/migrations/20261031064454_ad_activation_runner_controls.sql", "utf8");
 const vercelConfig = JSON.parse(fs.readFileSync("vercel.json", "utf8"));
 const policy = fs.readFileSync("lib/ad-activation/transport-policy.ts", "utf8");
 

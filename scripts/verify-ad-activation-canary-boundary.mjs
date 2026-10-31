@@ -5,7 +5,7 @@ const runner = fs.readFileSync("lib/ad-activation/execution-runner.ts", "utf8");
 const queue = fs.readFileSync("lib/ad-activation/provider-queue.ts", "utf8");
 const health = fs.readFileSync("app/api/ad-activation/meta/health/route.ts", "utf8");
 const migration = fs.readFileSync(
-  "supabase/migrations/20261031071500_ad_activation_canary_claim.sql",
+  "supabase/migrations/20261031064502_ad_activation_canary_claim.sql",
   "utf8",
 );
 const policy = fs.readFileSync("lib/ad-activation/transport-policy.ts", "utf8");
