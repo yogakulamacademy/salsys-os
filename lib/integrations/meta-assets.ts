@@ -15,18 +15,20 @@ type MetaAdAccountApiRow = {
   tos_accepted?: unknown;
 };
 
+type MetaGraphError = {
+  message?: string;
+  type?: string;
+  code?: number;
+  error_subcode?: number;
+  fbtrace_id?: string;
+};
+
 type MetaAdAccountsEnvelope = {
   data?: MetaAdAccountApiRow[];
   paging?: {
     next?: string;
   };
-  error?: {
-    message?: string;
-    type?: string;
-    code?: number;
-    error_subcode?: number;
-    fbtrace_id?: string;
-  };
+  error?: MetaGraphError;
 };
 
 export type DiscoveredMetaAdAccount = {
@@ -46,23 +48,80 @@ function normalizeAdAccountId(value: string) {
   return value.replace(/^act_/i, '').trim();
 }
 
-function customAudienceTosAccepted(value: unknown) {
+function customAudienceTosAccepted(value: unknown): boolean | null {
   if (
     !value ||
     typeof value !== 'object' ||
     Array.isArray(value)
   ) {
-    return false;
+    return null;
+  }
+
+  const record =
+    value as Record<string, unknown>;
+
+  if (
+    !Object.prototype.hasOwnProperty.call(
+      record,
+      'custom_audience_tos',
+    )
+  ) {
+    return null;
   }
 
   const status =
-    (value as Record<string, unknown>)[
-      'custom_audience_tos'
-    ];
+    record.custom_audience_tos;
 
-  return status === 1 ||
+  if (
+    status === 1 ||
     status === '1' ||
-    status === true;
+    status === true
+  ) {
+    return true;
+  }
+
+  if (
+    status === 0 ||
+    status === '0' ||
+    status === false
+  ) {
+    return false;
+  }
+
+  return null;
+}
+
+function withoutTosAcceptedField(rawUrl: string) {
+  const url =
+    new URL(rawUrl);
+
+  const fields =
+    url.searchParams.get(
+      'fields',
+    );
+
+  if (!fields) {
+    return rawUrl;
+  }
+
+  const safeFields =
+    fields
+      .split(',')
+      .map((field) =>
+        field.trim(),
+      )
+      .filter(
+        (field) =>
+          field &&
+          field !== 'tos_accepted',
+      );
+
+  url.searchParams.set(
+    'fields',
+    safeFields.join(','),
+  );
+
+  return url.toString();
 }
 
 async function metaGet<T>(
@@ -85,7 +144,7 @@ async function metaGet<T>(
     await response.text();
 
   let payload:
-    | MetaAdAccountsEnvelope
+    | (T & { error?: MetaGraphError })
     | null =
     null;
 
@@ -93,8 +152,10 @@ async function metaGet<T>(
     payload = rawText
       ? JSON.parse(
           rawText,
-        ) as MetaAdAccountsEnvelope
-      : {};
+        ) as T & {
+          error?: MetaGraphError;
+        }
+      : {} as T;
   } catch {
     throw new Error(
       `Meta API returned non-JSON data (HTTP ${response.status}).`,
@@ -194,6 +255,9 @@ export async function discoverMetaAdAccounts(
     | undefined =
     firstUrl.toString();
 
+  let includeTosAccepted =
+    true;
+
   const discovered =
     new Map<
       string,
@@ -201,12 +265,39 @@ export async function discoverMetaAdAccounts(
     >();
 
   while (nextUrl) {
-    const payload:
-      MetaAdAccountsEnvelope =
-      await metaGet<MetaAdAccountsEnvelope>(
-        nextUrl,
-        accessToken,
-      );
+    let payload:
+      MetaAdAccountsEnvelope;
+
+    try {
+      payload =
+        await metaGet<MetaAdAccountsEnvelope>(
+          nextUrl,
+          accessToken,
+        );
+    } catch (error) {
+      /*
+       * Some Meta account/token combinations do not expose tos_accepted through
+       * /me/adaccounts. Terms inspection is readiness metadata only, so retry
+       * once without that optional field rather than breaking core discovery.
+       */
+      if (!includeTosAccepted) {
+        throw error;
+      }
+
+      includeTosAccepted =
+        false;
+
+      nextUrl =
+        withoutTosAcceptedField(
+          nextUrl,
+        );
+
+      payload =
+        await metaGet<MetaAdAccountsEnvelope>(
+          nextUrl,
+          accessToken,
+        );
+    }
 
     const rows =
       Array.isArray(
@@ -266,9 +357,11 @@ export async function discoverMetaAdAccounts(
             graph_resource:
               `act_${accountId}`,
             custom_audience_tos_accepted:
-              customAudienceTosAccepted(
-                row.tos_accepted,
-              ),
+              includeTosAccepted
+                ? customAudienceTosAccepted(
+                    row.tos_accepted,
+                  )
+                : null,
           },
         },
       );
@@ -276,6 +369,16 @@ export async function discoverMetaAdAccounts(
 
     nextUrl =
       payload.paging?.next;
+
+    if (
+      nextUrl &&
+      !includeTosAccepted
+    ) {
+      nextUrl =
+        withoutTosAcceptedField(
+          nextUrl,
+        );
+    }
   }
 
   return {
