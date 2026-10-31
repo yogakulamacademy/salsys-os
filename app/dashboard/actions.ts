@@ -10,13 +10,16 @@ function textValue(formData: FormData, key: string) {
   return value || null;
 }
 
-function dashboardUrl(key: "notice" | "error", value: string) {
+function personalQueueUrl(key: "notice" | "error", value: string) {
   const params = new URLSearchParams();
   params.set(key, value);
-  return `/dashboard?${params.toString()}`;
+  return `/work-queue/mine?${params.toString()}`;
 }
 
 function revalidateEmployeeWorkspace(leadId?: string | null) {
+  revalidatePath("/work-queue");
+  revalidatePath("/work-queue/mine");
+  revalidatePath("/opportunities");
   revalidatePath("/dashboard");
   revalidatePath("/follow-ups");
   revalidatePath("/leads");
@@ -33,7 +36,7 @@ export async function completeDashboardFollowUpAction(formData: FormData) {
   const leadId = textValue(formData, "lead_id");
 
   if (!taskId) {
-    redirect(dashboardUrl("error", "Follow-up task is missing."));
+    redirect(personalQueueUrl("error", "Follow-up task is missing."));
   }
 
   const supabase = await createClient();
@@ -43,12 +46,12 @@ export async function completeDashboardFollowUpAction(formData: FormData) {
   });
 
   if (error) {
-    redirect(dashboardUrl("error", error.message));
+    redirect(personalQueueUrl("error", error.message));
   }
 
   revalidateEmployeeWorkspace(leadId);
 
-  redirect(dashboardUrl("notice", "followup-completed"));
+  redirect(personalQueueUrl("notice", "followup-completed"));
 }
 
 export async function snoozeDashboardFollowUpAction(formData: FormData) {
@@ -56,7 +59,7 @@ export async function snoozeDashboardFollowUpAction(formData: FormData) {
   const leadId = textValue(formData, "lead_id");
 
   if (!taskId) {
-    redirect(dashboardUrl("error", "Follow-up task is missing."));
+    redirect(personalQueueUrl("error", "Follow-up task is missing."));
   }
 
   const dueAt = tomorrowAt10AmIndia();
@@ -68,12 +71,12 @@ export async function snoozeDashboardFollowUpAction(formData: FormData) {
   });
 
   if (error) {
-    redirect(dashboardUrl("error", error.message));
+    redirect(personalQueueUrl("error", error.message));
   }
 
   revalidateEmployeeWorkspace(leadId);
 
-  redirect(dashboardUrl("notice", "followup-snoozed"));
+  redirect(personalQueueUrl("notice", "followup-snoozed"));
 }
 
 function tomorrowAt10AmIndia() {
