@@ -184,7 +184,6 @@ export async function PerformanceOperatingBrief() {
               ? `${available.currentActiveLeads.toLocaleString()} active · ${available.currentActionLoad.toLocaleString()} action load`
               : "No active Admissions employee"
           }
-          href="/performance"
           evidenceState="derived"
           evidenceLabel="Current workload comparison"
           definition="Admissions employee with the lowest current action load, with active leads used as a tie-breaker. This is a capacity suggestion, not a performance ranking."
