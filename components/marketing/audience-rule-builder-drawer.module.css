@@ -1,16 +1,15 @@
-.launcher { position: fixed; right: 22px; bottom: 22px; z-index: 70; display: inline-flex; min-height: 42px; align-items: center; gap: 8px; padding: 10px 14px; border: 1px solid #5f43d8; border-radius: 999px; color: #fff; background: #6846e8; box-shadow: 0 12px 30px rgba(72,49,165,.25); font-size: 11px; font-weight: 750; cursor: pointer; }
-.launcher:hover { background: #5938cf; }
-.backdrop { position: fixed; inset: 0; z-index: 78; background: rgba(18,19,27,.32); backdrop-filter: blur(2px); }
-.drawer { position: fixed; top: 0; right: 0; z-index: 80; width: min(520px, 96vw); height: 100dvh; overflow: auto; transform: translateX(102%); border-left: 1px solid #e1e3e8; background: #fbfbfd; box-shadow: -20px 0 50px rgba(22,19,39,.12); transition: transform .22s ease; }
-.drawerOpen { transform: translateX(0); }
-.header { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; padding: 22px; border-bottom: 1px solid #e8e9ee; background: linear-gradient(145deg,#fff,#f7f4ff); }
+.builderWrap { margin-top: 14px; }
+.launcher { display: inline-flex; min-height: 38px; align-items: center; gap: 7px; padding: 8px 12px; border: 1px solid #d8d2f5; border-radius: 10px; color: #5f43d8; background: #f8f6ff; font-size: 10px; font-weight: 750; cursor: pointer; }
+.launcher:hover { border-color: #b9adef; background: #f3efff; }
+.panel { margin-top: 12px; overflow: hidden; border: 1px solid #e1e3e8; border-radius: 16px; background: #fbfbfd; box-shadow: 0 12px 32px rgba(22,19,39,.06); }
+.header { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; padding: 18px 20px; border-bottom: 1px solid #e8e9ee; background: linear-gradient(145deg,#fff,#f7f4ff); }
 .eyebrow { font-size: 9px; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; color: #6846e8; }
-.header h2 { margin: 6px 0 0; font-size: 20px; line-height: 1.15; letter-spacing: -.025em; color: #24222d; }
-.header p { margin: 8px 0 0; max-width: 420px; font-size: 11px; line-height: 1.6; color: #6e7280; }
-.closeButton { display: grid; width: 34px; height: 34px; flex: 0 0 auto; place-items: center; border: 1px solid #e1e3e8; border-radius: 10px; color: #666b78; background: #fff; cursor: pointer; }
-.safetyBar { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; padding: 10px 22px; border-bottom: 1px solid #dcefe4; color: #176c49; background: #f2fbf6; font-size: 9px; font-weight: 700; }
-.body { padding: 18px 22px 26px; }
-.grid { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 11px; }
+.header h2 { margin: 5px 0 0; font-size: 18px; line-height: 1.2; letter-spacing: -.02em; color: #24222d; }
+.header p { margin: 7px 0 0; max-width: 720px; font-size: 11px; line-height: 1.55; color: #6e7280; }
+.closeButton { display: grid; width: 32px; height: 32px; flex: 0 0 auto; place-items: center; border: 1px solid #e1e3e8; border-radius: 9px; color: #666b78; background: #fff; cursor: pointer; }
+.safetyBar { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; padding: 9px 20px; border-bottom: 1px solid #dcefe4; color: #176c49; background: #f2fbf6; font-size: 9px; font-weight: 700; }
+.body { padding: 18px 20px 20px; }
+.grid { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 11px; }
 .field { display: grid; gap: 5px; min-width: 0; }
 .field span { font-size: 9px; font-weight: 750; letter-spacing: .06em; text-transform: uppercase; color: #777d8a; }
 .field select { width: 100%; min-height: 40px; padding: 8px 30px 8px 10px; border: 1px solid #dfe2e8; border-radius: 10px; color: #2d2b35; background: #fff; font-size: 11px; }
@@ -38,4 +37,5 @@
 .breakdownRow span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .breakdownRow strong { color: #30303a; }
 .resultFooter { margin-top: 10px; font-size: 8px; color: #969aa5; text-align: right; }
-@media (max-width: 640px) { .launcher { right: 14px; bottom: 14px; } .header { padding: 18px; } .body { padding: 16px 18px 24px; } .grid { grid-template-columns: 1fr; } .metrics,.breakdownGrid { grid-template-columns: 1fr; } }
+@media (max-width: 900px) { .grid { grid-template-columns: repeat(2,minmax(0,1fr)); } }
+@media (max-width: 640px) { .header { padding: 16px; } .body { padding: 16px; } .grid,.metrics,.breakdownGrid { grid-template-columns: 1fr; } .actions { justify-content: stretch; } .resetButton,.previewButton { flex: 1; justify-content: center; } }
