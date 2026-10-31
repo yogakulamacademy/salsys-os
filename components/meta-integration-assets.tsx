@@ -8,24 +8,60 @@ import {
 import type {
   IntegrationAsset,
 } from '@/lib/integrations/types';
+import {
+  createClient,
+} from '@/lib/supabase/server';
 
 import {
   discoverMetaAssetsAction,
   selectMetaAssetAction,
 } from '@/app/settings/integrations/actions';
 
-export function MetaIntegrationAssets({
+export async function MetaIntegrationAssets({
   connectionId,
   assets,
-  scopes,
 }: {
   connectionId: string;
   assets: IntegrationAsset[];
-  scopes: string[];
 }) {
+  const supabase =
+    await createClient();
+
+  const {
+    data: connection,
+  } =
+    await supabase
+      .from(
+        'integration_connections',
+      )
+      .select(
+        'scopes',
+      )
+      .eq(
+        'id',
+        connectionId,
+      )
+      .eq(
+        'provider',
+        'meta',
+      )
+      .maybeSingle();
+
+  const scopes =
+    Array.isArray(
+      connection?.scopes,
+    )
+      ? connection.scopes
+      : [];
+
   const normalizedScopes =
     new Set(
       scopes
+        .filter(
+          (scope): scope is string =>
+            typeof scope ===
+            'string',
+        )
         .map((scope) =>
           scope.trim().toLowerCase(),
         )
