@@ -14,6 +14,8 @@ for (const token of [
   "claimAdActivationCanaryDelivery",
   'provider: "meta"',
   "renewAdActivationDeliveryLease",
+  "assessAdActivationProviderReadiness",
+  "activation_provider_not_ready",
   "prepareAdActivationProviderDryRun",
   "executeAdActivationTransport",
   "metaCustomAudienceTransportAdapter",
@@ -58,6 +60,19 @@ const disabledGuard = runner.indexOf("if (AD_ACTIVATION_TRANSPORT_ENABLED === fa
 const claimCall = runner.indexOf("const delivery = await claimAdActivationCanaryDelivery");
 if (disabledGuard < 0 || claimCall < 0 || disabledGuard > claimCall) {
   throw new Error("Transport-disabled guard must execute before any queue claim.");
+}
+
+const readinessCall = runner.indexOf("readiness = await assessAdActivationProviderReadiness");
+const prepareCall = runner.indexOf("prepared = await prepareAdActivationProviderDryRun");
+const transportCall = runner.indexOf("const result = await executeAdActivationTransport");
+if (
+  readinessCall < 0 ||
+  prepareCall < 0 ||
+  transportCall < 0 ||
+  readinessCall > prepareCall ||
+  readinessCall > transportCall
+) {
+  throw new Error("Provider readiness must be verified before identifier preparation and transport.");
 }
 
 for (const forbidden of [
