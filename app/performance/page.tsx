@@ -4,6 +4,7 @@ import { Activity, MessageSquareText, UsersRound } from "lucide-react";
 
 import TeamPerformancePage from "@/app/team-performance/page";
 import { ContactPerformanceWorkspace } from "@/components/performance/contact-performance-workspace";
+import { PerformanceOperatingBrief } from "@/components/performance/performance-operating-brief";
 import { createClient } from "@/lib/supabase/server";
 
 type PerformanceView = "team" | "response" | "communication";
@@ -44,7 +45,10 @@ export default async function PerformancePage({ searchParams }: { searchParams: 
       ) : view === "communication" ? (
         <ContactPerformanceWorkspace mode="communication" />
       ) : (
-        <TeamPerformancePage searchParams={teamSearchParams} />
+        <>
+          <PerformanceOperatingBrief />
+          <TeamPerformancePage searchParams={teamSearchParams} />
+        </>
       )}
     </div>
   );
