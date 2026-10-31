@@ -27,13 +27,15 @@ for (const [source, tokens, label] of [
     "CRON_SECRET",
     "bearerMatchesAnySecret",
     "runMetaAdActivationExecutionCycle",
-    "limit: 10",
+    "leaseSeconds: 300",
     '"Cache-Control": "no-store"',
   ], "runner route"],
   [health, [
     "v_ad_activation_runner_health_v1",
     "runnerEnabled",
     "transportEnabled",
+    "canaryConfigured",
+    'mode: "canary_only"',
     "bearerMatchesAnySecret",
   ], "health route"],
   [migration, [
