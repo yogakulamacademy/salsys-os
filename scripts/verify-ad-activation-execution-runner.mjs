@@ -11,8 +11,8 @@ const policy = fs.readFileSync("lib/ad-activation/transport-policy.ts", "utf8");
 for (const token of [
   "runMetaAdActivationExecutionCycle",
   "AD_ACTIVATION_TRANSPORT_ENABLED === false",
-  "claimAdActivationDeliveriesForProvider",
-  '"meta"',
+  "claimAdActivationCanaryDelivery",
+  'provider: "meta"',
   "renewAdActivationDeliveryLease",
   "prepareAdActivationProviderDryRun",
   "executeAdActivationTransport",
@@ -55,7 +55,7 @@ if (!policy.includes("AD_ACTIVATION_TRANSPORT_ENABLED = false as const")) {
 }
 
 const disabledGuard = runner.indexOf("if (AD_ACTIVATION_TRANSPORT_ENABLED === false)");
-const claimCall = runner.indexOf("const deliveries = await claimAdActivationDeliveriesForProvider");
+const claimCall = runner.indexOf("const delivery = await claimAdActivationCanaryDelivery");
 if (disabledGuard < 0 || claimCall < 0 || disabledGuard > claimCall) {
   throw new Error("Transport-disabled guard must execute before any queue claim.");
 }
