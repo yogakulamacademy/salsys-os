@@ -175,18 +175,19 @@ export function MarketingNavigation() {
       </details>
 
       <aside
-        className="sticky top-20 hidden h-[calc(100vh-5.5rem)] self-start border-r border-line pr-3 lg:block"
+        className="sticky top-20 hidden h-[calc(100vh-5.5rem)] self-start overflow-hidden border-r border-line pr-3 lg:flex lg:flex-col"
         aria-label="Growth navigation"
       >
-        <div className="h-full overflow-y-auto overscroll-contain pb-12 pr-1 [scrollbar-color:transparent_transparent] [scrollbar-width:thin] hover:[scrollbar-color:rgba(148,163,184,0.35)_transparent] [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-transparent hover:[&::-webkit-scrollbar-thumb]:bg-slate-300/70">
-          <div className="mb-7 px-3 pt-1">
-            <div className="text-[18px] font-semibold tracking-[-0.025em] text-copy-strong">
-              Growth
-            </div>
-            <p className="mt-1.5 max-w-[195px] text-[13px] leading-5 text-copy-muted">
-              Connect acquisition, conversion and revenue in one growth workspace.
-            </p>
+        <div className="shrink-0 px-3 pb-5 pt-1">
+          <div className="text-[18px] font-semibold tracking-[-0.025em] text-copy-strong">
+            Growth
           </div>
+          <p className="mt-1.5 max-w-[195px] text-[13px] leading-5 text-copy-muted">
+            Connect acquisition, conversion and revenue in one growth workspace.
+          </p>
+        </div>
+
+        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain pb-12 pr-1 [scrollbar-color:transparent_transparent] [scrollbar-width:thin] hover:[scrollbar-color:rgba(148,163,184,0.35)_transparent] [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-transparent hover:[&::-webkit-scrollbar-thumb]:bg-slate-300/70">
           <NavigationLinks />
         </div>
       </aside>
