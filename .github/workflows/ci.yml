@@ -193,6 +193,9 @@ jobs:
       - name: Verify Ad Activation Audience Rule Preview Contracts
         run: npm run verify:ad-activation-rule-preview
 
+      - name: Verify Ad Activation Custom Audience Rule Builder Contracts
+        run: npm run verify:ad-activation-rule-builder
+
       - name: Typecheck
         run: npm run typecheck
 
