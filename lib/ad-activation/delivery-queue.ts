@@ -3,6 +3,7 @@ import "server-only";
 import { createAdminClient } from "@/lib/supabase/admin";
 import type {
   AdActivationAction,
+  AdActivationProviderResult,
   AdActivationSafeMetadata,
 } from "@/lib/ad-activation/types";
 
@@ -82,5 +83,71 @@ export async function validateAdActivationDeliveryBeforeSend(
   return objectResult<AdActivationPreSendValidation>(
     data,
     "Ad activation pre-send validation",
+  );
+}
+
+
+export type FinalizeAdActivationOptions = {
+  durationMs?: number;
+  httpStatus?: number;
+  retryAfterSeconds?: number;
+};
+
+export type FinalizedAdActivationDelivery = {
+  finalized: boolean;
+  reason?: string;
+  outbox_id?: string;
+  attempt_number?: number;
+  outcome?: "delivered" | "retry" | "skipped" | "failed";
+  retry_after_seconds?: number | null;
+};
+
+export async function finalizeAdActivationDelivery(
+  delivery: Pick<ClaimedAdActivationDelivery, "outbox_id" | "lease_token">,
+  result: AdActivationProviderResult,
+  options: FinalizeAdActivationOptions = {},
+): Promise<FinalizedAdActivationDelivery> {
+  const admin = createAdminClient();
+
+  const providerRequestId =
+    result.status === "delivered" ? result.providerRequestId ?? null : null;
+  const providerResponseCode =
+    result.status === "delivered" ? result.providerResponseCode ?? null : null;
+  const errorCode =
+    result.status === "retry" || result.status === "failed"
+      ? result.errorCode
+      : result.status === "skipped"
+        ? "provider_skipped"
+        : null;
+  const errorMessage =
+    result.status === "retry" || result.status === "failed"
+      ? result.errorMessage
+      : result.status === "skipped"
+        ? result.reason
+        : null;
+
+  const { data, error } = await admin.rpc(
+    "finalize_ad_activation_delivery_v1",
+    {
+      p_outbox_id: delivery.outbox_id,
+      p_lease_token: delivery.lease_token,
+      p_outcome: result.status,
+      p_duration_ms: options.durationMs ?? null,
+      p_http_status: options.httpStatus ?? null,
+      p_provider_request_id: providerRequestId,
+      p_provider_response_code: providerResponseCode,
+      p_error_code: errorCode,
+      p_error_message: errorMessage,
+      p_retry_after_seconds: options.retryAfterSeconds ?? 60,
+    },
+  );
+
+  if (error) {
+    throw new Error(`Ad activation finalization failed: ${error.message}`);
+  }
+
+  return objectResult<FinalizedAdActivationDelivery>(
+    data,
+    "Ad activation finalization",
   );
 }
