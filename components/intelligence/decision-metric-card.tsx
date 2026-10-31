@@ -73,6 +73,13 @@ const evidenceStateStyles: Record<MetricEvidenceState, string> = {
   unknown: "border-line bg-surface-muted text-copy-muted",
 };
 
+const evidenceStateNames: Record<MetricEvidenceState, string> = {
+  observed: "Observed",
+  derived: "Derived",
+  partial: "Partial",
+  unknown: "Unknown",
+};
+
 const neutralEvidenceStyle = "border-line bg-surface-muted text-copy-muted";
 
 export function DecisionMetricCard({
@@ -95,6 +102,9 @@ export function DecisionMetricCard({
   const effectiveDefinition = definition ?? canonical?.definition;
   const effectiveEvidenceLabel = evidenceLabel ?? canonical?.evidenceLabel;
   const effectiveEvidenceState = evidenceState ?? canonical?.evidenceState;
+  const effectiveEvidenceStateName = effectiveEvidenceState
+    ? evidenceStateNames[effectiveEvidenceState]
+    : null;
   const effectiveDeltaDirection =
     deltaDirection ?? canonical?.deltaDirection ?? "neutral";
   const effectiveHref = href ?? canonical?.href;
@@ -103,6 +113,14 @@ export function DecisionMetricCard({
   const evidenceClassName = effectiveEvidenceState
     ? evidenceStateStyles[effectiveEvidenceState]
     : neutralEvidenceStyle;
+  const evidenceTitle = [
+    effectiveEvidenceStateName
+      ? `${effectiveEvidenceStateName} evidence`
+      : null,
+    effectiveDefinition,
+  ]
+    .filter(Boolean)
+    .join(" · ");
 
   const content = (
     <>
@@ -169,7 +187,7 @@ export function DecisionMetricCard({
         ) : null}
       </div>
 
-      {(delta !== undefined || effectiveEvidenceLabel) ? (
+      {(delta !== undefined || effectiveEvidenceLabel || effectiveEvidenceStateName) ? (
         <div className="mt-3 flex min-h-6 flex-wrap items-center gap-2 border-t border-line pt-3">
           {delta !== undefined ? (
             <span
@@ -184,13 +202,23 @@ export function DecisionMetricCard({
             </span>
           ) : null}
 
-          {effectiveEvidenceLabel ? (
+          {effectiveEvidenceLabel || effectiveEvidenceStateName ? (
             <span
-              className={`ml-auto inline-flex items-center gap-1 rounded-full border px-2 py-1 text-[9px] font-semibold ${evidenceClassName}`}
-              title={effectiveDefinition}
+              className={`ml-auto inline-flex max-w-full items-center gap-1 rounded-full border px-2 py-1 text-[9px] font-semibold ${evidenceClassName}`}
+              title={evidenceTitle || undefined}
             >
               {effectiveEvidenceState === "observed" ? <CheckCircle2 size={10} /> : null}
-              {effectiveEvidenceLabel}
+              {effectiveEvidenceStateName ? (
+                <span className="shrink-0">{effectiveEvidenceStateName}</span>
+              ) : null}
+              {effectiveEvidenceStateName && effectiveEvidenceLabel ? (
+                <span aria-hidden="true" className="opacity-60">·</span>
+              ) : null}
+              {effectiveEvidenceLabel ? (
+                <span className="max-w-[150px] truncate sm:max-w-[210px]">
+                  {effectiveEvidenceLabel}
+                </span>
+              ) : null}
             </span>
           ) : null}
         </div>
