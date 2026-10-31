@@ -127,7 +127,11 @@ async function getAssignmentContext() {
   return { canManage: true, targets };
 }
 
-export async function TeamAssignmentPanel({ returnTo }: { returnTo: '/leads' | '/pipeline' }) {
+export async function TeamAssignmentPanel({
+  returnTo,
+}: {
+  returnTo: '/leads' | '/pipeline' | '/opportunities';
+}) {
   const context = await getAssignmentContext();
   if (!context.canManage) return null;
 
