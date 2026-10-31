@@ -2,12 +2,14 @@ import type { ReactNode } from 'react';
 import {
   AlertCircle,
   AlertTriangle,
-  ArrowDownRight,
-  ArrowUpRight,
   CheckCircle2,
   Info,
-  Minus,
 } from 'lucide-react';
+
+import {
+  DecisionMetricCard,
+  type DecisionMetricCardProps,
+} from '@/components/intelligence/decision-metric-card';
 import { Channel, IntentLevel, PipelineStage } from '@/types/crm';
 
 export function PageHeader({ eyebrow, title, description, actions }: { eyebrow?: string; title: string; description?: string; actions?: ReactNode }) {
@@ -23,30 +25,51 @@ export function PageHeader({ eyebrow, title, description, actions }: { eyebrow?:
   );
 }
 
-export function StatCard({ label, value, delta, note, icon }: { label: string; value: string; delta?: number; note?: string; icon?: ReactNode }) {
-  const positive = typeof delta === 'number' && delta > 0;
-  const negative = typeof delta === 'number' && delta < 0;
+export function StatCard({
+  label,
+  value,
+  delta,
+  note,
+  icon,
+  href,
+  comparisonLabel,
+  deltaDirection = 'neutral',
+  tone = 'neutral',
+  statusLabel,
+  definition,
+  evidenceLabel,
+  trend,
+}: {
+  label: string;
+  value: string;
+  delta?: number | null;
+  note?: string;
+  icon?: ReactNode;
+  href?: string;
+  comparisonLabel?: string;
+  deltaDirection?: DecisionMetricCardProps['deltaDirection'];
+  tone?: DecisionMetricCardProps['tone'];
+  statusLabel?: string;
+  definition?: string;
+  evidenceLabel?: string;
+  trend?: number[];
+}) {
   return (
-    <div className="card-pad">
-      <div className="flex items-start justify-between gap-4">
-        <div className="min-w-0">
-          <div className="text-[12px] font-semibold text-copy-muted">{label}</div>
-          <div className="mt-1.5 text-[28px] font-semibold tracking-[-0.035em] text-copy-strong">{value}</div>
-        </div>
-        {icon && <div className="grid h-10 w-10 shrink-0 place-items-center rounded-ui bg-brand-50 text-brand-700">{icon}</div>}
-      </div>
-      {(delta !== undefined || note) && (
-        <div className="mt-3.5 flex items-center gap-2 text-xs">
-          {delta !== undefined && (
-            <span className={`inline-flex items-center gap-1 font-semibold ${positive ? 'text-emerald-600' : negative ? 'text-rose-600' : 'text-copy-muted'}`}>
-              {positive ? <ArrowUpRight size={13} /> : negative ? <ArrowDownRight size={13} /> : <Minus size={13} />}
-              {Math.abs(delta)}%
-            </span>
-          )}
-          {note && <span className="text-copy-subtle">{note}</span>}
-        </div>
-      )}
-    </div>
+    <DecisionMetricCard
+      label={label}
+      value={value}
+      detail={note ?? 'Current workspace metric'}
+      icon={icon}
+      href={href}
+      delta={delta}
+      comparisonLabel={comparisonLabel}
+      deltaDirection={deltaDirection}
+      tone={tone}
+      statusLabel={statusLabel}
+      definition={definition}
+      evidenceLabel={evidenceLabel}
+      trend={trend}
+    />
   );
 }
 
