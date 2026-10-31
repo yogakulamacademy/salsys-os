@@ -61,8 +61,10 @@ body,
   }
 }
 
-/* Final containment: accidental descendants may scroll internally, but must
-   never increase the application viewport width. */
+/* Final containment: clip accidental horizontal spill without turning AppShell
+   main into a scroll container. `overflow-x: hidden` makes the other axis
+   compute as auto and breaks viewport-relative sticky descendants. */
 .salsys-meta-sidebar-shell .legacy-shell-host > div > div.min-h-screen > main {
-  overflow-x: hidden;
+  overflow-x: clip;
+  overflow-y: visible;
 }
