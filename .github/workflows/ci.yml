@@ -184,6 +184,9 @@ jobs:
       - name: Verify Ad Activation Meta Transport Contracts
         run: npm run verify:ad-activation-meta-transport
 
+      - name: Verify Ad Activation Execution Runner Contracts
+        run: npm run verify:ad-activation-execution-runner
+
       - name: Typecheck
         run: npm run typecheck
 
