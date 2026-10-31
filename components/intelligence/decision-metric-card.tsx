@@ -42,7 +42,7 @@ const toneStyles: Record<
     icon: "bg-brand-50 text-brand-700 dark:bg-brand-950/30 dark:text-brand-300",
     status: "bg-surface-muted text-copy-muted",
     trend: "text-brand-600 dark:text-brand-300",
-    accent: "bg-brand-500/70",
+    accent: "bg-brand-600/70",
   },
   positive: {
     icon: "bg-emerald-50 text-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-300",
