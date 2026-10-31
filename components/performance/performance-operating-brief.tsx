@@ -141,7 +141,6 @@ export async function PerformanceOperatingBrief() {
           label="Needs reply"
           value={needsReply.toLocaleString()}
           detail="Assigned leads currently needing a reply"
-          href="/conversations"
           tone={needsReply > 0 ? "warning" : "positive"}
           statusLabel={needsReply > 0 ? "Attention" : "Clear"}
           evidenceState="derived"
@@ -154,7 +153,6 @@ export async function PerformanceOperatingBrief() {
           label="Overdue follow-ups"
           value={overdue.toLocaleString()}
           detail="Assigned leads with overdue scheduled follow-up"
-          href="/follow-ups"
           tone={overdue > 0 ? "warning" : "positive"}
           statusLabel={overdue > 0 ? "Attention" : "Clear"}
           evidenceState="derived"
@@ -167,7 +165,6 @@ export async function PerformanceOperatingBrief() {
           label="Unassigned open"
           value={unassigned.toLocaleString()}
           detail="Open leads without a current owner"
-          href="/performance"
           tone={unassigned > 0 ? "warning" : "positive"}
           statusLabel={unassigned > 0 ? "Assign" : "Clear"}
           evidenceState="observed"
