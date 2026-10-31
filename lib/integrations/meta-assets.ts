@@ -144,7 +144,9 @@ async function metaGet<T>(
     await response.text();
 
   let payload:
-    | (T & { error?: MetaGraphError })
+    | (Record<string, unknown> & {
+        error?: MetaGraphError;
+      })
     | null =
     null;
 
@@ -152,10 +154,10 @@ async function metaGet<T>(
     payload = rawText
       ? JSON.parse(
           rawText,
-        ) as T & {
+        ) as Record<string, unknown> & {
           error?: MetaGraphError;
         }
-      : {} as T;
+      : {};
   } catch {
     throw new Error(
       `Meta API returned non-JSON data (HTTP ${response.status}).`,
@@ -164,10 +166,10 @@ async function metaGet<T>(
 
   if (
     !response.ok ||
-    payload?.error
+    payload.error
   ) {
     const error =
-      payload?.error;
+      payload.error;
 
     const parts = [
       error?.message,
