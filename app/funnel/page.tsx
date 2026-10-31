@@ -14,7 +14,7 @@ export default async function FunnelPage() {
   const brief = buildFunnelDecisionBrief(workspace);
 
   return (
-    <div className="space-y-4">
+    <div className="growth-funnel-workspace space-y-4">
       <PageHeader
         eyebrow="SalsysOS / Growth Operations"
         title="Conversion Funnel"
