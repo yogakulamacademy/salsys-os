@@ -12,6 +12,7 @@ type MetaAdAccountApiRow = {
   account_status?: unknown;
   currency?: unknown;
   timezone_name?: unknown;
+  tos_accepted?: unknown;
 };
 
 type MetaAdAccountsEnvelope = {
@@ -43,6 +44,25 @@ function nonEmptyString(value: unknown) {
 
 function normalizeAdAccountId(value: string) {
   return value.replace(/^act_/i, '').trim();
+}
+
+function customAudienceTosAccepted(value: unknown) {
+  if (
+    !value ||
+    typeof value !== 'object' ||
+    Array.isArray(value)
+  ) {
+    return false;
+  }
+
+  const status =
+    (value as Record<string, unknown>)[
+      'custom_audience_tos'
+    ];
+
+  return status === 1 ||
+    status === '1' ||
+    status === true;
 }
 
 async function metaGet<T>(
@@ -160,6 +180,7 @@ export async function discoverMetaAdAccounts(
       'account_status',
       'currency',
       'timezone_name',
+      'tos_accepted',
     ].join(','),
   );
 
@@ -244,6 +265,10 @@ export async function discoverMetaAdAccounts(
               ),
             graph_resource:
               `act_${accountId}`,
+            custom_audience_tos_accepted:
+              customAudienceTosAccepted(
+                row.tos_accepted,
+              ),
           },
         },
       );
