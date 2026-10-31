@@ -163,6 +163,9 @@ jobs:
       - name: Verify Ad Activation Membership Writer Contracts
         run: npm run verify:ad-activation-writer
 
+      - name: Verify Ad Activation Claim and Pre-Send Guard Contracts
+        run: npm run verify:ad-activation-delivery-guard
+
       - name: Typecheck
         run: npm run typecheck
 
