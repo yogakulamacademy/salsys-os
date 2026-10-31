@@ -171,8 +171,11 @@ export function MarketingNavigation() {
         </div>
       </details>
 
-      <aside className="hidden min-h-[calc(100vh-7rem)] border-r border-line pr-4 lg:block" aria-label="Growth navigation">
-        <div className="sticky top-20 pb-8">
+      <aside
+        className="sticky top-16 hidden h-[calc(100vh-4rem)] self-start overflow-y-auto overflow-x-hidden overscroll-contain border-r border-line pr-4 lg:block [scrollbar-width:thin]"
+        aria-label="Growth navigation"
+      >
+        <div className="pb-8 pt-4">
           <div className="mb-7 px-3 pt-1">
             <div className="text-[18px] font-semibold tracking-[-0.025em] text-copy-strong">
               Growth
