@@ -117,3 +117,48 @@ for (const token of [
 }
 
 console.log("Ad activation deterministic scenario executor contracts: PASS");
+
+const observabilityReadiness = fs.readFileSync(
+  "lib/ad-activation/observability-readiness.ts",
+  "utf8",
+);
+
+for (const token of [
+  "projectAdActivationObservabilityReadiness",
+  'mode: "simulation_only"',
+  '"simulation_verified"',
+  '"needs_attention"',
+  '"insufficient_evidence"',
+  "authorizedToSend: false",
+  "transportEnabled: false",
+  "persistentFinalization: false",
+  "liveQueueObserved: false",
+  "deterministic_simulation_not_verified",
+  "provider_transport_disabled",
+  "live_queue_not_observed",
+  "live_activation_not_authorized",
+  "leased pre-send privacy validation",
+]) {
+  if (!observabilityReadiness.includes(token)) {
+    throw new Error(`Activation observability readiness contract missing: ${token}`);
+  }
+}
+
+for (const token of [
+  "createAdminClient",
+  "claimAdActivationDeliveries",
+  "finalizeAdActivationDelivery",
+  "decryptIntegrationSecret",
+  "fetch(",
+  "graph.facebook.com",
+  "googleapis.com",
+  "process.env",
+  ".from(",
+  ".rpc(",
+]) {
+  if (observabilityReadiness.includes(token)) {
+    throw new Error(`Activation observability projection must remain pure/read-only: ${token}`);
+  }
+}
+
+console.log("Ad activation observability/readiness projection contracts: PASS");
