@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ArrowRight, CalendarClock, GitBranch, Sparkles, Target } from "lucide-react";
+import { ArrowRight, CalendarClock, GitBranch, Sparkles, Target, WalletCards } from "lucide-react";
 
 import { ExecutiveDecisionBrief } from "@/components/marketing/executive-decision-brief";
 import { RevenueInsights } from "@/components/revenue-insights";
@@ -105,17 +105,17 @@ export default async function RevenuePage({ searchParams }: RevenuePageProps) {
         description="Understand collected cash, open pipeline, outstanding balances and the opportunities most likely to need action now."
         actions={
           <div className="flex flex-wrap gap-2">
-            <Link href="/campaigns" className="btn-secondary">
+            <Link href="/marketing?view=campaigns" className="btn-secondary">
               <Target size={15} /> Campaigns
             </Link>
-            <Link href="/funnel" className="btn-secondary">
+            <Link href="/marketing?view=funnel" className="btn-secondary">
               <GitBranch size={15} /> Funnel
             </Link>
-            <Link href="/attribution" className="btn-secondary">
+            <Link href="/marketing?view=attribution" className="btn-secondary">
               Attribution
             </Link>
-            <Link href="/commercial-intelligence" className="btn-primary">
-              <Sparkles size={15} /> Ask Salsys
+            <Link href="/admissions?view=payments" className="btn-primary">
+              <WalletCards size={15} /> Work payment queue
             </Link>
           </div>
         }
@@ -146,10 +146,10 @@ export default async function RevenuePage({ searchParams }: RevenuePageProps) {
               </p>
             </div>
             <div className="flex shrink-0 flex-wrap gap-2">
-              <Link href={`/attribution?q=${encodeURIComponent(investigationSource)}`} className="btn-secondary">
+              <Link href={`/marketing?view=attribution&q=${encodeURIComponent(investigationSource)}`} className="btn-secondary">
                 Review attribution <ArrowRight size={13} />
               </Link>
-              <Link href={`/campaigns?q=${encodeURIComponent(investigationSource)}`} className="btn-secondary">
+              <Link href={`/marketing?view=campaigns&q=${encodeURIComponent(investigationSource)}`} className="btn-secondary">
                 Campaign evidence
               </Link>
             </div>
@@ -167,7 +167,7 @@ export default async function RevenuePage({ searchParams }: RevenuePageProps) {
           tone="warning"
           title={`${unvaluedLeads} open ${unvaluedLeads === 1 ? "lead is" : "leads are"} missing potential value`}
           action={
-            <Link href="/pipeline" className="btn-secondary">
+            <Link href="/admissions?view=pipeline" className="btn-secondary">
               Review pipeline <ArrowRight size={13} />
             </Link>
           }
@@ -271,8 +271,8 @@ function buildRevenueDecisionBrief(
       },
     ],
     actions: [
-      { label: "Work pipeline", href: "/pipeline", detail: "Review value, stage, ownership and expected close date." },
-      { label: "Inspect attribution", href: "/attribution", detail: "Compare commercial value with acquisition evidence." },
+      { label: "Work pipeline", href: "/admissions?view=pipeline", detail: "Review value, stage, ownership and expected close date." },
+      { label: "Inspect attribution", href: "/marketing?view=attribution", detail: "Compare commercial value with acquisition evidence." },
       ...(topOpportunities[0]
         ? [{ label: "Open top opportunity", href: `/leads/${topOpportunities[0].id}`, detail: "Review the highest-value visible opportunity." }]
         : []),
