@@ -20,6 +20,7 @@ import {
 } from "@/components/intelligence/decision-metric-link";
 import { canonicalizeWorkspaceHref } from "@/lib/canonical-workspace-routes";
 import type { MetricEvidenceState } from "@/lib/metric-definitions";
+import { resolveMetricNextCheck } from "@/lib/metric-investigation-guidance";
 
 const METRIC_CONTEXT_TTL_MS = 30 * 60 * 1000;
 
@@ -102,6 +103,7 @@ export function InvestigationContextBar() {
   if (!metricContext) return null;
 
   const currentPath = `${pathname}${searchParams.size ? `?${searchParams.toString()}` : ""}`;
+  const nextCheck = resolveMetricNextCheck(metricContext.metricLabel);
   const relatedLinks = metricRelatedLinks(metricContext.metricLabel)
     .map((item) => ({
       ...item,
@@ -149,6 +151,20 @@ export function InvestigationContextBar() {
               <p className="mt-1 max-w-3xl text-xs leading-5 text-copy-muted">
                 {metricContext.metricDetail}
               </p>
+            ) : null}
+
+            {nextCheck ? (
+              <div className="mt-3 flex max-w-3xl items-start gap-2 rounded-xl border border-line bg-surface-muted/55 px-3 py-2.5">
+                <ArrowRight size={12} className="mt-0.5 shrink-0 text-brand-700 dark:text-brand-300" />
+                <div className="min-w-0">
+                  <div className="text-[9px] font-bold uppercase tracking-[0.1em] text-copy-subtle">
+                    Next check
+                  </div>
+                  <p className="mt-0.5 text-[11px] leading-5 text-copy-muted">
+                    {nextCheck}
+                  </p>
+                </div>
+              </div>
             ) : null}
 
             <div className="mt-3 flex flex-wrap items-center gap-2">
