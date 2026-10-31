@@ -1,0 +1,118 @@
+.page {
+  --aa-violet: #6d4aff;
+  --aa-violet-soft: #f4f0ff;
+}
+
+.hero {
+  display: grid;
+  gap: 18px;
+  grid-template-columns: minmax(0, 1.55fr) minmax(260px, .75fr);
+  padding: 24px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-panel);
+  background:
+    radial-gradient(circle at 92% 8%, rgba(109, 74, 255, .12), transparent 32%),
+    linear-gradient(135deg, #fff 0%, #fbfaff 62%, #f6f2ff 100%);
+  box-shadow: 0 14px 34px rgba(40, 31, 78, .06);
+}
+
+.heroCopy { min-width: 0; }
+.title { margin-top: 6px; font-size: clamp(26px, 3vw, 38px); line-height: 1.08; font-weight: 730; letter-spacing: -.04em; color: var(--copy-strong); }
+.subtitle { margin-top: 11px; max-width: 820px; font-size: 14px; line-height: 1.75; color: var(--copy-muted); }
+.heroBadges { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 18px; }
+.heroState { display: flex; align-items: flex-start; gap: 13px; padding: 17px; border: 1px solid #ddd5ff; border-radius: 18px; background: rgba(255,255,255,.76); }
+.heroStateIcon { display: grid; width: 42px; height: 42px; flex: 0 0 auto; place-items: center; border-radius: 13px; color: #6846e8; background: #eee8ff; }
+.heroStateLabel { font-size: 10px; font-weight: 700; letter-spacing: .09em; text-transform: uppercase; color: var(--copy-subtle); }
+.heroStateValue { margin-top: 4px; font-size: 15px; font-weight: 700; color: var(--copy-strong); }
+.heroStateNote { margin-top: 5px; font-size: 12px; line-height: 1.55; color: var(--copy-muted); }
+
+.statusPill { display: inline-flex; min-height: 28px; align-items: center; gap: 6px; padding: 5px 9px; border: 1px solid; border-radius: 999px; font-size: 10px; font-weight: 700; letter-spacing: .02em; }
+.toneGreen { border-color: #b9e6cf; color: #147449; background: #f0fbf5; }
+.toneAmber { border-color: #f1d5a2; color: #996112; background: #fff9ed; }
+.toneViolet { border-color: #d9ceff; color: #6240d8; background: #f7f4ff; }
+.toneSlate { border-color: #dde2ea; color: #5e6878; background: #f8fafc; }
+
+.notice { display: flex; gap: 13px; padding: 16px 18px; border: 1px solid #e6d9a9; border-radius: 16px; color: #785b16; background: #fffaf0; }
+.noticeTitle { font-size: 13px; font-weight: 700; color: #684b0d; }
+.notice p { margin-top: 3px; font-size: 12px; line-height: 1.6; }
+.noticeDetail { margin-top: 7px; font-size: 10px; opacity: .72; word-break: break-word; }
+
+.metrics { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+.metricCard { min-width: 0; padding: 17px; border: 1px solid var(--line); border-radius: 17px; background: var(--surface); box-shadow: 0 8px 24px rgba(30, 27, 46, .035); }
+.metricIcon { display: grid; width: 36px; height: 36px; place-items: center; border-radius: 11px; color: #6846e8; background: #f1ecff; }
+.metricLabel { margin-top: 14px; font-size: 10px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--copy-subtle); }
+.metricValue { margin-top: 3px; font-size: 25px; font-weight: 730; letter-spacing: -.03em; color: var(--copy-strong); }
+.metricSub { margin-top: 3px; font-size: 11px; color: var(--copy-muted); }
+
+.grid { display: grid; grid-template-columns: minmax(0, 1.45fr) minmax(310px, .7fr); gap: 16px; }
+.sideStack { display: grid; align-content: start; gap: 16px; }
+.panel { overflow: hidden; }
+.panelHeader { display: flex; align-items: flex-start; justify-content: space-between; gap: 14px; padding: 18px 20px; border-bottom: 1px solid var(--line); }
+.panelTitle { margin-top: 3px; font-size: 17px; font-weight: 700; letter-spacing: -.02em; color: var(--copy-strong); }
+.panelSubtitle { margin-top: 4px; max-width: 680px; font-size: 12px; line-height: 1.55; color: var(--copy-muted); }
+.readOnlyBadge { padding: 5px 8px; border: 1px solid #ddd5ff; border-radius: 999px; font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; color: #6846e8; background: #f7f4ff; }
+
+.audienceList { display: grid; gap: 10px; padding: 14px; }
+.audienceCard { padding: 15px; border: 1px solid #e6e8ee; border-radius: 15px; background: #fff; }
+.audienceTopline { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+.audienceName { font-size: 14px; font-weight: 700; color: var(--copy-strong); }
+.audienceKey { margin-top: 2px; font: 600 10px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace; color: var(--copy-subtle); }
+.audienceDescription { margin-top: 9px; font-size: 12px; line-height: 1.55; color: var(--copy-muted); }
+.audienceMeta { display: flex; flex-wrap: wrap; gap: 10px 15px; margin-top: 11px; font-size: 10px; color: var(--copy-subtle); }
+.audienceMeta span { display: inline-flex; align-items: center; gap: 5px; }
+.destinationRow { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 12px; }
+.destinationChip, .mutedChip { display: inline-flex; align-items: center; min-height: 25px; padding: 4px 8px; border-radius: 999px; font-size: 9px; font-weight: 650; }
+.destinationChip { border: 1px solid #dcd4fb; color: #6346bd; background: #f7f4ff; }
+.mutedChip { border: 1px solid #e6e8ee; color: var(--copy-subtle); background: #fafbfc; }
+
+.emptyState { padding: 42px 20px; text-align: center; color: var(--copy-subtle); }
+.emptyTitle { margin-top: 10px; font-size: 14px; font-weight: 700; color: var(--copy-strong); }
+.emptyState p { max-width: 460px; margin: 5px auto 0; font-size: 12px; line-height: 1.6; color: var(--copy-muted); }
+
+.simulationList { display: grid; gap: 1px; padding: 8px 14px 14px; }
+.simulationItem { display: flex; align-items: flex-start; gap: 10px; padding: 10px 4px; border-bottom: 1px solid #f0f1f4; }
+.simulationItem:last-child { border-bottom: 0; }
+.passIcon, .warnIcon { display: grid; width: 28px; height: 28px; flex: 0 0 auto; place-items: center; border-radius: 9px; }
+.passIcon { color: #168057; background: #edf9f3; }
+.warnIcon { color: #a66c12; background: #fff8e8; }
+.simulationName { font-size: 11px; font-weight: 700; color: var(--copy-strong); }
+.simulationDetail { margin-top: 2px; font-size: 9px; line-height: 1.45; color: var(--copy-subtle); }
+
+.healthGrid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; padding: 14px; }
+.smallMetric { padding: 12px; border: 1px solid #e8eaf0; border-radius: 12px; background: #fbfcfd; }
+.smallMetric div { font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: .07em; color: var(--copy-subtle); }
+.smallMetric strong { display: block; margin-top: 4px; font-size: 18px; color: var(--copy-strong); }
+.smallMetricWarn { border-color: #f1d5a2; background: #fff9ed; }
+.smallMetricWarn strong { color: #9a6213; }
+.healthFooter { padding: 0 14px 15px; font-size: 9px; color: var(--copy-subtle); }
+
+.blueprintGrid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; padding: 14px; }
+.blueprintCard { padding: 16px; border: 1px solid #e6e8ee; border-radius: 15px; background: linear-gradient(180deg, #fff, #fcfbff); }
+.blueprintIcon { display: grid; width: 34px; height: 34px; place-items: center; border-radius: 11px; color: #6846e8; background: #f1ecff; }
+.blueprintCard h3 { margin-top: 12px; font-size: 13px; font-weight: 700; color: var(--copy-strong); }
+.blueprintCard p { margin-top: 5px; min-height: 38px; font-size: 11px; line-height: 1.55; color: var(--copy-muted); }
+.ruleBox { margin-top: 12px; padding: 10px; border: 1px dashed #dcd4fb; border-radius: 11px; font: 600 9px/1.6 ui-monospace, SFMono-Regular, Menlo, monospace; color: #5d4a99; background: #faf8ff; }
+.footerSafety { display: flex; align-items: center; gap: 9px; padding: 13px 15px; border: 1px solid #e6e8ee; border-radius: 14px; font-size: 11px; color: var(--copy-muted); background: #fafbfc; }
+.footerSafety span { flex: 1; }
+
+@media (max-width: 1100px) {
+  .hero, .grid { grid-template-columns: 1fr; }
+  .metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .blueprintGrid { grid-template-columns: 1fr; }
+  .blueprintCard p { min-height: 0; }
+}
+
+@media (max-width: 640px) {
+  .hero { padding: 18px; }
+  .title { font-size: 27px; }
+  .metrics { grid-template-columns: 1fr 1fr; }
+  .metricCard { padding: 14px; }
+  .metricValue { font-size: 22px; }
+  .panelHeader { padding: 15px; }
+  .audienceTopline { flex-direction: column; }
+  .footerSafety { align-items: flex-start; }
+}
+
+@media (max-width: 420px) {
+  .metrics { grid-template-columns: 1fr; }
+}
