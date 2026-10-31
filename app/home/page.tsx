@@ -15,6 +15,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 
+import { DecisionMetricCard } from "@/components/intelligence/decision-metric-card";
 import { isMockMode } from "@/lib/data";
 import {
   getDashboardSnapshot,
@@ -143,6 +144,11 @@ export default async function HomePage({ searchParams }: HomePageProps) {
     : primaryRevenue
       ? formatMoney(primaryRevenue.collected, primaryRevenue.currency)
       : "—";
+  const collectedTrend =
+    periodAnalytics.primaryCurrency &&
+    periodPrimaryRevenue?.currency === periodAnalytics.primaryCurrency
+      ? periodAnalytics.revenueSeries.map((point) => point.value)
+      : undefined;
 
   const attentionItems: AttentionItem[] = [
     {
@@ -173,7 +179,7 @@ export default async function HomePage({ searchParams }: HomePageProps) {
       label: "Payment pending",
       value: metrics.paymentPending,
       detail: "Opportunities currently at payment stage",
-      href: "/pipeline",
+      href: "/admissions?view=payments",
       icon: CreditCard,
       tone: "info",
     },
@@ -262,36 +268,51 @@ export default async function HomePage({ searchParams }: HomePageProps) {
       </section>
 
       <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4" aria-label="Business pulse">
-        <BusinessMetric
+        <DecisionMetricCard
           icon={<Users size={17} />}
           label="Leads"
           value={totalLeads.toLocaleString("en-IN")}
           detail={`${qualifiedLeads.toLocaleString("en-IN")} qualified in scope`}
-          change={periodAnalytics.available.leads ? periodAnalytics.leads.changePercent : null}
+          delta={periodAnalytics.available.leads ? periodAnalytics.leads.changePercent : undefined}
+          deltaDirection="neutral"
+          comparisonLabel="vs previous comparable period"
           href="/leads"
+          evidenceLabel="CRM lead evidence"
+          definition="Leads recorded in the selected reporting scope. Lead-volume movement is descriptive and is not automatically treated as positive or negative."
         />
-        <BusinessMetric
+        <DecisionMetricCard
           icon={<TrendingUp size={17} />}
           label="Qualified rate"
           value={qualifiedRate == null ? "—" : `${qualifiedRate}%`}
           detail="Lead-to-qualified quality signal"
           href="/admissions"
+          evidenceLabel="CRM stage quality"
+          definition="Share of leads in the selected scope currently recorded as qualified. This is a CRM stage ratio, not a predicted conversion probability."
         />
-        <BusinessMetric
+        <DecisionMetricCard
           icon={<UserRoundCheck size={17} />}
           label="Enrollments"
           value={enrolled.toLocaleString("en-IN")}
           detail="Recorded enrolled outcomes"
-          change={periodAnalytics.available.enrollments ? periodAnalytics.enrollments.changePercent : null}
+          delta={periodAnalytics.available.enrollments ? periodAnalytics.enrollments.changePercent : undefined}
+          deltaDirection="higher_is_better"
+          comparisonLabel="vs previous comparable period"
           href="/admissions"
+          evidenceLabel="Recorded CRM outcomes"
+          definition="Leads recorded as enrolled in the selected reporting scope. Period comparison uses the immediately preceding comparable range when available."
         />
-        <BusinessMetric
+        <DecisionMetricCard
           icon={<CircleDollarSign size={17} />}
           label="Collected"
           value={collectedValue}
           detail={periodPrimaryRevenue ? `${periodPrimaryRevenue.currency} paid evidence` : "Verified collected revenue"}
-          change={periodPrimaryRevenue?.changePercent ?? null}
+          delta={periodPrimaryRevenue ? periodPrimaryRevenue.changePercent : undefined}
+          deltaDirection="higher_is_better"
+          comparisonLabel="vs previous comparable period"
           href="/revenue"
+          evidenceLabel="Verified payment evidence"
+          definition="Net collected revenue from verified payment evidence in the displayed currency. Currencies are not combined without the explicit FX layer."
+          trend={collectedTrend}
         />
       </section>
 
@@ -349,23 +370,6 @@ export default async function HomePage({ searchParams }: HomePageProps) {
         </section>
       </section>
     </div>
-  );
-}
-
-function BusinessMetric({ icon, label, value, detail, change, href }: { icon: React.ReactNode; label: string; value: string; detail: string; change?: number | null; href: string }) {
-  return (
-    <Link href={href} className="group rounded-card border border-line bg-surface p-4 shadow-sm transition hover:border-line-strong hover:shadow-panel">
-      <div className="flex items-start justify-between gap-3">
-        <span className="grid h-9 w-9 place-items-center rounded-xl bg-brand-50 text-brand-700 dark:bg-brand-950/30 dark:text-brand-300">{icon}</span>
-        <ArrowRight size={14} className="mt-1 text-copy-subtle transition group-hover:translate-x-0.5 group-hover:text-brand-700" />
-      </div>
-      <div className="mt-4 flex items-end gap-2">
-        <div className="min-w-0 truncate text-[25px] font-semibold tracking-[-0.04em] text-copy-strong">{value}</div>
-        {change !== undefined ? <div className="mb-1"><TrendPill value={change ?? null} compact /></div> : null}
-      </div>
-      <div className="mt-1 text-sm font-semibold text-copy-strong">{label}</div>
-      <div className="mt-1 text-xs leading-5 text-copy-muted">{detail}</div>
-    </Link>
   );
 }
 
@@ -434,8 +438,8 @@ function PipelineSnapshot({ active, highIntent, payment, enrolled }: { active: n
           </div>
         ))}
       </div>
-      <Link href="/admissions" className="mt-4 inline-flex items-center gap-1 text-[11px] font-semibold text-brand-700 hover:text-brand-800 dark:text-brand-300">
-        Work admissions <ArrowRight size={12} />
+      <Link href="/admissions?view=pipeline" className="mt-4 inline-flex items-center gap-1 text-[11px] font-semibold text-brand-700 hover:text-brand-800 dark:text-brand-300">
+        Work pipeline <ArrowRight size={12} />
       </Link>
     </div>
   );
@@ -567,7 +571,7 @@ function buildChangeSignals(analytics: DashboardPeriodAnalytics, waitingOverHour
       label: "Lead momentum",
       value: leadDelta == null ? "—" : `${leadDelta > 0 ? "+" : ""}${leadDelta.toFixed(1)}%`,
       detail: leadDelta == null ? "No comparable lead baseline" : `${analytics.leads.current.toLocaleString("en-IN")} leads vs ${analytics.leads.previous.toLocaleString("en-IN")} prior`,
-      tone: leadDelta == null ? "neutral" : leadDelta >= 0 ? "positive" : "negative",
+      tone: "neutral",
     },
     {
       label: "Enrollment movement",
