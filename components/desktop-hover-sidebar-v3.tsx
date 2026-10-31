@@ -44,12 +44,13 @@ type WorkspaceContext = {
 };
 
 function activePath(pathname: string, href: string) {
-  if (href === "/home") return pathname === "/home";
-  if (href === "/dashboard") return pathname === "/dashboard";
-  if (href === "/settings") {
+  const cleanHref = href.split("?")[0];
+  if (cleanHref === "/home") return pathname === "/home";
+  if (cleanHref === "/dashboard") return pathname === "/dashboard";
+  if (cleanHref === "/settings") {
     return pathname === "/settings" || pathname.startsWith("/settings/");
   }
-  return pathname === href || pathname.startsWith(`${href}/`);
+  return pathname === cleanHref || pathname.startsWith(`${cleanHref}/`);
 }
 
 function askSalsys() {
@@ -210,7 +211,6 @@ export function DesktopHoverSidebarV3() {
         items: [
           { label: "Leads", href: "/leads" },
           { label: "Admissions", href: "/admissions" },
-          { label: "Pipeline", href: "/pipeline" },
           { label: "Inbox", href: "/conversations" },
           { label: "Tasks & Follow-ups", href: "/follow-ups" },
           { label: "Re-engaged", href: "/re-engaged" },
@@ -392,7 +392,12 @@ export function DesktopHoverSidebarV3() {
 
       {mobileOpen ? (
         <div className="fixed inset-0 z-[90] lg:hidden">
-          <button type="button" className="absolute inset-0 bg-brand-950/30 backdrop-blur-[2px]" aria-label="Close navigation" onClick={() => setMobileOpen(false)} />
+          <button
+            type="button"
+            className="absolute inset-0 bg-brand-950/30 backdrop-blur-[2px]"
+            aria-label="Close navigation"
+            onClick={() => setMobileOpen(false)}
+          />
 
           <aside className="absolute inset-y-0 left-0 flex w-[min(90vw,360px)] flex-col border-r border-line bg-surface shadow-panel">
             <div className="flex h-16 shrink-0 items-center gap-3 border-b border-line px-4">
@@ -401,7 +406,12 @@ export function DesktopHoverSidebarV3() {
                 <div className="truncate text-[14px] font-semibold text-copy-strong">SalsysOS</div>
                 <div className="truncate text-[11px] text-copy-subtle">{organizationName}</div>
               </div>
-              <button type="button" onClick={() => setMobileOpen(false)} className="grid h-9 w-9 place-items-center rounded-ui text-copy-muted transition hover:bg-surface-muted hover:text-copy-strong" aria-label="Close navigation">
+              <button
+                type="button"
+                onClick={() => setMobileOpen(false)}
+                className="grid h-9 w-9 place-items-center rounded-ui text-copy-muted transition hover:bg-surface-muted hover:text-copy-strong"
+                aria-label="Close navigation"
+              >
                 <X size={18} strokeWidth={1.8} />
               </button>
             </div>
@@ -415,7 +425,9 @@ export function DesktopHoverSidebarV3() {
                 }}
                 className="flex w-full items-center gap-3 rounded-ui border border-brand-100 bg-brand-50 px-3 py-3 text-left text-brand-700 transition hover:bg-brand-100"
               >
-                <span className="grid h-8 w-8 shrink-0 place-items-center rounded-ui bg-surface text-brand-700 shadow-sm"><Sparkles size={16} strokeWidth={1.8} /></span>
+                <span className="grid h-8 w-8 shrink-0 place-items-center rounded-ui bg-surface text-brand-700 shadow-sm">
+                  <Sparkles size={16} strokeWidth={1.8} />
+                </span>
                 <span className="min-w-0 flex-1">
                   <span className="block text-[13px] font-semibold">Ask Salsys</span>
                   <span className="block truncate text-[10px] text-copy-subtle">Find evidence, navigate or move work forward</span>
