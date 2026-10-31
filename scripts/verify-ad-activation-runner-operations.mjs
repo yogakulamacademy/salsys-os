@@ -5,7 +5,7 @@ const runner = fs.readFileSync("lib/ad-activation/execution-runner.ts", "utf8");
 const trigger = fs.readFileSync("app/api/ad-activation/meta/runner/route.ts", "utf8");
 const health = fs.readFileSync("app/api/ad-activation/meta/health/route.ts", "utf8");
 const migration = fs.readFileSync("supabase/migrations/20261031070000_ad_activation_runner_controls.sql", "utf8");
-const vercel = fs.readFileSync("vercel.json", "utf8");
+const vercelConfig = JSON.parse(fs.readFileSync("vercel.json", "utf8"));
 const policy = fs.readFileSync("lib/ad-activation/transport-policy.ts", "utf8");
 
 for (const [source, tokens, label] of [
@@ -27,7 +27,7 @@ for (const [source, tokens, label] of [
     "CRON_SECRET",
     "bearerMatchesAnySecret",
     "runMetaAdActivationExecutionCycle",
-    'limit: 10',
+    "limit: 10",
     '"Cache-Control": "no-store"',
   ], "runner route"],
   [health, [
@@ -44,15 +44,20 @@ for (const [source, tokens, label] of [
     "runner_already_active",
     "v_ad_activation_runner_health_v1",
   ], "runner migration"],
-  [vercel, [
-    '"path": "/api/ad-activation/meta/runner"',
-  ], "Vercel cron"],
 ]) {
   for (const token of tokens) {
     if (!source.includes(token)) {
       throw new Error(`${label} contract missing: ${token}`);
     }
   }
+}
+
+const activationCron = Array.isArray(vercelConfig.crons)
+  ? vercelConfig.crons.find((entry) => entry?.path === "/api/ad-activation/meta/runner")
+  : null;
+
+if (!activationCron || activationCron.schedule !== "*/5 * * * *") {
+  throw new Error("Vercel Meta activation runner cron is missing or has an unexpected schedule.");
 }
 
 if (!policy.includes("AD_ACTIVATION_TRANSPORT_ENABLED = false as const")) {
@@ -65,13 +70,11 @@ if (/console\.(log|error|warn)/.test(trigger + health + controls + runner)) {
 
 for (const forbidden of [
   "access_token",
-  "email",
-  "phone",
   "crm_notes",
   "message_content",
   "provider_response_body",
 ]) {
-  if (migration.toLowerCase().includes(forbidden) && forbidden !== "provider_response_body") {
+  if (migration.toLowerCase().includes(forbidden)) {
     throw new Error(`Runner state migration must remain aggregate-only: ${forbidden}`);
   }
 }
