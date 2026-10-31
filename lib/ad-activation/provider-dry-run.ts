@@ -6,13 +6,14 @@ import { buildMetaCustomAudienceDryRun } from "@/lib/ad-activation/providers/met
 import { buildGoogleDataManagerDryRun } from "@/lib/ad-activation/providers/google-data-manager";
 import {
   validateAdActivationDeliveryBeforeSend,
+  type AdActivationPreSendValidation,
   type ClaimedAdActivationDelivery,
 } from "@/lib/ad-activation/delivery-queue";
 
 export type AdActivationProviderDryRun =
   | { status: "skipped"; reason: string }
-  | { status: "ready"; provider: "meta"; operations: ReturnType<typeof buildMetaCustomAudienceDryRun> }
-  | { status: "ready"; provider: "google"; operation: ReturnType<typeof buildGoogleDataManagerDryRun> };
+  | { status: "ready"; provider: "meta"; connectionId: string; operations: ReturnType<typeof buildMetaCustomAudienceDryRun> }
+  | { status: "ready"; provider: "google"; connectionId: string; operation: ReturnType<typeof buildGoogleDataManagerDryRun> };
 
 /**
  * Prepare a provider-specific dry-run descriptor. This function performs no
@@ -22,6 +23,18 @@ export async function prepareAdActivationProviderDryRun(
   delivery: ClaimedAdActivationDelivery,
 ): Promise<AdActivationProviderDryRun> {
   const validation = await validateAdActivationDeliveryBeforeSend(delivery);
+  return prepareAdActivationProviderDryRunAfterValidation(delivery, validation);
+}
+
+/**
+ * Prepare a provider descriptor after the caller has already performed the
+ * leased pre-send validation. This lets the worker keep validation and payload
+ * preparation as explicit, ordered stages without validating twice.
+ */
+export async function prepareAdActivationProviderDryRunAfterValidation(
+  delivery: ClaimedAdActivationDelivery,
+  validation: AdActivationPreSendValidation,
+): Promise<AdActivationProviderDryRun> {
   if (!validation.valid) {
     return { status: "skipped", reason: validation.reason || "pre_send_validation_failed" };
   }
@@ -77,6 +90,7 @@ export async function prepareAdActivationProviderDryRun(
     return {
       status: "ready",
       provider: "meta",
+      connectionId: connection.id,
       operations: buildMetaCustomAudienceDryRun({
         audienceId: String(destination.external_audience_id),
         action: delivery.action,
@@ -97,6 +111,7 @@ export async function prepareAdActivationProviderDryRun(
     return {
       status: "ready",
       provider: "google",
+      connectionId: connection.id,
       operation: buildGoogleDataManagerDryRun({
         audienceId: String(destination.external_audience_id),
         operatingAccountId,

@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "npm run verify:durable-event-ingestion && npm run verify:sales-contracts && npm run verify:ad-activation-foundation && npm run verify:ad-activation-crm-mapping && npm run verify:ad-activation-writer && npm run verify:ad-activation-delivery-guard && npm run verify:ad-activation-delivery-finalize && npm run verify:ad-activation-provider-dryrun && npm run verify:ad-activation-provider-readiness && npm run verify:ad-activation-transport-boundary && npm run verify:ad-activation-execution-readiness && next build",
+    "build": "npm run verify:durable-event-ingestion && npm run verify:sales-contracts && npm run verify:ad-activation-foundation && npm run verify:ad-activation-crm-mapping && npm run verify:ad-activation-writer && npm run verify:ad-activation-delivery-guard && npm run verify:ad-activation-delivery-finalize && npm run verify:ad-activation-provider-dryrun && npm run verify:ad-activation-provider-readiness && npm run verify:ad-activation-transport-boundary && npm run verify:ad-activation-execution-readiness && npm run verify:ad-activation-worker-simulation && next build",
     "start": "next start",
     "typecheck": "tsc --noEmit",
     "verify:tracking-sdk": "node scripts/verify-tracking-sdk.mjs",
@@ -53,7 +53,8 @@
     "verify:ad-activation-provider-dryrun": "node scripts/verify-ad-activation-provider-dryrun.mjs",
     "verify:ad-activation-provider-readiness": "node scripts/verify-ad-activation-provider-readiness.mjs",
     "verify:ad-activation-transport-boundary": "node scripts/verify-ad-activation-transport-boundary.mjs",
-    "verify:ad-activation-execution-readiness": "node scripts/verify-ad-activation-execution-readiness.mjs"
+    "verify:ad-activation-execution-readiness": "node scripts/verify-ad-activation-execution-readiness.mjs",
+    "verify:ad-activation-worker-simulation": "node scripts/verify-ad-activation-worker-simulation.mjs"
   },
   "dependencies": {
     "@google-analytics/data": "^7.2.0",
