@@ -178,7 +178,7 @@ export function MarketingNavigation() {
         className="sticky top-20 hidden h-[calc(100vh-5.5rem)] self-start border-r border-line pr-3 lg:block"
         aria-label="Growth navigation"
       >
-        <div className="h-full overflow-y-auto overscroll-contain pb-8 pr-1 [scrollbar-width:thin]">
+        <div className="h-full overflow-y-auto overscroll-contain pb-12 pr-1 [scrollbar-color:transparent_transparent] [scrollbar-width:thin] hover:[scrollbar-color:rgba(148,163,184,0.35)_transparent] [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-transparent hover:[&::-webkit-scrollbar-thumb]:bg-slate-300/70">
           <div className="mb-7 px-3 pt-1">
             <div className="text-[18px] font-semibold tracking-[-0.025em] text-copy-strong">
               Growth
