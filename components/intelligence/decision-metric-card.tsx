@@ -14,7 +14,7 @@ type DeltaDirection = "higher_is_better" | "lower_is_better" | "neutral";
 export type DecisionMetricCardProps = {
   label: string;
   value: string;
-  detail: string;
+  detail?: string;
   icon?: ReactNode;
   href?: string;
   delta?: number | null;
@@ -113,7 +113,7 @@ export function DecisionMetricCard({
           <div className="truncate text-[25px] font-semibold tracking-[-0.04em] text-copy-strong">
             {value}
           </div>
-          <div className="mt-1 text-xs leading-5 text-copy-muted">{detail}</div>
+          {detail ? <div className="mt-1 text-xs leading-5 text-copy-muted">{detail}</div> : null}
         </div>
         {trend && trend.length > 1 ? (
           <MiniTrend points={trend} className={styles.trend} />
