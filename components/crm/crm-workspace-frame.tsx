@@ -39,6 +39,13 @@ export function CrmWorkspaceFrame({ children }: { children: ReactNode }) {
           background: var(--app-surface) !important;
         }
 
+        /* The CRM workspace sidebar should sit directly on the shared workspace
+         * canvas, exactly like Growth. Keep the AppShell rails surfaced, but let
+         * this nested sticky navigation inherit the workspace background. */
+        body:has(.crm-brand-scope) .legacy-shell-host .crm-brand-scope > aside {
+          background: transparent !important;
+        }
+
         body:has(.crm-brand-scope) .legacy-shell-host aside svg,
         body:has(.crm-brand-scope) .legacy-shell-host header svg {
           color: var(--app-text-subtle);
