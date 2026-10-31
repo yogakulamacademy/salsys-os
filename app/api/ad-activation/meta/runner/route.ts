@@ -31,7 +31,6 @@ async function handle(request: NextRequest) {
   }
 
   const summary = await runMetaAdActivationExecutionCycle({
-    limit: 10,
     leaseSeconds: 300,
     runnerLeaseSeconds: 600,
   });
