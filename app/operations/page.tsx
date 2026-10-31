@@ -10,6 +10,7 @@ import {
   Users,
 } from "lucide-react";
 
+import { DecisionMetricCard } from "@/components/intelligence/decision-metric-card";
 import { OperationsJourneyBar } from "@/components/operations/operations-journey-bar";
 import { PageHeader } from "@/components/ui";
 import { getCommerceReadinessForCurrentWorkspace } from "@/lib/commerce-readiness-data";
@@ -65,13 +66,66 @@ export default async function OperationsOverviewPage() {
         <CommercePipelineNotice commerce={commerce} />
       ) : null}
 
-      <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-6">
-        <Metric icon={<BookOpen size={17} />} label="Active programs" value={activePrograms} note={`${courses.length} total programs`} />
-        <Metric icon={<CalendarDays size={17} />} label="Upcoming batches" value={summary.upcomingBatches} note={`${activeBatches} active batches`} />
-        <Metric icon={<GraduationCap size={17} />} label="Confirmed enrolled" value={summary.totalEnrolled} note="Upcoming batches" />
-        <Metric icon={<ShieldCheck size={17} />} label="Calculated open" value={summary.totalOpenSeats} note="Capacity minus confirmed" />
-        <Metric icon={<AlertTriangle size={17} />} label="Enrollment closed" value={summary.closedEnrollment} note="Upcoming batches" alert={summary.closedEnrollment > 0} />
-        <Metric icon={<Users size={17} />} label="Demand pressure" value={summary.demandPressure} note={`${summary.needsCapacity} missing capacity`} alert={summary.demandPressure + summary.needsCapacity > 0} />
+      <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-6" aria-label="Operations pulse">
+        <DecisionMetricCard
+          icon={<BookOpen size={17} />}
+          label="Active programs"
+          value={activePrograms.toLocaleString("en-IN")}
+          detail={`${courses.length.toLocaleString("en-IN")} total programs`}
+          href="/course-management"
+          evidenceLabel="Catalog state"
+          definition="Programs currently marked active in the course catalog."
+        />
+        <DecisionMetricCard
+          icon={<CalendarDays size={17} />}
+          label="Upcoming batches"
+          value={summary.upcomingBatches.toLocaleString("en-IN")}
+          detail={`${activeBatches.toLocaleString("en-IN")} active batches`}
+          href="/course-management"
+          evidenceLabel="Batch schedule"
+          definition="Upcoming scheduled batches visible in the current operations workspace."
+        />
+        <DecisionMetricCard
+          icon={<GraduationCap size={17} />}
+          label="Confirmed enrolled"
+          value={summary.totalEnrolled.toLocaleString("en-IN")}
+          detail="Confirmed outcomes in upcoming batches"
+          href="/enrollments"
+          tone={summary.totalEnrolled > 0 ? "positive" : "neutral"}
+          evidenceLabel="Enrollment truth"
+          definition="Confirmed or completed enrollment records, with the documented legacy enrolled-stage fallback where required."
+        />
+        <DecisionMetricCard
+          icon={<ShieldCheck size={17} />}
+          label="Calculated open"
+          value={summary.totalOpenSeats.toLocaleString("en-IN")}
+          detail="Capacity minus confirmed enrollment"
+          href="/availability"
+          evidenceLabel="Capacity calculation"
+          definition="Calculated remaining seats after subtracting confirmed enrollments from recorded batch capacity."
+        />
+        <DecisionMetricCard
+          icon={<AlertTriangle size={17} />}
+          label="Enrollment closed"
+          value={summary.closedEnrollment.toLocaleString("en-IN")}
+          detail="Upcoming batches closed to enrollment"
+          href="/course-management"
+          tone={summary.closedEnrollment > 0 ? "warning" : "positive"}
+          statusLabel={summary.closedEnrollment > 0 ? "Review" : "Clear"}
+          evidenceLabel="Batch state"
+          definition="Upcoming batches whose enrollment state is currently closed."
+        />
+        <DecisionMetricCard
+          icon={<Users size={17} />}
+          label="Demand pressure"
+          value={summary.demandPressure.toLocaleString("en-IN")}
+          detail={`${summary.needsCapacity.toLocaleString("en-IN")} batches missing capacity`}
+          href="/availability"
+          tone={summary.demandPressure + summary.needsCapacity > 0 ? "warning" : "positive"}
+          statusLabel={summary.demandPressure + summary.needsCapacity > 0 ? "Attention" : "Healthy"}
+          evidenceLabel="Demand vs capacity"
+          definition="Operational warning when active prospects or payment-pending demand approaches or exceeds known open capacity."
+        />
       </section>
 
       <section className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_340px]">
@@ -165,17 +219,6 @@ function CommercePipelineNotice({
         ) : null}
       </div>
     </section>
-  );
-}
-
-function Metric({ icon, label, value, note, alert = false }: { icon: React.ReactNode; label: string; value: number; note: string; alert?: boolean }) {
-  return (
-    <div className={`rounded-2xl border bg-surface p-4 shadow-sm ${alert ? "border-amber-200" : "border-line"}`}>
-      <div className={`grid h-8 w-8 place-items-center rounded-lg ${alert ? "bg-amber-50 text-amber-700" : "bg-brand-50 text-brand-700"}`}>{icon}</div>
-      <div className="mt-3 text-2xl font-semibold tracking-[-.03em] text-copy-strong">{value.toLocaleString("en-IN")}</div>
-      <div className="mt-1 text-[11px] font-semibold text-copy-strong">{label}</div>
-      <div className="mt-0.5 text-[10px] text-copy-subtle">{note}</div>
-    </div>
   );
 }
 
