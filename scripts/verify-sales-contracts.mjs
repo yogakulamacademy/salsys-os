@@ -29,7 +29,8 @@ const instagramActions = read('app/conversations/instagram-actions.ts');
 const copilot = read('components/conversation-copilot.tsx');
 const copilotActions = read('app/conversations/copilot-actions.ts');
 const followupsData = read('lib/followups-data.ts');
-const followupsPage = read('app/follow-ups/page.tsx');
+const followupsCompatibilityPage = read('app/follow-ups/page.tsx');
+const workQueuePage = read('app/work-queue/page.tsx');
 
 for (const [needle, label] of [
   ['set_lead_stage', 'Pipeline uses canonical stage RPC'],
@@ -116,7 +117,8 @@ for (const [needle, label] of [
 }
 
 requireText(followupsData, 'taskType', 'task provenance in Follow-ups adapter');
-requireText(followupsPage, 'Payment verification', 'payment-check task labeling');
-requireText(followupsPage, 'Reschedule', 'reschedule semantics');
+requireText(followupsCompatibilityPage, "tab: 'followups'", 'legacy Follow-ups route points to canonical Work Queue');
+requireText(workQueuePage, 'payment verification', 'payment-check task labeling');
+requireText(workQueuePage, 'Reschedule', 'reschedule semantics');
 
 console.log('Sales workspace contracts verified.');
