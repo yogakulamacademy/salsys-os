@@ -15,6 +15,9 @@ for (const token of [
   "customerMatchTermsAccepted",
   "google_operating_account_missing",
   "removeSpecificReady",
+  "scopes",
+  "ads_management",
+  "meta_ads_management_scope_missing",
   "dryRunOnly: true",
   "transportEnabled: false",
 ]) {
