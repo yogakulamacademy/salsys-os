@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ArrowRight, CircleDollarSign, GitBranch, Megaphone, Sparkles, Target } from "lucide-react";
+import { Activity, ArrowRight, Megaphone } from "lucide-react";
 
 import { AttributionIntelligenceExplorer } from "@/components/attribution-intelligence-explorer";
 import type { AttributionWorkspaceFilters } from "@/components/attribution-workspace";
@@ -34,25 +34,16 @@ export default async function AttributionPage({ searchParams }: AttributionPageP
   return (
     <div className="space-y-4">
       <PageHeader
-        eyebrow="Intelligence · Attribution"
-        title="Attribution"
-        description="Understand who gets credit, how much evidence supports it, and where missing attribution could change the decision."
+        eyebrow="SalsysOS / Growth Operations"
+        title="Attribution Intelligence"
+        description="Understand who gets credit, how strong the evidence is, and where missing attribution could change the next marketing decision."
         actions={
           <div className="flex flex-wrap gap-2">
-            <Link href="/campaigns" className="btn-secondary">
-              <Target size={15} /> Campaigns
+            <Link href="/marketing" className="btn-secondary">
+              <Activity size={15} /> Growth overview
             </Link>
-            <Link href="/paid-media-leads" className="btn-secondary">
-              <Megaphone size={15} /> Acquisition
-            </Link>
-            <Link href="/funnel" className="btn-secondary">
-              <GitBranch size={15} /> Funnel
-            </Link>
-            <Link href="/commercial-intelligence" className="btn-secondary">
-              <Sparkles size={15} /> Ask Salsys
-            </Link>
-            <Link href="/revenue" className="btn-primary">
-              <CircleDollarSign size={15} /> Revenue
+            <Link href="/paid-media-leads" className="btn-primary">
+              <Megaphone size={15} /> Acquisition leads
             </Link>
           </div>
         }
