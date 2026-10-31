@@ -1,0 +1,68 @@
+/* Lead detail overflow hotfix — match the real V3 + legacy AppShell DOM. */
+
+html,
+body,
+.salsys-meta-sidebar-shell,
+.salsys-meta-sidebar-shell .legacy-shell-host,
+.salsys-meta-sidebar-shell .legacy-shell-host > div,
+.salsys-meta-sidebar-shell .legacy-shell-host > div > div.min-h-screen {
+  min-width: 0;
+  max-width: 100%;
+}
+
+/* The V3 rail leaves a 64px desktop gutter by padding the legacy AppShell.
+   Keep that host inside the viewport instead of allowing min-content to widen it. */
+.salsys-meta-sidebar-shell .legacy-shell-host,
+.salsys-meta-sidebar-shell .legacy-shell-host > div,
+.salsys-meta-sidebar-shell .legacy-shell-host > div > div.min-h-screen {
+  width: 100%;
+  box-sizing: border-box;
+}
+
+/* Real AppShell main + page-transition container. */
+.salsys-meta-sidebar-shell .legacy-shell-host > div > div.min-h-screen > main,
+.salsys-meta-sidebar-shell .legacy-shell-host > div > div.min-h-screen > main > .page-transition {
+  min-width: 0 !important;
+  width: 100% !important;
+  max-width: 100% !important;
+  box-sizing: border-box;
+}
+
+/* Never let a nested grid/flex child establish a wider min-content width. */
+.salsys-meta-sidebar-shell .legacy-shell-host main .grid,
+.salsys-meta-sidebar-shell .legacy-shell-host main .flex,
+.salsys-meta-sidebar-shell .legacy-shell-host main .grid > *,
+.salsys-meta-sidebar-shell .legacy-shell-host main .flex > * {
+  min-width: 0;
+}
+
+/* Lead detail cards can contain long tracking URLs, IDs and attribution values. */
+.salsys-meta-sidebar-shell .legacy-shell-host main .card-pad,
+.salsys-meta-sidebar-shell .legacy-shell-host main .card-pad > * {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.salsys-meta-sidebar-shell .legacy-shell-host main .card-pad p,
+.salsys-meta-sidebar-shell .legacy-shell-host main .card-pad dd,
+.salsys-meta-sidebar-shell .legacy-shell-host main .card-pad a,
+.salsys-meta-sidebar-shell .legacy-shell-host main .card-pad [class*="font-"] {
+  min-width: 0;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+/* The Lead detail page uses a 1fr + 360px layout. Force the flexible track to
+   be shrinkable even when descendants contain long URLs. */
+@media (min-width: 1280px) {
+  .salsys-meta-sidebar-shell .legacy-shell-host main .xl\:grid-cols-\[1fr_360px\] {
+    grid-template-columns: minmax(0, 1fr) 360px !important;
+  }
+}
+
+/* Final containment: accidental descendants may scroll internally, but must
+   never increase the application viewport width. */
+.salsys-meta-sidebar-shell .legacy-shell-host > div > div.min-h-screen > main {
+  overflow-x: hidden;
+}

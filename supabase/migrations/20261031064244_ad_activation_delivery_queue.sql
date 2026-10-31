@@ -1,0 +1,60 @@
+begin;
+
+create table public.ad_activation_outbox (
+  id uuid primary key default gen_random_uuid(),
+  organization_id uuid not null references public.organizations(id) on delete cascade,
+  destination_id uuid not null references public.ad_audience_destinations(id) on delete cascade,
+  audience_id uuid not null references public.ad_audience_definitions(id) on delete cascade,
+  person_id uuid not null references public.persons(id) on delete cascade,
+  lead_id uuid references public.leads(id) on delete set null,
+  membership_id uuid references public.ad_audience_memberships(id) on delete set null,
+  action text not null,
+  dedupe_key text not null,
+  status text not null default 'queued',
+  safe_metadata jsonb not null default '{}'::jsonb,
+  attempt_count integer not null default 0,
+  max_attempts integer not null default 8,
+  next_attempt_at timestamptz not null default now(),
+  lease_token uuid,
+  lease_expires_at timestamptz,
+  delivered_at timestamptz,
+  skipped_at timestamptz,
+  failed_at timestamptz,
+  last_error_code text,
+  last_error_message text,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  constraint ad_activation_outbox_action_check check (action in ('add','remove')),
+  constraint ad_activation_outbox_status_check check (status in ('queued','processing','retry','delivered','skipped','failed')),
+  constraint ad_activation_outbox_dedupe_nonempty check (nullif(btrim(dedupe_key), '') is not null),
+  constraint ad_activation_outbox_safe_metadata_object check (jsonb_typeof(safe_metadata) = 'object'),
+  constraint ad_activation_outbox_attempts_check check (attempt_count >= 0 and max_attempts between 1 and 25),
+  constraint ad_activation_outbox_org_dedupe_unique unique (organization_id, dedupe_key)
+);
+
+create table public.ad_activation_attempts (
+  id uuid primary key default gen_random_uuid(),
+  organization_id uuid not null references public.organizations(id) on delete cascade,
+  outbox_id uuid not null references public.ad_activation_outbox(id) on delete cascade,
+  attempt_number integer not null,
+  outcome text not null,
+  attempted_at timestamptz not null default now(),
+  completed_at timestamptz not null default now(),
+  duration_ms integer,
+  http_status integer,
+  provider_request_id text,
+  provider_response_code text,
+  error_code text,
+  error_message text,
+  request_metadata jsonb not null default '{}'::jsonb,
+  response_metadata jsonb not null default '{}'::jsonb,
+  created_at timestamptz not null default now(),
+  constraint ad_activation_attempts_number_check check (attempt_number > 0),
+  constraint ad_activation_attempts_outcome_check check (outcome in ('delivered','retry','skipped','failed')),
+  constraint ad_activation_attempts_duration_check check (duration_ms is null or duration_ms >= 0),
+  constraint ad_activation_attempts_request_metadata_object check (jsonb_typeof(request_metadata) = 'object'),
+  constraint ad_activation_attempts_response_metadata_object check (jsonb_typeof(response_metadata) = 'object'),
+  constraint ad_activation_attempts_outbox_number_unique unique (outbox_id, attempt_number)
+);
+
+commit;

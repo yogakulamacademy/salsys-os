@@ -1,111 +1,267 @@
-import Link from 'next/link';
-import { ArrowRight, ContactRound, Search, ShieldCheck, UsersRound } from 'lucide-react';
+import Link from "next/link";
+import {
+  ArrowRight,
+  ContactRound,
+  Search,
+  ShieldCheck,
+  UserRoundCheck,
+  UsersRound,
+} from "lucide-react";
 
-import styles from '@/components/crm/crm-studio.module.css';
-import { getLeads } from '@/lib/data';
+import { PageHeader } from "@/components/ui";
+import { getLeads } from "@/lib/data";
+import { createClient } from "@/lib/supabase/server";
+import { requireCurrentOrganizationId } from "@/lib/workspace";
 
-function prettyStage(value: string) {
-  return value
-    .split('_')
-    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
-    .join(' ');
-}
+type PersonLinkRow = {
+  person_id: string;
+  lead_id: string;
+  resolution_method: string | null;
+  confidence: number | string | null;
+};
+
+type PersonRow = {
+  id: string;
+  status: string | null;
+  created_at: string | null;
+};
+
+type IdentifierRow = {
+  person_id: string;
+  identifier_type: string;
+  verified: boolean;
+};
 
 export default async function Customer360Page() {
   const leads = await getLeads();
-  const withContact = leads.filter((lead) => lead.email || lead.phone).length;
-  const assigned = leads.filter((lead) => lead.owner && lead.owner !== 'Unassigned').length;
-  const withCourse = leads.filter((lead) => lead.course && lead.course !== 'Not selected').length;
-  const active = leads.filter((lead) => !['enrolled', 'lost', 'unqualified', 'duplicate'].includes(lead.stage)).length;
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) return null;
+
+  const organizationId = await requireCurrentOrganizationId(supabase, user.id);
+  const accessibleLeadIds = new Set(leads.map((lead) => lead.id));
+  const warnings: string[] = [];
+
+  // Keep the Customer index on lightweight canonical tables. Rich Person 360
+  // views are reserved for one-customer detail reads so a large tenant cannot
+  // time out the entire customer list.
+  const [linksResult, personsResult, identifiersResult] = await Promise.all([
+    supabase
+      .from("person_leads")
+      .select("person_id,lead_id,resolution_method,confidence")
+      .eq("organization_id", organizationId),
+    supabase
+      .from("persons")
+      .select("id,status,created_at")
+      .eq("organization_id", organizationId),
+    supabase
+      .from("person_identifiers")
+      .select("person_id,identifier_type,verified")
+      .eq("organization_id", organizationId)
+      .eq("verified", true),
+  ]);
+
+  if (linksResult.error) warnings.push("Customer identity links are temporarily unavailable.");
+  if (personsResult.error) warnings.push("Customer profile status is temporarily unavailable.");
+  if (identifiersResult.error) warnings.push("Verified identity evidence is temporarily unavailable.");
+
+  const links = (((linksResult.error ? [] : linksResult.data) ?? []) as PersonLinkRow[]).filter((row) =>
+    accessibleLeadIds.has(row.lead_id),
+  );
+  const accessiblePersonIds = new Set(links.map((row) => row.person_id).filter(Boolean));
+
+  // If the lightweight persons read degrades, keep the page usable by deriving
+  // minimal Contact shells from the already-authorized identity links.
+  const persons = personsResult.error
+    ? [...accessiblePersonIds].map((id) => ({ id, status: null, created_at: null } as PersonRow))
+    : ((personsResult.data ?? []) as PersonRow[]).filter((row) => accessiblePersonIds.has(row.id));
+
+  const verifiedIdentifiers = identifiersResult.error
+    ? []
+    : ((identifiersResult.data ?? []) as IdentifierRow[]).filter((row) =>
+        accessiblePersonIds.has(row.person_id),
+      );
+
+  const leadById = new Map(leads.map((lead) => [lead.id, lead]));
+  const linksByPerson = new Map<string, PersonLinkRow[]>();
+  const identifiersByPerson = new Map<string, IdentifierRow[]>();
+
+  for (const link of links) {
+    const current = linksByPerson.get(link.person_id) ?? [];
+    current.push(link);
+    linksByPerson.set(link.person_id, current);
+  }
+
+  for (const identifier of verifiedIdentifiers) {
+    const current = identifiersByPerson.get(identifier.person_id) ?? [];
+    current.push(identifier);
+    identifiersByPerson.set(identifier.person_id, current);
+  }
+
+  const customers = persons
+    .map((person) => {
+      const linked = linksByPerson.get(person.id) ?? [];
+      const accessibleLeads = linked
+        .map((link) => leadById.get(link.lead_id))
+        .filter((lead): lead is NonNullable<typeof lead> => Boolean(lead));
+
+      const openLead = accessibleLeads.find(
+        (lead) => !["enrolled", "closed_won", "lost", "unqualified", "duplicate"].includes(lead.stage),
+      );
+      const latestLead = openLead ?? accessibleLeads[0] ?? null;
+      const firstOpportunityAt = accessibleLeads
+        .map((lead) => lead.createdAt)
+        .filter(Boolean)
+        .sort()[0] ?? person.created_at;
+
+      return {
+        person,
+        accessibleLeads,
+        latestLead,
+        firstOpportunityAt,
+        verifiedIdentifiers: identifiersByPerson.get(person.id) ?? [],
+      };
+    })
+    .filter((row) => row.accessibleLeads.length > 0)
+    .sort((a, b) => {
+      const aTime = new Date(a.latestLead?.createdAt ?? a.person.created_at ?? 0).getTime();
+      const bTime = new Date(b.latestLead?.createdAt ?? b.person.created_at ?? 0).getTime();
+      return bTime - aTime;
+    });
+
+  const linkedLeadIds = new Set(links.map((row) => row.lead_id));
+  const unlinkedLeads = leads.filter((lead) => !linkedLeadIds.has(lead.id));
+  const multiOpportunity = customers.filter((row) => row.accessibleLeads.length > 1).length;
+  const activeOpportunities = leads.filter(
+    (lead) => !["enrolled", "closed_won", "lost", "unqualified", "duplicate"].includes(lead.stage),
+  ).length;
+  const verifiedIdentity = customers.filter((row) => row.verifiedIdentifiers.length > 0).length;
 
   return (
-    <div>
-      <header className={styles.pageHeader}>
-        <div>
-          <div className={styles.pageKicker}>SalsysOS / CRM Operations</div>
-          <h1>Customer 360</h1>
-          <p>
-            Open a customer record for one evidence-backed view of identity, sales context, journey,
-            conversations, follow-ups and payment evidence where available.
-          </p>
-        </div>
-        <div className={styles.pageActions}>
-          <Link href="/leads" className={styles.button}>
-            <Search size={14} /> Find a lead
-          </Link>
-          <Link href="/data-quality" className={styles.buttonPrimary}>
-            Data quality <ArrowRight size={13} />
-          </Link>
-        </div>
-      </header>
+    <div className="space-y-5">
+      <PageHeader
+        eyebrow="Sales · Customers"
+        title="Customer 360"
+        description="One relationship record per Contact, with linked Opportunities kept separate for stage, intent, ownership and commercial action."
+        actions={
+          <div className="flex items-center gap-2">
+            <Link href="/leads" className="btn-secondary">
+              <Search size={14} /> Find opportunity
+            </Link>
+            <Link href="/data-quality" className="btn-primary">
+              Data quality <ArrowRight size={13} />
+            </Link>
+          </div>
+        }
+      />
 
-      <section className={styles.metricGrid}>
-        <Metric label="Accessible customers" value={leads.length} note="Current tenant-scoped lead records" />
-        <Metric label="Active opportunities" value={active} note="Open CRM stages" />
-        <Metric label="Contact coverage" value={withContact} note="Phone or email available" />
-        <Metric label="Assigned ownership" value={assigned} note="Lead owner recorded" />
+      {warnings.length ? (
+        <section className="rounded-panel border border-amber-200 bg-amber-50/70 px-4 py-3 text-amber-900">
+          <div className="text-xs font-semibold">Customer 360 is partially degraded</div>
+          <div className="mt-1 text-[11px] text-amber-700">{warnings.join(" ")} Core Sales records remain available.</div>
+        </section>
+      ) : null}
+
+      <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        <Metric icon={<UsersRound size={17} />} label="Contacts" value={customers.length} note="Canonical Person records visible here" />
+        <Metric icon={<ContactRound size={17} />} label="Active opportunities" value={activeOpportunities} note="Open sales opportunities across contacts" />
+        <Metric icon={<UserRoundCheck size={17} />} label="Multi-opportunity" value={multiOpportunity} note="Contacts with more than one accessible opportunity" />
+        <Metric icon={<ShieldCheck size={17} />} label="Verified identity" value={verifiedIdentity} note="Contacts with verified identifiers" />
       </section>
 
-      <section className={styles.panel}>
-        <div className={styles.panelHead}>
+      <section className="overflow-hidden rounded-panel border border-line bg-surface shadow-xs">
+        <div className="flex flex-col gap-3 border-b border-line px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <div className={styles.pageKicker}>Customer records</div>
-            <h2>Open an evidence-backed profile</h2>
-            <p>Each record opens the canonical lead detail and Person 360 evidence already available in SalsysOS.</p>
+            <div className="eyebrow">Relationship records</div>
+            <h2 className="section-title mt-1">Contacts and their opportunities</h2>
+            <p className="mt-1 text-xs text-copy-subtle">
+              Customer identity is grouped by Person. Opportunity stage and commercial context remain on each Lead.
+            </p>
           </div>
-          <span className={styles.pill}>{withCourse} with course context</span>
+          <span className="rounded-full bg-brand-50 px-2.5 py-1 text-[10px] font-semibold text-brand-700">
+            {customers.length.toLocaleString("en-IN")} contacts
+          </span>
         </div>
 
-        <div className={styles.tableViewport}>
-          <table className={styles.dataTable}>
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-[900px] border-collapse">
             <thead>
-              <tr>
-                <th>Customer</th>
-                <th>Stage</th>
-                <th>Course</th>
-                <th>Owner</th>
-                <th>Contact evidence</th>
-                <th>Open</th>
+              <tr className="border-b border-line bg-surface-soft text-left">
+                <Header>Contact</Header>
+                <Header>Opportunities</Header>
+                <Header>Current context</Header>
+                <Header>Relationship</Header>
+                <Header>Identity evidence</Header>
+                <th className="w-28 px-4 py-3" />
               </tr>
             </thead>
             <tbody>
-              {leads.length ? (
-                leads.slice(0, 100).map((lead) => (
-                  <tr key={lead.id}>
-                    <td>
-                      <div className={styles.leadName}>{lead.name}</div>
-                      <div className={styles.micro}>{lead.leadCode} · {lead.country || 'Location unknown'}</div>
-                    </td>
-                    <td><span className={styles.pill}>{prettyStage(lead.stage)}</span></td>
-                    <td>
-                      <div className={styles.leadName}>{lead.course || 'Not selected'}</div>
-                      <div className={styles.micro}>{lead.location || 'Location not recorded'}</div>
-                    </td>
-                    <td>{lead.owner || 'Unassigned'}</td>
-                    <td>
-                      {lead.email || lead.phone ? (
-                        <span className={styles.pill}><ShieldCheck size={11} /> Available</span>
-                      ) : (
-                        <span className={styles.pillGray}>Unavailable</span>
-                      )}
-                    </td>
-                    <td>
-                      <Link href={`/leads/${lead.id}`} className={styles.button}>
-                        Open <ArrowRight size={12} />
-                      </Link>
-                    </td>
-                  </tr>
-                ))
+              {customers.length ? (
+                customers.map(({ person, accessibleLeads, latestLead, firstOpportunityAt, verifiedIdentifiers }) => {
+                  const displayName = latestLead?.name || "Customer";
+                  const identifierTypes = [...new Set(verifiedIdentifiers.map((row) => pretty(row.identifier_type)))];
+
+                  return (
+                    <tr key={person.id} className="border-b border-line last:border-b-0 hover:bg-surface-soft/70">
+                      <td className="px-4 py-3.5">
+                        <div className="flex items-center gap-3">
+                          <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-brand-50 text-[10px] font-bold text-brand-700">
+                            {initials(displayName)}
+                          </span>
+                          <div className="min-w-0">
+                            <div className="max-w-[220px] truncate text-[12px] font-semibold text-copy-strong">{displayName}</div>
+                            <div className="mt-0.5 text-[10px] text-copy-subtle">Contact status · {pretty(person.status || "available")}</div>
+                          </div>
+                        </div>
+                      </td>
+                      <td className="px-4 py-3.5">
+                        <div className="text-[12px] font-semibold text-copy-strong">{accessibleLeads.length}</div>
+                        <div className="mt-0.5 text-[10px] text-copy-subtle">{accessibleLeads.length === 1 ? "accessible opportunity" : "accessible opportunities"}</div>
+                      </td>
+                      <td className="px-4 py-3.5">
+                        <div className="text-[11px] font-medium text-copy">{latestLead?.course || "No course selected"}</div>
+                        <div className="mt-1 flex flex-wrap gap-1.5">
+                          {latestLead ? <Pill>{pretty(latestLead.stage)}</Pill> : null}
+                          {latestLead?.intent ? <Pill>{pretty(latestLead.intent)} intent</Pill> : null}
+                        </div>
+                      </td>
+                      <td className="px-4 py-3.5 text-[11px] text-copy-muted">
+                        <div>Since {formatDate(firstOpportunityAt)}</div>
+                        <div className="mt-0.5 text-copy-subtle">Owner · {latestLead?.owner || "Unassigned"}</div>
+                      </td>
+                      <td className="px-4 py-3.5 text-[11px] text-copy-muted">
+                        {verifiedIdentifiers.length ? (
+                          <>
+                            <div>{verifiedIdentifiers.length} verified identifier{verifiedIdentifiers.length === 1 ? "" : "s"}</div>
+                            <div className="mt-0.5 text-copy-subtle">{identifierTypes.slice(0, 2).join(" · ") || "Verified identity"}</div>
+                          </>
+                        ) : (
+                          <>
+                            <div>No verified identifier</div>
+                            <div className="mt-0.5 text-copy-subtle">Identity remains evidence-limited</div>
+                          </>
+                        )}
+                      </td>
+                      <td className="px-4 py-3.5 text-right">
+                        <Link
+                          href={`/customer-360/${person.id}${latestLead ? `?opportunity=${latestLead.id}` : ""}`}
+                          className="inline-flex h-8 items-center gap-1.5 rounded-ui border border-line bg-surface px-2.5 text-[11px] font-semibold text-brand-700 transition hover:border-line-strong hover:bg-brand-50"
+                        >
+                          Open <ArrowRight size={12} />
+                        </Link>
+                      </td>
+                    </tr>
+                  );
+                })
               ) : (
                 <tr>
-                  <td colSpan={6}>
-                    <div className={styles.emptyNote}>
-                      <UsersRound size={18} />
-                      <div>
-                        <strong>No customer records are available in this workspace</strong>
-                        Create or import a lead before using Customer 360.
-                      </div>
-                    </div>
+                  <td colSpan={6} className="px-6 py-12 text-center">
+                    <UsersRound size={20} className="mx-auto text-copy-subtle" />
+                    <div className="mt-2 text-sm font-semibold text-copy-strong">No canonical customer records are available</div>
+                    <div className="mt-1 text-xs text-copy-subtle">Use Leads while identity resolution data is unavailable or no Person links exist yet.</div>
                   </td>
                 </tr>
               )}
@@ -114,68 +270,48 @@ export default async function Customer360Page() {
         </div>
       </section>
 
-      <div className={styles.splitGrid}>
-        <section className={styles.panel}>
-          <div className={styles.panelHead}>
-            <div>
-              <div className={styles.pageKicker}>Identity</div>
-              <h2>Evidence before assumptions</h2>
-              <p>Names and channels never establish identity by themselves.</p>
-            </div>
-            <ContactRound size={17} />
-          </div>
-          <div className={styles.panelBody}>
-            <div className={styles.emptyNote}>
-              <ShieldCheck size={18} />
-              <div>
-                <strong>Canonical customer detail remains the source of truth</strong>
-                Identity, journey and contact evidence are loaded per customer record with the existing tenant and field-level access controls.
-              </div>
-            </div>
-          </div>
+      {unlinkedLeads.length ? (
+        <section className="rounded-panel border border-amber-200 bg-amber-50/70 p-4 text-amber-900">
+          <div className="text-xs font-semibold">{unlinkedLeads.length} accessible opportunity{unlinkedLeads.length === 1 ? " is" : " are"} not linked to a canonical Contact yet.</div>
+          <div className="mt-1 text-[11px] text-amber-700">They remain available in Leads; Customer 360 will not guess identity from names alone.</div>
         </section>
+      ) : null}
+    </div>
+  );
+}
 
-        <section className={styles.panel}>
-          <div className={styles.panelHead}>
-            <div>
-              <div className={styles.pageKicker}>Profile completeness</div>
-              <h2>Coverage in the current workspace</h2>
-              <p>Missing values remain visible rather than being silently inferred.</p>
-            </div>
-          </div>
-          <div className={styles.panelBody}>
-            <div className={styles.evidenceList}>
-              <Evidence label="Contact evidence" value={`${withContact} / ${leads.length}`} />
-              <Evidence label="Assigned owner" value={`${assigned} / ${leads.length}`} />
-              <Evidence label="Course context" value={`${withCourse} / ${leads.length}`} />
-              <Evidence label="Repair missing fields" value="Open Data Quality" href="/data-quality" />
-            </div>
-          </div>
-        </section>
+function Metric({ icon, label, value, note }: { icon: React.ReactNode; label: string; value: number; note: string }) {
+  return (
+    <div className="rounded-panel border border-line bg-surface p-4 shadow-xs">
+      <div className="flex items-center justify-between gap-3">
+        <span className="grid h-9 w-9 place-items-center rounded-ui bg-brand-50 text-brand-700">{icon}</span>
+        <span className="text-2xl font-semibold tracking-tight text-copy-strong">{value.toLocaleString("en-IN")}</span>
       </div>
+      <div className="mt-3 text-[11px] font-semibold text-copy-strong">{label}</div>
+      <div className="mt-1 text-[10px] leading-4 text-copy-subtle">{note}</div>
     </div>
   );
 }
 
-function Metric({ label, value, note }: { label: string; value: number; note: string }) {
-  return (
-    <div className={styles.metricCard}>
-      <small>{label}</small>
-      <div className={styles.metricValue}>{value.toLocaleString('en-IN')}</div>
-      <p>{note}</p>
-    </div>
-  );
+function Header({ children }: { children: React.ReactNode }) {
+  return <th className="px-4 py-3 text-[10px] font-medium text-copy-subtle">{children}</th>;
 }
 
-function Evidence({ label, value, href }: { label: string; value: string; href?: string }) {
-  return (
-    <div className={styles.evidenceRow}>
-      <span>{label}</span>
-      {href ? (
-        <Link href={href} className={styles.pill}>{value}</Link>
-      ) : (
-        <span className={styles.pill}>{value}</span>
-      )}
-    </div>
-  );
+function Pill({ children }: { children: React.ReactNode }) {
+  return <span className="rounded-full bg-brand-50 px-2 py-1 text-[9px] font-semibold text-brand-700">{children}</span>;
+}
+
+function initials(value: string) {
+  return value.split(/\s+/).filter(Boolean).map((part) => part[0]).slice(0, 2).join("").toUpperCase() || "C";
+}
+
+function pretty(value: string) {
+  return value.replace(/[_-]+/g, " ").replace(/\b\w/g, (character) => character.toUpperCase());
+}
+
+function formatDate(value: string | null | undefined) {
+  if (!value) return "—";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "—";
+  return new Intl.DateTimeFormat("en-IN", { day: "numeric", month: "short", year: "numeric" }).format(date);
 }

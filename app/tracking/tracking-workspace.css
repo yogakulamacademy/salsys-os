@@ -1,0 +1,119 @@
+.tracking-workspace {
+  min-width: 0;
+}
+
+.tracking-workspace .tracking-polish {
+  min-width: 0;
+}
+
+.tracking-workspace .tracking-status-card,
+.tracking-workspace .tracking-journey-card,
+.tracking-workspace .tracking-install-card,
+.tracking-workspace .tracking-capture-card,
+.tracking-workspace .tracking-server-card {
+  border-color: var(--line) !important;
+  background: var(--surface) !important;
+  box-shadow: var(--shadow-xs) !important;
+}
+
+.tracking-workspace .tracking-status-card {
+  border-color: color-mix(in srgb, var(--brand-700) 18%, var(--line)) !important;
+  background: color-mix(in srgb, var(--brand-50) 52%, var(--surface)) !important;
+}
+
+.tracking-workspace .tracking-stat-grid > * {
+  border-color: var(--line) !important;
+  background: var(--surface) !important;
+  box-shadow: var(--shadow-xs) !important;
+}
+
+.tracking-workspace .tracking-stat-grid > *:hover {
+  transform: none !important;
+  border-color: color-mix(in srgb, var(--brand-700) 18%, var(--line)) !important;
+  box-shadow: var(--shadow-sm) !important;
+}
+
+.tracking-workspace .tracking-journey-card {
+  border-color: color-mix(in srgb, var(--brand-700) 14%, var(--line)) !important;
+}
+
+.tracking-workspace .tracking-completion-card,
+.tracking-workspace .tracking-capture-item,
+.tracking-workspace .tracking-handoff-card,
+.tracking-workspace .tracking-install-card [class*='rounded-xl'][class*='border'] {
+  border-color: var(--line) !important;
+  background: var(--surface-muted) !important;
+}
+
+.tracking-workspace .tracking-capture-item:hover {
+  border-color: color-mix(in srgb, var(--brand-700) 22%, var(--line)) !important;
+  background: color-mix(in srgb, var(--brand-50) 42%, var(--surface)) !important;
+}
+
+.tracking-workspace .tracking-server-card [class*='bg-emerald-50'],
+.tracking-workspace .tracking-server-note {
+  background: color-mix(in srgb, var(--brand-50) 72%, var(--surface)) !important;
+  color: var(--brand-700) !important;
+}
+
+.tracking-workspace .tracking-server-card a[class*='bg-emerald-700'] {
+  background: var(--brand-700) !important;
+  color: #fff !important;
+}
+
+.tracking-workspace .tracking-server-card a[class*='bg-emerald-700']:hover {
+  background: var(--brand-900) !important;
+}
+
+.tracking-workspace .tracking-polish > div[class*='grid'][class*='xl:grid-cols'] {
+  align-items: start;
+}
+
+.tracking-workspace .tracking-install-card,
+.tracking-workspace .tracking-server-card,
+.tracking-workspace .tracking-capture-card {
+  position: relative;
+}
+
+.tracking-workspace .tracking-install-card::before,
+.tracking-workspace .tracking-server-card::before,
+.tracking-workspace .tracking-capture-card::before {
+  content: '';
+  position: absolute;
+  inset: 0 0 auto;
+  height: 2px;
+  background: linear-gradient(90deg, color-mix(in srgb, var(--brand-700) 56%, transparent), transparent 72%);
+  pointer-events: none;
+}
+
+.tracking-workspace .text-slate-900,
+.tracking-workspace .text-slate-800,
+.tracking-workspace .text-slate-700 {
+  color: var(--copy-strong) !important;
+}
+
+.tracking-workspace .text-slate-500,
+.tracking-workspace .text-slate-400 {
+  color: var(--copy-muted) !important;
+}
+
+.tracking-workspace .border-slate-200,
+.tracking-workspace .border-slate-100 {
+  border-color: var(--line) !important;
+}
+
+@media (max-width: 767px) {
+  .tracking-workspace .tracking-status-card {
+    padding: 1rem !important;
+  }
+
+  .tracking-workspace .tracking-stat-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 480px) {
+  .tracking-workspace .tracking-stat-grid {
+    grid-template-columns: 1fr;
+  }
+}

@@ -1,0 +1,63 @@
+.crm-command-center-polish [class*="buttonPrimary"] {
+  box-shadow: 0 4px 12px rgba(var(--app-brand-rgb), 0.14);
+}
+
+.crm-command-center-polish [class*="buttonPrimary"]:hover {
+  box-shadow: 0 6px 16px rgba(var(--app-brand-rgb), 0.18);
+}
+
+.crm-command-center-polish [class*="commandHero"] {
+  color: #f3f1ff;
+  background: linear-gradient(135deg, var(--app-brand-900), var(--app-brand-800));
+}
+
+.crm-command-center-polish [class*="commandHero"]::after {
+  background: radial-gradient(circle, rgba(var(--app-accent-rgb), 0.2), transparent 60%);
+}
+
+.crm-command-center-polish [class*="commandHero"] [class*="kicker"] {
+  color: #d8d0ff;
+}
+
+.crm-command-center-polish [class*="commandHero"] h2 {
+  color: #fbfaff;
+}
+
+.crm-command-center-polish [class*="commandHero"] p,
+.crm-command-center-polish [class*="heroNode"] small {
+  color: #d8d4eb;
+}
+
+.crm-command-center-polish [class*="commandHero"] [class*="buttonPrimary"] {
+  border-color: #ede9ff;
+  color: var(--app-brand-900);
+  background: #ede9ff;
+  box-shadow: none;
+}
+
+.crm-command-center-polish [class*="commandHero"] [class*="buttonPrimary"]:hover {
+  border-color: #e2dcff;
+  background: #e2dcff;
+  box-shadow: none;
+}
+
+.crm-command-center-polish [class*="heroNode"] {
+  border-color: rgba(226, 220, 255, 0.2);
+}
+
+.crm-command-center-polish [class*="heroNode"] b {
+  color: #faf9ff;
+}
+
+.crm-command-center-polish [class*="heroDot"] {
+  color: #f1edff;
+  background: rgba(var(--app-accent-rgb), 0.38);
+}
+
+.crm-command-center-polish [class*="heroConnector"] {
+  background: rgba(216, 208, 255, 0.42);
+}
+
+.dark .crm-command-center-polish [class*="commandHero"] {
+  background: linear-gradient(135deg, #2f255f, #3d3090);
+}

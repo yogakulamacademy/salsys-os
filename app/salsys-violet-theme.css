@@ -1,0 +1,262 @@
+/*
+ * SalsysOS — Phase 6A Violet Theme Foundation
+ *
+ * Loaded after the existing visual layers so the redesign can migrate
+ * incrementally without changing CRM behavior, routes, permissions, or data.
+ * Hostinger is visual inspiration only; SalsysOS keeps its own product system.
+ */
+
+:root {
+  /* Core brand */
+  --app-brand-rgb: 87 67 197;
+  --app-accent-rgb: 131 84 213;
+  --app-brand-950: #211b3a;
+  --app-brand-900: #2f255f;
+  --app-brand-800: #3d3090;
+  --app-brand-700: #5743c5;
+  --app-brand-600: #6a56d2;
+  --app-brand-100: #e4def8;
+  --app-brand-50: #f3f0fb;
+
+  /* Neutral surfaces */
+  --app-bg: #f8f7fc;
+  --app-surface: #ffffff;
+  --app-surface-soft: #fbfafd;
+  --app-surface-muted: #f3f0fb;
+  --app-border: #e6e3ef;
+  --app-border-strong: #d8d4e3;
+
+  /* Text */
+  --app-text: #3d3854;
+  --app-text-strong: #24213c;
+  --app-text-muted: #67627a;
+  --app-text-subtle: #9691a6;
+
+  /* Accent and semantic feedback */
+  --app-accent: #8354d5;
+  --app-accent-soft: #f1ecfb;
+  --app-success: #168060;
+  --app-success-soft: #edf8f4;
+  --app-warning: #bc7518;
+  --app-warning-soft: #fff7e8;
+  --app-danger: #c34c52;
+  --app-danger-soft: #fff1f2;
+  --app-info: #3476c9;
+  --app-info-soft: #eef5fc;
+  --app-ai: #8354d5;
+  --app-ai-soft: #f1ecfb;
+  --app-teal: #128c91;
+
+  /* Layout and geometry */
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 10px;
+  --radius-xl: 12px;
+  --radius-2xl: 16px;
+  --control-height: 38px;
+
+  /* Quiet operational elevation */
+  --shadow-xs: 0 1px 2px rgba(36, 33, 60, 0.03);
+  --shadow-sm: 0 1px 2px rgba(36, 33, 60, 0.035),
+    0 6px 18px rgba(36, 33, 60, 0.035);
+  --shadow-md: 0 2px 6px rgba(36, 33, 60, 0.04),
+    0 12px 30px rgba(36, 33, 60, 0.07);
+
+  /* Compatibility aliases */
+  --background: var(--app-bg);
+  --foreground: var(--app-text);
+  --surface: var(--app-surface);
+  --surface-soft: var(--app-surface-soft);
+  --surface-raised: rgba(255, 255, 255, 0.95);
+  --border: var(--app-border);
+  --border-strong: var(--app-border-strong);
+  --brand-strong: var(--app-brand-700);
+  --accent: var(--app-accent);
+  --shadow-soft: var(--shadow-sm);
+  --shadow-lifted: var(--shadow-md);
+}
+
+.dark {
+  --app-brand-rgb: 128 110 225;
+  --app-accent-rgb: 154 130 236;
+  --app-bg: #15131d;
+  --app-surface: #1c1926;
+  --app-surface-soft: #211d2c;
+  --app-surface-muted: #252039;
+  --app-border: #342f43;
+  --app-border-strong: #443d55;
+
+  --app-text: #d9d5e2;
+  --app-text-strong: #f3f1f7;
+  --app-text-muted: #b4afc1;
+  --app-text-subtle: #817a90;
+
+  --app-brand-950: #ede9ff;
+  --app-brand-900: #d8d0ff;
+  --app-brand-800: #a996f0;
+  --app-brand-700: #806ee1;
+  --app-brand-600: #927fe9;
+  --app-brand-100: #352c59;
+  --app-brand-50: #2b2548;
+
+  --app-accent: #9a82ec;
+  --app-accent-soft: #29223e;
+  --app-ai: #9a82ec;
+  --app-ai-soft: #29223e;
+
+  --background: var(--app-bg);
+  --foreground: var(--app-text);
+  --surface: var(--app-surface);
+  --surface-soft: var(--app-surface-soft);
+  --surface-raised: rgba(28, 25, 38, 0.95);
+  --border: var(--app-border);
+  --border-strong: var(--app-border-strong);
+}
+
+html,
+body {
+  color: var(--app-text);
+  background: var(--app-bg);
+}
+
+body {
+  background-image: none;
+}
+
+::selection {
+  color: var(--app-text-strong);
+  background: rgba(87, 67, 197, 0.18);
+}
+
+button:focus-visible,
+a:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible,
+[tabindex]:focus-visible {
+  outline-color: rgba(87, 67, 197, 0.42);
+}
+
+/* Shared controls -------------------------------------------------------- */
+.btn-primary {
+  background: var(--app-brand-700);
+  box-shadow: none;
+}
+
+.btn-primary:hover {
+  background: var(--app-brand-800);
+  box-shadow: none;
+}
+
+.btn-secondary:hover {
+  color: var(--app-brand-700);
+  background: var(--app-brand-50);
+}
+
+.input:focus,
+.global-search:focus-within {
+  border-color: var(--app-brand-700);
+  box-shadow: 0 0 0 3px rgba(87, 67, 197, 0.1);
+}
+
+.card,
+.ui-panel {
+  box-shadow: var(--shadow-xs);
+}
+
+.card:hover {
+  box-shadow: var(--shadow-sm);
+}
+
+/* Existing legacy shell ------------------------------------------------- */
+.brand-mark,
+.topbar-brand-mark {
+  background: var(--app-brand-700);
+  box-shadow: none;
+}
+
+.nav-item-active {
+  color: var(--app-brand-700);
+  background: var(--app-brand-50);
+}
+
+.nav-item-active::before {
+  background: var(--app-brand-700);
+}
+
+.nav-item-active .nav-icon-wrap {
+  color: var(--app-brand-700);
+  background: transparent;
+}
+
+.nav-active-dot {
+  background: var(--app-brand-700);
+  box-shadow: none;
+}
+
+.sidebar-signout:hover,
+.ui-page-kicker,
+.ui-brand {
+  color: var(--app-brand-700);
+}
+
+/* Current V3 meta-sidebar ----------------------------------------------- */
+.salsys-meta-sidebar-shell aside[aria-label="Primary navigation"] {
+  border-color: var(--app-border);
+  background: var(--app-surface);
+}
+
+.salsys-meta-sidebar-shell aside[aria-label="Primary navigation"] a[aria-current="page"] {
+  color: #fff;
+  background: var(--app-brand-700);
+  box-shadow: none;
+}
+
+.salsys-meta-sidebar-shell aside[aria-label="Primary navigation"] a[aria-current="page"]:hover {
+  background: var(--app-brand-800);
+}
+
+/* AI visual language ---------------------------------------------------- */
+.salsys-ai,
+.salsys-insight,
+[data-salsys-ai="true"] {
+  border-color: #e4d8f8;
+  color: var(--app-text-strong);
+  background: var(--app-ai-soft);
+}
+
+.salsys-ai-icon,
+.salsys-ai-label,
+.salsys-insight-title {
+  color: var(--app-ai);
+}
+
+/* Dark mode ------------------------------------------------------------- */
+.dark body {
+  background: var(--app-bg);
+}
+
+.dark .brand-mark,
+.dark .topbar-brand-mark {
+  background: var(--app-brand-700);
+  box-shadow: none;
+}
+
+.dark .nav-item-active {
+  color: var(--app-text-strong);
+  background: var(--app-brand-50);
+}
+
+.dark .global-search:focus-within,
+.dark .input:focus {
+  border-color: var(--app-brand-700);
+  box-shadow: 0 0 0 3px rgba(128, 110, 225, 0.14);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .card,
+  .btn,
+  .nav-item {
+    transition: none !important;
+  }
+}

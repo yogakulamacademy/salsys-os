@@ -1,0 +1,206 @@
+/* ========================================================================== 
+   SalsysOS Phase 6C — Sales Today
+   Employee dashboard presentation only. No server action or data behavior changes.
+   ========================================================================== */
+
+.dashboard-polish:has(form) {
+  --sales-border: var(--salsys-border, #e6e3ef);
+  --sales-border-strong: var(--salsys-border-strong, #d8d4e3);
+  --sales-surface: var(--salsys-surface, #fff);
+  --sales-soft: var(--salsys-primary-softer, #f3f0fb);
+  --sales-selected: var(--salsys-primary-soft, #ede9fa);
+  --sales-primary: var(--salsys-primary, #5743c5);
+  --sales-primary-hover: var(--salsys-primary-hover, #4632aa);
+  --sales-text: var(--salsys-text-primary, #24213c);
+  --sales-muted: var(--salsys-text-secondary, #67627a);
+  --sales-faint: var(--salsys-text-muted, #9691a6);
+  color: var(--sales-text);
+}
+
+.dashboard-polish:has(form) .page-header {
+  margin-bottom: 18px;
+}
+
+.dashboard-polish:has(form) .page-header .eyebrow {
+  color: var(--sales-primary);
+}
+
+.dashboard-polish:has(form) .page-header h1,
+.dashboard-polish:has(form) .section-title {
+  color: var(--sales-text);
+}
+
+.dashboard-polish:has(form) .page-header p,
+.dashboard-polish:has(form) .eyebrow {
+  color: var(--sales-muted);
+}
+
+.dashboard-polish:has(form) .card,
+.dashboard-polish:has(form) .card-pad,
+.dashboard-polish:has(form) > section,
+.dashboard-polish:has(form) > div > section {
+  border-color: var(--sales-border) !important;
+  border-radius: 12px !important;
+  background: var(--sales-surface) !important;
+  box-shadow: none !important;
+}
+
+/* Daily priorities */
+.dashboard-polish:has(form) > section:first-of-type {
+  position: relative;
+  overflow: hidden;
+}
+
+.dashboard-polish:has(form) > section:first-of-type::before {
+  content: "Daily priorities";
+  position: absolute;
+  right: 18px;
+  top: 14px;
+  z-index: 1;
+  border: 1px solid #e4d8f8;
+  border-radius: 999px;
+  background: var(--salsys-ai-soft, #f1ecfb);
+  padding: 5px 9px;
+  color: var(--salsys-ai, #8354d5);
+  font-size: 9px;
+  font-weight: 750;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+
+.dashboard-polish:has(form) > section:first-of-type > div:first-child {
+  border-bottom-color: var(--sales-border) !important;
+  background: linear-gradient(180deg, rgba(87, 67, 197, .035), transparent);
+}
+
+.dashboard-polish:has(form) > section:first-of-type > div:first-child > div:first-child > div:first-child {
+  color: var(--sales-primary) !important;
+}
+
+.dashboard-polish:has(form) > section:first-of-type > div:last-child > a:hover {
+  background: var(--sales-soft) !important;
+}
+
+/* Action queue + pipeline snapshot */
+.dashboard-polish:has(form) > div.mt-4.grid {
+  grid-template-columns: minmax(0, 1.55fr) minmax(280px, .45fr);
+}
+
+.dashboard-polish:has(form) > div.mt-4.grid > section:first-child > div:first-child,
+.dashboard-polish:has(form) > section.card.mt-4 > div:first-child {
+  border-bottom-color: var(--sales-border) !important;
+}
+
+.dashboard-polish:has(form) > div.mt-4.grid > section:first-child > div:first-child .eyebrow::after {
+  content: " · Action queue";
+  color: var(--sales-primary);
+}
+
+.dashboard-polish:has(form) > section.card.mt-4 > div:first-child .eyebrow::after {
+  content: " · Upcoming work";
+  color: var(--sales-primary);
+}
+
+.dashboard-polish:has(form) > div.mt-4.grid > section:first-child > div:last-child > div:hover,
+.dashboard-polish:has(form) > section.card.mt-4 > div:last-child > div:hover {
+  background: #fbfafd !important;
+}
+
+.dashboard-polish:has(form) > div.mt-4.grid > section:nth-child(2) {
+  background: linear-gradient(180deg, #fff, #fbfafd) !important;
+}
+
+.dashboard-polish:has(form) a[href^="/leads/"] {
+  color: var(--sales-text);
+}
+
+.dashboard-polish:has(form) a[href^="/leads/"]:hover,
+.dashboard-polish:has(form) a[href^="/conversations?lead="] {
+  color: var(--sales-primary) !important;
+}
+
+.dashboard-polish:has(form) a[href^="/conversations?lead="] {
+  border-color: var(--sales-border) !important;
+  background: var(--sales-surface) !important;
+}
+
+.dashboard-polish:has(form) a[href^="/conversations?lead="]:hover {
+  border-color: #cfc5f4 !important;
+  background: var(--sales-soft) !important;
+}
+
+.dashboard-polish:has(form) .btn-primary,
+.dashboard-polish:has(form) button.bg-slate-900 {
+  border-radius: 8px !important;
+  background: var(--sales-primary) !important;
+  box-shadow: none !important;
+}
+
+.dashboard-polish:has(form) .btn-primary:hover,
+.dashboard-polish:has(form) button.bg-slate-900:hover {
+  background: var(--sales-primary-hover) !important;
+}
+
+.dashboard-polish:has(form) .btn-secondary {
+  border-color: var(--sales-border) !important;
+  border-radius: 8px !important;
+  background: var(--sales-surface) !important;
+  color: var(--sales-text) !important;
+}
+
+.dashboard-polish:has(form) .btn-secondary:hover {
+  background: var(--sales-soft) !important;
+}
+
+/* Current snooze RPC changes due_at + status, so present it as Reschedule. */
+.dashboard-polish:has(form) form + form button {
+  font-size: 0 !important;
+  border-color: var(--sales-border) !important;
+  background: var(--sales-surface) !important;
+  color: var(--sales-muted) !important;
+}
+
+.dashboard-polish:has(form) form + form button::after {
+  content: "Reschedule";
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.dashboard-polish:has(form) form + form button:hover {
+  border-color: var(--sales-border-strong) !important;
+  background: var(--sales-soft) !important;
+}
+
+.dashboard-polish:has(form) .bg-violet-50 {
+  background: var(--sales-selected) !important;
+}
+
+.dashboard-polish:has(form) .text-violet-600,
+.dashboard-polish:has(form) .text-violet-700 {
+  color: var(--sales-primary) !important;
+}
+
+.dashboard-polish:has(form) .border-violet-100 {
+  border-color: #ddd5f5 !important;
+}
+
+@media (max-width: 1279px) {
+  .dashboard-polish:has(form) > div.mt-4.grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 639px) {
+  .dashboard-polish:has(form) > section:first-of-type::before {
+    display: none;
+  }
+}
+
+html.dark .dashboard-polish:has(form) > div.mt-4.grid > section:nth-child(2) {
+  background: linear-gradient(180deg, #1c1926, #211d2c) !important;
+}
+
+html.dark .dashboard-polish:has(form) > div.mt-4.grid > section:first-child > div:last-child > div:hover,
+html.dark .dashboard-polish:has(form) > section.card.mt-4 > div:last-child > div:hover {
+  background: #211d2c !important;
+}

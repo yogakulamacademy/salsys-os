@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 const root = process.cwd();
-const helperPath = path.join(root, 'lib/conversations-data.ts');
+const helperPath = path.join(root, 'lib/conversations-data-core.ts');
 const migrationPath = path.join(
   root,
   'supabase/migrations/20261029093000_current_conversations_workspace_v1.sql',

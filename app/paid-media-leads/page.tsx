@@ -6,7 +6,9 @@ import {
   CircleDollarSign,
   Filter,
   Flame,
+  GitBranch,
   Search,
+  Sparkles,
   Target,
   Users,
 } from "lucide-react";
@@ -183,21 +185,30 @@ export default async function PaidMediaLeadsPage({
     label: string;
   }>;
 
+  const campaignContext = campaign ? encodeURIComponent(campaign) : "";
+
   return (
     <div className="paid-media-polish">
       <PageHeader
-        eyebrow="Paid acquisition"
-        title="Paid Media Leads"
-        description="Individual Google, Facebook, Instagram and Meta leads connected to campaign attribution, CRM stage, payments, enrollment, revenue and allocated acquisition cost."
+        eyebrow="Marketing · Acquisition"
+        title="Acquisition Leads"
+        description="Connect paid-media demand to the actual CRM records, qualification, payment evidence, enrollment outcomes and allocated acquisition cost."
         actions={
           <div className="flex flex-wrap gap-2">
             <Link href="/campaigns" className="btn-secondary">
-              Campaigns
+              <Target size={15} /> Campaigns
             </Link>
 
-            <Link href="/funnel" className="btn-primary">
-              Funnel analytics
-              <ArrowRight size={15} />
+            <Link href="/funnel" className="btn-secondary">
+              <GitBranch size={15} /> Funnel
+            </Link>
+
+            <Link href="/attribution" className="btn-secondary">
+              <Sparkles size={15} /> Attribution
+            </Link>
+
+            <Link href="/revenue" className="btn-primary">
+              <CircleDollarSign size={15} /> Revenue
             </Link>
           </div>
         }
@@ -205,10 +216,45 @@ export default async function PaidMediaLeadsPage({
 
       {workspace.warning && (
         <div className="paid-media-warning">
-          Paid Media Leads loaded through the legacy fallback.{" "}
+          Acquisition loaded through the legacy fallback.{" "}
           {workspace.warning}
         </div>
       )}
+
+      {campaign ? (
+        <section className="mt-4 rounded-panel border border-line bg-surface px-4 py-4 shadow-card sm:px-5">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+            <div className="min-w-0">
+              <div className="text-[10px] font-semibold uppercase tracking-[0.14em] text-brand-700">
+                Campaign context preserved
+              </div>
+              <div className="mt-1 truncate text-sm font-semibold text-copy-strong">
+                Acquisition records for “{campaign}”
+              </div>
+              <p className="mt-1 max-w-2xl text-[11px] leading-5 text-copy-muted">
+                This view is narrowed to the campaign selected in Campaign Performance. Inspect the matched CRM records here, then continue to attribution or revenue without losing the campaign thread.
+              </p>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <Link href={`/campaigns?q=${campaignContext}`} className="btn-secondary">
+                Campaign evidence
+              </Link>
+              <Link href={`/attribution?q=${campaignContext}`} className="btn-secondary">
+                Attribution
+              </Link>
+              <Link href={`/revenue?investigation=1&source=${campaignContext}&from=acquisition`} className="btn-secondary">
+                Revenue
+              </Link>
+              <Link href="/paid-media-leads" className="btn-secondary">
+                Clear context
+              </Link>
+            </div>
+          </div>
+          <div className="mt-3 flex items-center gap-2 border-t border-line pt-3 text-[11px] font-semibold text-brand-700">
+            <ArrowRight size={12} /> Suggested path: inspect matched leads → verify qualification → compare attribution → confirm revenue evidence.
+          </div>
+        </section>
+      ) : null}
 
       <section className="paid-media-platforms mt-6 overflow-x-auto">
         <div className="paid-media-platform-shell inline-flex min-w-full gap-2">
@@ -323,7 +369,7 @@ export default async function PaidMediaLeadsPage({
       <section className="paid-media-metrics mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <SummaryCard
           icon={<Users size={17} />}
-          label="Paid media leads"
+          label="Acquisition leads"
           value={formatNumber(overview.paid_media_leads)}
           sub={`${formatNumber(overview.qualified_leads)} qualified`}
         />
@@ -559,7 +605,7 @@ export default async function PaidMediaLeadsPage({
             <div className="eyebrow">Individual acquisition records</div>
 
             <div className="section-title mt-1">
-              {formatNumber(total)} paid-media leads
+              {formatNumber(total)} acquisition leads
             </div>
           </div>
 
@@ -607,7 +653,7 @@ export default async function PaidMediaLeadsPage({
                     colSpan={13}
                     className="px-3 py-10 text-center text-sm text-slate-400"
                   >
-                    No paid-media leads match these filters.
+                    No acquisition leads match these filters.
                   </td>
                 </tr>
               ) : (
@@ -788,7 +834,7 @@ export default async function PaidMediaLeadsPage({
             <div className="paid-media-drawer-header sticky top-0 z-10 px-5 py-4 backdrop-blur">
               <div className="flex items-start justify-between gap-4">
                 <div>
-                  <div className="eyebrow">Paid media lead</div>
+                  <div className="eyebrow">Acquisition lead</div>
 
                   <div className="mt-1 text-xl font-bold text-slate-900">
                     {selectedLead.lead_name || selectedLead.lead_code || "Lead"}

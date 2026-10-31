@@ -21,7 +21,7 @@ export default function Error({
           We couldn’t load this page
         </h1>
         <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-copy-muted">
-          The page hit an unexpected problem. You can try loading it again or return to the Dashboard.
+          The page hit an unexpected problem. You can try loading it again or return to the Command Center.
         </p>
 
         <div className="mt-6 flex flex-col justify-center gap-2 sm:flex-row">
@@ -31,7 +31,7 @@ export default function Error({
           </button>
           <Link href="/home" className="btn-secondary justify-center">
             <Home size={15} aria-hidden="true" />
-            Dashboard
+            Command Center
           </Link>
         </div>
 

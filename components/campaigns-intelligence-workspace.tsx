@@ -163,6 +163,7 @@ function CampaignDrawer({ campaign, onClose }: { campaign: CampaignWorkspaceRow;
   const enrollmentRate = campaign.leads > 0 ? (campaign.enrolled / campaign.leads) * 100 : null;
   const sameCurrencyRevenue = campaign.spendCurrency.toUpperCase() === 'USD' ? campaign.revenueUsd : campaign.revenueInr;
   const commercialEvidence = campaign.roas !== null || campaign.cac !== null || sameCurrencyRevenue > 0;
+  const context = encodeURIComponent(campaign.name);
   const statusTone = campaign.spend > 0 && campaign.qualified === 0
     ? 'risk' as const
     : campaign.enrolled > 0
@@ -218,12 +219,13 @@ function CampaignDrawer({ campaign, onClose }: { campaign: CampaignWorkspaceRow;
       ]}
       recommendedAction={campaignRecommendedAction(campaign)}
       actions={[
-        { label: 'View generated leads', href: '/paid-media-leads', primary: true },
-        { label: 'Open attribution', href: '/attribution' },
+        { label: 'View acquisition leads', href: `/paid-media-leads?campaign=${context}`, primary: true },
+        { label: 'Open attribution', href: `/attribution?q=${context}` },
       ]}
       related={[
-        { label: 'Attribution', href: '/attribution', detail: 'Inspect source credit and unknown attribution.' },
-        { label: 'Revenue', href: '/revenue', detail: 'Validate cash, pipeline and currency-separated revenue.' },
+        { label: 'Acquisition', href: `/paid-media-leads?campaign=${context}`, detail: 'Inspect the exact CRM leads matched to this campaign.' },
+        { label: 'Attribution', href: `/attribution?q=${context}`, detail: 'Inspect source credit and unknown attribution.' },
+        { label: 'Revenue', href: `/revenue?investigation=1&source=${context}&from=campaigns`, detail: 'Validate cash, pipeline and currency-separated revenue.' },
         { label: 'Funnel', href: '/funnel', detail: 'Compare this campaign context with overall stage progression.' },
       ]}
     />

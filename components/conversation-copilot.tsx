@@ -2,8 +2,10 @@
 
 import {
   Bot,
+  CheckCircle2,
   ChevronDown,
   ChevronUp,
+  Database,
   ShieldAlert,
   Sparkles,
   WandSparkles,
@@ -73,32 +75,32 @@ export function ConversationCopilot({
         : "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900/40 dark:bg-emerald-950/20 dark:text-emerald-300";
 
   return (
-    <section className="overflow-hidden rounded-xl border border-[#DDE7DF] bg-white dark:border-slate-800 dark:bg-slate-950">
+    <section className="overflow-hidden rounded-xl border border-brand-100 bg-surface dark:border-slate-800 dark:bg-slate-950">
       <button
         type="button"
         onClick={() => setOpen((value) => !value)}
-        className="flex w-full items-center gap-3 px-3 py-3 text-left transition hover:bg-[#F7FAF8] dark:hover:bg-slate-900/50"
+        className="flex w-full items-center gap-3 px-3 py-3 text-left transition hover:bg-brand-50/60 dark:hover:bg-slate-900/50"
       >
-        <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-[#E4F2E8] text-[#216551] dark:bg-emerald-950/30 dark:text-emerald-300">
+        <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-brand-50 text-brand-700 dark:bg-violet-950/30 dark:text-violet-300">
           <Bot size={15} />
         </span>
         <span className="min-w-0 flex-1">
-          <span className="block text-[11px] font-semibold text-[#203B31] dark:text-white">
-            AI reply assistant
+          <span className="block text-[11px] font-semibold text-copy-strong">
+            Ask Salsys · Reply Copilot
           </span>
-          <span className="mt-0.5 block text-[9px] leading-4 text-[#839188]">
-            Classify the latest request and prepare a draft for human review.
+          <span className="mt-0.5 block text-[9px] leading-4 text-copy-muted">
+            Prepare a grounded reply draft for human review. Never auto-sends.
           </span>
         </span>
         {open ? (
-          <ChevronUp size={14} className="text-[#89968F]" />
+          <ChevronUp size={14} className="text-copy-subtle" />
         ) : (
-          <ChevronDown size={14} className="text-[#89968F]" />
+          <ChevronDown size={14} className="text-copy-subtle" />
         )}
       </button>
 
       {open ? (
-        <div className="border-t border-[#EEF2EF] p-3 dark:border-slate-900">
+        <div className="border-t border-line p-3 dark:border-slate-900">
           {!enabled && disabledReason ? (
             <div className="rounded-lg bg-amber-50 px-3 py-2 text-[10px] leading-4 text-amber-700 dark:bg-amber-950/20 dark:text-amber-300">
               {disabledReason}
@@ -110,7 +112,7 @@ export function ConversationCopilot({
               type="button"
               onClick={generate}
               disabled={isPending}
-              className="inline-flex h-9 w-full items-center justify-center gap-2 rounded-lg bg-[#216551] px-3 text-[10px] font-semibold text-white transition hover:bg-[#174D3B] disabled:cursor-not-allowed disabled:opacity-60"
+              className="inline-flex h-9 w-full items-center justify-center gap-2 rounded-lg bg-brand-700 px-3 text-[10px] font-semibold text-white transition hover:bg-brand-800 disabled:cursor-not-allowed disabled:opacity-60"
             >
               {isPending ? (
                 <Sparkles size={13} className="animate-pulse" />
@@ -118,7 +120,7 @@ export function ConversationCopilot({
                 <WandSparkles size={13} />
               )}
               {isPending
-                ? "Building draft…"
+                ? "Building grounded draft…"
                 : result
                   ? "Regenerate draft"
                   : "Draft next reply"}
@@ -141,20 +143,43 @@ export function ConversationCopilot({
                       ? "Review carefully"
                       : "Low risk"}
                 </span>
-                <span className="rounded-full bg-[#F0F5F1] px-2 py-1 text-[#60736A] dark:bg-slate-900 dark:text-slate-300">
+                <span className="rounded-full bg-surface-soft px-2 py-1 text-copy-muted dark:bg-slate-900 dark:text-slate-300">
                   {result.intent || "General enquiry"}
                 </span>
-                <span className="rounded-full bg-[#F0F5F1] px-2 py-1 text-[#60736A] dark:bg-slate-900 dark:text-slate-300">
+                <span className="rounded-full bg-surface-soft px-2 py-1 text-copy-muted dark:bg-slate-900 dark:text-slate-300">
                   {result.nextAction === "handoff" ? "Escalate" : "Reply"}
                 </span>
               </div>
 
-              <div className="rounded-lg border border-[#E1E9E3] bg-[#F8FAF8] px-3 py-3 text-[11px] leading-5 text-[#52665C] dark:border-slate-800 dark:bg-slate-900/50 dark:text-slate-200">
+              <div className="rounded-lg border border-line bg-surface-soft px-3 py-3 text-[11px] leading-5 text-copy-muted dark:border-slate-800 dark:bg-slate-900/50 dark:text-slate-200">
                 {result.draft}
               </div>
 
+              <div className="rounded-lg border border-brand-100 bg-brand-50/60 p-3 dark:border-violet-900/40 dark:bg-violet-950/15">
+                <div className="flex items-center gap-2 text-[9px] font-semibold uppercase tracking-[0.08em] text-brand-700 dark:text-violet-300">
+                  <Database size={11} /> Grounding & provenance
+                </div>
+                <div className="mt-2 space-y-1.5 text-[9px] leading-4 text-copy-muted dark:text-slate-300">
+                  <div className="flex items-start gap-2">
+                    <CheckCircle2 size={11} className="mt-0.5 shrink-0 text-success" />
+                    <span>Live CRM course, batch, lead and conversation context is used as the primary source of truth.</span>
+                  </div>
+                  <div className="flex items-start gap-2">
+                    <CheckCircle2 size={11} className="mt-0.5 shrink-0 text-success" />
+                    <span>
+                      {result.knowledgeUsed > 0
+                        ? `${result.knowledgeUsed} approved organization knowledge source${result.knowledgeUsed === 1 ? "" : "s"} matched this request.`
+                        : "No approved knowledge article matched this request; the draft is grounded only in live CRM context and conversation history."}
+                    </span>
+                  </div>
+                  <div className="text-[8px] text-copy-subtle">
+                    Draft model: {result.model} · Router: {result.routerModel}
+                  </div>
+                </div>
+              </div>
+
               {result.risk !== "low" ? (
-                <div className="flex items-start gap-2 text-[9px] leading-4 text-[#718078]">
+                <div className="flex items-start gap-2 rounded-lg border border-amber-100 bg-amber-50 px-3 py-2 text-[9px] leading-4 text-amber-800 dark:border-amber-900/40 dark:bg-amber-950/20 dark:text-amber-300">
                   <ShieldAlert size={12} className="mt-0.5 shrink-0" />
                   <span>{result.reason}</span>
                 </div>
@@ -163,13 +188,13 @@ export function ConversationCopilot({
               <button
                 type="button"
                 onClick={useDraft}
-                className="inline-flex h-9 w-full items-center justify-center rounded-lg border border-[#D7E4DA] bg-white px-3 text-[10px] font-semibold text-[#456158] transition hover:bg-[#F2F8F4] hover:text-[#216551] dark:border-slate-800 dark:bg-slate-950 dark:text-slate-200 dark:hover:bg-slate-900"
+                className="inline-flex h-9 w-full items-center justify-center rounded-lg border border-brand-100 bg-surface px-3 text-[10px] font-semibold text-brand-700 transition hover:bg-brand-50 dark:border-slate-800 dark:bg-slate-950 dark:text-violet-200 dark:hover:bg-slate-900"
               >
                 Use draft in composer
               </button>
 
-              <div className="text-center text-[8px] leading-4 text-[#89968F]">
-                AI never sends the message. A human must review and press Send.
+              <div className="text-center text-[8px] leading-4 text-copy-subtle">
+                AI never sends the message. Eligibility is checked separately, and a human must review and press Send.
               </div>
             </div>
           ) : null}

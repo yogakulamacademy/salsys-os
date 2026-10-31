@@ -13,11 +13,18 @@ function expectIncludes(source, needle, label) {
   }
 }
 
+function expectNotIncludes(source, needle, label) {
+  if (source.includes(needle)) {
+    throw new Error(`Commercial intelligence verification failed: ${label}`);
+  }
+}
+
 const engine = read('lib/commercial-intelligence.ts');
 const panel = read('components/commercial-intelligence-panel.tsx');
 const paidMedia = read('components/paid-media-intelligence-panel.tsx');
-const commandCenter = read('app/commercial-intelligence/page.tsx');
-const attributionPage = read('app/attribution/page.tsx');
+const legacyRoute = read('app/commercial-intelligence/page.tsx');
+const marketingPage = read('app/marketing/page.tsx');
+const revenuePage = read('app/revenue/page.tsx');
 const funnelLayout = read('app/funnel/layout.tsx');
 const revenueLayout = read('app/revenue/layout.tsx');
 
@@ -37,13 +44,16 @@ expectIncludes(paidMedia, 'Spend → CRM → Revenue quality', 'paid-media decis
 expectIncludes(paidMedia, 'does not automatically move advertising budget', 'paid-media human-control guard missing');
 expectIncludes(paidMedia, 'Repair lineage before strong ROI conclusions', 'Google attribution-quality guard missing');
 expectIncludes(paidMedia, 'Unmatched IDs stay unresolved rather than being guessed', 'Meta attribution-quality guard missing');
-expectIncludes(commandCenter, 'Commercial Intelligence', 'command center route missing');
-expectIncludes(commandCenter, 'Smart does not mean speculative', 'interpretation guardrail missing');
-expectIncludes(commandCenter, 'RevenueAttributionReconciliationCard', 'command center reconciliation missing');
-expectIncludes(commandCenter, 'PaidMediaIntelligencePanel', 'paid-media intelligence not surfaced');
-expectIncludes(attributionPage, 'buildAttributionIntelligence', 'attribution intelligence builder not surfaced');
-expectIncludes(attributionPage, 'ExecutiveDecisionBrief', 'attribution decision intelligence not surfaced');
-expectIncludes(funnelLayout, 'buildFunnelIntelligence', 'funnel intelligence not surfaced');
-expectIncludes(revenueLayout, 'buildRevenueIntelligence', 'revenue intelligence not surfaced');
 
-console.log('Commercial intelligence contracts verified.');
+expectIncludes(legacyRoute, 'redirect("/home")', 'legacy Commercial Intelligence route must resolve to the canonical command center');
+expectIncludes(marketingPage, 'buildAttributionIntelligence', 'attribution intelligence must remain surfaced in Marketing');
+expectIncludes(marketingPage, 'FunnelIntelligenceWorkspaceV2', 'funnel intelligence must remain surfaced in Marketing');
+expectIncludes(marketingPage, 'ExecutiveDecisionBrief', 'Marketing decision intelligence must remain surfaced');
+expectIncludes(revenuePage, 'ExecutiveDecisionBrief', 'Revenue decision intelligence must remain surfaced');
+expectIncludes(revenuePage, '/admissions?view=payments', 'Revenue must route payment action work to Admissions');
+expectIncludes(revenuePage, '/marketing?view=attribution', 'Revenue must route attribution investigation to Marketing');
+
+expectNotIncludes(funnelLayout, 'CommercialIntelligencePanel', 'Funnel layout must not append duplicate intelligence presentation');
+expectNotIncludes(revenueLayout, 'CommercialIntelligencePanel', 'Revenue layout must not append duplicate intelligence presentation');
+
+console.log('Commercial intelligence contracts verified across canonical workspaces.');

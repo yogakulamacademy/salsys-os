@@ -1,433 +1,512 @@
-import Link from 'next/link';
+import Link from "next/link";
 import {
   Activity,
-  ArrowRight,
-  RefreshCw,
-  ShieldCheck,
-  TrendingDown,
-  TrendingUp,
-} from 'lucide-react';
+  BarChart3,
+  CircleDollarSign,
+  GitBranch,
+  Megaphone,
+  Route,
+  Search,
+  Target,
+} from "lucide-react";
 
-import { getCampaignsWorkspace } from '@/lib/campaigns-data';
-import { getFunnelWorkspace } from '@/lib/funnel-data';
-import { getRevenueWorkspace } from '@/lib/revenue-data';
-import type { CampaignWorkspaceRow } from '@/components/campaigns-workspace';
+import { AnalyticsExplorer } from "@/components/analytics-explorer";
+import { AttributionIntelligenceExplorer } from "@/components/attribution-intelligence-explorer";
+import { CampaignsIntelligenceWorkspace } from "@/components/campaigns-intelligence-workspace";
+import type { CampaignWorkspaceFilters } from "@/components/campaigns-workspace";
+import { FunnelIntelligenceWorkspaceV2 } from "@/components/funnel-intelligence-workspace-v2";
+import { ExecutiveDecisionBrief } from "@/components/marketing/executive-decision-brief";
+import { MarketingOverview } from "@/components/marketing/marketing-overview";
+import { Notice, PageHeader } from "@/components/ui";
+import { getAnalyticsWorkspace } from "@/lib/analytics-data";
+import { getAttributionWorkspace } from "@/lib/attribution-data";
+import { getCampaignsWorkspace } from "@/lib/campaigns-data";
+import { buildAttributionIntelligence } from "@/lib/commercial-intelligence";
+import { isMockMode } from "@/lib/data";
+import {
+  getFunnelIntelligenceWorkspace,
+  type FunnelIntelligenceWorkspace as FunnelWorkspace,
+} from "@/lib/funnel-intelligence-data";
 
-import styles from './marketing-command-center.module.css';
+type MarketingView = "overview" | "campaigns" | "analytics" | "funnel" | "attribution";
 
-type UnknownRecord = Record<string, unknown>;
-
-type AcquisitionRow = {
-  name: string;
-  leads: number;
-  qualified: number;
-  enrolled: number;
+type MarketingPageProps = {
+  searchParams: Promise<{
+    view?: string;
+    q?: string;
+    platform?: string;
+    outcome?: string;
+    sort?: string;
+    page?: string;
+    course?: string;
+    location?: string;
+    country?: string;
+    stage?: string;
+  }>;
 };
 
-type DailySignal = {
-  sessions: number;
-  leads: number;
-  qualified: number;
-  enrolled: number;
-};
+const PAGE_SIZE = 50;
+const validViews = new Set<MarketingView>([
+  "overview",
+  "campaigns",
+  "analytics",
+  "funnel",
+  "attribution",
+]);
 
-type Movement = {
-  current: number;
-  previous: number;
-  delta: number | null;
-};
-
-type AttentionItem = {
-  score: number;
-  tone: 'critical' | 'warning' | 'positive' | 'neutral';
-  title: string;
-  detail: string;
-  href: string;
-  label: string;
-};
-
-export default async function MarketingCommandCenterPage() {
-  const currentMonth = new Date().toISOString().slice(0, 7);
-  const [campaigns, funnel, revenue] = await Promise.all([
-    getCampaignsWorkspace({
-      query: '',
-      platform: 'all',
-      outcome: 'all',
-      sortMode: 'spend_desc',
-      page: 1,
-      pageSize: 50,
-    }),
-    getFunnelWorkspace(),
-    getRevenueWorkspace(currentMonth),
-  ]);
-
-  const overview = asRecord(funnel.funnel.overview);
-  const sources = normalizeSources(funnel.funnel.sources);
-  const totalLeads = positiveNumber(overview.leads, campaigns.summary.leads);
-  const qualified = positiveNumber(overview.qualified_leads, campaigns.summary.qualified);
-  const enrolled = positiveNumber(overview.enrolled_leads, campaigns.summary.enrolled);
-  const traffic = positiveNumber(overview.sessions, campaigns.summary.clicks);
-  const highIntent = sumCampaign(campaigns.campaigns, 'highIntent');
-  const paymentPending = sumCampaign(campaigns.campaigns, 'paymentPending');
-  const spendInr = campaigns.summary.spendByCurrency.INR ?? 0;
-  const revenueInr = revenue.totalsByCurrency.find((row) => row.currency.toUpperCase() === 'INR')?.actual ?? campaigns.summary.revenueInr;
-  const revenueUsd = revenue.totalsByCurrency.find((row) => row.currency.toUpperCase() === 'USD')?.actual ?? campaigns.summary.revenueUsd;
-  const roasComplete = campaigns.campaigns.length > 0 && campaigns.campaigns.every((row) => row.roas !== null && row.spendCurrency.toUpperCase() === 'INR');
-  const roas = roasComplete && spendInr > 0 ? revenueInr / spendInr : null;
-
-  const sourceRows = sources.length ? sources : fallbackAcquisition(campaigns.campaigns);
-  const maxLeadVolume = Math.max(1, ...sourceRows.map((row) => row.leads));
-  const topCampaigns = [...campaigns.campaigns]
-    .sort((a, b) => b.enrolled - a.enrolled || b.qualified - a.qualified || b.leads - a.leads)
-    .slice(0, 4);
-  const poorCampaign = campaigns.campaigns
-    .filter((row) => row.spend > 0 && row.qualified === 0)
-    .sort((a, b) => b.spend - a.spend)[0];
-  const missingRoas = campaigns.campaigns.filter((row) => row.spend > 0 && row.roas === null).length;
-  const strongest = [...campaigns.campaigns]
-    .filter((row) => row.cac !== null && row.enrolled > 0)
-    .sort((a, b) => (a.cac ?? Number.POSITIVE_INFINITY) - (b.cac ?? Number.POSITIVE_INFINITY))[0];
-
-  const movement = buildMovement(funnel.funnel.daily);
-  const evidenceKnown = campaigns.summary.campaigns > 0
-    ? Math.max(0, campaigns.summary.campaigns - missingRoas)
-    : 0;
-  const evidenceCoverage = campaigns.summary.campaigns > 0
-    ? (evidenceKnown / campaigns.summary.campaigns) * 100
-    : null;
-  const attention = buildAttentionQueue({
-    poorCampaign,
-    missingRoas,
-    strongest,
-    movement,
-    campaignCount: campaigns.summary.campaigns,
-  });
-  const topAttention = attention[0] ?? null;
-
-  const warnings = [campaigns.warning, funnel.warning, revenue.warning].filter(Boolean) as string[];
+export default async function MarketingPage({ searchParams }: MarketingPageProps) {
+  const query = await searchParams;
+  const requestedView = (query.view || "overview") as MarketingView;
+  const view = validViews.has(requestedView) ? requestedView : "overview";
 
   return (
-    <div className={styles.page}>
-      <header className={styles.head}>
-        <div>
-          <div className={styles.eyebrow}>Marketing Studio</div>
-          <h1 className={styles.title}>Marketing Command Center</h1>
-          <p className={styles.subtitle}>See acquisition quality, campaign performance and revenue impact in one place.</p>
-        </div>
-        <div className={styles.controls}>
-          <div className={styles.control}>Latest 30 days</div>
-          <div className={styles.control}>INR</div>
-          <Link href="/marketing" className={styles.button} aria-label="Refresh Marketing Command Center">
-            <RefreshCw size={13} /> Refresh
+    <div className="space-y-4">
+      <PageHeader
+        eyebrow="Growth / Marketing"
+        title="Marketing"
+        description="One workspace for acquisition quality, campaign performance, analytics, funnel movement and attribution evidence."
+        actions={
+          <div className="flex flex-wrap gap-2">
+            <Link href="/paid-media-leads" className="btn-secondary">
+              <Megaphone size={15} /> Acquisition leads
+            </Link>
+            <Link href="/seo" className="btn-secondary">
+              <Search size={15} /> Search intelligence
+            </Link>
+            <Link href="/revenue" className="btn-primary">
+              <CircleDollarSign size={15} /> Revenue
+            </Link>
+          </div>
+        }
+      />
+
+      <MarketingTabs view={view} />
+
+      {view === "overview" ? <MarketingOverview /> : null}
+      {view === "campaigns" ? <CampaignsView query={query} /> : null}
+      {view === "analytics" ? <AnalyticsView /> : null}
+      {view === "funnel" ? <FunnelView /> : null}
+      {view === "attribution" ? <AttributionView query={query} /> : null}
+    </div>
+  );
+}
+
+function MarketingTabs({ view }: { view: MarketingView }) {
+  const tabs: Array<{
+    value: MarketingView;
+    label: string;
+    icon: React.ReactNode;
+  }> = [
+    { value: "overview", label: "Overview", icon: <Activity size={13} /> },
+    { value: "campaigns", label: "Campaigns", icon: <Target size={13} /> },
+    { value: "analytics", label: "Analytics", icon: <BarChart3 size={13} /> },
+    { value: "funnel", label: "Funnel", icon: <GitBranch size={13} /> },
+    { value: "attribution", label: "Attribution", icon: <Route size={13} /> },
+  ];
+
+  return (
+    <nav
+      className="overflow-x-auto rounded-xl border border-slate-200 bg-white p-1 dark:border-slate-800 dark:bg-slate-950"
+      aria-label="Marketing workspace views"
+    >
+      <div className="flex min-w-max items-center gap-1">
+        {tabs.map((tab) => (
+          <Link
+            key={tab.value}
+            href={tab.value === "overview" ? "/marketing" : `/marketing?view=${tab.value}`}
+            className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-semibold transition ${
+              view === tab.value
+                ? "bg-slate-950 text-white dark:bg-white dark:text-slate-950"
+                : "text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-900"
+            }`}
+          >
+            {tab.icon}
+            {tab.label}
           </Link>
-        </div>
-      </header>
-
-      {warnings.length ? <div className={styles.warning}>{warnings[0]}</div> : null}
-
-      <section className={styles.pulse} aria-label="Marketing performance summary">
-        <Pulse label="Spend" value={formatMoney(spendInr, 'INR', true)} note="Advertising spend · INR" />
-        <Pulse label="Leads" value={formatNumber(totalLeads)} note="Observed CRM leads" />
-        <Pulse label="Qualified" value={formatNumber(qualified)} note={`${formatPercent(qualified, totalLeads)} of leads`} />
-        <Pulse label="Enrolled" value={formatNumber(enrolled)} note={`${formatPercent(enrolled, totalLeads)} of leads`} />
-        <Pulse label="Revenue" value={formatMoney(revenueInr, 'INR', true)} note={revenueUsd > 0 ? `Plus ${formatMoney(revenueUsd, 'USD', true)} · kept separate` : 'CRM collected · INR'} />
-        <Pulse label="Paid ROAS" value={roas === null ? 'Partial coverage' : `${roas.toFixed(1)}×`} note={roas === null ? 'Inspect complete campaign evidence' : 'Known INR evidence only'} partial={roas === null} />
-      </section>
-
-      <section className={styles.intelligenceStrip} aria-label="Marketing intelligence summary">
-        <IntelligenceCard
-          icon={movement.leads.delta !== null && movement.leads.delta < 0 ? <TrendingDown size={14} /> : <TrendingUp size={14} />}
-          label="Momentum"
-          value={movement.leads.delta === null ? 'Not enough history' : formatDelta(movement.leads.delta, 'Leads')}
-          note={movement.leads.delta === null ? 'Daily history is not sufficient for a recent-vs-prior comparison.' : `${formatNumber(movement.leads.current)} recent leads vs ${formatNumber(movement.leads.previous)} prior.`}
-          tone={movement.leads.delta !== null && movement.leads.delta < -10 ? 'warning' : 'positive'}
-        />
-        <IntelligenceCard
-          icon={<ShieldCheck size={14} />}
-          label="Evidence quality"
-          value={evidenceCoverage === null ? 'Unknown' : `${evidenceCoverage.toFixed(0)}% campaign coverage`}
-          note={missingRoas > 0 ? `${missingRoas} campaign${missingRoas === 1 ? '' : 's'} still lack complete efficiency evidence.` : 'All campaigns in scope have comparable efficiency evidence.'}
-          tone={missingRoas > 0 ? 'warning' : 'positive'}
-        />
-        <IntelligenceCard
-          icon={<Activity size={14} />}
-          label="Priority now"
-          value={topAttention?.title ?? 'No urgent action'}
-          note={topAttention?.detail ?? 'No priority investigation is supported by the current evidence.'}
-          tone={topAttention?.tone === 'critical' || topAttention?.tone === 'warning' ? 'warning' : 'neutral'}
-          href={topAttention?.href}
-        />
-      </section>
-
-      <div className={styles.grid}>
-        <div className={styles.stack}>
-          <section className={styles.panel}>
-            <div className={styles.panelHeader}>
-              <div>
-                <h2>Acquisition Mix</h2>
-                <p>Volume is a starting point. Quality tells you what follows.</p>
-              </div>
-              <div className={styles.segmented} aria-label="Acquisition mix view"><span>Volume</span><span>Quality</span><span>Revenue</span></div>
-            </div>
-            <div className={styles.panelBody}>
-              <div className={styles.mixHead}><span>Channel</span><span>Lead volume</span><span>Leads</span><span>Qual.</span><span>Enr.</span></div>
-              {sourceRows.slice(0, 7).map((row) => (
-                <div className={styles.mixRow} key={row.name}>
-                  <span className={styles.mixName}><i className={styles.dot} />{row.name}</span>
-                  <span className={styles.bar}><i style={{ width: `${Math.max(row.leads ? 3 : 0, (row.leads / maxLeadVolume) * 100)}%` }} /></span>
-                  <strong className={styles.number}>{formatNumber(row.leads)}</strong>
-                  <strong className={styles.number}>{formatNumber(row.qualified)}</strong>
-                  <strong className={styles.number}>{formatNumber(row.enrolled)}</strong>
-                </div>
-              ))}
-              <p className={styles.caption}>Exact values are shown where observed. Missing source evidence stays Unknown rather than being inferred.</p>
-            </div>
-          </section>
-
-          <section className={`${styles.panel} ${styles.attention}`}>
-            <div className={styles.panelHeader}>
-              <div><h2>Needs Attention</h2><p>Ranked investigations from current marketing evidence.</p></div>
-              <span className={styles.queueCount}>{attention.length} signal{attention.length === 1 ? '' : 's'}</span>
-            </div>
-            <div className={styles.panelBody}>
-              {attention.length ? attention.slice(0, 4).map((item, index) => (
-                <Attention key={`${item.title}-${index}`} rank={index + 1} tone={item.tone} title={item.title} detail={item.detail} href={item.href} label={item.label} />
-              )) : <p className={styles.caption}>No priority investigation is supported by the current evidence.</p>}
-            </div>
-          </section>
-        </div>
-
-        <div className={styles.stack}>
-          <section className={styles.panel}>
-            <div className={styles.panelHeader}>
-              <div><h2>Marketing Funnel</h2><p>From acquisition to enrollment.</p></div>
-              <Link href="/funnel" className={styles.link}>Explore <ArrowRight size={12} /></Link>
-            </div>
-            <div className={styles.panelBody}>
-              <div className={styles.funnel}>
-                <FunnelRow label="Traffic" value={traffic} base={traffic} />
-                <FunnelRow label="Lead" value={totalLeads} base={traffic} />
-                <FunnelRow label="Qualified" value={qualified} base={totalLeads} />
-                <FunnelRow label="High Intent" value={highIntent} base={totalLeads} />
-                <FunnelRow label="Payment Pending" value={paymentPending} base={totalLeads} />
-                <FunnelRow label="Enrolled" value={enrolled} base={totalLeads} />
-              </div>
-              <p className={styles.caption}>Counts are observed states/milestones. Bars show stage share and do not imply causal attribution.</p>
-            </div>
-          </section>
-
-          <section className={styles.panel}>
-            <div className={styles.panelHeader}>
-              <div><h2>Top Performers</h2><p>Ranked by enrollments in the current campaign scope.</p></div>
-            </div>
-            <div className={styles.panelBody}>
-              {topCampaigns.length ? topCampaigns.map((row, index) => (
-                <Link href="/campaigns" className={styles.rankRow} key={row.id}>
-                  <span className={styles.rankNum}>{index + 1}</span>
-                  <span className={styles.rankMain}><strong>{row.name}</strong><small>{row.qualified} qualified · {row.cac === null ? 'CAC unavailable' : `CAC ${formatMoney(row.cac, row.spendCurrency)}`}</small></span>
-                  <span className={styles.rankValue}>{row.enrolled}<small style={{ display: 'block', fontSize: 7, color: '#758279', fontWeight: 400 }}>enrolled</small></span>
-                </Link>
-              )) : <p className={styles.caption}>No connected paid campaign rows are available in this scope.</p>}
-            </div>
-          </section>
-        </div>
+        ))}
+        <span className="mx-1 h-7 w-px bg-slate-200 dark:bg-slate-800" />
+        <Link
+          href="/paid-media-leads"
+          className="inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-semibold text-slate-500 transition hover:bg-slate-100 dark:hover:bg-slate-900"
+        >
+          <Megaphone size={13} /> Acquisition
+        </Link>
+        <Link
+          href="/seo"
+          className="inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-semibold text-slate-500 transition hover:bg-slate-100 dark:hover:bg-slate-900"
+        >
+          <Search size={13} /> Search
+        </Link>
       </div>
+    </nav>
+  );
+}
 
-      <div className={styles.changeFeed}>
-        <strong>What changed</strong>
-        <ChangeItem label="Sessions" movement={movement.sessions} />
-        <ChangeItem label="Leads" movement={movement.leads} />
-        <ChangeItem label="Qualified" movement={movement.qualified} />
-        <ChangeItem label="Enrolled" movement={movement.enrolled} />
-        <span>{roas === null ? 'ROAS coverage remains partial' : `Known paid ROAS ${roas.toFixed(1)}×`}</span>
+async function CampaignsView({
+  query,
+}: {
+  query: Awaited<MarketingPageProps["searchParams"]>;
+}) {
+  const filters = parseCampaignFilters(query);
+  const workspace = await getCampaignsWorkspace(filters);
+  const mock = isMockMode();
+
+  return (
+    <div className="space-y-4">
+      <WorkspaceIntro
+        eyebrow="Paid acquisition"
+        title="Campaign performance"
+        detail="Compare spend with qualified demand, enrollments and known revenue without leaving the Marketing workspace."
+      />
+
+      {workspace.googleError || workspace.metaError ? (
+        <Notice tone="warning" title="Some paid-media evidence is temporarily unavailable">
+          {[workspace.googleError ? `Google Ads: ${workspace.googleError}` : null, workspace.metaError ? `Meta Ads: ${workspace.metaError}` : null]
+            .filter(Boolean)
+            .join(" · ")}
+        </Notice>
+      ) : null}
+
+      {workspace.warning ? (
+        <Notice tone="warning">
+          Campaign reporting is using a fallback path. Treat budget decisions as directional until the primary evidence path is healthy. {workspace.warning}
+        </Notice>
+      ) : null}
+
+      <CampaignsIntelligenceWorkspace
+        campaigns={workspace.campaigns}
+        summary={workspace.summary}
+        platforms={workspace.platforms}
+        pagination={workspace.pagination}
+        filters={filters}
+        mock={mock}
+      />
+    </div>
+  );
+}
+
+async function AnalyticsView() {
+  const workspace = await getAnalyticsWorkspace();
+  const { overview, sourceRows, landingRows, campaignRows, countryRows, reconciliation, health } = workspace;
+  const brief = buildAnalyticsDecisionBrief(workspace);
+  const dateRange =
+    overview.range_start && overview.range_end
+      ? `${formatDate(overview.range_start)} – ${formatDate(overview.range_end)}`
+      : "Latest synced period";
+
+  return (
+    <div className="space-y-4">
+      <WorkspaceIntro
+        eyebrow="Traffic & behavior"
+        title="Analytics"
+        detail="Connect traffic and engagement with downstream CRM outcomes while keeping browser analytics and first-party identity distinct."
+        meta={
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-[10px] font-bold text-slate-500 dark:border-slate-800 dark:bg-slate-950 dark:text-slate-400">
+              {dateRange}
+            </span>
+            <span className={`inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-[10px] font-bold ${health.latest_analytics_date ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-300" : "bg-slate-100 text-slate-500 dark:bg-slate-900 dark:text-slate-400"}`}>
+              <Activity size={12} />
+              {health.latest_analytics_date ? `Synced ${formatDate(health.latest_analytics_date)}` : "Waiting for data"}
+            </span>
+          </div>
+        }
+      />
+
+      <ExecutiveDecisionBrief
+        eyebrow="Analytics decision brief"
+        title={brief.title}
+        summary={brief.summary}
+        confidenceLabel={brief.confidenceLabel}
+        confidenceDetail={brief.confidenceDetail}
+        signals={brief.signals}
+        actions={brief.actions}
+      />
+
+      {workspace.warning ? <Notice tone="warning">{workspace.warning}</Notice> : null}
+
+      <AnalyticsExplorer
+        overview={overview}
+        reconciliation={reconciliation}
+        sources={sourceRows}
+        landing={landingRows}
+        campaigns={campaignRows}
+        countries={countryRows}
+      />
+
+      <div className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-xs text-slate-500 dark:border-slate-800 dark:bg-slate-950">
+        Data health · {health.latest_analytics_date ? `latest GA4 date ${formatDate(health.latest_analytics_date)}` : "waiting for GA4 data"} · {formatNumber(health.daily_rows)} daily rows · {formatNumber(health.landing_page_rows)} landing rows.
       </div>
     </div>
   );
 }
 
-function Pulse({ label, value, note, partial = false }: { label: string; value: string; note: string; partial?: boolean }) {
-  return <div className={styles.pulseItem}><span className={styles.pulseLabel}>{label}</span><strong className={`${styles.pulseValue} ${partial ? styles.partial : ''}`}>{value}</strong><small className={styles.pulseNote}>{note}</small></div>;
+async function FunnelView() {
+  const workspace = await getFunnelIntelligenceWorkspace();
+  const brief = buildFunnelDecisionBrief(workspace);
+
+  return (
+    <div className="space-y-4">
+      <WorkspaceIntro
+        eyebrow="Conversion"
+        title="Funnel"
+        detail="See where demand becomes revenue, where momentum is lost and which conversion step deserves investigation first."
+      />
+
+      {workspace.status.available && workspace.overview ? (
+        <ExecutiveDecisionBrief
+          title={brief.title}
+          summary={brief.summary}
+          confidenceLabel={brief.confidenceLabel}
+          confidenceDetail={brief.confidenceDetail}
+          signals={brief.signals}
+          actions={brief.actions}
+        />
+      ) : null}
+
+      <FunnelIntelligenceWorkspaceV2 workspace={workspace} />
+    </div>
+  );
 }
 
-function IntelligenceCard({ icon, label, value, note, tone, href }: { icon: React.ReactNode; label: string; value: string; note: string; tone: 'warning' | 'positive' | 'neutral'; href?: string }) {
-  const content = <><span className={`${styles.intelligenceIcon} ${styles[`intelligenceIcon_${tone}`]}`}>{icon}</span><span className={styles.intelligenceCopy}><small>{label}</small><strong>{value}</strong><em>{note}</em></span>{href ? <ArrowRight size={13} className={styles.intelligenceArrow} /> : null}</>;
-  return href ? <Link href={href} className={styles.intelligenceCard}>{content}</Link> : <div className={styles.intelligenceCard}>{content}</div>;
+async function AttributionView({
+  query,
+}: {
+  query: Awaited<MarketingPageProps["searchParams"]>;
+}) {
+  const filters = {
+    query: query.q?.trim() ?? "",
+    course: query.course?.trim() || "all",
+    location: query.location?.trim() || "all",
+    country: query.country?.trim() || "all",
+    stage: query.stage?.trim() || "all",
+  };
+  const { workspace, warning } = await getAttributionWorkspace(filters);
+  const intelligence = buildAttributionIntelligence(workspace);
+
+  return (
+    <div className="space-y-4">
+      <WorkspaceIntro
+        eyebrow="Attribution"
+        title="Source credit & evidence"
+        detail="Compare attribution models, known-vs-unknown coverage and downstream outcomes in the same Marketing workspace."
+      />
+
+      <ExecutiveDecisionBrief
+        eyebrow="Attribution decision brief"
+        title={intelligence.summary}
+        summary={buildAttributionNarrative(intelligence.readinessScore, intelligence.readinessDetail)}
+        confidenceLabel={`${Math.round(intelligence.readinessScore)}/100 evidence readiness`}
+        confidenceDetail={intelligence.methodology}
+        signals={intelligence.signals.slice(0, 4).map((signal) => ({
+          label: signal.label,
+          value: signal.value,
+          detail: signal.detail,
+          tone: mapTone(signal.tone),
+        }))}
+        actions={intelligence.actions
+          .filter((action) => action.href)
+          .slice(0, 3)
+          .map((action) => ({
+            label: action.title,
+            href: marketingActionHref(action.href!),
+            detail: action.detail,
+          }))}
+      />
+
+      <AttributionIntelligenceExplorer workspace={workspace} filters={filters} warning={warning} />
+    </div>
+  );
 }
 
-function Attention({ rank, tone, title, detail, href, label }: { rank: number; tone: AttentionItem['tone']; title: string; detail: string; href: string; label: string }) {
-  return <div className={styles.attentionItem}><span className={`${styles.attentionRank} ${styles[`attentionRank_${tone}`]}`}>{String(rank).padStart(2, '0')}</span><div className={styles.attentionText}><div className={styles.attentionMeta}><span>{tone === 'critical' ? 'High priority' : tone === 'warning' ? 'Review' : tone === 'positive' ? 'Opportunity' : 'Monitor'}</span></div><h3>{title}</h3><p>{detail}</p><Link href={href} className={styles.link}>{label} <ArrowRight size={11} /></Link></div></div>;
+function WorkspaceIntro({
+  eyebrow,
+  title,
+  detail,
+  meta,
+}: {
+  eyebrow: string;
+  title: string;
+  detail: string;
+  meta?: React.ReactNode;
+}) {
+  return (
+    <section className="flex flex-col gap-3 rounded-2xl border border-slate-200 bg-white px-5 py-4 dark:border-slate-800 dark:bg-slate-950 lg:flex-row lg:items-center lg:justify-between">
+      <div>
+        <div className="text-[10px] font-bold uppercase tracking-[0.12em] text-violet-600 dark:text-violet-300">{eyebrow}</div>
+        <h2 className="mt-1 text-lg font-semibold text-slate-950 dark:text-white">{title}</h2>
+        <p className="mt-1 max-w-3xl text-sm leading-6 text-slate-500">{detail}</p>
+      </div>
+      {meta ? <div className="shrink-0">{meta}</div> : null}
+    </section>
+  );
 }
 
-function FunnelRow({ label, value, base }: { label: string; value: number; base: number }) {
-  const width = base > 0 ? Math.max(value > 0 ? 3 : 0, Math.min(100, (value / base) * 100)) : 0;
-  return <div className={styles.funnelRow}><span>{label}</span><span className={styles.funnelBar}><i style={{ width: `${width}%` }} /></span><strong className={styles.funnelCount}>{formatNumber(value)}</strong></div>;
-}
-
-function ChangeItem({ label, movement }: { label: string; movement: Movement }) {
-  if (movement.delta === null) return <span>{label}: not enough history</span>;
-  const sign = movement.delta > 0 ? '+' : '';
-  return <span>{label} {sign}{movement.delta.toFixed(1)}%</span>;
-}
-
-function buildMovement(rows: unknown[]) {
-  const daily = rows.map(asRecord).map((row) => ({
-    sessions: numberValue(row.sessions, row.visitors, row.traffic),
-    leads: numberValue(row.leads, row.lead_count, row.crm_leads),
-    qualified: numberValue(row.qualified, row.qualified_leads, row.qualified_count),
-    enrolled: numberValue(row.enrolled, row.enrolled_leads, row.enrolled_count),
-  })).filter((row) => row.sessions > 0 || row.leads > 0 || row.qualified > 0 || row.enrolled > 0);
-
-  const split = Math.floor(daily.length / 2);
-  if (split < 2) return emptyMovement();
-  const previous = daily.slice(0, split);
-  const current = daily.slice(split);
+function parseCampaignFilters(query: Awaited<MarketingPageProps["searchParams"]>): CampaignWorkspaceFilters {
+  const allowedOutcomes = new Set(["all", "with_leads", "no_leads", "qualified", "enrolled", "revenue"]);
+  const allowedSorts = new Set(["spend_desc", "leads_desc", "qualified_desc", "enrolled_desc", "roas_desc", "cac_asc", "name"]);
+  const outcome = allowedOutcomes.has(query.outcome ?? "") ? query.outcome! : "all";
+  const sortMode = allowedSorts.has(query.sort ?? "") ? query.sort! : "spend_desc";
+  const page = Number.parseInt(query.page ?? "1", 10);
 
   return {
-    sessions: movementFor(previous, current, 'sessions'),
-    leads: movementFor(previous, current, 'leads'),
-    qualified: movementFor(previous, current, 'qualified'),
-    enrolled: movementFor(previous, current, 'enrolled'),
+    query: query.q?.trim() ?? "",
+    platform: query.platform?.trim() || "all",
+    outcome: outcome as CampaignWorkspaceFilters["outcome"],
+    sortMode: sortMode as CampaignWorkspaceFilters["sortMode"],
+    page: Number.isFinite(page) && page > 0 ? page : 1,
+    pageSize: PAGE_SIZE,
   };
 }
 
-function movementFor(previous: DailySignal[], current: DailySignal[], key: keyof DailySignal): Movement {
-  const previousValue = previous.reduce((sum, row) => sum + row[key], 0);
-  const currentValue = current.reduce((sum, row) => sum + row[key], 0);
-  const delta = previousValue > 0 ? ((currentValue - previousValue) / previousValue) * 100 : null;
-  return { current: currentValue, previous: previousValue, delta };
+function buildAnalyticsDecisionBrief(workspace: Awaited<ReturnType<typeof getAnalyticsWorkspace>>) {
+  const overview = workspace.overview;
+  const sessions = toNumber(overview.ga4_sessions);
+  const engaged = toNumber(overview.ga4_engaged_sessions);
+  const leads = toNumber(overview.crm_web_leads);
+  const qualified = toNumber(overview.crm_qualified_leads);
+  const enrolled = toNumber(overview.crm_enrolled_leads);
+  const engagementRate = toRatePercent(overview.ga4_engagement_rate);
+  const conversionRate = toRatePercent(overview.website_lead_conversion_rate);
+  const bestSource = [...workspace.sourceRows].sort((a, b) => {
+    if (b.enrolled !== a.enrolled) return b.enrolled - a.enrolled;
+    if (b.qualified !== a.qualified) return b.qualified - a.qualified;
+    return b.leads - a.leads;
+  })[0];
+  const hasFreshData = Boolean(workspace.health.latest_analytics_date);
+  const crmSessions = toNumber(overview.crm_sessions);
+  const sessionDelta = sessions > 0 && crmSessions > 0 ? (Math.abs(sessions - crmSessions) / Math.max(sessions, crmSessions)) * 100 : null;
+
+  return {
+    title: bestSource?.source
+      ? `${pretty(bestSource.source)} is the strongest observed source by downstream CRM outcome.`
+      : sessions > 0
+        ? "Traffic is visible; downstream source evidence is still developing."
+        : "Analytics evidence is waiting for a complete synced period.",
+    summary: bestSource
+      ? `${bestSource.leads.toLocaleString("en-IN")} CRM leads, ${bestSource.qualified.toLocaleString("en-IN")} qualified and ${bestSource.enrolled.toLocaleString("en-IN")} enrolled are currently associated with ${pretty(bestSource.source)}${bestSource.medium ? ` / ${pretty(bestSource.medium)}` : ""}. Compare traffic contribution with business outcomes rather than optimizing on sessions alone.`
+      : "SalsysOS will surface source, landing-page, campaign and country patterns as connected analytics and CRM evidence becomes available.",
+    confidenceLabel: hasFreshData ? "Synced analytics evidence" : "Sync evidence incomplete",
+    confidenceDetail: sessionDelta == null
+      ? "GA4 and CRM use different identity and session definitions. Reconciliation remains explicit instead of forcing the two systems to match."
+      : `GA4 and CRM session totals differ by ${sessionDelta.toFixed(1)}% in the visible scope. This is a reconciliation signal, not automatically a tracking error.`,
+    signals: [
+      { label: "GA4 sessions", value: sessions.toLocaleString("en-IN"), detail: `${engaged.toLocaleString("en-IN")} engaged sessions · ${engagementRate == null ? "engagement unknown" : `${engagementRate.toFixed(1)}% engagement`}.`, tone: sessions > 0 ? ("positive" as const) : ("neutral" as const) },
+      { label: "Website lead conversion", value: conversionRate == null ? "—" : `${conversionRate.toFixed(1)}%`, detail: `${leads.toLocaleString("en-IN")} CRM web leads from the current analytics scope.`, tone: conversionRate != null && conversionRate > 0 ? ("positive" as const) : ("neutral" as const) },
+      { label: "Qualified outcomes", value: qualified.toLocaleString("en-IN"), detail: leads > 0 ? `${((qualified / leads) * 100).toFixed(1)}% of CRM web leads.` : "No valid lead denominator yet.", tone: qualified > 0 ? ("positive" as const) : ("neutral" as const) },
+      { label: "Enrollments", value: enrolled.toLocaleString("en-IN"), detail: bestSource ? `${bestSource.enrolled.toLocaleString("en-IN")} currently associated with the strongest source.` : "No source leader yet.", tone: enrolled > 0 ? ("positive" as const) : ("neutral" as const) },
+    ],
+    actions: [
+      { label: "Inspect funnel", href: "/marketing?view=funnel", detail: "See where traffic becomes CRM outcomes." },
+      { label: "Compare attribution", href: "/marketing?view=attribution", detail: "Separate analytics source labels from attribution credit." },
+      { label: "Review data coverage", href: "/tracking/data-coverage", detail: "Check evidence completeness before diagnosing differences." },
+    ],
+  };
 }
 
-function emptyMovement() {
-  const empty = { current: 0, previous: 0, delta: null } satisfies Movement;
-  return { sessions: { ...empty }, leads: { ...empty }, qualified: { ...empty }, enrolled: { ...empty } };
-}
-
-function buildAttentionQueue({ poorCampaign, missingRoas, strongest, movement, campaignCount }: { poorCampaign?: CampaignWorkspaceRow; missingRoas: number; strongest?: CampaignWorkspaceRow; movement: ReturnType<typeof buildMovement>; campaignCount: number }): AttentionItem[] {
-  const items: AttentionItem[] = [];
-
-  if (poorCampaign) {
-    items.push({
-      score: 100 + Math.min(50, poorCampaign.spend / 1000),
-      tone: 'critical',
-      title: 'Spend without qualified outcomes',
-      detail: `${poorCampaign.name} · ${formatMoney(poorCampaign.spend, poorCampaign.spendCurrency)} spend · ${poorCampaign.leads} leads · 0 qualified.`,
-      href: '/campaigns',
-      label: 'Inspect campaign',
-    });
+function buildFunnelDecisionBrief(workspace: FunnelWorkspace) {
+  if (!workspace.status.available || !workspace.overview) {
+    return {
+      title: "Funnel evidence is unavailable",
+      summary: "SalsysOS is withholding funnel conclusions until the current cohort can be read safely.",
+      confidenceLabel: "Evidence unavailable",
+      confidenceDetail: "Unavailable reporting is not treated as zero performance.",
+      signals: [],
+      actions: [],
+    };
   }
 
-  if (movement.qualified.delta !== null && movement.qualified.delta <= -15) {
-    items.push({
-      score: 92 + Math.min(30, Math.abs(movement.qualified.delta)),
-      tone: 'critical',
-      title: 'Qualification momentum declined',
-      detail: `${formatDelta(movement.qualified.delta, 'Qualified outcomes')} versus the prior half of the observed daily period. Check lead quality and admissions handling before changing budget.`,
-      href: '/funnel',
-      label: 'Inspect funnel',
-    });
-  } else if (movement.leads.delta !== null && movement.leads.delta <= -15) {
-    items.push({
-      score: 84 + Math.min(30, Math.abs(movement.leads.delta)),
-      tone: 'warning',
-      title: 'Lead momentum declined',
-      detail: `${formatDelta(movement.leads.delta, 'Leads')} versus the prior half of the observed daily period. Review acquisition mix and campaign delivery.`,
-      href: '/analytics',
-      label: 'Inspect traffic and leads',
-    });
-  }
+  const overview = workspace.overview;
+  const businessJourney = workspace.journeys.find((journey) => journey.key === "business") ?? workspace.journeys[0];
+  const drops = businessJourney
+    ? businessJourney.stages.flatMap((stage, index) => {
+        if (index === 0) return [];
+        const previous = businessJourney.stages[index - 1];
+        if (previous.unit !== stage.unit || previous.count <= 0) return [];
+        const rate = (stage.count / previous.count) * 100;
+        return [{ from: previous.label, to: stage.label, rate, lost: Math.max(0, previous.count - stage.count) }];
+      })
+    : [];
+  const largestDrop = [...drops].sort((a, b) => a.rate - b.rate)[0] ?? null;
+  const strongestSource = [...workspace.sources].sort((a, b) => {
+    if (b.enrolled !== a.enrolled) return b.enrolled - a.enrolled;
+    if (b.qualified !== a.qualified) return b.qualified - a.qualified;
+    return b.leads - a.leads;
+  })[0];
+  const coverage = workspace.measurement?.first_touch_coverage ?? null;
+  const coveragePct = coverage == null ? null : coverage <= 1 ? coverage * 100 : coverage;
+  const enrolledRate = overview.leads > 0 ? (overview.enrolled / overview.leads) * 100 : null;
+  const qualifiedRate = overview.leads > 0 ? (overview.qualified / overview.leads) * 100 : null;
 
-  if (missingRoas > 0) {
-    items.push({
-      score: 70 + Math.min(20, missingRoas * 2),
-      tone: 'warning',
-      title: 'Campaign efficiency has incomplete evidence',
-      detail: `${missingRoas} of ${campaignCount || missingRoas} campaign${campaignCount === 1 ? '' : 's'} do not have enough known revenue/spend evidence for ROAS.`,
-      href: '/attribution',
-      label: 'Inspect attribution',
-    });
-  }
-
-  if (strongest) {
-    items.push({
-      score: 45 + Math.min(20, strongest.enrolled * 2),
-      tone: 'positive',
-      title: 'Potential scale opportunity',
-      detail: `${strongest.name} · ${strongest.enrolled} enrolled · ${strongest.cac === null ? 'CAC unavailable' : `${formatMoney(strongest.cac, strongest.spendCurrency)} CAC`}. Review marginal efficiency before increasing spend.`,
-      href: '/campaigns',
-      label: 'Inspect performance',
-    });
-  }
-
-  return items.sort((a, b) => b.score - a.score);
+  return {
+    title: largestDrop ? `${largestDrop.from} → ${largestDrop.to} is the conversion step to investigate first.` : "The funnel is connected; focus on the strongest observed conversion evidence.",
+    summary: largestDrop ? `${largestDrop.lost.toLocaleString("en-IN")} records are currently between those two comparable stages. SalsysOS is surfacing the observed gap, not assuming why it happened.` : "No comparable stage produces a clear dominant drop in the current cohort. Use source performance and measurement coverage to decide where to inspect next.",
+    confidenceLabel: coveragePct == null ? "Coverage unknown" : `${coveragePct.toFixed(0)}% first-touch coverage`,
+    confidenceDetail: coveragePct == null ? "The current read does not contain a reliable first-touch coverage denominator." : `${workspace.measurement?.known_first_touch.toLocaleString("en-IN") ?? 0} of ${workspace.measurement?.total_leads.toLocaleString("en-IN") ?? 0} leads have known first-touch evidence.`,
+    signals: [
+      { label: "Largest comparable drop", value: largestDrop ? `${largestDrop.rate.toFixed(1)}% continue` : "No dominant drop", detail: largestDrop ? `${largestDrop.from} → ${largestDrop.to}` : "No valid adjacent-stage denominator stands out.", tone: largestDrop && largestDrop.rate < 35 ? ("risk" as const) : ("watch" as const) },
+      { label: "Lead → qualified", value: qualifiedRate == null ? "—" : `${qualifiedRate.toFixed(1)}%`, detail: `${overview.qualified.toLocaleString("en-IN")} qualified from ${overview.leads.toLocaleString("en-IN")} leads.`, tone: qualifiedRate != null && qualifiedRate >= 35 ? ("positive" as const) : ("neutral" as const) },
+      { label: "Lead → enrolled", value: enrolledRate == null ? "—" : `${enrolledRate.toFixed(1)}%`, detail: `${overview.enrolled.toLocaleString("en-IN")} enrollments in the current cohort.`, tone: enrolledRate != null && enrolledRate > 0 ? ("positive" as const) : ("neutral" as const) },
+      { label: "Strongest observed source", value: strongestSource?.source || "Unknown", detail: strongestSource ? `${strongestSource.qualified.toLocaleString("en-IN")} qualified · ${strongestSource.enrolled.toLocaleString("en-IN")} enrolled.` : "No source-level CRM evidence is available.", tone: strongestSource?.enrolled ? ("positive" as const) : ("neutral" as const) },
+    ],
+    actions: [
+      { label: "Inspect attribution", href: "/marketing?view=attribution", detail: "Compare source evidence across attribution models." },
+      { label: "Review re-engaged leads", href: "/re-engaged", detail: "Prioritize returning leads with current intent evidence." },
+      { label: "Check tracking health", href: "/tracking/data-coverage", detail: "Validate evidence completeness before diagnosing performance." },
+    ],
+  };
 }
 
-function normalizeSources(rows: unknown[]): AcquisitionRow[] {
-  return rows.map(asRecord).map((row) => ({
-    name: stringValue(row.source, row.first_touch_source, row.channel, row.name) || 'Unknown',
-    leads: numberValue(row.leads, row.lead_count),
-    qualified: numberValue(row.qualified_leads, row.qualified, row.qualified_count),
-    enrolled: numberValue(row.enrolled_leads, row.enrolled, row.enrolled_count),
-  })).filter((row) => row.leads > 0 || row.qualified > 0 || row.enrolled > 0).sort((a, b) => b.leads - a.leads);
+function buildAttributionNarrative(score: number, readinessDetail: string) {
+  if (score >= 85) return `Attribution evidence is strong enough for directional source decisions. ${readinessDetail}`;
+  if (score >= 60) return `The model is useful, but source comparisons should still be read with visible coverage gaps in mind. ${readinessDetail}`;
+  return `Attribution is currently incomplete. Prioritize evidence repair before making aggressive channel or budget changes. ${readinessDetail}`;
 }
 
-function fallbackAcquisition(rows: CampaignWorkspaceRow[]): AcquisitionRow[] {
-  const grouped = new Map<string, AcquisitionRow>();
-  for (const row of rows) {
-    const key = row.platform || 'Unknown';
-    const current = grouped.get(key) ?? { name: key, leads: 0, qualified: 0, enrolled: 0 };
-    current.leads += row.leads;
-    current.qualified += row.qualified;
-    current.enrolled += row.enrolled;
-    grouped.set(key, current);
-  }
-  return [...grouped.values()].sort((a, b) => b.leads - a.leads);
+function mapTone(tone: "positive" | "info" | "watch" | "risk") {
+  if (tone === "positive") return "positive" as const;
+  if (tone === "watch") return "watch" as const;
+  if (tone === "risk") return "risk" as const;
+  return "neutral" as const;
 }
 
-function sumCampaign(rows: CampaignWorkspaceRow[], key: 'highIntent' | 'paymentPending') {
-  return rows.reduce((sum, row) => sum + row[key], 0);
+function marketingActionHref(href: string) {
+  if (href === "/funnel") return "/marketing?view=funnel";
+  if (href === "/attribution") return "/marketing?view=attribution";
+  if (href === "/campaigns") return "/marketing?view=campaigns";
+  if (href === "/analytics") return "/marketing?view=analytics";
+  return href;
 }
 
-function asRecord(value: unknown): UnknownRecord {
-  return value && typeof value === 'object' && !Array.isArray(value) ? value as UnknownRecord : {};
+function toNumber(value: number | string | null | undefined) {
+  const number = Number(value ?? 0);
+  return Number.isFinite(number) ? number : 0;
 }
 
-function numberValue(...values: unknown[]) {
-  for (const value of values) {
-    const number = Number(value ?? 0);
-    if (Number.isFinite(number) && number !== 0) return number;
-  }
-  return 0;
+function toRatePercent(value: number | string | null | undefined) {
+  if (value == null || value === "") return null;
+  const number = Number(value);
+  if (!Number.isFinite(number)) return null;
+  return number <= 1 ? number * 100 : number;
 }
 
-function positiveNumber(primary: unknown, fallback: number) {
-  const value = Number(primary ?? 0);
-  return Number.isFinite(value) && value > 0 ? value : fallback;
+function formatNumber(value: number | string | null | undefined) {
+  return toNumber(value).toLocaleString("en-IN", { maximumFractionDigits: 0 });
 }
 
-function stringValue(...values: unknown[]) {
-  for (const value of values) if (typeof value === 'string' && value.trim()) return value.trim();
-  return '';
+function formatDate(value: string | null | undefined) {
+  if (!value) return "—";
+  const date = new Date(`${value.slice(0, 10)}T00:00:00Z`);
+  if (Number.isNaN(date.getTime())) return value;
+  return new Intl.DateTimeFormat("en-IN", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+    timeZone: "UTC",
+  }).format(date);
 }
 
-function formatNumber(value: number) {
-  return new Intl.NumberFormat('en-IN', { maximumFractionDigits: 0 }).format(value || 0);
-}
-
-function formatMoney(value: number, currency = 'INR', compact = false) {
-  if (compact && Math.abs(value) >= 1000000) return `${currency === 'INR' ? '₹' : '$'}${(value / 1000000).toFixed(2)}M`;
-  if (compact && Math.abs(value) >= 1000) return `${currency === 'INR' ? '₹' : '$'}${(value / 1000).toFixed(1)}K`;
-  try {
-    return new Intl.NumberFormat(currency === 'INR' ? 'en-IN' : 'en-US', { style: 'currency', currency, maximumFractionDigits: 0 }).format(value || 0);
-  } catch {
-    return `${currency} ${formatNumber(value)}`;
-  }
-}
-
-function formatPercent(value: number, denominator: number) {
-  return denominator > 0 ? `${((value / denominator) * 100).toFixed(1)}%` : '—';
-}
-
-function formatDelta(delta: number, label: string) {
-  if (delta === 0) return `${label} flat`;
-  return `${label} ${delta > 0 ? 'up' : 'down'} ${Math.abs(delta).toFixed(1)}%`;
+function pretty(value: string | null | undefined) {
+  if (!value) return "—";
+  return String(value).replaceAll("_", " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
 }

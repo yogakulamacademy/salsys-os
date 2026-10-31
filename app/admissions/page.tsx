@@ -5,13 +5,19 @@ import {
   CircleDollarSign,
   Clock3,
   Inbox,
+  LayoutDashboard,
+  ListTodo,
   Sparkles,
   UserRoundCheck,
   UsersRound,
+  WalletCards,
 } from "lucide-react";
 
+import { PipelineWorkspace } from "@/components/crm/pipeline-workspace";
+import { DecisionMetricCard } from "@/components/intelligence/decision-metric-card";
 import { EmptyState, Notice, PageHeader } from "@/components/ui";
 import { getAdmissionsSnapshot } from "@/lib/admissions-data";
+import { getPipelineSnapshot } from "@/lib/pipeline-data";
 
 type PriorityRow = {
   lead_id: string;
@@ -56,6 +62,12 @@ type RevenueRow = {
   currency: string | null;
   outstanding_balance: number | string | null;
   payment_status: string | null;
+};
+
+type OutstandingSummary = {
+  display: string;
+  hasAmount: boolean;
+  missingCurrencyRecords: number;
 };
 
 type NewLeadRow = {
@@ -111,6 +123,14 @@ type AdmissionsBatchCapacityRow = {
   capacity_status: string | null;
 };
 
+type AdmissionsView =
+  | "overview"
+  | "queue"
+  | "pipeline"
+  | "payments"
+  | "capacity"
+  | "performance";
+
 type SearchParams = {
   notice?: string | string[];
   error?: string | string[];
@@ -118,6 +138,15 @@ type SearchParams = {
   owner?: string | string[];
   view?: string | string[];
 };
+
+const validViews = new Set<AdmissionsView>([
+  "overview",
+  "queue",
+  "pipeline",
+  "payments",
+  "capacity",
+  "performance",
+]);
 
 export default async function AdmissionsDeskPage({
   searchParams,
@@ -127,11 +156,16 @@ export default async function AdmissionsDeskPage({
   const resolved = (await searchParams) ?? {};
   const notice = one(resolved.notice);
   const error = one(resolved.error);
+  const requestedView = one(resolved.view) as AdmissionsView;
+  const view = validViews.has(requestedView) ? requestedView : "overview";
   const band = one(resolved.band) || "all";
   const ownerFilter = one(resolved.owner) || "all";
-  const view = one(resolved.view) === "performance" ? "performance" : "queue";
 
-  const snapshot = await getAdmissionsSnapshot();
+  const [snapshot, pipelineSnapshot] = await Promise.all([
+    getAdmissionsSnapshot(),
+    view === "pipeline" ? getPipelineSnapshot() : Promise.resolve(null),
+  ]);
+
   const user = snapshot.user;
   const priorityQueue = snapshot.priorityQueue as PriorityRow[];
   const followups = snapshot.followups as FollowUpRow[];
@@ -164,16 +198,22 @@ export default async function AdmissionsDeskPage({
 
   const criticalCount = ownerScoped.filter((row) => row.priority_band === "critical").length;
   const highCount = ownerScoped.filter((row) => row.priority_band === "high").length;
-  const paymentOutstanding = paymentPending.reduce(
-    (sum, row) => sum + toNumber(row.outstanding_balance),
-    0,
-  );
+  const paymentOutstanding = summarizeOutstanding(paymentPending);
+
+  const brief = buildAdmissionsBrief({
+    needsReplyCount,
+    overdueCount: overdue.length,
+    paymentCount: paymentPending.length,
+    criticalCount: priorityQueue.filter((row) => row.priority_band === "critical").length,
+    newLeadCount: newLeads.length,
+  });
 
   return (
     <div className="space-y-5">
       <PageHeader
-        title="Admissions Desk"
-        description="Prioritize leads, follow-ups, and pending payments."
+        eyebrow="CRM / Admissions"
+        title="Admissions"
+        description="One workspace for today’s sales actions, pipeline movement, payments, capacity and team performance."
         actions={
           <div className="flex flex-wrap gap-2">
             <Link href="/follow-ups" className="btn-secondary">
@@ -187,176 +227,286 @@ export default async function AdmissionsDeskPage({
       />
 
       {error ? <Notice tone="error">{error}</Notice> : null}
-
       {notice ? <Notice tone="success">Admissions updated.</Notice> : null}
 
-      <div className="flex items-center gap-1 rounded-xl border border-slate-200 bg-white p-1 dark:border-slate-800 dark:bg-slate-950">
-        <ViewTab href={admissionsHref({ view: "queue", owner: ownerFilter, band })} active={view === "queue"} label="Priority queue" />
-        <ViewTab href={admissionsHref({ view: "performance", owner: ownerFilter, band })} active={view === "performance"} label="Performance" />
-      </div>
+      <nav className="overflow-x-auto rounded-xl border border-slate-200 bg-white p-1 dark:border-slate-800 dark:bg-slate-950" aria-label="Admissions workspace views">
+        <div className="flex min-w-max items-center gap-1">
+          <ViewTab href={admissionsHref({ view: "overview" })} active={view === "overview"} label="Overview" />
+          <ViewTab href={admissionsHref({ view: "queue", owner: ownerFilter, band })} active={view === "queue"} label="Work Queue" />
+          <ViewTab href={admissionsHref({ view: "pipeline" })} active={view === "pipeline"} label="Pipeline" />
+          <ViewTab href={admissionsHref({ view: "payments" })} active={view === "payments"} label="Payments" />
+          <ViewTab href={admissionsHref({ view: "capacity" })} active={view === "capacity"} label="Capacity" />
+          <ViewTab href={admissionsHref({ view: "performance" })} active={view === "performance"} label="Performance" />
+        </div>
+      </nav>
+
+      {view === "overview" ? (
+        <AdmissionsOverview
+          brief={brief}
+          priorityQueue={priorityQueue}
+          batchCapacity={batchCapacity}
+          needsReplyCount={needsReplyCount}
+          unreadCount={unreadCount}
+          overdueCount={overdue.length}
+          newLeadCount={newLeads.length}
+          paymentCount={paymentPending.length}
+          paymentOutstanding={paymentOutstanding}
+        />
+      ) : null}
 
       {view === "queue" ? (
-        <>
-          <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-            <SignalMetric
-              href="/conversations"
-              label="Needs reply"
-              value={needsReplyCount}
-              detail={unreadCount > 0 ? `${unreadCount} unread` : "Admissions-scoped conversations"}
-              tone={needsReplyCount > 0 ? "attention" : "neutral"}
-            />
-            <SignalMetric
-              href="/follow-ups"
-              label="Overdue follow-ups"
-              value={overdue.length}
-              detail="Scheduled actions past due"
-              tone={overdue.length > 0 ? "attention" : "neutral"}
-            />
-            <SignalMetric
-              href="/pipeline"
-              label="Payment pending"
-              value={paymentPending.length}
-              detail={paymentOutstanding > 0 ? `${formatNumber(paymentOutstanding)} recorded outstanding` : "Near-conversion opportunities"}
-              tone={paymentPending.length > 0 ? "money" : "neutral"}
-            />
-            <SignalMetric
-              href="/leads"
-              label="New leads"
-              value={newLeads.length}
-              detail="Waiting to progress beyond New"
-              tone="neutral"
-            />
-          </section>
-
-          <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-950">
-            <div className="flex flex-col gap-4 border-b border-slate-100 px-5 py-4 dark:border-slate-900 xl:flex-row xl:items-center xl:justify-between">
-              <div>
-                <div className="text-[11px] font-bold uppercase tracking-[0.08em] text-violet-600 dark:text-violet-300">
-                  Team priorities
-                </div>
-                <h2 className="mt-1 text-lg font-semibold text-slate-950 dark:text-white">Priority queue</h2>
-                <p className="mt-1 text-sm text-slate-500">Work the highest-value next decisions first.</p>
-              </div>
-
-              <div className="flex flex-wrap gap-2">
-                <FilterTab href={admissionsHref({ view, owner: "all", band })} active={ownerFilter === "all"} label="Team" />
-                {user?.id ? (
-                  <FilterTab href={admissionsHref({ view, owner: "mine", band })} active={ownerFilter === "mine"} label="Mine" />
-                ) : null}
-                <FilterTab href={admissionsHref({ view, owner: "unassigned", band })} active={ownerFilter === "unassigned"} label="Unassigned" />
-                <span className="mx-1 h-8 w-px bg-slate-200 dark:bg-slate-800" />
-                <FilterTab href={admissionsHref({ view, owner: ownerFilter, band: "all" })} active={band === "all"} label="All" />
-                <FilterTab href={admissionsHref({ view, owner: ownerFilter, band: "critical" })} active={band === "critical"} label={`Critical ${criticalCount}`} />
-                <FilterTab href={admissionsHref({ view, owner: ownerFilter, band: "high" })} active={band === "high"} label={`High ${highCount}`} />
-              </div>
-            </div>
-
-            {filteredPriority.length ? (
-              <div className="divide-y divide-slate-100 dark:divide-slate-900">
-                {filteredPriority.slice(0, 30).map((row) => (
-                  <PriorityQueueRow key={row.lead_id} row={row} />
-                ))}
-              </div>
-            ) : (
-              <div className="px-5 py-5">
-                <EmptyState
-                  title="You're caught up"
-                  description="No matching leads need action in this queue. Try changing the filters."
-                  compact
-                />
-              </div>
-            )}
-          </section>
-
-          {paymentPending.length ? (
-            <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-950">
-              <div className="flex items-center justify-between border-b border-slate-100 px-5 py-4 dark:border-slate-900">
-                <div>
-                  <div className="text-[11px] font-bold uppercase tracking-[0.08em] text-slate-400">Conversion</div>
-                  <h2 className="mt-1 text-base font-semibold text-slate-950 dark:text-white">Pending payments</h2>
-                </div>
-                <Link href="/pipeline" className="text-xs font-semibold text-violet-600 hover:underline dark:text-violet-300">Open pipeline</Link>
-              </div>
-              <div className="divide-y divide-slate-100 dark:divide-slate-900">
-                {paymentPending.slice(0, 8).map((row) => (
-                  <Link key={row.lead_id} href={`/leads/${row.lead_id}`} className="group flex items-center gap-4 px-5 py-4 transition hover:bg-slate-50 dark:hover:bg-slate-900/60">
-                    <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-violet-50 text-violet-600 dark:bg-violet-950/30 dark:text-violet-300">
-                      <CircleDollarSign size={15} />
-                    </span>
-                    <span className="min-w-0 flex-1">
-                      <span className="block truncate text-sm font-semibold text-slate-900 dark:text-white">{row.lead_name || "Lead"}</span>
-                      <span className="mt-0.5 block text-xs text-slate-500">{pretty(row.current_stage || "payment_pending")}</span>
-                    </span>
-                    <span className="text-right">
-                      <span className="block text-sm font-semibold text-slate-900 dark:text-white">
-                        {row.outstanding_balance == null || !row.currency ? "—" : formatMoney(row.outstanding_balance, row.currency)}
-                      </span>
-                      <span className="block text-[11px] text-slate-400">outstanding</span>
-                    </span>
-                    <ArrowRight size={14} className="text-slate-300 transition group-hover:translate-x-0.5" />
-                  </Link>
-                ))}
-              </div>
-            </section>
-          ) : null}
-        </>
-      ) : (
-        <AdmissionsPerformance
-          sla={slaOverview}
-          ownerWorkload={ownerWorkload}
-          batchCapacity={batchCapacity}
+        <PriorityQueueView
+          userId={user?.id ?? null}
+          ownerFilter={ownerFilter}
+          band={band}
+          criticalCount={criticalCount}
+          highCount={highCount}
+          rows={filteredPriority}
         />
-      )}
+      ) : null}
+
+      {view === "pipeline" && pipelineSnapshot ? (
+        <PipelineWorkspace snapshot={pipelineSnapshot} embedded />
+      ) : null}
+
+      {view === "payments" ? (
+        <PaymentsView rows={paymentPending} outstanding={paymentOutstanding} />
+      ) : null}
+
+      {view === "capacity" ? <CapacityView rows={batchCapacity} /> : null}
+
+      {view === "performance" ? (
+        <AdmissionsPerformance sla={slaOverview} ownerWorkload={ownerWorkload} />
+      ) : null}
     </div>
   );
 }
 
-function PriorityQueueRow({ row }: { row: PriorityRow }) {
-  const reason = row.priority_reason || "Priority is based on the current CRM state.";
-  const action = row.next_best_action || "Review lead";
-  const lastSignal = row.next_followup_due_at
-    ? `Follow-up ${formatDateTime(row.next_followup_due_at)}`
-    : row.created_at
-      ? `Created ${formatRelative(row.created_at)}`
-      : "No recent timestamp";
+function AdmissionsOverview({
+  brief,
+  priorityQueue,
+  batchCapacity,
+  needsReplyCount,
+  unreadCount,
+  overdueCount,
+  newLeadCount,
+  paymentCount,
+  paymentOutstanding,
+}: {
+  brief: string;
+  priorityQueue: PriorityRow[];
+  batchCapacity: AdmissionsBatchCapacityRow[];
+  needsReplyCount: number;
+  unreadCount: number;
+  overdueCount: number;
+  newLeadCount: number;
+  paymentCount: number;
+  paymentOutstanding: OutstandingSummary;
+}) {
+  const paymentDetail = paymentOutstanding.hasAmount
+    ? `${paymentOutstanding.display} recorded outstanding`
+    : paymentOutstanding.missingCurrencyRecords > 0
+      ? `${paymentOutstanding.missingCurrencyRecords} amount ${paymentOutstanding.missingCurrencyRecords === 1 ? "record has" : "records have"} no currency`
+      : "Near-conversion opportunities";
 
   return (
-    <div className="grid gap-3 px-5 py-4 transition hover:bg-slate-50 dark:hover:bg-slate-900/60 lg:grid-cols-[minmax(220px,1fr)_150px_minmax(220px,1.2fr)_160px_auto] lg:items-center">
-      <div className="min-w-0">
-        <div className="flex items-center gap-2">
-          <Link href={`/leads/${row.lead_id}`} className="truncate text-sm font-semibold text-slate-950 hover:text-violet-600 dark:text-white dark:hover:text-violet-300">
-            {row.lead_name || row.lead_code || "Lead"}
-          </Link>
-          <StagePill value={row.current_stage || "new"} />
+    <div className="space-y-5">
+      <section className="grid gap-4 rounded-2xl border border-violet-100 bg-violet-50/50 p-5 dark:border-violet-900/50 dark:bg-violet-950/15 xl:grid-cols-[minmax(0,1fr)_auto] xl:items-center">
+        <div className="flex items-start gap-3">
+          <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-white text-violet-700 shadow-sm dark:bg-slate-950 dark:text-violet-300">
+            <Sparkles size={17} />
+          </span>
+          <div>
+            <div className="text-[10px] font-bold uppercase tracking-[0.12em] text-violet-600 dark:text-violet-300">Admissions brief</div>
+            <h2 className="mt-1 text-lg font-semibold text-slate-950 dark:text-white">Where the team should focus now</h2>
+            <p className="mt-1 max-w-4xl text-sm leading-6 text-slate-600 dark:text-slate-300">{brief}</p>
+          </div>
         </div>
-        <div className="mt-1 truncate text-xs text-slate-500">
-          {[row.course_name, row.first_touch_source, row.current_contact_channel].filter(Boolean).map((value) => pretty(String(value))).join(" · ") || "Context unavailable"}
+        <Link href="/admissions?view=queue" className="btn-primary whitespace-nowrap">
+          Open work queue <ArrowRight size={14} />
+        </Link>
+      </section>
+
+      <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4" aria-label="Admissions action signals">
+        <DecisionMetricCard
+          href="/conversations"
+          label="Needs reply"
+          value={formatNumber(needsReplyCount)}
+          detail={unreadCount > 0 ? `${unreadCount} unread inbound` : "Conversation attention"}
+          tone={needsReplyCount > 0 ? "warning" : "positive"}
+          statusLabel={needsReplyCount > 0 ? "Attention" : "Clear"}
+          icon={<Inbox size={16} />}
+          evidenceLabel="Conversation state"
+          definition="Active conversations currently recorded as needing a human reply. This is an action queue signal; it does not infer customer intent."
+        />
+        <DecisionMetricCard
+          href="/follow-ups"
+          label="Overdue follow-ups"
+          value={formatNumber(overdueCount)}
+          detail="Scheduled actions past due"
+          tone={overdueCount > 0 ? "warning" : "positive"}
+          statusLabel={overdueCount > 0 ? "Attention" : "Clear"}
+          icon={<Clock3 size={16} />}
+          evidenceLabel="Scheduled task evidence"
+          definition="Open follow-up tasks whose recorded due time has passed."
+        />
+        <DecisionMetricCard
+          href="/admissions?view=payments"
+          label="Payment pending"
+          value={formatNumber(paymentCount)}
+          detail={paymentDetail}
+          tone="neutral"
+          icon={<WalletCards size={16} />}
+          evidenceLabel="Pipeline & payment state"
+          definition="Opportunities currently recorded in the payment-pending stage. Outstanding amounts stay separated by recorded currency and amounts without currency are not combined into financial totals."
+        />
+        <DecisionMetricCard
+          href="/admissions?view=queue"
+          label="New leads"
+          value={formatNumber(newLeadCount)}
+          detail="Waiting to progress beyond New"
+          tone="neutral"
+          icon={<UserRoundCheck size={16} />}
+          evidenceLabel="CRM intake state"
+          definition="Leads currently recorded in the New stage. Intake volume is descriptive and is not treated as quality by itself."
+        />
+      </section>
+
+      <section className="grid gap-5 xl:grid-cols-[minmax(0,1.25fr)_minmax(340px,.75fr)]">
+        <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-950">
+          <PanelHeader eyebrow="Priority intelligence" title="Next best work" href="/admissions?view=queue" action="Full queue" />
+          {priorityQueue.length ? (
+            <div className="divide-y divide-slate-100 dark:divide-slate-900">
+              {priorityQueue.slice(0, 6).map((row) => <PriorityQueueRow key={row.lead_id} row={row} compact />)}
+            </div>
+          ) : (
+            <SimpleEmpty title="No priority work" detail="No priority rows are available in the current admissions snapshot." />
+          )}
+        </section>
+
+        <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-950">
+          <PanelHeader eyebrow="Demand pressure" title="Upcoming capacity" href="/admissions?view=capacity" action="View capacity" />
+          {batchCapacity.length ? (
+            <div className="divide-y divide-slate-100 dark:divide-slate-900">
+              {batchCapacity.slice(0, 5).map((row) => <CapacityRow key={row.batch_id} row={row} compact />)}
+            </div>
+          ) : (
+            <SimpleEmpty title="No upcoming batch data" detail="Capacity pressure will appear when scheduled batches are available." />
+          )}
+        </section>
+      </section>
+    </div>
+  );
+}
+
+function PriorityQueueView({
+  userId,
+  ownerFilter,
+  band,
+  criticalCount,
+  highCount,
+  rows,
+}: {
+  userId: string | null;
+  ownerFilter: string;
+  band: string;
+  criticalCount: number;
+  highCount: number;
+  rows: PriorityRow[];
+}) {
+  return (
+    <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-950">
+      <div className="flex flex-col gap-4 border-b border-slate-100 px-5 py-4 dark:border-slate-900 xl:flex-row xl:items-center xl:justify-between">
+        <div>
+          <div className="text-[11px] font-bold uppercase tracking-[0.08em] text-violet-600 dark:text-violet-300">Action center</div>
+          <h2 className="mt-1 text-lg font-semibold text-slate-950 dark:text-white">Prioritized work queue</h2>
+          <p className="mt-1 text-sm text-slate-500">One queue for the leads most likely to need a human decision now.</p>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <FilterTab href={admissionsHref({ view: "queue", owner: "all", band })} active={ownerFilter === "all"} label="Team" />
+          {userId ? <FilterTab href={admissionsHref({ view: "queue", owner: "mine", band })} active={ownerFilter === "mine"} label="Mine" /> : null}
+          <FilterTab href={admissionsHref({ view: "queue", owner: "unassigned", band })} active={ownerFilter === "unassigned"} label="Unassigned" />
+          <span className="mx-1 h-8 w-px bg-slate-200 dark:bg-slate-800" />
+          <FilterTab href={admissionsHref({ view: "queue", owner: ownerFilter, band: "all" })} active={band === "all"} label="All" />
+          <FilterTab href={admissionsHref({ view: "queue", owner: ownerFilter, band: "critical" })} active={band === "critical"} label={`Critical ${criticalCount}`} />
+          <FilterTab href={admissionsHref({ view: "queue", owner: ownerFilter, band: "high" })} active={band === "high"} label={`High ${highCount}`} />
         </div>
       </div>
 
-      <div>
-        <div className="text-[11px] text-slate-400">Owner</div>
-        <div className="mt-0.5 text-sm font-medium text-slate-700 dark:text-slate-200">{row.owner_name || "Unassigned"}</div>
-      </div>
+      {rows.length ? (
+        <div className="divide-y divide-slate-100 dark:divide-slate-900">
+          {rows.slice(0, 40).map((row) => <PriorityQueueRow key={row.lead_id} row={row} />)}
+        </div>
+      ) : (
+        <div className="px-5 py-5"><EmptyState title="You're caught up" description="No matching leads need action in this queue. Try changing the filters." compact /></div>
+      )}
+    </section>
+  );
+}
 
-      <div className="min-w-0">
-        <div className="text-[11px] text-slate-400">Why this is prioritized</div>
-        <div className="mt-0.5 line-clamp-2 text-sm text-slate-700 dark:text-slate-200">{reason}</div>
-        <div className="mt-1 text-[11px] text-slate-400">{lastSignal}</div>
-      </div>
+function PaymentsView({ rows, outstanding }: { rows: RevenueRow[]; outstanding: OutstandingSummary }) {
+  const outstandingDetail = outstanding.missingCurrencyRecords > 0
+    ? `${outstanding.missingCurrencyRecords} amount ${outstanding.missingCurrencyRecords === 1 ? "record is" : "records are"} excluded because currency is missing`
+    : "Amounts are shown separately by recorded currency";
 
-      <div>
-        <div className="text-[11px] text-slate-400">Next action</div>
-        <div className="mt-0.5 text-sm font-semibold text-slate-900 dark:text-white">{action}</div>
-      </div>
+  return (
+    <div className="space-y-4">
+      <section className="grid gap-3 sm:grid-cols-3">
+        <PerformanceMetric label="Payment-stage leads" value={formatNumber(rows.length)} detail="Current payment-pending opportunities" />
+        <PerformanceMetric label="Recorded outstanding" value={outstanding.hasAmount ? outstanding.display : "—"} detail={outstandingDetail} attention={outstanding.hasAmount} />
+        <PerformanceMetric label="Next action" value="Follow up" detail="Resolve payment questions, proof and collection status" />
+      </section>
 
-      <Link
-        href={row.next_best_action?.toLowerCase().includes("reply") ? `/conversations?lead=${row.lead_id}` : `/leads/${row.lead_id}`}
-        className="inline-flex h-9 items-center justify-center gap-1.5 rounded-lg bg-slate-950 px-3 text-xs font-semibold text-white transition hover:bg-slate-800 dark:bg-white dark:text-slate-950 dark:hover:bg-slate-200"
-      >
-        {row.next_best_action?.toLowerCase().includes("reply") ? "Reply" : "Open"}
-        <ArrowRight size={12} />
-      </Link>
+      <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-950">
+        <PanelHeader eyebrow="Conversion" title="Payment-pending opportunities" href="/revenue" action="Open revenue" />
+        {rows.length ? (
+          <div className="divide-y divide-slate-100 dark:divide-slate-900">
+            {rows.map((row) => (
+              <Link key={row.lead_id} href={`/leads/${row.lead_id}`} className="group grid gap-3 px-5 py-4 transition hover:bg-slate-50 dark:hover:bg-slate-900/60 sm:grid-cols-[minmax(0,1fr)_160px_140px_auto] sm:items-center">
+                <div className="min-w-0">
+                  <div className="truncate text-sm font-semibold text-slate-950 dark:text-white">{row.lead_name || "Lead"}</div>
+                  <div className="mt-0.5 text-xs text-slate-500">{pretty(row.current_stage || "payment_pending")}</div>
+                </div>
+                <div><div className="text-[10px] text-slate-400">Status</div><div className="mt-0.5 text-sm font-medium text-slate-700 dark:text-slate-200">{pretty(row.payment_status || "pending")}</div></div>
+                <div className="sm:text-right"><div className="text-[10px] text-slate-400">Outstanding</div><div className="mt-0.5 text-sm font-semibold text-slate-950 dark:text-white">{row.outstanding_balance == null || !row.currency ? "—" : formatMoney(row.outstanding_balance, row.currency)}</div></div>
+                <ArrowRight size={14} className="text-slate-300 transition group-hover:translate-x-0.5" />
+              </Link>
+            ))}
+          </div>
+        ) : (
+          <SimpleEmpty title="No payment-pending opportunities" detail="Payment-stage leads will appear here when recorded." />
+        )}
+      </section>
+    </div>
+  );
+}
+
+function CapacityView({ rows }: { rows: AdmissionsBatchCapacityRow[] }) {
+  const hot = rows.reduce((sum, row) => sum + toNumber(row.hot_prospects), 0);
+  const seats = rows.reduce((sum, row) => sum + Math.max(0, toNumber(row.calculated_seats_remaining)), 0);
+  const nearCapacity = rows.filter((row) => {
+    const remaining = toNumber(row.calculated_seats_remaining);
+    return row.calculated_seats_remaining != null && remaining <= 3;
+  }).length;
+
+  return (
+    <div className="space-y-4">
+      <section className="grid gap-3 sm:grid-cols-3">
+        <PerformanceMetric label="Upcoming batches" value={formatNumber(rows.length)} detail="Batches represented in current admissions demand" />
+        <PerformanceMetric label="Hot prospects" value={formatNumber(hot)} detail="High-intent demand attached to upcoming batches" />
+        <PerformanceMetric label="Near capacity" value={formatNumber(nearCapacity)} detail={`${formatNumber(seats)} calculated seats remain across visible batches`} attention={nearCapacity > 0} />
+      </section>
+
+      <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-950">
+        <PanelHeader eyebrow="Demand planning" title="Batch capacity & prospect pressure" href="/course-management" action="Manage batches" />
+        {rows.length ? (
+          <div className="divide-y divide-slate-100 dark:divide-slate-900">
+            {rows.map((row) => <CapacityRow key={row.batch_id} row={row} />)}
+          </div>
+        ) : (
+          <SimpleEmpty title="No upcoming batch data" detail="Batch capacity will appear when course schedules are available." />
+        )}
+      </section>
     </div>
   );
 }
@@ -364,11 +514,9 @@ function PriorityQueueRow({ row }: { row: PriorityRow }) {
 function AdmissionsPerformance({
   sla,
   ownerWorkload,
-  batchCapacity,
 }: {
   sla: SlaOverviewRow | null;
   ownerWorkload: AdmissionsOwnerWorkloadRow[];
-  batchCapacity: AdmissionsBatchCapacityRow[];
 }) {
   const responded = toNumber(sla?.responded_7d);
   const hasResponseSample = responded > 0;
@@ -391,7 +539,6 @@ function AdmissionsPerformance({
           </div>
           <span className={`rounded-full px-3 py-1.5 text-xs font-semibold ${status.className}`}>{status.label}</span>
         </div>
-
         <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
           <PerformanceMetric label="On-time rate" value={hasResponseSample ? `${formatDecimal(sla?.on_time_response_rate_percent)}%` : "—"} detail={hasResponseSample ? `${responded} responded leads` : "No measured responses"} />
           <PerformanceMetric label="Median response" value={hasResponseSample ? formatMinutes(sla?.median_response_minutes) : "—"} detail="First outbound response" />
@@ -401,22 +548,12 @@ function AdmissionsPerformance({
       </section>
 
       <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-950">
-        <div className="border-b border-slate-100 px-5 py-4 dark:border-slate-900">
-          <div className="text-[11px] font-bold uppercase tracking-[0.08em] text-slate-400">Team</div>
-          <h2 className="mt-1 text-base font-semibold text-slate-950 dark:text-white">Workload</h2>
-        </div>
+        <PanelHeader eyebrow="Team" title="Admissions workload" href="/performance" action="Full performance" />
         {ownerWorkload.length ? (
           <div className="overflow-x-auto">
             <table className="min-w-[760px] w-full text-left">
               <thead className="bg-slate-50 text-[11px] font-semibold text-slate-500 dark:bg-slate-900/60">
-                <tr>
-                  <th className="px-5 py-3">Owner</th>
-                  <th className="px-4 py-3">Active</th>
-                  <th className="px-4 py-3">Needs reply</th>
-                  <th className="px-4 py-3">Overdue</th>
-                  <th className="px-4 py-3">Payment</th>
-                  <th className="px-4 py-3">Action load</th>
-                </tr>
+                <tr><th className="px-5 py-3">Owner</th><th className="px-4 py-3">Active</th><th className="px-4 py-3">Needs reply</th><th className="px-4 py-3">Overdue</th><th className="px-4 py-3">Payment</th><th className="px-4 py-3">Action load</th></tr>
               </thead>
               <tbody className="divide-y divide-slate-100 dark:divide-slate-900">
                 {ownerWorkload.map((row) => (
@@ -436,215 +573,139 @@ function AdmissionsPerformance({
           <SimpleEmpty title="No team workload data" detail="Workload will appear when ownership and activity records are available." />
         )}
       </section>
-
-      <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-950">
-        <div className="flex items-center justify-between border-b border-slate-100 px-5 py-4 dark:border-slate-900">
-          <div>
-            <div className="text-[11px] font-bold uppercase tracking-[0.08em] text-slate-400">Business context</div>
-            <h2 className="mt-1 text-base font-semibold text-slate-950 dark:text-white">Upcoming batch pressure</h2>
-          </div>
-          <Link href="/course-management" className="text-xs font-semibold text-violet-600 hover:underline dark:text-violet-300">Courses</Link>
-        </div>
-        {batchCapacity.length ? (
-          <div className="divide-y divide-slate-100 dark:divide-slate-900">
-            {batchCapacity.slice(0, 8).map((row) => (
-              <div key={row.batch_id} className="grid gap-2 px-5 py-4 sm:grid-cols-[minmax(220px,1fr)_100px_100px_110px_120px] sm:items-center">
-                <div className="min-w-0">
-                  <div className="truncate text-sm font-semibold text-slate-900 dark:text-white">{row.course_name || row.batch_code || "Batch"}</div>
-                  <div className="mt-0.5 text-xs text-slate-500">{[row.batch_code, row.location, row.start_date ? formatDate(row.start_date) : null].filter(Boolean).join(" · ")}</div>
-                </div>
-                <MiniMetric label="Enrolled" value={formatNumber(row.enrolled_count)} />
-                <MiniMetric label="Payment" value={formatNumber(row.payment_pending)} />
-                <MiniMetric label="Hot" value={formatNumber(row.hot_prospects)} />
-                <MiniMetric label="Seats open" value={row.calculated_seats_remaining == null ? "—" : formatNumber(row.calculated_seats_remaining)} />
-              </div>
-            ))}
-          </div>
-        ) : (
-          <SimpleEmpty title="No upcoming batch data" detail="Batch capacity will appear when course schedules are available." />
-        )}
-      </section>
     </div>
   );
 }
 
-function SignalMetric({
-  href,
-  label,
-  value,
-  detail,
-  tone,
-}: {
-  href: string;
-  label: string;
-  value: number;
-  detail: string;
-  tone: "attention" | "money" | "neutral";
-}) {
-  const toneClass =
-    tone === "attention"
-      ? "text-amber-700 dark:text-amber-300"
-      : tone === "money"
-        ? "text-violet-700 dark:text-violet-300"
-        : "text-slate-950 dark:text-white";
+function PriorityQueueRow({ row, compact = false }: { row: PriorityRow; compact?: boolean }) {
+  const reason = row.priority_reason || "Priority is based on the current CRM state.";
+  const action = row.next_best_action || "Review lead";
+  const lastSignal = row.next_followup_due_at
+    ? `Follow-up ${formatDateTime(row.next_followup_due_at)}`
+    : row.created_at
+      ? `Created ${formatRelative(row.created_at)}`
+      : "No recent timestamp";
+
+  if (compact) {
+    return (
+      <Link href={`/leads/${row.lead_id}`} className="group flex items-center gap-3 px-5 py-4 transition hover:bg-slate-50 dark:hover:bg-slate-900/60">
+        <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-violet-50 text-violet-700 dark:bg-violet-950/30 dark:text-violet-300"><ListTodo size={15} /></span>
+        <span className="min-w-0 flex-1"><span className="flex items-center gap-2"><strong className="truncate text-sm text-slate-950 dark:text-white">{row.lead_name || row.lead_code || "Lead"}</strong><StagePill value={row.current_stage || "new"} /></span><span className="mt-1 block truncate text-xs text-slate-500">{action} · {row.owner_name || "Unassigned"}</span></span>
+        <ArrowRight size={14} className="text-slate-300 transition group-hover:translate-x-0.5" />
+      </Link>
+    );
+  }
 
   return (
-    <Link href={href} className="rounded-2xl border border-slate-200 bg-white p-4 transition hover:border-slate-300 hover:bg-slate-50 dark:border-slate-800 dark:bg-slate-950 dark:hover:bg-slate-900/60">
-      <div className="text-[11px] font-semibold text-slate-500">{label}</div>
-      <div className={`mt-2 text-2xl font-semibold tracking-[-0.03em] ${toneClass}`}>{formatNumber(value)}</div>
-      <div className="mt-1 text-xs text-slate-500">{detail}</div>
-    </Link>
+    <div className="grid gap-3 px-5 py-4 transition hover:bg-slate-50 dark:hover:bg-slate-900/60 lg:grid-cols-[minmax(220px,1fr)_150px_minmax(220px,1.2fr)_160px_auto] lg:items-center">
+      <div className="min-w-0"><div className="flex items-center gap-2"><Link href={`/leads/${row.lead_id}`} className="truncate text-sm font-semibold text-slate-950 hover:text-violet-600 dark:text-white dark:hover:text-violet-300">{row.lead_name || row.lead_code || "Lead"}</Link><StagePill value={row.current_stage || "new"} /></div><div className="mt-1 truncate text-xs text-slate-500">{[row.course_name, row.first_touch_source, row.current_contact_channel].filter(Boolean).map((value) => pretty(String(value))).join(" · ") || "Context unavailable"}</div></div>
+      <div><div className="text-[11px] text-slate-400">Owner</div><div className="mt-0.5 text-sm font-medium text-slate-700 dark:text-slate-200">{row.owner_name || "Unassigned"}</div></div>
+      <div className="min-w-0"><div className="text-[11px] text-slate-400">Why prioritized</div><div className="mt-0.5 line-clamp-2 text-sm text-slate-700 dark:text-slate-200">{reason}</div><div className="mt-1 text-[11px] text-slate-400">{lastSignal}</div></div>
+      <div><div className="text-[11px] text-slate-400">Next action</div><div className="mt-0.5 text-sm font-semibold text-slate-900 dark:text-white">{action}</div></div>
+      <Link href={row.next_best_action?.toLowerCase().includes("reply") ? `/conversations?lead=${row.lead_id}` : `/leads/${row.lead_id}`} className="inline-flex h-9 items-center justify-center gap-1.5 rounded-lg bg-slate-950 px-3 text-xs font-semibold text-white transition hover:bg-slate-800 dark:bg-white dark:text-slate-950 dark:hover:bg-slate-200">{row.next_best_action?.toLowerCase().includes("reply") ? "Reply" : "Open"}<ArrowRight size={12} /></Link>
+    </div>
   );
 }
 
-function PerformanceMetric({
-  label,
-  value,
-  detail,
-  attention = false,
-}: {
-  label: string;
-  value: string;
-  detail: string;
-  attention?: boolean;
-}) {
+function CapacityRow({ row, compact = false }: { row: AdmissionsBatchCapacityRow; compact?: boolean }) {
+  const remaining = row.calculated_seats_remaining == null ? null : toNumber(row.calculated_seats_remaining);
   return (
-    <div className="rounded-xl border border-slate-200 p-4 dark:border-slate-800">
-      <div className="text-[11px] text-slate-500">{label}</div>
-      <div className={`mt-2 text-xl font-semibold ${attention ? "text-amber-700 dark:text-amber-300" : "text-slate-950 dark:text-white"}`}>{value}</div>
-      <div className="mt-1 text-xs text-slate-500">{detail}</div>
+    <div className={`grid gap-2 px-5 py-4 ${compact ? "sm:grid-cols-[minmax(0,1fr)_90px_90px]" : "sm:grid-cols-[minmax(220px,1fr)_100px_100px_100px_110px_120px]"} sm:items-center`}>
+      <div className="min-w-0"><div className="truncate text-sm font-semibold text-slate-900 dark:text-white">{row.course_name || row.batch_code || "Batch"}</div><div className="mt-0.5 text-xs text-slate-500">{[row.batch_code, row.location, row.start_date ? formatDate(row.start_date) : null].filter(Boolean).join(" · ")}</div></div>
+      <MiniMetric label="Hot" value={formatNumber(row.hot_prospects)} />
+      <MiniMetric label="Seats" value={remaining == null ? "—" : formatNumber(remaining)} />
+      {!compact ? <MiniMetric label="Enrolled" value={formatNumber(row.enrolled_count)} /> : null}
+      {!compact ? <MiniMetric label="Payment" value={formatNumber(row.payment_pending)} /> : null}
+      {!compact ? <MiniMetric label="Needs reply" value={formatNumber(row.needs_reply)} /> : null}
     </div>
   );
+}
+
+function PanelHeader({ eyebrow, title, href, action }: { eyebrow: string; title: string; href: string; action: string }) {
+  return <div className="flex items-center justify-between gap-3 border-b border-slate-100 px-5 py-4 dark:border-slate-900"><div><div className="text-[10px] font-bold uppercase tracking-[0.1em] text-slate-400">{eyebrow}</div><h2 className="mt-1 text-base font-semibold text-slate-950 dark:text-white">{title}</h2></div><Link href={href} className="inline-flex items-center gap-1 text-xs font-semibold text-violet-600 hover:underline dark:text-violet-300">{action}<ArrowRight size={12} /></Link></div>;
+}
+
+function PerformanceMetric({ label, value, detail, attention = false }: { label: string; value: string; detail: string; attention?: boolean }) {
+  return <div className="rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-950"><div className="text-[11px] text-slate-500">{label}</div><div className={`mt-2 text-xl font-semibold ${attention ? "text-amber-700 dark:text-amber-300" : "text-slate-950 dark:text-white"}`}>{value}</div><div className="mt-1 text-xs text-slate-500">{detail}</div></div>;
 }
 
 function MiniMetric({ label, value }: { label: string; value: string }) {
-  return (
-    <div>
-      <div className="text-[10px] text-slate-400">{label}</div>
-      <div className="mt-0.5 text-sm font-semibold text-slate-800 dark:text-slate-100">{value}</div>
-    </div>
-  );
+  return <div><div className="text-[10px] text-slate-400">{label}</div><div className="mt-0.5 text-sm font-semibold text-slate-800 dark:text-slate-100">{value}</div></div>;
 }
 
 function StagePill({ value }: { value: string }) {
-  return (
-    <span className="shrink-0 rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-semibold text-slate-600 dark:bg-slate-900 dark:text-slate-300">
-      {pretty(value)}
-    </span>
-  );
+  return <span className="shrink-0 rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-semibold text-slate-600 dark:bg-slate-900 dark:text-slate-300">{pretty(value)}</span>;
 }
 
 function ViewTab({ href, active, label }: { href: string; active: boolean; label: string }) {
-  return (
-    <Link href={href} className={`rounded-lg px-3 py-2 text-xs font-semibold transition ${active ? "bg-slate-950 text-white dark:bg-white dark:text-slate-950" : "text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-900"}`}>
-      {label}
-    </Link>
-  );
+  return <Link href={href} className={`rounded-lg px-3 py-2 text-xs font-semibold transition ${active ? "bg-slate-950 text-white dark:bg-white dark:text-slate-950" : "text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-900"}`}>{label}</Link>;
 }
 
 function FilterTab({ href, active, label }: { href: string; active: boolean; label: string }) {
-  return (
-    <Link href={href} className={`rounded-lg border px-2.5 py-1.5 text-[11px] font-semibold transition ${active ? "border-slate-950 bg-slate-950 text-white dark:border-white dark:bg-white dark:text-slate-950" : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50 dark:border-slate-800 dark:bg-slate-950 dark:text-slate-300 dark:hover:bg-slate-900"}`}>
-      {label}
-    </Link>
-  );
+  return <Link href={href} className={`rounded-lg border px-2.5 py-1.5 text-[11px] font-semibold transition ${active ? "border-slate-950 bg-slate-950 text-white dark:border-white dark:bg-white dark:text-slate-950" : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50 dark:border-slate-800 dark:bg-slate-950 dark:text-slate-300 dark:hover:bg-slate-900"}`}>{label}</Link>;
 }
 
 function SimpleEmpty({ title, detail }: { title: string; detail: string }) {
   return <EmptyState title={title} description={detail} compact />;
 }
 
-function admissionsHref({
-  view,
-  owner,
-  band,
-}: {
-  view?: string;
-  owner?: string;
-  band?: string;
-}) {
+function admissionsHref({ view, owner, band }: { view?: AdmissionsView; owner?: string; band?: string }) {
   const params = new URLSearchParams();
-  if (view === "performance") params.set("view", "performance");
+  if (view && view !== "overview") params.set("view", view);
   if (owner && owner !== "all") params.set("owner", owner);
   if (band && band !== "all") params.set("band", band);
   const query = params.toString();
   return query ? `/admissions?${query}` : "/admissions";
 }
 
-function one(value: string | string[] | undefined) {
-  return Array.isArray(value) ? value[0] ?? "" : value ?? "";
+function buildAdmissionsBrief({ needsReplyCount, overdueCount, paymentCount, criticalCount, newLeadCount }: { needsReplyCount: number; overdueCount: number; paymentCount: number; criticalCount: number; newLeadCount: number }) {
+  const signals = [
+    { value: criticalCount, text: `${criticalCount} critical-priority lead${criticalCount === 1 ? "" : "s"}` },
+    { value: needsReplyCount, text: `${needsReplyCount} conversation${needsReplyCount === 1 ? "" : "s"} need a reply` },
+    { value: overdueCount, text: `${overdueCount} overdue follow-up${overdueCount === 1 ? "" : "s"}` },
+    { value: paymentCount, text: `${paymentCount} payment-stage opportunit${paymentCount === 1 ? "y" : "ies"}` },
+    { value: newLeadCount, text: `${newLeadCount} new lead${newLeadCount === 1 ? "" : "s"}` },
+  ].filter((item) => item.value > 0).sort((a, b) => b.value - a.value);
+  if (!signals.length) return "No urgent admissions workload is currently recorded. Use Pipeline and Capacity to monitor movement and demand.";
+  return `${signals.slice(0, 3).map((item) => item.text).join(", ")}. Work the queue first, then use Pipeline, Payments and Capacity for deeper context.`;
 }
 
-function toNumber(value: number | string | null | undefined) {
-  const parsed = Number(value ?? 0);
-  return Number.isFinite(parsed) ? parsed : 0;
-}
+function summarizeOutstanding(rows: RevenueRow[]): OutstandingSummary {
+  const totals = new Map<string, number>();
+  let missingCurrencyRecords = 0;
 
-function formatNumber(value: number | string | null | undefined) {
-  return new Intl.NumberFormat("en-IN", { maximumFractionDigits: 0 }).format(toNumber(value));
-}
+  for (const row of rows) {
+    const amount = toNumber(row.outstanding_balance);
+    if (amount === 0) continue;
 
-function formatDecimal(value: number | string | null | undefined) {
-  const parsed = Number(value);
-  return Number.isFinite(parsed) ? parsed.toFixed(1) : "—";
-}
+    const currency = row.currency?.trim().toUpperCase();
+    if (!currency) {
+      missingCurrencyRecords += 1;
+      continue;
+    }
 
-function formatMinutes(value: number | string | null | undefined) {
-  if (value == null || value === "") return "—";
-  const minutes = Number(value);
-  if (!Number.isFinite(minutes)) return "—";
-  if (minutes < 60) return `${Math.round(minutes)} min`;
-  const hours = Math.floor(minutes / 60);
-  const remainder = Math.round(minutes % 60);
-  return remainder ? `${hours}h ${remainder}m` : `${hours}h`;
-}
-
-function formatMoney(value: number | string | null | undefined, currency: string) {
-  try {
-    return new Intl.NumberFormat(currency.toUpperCase() === "INR" ? "en-IN" : "en-US", {
-      style: "currency",
-      currency: currency.toUpperCase(),
-      maximumFractionDigits: 0,
-    }).format(toNumber(value));
-  } catch {
-    return `${currency} ${formatNumber(value)}`;
+    totals.set(currency, (totals.get(currency) ?? 0) + amount);
   }
+
+  const display = [...totals.entries()]
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([currency, amount]) => formatMoney(amount, currency))
+    .join(" · ");
+
+  return {
+    display,
+    hasAmount: totals.size > 0,
+    missingCurrencyRecords,
+  };
 }
 
-function formatDateTime(value: string) {
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return value;
-  return new Intl.DateTimeFormat("en-IN", {
-    day: "numeric",
-    month: "short",
-    hour: "2-digit",
-    minute: "2-digit",
-    timeZone: "Asia/Kolkata",
-  }).format(date);
-}
-
-function formatRelative(value: string) {
-  const time = new Date(value).getTime();
-  if (!Number.isFinite(time)) return value;
-  const minutes = Math.max(0, Math.floor((Date.now() - time) / 60000));
-  if (minutes < 60) return `${minutes}m ago`;
-  const hours = Math.floor(minutes / 60);
-  if (hours < 24) return `${hours}h ago`;
-  const days = Math.floor(hours / 24);
-  return `${days}d ago`;
-}
-
-function formatDate(value: string) {
-  const date = new Date(`${value.slice(0, 10)}T00:00:00Z`);
-  if (Number.isNaN(date.getTime())) return value;
-  return new Intl.DateTimeFormat("en-IN", {
-    day: "numeric",
-    month: "short",
-    year: "numeric",
-    timeZone: "UTC",
-  }).format(date);
-}
-
-function pretty(value: string) {
-  return value.replaceAll("_", " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
-}
+function one(value: string | string[] | undefined) { return Array.isArray(value) ? value[0] ?? "" : value ?? ""; }
+function toNumber(value: number | string | null | undefined) { const parsed = Number(value ?? 0); return Number.isFinite(parsed) ? parsed : 0; }
+function formatNumber(value: number | string | null | undefined) { return new Intl.NumberFormat("en-IN", { maximumFractionDigits: 0 }).format(toNumber(value)); }
+function formatDecimal(value: number | string | null | undefined) { const parsed = Number(value); return Number.isFinite(parsed) ? parsed.toFixed(1) : "—"; }
+function formatMinutes(value: number | string | null | undefined) { if (value == null || value === "") return "—"; const minutes = Number(value); if (!Number.isFinite(minutes)) return "—"; if (minutes < 60) return `${Math.round(minutes)} min`; const hours = Math.floor(minutes / 60); const remainder = Math.round(minutes % 60); return remainder ? `${hours}h ${remainder}m` : `${hours}h`; }
+function formatMoney(value: number | string | null | undefined, currency: string) { try { return new Intl.NumberFormat(currency.toUpperCase() === "INR" ? "en-IN" : "en-US", { style: "currency", currency: currency.toUpperCase(), maximumFractionDigits: 0 }).format(toNumber(value)); } catch { return `${currency} ${formatNumber(value)}`; } }
+function formatDateTime(value: string) { const date = new Date(value); if (Number.isNaN(date.getTime())) return value; return new Intl.DateTimeFormat("en-IN", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit", timeZone: "Asia/Kolkata" }).format(date); }
+function formatRelative(value: string) { const time = new Date(value).getTime(); if (!Number.isFinite(time)) return value; const minutes = Math.max(0, Math.floor((Date.now() - time) / 60000)); if (minutes < 60) return `${minutes}m ago`; const hours = Math.floor(minutes / 60); if (hours < 24) return `${hours}h ago`; return `${Math.floor(hours / 24)}d ago`; }
+function formatDate(value: string) { const date = new Date(`${value.slice(0, 10)}T00:00:00Z`); if (Number.isNaN(date.getTime())) return value; return new Intl.DateTimeFormat("en-IN", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" }).format(date); }
+function pretty(value: string) { return value.replaceAll("_", " ").replace(/\b\w/g, (letter) => letter.toUpperCase()); }

@@ -1,7 +1,9 @@
 import type { ReactNode } from 'react';
 
 import { CrmWorkspaceFrame } from '@/components/crm/crm-workspace-frame';
+import { requirePrivilegedWorkspaceAccess } from '@/lib/route-access';
 
-export default function AdmissionsLayout({ children }: { children: ReactNode }) {
+export default async function AdmissionsLayout({ children }: { children: ReactNode }) {
+  await requirePrivilegedWorkspaceAccess();
   return <CrmWorkspaceFrame>{children}</CrmWorkspaceFrame>;
 }

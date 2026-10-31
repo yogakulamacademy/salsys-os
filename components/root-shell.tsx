@@ -47,7 +47,18 @@ function isMarketingPath(pathname: string) {
 }
 
 function hasInvestigationContext(pathname: string) {
-  return pathname === '/revenue' || /^\/leads\/[^/]+$/.test(pathname);
+  return (
+    [
+      '/admissions',
+      '/marketing',
+      '/revenue',
+      '/leads',
+      '/follow-ups',
+      '/conversations',
+      '/operations',
+      '/performance',
+    ].includes(pathname) || /^\/leads\/[^/]+$/.test(pathname)
+  );
 }
 
 export function RootShell({ children }: { children: ReactNode }) {

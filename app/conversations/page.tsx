@@ -30,6 +30,7 @@ import { WhatsAppTemplateComposer } from "@/components/whatsapp-template-compose
 import { getConversationsWorkspace } from "@/lib/conversations-data";
 import { getCourses, isMockMode } from "@/lib/data";
 import { formatDateTime } from "@/lib/format";
+import { getMessagingEligibility } from "@/lib/messaging-eligibility";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentWorkspaceContext } from "@/lib/workspace";
 import { getApprovedWhatsAppTemplates } from "@/lib/whatsapp-templates";
@@ -80,6 +81,17 @@ export default async function ConversationsPage({
       hasTelephoneContact,
   );
 
+  const messagingEligibility =
+    selected && !mock
+      ? await getMessagingEligibility({
+          leadId: selected.id,
+          organizationId,
+          channel: selected.currentContactChannel,
+          whatsappWindow,
+          canStartWhatsApp,
+        })
+      : null;
+
   const activeConversations = conversationSummary.filter(
     (lead) => !isFuture(lead.snoozedUntil),
   );
@@ -109,11 +121,15 @@ export default async function ConversationsPage({
 
   const noticeText = noticeFor(query.notice);
 
+  const normalizedWhatsAppMode =
+    messagingEligibility?.channel === "whatsapp"
+      ? messagingEligibility.replyMode
+      : whatsappWindow?.open
+        ? "freeform"
+        : "template";
+
   const shouldLoadWhatsAppTemplates = Boolean(
-    (selected?.currentContactChannel === "whatsapp" &&
-      whatsappWindow &&
-      !whatsappWindow.open) ||
-      canStartWhatsApp,
+    normalizedWhatsAppMode === "template" || canStartWhatsApp,
   );
 
   const whatsappTemplateCatalog =
@@ -132,9 +148,14 @@ export default async function ConversationsPage({
       ? selected.currentContactChannel
       : null;
 
-  const copilotEnabled =
-    copilotChannel === "instagram" ||
-    (copilotChannel === "whatsapp" && Boolean(whatsappWindow?.open));
+  const copilotEnabled = mock
+    ? copilotChannel === "instagram" ||
+      (copilotChannel === "whatsapp" && Boolean(whatsappWindow?.open))
+    : Boolean(
+        copilotChannel &&
+          messagingEligibility?.channel === copilotChannel &&
+          messagingEligibility.freeformAllowed,
+      );
 
   const inbox = (
     <ConversationsSidebar
@@ -228,46 +249,60 @@ export default async function ConversationsPage({
 
       <div className="shrink-0 border-t border-line bg-surface">
         {selected.currentContactChannel === "whatsapp" &&
-        whatsappWindow &&
-        !whatsappWindow.open ? (
+        normalizedWhatsAppMode === "template" ? (
           <div className="border-b border-amber-100 bg-amber-50 px-4 py-2.5 dark:border-amber-900/40 dark:bg-amber-950/15">
             <div className="text-[12px] font-semibold text-amber-800 dark:text-amber-300">
-              Reply window closed
+              Approved template required
             </div>
             <div className="mt-0.5 text-[11px] text-amber-700/80 dark:text-amber-400">
-              An approved template is required before another WhatsApp message can be sent.
+              {messagingEligibility?.userMessage ||
+                "An approved template is required before another WhatsApp message can be sent."}
             </div>
           </div>
         ) : null}
 
         {selected.currentContactChannel === "whatsapp" ? (
-          whatsappWindow?.open && whatsappAction ? (
+          normalizedWhatsAppMode === "freeform" && whatsappAction ? (
             <WhatsAppComposer
               action={whatsappAction}
               leadId={selected.id}
               windowOpen
-              windowLabel={whatsappWindow.label}
+              windowLabel={
+                messagingEligibility?.userMessage ||
+                whatsappWindow?.label ||
+                "WhatsApp free-form reply is available."
+              }
             />
-          ) : whatsappTemplateAction ? (
+          ) : normalizedWhatsAppMode === "template" && whatsappTemplateAction ? (
             <WhatsAppTemplateComposer
               action={whatsappTemplateAction}
               templates={whatsappTemplateCatalog.templates}
               loadError={whatsappTemplateCatalog.error}
               windowLabel={
-                whatsappWindow?.label ??
+                messagingEligibility?.userMessage ||
+                whatsappWindow?.label ||
                 "Choose an approved template to continue."
               }
               mode="followup"
               phone={selected.phone}
             />
-          ) : null
+          ) : (
+            <div className="p-4 text-[12px] text-copy-muted">
+              {messagingEligibility?.userMessage ||
+                "WhatsApp sending is currently unavailable for this conversation."}
+            </div>
+          )
         ) : canStartWhatsApp && whatsappTemplateAction ? (
           <WhatsAppTemplateComposer
             action={whatsappTemplateAction}
             leadId={selected.id}
             templates={whatsappTemplateCatalog.templates}
             loadError={whatsappTemplateCatalog.error}
-            windowLabel="Use an approved template to start WhatsApp from this website enquiry."
+            windowLabel={
+              messagingEligibility?.channel === "whatsapp"
+                ? messagingEligibility.userMessage
+                : "Use an approved template to start WhatsApp from this website enquiry."
+            }
             mode="start"
           />
         ) : (
@@ -275,6 +310,11 @@ export default async function ConversationsPage({
             leadId={selected.id}
             channel={selected.currentContactChannel}
             interactionAction={interactionAction}
+            eligibility={
+              messagingEligibility?.channel === selected.currentContactChannel
+                ? messagingEligibility
+                : null
+            }
           />
         )}
       </div>
@@ -335,6 +375,12 @@ export default async function ConversationsPage({
               }
             />
           ) : null}
+          {messagingEligibility ? (
+            <ContextLine
+              label="Messaging"
+              value={messagingEligibility.replyMode.replaceAll("_", " ")}
+            />
+          ) : null}
           <ContextLine
             label="Last contacted"
             value={
@@ -373,8 +419,11 @@ export default async function ConversationsPage({
             channel={copilotChannel}
             enabled={copilotEnabled}
             disabledReason={
-              copilotChannel === "whatsapp" && !whatsappWindow?.open
-                ? "The WhatsApp service window is closed. Use an approved template instead of a free-text draft."
+              !copilotEnabled
+                ? messagingEligibility?.userMessage ||
+                  (copilotChannel === "whatsapp"
+                    ? "The WhatsApp service window is closed. Use an approved template instead of a free-text draft."
+                    : "This channel is not currently eligible for a direct reply.")
                 : undefined
             }
           />

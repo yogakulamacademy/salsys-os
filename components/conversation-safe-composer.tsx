@@ -6,6 +6,7 @@ import { useCallback, useEffect, useRef, useState, useTransition } from "react";
 
 import { markCopilotAssistedMessageAction } from "@/app/conversations/copilot-audit-actions";
 import { sendInstagramMessageAction } from "@/app/conversations/instagram-actions";
+import type { MessagingEligibility } from "@/lib/messaging-eligibility";
 import type { Channel } from "@/types/crm";
 
 type ServerAction =
@@ -38,10 +39,12 @@ export function ConversationSafeComposer({
   leadId,
   channel,
   interactionAction,
+  eligibility,
 }: {
   leadId: string;
   channel: Channel;
   interactionAction?: ServerAction;
+  eligibility?: MessagingEligibility | null;
 }) {
   const router = useRouter();
   const [mode, setMode] = useState<ComposeMode>("reply");
@@ -58,6 +61,7 @@ export function ConversationSafeComposer({
   const replyTextareaRef = useRef<HTMLTextAreaElement | null>(null);
   const draftKey = `salsysos:conversation-draft:v1:${leadId}:${channel}`;
   const isInstagram = channel === "instagram";
+  const instagramSendAllowed = !isInstagram || eligibility?.canReply !== false;
   const replyLimit = isInstagram ? 1000 : 5000;
 
   useEffect(() => {
@@ -164,7 +168,7 @@ export function ConversationSafeComposer({
 
   function sendInstagramReply() {
     const text = replyDraft.trim();
-    if (!isInstagram || !text || isPending) return;
+    if (!isInstagram || !instagramSendAllowed || !text || isPending) return;
 
     const wasCopilotAssisted = copilotAssisted;
     setSendError(null);
@@ -254,7 +258,7 @@ export function ConversationSafeComposer({
                 </div>
                 <p className="mt-0.5 text-[9px] leading-4 text-[#596E64]">
                   {isInstagram
-                    ? "Salsys checks the customer-initiated Instagram reply window before the provider call. Nothing is sent until you click Send."
+                    ? eligibility?.userMessage || "Salsys checks the customer-initiated Instagram reply window before the provider call. Nothing is sent until you click Send."
                     : "Draft only. Saving here never sends a message or changes the lead stage."}
                 </p>
               </div>
@@ -262,6 +266,13 @@ export function ConversationSafeComposer({
                 {channel.replaceAll("_", " ")}
               </span>
             </div>
+
+            {isInstagram && eligibility?.canReply === false ? (
+              <div className="mb-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-[9px] leading-4 text-amber-800">
+                Sending is currently blocked. You can keep preparing the draft or add an internal note; provider eligibility will be checked again before any future send.
+              </div>
+            ) : null}
+
             <label className="sr-only" htmlFor={`reply-draft-${leadId}`}>
               {isInstagram ? "Write an Instagram reply" : "Write a reply draft"}
             </label>
@@ -273,7 +284,7 @@ export function ConversationSafeComposer({
               onKeyDown={(event) => {
                 if ((event.ctrlKey || event.metaKey) && event.key === "Enter") {
                   event.preventDefault();
-                  if (isInstagram) sendInstagramReply();
+                  if (isInstagram && instagramSendAllowed) sendInstagramReply();
                   else persistDraft(replyDraft);
                 }
               }}
@@ -296,18 +307,18 @@ export function ConversationSafeComposer({
 
             <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
               <div className="text-[9px] text-[#71847A]">
-                {draftStatus(draftState)} · {replyDraft.length}/{replyLimit} · Ctrl/⌘ + Enter {isInstagram ? "sends" : "saves"}
+                {draftStatus(draftState)} · {replyDraft.length}/{replyLimit} · Ctrl/⌘ + Enter {isInstagram && instagramSendAllowed ? "sends" : "saves"}
                 {copilotAssisted && isInstagram ? " · AI-assisted draft reviewed by human" : ""}
               </div>
               {isInstagram ? (
                 <button
                   type="button"
                   onClick={sendInstagramReply}
-                  disabled={!replyDraft.trim() || isPending}
+                  disabled={!instagramSendAllowed || !replyDraft.trim() || isPending}
                   className="inline-flex h-8 items-center justify-center gap-1.5 rounded-lg bg-[#153E33] px-3 text-[9px] font-semibold text-white transition hover:bg-[#216551] disabled:cursor-not-allowed disabled:bg-[#EDF0EC] disabled:text-[#59685F]"
                 >
                   {isPending ? <RefreshCw size={10} className="animate-spin" /> : <Send size={11} />}
-                  {isPending ? "Sending…" : "Send"}
+                  {isPending ? "Sending…" : instagramSendAllowed ? "Send" : "Blocked"}
                 </button>
               ) : (
                 <button

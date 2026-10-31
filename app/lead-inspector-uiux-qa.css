@@ -1,0 +1,126 @@
+/* ========================================================================== 
+   Lead Inspector final UI/UX QA
+   Portal-safe visual normalization and small-screen readability.
+   ========================================================================== */
+
+[role='dialog'][aria-label='Lead Inspector'] {
+  --li-primary: var(--brand-700, #5743c5);
+  --li-primary-deep: var(--brand-900, #33257e);
+  --li-primary-soft: var(--brand-50, #f3f0fb);
+  --li-text: var(--copy-strong, #24213c);
+  --li-muted: var(--copy-muted, #67627a);
+  --li-subtle: var(--copy-subtle, #9691a6);
+  --li-line: var(--line, #e6e3ef);
+  --li-surface: var(--surface, #fff);
+  --li-surface-soft: var(--surface-soft, #f8f7fc);
+}
+
+[role='dialog'][aria-label='Lead Inspector'] > aside {
+  border-color: var(--li-line) !important;
+  background: var(--li-surface-soft) !important;
+  box-shadow: -20px 0 60px rgba(33, 27, 58, .14) !important;
+}
+
+[role='dialog'][aria-label='Lead Inspector'] [class*='border-[#DDE7DF]'],
+[role='dialog'][aria-label='Lead Inspector'] [class*='border-[#E4EAE6]'],
+[role='dialog'][aria-label='Lead Inspector'] [class*='border-[#DCE8DF]'],
+[role='dialog'][aria-label='Lead Inspector'] [class*='border-[#DCE7DF]'],
+[role='dialog'][aria-label='Lead Inspector'] [class*='border-[#DCE5DF]'],
+[role='dialog'][aria-label='Lead Inspector'] [class*='border-[#D9E6DD]'],
+[role='dialog'][aria-label='Lead Inspector'] [class*='border-[#D7E5DB]'],
+[role='dialog'][aria-label='Lead Inspector'] [class*='border-[#E3EAE5]'] {
+  border-color: var(--li-line) !important;
+}
+
+[role='dialog'][aria-label='Lead Inspector'] [class*='text-[#216551]'],
+[role='dialog'][aria-label='Lead Inspector'] [class*='text-[#174D3B]'] {
+  color: var(--li-primary) !important;
+}
+
+[role='dialog'][aria-label='Lead Inspector'] [class*='text-[#192E29]'],
+[role='dialog'][aria-label='Lead Inspector'] [class*='text-[#233C33]'],
+[role='dialog'][aria-label='Lead Inspector'] [class*='text-[#2C443B]'],
+[role='dialog'][aria-label='Lead Inspector'] [class*='text-[#344E42]'],
+[role='dialog'][aria-label='Lead Inspector'] [class*='text-[#40564C]'],
+[role='dialog'][aria-label='Lead Inspector'] [class*='text-[#40594F]'] {
+  color: var(--li-text) !important;
+}
+
+[role='dialog'][aria-label='Lead Inspector'] [class*='text-[#456158]'],
+[role='dialog'][aria-label='Lead Inspector'] [class*='text-[#52665C]'],
+[role='dialog'][aria-label='Lead Inspector'] [class*='text-[#586C62]'],
+[role='dialog'][aria-label='Lead Inspector'] [class*='text-[#607068]'],
+[role='dialog'][aria-label='Lead Inspector'] [class*='text-[#62746B]'],
+[role='dialog'][aria-label='Lead Inspector'] [class*='text-[#63756B]'],
+[role='dialog'][aria-label='Lead Inspector'] [class*='text-[#6E7E76]'],
+[role='dialog'][aria-label='Lead Inspector'] [class*='text-[#718078]'],
+[role='dialog'][aria-label='Lead Inspector'] [class*='text-[#74837A]'],
+[role='dialog'][aria-label='Lead Inspector'] [class*='text-[#7A8981]'],
+[role='dialog'][aria-label='Lead Inspector'] [class*='text-[#7B8A82]'],
+[role='dialog'][aria-label='Lead Inspector'] [class*='text-[#829087]'],
+[role='dialog'][aria-label='Lead Inspector'] [class*='text-[#849188]'],
+[role='dialog'][aria-label='Lead Inspector'] [class*='text-[#85928B]'],
+[role='dialog'][aria-label='Lead Inspector'] [class*='text-[#87948D]'],
+[role='dialog'][aria-label='Lead Inspector'] [class*='text-[#8A978F]'],
+[role='dialog'][aria-label='Lead Inspector'] [class*='text-[#8B988F]'],
+[role='dialog'][aria-label='Lead Inspector'] [class*='text-[#89968F]'],
+[role='dialog'][aria-label='Lead Inspector'] [class*='text-[#91A097]'] {
+  color: var(--li-muted) !important;
+}
+
+[role='dialog'][aria-label='Lead Inspector'] [class*='bg-[#F0F7F3]'],
+[role='dialog'][aria-label='Lead Inspector'] [class*='bg-[#F8FBF9]'],
+[role='dialog'][aria-label='Lead Inspector'] [class*='bg-[#F8FAF8]'],
+[role='dialog'][aria-label='Lead Inspector'] [class*='bg-[#F4F7F5]'],
+[role='dialog'][aria-label='Lead Inspector'] [class*='bg-[#F4F8F5]'],
+[role='dialog'][aria-label='Lead Inspector'] [class*='bg-[#F4F9F5]'],
+[role='dialog'][aria-label='Lead Inspector'] [class*='bg-[#F0F5F1]'],
+[role='dialog'][aria-label='Lead Inspector'] [class*='bg-[#EDF4EF]'],
+[role='dialog'][aria-label='Lead Inspector'] [class*='bg-[#EDF1EE]'] {
+  background-color: var(--li-primary-soft) !important;
+}
+
+[role='dialog'][aria-label='Lead Inspector'] [class*='bg-[#E4F2E8]'],
+[role='dialog'][aria-label='Lead Inspector'] [class*='bg-[#E9F4EC]'] {
+  background-color: color-mix(in srgb, var(--li-primary) 10%, var(--li-surface)) !important;
+}
+
+[role='dialog'][aria-label='Lead Inspector'] [class*='bg-[#216551]'] {
+  background-color: var(--li-primary) !important;
+}
+
+[role='dialog'][aria-label='Lead Inspector'] [class*='hover:bg-[#174D3B]']:hover {
+  background-color: var(--li-primary-deep) !important;
+}
+
+[role='dialog'][aria-label='Lead Inspector'] button:focus-visible,
+[role='dialog'][aria-label='Lead Inspector'] a:focus-visible,
+[role='dialog'][aria-label='Lead Inspector'] input:focus-visible,
+[role='dialog'][aria-label='Lead Inspector'] select:focus-visible,
+[role='dialog'][aria-label='Lead Inspector'] textarea:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--li-primary) 52%, transparent);
+  outline-offset: 2px;
+}
+
+@media (max-width: 639px) {
+  [role='dialog'][aria-label='Lead Inspector'] [class*='text-[8px]'],
+  [role='dialog'][aria-label='Lead Inspector'] [class*='text-[9px]'] {
+    font-size: 11px !important;
+    line-height: 1.4 !important;
+  }
+
+  [role='dialog'][aria-label='Lead Inspector'] [class*='text-[10px]'] {
+    font-size: 11.5px !important;
+    line-height: 1.45 !important;
+  }
+
+  [role='dialog'][aria-label='Lead Inspector'] button[class*='h-8'][class*='w-8'] {
+    min-width: 40px !important;
+    min-height: 40px !important;
+  }
+
+  [role='dialog'][aria-label='Lead Inspector'] a[class*='h-8'],
+  [role='dialog'][aria-label='Lead Inspector'] button[class*='h-8'] {
+    min-height: 38px !important;
+  }
+}

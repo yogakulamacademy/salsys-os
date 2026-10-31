@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ArrowRight, CalendarClock, Sparkles } from "lucide-react";
+import { ArrowRight, CalendarClock, GitBranch, Sparkles, Target, WalletCards } from "lucide-react";
 
 import { ExecutiveDecisionBrief } from "@/components/marketing/executive-decision-brief";
 import { RevenueInsights } from "@/components/revenue-insights";
@@ -100,13 +100,24 @@ export default async function RevenuePage({ searchParams }: RevenuePageProps) {
   return (
     <div className="space-y-4">
       <PageHeader
-        eyebrow="Decision intelligence"
+        eyebrow="Intelligence · Revenue"
         title="Revenue"
         description="Understand collected cash, open pipeline, outstanding balances and the opportunities most likely to need action now."
         actions={
-          <Link href="/commercial-intelligence" className="btn-secondary">
-            <Sparkles size={15} /> Explain performance
-          </Link>
+          <div className="flex flex-wrap gap-2">
+            <Link href="/marketing?view=campaigns" className="btn-secondary">
+              <Target size={15} /> Campaigns
+            </Link>
+            <Link href="/marketing?view=funnel" className="btn-secondary">
+              <GitBranch size={15} /> Funnel
+            </Link>
+            <Link href="/marketing?view=attribution" className="btn-secondary">
+              Attribution
+            </Link>
+            <Link href="/admissions?view=payments" className="btn-primary">
+              <WalletCards size={15} /> Work payment queue
+            </Link>
+          </div>
         }
       />
 
@@ -121,16 +132,30 @@ export default async function RevenuePage({ searchParams }: RevenuePageProps) {
       />
 
       {investigationSource ? (
-        <section className="rounded-2xl border border-[#dbe6dc] bg-white px-4 py-4 shadow-[0_8px_24px_rgba(16,45,39,.035)] sm:px-5">
+        <section className="rounded-panel border border-line bg-surface px-4 py-4 shadow-card sm:px-5">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <div>
-              <div className="text-[9px] font-black uppercase tracking-[.14em] text-[#829186]">Revenue evidence focus</div>
-              <div className="mt-1 text-sm font-semibold text-[#102d27]">Commercial records attributed to “{investigationSource}” are prioritized below.</div>
-              <p className="mt-1 text-[10px] leading-5 text-[#758279]">
+            <div className="min-w-0">
+              <div className="text-[10px] font-semibold uppercase tracking-[0.12em] text-brand-700">
+                Revenue evidence focus
+              </div>
+              <div className="mt-1 text-sm font-semibold text-copy-strong">
+                Commercial records attributed to “{investigationSource}” are prioritized below.
+              </div>
+              <p className="mt-1 max-w-3xl text-[11px] leading-5 text-copy-muted">
                 Opportunity focus uses the stored first-touch source only. If no matching first-touch opportunities are visible, the list falls back to the broader commercial cohort rather than inventing a match.
               </p>
             </div>
-            <Link href={`/attribution?q=${encodeURIComponent(investigationSource)}`} className="btn-secondary">Review attribution <ArrowRight size={13} /></Link>
+            <div className="flex shrink-0 flex-wrap gap-2">
+              <Link href={`/marketing?view=attribution&q=${encodeURIComponent(investigationSource)}`} className="btn-secondary">
+                Review attribution <ArrowRight size={13} />
+              </Link>
+              <Link href={`/marketing?view=campaigns&q=${encodeURIComponent(investigationSource)}`} className="btn-secondary">
+                Campaign evidence
+              </Link>
+            </div>
+          </div>
+          <div className="mt-3 flex items-center gap-2 border-t border-line pt-3 text-[11px] font-semibold text-brand-700">
+            <ArrowRight size={12} /> Suggested path: verify attribution → inspect the Opportunity → confirm payment evidence.
           </div>
         </section>
       ) : null}
@@ -142,7 +167,7 @@ export default async function RevenuePage({ searchParams }: RevenuePageProps) {
           tone="warning"
           title={`${unvaluedLeads} open ${unvaluedLeads === 1 ? "lead is" : "leads are"} missing potential value`}
           action={
-            <Link href="/pipeline" className="btn-secondary">
+            <Link href="/admissions?view=pipeline" className="btn-secondary">
               Review pipeline <ArrowRight size={13} />
             </Link>
           }
@@ -181,7 +206,7 @@ export default async function RevenuePage({ searchParams }: RevenuePageProps) {
         />
       </div>
 
-      <div className="px-1 text-[10px] leading-4 text-slate-400">
+      <div className="px-1 text-[10px] leading-4 text-copy-subtle">
         Weighted pipeline is a deterministic planning value based on configured stage weights, not a calibrated probability. Cross-currency totals are shown only through the explicit FX display layer above.
       </div>
     </div>
@@ -246,8 +271,8 @@ function buildRevenueDecisionBrief(
       },
     ],
     actions: [
-      { label: "Work pipeline", href: "/pipeline", detail: "Review value, stage, ownership and expected close date." },
-      { label: "Inspect attribution", href: "/attribution", detail: "Compare commercial value with acquisition evidence." },
+      { label: "Work pipeline", href: "/admissions?view=pipeline", detail: "Review value, stage, ownership and expected close date." },
+      { label: "Inspect attribution", href: "/marketing?view=attribution", detail: "Compare commercial value with acquisition evidence." },
       ...(topOpportunities[0]
         ? [{ label: "Open top opportunity", href: `/leads/${topOpportunities[0].id}`, detail: "Review the highest-value visible opportunity." }]
         : []),
@@ -281,17 +306,23 @@ function OpportunityCard({
   investigationFrom: string;
 }) {
   return (
-    <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-950">
-      <div className="flex items-center justify-between gap-3 border-b border-slate-100 px-4 py-4 dark:border-slate-900">
+    <section className="overflow-hidden rounded-panel border border-line bg-surface shadow-card">
+      <div className="flex items-center justify-between gap-3 border-b border-line bg-surface-soft px-4 py-4">
         <div>
-          <div className="text-[10px] font-black uppercase tracking-[0.12em] text-slate-400">Action</div>
-          <div className="mt-1 text-sm font-black text-slate-900 dark:text-white">{title}</div>
+          <div className="text-[10px] font-semibold uppercase tracking-[0.12em] text-brand-700">
+            Action
+          </div>
+          <div className="mt-1 text-sm font-semibold text-copy-strong">{title}</div>
         </div>
-        {closing ? <CalendarClock size={16} className="text-slate-300" /> : <Sparkles size={16} className="text-slate-300" />}
+        {closing ? (
+          <CalendarClock size={16} className="text-brand-500" />
+        ) : (
+          <Sparkles size={16} className="text-brand-500" />
+        )}
       </div>
 
       {rows.length ? (
-        <div className="divide-y divide-slate-100 dark:divide-slate-900">
+        <div className="divide-y divide-line">
           {rows.map((row) => {
             const href = investigationSource
               ? `/leads/${row.id}?investigation=1&source=${encodeURIComponent(investigationSource)}&from=${encodeURIComponent(investigationFrom)}`
@@ -300,27 +331,33 @@ function OpportunityCard({
               <Link
                 key={row.id}
                 href={href}
-                className="group flex items-center gap-3 px-4 py-3.5 transition hover:bg-slate-50 dark:hover:bg-slate-900/60"
+                className="group flex items-center gap-3 px-4 py-3.5 transition hover:bg-brand-50/60"
               >
                 <span className="min-w-0 flex-1">
-                  <span className="block truncate text-[11px] font-black text-slate-800 dark:text-slate-100">{row.lead_name || row.lead_code}</span>
-                  <span className="mt-0.5 block truncate text-[9px] text-slate-400">
+                  <span className="block truncate text-[12px] font-semibold text-copy-strong">
+                    {row.lead_name || row.lead_code}
+                  </span>
+                  <span className="mt-0.5 block truncate text-[10px] text-copy-muted">
                     {pretty(row.current_stage)} · {row.preferred_location || "Unknown location"}
                     {row.first_touch_source ? ` · ${pretty(row.first_touch_source)}` : ""}
                     {closing && row.expected_close_date ? ` · ${formatDate(row.expected_close_date)}` : ""}
                   </span>
                 </span>
                 <span className="shrink-0 text-right">
-                  <span className="block text-[11px] font-black text-slate-800 dark:text-slate-100">{formatMoney(row.weighted_value, row.currency)}</span>
-                  <span className="mt-0.5 block text-[8px] font-semibold uppercase tracking-[0.06em] text-slate-400">weighted</span>
+                  <span className="block text-[12px] font-semibold text-copy-strong">
+                    {formatMoney(row.weighted_value, row.currency)}
+                  </span>
+                  <span className="mt-0.5 block text-[9px] font-semibold uppercase tracking-[0.06em] text-copy-subtle">
+                    planning value
+                  </span>
                 </span>
-                <ArrowRight size={13} className="shrink-0 text-slate-300 transition group-hover:translate-x-0.5 group-hover:text-violet-500" />
+                <ArrowRight size={13} className="shrink-0 text-copy-subtle transition group-hover:translate-x-0.5 group-hover:text-brand-700" />
               </Link>
             );
           })}
         </div>
       ) : (
-        <div className="px-4 py-10 text-center text-xs font-semibold text-slate-400">{empty}</div>
+        <div className="px-4 py-10 text-center text-xs font-semibold text-copy-subtle">{empty}</div>
       )}
     </section>
   );

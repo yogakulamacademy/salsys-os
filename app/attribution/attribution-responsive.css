@@ -1,0 +1,18 @@
+/* Responsive polish for Intelligence · Attribution.
+   Keep evidence visible while preventing source-ranking rows from overflowing very small screens. */
+
+@media (max-width: 420px) {
+  .attribution-responsive-scope [class*="grid-cols-[minmax(110px,210px)_1fr_94px_72px_16px]"] {
+    grid-template-columns: minmax(92px, 1fr) 76px 62px 16px !important;
+    gap: 8px !important;
+  }
+
+  .attribution-responsive-scope [class*="grid-cols-[minmax(110px,210px)_1fr_94px_72px_16px]"] > :nth-child(2) {
+    display: none;
+  }
+
+  .attribution-responsive-scope [class*="grid-cols-[minmax(110px,210px)_1fr_94px_72px_16px]"] > :nth-child(3),
+  .attribution-responsive-scope [class*="grid-cols-[minmax(110px,210px)_1fr_94px_72px_16px]"] > :nth-child(4) {
+    font-size: 9px !important;
+  }
+}
