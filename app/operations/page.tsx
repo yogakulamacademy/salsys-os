@@ -14,7 +14,10 @@ import { DecisionMetricCard } from "@/components/intelligence/decision-metric-ca
 import { OperationsJourneyBar } from "@/components/operations/operations-journey-bar";
 import { PageHeader } from "@/components/ui";
 import { getCommerceReadinessForCurrentWorkspace } from "@/lib/commerce-readiness-data";
-import { getCourseManagementWorkspace } from "@/lib/course-management-data";
+import {
+  getCourseManagementWorkspace,
+  type CourseManagementBatchRow,
+} from "@/lib/course-management-data";
 
 export default async function OperationsOverviewPage() {
   const [workspace, commerce] = await Promise.all([
@@ -134,28 +137,14 @@ export default async function OperationsOverviewPage() {
             <div>
               <div className="eyebrow">Batch availability</div>
               <div className="section-title mt-1">Operational pressure</div>
-              <p className="mt-1 text-xs text-copy-muted">Batches where confirmed seats, active demand or missing capacity deserve review.</p>
+              <p className="mt-1 text-xs text-copy-muted">Batches where confirmed seats or active demand deserve a capacity decision now.</p>
             </div>
             <Link href="/course-management" className="btn-secondary">Open batch management</Link>
           </div>
 
-          <div className="mt-4 space-y-2">
+          <div className="mt-4 space-y-3">
             {pressureBatches.length ? pressureBatches.map((batch) => (
-              <Link
-                key={batch.batch_id}
-                href={`/course-management?course=${encodeURIComponent(batch.course_id)}&batch=${encodeURIComponent(batch.batch_id)}`}
-                className="flex flex-col gap-2 rounded-xl border border-line bg-surface-muted/60 px-4 py-3 transition hover:border-brand-200 hover:bg-brand-50/40 sm:flex-row sm:items-center sm:justify-between"
-              >
-                <span className="min-w-0">
-                  <strong className="block truncate text-sm text-copy-strong">{batch.course_name || batch.course_code || "Program"}</strong>
-                  <span className="mt-1 block text-[11px] text-copy-muted">{batch.batch_code || "Batch"} · {batch.location || "Location not set"}</span>
-                </span>
-                <span className="flex flex-wrap items-center gap-2 text-[10px] font-semibold text-copy-muted">
-                  <span>{Number(batch.enrolled_count ?? 0)} enrolled</span>
-                  <span>{batch.calculated_seats_remaining == null ? "Open seats unknown" : `${Number(batch.calculated_seats_remaining)} open`}</span>
-                  <span className="rounded-full border border-amber-200 bg-amber-50 px-2 py-1 text-amber-700">{pretty(batch.capacity_status || "review")}</span>
-                </span>
-              </Link>
+              <PressureBatchCard key={batch.batch_id} batch={batch} />
             )) : (
               <div className="rounded-xl border border-dashed border-line px-4 py-8 text-center text-sm text-copy-subtle">
                 No capacity or demand-pressure alerts are active right now.
@@ -176,6 +165,125 @@ export default async function OperationsOverviewPage() {
       </section>
     </div>
   );
+}
+
+function PressureBatchCard({ batch }: { batch: CourseManagementBatchRow }) {
+  const status = String(batch.capacity_status ?? "review").toLowerCase();
+  const enrolled = safeNumber(batch.enrolled_count);
+  const active = safeNumber(batch.active_prospects);
+  const hot = safeNumber(batch.hot_prospects);
+  const payment = safeNumber(batch.payment_pending);
+  const critical = safeNumber(batch.critical_prospects);
+  const open = batch.calculated_seats_remaining == null
+    ? null
+    : safeNumber(batch.calculated_seats_remaining);
+  const reason = capacityPressureReason({ status, active, payment, open });
+  const nextCheck = capacityNextCheck(status);
+  const href = `/course-management?course=${encodeURIComponent(batch.course_id)}&batch=${encodeURIComponent(batch.batch_id)}`;
+  const tone = status === "overbooked" || status === "full"
+    ? "border-rose-200 bg-rose-50 text-rose-700 dark:border-rose-900/60 dark:bg-rose-950/20 dark:text-rose-300"
+    : "border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-900/60 dark:bg-amber-950/20 dark:text-amber-300";
+
+  return (
+    <article className="rounded-xl border border-line bg-surface p-4 transition hover:border-line-strong hover:shadow-sm">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-center gap-2">
+            <strong className="truncate text-sm text-copy-strong">{batch.course_name || batch.course_code || "Program"}</strong>
+            <span className={`rounded-full border px-2 py-0.5 text-[9px] font-bold uppercase tracking-[0.08em] ${tone}`}>
+              {pretty(status)}
+            </span>
+          </div>
+          <div className="mt-1 text-[11px] text-copy-muted">
+            {batch.batch_code || "Batch"} · {batch.location || "Location not set"}
+          </div>
+        </div>
+        <Link href={href} className="inline-flex shrink-0 items-center gap-1 text-[11px] font-semibold text-brand-700 hover:text-brand-800 dark:text-brand-300">
+          Review batch <ArrowRight size={12} />
+        </Link>
+      </div>
+
+      <div className="mt-3 rounded-lg bg-surface-muted/70 px-3.5 py-3">
+        <div className="flex items-center justify-between gap-3">
+          <div className="text-[10px] font-semibold uppercase tracking-[0.1em] text-copy-subtle">Why now</div>
+          <span className="text-[9px] font-semibold uppercase tracking-[0.08em] text-brand-700 dark:text-brand-300">Derived capacity state</span>
+        </div>
+        <p className="mt-1.5 text-xs leading-5 text-copy-muted">{reason}</p>
+      </div>
+
+      <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-5">
+        <PressureMetric label="Enrolled" value={enrolled} />
+        <PressureMetric label="Open seats" value={open == null ? "—" : open} />
+        <PressureMetric label="Active demand" value={active} />
+        <PressureMetric label="Hot / critical" value={`${hot} / ${critical}`} />
+        <PressureMetric label="Payment" value={payment} />
+      </div>
+
+      <div className="mt-3 flex flex-col gap-2 border-t border-line pt-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="text-[11px] leading-5 text-copy-muted">
+          <span className="font-semibold text-copy-strong">Next check:</span> {nextCheck}
+        </div>
+        <Link href="/availability" className="inline-flex shrink-0 items-center gap-1 text-[11px] font-semibold text-brand-700 hover:text-brand-800 dark:text-brand-300">
+          Compare availability <ArrowRight size={12} />
+        </Link>
+      </div>
+    </article>
+  );
+}
+
+function PressureMetric({ label, value }: { label: string; value: number | string }) {
+  return (
+    <div className="rounded-lg border border-line bg-surface px-3 py-2.5">
+      <div className="text-[9px] font-semibold uppercase tracking-[0.08em] text-copy-subtle">{label}</div>
+      <div className="mt-1 text-sm font-semibold tabular-nums text-copy-strong">{typeof value === "number" ? value.toLocaleString("en-IN") : value}</div>
+    </div>
+  );
+}
+
+function capacityPressureReason({
+  status,
+  active,
+  payment,
+  open,
+}: {
+  status: string;
+  active: number;
+  payment: number;
+  open: number | null;
+}) {
+  if (status === "overbooked") {
+    return "This batch is classified as overbooked in the current capacity evidence and needs reconciliation before further availability is promised.";
+  }
+  if (status === "full") {
+    return "This batch is classified as full in the current capacity evidence; new demand should be checked against confirmed enrollment before a place is promised.";
+  }
+  if (status === "demand_exceeds_open_seats" && open != null) {
+    return `${active.toLocaleString("en-IN")} active prospects are visible against ${open.toLocaleString("en-IN")} calculated open seats.`;
+  }
+  if (status === "payment_pressure") {
+    return open == null
+      ? `${payment.toLocaleString("en-IN")} payment-pending prospects are visible while calculated open capacity is unavailable.`
+      : `${payment.toLocaleString("en-IN")} payment-pending prospects are visible against ${open.toLocaleString("en-IN")} calculated open seats.`;
+  }
+  if (status === "near_full") {
+    return open == null
+      ? "This batch is classified as near full, but calculated open seats are not available in the current evidence."
+      : `Only ${open.toLocaleString("en-IN")} calculated open seats remain with ${active.toLocaleString("en-IN")} active prospects visible.`;
+  }
+  return "Current demand and capacity evidence has placed this batch in an operational review state.";
+}
+
+function capacityNextCheck(status: string) {
+  if (status === "overbooked" || status === "full") {
+    return "Reconcile recorded capacity and confirmed enrollment before accepting additional commitments.";
+  }
+  if (status === "payment_pressure") {
+    return "Reconcile payment-pending demand with open seats before treating those places as available to new prospects.";
+  }
+  if (status === "demand_exceeds_open_seats" || status === "near_full") {
+    return "Compare active and high-intent demand with calculated open seats before confirming availability.";
+  }
+  return "Review capacity, confirmed enrollment and active demand before changing availability.";
 }
 
 function CommercePipelineNotice({
