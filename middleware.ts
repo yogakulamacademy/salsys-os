@@ -53,6 +53,10 @@ const ONBOARDING_LOOKUP_MAX_MS = 300;
 
 const EMPLOYEE_EXACT_PATHS = new Set([
   "/dashboard",
+  "/work-queue",
+  "/work-queue/mine",
+  "/work-queue/team",
+  "/opportunities",
   "/leads",
   "/pipeline",
   "/conversations",
@@ -515,11 +519,15 @@ export async function middleware(request: NextRequest) {
   }
 
   if (role === "employee" && !isEmployeeAllowedPage(pathname)) {
-    return redirectWithAuthCookies(request, response, "/dashboard");
+    return redirectWithAuthCookies(request, response, "/work-queue/mine");
   }
 
   if (role !== "admin" && isAdminOnlyPage(pathname)) {
-    return redirectWithAuthCookies(request, response, "/dashboard");
+    return redirectWithAuthCookies(
+      request,
+      response,
+      role === "employee" ? "/work-queue/mine" : "/crm",
+    );
   }
 
   return privateNoStore(response);
