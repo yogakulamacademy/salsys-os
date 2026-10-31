@@ -3,9 +3,10 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
+  BarChart3,
   BookOpen,
-  BrainCircuit,
   ChevronRight,
+  CircleDollarSign,
   Home,
   Megaphone,
   Menu,
@@ -92,9 +93,7 @@ export function DesktopHoverSidebarV3() {
           const workspace = (await response.json()) as WorkspaceContext;
           if (!cancelled) {
             setRole(workspace.activeWorkspace?.role ?? null);
-            setOrganizationName(
-              workspace.activeWorkspace?.organizationName || "Workspace",
-            );
+            setOrganizationName(workspace.activeWorkspace?.organizationName || "Workspace");
           }
           return;
         }
@@ -166,20 +165,14 @@ export function DesktopHoverSidebarV3() {
           label: "Home",
           icon: Home,
           href: "/dashboard",
-          items: [{ label: "Today", href: "/dashboard" }],
+          items: [{ label: "My work", href: "/dashboard" }],
         },
         {
-          id: "sales",
-          label: "Sales",
+          id: "crm",
+          label: "CRM",
           icon: UsersRound,
           href: "/leads",
-          activeHrefs: [
-            "/pipeline",
-            "/conversations",
-            "/follow-ups",
-            "/customer-360",
-            "/contact-intelligence",
-          ],
+          activeHrefs: ["/pipeline", "/conversations", "/follow-ups", "/customer-360"],
           items: [
             { label: "My Leads", href: "/leads" },
             { label: "My Pipeline", href: "/pipeline" },
@@ -198,36 +191,28 @@ export function DesktopHoverSidebarV3() {
         label: "Home",
         icon: Home,
         href: "/home",
-        activeHrefs: ["/dashboard"],
-        items: [
-          { label: "Command Center", href: "/home" },
-          { label: "Today", href: "/dashboard" },
-        ],
+        items: [{ label: "Command Center", href: "/home" }],
       },
       {
-        id: "sales",
-        label: "Sales",
+        id: "crm",
+        label: "CRM",
         icon: UsersRound,
-        href: "/crm",
+        href: "/leads",
         activeHrefs: [
-          "/leads",
           "/admissions",
           "/pipeline",
           "/conversations",
           "/follow-ups",
           "/customer-360",
-          "/contact-intelligence",
           "/data-quality",
           "/re-engaged",
         ],
         items: [
-          { label: "Sales Overview", href: "/crm" },
           { label: "Leads", href: "/leads" },
+          { label: "Admissions", href: "/admissions" },
           { label: "Pipeline", href: "/pipeline" },
           { label: "Inbox", href: "/conversations" },
           { label: "Tasks & Follow-ups", href: "/follow-ups" },
-          { label: "Customer 360", href: "/contact-intelligence" },
-          { label: "Admissions", href: "/admissions" },
           { label: "Re-engaged", href: "/re-engaged" },
         ],
       },
@@ -236,27 +221,31 @@ export function DesktopHoverSidebarV3() {
         label: "Marketing",
         icon: Megaphone,
         href: "/marketing",
-        activeHrefs: ["/campaigns", "/paid-media-leads", "/seo"],
+        activeHrefs: [
+          "/campaigns",
+          "/paid-media-leads",
+          "/analytics",
+          "/funnel",
+          "/attribution",
+          "/seo",
+          "/commercial-intelligence",
+        ],
         items: [
-          { label: "Marketing Overview", href: "/marketing" },
+          { label: "Overview", href: "/marketing" },
           { label: "Campaigns", href: "/campaigns" },
           { label: "Acquisition", href: "/paid-media-leads" },
+          { label: "Analytics", href: "/analytics" },
+          { label: "Funnel", href: "/funnel" },
+          { label: "Attribution", href: "/attribution" },
           { label: "Search Intelligence", href: "/seo" },
         ],
       },
       {
-        id: "intelligence",
-        label: "Intelligence",
-        icon: BrainCircuit,
-        href: "/commercial-intelligence",
-        activeHrefs: ["/analytics", "/funnel", "/attribution", "/revenue"],
-        items: [
-          { label: "Overview", href: "/commercial-intelligence" },
-          { label: "Analytics", href: "/analytics" },
-          { label: "Funnels", href: "/funnel" },
-          { label: "Attribution", href: "/attribution" },
-          { label: "Revenue", href: "/revenue" },
-        ],
+        id: "revenue",
+        label: "Revenue",
+        icon: CircleDollarSign,
+        href: "/revenue",
+        items: [{ label: "Revenue workspace", href: "/revenue" }],
       },
       {
         id: "operations",
@@ -272,16 +261,15 @@ export function DesktopHoverSidebarV3() {
         ],
       },
       {
-        id: "team",
-        label: "Team",
-        icon: UsersRound,
-        href: "/team",
-        activeHrefs: ["/team-performance"],
+        id: "performance",
+        label: "Performance",
+        icon: BarChart3,
+        href: "/team-performance",
+        activeHrefs: ["/team", "/contact-intelligence"],
         items: [
-          { label: "Team Overview", href: "/team" },
-          ...(admin
-            ? [{ label: "Performance", href: "/team-performance" }]
-            : []),
+          ...(admin ? [{ label: "Team performance", href: "/team-performance" }] : []),
+          { label: "Contact performance", href: "/contact-intelligence" },
+          { label: "Team", href: "/team" },
         ],
       },
       {
@@ -345,28 +333,16 @@ export function DesktopHoverSidebarV3() {
         ref={primaryRef}
         onMouseEnter={() => setOpen(true)}
         onFocusCapture={() => setOpen(true)}
-        className={`fixed inset-y-0 left-0 z-[70] hidden flex-col border-r border-line bg-surface transition-[width,box-shadow] duration-200 lg:flex ${
-          open ? "w-[232px] shadow-panel" : "w-16"
-        }`}
+        className={`fixed inset-y-0 left-0 z-[70] hidden flex-col border-r border-line bg-surface transition-[width,box-shadow] duration-200 lg:flex ${open ? "w-[232px] shadow-panel" : "w-16"}`}
         aria-label="Primary navigation"
       >
         <div className="flex h-16 shrink-0 items-center border-b border-line px-3">
-          <Link
-            href={employee ? "/dashboard" : "/home"}
-            onClick={closeNav}
-            className="flex min-w-0 items-center gap-3"
-          >
-            <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-brand-900 text-[12px] font-semibold text-white shadow-sm">
-              SO
-            </span>
+          <Link href={employee ? "/dashboard" : "/home"} onClick={closeNav} className="flex min-w-0 items-center gap-3">
+            <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-brand-900 text-[12px] font-semibold text-white shadow-sm">SO</span>
             {open ? (
               <span className="min-w-0">
-                <span className="block truncate text-[14px] font-semibold text-copy-strong">
-                  SalsysOS
-                </span>
-                <span className="block max-w-[150px] truncate text-[12px] text-copy-subtle">
-                  {organizationName}
-                </span>
+                <span className="block truncate text-[14px] font-semibold text-copy-strong">SalsysOS</span>
+                <span className="block max-w-[150px] truncate text-[12px] text-copy-subtle">{organizationName}</span>
               </span>
             ) : null}
           </Link>
@@ -377,7 +353,6 @@ export function DesktopHoverSidebarV3() {
             {sections.map((section) => {
               const Icon = section.icon;
               const current = isCurrent(section);
-
               return (
                 <Link
                   key={section.id}
@@ -385,18 +360,10 @@ export function DesktopHoverSidebarV3() {
                   onClick={closeNav}
                   title={open ? undefined : section.label}
                   aria-current={current ? "page" : undefined}
-                  className={`flex h-11 items-center rounded-ui transition ${
-                    open ? "gap-3 px-3" : "justify-center"
-                  } ${
-                    current
-                      ? "bg-brand-700 text-white shadow-sm"
-                      : "text-copy-muted hover:bg-surface-muted hover:text-copy-strong"
-                  }`}
+                  className={`flex h-11 items-center rounded-ui transition ${open ? "gap-3 px-3" : "justify-center"} ${current ? "bg-brand-700 text-white shadow-sm" : "text-copy-muted hover:bg-surface-muted hover:text-copy-strong"}`}
                 >
                   <Icon size={19} strokeWidth={1.8} />
-                  {open ? (
-                    <span className="text-[14px] font-medium">{section.label}</span>
-                  ) : null}
+                  {open ? <span className="text-[14px] font-medium">{section.label}</span> : null}
                 </Link>
               );
             })}
@@ -410,28 +377,14 @@ export function DesktopHoverSidebarV3() {
               askSalsys();
               closeNav();
             }}
-            className={`flex h-10 w-full items-center rounded-ui text-copy-muted transition hover:bg-brand-50 hover:text-brand-700 ${
-              open ? "gap-3 px-3" : "justify-center"
-            }`}
+            className={`flex h-10 w-full items-center rounded-ui text-copy-muted transition hover:bg-brand-50 hover:text-brand-700 ${open ? "gap-3 px-3" : "justify-center"}`}
           >
             <Sparkles size={18} strokeWidth={1.8} />
-            {open ? (
-              <span className="text-[13px] font-medium">Ask Salsys</span>
-            ) : null}
+            {open ? <span className="text-[13px] font-medium">Ask Salsys</span> : null}
           </button>
 
-          <div
-            className={
-              open
-                ? "mt-2 flex items-center gap-2 px-3 py-1 text-[11px] text-copy-subtle"
-                : "mt-2 flex justify-center py-1"
-            }
-          >
-            <span
-              className={`h-2 w-2 rounded-full ${
-                mock ? "bg-amber-400" : "bg-emerald-500"
-              }`}
-            />
+          <div className={open ? "mt-2 flex items-center gap-2 px-3 py-1 text-[11px] text-copy-subtle" : "mt-2 flex justify-center py-1"}>
+            <span className={`h-2 w-2 rounded-full ${mock ? "bg-amber-400" : "bg-emerald-500"}`} />
             {open ? (mock ? "Development" : "Live workspace") : null}
           </div>
         </div>
@@ -439,32 +392,16 @@ export function DesktopHoverSidebarV3() {
 
       {mobileOpen ? (
         <div className="fixed inset-0 z-[90] lg:hidden">
-          <button
-            type="button"
-            className="absolute inset-0 bg-brand-950/30 backdrop-blur-[2px]"
-            aria-label="Close navigation"
-            onClick={() => setMobileOpen(false)}
-          />
+          <button type="button" className="absolute inset-0 bg-brand-950/30 backdrop-blur-[2px]" aria-label="Close navigation" onClick={() => setMobileOpen(false)} />
 
           <aside className="absolute inset-y-0 left-0 flex w-[min(90vw,360px)] flex-col border-r border-line bg-surface shadow-panel">
             <div className="flex h-16 shrink-0 items-center gap-3 border-b border-line px-4">
-              <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-brand-900 text-[12px] font-semibold text-white shadow-sm">
-                SO
-              </span>
+              <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-brand-900 text-[12px] font-semibold text-white shadow-sm">SO</span>
               <div className="min-w-0 flex-1">
-                <div className="truncate text-[14px] font-semibold text-copy-strong">
-                  SalsysOS
-                </div>
-                <div className="truncate text-[11px] text-copy-subtle">
-                  {organizationName}
-                </div>
+                <div className="truncate text-[14px] font-semibold text-copy-strong">SalsysOS</div>
+                <div className="truncate text-[11px] text-copy-subtle">{organizationName}</div>
               </div>
-              <button
-                type="button"
-                onClick={() => setMobileOpen(false)}
-                className="grid h-9 w-9 place-items-center rounded-ui text-copy-muted transition hover:bg-surface-muted hover:text-copy-strong"
-                aria-label="Close navigation"
-              >
+              <button type="button" onClick={() => setMobileOpen(false)} className="grid h-9 w-9 place-items-center rounded-ui text-copy-muted transition hover:bg-surface-muted hover:text-copy-strong" aria-label="Close navigation">
                 <X size={18} strokeWidth={1.8} />
               </button>
             </div>
@@ -478,14 +415,10 @@ export function DesktopHoverSidebarV3() {
                 }}
                 className="flex w-full items-center gap-3 rounded-ui border border-brand-100 bg-brand-50 px-3 py-3 text-left text-brand-700 transition hover:bg-brand-100"
               >
-                <span className="grid h-8 w-8 shrink-0 place-items-center rounded-ui bg-surface text-brand-700 shadow-sm">
-                  <Sparkles size={16} strokeWidth={1.8} />
-                </span>
+                <span className="grid h-8 w-8 shrink-0 place-items-center rounded-ui bg-surface text-brand-700 shadow-sm"><Sparkles size={16} strokeWidth={1.8} /></span>
                 <span className="min-w-0 flex-1">
                   <span className="block text-[13px] font-semibold">Ask Salsys</span>
-                  <span className="block truncate text-[10px] text-copy-subtle">
-                    Find evidence, navigate or move work forward
-                  </span>
+                  <span className="block truncate text-[10px] text-copy-subtle">Find evidence, navigate or move work forward</span>
                 </span>
               </button>
             </div>
@@ -495,22 +428,15 @@ export function DesktopHoverSidebarV3() {
                 {sections.map((section) => {
                   const Icon = section.icon;
                   const current = isCurrent(section);
-
                   return (
                     <section key={section.id}>
                       <Link
                         href={section.href}
                         onClick={() => setMobileOpen(false)}
-                        className={`flex items-center gap-3 rounded-ui px-3 py-2.5 transition ${
-                          current
-                            ? "bg-brand-50 text-brand-700"
-                            : "text-copy-strong hover:bg-surface-muted"
-                        }`}
+                        className={`flex items-center gap-3 rounded-ui px-3 py-2.5 transition ${current ? "bg-brand-50 text-brand-700" : "text-copy-strong hover:bg-surface-muted"}`}
                       >
                         <Icon size={18} strokeWidth={1.8} />
-                        <span className="flex-1 text-[13px] font-semibold">
-                          {section.label}
-                        </span>
+                        <span className="flex-1 text-[13px] font-semibold">{section.label}</span>
                         <ChevronRight size={15} className="text-copy-subtle" />
                       </Link>
 
@@ -523,11 +449,7 @@ export function DesktopHoverSidebarV3() {
                                 key={`${section.id}-${item.href}`}
                                 href={item.href}
                                 onClick={() => setMobileOpen(false)}
-                                className={`block rounded-ui px-3 py-2 text-[12px] transition ${
-                                  active
-                                    ? "bg-surface-muted font-semibold text-brand-700"
-                                    : "text-copy-muted hover:bg-surface-muted hover:text-copy-strong"
-                                }`}
+                                className={`block rounded-ui px-3 py-2 text-[12px] transition ${active ? "bg-surface-muted font-semibold text-brand-700" : "text-copy-muted hover:bg-surface-muted hover:text-copy-strong"}`}
                               >
                                 {item.label}
                               </Link>
@@ -542,11 +464,7 @@ export function DesktopHoverSidebarV3() {
             </nav>
 
             <div className="flex shrink-0 items-center gap-2 border-t border-line px-4 py-3 text-[11px] text-copy-subtle">
-              <span
-                className={`h-2 w-2 rounded-full ${
-                  mock ? "bg-amber-400" : "bg-emerald-500"
-                }`}
-              />
+              <span className={`h-2 w-2 rounded-full ${mock ? "bg-amber-400" : "bg-emerald-500"}`} />
               <span>{mock ? "Development workspace" : "Live workspace"}</span>
             </div>
           </aside>
@@ -561,17 +479,13 @@ export function DesktopHoverSidebarV3() {
           .salsys-meta-sidebar-shell .legacy-shell-host > div > div.min-h-screen {
             padding-left: 4rem !important;
           }
-          .salsys-meta-sidebar-shell
-            .legacy-shell-host
-            button[aria-label="Open section menu"] {
+          .salsys-meta-sidebar-shell .legacy-shell-host button[aria-label="Open section menu"] {
             display: none !important;
           }
         }
 
         @media (max-width: 1023px) {
-          .salsys-meta-sidebar-shell
-            .legacy-shell-host
-            button[aria-label="Open navigation"] {
+          .salsys-meta-sidebar-shell .legacy-shell-host button[aria-label="Open navigation"] {
             visibility: hidden !important;
             pointer-events: none !important;
           }
