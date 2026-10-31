@@ -5,8 +5,6 @@ import {
   ArrowRight,
   Check,
   Database,
-  ListTodo,
-  UserRoundCheck,
   Users,
   WalletCards,
 } from 'lucide-react';
@@ -18,18 +16,15 @@ import {
   type DashboardRevenueSummary,
   type DashboardSource,
 } from '@/lib/dashboard-data';
+import {
+  ACTIVE_OPPORTUNITY_STAGES,
+  opportunityStageLabel,
+} from '@/lib/crm/canonical-metrics';
 
 type PriorityRow = {
   lead_id: string;
-  lead_code: string | null;
-  lead_name: string | null;
-  current_stage: string | null;
   owner_user_id: string | null;
   owner_name: string | null;
-  priority_score: number | string | null;
-  priority_band: string | null;
-  priority_reason: string | null;
-  next_best_action: string | null;
 };
 
 type OwnerWorkloadRow = {
@@ -37,15 +32,6 @@ type OwnerWorkloadRow = {
   owner_name: string | null;
   active_leads: number | string | null;
 };
-
-const STAGES = [
-  'new',
-  'contacted',
-  'engaged',
-  'qualified',
-  'high_intent',
-  'payment_pending',
-] as const;
 
 export default async function CrmCommandCenterPage() {
   const [admissions, dashboard] = await Promise.all([
@@ -60,8 +46,9 @@ export default async function CrmCommandCenterPage() {
   const paymentCount = dashboard.metrics.paymentPending;
   const unassignedCount = resolveUnassignedCount(ownerWorkload, priorities);
   const sourceRows = dashboard.sources.slice(0, 6);
+  const topSource = sourceRows[0] ?? null;
   const maxSource = Math.max(1, ...sourceRows.map((row) => row.leads));
-  const stageRows = STAGES.map((stage) => ({
+  const stageRows = ACTIVE_OPPORTUNITY_STAGES.map((stage) => ({
     stage,
     count: dashboard.counts[stage] ?? 0,
   }));
@@ -76,11 +63,11 @@ export default async function CrmCommandCenterPage() {
           <p>A focused view of what needs action, what is moving, and what is missing.</p>
         </div>
         <div className={styles.introActions}>
-          <Link href="/leads" className={styles.button}>
+          <Link href="/opportunities?surface=quality" className={styles.button}>
             <AlertTriangle size={14} /> Data health
           </Link>
-          <Link href="/leads" className={styles.buttonPrimary}>
-            <Users size={14} /> Open leads
+          <Link href="/opportunities" className={styles.buttonPrimary}>
+            <Users size={14} /> Open opportunities
           </Link>
         </div>
       </header>
@@ -97,17 +84,17 @@ export default async function CrmCommandCenterPage() {
             Review priorities come from the CRM&apos;s current operational evidence and remain decision-support hints. They do not execute stage changes, messages, payments, or customer-visible actions.
           </p>
           <div className={styles.commandActions}>
-            <Link href="/admissions" className={styles.buttonPrimary}>
-              Open priority desk <ArrowRight size={13} />
+            <Link href="/work-queue" className={styles.buttonPrimary}>
+              Open work queue <ArrowRight size={13} />
             </Link>
-            <Link href="/follow-ups" className={styles.buttonAlt}>
-              Manage follow-ups
+            <Link href="/opportunities" className={styles.buttonAlt}>
+              Review opportunities
             </Link>
           </div>
         </div>
 
         <div className={styles.heroFlow} aria-label="CRM operating flow">
-          <HeroNode icon={<Users size={16} />} title="Capture" detail="Lead context" />
+          <HeroNode icon={<Users size={16} />} title="Capture" detail="Opportunity context" />
           <span className={styles.heroConnector} aria-hidden="true" />
           <HeroNode icon={<Activity size={16} />} title="Prioritize" detail="Explain the signal" />
           <span className={styles.heroConnector} aria-hidden="true" />
@@ -117,29 +104,29 @@ export default async function CrmCommandCenterPage() {
 
       <section className={styles.stats} aria-label="CRM summary">
         <StatCard
-          href="/leads"
+          href="/opportunities"
           label="Open opportunities"
           value={openCount}
-          detail={`From ${dashboard.metrics.total} CRM lead records`}
+          detail={`From ${dashboard.metrics.total} CRM opportunity records`}
           icon={<Users size={15} />}
         />
         <StatCard
-          href="/admissions"
+          href="/work-queue"
           label="Priority reviews"
           value={reviewCount}
           detail="Explainable CRM priority evidence"
           icon={<Activity size={15} />}
         />
         <StatCard
-          href="/pipeline"
-          label="Payment-stage leads"
+          href="/work-queue?tab=payment"
+          label="Payment-stage opportunities"
           value={paymentCount}
           detail="Balances remain separate from stage"
           icon={<WalletCards size={15} />}
         />
         <StatCard
-          href="/admissions?owner=unassigned"
-          label="Unassigned leads"
+          href="/opportunities?owner=unassigned"
+          label="Unassigned opportunities"
           value={unassignedCount}
           detail="Assign ownership to move work"
           icon={<AlertTriangle size={15} />}
@@ -150,36 +137,51 @@ export default async function CrmCommandCenterPage() {
         <section className={styles.panel}>
           <div className={styles.panelHead}>
             <div>
-              <div className={styles.kicker}>PRIORITY INTELLIGENCE</div>
-              <h2>Recommended work queue</h2>
-              <p>Explainable next steps. No automatic stage changes or messages.</p>
+              <div className={styles.kicker}>DECISION SIGNALS</div>
+              <h2>Where intervention is concentrated</h2>
+              <p>Summary signals only. Open the canonical workspace to work the underlying records.</p>
             </div>
-            <Link href="/admissions" className={styles.nakedLink}>
-              Full queue <ArrowRight size={12} />
+            <Link href="/work-queue" className={styles.nakedLink}>
+              Work queue <ArrowRight size={12} />
             </Link>
           </div>
 
           <div>
-            {priorities.length ? (
-              priorities.slice(0, 5).map((row, index) => (
-                <PriorityItem key={row.lead_id} row={row} rank={index + 1} />
-              ))
-            ) : (
-              <div className={styles.panelBody}>
-                <div className={styles.emptyNote}>
-                  <Activity size={18} />
-                  <div>
-                    <strong>No priority rows are available.</strong>
-                    Open Admissions or Follow-ups to work the underlying operational queues.
-                  </div>
-                </div>
-              </div>
-            )}
+            <DecisionSignal
+              value={reviewCount}
+              title="Priority review load"
+              detail="Ranked opportunities currently need human review."
+              href="/work-queue"
+              action="Open queue"
+            />
+            <DecisionSignal
+              value={unassignedCount}
+              title="Ownership gap"
+              detail="Open opportunities do not yet have a clear owner."
+              href="/opportunities?owner=unassigned"
+              action="Assign owners"
+            />
+            <DecisionSignal
+              value={paymentCount}
+              title="Payment-stage pressure"
+              detail="Opportunities are currently closest to enrollment."
+              href="/work-queue?tab=payment"
+              action="Review payment"
+            />
+            {topSource ? (
+              <DecisionSignal
+                value={topSource.leads}
+                title={`${pretty(topSource.source)} is the largest source`}
+                detail="Current CRM opportunities share this source label."
+                href={`/opportunities?source=${encodeURIComponent(topSource.source)}`}
+                action="Inspect source"
+              />
+            ) : null}
           </div>
 
           <div className={styles.panelFoot}>
-            <span>Production ranking · canonical CRM priority evidence</span>
-            <span>Human review required</span>
+            <span>Signals summarize canonical CRM evidence</span>
+            <span>Drill down to act</span>
           </div>
         </section>
 
@@ -187,10 +189,10 @@ export default async function CrmCommandCenterPage() {
           <div className={styles.panelHead}>
             <div>
               <div className={styles.kicker}>ACQUISITION</div>
-              <h2>Where these leads came from</h2>
+              <h2>Where these opportunities came from</h2>
               <p>Current CRM source labels, not campaign ROI attribution.</p>
             </div>
-            <Link href="/leads" className={styles.nakedLink}>
+            <Link href="/opportunities?surface=quality" className={styles.nakedLink}>
               Data quality <ArrowRight size={12} />
             </Link>
           </div>
@@ -221,10 +223,10 @@ export default async function CrmCommandCenterPage() {
             <div>
               <div className={styles.kicker}>PIPELINE</div>
               <h2>Current opportunity distribution</h2>
-              <p>Click a stage to inspect the underlying CRM leads.</p>
+              <p>Click a stage to inspect the underlying opportunities.</p>
             </div>
-            <Link href="/pipeline" className={styles.nakedLink}>
-              Pipeline board <ArrowRight size={12} />
+            <Link href="/opportunities?surface=pipeline" className={styles.nakedLink}>
+              Pipeline view <ArrowRight size={12} />
             </Link>
           </div>
           <div className={styles.panelBody}>
@@ -232,10 +234,10 @@ export default async function CrmCommandCenterPage() {
               {stageRows.map((row) => (
                 <Link
                   key={row.stage}
-                  href={`/leads?stage=${encodeURIComponent(row.stage)}`}
+                  href={`/opportunities?stage=${encodeURIComponent(row.stage)}`}
                   className={styles.stageCard}
                 >
-                  <small>{pretty(row.stage)}</small>
+                  <small>{opportunityStageLabel(row.stage)}</small>
                   <b>{row.count}</b>
                   <div className={styles.mutedBar}>
                     <span style={{ width: `${Math.max(2, (row.count / maxStage) * 100)}%` }} />
@@ -298,33 +300,34 @@ function StatCard({
   );
 }
 
-function PriorityItem({ row, rank }: { row: PriorityRow; rank: number }) {
-  const score = numericOrNull(row.priority_score);
-  const band = String(row.priority_band || 'review').toLowerCase();
-  const reason = row.priority_reason || 'Current CRM state requires review.';
-  const action = row.next_best_action || 'Review lead';
-  const owner = row.owner_name || 'Unassigned';
-
+function DecisionSignal({
+  value,
+  title,
+  detail,
+  href,
+  action,
+}: {
+  value: number;
+  title: string;
+  detail: string;
+  href: string;
+  action: string;
+}) {
   return (
     <div className={styles.queueItem}>
-      <div className={styles.queueScore} aria-label={score == null ? 'Priority score unavailable' : `Priority score ${score}`}>
-        {score == null ? '—' : Math.round(score)}
-        <small>{score == null ? 'rank' : 'score'}</small>
+      <div className={styles.queueScore} aria-label={`${value} records`}>
+        {value.toLocaleString('en-IN')}
+        <small>records</small>
       </div>
       <div className={styles.queueMain}>
         <div className={styles.queueTitleLine}>
-          <strong>{row.lead_name || row.lead_code || `Priority ${rank}`}</strong>
-          <span className={pillClass(band)}>{pretty(row.current_stage || 'unknown')}</span>
+          <strong>{title}</strong>
         </div>
-        <p>{action} · {owner}</p>
-        <div className={styles.queueReason}>
-          <span className={pillClass(band)}>{pretty(row.priority_band || 'review')}</span>
-          <span className={styles.pillGray}>{truncate(reason, 54)}</span>
-        </div>
+        <p>{detail}</p>
       </div>
       <div className={styles.queueActions}>
-        <Link href={`/leads/${row.lead_id}`} className={styles.smallButton}>
-          Review <ArrowRight size={12} />
+        <Link href={href} className={styles.smallButton}>
+          {action} <ArrowRight size={12} />
         </Link>
       </div>
     </div>
@@ -335,7 +338,7 @@ function SourceRow({ source, max }: { source: DashboardSource; max: number }) {
   const width = Math.max(4, (source.leads / max) * 100);
   return (
     <Link
-      href={`/leads?source=${encodeURIComponent(source.source)}`}
+      href={`/opportunities?source=${encodeURIComponent(source.source)}`}
       className={styles.sourceRow}
     >
       <span>{pretty(source.source)}</span>
@@ -434,21 +437,10 @@ function numericOrNull(value: number | string | null | undefined) {
   return Number.isFinite(number) ? number : null;
 }
 
-function truncate(value: string, max: number) {
-  const normalized = value.trim();
-  return normalized.length <= max ? normalized : `${normalized.slice(0, max - 1).trimEnd()}…`;
-}
-
 function pretty(value: string) {
   return value
     .replace(/[_-]+/g, ' ')
     .replace(/\b\w/g, (match) => match.toUpperCase());
-}
-
-function pillClass(band: string) {
-  if (band.includes('critical')) return styles.pillRed;
-  if (band.includes('high') || band.includes('payment')) return styles.pillAmber;
-  return styles.pill;
 }
 
 function formatMoney(value: number | string | null | undefined, currency: string) {
