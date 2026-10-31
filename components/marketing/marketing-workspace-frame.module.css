@@ -280,6 +280,30 @@
   to { opacity: 1; transform: translateY(0); }
 }
 
+/* The AppShell command bar must remain flush to the viewport on Growth pages.
+ * Keeping this scoped here avoids changing CRM/other workspaces while also
+ * bypassing the same scroll-context issues that affected Growth navigation. */
+@media (min-width: 1024px) {
+  :global(body:has(.growth-workspace-scope) header.sticky.top-0) {
+    position: fixed !important;
+    top: 0 !important;
+    right: 0;
+    width: auto;
+  }
+
+  :global(body:has(.growth-workspace-scope) div[class*="lg:pl-16"] > header.sticky.top-0) {
+    left: 4rem;
+  }
+
+  :global(body:has(.growth-workspace-scope) div[class*="lg:pl-[304px]"] > header.sticky.top-0) {
+    left: 19rem;
+  }
+
+  :global(body:has(.growth-workspace-scope) main) {
+    padding-top: calc(4rem + 1.5rem) !important;
+  }
+}
+
 @media (max-width: 1023px) {
   .studio {
     min-height: auto;
