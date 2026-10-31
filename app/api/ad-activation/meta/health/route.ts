@@ -3,7 +3,10 @@ import "server-only";
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { bearerMatchesAnySecret } from "@/lib/security/machine-bearer-auth";
-import { isAdActivationRunnerEnabled } from "@/lib/ad-activation/runner-controls";
+import {
+  getAdActivationCanaryScope,
+  isAdActivationRunnerEnabled,
+} from "@/lib/ad-activation/runner-controls";
 import { AD_ACTIVATION_TRANSPORT_ENABLED } from "@/lib/ad-activation/transport-policy";
 
 export const dynamic = "force-dynamic";
@@ -51,6 +54,8 @@ export async function GET(request: NextRequest) {
       provider: "meta",
       runnerEnabled: isAdActivationRunnerEnabled(),
       transportEnabled: AD_ACTIVATION_TRANSPORT_ENABLED,
+      canaryConfigured: getAdActivationCanaryScope() !== null,
+      mode: "canary_only",
       state: data ?? null,
     },
     { status: 200, headers: { "Cache-Control": "no-store" } },
