@@ -10,6 +10,7 @@ import {
   renewAdActivationDeliveryLease,
 } from "@/lib/ad-activation/provider-queue";
 import { prepareAdActivationProviderDryRun } from "@/lib/ad-activation/provider-dry-run";
+import { assessAdActivationProviderReadiness } from "@/lib/ad-activation/provider-readiness";
 import { executeAdActivationTransport } from "@/lib/ad-activation/provider-transport-boundary";
 import { metaCustomAudienceTransportAdapter } from "@/lib/ad-activation/providers/meta-transport";
 import {
@@ -104,6 +105,77 @@ async function processMetaDelivery(
     return "lease_lost";
   }
 
+  let context;
+  try {
+    context = await resolveMetaTransportContext(delivery);
+  } catch {
+    await finalizeSafely(
+      delivery,
+      {
+        status: "retry",
+        errorCode: "activation_context_lookup_failed",
+        errorMessage: "Activation transport context could not be resolved.",
+      },
+      startedAt,
+    );
+    return "retry";
+  }
+
+  if (!context) {
+    await finalizeSafely(
+      delivery,
+      {
+        status: "failed",
+        errorCode: "activation_destination_missing",
+        errorMessage: "Activation destination is unavailable for transport.",
+      },
+      startedAt,
+    );
+    return "failed";
+  }
+
+  /*
+   * Fail closed on provider configuration before resolving or hashing any
+   * person identifiers. The readiness check is database/config-only and never
+   * decrypts credentials or calls Meta.
+   */
+  let readiness;
+  try {
+    readiness = await assessAdActivationProviderReadiness({
+      organizationId: delivery.organization_id,
+      destinationId: delivery.destination_id,
+    });
+  } catch {
+    await finalizeSafely(
+      delivery,
+      {
+        status: "retry",
+        errorCode: "activation_readiness_check_failed",
+        errorMessage: "Activation provider readiness could not be verified.",
+      },
+      startedAt,
+    );
+    return "retry";
+  }
+
+  const actionReady =
+    delivery.action === "add"
+      ? readiness.addReady
+      : readiness.removeReady;
+
+  if (readiness.provider !== "meta" || !actionReady) {
+    await finalizeSafely(
+      delivery,
+      {
+        status: "failed",
+        errorCode: "activation_provider_not_ready",
+        errorMessage: "Meta activation destination is not ready for this action.",
+      },
+      startedAt,
+    );
+    return "failed";
+  }
+
   let prepared;
   try {
     prepared = await prepareAdActivationProviderDryRun(delivery);
@@ -146,35 +218,6 @@ async function processMetaDelivery(
       startedAt,
     );
     return "retry";
-  }
-
-  let context;
-  try {
-    context = await resolveMetaTransportContext(delivery);
-  } catch {
-    await finalizeSafely(
-      delivery,
-      {
-        status: "retry",
-        errorCode: "activation_context_lookup_failed",
-        errorMessage: "Activation transport context could not be resolved.",
-      },
-      startedAt,
-    );
-    return "retry";
-  }
-
-  if (!context) {
-    await finalizeSafely(
-      delivery,
-      {
-        status: "failed",
-        errorCode: "activation_destination_missing",
-        errorMessage: "Activation destination is unavailable for transport.",
-      },
-      startedAt,
-    );
-    return "failed";
   }
 
   const result = await executeAdActivationTransport({
