@@ -58,7 +58,7 @@ export function StatCard({
     <DecisionMetricCard
       label={label}
       value={value}
-      detail={note ?? 'Current workspace metric'}
+      detail={note}
       icon={icon}
       href={href}
       delta={delta}
