@@ -39,7 +39,6 @@ function isMarketingPath(pathname: string) {
     '/attribution',
     '/funnel',
     '/paid-media-leads',
-    '/re-engaged',
     '/seo',
     '/analytics',
     '/revenue',

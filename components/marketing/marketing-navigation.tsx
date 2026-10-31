@@ -3,7 +3,6 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
-  Activity,
   BarChart3,
   CheckCircle2,
   ChevronDown,
@@ -45,7 +44,6 @@ const groups: NavigationGroup[] = [
     items: [
       { href: '/campaigns', label: 'Campaigns', icon: Megaphone },
       { href: '/paid-media-leads', label: 'Acquisition', icon: UsersRound },
-      { href: '/re-engaged', label: 'Re-engaged Leads', icon: Activity },
     ],
   },
   {
