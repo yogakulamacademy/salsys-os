@@ -58,6 +58,10 @@
     {
       "path": "/api/analytics/meta-ads/sync",
       "schedule": "15 6 * * *"
+    },
+    {
+      "path": "/api/marketing/audience-intelligence/snapshot",
+      "schedule": "35 6 * * *"
     }
   ]
 }
