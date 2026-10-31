@@ -189,7 +189,7 @@ export function MarketingNavigation() {
       </details>
 
       <aside
-        className="hidden self-start border-r border-line pr-3 lg:block"
+        className="hidden min-h-[calc(100vh-7rem)] border-r border-line pr-3 lg:block"
         aria-label="Growth navigation"
       >
         <div className="sticky top-20 pb-6">
