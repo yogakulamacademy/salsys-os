@@ -29,8 +29,19 @@ const instagramActions = read('app/conversations/instagram-actions.ts');
 const copilot = read('components/conversation-copilot.tsx');
 const copilotActions = read('app/conversations/copilot-actions.ts');
 const followupsData = read('lib/followups-data.ts');
-const followupsCompatibilityPage = read('app/follow-ups/page.tsx');
 const workQueuePage = read('app/work-queue/page.tsx');
+const workQueueMinePage = read('app/work-queue/mine/page.tsx');
+const workQueueTeamPage = read('app/work-queue/team/page.tsx');
+const opportunitiesPage = read('app/opportunities/page.tsx');
+const salesPerformancePage = read('app/crm/performance/page.tsx');
+const leadsCompatibilityPage = read('app/leads/page.tsx');
+const pipelineCompatibilityPage = read('app/pipeline/page.tsx');
+const reengagedCompatibilityPage = read('app/re-engaged/page.tsx');
+const qualityCompatibilityPage = read('app/data-quality/page.tsx');
+const followupsCompatibilityPage = read('app/follow-ups/page.tsx');
+const admissionsCompatibilityPage = read('app/admissions/page.tsx');
+const dashboardCompatibilityLayout = read('app/dashboard/layout.tsx');
+const middleware = read('middleware.ts');
 
 for (const [needle, label] of [
   ['set_lead_stage', 'Pipeline uses canonical stage RPC'],
@@ -117,8 +128,29 @@ for (const [needle, label] of [
 }
 
 requireText(followupsData, 'taskType', 'task provenance in Follow-ups adapter');
-requireText(followupsCompatibilityPage, "tab: 'followups'", 'legacy Follow-ups route points to canonical Work Queue');
 requireText(workQueuePage, 'payment verification', 'payment-check task labeling');
 requireText(workQueuePage, 'Reschedule', 'reschedule semantics');
+requireText(workQueueMinePage, '@/app/dashboard/page', 'personal Today view is hosted under Work Queue');
+requireText(workQueueTeamPage, 'Team priority queue', 'team priority scope is hosted under Work Queue');
+requireText(opportunitiesPage, "type Surface = 'table' | 'pipeline' | 'activity' | 'quality'", 'unified Opportunities surfaces');
+requireText(salesPerformancePage, 'Sales performance', 'management performance drill-down');
+
+for (const [source, needle, label] of [
+  [leadsCompatibilityPage, '/opportunities', 'legacy Leads route points to Opportunities'],
+  [pipelineCompatibilityPage, "surface: 'pipeline'", 'legacy Pipeline route points to Opportunities Pipeline'],
+  [reengagedCompatibilityPage, "surface: 'activity'", 'legacy Re-engaged route points to Opportunities Activity'],
+  [qualityCompatibilityPage, "surface: 'quality'", 'legacy Data Quality route points to Opportunities Quality'],
+  [followupsCompatibilityPage, "tab: 'followups'", 'legacy Follow-ups route points to canonical Work Queue'],
+  [admissionsCompatibilityPage, '/work-queue/team', 'legacy Admissions queue points to Work Queue Team'],
+  [admissionsCompatibilityPage, '/crm/performance', 'legacy Admissions performance points to Command Center Performance'],
+  [dashboardCompatibilityLayout, '/work-queue/mine', 'legacy employee Dashboard points to personal Work Queue'],
+  [dashboardCompatibilityLayout, '/crm', 'legacy manager Dashboard points to Command Center'],
+]) {
+  requireText(source, needle, label);
+}
+
+for (const needle of ['/work-queue', '/work-queue/mine', '/work-queue/team', '/opportunities']) {
+  requireText(middleware, `\"${needle}\"`, `employee middleware allows ${needle}`);
+}
 
 console.log('Sales workspace contracts verified.');
