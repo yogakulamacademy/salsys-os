@@ -11,14 +11,14 @@ function textValue(formData: FormData, key: string) {
 }
 
 function safeReturnPath(value: string | null) {
-  if (!value || value.startsWith('//')) return '/leads';
+  if (!value || value.startsWith('//')) return '/opportunities';
 
-  const allowed = ['/leads', '/pipeline', '/team-performance'];
+  const allowed = ['/opportunities', '/leads', '/pipeline', '/team-performance'];
   if (allowed.some((prefix) => value === prefix || value.startsWith(`${prefix}/`) || value.startsWith(`${prefix}?`))) {
     return value;
   }
 
-  return '/leads';
+  return '/opportunities';
 }
 
 function withMessage(path: string, key: 'notice' | 'error', value: string) {
@@ -28,6 +28,9 @@ function withMessage(path: string, key: 'notice' | 'error', value: string) {
 }
 
 function revalidateLeadAssignment(leadId: string) {
+  revalidatePath('/crm');
+  revalidatePath('/work-queue');
+  revalidatePath('/opportunities');
   revalidatePath('/dashboard');
   revalidatePath('/admissions');
   revalidatePath('/leads');
