@@ -1,22 +1,29 @@
 import type { ReactNode } from 'react';
 
-import automationStyles from '@/app/automation/automation-studio.module.css';
 import { CrmLeadInspectorBridge } from '@/components/crm/crm-lead-inspector-bridge';
 import { CrmNavigation } from '@/components/crm/crm-navigation';
+import workspaceStyles from '@/components/marketing/marketing-workspace-frame.module.css';
 
 export function CrmWorkspaceFrame({ children }: { children: ReactNode }) {
   return (
     <>
       <div
-        className={`crm-brand-scope ${automationStyles.studio} grid gap-6 min-[768px]:grid-cols-[232px_minmax(0,1fr)] xl:grid-cols-[252px_minmax(0,1fr)] xl:gap-7`}
+        className={`crm-brand-scope ${workspaceStyles.studio} grid gap-5 lg:grid-cols-[220px_minmax(0,1fr)] xl:grid-cols-[238px_minmax(0,1fr)] xl:gap-6`}
       >
         <CrmNavigation />
-        <CrmLeadInspectorBridge>
-          <main className="min-w-0 pb-10">{children}</main>
-        </CrmLeadInspectorBridge>
+        <div className="min-w-0 pb-8">
+          <CrmLeadInspectorBridge>{children}</CrmLeadInspectorBridge>
+        </div>
       </div>
 
       <style>{`
+        /* Match Growth workspace behavior: sticky child navigation must not live
+         * inside the transformed AppShell page-enter wrapper. */
+        .page-transition:has(.crm-brand-scope) {
+          animation: none !important;
+          transform: none !important;
+        }
+
         body:has(.crm-brand-scope) .legacy-shell-host > div {
           background: var(--app-bg) !important;
           color: var(--app-text) !important;
