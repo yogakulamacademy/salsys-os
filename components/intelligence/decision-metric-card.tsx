@@ -73,6 +73,7 @@ export function DecisionMetricCard({
   const effectiveDefinition = definition ?? canonical?.definition;
   const effectiveEvidenceLabel = evidenceLabel ?? canonical?.evidenceLabel;
   const effectiveDeltaDirection = deltaDirection ?? canonical?.deltaDirection ?? "neutral";
+  const effectiveHref = href ?? canonical?.href;
   const styles = toneStyles[tone];
   const deltaState = getDeltaState(delta, effectiveDeltaDirection);
   const content = (
@@ -104,7 +105,7 @@ export function DecisionMetricCard({
             ) : null}
           </span>
         </div>
-        {href ? (
+        {effectiveHref ? (
           <ArrowRight
             size={14}
             className="mt-1 shrink-0 text-copy-subtle transition group-hover:translate-x-0.5 group-hover:text-brand-700"
@@ -139,7 +140,7 @@ export function DecisionMetricCard({
           {delta !== undefined ? (
             <span className="text-[10px] text-copy-subtle">{comparisonLabel}</span>
           ) : null}
-          {statusLabel && href ? (
+          {statusLabel && effectiveHref ? (
             <span className={`ml-auto rounded-full px-2 py-1 text-[9px] font-semibold ${styles.status}`}>
               {statusLabel}
             </span>
@@ -152,8 +153,8 @@ export function DecisionMetricCard({
   const className =
     "group block rounded-card border border-line bg-surface p-4 shadow-sm transition hover:border-line-strong hover:shadow-panel";
 
-  return href ? (
-    <Link href={href} className={className}>
+  return effectiveHref ? (
+    <Link href={effectiveHref} className={className}>
       {content}
     </Link>
   ) : (
