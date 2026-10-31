@@ -178,6 +178,9 @@ jobs:
       - name: Verify Ad Activation Credential and Transport Boundary Contracts
         run: npm run verify:ad-activation-transport-boundary
 
+      - name: Verify Ad Activation Execution Readiness Contracts
+        run: npm run verify:ad-activation-execution-readiness
+
       - name: Typecheck
         run: npm run typecheck
 
