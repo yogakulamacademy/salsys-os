@@ -26,9 +26,26 @@ function numericId(value: unknown) {
   return /^\d+$/.test(String(value ?? "").trim());
 }
 
+function stringSet(value: unknown) {
+  if (!Array.isArray(value)) {
+    return new Set<string>();
+  }
+
+  return new Set(
+    value
+      .filter((item): item is string => typeof item === "string")
+      .map((item) => item.trim())
+      .filter(Boolean),
+  );
+}
+
 /**
  * Assess destination/provider configuration only. This deliberately does not
  * resolve Person identifiers, decrypt provider credentials, or call a provider.
+ *
+ * Provider permissions are checked from the scopes already recorded when the
+ * tenant connection was authorized. This lets execution fail closed before any
+ * customer identifier is prepared for a provider request.
  */
 export async function assessAdActivationProviderReadiness(input: {
   organizationId: string;
@@ -70,7 +87,7 @@ export async function assessAdActivationProviderReadiness(input: {
 
   const { data: connection, error: connectionError } = await admin
     .from("integration_connections")
-    .select("id,organization_id,provider,status,external_account_id,provider_metadata")
+    .select("id,organization_id,provider,status,external_account_id,provider_metadata,scopes")
     .eq("organization_id", organizationId)
     .eq("id", destination.connection_id)
     .maybeSingle();
@@ -85,6 +102,7 @@ export async function assessAdActivationProviderReadiness(input: {
       ? "google"
       : "unsupported";
   const config = objectConfig(destination.config);
+  const scopes = stringSet(connection?.scopes);
   const reasons: string[] = [];
   const connectionReady = Boolean(connection && connection.status === "connected");
   const audienceIdReady = numericId(destination.external_audience_id);
@@ -101,9 +119,16 @@ export async function assessAdActivationProviderReadiness(input: {
     if (destination.destination_kind !== "custom_audience") {
       reasons.push("meta_destination_kind_must_be_custom_audience");
     }
+
     const kindReady = destination.destination_kind === "custom_audience";
-    addSpecificReady = kindReady;
-    removeSpecificReady = kindReady;
+    const adsManagementReady = scopes.has("ads_management");
+
+    if (!adsManagementReady) {
+      reasons.push("meta_ads_management_scope_missing");
+    }
+
+    addSpecificReady = kindReady && adsManagementReady;
+    removeSpecificReady = kindReady && adsManagementReady;
   } else if (provider === "google") {
     if (destination.destination_kind !== "customer_match") {
       reasons.push("google_destination_kind_must_be_customer_match");
