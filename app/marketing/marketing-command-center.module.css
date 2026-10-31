@@ -19,10 +19,10 @@
 .intro h1 {
   margin: 5px 0 0;
   color: var(--ink);
-  font-size: 32px;
-  font-weight: 680;
-  line-height: 1.08;
-  letter-spacing: -.04em;
+  font-size: 30px;
+  font-weight: 650;
+  line-height: 1.15;
+  letter-spacing: -.035em;
 }
 
 .intro p {
@@ -37,8 +37,8 @@
 .kickerLight {
   color: var(--brand);
   font-size: 10px;
-  font-weight: 750;
-  letter-spacing: .13em;
+  font-weight: 700;
+  letter-spacing: .12em;
   text-transform: uppercase;
 }
 
@@ -66,6 +66,7 @@
   padding: 0 14px;
   font-size: 13px;
   font-weight: 650;
+  line-height: 1;
   text-decoration: none;
   white-space: nowrap;
 }
@@ -115,13 +116,13 @@
 
 .todayPrimary h2 {
   max-width: 25ch;
-  margin: 16px 0 12px;
+  margin: 12px 0 10px;
   color: #fff !important;
   -webkit-text-fill-color: #fff;
-  font-size: clamp(26px, 2.2vw, 34px);
-  font-weight: 700;
-  line-height: 1.12;
-  letter-spacing: -.035em;
+  font-size: 25px;
+  font-weight: 650;
+  line-height: 1.28;
+  letter-spacing: -.025em;
   text-wrap: balance;
 }
 
@@ -130,7 +131,7 @@
   margin: 0;
   color: rgba(255,255,255,.82);
   font-size: 13px;
-  line-height: 1.7;
+  line-height: 1.65;
 }
 
 .todayActions { margin-top: 20px; }
@@ -178,8 +179,8 @@
 
 .growthStep strong {
   color: #fff;
-  font-size: 13px;
-  font-weight: 720;
+  font-size: 12px;
+  font-weight: 650;
   line-height: 1.25;
 }
 
@@ -218,24 +219,24 @@
 
 .decisionMetric > span {
   color: var(--muted);
-  font-size: 10px;
-  font-weight: 650;
+  font-size: 12px;
+  font-weight: 600;
 }
 
 .decisionMetric strong {
-  margin-top: 9px;
+  margin-top: 8px;
   color: var(--ink);
-  font-size: 28px;
-  font-weight: 690;
-  line-height: 1;
+  font-size: 30px;
+  font-weight: 650;
+  line-height: 1.1;
   letter-spacing: -.035em;
 }
 
 .decisionMetric small {
-  margin-top: 7px;
+  margin-top: 3px;
   color: var(--app-text-subtle);
-  font-size: 10px;
-  line-height: 1.35;
+  font-size: 11px;
+  line-height: 1.5;
 }
 
 .operatingGrid {
@@ -278,19 +279,19 @@
 .sectionHeading h2,
 .sectionHeadingWide h2,
 .journeyHeader h2 {
-  margin: 4px 0 0;
+  margin: 3px 0 4px;
   color: var(--ink);
-  font-size: 18px;
-  font-weight: 680;
-  letter-spacing: -.025em;
+  font-size: 16px;
+  font-weight: 650;
+  letter-spacing: -.015em;
 }
 
 .sectionHeadingWide p,
 .journeyHeader p {
-  margin: 5px 0 0;
+  margin: 0;
   color: var(--muted);
   font-size: 12px;
-  line-height: 1.5;
+  line-height: 1.55;
 }
 
 .signalCount {
@@ -340,14 +341,15 @@
 .priorityTop strong {
   color: var(--ink);
   font-size: 13px;
+  font-weight: 650;
   line-height: 1.35;
 }
 
 .priorityMain p {
-  margin: 5px 0 0;
+  margin: 4px 0 0;
   color: var(--muted);
-  font-size: 11px;
-  line-height: 1.55;
+  font-size: 12px;
+  line-height: 1.5;
 }
 
 .railFooter {
@@ -402,17 +404,18 @@
   display: block;
   color: var(--muted);
   font-size: 10px;
-  font-weight: 650;
+  font-weight: 600;
   text-transform: uppercase;
   letter-spacing: .06em;
 }
 
 .journeyStage strong {
   display: block;
-  margin-top: 8px;
+  margin-top: 7px;
   color: var(--ink);
-  font-size: 24px;
-  line-height: 1;
+  font-size: 21px;
+  font-weight: 650;
+  line-height: 1.1;
   letter-spacing: -.035em;
 }
 
@@ -441,7 +444,7 @@
   margin-bottom: 12px;
   color: var(--ink);
   font-size: 12px;
-  font-weight: 680;
+  font-weight: 650;
 }
 
 .subheading a,
@@ -450,7 +453,7 @@
   align-items: center;
   gap: 5px;
   color: var(--brand);
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 650;
   text-decoration: none;
   white-space: nowrap;
@@ -464,7 +467,7 @@
   padding: 9px 0;
   border-bottom: 1px solid var(--line);
   color: var(--ink);
-  font-size: 11px;
+  font-size: 12px;
   text-decoration: none;
 }
 
@@ -498,7 +501,7 @@
 }
 
 .readinessHero strong { display: block; color: var(--ink); font-size: 12px; }
-.readinessHero span { display: block; margin-top: 4px; color: var(--muted); font-size: 10px; line-height: 1.45; }
+.readinessHero span { display: block; margin-top: 4px; color: var(--muted); font-size: 11px; line-height: 1.5; }
 
 .evidenceList { margin-top: 12px; }
 .evidenceRow { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 9px 0; border-bottom: 1px solid var(--line); color: var(--muted); font-size: 11px; }
@@ -512,9 +515,9 @@
   align-items: center;
   border-radius: 999px;
   padding: 4px 8px;
-  font-size: 9px;
-  font-weight: 700;
-  line-height: 1.2;
+  font-size: 10px;
+  font-weight: 650;
+  line-height: 1.35;
   white-space: nowrap;
 }
 
@@ -549,11 +552,11 @@
 .campaignRow:hover { background: var(--app-surface-soft); }
 .rank { color: var(--brand); font-size: 11px; font-weight: 750; letter-spacing: .08em; }
 .campaignMain { min-width: 0; }
-.campaignMain strong { display: block; overflow: hidden; color: var(--ink); font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
-.campaignMain span { display: block; margin-top: 4px; color: var(--muted); font-size: 10px; }
+.campaignMain strong { display: block; overflow: hidden; color: var(--ink); font-size: 13px; font-weight: 650; text-overflow: ellipsis; white-space: nowrap; }
+.campaignMain span { display: block; margin-top: 4px; color: var(--muted); font-size: 12px; line-height: 1.5; }
 .campaignOutcome { text-align: right; }
-.campaignOutcome strong { display: block; color: var(--ink); font-size: 18px; line-height: 1; }
-.campaignOutcome small { display: block; margin-top: 3px; color: var(--app-text-subtle); font-size: 9px; text-transform: uppercase; letter-spacing: .06em; }
+.campaignOutcome strong { display: block; color: var(--ink); font-size: 18px; font-weight: 650; line-height: 1; }
+.campaignOutcome small { display: block; margin-top: 3px; color: var(--app-text-subtle); font-size: 10px; text-transform: uppercase; letter-spacing: .06em; }
 .rowArrow { color: var(--app-text-subtle); }
 
 .momentumStack { display: grid; }
@@ -569,7 +572,7 @@
 .momentumIcon { width: 34px; height: 34px; display: grid; place-items: center; border-radius: 10px; color: var(--brand); background: var(--app-brand-50); }
 .momentumCopy span { display: block; color: var(--ink); font-size: 12px; font-weight: 650; }
 .momentumCopy small { display: block; margin-top: 3px; color: var(--muted); font-size: 10px; }
-.momentumCard > strong { color: var(--ink); font-size: 16px; }
+.momentumCard > strong { color: var(--ink); font-size: 16px; font-weight: 650; }
 
 .emptyState {
   display: grid;
@@ -607,7 +610,7 @@
 @media (max-width: 640px) {
   .intro h1 { font-size: 28px; }
   .todayPrimary { padding: 26px 22px 22px; }
-  .todayPrimary h2 { max-width: 19ch; font-size: 28px; }
+  .todayPrimary h2 { max-width: 19ch; font-size: 24px; }
   .growthPath { padding: 0 22px 22px; }
   .kpiGrid { grid-template-columns: 1fr 1fr; gap: 8px; }
   .decisionMetric { min-height: 96px; padding: 15px; }
