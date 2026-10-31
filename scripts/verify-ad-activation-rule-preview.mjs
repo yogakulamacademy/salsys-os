@@ -31,8 +31,19 @@ for (const token of forbidden) {
 if (page.includes('Prenatal nurture audience')) {
   throw new Error('Sensitive pregnancy-related audience blueprint must not be present.');
 }
-if (!page.includes('Rule Preview Engine') || !page.includes('Matched people') || !page.includes('previewAudienceRule')) {
-  throw new Error('Audience Intelligence page must surface rule-preview output.');
+
+const hasPreviewSurface =
+  (page.includes('Custom audience explorer') || page.includes('Rule Preview Engine')) &&
+  page.includes('Matched people') &&
+  page.includes('previewAudienceRule') &&
+  page.includes('AudienceRuleBuilderDrawer');
+
+if (!hasPreviewSurface) {
+  throw new Error('Audience Intelligence page must preserve the safe aggregate rule-preview surface.');
+}
+
+if (!page.includes('Live CRM intelligence') || !page.includes('External sync off')) {
+  throw new Error('Audience Intelligence page must distinguish live CRM intelligence from disabled external activation.');
 }
 
 console.log('Ad activation audience rule preview contracts: PASS');
