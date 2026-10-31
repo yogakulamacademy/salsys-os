@@ -1,4 +1,3 @@
-import Link from "next/link";
 import {
   ArrowDownRight,
   ArrowRight,
@@ -8,6 +7,7 @@ import {
 } from "lucide-react";
 import type { ReactNode } from "react";
 
+import { DecisionMetricLink } from "@/components/intelligence/decision-metric-link";
 import {
   resolveMetricDefinition,
   type MetricDeltaDirection,
@@ -154,9 +154,16 @@ export function DecisionMetricCard({
     "group block rounded-card border border-line bg-surface p-4 shadow-sm transition hover:border-line-strong hover:shadow-panel";
 
   return effectiveHref ? (
-    <Link href={effectiveHref} className={className}>
+    <DecisionMetricLink
+      href={effectiveHref}
+      className={className}
+      metricLabel={label}
+      metricValue={value}
+      metricDetail={detail}
+      evidenceLabel={effectiveEvidenceLabel}
+    >
       {content}
-    </Link>
+    </DecisionMetricLink>
   ) : (
     <div className={className}>{content}</div>
   );
