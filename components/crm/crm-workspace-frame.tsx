@@ -11,9 +11,9 @@ export function CrmWorkspaceFrame({ children }: { children: ReactNode }) {
         className={`crm-brand-scope ${workspaceStyles.studio} grid gap-5 lg:grid-cols-[220px_minmax(0,1fr)] xl:grid-cols-[238px_minmax(0,1fr)] xl:gap-6`}
       >
         <CrmNavigation />
-        <CrmLeadInspectorBridge>
-          <div className="min-w-0 pb-8">{children}</div>
-        </CrmLeadInspectorBridge>
+        <div className="min-w-0 pb-8">
+          <CrmLeadInspectorBridge>{children}</CrmLeadInspectorBridge>
+        </div>
       </div>
 
       <style>{`
