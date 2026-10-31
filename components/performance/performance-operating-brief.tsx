@@ -36,10 +36,6 @@ function admissionsEmployees(employees: TeamPerformanceEmployee[]) {
   return employees.filter((employee) => employee.role === "admissions");
 }
 
-function ownerHref(employee: TeamPerformanceEmployee | null) {
-  return employee ? `/performance?employee=${encodeURIComponent(employee.userId)}` : "/performance";
-}
-
 export async function PerformanceOperatingBrief() {
   const today = datePartsInIndia();
   const startDate = addDays(today, -6);
@@ -188,7 +184,7 @@ export async function PerformanceOperatingBrief() {
               ? `${available.currentActiveLeads.toLocaleString()} active · ${available.currentActionLoad.toLocaleString()} action load`
               : "No active Admissions employee"
           }
-          href={ownerHref(available)}
+          href="/performance"
           evidenceState="derived"
           evidenceLabel="Current workload comparison"
           definition="Admissions employee with the lowest current action load, with active leads used as a tie-breaker. This is a capacity suggestion, not a performance ranking."
@@ -210,10 +206,10 @@ export async function PerformanceOperatingBrief() {
             </div>
           </div>
           <Link
-            href={ownerHref(heaviest)}
+            href="/performance"
             className="inline-flex shrink-0 items-center gap-1.5 text-xs font-semibold text-brand-700 hover:text-brand-800"
           >
-            Review owner
+            Review team
             <ArrowRight size={13} />
           </Link>
         </div>
