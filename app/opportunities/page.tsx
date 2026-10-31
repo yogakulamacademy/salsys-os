@@ -11,6 +11,7 @@ import {
   Plus,
   ShieldAlert,
   ShieldCheck,
+  UserRoundCheck,
   UsersRound,
 } from 'lucide-react';
 
@@ -44,6 +45,14 @@ type ActivityView = 'all' | 'reengaged' | 'hot' | 'high_intent';
 
 type SearchParams = Promise<Record<string, string | string[] | undefined>>;
 
+type OpportunityHealthSummary = {
+  all: number;
+  unassigned: number;
+  stuck: number;
+  followupOverdue: number;
+  paymentPending: number;
+};
+
 export default async function OpportunitiesPage({ searchParams }: { searchParams: SearchParams }) {
   const params = await searchParams;
   const surface = parseSurface(one(params.surface));
@@ -53,7 +62,7 @@ export default async function OpportunitiesPage({ searchParams }: { searchParams
       <PageHeader
         eyebrow="Sales · Opportunities"
         title="Opportunities"
-        description="One commercial workspace for opportunity records, pipeline movement, behavioural activity and data quality. Change the view without losing the underlying customer context."
+        description="One commercial workspace for opportunity records, pipeline movement, behavioural activity and data quality. Each view explains the evidence without changing the underlying record automatically."
         actions={
           <Link href="/leads/new" className="btn-primary">
             <Plus size={15} /> Add opportunity
@@ -76,6 +85,13 @@ async function TableSurface({ params }: { params: Record<string, string | string
   const workspace = await getLeadsWorkspacePage(filters);
   const notice = one(params.notice);
   const error = one(params.error);
+  const health: OpportunityHealthSummary = {
+    all: workspace.summary.all,
+    unassigned: workspace.summary.unassigned,
+    stuck: workspace.summary.stuck,
+    followupOverdue: workspace.summary.followupOverdue,
+    paymentPending: workspace.summary.paymentPending,
+  };
 
   return (
     <div className="leads-workspace-v2 space-y-4">
@@ -93,6 +109,8 @@ async function TableSurface({ params }: { params: Record<string, string | string
           {workspace.warning}
         </Notice>
       ) : null}
+
+      <OpportunityHealthBrief summary={health} />
 
       <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
         <Metric label="All" value={workspace.summary.all} note="Accessible opportunities" />
@@ -130,6 +148,90 @@ async function TableSurface({ params }: { params: Record<string, string | string
   );
 }
 
+function OpportunityHealthBrief({ summary }: { summary: OpportunityHealthSummary }) {
+  const primary = primaryOpportunityRisk(summary);
+
+  return (
+    <section className="grid gap-4 rounded-panel border border-line bg-surface p-5 shadow-xs xl:grid-cols-[minmax(0,1.15fr)_minmax(360px,.85fr)] xl:items-center">
+      <div>
+        <div className="eyebrow">Opportunity health brief</div>
+        <h2 className="mt-1 text-[20px] font-semibold tracking-tight text-copy-strong">{primary.headline}</h2>
+        <p className="mt-2 max-w-3xl text-[12px] leading-6 text-copy-muted">{primary.detail}</p>
+        <div className="mt-4 flex flex-wrap gap-2">
+          <Link href={primary.href} className="btn-primary">
+            {primary.action} <ArrowRight size={13} />
+          </Link>
+          <Link href="/work-queue" className="btn-secondary">Open work queue</Link>
+        </div>
+      </div>
+
+      <div className="grid gap-2 sm:grid-cols-2">
+        <HealthEvidence
+          icon={<AlertTriangle size={14} />}
+          label="Follow-up overdue"
+          value={summary.followupOverdue}
+          total={summary.all}
+          note="Persisted next action is already due"
+          attention={summary.followupOverdue > 0}
+        />
+        <HealthEvidence
+          icon={<Flame size={14} />}
+          label="Stage stagnation"
+          value={summary.stuck}
+          total={summary.all}
+          note="Past the configured stage threshold"
+          attention={summary.stuck > 0}
+        />
+        <HealthEvidence
+          icon={<UserRoundCheck size={14} />}
+          label="Ownership gap"
+          value={summary.unassigned}
+          total={summary.all}
+          note="No recorded owner"
+          attention={summary.unassigned > 0}
+        />
+        <HealthEvidence
+          icon={<CircleDollarSign size={14} />}
+          label="Payment stage"
+          value={summary.paymentPending}
+          total={summary.all}
+          note="Closest active commercial stage"
+        />
+      </div>
+    </section>
+  );
+}
+
+function HealthEvidence({
+  icon,
+  label,
+  value,
+  total,
+  note,
+  attention = false,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  value: number;
+  total: number;
+  note: string;
+  attention?: boolean;
+}) {
+  return (
+    <div className={`rounded-ui border p-3.5 ${attention ? 'border-amber-200 bg-amber-50/50' : 'border-line bg-surface-soft/70'}`}>
+      <div className="flex items-center justify-between gap-3 text-copy-subtle">
+        <span className="text-[10px] font-semibold uppercase tracking-[0.08em]">{label}</span>
+        {icon}
+      </div>
+      <div className="mt-2 flex items-end justify-between gap-3">
+        <div className="text-[18px] font-semibold text-copy-strong">{value.toLocaleString('en-IN')}</div>
+        <div className="text-[9px] font-semibold text-copy-subtle">{formatShare(value, total)}</div>
+      </div>
+      <div className="mt-1 text-[10px] leading-4 text-copy-subtle">{note}</div>
+    </div>
+  );
+}
+
 async function PipelineSurface() {
   const snapshot = await getPipelineSnapshot();
   const stageCountByStage = new Map(snapshot.stageCounts.map((row) => [row.stage, row.leads]));
@@ -149,6 +251,15 @@ async function PipelineSurface() {
       oldestDays: row?.oldestDays ?? 0,
     };
   });
+  const bottleneck = snapshot.agingSummary
+    .filter((row) => row.stuck > 0 || row.warning > 0)
+    .slice()
+    .sort(
+      (left, right) =>
+        right.stuck - left.stuck ||
+        right.warning - left.warning ||
+        right.oldestDays - left.oldestDays,
+    )[0] ?? null;
 
   return (
     <div className="space-y-4">
@@ -156,6 +267,23 @@ async function PipelineSurface() {
         <Notice tone="warning" title="Pipeline loaded with a fallback path">
           {snapshot.warning}
         </Notice>
+      ) : null}
+
+      {bottleneck ? (
+        <section className={`rounded-panel border p-4 ${bottleneck.stuck > 0 ? 'border-amber-200 bg-amber-50/70' : 'border-line bg-surface'}`}>
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <div className="eyebrow">Strongest aging bottleneck</div>
+              <div className="section-title mt-1">{opportunityStageLabel(bottleneck.stage)}</div>
+              <p className="mt-1 text-[12px] text-copy-muted">
+                {bottleneck.stuck.toLocaleString('en-IN')} stuck · {bottleneck.warning.toLocaleString('en-IN')} warning · median {bottleneck.medianDays.toFixed(1)}d · oldest {bottleneck.oldestDays.toLocaleString('en-IN')}d.
+              </p>
+            </div>
+            <Link href="/opportunities?view=stuck" className="btn-secondary">
+              Review stuck opportunities <ArrowRight size={13} />
+            </Link>
+          </div>
+        </section>
       ) : null}
 
       <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
@@ -519,6 +647,52 @@ function Evidence({ label, value, muted = false }: { label: string; value: strin
 
 function Header({ children }: { children: React.ReactNode }) {
   return <th className="px-4 py-3 text-[10px] font-semibold text-copy-subtle">{children}</th>;
+}
+
+function primaryOpportunityRisk(summary: OpportunityHealthSummary) {
+  if (summary.followupOverdue > 0) {
+    return {
+      headline: `${summary.followupOverdue.toLocaleString('en-IN')} opportunities have an overdue follow-up.`,
+      detail: 'A persisted next action has already passed its due time. Clear those commitments before treating lower-urgency opportunity hygiene as the main problem.',
+      href: '/opportunities?view=followup_overdue',
+      action: 'Review overdue follow-ups',
+    };
+  }
+  if (summary.stuck > 0) {
+    return {
+      headline: `${summary.stuck.toLocaleString('en-IN')} opportunities are past their stage-aging threshold.`,
+      detail: 'Stage stagnation is the strongest visible book-health risk. Use Pipeline to understand which stage is holding the most stuck or warning work.',
+      href: '/opportunities?surface=pipeline',
+      action: 'Inspect pipeline aging',
+    };
+  }
+  if (summary.unassigned > 0) {
+    return {
+      headline: `${summary.unassigned.toLocaleString('en-IN')} opportunities do not have a recorded owner.`,
+      detail: 'Ownership is the strongest visible operating gap in the current accessible book. Assign responsibility before adding more follow-up complexity.',
+      href: '/opportunities?owner=unassigned',
+      action: 'Assign ownership',
+    };
+  }
+  if (summary.paymentPending > 0) {
+    return {
+      headline: `${summary.paymentPending.toLocaleString('en-IN')} opportunities are currently at payment pending.`,
+      detail: 'These are the closest active commercial-stage opportunities. Payment stage is not treated as proof of cash collection; verification remains separate.',
+      href: '/work-queue?tab=payment',
+      action: 'Review payment attention',
+    };
+  }
+  return {
+    headline: 'No concentrated opportunity-health risk is visible.',
+    detail: 'The accessible book has no overdue follow-up, stuck-stage, ownership or payment-stage concentration in the current summary. Continue monitoring activity and new records rather than manufacturing urgency.',
+    href: '/opportunities?surface=activity',
+    action: 'Review recent activity',
+  };
+}
+
+function formatShare(value: number, total: number) {
+  if (total <= 0) return 'No denominator';
+  return `${((value / total) * 100).toLocaleString('en-IN', { maximumFractionDigits: 1 })}% of book`;
 }
 
 function qualityIssues(lead: Awaited<ReturnType<typeof getLeads>>[number]) {
