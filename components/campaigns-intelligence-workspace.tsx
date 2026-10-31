@@ -76,15 +76,11 @@ export function CampaignsIntelligenceWorkspace({
 
   return (
     <div className={styles.root}>
-      <section className={styles.pulse} aria-label="Campaign performance summary">
-        <Pulse label="Campaigns" value={summary.campaigns.toLocaleString('en-IN')} note="Matching this view" />
-        <Pulse label="Spend" value={spend} note="Advertising spend" word />
-        <Pulse label="Clicks" value={summary.clicks.toLocaleString('en-IN')} note="Ad-platform clicks" />
-        <Pulse label="CRM Leads" value={summary.leads.toLocaleString('en-IN')} note="Deterministic campaign matches" />
-        <Pulse label="Qualified" value={summary.qualified.toLocaleString('en-IN')} note={`${percent(summary.qualified, summary.leads)} of matched leads`} />
-        <Pulse label="Enrolled" value={summary.enrolled.toLocaleString('en-IN')} note={`${percent(summary.enrolled, summary.leads)} of matched leads`} />
-        <Pulse label="Revenue" value={formatRevenue(summary.revenueInr, summary.revenueUsd)} note="Confirmed CRM links" word />
-        <Pulse label="ROAS" value={roas === null ? 'Partial coverage' : `${roas.toFixed(1)}×`} note={roas === null ? 'Inspect complete evidence' : 'Same-currency evidence'} word={roas === null} />
+      <section className={styles.stats} aria-label="Campaign performance summary">
+        <StatCard label="Ad spend" value={spend} note={`${summary.campaigns.toLocaleString('en-IN')} campaigns in view`} />
+        <StatCard label="CRM leads" value={summary.leads.toLocaleString('en-IN')} note={`${summary.clicks.toLocaleString('en-IN')} observed ad-platform clicks`} />
+        <StatCard label="Qualified" value={summary.qualified.toLocaleString('en-IN')} note={`${percent(summary.qualified, summary.leads)} of matched leads`} />
+        <StatCard label="Enrolled" value={summary.enrolled.toLocaleString('en-IN')} note={roas === null ? 'ROAS evidence remains partial' : `${roas.toFixed(1)}× observed ROAS`} />
       </section>
 
       {!sameCurrency && campaigns.length > 0 ? (
@@ -93,7 +89,7 @@ export function CampaignsIntelligenceWorkspace({
 
       <section className={styles.panel}>
         <div className={styles.panelHeader}>
-          <div><h2>Campaign explorer</h2><p>Summary reflects active filters · select a campaign for full evidence.</p></div>
+          <div><div className={styles.kicker}>CAMPAIGN INTELLIGENCE</div><h2>Campaign explorer</h2><p>Filter paid-media evidence, then open a campaign to inspect the CRM outcomes behind it.</p></div>
           <Link href="/attribution">Inspect attribution <ArrowRight size={11} /></Link>
         </div>
 
@@ -153,8 +149,8 @@ export function CampaignsIntelligenceWorkspace({
   );
 }
 
-function Pulse({ label, value, note, word = false }: { label: string; value: string; note: string; word?: boolean }) {
-  return <div className={styles.pulseItem}><span>{label}</span><strong className={word ? styles.word : ''}>{value}</strong><small>{note}</small></div>;
+function StatCard({ label, value, note }: { label: string; value: string; note: string }) {
+  return <div className={styles.stat}><span>{label}</span><strong>{value}</strong><small>{note}</small></div>;
 }
 
 function CampaignDrawer({ campaign, onClose }: { campaign: CampaignWorkspaceRow; onClose: () => void }) {
