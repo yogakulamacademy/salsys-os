@@ -72,3 +72,48 @@ for (const forbidden of [
 }
 
 console.log("Ad activation deterministic fixtures/run-history contracts: PASS");
+
+const scenarioExecutor = fs.readFileSync(
+  "lib/ad-activation/simulation-scenario-executor.ts",
+  "utf8",
+);
+
+for (const token of [
+  "executeAdActivationSimulationScenarios",
+  "runConfiguredAdActivationSimulation",
+  "createAdActivationSimulationFixtureDependencies",
+  "projectAdActivationSimulationRunHistory",
+  '"meta_add_ready"',
+  '"google_remove_ready"',
+  '"privacy_rejected"',
+  '"preparation_skipped"',
+  'reason: "provider_transport_disabled"',
+  'reason: "advertising_not_granted"',
+  'reason: "no_exportable_identifiers"',
+  "deliveredZero",
+  "finalizedPersistentlyZero",
+  "transportEnabled: false",
+  "persistentFinalization: false",
+  'liveBindings: "absent"',
+]) {
+  if (!scenarioExecutor.includes(token)) {
+    throw new Error(`Scenario executor contract missing: ${token}`);
+  }
+}
+
+for (const token of [
+  "createAdminClient",
+  "claimAdActivationDeliveries",
+  "finalizeAdActivationDelivery",
+  "decryptIntegrationSecret",
+  "fetch(",
+  "graph.facebook.com",
+  "googleapis.com",
+  "process.env",
+]) {
+  if (scenarioExecutor.includes(token)) {
+    throw new Error(`Scenario executor must not bind live capability: ${token}`);
+  }
+}
+
+console.log("Ad activation deterministic scenario executor contracts: PASS");
