@@ -14,6 +14,7 @@ import {
   UsersRound,
 } from 'lucide-react';
 
+import { AudienceRuleBuilderDrawer } from '@/components/marketing/audience-rule-builder-drawer';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { requirePrivilegedWorkspaceAccess } from '@/lib/route-access';
 import { executeAdActivationSimulationScenarios } from '@/lib/ad-activation/simulation-scenario-executor';
@@ -164,6 +165,9 @@ export default async function AudienceActivationPage({ searchParams }: { searchP
             </a>
           ))}
         </div>
+
+        <AudienceRuleBuilderDrawer />
+
         {'sensitiveRuleRejected' in rulePreview && rulePreview.sensitiveRuleRejected ? (
           <div className={styles.previewRejected}><AlertTriangle size={18} /><div><strong>Preview blocked.</strong><span>SalsysOS does not build audiences from pregnancy, medical or other sensitive health-related rules.</span></div></div>
         ) : (
