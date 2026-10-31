@@ -3,13 +3,10 @@ import {
   Activity,
   AlertTriangle,
   ArrowRight,
-  BarChart3,
   Megaphone,
   ShieldCheck,
   TrendingDown,
   TrendingUp,
-  Users,
-  WalletCards,
 } from 'lucide-react';
 
 import { getCampaignsWorkspace } from '@/lib/campaigns-data';
@@ -92,21 +89,29 @@ export default async function MarketingCommandCenterPage() {
 
       <section className={styles.todayDeck}>
         <div className={styles.todayPrimary}>
-          <div className={styles.kickerLight}>TODAY / GROWTH DECISION</div>
+          <div className={styles.kickerLight}>YOUR DAILY GROWTH BRIEF</div>
           <h2>{primaryAttention?.title ?? 'Growth evidence is stable.'}</h2>
-          <p>{primaryAttention?.detail ?? 'No urgent acquisition or conversion exception is supported by the current evidence. Keep source quality and downstream outcomes under review.'}</p>
+          <p>{primaryAttention?.detail ?? 'Current acquisition and conversion evidence does not support an urgent exception. Keep lead quality, campaign efficiency, and downstream outcomes under review.'}</p>
           <div className={styles.todayActions}>
-            <Link href={primaryAttention?.href ?? '/campaigns'} className={styles.heroPrimary}>Review priority <ArrowRight size={13} /></Link>
-            <Link href="/analytics" className={styles.heroSecondary}>Open analysis</Link>
+            <Link href={primaryAttention?.href ?? '/campaigns'} className={styles.heroPrimary}>Open growth priorities <ArrowRight size={13} /></Link>
+            <Link href="/campaigns" className={styles.heroSecondary}>Review campaigns</Link>
           </div>
         </div>
 
-        <div className={styles.todayMetrics}>
-          <DecisionMetric icon={<WalletCards size={15} />} label="Spend" value={formatMoney(spendInr, 'INR', true)} note="Observed paid media" />
-          <DecisionMetric icon={<Users size={15} />} label="Leads" value={formatNumber(totalLeads)} note={`${formatPercent(qualified, totalLeads)} qualified`} />
-          <DecisionMetric icon={<Activity size={15} />} label="Qualified" value={formatNumber(qualified)} note={`${formatNumber(enrolled)} enrolled`} />
-          <DecisionMetric icon={<BarChart3 size={15} />} label="Revenue" value={formatMoney(revenueInr, 'INR', true)} note={roas === null ? 'ROAS partial' : `${roas.toFixed(1)}× paid ROAS`} />
+        <div className={styles.growthPath} aria-label="Marketing decision path">
+          <GrowthStep icon={<Megaphone size={18} />} title="Acquire" detail="Traffic and demand" />
+          <span className={styles.pathConnector} aria-hidden="true" />
+          <GrowthStep icon={<Activity size={18} />} title="Prioritize" detail="Lead quality and signal" />
+          <span className={styles.pathConnector} aria-hidden="true" />
+          <GrowthStep icon={<ShieldCheck size={18} />} title="Act" detail="Human growth decision" />
         </div>
+      </section>
+
+      <section className={styles.kpiGrid} aria-label="Marketing performance summary">
+        <DecisionMetric label="Spend" value={formatMoney(spendInr, 'INR', true)} note="Observed paid media" />
+        <DecisionMetric label="Leads" value={formatNumber(totalLeads)} note={`${formatPercent(qualified, totalLeads)} qualified`} />
+        <DecisionMetric label="Qualified" value={formatNumber(qualified)} note={`${formatNumber(enrolled)} enrolled`} />
+        <DecisionMetric label="Revenue" value={formatMoney(revenueInr, 'INR', true)} note={roas === null ? 'ROAS partial' : `${roas.toFixed(1)}× paid ROAS`} />
       </section>
 
       <section className={styles.operatingGrid}>
@@ -213,8 +218,18 @@ export default async function MarketingCommandCenterPage() {
   );
 }
 
-function DecisionMetric({ icon, label, value, note }: { icon: React.ReactNode; label: string; value: string; note: string }) {
-  return <div className={styles.decisionMetric}><div className={styles.decisionMetricTop}><span>{label}</span>{icon}</div><strong>{value}</strong><small>{note}</small></div>;
+function GrowthStep({ icon, title, detail }: { icon: React.ReactNode; title: string; detail: string }) {
+  return (
+    <div className={styles.growthStep}>
+      <div className={styles.growthStepIcon}>{icon}</div>
+      <strong>{title}</strong>
+      <span>{detail}</span>
+    </div>
+  );
+}
+
+function DecisionMetric({ label, value, note }: { label: string; value: string; note: string }) {
+  return <div className={styles.decisionMetric}><span>{label}</span><strong>{value}</strong><small>{note}</small></div>;
 }
 
 function JourneyStage({ label, value, detail }: { label: string; value: number; detail: string }) {
