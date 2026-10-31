@@ -71,6 +71,8 @@ const evidenceStateStyles: Record<MetricEvidenceState, string> = {
   unknown: "border-line bg-surface-muted text-copy-muted",
 };
 
+const neutralEvidenceStyle = "border-line bg-surface-muted text-copy-muted";
+
 export function DecisionMetricCard({
   label,
   value,
@@ -84,7 +86,7 @@ export function DecisionMetricCard({
   statusLabel,
   definition,
   evidenceLabel,
-  evidenceState = "observed",
+  evidenceState,
   trend,
 }: DecisionMetricCardProps) {
   const canonical = resolveMetricDefinition(label);
@@ -95,6 +97,9 @@ export function DecisionMetricCard({
   const effectiveHref = href ?? canonical?.href;
   const styles = toneStyles[tone];
   const deltaState = getDeltaState(delta, effectiveDeltaDirection);
+  const evidenceClassName = evidenceState
+    ? evidenceStateStyles[evidenceState]
+    : neutralEvidenceStyle;
 
   const content = (
     <>
@@ -178,7 +183,7 @@ export function DecisionMetricCard({
 
           {effectiveEvidenceLabel ? (
             <span
-              className={`ml-auto inline-flex items-center gap-1 rounded-full border px-2 py-1 text-[9px] font-semibold ${evidenceStateStyles[evidenceState]}`}
+              className={`ml-auto inline-flex items-center gap-1 rounded-full border px-2 py-1 text-[9px] font-semibold ${evidenceClassName}`}
               title={effectiveDefinition}
             >
               {evidenceState === "observed" ? <CheckCircle2 size={10} /> : null}
