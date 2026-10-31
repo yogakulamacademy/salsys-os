@@ -1,11 +1,17 @@
 import Link from 'next/link';
 import {
   Activity,
+  AlertTriangle,
   ArrowRight,
-  RefreshCw,
+  BarChart3,
+  Check,
+  Megaphone,
+  MousePointerClick,
   ShieldCheck,
   TrendingDown,
   TrendingUp,
+  Users,
+  WalletCards,
 } from 'lucide-react';
 
 import { getCampaignsWorkspace } from '@/lib/campaigns-data';
@@ -79,7 +85,7 @@ export default async function MarketingCommandCenterPage() {
   const maxLeadVolume = Math.max(1, ...sourceRows.map((row) => row.leads));
   const topCampaigns = [...campaigns.campaigns]
     .sort((a, b) => b.enrolled - a.enrolled || b.qualified - a.qualified || b.leads - a.leads)
-    .slice(0, 4);
+    .slice(0, 5);
   const poorCampaign = campaigns.campaigns
     .filter((row) => row.spend > 0 && row.qualified === 0)
     .sort((a, b) => b.spend - a.spend)[0];
@@ -102,171 +108,380 @@ export default async function MarketingCommandCenterPage() {
     movement,
     campaignCount: campaigns.summary.campaigns,
   });
-  const topAttention = attention[0] ?? null;
-
+  const primaryAttention = attention[0] ?? null;
   const warnings = [campaigns.warning, funnel.warning, revenue.warning].filter(Boolean) as string[];
 
   return (
     <div className={styles.page}>
-      <header className={styles.head}>
+      <header className={styles.intro}>
         <div>
-          <div className={styles.eyebrow}>Marketing Studio</div>
-          <h1 className={styles.title}>Marketing Command Center</h1>
-          <p className={styles.subtitle}>See acquisition quality, campaign performance and revenue impact in one place.</p>
+          <div className={styles.kicker}>SALSYSOS / GROWTH OPERATIONS</div>
+          <h1>Marketing Command Center</h1>
+          <p>See what is driving demand, where conversion is breaking, and what deserves attention next.</p>
         </div>
-        <div className={styles.controls}>
-          <div className={styles.control}>Latest 30 days</div>
-          <div className={styles.control}>INR</div>
-          <Link href="/marketing" className={styles.button} aria-label="Refresh Marketing Command Center">
-            <RefreshCw size={13} /> Refresh
+        <div className={styles.introActions}>
+          <Link href="/analytics" className={styles.button}>
+            <ShieldCheck size={14} /> Data health
+          </Link>
+          <Link href="/campaigns" className={styles.buttonPrimary}>
+            <Megaphone size={14} /> Open campaigns
           </Link>
         </div>
       </header>
 
-      {warnings.length ? <div className={styles.warning}>{warnings[0]}</div> : null}
+      {warnings.length ? (
+        <div className={styles.warning}>
+          <AlertTriangle size={15} />
+          <span>{warnings[0]}</span>
+        </div>
+      ) : null}
 
-      <section className={styles.pulse} aria-label="Marketing performance summary">
-        <Pulse label="Spend" value={formatMoney(spendInr, 'INR', true)} note="Advertising spend · INR" />
-        <Pulse label="Leads" value={formatNumber(totalLeads)} note="Observed CRM leads" />
-        <Pulse label="Qualified" value={formatNumber(qualified)} note={`${formatPercent(qualified, totalLeads)} of leads`} />
-        <Pulse label="Enrolled" value={formatNumber(enrolled)} note={`${formatPercent(enrolled, totalLeads)} of leads`} />
-        <Pulse label="Revenue" value={formatMoney(revenueInr, 'INR', true)} note={revenueUsd > 0 ? `Plus ${formatMoney(revenueUsd, 'USD', true)} · kept separate` : 'CRM collected · INR'} />
-        <Pulse label="Paid ROAS" value={roas === null ? 'Partial coverage' : `${roas.toFixed(1)}×`} note={roas === null ? 'Inspect complete campaign evidence' : 'Known INR evidence only'} partial={roas === null} />
+      <section className={styles.commandHero}>
+        <div className={styles.heroCopy}>
+          <div className={styles.kicker}>YOUR DAILY GROWTH BRIEF</div>
+          <h2>
+            {primaryAttention ? primaryAttention.title : 'Growth evidence is stable.'}
+            <br />
+            {primaryAttention ? 'Improve the signal before scaling spend.' : 'Keep acquisition and conversion evidence clean.'}
+          </h2>
+          <p>
+            Growth priorities are derived from observed acquisition, funnel and attribution evidence. They support human decisions and do not change campaign budgets, audiences, ads, or customer-visible actions automatically.
+          </p>
+          <div className={styles.commandActions}>
+            <Link href={primaryAttention?.href ?? '/campaigns'} className={styles.buttonPrimary}>
+              Review growth priorities <ArrowRight size={13} />
+            </Link>
+            <Link href="/campaigns" className={styles.buttonAlt}>
+              Review campaigns
+            </Link>
+          </div>
+        </div>
+
+        <div className={styles.heroFlow} aria-label="Growth operating flow">
+          <HeroNode icon={<MousePointerClick size={16} />} title="Acquire" detail="Demand signals" />
+          <span className={styles.heroConnector} aria-hidden="true" />
+          <HeroNode icon={<Activity size={16} />} title="Convert" detail="Lead quality" />
+          <span className={styles.heroConnector} aria-hidden="true" />
+          <HeroNode icon={<Check size={16} />} title="Grow" detail="Human decision" />
+        </div>
       </section>
 
-      <section className={styles.intelligenceStrip} aria-label="Marketing intelligence summary">
-        <IntelligenceCard
-          icon={movement.leads.delta !== null && movement.leads.delta < 0 ? <TrendingDown size={14} /> : <TrendingUp size={14} />}
-          label="Momentum"
-          value={movement.leads.delta === null ? 'Not enough history' : formatDelta(movement.leads.delta, 'Leads')}
-          note={movement.leads.delta === null ? 'Daily history is not sufficient for a recent-vs-prior comparison.' : `${formatNumber(movement.leads.current)} recent leads vs ${formatNumber(movement.leads.previous)} prior.`}
-          tone={movement.leads.delta !== null && movement.leads.delta < -10 ? 'warning' : 'positive'}
+      <section className={styles.stats} aria-label="Marketing summary">
+        <StatCard
+          href="/campaigns"
+          label="Ad spend"
+          value={formatMoney(spendInr, 'INR', true)}
+          detail="Observed paid-media spend · INR"
+          icon={<WalletCards size={15} />}
         />
-        <IntelligenceCard
-          icon={<ShieldCheck size={14} />}
-          label="Evidence quality"
-          value={evidenceCoverage === null ? 'Unknown' : `${evidenceCoverage.toFixed(0)}% campaign coverage`}
-          note={missingRoas > 0 ? `${missingRoas} campaign${missingRoas === 1 ? '' : 's'} still lack complete efficiency evidence.` : 'All campaigns in scope have comparable efficiency evidence.'}
-          tone={missingRoas > 0 ? 'warning' : 'positive'}
+        <StatCard
+          href="/acquisition"
+          label="New leads"
+          value={formatNumber(totalLeads)}
+          detail="Observed CRM lead volume"
+          icon={<Users size={15} />}
         />
-        <IntelligenceCard
-          icon={<Activity size={14} />}
-          label="Priority now"
-          value={topAttention?.title ?? 'No urgent action'}
-          note={topAttention?.detail ?? 'No priority investigation is supported by the current evidence.'}
-          tone={topAttention?.tone === 'critical' || topAttention?.tone === 'warning' ? 'warning' : 'neutral'}
-          href={topAttention?.href}
+        <StatCard
+          href="/funnel"
+          label="Qualified leads"
+          value={formatNumber(qualified)}
+          detail={`${formatPercent(qualified, totalLeads)} of observed leads`}
+          icon={<Activity size={15} />}
+        />
+        <StatCard
+          href="/revenue"
+          label="Revenue"
+          value={formatMoney(revenueInr, 'INR', true)}
+          detail={revenueUsd > 0 ? `Plus ${formatMoney(revenueUsd, 'USD', true)} kept separate` : 'Verified CRM-collected INR'}
+          icon={<BarChart3 size={15} />}
         />
       </section>
 
-      <div className={styles.grid}>
-        <div className={styles.stack}>
-          <section className={styles.panel}>
-            <div className={styles.panelHeader}>
+      <section className={styles.grid}>
+        <section className={styles.panel}>
+          <div className={styles.panelHead}>
+            <div>
+              <div className={styles.kicker}>PRIORITY INTELLIGENCE</div>
+              <h2>Growth priority queue</h2>
+              <p>Ranked investigations from current marketing evidence. Human review required.</p>
+            </div>
+            <Link href="/analytics" className={styles.nakedLink}>
+              Full analysis <ArrowRight size={12} />
+            </Link>
+          </div>
+
+          <div>
+            {attention.length ? (
+              attention.slice(0, 5).map((item, index) => (
+                <PriorityItem key={`${item.title}-${index}`} item={item} rank={index + 1} />
+              ))
+            ) : (
+              <div className={styles.panelBody}>
+                <div className={styles.emptyNote}>
+                  <TrendingUp size={18} />
+                  <div>
+                    <strong>No urgent growth investigation is supported.</strong>
+                    Current acquisition and conversion evidence does not surface a priority exception.
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+
+          <div className={styles.panelFoot}>
+            <span>Observed marketing evidence · no automatic budget changes</span>
+            <span>{attention.length} signal{attention.length === 1 ? '' : 's'} in scope</span>
+          </div>
+        </section>
+
+        <section className={styles.panel}>
+          <div className={styles.panelHead}>
+            <div>
+              <div className={styles.kicker}>ACQUISITION</div>
+              <h2>Where demand is coming from</h2>
+              <p>Lead volume and downstream quality by observed source.</p>
+            </div>
+            <Link href="/attribution" className={styles.nakedLink}>
+              Attribution <ArrowRight size={12} />
+            </Link>
+          </div>
+          <div className={styles.panelBody}>
+            {sourceRows.length ? (
+              sourceRows.slice(0, 7).map((row) => (
+                <SourceRow key={row.name} row={row} max={maxLeadVolume} />
+              ))
+            ) : (
+              <div className={styles.emptyNote}>
+                <Megaphone size={18} />
+                <div>
+                  <strong>Acquisition evidence is unavailable.</strong>
+                  No source-level lead evidence was returned in the current scope.
+                </div>
+              </div>
+            )}
+            <div className={styles.chartNote}>
+              Source labels are observed evidence. Missing source evidence remains unknown rather than inferred.
+            </div>
+          </div>
+        </section>
+      </section>
+
+      <section className={styles.gridEqual}>
+        <section className={styles.panel}>
+          <div className={styles.panelHead}>
+            <div>
+              <div className={styles.kicker}>CONVERSION</div>
+              <h2>Marketing funnel</h2>
+              <p>Observed movement from traffic to enrollment.</p>
+            </div>
+            <Link href="/funnel" className={styles.nakedLink}>
+              Open funnel <ArrowRight size={12} />
+            </Link>
+          </div>
+          <div className={styles.panelBody}>
+            <div className={styles.funnel}>
+              <FunnelRow label="Traffic" value={traffic} base={traffic} />
+              <FunnelRow label="Lead" value={totalLeads} base={traffic} />
+              <FunnelRow label="Qualified" value={qualified} base={totalLeads} />
+              <FunnelRow label="High intent" value={highIntent} base={totalLeads} />
+              <FunnelRow label="Payment pending" value={paymentPending} base={totalLeads} />
+              <FunnelRow label="Enrolled" value={enrolled} base={totalLeads} />
+            </div>
+            <div className={styles.chartNote}>
+              Counts are observed states and milestones. Bars show stage share and do not imply causal attribution.
+            </div>
+          </div>
+        </section>
+
+        <section className={styles.panel}>
+          <div className={styles.panelHead}>
+            <div>
+              <div className={styles.kicker}>EVIDENCE QUALITY</div>
+              <h2>Growth data readiness</h2>
+              <p>Know what is reliable before making a scaling decision.</p>
+            </div>
+            <Link href="/attribution" className={styles.nakedLink}>
+              Inspect evidence <ArrowRight size={12} />
+            </Link>
+          </div>
+          <div className={styles.panelBody}>
+            <div className={styles.readinessLead}>
+              <ShieldCheck size={18} />
               <div>
-                <h2>Acquisition Mix</h2>
-                <p>Volume is a starting point. Quality tells you what follows.</p>
+                <strong>{evidenceCoverage === null ? 'Campaign coverage is unknown.' : `${evidenceCoverage.toFixed(0)}% campaign efficiency coverage.`}</strong>
+                <span>{missingRoas > 0 ? `${missingRoas} campaign${missingRoas === 1 ? '' : 's'} still lack complete ROAS evidence.` : 'Comparable campaign efficiency evidence is available for the current scope.'}</span>
               </div>
-              <div className={styles.segmented} aria-label="Acquisition mix view"><span>Volume</span><span>Quality</span><span>Revenue</span></div>
             </div>
-            <div className={styles.panelBody}>
-              <div className={styles.mixHead}><span>Channel</span><span>Lead volume</span><span>Leads</span><span>Qual.</span><span>Enr.</span></div>
-              {sourceRows.slice(0, 7).map((row) => (
-                <Link href={`/attribution?q=${encodeURIComponent(row.name)}`} className={styles.mixRow} key={row.name}>
-                  <span className={styles.mixName}><i className={styles.dot} />{row.name}</span>
-                  <span className={styles.bar}><i style={{ width: `${Math.max(row.leads ? 3 : 0, (row.leads / maxLeadVolume) * 100)}%` }} /></span>
-                  <strong className={styles.number}>{formatNumber(row.leads)}</strong>
-                  <strong className={styles.number}>{formatNumber(row.qualified)}</strong>
-                  <strong className={styles.number}>{formatNumber(row.enrolled)}</strong>
-                </Link>
-              ))}
-              <p className={styles.caption}>Exact values are shown where observed. Missing source evidence stays Unknown rather than being inferred.</p>
+            <div className={styles.evidenceList}>
+              <EvidenceRow label="Paid ROAS" value={roas === null ? 'Partial' : `${roas.toFixed(1)}×`} tone={roas === null ? 'warning' : 'good'} />
+              <EvidenceRow label="Enrolled" value={formatNumber(enrolled)} />
+              <EvidenceRow label="Lead momentum" value={movement.leads.delta === null ? 'Not enough history' : shortDelta(movement.leads.delta)} tone={movement.leads.delta !== null && movement.leads.delta < -10 ? 'warning' : 'neutral'} />
+              <EvidenceRow label="Qualified momentum" value={movement.qualified.delta === null ? 'Not enough history' : shortDelta(movement.qualified.delta)} tone={movement.qualified.delta !== null && movement.qualified.delta < -10 ? 'warning' : 'neutral'} />
+              <EvidenceRow label="Cross-currency revenue" value={revenueUsd > 0 ? 'Kept separate' : 'INR only in scope'} />
             </div>
-          </section>
+          </div>
+        </section>
+      </section>
 
-          <section className={`${styles.panel} ${styles.attention}`}>
-            <div className={styles.panelHeader}>
-              <div><h2>Needs Attention</h2><p>Ranked investigations from current marketing evidence.</p></div>
-              <span className={styles.queueCount}>{attention.length} signal{attention.length === 1 ? '' : 's'}</span>
+      <section className={styles.gridEqual}>
+        <section className={styles.panel}>
+          <div className={styles.panelHead}>
+            <div>
+              <div className={styles.kicker}>CAMPAIGN PERFORMANCE</div>
+              <h2>Top performers</h2>
+              <p>Ranked by observed enrollment outcomes in the current campaign scope.</p>
             </div>
-            <div className={styles.panelBody}>
-              {attention.length ? attention.slice(0, 4).map((item, index) => (
-                <Attention key={`${item.title}-${index}`} rank={index + 1} tone={item.tone} title={item.title} detail={item.detail} href={item.href} label={item.label} />
-              )) : <p className={styles.caption}>No priority investigation is supported by the current evidence.</p>}
-            </div>
-          </section>
-        </div>
-
-        <div className={styles.stack}>
-          <section className={styles.panel}>
-            <div className={styles.panelHeader}>
-              <div><h2>Marketing Funnel</h2><p>From acquisition to enrollment.</p></div>
-              <Link href="/funnel" className={styles.link}>Explore <ArrowRight size={12} /></Link>
-            </div>
-            <div className={styles.panelBody}>
-              <div className={styles.funnel}>
-                <FunnelRow label="Traffic" value={traffic} base={traffic} />
-                <FunnelRow label="Lead" value={totalLeads} base={traffic} />
-                <FunnelRow label="Qualified" value={qualified} base={totalLeads} />
-                <FunnelRow label="High Intent" value={highIntent} base={totalLeads} />
-                <FunnelRow label="Payment Pending" value={paymentPending} base={totalLeads} />
-                <FunnelRow label="Enrolled" value={enrolled} base={totalLeads} />
+            <Link href="/campaigns" className={styles.nakedLink}>
+              All campaigns <ArrowRight size={12} />
+            </Link>
+          </div>
+          <div>
+            {topCampaigns.length ? topCampaigns.map((row, index) => (
+              <CampaignRow key={row.id} row={row} rank={index + 1} />
+            )) : (
+              <div className={styles.panelBody}>
+                <div className={styles.emptyNote}>
+                  <Megaphone size={18} />
+                  <div>
+                    <strong>No connected campaign rows are available.</strong>
+                    Connect or sync paid-media campaign evidence to populate this section.
+                  </div>
+                </div>
               </div>
-              <p className={styles.caption}>Counts are observed states/milestones. Bars show stage share and do not imply causal attribution.</p>
-            </div>
-          </section>
+            )}
+          </div>
+        </section>
 
-          <section className={styles.panel}>
-            <div className={styles.panelHeader}>
-              <div><h2>Top Performers</h2><p>Ranked by enrollments in the current campaign scope.</p></div>
+        <section className={styles.panel}>
+          <div className={styles.panelHead}>
+            <div>
+              <div className={styles.kicker}>MOMENTUM</div>
+              <h2>What changed</h2>
+              <p>Recent half of the observed daily period versus the prior half.</p>
             </div>
-            <div className={styles.panelBody}>
-              {topCampaigns.length ? topCampaigns.map((row, index) => (
-                <Link href={`/campaigns?q=${encodeURIComponent(row.name)}`} className={styles.rankRow} key={row.id}>
-                  <span className={styles.rankNum}>{index + 1}</span>
-                  <span className={styles.rankMain}><strong>{row.name}</strong><small>{row.qualified} qualified · {row.cac === null ? 'CAC unavailable' : `CAC ${formatMoney(row.cac, row.spendCurrency)}`}</small></span>
-                  <span className={styles.rankValue}>{row.enrolled}<small style={{ display: 'block', fontSize: 7, color: '#758279', fontWeight: 400 }}>enrolled</small></span>
-                </Link>
-              )) : <p className={styles.caption}>No connected paid campaign rows are available in this scope.</p>}
+          </div>
+          <div className={styles.panelBody}>
+            <div className={styles.momentumGrid}>
+              <MomentumCard label="Sessions" movement={movement.sessions} />
+              <MomentumCard label="Leads" movement={movement.leads} />
+              <MomentumCard label="Qualified" movement={movement.qualified} />
+              <MomentumCard label="Enrolled" movement={movement.enrolled} />
             </div>
-          </section>
-        </div>
+            <div className={styles.chartNote}>
+              Movement is descriptive evidence only. It does not prove campaign causality or recommend an autonomous budget change.
+            </div>
+          </div>
+        </section>
+      </section>
+    </div>
+  );
+}
+
+function HeroNode({ icon, title, detail }: { icon: React.ReactNode; title: string; detail: string }) {
+  return (
+    <div className={styles.heroNode}>
+      <div className={styles.heroDot}>{icon}</div>
+      <b>{title}</b>
+      <small>{detail}</small>
+    </div>
+  );
+}
+
+function StatCard({ href, label, value, detail, icon }: { href: string; label: string; value: string; detail: string; icon: React.ReactNode }) {
+  return (
+    <Link href={href} className={styles.stat}>
+      <div className={styles.statLabel}>
+        <span>{label}</span>
+        {icon}
       </div>
+      <div className={styles.statValue}>{value}</div>
+      <div className={styles.statDesc}>{detail}</div>
+    </Link>
+  );
+}
 
-      <div className={styles.changeFeed}>
-        <strong>What changed</strong>
-        <ChangeItem label="Sessions" movement={movement.sessions} />
-        <ChangeItem label="Leads" movement={movement.leads} />
-        <ChangeItem label="Qualified" movement={movement.qualified} />
-        <ChangeItem label="Enrolled" movement={movement.enrolled} />
-        <span>{roas === null ? 'ROAS coverage remains partial' : `Known paid ROAS ${roas.toFixed(1)}×`}</span>
+function PriorityItem({ item, rank }: { item: AttentionItem; rank: number }) {
+  return (
+    <div className={styles.queueItem}>
+      <div className={styles.queueScore}>
+        {Math.round(item.score)}
+        <small>score</small>
+      </div>
+      <div className={styles.queueMain}>
+        <div className={styles.queueTitleLine}>
+          <strong>{item.title}</strong>
+          <span className={tonePill(item.tone)}>{priorityLabel(item.tone)}</span>
+        </div>
+        <p>{item.detail}</p>
+      </div>
+      <div className={styles.queueActions}>
+        <Link href={item.href} className={styles.smallButton}>
+          {item.label} <ArrowRight size={12} />
+        </Link>
       </div>
     </div>
   );
 }
 
-function Pulse({ label, value, note, partial = false }: { label: string; value: string; note: string; partial?: boolean }) {
-  return <div className={styles.pulseItem}><span className={styles.pulseLabel}>{label}</span><strong className={`${styles.pulseValue} ${partial ? styles.partial : ''}`}>{value}</strong><small className={styles.pulseNote}>{note}</small></div>;
-}
-
-function IntelligenceCard({ icon, label, value, note, tone, href }: { icon: React.ReactNode; label: string; value: string; note: string; tone: 'warning' | 'positive' | 'neutral'; href?: string }) {
-  const content = <><span className={`${styles.intelligenceIcon} ${styles[`intelligenceIcon_${tone}`]}`}>{icon}</span><span className={styles.intelligenceCopy}><small>{label}</small><strong>{value}</strong><em>{note}</em></span>{href ? <ArrowRight size={13} className={styles.intelligenceArrow} /> : null}</>;
-  return href ? <Link href={href} className={styles.intelligenceCard}>{content}</Link> : <div className={styles.intelligenceCard}>{content}</div>;
-}
-
-function Attention({ rank, tone, title, detail, href, label }: { rank: number; tone: AttentionItem['tone']; title: string; detail: string; href: string; label: string }) {
-  return <div className={styles.attentionItem}><span className={`${styles.attentionRank} ${styles[`attentionRank_${tone}`]}`}>{String(rank).padStart(2, '0')}</span><div className={styles.attentionText}><div className={styles.attentionMeta}><span>{tone === 'critical' ? 'High priority' : tone === 'warning' ? 'Review' : tone === 'positive' ? 'Opportunity' : 'Monitor'}</span></div><h3>{title}</h3><p>{detail}</p><Link href={href} className={styles.link}>{label} <ArrowRight size={11} /></Link></div></div>;
+function SourceRow({ row, max }: { row: AcquisitionRow; max: number }) {
+  const width = Math.max(row.leads ? 4 : 0, (row.leads / max) * 100);
+  return (
+    <Link href={`/attribution?q=${encodeURIComponent(row.name)}`} className={styles.sourceRow}>
+      <span>{row.name}</span>
+      <div className={styles.mutedBar}><span style={{ width: `${width}%` }} /></div>
+      <b>{formatNumber(row.leads)}</b>
+      <small>{formatNumber(row.qualified)} qual.</small>
+    </Link>
+  );
 }
 
 function FunnelRow({ label, value, base }: { label: string; value: number; base: number }) {
   const width = base > 0 ? Math.max(value > 0 ? 3 : 0, Math.min(100, (value / base) * 100)) : 0;
-  return <div className={styles.funnelRow}><span>{label}</span><span className={styles.funnelBar}><i style={{ width: `${width}%` }} /></span><strong className={styles.funnelCount}>{formatNumber(value)}</strong></div>;
+  return (
+    <div className={styles.funnelRow}>
+      <span>{label}</span>
+      <div className={styles.funnelBar}><i style={{ width: `${width}%` }} /></div>
+      <strong>{formatNumber(value)}</strong>
+    </div>
+  );
 }
 
-function ChangeItem({ label, movement }: { label: string; movement: Movement }) {
-  if (movement.delta === null) return <span>{label}: not enough history</span>;
-  const sign = movement.delta > 0 ? '+' : '';
-  return <span>{label} {sign}{movement.delta.toFixed(1)}%</span>;
+function EvidenceRow({ label, value, tone = 'neutral' }: { label: string; value: string; tone?: 'neutral' | 'warning' | 'good' }) {
+  return (
+    <div className={styles.evidenceRow}>
+      <span>{label}</span>
+      <span className={tone === 'warning' ? styles.pillAmber : tone === 'good' ? styles.pill : styles.pillGray}>{value}</span>
+    </div>
+  );
+}
+
+function CampaignRow({ row, rank }: { row: CampaignWorkspaceRow; rank: number }) {
+  return (
+    <Link href={`/campaigns?q=${encodeURIComponent(row.name)}`} className={styles.campaignRow}>
+      <div className={styles.rank}>{String(rank).padStart(2, '0')}</div>
+      <div className={styles.campaignMain}>
+        <strong>{row.name}</strong>
+        <span>{row.leads} leads · {row.qualified} qualified · {row.cac === null ? 'CAC unavailable' : `${formatMoney(row.cac, row.spendCurrency)} CAC`}</span>
+      </div>
+      <div className={styles.campaignOutcome}>
+        <strong>{row.enrolled}</strong>
+        <small>enrolled</small>
+      </div>
+      <ArrowRight size={13} className={styles.rowArrow} />
+    </Link>
+  );
+}
+
+function MomentumCard({ label, movement }: { label: string; movement: Movement }) {
+  const down = movement.delta !== null && movement.delta < 0;
+  return (
+    <div className={styles.momentumCard}>
+      <div className={styles.momentumIcon}>{down ? <TrendingDown size={14} /> : <TrendingUp size={14} />}</div>
+      <span>{label}</span>
+      <strong>{movement.delta === null ? '—' : shortDelta(movement.delta)}</strong>
+      <small>{movement.delta === null ? 'Not enough history' : `${formatNumber(movement.current)} recent vs ${formatNumber(movement.previous)} prior`}</small>
+    </div>
+  );
 }
 
 function buildMovement(rows: unknown[]) {
@@ -312,7 +527,7 @@ function buildAttentionQueue({ poorCampaign, missingRoas, strongest, movement, c
       title: 'Spend without qualified outcomes',
       detail: `${poorCampaign.name} · ${formatMoney(poorCampaign.spend, poorCampaign.spendCurrency)} spend · ${poorCampaign.leads} leads · 0 qualified.`,
       href: '/campaigns',
-      label: 'Inspect campaign',
+      label: 'Review',
     });
   }
 
@@ -321,18 +536,18 @@ function buildAttentionQueue({ poorCampaign, missingRoas, strongest, movement, c
       score: 92 + Math.min(30, Math.abs(movement.qualified.delta)),
       tone: 'critical',
       title: 'Qualification momentum declined',
-      detail: `${formatDelta(movement.qualified.delta, 'Qualified outcomes')} versus the prior half of the observed daily period. Check lead quality and admissions handling before changing budget.`,
+      detail: `${formatDelta(movement.qualified.delta, 'Qualified outcomes')} versus the prior half of the observed period. Check lead quality and admissions handling before increasing budget.`,
       href: '/funnel',
-      label: 'Inspect funnel',
+      label: 'Review',
     });
   } else if (movement.leads.delta !== null && movement.leads.delta <= -15) {
     items.push({
       score: 84 + Math.min(30, Math.abs(movement.leads.delta)),
       tone: 'warning',
       title: 'Lead momentum declined',
-      detail: `${formatDelta(movement.leads.delta, 'Leads')} versus the prior half of the observed daily period. Review acquisition mix and campaign delivery.`,
+      detail: `${formatDelta(movement.leads.delta, 'Leads')} versus the prior half of the observed period. Review acquisition mix and campaign delivery.`,
       href: '/analytics',
-      label: 'Inspect traffic and leads',
+      label: 'Review',
     });
   }
 
@@ -343,7 +558,7 @@ function buildAttentionQueue({ poorCampaign, missingRoas, strongest, movement, c
       title: 'Campaign efficiency has incomplete evidence',
       detail: `${missingRoas} of ${campaignCount || missingRoas} campaign${campaignCount === 1 ? '' : 's'} do not have enough known revenue/spend evidence for ROAS.`,
       href: '/attribution',
-      label: 'Inspect attribution',
+      label: 'Review',
     });
   }
 
@@ -354,7 +569,7 @@ function buildAttentionQueue({ poorCampaign, missingRoas, strongest, movement, c
       title: 'Potential scale opportunity',
       detail: `${strongest.name} · ${strongest.enrolled} enrolled · ${strongest.cac === null ? 'CAC unavailable' : `${formatMoney(strongest.cac, strongest.spendCurrency)} CAC`}. Review marginal efficiency before increasing spend.`,
       href: '/campaigns',
-      label: 'Inspect performance',
+      label: 'Inspect',
     });
   }
 
@@ -385,6 +600,20 @@ function fallbackAcquisition(rows: CampaignWorkspaceRow[]): AcquisitionRow[] {
 
 function sumCampaign(rows: CampaignWorkspaceRow[], key: 'highIntent' | 'paymentPending') {
   return rows.reduce((sum, row) => sum + row[key], 0);
+}
+
+function tonePill(tone: AttentionItem['tone']) {
+  if (tone === 'critical') return styles.pillRed;
+  if (tone === 'warning') return styles.pillAmber;
+  if (tone === 'positive') return styles.pill;
+  return styles.pillGray;
+}
+
+function priorityLabel(tone: AttentionItem['tone']) {
+  if (tone === 'critical') return 'High priority';
+  if (tone === 'warning') return 'Review';
+  if (tone === 'positive') return 'Opportunity';
+  return 'Monitor';
 }
 
 function asRecord(value: unknown): UnknownRecord {
@@ -430,4 +659,9 @@ function formatPercent(value: number, denominator: number) {
 function formatDelta(delta: number, label: string) {
   if (delta === 0) return `${label} flat`;
   return `${label} ${delta > 0 ? 'up' : 'down'} ${Math.abs(delta).toFixed(1)}%`;
+}
+
+function shortDelta(delta: number) {
+  if (delta === 0) return 'Flat';
+  return `${delta > 0 ? '+' : ''}${delta.toFixed(1)}%`;
 }
