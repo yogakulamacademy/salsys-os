@@ -190,6 +190,9 @@ jobs:
       - name: Verify Ad Activation Deterministic Fixtures and Run-History Contracts
         run: npm run verify:ad-activation-simulation-fixtures-history
 
+      - name: Verify Ad Activation Audience Rule Preview Contracts
+        run: npm run verify:ad-activation-rule-preview
+
       - name: Typecheck
         run: npm run typecheck
 

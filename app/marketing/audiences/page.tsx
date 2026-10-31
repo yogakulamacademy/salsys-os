@@ -17,6 +17,7 @@ import {
 import { createAdminClient } from '@/lib/supabase/admin';
 import { requirePrivilegedWorkspaceAccess } from '@/lib/route-access';
 import { executeAdActivationSimulationScenarios } from '@/lib/ad-activation/simulation-scenario-executor';
+import { findSafeAudiencePreviewRule, previewAudienceRule, SAFE_AUDIENCE_PREVIEW_RULES } from '@/lib/ad-activation/audience-rule-preview';
 
 import styles from './audience-activation.module.css';
 
@@ -67,15 +68,15 @@ type WorkspaceData = {
 
 const blueprints = [
   {
-    name: 'Mysore 200H high-intent prospects',
-    description: 'People interested in Mysore 200H YTT who are not yet enrolled.',
-    rule: 'Course interest = 200H · Location = Mysore · Stage ≠ Enrolled · Last interaction < 30 days',
+    name: 'Mysore active prospects',
+    description: 'Recent Mysore prospects who remain in an active CRM stage.',
+    rule: 'Location = Mysore · Stage active · Not enrolled/lost · Last interaction < 60 days',
     destinations: ['Meta Custom Audience', 'Google Customer Match'],
   },
   {
-    name: 'Prenatal nurture audience',
-    description: 'Prenatal leads who engaged but have not booked a course.',
-    rule: 'Course interest = Prenatal · Stage ∈ Engaged/Qualified · Enrollment = None',
+    name: '200H recent prospects',
+    description: 'Recent 200-hour course prospects across locations who remain active.',
+    rule: 'Course interest = 200H · Stage active · Not enrolled/lost · Last interaction < 90 days',
     destinations: ['Meta Custom Audience', 'Google Customer Match'],
   },
   {
@@ -86,11 +87,14 @@ const blueprints = [
   },
 ];
 
-export default async function AudienceActivationPage() {
+export default async function AudienceActivationPage({ searchParams }: { searchParams?: Promise<{ preview?: string }> }) {
   const workspace = await requirePrivilegedWorkspaceAccess();
-  const [data, simulation] = await Promise.all([
+  const params = (await searchParams) ?? {};
+  const previewRule = findSafeAudiencePreviewRule(params.preview);
+  const [data, simulation, rulePreview] = await Promise.all([
     loadWorkspace(workspace.organizationId),
     executeAdActivationSimulationScenarios(),
+    previewAudienceRule({ organizationId: workspace.organizationId, rule: previewRule }),
   ]);
 
   const activeAudiences = data.audiences.filter((audience) => audience.status === 'active').length;
@@ -142,6 +146,43 @@ export default async function AudienceActivationPage() {
         <MetricCard icon={<UsersRound size={18} />} label="Active members" value={activeMemberships} sub="First-party qualified people" />
         <MetricCard icon={<RefreshCw size={18} />} label="Active destinations" value={connectedDestinations} sub="Meta + Google bindings" />
         <MetricCard icon={providerTransportEnabled ? <CheckCircle2 size={18} /> : <CircleOff size={18} />} label="Provider transport" value={providerTransportEnabled ? 'On' : 'Off'} sub="Hard-disabled in Phase 7C" />
+      </section>
+
+      <section className={styles.previewPanel}>
+        <div className={styles.previewHeader}>
+          <div>
+            <div className="eyebrow">Rule Preview Engine</div>
+            <h2 className={styles.panelTitle}>See who would qualify before creating membership</h2>
+            <p className={styles.previewIntro}>Read-only aggregate preview. It returns counts and breakdowns only—no email, phone, person list, membership write or provider export.</p>
+          </div>
+          <StatusPill tone="green" icon={<ShieldCheck size={13} />} label="0 writes" />
+        </div>
+        <div className={styles.ruleTabs}>
+          {SAFE_AUDIENCE_PREVIEW_RULES.map((rule) => (
+            <a key={rule.id} href={`/marketing/audiences?preview=${encodeURIComponent(rule.id)}`} className={rule.id === previewRule.id ? styles.ruleTabActive : styles.ruleTab}>
+              {rule.name}
+            </a>
+          ))}
+        </div>
+        {'sensitiveRuleRejected' in rulePreview && rulePreview.sensitiveRuleRejected ? (
+          <div className={styles.previewRejected}><AlertTriangle size={18} /><div><strong>Preview blocked.</strong><span>SalsysOS does not build audiences from pregnancy, medical or other sensitive health-related rules.</span></div></div>
+        ) : (
+          <div className={styles.previewBody}>
+            <div className={styles.previewMetrics}>
+              <PreviewMetric label="Matched people" value={rulePreview.matchedPeople} note="Canonical Customer 360 people" />
+              <PreviewMetric label="Matched leads" value={rulePreview.matchedLeads} note="Lead opportunities meeting the rule" />
+              <PreviewMetric label="Identity unlinked" value={rulePreview.identityUnlinkedLeads} note="Qualified leads not yet stitched to a Person" />
+            </div>
+            {rulePreview.dataTruncated ? <div className={styles.previewWarning}><AlertTriangle size={15} /> Preview hit the 20,000-row safety ceiling; counts may be understated.</div> : null}
+            <div className={styles.breakdownGrid}>
+              <Breakdown title="Stage" rows={rulePreview.breakdowns.stage} />
+              <Breakdown title="Intent" rows={rulePreview.breakdowns.intent} />
+              <Breakdown title="Course" rows={rulePreview.breakdowns.course} />
+              <Breakdown title="Location" rows={rulePreview.breakdowns.location} />
+              <Breakdown title="Acquisition source" rows={rulePreview.breakdowns.source} />
+            </div>
+          </div>
+        )}
       </section>
 
       <section className={styles.grid}>
@@ -308,6 +349,15 @@ function SmallMetric({ label, value, warn = false }: { label: string; value: num
       <strong>{value.toLocaleString()}</strong>
     </div>
   );
+}
+
+function PreviewMetric({ label, value, note }: { label: string; value: number; note: string }) {
+  return <div className={styles.previewMetric}><div className={styles.previewMetricLabel}>{label}</div><div className={styles.previewMetricValue}>{value.toLocaleString()}</div><div className={styles.previewMetricNote}>{note}</div></div>;
+}
+
+function Breakdown({ title, rows }: { title: string; rows: Array<{ label: string; count: number }> }) {
+  const max = Math.max(1, ...rows.map((row) => row.count));
+  return <div className={styles.breakdownCard}><div className={styles.breakdownTitle}>{title}</div>{rows.length ? <div className={styles.breakdownRows}>{rows.map((row) => <div key={row.label} className={styles.breakdownRow}><div className={styles.breakdownLabel}><span>{pretty(row.label)}</span><strong>{row.count.toLocaleString()}</strong></div><div className={styles.breakdownTrack}><span style={{ width: `${Math.max(5, Math.round((row.count / max) * 100))}%` }} /></div></div>)}</div> : <div className={styles.emptyBreakdown}>No matches</div>}</div>;
 }
 
 function StatusPill({ tone, label, icon }: { tone: 'green' | 'amber' | 'violet' | 'slate'; label: string; icon?: React.ReactNode }) {
