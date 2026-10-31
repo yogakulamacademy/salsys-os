@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 
 import { PipelineWorkspace } from "@/components/crm/pipeline-workspace";
+import { DecisionMetricCard } from "@/components/intelligence/decision-metric-card";
 import { EmptyState, Notice, PageHeader } from "@/components/ui";
 import { getAdmissionsSnapshot } from "@/lib/admissions-data";
 import { getPipelineSnapshot } from "@/lib/pipeline-data";
@@ -317,11 +318,49 @@ function AdmissionsOverview({
         </Link>
       </section>
 
-      <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        <SignalMetric href="/conversations" label="Needs reply" value={needsReplyCount} detail={unreadCount > 0 ? `${unreadCount} unread inbound` : "Conversation attention"} tone={needsReplyCount > 0 ? "attention" : "neutral"} icon={<Inbox size={16} />} />
-        <SignalMetric href="/follow-ups" label="Overdue follow-ups" value={overdueCount} detail="Scheduled actions past due" tone={overdueCount > 0 ? "attention" : "neutral"} icon={<Clock3 size={16} />} />
-        <SignalMetric href="/admissions?view=payments" label="Payment pending" value={paymentCount} detail={paymentOutstanding > 0 ? `${formatNumber(paymentOutstanding)} recorded outstanding` : "Near-conversion opportunities"} tone={paymentCount > 0 ? "money" : "neutral"} icon={<WalletCards size={16} />} />
-        <SignalMetric href="/leads?stage=new" label="New leads" value={newLeadCount} detail="Waiting to progress beyond New" tone="neutral" icon={<UserRoundCheck size={16} />} />
+      <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4" aria-label="Admissions action signals">
+        <DecisionMetricCard
+          href="/conversations"
+          label="Needs reply"
+          value={formatNumber(needsReplyCount)}
+          detail={unreadCount > 0 ? `${unreadCount} unread inbound` : "Conversation attention"}
+          tone={needsReplyCount > 0 ? "warning" : "positive"}
+          statusLabel={needsReplyCount > 0 ? "Attention" : "Clear"}
+          icon={<Inbox size={16} />}
+          evidenceLabel="Conversation state"
+          definition="Active conversations currently recorded as needing a human reply. This is an action queue signal; it does not infer customer intent."
+        />
+        <DecisionMetricCard
+          href="/follow-ups"
+          label="Overdue follow-ups"
+          value={formatNumber(overdueCount)}
+          detail="Scheduled actions past due"
+          tone={overdueCount > 0 ? "warning" : "positive"}
+          statusLabel={overdueCount > 0 ? "Attention" : "Clear"}
+          icon={<Clock3 size={16} />}
+          evidenceLabel="Scheduled task evidence"
+          definition="Open follow-up tasks whose recorded due time has passed."
+        />
+        <DecisionMetricCard
+          href="/admissions?view=payments"
+          label="Payment pending"
+          value={formatNumber(paymentCount)}
+          detail={paymentOutstanding > 0 ? `${formatNumber(paymentOutstanding)} recorded outstanding` : "Near-conversion opportunities"}
+          tone="neutral"
+          icon={<WalletCards size={16} />}
+          evidenceLabel="Pipeline & payment state"
+          definition="Opportunities currently recorded in the payment-pending stage. The count is commercial workload, not automatically a positive or negative signal."
+        />
+        <DecisionMetricCard
+          href="/admissions?view=queue"
+          label="New leads"
+          value={formatNumber(newLeadCount)}
+          detail="Waiting to progress beyond New"
+          tone="neutral"
+          icon={<UserRoundCheck size={16} />}
+          evidenceLabel="CRM intake state"
+          definition="Leads currently recorded in the New stage. Intake volume is descriptive and is not treated as quality by itself."
+        />
       </section>
 
       <section className="grid gap-5 xl:grid-cols-[minmax(0,1.25fr)_minmax(340px,.75fr)]">
@@ -496,7 +535,7 @@ function AdmissionsPerformance({
       </section>
 
       <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-950">
-        <PanelHeader eyebrow="Team" title="Admissions workload" href="/team-performance" action="Full performance" />
+        <PanelHeader eyebrow="Team" title="Admissions workload" href="/performance" action="Full performance" />
         {ownerWorkload.length ? (
           <div className="overflow-x-auto">
             <table className="min-w-[760px] w-full text-left">
@@ -567,11 +606,6 @@ function CapacityRow({ row, compact = false }: { row: AdmissionsBatchCapacityRow
       {!compact ? <MiniMetric label="Needs reply" value={formatNumber(row.needs_reply)} /> : null}
     </div>
   );
-}
-
-function SignalMetric({ href, label, value, detail, tone, icon }: { href: string; label: string; value: number; detail: string; tone: "attention" | "money" | "neutral"; icon: React.ReactNode }) {
-  const toneClass = tone === "attention" ? "text-amber-700 dark:text-amber-300" : tone === "money" ? "text-violet-700 dark:text-violet-300" : "text-slate-950 dark:text-white";
-  return <Link href={href} className="rounded-2xl border border-slate-200 bg-white p-4 transition hover:border-slate-300 hover:bg-slate-50 dark:border-slate-800 dark:bg-slate-950 dark:hover:bg-slate-900/60"><div className="flex items-center justify-between gap-3"><div className="text-[11px] font-semibold text-slate-500">{label}</div><span className="text-slate-400">{icon}</span></div><div className={`mt-2 text-2xl font-semibold tracking-[-0.03em] ${toneClass}`}>{formatNumber(value)}</div><div className="mt-1 text-xs text-slate-500">{detail}</div></Link>;
 }
 
 function PanelHeader({ eyebrow, title, href, action }: { eyebrow: string; title: string; href: string; action: string }) {
