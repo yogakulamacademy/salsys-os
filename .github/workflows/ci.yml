@@ -157,6 +157,12 @@ jobs:
       - name: Verify Ad Activation Foundation Contracts
         run: npm run verify:ad-activation-foundation
 
+      - name: Verify Ad Activation CRM Mapping Contracts
+        run: npm run verify:ad-activation-crm-mapping
+
+      - name: Verify Ad Activation Membership Writer Contracts
+        run: npm run verify:ad-activation-writer
+
       - name: Typecheck
         run: npm run typecheck
 
