@@ -1,0 +1,288 @@
+/* Marketing workspace CRM alignment -------------------------------------- */
+
+.paid-media-polish {
+  --paid-border: var(--app-border) !important;
+  --paid-border-soft: var(--app-border) !important;
+  --paid-surface: var(--app-surface) !important;
+  --paid-surface-soft: var(--app-surface-soft) !important;
+  --paid-surface-muted: var(--app-surface-muted) !important;
+  --paid-text: var(--app-text-strong) !important;
+  --paid-muted: var(--app-text-muted) !important;
+  --paid-brand: var(--app-brand-700) !important;
+}
+
+.paid-media-polish .ui-page-kicker {
+  color: var(--app-brand-700) !important;
+}
+
+.paid-media-polish .ui-page-title {
+  color: var(--app-text-strong) !important;
+}
+
+.paid-media-polish .ui-page-description {
+  max-width: 70ch;
+  color: var(--app-text-muted) !important;
+}
+
+/* Acquisition already has deep navigation in the Growth sidebar.
+   Keep only the first two contextual page actions visible. */
+.paid-media-polish .ui-page-header > div:last-child > div > a:nth-child(n + 3) {
+  display: none !important;
+}
+
+.paid-media-platforms {
+  margin-top: 18px !important;
+}
+
+.paid-media-platform-shell {
+  gap: 8px !important;
+}
+
+.paid-media-platform-tab {
+  min-width: 124px !important;
+  min-height: 42px;
+  border: 1px solid var(--app-border) !important;
+  border-radius: var(--radius-md) !important;
+  color: var(--app-text-muted) !important;
+  background: var(--app-surface) !important;
+  box-shadow: none !important;
+}
+
+.paid-media-platform-tab:hover {
+  border-color: var(--app-border-strong) !important;
+  color: var(--app-brand-700) !important;
+  background: var(--app-brand-50) !important;
+}
+
+.paid-media-platform-tab.is-active {
+  border-color: var(--app-brand-200) !important;
+  color: var(--app-brand-700) !important;
+  background: var(--app-brand-50) !important;
+}
+
+.paid-media-platform-count,
+.paid-media-platform-count.is-active {
+  color: var(--app-text-muted) !important;
+  background: var(--app-surface-muted) !important;
+}
+
+.paid-media-quickbar {
+  border: 1px solid var(--app-border);
+  border-radius: var(--radius-md);
+  padding: 12px 14px;
+  background: var(--app-surface-soft);
+}
+
+.paid-media-quick-filter,
+.paid-media-filter-chip {
+  border-color: var(--app-border) !important;
+  color: var(--app-text-muted) !important;
+  background: var(--app-surface) !important;
+  box-shadow: none !important;
+}
+
+.paid-media-quick-filter:hover,
+.paid-media-filter-chip:hover,
+.paid-media-quick-filter.is-active {
+  border-color: var(--app-brand-200) !important;
+  color: var(--app-brand-700) !important;
+  background: var(--app-brand-50) !important;
+}
+
+/* Four primary cards only. Secondary coverage/revenue details remain in
+   filters, lead rows and inspectors instead of competing at page level. */
+.paid-media-metrics {
+  grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+  gap: 12px !important;
+}
+
+.paid-media-metrics > :nth-child(2),
+.paid-media-metrics > :nth-child(3),
+.paid-media-metrics > :nth-child(5),
+.paid-media-metrics > :nth-child(6) {
+  display: none !important;
+}
+
+.paid-media-metric {
+  min-height: 120px !important;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  border: 1px solid var(--app-border) !important;
+  border-radius: var(--radius-xl) !important;
+  padding: 17px 18px !important;
+  color: var(--app-text);
+  background: var(--app-surface) !important;
+  box-shadow: var(--shadow-xs) !important;
+  transform: none !important;
+}
+
+.paid-media-metric:hover {
+  border-color: var(--app-border-strong) !important;
+  box-shadow: var(--shadow-sm) !important;
+  transform: translateY(-1px) !important;
+}
+
+.paid-media-metric-label {
+  color: var(--app-text-muted) !important;
+  font-size: 12px !important;
+  font-weight: 600 !important;
+}
+
+.paid-media-metric-label svg {
+  color: var(--app-brand-700) !important;
+}
+
+.paid-media-metric-value {
+  margin-top: 8px !important;
+  color: var(--app-text-strong) !important;
+  font-size: 28px !important;
+  font-weight: 650 !important;
+  line-height: 1.08;
+  letter-spacing: -0.035em;
+}
+
+.paid-media-metric-note {
+  color: var(--app-text-subtle) !important;
+  font-size: 11px !important;
+  line-height: 1.45;
+}
+
+.paid-media-filter-panel,
+.paid-media-results {
+  border-color: var(--app-border) !important;
+  border-radius: var(--radius-xl) !important;
+  background: var(--app-surface) !important;
+  box-shadow: var(--shadow-xs) !important;
+}
+
+.paid-media-filter-panel .section-title,
+.paid-media-results .section-title {
+  color: var(--app-text-strong) !important;
+  font-weight: 650 !important;
+}
+
+.paid-media-filter-panel .input,
+.paid-media-filter-field .input {
+  border-color: var(--app-border) !important;
+  border-radius: var(--radius-md) !important;
+  color: var(--app-text) !important;
+  background: var(--app-surface) !important;
+  box-shadow: none !important;
+}
+
+.paid-media-filter-panel .input:focus,
+.paid-media-filter-field .input:focus {
+  border-color: var(--app-brand-300) !important;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--app-brand-500) 10%, transparent) !important;
+}
+
+.paid-media-table-wrap {
+  border: 1px solid var(--app-border);
+  border-radius: var(--radius-md);
+}
+
+.paid-media-table-head {
+  background: color-mix(in srgb, var(--app-surface-soft) 94%, transparent) !important;
+}
+
+.paid-media-table th {
+  color: var(--app-text-subtle) !important;
+  font-size: 9px !important;
+  font-weight: 650 !important;
+  letter-spacing: .05em !important;
+}
+
+.paid-media-row {
+  border-color: var(--app-border) !important;
+}
+
+.paid-media-row:hover {
+  background: var(--app-surface-soft) !important;
+}
+
+.paid-media-quick-view {
+  border: 1px solid var(--app-border) !important;
+  color: var(--app-text-strong) !important;
+  background: var(--app-surface) !important;
+}
+
+.paid-media-quick-view:hover,
+.paid-media-open-link:hover {
+  color: var(--app-brand-700) !important;
+}
+
+.paid-media-open-link {
+  color: var(--app-brand-700) !important;
+}
+
+.paid-media-pagination {
+  border-color: var(--app-border) !important;
+}
+
+.paid-media-drawer-backdrop {
+  background: rgba(20, 18, 35, .28) !important;
+  backdrop-filter: blur(2px);
+}
+
+.paid-media-drawer {
+  border-left: 1px solid var(--app-border) !important;
+  background: var(--app-surface-soft) !important;
+  box-shadow: -18px 0 55px rgba(25, 20, 55, .14) !important;
+}
+
+.paid-media-drawer-header {
+  border-bottom: 1px solid var(--app-border) !important;
+  background: color-mix(in srgb, var(--app-surface) 94%, transparent) !important;
+}
+
+.paid-media-drawer-body > section,
+.paid-media-drawer-section {
+  border-color: var(--app-border) !important;
+  background: var(--app-surface) !important;
+}
+
+/* Funnel pages still contain some old hard-coded green utility values.
+   The wrapper remaps them to the same violet CRM visual language. */
+.growth-funnel-workspace [class*="border-[#dfe6df]"] {
+  border-color: var(--app-border) !important;
+}
+
+.growth-funnel-workspace [class*="text-[#102d27]"] {
+  color: var(--app-text-strong) !important;
+}
+
+.growth-funnel-workspace [class*="text-[#758279]"],
+.growth-funnel-workspace [class*="text-[#8a978a]"] {
+  color: var(--app-text-muted) !important;
+}
+
+.growth-funnel-workspace [class*="bg-[#f8faf8]"],
+.growth-funnel-workspace [class*="bg-[#f3f8f4]"] {
+  background: var(--app-brand-50) !important;
+}
+
+.growth-funnel-workspace [class*="text-[#216551]"],
+.growth-funnel-workspace [class*="text-[#5f8e74]"] {
+  color: var(--app-brand-700) !important;
+}
+
+.growth-funnel-workspace [class*="shadow-[0_10px_28px_rgba(16,45,39"] {
+  box-shadow: var(--shadow-xs) !important;
+}
+
+@media (max-width: 1024px) {
+  .paid-media-metrics {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+}
+
+@media (max-width: 640px) {
+  .paid-media-metrics {
+    grid-template-columns: 1fr !important;
+  }
+
+  .paid-media-metric {
+    min-height: 108px !important;
+  }
+}
