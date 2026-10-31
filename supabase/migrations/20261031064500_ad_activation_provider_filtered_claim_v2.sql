@@ -1,6 +1,6 @@
 begin;
 
--- Phase 7D.2: claim activation work for one explicitly supported provider.
+-- Phase 7D.2: provider-scoped claiming + bounded lease renewal for live runners.
 -- Keep v1 intact for backwards compatibility; live runners must use v2 so a
 -- Meta-only worker cannot accidentally lease/finalize Google Customer Match jobs.
 
@@ -108,12 +108,58 @@ begin
 end;
 $function$;
 
+create or replace function public.renew_ad_activation_delivery_lease_v1(
+  p_outbox_id uuid,
+  p_lease_token uuid,
+  p_lease_seconds integer default 120
+)
+returns jsonb
+language plpgsql
+set search_path = 'public', 'pg_temp'
+as $function$
+declare
+  v_now timestamptz := clock_timestamp();
+  v_lease_seconds integer := greatest(30, least(coalesce(p_lease_seconds, 120), 600));
+  v_expires_at timestamptz;
+begin
+  update public.ad_activation_outbox q
+  set lease_expires_at = v_now + make_interval(secs => v_lease_seconds)
+  where q.id = p_outbox_id
+    and q.status = 'processing'
+    and q.lease_token = p_lease_token
+    and q.lease_expires_at is not null
+    and q.lease_expires_at > v_now
+  returning q.lease_expires_at
+  into v_expires_at;
+
+  if v_expires_at is null then
+    return jsonb_build_object(
+      'renewed', false,
+      'reason', 'lease_not_owned_or_expired'
+    );
+  end if;
+
+  return jsonb_build_object(
+    'renewed', true,
+    'lease_expires_at', v_expires_at
+  );
+end;
+$function$;
+
 revoke all on function public.claim_ad_activation_deliveries_v2(text, integer, integer)
   from public, anon, authenticated;
 grant execute on function public.claim_ad_activation_deliveries_v2(text, integer, integer)
   to service_role;
 
+revoke all on function public.renew_ad_activation_delivery_lease_v1(uuid, uuid, integer)
+  from public, anon, authenticated;
+grant execute on function public.renew_ad_activation_delivery_lease_v1(uuid, uuid, integer)
+  to service_role;
+
 comment on function public.claim_ad_activation_deliveries_v2(text, integer, integer) is
 'Claims ad activation queue work only for the explicitly requested connected provider. Prevents a provider-specific runner from consuming another provider''s jobs.';
+
+comment on function public.renew_ad_activation_delivery_lease_v1(uuid, uuid, integer) is
+'Renews an unexpired activation processing lease only for the current lease owner. Performs no provider action and does not bypass pre-send validation.';
 
 commit;
