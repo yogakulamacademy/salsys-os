@@ -190,6 +190,9 @@ jobs:
       - name: Verify Ad Activation Runner Operational Controls
         run: npm run verify:ad-activation-runner-operations
 
+      - name: Verify Ad Activation Canary Boundary
+        run: npm run verify:ad-activation-canary-boundary
+
       - name: Typecheck
         run: npm run typecheck
 
