@@ -3,16 +3,12 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
-  Activity,
   AlertTriangle,
   ChevronDown,
   CircleDollarSign,
-  DatabaseZap,
   Inbox,
   LayoutDashboard,
   ListTodo,
-  Rows3,
-  RotateCcw,
   UserRoundSearch,
   UsersRound,
 } from 'lucide-react';
@@ -21,6 +17,7 @@ type NavigationItem = {
   href: string;
   label: string;
   icon: React.ComponentType<{ size?: number; className?: string }>;
+  matches?: string[];
 };
 
 type NavigationGroup = {
@@ -32,33 +29,38 @@ const groups: NavigationGroup[] = [
   {
     label: 'Workspace',
     items: [
-      { href: '/crm', label: 'Sales Overview', icon: LayoutDashboard },
-      { href: '/dashboard', label: 'Today', icon: Activity },
-      { href: '/admissions', label: 'Admissions', icon: UsersRound },
+      { href: '/crm', label: 'Command Center', icon: LayoutDashboard },
+      {
+        href: '/admissions',
+        label: 'Work Queue',
+        icon: ListTodo,
+        matches: ['/dashboard', '/admissions', '/follow-ups'],
+      },
     ],
   },
   {
     label: 'Selling',
     items: [
-      { href: '/leads', label: 'Leads', icon: UserRoundSearch },
-      { href: '/pipeline', label: 'Pipeline', icon: Rows3 },
+      {
+        href: '/opportunities',
+        label: 'Opportunities',
+        icon: UserRoundSearch,
+        matches: ['/opportunities', '/leads', '/pipeline', '/re-engaged', '/data-quality'],
+      },
       { href: '/conversations', label: 'Inbox', icon: Inbox },
-      { href: '/follow-ups', label: 'Tasks & Follow-ups', icon: ListTodo },
     ],
   },
   {
-    label: 'Customer & quality',
+    label: 'Customers',
     items: [
-      { href: '/customer-360', label: 'Customer 360', icon: UsersRound },
-      { href: '/data-quality', label: 'Data Quality', icon: DatabaseZap },
-      { href: '/re-engaged', label: 'Re-engaged', icon: RotateCcw },
+      { href: '/customer-360', label: 'Customers', icon: UsersRound },
     ],
   },
   {
     label: 'Saved views',
     items: [
-      { href: '/leads?stage=payment_pending', label: 'Payment Pending', icon: CircleDollarSign },
-      { href: '/leads?view=attention', label: 'Aging Alerts', icon: AlertTriangle },
+      { href: '/opportunities?view=payment_pending', label: 'Payment Pending', icon: CircleDollarSign },
+      { href: '/opportunities?view=stuck', label: 'Aging Alerts', icon: AlertTriangle },
     ],
   },
 ];
@@ -67,13 +69,15 @@ function pathOnly(href: string) {
   return href.split('?')[0];
 }
 
-function isActive(pathname: string, href: string) {
-  if (href.includes('?')) return false;
-  const path = pathOnly(href);
+function pathMatches(pathname: string, path: string) {
   if (path === '/crm') return pathname === path;
-  if (path === '/dashboard') return pathname === path;
-  if (path === '/leads') return pathname === '/leads' || pathname.startsWith('/leads/');
   return pathname === path || pathname.startsWith(`${path}/`);
+}
+
+function isActive(pathname: string, item: NavigationItem) {
+  if (item.href.includes('?')) return false;
+  const candidates = item.matches ?? [pathOnly(item.href)];
+  return candidates.some((path) => pathMatches(pathname, path));
 }
 
 function NavigationLinks({ mobile = false }: { mobile?: boolean }) {
@@ -87,8 +91,9 @@ function NavigationLinks({ mobile = false }: { mobile?: boolean }) {
             {group.label}
           </div>
           <div className="space-y-1.5">
-            {group.items.map(({ href, label, icon: Icon }) => {
-              const active = isActive(pathname, href);
+            {group.items.map((item) => {
+              const { href, label, icon: Icon } = item;
+              const active = isActive(pathname, item);
 
               return (
                 <Link
@@ -127,7 +132,7 @@ export function CrmNavigation() {
   const pathname = usePathname();
   const current = groups
     .flatMap((group) => group.items)
-    .find((item) => isActive(pathname, item.href));
+    .find((item) => isActive(pathname, item));
 
   return (
     <>
@@ -145,7 +150,7 @@ export function CrmNavigation() {
           <div className="mb-5 rounded-ui bg-surface-soft px-4 py-3.5">
             <div className="text-[16px] font-semibold text-copy-strong">Sales</div>
             <div className="mt-1.5 text-[14px] leading-6 text-copy-muted">
-              Work priorities, leads, conversations, pipeline and customer context from one place.
+              Decide what needs attention, work opportunities, handle conversations and understand each customer relationship.
             </div>
           </div>
           <NavigationLinks mobile />
@@ -162,7 +167,7 @@ export function CrmNavigation() {
               Sales
             </div>
             <p className="mt-2 max-w-[205px] text-[14px] leading-6 text-copy-muted">
-              Work priorities, leads, conversations, pipeline and customer context from one place.
+              Command the day, work opportunities, respond to customers and keep relationship context connected.
             </p>
           </div>
           <NavigationLinks />
