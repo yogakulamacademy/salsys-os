@@ -80,13 +80,13 @@ function NavigationLinks({ mobile = false }: { mobile?: boolean }) {
   const pathname = usePathname();
 
   return (
-    <div className={mobile ? 'space-y-6' : 'space-y-7'}>
+    <div className={mobile ? 'space-y-5' : 'space-y-6'}>
       {groups.map((group) => (
         <section key={group.label}>
-          <div className="mb-2.5 px-3 text-[12px] font-semibold uppercase tracking-[0.1em] text-copy-subtle">
+          <div className="mb-2 px-3 text-[11px] font-semibold uppercase tracking-[0.12em] text-copy-subtle">
             {group.label}
           </div>
-          <div className="space-y-1.5">
+          <div className="space-y-1">
             {group.items.map(({ href, label, icon: Icon }) => {
               const active = isActive(pathname, href);
 
@@ -95,24 +95,24 @@ function NavigationLinks({ mobile = false }: { mobile?: boolean }) {
                   key={`${href}-${label}`}
                   href={href}
                   aria-current={active ? 'page' : undefined}
-                  className={`group relative flex min-h-11 items-center gap-3 rounded-ui px-3 py-2.5 text-[14px] transition ${
+                  className={`group relative flex min-h-10 items-center gap-2.5 rounded-ui px-3 py-2.5 text-[13px] transition ${
                     active
                       ? 'bg-brand-50 font-semibold text-brand-700'
                       : 'font-medium text-copy-muted hover:bg-surface-muted hover:text-copy-strong'
                   }`}
                 >
                   {active ? (
-                    <span className="absolute -left-4 h-6 w-[3px] rounded-r bg-brand-700" />
+                    <span className="absolute -left-4 h-5 w-[3px] rounded-r bg-brand-700" />
                   ) : null}
                   <Icon
-                    size={17}
+                    size={16}
                     className={
                       active
                         ? 'text-brand-700'
                         : 'text-copy-subtle transition group-hover:text-brand-700'
                     }
                   />
-                  <span>{label}</span>
+                  <span className="min-w-0 flex-1">{label}</span>
                 </Link>
               );
             })}
@@ -131,21 +131,21 @@ export function CrmNavigation() {
 
   return (
     <>
-      <details className="group rounded-panel border border-line bg-surface min-[768px]:hidden">
-        <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-4 text-[15px] font-semibold text-copy-strong [&::-webkit-details-marker]:hidden">
+      <details className="group rounded-panel border border-line bg-surface lg:hidden">
+        <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3.5 text-sm font-semibold text-copy-strong [&::-webkit-details-marker]:hidden">
           <span className="flex items-center gap-2.5">
-            <span className="grid h-9 w-9 place-items-center rounded-ui bg-brand-50 text-brand-700">
-              <UsersRound size={17} />
+            <span className="grid h-8 w-8 place-items-center rounded-ui bg-brand-50 text-brand-700">
+              <UsersRound size={16} />
             </span>
-            {current?.label || 'Sales'}
+            {current?.label || 'CRM'}
           </span>
-          <ChevronDown size={17} className="text-copy-subtle transition group-open:rotate-180" />
+          <ChevronDown size={16} className="text-copy-subtle transition group-open:rotate-180" />
         </summary>
-        <div className="border-t border-line p-4">
-          <div className="mb-5 rounded-ui bg-surface-soft px-4 py-3.5">
-            <div className="text-[16px] font-semibold text-copy-strong">Sales</div>
-            <div className="mt-1.5 text-[14px] leading-6 text-copy-muted">
-              Work priorities, leads, conversations, pipeline and customer context from one place.
+        <div className="border-t border-line p-3">
+          <div className="mb-4 rounded-ui bg-surface-soft px-3 py-3">
+            <div className="text-sm font-semibold text-copy-strong">CRM</div>
+            <div className="mt-1 text-[13px] leading-5 text-copy-muted">
+              Manage leads, admissions, conversations and customer context in one workspace.
             </div>
           </div>
           <NavigationLinks mobile />
@@ -153,16 +153,16 @@ export function CrmNavigation() {
       </details>
 
       <aside
-        className="hidden min-h-[calc(100vh-7rem)] border-r border-line pr-5 min-[768px]:block"
-        aria-label="Sales navigation"
+        className="sticky top-16 hidden h-[calc(100vh-4rem)] self-start overflow-y-auto overflow-x-hidden overscroll-contain border-r border-line pr-4 lg:block [scrollbar-width:thin]"
+        aria-label="CRM navigation"
       >
-        <div className="sticky top-20 pb-10">
-          <div className="mb-8 px-3 pt-1">
-            <div className="text-[20px] font-semibold tracking-[-0.025em] text-copy-strong">
-              Sales
+        <div className="pb-8 pt-4">
+          <div className="mb-7 px-3 pt-1">
+            <div className="text-[18px] font-semibold tracking-[-0.025em] text-copy-strong">
+              CRM
             </div>
-            <p className="mt-2 max-w-[205px] text-[14px] leading-6 text-copy-muted">
-              Work priorities, leads, conversations, pipeline and customer context from one place.
+            <p className="mt-1.5 max-w-[195px] text-[13px] leading-5 text-copy-muted">
+              Manage leads, admissions, conversations and customer context in one workspace.
             </p>
           </div>
           <NavigationLinks />
