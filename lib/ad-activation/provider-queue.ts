@@ -29,6 +29,42 @@ export async function claimAdActivationDeliveriesForProvider(
     : [];
 }
 
+/**
+ * Initial live validation path. Claims at most one row for an explicitly
+ * configured destination + person pair; it cannot drain a broad audience.
+ */
+export async function claimAdActivationCanaryDelivery(input: {
+  provider: AdActivationExecutionProvider;
+  destinationId: string;
+  personId: string;
+  leaseSeconds?: number;
+}): Promise<ClaimedAdActivationDelivery | null> {
+  const admin = createAdminClient();
+  const { data, error } = await admin.rpc(
+    "claim_ad_activation_canary_delivery_v1",
+    {
+      p_provider: input.provider,
+      p_destination_id: input.destinationId,
+      p_person_id: input.personId,
+      p_lease_seconds: input.leaseSeconds ?? 300,
+    },
+  );
+
+  if (error) {
+    throw new Error("Ad activation canary claim failed.");
+  }
+
+  if (!Array.isArray(data) || data.length === 0) {
+    return null;
+  }
+
+  if (data.length > 1) {
+    throw new Error("Ad activation canary claim returned more than one delivery.");
+  }
+
+  return data[0] as ClaimedAdActivationDelivery;
+}
+
 export async function renewAdActivationDeliveryLease(
   delivery: Pick<ClaimedAdActivationDelivery, "outbox_id" | "lease_token">,
   leaseSeconds = 300,
