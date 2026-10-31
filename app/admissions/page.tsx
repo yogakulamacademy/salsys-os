@@ -64,6 +64,12 @@ type RevenueRow = {
   payment_status: string | null;
 };
 
+type OutstandingSummary = {
+  display: string;
+  hasAmount: boolean;
+  missingCurrencyRecords: number;
+};
+
 type NewLeadRow = {
   id: string;
   lead_code: string | null;
@@ -192,10 +198,7 @@ export default async function AdmissionsDeskPage({
 
   const criticalCount = ownerScoped.filter((row) => row.priority_band === "critical").length;
   const highCount = ownerScoped.filter((row) => row.priority_band === "high").length;
-  const paymentOutstanding = paymentPending.reduce(
-    (sum, row) => sum + toNumber(row.outstanding_balance),
-    0,
-  );
+  const paymentOutstanding = summarizeOutstanding(paymentPending);
 
   const brief = buildAdmissionsBrief({
     needsReplyCount,
@@ -298,8 +301,14 @@ function AdmissionsOverview({
   overdueCount: number;
   newLeadCount: number;
   paymentCount: number;
-  paymentOutstanding: number;
+  paymentOutstanding: OutstandingSummary;
 }) {
+  const paymentDetail = paymentOutstanding.hasAmount
+    ? `${paymentOutstanding.display} recorded outstanding`
+    : paymentOutstanding.missingCurrencyRecords > 0
+      ? `${paymentOutstanding.missingCurrencyRecords} amount ${paymentOutstanding.missingCurrencyRecords === 1 ? "record has" : "records have"} no currency`
+      : "Near-conversion opportunities";
+
   return (
     <div className="space-y-5">
       <section className="grid gap-4 rounded-2xl border border-violet-100 bg-violet-50/50 p-5 dark:border-violet-900/50 dark:bg-violet-950/15 xl:grid-cols-[minmax(0,1fr)_auto] xl:items-center">
@@ -345,11 +354,11 @@ function AdmissionsOverview({
           href="/admissions?view=payments"
           label="Payment pending"
           value={formatNumber(paymentCount)}
-          detail={paymentOutstanding > 0 ? `${formatNumber(paymentOutstanding)} recorded outstanding` : "Near-conversion opportunities"}
+          detail={paymentDetail}
           tone="neutral"
           icon={<WalletCards size={16} />}
           evidenceLabel="Pipeline & payment state"
-          definition="Opportunities currently recorded in the payment-pending stage. The count is commercial workload, not automatically a positive or negative signal."
+          definition="Opportunities currently recorded in the payment-pending stage. Outstanding amounts stay separated by recorded currency and amounts without currency are not combined into financial totals."
         />
         <DecisionMetricCard
           href="/admissions?view=queue"
@@ -435,12 +444,16 @@ function PriorityQueueView({
   );
 }
 
-function PaymentsView({ rows, outstanding }: { rows: RevenueRow[]; outstanding: number }) {
+function PaymentsView({ rows, outstanding }: { rows: RevenueRow[]; outstanding: OutstandingSummary }) {
+  const outstandingDetail = outstanding.missingCurrencyRecords > 0
+    ? `${outstanding.missingCurrencyRecords} amount ${outstanding.missingCurrencyRecords === 1 ? "record is" : "records are"} excluded because currency is missing`
+    : "Amounts are shown separately by recorded currency";
+
   return (
     <div className="space-y-4">
       <section className="grid gap-3 sm:grid-cols-3">
         <PerformanceMetric label="Payment-stage leads" value={formatNumber(rows.length)} detail="Current payment-pending opportunities" />
-        <PerformanceMetric label="Recorded outstanding" value={outstanding > 0 ? formatNumber(outstanding) : "—"} detail="Raw recorded amount; currencies are not combined here" attention={outstanding > 0} />
+        <PerformanceMetric label="Recorded outstanding" value={outstanding.hasAmount ? outstanding.display : "—"} detail={outstandingDetail} attention={outstanding.hasAmount} />
         <PerformanceMetric label="Next action" value="Follow up" detail="Resolve payment questions, proof and collection status" />
       </section>
 
@@ -655,6 +668,35 @@ function buildAdmissionsBrief({ needsReplyCount, overdueCount, paymentCount, cri
   ].filter((item) => item.value > 0).sort((a, b) => b.value - a.value);
   if (!signals.length) return "No urgent admissions workload is currently recorded. Use Pipeline and Capacity to monitor movement and demand.";
   return `${signals.slice(0, 3).map((item) => item.text).join(", ")}. Work the queue first, then use Pipeline, Payments and Capacity for deeper context.`;
+}
+
+function summarizeOutstanding(rows: RevenueRow[]): OutstandingSummary {
+  const totals = new Map<string, number>();
+  let missingCurrencyRecords = 0;
+
+  for (const row of rows) {
+    const amount = toNumber(row.outstanding_balance);
+    if (amount === 0) continue;
+
+    const currency = row.currency?.trim().toUpperCase();
+    if (!currency) {
+      missingCurrencyRecords += 1;
+      continue;
+    }
+
+    totals.set(currency, (totals.get(currency) ?? 0) + amount);
+  }
+
+  const display = [...totals.entries()]
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([currency, amount]) => formatMoney(amount, currency))
+    .join(" · ");
+
+  return {
+    display,
+    hasAmount: totals.size > 0,
+    missingCurrencyRecords,
+  };
 }
 
 function one(value: string | string[] | undefined) { return Array.isArray(value) ? value[0] ?? "" : value ?? ""; }
