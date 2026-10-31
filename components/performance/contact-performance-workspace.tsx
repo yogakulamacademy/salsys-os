@@ -102,6 +102,10 @@ export async function ContactPerformanceWorkspace({ mode }: { mode: ContactPerfo
   const coveragePct = accessibleLeads > 0 ? (contactedLeads / accessibleLeads) * 100 : null;
   const markedSuccessPct = totalContacts > 0 ? (successfulContacts / totalContacts) * 100 : null;
   const maxChannelContacts = Math.max(1, ...channels.map((row) => numberValue(row.total_contacts)));
+  const dominantChannel = channels.reduce<ChannelRow | null>((best, row) => {
+    if (!best) return row;
+    return numberValue(row.total_contacts) > numberValue(best.total_contacts) ? row : best;
+  }, null);
 
   return (
     <div className="space-y-5">
@@ -118,6 +122,16 @@ export async function ContactPerformanceWorkspace({ mode }: { mode: ContactPerfo
             : "Understand how the team communicates across channels, owners and observed contact windows without treating contact volume as a conversion score."}
         </p>
       </section>
+
+      <PerformanceDecisionBrief
+        mode={mode}
+        accessibleLeads={accessibleLeads}
+        contactedLeads={contactedLeads}
+        neverContacted={neverContacted}
+        totalContacts={totalContacts}
+        dominantChannel={dominantChannel}
+        hasPartialData={errors.length > 0}
+      />
 
       {errors.length ? (
         <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
@@ -203,7 +217,7 @@ export async function ContactPerformanceWorkspace({ mode }: { mode: ContactPerfo
             </section>
           </section>
 
-          <OwnerTable employees={employees} title="Response activity by owner" />
+          <OwnerTable employees={employees} title="Response activity by owner" mode="response" />
         </>
       ) : (
         <>
@@ -246,6 +260,7 @@ export async function ContactPerformanceWorkspace({ mode }: { mode: ContactPerfo
             <section className="rounded-2xl border border-line bg-surface p-5">
               <div className="text-[10px] font-bold uppercase tracking-[0.1em] text-copy-subtle">Channel activity</div>
               <h2 className="mt-1 text-base font-semibold text-copy-strong">Recorded contacts by channel</h2>
+              <p className="mt-1 text-xs leading-5 text-copy-muted">Use channel mix as context only. It does not rank channel effectiveness.</p>
               <div className="mt-4 space-y-4">
                 {channels.length ? channels.map((row) => {
                   const total = numberValue(row.total_contacts);
@@ -279,19 +294,125 @@ export async function ContactPerformanceWorkspace({ mode }: { mode: ContactPerfo
             </Panel>
           </section>
 
-          <OwnerTable employees={employees} title="Communication activity by owner" />
+          <OwnerTable employees={employees} title="Communication activity by owner" mode="communication" />
         </>
       )}
     </div>
   );
 }
 
-function OwnerTable({ employees, title }: { employees: EmployeeRow[]; title: string }) {
+function PerformanceDecisionBrief({
+  mode,
+  accessibleLeads,
+  contactedLeads,
+  neverContacted,
+  totalContacts,
+  dominantChannel,
+  hasPartialData,
+}: {
+  mode: ContactPerformanceMode;
+  accessibleLeads: number;
+  contactedLeads: number;
+  neverContacted: number;
+  totalContacts: number;
+  dominantChannel: ChannelRow | null;
+  hasPartialData: boolean;
+}) {
+  const responseNeedsAttention = mode === "response" && neverContacted > 0;
+  const title = mode === "response"
+    ? responseNeedsAttention
+      ? `${formatNumber(neverContacted)} leads need coverage review`
+      : "No recorded contact coverage gaps"
+    : totalContacts > 0
+      ? `${formatNumber(totalContacts)} structured contacts are available for review`
+      : "No structured communication activity is available yet";
+
+  const why = mode === "response"
+    ? accessibleLeads > 0
+      ? `${formatNumber(contactedLeads)} of ${formatNumber(accessibleLeads)} visible leads have at least one structured contact record.`
+      : "No accessible lead population is available for a coverage comparison."
+    : dominantChannel
+      ? `${pretty(dominantChannel.method)} has the largest recorded contact volume (${formatNumber(dominantChannel.total_contacts)}), but volume alone does not establish effectiveness.`
+      : "There is not enough structured channel activity to compare communication mix.";
+
+  const nextHref = mode === "response" ? "/leads" : "/performance?view=response";
+  const nextLabel = mode === "response" ? "Review leads" : "Check coverage & SLA";
+  const nextDetail = mode === "response"
+    ? "Verify ownership and contact evidence before treating a lead as untouched."
+    : "Use coverage and response evidence before drawing conclusions from communication volume.";
+
+  return (
+    <section className={`rounded-2xl border px-5 py-5 ${responseNeedsAttention ? "border-amber-200 bg-amber-50/60" : "border-line bg-surface"}`}>
+      <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
+        <div className="min-w-0 max-w-3xl">
+          <div className={`text-[10px] font-bold uppercase tracking-[0.14em] ${responseNeedsAttention ? "text-amber-700" : "text-brand-700"}`}>
+            Performance decision brief
+          </div>
+          <div className="mt-1 flex flex-wrap items-center gap-2">
+            <h2 className="text-lg font-semibold tracking-[-0.02em] text-copy-strong">{title}</h2>
+            <span className="rounded-full border border-line bg-surface px-2 py-1 text-[10px] font-semibold text-copy-muted">
+              {hasPartialData ? "Partial evidence" : "Partial · structured logs"}
+            </span>
+          </div>
+          <p className="mt-2 text-sm leading-6 text-copy-muted">{why}</p>
+        </div>
+
+        <Link
+          href={nextHref}
+          className="inline-flex shrink-0 items-center justify-center gap-2 rounded-xl bg-brand-700 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-brand-800"
+        >
+          {nextLabel}
+          <ArrowRight size={14} />
+        </Link>
+      </div>
+
+      <div className="mt-4 grid gap-3 md:grid-cols-3">
+        <DecisionPoint
+          label="Why it matters"
+          detail={mode === "response"
+            ? neverContacted > 0
+              ? "Coverage gaps can hide unowned or unworked demand, but missing CRM contact evidence is not proof that no off-system contact occurred."
+              : "Recorded coverage is complete for the visible lead set, but historical contact evidence can still be incomplete."
+            : "High activity can reflect workload, follow-up depth or repeated attempts. It should not be interpreted as conversion performance."}
+        />
+        <DecisionPoint
+          label="Evidence"
+          detail={hasPartialData
+            ? "Some contact-intelligence reads failed. Use only the records currently visible and keep missing evidence unknown."
+            : "Structured contact logs are available, but historical imports and off-system contact may be incomplete."}
+        />
+        <DecisionPoint label="Next check" detail={nextDetail} />
+      </div>
+    </section>
+  );
+}
+
+function DecisionPoint({ label, detail }: { label: string; detail: string }) {
+  return (
+    <div className="rounded-xl border border-line bg-surface px-3.5 py-3">
+      <div className="text-[10px] font-bold uppercase tracking-[0.1em] text-copy-subtle">{label}</div>
+      <div className="mt-1 text-xs leading-5 text-copy-muted">{detail}</div>
+    </div>
+  );
+}
+
+function OwnerTable({ employees, title, mode }: { employees: EmployeeRow[]; title: string; mode: ContactPerformanceMode }) {
   return (
     <section className="overflow-hidden rounded-2xl border border-line bg-surface">
-      <div className="border-b border-line px-5 py-4">
-        <div className="text-[10px] font-bold uppercase tracking-[0.1em] text-copy-subtle">Team activity</div>
-        <h2 className="mt-1 text-base font-semibold text-copy-strong">{title}</h2>
+      <div className="flex flex-col gap-3 border-b border-line px-5 py-4 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+          <div className="text-[10px] font-bold uppercase tracking-[0.1em] text-copy-subtle">Team activity</div>
+          <h2 className="mt-1 text-base font-semibold text-copy-strong">{title}</h2>
+          <p className="mt-1 text-xs leading-5 text-copy-muted">
+            {mode === "response"
+              ? "Use owner activity to investigate coverage and handoff patterns; contact counts are not a quality score."
+              : "Compare activity distribution without ranking people by raw contact volume or marked-success counts."}
+          </p>
+        </div>
+        <Link href={mode === "response" ? "/leads" : "/performance?view=response"} className="inline-flex items-center gap-1.5 text-xs font-semibold text-brand-700 hover:text-brand-800">
+          {mode === "response" ? "Review lead ownership" : "Review response evidence"}
+          <ArrowRight size={13} />
+        </Link>
       </div>
       {employees.length ? (
         <div className="overflow-x-auto">
