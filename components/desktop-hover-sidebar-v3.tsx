@@ -260,12 +260,11 @@ export function DesktopHoverSidebarV3() {
         id: "performance",
         label: "Performance",
         icon: BarChart3,
-        href: "/team-performance",
-        activeHrefs: ["/team", "/contact-intelligence"],
+        href: "/performance",
+        activeHrefs: ["/team-performance", "/contact-intelligence", "/team"],
         items: [
-          ...(admin ? [{ label: "Team performance", href: "/team-performance" }] : []),
-          { label: "Contact performance", href: "/contact-intelligence" },
-          { label: "Team", href: "/team" },
+          { label: "Performance Workspace", href: "/performance" },
+          { label: "Team Directory", href: "/team" },
         ],
       },
       {
