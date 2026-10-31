@@ -12,11 +12,16 @@ import {
 import { prepareAdActivationProviderDryRun } from "@/lib/ad-activation/provider-dry-run";
 import { executeAdActivationTransport } from "@/lib/ad-activation/provider-transport-boundary";
 import { metaCustomAudienceTransportAdapter } from "@/lib/ad-activation/providers/meta-transport";
+import {
+  acquireAdActivationRunnerLease,
+  isAdActivationRunnerEnabled,
+  releaseAdActivationRunnerLease,
+} from "@/lib/ad-activation/runner-controls";
 import { AD_ACTIVATION_TRANSPORT_ENABLED } from "@/lib/ad-activation/transport-policy";
 import type { AdActivationProviderResult } from "@/lib/ad-activation/types";
 
 export type AdActivationExecutionSummary = {
-  status: "disabled" | "completed";
+  status: "disabled" | "busy" | "completed" | "failed";
   provider: "meta";
   claimed: number;
   delivered: number;
@@ -24,6 +29,7 @@ export type AdActivationExecutionSummary = {
   skipped: number;
   failed: number;
   leaseLost: number;
+  reason?: string;
 };
 
 type DestinationContextRow = {
@@ -31,6 +37,23 @@ type DestinationContextRow = {
   organization_id: string;
   connection_id: string;
 };
+
+function emptySummary(
+  status: AdActivationExecutionSummary["status"],
+  reason?: string,
+): AdActivationExecutionSummary {
+  return {
+    status,
+    provider: "meta",
+    claimed: 0,
+    delivered: 0,
+    retry: 0,
+    skipped: 0,
+    failed: 0,
+    leaseLost: 0,
+    ...(reason ? { reason } : {}),
+  };
+}
 
 async function resolveMetaTransportContext(delivery: ClaimedAdActivationDelivery) {
   const admin = createAdminClient();
@@ -166,39 +189,40 @@ async function processMetaDelivery(
 /**
  * Execute one bounded Meta activation cycle.
  *
- * Critical safety property: while the compile-time transport policy is false,
- * this function returns before claiming or mutating any queue row. Enabling a
- * future live send therefore requires an explicit reviewed code change.
+ * Two independent controls must be enabled before queue mutation or provider
+ * delivery is possible:
+ *  1. compile-time provider transport policy
+ *  2. runtime AD_ACTIVATION_RUNNER_ENABLED kill switch
+ *
+ * Once enabled, an expiring provider-level runner lease prevents overlapping
+ * executions. Individual delivery leases still protect each outbox row.
  */
 export async function runMetaAdActivationExecutionCycle(input: {
   limit?: number;
   leaseSeconds?: number;
+  runnerLeaseSeconds?: number;
 } = {}): Promise<AdActivationExecutionSummary> {
   if (AD_ACTIVATION_TRANSPORT_ENABLED === false) {
-    return {
-      status: "disabled",
-      provider: "meta",
-      claimed: 0,
-      delivered: 0,
-      retry: 0,
-      skipped: 0,
-      failed: 0,
-      leaseLost: 0,
-    };
+    return emptySummary("disabled", "provider_transport_disabled");
+  }
+
+  if (!isAdActivationRunnerEnabled()) {
+    return emptySummary("disabled", "runner_kill_switch_disabled");
   }
 
   const limit = Math.max(1, Math.min(input.limit ?? 10, 25));
   const leaseSeconds = Math.max(60, Math.min(input.leaseSeconds ?? 300, 600));
-  const deliveries = await claimAdActivationDeliveriesForProvider(
-    "meta",
-    limit,
-    leaseSeconds,
-  );
+  const runnerLeaseSeconds = Math.max(120, Math.min(input.runnerLeaseSeconds ?? 600, 900));
+
+  const runnerLease = await acquireAdActivationRunnerLease("meta", runnerLeaseSeconds);
+  if (!runnerLease.acquired) {
+    return emptySummary("busy", runnerLease.reason);
+  }
 
   const summary: AdActivationExecutionSummary = {
     status: "completed",
     provider: "meta",
-    claimed: deliveries.length,
+    claimed: 0,
     delivered: 0,
     retry: 0,
     skipped: 0,
@@ -206,19 +230,66 @@ export async function runMetaAdActivationExecutionCycle(input: {
     leaseLost: 0,
   };
 
-  // Sequential delivery keeps provider pressure and lease behavior predictable.
-  // Batch size is deliberately bounded above to 25.
-  for (const delivery of deliveries) {
-    try {
-      const outcome = await processMetaDelivery(delivery, leaseSeconds);
-      if (outcome === "lease_lost") summary.leaseLost += 1;
-      else summary[outcome] += 1;
-    } catch {
-      // Leave an unfinalized leased row to expire naturally rather than risk a
-      // second provider call after an ambiguous execution failure.
-      summary.leaseLost += 1;
-    }
-  }
+  try {
+    const deliveries = await claimAdActivationDeliveriesForProvider(
+      "meta",
+      limit,
+      leaseSeconds,
+    );
+    summary.claimed = deliveries.length;
 
-  return summary;
+    // Sequential delivery keeps provider pressure and lease behavior predictable.
+    // Batch size is deliberately bounded above to 25.
+    for (const delivery of deliveries) {
+      try {
+        const outcome = await processMetaDelivery(delivery, leaseSeconds);
+        if (outcome === "lease_lost") summary.leaseLost += 1;
+        else summary[outcome] += 1;
+      } catch {
+        // Leave an unfinalized leased row to expire naturally rather than risk a
+        // second provider call after an ambiguous execution failure.
+        summary.leaseLost += 1;
+      }
+    }
+
+    await releaseAdActivationRunnerLease({
+      provider: "meta",
+      leaseToken: runnerLease.leaseToken,
+      telemetry: {
+        status: "completed",
+        claimed: summary.claimed,
+        delivered: summary.delivered,
+        retry: summary.retry,
+        skipped: summary.skipped,
+        failed: summary.failed,
+        leaseLost: summary.leaseLost,
+      },
+    });
+
+    return summary;
+  } catch {
+    summary.status = "failed";
+    summary.reason = "runner_execution_failed";
+
+    try {
+      await releaseAdActivationRunnerLease({
+        provider: "meta",
+        leaseToken: runnerLease.leaseToken,
+        telemetry: {
+          status: "failed",
+          claimed: summary.claimed,
+          delivered: summary.delivered,
+          retry: summary.retry,
+          skipped: summary.skipped,
+          failed: summary.failed,
+          leaseLost: summary.leaseLost,
+          errorCode: "runner_execution_failed",
+        },
+      });
+    } catch {
+      // The lease is bounded and will expire automatically if release fails.
+    }
+
+    return summary;
+  }
 }
