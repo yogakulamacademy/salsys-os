@@ -8,8 +8,12 @@ import {
 } from "lucide-react";
 import type { ReactNode } from "react";
 
+import {
+  resolveMetricDefinition,
+  type MetricDeltaDirection,
+} from "@/lib/metric-definitions";
+
 type MetricTone = "neutral" | "positive" | "warning" | "critical";
-type DeltaDirection = "higher_is_better" | "lower_is_better" | "neutral";
 
 export type DecisionMetricCardProps = {
   label: string;
@@ -19,7 +23,7 @@ export type DecisionMetricCardProps = {
   href?: string;
   delta?: number | null;
   comparisonLabel?: string;
-  deltaDirection?: DeltaDirection;
+  deltaDirection?: MetricDeltaDirection;
   tone?: MetricTone;
   statusLabel?: string;
   definition?: string;
@@ -58,15 +62,19 @@ export function DecisionMetricCard({
   href,
   delta,
   comparisonLabel = "vs previous period",
-  deltaDirection = "neutral",
+  deltaDirection,
   tone = "neutral",
   statusLabel,
   definition,
   evidenceLabel,
   trend,
 }: DecisionMetricCardProps) {
+  const canonical = resolveMetricDefinition(label);
+  const effectiveDefinition = definition ?? canonical?.definition;
+  const effectiveEvidenceLabel = evidenceLabel ?? canonical?.evidenceLabel;
+  const effectiveDeltaDirection = deltaDirection ?? canonical?.deltaDirection ?? "neutral";
   const styles = toneStyles[tone];
-  const deltaState = getDeltaState(delta, deltaDirection);
+  const deltaState = getDeltaState(delta, effectiveDeltaDirection);
   const content = (
     <>
       <div className="flex items-start justify-between gap-3">
@@ -79,19 +87,19 @@ export function DecisionMetricCard({
           <span className="min-w-0">
             <span className="flex items-center gap-1.5 text-[11px] font-semibold text-copy-muted">
               <span className="truncate">{label}</span>
-              {definition ? (
+              {effectiveDefinition ? (
                 <span
                   className="inline-flex shrink-0 text-copy-subtle"
-                  title={definition}
-                  aria-label={`${label} definition: ${definition}`}
+                  title={effectiveDefinition}
+                  aria-label={`${label} definition: ${effectiveDefinition}`}
                 >
                   <Info size={12} />
                 </span>
               ) : null}
             </span>
-            {evidenceLabel ? (
+            {effectiveEvidenceLabel ? (
               <span className="mt-0.5 block text-[9px] font-semibold uppercase tracking-[0.08em] text-copy-subtle">
-                {evidenceLabel}
+                {effectiveEvidenceLabel}
               </span>
             ) : null}
           </span>
@@ -153,7 +161,10 @@ export function DecisionMetricCard({
   );
 }
 
-function getDeltaState(delta: number | null | undefined, direction: DeltaDirection) {
+function getDeltaState(
+  delta: number | null | undefined,
+  direction: MetricDeltaDirection,
+) {
   if (delta == null || delta === 0 || direction === "neutral") {
     return {
       className: "text-copy-muted",
