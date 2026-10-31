@@ -12,10 +12,12 @@ import { DecisionMetricLink } from "@/components/intelligence/decision-metric-li
 import {
   resolveMetricDefinition,
   type MetricDeltaDirection,
+  type MetricEvidenceState,
 } from "@/lib/metric-definitions";
 
+export type { MetricEvidenceState } from "@/lib/metric-definitions";
+
 type MetricTone = "neutral" | "positive" | "warning" | "critical";
-export type MetricEvidenceState = "observed" | "derived" | "partial" | "unknown";
 
 export type DecisionMetricCardProps = {
   label: string;
@@ -92,13 +94,14 @@ export function DecisionMetricCard({
   const canonical = resolveMetricDefinition(label);
   const effectiveDefinition = definition ?? canonical?.definition;
   const effectiveEvidenceLabel = evidenceLabel ?? canonical?.evidenceLabel;
+  const effectiveEvidenceState = evidenceState ?? canonical?.evidenceState;
   const effectiveDeltaDirection =
     deltaDirection ?? canonical?.deltaDirection ?? "neutral";
   const effectiveHref = href ?? canonical?.href;
   const styles = toneStyles[tone];
   const deltaState = getDeltaState(delta, effectiveDeltaDirection);
-  const evidenceClassName = evidenceState
-    ? evidenceStateStyles[evidenceState]
+  const evidenceClassName = effectiveEvidenceState
+    ? evidenceStateStyles[effectiveEvidenceState]
     : neutralEvidenceStyle;
 
   const content = (
@@ -186,7 +189,7 @@ export function DecisionMetricCard({
               className={`ml-auto inline-flex items-center gap-1 rounded-full border px-2 py-1 text-[9px] font-semibold ${evidenceClassName}`}
               title={effectiveDefinition}
             >
-              {evidenceState === "observed" ? <CheckCircle2 size={10} /> : null}
+              {effectiveEvidenceState === "observed" ? <CheckCircle2 size={10} /> : null}
               {effectiveEvidenceLabel}
             </span>
           ) : null}
