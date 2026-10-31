@@ -5,6 +5,7 @@ import { usePathname } from 'next/navigation';
 import { Suspense, type ReactNode } from 'react';
 
 import { AppShell } from '@/components/app-shell';
+import { CanonicalRouteBridge } from '@/components/canonical-route-bridge';
 import { DesktopHoverSidebarV3 } from '@/components/desktop-hover-sidebar-v3';
 
 const MarketingWorkspaceFrame = dynamic(() =>
@@ -87,6 +88,7 @@ export function RootShell({ children }: { children: ReactNode }) {
 
   return (
     <div className="salsys-meta-sidebar-shell">
+      <CanonicalRouteBridge />
       <DesktopHoverSidebarV3 />
       <div className="legacy-shell-host">
         <AppShell>{content}</AppShell>
