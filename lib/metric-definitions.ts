@@ -3,10 +3,17 @@ export type MetricDeltaDirection =
   | "lower_is_better"
   | "neutral";
 
+export type MetricStatusTone = "neutral" | "positive" | "warning" | "critical";
+
 export type MetricDefinition = {
   definition: string;
   evidenceLabel: string;
   deltaDirection?: MetricDeltaDirection;
+};
+
+export type MetricStatus = {
+  tone: MetricStatusTone;
+  statusLabel: string;
 };
 
 const definitions: Record<string, MetricDefinition> = {
@@ -123,6 +130,42 @@ const definitions: Record<string, MetricDefinition> = {
 };
 
 export function resolveMetricDefinition(label: string): MetricDefinition | null {
-  const key = label.trim().toLowerCase();
-  return definitions[key] ?? null;
+  return definitions[normalize(label)] ?? null;
+}
+
+export function resolveMetricStatus(label: string, value: string): MetricStatus | null {
+  const key = normalize(label);
+  const numeric = parseMetricNumber(value);
+
+  if (key === "warnings" && numeric != null) {
+    return numeric > 0
+      ? { tone: "warning", statusLabel: "Review" }
+      : { tone: "positive", statusLabel: "Clear" };
+  }
+
+  if (key === "critical" && numeric != null) {
+    return numeric > 0
+      ? { tone: "critical", statusLabel: "Action" }
+      : { tone: "positive", statusLabel: "Clear" };
+  }
+
+  if (key === "crm environment") {
+    const state = value.trim().toLowerCase();
+    if (state === "live") return { tone: "positive", statusLabel: "Connected" };
+    if (state === "mock") return { tone: "warning", statusLabel: "Mock data" };
+    if (state === "setup") return { tone: "warning", statusLabel: "Setup needed" };
+  }
+
+  return null;
+}
+
+function normalize(value: string) {
+  return value.trim().toLowerCase();
+}
+
+function parseMetricNumber(value: string) {
+  const cleaned = value.replace(/[^0-9.-]/g, "");
+  if (!cleaned) return null;
+  const numeric = Number(cleaned);
+  return Number.isFinite(numeric) ? numeric : null;
 }
