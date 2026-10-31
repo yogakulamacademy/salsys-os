@@ -79,62 +79,70 @@ export function AudienceRuleBuilderDrawer() {
   }
 
   return (
-    <>
-      <button type="button" className={styles.launcher} onClick={() => setOpen(true)} aria-label="Open custom audience rule builder">
-        <Filter size={16} /> Build audience
+    <div className={styles.builderWrap}>
+      <button
+        type="button"
+        className={styles.launcher}
+        onClick={() => setOpen((current) => !current)}
+        aria-expanded={open}
+        aria-controls="custom-audience-builder"
+      >
+        <Filter size={15} /> {open ? 'Hide custom audience' : '+ Custom audience'}
       </button>
-      {open ? <div className={styles.backdrop} onMouseDown={() => setOpen(false)} /> : null}
-      <aside className={`${styles.drawer} ${open ? styles.drawerOpen : ''}`} aria-hidden={!open}>
-        <div className={styles.header}>
-          <div>
-            <div className={styles.eyebrow}>7C.13 · Custom Rule Builder</div>
-            <h2>Preview an audience before activation</h2>
-            <p>Combine first-party CRM signals. This tool returns aggregate counts only and never writes memberships or sends data to ad platforms.</p>
-          </div>
-          <button type="button" className={styles.closeButton} onClick={() => setOpen(false)} aria-label="Close audience builder"><X size={18} /></button>
-        </div>
 
-        <div className={styles.safetyBar}><ShieldCheck size={15} /><span>Read-only</span><span>0 writes</span><span>No identifiers returned</span></div>
-
-        <div className={styles.body}>
-          <div className={styles.grid}>
-            <Select label="Course" value={filters.course} onChange={(value) => updateFilter('course', value)} options={options?.courses ?? []} empty="Any safe course" />
-            <Select label="Location" value={filters.location} onChange={(value) => updateFilter('location', value)} options={options?.locations ?? []} empty="Any location" />
-            <Select label="Stage" value={filters.stage} onChange={(value) => updateFilter('stage', value)} options={options?.stages ?? []} empty="Any stage" pretty />
-            <Select label="Intent" value={filters.intent} onChange={(value) => updateFilter('intent', value)} options={options?.intents ?? []} empty="Any intent" pretty />
-            <Select label="Acquisition source" value={filters.source} onChange={(value) => updateFilter('source', value)} options={options?.sources ?? []} empty="Any source" />
-            <Select label="Lead channel" value={filters.channel} onChange={(value) => updateFilter('channel', value)} options={options?.channels ?? []} empty="Any channel" pretty />
-            <Select label="Recency" value={filters.recency} onChange={(value) => updateFilter('recency', value)} options={(options?.recencyDays ?? []).map(String)} empty="Any time" format={(value) => `Last ${value} days`} />
-          </div>
-
-          <div className={styles.privacyNote}><LockKeyhole size={14} /><span>Pregnancy, medical, diagnosis, treatment and other sensitive categories are removed from options and rejected again server-side.</span></div>
-
-          <div className={styles.actions}>
-            <button type="button" className={styles.resetButton} onClick={reset} disabled={!hasFilters && !preview}>Reset</button>
-            <button type="button" className={styles.previewButton} onClick={() => void fetchPreview(true)} disabled={!hasFilters || loading}><Search size={14} />{loading ? 'Previewing…' : 'Preview audience'}</button>
-          </div>
-
-          {error ? <div className={styles.error}>{error}</div> : null}
-          {preview?.sensitiveRuleRejected ? <div className={styles.rejected}>This rule was blocked because it contains a sensitive audience category.</div> : null}
-          {preview && !preview.sensitiveRuleRejected ? (
-            <div className={styles.results}>
-              <div className={styles.metrics}>
-                <Metric label="Matched people" value={preview.matchedPeople} />
-                <Metric label="Matched leads" value={preview.matchedLeads} />
-                <Metric label="Identity unlinked" value={preview.identityUnlinkedLeads} />
-              </div>
-              {preview.dataTruncated ? <div className={styles.warning}>Preview reached the 20,000-row safety ceiling.</div> : null}
-              <div className={styles.breakdownGrid}>
-                <Breakdown title="Stage" rows={preview.breakdowns.stage ?? []} />
-                <Breakdown title="Source" rows={preview.breakdowns.source ?? []} />
-                <Breakdown title="Location" rows={preview.breakdowns.location ?? []} />
-              </div>
-              <div className={styles.resultFooter}>Aggregate preview only · writes performed: {preview.writesPerformed}</div>
+      {open ? (
+        <section id="custom-audience-builder" className={styles.panel} aria-label="Custom audience rule builder">
+          <div className={styles.header}>
+            <div>
+              <div className={styles.eyebrow}>Custom Rule Builder</div>
+              <h2>Preview a custom audience</h2>
+              <p>Combine safe first-party CRM signals and preview aggregate matches before creating any membership.</p>
             </div>
-          ) : null}
-        </div>
-      </aside>
-    </>
+            <button type="button" className={styles.closeButton} onClick={() => setOpen(false)} aria-label="Close custom audience builder"><X size={18} /></button>
+          </div>
+
+          <div className={styles.safetyBar}><ShieldCheck size={15} /><span>Read-only</span><span>0 writes</span><span>No identifiers returned</span></div>
+
+          <div className={styles.body}>
+            <div className={styles.grid}>
+              <Select label="Course" value={filters.course} onChange={(value) => updateFilter('course', value)} options={options?.courses ?? []} empty="Any safe course" />
+              <Select label="Location" value={filters.location} onChange={(value) => updateFilter('location', value)} options={options?.locations ?? []} empty="Any location" />
+              <Select label="Stage" value={filters.stage} onChange={(value) => updateFilter('stage', value)} options={options?.stages ?? []} empty="Any stage" pretty />
+              <Select label="Intent" value={filters.intent} onChange={(value) => updateFilter('intent', value)} options={options?.intents ?? []} empty="Any intent" pretty />
+              <Select label="Acquisition source" value={filters.source} onChange={(value) => updateFilter('source', value)} options={options?.sources ?? []} empty="Any source" />
+              <Select label="Lead channel" value={filters.channel} onChange={(value) => updateFilter('channel', value)} options={options?.channels ?? []} empty="Any channel" pretty />
+              <Select label="Recency" value={filters.recency} onChange={(value) => updateFilter('recency', value)} options={(options?.recencyDays ?? []).map(String)} empty="Any time" format={(value) => `Last ${value} days`} />
+            </div>
+
+            <div className={styles.privacyNote}><LockKeyhole size={14} /><span>Pregnancy, medical, diagnosis, treatment and other sensitive categories are removed from options and rejected again server-side.</span></div>
+
+            <div className={styles.actions}>
+              <button type="button" className={styles.resetButton} onClick={reset} disabled={!hasFilters && !preview}>Reset</button>
+              <button type="button" className={styles.previewButton} onClick={() => void fetchPreview(true)} disabled={!hasFilters || loading}><Search size={14} />{loading ? 'Previewing…' : 'Preview audience'}</button>
+            </div>
+
+            {error ? <div className={styles.error}>{error}</div> : null}
+            {preview?.sensitiveRuleRejected ? <div className={styles.rejected}>This rule was blocked because it contains a sensitive audience category.</div> : null}
+            {preview && !preview.sensitiveRuleRejected ? (
+              <div className={styles.results}>
+                <div className={styles.metrics}>
+                  <Metric label="Matched people" value={preview.matchedPeople} />
+                  <Metric label="Matched leads" value={preview.matchedLeads} />
+                  <Metric label="Identity unlinked" value={preview.identityUnlinkedLeads} />
+                </div>
+                {preview.dataTruncated ? <div className={styles.warning}>Preview reached the 20,000-row safety ceiling.</div> : null}
+                <div className={styles.breakdownGrid}>
+                  <Breakdown title="Stage" rows={preview.breakdowns.stage ?? []} />
+                  <Breakdown title="Source" rows={preview.breakdowns.source ?? []} />
+                  <Breakdown title="Location" rows={preview.breakdowns.location ?? []} />
+                </div>
+                <div className={styles.resultFooter}>Aggregate preview only · writes performed: {preview.writesPerformed}</div>
+              </div>
+            ) : null}
+          </div>
+        </section>
+      ) : null}
+    </div>
   );
 }
 
