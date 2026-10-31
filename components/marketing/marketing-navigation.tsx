@@ -19,6 +19,7 @@ import {
   ShieldCheck,
   Sparkles,
   UsersRound,
+  Target,
 } from 'lucide-react';
 
 type NavigationItem = {
@@ -46,6 +47,7 @@ const groups: NavigationGroup[] = [
       { href: '/campaigns', label: 'Campaigns', icon: Megaphone },
       { href: '/paid-media-leads', label: 'Acquisition', icon: UsersRound },
       { href: '/re-engaged', label: 'Re-engaged Leads', icon: Activity },
+      { href: '/marketing/audiences', label: 'Audience Intelligence', icon: Target, badge: 'Simulation' },
     ],
   },
   {
