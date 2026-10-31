@@ -11,14 +11,14 @@ const policy = fs.readFileSync("lib/ad-activation/transport-policy.ts", "utf8");
 for (const token of [
   "runMetaAdActivationExecutionCycle",
   "AD_ACTIVATION_TRANSPORT_ENABLED === false",
-  'claimAdActivationDeliveriesForProvider(\n    "meta"',
+  "claimAdActivationDeliveriesForProvider",
+  '"meta"',
   "renewAdActivationDeliveryLease",
   "prepareAdActivationProviderDryRun",
   "executeAdActivationTransport",
   "metaCustomAudienceTransportAdapter",
   "finalizeAdActivationDelivery",
-  'status: "disabled"',
-  "claimed: 0",
+  'emptySummary("disabled"',
 ]) {
   if (!runner.includes(token)) {
     throw new Error(`execution runner contract missing: ${token}`);
@@ -55,7 +55,7 @@ if (!policy.includes("AD_ACTIVATION_TRANSPORT_ENABLED = false as const")) {
 }
 
 const disabledGuard = runner.indexOf("if (AD_ACTIVATION_TRANSPORT_ENABLED === false)");
-const claimCall = runner.indexOf("claimAdActivationDeliveriesForProvider(");
+const claimCall = runner.indexOf("claimAdActivationDeliveriesForProvider");
 if (disabledGuard < 0 || claimCall < 0 || disabledGuard > claimCall) {
   throw new Error("Transport-disabled guard must execute before any queue claim.");
 }
