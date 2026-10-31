@@ -6,7 +6,7 @@ import {
   type ClaimedAdActivationDelivery,
 } from "@/lib/ad-activation/delivery-queue";
 import {
-  claimAdActivationDeliveriesForProvider,
+  claimAdActivationCanaryDelivery,
   renewAdActivationDeliveryLease,
 } from "@/lib/ad-activation/provider-queue";
 import { prepareAdActivationProviderDryRun } from "@/lib/ad-activation/provider-dry-run";
@@ -14,6 +14,7 @@ import { executeAdActivationTransport } from "@/lib/ad-activation/provider-trans
 import { metaCustomAudienceTransportAdapter } from "@/lib/ad-activation/providers/meta-transport";
 import {
   acquireAdActivationRunnerLease,
+  getAdActivationCanaryScope,
   isAdActivationRunnerEnabled,
   releaseAdActivationRunnerLease,
 } from "@/lib/ad-activation/runner-controls";
@@ -187,18 +188,19 @@ async function processMetaDelivery(
 }
 
 /**
- * Execute one bounded Meta activation cycle.
+ * Execute one Meta activation canary cycle.
  *
- * Two independent controls must be enabled before queue mutation or provider
- * delivery is possible:
- *  1. compile-time provider transport policy
- *  2. runtime AD_ACTIVATION_RUNNER_ENABLED kill switch
+ * Initial live delivery requires all of the following:
+ *  1. compile-time provider transport policy enabled by reviewed code
+ *  2. runtime AD_ACTIVATION_RUNNER_ENABLED=true
+ *  3. explicit AD_ACTIVATION_CANARY_DESTINATION_ID
+ *  4. explicit AD_ACTIVATION_CANARY_PERSON_ID
  *
- * Once enabled, an expiring provider-level runner lease prevents overlapping
- * executions. Individual delivery leases still protect each outbox row.
+ * Even with those controls enabled, this phase can claim at most one outbox row
+ * matching that exact destination/person pair. There is intentionally no broad
+ * audience drain path in Phase 7D.4.
  */
 export async function runMetaAdActivationExecutionCycle(input: {
-  limit?: number;
   leaseSeconds?: number;
   runnerLeaseSeconds?: number;
 } = {}): Promise<AdActivationExecutionSummary> {
@@ -210,7 +212,11 @@ export async function runMetaAdActivationExecutionCycle(input: {
     return emptySummary("disabled", "runner_kill_switch_disabled");
   }
 
-  const limit = Math.max(1, Math.min(input.limit ?? 10, 25));
+  const canaryScope = getAdActivationCanaryScope();
+  if (!canaryScope) {
+    return emptySummary("disabled", "canary_scope_not_configured");
+  }
+
   const leaseSeconds = Math.max(60, Math.min(input.leaseSeconds ?? 300, 600));
   const runnerLeaseSeconds = Math.max(120, Math.min(input.runnerLeaseSeconds ?? 600, 900));
 
@@ -231,16 +237,16 @@ export async function runMetaAdActivationExecutionCycle(input: {
   };
 
   try {
-    const deliveries = await claimAdActivationDeliveriesForProvider(
-      "meta",
-      limit,
+    const delivery = await claimAdActivationCanaryDelivery({
+      provider: "meta",
+      destinationId: canaryScope.destinationId,
+      personId: canaryScope.personId,
       leaseSeconds,
-    );
-    summary.claimed = deliveries.length;
+    });
 
-    // Sequential delivery keeps provider pressure and lease behavior predictable.
-    // Batch size is deliberately bounded above to 25.
-    for (const delivery of deliveries) {
+    if (delivery) {
+      summary.claimed = 1;
+
       try {
         const outcome = await processMetaDelivery(delivery, leaseSeconds);
         if (outcome === "lease_lost") summary.leaseLost += 1;
