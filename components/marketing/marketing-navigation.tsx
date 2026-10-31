@@ -97,13 +97,19 @@ function NavigationLinks({ mobile = false }: { mobile?: boolean }) {
   const pathname = usePathname();
 
   return (
-    <div className={mobile ? 'space-y-5' : 'space-y-6'}>
+    <div className={mobile ? 'space-y-5' : 'space-y-3.5'}>
       {groups.map((group) => (
         <section key={group.label}>
-          <div className="mb-2 px-3 text-[11px] font-semibold uppercase tracking-[0.12em] text-copy-subtle">
+          <div
+            className={
+              mobile
+                ? 'mb-2 px-3 text-[11px] font-semibold uppercase tracking-[0.12em] text-copy-subtle'
+                : 'mb-1.5 px-3 text-[10px] font-semibold uppercase tracking-[0.12em] text-copy-subtle'
+            }
+          >
             {group.label}
           </div>
-          <div className="space-y-1">
+          <div className={mobile ? 'space-y-1' : 'space-y-0.5'}>
             {group.items.map(({ href, label, icon: Icon, badge }) => {
               const active = isActive(pathname, href);
 
@@ -112,7 +118,11 @@ function NavigationLinks({ mobile = false }: { mobile?: boolean }) {
                   key={href}
                   href={href}
                   aria-current={active ? 'page' : undefined}
-                  className={`group relative flex min-h-10 items-center gap-2.5 rounded-ui px-3 py-2.5 text-[13px] transition ${
+                  className={`group relative flex items-center rounded-ui transition ${
+                    mobile
+                      ? 'min-h-10 gap-2.5 px-3 py-2.5 text-[13px]'
+                      : 'min-h-8 gap-2.5 px-3 py-1.5 text-[12.5px]'
+                  } ${
                     active
                       ? 'bg-brand-50 font-semibold text-brand-700'
                       : 'font-medium text-copy-muted hover:bg-surface-muted hover:text-copy-strong'
@@ -122,7 +132,7 @@ function NavigationLinks({ mobile = false }: { mobile?: boolean }) {
                     <span className="absolute -left-4 h-5 w-[3px] rounded-r bg-brand-700" />
                   ) : null}
                   <Icon
-                    size={16}
+                    size={mobile ? 16 : 15}
                     className={
                       active
                         ? 'text-brand-700'
@@ -131,7 +141,11 @@ function NavigationLinks({ mobile = false }: { mobile?: boolean }) {
                   />
                   <span className="min-w-0 flex-1">{label}</span>
                   {badge ? (
-                    <span className="rounded-full border border-line bg-surface-soft px-2 py-0.5 text-[10px] font-medium text-copy-muted">
+                    <span
+                      className={`rounded-full border border-line bg-surface-soft font-medium text-copy-muted ${
+                        mobile ? 'px-2 py-0.5 text-[10px]' : 'px-1.5 py-0.5 text-[9px]'
+                      }`}
+                    >
                       {badge}
                     </span>
                   ) : null}
@@ -175,19 +189,18 @@ export function MarketingNavigation() {
       </details>
 
       <aside
-        className="sticky top-20 hidden h-[calc(100vh-5.5rem)] self-start overflow-hidden border-r border-line pr-3 lg:flex lg:flex-col"
+        className="hidden self-start border-r border-line pr-3 lg:block"
         aria-label="Growth navigation"
       >
-        <div className="shrink-0 px-3 pb-5 pt-1">
-          <div className="text-[18px] font-semibold tracking-[-0.025em] text-copy-strong">
-            Growth
+        <div className="sticky top-20 pb-6">
+          <div className="mb-4 px-3 pt-1">
+            <div className="text-[18px] font-semibold tracking-[-0.025em] text-copy-strong">
+              Growth
+            </div>
+            <p className="mt-1 max-w-[195px] text-[12px] leading-[18px] text-copy-muted">
+              Connect acquisition, conversion and revenue in one growth workspace.
+            </p>
           </div>
-          <p className="mt-1.5 max-w-[195px] text-[13px] leading-5 text-copy-muted">
-            Connect acquisition, conversion and revenue in one growth workspace.
-          </p>
-        </div>
-
-        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain pb-12 pr-1 [scrollbar-color:transparent_transparent] [scrollbar-width:thin] hover:[scrollbar-color:rgba(148,163,184,0.35)_transparent] [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-transparent hover:[&::-webkit-scrollbar-thumb]:bg-slate-300/70">
           <NavigationLinks />
         </div>
       </aside>
