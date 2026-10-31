@@ -18,11 +18,11 @@ export default function NotFound() {
         <div className="mt-6 flex flex-col justify-center gap-2 sm:flex-row">
           <Link href="/home" className="btn-primary justify-center">
             <Home size={15} aria-hidden="true" />
-            Dashboard
+            Command Center
           </Link>
           <Link href="/leads" className="btn-secondary justify-center">
             <ArrowLeft size={15} aria-hidden="true" />
-            Back to CRM
+            Back to Sales
           </Link>
         </div>
       </div>

@@ -172,13 +172,13 @@ export default async function MarketingCommandCenterPage() {
             <div className={styles.panelBody}>
               <div className={styles.mixHead}><span>Channel</span><span>Lead volume</span><span>Leads</span><span>Qual.</span><span>Enr.</span></div>
               {sourceRows.slice(0, 7).map((row) => (
-                <div className={styles.mixRow} key={row.name}>
+                <Link href={`/attribution?q=${encodeURIComponent(row.name)}`} className={styles.mixRow} key={row.name}>
                   <span className={styles.mixName}><i className={styles.dot} />{row.name}</span>
                   <span className={styles.bar}><i style={{ width: `${Math.max(row.leads ? 3 : 0, (row.leads / maxLeadVolume) * 100)}%` }} /></span>
                   <strong className={styles.number}>{formatNumber(row.leads)}</strong>
                   <strong className={styles.number}>{formatNumber(row.qualified)}</strong>
                   <strong className={styles.number}>{formatNumber(row.enrolled)}</strong>
-                </div>
+                </Link>
               ))}
               <p className={styles.caption}>Exact values are shown where observed. Missing source evidence stays Unknown rather than being inferred.</p>
             </div>
@@ -222,7 +222,7 @@ export default async function MarketingCommandCenterPage() {
             </div>
             <div className={styles.panelBody}>
               {topCampaigns.length ? topCampaigns.map((row, index) => (
-                <Link href="/campaigns" className={styles.rankRow} key={row.id}>
+                <Link href={`/campaigns?q=${encodeURIComponent(row.name)}`} className={styles.rankRow} key={row.id}>
                   <span className={styles.rankNum}>{index + 1}</span>
                   <span className={styles.rankMain}><strong>{row.name}</strong><small>{row.qualified} qualified · {row.cac === null ? 'CAC unavailable' : `CAC ${formatMoney(row.cac, row.spendCurrency)}`}</small></span>
                   <span className={styles.rankValue}>{row.enrolled}<small style={{ display: 'block', fontSize: 7, color: '#758279', fontWeight: 400 }}>enrolled</small></span>

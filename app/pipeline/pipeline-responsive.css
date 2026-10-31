@@ -1,0 +1,31 @@
+/* SalsysOS responsive QA — Pipeline board
+   Presentation only. Stage mutation, drag/drop and touch selectors remain unchanged. */
+
+@media (max-width: 900px) {
+  .pipeline-responsive [class*="overflow-x-auto"] {
+    scroll-snap-type: x proximity;
+    scroll-padding-inline: 2px;
+    overscroll-behavior-inline: contain;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .pipeline-responsive [class*="min-w-[1660px]"] {
+    min-width: max-content !important;
+    grid-template-columns: repeat(7, minmax(286px, 286px)) !important;
+  }
+
+  .pipeline-responsive [class*="min-w-[1660px]"] > div {
+    scroll-snap-align: start;
+  }
+}
+
+@media (max-width: 620px) {
+  .pipeline-responsive [class*="min-w-[1660px]"] {
+    grid-template-columns: repeat(7, minmax(82vw, 82vw)) !important;
+    gap: 10px !important;
+  }
+
+  .pipeline-responsive [class*="min-h-[455px]"] {
+    min-height: 390px !important;
+  }
+}

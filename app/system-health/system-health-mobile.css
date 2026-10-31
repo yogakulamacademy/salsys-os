@@ -1,4 +1,101 @@
+.system-health-polish {
+  min-width: 0;
+}
+
+.system-health-polish .system-health-overview {
+  border-color: color-mix(in srgb, var(--brand-700) 14%, var(--line)) !important;
+  background: color-mix(in srgb, var(--brand-50) 46%, var(--surface)) !important;
+  box-shadow: var(--shadow-xs) !important;
+}
+
+.system-health-polish .system-health-stat-grid > * {
+  border-color: var(--line) !important;
+  background: var(--surface) !important;
+  box-shadow: var(--shadow-xs) !important;
+}
+
+.system-health-polish .system-health-stat-grid > *:hover {
+  transform: none !important;
+  border-color: color-mix(in srgb, var(--brand-700) 18%, var(--line)) !important;
+}
+
+.system-health-polish .system-health-systems-card,
+.system-health-polish .system-health-failures-card,
+.system-health-polish .system-health-rules-card,
+.system-health-polish > section.card,
+.system-health-polish > section.card-pad {
+  border-color: var(--line) !important;
+  background: var(--surface) !important;
+  box-shadow: var(--shadow-xs) !important;
+}
+
+.system-health-polish .system-health-systems-card {
+  border-color: color-mix(in srgb, var(--brand-700) 16%, var(--line)) !important;
+}
+
+.system-health-polish .system-health-failures-card {
+  border-color: color-mix(in srgb, var(--warning) 24%, var(--line)) !important;
+}
+
+.system-health-polish .system-health-rules-card {
+  opacity: 0.92;
+}
+
+.system-health-polish .text-slate-950,
+.system-health-polish .text-slate-900,
+.system-health-polish .text-slate-800,
+.system-health-polish .text-slate-700 {
+  color: var(--copy-strong) !important;
+}
+
+.system-health-polish .text-slate-600,
+.system-health-polish .text-slate-500,
+.system-health-polish .text-slate-400 {
+  color: var(--copy-muted) !important;
+}
+
+.system-health-polish .border-slate-200,
+.system-health-polish .border-slate-100 {
+  border-color: var(--line) !important;
+}
+
+.system-health-polish .bg-white {
+  background: var(--surface) !important;
+}
+
+.system-health-polish .bg-slate-50\/80,
+.system-health-polish .bg-slate-50\/70,
+.system-health-polish .bg-slate-50\/50,
+.system-health-polish .bg-slate-50 {
+  background: var(--surface-muted) !important;
+}
+
+.system-health-polish article.rounded-2xl.border {
+  box-shadow: none !important;
+}
+
+.system-health-polish article.rounded-2xl.border:hover {
+  border-color: color-mix(in srgb, var(--brand-700) 18%, var(--line)) !important;
+}
+
+.system-health-polish .system-health-table thead tr {
+  background: var(--surface-muted) !important;
+  color: var(--copy-muted) !important;
+}
+
+.system-health-polish .system-health-table tbody tr:hover {
+  background: color-mix(in srgb, var(--brand-50) 32%, var(--surface)) !important;
+}
+
+.system-health-polish .system-health-load-warning {
+  box-shadow: none;
+}
+
 @media (max-width: 767px) {
+  .system-health-stat-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
   .system-health-failures-card .system-health-table-wrap {
     overflow: visible;
     padding: 12px;
@@ -79,5 +176,11 @@
 
   .system-health-failures-card .system-health-table tbody td:last-child {
     padding-bottom: 0;
+  }
+}
+
+@media (max-width: 480px) {
+  .system-health-stat-grid {
+    grid-template-columns: 1fr;
   }
 }

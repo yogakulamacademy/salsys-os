@@ -5,18 +5,29 @@ import { usePathname } from "next/navigation";
 import {
   BookOpen,
   BrainCircuit,
+  ChevronRight,
   Home,
-  Inbox,
   Megaphone,
+  Menu,
   Settings,
   Sparkles,
   UsersRound,
   Workflow,
+  X,
 } from "lucide-react";
 import { type ComponentType, useEffect, useMemo, useRef, useState } from "react";
 import { createClient as createBrowserClient } from "@/lib/supabase/browser";
 
-type IconType = ComponentType<{ size?: number | string; strokeWidth?: number; className?: string }>;
+type IconType = ComponentType<{
+  size?: number | string;
+  strokeWidth?: number;
+  className?: string;
+}>;
+
+type SectionItem = {
+  label: string;
+  href: string;
+};
 
 type SectionLink = {
   id: string;
@@ -24,6 +35,7 @@ type SectionLink = {
   icon: IconType;
   href: string;
   activeHrefs?: string[];
+  items?: SectionItem[];
 };
 
 type WorkspaceContext = {
@@ -33,7 +45,9 @@ type WorkspaceContext = {
 function activePath(pathname: string, href: string) {
   if (href === "/home") return pathname === "/home";
   if (href === "/dashboard") return pathname === "/dashboard";
-  if (href === "/settings") return pathname === "/settings" || pathname.startsWith("/settings/");
+  if (href === "/settings") {
+    return pathname === "/settings" || pathname.startsWith("/settings/");
+  }
   return pathname === href || pathname.startsWith(`${href}/`);
 }
 
@@ -52,13 +66,15 @@ export function DesktopHoverSidebarV3() {
   const pathname = usePathname();
   const primaryRef = useRef<HTMLElement | null>(null);
   const [open, setOpen] = useState(false);
+  const [mobileOpen, setMobileOpen] = useState(false);
   const [role, setRole] = useState<string | null>(null);
   const [organizationName, setOrganizationName] = useState("SalsysOS");
 
   const mock = process.env.NEXT_PUBLIC_USE_MOCK_DATA !== "false";
   const employee = !mock && role === "admissions";
   const admin = mock || role === "owner" || role === "admin";
-  const privileged = admin || (!mock && role === "manager");
+  const manager = !mock && role === "manager";
+  const privileged = admin || manager;
 
   useEffect(() => {
     let cancelled = false;
@@ -109,6 +125,7 @@ export function DesktopHoverSidebarV3() {
 
   useEffect(() => {
     setOpen(false);
+    setMobileOpen(false);
   }, [pathname]);
 
   useEffect(() => {
@@ -118,7 +135,10 @@ export function DesktopHoverSidebarV3() {
     }
 
     function escape(event: KeyboardEvent) {
-      if (event.key === "Escape") setOpen(false);
+      if (event.key === "Escape") {
+        setOpen(false);
+        setMobileOpen(false);
+      }
     }
 
     document.addEventListener("pointerdown", outside, true);
@@ -129,27 +149,43 @@ export function DesktopHoverSidebarV3() {
     };
   }, [open]);
 
+  useEffect(() => {
+    if (!mobileOpen) return;
+    const previous = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = previous;
+    };
+  }, [mobileOpen]);
+
   const sections = useMemo<SectionLink[]>(() => {
     if (employee) {
       return [
         {
-          id: "overview",
-          label: "Overview",
+          id: "home",
+          label: "Home",
           icon: Home,
           href: "/dashboard",
+          items: [{ label: "Today", href: "/dashboard" }],
         },
         {
-          id: "crm",
-          label: "CRM",
+          id: "sales",
+          label: "Sales",
           icon: UsersRound,
           href: "/leads",
-          activeHrefs: ["/pipeline", "/follow-ups"],
-        },
-        {
-          id: "inbox",
-          label: "Inbox",
-          icon: Inbox,
-          href: "/conversations",
+          activeHrefs: [
+            "/pipeline",
+            "/conversations",
+            "/follow-ups",
+            "/customer-360",
+            "/contact-intelligence",
+          ],
+          items: [
+            { label: "My Leads", href: "/leads" },
+            { label: "My Pipeline", href: "/pipeline" },
+            { label: "Inbox", href: "/conversations" },
+            { label: "Tasks & Follow-ups", href: "/follow-ups" },
+          ],
         },
       ];
     }
@@ -158,24 +194,81 @@ export function DesktopHoverSidebarV3() {
 
     return [
       {
-        id: "overview",
-        label: "Overview",
+        id: "home",
+        label: "Home",
         icon: Home,
         href: "/home",
+        activeHrefs: ["/dashboard"],
+        items: [
+          { label: "Command Center", href: "/home" },
+          { label: "Today", href: "/dashboard" },
+        ],
       },
       {
-        id: "crm",
-        label: "CRM",
+        id: "sales",
+        label: "Sales",
         icon: UsersRound,
         href: "/crm",
         activeHrefs: [
           "/leads",
           "/admissions",
           "/pipeline",
+          "/conversations",
           "/follow-ups",
           "/customer-360",
           "/contact-intelligence",
           "/data-quality",
+          "/re-engaged",
+        ],
+        items: [
+          { label: "Sales Overview", href: "/crm" },
+          { label: "Leads", href: "/leads" },
+          { label: "Pipeline", href: "/pipeline" },
+          { label: "Inbox", href: "/conversations" },
+          { label: "Tasks & Follow-ups", href: "/follow-ups" },
+          { label: "Customer 360", href: "/contact-intelligence" },
+          { label: "Admissions", href: "/admissions" },
+          { label: "Re-engaged", href: "/re-engaged" },
+        ],
+      },
+      {
+        id: "marketing",
+        label: "Marketing",
+        icon: Megaphone,
+        href: "/marketing",
+        activeHrefs: ["/campaigns", "/paid-media-leads", "/seo"],
+        items: [
+          { label: "Marketing Overview", href: "/marketing" },
+          { label: "Campaigns", href: "/campaigns" },
+          { label: "Acquisition", href: "/paid-media-leads" },
+          { label: "Search Intelligence", href: "/seo" },
+        ],
+      },
+      {
+        id: "intelligence",
+        label: "Intelligence",
+        icon: BrainCircuit,
+        href: "/commercial-intelligence",
+        activeHrefs: ["/analytics", "/funnel", "/attribution", "/revenue"],
+        items: [
+          { label: "Overview", href: "/commercial-intelligence" },
+          { label: "Analytics", href: "/analytics" },
+          { label: "Funnels", href: "/funnel" },
+          { label: "Attribution", href: "/attribution" },
+          { label: "Revenue", href: "/revenue" },
+        ],
+      },
+      {
+        id: "operations",
+        label: "Operations",
+        icon: BookOpen,
+        href: "/operations",
+        activeHrefs: ["/availability", "/course-management", "/enrollments"],
+        items: [
+          { label: "Overview", href: "/operations" },
+          { label: "Availability", href: "/availability" },
+          { label: "Programs & Batches", href: "/course-management" },
+          { label: "Enrollments", href: "/enrollments" },
         ],
       },
       {
@@ -183,29 +276,12 @@ export function DesktopHoverSidebarV3() {
         label: "Team",
         icon: UsersRound,
         href: "/team",
-        activeHrefs: ["/team-performance", "/settings/team"],
-      },
-      {
-        id: "inbox",
-        label: "Inbox",
-        icon: Inbox,
-        href: "/conversations",
-      },
-      {
-        id: "growth",
-        label: "Growth",
-        icon: Megaphone,
-        href: "/marketing",
-        activeHrefs: [
-          "/campaigns",
-          "/paid-media-leads",
-          "/re-engaged",
-          "/seo",
-          "/analytics",
-          "/funnel",
-          "/attribution",
-          "/revenue",
-          "/tracking",
+        activeHrefs: ["/team-performance"],
+        items: [
+          { label: "Team Overview", href: "/team" },
+          ...(admin
+            ? [{ label: "Performance", href: "/team-performance" }]
+            : []),
         ],
       },
       {
@@ -213,34 +289,37 @@ export function DesktopHoverSidebarV3() {
         label: "Automation",
         icon: Workflow,
         href: "/automation",
+        items: [{ label: "Workflows", href: "/automation" }],
       },
       {
-        id: "intelligence",
-        label: "Intelligence",
-        icon: BrainCircuit,
-        href: "/commercial-intelligence",
-      },
-      {
-        id: "operations",
-        label: "Operations",
-        icon: BookOpen,
-        href: "/course-management",
-      },
-      {
-        id: "system",
-        label: "System",
+        id: "settings",
+        label: "Settings",
         icon: Settings,
         href: "/settings/overview",
         activeHrefs: [
           "/settings",
           "/settings/integrations",
+          "/settings/team",
           "/settings/knowledge",
           "/settings/organizations",
+          "/tracking",
           "/system-health",
+        ],
+        items: [
+          { label: "Overview", href: "/settings/overview" },
+          ...(admin
+            ? [
+                { label: "Integrations", href: "/settings/integrations" },
+                { label: "Team & Permissions", href: "/settings/team" },
+                { label: "Tracking & Data", href: "/tracking" },
+                { label: "System Health", href: "/system-health" },
+              ]
+            : []),
+          { label: "Settings", href: "/settings" },
         ],
       },
     ];
-  }, [employee, privileged]);
+  }, [admin, employee, privileged]);
 
   function isCurrent(section: SectionLink) {
     if (activePath(pathname, section.href)) return true;
@@ -253,6 +332,15 @@ export function DesktopHoverSidebarV3() {
 
   return (
     <>
+      <button
+        type="button"
+        onClick={() => setMobileOpen(true)}
+        className="fixed left-3 top-3 z-[75] grid h-10 w-10 place-items-center rounded-ui border border-line bg-surface text-copy-muted shadow-sm transition hover:bg-surface-muted hover:text-copy-strong lg:hidden"
+        aria-label="Open SalsysOS navigation"
+      >
+        <Menu size={19} strokeWidth={1.8} />
+      </button>
+
       <aside
         ref={primaryRef}
         onMouseEnter={() => setOpen(true)}
@@ -349,6 +437,122 @@ export function DesktopHoverSidebarV3() {
         </div>
       </aside>
 
+      {mobileOpen ? (
+        <div className="fixed inset-0 z-[90] lg:hidden">
+          <button
+            type="button"
+            className="absolute inset-0 bg-brand-950/30 backdrop-blur-[2px]"
+            aria-label="Close navigation"
+            onClick={() => setMobileOpen(false)}
+          />
+
+          <aside className="absolute inset-y-0 left-0 flex w-[min(90vw,360px)] flex-col border-r border-line bg-surface shadow-panel">
+            <div className="flex h-16 shrink-0 items-center gap-3 border-b border-line px-4">
+              <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-brand-900 text-[12px] font-semibold text-white shadow-sm">
+                SO
+              </span>
+              <div className="min-w-0 flex-1">
+                <div className="truncate text-[14px] font-semibold text-copy-strong">
+                  SalsysOS
+                </div>
+                <div className="truncate text-[11px] text-copy-subtle">
+                  {organizationName}
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setMobileOpen(false)}
+                className="grid h-9 w-9 place-items-center rounded-ui text-copy-muted transition hover:bg-surface-muted hover:text-copy-strong"
+                aria-label="Close navigation"
+              >
+                <X size={18} strokeWidth={1.8} />
+              </button>
+            </div>
+
+            <div className="border-b border-line p-3">
+              <button
+                type="button"
+                onClick={() => {
+                  setMobileOpen(false);
+                  window.setTimeout(() => askSalsys(), 0);
+                }}
+                className="flex w-full items-center gap-3 rounded-ui border border-brand-100 bg-brand-50 px-3 py-3 text-left text-brand-700 transition hover:bg-brand-100"
+              >
+                <span className="grid h-8 w-8 shrink-0 place-items-center rounded-ui bg-surface text-brand-700 shadow-sm">
+                  <Sparkles size={16} strokeWidth={1.8} />
+                </span>
+                <span className="min-w-0 flex-1">
+                  <span className="block text-[13px] font-semibold">Ask Salsys</span>
+                  <span className="block truncate text-[10px] text-copy-subtle">
+                    Find evidence, navigate or move work forward
+                  </span>
+                </span>
+              </button>
+            </div>
+
+            <nav className="min-h-0 flex-1 overflow-y-auto px-3 py-4">
+              <div className="space-y-5">
+                {sections.map((section) => {
+                  const Icon = section.icon;
+                  const current = isCurrent(section);
+
+                  return (
+                    <section key={section.id}>
+                      <Link
+                        href={section.href}
+                        onClick={() => setMobileOpen(false)}
+                        className={`flex items-center gap-3 rounded-ui px-3 py-2.5 transition ${
+                          current
+                            ? "bg-brand-50 text-brand-700"
+                            : "text-copy-strong hover:bg-surface-muted"
+                        }`}
+                      >
+                        <Icon size={18} strokeWidth={1.8} />
+                        <span className="flex-1 text-[13px] font-semibold">
+                          {section.label}
+                        </span>
+                        <ChevronRight size={15} className="text-copy-subtle" />
+                      </Link>
+
+                      {section.items?.length ? (
+                        <div className="mt-1 space-y-0.5 pl-9">
+                          {section.items.map((item) => {
+                            const active = activePath(pathname, item.href);
+                            return (
+                              <Link
+                                key={`${section.id}-${item.href}`}
+                                href={item.href}
+                                onClick={() => setMobileOpen(false)}
+                                className={`block rounded-ui px-3 py-2 text-[12px] transition ${
+                                  active
+                                    ? "bg-surface-muted font-semibold text-brand-700"
+                                    : "text-copy-muted hover:bg-surface-muted hover:text-copy-strong"
+                                }`}
+                              >
+                                {item.label}
+                              </Link>
+                            );
+                          })}
+                        </div>
+                      ) : null}
+                    </section>
+                  );
+                })}
+              </div>
+            </nav>
+
+            <div className="flex shrink-0 items-center gap-2 border-t border-line px-4 py-3 text-[11px] text-copy-subtle">
+              <span
+                className={`h-2 w-2 rounded-full ${
+                  mock ? "bg-amber-400" : "bg-emerald-500"
+                }`}
+              />
+              <span>{mock ? "Development workspace" : "Live workspace"}</span>
+            </div>
+          </aside>
+        </div>
+      ) : null}
+
       <style jsx global>{`
         @media (min-width: 1024px) {
           .salsys-meta-sidebar-shell .legacy-shell-host > div > aside {
@@ -361,6 +565,15 @@ export function DesktopHoverSidebarV3() {
             .legacy-shell-host
             button[aria-label="Open section menu"] {
             display: none !important;
+          }
+        }
+
+        @media (max-width: 1023px) {
+          .salsys-meta-sidebar-shell
+            .legacy-shell-host
+            button[aria-label="Open navigation"] {
+            visibility: hidden !important;
+            pointer-events: none !important;
           }
         }
       `}</style>

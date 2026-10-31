@@ -1,0 +1,192 @@
+/* SalsysOS Phase 6F.1 — Unified Inbox visual layer */
+
+.conversations-polish {
+  --inbox-canvas: #f8f7fc;
+  --inbox-surface: #ffffff;
+  --inbox-border: #e6e3ef;
+  --inbox-text: #24213c;
+  --inbox-muted: #67627a;
+  --inbox-primary: #5743c5;
+  --inbox-primary-soft: #ede9fa;
+}
+
+.conversations-polish .conversation-workspace {
+  border-color: var(--inbox-border) !important;
+  border-radius: 14px !important;
+  background: var(--inbox-surface) !important;
+  box-shadow: 0 10px 30px rgba(36, 33, 60, 0.055) !important;
+}
+
+.conversations-polish .conversation-sidebar {
+  background: var(--inbox-surface) !important;
+}
+
+.conversations-polish .conversation-sidebar > div:first-child {
+  background: linear-gradient(180deg, #fff 0%, #fbfaff 100%);
+}
+
+.conversations-polish .conversation-sidebar a[aria-current='page'],
+.conversations-polish .conversation-sidebar a[aria-current='true'] {
+  background: #f3f0fb !important;
+  box-shadow: inset 3px 0 0 var(--inbox-primary);
+}
+
+.conversations-polish .conversation-sidebar a:hover {
+  background: #faf8ff;
+}
+
+.conversations-polish .conversation-sidebar input,
+.conversations-polish .conversation-sidebar select {
+  border-color: var(--inbox-border) !important;
+  background: #fbfafd !important;
+}
+
+.conversations-polish .conversation-sidebar input:focus,
+.conversations-polish .conversation-sidebar select:focus {
+  border-color: var(--inbox-primary) !important;
+  box-shadow: 0 0 0 3px rgba(87, 67, 197, 0.1) !important;
+  background: #fff !important;
+}
+
+.conversations-polish .conversation-context-pane {
+  background: #fbfafd !important;
+}
+
+.conversations-polish .conversation-context-pane > div:first-child {
+  background: rgba(251, 250, 253, 0.95) !important;
+}
+
+.conversations-polish .conversation-context-pane section {
+  background: transparent;
+}
+
+.conversations-polish .conversation-context-pane details,
+.conversations-polish .conversation-context-pane [class*='rounded-ui'] {
+  border-color: var(--inbox-border);
+}
+
+.conversations-polish .conversation-composer,
+.conversations-polish [class*='whatsapp'] {
+  --tw-ring-color: rgba(87, 67, 197, 0.14);
+}
+
+.conversations-polish textarea:focus,
+.conversations-polish input:focus,
+.conversations-polish select:focus {
+  border-color: var(--inbox-primary) !important;
+  box-shadow: 0 0 0 3px rgba(87, 67, 197, 0.1) !important;
+}
+
+.conversations-polish button:focus-visible,
+.conversations-polish a:focus-visible {
+  outline-color: rgba(87, 67, 197, 0.35) !important;
+}
+
+.conversations-polish .conversation-workspace header {
+  background: rgba(255, 255, 255, 0.97) !important;
+}
+
+.conversations-polish .conversation-workspace header h2 {
+  letter-spacing: -0.02em;
+}
+
+.conversations-polish .conversation-workspace [class*='bg-warning-soft'] {
+  border: 1px solid rgba(188, 117, 24, 0.18);
+}
+
+@media (min-width: 1171px) {
+  .conversations-polish .conversation-workspace {
+    grid-template-columns: 320px minmax(420px, 1fr) 320px !important;
+  }
+}
+
+@media (min-width: 1500px) {
+  .conversations-polish .conversation-workspace {
+    grid-template-columns: 332px minmax(500px, 1fr) 336px !important;
+  }
+}
+
+@media (max-width: 1170px) and (min-width: 621px) {
+  .conversations-polish .conversation-workspace {
+    grid-template-columns: 300px minmax(0, 1fr) !important;
+  }
+}
+
+@media (max-width: 620px) {
+  .conversations-polish .conversation-workspace {
+    border-radius: 12px !important;
+    box-shadow: none !important;
+  }
+
+  .conversations-polish .conversation-sidebar > div:first-child {
+    padding-left: 14px;
+    padding-right: 14px;
+  }
+}
+
+html.dark .conversations-polish {
+  --inbox-canvas: #15131d;
+  --inbox-surface: #1c1926;
+  --inbox-border: #342f43;
+  --inbox-text: #f3f1f7;
+  --inbox-muted: #b4afc1;
+  --inbox-primary: #806ee1;
+  --inbox-primary-soft: #2b2548;
+}
+
+html.dark .conversations-polish .conversation-workspace,
+html.dark .conversations-polish .conversation-sidebar,
+html.dark .conversations-polish .conversation-workspace header {
+  background: var(--inbox-surface) !important;
+  border-color: var(--inbox-border) !important;
+}
+
+html.dark .conversations-polish .conversation-sidebar > div:first-child,
+html.dark .conversations-polish .conversation-context-pane,
+html.dark .conversations-polish .conversation-context-pane > div:first-child {
+  background: #211d2c !important;
+}
+
+html.dark .conversations-polish .conversation-sidebar a[aria-current='page'],
+html.dark .conversations-polish .conversation-sidebar a[aria-current='true'] {
+  background: var(--inbox-primary-soft) !important;
+}
+
+/* Inbox intelligence still used the pre-Violet green brand vocabulary. Keep
+   semantic amber/error states unchanged, but normalize product-brand surfaces. */
+.conversations-polish [class*='text-[#216551]'] {
+  color: var(--inbox-primary) !important;
+}
+
+.conversations-polish [class*='text-[#203B31]'],
+.conversations-polish [class*='text-[#203b31]'] {
+  color: var(--inbox-text) !important;
+}
+
+.conversations-polish [class*='text-[#60736A]'],
+.conversations-polish [class*='text-[#60736a]'],
+.conversations-polish [class*='text-[#61736A]'],
+.conversations-polish [class*='text-[#61736a]'],
+.conversations-polish [class*='text-[#728179]'],
+.conversations-polish [class*='text-[#829087]'] {
+  color: var(--inbox-muted) !important;
+}
+
+.conversations-polish [class*='border-[#DDE7DF]'],
+.conversations-polish [class*='border-[#dde7df]'],
+.conversations-polish [class*='border-[#E8EEEA]'],
+.conversations-polish [class*='border-[#e8eeea]'] {
+  border-color: var(--inbox-border) !important;
+}
+
+.conversations-polish [class*='bg-[#F7FAF8]'],
+.conversations-polish [class*='bg-[#f7faf8]'] {
+  background: color-mix(in srgb, var(--inbox-primary-soft) 52%, var(--inbox-surface)) !important;
+}
+
+@media (max-width: 620px) {
+  .conversations-polish button[class*='h-7'][class*='w-7'] {
+    min-width: 36px !important;
+    min-height: 36px !important;
+  }
+}

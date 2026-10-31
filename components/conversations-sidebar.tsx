@@ -11,6 +11,9 @@ export type ConversationPriority = "urgent" | "high" | "normal" | "waiting";
 
 export type ConversationLeadSummary = {
   id: string;
+  personId?: string | null;
+  opportunityCount?: number;
+  relatedLeadIds?: string[];
   name: string;
   course: string;
   country: string;
@@ -121,7 +124,8 @@ export function ConversationsSidebar({
     const query = search.trim().toLowerCase();
 
     return leads.filter((lead) => {
-      const selectedOutsideScope = lead.id === selectedId;
+      const selectedOutsideScope =
+        lead.id === selectedId || Boolean(selectedId && lead.relatedLeadIds?.includes(selectedId));
       if (!matchesScope(lead, scope, currentUserId) && !selectedOutsideScope) return false;
 
       const snoozed = isSnoozed(lead, now);
@@ -188,7 +192,7 @@ export function ConversationsSidebar({
               Inbox queue
             </div>
             <div className="mt-1 text-[11.5px] leading-5 text-copy-muted">
-              Ownership, reply state and urgency in one queue
+              One Contact per row · Opportunity context stays selectable
             </div>
           </div>
           <span className="rounded-md bg-brand-50 px-2 py-1 text-[11px] font-semibold text-brand-700">
@@ -227,7 +231,7 @@ export function ConversationsSidebar({
             ref={searchRef}
             value={search}
             onChange={(event) => setSearch(event.target.value)}
-            placeholder="Search leads, course, owner…"
+            placeholder="Search contacts, course, owner…"
             className="h-10 w-full rounded-ui border border-line bg-surface-soft pl-9 pr-14 text-[13px] text-copy-strong outline-none transition placeholder:text-copy-subtle focus:border-brand-600 focus:bg-surface focus:ring-2 focus:ring-brand-700/10"
           />
           {!search ? (
@@ -296,7 +300,7 @@ export function ConversationsSidebar({
           </select>
         </label>
         <span className="col-span-2 text-right text-[10.5px] text-copy-subtle" aria-live="polite">
-          {filteredLeads.length} shown
+          {filteredLeads.length} contacts shown
         </span>
       </div>
 
@@ -339,16 +343,17 @@ export function ConversationsSidebar({
         ) : (
           filteredLeads.map((lead) => {
             const selected =
-              lead.id === selectedId && (!mobileViewport || explicitLeadId === lead.id);
+              (lead.id === selectedId || Boolean(selectedId && lead.relatedLeadIds?.includes(selectedId))) &&
+              (!mobileViewport || explicitLeadId === lead.id || Boolean(explicitLeadId && lead.relatedLeadIds?.includes(explicitLeadId)));
 
-            return <ConversationRow key={lead.id} lead={lead} selected={selected} now={now} />;
+            return <ConversationRow key={lead.personId || lead.id} lead={lead} selected={selected} now={now} />;
           })
         )}
       </div>
 
       <div className="shrink-0 border-t border-line px-4 py-2.5 text-[11px] text-copy-subtle">
         <span className="inline-flex items-center gap-1.5">
-          <UsersRound size={12} /> CRM ownership is shared · snooze is personal
+          <UsersRound size={12} /> Contact identity is shared · opportunity context remains lead-scoped
         </span>
       </div>
     </aside>
@@ -375,6 +380,7 @@ function ConversationRow({
   const waiting = lead.waitingSince && (lead.needsReply || lead.needsFirstContact)
     ? formatWaitingTime(lead.waitingSince, now)
     : null;
+  const otherOpportunities = Math.max(0, (lead.opportunityCount ?? 1) - 1);
 
   return (
     <Link
@@ -408,6 +414,11 @@ function ConversationRow({
               ) : null}
               {lead.name}
             </div>
+            {otherOpportunities > 0 ? (
+              <span className="shrink-0 rounded-full bg-brand-50 px-1.5 py-0.5 text-[9.5px] font-semibold text-brand-700">
+                +{otherOpportunities} opp
+              </span>
+            ) : null}
             {highPriority ? (
               <Flag
                 size={12}
@@ -566,35 +577,23 @@ function formatWaitingTime(value: string, now: number) {
   return `${Math.floor(hours / 24)}d`;
 }
 
-function formatSnooze(value: string | null) {
-  if (!value) return "Snoozed";
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "Snoozed";
-  return `Until ${new Intl.DateTimeFormat("en-IN", {
-    day: "numeric",
-    month: "short",
-    hour: "numeric",
-    minute: "2-digit",
-  }).format(date)}`;
-}
-
 function formatListTime(value: string, now: number) {
   const timestamp = new Date(value).getTime();
-  if (!Number.isFinite(timestamp) || now <= 0) return "—";
-
-  const diff = Math.max(0, now - timestamp);
+  if (!Number.isFinite(timestamp)) return "—";
+  const diff = Math.max(0, (now || Date.now()) - timestamp);
   const minutes = Math.floor(diff / 60_000);
-  if (minutes < 1) return "now";
+  if (minutes < 1) return "Now";
   if (minutes < 60) return `${minutes}m`;
-
   const hours = Math.floor(minutes / 60);
   if (hours < 24) return `${hours}h`;
-
   const days = Math.floor(hours / 24);
   if (days < 7) return `${days}d`;
+  return new Intl.DateTimeFormat("en-IN", { day: "numeric", month: "short" }).format(new Date(timestamp));
+}
 
-  return new Intl.DateTimeFormat("en-IN", {
-    day: "numeric",
-    month: "short",
-  }).format(new Date(timestamp));
+function formatSnooze(value: string | null) {
+  if (!value) return "Snoozed";
+  const timestamp = new Date(value);
+  if (Number.isNaN(timestamp.getTime())) return "Snoozed";
+  return `until ${new Intl.DateTimeFormat("en-IN", { day: "numeric", month: "short", hour: "numeric", minute: "2-digit" }).format(timestamp)}`;
 }

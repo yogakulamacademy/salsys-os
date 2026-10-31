@@ -1,0 +1,223 @@
+.course-management-scope {
+  --operations-accent: var(--brand-700);
+}
+
+.course-management-scope .card-pad {
+  border-color: var(--line);
+  background: var(--surface);
+  box-shadow: var(--shadow-xs);
+}
+
+.course-management-scope .eyebrow {
+  color: var(--brand-700);
+  letter-spacing: 0.12em;
+}
+
+.course-management-scope .section-title,
+.course-management-scope .text-slate-900,
+.course-management-scope .text-slate-800,
+.course-management-scope .text-slate-700 {
+  color: var(--copy-strong);
+}
+
+.course-management-scope .text-slate-600,
+.course-management-scope .text-slate-500,
+.course-management-scope .text-slate-400 {
+  color: var(--copy-muted);
+}
+
+.course-management-scope .border-slate-100,
+.course-management-scope .border-slate-200 {
+  border-color: var(--line);
+}
+
+.course-management-scope .bg-slate-50,
+.course-management-scope .bg-slate-50\/70,
+.course-management-scope .bg-slate-50\/80 {
+  background: var(--surface-muted);
+}
+
+.course-management-scope .input {
+  border-color: var(--line);
+  background: var(--surface);
+  color: var(--copy-strong);
+}
+
+.course-management-scope .input:focus {
+  border-color: var(--brand-700);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--brand-700) 12%, transparent);
+}
+
+.course-management-scope .btn-primary {
+  background: var(--brand-700);
+  border-color: var(--brand-700);
+  color: #fff;
+}
+
+.course-management-scope .btn-primary:hover {
+  background: var(--brand-900);
+  border-color: var(--brand-900);
+}
+
+.course-management-scope .btn-secondary {
+  border-color: var(--line);
+  background: var(--surface);
+  color: var(--copy-muted);
+}
+
+.course-management-scope .btn-secondary:hover {
+  border-color: color-mix(in srgb, var(--brand-700) 24%, var(--line));
+  background: var(--brand-50);
+  color: var(--copy-strong);
+}
+
+/* Summary metrics become operational signals, not oversized dashboard cards. */
+.course-management-scope > section:first-of-type {
+  gap: 10px;
+}
+
+.course-management-scope > section:first-of-type > div {
+  min-height: 118px;
+  border-color: var(--line);
+  background: var(--surface);
+  box-shadow: none;
+}
+
+.course-management-scope > section:first-of-type > div[class*='border-red'],
+.course-management-scope > section:first-of-type > div[class*='border-amber'] {
+  border-color: color-mix(in srgb, var(--warning) 34%, var(--line));
+  background: color-mix(in srgb, var(--warning) 5%, var(--surface));
+}
+
+/* Batch selector is the main control surface. */
+.course-management-scope .card-pad.mt-4:has(select) {
+  border-color: color-mix(in srgb, var(--brand-700) 22%, var(--line));
+  background: color-mix(in srgb, var(--brand-50) 30%, var(--surface));
+}
+
+.course-management-scope .card-pad.mt-4:has(select) > div:first-child {
+  align-items: center;
+}
+
+.course-management-scope .card-pad.mt-4:has(select) .field-label {
+  color: var(--copy-muted);
+  font-weight: 700;
+}
+
+.course-management-scope .card-pad.mt-4:has(select) > div[class*='mt-5'][class*='grid'] {
+  gap: 12px;
+}
+
+/* Nested create/edit forms should read as focused tasks. */
+.course-management-scope .rounded-2xl.border.border-slate-200.bg-slate-50\/70.p-5 {
+  border-color: color-mix(in srgb, var(--brand-700) 18%, var(--line));
+  background: var(--surface);
+  box-shadow: inset 3px 0 0 color-mix(in srgb, var(--brand-700) 76%, transparent);
+}
+
+/* Selected course details remain useful context but quieter than the batch editor. */
+.course-management-scope section.card-pad.mt-4:not(:has(form)) {
+  background: color-mix(in srgb, var(--surface-muted) 58%, var(--surface));
+}
+
+.course-management-scope section.card-pad.mt-4:not(:has(form)) .rounded-xl.border {
+  border-color: var(--line);
+  background: var(--surface);
+}
+
+/* The main selected-batch card gets stronger hierarchy. */
+.course-management-scope article.rounded-2xl.border {
+  position: relative;
+  overflow: hidden;
+  border-color: color-mix(in srgb, var(--brand-700) 24%, var(--line));
+  background: var(--surface);
+  box-shadow: 0 12px 34px color-mix(in srgb, var(--brand-700) 7%, transparent);
+}
+
+.course-management-scope article.rounded-2xl.border::before {
+  content: '';
+  position: absolute;
+  inset: 0 0 auto 0;
+  height: 3px;
+  background: var(--brand-700);
+}
+
+.course-management-scope article.rounded-2xl.border form button:not(.btn-primary):not(.btn-secondary) {
+  border-color: var(--line);
+  background: var(--surface);
+}
+
+.course-management-scope article.rounded-2xl.border form button[class*='text-red'] {
+  border-color: color-mix(in srgb, var(--error) 28%, var(--line));
+  color: var(--error);
+}
+
+.course-management-scope article.rounded-2xl.border form button[class*='text-emerald'] {
+  border-color: color-mix(in srgb, var(--success) 28%, var(--line));
+  color: var(--success);
+}
+
+/* Operating rules and audit trail are supporting evidence. */
+.course-management-scope aside > section.card-pad {
+  box-shadow: none;
+}
+
+.course-management-scope aside > section.card-pad:first-child {
+  background: color-mix(in srgb, var(--brand-50) 24%, var(--surface));
+}
+
+.course-management-scope aside > section.card-pad:last-child {
+  background: var(--surface-muted);
+}
+
+.course-management-scope aside .rounded-xl.border.border-slate-100,
+.course-management-scope aside .rounded-xl.bg-slate-50 {
+  border-color: var(--line);
+  background: var(--surface);
+}
+
+@media (max-width: 768px) {
+  .course-management-scope .card-pad.mt-4:has(select) > div:first-child {
+    align-items: flex-start;
+  }
+
+  .course-management-scope article.rounded-2xl.border {
+    padding: 16px;
+  }
+}
+
+@media (max-width: 640px) {
+  /* Keep batch-management actions compact instead of stacking four rows. */
+  .course-management-scope .card-pad.mt-4:has(select) > div:first-child > div:last-child {
+    width: 100%;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    padding-bottom: 4px;
+    scroll-snap-type: x proximity;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+  }
+
+  .course-management-scope .card-pad.mt-4:has(select) > div:first-child > div:last-child::-webkit-scrollbar {
+    display: none;
+  }
+
+  .course-management-scope .card-pad.mt-4:has(select) > div:first-child > div:last-child > button {
+    flex: 0 0 auto;
+    white-space: nowrap;
+    scroll-snap-align: start;
+  }
+
+  .course-management-scope .rounded-2xl.border.border-slate-200.bg-slate-50\/70.p-5 {
+    padding: 16px;
+  }
+
+  .course-management-scope .rounded-2xl.border.border-slate-200.bg-slate-50\/70.p-5 form > div:last-child {
+    width: 100%;
+  }
+
+  .course-management-scope .rounded-2xl.border.border-slate-200.bg-slate-50\/70.p-5 form > div:last-child .btn-primary,
+  .course-management-scope .rounded-2xl.border.border-slate-200.bg-slate-50\/70.p-5 form > div:last-child .btn-secondary {
+    min-height: 42px;
+  }
+}

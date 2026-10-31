@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 
 import {
   BadgeDollarSign,
+  CalendarCheck2,
   CircleUserRound,
   ClipboardCheck,
   Globe2,
@@ -26,13 +27,11 @@ export function PersonJourneyTimeline({
         <div>
           <div className="eyebrow">Journey</div>
 
-          <div className="section-title mt-1">
-            Customer timeline
-          </div>
+          <div className="section-title mt-1">Customer timeline</div>
 
           <p className="mt-1 max-w-3xl text-xs leading-5 text-slate-400">
             Canonical timeline across website activity, CRM changes, admissions
-            contact, conversations, enrollment and payments.
+            contact, conversations, booking, enrollment and payments.
           </p>
         </div>
 
@@ -133,17 +132,9 @@ export function PersonJourneyTimeline({
                           </span>
                         )}
 
-                        {event.web_session_id && (
-                          <span>
-                            Website session linked
-                          </span>
-                        )}
+                        {event.web_session_id && <span>Website session linked</span>}
 
-                        {event.lead_id && (
-                          <span>
-                            CRM lead linked
-                          </span>
-                        )}
+                        {event.lead_id && <span>CRM lead linked</span>}
                       </div>
 
                       {details.length > 0 && (
@@ -157,9 +148,7 @@ export function PersonJourneyTimeline({
                                 {detail.label}:
                               </strong>
 
-                              <span className="truncate">
-                                {detail.value}
-                              </span>
+                              <span className="truncate">{detail.value}</span>
                             </span>
                           ))}
                         </div>
@@ -201,14 +190,21 @@ function getEventPresentation(
   const category = String(event.event_category || "").toLowerCase();
   const type = String(event.event_type || "").toLowerCase();
 
+  if (type.includes("booking")) {
+    return {
+      label: "Booking",
+      icon: <CalendarCheck2 size={16} />,
+      iconClassName: "border-indigo-100 bg-indigo-50 text-indigo-700",
+      badgeClassName: "bg-indigo-50 text-indigo-700",
+    };
+  }
+
   if (category === "payment" || type.includes("payment")) {
     return {
       label: "Payment",
       icon: <BadgeDollarSign size={16} />,
-      iconClassName:
-        "border-amber-100 bg-amber-50 text-amber-700",
-      badgeClassName:
-        "bg-amber-50 text-amber-700",
+      iconClassName: "border-amber-100 bg-amber-50 text-amber-700",
+      badgeClassName: "bg-amber-50 text-amber-700",
     };
   }
 
@@ -216,10 +212,8 @@ function getEventPresentation(
     return {
       label: "Enrollment",
       icon: <ClipboardCheck size={16} />,
-      iconClassName:
-        "border-emerald-100 bg-emerald-50 text-emerald-700",
-      badgeClassName:
-        "bg-emerald-50 text-emerald-700",
+      iconClassName: "border-emerald-100 bg-emerald-50 text-emerald-700",
+      badgeClassName: "bg-emerald-50 text-emerald-700",
     };
   }
 
@@ -228,20 +222,16 @@ function getEventPresentation(
       return {
         label: "Message",
         icon: <MessageSquareText size={16} />,
-        iconClassName:
-          "border-violet-100 bg-violet-50 text-violet-700",
-        badgeClassName:
-          "bg-violet-50 text-violet-700",
+        iconClassName: "border-violet-100 bg-violet-50 text-violet-700",
+        badgeClassName: "bg-violet-50 text-violet-700",
       };
     }
 
     return {
       label: "Conversation",
       icon: <MessageCircle size={16} />,
-      iconClassName:
-        "border-violet-100 bg-violet-50 text-violet-700",
-      badgeClassName:
-        "bg-violet-50 text-violet-700",
+      iconClassName: "border-violet-100 bg-violet-50 text-violet-700",
+      badgeClassName: "bg-violet-50 text-violet-700",
     };
   }
 
@@ -249,10 +239,8 @@ function getEventPresentation(
     return {
       label: "Contact",
       icon: <PhoneCall size={16} />,
-      iconClassName:
-        "border-orange-100 bg-orange-50 text-orange-700",
-      badgeClassName:
-        "bg-orange-50 text-orange-700",
+      iconClassName: "border-orange-100 bg-orange-50 text-orange-700",
+      badgeClassName: "bg-orange-50 text-orange-700",
     };
   }
 
@@ -260,10 +248,8 @@ function getEventPresentation(
     return {
       label: "CRM",
       icon: <CircleUserRound size={16} />,
-      iconClassName:
-        "border-slate-200 bg-slate-100 text-slate-700",
-      badgeClassName:
-        "bg-slate-100 text-slate-700",
+      iconClassName: "border-slate-200 bg-slate-100 text-slate-700",
+      badgeClassName: "bg-slate-100 text-slate-700",
     };
   }
 
@@ -276,20 +262,16 @@ function getEventPresentation(
     return {
       label: "Digital",
       icon: <Globe2 size={16} />,
-      iconClassName:
-        "border-sky-100 bg-sky-50 text-sky-700",
-      badgeClassName:
-        "bg-sky-50 text-sky-700",
+      iconClassName: "border-sky-100 bg-sky-50 text-sky-700",
+      badgeClassName: "bg-sky-50 text-sky-700",
     };
   }
 
   return {
     label: pretty(category || "Journey"),
     icon: <Route size={16} />,
-    iconClassName:
-      "border-slate-200 bg-slate-50 text-slate-600",
-    badgeClassName:
-      "bg-slate-100 text-slate-600",
+    iconClassName: "border-slate-200 bg-slate-50 text-slate-600",
+    badgeClassName: "bg-slate-100 text-slate-600",
   };
 }
 
@@ -310,6 +292,7 @@ function getEventDetails(
     value: string;
   }> = [];
 
+  pushDetail(details, "Booking", metadata.booking_reference);
   pushDetail(details, "Page", metadata.landing_page);
   pushDetail(details, "Campaign", metadata.campaign);
   pushDetail(details, "Medium", metadata.medium);
@@ -317,14 +300,8 @@ function getEventDetails(
   pushDetail(details, "Status", metadata.status);
   pushDetail(details, "Stage", metadata.to_stage);
 
-  if (
-    metadata.amount != null &&
-    metadata.currency != null
-  ) {
-    const amount = formatMoney(
-      metadata.amount,
-      metadata.currency,
-    );
+  if (metadata.amount != null && metadata.currency != null) {
+    const amount = formatMoney(metadata.amount, metadata.currency);
 
     if (amount) {
       details.push({
@@ -345,11 +322,7 @@ function pushDetail(
   label: string,
   value: unknown,
 ) {
-  if (
-    value === null ||
-    value === undefined ||
-    value === ""
-  ) {
+  if (value === null || value === undefined || value === "") {
     return;
   }
 
@@ -359,10 +332,7 @@ function pushDetail(
   });
 }
 
-function formatMoney(
-  amount: unknown,
-  currency: unknown,
-) {
+function formatMoney(amount: unknown, currency: unknown) {
   const parsed = Number(amount);
   const code = String(currency ?? "")
     .trim()
@@ -377,22 +347,17 @@ function formatMoney(
   }
 
   try {
-    return new Intl.NumberFormat(
-      code === "INR" ? "en-IN" : "en-US",
-      {
-        style: "currency",
-        currency: code,
-        maximumFractionDigits: 0,
-      },
-    ).format(parsed);
+    return new Intl.NumberFormat(code === "INR" ? "en-IN" : "en-US", {
+      style: "currency",
+      currency: code,
+      maximumFractionDigits: 0,
+    }).format(parsed);
   } catch {
     return `${code} ${parsed}`;
   }
 }
 
-function formatCount(
-  value: number | string | null | undefined,
-) {
+function formatCount(value: number | string | null | undefined) {
   const parsed = Number(value ?? 0);
 
   return Number.isFinite(parsed)
@@ -402,9 +367,7 @@ function formatCount(
     : "0";
 }
 
-function formatDateTime(
-  value: string | null | undefined,
-) {
+function formatDateTime(value: string | null | undefined) {
   if (!value) {
     return "—";
   }
@@ -415,22 +378,17 @@ function formatDateTime(
     return value;
   }
 
-  return new Intl.DateTimeFormat(
-    "en-IN",
-    {
-      day: "numeric",
-      month: "short",
-      year: "numeric",
-      hour: "numeric",
-      minute: "2-digit",
-      timeZone: "Asia/Kolkata",
-    },
-  ).format(date);
+  return new Intl.DateTimeFormat("en-IN", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+    timeZone: "Asia/Kolkata",
+  }).format(date);
 }
 
-function pretty(
-  value: string | null | undefined,
-) {
+function pretty(value: string | null | undefined) {
   if (!value) {
     return "—";
   }
@@ -438,8 +396,5 @@ function pretty(
   return String(value)
     .replaceAll("_", " ")
     .replaceAll("-", " ")
-    .replace(
-      /\b\w/g,
-      (letter) => letter.toUpperCase(),
-    );
+    .replace(/\b\w/g, (letter) => letter.toUpperCase());
 }

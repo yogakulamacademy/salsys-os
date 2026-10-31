@@ -19,7 +19,6 @@ import {
   Gauge,
   GitBranch,
   Home,
-  Inbox,
   LineChart,
   ListTodo,
   LogOut,
@@ -181,19 +180,8 @@ export function AppShell({ children }: { children: ReactNode }) {
           items: [
             { href: "/leads", label: "My leads", icon: ContactRound },
             { href: "/pipeline", label: "My pipeline", icon: Boxes },
+            { href: "/conversations", label: "Inbox", icon: MessageSquareText },
             { href: "/follow-ups", label: "Follow-ups", icon: ListTodo },
-          ],
-        },
-        {
-          id: "inbox",
-          label: "Inbox",
-          icon: Inbox,
-          items: [
-            {
-              href: "/conversations",
-              label: "Conversations",
-              icon: MessageSquareText,
-            },
           ],
         },
       ];
@@ -215,6 +203,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         items: [
           { href: "/leads", label: "Leads", icon: ContactRound },
           { href: "/pipeline", label: "Pipeline", icon: Boxes },
+          { href: "/conversations", label: "Inbox", icon: MessageSquareText },
           { href: "/admissions", label: "Admissions", icon: ClipboardCheck },
           {
             href: "/contact-intelligence",
@@ -231,18 +220,6 @@ export function AppShell({ children }: { children: ReactNode }) {
                 },
               ]
             : []),
-        ],
-      },
-      {
-        id: "inbox",
-        label: "Inbox",
-        icon: Inbox,
-        items: [
-          {
-            href: "/conversations",
-            label: "Conversations",
-            icon: MessageSquareText,
-          },
         ],
       },
       {

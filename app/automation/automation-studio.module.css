@@ -23,14 +23,14 @@
   min-height: 40px;
   border-radius: var(--radius-md);
   background: var(--automation-brand);
-  box-shadow: 0 4px 12px rgba(33, 101, 81, 0.14);
+  box-shadow: 0 4px 12px color-mix(in srgb, var(--automation-brand) 14%, transparent);
   font-size: 13px;
   font-weight: 650;
 }
 
 .studio :global(.btn-primary:hover) {
   background: var(--app-brand-800);
-  box-shadow: 0 6px 16px rgba(33, 101, 81, 0.18);
+  box-shadow: 0 6px 16px color-mix(in srgb, var(--automation-brand) 18%, transparent);
 }
 
 .studio :global(.btn-secondary) {
@@ -76,8 +76,8 @@
 }
 
 .studio :global(.input:focus) {
-  border-color: rgba(33, 101, 81, 0.48);
-  box-shadow: 0 0 0 3px rgba(33, 101, 81, 0.08);
+  border-color: color-mix(in srgb, var(--automation-brand) 48%, transparent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--automation-brand) 9%, transparent);
 }
 
 .studio h1,
@@ -189,7 +189,7 @@
 }
 
 .studio :global(.ring-violet-500) {
-  --tw-ring-color: rgba(33, 101, 81, 0.42);
+  --tw-ring-color: color-mix(in srgb, var(--automation-brand) 42%, transparent);
 }
 
 .studio :global(.hover\:border-violet-200:hover) {
@@ -206,6 +206,101 @@
 .studio :global(.group:hover .group-hover\:text-violet-500),
 .studio :global(.group:hover .group-hover\:text-violet-600) {
   color: var(--automation-brand-dark);
+}
+
+/* Normalize legacy Automation Overview colors into the shared Violet Cloud system. */
+.studio :global(.border-\[\#e4eae6\]),
+.studio :global(.border-\[\#dce6e1\]),
+.studio :global(.border-\[\#edf1ed\]) {
+  border-color: var(--automation-line) !important;
+}
+
+.studio :global(.bg-\[\#f8faf8\]),
+.studio :global(.bg-\[\#f0f3f1\]),
+.studio :global(.bg-\[\#edf1ed\]) {
+  background: var(--app-surface-soft) !important;
+}
+
+.studio :global(.text-\[\#192e29\]) {
+  color: var(--automation-ink) !important;
+}
+
+.studio :global(.text-\[\#6d7c76\]),
+.studio :global(.text-\[\#69796f\]),
+.studio :global(.text-\[\#81917f\]) {
+  color: var(--automation-muted) !important;
+}
+
+.studio :global(.text-\[\#98a29b\]),
+.studio :global(.text-\[\#98a399\]),
+.studio :global(.text-\[\#91a096\]),
+.studio :global(.text-\[\#93a096\]),
+.studio :global(.text-\[\#9aa69e\]) {
+  color: var(--app-text-subtle) !important;
+}
+
+.studio :global(.text-\[\#216551\]) {
+  color: var(--automation-brand) !important;
+}
+
+.studio :global(.bg-\[\#82af91\]),
+.studio :global(.bg-\[\#69a87e\]) {
+  background: var(--automation-brand) !important;
+}
+
+/* The old promotional hero becomes a compact operator/safety banner. */
+.studio :global(.min-h-\[220px\].bg-\[\#163f35\]) {
+  min-height: 154px !important;
+  border: 1px solid color-mix(in srgb, var(--automation-brand) 24%, var(--automation-line));
+  background: var(--automation-brand-dark) !important;
+  box-shadow: 0 12px 28px color-mix(in srgb, var(--automation-brand) 10%, transparent);
+}
+
+.studio :global(.min-h-\[220px\].bg-\[\#163f35\]) > div:first-child {
+  padding: 20px 22px !important;
+}
+
+.studio :global(.min-h-\[220px\].bg-\[\#163f35\]) h2 {
+  margin-top: 8px !important;
+  font-size: 22px !important;
+  line-height: 1.2 !important;
+}
+
+.studio :global(.min-h-\[220px\].bg-\[\#163f35\]) p {
+  margin-top: 8px !important;
+  max-width: 34rem;
+}
+
+.studio :global(.min-h-\[220px\].bg-\[\#163f35\]) a {
+  margin-top: 14px !important;
+  border-color: color-mix(in srgb, #fff 24%, transparent) !important;
+  background: #fff !important;
+  color: var(--automation-brand-dark) !important;
+}
+
+.studio :global(.min-h-\[220px\].bg-\[\#163f35\]) > div:last-child {
+  min-height: 154px !important;
+  opacity: 0.92;
+}
+
+/* Readiness and execution surfaces should carry more weight than recipes. */
+.studio main > :global(.space-y-6) > section:nth-of-type(3) > div {
+  border-color: color-mix(in srgb, var(--automation-brand) 14%, var(--automation-line));
+  box-shadow: var(--shadow-xs);
+}
+
+.studio main > :global(.space-y-6) > section:nth-of-type(3) > div:last-child {
+  border-color: color-mix(in srgb, var(--automation-brand) 24%, var(--automation-line));
+  background: color-mix(in srgb, var(--automation-mint-soft) 28%, var(--automation-surface));
+}
+
+.studio main > :global(.space-y-6) > section:nth-of-type(4) {
+  padding-top: 2px;
+  opacity: 0.94;
+}
+
+.studio main > :global(.space-y-6) > section:nth-of-type(4) article {
+  box-shadow: none;
 }
 
 /* Keep operational metadata compact but readable and consistent with CRM. */
@@ -238,5 +333,9 @@
 @media (max-width: 1023px) {
   .studio {
     min-height: auto;
+  }
+
+  .studio :global(.min-h-\[220px\].bg-\[\#163f35\]) {
+    min-height: 0 !important;
   }
 }

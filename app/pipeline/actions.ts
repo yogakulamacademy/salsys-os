@@ -28,6 +28,7 @@ export type PipelineStageResult =
 export async function movePipelineLeadStage(
   leadId: string,
   newStage: PipelineStage,
+  reason?: string,
 ): Promise<PipelineStageResult> {
   if (!leadId) {
     return { ok: false, error: "Lead ID is required." };
@@ -35,6 +36,15 @@ export async function movePipelineLeadStage(
 
   if (!allowedStages.includes(newStage)) {
     return { ok: false, error: "Invalid pipeline stage." };
+  }
+
+  const normalizedReason = String(reason ?? "").trim();
+
+  if (newStage === "lost" && !normalizedReason) {
+    return {
+      ok: false,
+      error: "A reason is required before marking an opportunity Lost.",
+    };
   }
 
   if (useMockData) {
@@ -52,12 +62,20 @@ export async function movePipelineLeadStage(
     };
   }
 
+  const mutationReason =
+    normalizedReason ||
+    (newStage === "closed_won"
+      ? "Manually confirmed Closed Won via pipeline board"
+      : newStage === "enrolled"
+        ? "Manually confirmed Enrolled stage via pipeline board"
+        : "Moved via pipeline board");
+
   const { error } = await supabase.rpc("set_lead_stage", {
     p_lead_id: leadId,
     p_new_stage: newStage,
     p_changed_by_type: "human",
     p_changed_by_id: claims.claims.sub,
-    p_reason: "Moved via pipeline board",
+    p_reason: mutationReason,
   });
 
   if (error) {

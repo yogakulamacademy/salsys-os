@@ -33,41 +33,41 @@ type NavigationGroup = {
 
 const groups: NavigationGroup[] = [
   {
-    label: 'Workspace',
+    label: 'Build',
     items: [
       { href: '/automation', label: 'Overview', icon: LayoutDashboard },
-      { href: '/automation/flow-builder', label: 'Flow builder', icon: Workflow },
-      { href: '/automation/triggers', label: 'Smart triggers', icon: GitBranch },
-      { href: '/automation/recipes', label: 'Starter recipes', icon: Sparkles },
+      { href: '/automation/flow-builder', label: 'Workflows', icon: Workflow },
+      { href: '/automation/triggers', label: 'Triggers', icon: GitBranch },
+      { href: '/automation/recipes', label: 'Recipes', icon: Sparkles },
     ],
   },
   {
-    label: 'Channels',
+    label: 'Messaging',
     items: [
-      { href: '/automation/whatsapp', label: 'WhatsApp ops', icon: MessageCircleMore },
-      { href: '/automation/templates', label: 'WhatsApp templates', icon: MessageSquareText },
-      { href: '/automation/whatsapp/growth', label: 'WhatsApp growth', icon: BarChart3 },
-      { href: '/automation/instagram', label: 'Instagram ops', icon: Instagram },
+      { href: '/automation/templates', label: 'Templates', icon: MessageSquareText },
+      { href: '/automation/whatsapp', label: 'WhatsApp', icon: MessageCircleMore },
+      { href: '/automation/instagram', label: 'Instagram', icon: Instagram },
+      { href: '/automation/whatsapp/growth', label: 'WhatsApp Growth', icon: BarChart3 },
     ],
   },
   {
-    label: 'Governance',
+    label: 'Control',
     items: [
-      { href: '/automation/approvals', label: 'Approval queue', icon: ListChecks },
-      { href: '/automation/pilot', label: 'Pilot control', icon: LockKeyhole },
-      { href: '/automation/readiness', label: 'Launch readiness', icon: ShieldCheck },
+      { href: '/automation/approvals', label: 'Approvals', icon: ListChecks },
+      { href: '/automation/readiness', label: 'Readiness', icon: ShieldCheck },
+      { href: '/automation/pilot', label: 'Pilot Control', icon: LockKeyhole },
     ],
   },
   {
-    label: 'Observability',
+    label: 'Monitor',
     items: [
-      { href: '/automation/runs', label: 'Runtime monitor', icon: Activity },
-      { href: '/automation/audits', label: 'Provider & audit', icon: FileSearch },
+      { href: '/automation/runs', label: 'Runs', icon: Activity },
+      { href: '/automation/audits', label: 'Audits', icon: FileSearch },
     ],
   },
   {
     label: 'Settings',
-    items: [{ href: '/automation/settings', label: 'Automation settings', icon: Settings2 }],
+    items: [{ href: '/automation/settings', label: 'Automation Settings', icon: Settings2 }],
   },
 ];
 

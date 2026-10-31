@@ -154,6 +154,48 @@ jobs:
       - name: Verify PH-5 Recovery Readiness Contract
         run: npm run verify:recovery-readiness
 
+      - name: Verify Ad Activation Foundation Contracts
+        run: npm run verify:ad-activation-foundation
+
+      - name: Verify Ad Activation CRM Mapping Contracts
+        run: npm run verify:ad-activation-crm-mapping
+
+      - name: Verify Ad Activation Membership Writer Contracts
+        run: npm run verify:ad-activation-writer
+
+      - name: Verify Ad Activation Claim and Pre-Send Guard Contracts
+        run: npm run verify:ad-activation-delivery-guard
+
+      - name: Verify Ad Activation Delivery Finalization Contracts
+        run: npm run verify:ad-activation-delivery-finalize
+
+      - name: Verify Ad Activation Provider Dry-Run Contracts
+        run: npm run verify:ad-activation-provider-dryrun
+
+      - name: Verify Ad Activation Provider Readiness Contracts
+        run: npm run verify:ad-activation-provider-readiness
+
+      - name: Verify Ad Activation Credential and Transport Boundary Contracts
+        run: npm run verify:ad-activation-transport-boundary
+
+      - name: Verify Ad Activation Execution Readiness Contracts
+        run: npm run verify:ad-activation-execution-readiness
+
+      - name: Verify Ad Activation Worker Simulation Contracts
+        run: npm run verify:ad-activation-worker-simulation
+
+      - name: Verify Ad Activation Configured Simulation and Telemetry Contracts
+        run: npm run verify:ad-activation-simulation-runner
+
+      - name: Verify Ad Activation Deterministic Fixtures and Run-History Contracts
+        run: npm run verify:ad-activation-simulation-fixtures-history
+
+      - name: Verify Ad Activation Audience Rule Preview Contracts
+        run: npm run verify:ad-activation-rule-preview
+
+      - name: Verify Ad Activation Custom Audience Rule Builder Contracts
+        run: npm run verify:ad-activation-rule-builder
+
       - name: Typecheck
         run: npm run typecheck
 
