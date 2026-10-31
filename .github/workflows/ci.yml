@@ -169,6 +169,9 @@ jobs:
       - name: Verify Ad Activation Delivery Finalization Contracts
         run: npm run verify:ad-activation-delivery-finalize
 
+      - name: Verify Ad Activation Provider Dry-Run Contracts
+        run: npm run verify:ad-activation-provider-dryrun
+
       - name: Typecheck
         run: npm run typecheck
 
