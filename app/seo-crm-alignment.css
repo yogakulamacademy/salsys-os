@@ -1,0 +1,23 @@
+/* SEO overview alignment with the SalsysOS CRM visual system. */
+.seo-polish{--seo-brand:var(--app-brand-700);--seo-line:var(--app-border);--seo-ink:var(--app-text-strong);--seo-muted:var(--app-text-muted)}
+.seo-polish .ui-page-kicker,.seo-polish .eyebrow{color:var(--seo-brand)!important;font-weight:700!important;letter-spacing:.12em!important}
+.seo-polish .ui-page-title,.seo-polish .section-title{color:var(--seo-ink)!important;font-weight:650!important;letter-spacing:-.02em}
+.seo-polish .ui-page-description{max-width:70ch;color:var(--seo-muted)!important}
+.seo-polish .seo-range-meta>span:first-child{border-color:var(--seo-line)!important;border-radius:var(--radius-md)!important;color:var(--app-text-muted)!important;background:var(--app-surface)!important;box-shadow:var(--shadow-xs)}
+.seo-polish .seo-range-meta strong{color:var(--app-text-strong)!important}
+.seo-polish .card-pad,.seo-polish .seo-sync-card{border:1px solid var(--seo-line)!important;border-radius:var(--radius-xl)!important;background:var(--app-surface)!important;box-shadow:var(--shadow-xs)!important}
+.seo-polish .card-pad:hover{border-color:var(--app-border-strong)!important}
+.seo-polish .seo-search-performance,.seo-polish .seo-crm-attribution{overflow:hidden}
+.seo-polish .seo-search-performance [class*="bg-emerald"],.seo-polish .seo-search-performance [class*="bg-green"],.seo-polish .seo-search-performance [class*="bg-lime"]{background:var(--app-brand-50)!important}
+.seo-polish .seo-search-performance [class*="text-emerald"],.seo-polish .seo-search-performance [class*="text-green"],.seo-polish .seo-search-performance [class*="text-lime"]{color:var(--app-brand-700)!important}
+.seo-polish .seo-crm-attribution [class*="bg-emerald"],.seo-polish .seo-crm-attribution [class*="bg-green"],.seo-polish .seo-crm-attribution [class*="bg-lime"]{background:var(--app-brand-50)!important}
+.seo-polish .seo-crm-attribution [class*="text-emerald"],.seo-polish .seo-crm-attribution [class*="text-green"],.seo-polish .seo-crm-attribution [class*="text-lime"]{color:var(--app-brand-700)!important}
+.seo-polish .seo-data-table,.seo-polish table{color:var(--app-text)!important}
+.seo-polish table thead,.seo-polish table th{background:var(--app-surface-soft)!important;color:var(--app-text-subtle)!important}
+.seo-polish table th{border-color:var(--seo-line)!important;font-size:9px!important;font-weight:650!important;letter-spacing:.05em!important}
+.seo-polish table td{border-color:var(--seo-line)!important}
+.seo-polish table tbody tr:hover{background:var(--app-surface-soft)!important}
+.seo-polish [class*="rounded-full"][class*="bg-violet"],.seo-polish [class*="rounded-full"][class*="bg-purple"]{background:var(--app-brand-50)!important;color:var(--app-brand-700)!important}
+.seo-polish input,.seo-polish select{border-color:var(--seo-line)!important;border-radius:var(--radius-md)!important;background:var(--app-surface)!important;color:var(--app-text)!important}
+.seo-polish input:focus,.seo-polish select:focus{border-color:var(--app-brand-300)!important;box-shadow:0 0 0 3px color-mix(in srgb,var(--app-brand-500) 10%,transparent)!important;outline:none!important}
+.seo-polish .seo-warning{border-color:color-mix(in srgb,var(--app-warning) 25%,var(--seo-line))!important;border-radius:var(--radius-md)!important;color:var(--app-warning)!important;background:var(--app-warning-soft)!important}
