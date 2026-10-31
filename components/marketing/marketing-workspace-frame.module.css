@@ -280,23 +280,17 @@
   to { opacity: 1; transform: translateY(0); }
 }
 
-/* The AppShell command bar must remain flush to the viewport on Growth pages.
- * The local .studio class inside :has() keeps these selectors valid in a CSS
- * Module while still targeting the AppShell elements outside this component. */
+/* Keep the AppShell command bar flush to the viewport on Growth pages.
+ * Growth owns its own secondary workspace navigation, so the command bar must
+ * always begin after the 64px primary icon rail rather than inheriting the
+ * AppShell's 304px secondary-navigation offset. */
 @media (min-width: 1024px) {
   :global(body):has(.studio) :global(header.sticky.top-0) {
     position: fixed !important;
     top: 0 !important;
+    left: 4rem !important;
     right: 0;
     width: auto;
-  }
-
-  :global(body):has(.studio) :global(div[class*="lg:pl-16"] > header.sticky.top-0) {
-    left: 4rem;
-  }
-
-  :global(body):has(.studio) :global(div[class*="lg:pl-[304px]"] > header.sticky.top-0) {
-    left: 19rem;
   }
 
   :global(body):has(.studio) :global(main) {
