@@ -21,6 +21,7 @@ import {
   UsersRound,
   Target,
 } from 'lucide-react';
+import { useLayoutEffect, useRef, useState } from 'react';
 
 type NavigationItem = {
   href: string;
@@ -32,6 +33,11 @@ type NavigationItem = {
 type NavigationGroup = {
   label: string;
   items: NavigationItem[];
+};
+
+type FixedNavigationGeometry = {
+  left: number;
+  width: number;
 };
 
 const groups: NavigationGroup[] = [
@@ -164,6 +170,47 @@ export function MarketingNavigation() {
   const current = groups
     .flatMap((group) => group.items)
     .find((item) => isActive(pathname, item.href));
+  const desktopSpacerRef = useRef<HTMLDivElement | null>(null);
+  const [geometry, setGeometry] = useState<FixedNavigationGeometry | null>(null);
+
+  useLayoutEffect(() => {
+    const spacer = desktopSpacerRef.current;
+    if (!spacer) return;
+
+    let frame = 0;
+
+    const measure = () => {
+      cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(() => {
+        const rect = spacer.getBoundingClientRect();
+        setGeometry((previous) => {
+          const next = { left: rect.left, width: rect.width };
+          if (
+            previous &&
+            Math.abs(previous.left - next.left) < 0.5 &&
+            Math.abs(previous.width - next.width) < 0.5
+          ) {
+            return previous;
+          }
+          return next;
+        });
+      });
+    };
+
+    measure();
+
+    const resizeObserver = new ResizeObserver(measure);
+    resizeObserver.observe(spacer);
+    window.addEventListener('resize', measure);
+    document.addEventListener('transitionend', measure, true);
+
+    return () => {
+      cancelAnimationFrame(frame);
+      resizeObserver.disconnect();
+      window.removeEventListener('resize', measure);
+      document.removeEventListener('transitionend', measure, true);
+    };
+  }, []);
 
   return (
     <>
@@ -188,22 +235,36 @@ export function MarketingNavigation() {
         </div>
       </details>
 
-      <aside
-        className="hidden min-h-[calc(100vh-7rem)] border-r border-line pr-3 lg:block"
-        aria-label="Growth navigation"
-      >
-        <div className="sticky top-20 pb-6">
-          <div className="mb-4 px-3 pt-1">
-            <div className="text-[18px] font-semibold tracking-[-0.025em] text-copy-strong">
-              Growth
+      <div
+        ref={desktopSpacerRef}
+        className="relative hidden min-h-[calc(100vh-7rem)] lg:block"
+        aria-hidden="true"
+      />
+
+      {geometry ? (
+        <aside
+          className="fixed z-20 hidden border-r border-line bg-[#f7f8fa] pr-3 lg:block dark:bg-slate-950"
+          aria-label="Growth navigation"
+          style={{
+            left: `${geometry.left}px`,
+            top: '88px',
+            width: `${geometry.width}px`,
+            maxHeight: 'calc(100vh - 88px)',
+          }}
+        >
+          <div className="pb-6">
+            <div className="mb-4 px-3 pt-1">
+              <div className="text-[18px] font-semibold tracking-[-0.025em] text-copy-strong">
+                Growth
+              </div>
+              <p className="mt-1 max-w-[195px] text-[12px] leading-[18px] text-copy-muted">
+                Connect acquisition, conversion and revenue in one growth workspace.
+              </p>
             </div>
-            <p className="mt-1 max-w-[195px] text-[12px] leading-[18px] text-copy-muted">
-              Connect acquisition, conversion and revenue in one growth workspace.
-            </p>
+            <NavigationLinks />
           </div>
-          <NavigationLinks />
-        </div>
-      </aside>
+        </aside>
+      ) : null}
     </>
   );
 }
