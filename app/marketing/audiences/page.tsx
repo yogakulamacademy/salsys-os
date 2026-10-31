@@ -13,6 +13,7 @@ import {
 
 import { AudienceRuleBuilderDrawer } from '@/components/marketing/audience-rule-builder-drawer';
 import { findSafeAudiencePreviewRule, previewAudienceRule, SAFE_AUDIENCE_PREVIEW_RULES } from '@/lib/ad-activation/audience-rule-preview';
+import { getAudienceTrendMap, type AudienceTrend } from '@/lib/marketing/audience-history';
 import { getLiveAudienceIntelligence, type LiveAudienceInsight } from '@/lib/marketing/live-audience-intelligence';
 import { requirePrivilegedWorkspaceAccess } from '@/lib/route-access';
 import { createAdminClient } from '@/lib/supabase/admin';
@@ -73,11 +74,13 @@ export default async function AudienceIntelligencePage({ searchParams }: { searc
     getLiveAudienceIntelligence(workspace.organizationId),
     previewAudienceRule({ organizationId: workspace.organizationId, rule: previewRule }),
   ]);
+  const trendMap = await getAudienceTrendMap(workspace.organizationId, intelligence.segments);
 
   const selectedSegment =
     intelligence.segments.find((segment) => segment.id === params.segment) ??
     intelligence.segments.find((segment) => segment.matchedPeople > 0) ??
     intelligence.segments[0];
+  const selectedTrend = trendMap[selectedSegment.id];
   const highIntent = intelligence.segments.find((segment) => segment.id === 'high-intent-prospects');
   const connectedDestinations = activation.destinations.filter((destination) => destination.status === 'active').length;
   const providerTransportEnabled = false;
@@ -120,7 +123,7 @@ export default async function AudienceIntelligencePage({ searchParams }: { searc
           <div>
             <div className="eyebrow">Live adaptive audiences</div>
             <h2 className={styles.panelTitle}>Who deserves attention right now</h2>
-            <p className={styles.panelSubtitle}>Counts are recalculated from current CRM state on every request. No membership or provider write is required to produce this intelligence.</p>
+            <p className={styles.panelSubtitle}>Counts are recalculated from current CRM state on every request. Daily aggregate snapshots provide truthful movement once a prior-day baseline exists.</p>
           </div>
           <span className={styles.readOnlyBadge}>Live · read-only</span>
         </div>
@@ -129,14 +132,14 @@ export default async function AudienceIntelligencePage({ searchParams }: { searc
           <div className={liveStyles.liveHeader}>
             <div>
               <h2>Adaptive segment monitor</h2>
-              <p>Use the cards to move from a broad audience signal into the current source, course, location and stage mix.</p>
+              <p>Use the cards to move from a broad audience signal into the current source, course, location, stage and day-over-day movement.</p>
             </div>
             <div className={liveStyles.liveStamp}>Evaluated {formatTime(intelligence.generatedAt)}</div>
           </div>
 
           <div className={liveStyles.segmentGrid}>
             {intelligence.segments.map((segment) => (
-              <SegmentCard key={segment.id} segment={segment} active={segment.id === selectedSegment.id} />
+              <SegmentCard key={segment.id} segment={segment} trend={trendMap[segment.id]} active={segment.id === selectedSegment.id} />
             ))}
           </div>
 
@@ -172,7 +175,7 @@ export default async function AudienceIntelligencePage({ searchParams }: { searc
                   <ActionFact label="Top source" value={selectedSegment.topSource || 'Unknown'} />
                   <ActionFact label="Top course" value={selectedSegment.topCourse || 'No course'} />
                   <ActionFact label="Top location" value={selectedSegment.topLocation || 'No location'} />
-                  <ActionFact label="Trend" value="History not collected yet" />
+                  <ActionFact label="Trend" value={formatTrend(selectedTrend)} />
                 </div>
               </div>
             </aside>
@@ -290,7 +293,7 @@ export default async function AudienceIntelligencePage({ searchParams }: { searc
   );
 }
 
-function SegmentCard({ segment, active }: { segment: LiveAudienceInsight; active: boolean }) {
+function SegmentCard({ segment, trend, active }: { segment: LiveAudienceInsight; trend: AudienceTrend; active: boolean }) {
   const readinessClass = segment.readiness === 'review_ready'
     ? liveStyles.readiness
     : segment.readiness === 'identity_gap'
@@ -311,7 +314,7 @@ function SegmentCard({ segment, active }: { segment: LiveAudienceInsight; active
         <Signal label="Course" value={segment.topCourse || 'No course'} />
         <Signal label="Location" value={segment.topLocation || 'No location'} />
       </div>
-      <div className={liveStyles.segmentFooter}><span>{segment.matchedLeads.toLocaleString()} lead opportunities</span><span>{segment.identityCoveragePct}% identity linked</span></div>
+      <div className={liveStyles.segmentFooter}><span>{segment.matchedLeads.toLocaleString()} lead opportunities</span><span>{formatTrendShort(trend)}</span></div>
     </a>
   );
 }
@@ -367,6 +370,20 @@ async function loadWorkspace(organizationId: string): Promise<WorkspaceData> {
     health: available ? ((healthResult.data ?? null) as HealthRow | null) : null,
     loadError: errors.length ? errors.map((error: { message: string }) => error.message).join(' · ') : null,
   };
+}
+
+function formatTrend(trend: AudienceTrend | undefined) {
+  if (!trend || trend.direction === 'unavailable' || trend.deltaPeople == null) return 'Baseline collecting';
+  if (trend.direction === 'stable') return 'Stable · no change vs prior day';
+  const sign = trend.deltaPeople > 0 ? '+' : '';
+  const pct = trend.deltaPct == null ? '' : ` (${trend.deltaPct > 0 ? '+' : ''}${trend.deltaPct}%)`;
+  return `${trend.direction === 'up' ? 'Growing' : 'Shrinking'} · ${sign}${trend.deltaPeople} people${pct} vs prior day`;
+}
+
+function formatTrendShort(trend: AudienceTrend | undefined) {
+  if (!trend || trend.direction === 'unavailable' || trend.deltaPeople == null) return 'Baseline collecting';
+  if (trend.direction === 'stable') return 'Stable vs prior day';
+  return `${trend.direction === 'up' ? '↑' : '↓'} ${trend.deltaPeople > 0 ? '+' : ''}${trend.deltaPeople} vs prior day`;
 }
 
 function safeNumber(value: unknown) {
