@@ -1,6 +1,16 @@
 import Link from "next/link";
-import { ArrowRight, ContactRound, UserRound } from "lucide-react";
+import {
+  AlertTriangle,
+  ArrowRight,
+  Clock3,
+  ContactRound,
+  MessageSquareText,
+  MessagesSquare,
+  ShieldCheck,
+  UserRound,
+} from "lucide-react";
 
+import { DecisionMetricCard } from "@/components/intelligence/decision-metric-card";
 import { createClient } from "@/lib/supabase/server";
 
 type ContactPerformanceMode = "response" | "communication";
@@ -86,6 +96,7 @@ export async function ContactPerformanceWorkspace({ mode }: { mode: ContactPerfo
 
   const accessibleLeads = numberValue(overview?.accessible_leads);
   const contactedLeads = numberValue(overview?.contacted_leads);
+  const neverContacted = numberValue(overview?.never_contacted_leads);
   const totalContacts = numberValue(overview?.total_contacts);
   const successfulContacts = numberValue(overview?.successful_contacts);
   const coveragePct = accessibleLeads > 0 ? (contactedLeads / accessibleLeads) * 100 : null;
@@ -120,11 +131,41 @@ export async function ContactPerformanceWorkspace({ mode }: { mode: ContactPerfo
 
       {mode === "response" ? (
         <>
-          <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-            <Kpi label="Contact coverage" value={coveragePct == null ? "—" : `${coveragePct.toFixed(1)}%`} detail={accessibleLeads > 0 ? `${contactedLeads} of ${accessibleLeads} visible leads` : "No accessible leads"} />
-            <Kpi label="Median first response" value={formatMinutes(overview?.median_first_response_minutes)} detail="Recorded first outbound contacts" />
-            <Kpi label="Median inbound response" value={formatMinutes(overview?.median_first_inbound_response_minutes)} detail="Recorded inbound-response evidence" />
-            <Kpi label="Never contacted" value={formatNumber(overview?.never_contacted_leads)} detail="Visible leads without structured contact" attention={numberValue(overview?.never_contacted_leads) > 0} />
+          <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4" aria-label="Response performance metrics">
+            <DecisionMetricCard
+              icon={<ShieldCheck size={16} />}
+              label="Contact coverage"
+              value={coveragePct == null ? "—" : `${coveragePct.toFixed(1)}%`}
+              detail={accessibleLeads > 0 ? `${contactedLeads} of ${accessibleLeads} visible leads` : "No accessible leads"}
+              evidenceLabel="Structured contact logs"
+              definition="Share of visible leads with at least one structured contact record. Historical imports may be incomplete."
+            />
+            <DecisionMetricCard
+              icon={<Clock3 size={16} />}
+              label="Median first response"
+              value={formatMinutes(overview?.median_first_response_minutes)}
+              detail="Recorded first outbound contacts"
+              evidenceLabel="Observed response evidence"
+              definition="Median elapsed time to the first recorded outbound contact where the required timestamps are available."
+            />
+            <DecisionMetricCard
+              icon={<Clock3 size={16} />}
+              label="Median inbound response"
+              value={formatMinutes(overview?.median_first_inbound_response_minutes)}
+              detail="Recorded inbound-response evidence"
+              evidenceLabel="Observed response evidence"
+              definition="Median recorded response time following inbound contact. Missing historical events remain unknown."
+            />
+            <DecisionMetricCard
+              icon={<AlertTriangle size={16} />}
+              label="Never contacted"
+              value={formatNumber(neverContacted)}
+              detail="Visible leads without structured contact"
+              tone={neverContacted > 0 ? "warning" : "positive"}
+              statusLabel={neverContacted > 0 ? "Attention" : "Clear"}
+              evidenceLabel="Coverage gap"
+              definition="Visible leads with no structured contact event in the available CRM evidence. This does not prove no contact happened outside the system."
+            />
           </section>
 
           <section className="grid gap-5 xl:grid-cols-[minmax(0,1.05fr)_minmax(320px,.95fr)]">
@@ -166,11 +207,39 @@ export async function ContactPerformanceWorkspace({ mode }: { mode: ContactPerfo
         </>
       ) : (
         <>
-          <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-            <Kpi label="Inbound contacts" value={formatNumber(overview?.inbound_contacts)} detail="Recorded inbound events" />
-            <Kpi label="Outbound contacts" value={formatNumber(overview?.outbound_contacts)} detail="Recorded outbound events" />
-            <Kpi label="Total contacts" value={formatNumber(totalContacts)} detail="Structured contact events" />
-            <Kpi label="Marked successful" value={markedSuccessPct == null ? "—" : `${markedSuccessPct.toFixed(1)}%`} detail="CRM contact outcome label, not sales conversion" />
+          <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4" aria-label="Communication performance metrics">
+            <DecisionMetricCard
+              icon={<MessageSquareText size={16} />}
+              label="Inbound contacts"
+              value={formatNumber(overview?.inbound_contacts)}
+              detail="Recorded inbound events"
+              evidenceLabel="Communication activity"
+              definition="Structured contact events recorded as inbound. Volume is descriptive and is not a performance score."
+            />
+            <DecisionMetricCard
+              icon={<MessageSquareText size={16} />}
+              label="Outbound contacts"
+              value={formatNumber(overview?.outbound_contacts)}
+              detail="Recorded outbound events"
+              evidenceLabel="Communication activity"
+              definition="Structured contact events recorded as outbound. Higher volume is not automatically better."
+            />
+            <DecisionMetricCard
+              icon={<MessagesSquare size={16} />}
+              label="Total contacts"
+              value={formatNumber(totalContacts)}
+              detail="Structured contact events"
+              evidenceLabel="Communication activity"
+              definition="Total available structured inbound and outbound contact events in the current contact-intelligence view."
+            />
+            <DecisionMetricCard
+              icon={<ShieldCheck size={16} />}
+              label="Marked successful"
+              value={markedSuccessPct == null ? "—" : `${markedSuccessPct.toFixed(1)}%`}
+              detail="CRM contact outcome label, not sales conversion"
+              evidenceLabel="Contact outcome label"
+              definition="Share of structured contact events explicitly marked successful in the CRM. It must not be interpreted as lead or sales conversion."
+            />
           </section>
 
           <section className="grid gap-5 xl:grid-cols-[minmax(0,.85fr)_minmax(0,1.15fr)]">
@@ -275,16 +344,6 @@ function Panel({ title, eyebrow, value, children }: { title: string; eyebrow: st
       </div>
       {children}
     </section>
-  );
-}
-
-function Kpi({ label, value, detail, attention = false }: { label: string; value: string; detail: string; attention?: boolean }) {
-  return (
-    <div className="rounded-2xl border border-line bg-surface p-4">
-      <div className="text-[11px] font-semibold text-copy-muted">{label}</div>
-      <div className={`mt-2 text-2xl font-semibold tracking-[-0.03em] ${attention ? "text-orange-600" : "text-copy-strong"}`}>{value}</div>
-      <div className="mt-1 text-xs text-copy-muted">{detail}</div>
-    </div>
   );
 }
 
