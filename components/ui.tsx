@@ -10,6 +10,7 @@ import {
   DecisionMetricCard,
   type DecisionMetricCardProps,
 } from '@/components/intelligence/decision-metric-card';
+import { resolveMetricStatus } from '@/lib/metric-definitions';
 import { Channel, IntentLevel, PipelineStage } from '@/types/crm';
 
 export function PageHeader({ eyebrow, title, description, actions }: { eyebrow?: string; title: string; description?: string; actions?: ReactNode }) {
@@ -33,8 +34,8 @@ export function StatCard({
   icon,
   href,
   comparisonLabel,
-  deltaDirection = 'neutral',
-  tone = 'neutral',
+  deltaDirection,
+  tone,
   statusLabel,
   definition,
   evidenceLabel,
@@ -54,6 +55,8 @@ export function StatCard({
   evidenceLabel?: string;
   trend?: number[];
 }) {
+  const canonicalStatus = resolveMetricStatus(label, value);
+
   return (
     <DecisionMetricCard
       label={label}
@@ -64,8 +67,8 @@ export function StatCard({
       delta={delta}
       comparisonLabel={comparisonLabel}
       deltaDirection={deltaDirection}
-      tone={tone}
-      statusLabel={statusLabel}
+      tone={tone ?? canonicalStatus?.tone ?? 'neutral'}
+      statusLabel={statusLabel ?? canonicalStatus?.statusLabel}
       definition={definition}
       evidenceLabel={evidenceLabel}
       trend={trend}
