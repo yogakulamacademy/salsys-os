@@ -100,7 +100,7 @@ export function DecisionMetricCard({
   evidenceLabel,
   evidenceState,
   trend,
-  inspectable = false,
+  inspectable,
 }: DecisionMetricCardProps) {
   const canonical = resolveMetricDefinition(label);
   const effectiveDefinition = definition ?? canonical?.definition;
@@ -112,6 +112,9 @@ export function DecisionMetricCard({
   const effectiveDeltaDirection =
     deltaDirection ?? canonical?.deltaDirection ?? "neutral";
   const effectiveHref = href ?? canonical?.href;
+  const shouldInspect =
+    inspectable ??
+    Boolean(effectiveDefinition || effectiveEvidenceLabel || effectiveEvidenceState);
   const styles = toneStyles[tone];
   const deltaState = getDeltaState(delta, effectiveDeltaDirection);
   const evidenceClassName = effectiveEvidenceState
@@ -167,7 +170,7 @@ export function DecisionMetricCard({
               {statusLabel}
             </span>
           ) : null}
-          {inspectable ? (
+          {shouldInspect ? (
             <PanelRightOpen
               size={14}
               className="text-copy-subtle transition group-hover:text-brand-700"
@@ -238,7 +241,7 @@ export function DecisionMetricCard({
   const className =
     "group relative block overflow-hidden rounded-card border border-line bg-surface p-4 shadow-sm transition duration-200 hover:-translate-y-[1px] hover:border-line-strong hover:shadow-panel";
 
-  if (inspectable) {
+  if (shouldInspect) {
     return (
       <MetricInvestigatorCard
         className={className}
