@@ -29,10 +29,12 @@ const instagramActions = read('app/conversations/instagram-actions.ts');
 const copilot = read('components/conversation-copilot.tsx');
 const copilotActions = read('app/conversations/copilot-actions.ts');
 const followupsData = read('lib/followups-data.ts');
+const commandCenterPage = read('app/crm/page.tsx');
 const workQueuePage = read('app/work-queue/page.tsx');
 const workQueueMinePage = read('app/work-queue/mine/page.tsx');
 const workQueueTeamPage = read('app/work-queue/team/page.tsx');
 const opportunitiesPage = read('app/opportunities/page.tsx');
+const customer360Page = read('app/customer-360/page.tsx');
 const salesPerformancePage = read('app/crm/performance/page.tsx');
 const leadsCompatibilityPage = read('app/leads/page.tsx');
 const pipelineCompatibilityPage = read('app/pipeline/page.tsx');
@@ -134,6 +136,21 @@ requireText(workQueueMinePage, '@/app/dashboard/page', 'personal Today view is h
 requireText(workQueueTeamPage, 'Team priority queue', 'team priority scope is hosted under Work Queue');
 requireText(opportunitiesPage, "type Surface = 'table' | 'pipeline' | 'activity' | 'quality'", 'unified Opportunities surfaces');
 requireText(salesPerformancePage, 'Sales performance', 'management performance drill-down');
+
+// Smart Presentation V2 is intentionally evidence-driven. These checks guard the
+// data boundaries and decision-layer helpers, not incidental CSS or exact prose.
+for (const [source, needle, label] of [
+  [commandCenterPage, 'getDashboardPeriodAnalytics', 'Command Center uses equal-period change evidence'],
+  [commandCenterPage, 'getPipelineSnapshot', 'Command Center uses stage-aging bottleneck evidence'],
+  [workQueuePage, 'buildQueueOrder', 'Work Queue derives an explicit deterministic work order'],
+  [workQueuePage, 'priority_band', 'Work Queue exposes persisted priority bands'],
+  [opportunitiesPage, 'primaryOpportunityRisk', 'Opportunities derives explainable book-health risk'],
+  [opportunitiesPage, 'Strongest aging bottleneck', 'Opportunities exposes stage-aging bottleneck context'],
+  [customer360Page, 'relationshipSignal', 'Customer 360 derives explainable relationship states'],
+  [customer360Page, 'No hidden health score', 'Customer 360 keeps relationship health explainable'],
+]) {
+  requireText(source, needle, label);
+}
 
 for (const [source, needle, label] of [
   [leadsCompatibilityPage, '/opportunities', 'legacy Leads route points to Opportunities'],
