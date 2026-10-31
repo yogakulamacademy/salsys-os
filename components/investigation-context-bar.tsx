@@ -19,6 +19,11 @@ import {
 
 const METRIC_CONTEXT_TTL_MS = 30 * 60 * 1000;
 
+type RelatedLink = {
+  label: string;
+  href: string;
+};
+
 export function InvestigationContextBar() {
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -56,6 +61,11 @@ export function InvestigationContextBar() {
   }
 
   if (!metricContext) return null;
+
+  const currentPath = `${pathname}${searchParams.size ? `?${searchParams.toString()}` : ""}`;
+  const relatedLinks = metricRelatedLinks(metricContext.metricLabel).filter(
+    (item) => item.href !== currentPath && item.href !== metricContext.targetPath,
+  );
 
   return (
     <section className="mb-4 overflow-hidden rounded-2xl border border-[#d5e2d7] bg-[linear-gradient(135deg,#f4f8f3_0%,#fbfcfa_62%,#eef6f0_100%)] shadow-[0_12px_32px_rgba(16,45,39,.045)]">
@@ -97,6 +107,16 @@ export function InvestigationContextBar() {
         </div>
 
         <div className="flex shrink-0 flex-wrap gap-2">
+          {relatedLinks.slice(0, 2).map((item) => (
+            <Link
+              key={item.href}
+              href={item.href}
+              className="btn-secondary"
+              onClick={() => continueMetricContext(metricContext, item.href)}
+            >
+              {item.label} <ArrowRight size={13} />
+            </Link>
+          ))}
           <Link href={metricContext.sourcePath} className="btn-secondary">
             <ArrowLeft size={13} /> Back to {metricContext.sourceLabel}
           </Link>
@@ -155,6 +175,79 @@ function SourceInvestigationBar({
       </div>
     </section>
   );
+}
+
+function metricRelatedLinks(metricLabel: string): RelatedLink[] {
+  const metric = metricLabel.toLowerCase();
+
+  if (metric.includes("payment")) {
+    return [
+      { label: "Payments", href: "/admissions?view=payments" },
+      { label: "Revenue", href: "/revenue" },
+    ];
+  }
+
+  if (metric.includes("qualified")) {
+    return [
+      { label: "Funnel", href: "/marketing?view=funnel" },
+      { label: "Pipeline", href: "/admissions?view=pipeline" },
+    ];
+  }
+
+  if (metric.includes("enroll")) {
+    return [
+      { label: "Pipeline", href: "/admissions?view=pipeline" },
+      { label: "Revenue", href: "/revenue" },
+    ];
+  }
+
+  if (metric.includes("collected") || metric.includes("revenue")) {
+    return [
+      { label: "Revenue", href: "/revenue" },
+      { label: "Payments", href: "/admissions?view=payments" },
+    ];
+  }
+
+  if (metric.includes("reply")) {
+    return [
+      { label: "Inbox", href: "/conversations" },
+      { label: "Response & SLA", href: "/performance?view=response" },
+    ];
+  }
+
+  if (metric.includes("follow")) {
+    return [
+      { label: "Follow-ups", href: "/follow-ups" },
+      { label: "Work Queue", href: "/admissions?view=queue" },
+    ];
+  }
+
+  if (metric.includes("pipeline") || metric.includes("high intent")) {
+    return [
+      { label: "Pipeline", href: "/admissions?view=pipeline" },
+      { label: "Revenue", href: "/revenue" },
+    ];
+  }
+
+  if (metric.includes("lead")) {
+    return [
+      { label: "Leads", href: "/leads" },
+      { label: "Attribution", href: "/marketing?view=attribution" },
+    ];
+  }
+
+  return [];
+}
+
+function continueMetricContext(context: StoredMetricInvestigation, href: string) {
+  try {
+    window.sessionStorage.setItem(
+      METRIC_INVESTIGATION_STORAGE_KEY,
+      JSON.stringify({ ...context, targetPath: href, createdAt: Date.now() }),
+    );
+  } catch {
+    // Investigation navigation must remain functional without sessionStorage.
+  }
 }
 
 function clearMetricContext(setMetricContext: (value: StoredMetricInvestigation | null) => void) {
