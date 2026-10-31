@@ -10,7 +10,7 @@ export default async function DashboardLayout({
   children: ReactNode;
 }) {
   if (isMockMode()) {
-    redirect("/home");
+    redirect("/crm");
   }
 
   const supabase = await createClient();
@@ -38,7 +38,7 @@ export default async function DashboardLayout({
     profile.role === "admin" ||
     profile.role === "manager"
   ) {
-    redirect("/home");
+    redirect("/crm");
   }
 
   return <>{children}</>;
