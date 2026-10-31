@@ -55,7 +55,7 @@ if (!policy.includes("AD_ACTIVATION_TRANSPORT_ENABLED = false as const")) {
 }
 
 const disabledGuard = runner.indexOf("if (AD_ACTIVATION_TRANSPORT_ENABLED === false)");
-const claimCall = runner.indexOf("claimAdActivationDeliveriesForProvider");
+const claimCall = runner.indexOf("const deliveries = await claimAdActivationDeliveriesForProvider");
 if (disabledGuard < 0 || claimCall < 0 || disabledGuard > claimCall) {
   throw new Error("Transport-disabled guard must execute before any queue claim.");
 }
