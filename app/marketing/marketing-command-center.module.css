@@ -96,46 +96,33 @@
 }
 
 .todayDeck {
-  display: grid;
-  grid-template-columns: minmax(0, 1.55fr) minmax(360px, .75fr);
   overflow: hidden;
   margin-bottom: 18px;
   border: 1px solid color-mix(in srgb, var(--app-brand-700) 24%, transparent);
   border-radius: 24px;
-  background: var(--app-brand-900);
+  background: linear-gradient(135deg, var(--app-brand-900), var(--app-brand-800));
   box-shadow: 0 10px 28px rgba(33, 23, 84, .12);
 }
 
 .todayPrimary {
   position: relative;
-  min-height: 272px;
-  padding: 30px 36px 32px;
+  padding: 30px 36px 26px;
   color: #fff;
-  background:
-    radial-gradient(circle at 90% 18%, rgba(255,255,255,.08), transparent 25%),
-    linear-gradient(135deg, var(--app-brand-900), var(--app-brand-800));
+  background: transparent;
 }
 
 .todayPrimary::after {
-  content: '';
-  position: absolute;
-  right: -135px;
-  bottom: -215px;
-  width: 430px;
-  height: 430px;
-  border-radius: 50%;
-  border: 1px solid rgba(255,255,255,.07);
-  pointer-events: none;
+  display: none;
 }
 
 .todayPrimary h2 {
   position: relative;
   z-index: 1;
-  max-width: 17ch;
+  max-width: 24ch;
   margin: 16px 0 12px;
   color: #fff !important;
   -webkit-text-fill-color: #fff;
-  font-size: clamp(29px, 2.65vw, 40px);
+  font-size: clamp(30px, 2.45vw, 38px);
   font-weight: 620;
   line-height: 1.08;
   letter-spacing: -.035em;
@@ -145,7 +132,7 @@
 .todayPrimary p {
   position: relative;
   z-index: 1;
-  max-width: 58ch;
+  max-width: 72ch;
   margin: 0;
   color: rgba(255,255,255,.82);
   font-size: 13px;
@@ -173,11 +160,10 @@
 
 .todayMetrics {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0,1fr));
-  align-content: center;
-  gap: 10px;
-  padding: 20px;
-  background: color-mix(in srgb, var(--app-brand-900) 91%, #fff);
+  grid-template-columns: repeat(4, minmax(0,1fr));
+  margin: 0 36px;
+  border-top: 1px solid rgba(255,255,255,.14);
+  background: transparent;
 }
 
 .decisionMetric {
@@ -185,10 +171,12 @@
   display: flex;
   flex-direction: column;
   justify-content: center;
-  padding: 16px 17px;
-  border: 1px solid rgba(255,255,255,.07);
-  border-radius: 14px;
-  background: rgba(255,255,255,.045);
+  padding: 18px 22px 22px;
+  background: transparent;
+}
+
+.decisionMetric + .decisionMetric {
+  border-left: 1px solid rgba(255,255,255,.11);
 }
 
 .decisionMetricTop {
@@ -210,7 +198,7 @@
 .decisionMetric strong {
   margin-top: 9px;
   color: #fff;
-  font-size: 27px;
+  font-size: 29px;
   font-weight: 650;
   line-height: 1;
   letter-spacing: -.03em;
@@ -218,7 +206,7 @@
 
 .decisionMetric small {
   margin-top: 7px;
-  color: rgba(255,255,255,.56);
+  color: rgba(255,255,255,.58);
   font-size: 10px;
   line-height: 1.35;
 }
@@ -568,14 +556,8 @@
 .miniEmpty { padding: 12px 0; color: var(--muted); font-size: 11px; }
 
 @media (max-width: 1180px) {
-  .todayDeck,
   .operatingGrid,
   .lowerGrid { grid-template-columns: 1fr; }
-  .todayMetrics {
-    grid-template-columns: repeat(4,minmax(0,1fr));
-    padding: 14px;
-  }
-  .decisionMetric { min-height: 100px; }
   .journeyBottom { grid-template-columns: 1fr; }
   .readinessBlock { border-left: 0; border-top: 1px solid var(--line); }
 }
@@ -583,6 +565,9 @@
 @media (max-width: 900px) {
   .intro { align-items: flex-start; flex-direction: column; }
   .todayMetrics { grid-template-columns: repeat(2,minmax(0,1fr)); }
+  .decisionMetric:nth-child(3) { border-left: 0; }
+  .decisionMetric:nth-child(3),
+  .decisionMetric:nth-child(4) { border-top: 1px solid rgba(255,255,255,.11); }
   .journeyStages { grid-template-columns: repeat(3,minmax(0,1fr)); }
   .journeyStage:nth-child(3) { border-right: 0; }
   .journeyStage:nth-child(-n+3) { border-bottom: 1px solid var(--line); }
@@ -591,10 +576,11 @@
 
 @media (max-width: 640px) {
   .intro h1 { font-size: 28px; }
-  .todayPrimary { min-height: auto; padding: 26px 22px; }
+  .todayPrimary { padding: 26px 22px 22px; }
   .todayPrimary h2 { max-width: 19ch; font-size: 30px; }
-  .todayMetrics { grid-template-columns: 1fr 1fr; padding: 12px; gap: 8px; }
-  .decisionMetric { min-height: 96px; padding: 15px; }
+  .todayMetrics { margin: 0 22px; grid-template-columns: 1fr 1fr; }
+  .decisionMetric { min-height: 92px; padding: 16px 14px 18px; }
+  .decisionMetric strong { font-size: 25px; }
   .journeyStages { grid-template-columns: repeat(2,minmax(0,1fr)); }
   .journeyStage:nth-child(2), .journeyStage:nth-child(4) { border-right: 0; }
   .journeyStage:nth-child(2)::after, .journeyStage:nth-child(4)::after { display: none; }
