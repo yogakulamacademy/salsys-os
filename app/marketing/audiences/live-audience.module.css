@@ -168,9 +168,10 @@
 
 .detailGrid {
   display: grid;
-  grid-template-columns: minmax(0, 1.45fr) minmax(300px, .65fr);
-  gap: 16px;
-  margin-top: 18px;
+  grid-template-columns: minmax(0, 1.35fr) minmax(340px, .75fr);
+  align-items: start;
+  gap: 18px;
+  margin-top: 20px;
 }
 
 .detailPanel,
@@ -184,15 +185,15 @@
 
 .detailHead,
 .actionHead {
-  padding: 18px 19px 15px;
+  padding: 20px 22px 16px;
   border-bottom: 1px solid var(--line);
 }
 
 .detailHead h3,
 .actionHead h3 {
-  margin: 4px 0 0;
+  margin: 5px 0 0;
   color: var(--copy-strong);
-  font-size: 16px;
+  font-size: 17px;
   font-weight: 650;
   line-height: 1.35;
 }
@@ -204,43 +205,66 @@
 }
 
 .detailMetric {
-  padding: 15px 17px;
+  padding: 18px 20px;
   border-right: 1px solid var(--line);
 }
 
 .detailMetric:last-child { border-right: 0; }
-.detailMetric span { color: var(--copy-subtle); font-size: 11px; }
-.detailMetric strong { display: block; margin-top: 4px; color: var(--copy-strong); font-size: 24px; font-weight: 650; }
+.detailMetric span {
+  color: var(--copy-subtle);
+  font-size: 12px;
+  line-height: 1.4;
+}
+.detailMetric strong {
+  display: block;
+  margin-top: 6px;
+  color: var(--copy-strong);
+  font-size: 28px;
+  font-weight: 650;
+  line-height: 1.1;
+  letter-spacing: -.025em;
+}
 
 .breakdowns {
   display: grid;
   grid-template-columns: repeat(5, minmax(0, 1fr));
-  gap: 10px;
-  padding: 17px;
+  gap: 12px;
+  padding: 20px;
 }
 
-.actionBody { padding: 17px 19px 19px; }
-.actionBody p { margin: 0; color: var(--copy-muted); font-size: 13px; line-height: 1.6; }
+.actionBody { padding: 19px 22px 20px; }
+.actionBody p {
+  margin: 0;
+  color: var(--copy-muted);
+  font-size: 13.5px;
+  line-height: 1.65;
+}
 
 .actionFacts {
   display: grid;
-  gap: 8px;
-  margin-top: 15px;
+  gap: 0;
+  margin-top: 18px;
 }
 
 .actionFact {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 10px;
-  padding: 10px 0;
+  gap: 14px;
+  padding: 12px 0;
   border-bottom: 1px solid var(--line);
   color: var(--copy-muted);
-  font-size: 12px;
+  font-size: 12.5px;
+  line-height: 1.45;
 }
 
 .actionFact:last-child { border-bottom: 0; }
-.actionFact strong { color: var(--copy-strong); font-weight: 650; text-align: right; }
+.actionFact strong {
+  color: var(--copy-strong);
+  font-size: 12.5px;
+  font-weight: 650;
+  text-align: right;
+}
 
 @media (max-width: 1180px) {
   .segmentGrid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
