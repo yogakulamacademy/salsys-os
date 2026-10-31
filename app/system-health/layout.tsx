@@ -7,6 +7,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { getWorkspaceContextForUser } from "@/lib/workspace";
 import OperationalReadinessSection from "./operational-readiness-section";
+import AdActivationReadinessSection from "./ad-activation-readiness-section";
 import "./system-health-mobile.css";
 
 type IntegrityStatus = "healthy" | "warning" | string;
@@ -45,6 +46,7 @@ export default async function SystemHealthLayout({
       <div className="system-health-polish mt-4">
         <DataIntegritySection rows={rows} error={error} />
         <OperationalReadinessSection organizationId={organizationId} />
+        <AdActivationReadinessSection organizationId={organizationId} />
       </div>
     </>
   );
