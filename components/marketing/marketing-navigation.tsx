@@ -87,6 +87,7 @@ const groups: NavigationGroup[] = [
 ];
 
 function isActive(pathname: string, href: string) {
+  if (href === '/marketing') return pathname === '/marketing';
   if (href === '/seo') return pathname === '/seo';
   if (href === '/tracking') return pathname === '/tracking';
   return pathname === href || pathname.startsWith(`${href}/`);
