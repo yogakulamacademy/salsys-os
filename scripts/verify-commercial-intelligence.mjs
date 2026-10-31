@@ -24,6 +24,9 @@ const panel = read('components/commercial-intelligence-panel.tsx');
 const paidMedia = read('components/paid-media-intelligence-panel.tsx');
 const legacyRoute = read('app/commercial-intelligence/page.tsx');
 const marketingPage = read('app/marketing/page.tsx');
+const marketingCanonicalWorkspace = read('app/marketing/canonical-workspace.tsx');
+const marketingOverview = read('app/marketing/marketing-command-center-overview.tsx');
+const marketingSurface = `${marketingPage}\n${marketingCanonicalWorkspace}\n${marketingOverview}`;
 const revenuePage = read('app/revenue/page.tsx');
 const funnelLayout = read('app/funnel/layout.tsx');
 const revenueLayout = read('app/revenue/layout.tsx');
@@ -46,9 +49,9 @@ expectIncludes(paidMedia, 'Repair lineage before strong ROI conclusions', 'Googl
 expectIncludes(paidMedia, 'Unmatched IDs stay unresolved rather than being guessed', 'Meta attribution-quality guard missing');
 
 expectIncludes(legacyRoute, 'redirect("/home")', 'legacy Commercial Intelligence route must resolve to the canonical command center');
-expectIncludes(marketingPage, 'buildAttributionIntelligence', 'attribution intelligence must remain surfaced in Marketing');
-expectIncludes(marketingPage, 'FunnelIntelligenceWorkspaceV2', 'funnel intelligence must remain surfaced in Marketing');
-expectIncludes(marketingPage, 'ExecutiveDecisionBrief', 'Marketing decision intelligence must remain surfaced');
+expectIncludes(marketingSurface, 'buildAttributionIntelligence', 'attribution intelligence must remain surfaced in Marketing');
+expectIncludes(marketingSurface, 'FunnelIntelligenceWorkspaceV2', 'funnel intelligence must remain surfaced in Marketing');
+expectIncludes(marketingSurface, 'ExecutiveDecisionBrief', 'Marketing decision intelligence must remain surfaced');
 expectIncludes(revenuePage, 'ExecutiveDecisionBrief', 'Revenue decision intelligence must remain surfaced');
 expectIncludes(revenuePage, '/admissions?view=payments', 'Revenue must route payment action work to Admissions');
 expectIncludes(revenuePage, '/marketing?view=attribution', 'Revenue must route attribution investigation to Marketing');
