@@ -47,7 +47,7 @@ const groups: NavigationGroup[] = [
       { href: '/campaigns', label: 'Campaigns', icon: Megaphone },
       { href: '/paid-media-leads', label: 'Acquisition', icon: UsersRound },
       { href: '/re-engaged', label: 'Re-engaged Leads', icon: Activity },
-      { href: '/marketing/audiences', label: 'Audience Intelligence', icon: Target, badge: 'Simulation' },
+      { href: '/marketing/audiences', label: 'Audience Intelligence', icon: Target, badge: 'Live' },
     ],
   },
   {
@@ -57,7 +57,7 @@ const groups: NavigationGroup[] = [
       { href: '/seo/search-performance', label: 'Search Performance', icon: Search },
       { href: '/seo/content-opportunities', label: 'Content Opportunities', icon: Sparkles },
       { href: '/seo/technical', label: 'Technical SEO', icon: ShieldCheck },
-      { href: '/seo/ai-answer-visibility', label: 'AI Answer Visibility', icon: Sparkles, badge: 'Preview' },
+      { href: '/seo/ai-answer-visibility', label: 'AI Answer Visibility', icon: Sparkles, badge: 'Live signals' },
     ],
   },
   {
