@@ -29,11 +29,23 @@ export type AdActivationRunnerTelemetry = {
   errorCode?: string | null;
 };
 
+export type AdActivationCanaryScope = {
+  destinationId: string;
+  personId: string;
+};
+
 function objectValue(value: unknown): Record<string, unknown> {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
     return {};
   }
   return value as Record<string, unknown>;
+}
+
+function uuidValue(value: string | undefined) {
+  const candidate = value?.trim().toLowerCase() ?? "";
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(candidate)
+    ? candidate
+    : null;
 }
 
 /**
@@ -45,6 +57,21 @@ function objectValue(value: unknown): Record<string, unknown> {
  */
 export function isAdActivationRunnerEnabled() {
   return process.env.AD_ACTIVATION_RUNNER_ENABLED?.trim().toLowerCase() === "true";
+}
+
+/**
+ * Initial live operation is canary-only. Both IDs must be explicit UUIDs.
+ * There is intentionally no broad/live fallback in Phase 7D.4.
+ */
+export function getAdActivationCanaryScope(): AdActivationCanaryScope | null {
+  const destinationId = uuidValue(process.env.AD_ACTIVATION_CANARY_DESTINATION_ID);
+  const personId = uuidValue(process.env.AD_ACTIVATION_CANARY_PERSON_ID);
+
+  if (!destinationId || !personId) {
+    return null;
+  }
+
+  return { destinationId, personId };
 }
 
 export async function acquireAdActivationRunnerLease(
