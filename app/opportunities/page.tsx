@@ -9,15 +9,22 @@ import {
   Flame,
   ListFilter,
   Plus,
+  ShieldAlert,
   ShieldCheck,
   UsersRound,
 } from 'lucide-react';
 
+import { LeadJourneyIntelligence } from '@/components/lead-journey-intelligence';
 import { LeadsCleanTable } from '@/components/leads-clean-table';
 import { PipelineBoardStudio } from '@/components/crm/pipeline-board-studio';
+import {
+  PipelineInsights,
+  type PipelineAgingPoint,
+} from '@/components/pipeline-insights';
+import { RecentBookingActivity } from '@/components/recent-booking-activity';
+import { TeamAssignmentPanel } from '@/components/team-assignment-panel';
 import { Notice, PageHeader } from '@/components/ui';
-import { isMockMode } from '@/lib/data';
-import { getLeads } from '@/lib/data';
+import { isMockMode, getLeads } from '@/lib/data';
 import {
   getLeadsWorkspacePage,
   parseLeadsWorkspaceParams,
@@ -27,9 +34,13 @@ import {
   getReEngagedWorkspace,
   type JourneyLeadRow,
 } from '@/lib/reengaged-data';
-import { opportunityStageLabel } from '@/lib/crm/canonical-metrics';
+import {
+  ACTIVE_OPPORTUNITY_STAGES,
+  opportunityStageLabel,
+} from '@/lib/crm/canonical-metrics';
 
 type Surface = 'table' | 'pipeline' | 'activity' | 'quality';
+type ActivityView = 'all' | 'reengaged' | 'hot' | 'high_intent';
 
 type SearchParams = Promise<Record<string, string | string[] | undefined>>;
 
@@ -42,7 +53,7 @@ export default async function OpportunitiesPage({ searchParams }: { searchParams
       <PageHeader
         eyebrow="Sales · Opportunities"
         title="Opportunities"
-        description="One commercial workspace for lead records, pipeline movement, behavioural activity and data quality. Change the view without losing the underlying opportunity context."
+        description="One commercial workspace for opportunity records, pipeline movement, behavioural activity and data quality. Change the view without losing the underlying customer context."
         actions={
           <Link href="/leads/new" className="btn-primary">
             <Plus size={15} /> Add opportunity
@@ -54,7 +65,7 @@ export default async function OpportunitiesPage({ searchParams }: { searchParams
 
       {surface === 'table' ? <TableSurface params={params} /> : null}
       {surface === 'pipeline' ? <PipelineSurface /> : null}
-      {surface === 'activity' ? <ActivitySurface /> : null}
+      {surface === 'activity' ? <ActivitySurface params={params} /> : null}
       {surface === 'quality' ? <QualitySurface /> : null}
     </div>
   );
@@ -63,9 +74,20 @@ export default async function OpportunitiesPage({ searchParams }: { searchParams
 async function TableSurface({ params }: { params: Record<string, string | string[] | undefined> }) {
   const filters = parseLeadsWorkspaceParams(params);
   const workspace = await getLeadsWorkspacePage(filters);
+  const notice = one(params.notice);
+  const error = one(params.error);
 
   return (
     <div className="leads-workspace-v2 space-y-4">
+      {notice === 'mock-create' ? (
+        <Notice tone="warning">Demo mode is active, so the test opportunity was not saved.</Notice>
+      ) : null}
+      {notice === 'owner-updated' || notice === 'owner-unassigned' ? (
+        <Notice tone="success">
+          {notice === 'owner-unassigned' ? 'Opportunity ownership removed.' : 'Opportunity owner updated.'}
+        </Notice>
+      ) : null}
+      {error ? <Notice tone="error">{error}</Notice> : null}
       {workspace.warning ? (
         <Notice tone="warning" title="Opportunities loaded with a fallback path">
           {workspace.warning}
@@ -79,6 +101,21 @@ async function TableSurface({ params }: { params: Record<string, string | string
         <Metric label="Follow-up overdue" value={workspace.summary.followupOverdue} note="Action already due" tone="attention" />
         <Metric label="Payment pending" value={workspace.summary.paymentPending} note="Closest active stage" tone="money" />
       </section>
+
+      <details className="group rounded-panel border border-line bg-surface shadow-xs">
+        <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-5 py-4 [&::-webkit-details-marker]:hidden">
+          <div>
+            <div className="eyebrow">Operational context</div>
+            <div className="section-title mt-1">Assignment and recent booking activity</div>
+            <p className="mt-1 text-[12px] text-copy-subtle">Keep secondary operational context available without crowding the primary opportunity table.</p>
+          </div>
+          <span className="rounded-full bg-surface-soft px-2.5 py-1 text-[10px] font-semibold text-copy-muted group-open:bg-brand-50 group-open:text-brand-700">Expand</span>
+        </summary>
+        <div className="space-y-4 border-t border-line p-4">
+          <RecentBookingActivity />
+          <TeamAssignmentPanel returnTo="/opportunities" />
+        </div>
+      </details>
 
       <LeadsCleanTable
         leads={workspace.leads}
@@ -95,6 +132,23 @@ async function TableSurface({ params }: { params: Record<string, string | string
 
 async function PipelineSurface() {
   const snapshot = await getPipelineSnapshot();
+  const stageCountByStage = new Map(snapshot.stageCounts.map((row) => [row.stage, row.leads]));
+  const agingByStage = new Map(snapshot.agingSummary.map((row) => [row.stage, row]));
+  const insightData = ACTIVE_OPPORTUNITY_STAGES.map((stage) => ({
+    stage: opportunityStageLabel(stage),
+    leads: stageCountByStage.get(stage) ?? 0,
+  }));
+  const agingInsightData: PipelineAgingPoint[] = ACTIVE_OPPORTUNITY_STAGES.map((stage) => {
+    const row = agingByStage.get(stage);
+    return {
+      stage: opportunityStageLabel(stage),
+      healthy: row?.healthy ?? 0,
+      warning: row?.warning ?? 0,
+      stuck: row?.stuck ?? 0,
+      medianDays: row?.medianDays ?? 0,
+      oldestDays: row?.oldestDays ?? 0,
+    };
+  });
 
   return (
     <div className="space-y-4">
@@ -104,11 +158,28 @@ async function PipelineSurface() {
         </Notice>
       ) : null}
 
-      <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+      <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
         <Metric label="Active pipeline" value={snapshot.metrics.activePipeline} note="Open opportunities" />
+        <Metric label="Qualified+" value={snapshot.metrics.qualifiedPlus} note="Qualified through enrolled" />
         <Metric label="High intent" value={snapshot.metrics.highIntent} note="Strong enrollment intent" tone="priority" />
         <Metric label="Payment pending" value={snapshot.metrics.paymentPending} note="Closest active stage" tone="money" />
         <Metric label="Stuck" value={snapshot.metrics.stuckLeads} note="Past stage threshold" tone="attention" />
+      </section>
+
+      <section className="rounded-panel border border-line bg-surface p-4 shadow-xs">
+        <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <div className="eyebrow">Pipeline intelligence</div>
+            <h2 className="section-title mt-1">Movement and stage aging</h2>
+            <p className="mt-1 text-[12px] text-copy-subtle">Use stage distribution and aging together so volume does not hide stalled opportunities.</p>
+          </div>
+          <div className="flex gap-2 text-[10px] font-semibold text-copy-subtle">
+            <span>{snapshot.metrics.warningLeads} warning</span>
+            <span>·</span>
+            <span>{snapshot.metrics.medianStageAgeDays.toFixed(1)}d median age</span>
+          </div>
+        </div>
+        <PipelineInsights data={insightData} agingData={agingInsightData} />
       </section>
 
       {snapshot.stuckLeads.length ? (
@@ -119,7 +190,7 @@ async function PipelineSurface() {
               <div className="section-title mt-1">{snapshot.stuckLeads.length.toLocaleString('en-IN')} opportunities are stuck</div>
               <p className="mt-1 text-[12px] text-amber-800/80">Review the oldest stage age first instead of treating every pipeline card equally.</p>
             </div>
-            <Link href="/opportunities?surface=table&view=stuck" className="btn-secondary">
+            <Link href="/opportunities?view=stuck" className="btn-secondary">
               Review stuck opportunities <ArrowRight size={13} />
             </Link>
           </div>
@@ -131,10 +202,19 @@ async function PipelineSurface() {
   );
 }
 
-async function ActivitySurface() {
+async function ActivitySurface({ params }: { params: Record<string, string | string[] | undefined> }) {
   const workspace = await getReEngagedWorkspace();
   const leads = workspace.leads;
-  const hot = leads.filter((lead) => lead.behaviour_temperature === 'hot');
+  const activityView = parseActivityView(one(params.activity) || one(params.view));
+  const selectedLeadId = one(params.lead);
+  const selectedLead = selectedLeadId ? leads.find((lead) => lead.lead_id === selectedLeadId) ?? null : null;
+  const visibleLeads = leads.filter((lead) => {
+    if (activityView === 'reengaged') return Boolean(lead.is_reengaged);
+    if (activityView === 'hot') return String(lead.behaviour_temperature || '').toLowerCase() === 'hot';
+    if (activityView === 'high_intent') return toNumber(lead.high_intent_events_7d) > 0;
+    return true;
+  });
+  const hot = leads.filter((lead) => String(lead.behaviour_temperature || '').toLowerCase() === 'hot');
   const reengaged = leads.filter((lead) => Boolean(lead.is_reengaged));
   const highIntent = leads.filter((lead) => toNumber(lead.high_intent_events_7d) > 0);
   const active7d = leads.filter((lead) => toNumber(lead.sessions_7d) > 0 || toNumber(lead.page_views_7d) > 0);
@@ -154,6 +234,52 @@ async function ActivitySurface() {
         <Metric label="High-intent activity" value={highIntent.length} note="Observed high-intent events" tone="priority" />
       </section>
 
+      {workspace.distribution.length ? (
+        <section className="rounded-panel border border-line bg-surface p-4 shadow-xs">
+          <div>
+            <div className="eyebrow">Conversion behaviour</div>
+            <h2 className="section-title mt-1">How many visits happen before conversion?</h2>
+            <p className="mt-1 text-[12px] text-copy-subtle">Observed visit distribution helps distinguish fast converters from longer research journeys.</p>
+          </div>
+          <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+            {workspace.distribution.map((row) => (
+              <div key={row.visit_bucket} className="rounded-ui border border-line bg-surface-soft p-3.5">
+                <div className="text-[10px] font-semibold uppercase tracking-[0.08em] text-copy-subtle">{row.visit_bucket}</div>
+                <div className="mt-2 text-[22px] font-semibold text-copy-strong">{toNumber(row.lead_count).toLocaleString('en-IN')}</div>
+                <div className="mt-1 text-[11px] leading-5 text-copy-muted">Avg visit #{formatDecimal(row.avg_visit_number)} · {formatDecimal(row.avg_days_to_lead)} days to lead</div>
+              </div>
+            ))}
+          </div>
+        </section>
+      ) : null}
+
+      <nav className="flex flex-wrap gap-1 rounded-panel border border-line bg-surface p-1.5 shadow-xs" aria-label="Activity filters">
+        <ActivityFilter id="all" active={activityView} label={`All active ${leads.length}`} />
+        <ActivityFilter id="reengaged" active={activityView} label={`Re-engaged ${reengaged.length}`} />
+        <ActivityFilter id="hot" active={activityView} label={`Hot ${hot.length}`} />
+        <ActivityFilter id="high_intent" active={activityView} label={`High intent ${highIntent.length}`} />
+      </nav>
+
+      {selectedLead ? (
+        <section className="rounded-panel border border-brand-100 bg-surface shadow-xs">
+          <div className="flex flex-col gap-3 border-b border-line px-5 py-4 sm:flex-row sm:items-start sm:justify-between">
+            <div>
+              <div className="eyebrow">Selected opportunity journey</div>
+              <h2 className="section-title mt-1">{selectedLead.lead_name || selectedLead.lead_code || 'Opportunity'}</h2>
+              <p className="mt-1 text-[12px] text-copy-subtle">{opportunityStageLabel(selectedLead.current_stage)} · {pretty(selectedLead.behaviour_temperature || 'unknown')} · score {toNumber(selectedLead.engagement_score)}</p>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <Link href={`/conversations?lead=${encodeURIComponent(selectedLead.lead_id)}`} className="btn-secondary">Open conversation</Link>
+              <Link href={`/leads/${selectedLead.lead_id}`} className="btn-primary">Open record</Link>
+              <Link href={activityHref(activityView)} className="btn-secondary">Close</Link>
+            </div>
+          </div>
+          <div className="p-4">
+            <LeadJourneyIntelligence leadId={selectedLead.lead_id} />
+          </div>
+        </section>
+      ) : null}
+
       <section className="overflow-hidden rounded-panel border border-line bg-surface shadow-xs">
         <div className="flex items-center justify-between border-b border-line px-5 py-4">
           <div>
@@ -161,11 +287,11 @@ async function ActivitySurface() {
             <h2 className="section-title mt-1">Recently active opportunities</h2>
             <p className="mt-1 text-[12px] text-copy-subtle">Use activity as context for prioritisation; it does not replace stage, owner or conversation evidence.</p>
           </div>
-          <span className="rounded-full bg-brand-50 px-2.5 py-1 text-[10px] font-semibold text-brand-700">{leads.length.toLocaleString('en-IN')} active</span>
+          <span className="rounded-full bg-brand-50 px-2.5 py-1 text-[10px] font-semibold text-brand-700">{visibleLeads.length.toLocaleString('en-IN')} shown</span>
         </div>
 
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[920px] border-collapse text-left">
+          <table className="w-full min-w-[980px] border-collapse text-left">
             <thead>
               <tr className="border-b border-line bg-surface-soft">
                 <Header>Opportunity</Header>
@@ -176,11 +302,11 @@ async function ActivitySurface() {
                 <Header>7d pages</Header>
                 <Header>Last source</Header>
                 <Header>Signal</Header>
-                <th className="w-24 px-4 py-3" />
+                <th className="w-40 px-4 py-3" />
               </tr>
             </thead>
             <tbody>
-              {leads.slice(0, 75).map((lead) => <ActivityRow key={lead.lead_id} lead={lead} />)}
+              {visibleLeads.slice(0, 75).map((lead) => <ActivityRow key={lead.lead_id} lead={lead} activeView={activityView} />)}
             </tbody>
           </table>
         </div>
@@ -199,6 +325,7 @@ async function QualitySurface() {
   const missingContact = qualityRows.filter((row) => row.issues.includes('Missing contact')).length;
   const unknownSource = qualityRows.filter((row) => row.issues.includes('Unknown source')).length;
   const missingCourse = qualityRows.filter((row) => row.issues.includes('Missing course')).length;
+  const knownCampaigns = leads.filter((lead) => lead.firstTouchCampaign && lead.firstTouchCampaign !== 'Unattributed').length;
 
   return (
     <div className="space-y-4">
@@ -246,6 +373,31 @@ async function QualitySurface() {
           ) : null}
         </div>
       </section>
+
+      <div className="grid gap-4 lg:grid-cols-2">
+        <section className="rounded-panel border border-line bg-surface p-5 shadow-xs">
+          <div className="flex items-start gap-3">
+            <span className="grid h-9 w-9 shrink-0 place-items-center rounded-ui bg-amber-50 text-amber-700"><ShieldAlert size={17} /></span>
+            <div>
+              <div className="eyebrow">Identity integrity</div>
+              <h2 className="section-title mt-1">Duplicate-review safeguards</h2>
+              <p className="mt-2 text-[12px] leading-5 text-copy-muted">Similarity is a review signal, never proof that two records belong to the same person. Generic names, channels or similar course interests are not sufficient evidence for a merge.</p>
+              <div className="mt-3 rounded-ui border border-amber-100 bg-amber-50/70 px-3 py-2.5 text-[11px] font-medium text-amber-800">No automatic identity merge happens from this workspace.</div>
+            </div>
+          </div>
+        </section>
+
+        <section className="rounded-panel border border-line bg-surface p-5 shadow-xs">
+          <div className="eyebrow">Attribution readiness</div>
+          <h2 className="section-title mt-1">Evidence coverage</h2>
+          <div className="mt-4 space-y-2.5">
+            <Evidence label="CRM source label" value={`${leads.length - unknownSource} / ${leads.length} known`} />
+            <Evidence label="Exact first-touch campaign" value={`${knownCampaigns} / ${leads.length} known`} />
+            <Evidence label="Linked click / session lineage" value="Review tracking evidence" muted />
+            <Evidence label="Consent & lawful join state" value="Not inferred here" muted />
+          </div>
+        </section>
+      </div>
     </div>
   );
 }
@@ -274,6 +426,19 @@ function OpportunityTabs({ active }: { active: Surface }) {
         );
       })}
     </nav>
+  );
+}
+
+function ActivityFilter({ id, active, label }: { id: ActivityView; active: ActivityView; label: string }) {
+  const selected = id === active;
+  return (
+    <Link
+      href={activityHref(id)}
+      aria-current={selected ? 'page' : undefined}
+      className={`inline-flex min-h-8 items-center rounded-ui px-3 text-[11px] font-semibold transition ${selected ? 'bg-brand-50 text-brand-700' : 'text-copy-muted hover:bg-surface-soft hover:text-copy-strong'}`}
+    >
+      {label}
+    </Link>
   );
 }
 
@@ -308,7 +473,7 @@ function Metric({
   );
 }
 
-function ActivityRow({ lead }: { lead: JourneyLeadRow }) {
+function ActivityRow({ lead, activeView }: { lead: JourneyLeadRow; activeView: ActivityView }) {
   return (
     <tr className="border-b border-line last:border-b-0 hover:bg-surface-soft/70">
       <td className="px-4 py-3.5">
@@ -323,7 +488,10 @@ function ActivityRow({ lead }: { lead: JourneyLeadRow }) {
       <td className="px-4 py-3.5 text-[11px] text-copy-muted">{pretty(lead.last_session_source || 'Unknown')}</td>
       <td className="max-w-[300px] px-4 py-3.5 text-[11px] leading-5 text-copy-muted">{lead.behaviour_reason || 'No additional behavioural reason recorded.'}</td>
       <td className="px-4 py-3.5 text-right">
-        <Link href={`/leads/${lead.lead_id}`} className="text-[11px] font-semibold text-brand-700 hover:underline">Open</Link>
+        <div className="flex justify-end gap-2">
+          <Link href={`${activityHref(activeView)}&lead=${encodeURIComponent(lead.lead_id)}`} className="text-[11px] font-semibold text-brand-700 hover:underline">Journey</Link>
+          <Link href={`/leads/${lead.lead_id}`} className="text-[11px] font-semibold text-copy-muted hover:text-brand-700">Open</Link>
+        </div>
       </td>
     </tr>
   );
@@ -338,6 +506,15 @@ function Temperature({ value }: { value: string | null }) {
       : 'bg-surface-soft text-copy-muted';
 
   return <span className={`rounded-full px-2 py-1 text-[10px] font-semibold ${className}`}>{pretty(normalized)}</span>;
+}
+
+function Evidence({ label, value, muted = false }: { label: string; value: string; muted?: boolean }) {
+  return (
+    <div className="flex items-center justify-between gap-4 rounded-ui border border-line bg-surface-soft px-3 py-2.5">
+      <span className="text-[11px] text-copy-muted">{label}</span>
+      <span className={`text-[10px] font-semibold ${muted ? 'text-copy-subtle' : 'text-copy-strong'}`}>{value}</span>
+    </div>
+  );
 }
 
 function Header({ children }: { children: React.ReactNode }) {
@@ -357,6 +534,14 @@ function parseSurface(value: string): Surface {
   return value === 'pipeline' || value === 'activity' || value === 'quality' ? value : 'table';
 }
 
+function parseActivityView(value: string): ActivityView {
+  return value === 'reengaged' || value === 'hot' || value === 'high_intent' ? value : 'all';
+}
+
+function activityHref(view: ActivityView) {
+  return view === 'all' ? '/opportunities?surface=activity' : `/opportunities?surface=activity&activity=${view}`;
+}
+
 function one(value: string | string[] | undefined) {
   return Array.isArray(value) ? value[0] ?? '' : value ?? '';
 }
@@ -364,6 +549,10 @@ function one(value: string | string[] | undefined) {
 function toNumber(value: number | string | null | undefined) {
   const parsed = Number(value ?? 0);
   return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function formatDecimal(value: number | string | null | undefined) {
+  return toNumber(value).toFixed(1);
 }
 
 function pretty(value: string) {
