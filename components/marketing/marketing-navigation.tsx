@@ -172,7 +172,7 @@ export function MarketingNavigation() {
       </details>
 
       <aside
-        className="sticky top-16 hidden h-[calc(100vh-4rem)] self-start overflow-y-auto overflow-x-hidden overscroll-contain border-r border-line pr-4 lg:block [scrollbar-width:thin]"
+        className="sticky top-16 hidden h-[calc(100vh-4rem)] self-start overflow-y-auto overflow-x-hidden overscroll-contain border-r border-line pr-4 lg:block [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
         aria-label="Growth navigation"
       >
         <div className="pb-8 pt-4">
