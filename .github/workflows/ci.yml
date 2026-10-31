@@ -184,6 +184,9 @@ jobs:
       - name: Verify Ad Activation Worker Simulation Contracts
         run: npm run verify:ad-activation-worker-simulation
 
+      - name: Verify Ad Activation Configured Simulation and Telemetry Contracts
+        run: npm run verify:ad-activation-simulation-runner
+
       - name: Typecheck
         run: npm run typecheck
 
