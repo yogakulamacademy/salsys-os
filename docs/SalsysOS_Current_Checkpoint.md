@@ -82,7 +82,9 @@ Education-specific fields embedded in generic CRM remain nullable; R11 surface g
 
 ---
 
-## 4. R11-P0 security prerequisite
+## 4. R11-P0 security prerequisites
+
+### Direct table privileges
 
 Current RLS write checks correctly limit course management administration to:
 
@@ -97,7 +99,7 @@ However authenticated table grants on `courses` and `course_batches` currently i
 
 Repository audit found no active application delete path for courses/batches.
 
-P0 must reduce the authenticated direct table boundary to only the privileges required by current application behavior:
+P0 must reduce the authenticated direct table boundary to:
 
 ```text
 SELECT
@@ -105,7 +107,7 @@ INSERT
 UPDATE
 ```
 
-subject to RLS + tenant + role + capability checks.
+subject to tenant + role + capability RLS.
 
 Authenticated users must not retain direct:
 
@@ -115,6 +117,27 @@ TRUNCATE
 TRIGGER
 REFERENCES
 ```
+
+### Hardened V2 batch-admin RPC compatibility
+
+Current user-facing Course Management server actions use the authenticated user/session client to call:
+
+```text
+update_course_batch_admin_v2(uuid,uuid,integer,integer,numeric,text,text)
+set_course_batch_enrollment_state_v2(uuid,uuid,boolean,text)
+set_course_batch_active_state_v2(uuid,uuid,boolean)
+```
+
+Those V2 functions are `SECURITY DEFINER` and internally enforce `can_administer_course_management(org_id)`, preserving bound-tenant owner/admin/manager authorization and `auth.uid()` audit attribution.
+
+Their current ACLs are service-role-only because authenticated EXECUTE was revoked during an older latent-RPC hardening step and never restored after the safer explicit-org V2 boundary was introduced.
+
+P0 must:
+
+- restore authenticated EXECUTE only on these three hardened V2 RPCs;
+- keep their internal tenant/role authorization intact;
+- keep legacy V1 course-admin RPCs revoked from authenticated users;
+- not change the user-facing actions to a service-role client merely to bypass ACLs.
 
 ---
 
@@ -155,6 +178,8 @@ Other organizations
   disabled unless deliberately configured
 ```
 
+Resolve Yogakulam through its stable slug `yogakulam-academy`; do not hardcode its generated UUID in the migration.
+
 Do not seed courses/batches into `Test Yoga School` or another tenant.
 
 ---
@@ -173,8 +198,8 @@ Do not seed courses/batches into `Test Yoga School` or another tenant.
 
 - generic adapter registry/interface;
 - preserve `yogakulam_website` as one adapter;
-- tenant-configurable non-secret adapter selection;
-- sync execution fails closed without capability/config.
+- tenant non-secret adapter selection;
+- capability/config fail-closed sync.
 
 ### R11-P3 — Optional Residential extension
 
@@ -203,10 +228,11 @@ P0 is complete only when:
 4. mutation authority is trusted/admin-controlled;
 5. authenticated course/batch table grants are least-privilege and no longer include DELETE/TRUNCATE/TRIGGER/REFERENCES;
 6. existing owner/admin/manager course mutation remains functional under capability authority;
-7. Yogakulam's real Education use is preserved through explicit capability state;
-8. other tenants receive no fake vertical data;
-9. no route/UI/catalog-adapter rewrite is smuggled into P0;
-10. migration provenance, CI, CodeQL, deployment and production readback are clean.
+7. authenticated user sessions can execute the three hardened explicit-org V2 course-admin RPCs while legacy V1 RPCs remain unavailable;
+8. Yogakulam's real Education use is preserved through explicit capability state;
+9. other tenants receive no fake vertical data;
+10. no route/UI/catalog-adapter rewrite is smuggled into P0;
+11. migration provenance, CI, CodeQL, deployment and production readback are clean.
 
 ---
 
