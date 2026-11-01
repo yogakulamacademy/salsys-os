@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 
-import { syncYogakulamCourseCatalog } from "@/lib/integrations/yogakulam-courses";
+import {
+  EducationCatalogSyncConfigurationError,
+  syncEducationCatalog,
+} from "@/lib/integrations/education-catalog";
 import {
   bearerMatchesAnySecret,
   secretMatches,
@@ -11,7 +14,7 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 /*
- * The catalog sync now processes batches with bounded concurrency, so it
+ * Catalog adapters may process batches with bounded concurrency, so they
  * should normally finish well below 60 seconds. A longer duration is still
  * requested for deployments/plans that allow it.
  */
@@ -41,6 +44,23 @@ function cronAuthorized(request: NextRequest) {
   return bearerMatchesAnySecret(request.headers.get("authorization"), secrets);
 }
 
+function requestedOrganizationId(request: NextRequest) {
+  return request.nextUrl.searchParams.get("organization_id")?.trim() || undefined;
+}
+
+function configurationFailure(error: EducationCatalogSyncConfigurationError) {
+  return NextResponse.json(
+    {
+      ok: false,
+      code: error.code,
+      error: error.message,
+    },
+    {
+      status: error.status,
+    },
+  );
+}
+
 export async function POST(request: NextRequest) {
   if (!manualAuthorized(request)) {
     return NextResponse.json(
@@ -55,12 +75,17 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    const result = await syncYogakulamCourseCatalog({
+    const result = await syncEducationCatalog({
       trigger: "manual",
+      organizationId: requestedOrganizationId(request),
     });
 
     return NextResponse.json(result);
   } catch (error) {
+    if (error instanceof EducationCatalogSyncConfigurationError) {
+      return configurationFailure(error);
+    }
+
     console.error("Course catalog manual sync failed:", error);
 
     return NextResponse.json(
@@ -89,12 +114,17 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    const result = await syncYogakulamCourseCatalog({
+    const result = await syncEducationCatalog({
       trigger: "cron",
+      organizationId: requestedOrganizationId(request),
     });
 
     return NextResponse.json(result);
   } catch (error) {
+    if (error instanceof EducationCatalogSyncConfigurationError) {
+      return configurationFailure(error);
+    }
+
     console.error("Course catalog cron sync failed:", error);
 
     return NextResponse.json(
