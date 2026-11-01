@@ -104,7 +104,8 @@ for (const [needle, label] of [
 for (const [needle, label] of [
   ['creation_channel?: string | string[];', 'Revenue creation-channel query'],
   ['last_touch_source?: string | string[];', 'Revenue last-touch query'],
-  ['getRevenueAttributionOpportunities', 'Revenue full-cohort attribution read'],
+  ['getRevenueAttributionActions', 'Revenue full-cohort attribution read'],
+  ['Ranked after cohort filtering, not filtered from the global top-ten list.', 'Revenue cohort-first ranking disclosure'],
 ]) {
   requireText(revenueAttribution, needle, label);
 }
