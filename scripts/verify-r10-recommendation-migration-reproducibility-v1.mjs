@@ -10,6 +10,7 @@ const migrations = [
   ['supabase/migrations/20261018154443_system_intelligence_calibration_readiness_v1.sql', '8fa01e7f082a4ffab6e97facc78d0626'],
   ['supabase/migrations/20261018155528_system_intelligence_action_completion_v1.sql', '6c0d82624bf9f324cced9109d0f86c0c'],
   ['supabase/migrations/20261018155811_system_intelligence_action_completion_effectiveness_v1.sql', '10a04d83b7920c23d19e011abc155a6e'],
+  ['supabase/migrations/20261101151403_r10_recommendation_security_hardening_v1.sql', '436fb28942a49076abd034bf37d22b7f'],
 ];
 
 function normalizedSql(path) {
@@ -31,6 +32,7 @@ const foundation = normalizedSql(migrations[0][0]);
 const businessLearning = normalizedSql(migrations[2][0]);
 const observer = normalizedSql(migrations[3][0]);
 const completion = normalizedSql(migrations[6][0]);
+const hardening = normalizedSql(migrations[8][0]);
 
 for (const [source, needle, label] of [
   [foundation, 'system_intelligence_recommendation_events', 'recommendation event ledger'],
@@ -39,6 +41,9 @@ for (const [source, needle, label] of [
   [businessLearning, 'recompute_system_intelligence_learning_profile_v1', 'learning profile recomputation'],
   [observer, 'This is temporal outcome evidence, not causal attribution.', 'non-causal outcome contract'],
   [completion, 'completed_at', 'explicit action completion'],
+  [hardening, 'system_intelligence_recommendation_events_rec_org_fkey', 'P0 composite tenant relationship'],
+  [hardening, 'INTELLIGENCE_PRIVILEGED_ROLE_REQUIRED', 'P0 privileged mutation boundary'],
+  [hardening, 'INTELLIGENCE_TRANSITION_INVALID', 'P0 fail-closed lifecycle boundary'],
 ]) {
   if (!source.includes(needle)) {
     throw new Error(`R10 recommendation provenance contract missing ${label}: ${needle}`);
