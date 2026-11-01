@@ -188,6 +188,30 @@ REFERENCES
 
 Service role / database ownership remain separate trusted boundaries.
 
+### R11-P0 compatibility requirement — hardened V2 admin RPC EXECUTE
+
+Current Course Management server actions call these RPCs through the authenticated user/session Supabase client:
+
+```text
+update_course_batch_admin_v2(uuid,uuid,integer,integer,numeric,text,text)
+set_course_batch_enrollment_state_v2(uuid,uuid,boolean,text)
+set_course_batch_active_state_v2(uuid,uuid,boolean)
+```
+
+Live ACLs currently expose those V2 functions only to `postgres` / `service_role`, because an older latent-RPC hardening migration revoked authenticated EXECUTE before the newer explicit-organization V2 functions became the application boundary.
+
+The V2 functions are `SECURITY DEFINER` but fail closed internally through `can_administer_course_management(p_organization_id)`, which requires a session-bound organization and owner/admin/manager role for authenticated users. They also preserve `auth.uid()` in the batch-admin audit trail.
+
+Therefore P0 must:
+
+- restore `authenticated` EXECUTE **only** on the three hardened V2 functions above;
+- retain the function-internal tenant/role authorization checks;
+- retain service-role execution for trusted server/maintenance paths;
+- keep legacy V1 course-admin RPCs revoked from authenticated users;
+- not switch the existing user-facing server actions to a service-role/admin client merely to bypass the ACL mismatch.
+
+This repair preserves least privilege while restoring the intended user-attributed mutation path.
+
 ---
 
 ## 7. Wellness / Residential is an optional extension, not Education Core
@@ -454,8 +478,9 @@ Unacceptable evidence:
 2. add tenant-safe capability helper/API contract;
 3. preserve explicit capability dependencies;
 4. tighten authenticated `courses` / `course_batches` table privileges;
-5. add regression verification;
-6. explicitly activate existing Yogakulam capability state without creating business records.
+5. repair authenticated EXECUTE only for the three hardened explicit-org V2 course-admin RPCs while keeping legacy V1 RPCs revoked;
+6. add regression verification;
+7. explicitly activate existing Yogakulam capability state without creating business records.
 
 ### R11-P1 — Product surface gating
 
@@ -512,12 +537,13 @@ R11 V1 can close only when:
 4. non-Education organizations do not see/access Education-only surfaces;
 5. course/batch mutation still requires owner/admin/manager plus tenant/capability authority;
 6. authenticated users cannot directly TRUNCATE/DELETE course/batch truth;
-7. generic CRM continues working with Education fields null/hidden;
-8. external catalog sync is adapter-based and tenant-configured, with Yogakulam preserved as one provider;
-9. Education core works without residential capability;
-10. residential capability works only as an optional extension;
-11. no fake second-tenant production data is required for acceptance;
-12. CI, security checks, deployment provenance and production readback are clean.
+7. the three hardened V2 course-admin RPCs work through authenticated user sessions while legacy V1 RPCs remain unavailable;
+8. generic CRM continues working with Education fields null/hidden;
+9. external catalog sync is adapter-based and tenant-configured, with Yogakulam preserved as one provider;
+10. Education core works without residential capability;
+11. residential capability works only as an optional extension;
+12. no fake second-tenant production data is required for acceptance;
+13. CI, security checks, deployment provenance and production readback are clean.
 
 ---
 
