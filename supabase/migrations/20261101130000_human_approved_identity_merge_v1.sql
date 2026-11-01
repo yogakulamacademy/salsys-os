@@ -406,6 +406,7 @@ begin
     )
   where c.organization_id = v_conflict.organization_id
     and c.status = 'open'
+    and coalesce(cardinality(c.candidate_person_ids), 0) = 1
     and (
       (c.person_id = v_target_person_id and v_source_person_id = any(c.candidate_person_ids))
       or
