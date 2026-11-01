@@ -45,7 +45,7 @@ const ACTIVE_WORKSPACE_COOKIE = "salsys-active-workspace";
 const WORKSPACE_COOKIE_MAX_AGE_SECONDS = 60 * 60 * 24 * 30;
 
 // Keep the entire protected-route middleware path below Vercel's own timeout.
-// Critical auth/workspace checks fail closed; optional onboarding lookup fails open.
+// Critical auth, workspace, and required-onboarding checks fail closed.
 const MIDDLEWARE_TOTAL_BUDGET_MS = 3200;
 const AUTH_LOOKUP_MAX_MS = 1400;
 const WORKSPACE_LOOKUP_MAX_MS = 1400;
@@ -495,8 +495,15 @@ export async function middleware(request: NextRequest) {
           "organization_onboarding",
         );
 
+      if (onboardingError) {
+        console.warn("Middleware required onboarding lookup unavailable", {
+          path: pathname,
+          reason: onboardingError.message,
+        });
+        return workspaceServiceUnavailable(pathname);
+      }
+
       if (
-        !onboardingError &&
         onboarding?.enforce_on_sign_in === true &&
         onboarding.status !== "completed" &&
         onboarding.status !== "dismissed"
@@ -504,13 +511,14 @@ export async function middleware(request: NextRequest) {
         return redirectWithAuthCookies(request, response, "/onboarding");
       }
     } catch (error) {
-      console.warn("Middleware onboarding lookup skipped", {
+      console.warn("Middleware required onboarding lookup unavailable", {
         path: pathname,
         reason:
           error instanceof MiddlewareDependencyTimeout
             ? error.dependency
             : "organization_onboarding",
       });
+      return workspaceServiceUnavailable(pathname);
     }
   }
 
