@@ -1,3 +1,4 @@
+import crypto from 'node:crypto';
 import fs from 'node:fs';
 
 const migration = fs.readFileSync(
@@ -9,7 +10,7 @@ const triggerContextMigration = fs.readFileSync(
   'utf8',
 );
 const anonGrantHardeningMigration = fs.readFileSync(
-  'supabase/migrations/20261101195000_r11_p3_anon_residential_grant_hardening_v1.sql',
+  'supabase/migrations/20261101195631_r11_p3_anon_residential_grant_hardening_v1.sql',
   'utf8',
 );
 const educationAccess = fs.readFileSync('lib/education-access.ts', 'utf8');
@@ -31,6 +32,16 @@ function expect(condition, message) {
 function has(source, needle, label) {
   expect(source.includes(needle), `missing ${label} (${needle})`);
 }
+
+expect(
+  Buffer.byteLength(anonGrantHardeningMigration, 'utf8') === 1942,
+  'ledgered residential grant hardening byte length must remain 1942.',
+);
+expect(
+  crypto.createHash('md5').update(anonGrantHardeningMigration, 'utf8').digest('hex') ===
+    '863a1bed570e34986c10a226330f21cf',
+  'ledgered residential grant hardening SQL must match production MD5 863a1bed570e34986c10a226330f21cf.',
+);
 
 for (const [needle, label] of [
   ["organization_has_residential_data_v1", 'canonical residential data detector'],
