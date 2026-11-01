@@ -8,8 +8,8 @@
 Read first:
 
 1. `docs/SalsysOS_Current_Checkpoint.md`
-2. `docs/checkpoints/M-2026-11-01-Post-R10-Rebaseline-v1.md`
-3. `docs/checkpoints/M-2026-11-01-R10-V1-Engineering-Closeout-v1.md`
+2. `docs/checkpoints/M-2026-11-01-R11-Vertical-Pack-Audit-Design-v1.md`
+3. `docs/checkpoints/M-2026-11-01-Post-R10-Rebaseline-v1.md`
 
 Historical checkpoint files are immutable evidence records.
 
@@ -17,119 +17,167 @@ Historical checkpoint files are immutable evidence records.
 
 ## 1. Exact continuation point
 
-**R11 — Education / Wellness Vertical Pack V1 — Audit & Design**
+**R11-P0 — Capability + Security Foundation**
 
-R10 V1 engineering is closed. The post-R10 rebaseline selected R11 before R13 because the education/wellness engine already exists and the next highest-value step is to make it explicitly reusable/configurable across tenants.
-
-Do not start R11 implementation until the audit/design contract is locked.
+The R11 Education/Wellness Vertical Pack audit/design is complete and locked. Implement P0 only; do not begin product-surface gating, adapter refactoring or residential UI changes until P0 is production-accepted.
 
 ---
 
-## 2. Current R11 evidence
+## 2. Locked capability model
 
-Across 4 active organizations:
+Introduce product capability state separate from workspaces and billing:
 
 ```text
-courses                              16
-course batches                       85
-upcoming capacity rows               63
-person/course affinity rows          21
-person/course recommendation rows    20
+capability_catalog
+organization_capabilities
 ```
 
-All current course/batch rows belong to Yogakulam Academy.
-
-`Test Yoga School` exists as another active organization but has no course/batch data.
-
-Do not seed fake courses or batches there to manufacture multi-tenant proof.
-
----
-
-## 3. Existing generic foundation
-
-The current course/batch schema is already organization-scoped and largely reusable.
-
-Generic Education concepts already modeled:
-
-- course identity/name/category/hours;
-- batch date/time/timezone/location/mode;
-- capacity/seats;
-- currency/pricing;
-- enrollment state;
-- external source/catalog IDs and sync timestamps.
-
-Potential Wellness/Residential extensions already present:
-
-- private/shared/course-only pricing;
-- accommodation capacity/remaining/note.
-
-The audit must decide which are optional extensions rather than mandatory Education semantics.
-
----
-
-## 4. Tenant shell today
-
-All active organizations currently receive the same generic enabled workspaces:
+V1 codes:
 
 ```text
-admin
-finance
-marketing
-reports
-sales
+education_core
+wellness_residential
+education_catalog_sync
 ```
 
-There is no formal organization-level Education/Wellness vertical capability profile today.
+Dependencies:
 
-This is the central productization gap to audit.
+```text
+wellness_residential   -> education_core
+education_catalog_sync -> education_core
+```
 
----
-
-## 5. R11 audit work
-
-Verify read-only:
-
-1. course-management route/navigation access boundaries;
-2. Admissions route/navigation dependencies on course/batch capability;
-3. current role/permission model for course/batch mutation;
-4. course/batch constraints that are generic vs wellness-specific;
-5. catalog/source sync configuration and any Yogakulam-specific assumptions;
-6. whether an organization capability/settings model already exists elsewhere;
-7. how a second tenant would enable the pack without copying Yogakulam data;
-8. how defaults/templates can be optional and non-destructive.
-
-Then lock a single R11 V1 implementation contract.
+Onboarding industry is a suggestion only, never access authority.
 
 ---
 
-## 6. R13 remains later
+## 3. P0 course/batch privilege hardening
 
-Controlled customer organization provisioning/onboarding already exists, but R13 still lacks public signup, subscriptions/billing, plan entitlements, signup abuse controls, customer-controlled deletion and billing-driven suspension.
+Current course/batch RLS already limits administration to owner/admin/manager, but authenticated table grants are broader than necessary.
 
-Do not pull those commercial concerns into R11 V1. First define the reusable vertical product boundary; then R13 can attach commercial plans/entitlements to it.
+P0 target authenticated course/batch privileges:
+
+```text
+SELECT
+INSERT
+UPDATE
+```
+
+Remove direct authenticated:
+
+```text
+DELETE
+TRUNCATE
+TRIGGER
+REFERENCES
+```
+
+No current application course/batch delete path was found.
 
 ---
 
-## 7. Parked work
+## 4. P0 hardened V2 RPC compatibility
+
+Current Course Management server actions use the authenticated user/session Supabase client for these hardened explicit-org functions:
+
+```text
+update_course_batch_admin_v2(uuid,uuid,integer,integer,numeric,text,text)
+set_course_batch_enrollment_state_v2(uuid,uuid,boolean,text)
+set_course_batch_active_state_v2(uuid,uuid,boolean)
+```
+
+Each function is `SECURITY DEFINER` and internally calls `can_administer_course_management(org_id)`, which requires bound-tenant owner/admin/manager authorization for authenticated users and preserves `auth.uid()` in audit events.
+
+Current function ACLs are service-role-only due to historical grant drift.
+
+P0 must:
+
+- grant authenticated EXECUTE only on these three hardened V2 RPCs;
+- keep legacy V1 course-admin RPCs revoked from authenticated users;
+- keep function-internal tenant/role checks intact;
+- not replace the user-facing server actions with a service-role client.
+
+---
+
+## 5. Capability authority
+
+Add a canonical tenant-safe capability helper.
+
+Requirements:
+
+- explicit org identity;
+- tenant-bound authenticated read path;
+- trusted server/service mutation path;
+- unknown/disabled codes fail closed;
+- dependency rules fail closed;
+- config contains no provider secrets.
+
+Capability activation is high-impact configuration and must not be directly writable by arbitrary members.
+
+---
+
+## 6. Existing tenant preservation
+
+Yogakulam is the only current tenant with real Education catalog data:
+
+```text
+courses         16
+course batches  85
+```
+
+P0 must preserve that real behavior through explicit capability activation.
+
+Use stable slug `yogakulam-academy` for migration lookup; do not hardcode the generated organization UUID.
+
+Do not infer capability from organization name or onboarding industry.
+
+Do not create fake courses/batches for Test Yoga School or another tenant.
+
+---
+
+## 7. Later R11 phases
+
+Do not pull into P0:
+
+- **P1:** route/navigation/lead-control capability gating;
+- **P2:** generic external catalog adapter boundary;
+- **P3:** optional residential/accommodation surface gating.
+
+The existing Yogakulam adapter remains untouched during P0.
+
+---
+
+## 8. R13 remains later
+
+No billing/subscriptions/public signup/plan entitlements in R11-P0.
+
+R13 commercial packaging follows after the reusable vertical boundary is proven.
+
+---
+
+## 9. Acceptance rules
+
+P0 must finish with:
+
+- canonical capability catalog/state;
+- tenant-safe fail-closed helper;
+- trusted activation boundary;
+- dependency enforcement;
+- least-privilege course/batch grants;
+- authenticated V2 course-admin RPC path restored while V1 remains blocked;
+- explicit Yogakulam capability state;
+- zero fake second-tenant vertical data;
+- CI/CodeQL/deployment/provenance/readback green.
+
+---
+
+## 10. Parked work
 
 Do not resume automatically:
 
 - Yogakulam Hostinger/PHP commerce completion;
 - PA-1 live identity decision;
-- Google Ads production API approval;
-- Meta Ads provider permission/account selection;
+- Google Ads production approval;
+- Meta Ads permission/account selection;
 - Search Indexing activation;
 - predictive model promotion / automatic learning-based recommendation ranking.
-
----
-
-## 8. Safety rules
-
-- verify before modifying;
-- one checkpoint at a time;
-- PostgreSQL remains canonical truth;
-- tenant authority is server-derived/explicit;
-- vertical capability cannot weaken role/tenant isolation;
-- no fake second-tenant data for acceptance;
-- generic Education core and optional Wellness/Residential extensions must remain distinguishable;
-- do not mix R13 billing/signup scope into R11 design.
