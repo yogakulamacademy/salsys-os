@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 
 const migration = fs.readFileSync(
-  'supabase/migrations/20261101154500_r10_recommendation_security_hardening_v1.sql',
+  'supabase/migrations/20261101151403_r10_recommendation_security_hardening_v1.sql',
   'utf8',
 );
 
