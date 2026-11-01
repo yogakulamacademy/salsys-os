@@ -4,13 +4,14 @@
 **Updated:** 2026-11-01  
 **Repository:** `yogakulamacademy/salsys-os`  
 **Production branch:** `main`  
-**Verified production head:** `1daf2c6d019a3cc8c899bc9d8d0c996ceee64e21`
+**Verified production head:** `d5bbe5841e6a4e0f0647b1e1823efc8522fa10da`
 
 Read first:
 
 1. `docs/SalsysOS_Current_Checkpoint.md`
-2. `docs/checkpoints/M-2026-11-01-R10-P0-Recommendation-Hardening-Closeout-v1.md`
-3. `docs/checkpoints/M-2026-11-01-R10-Audit-Design-v1.md`
+2. `docs/checkpoints/M-2026-11-01-R10-P1-Closeout-v1.md`
+3. `docs/checkpoints/M-2026-11-01-R10-P1-Episode-Design-v1.md`
+4. `docs/checkpoints/M-2026-11-01-R10-P0-Recommendation-Hardening-Closeout-v1.md`
 
 Historical checkpoint files are immutable evidence records.
 
@@ -18,113 +19,134 @@ Historical checkpoint files are immutable evidence records.
 
 ## 1. Exact continuation point
 
-**R10-P1 — Deterministic Recommended Actions on Command Center — Episode Design & Implementation**
+**R10-P2 — Human Feedback Lifecycle UI — audit/design before implementation**
 
-P0 security/provenance hardening is complete and production-verified. Do not reopen P0 unless a regression is observed.
+R10-P1 deterministic Command Center recommendations are complete, acceptance-hardened and production-verified. Do not reopen P1 unless a regression is observed.
 
 ---
 
-## 2. P0 release
+## 2. P1 final release
 
 ```text
-PR                         #410
-main SHA                   1daf2c6d019a3cc8c899bc9d8d0c996ceee64e21
-CI                         #1342 passed
-CodeQL                     #627 passed
-Production Smoke           #159 passed
-Vercel production          READY on exact SHA
-Supabase migration         20261101151403 / r10_recommendation_security_hardening_v1
+Implementation PR           #413
+Acceptance-hardening PR     #414
+main SHA                    d5bbe5841e6a4e0f0647b1e1823efc8522fa10da
+CI                          #1354 passed
+CodeQL                      #639 passed
+Production Smoke            #163 passed
+Vercel production           READY on exact SHA
 ```
 
-Post-deploy:
+Supabase production migrations:
 
 ```text
-recommendations                    0
-recommendation_events              0
-orphan_or_tenant_mismatch_rows     0
-authenticated table privileges     SELECT only
+20261101153414  r10_command_center_recommendation_episodes_v1
+20261101155326  r10_command_center_recommendation_acceptance_hardening_v1
 ```
 
----
-
-## 3. Hardened recommendation boundary
-
-Live production now has:
-
-- composite recommendation/event tenant FK;
-- explicit event RLS tenant check;
-- target Lead array <= 500;
-- target count/cardinality equality;
-- lifecycle idempotency unique index;
-- owner/admin/manager-only v2 recommendation creation;
-- owner/admin/manager-only feedback;
-- service-role-only outcome observer;
-- fail-closed lifecycle transitions;
-- no app-role access to legacy v1 creator.
-
-No recommendation rows were created during P0.
+Source files are aligned to those exact ledger versions and protected by normalized MD5 checks.
 
 ---
 
-## 4. P1 allowed signals
+## 3. P1 live boundary
 
-Use only fresh observed CRM facts:
+The `/home` Recommended actions layer now uses only observed deterministic CRM signals:
 
 - reply backlog;
 - overdue follow-ups;
 - first touch needed;
 - payment pending.
 
-Keep the existing factual Attention cards unchanged and render recommendations in a separate Recommended actions layer.
+Important runtime properties:
 
-Exclude stale predictions, unready predictive probabilities, generic raw system failures, browser-only commerce claims and autonomous actions.
+- owner/admin/manager only;
+- server-derived tenant;
+- POST/private-no-store presentation;
+- persistent clear/recur episode state;
+- stable episode key during target churn;
+- working target set <= 50 Leads;
+- full signal baseline retained;
+- canonical admissions `priority_score` reused for ordering;
+- priority is not probability/confidence;
+- terminal episode keys cannot be touched/shown again;
+- partial signal failures preserve already-persisted successful presentations and are disclosed in UI;
+- no AI-generated recommendation prose;
+- no predictive conversion probability;
+- no autonomous customer/provider action.
 
----
-
-## 5. Episode-key design is the next immediate task
-
-The hardened v2 touch RPC upserts by `recommendation_key` and records `shown` on every call.
-
-Before any P1 code, define a deterministic episode key for each signal that guarantees:
-
-- repeated Home loads reuse the same unresolved episode;
-- dismissed/completed records are never reopened by touching the same key;
-- a new episode is created only after genuine clear/recur behavior or a deterministic new episode fingerprint;
-- target Lead changes do not rewrite terminal history;
-- `shown` means actually presented to a privileged user.
-
-Preferred shape:
-
-`signal + deterministic episode fingerprint`
-
-Fingerprint inputs should come only from observed CRM facts and be hashed server-side.
-
-Audit available timestamps/IDs for all four signals before locking the exact formula.
+Existing factual Home Attention / Action Queue surfaces remain unchanged.
 
 ---
 
-## 6. Authorization / generation flow
+## 4. Evidence state at P1 closeout
 
-`/home` already requires `owner | admin | manager`.
+No synthetic operator presentation was run.
 
-P1 flow:
+```text
+recommendations                    0
+recommendation_events              0
+signal_state_rows                  0
+```
 
-1. privileged user requests `/home`;
-2. server derives tenant;
-3. server evaluates four CRM signals;
-4. server computes current episode keys;
-5. only recommendations actually displayed call hardened v2 touch;
-6. page renders current recommendation rows separately from factual Attention cards.
+This is intentional. Real recommendation evidence begins only when a real privileged operator actually presents the production surface.
 
-No background recommendation generator in P1.
+Authenticated direct table privileges on recommendation and recommendation-event tables remain SELECT-only.
 
 ---
 
-## 7. Later checkpoints
+## 5. Live parity snapshot at closeout
 
-- P2: Accept / Dismiss / Start / Complete UI through hardened feedback RPC.
-- P3: service-role outcome observation + learning runner.
-- Predictive model activation remains gated by real outcome history.
+At the final read-only production check:
+
+```text
+Home needs reply / P1 reply backlog        575
+Home follow-ups due / P1 overdue            22
+Home first touch / P1 first touch            0
+Home payment pending / P1 payment pending    9
+```
+
+These are live operational counts and will change with real activity.
+
+---
+
+## 6. P2 immediate task
+
+Audit the existing hardened feedback RPC and lifecycle tables **read-only first**.
+
+P2 intends to expose four human-governed controls:
+
+- Accept;
+- Dismiss;
+- Start action;
+- Mark complete.
+
+Before code, lock:
+
+1. valid transitions from each recommendation state;
+2. terminal vs reversible actions;
+3. idempotent retry semantics;
+4. actor/timestamp/audit evidence;
+5. optional reason/evidence fields without fabricating data;
+6. stale-state and concurrent-operator behavior;
+7. owner/admin/manager authorization and tenant binding;
+8. UI states for success, conflict, terminal record and unavailable RPC;
+9. separation between work-queue navigation and lifecycle feedback;
+10. regression contracts preserving P1 episode/presentation semantics.
+
+Do not add P2 buttons until this design is finalized.
+
+---
+
+## 7. Later checkpoint
+
+P3 remains later:
+
+- service-role observed outcome runner;
+- downstream CRM/payment/enrollment evidence only;
+- learning-profile recomputation;
+- no causal-attribution claim from temporal observation alone.
+
+Predictive model activation remains separately gated by sufficient real labeled outcomes.
 
 ---
 
@@ -146,4 +168,5 @@ Do not resume automatically:
 - no fake recommendation/outcome evidence;
 - no predictive probabilities while readiness is blocked;
 - no autonomous high-impact action;
-- PostgreSQL remains canonical truth.
+- PostgreSQL remains canonical truth;
+- deterministic evidence must remain distinct from inferred/modelled evidence.
