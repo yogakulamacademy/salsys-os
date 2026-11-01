@@ -3,6 +3,7 @@
 **Checkpoint date:** 2026-11-01  
 **Canonical repository:** `yogakulamacademy/salsys-os`  
 **Production branch:** `main`  
+**Verified production head before this docs-only closeout:** `3362aa01bb777c9ea482199d80268f1a2df02177`  
 **Companion context:** `docs/SalsysOS_North_Star_Product_Context.md`  
 **Fast resume file:** `docs/SalsysOS_Active_Handoff.md`
 
@@ -25,8 +26,9 @@ Canonical production app:
 Current execution mode:
 
 - prior broad engineering closeout: complete;
+- PA-1 engineering + post-deploy closeout: complete;
 - current program: **Production Acceptance & Operational Closeout**;
-- consequential identity/customer changes: human-approved only.
+- current exact gate: **explicit human approval before a live identity merge**.
 
 ---
 
@@ -162,7 +164,7 @@ The V1 merge boundary is deliberately narrow:
 
 ### UI contract
 
-Data Quality now exposes:
+Data Quality exposes:
 
 ```text
 Dismiss as distinct
@@ -230,7 +232,7 @@ After PR #400 was merged:
 
 No actual live Person merge has occurred.
 
-Production application evidence for `f2abceb35b37f039b3382958b9a375bc32546f93`:
+PR #400 production evidence for `f2abceb35b37f039b3382958b9a375bc32546f93`:
 
 ```text
 Production Smoke #148   success
@@ -244,50 +246,118 @@ crm.salsysos.com        production alias present
 
 ---
 
-## 7. Supabase advisor state after PA-1
+## 7. PA-1 post-deploy advisor closeout — COMPLETE
+
+Supabase security and performance advisors were run after PA-1 deployment.
 
 Security advisor:
 
 - PA-1 audit-table `RLS enabled / no policy` notice is intentional because direct table grants are revoked;
 - PA-1 authenticated SECURITY DEFINER notice is expected and guarded inside the function;
-- other security-advisor findings shown in the scan pre-date PA-1 and are separate cleanup work.
+- unrelated security-advisor findings pre-date PA-1 and remain separate work.
 
-Performance advisor identified three PA-1-specific missing FK indexes on `person_merge_audit_v1`:
+Initial performance advisor identified three PA-1-specific unindexed foreign keys on `person_merge_audit_v1`:
 
 - `initiating_conflict_id`
 - `source_person_id`
 - `target_person_id`
 
-The focused follow-up migration is:
+PR #401 closed those advisor gaps and refreshed the operational handoff/checkpoint.
 
-`20261101131500_person_merge_audit_fk_indexes_v1.sql`
+PR #401 merge SHA:
 
-It adds only those three indexes and does not change identity-merge semantics.
+`3362aa01bb777c9ea482199d80268f1a2df02177`
+
+Production follow-up migration:
+
+`person_merge_audit_fk_indexes_v1`
+
+Migration ledger version:
+
+`20261101130010`
+
+Verified indexes:
+
+- `idx_person_merge_audit_v1_initiating_conflict_id`
+- `idx_person_merge_audit_v1_source_person_id`
+- `idx_person_merge_audit_v1_target_person_id`
+
+Performance-advisor rerun:
+
+- the three PA-1 unindexed-FK findings are gone;
+- the new indexes may appear as `unused_index` until real merge/audit traffic exists; do not remove them merely for being unused immediately after deployment.
+
+Post-closeout customer-data boundary:
+
+```text
+open pair conflicts          2
+source Person status         active
+merge audit rows             0
+```
+
+Therefore PA-1 engineering is deployed and complete while the consequential customer identity remains untouched.
 
 ---
 
-## 8. Exact current checkpoint
+## 8. Final PA-1 production proof
 
-**Finish PA-1 post-deploy closeout.**
+For `main` SHA:
 
-Sequence:
+`3362aa01bb777c9ea482199d80268f1a2df02177`
 
-1. validate/merge `feature/pa1-postdeploy-closeout-v1`;
-2. apply `person_merge_audit_fk_indexes_v1` in production;
-3. rerun Supabase performance advisor;
-4. confirm the three PA-1 missing-FK-index notices are gone;
-5. verify final `main` CI/CodeQL/Production Smoke and Vercel exact-SHA production deployment;
-6. confirm the two live identity conflicts still remain open and no merge audit row exists.
+Verified:
 
-Then **stop for explicit human approval** before the live same-person merge.
+```text
+Production Smoke #149   success
+CI #1324                success
+CodeQL #609             success
+Vercel deployment       dpl_2Mc3a8fnuHhSKQLRND4QaFP8bFJT
+Vercel state            READY
+Git commit provenance   exact SHA verified
+crm.salsysos.com        production alias present
+```
 
-The live merge is a consequential customer-identity change and must not be inferred from similarity alone. The identifiers are unverified.
+PA-1 post-deploy engineering closeout is therefore **COMPLETE**.
 
 ---
 
-## 9. After explicit PA-1 human approval
+## 9. Exact current checkpoint — HUMAN APPROVAL REQUIRED
 
-Execute one controlled merge for the eligible Person pair through the Data Quality workflow or the same authenticated RPC boundary.
+**Stop engineering changes here.**
+
+The next action is not another migration, bug fix, provider task or code change.
+
+The next action is an explicit human decision on whether the two flagged records represent the **same person**.
+
+Current live pair:
+
+```text
+Lead                LD-012063 / RANJAN SRI
+Current Person      745f0691-1edd-49c5-bbe0-89b36e709980
+Candidate Person    195e7642-c0bf-4425-8bb5-aaa8d81f781c
+Open conflicts      2
+Conflict evidence   phone + email ownership overlap
+Identifier status   unverified
+Merge audit rows    0
+```
+
+Because the identifiers are unverified, do not infer approval from similarity alone.
+
+Required human outcomes:
+
+1. **Same person**  
+   Use the PA-1 controlled two-step merge.
+
+2. **Different people / evidence not reusable**  
+   Use the existing human `Dismiss as distinct` path.
+
+Until one of those decisions is explicitly approved, leave both conflicts open.
+
+---
+
+## 10. After explicit PA-1 same-person approval
+
+Execute one controlled merge through the Data Quality workflow or the equivalent authenticated RPC boundary.
 
 Expected post-merge acceptance:
 
@@ -297,17 +367,31 @@ source Person status                merged
 source canonical identifiers        0
 source canonical sessions           0
 merge audit rows                    1
-surviving Person/live Lead link      preserved
+surviving Person/live Lead link     preserved
 CRM Core Integrity                  healthy
 Customer 360 Integrity              healthy
 Privacy Compliance                  healthy
 ```
 
+Expected row movement from the already-proven rollback lifecycle, subject to no intervening production changes:
+
+```text
+identifiers moved          2
+sessions moved             2
+consent receipts moved     4
+target identifiers         3
+target sessions            4
+target consent receipts    8
+resolved conflicts         2
+```
+
+Re-read the live pair immediately before execution and do not rely only on these historical counts.
+
 If any invariant fails, treat it as a production defect and stop before continuing.
 
 ---
 
-## 10. Next production-acceptance work after PA-1
+## 11. Next production-acceptance work after PA-1 decision
 
 After identity review is closed:
 
@@ -323,7 +407,7 @@ After identity review is closed:
 
 ---
 
-## 11. Locked engineering rules
+## 12. Locked engineering rules
 
 - one controlled checkpoint at a time;
 - verify before modifying;
@@ -343,7 +427,7 @@ After identity review is closed:
 
 ---
 
-## 12. Resume instruction
+## 13. Resume instruction
 
 When resuming in a new chat/session:
 
@@ -351,5 +435,5 @@ When resuming in a new chat/session:
 2. read this file;
 3. read `docs/SalsysOS_North_Star_Product_Context.md`;
 4. verify current `main`, Supabase migration state and production Vercel SHA before changing anything;
-5. continue from Section 8, not from an older October checkpoint;
+5. continue from Section 9;
 6. do not perform the live identity merge without explicit human approval.

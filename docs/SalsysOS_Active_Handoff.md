@@ -4,7 +4,7 @@
 **Updated:** 2026-11-01  
 **Repository:** `yogakulamacademy/salsys-os`  
 **Production branch:** `main`  
-**Verified production head before this documentation follow-up:** `f2abceb35b37f039b3382958b9a375bc32546f93`
+**Verified production head before this docs-only closeout:** `3362aa01bb777c9ea482199d80268f1a2df02177`
 
 Read this file first when resuming active engineering. Then read:
 
@@ -67,7 +67,7 @@ Do not reopen the old 14-surface checklist unless production evidence shows a re
 
 ## 3. Current phase — Production Acceptance & Operational Closeout
 
-The active program is no longer broad implementation closeout. It is **production acceptance under real tenant activity**.
+The active program is **production acceptance under real tenant activity**.
 
 Current acceptance evidence for Yogakulam Academy:
 
@@ -87,13 +87,13 @@ Expected/non-regression states still visible:
 - Search Indexing: intentionally inactive;
 - Customer 360: two open human-review identity conflicts.
 
-The provider blockers must not be misclassified as SalsysOS implementation defects.
+Provider blockers must not be misclassified as SalsysOS implementation defects.
 
 ---
 
 ## 4. PA-1 — Human-Approved Identity Merge & Conflict Resolution
 
-PA-1 was created after the production acceptance pass found two identity conflicts for the same live Lead/Person pair.
+PA-1 was created after the production acceptance pass found two identity conflicts for the same live Lead/current Person and the same candidate Person.
 
 Important evidence:
 
@@ -102,25 +102,25 @@ Important evidence:
 - the identifiers are unverified;
 - automatic merging is therefore intentionally prohibited.
 
-### PA-1 production capability
+### PA-1 implementation
 
 PR #400 merged:
 
 `PA-1: add human-approved identity merge and conflict resolution`
 
-Merged production code head:
+Main SHA after PR #400:
 
 `f2abceb35b37f039b3382958b9a375bc32546f93`
 
-Production migration applied:
+Production migration:
 
 `human_approved_identity_merge_v1`
 
-Production migration ledger version:
+Migration ledger version:
 
 `20261101125123`
 
-New controlled capability:
+Controlled capability:
 
 - `person_merge_audit_v1`
 - `merge_identity_resolution_conflict_v1(uuid)`
@@ -139,13 +139,13 @@ New controlled capability:
 - captured consent subject/decision/source evidence remains preserved;
 - active privacy/legal/ad-delivery state blocks the merge;
 - multi-candidate conflicts remain review-only;
-- durable merge audit is required.
+- durable merge audit required.
 
 ### Rollback-only production proof
 
 Before persistent deployment, the real two-conflict pair was exercised inside a production transaction and rolled back.
 
-Assertions inside the transaction:
+Inside the transaction:
 
 - both pair conflicts resolved;
 - source Person became `merged`;
@@ -156,82 +156,115 @@ Assertions inside the transaction:
 
 Post-rollback proof confirmed production customer identity remained unchanged.
 
-After persistent schema deployment:
+---
 
-- the PA-1 table/RPC exist;
-- RLS is enabled on the audit table;
-- anon cannot execute the merge RPC;
-- direct anon/authenticated audit-table access is denied;
-- authenticated execution still requires the function's explicit manager/admin authorization check;
-- the two live conflicts remain open;
-- source Person remains active;
-- merge audit rows remain 0.
+## 5. PA-1 post-deploy closeout — COMPLETE
 
-**No live customer identity merge has been performed.**
+After PR #400 deployment, Supabase performance advisor identified three missing FK indexes on `person_merge_audit_v1`.
+
+PR #401 merged the focused advisor closeout and refreshed the canonical operational documents.
+
+Current verified production head before this docs-only update:
+
+`3362aa01bb777c9ea482199d80268f1a2df02177`
+
+Follow-up migration:
+
+`person_merge_audit_fk_indexes_v1`
+
+Migration ledger version:
+
+`20261101130010`
+
+Verified indexes:
+
+- `idx_person_merge_audit_v1_initiating_conflict_id`
+- `idx_person_merge_audit_v1_source_person_id`
+- `idx_person_merge_audit_v1_target_person_id`
+
+Performance advisor rerun confirms the three PA-1 unindexed-FK findings are gone.
+
+The indexes may initially appear under `unused_index`; that is expected before real merge/audit traffic exists and is not a reason to remove them.
 
 ---
 
-## 5. PA-1 post-deploy advisor follow-up
+## 6. Final production evidence for PA-1 engineering
 
-Supabase advisors were run after deployment.
+For `main` SHA:
 
-Security advisor:
+`3362aa01bb777c9ea482199d80268f1a2df02177`
 
-- PA-1 audit-table `RLS enabled / no policy` notice is intentional because direct table privileges are revoked;
-- PA-1 authenticated SECURITY DEFINER notice is expected and protected by `auth.uid()` + `can_administer_organization_crm(...)` inside the function and anon execute revocation;
-- other security-advisor findings are pre-existing and are not introduced by PA-1.
+Verified:
 
-Performance advisor found three PA-1-specific unindexed foreign keys on `person_merge_audit_v1`:
+```text
+Production Smoke #149   success
+CI #1324                success
+CodeQL #609             success
+Vercel deployment       dpl_2Mc3a8fnuHhSKQLRND4QaFP8bFJT
+Vercel state            READY
+Git commit provenance   exact SHA verified
+crm.salsysos.com        production alias present
+```
 
-- `initiating_conflict_id`
-- `source_person_id`
-- `target_person_id`
+Current live customer-data boundary:
 
-A focused follow-up migration is being completed to index those three columns. Do not treat that advisor cleanup as a change to merge semantics.
+```text
+open pair conflicts      2
+source Person status     active
+merge audit rows         0
+```
 
----
+**No live identity merge has been performed.**
 
-## 6. Production deployment evidence
-
-For PR #400 merge head `f2abceb35b37f039b3382958b9a375bc32546f93`:
-
-- Production Smoke #148: success;
-- CI #1322: success;
-- CodeQL #607: success;
-- Vercel production deployment: `dpl_6bjy6sCXnq6Yu7DPeZqAqjDmDTMx`;
-- Vercel state: READY;
-- exact Git SHA metadata: verified;
-- production alias `crm.salsysos.com`: present.
+PA-1 engineering and post-deploy closeout are complete.
 
 ---
 
-## 7. Current exact continuation point
+## 7. Exact continuation point — HUMAN APPROVAL
 
-Complete the **PA-1 post-deploy closeout** first:
+Stop engineering changes here.
 
-1. merge/deploy the three audit FK indexes;
-2. rerun performance advisor and confirm those three PA-1 notices are gone;
-3. confirm production remains on the exact new main SHA and all gates are green;
-4. update the canonical Current Checkpoint with final evidence.
+The next step is a human decision on the live identity pair:
 
-Then stop before the consequential customer action and obtain explicit human confirmation for the live same-person decision.
+```text
+Lead                LD-012063 / RANJAN SRI
+Current Person      745f0691-1edd-49c5-bbe0-89b36e709980
+Candidate Person    195e7642-c0bf-4425-8bb5-aaa8d81f781c
+Open conflicts      2
+Evidence             phone + email ownership overlap
+Identifier status    unverified
+Merge audit rows     0
+```
 
-After explicit confirmation, execute **one** PA-1 merge through the controlled Data Quality workflow (or the same authenticated RPC boundary), then verify:
+Available outcomes:
 
-- open identity conflicts for the pair = 0;
+1. **Same person** — explicitly approve the PA-1 controlled merge.
+2. **Different people / evidence not reusable** — dismiss the conflicts as distinct through the existing human-review path.
+
+Do not infer either outcome from similarity alone because the identifiers are unverified.
+
+If same-person approval is given, re-read the live pair immediately before execution, then perform one controlled merge and verify:
+
+- open conflicts for pair = 0;
 - source Person status = `merged`;
-- identifiers/sessions/consent associations moved as expected;
-- exactly one merge audit record exists;
+- source canonical identifiers = 0;
+- source canonical sessions = 0;
+- one merge audit row exists;
 - surviving Person remains linked to the live Lead;
 - CRM Core Integrity remains healthy;
 - Customer 360 Integrity returns healthy;
 - Privacy Compliance remains healthy.
 
-Do not merge the two live Persons merely because the evidence looks likely. Their identifiers are unverified, so the human approval boundary is intentional.
+Expected historical row movement from rollback proof, subject to no intervening live changes:
+
+- identifiers moved: 2;
+- sessions moved: 2;
+- consent receipts moved: 4;
+- conflicts resolved: 2.
 
 ---
 
-## 8. Next production-acceptance sequence after PA-1
+## 8. Next production-acceptance sequence after PA-1 decision
 
 1. park Google Ads as an external approval blocker;
 2. park/track Meta Ads permission + App Review dependencies separately;
@@ -256,3 +289,15 @@ Do not merge the two live Persons merely because the evidence looks likely. Thei
 - customer-visible/high-impact autonomous actions remain fail-closed unless explicitly enabled;
 - privacy/legal holds must block destructive identity operations;
 - never create or mutate production customer data just to make a health metric green.
+
+---
+
+## 10. Resume instruction
+
+When resuming after interruption:
+
+1. verify current `main` before modifying anything;
+2. read this file + Current Checkpoint + North-Star context;
+3. continue from Section 7;
+4. do not rebuild PA-1 unless verification finds a regression;
+5. do not perform the live identity merge without explicit human approval.
