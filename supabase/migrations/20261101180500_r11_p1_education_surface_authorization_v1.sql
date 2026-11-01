@@ -2,8 +2,9 @@
 --
 -- Scope:
 -- - privileged education-operations access helper;
--- - narrow authenticated wrappers for Course Management + Admissions snapshots;
--- - retire broad authenticated access to the previous SECURITY DEFINER entry points.
+-- - narrow authenticated wrapper for the large Course Management aggregator;
+-- - harden the existing short Admissions snapshot entry point in place;
+-- - retire broad authenticated access to the previous Course Management entry point.
 --
 -- UI/navigation/form gating is implemented in application code in the same P1.
 
@@ -85,9 +86,9 @@ grant execute on function public.get_course_management_workspace_v2(uuid,text,te
 comment on function public.get_course_management_workspace_v3(uuid,text,text,text) is
 'R11-P1 authenticated Course Management/Operations read boundary. Enforces education_core and privileged tenant role before delegating to the proven V2 aggregator.';
 
--- Admissions receives the same product-surface boundary. Keep the proven
--- internal snapshot builder untouched and gate the authenticated entry point.
-create or replace function public.get_admissions_snapshot_v2(
+-- Admissions already has a compact public entry function around a larger
+-- internal snapshot builder, so harden that existing entry point in place.
+create or replace function public.get_admissions_snapshot(
   p_organization_id uuid
 )
 returns jsonb
@@ -105,19 +106,12 @@ begin
 end;
 $$;
 
-revoke all on function public.get_admissions_snapshot_v2(uuid)
-  from public, anon, authenticated;
-grant execute on function public.get_admissions_snapshot_v2(uuid)
-  to authenticated, service_role;
-
--- The earlier authenticated snapshot function allowed any organization member.
--- Preserve it for trusted service paths, but make product traffic use V2.
-revoke execute on function public.get_admissions_snapshot(uuid)
+revoke all on function public.get_admissions_snapshot(uuid)
   from public, anon, authenticated;
 grant execute on function public.get_admissions_snapshot(uuid)
-  to service_role;
+  to authenticated, service_role;
 
-comment on function public.get_admissions_snapshot_v2(uuid) is
+comment on function public.get_admissions_snapshot(uuid) is
 'R11-P1 authenticated Admissions management boundary. Requires education_core plus bound owner/admin/manager role.';
 
 commit;
