@@ -129,7 +129,7 @@ export async function POST(request: NextRequest) {
     const db = supabase as any;
 
     const { data: candidateData, error: candidateError } = await db
-      .from("v_r10_command_center_recommendation_candidates_v1")
+      .from("v_r10_command_center_recommendation_candidates_v2")
       .select(
         "organization_id,signal_id,lead_id,signal_at,target_rank,baseline_value,priority_score,max_priority_score",
       )
