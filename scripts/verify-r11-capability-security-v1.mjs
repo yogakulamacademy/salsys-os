@@ -53,9 +53,9 @@ for (const [needle, label] of [
 }
 
 for (const [needle, label] of [
-  ["rpc('update_course_batch_admin_v2'", 'authenticated V2 batch update call'],
-  ["rpc('set_course_batch_enrollment_state_v2'", 'authenticated V2 enrollment-state call'],
-  ["rpc('set_course_batch_active_state_v2'", 'authenticated V2 active-state call'],
+  ['rpc("update_course_batch_admin_v2"', 'authenticated V2 batch update call'],
+  ['rpc("set_course_batch_enrollment_state_v2"', 'authenticated V2 enrollment-state call'],
+  ['rpc("set_course_batch_active_state_v2"', 'authenticated V2 active-state call'],
 ]) {
   requireText(courseActions, needle, label);
 }
@@ -119,8 +119,9 @@ for (const legacySignature of [
   'set_course_batch_enrollment_state(uuid,boolean,text)',
   'set_course_batch_active_state(uuid,boolean)',
 ]) {
+  const escaped = legacySignature.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   const grantPattern = new RegExp(
-    `grant\\s+execute\\s+on\\s+function\\s+public\\.${legacySignature.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}[\\s\\S]{0,120}authenticated`,
+    `grant\\s+execute\\s+on\\s+function\\s+public\\.${escaped}[\\s\\S]{0,120}authenticated`,
     'i',
   );
   expect(!grantPattern.test(migration), `Legacy V1 RPC must not regain authenticated EXECUTE (${legacySignature})`);
