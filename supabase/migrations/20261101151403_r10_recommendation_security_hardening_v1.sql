@@ -6,10 +6,6 @@
 
 begin;
 
--- ---------------------------------------------------------------------------
--- Tenant relationship integrity
--- ---------------------------------------------------------------------------
-
 alter table public.system_intelligence_recommendations
   add constraint system_intelligence_recommendations_id_org_key
   unique (id, organization_id);
@@ -20,10 +16,6 @@ alter table public.system_intelligence_recommendation_events
   references public.system_intelligence_recommendations (id, organization_id)
   on delete cascade;
 
--- ---------------------------------------------------------------------------
--- Target-list integrity
--- ---------------------------------------------------------------------------
-
 alter table public.system_intelligence_recommendations
   add constraint system_intelligence_recommendations_target_array_bound_check
   check (cardinality(target_lead_ids) <= 500);
@@ -32,18 +24,9 @@ alter table public.system_intelligence_recommendations
   add constraint system_intelligence_recommendations_target_count_matches_check
   check (target_lead_count = cardinality(target_lead_ids));
 
--- ---------------------------------------------------------------------------
--- Lifecycle idempotency backup guard
--- ---------------------------------------------------------------------------
-
 create unique index system_intelligence_recommendation_events_single_lifecycle_uidx
   on public.system_intelligence_recommendation_events (recommendation_id, event_type)
   where event_type in ('accepted','dismissed','action_started','action_completed');
-
--- ---------------------------------------------------------------------------
--- Direct table grants: tenant members may read; mutations go through hardened
--- functions. Service-role/postgres retain their existing trusted privileges.
--- ---------------------------------------------------------------------------
 
 revoke all on table public.system_intelligence_recommendations from anon, authenticated;
 revoke all on table public.system_intelligence_recommendation_events from anon, authenticated;
@@ -51,7 +34,6 @@ revoke all on table public.system_intelligence_recommendation_events from anon, 
 grant select on table public.system_intelligence_recommendations to authenticated;
 grant select on table public.system_intelligence_recommendation_events to authenticated;
 
--- Keep read policies tenant-scoped.
 drop policy if exists system_intelligence_recommendations_select
   on public.system_intelligence_recommendations;
 create policy system_intelligence_recommendations_select
@@ -74,9 +56,6 @@ using (
   and public.is_organization_member(organization_id)
 );
 
--- Defense-in-depth mutation policies. Authenticated currently has no direct
--- INSERT/UPDATE table grant, but these policies remain restrictive if a future
--- migration intentionally restores one.
 drop policy if exists system_intelligence_recommendations_insert
   on public.system_intelligence_recommendations;
 create policy system_intelligence_recommendations_insert
@@ -132,21 +111,9 @@ with check (
   )
 );
 
--- ---------------------------------------------------------------------------
--- Retire the legacy recommendation creator. The V2 creator below is the only
--- authenticated recommendation-creation RPC retained after P0.
--- ---------------------------------------------------------------------------
-
 revoke all on function public.touch_system_intelligence_recommendation_v1(
   text,text,text,text,text,text,integer,text,text,text,numeric,text
 ) from public, anon, authenticated, service_role;
-
--- ---------------------------------------------------------------------------
--- Privileged recommendation presentation/touch boundary.
---
--- `shown` is recorded by this RPC, so P1 must call it only for recommendations
--- that are actually being presented on the privileged Command Center surface.
--- ---------------------------------------------------------------------------
 
 create or replace function public.touch_system_intelligence_recommendation_v2(
   p_recommendation_key text,
@@ -297,11 +264,6 @@ comment on function public.touch_system_intelligence_recommendation_v2(
   text,text,text,text,text,text,integer,text,text,text,numeric,text,uuid[]
 ) is
 'R10 privileged recommendation presentation boundary. Tenant is session-derived, owner/admin/manager is required, target Leads must belong to the tenant, and every call records a real shown event.';
-
--- ---------------------------------------------------------------------------
--- Privileged human feedback with fail-closed state transitions and idempotent
--- retries. No customer/provider action is executed by this function.
--- ---------------------------------------------------------------------------
 
 create or replace function public.record_system_intelligence_recommendation_feedback_v1(
   p_recommendation_id uuid,
@@ -459,7 +421,6 @@ comment on function public.record_system_intelligence_recommendation_feedback_v1
 ) is
 'R10 privileged human recommendation feedback boundary. Enforces tenant role, valid state transitions and idempotent lifecycle retries; it executes no external customer/provider action.';
 
--- Outcome observation is machine work. Remove arbitrary authenticated execution.
 revoke all on function public.observe_system_intelligence_recommendation_outcomes_v1(integer)
   from public, anon, authenticated;
 grant execute on function public.observe_system_intelligence_recommendation_outcomes_v1(integer)
