@@ -44,7 +44,7 @@ for (const [needle, label] of [
   ['Settings audit could not be verified:', 'audit read failure must be distinguished from an empty audit'],
   ['This is not presented as an empty change history.', 'audit failure must not masquerade as no history'],
   ['providerVisibility.instagramConnected', 'Instagram status must come from provider visibility evidence'],
-  ["providerVisibility.whatsappConnected", 'WhatsApp fallback status must come from provider visibility evidence'],
+  ['visibility.whatsappConnected', 'WhatsApp fallback status must come from provider visibility evidence'],
   ["status={instagramStatus}", 'Instagram Settings row must render canonical provider status'],
   ['Workspace-scoped Instagram Direct messaging and automation eligibility', 'Instagram capability copy must reflect implemented messaging operations'],
   ['Owner / Admin / Manager permissions', 'Settings mutation role label must match database authorization'],
