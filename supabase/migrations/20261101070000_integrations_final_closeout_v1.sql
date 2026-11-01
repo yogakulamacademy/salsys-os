@@ -55,8 +55,8 @@ begin
     raise exception 'Connection not found';
   end if;
 
-  if v_connection.provider = 'whatsapp' then
-    raise exception 'Use the dedicated WhatsApp removal flow';
+  if v_connection.provider not in ('google', 'meta', 'instagram') then
+    raise exception 'This provider is not managed by the generic integration disconnect flow';
   end if;
 
   if v_connection.provider <> 'google' and v_status <> 'not_attempted' then
@@ -231,7 +231,7 @@ grant execute on function public.finalize_integration_disconnect_v1(uuid, uuid, 
 grant execute on function public.finalize_whatsapp_removal_v1(uuid, uuid, uuid, boolean, text) to service_role;
 
 comment on function public.finalize_integration_disconnect_v1(uuid, uuid, uuid, text, text) is
-  'Atomically clears one non-WhatsApp tenant integration, removes its assets, and records truthful provider-revocation evidence.';
+  'Atomically clears one Google/Meta/Instagram tenant integration, removes its assets, and records truthful provider-revocation evidence.';
 comment on function public.finalize_whatsapp_removal_v1(uuid, uuid, uuid, boolean, text) is
   'Atomically deactivates WhatsApp mappings, clears assets/credentials, revokes the local connection, and records removal evidence after the provider unsubscribe attempt.';
 
