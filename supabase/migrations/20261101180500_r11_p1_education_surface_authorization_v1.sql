@@ -2,9 +2,9 @@
 --
 -- Scope:
 -- - privileged education-operations access helper;
--- - narrow authenticated wrapper for the large Course Management aggregator;
--- - harden the existing short Admissions snapshot entry point in place;
--- - retire broad authenticated access to the previous Course Management entry point.
+-- - preserve the public Course Management RPC signature while moving its proven
+--   large aggregator behind a capability/role guard;
+-- - harden the existing short Admissions snapshot entry point in place.
 --
 -- UI/navigation/form gating is implemented in application code in the same P1.
 
@@ -43,9 +43,18 @@ grant execute on function public.can_access_education_operations(uuid)
 comment on function public.can_access_education_operations(uuid) is
 'R11-P1 privileged Education workspace access. Requires education_core plus bound owner/admin/manager for authenticated callers; service_role may evaluate explicit organizations.';
 
--- Keep the large proven Course Management aggregator intact behind a smaller
--- product-surface authorization wrapper rather than duplicating its SQL.
-create or replace function public.get_course_management_workspace_v3(
+-- Preserve the proven Course Management aggregator without copying its large
+-- SQL body. Rename the existing function to an internal implementation, then
+-- recreate the original public signature as the guarded product boundary.
+alter function public.get_course_management_workspace_v2(uuid,text,text,text)
+  rename to get_course_management_workspace_internal_v2;
+
+revoke all on function public.get_course_management_workspace_internal_v2(uuid,text,text,text)
+  from public, anon, authenticated;
+grant execute on function public.get_course_management_workspace_internal_v2(uuid,text,text,text)
+  to service_role;
+
+create or replace function public.get_course_management_workspace_v2(
   p_organization_id uuid,
   p_query text default '',
   p_location text default 'all',
@@ -62,7 +71,7 @@ begin
     raise exception 'EDUCATION_OPERATIONS_ACCESS_REQUIRED' using errcode = '42501';
   end if;
 
-  return public.get_course_management_workspace_v2(
+  return public.get_course_management_workspace_internal_v2(
     p_organization_id,
     p_query,
     p_location,
@@ -71,20 +80,13 @@ begin
 end;
 $$;
 
-revoke all on function public.get_course_management_workspace_v3(uuid,text,text,text)
-  from public, anon, authenticated;
-grant execute on function public.get_course_management_workspace_v3(uuid,text,text,text)
-  to authenticated, service_role;
-
--- The older V2 function remains available to trusted server/service paths only.
--- Authenticated product traffic must pass through V3 capability + role checks.
-revoke execute on function public.get_course_management_workspace_v2(uuid,text,text,text)
+revoke all on function public.get_course_management_workspace_v2(uuid,text,text,text)
   from public, anon, authenticated;
 grant execute on function public.get_course_management_workspace_v2(uuid,text,text,text)
-  to service_role;
+  to authenticated, service_role;
 
-comment on function public.get_course_management_workspace_v3(uuid,text,text,text) is
-'R11-P1 authenticated Course Management/Operations read boundary. Enforces education_core and privileged tenant role before delegating to the proven V2 aggregator.';
+comment on function public.get_course_management_workspace_v2(uuid,text,text,text) is
+'R11-P1 authenticated Course Management/Operations read boundary. Preserves the existing application signature while enforcing education_core and privileged tenant role before delegating to the internal proven aggregator.';
 
 -- Admissions already has a compact public entry function around a larger
 -- internal snapshot builder, so harden that existing entry point in place.
