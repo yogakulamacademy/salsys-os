@@ -1,4 +1,3 @@
-import { redirect } from 'next/navigation';
 import {
   Building2,
   CheckCircle2,
@@ -10,9 +9,8 @@ import {
 
 import { provisionCustomerOrganizationAction } from '@/app/settings/organizations/actions';
 import { PageHeader } from '@/components/ui';
+import { requirePlatformAdminAccess } from '@/lib/platform-admin-access';
 import { createAdminClient } from '@/lib/supabase/admin';
-import { createClient } from '@/lib/supabase/server';
-import { getCurrentWorkspaceContext } from '@/lib/workspace';
 
 type OrganizationRow = {
   id: string;
@@ -30,35 +28,6 @@ type OnboardingRow = {
   completed_at: string | null;
 };
 
-async function requirePlatformAdmin() {
-  const supabase = await createClient();
-  const {
-    data: { user },
-    error: authError,
-  } = await supabase.auth.getUser();
-
-  if (authError || !user) redirect('/login');
-
-  const workspace = await getCurrentWorkspaceContext(supabase);
-  const active = workspace.activeWorkspace;
-
-  if (
-    !active ||
-    active.organizationSlug !== 'salsysos' ||
-    !['owner', 'admin'].includes(active.role)
-  ) {
-    redirect('/dashboard');
-  }
-
-  const { data: profile, error: profileError } = await supabase
-    .from('profiles')
-    .select('id,active')
-    .eq('id', user.id)
-    .maybeSingle();
-
-  if (profileError || !profile || profile.active !== true) redirect('/dashboard');
-}
-
 function formatDate(value: string | null) {
   if (!value) return '—';
   const date = new Date(value);
@@ -75,7 +44,7 @@ export default async function OrganizationsPage({
   searchParams: Promise<{ notice?: string; error?: string }>;
 }) {
   const query = await searchParams;
-  await requirePlatformAdmin();
+  await requirePlatformAdminAccess();
 
   const admin = createAdminClient();
   const [organizationsResult, onboardingResult] = await Promise.all([
@@ -128,7 +97,7 @@ export default async function OrganizationsPage({
           <div>
             <div className="text-base font-semibold text-slate-950">Provision customer workspace</div>
             <p className="mt-1 max-w-3xl text-sm leading-6 text-slate-500">
-              This creates the owner Auth identity, organization membership, standard functional workspaces and a required onboarding record together. If tenant provisioning fails, the new Auth identity is rolled back.
+              This creates the owner Auth identity, organization membership, standard functional workspaces and a required onboarding record together. If tenant provisioning fails, SalsysOS also attempts to remove the temporary owner login and reports separately if that cleanup cannot be verified.
             </p>
           </div>
         </div>
