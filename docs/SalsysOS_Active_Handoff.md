@@ -3,14 +3,13 @@
 **Purpose:** Fast recovery after an interrupted engineering session.  
 **Updated:** 2026-11-01  
 **Repository:** `yogakulamacademy/salsys-os`  
-**Production branch:** `main`  
-**Verified production runtime head:** `0ff9a29096c44975ba3ea39099e7ecfa1a7bd0ac`
+**Production branch:** `main`
 
 Read first:
 
 1. `docs/SalsysOS_Current_Checkpoint.md`
-2. `docs/checkpoints/M-2026-11-01-R10-V1-Engineering-Closeout-v1.md`
-3. `docs/checkpoints/M-2026-11-01-North-Star-Rebaseline-v1.md`
+2. `docs/checkpoints/M-2026-11-01-Post-R10-Rebaseline-v1.md`
+3. `docs/checkpoints/M-2026-11-01-R10-V1-Engineering-Closeout-v1.md`
 
 Historical checkpoint files are immutable evidence records.
 
@@ -18,131 +17,119 @@ Historical checkpoint files are immutable evidence records.
 
 ## 1. Exact continuation point
 
-**Post-R10 North-Star Rebaseline & Next Roadmap Selection — read-only first.**
+**R11 — Education / Wellness Vertical Pack V1 — Audit & Design**
 
-R10 V1 engineering is closed. Do not invent an R10-P4 merely because real recommendation/feedback/outcome samples are currently zero.
+R10 V1 engineering is closed. The post-R10 rebaseline selected R11 before R13 because the education/wellness engine already exists and the next highest-value step is to make it explicitly reusable/configurable across tenants.
 
----
-
-## 2. R10 V1 status
-
-```text
-R10-P0  Recommendation security / reproducibility       complete
-R10-P1  Deterministic Command Center recommendations    complete
-R10-P2  Human feedback lifecycle                        complete
-R10-P3  Observed outcome + descriptive learning runner  complete
-```
-
-Latest R10 runtime release:
-
-```text
-PR                         #420
-main SHA                   0ff9a29096c44975ba3ea39099e7ecfa1a7bd0ac
-PR CI                      #1371 passed
-PR CodeQL                  #656 passed
-post-merge CI              #1372 passed
-post-merge CodeQL          #657 passed
-Production Smoke           #169 passed
-Vercel production          READY on exact SHA
-```
-
-Supabase P3 migration:
-
-```text
-version                    20261101164458
-name                       r10_outcome_learning_runner_v1
-MD5                        8d1fa6a3f4b032300b84212fd0fc0571
-```
+Do not start R11 implementation until the audit/design contract is locked.
 
 ---
 
-## 3. R10 runner is operationally proven
+## 2. Current R11 evidence
 
-The single P3 cron runs every 15 minutes.
-
-During closeout it naturally executed twice across all 4 active organizations:
+Across 4 active organizations:
 
 ```text
-outcome-run rows                 8
-latest tenant run status         success for all 4
-System Health                    healthy for all 4
-recommendations scanned          0
-outcome events recorded          0
-learning profiles recomputed     0
+courses                              16
+course batches                       85
+upcoming capacity rows               63
+person/course affinity rows          21
+person/course recommendation rows    20
 ```
 
-This is valid runner telemetry and does not fabricate business evidence.
+All current course/batch rows belong to Yogakulam Academy.
+
+`Test Yoga School` exists as another active organization but has no course/batch data.
+
+Do not seed fake courses or batches there to manufacture multi-tenant proof.
 
 ---
 
-## 4. R10 business-effectiveness evidence remains intentionally empty
+## 3. Existing generic foundation
 
-At closeout:
+The current course/batch schema is already organization-scoped and largely reusable.
+
+Generic Education concepts already modeled:
+
+- course identity/name/category/hours;
+- batch date/time/timezone/location/mode;
+- capacity/seats;
+- currency/pricing;
+- enrollment state;
+- external source/catalog IDs and sync timestamps.
+
+Potential Wellness/Residential extensions already present:
+
+- private/shared/course-only pricing;
+- accommodation capacity/remaining/note.
+
+The audit must decide which are optional extensions rather than mandatory Education semantics.
+
+---
+
+## 4. Tenant shell today
+
+All active organizations currently receive the same generic enabled workspaces:
 
 ```text
-recommendations              0
-recommendation events        0
-learning profiles            0
+admin
+finance
+marketing
+reports
+sales
 ```
 
-Real recommendation activity must accumulate organically through the privileged Command Center.
+There is no formal organization-level Education/Wellness vertical capability profile today.
 
-Do not seed fake presentations, feedback, actions, downstream outcomes or learning samples.
-
----
-
-## 5. Predictive promotion remains parked
-
-Do not:
-
-- publish trained conversion probability without readiness evidence;
-- reinterpret deterministic predictions as a trained model;
-- apply descriptive learning-profile score adjustments to live P1 priority;
-- claim recommendation causality from temporal downstream movement.
-
-Any predictive-ranking phase requires a separate evidence-backed checkpoint.
+This is the central productization gap to audit.
 
 ---
 
-## 6. Other parked work — do not resume automatically
+## 5. R11 audit work
 
-- Yogakulam live commerce completion / Hostinger PHP emitter;
+Verify read-only:
+
+1. course-management route/navigation access boundaries;
+2. Admissions route/navigation dependencies on course/batch capability;
+3. current role/permission model for course/batch mutation;
+4. course/batch constraints that are generic vs wellness-specific;
+5. catalog/source sync configuration and any Yogakulam-specific assumptions;
+6. whether an organization capability/settings model already exists elsewhere;
+7. how a second tenant would enable the pack without copying Yogakulam data;
+8. how defaults/templates can be optional and non-destructive.
+
+Then lock a single R11 V1 implementation contract.
+
+---
+
+## 6. R13 remains later
+
+Controlled customer organization provisioning/onboarding already exists, but R13 still lacks public signup, subscriptions/billing, plan entitlements, signup abuse controls, customer-controlled deletion and billing-driven suspension.
+
+Do not pull those commercial concerns into R11 V1. First define the reusable vertical product boundary; then R13 can attach commercial plans/entitlements to it.
+
+---
+
+## 7. Parked work
+
+Do not resume automatically:
+
+- Yogakulam Hostinger/PHP commerce completion;
 - PA-1 live identity decision;
-- Google Ads external production API approval;
-- Meta Ads external permission/App Review/account selection;
-- broad Search Indexing activation.
-
----
-
-## 7. NEXT WORK — POST-R10 REBASELINE
-
-Run a read-only comparison of the highest-value remaining internal product gaps.
-
-Primary candidates:
-
-### R11 Wellness / Education Productization
-
-Existing Yogakulam depth already includes real courses, batches, capacity, affinity and recommendation structures. Audit what is tenant-specific versus reusable vertical-pack capability.
-
-### R13 Commercial SaaS Readiness
-
-Provisioning/onboarding exists, but prior audit found public signup, billing/subscription enforcement, plan entitlements, signup abuse controls and customer-controlled organization deletion intentionally unimplemented.
-
-### Smaller cross-cutting gap
-
-If current production/repository evidence reveals a smaller high-value internal gap, compare it honestly against R11/R13 before selecting a large phase.
-
-The rebaseline must select **one** next checkpoint and define its acceptance/design contract before code.
+- Google Ads production API approval;
+- Meta Ads provider permission/account selection;
+- Search Indexing activation;
+- predictive model promotion / automatic learning-based recommendation ranking.
 
 ---
 
 ## 8. Safety rules
 
 - verify before modifying;
-- one controlled checkpoint at a time;
+- one checkpoint at a time;
 - PostgreSQL remains canonical truth;
 - tenant authority is server-derived/explicit;
-- observed, deterministic, inferred and trained/modelled evidence remain distinct;
-- no fake recommendations, outcomes, revenue or learning evidence;
-- high-impact actions remain human-governed;
-- do not reopen external/human-blocked work without the required decision/dependency.
+- vertical capability cannot weaken role/tenant isolation;
+- no fake second-tenant data for acceptance;
+- generic Education core and optional Wellness/Residential extensions must remain distinguishable;
+- do not mix R13 billing/signup scope into R11 design.
