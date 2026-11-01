@@ -4,14 +4,15 @@
 **Updated:** 2026-11-01  
 **Repository:** `yogakulamacademy/salsys-os`  
 **Production branch:** `main`  
-**Verified production head:** `d5bbe5841e6a4e0f0647b1e1823efc8522fa10da`
+**R10-P1 verified runtime release:** `d5bbe5841e6a4e0f0647b1e1823efc8522fa10da`  
+**Latest docs merge before P2 design:** `31894ef499d94ee06b0f706e34acb5ecef5452c5`
 
 Read first:
 
 1. `docs/SalsysOS_Current_Checkpoint.md`
-2. `docs/checkpoints/M-2026-11-01-R10-P1-Closeout-v1.md`
-3. `docs/checkpoints/M-2026-11-01-R10-P1-Episode-Design-v1.md`
-4. `docs/checkpoints/M-2026-11-01-R10-P0-Recommendation-Hardening-Closeout-v1.md`
+2. `docs/checkpoints/M-2026-11-01-R10-P2-Human-Feedback-Audit-Design-v1.md`
+3. `docs/checkpoints/M-2026-11-01-R10-P1-Closeout-v1.md`
+4. `docs/checkpoints/M-2026-11-01-R10-P1-Episode-Design-v1.md`
 
 Historical checkpoint files are immutable evidence records.
 
@@ -19,154 +20,182 @@ Historical checkpoint files are immutable evidence records.
 
 ## 1. Exact continuation point
 
-**R10-P2 — Human Feedback Lifecycle UI — audit/design before implementation**
+**R10-P2 — Human Feedback Lifecycle UI — implementation against locked design**
 
-R10-P1 deterministic Command Center recommendations are complete, acceptance-hardened and production-verified. Do not reopen P1 unless a regression is observed.
+P2 audit/design is complete. Do not redesign the state machine during implementation unless a new verified invariant gap is found.
 
 ---
 
-## 2. P1 final release
+## 2. Existing lifecycle to reuse
+
+Production already provides the hardened RPC:
 
 ```text
-Implementation PR           #413
-Acceptance-hardening PR     #414
-main SHA                    d5bbe5841e6a4e0f0647b1e1823efc8522fa10da
-CI                          #1354 passed
-CodeQL                      #639 passed
-Production Smoke            #163 passed
-Vercel production           READY on exact SHA
+record_system_intelligence_recommendation_feedback_v1(id,event,note)
 ```
 
-Supabase production migrations:
+Security/consistency:
+
+- authenticated tenant required;
+- tenant derived server-side;
+- owner/admin/manager required;
+- row locked before transition;
+- recommendation must belong to tenant;
+- lifecycle retries are idempotent;
+- unique lifecycle event per recommendation/event type;
+- actor/timestamp stored in event ledger;
+- optional note <= 500 chars.
+
+No new lifecycle schema is required for P2 V1.
+
+---
+
+## 3. Locked lifecycle UI states
 
 ```text
-20261101153414  r10_command_center_recommendation_episodes_v1
-20261101155326  r10_command_center_recommendation_acceptance_hardening_v1
+active                    -> Accept | Dismiss
+accepted                  -> Start action | Dismiss
+acted + completed_at null -> Mark complete
+acted + completed_at set  -> Completed / no actions
+dismissed                 -> no actions
+expired                   -> no actions
 ```
 
-Source files are aligned to those exact ledger versions and protected by normalized MD5 checks.
+There is no `completed` database state. Completion is derived from `completed_at`.
+
+No undo/reopen in P2 V1.
 
 ---
 
-## 3. P1 live boundary
+## 4. Critical P1/P2 integration rule
 
-The `/home` Recommended actions layer now uses only observed deterministic CRM signals:
+Current P1 presentation returns/touches active recommendations only.
 
-- reply backlog;
-- overdue follow-ups;
-- first touch needed;
-- payment pending.
-
-Important runtime properties:
-
-- owner/admin/manager only;
-- server-derived tenant;
-- POST/private-no-store presentation;
-- persistent clear/recur episode state;
-- stable episode key during target churn;
-- working target set <= 50 Leads;
-- full signal baseline retained;
-- canonical admissions `priority_score` reused for ordering;
-- priority is not probability/confidence;
-- terminal episode keys cannot be touched/shown again;
-- partial signal failures preserve already-persisted successful presentations and are disclosed in UI;
-- no AI-generated recommendation prose;
-- no predictive conversion probability;
-- no autonomous customer/provider action.
-
-Existing factual Home Attention / Action Queue surfaces remain unchanged.
-
----
-
-## 4. Evidence state at P1 closeout
-
-No synthetic operator presentation was run.
+P2 must additionally return committed unfinished work:
 
 ```text
-recommendations                    0
-recommendation_events              0
-signal_state_rows                  0
+accepted + not dismissed/acted/completed
+acted + not dismissed/completed
 ```
 
-This is intentional. Real recommendation evidence begins only when a real privileged operator actually presents the production surface.
+Committed work:
 
-Authenticated direct table privileges on recommendation and recommendation-event tables remain SELECT-only.
+- is read from persisted recommendation rows;
+- is not touched again;
+- does not create another `shown` event;
+- persists across Home reloads;
+- persists if the original aggregate signal clears;
+- keeps the evidence snapshot from the recommendation that the human accepted.
+
+A later genuine clear -> recur episode may coexist as a separate new active recommendation. Do not merge history.
+
+If active touch hits `INTELLIGENCE_EPISODE_TERMINAL` due a concurrent feedback transition, re-read lifecycle state instead of reporting generic unavailable evidence.
 
 ---
 
-## 5. Live parity snapshot at closeout
-
-At the final read-only production check:
+## 5. Feedback endpoint to build
 
 ```text
-Home needs reply / P1 reply backlog        575
-Home follow-ups due / P1 overdue            22
-Home first touch / P1 first touch            0
-Home payment pending / P1 payment pending    9
+POST /api/intelligence/recommendations/feedback
 ```
 
-These are live operational counts and will change with real activity.
+Body:
+
+```text
+recommendationId
+accepted | dismissed | action_started | action_completed
+optional note <= 500
+```
+
+Required server behavior:
+
+- same-origin guard;
+- authenticated user;
+- current workspace resolution;
+- owner/admin/manager check;
+- event/note validation;
+- call existing feedback RPC;
+- re-read authoritative recommendation state;
+- return normalized lifecycle + timestamps + legal next actions;
+- private/no-store response.
+
+Expected error semantics:
+
+```text
+400 invalid input
+401 auth/workspace missing
+403 origin/role denied
+404 recommendation not found
+409 stale/invalid transition
+503 unexpected data-layer failure
+```
 
 ---
 
-## 6. P2 immediate task
+## 6. Card UX
 
-Audit the existing hardened feedback RPC and lifecycle tables **read-only first**.
+Active:
 
-P2 intends to expose four human-governed controls:
+```text
+Accept
+Dismiss
+Open work queue
+```
 
-- Accept;
-- Dismiss;
-- Start action;
-- Mark complete.
+Accepted:
 
-Before code, lock:
+```text
+Start action
+Dismiss
+Open work queue
+```
 
-1. valid transitions from each recommendation state;
-2. terminal vs reversible actions;
-3. idempotent retry semantics;
-4. actor/timestamp/audit evidence;
-5. optional reason/evidence fields without fabricating data;
-6. stale-state and concurrent-operator behavior;
-7. owner/admin/manager authorization and tenant binding;
-8. UI states for success, conflict, terminal record and unavailable RPC;
-9. separation between work-queue navigation and lifecycle feedback;
-10. regression contracts preserving P1 episode/presentation semantics.
+In progress:
 
-Do not add P2 buttons until this design is finalized.
+```text
+Mark complete
+Open work queue
+```
 
----
+Dismiss and Mark complete may collect an optional workflow note.
 
-## 7. Later checkpoint
+Completion message must state that marking workflow complete does not claim the business/customer outcome succeeded.
 
-P3 remains later:
-
-- service-role observed outcome runner;
-- downstream CRM/payment/enrollment evidence only;
-- learning-profile recomputation;
-- no causal-attribution claim from temporal observation alone.
-
-Predictive model activation remains separately gated by sufficient real labeled outcomes.
+`Open work queue` is navigation. Feedback buttons do not execute external/customer/provider actions.
 
 ---
 
-## 8. Parked work
+## 7. P3 remains out of scope
 
-Do not resume automatically:
+Existing outcome observation begins from `acted_at`.
 
-- commerce completion / Hostinger PHP emitter;
-- PA-1 live identity decision;
-- Google/Meta provider approval;
-- Search Indexing activation.
+Do not modify or run the P3 observer/learning runner during P2.
+
+No causal-attribution claim is added by P2.
+
+---
+
+## 8. Implementation order
+
+1. shared lifecycle helpers/types;
+2. committed-work support in presentation response;
+3. terminal-touch race reconciliation;
+4. feedback POST endpoint;
+5. lifecycle controls + note confirmation UI;
+6. authoritative conflict/error handling;
+7. P2 verifier and CI contract;
+8. release gates;
+9. production acceptance without synthetic feedback events;
+10. P2 closeout docs.
 
 ---
 
 ## 9. Safety rules
 
-- verify before modifying;
-- one checkpoint at a time;
-- no fake recommendation/outcome evidence;
-- no predictive probabilities while readiness is blocked;
-- no autonomous high-impact action;
+- no new schema unless a verified invariant gap appears;
+- no fake recommendation/feedback/outcome evidence;
+- no predictive probabilities;
+- no autonomous external action;
+- tenant authority remains server-derived;
 - PostgreSQL remains canonical truth;
-- deterministic evidence must remain distinct from inferred/modelled evidence.
+- preserve P1 `shown` semantics exactly.
