@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { SALSYSOS_VERSION } from "@/lib/product-version";
 import {
   getTrackingAllowedOrigins,
   trackingCorsHeaders,
@@ -70,6 +71,7 @@ export async function GET(request: NextRequest) {
     {
       ok: databaseOk && allowedOrigins.length > 0,
 
+      product_version: SALSYSOS_VERSION,
       tracker_version: "0.8.0",
 
       allowed_origins_configured: allowedOrigins.length > 0,
