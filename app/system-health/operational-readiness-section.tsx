@@ -1,4 +1,10 @@
-import { AlertTriangle, CheckCircle2, CircleOff, Settings2, ShieldCheck } from "lucide-react";
+import {
+  AlertTriangle,
+  CheckCircle2,
+  CircleOff,
+  Settings2,
+  ShieldCheck,
+} from "lucide-react";
 
 import { createAdminClient } from "@/lib/supabase/admin";
 
@@ -8,14 +14,14 @@ type ReadinessStatus =
   | "critical"
   | "inactive"
   | "configuration_blocked"
-  | string;
+  | "unknown";
 
 type ReadinessRow = {
   organization_id: string;
   readiness_key: string;
   readiness_name: string;
   readiness_group: string;
-  health_status: ReadinessStatus;
+  health_status: string | null;
   operational_status: string | null;
   active: boolean | null;
   issue_count: number | string | null;
@@ -53,7 +59,9 @@ export default async function OperationalReadinessSection({
         <div className="m-4 flex items-start gap-3 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
           <AlertTriangle size={17} className="mt-0.5 shrink-0" />
           <div>
-            <div className="font-semibold">Operational readiness could not be loaded.</div>
+            <div className="font-semibold">
+              Operational readiness could not be loaded.
+            </div>
             <div className="mt-1 text-xs leading-5">{result.error.message}</div>
           </div>
         </div>
@@ -63,7 +71,9 @@ export default async function OperationalReadinessSection({
 
   const rows = ([
     ...((result.data ?? []) as ReadinessRow[]),
-    ...(commerceResult.error ? [] : ((commerceResult.data ?? []) as ReadinessRow[])),
+    ...(commerceResult.error
+      ? []
+      : ((commerceResult.data ?? []) as ReadinessRow[])),
   ]).sort((a, b) => {
     const rank = readinessRank(a.health_status) - readinessRank(b.health_status);
     if (rank !== 0) return rank;
@@ -78,7 +88,9 @@ export default async function OperationalReadinessSection({
         <div className="mx-4 mt-4 flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 px-3.5 py-3 text-xs text-amber-800">
           <AlertTriangle size={15} className="mt-0.5 shrink-0" />
           <div>
-            <div className="font-semibold">Commerce event readiness is temporarily unavailable.</div>
+            <div className="font-semibold">
+              Commerce event readiness is temporarily unavailable.
+            </div>
             <div className="mt-1 leading-5">{commerceResult.error.message}</div>
           </div>
         </div>
@@ -92,7 +104,8 @@ export default async function OperationalReadinessSection({
         </div>
       ) : (
         <div className="px-5 py-10 text-center text-sm text-slate-500">
-          No operational-readiness rows are available for this workspace.
+          No operational-readiness rows are available for this workspace. Missing
+          readiness evidence is not treated as healthy.
         </div>
       )}
     </section>
@@ -106,7 +119,8 @@ function SectionHeader() {
         <div className="eyebrow">Operational readiness</div>
         <div className="section-title mt-1">Runtime & configuration state</div>
         <p className="mt-1 max-w-3xl text-xs leading-5 text-slate-400">
-          Distinguishes active incidents from capabilities that are intentionally inactive or blocked on configuration/provider access.
+          Distinguishes active incidents from capabilities that are intentionally
+          inactive or blocked on configuration/provider access.
         </p>
       </div>
       <div className="flex items-center gap-2 text-xs font-semibold text-slate-400">
@@ -126,7 +140,9 @@ function ReadinessCard({ row }: { row: ReadinessRow }) {
     <article className={`rounded-2xl border p-4 ${appearance.card}`}>
       <div className="flex items-start justify-between gap-3">
         <div className="flex min-w-0 items-center gap-3">
-          <span className={`grid h-10 w-10 shrink-0 place-items-center rounded-xl ${appearance.icon}`}>
+          <span
+            className={`grid h-10 w-10 shrink-0 place-items-center rounded-xl ${appearance.icon}`}
+          >
             <StatusIcon status={status} />
           </span>
           <div className="min-w-0">
@@ -138,14 +154,23 @@ function ReadinessCard({ row }: { row: ReadinessRow }) {
             </div>
           </div>
         </div>
-        <span className={`inline-flex shrink-0 items-center rounded-full border px-2.5 py-1 text-[9px] font-semibold uppercase tracking-[.08em] ${appearance.badge}`}>
+        <span
+          className={`inline-flex shrink-0 items-center rounded-full border px-2.5 py-1 text-[9px] font-semibold uppercase tracking-[.08em] ${appearance.badge}`}
+        >
           {pretty(status)}
         </span>
       </div>
 
       <div className="mt-4 grid grid-cols-2 gap-2">
-        <Metric label="State" value={pretty(row.operational_status || "unknown")} />
-        <Metric label="Issues" value={issueCount.toLocaleString()} warn={issueCount > 0 && status !== "inactive"} />
+        <Metric
+          label="State"
+          value={pretty(row.operational_status || "unknown")}
+        />
+        <Metric
+          label="Issues"
+          value={issueCount.toLocaleString()}
+          warn={issueCount > 0 && status !== "inactive"}
+        />
       </div>
 
       <div className="mt-3 rounded-xl border border-slate-100 bg-white/70 px-3 py-2.5">
@@ -161,8 +186,10 @@ function ReadinessCard({ row }: { row: ReadinessRow }) {
         <CommerceEventDetails details={row.details ?? {}} />
       ) : null}
 
-      {readinessNote(row) ? (
-        <div className="mt-3 text-xs leading-5 text-slate-500">{readinessNote(row)}</div>
+      {readinessNote(row, status) ? (
+        <div className="mt-3 text-xs leading-5 text-slate-500">
+          {readinessNote(row, status)}
+        </div>
       ) : null}
 
       <div className="mt-3 text-[10px] font-semibold text-slate-400">
@@ -172,39 +199,88 @@ function ReadinessCard({ row }: { row: ReadinessRow }) {
   );
 }
 
-function CommerceEventDetails({ details }: { details: Record<string, unknown> }) {
+function CommerceEventDetails({
+  details,
+}: {
+  details: Record<string, unknown>;
+}) {
   return (
     <div className="mt-3 grid grid-cols-2 gap-2 border-t border-slate-200/70 pt-3">
-      <Metric label="Bookings · 30d" value={safeNumber(details.booking_completed_30d).toLocaleString()} />
-      <Metric label="Payment starts · 30d" value={safeNumber(details.payment_started_30d).toLocaleString()} />
-      <Metric label="Verified payments · 30d" value={safeNumber(details.payment_completed_30d).toLocaleString()} warn={safeNumber(details.payment_started_30d) > 0 && safeNumber(details.payment_completed_30d) === 0} />
-      <Metric label="Enrollments · 30d" value={safeNumber(details.enrollment_completed_30d).toLocaleString()} warn={safeNumber(details.payment_completed_30d) > 0 && safeNumber(details.enrollment_completed_30d) === 0} />
+      <Metric
+        label="Bookings · 30d"
+        value={safeNumber(details.booking_completed_30d).toLocaleString()}
+      />
+      <Metric
+        label="Payment starts · 30d"
+        value={safeNumber(details.payment_started_30d).toLocaleString()}
+      />
+      <Metric
+        label="Verified payments · 30d"
+        value={safeNumber(details.payment_completed_30d).toLocaleString()}
+        warn={
+          safeNumber(details.payment_started_30d) > 0 &&
+          safeNumber(details.payment_completed_30d) === 0
+        }
+      />
+      <Metric
+        label="Enrollments · 30d"
+        value={safeNumber(details.enrollment_completed_30d).toLocaleString()}
+        warn={
+          safeNumber(details.payment_completed_30d) > 0 &&
+          safeNumber(details.enrollment_completed_30d) === 0
+        }
+      />
     </div>
   );
 }
 
-function StatusIcon({ status }: { status: ReturnType<typeof normalizeReadinessStatus> }) {
+function StatusIcon({ status }: { status: ReadinessStatus }) {
   if (status === "inactive") return <CircleOff size={18} />;
   if (status === "configuration_blocked") return <Settings2 size={18} />;
   if (status === "healthy") return <CheckCircle2 size={18} />;
   return <AlertTriangle size={18} />;
 }
 
-function Metric({ label, value, warn = false }: { label: string; value: string; warn?: boolean }) {
+function Metric({
+  label,
+  value,
+  warn = false,
+}: {
+  label: string;
+  value: string;
+  warn?: boolean;
+}) {
   return (
-    <div className={`rounded-xl border px-3 py-2.5 ${warn ? "border-amber-100 bg-amber-50/80" : "border-slate-100 bg-white/80"}`}>
-      <div className="text-[9px] font-semibold uppercase tracking-[.08em] text-slate-400">{label}</div>
-      <div className={`mt-1 text-sm font-semibold ${warn ? "text-amber-700" : "text-slate-800"}`}>{value}</div>
+    <div
+      className={`rounded-xl border px-3 py-2.5 ${
+        warn
+          ? "border-amber-100 bg-amber-50/80"
+          : "border-slate-100 bg-white/80"
+      }`}
+    >
+      <div className="text-[9px] font-semibold uppercase tracking-[.08em] text-slate-400">
+        {label}
+      </div>
+      <div
+        className={`mt-1 text-sm font-semibold ${
+          warn ? "text-amber-700" : "text-slate-800"
+        }`}
+      >
+        {value}
+      </div>
     </div>
   );
 }
 
-function normalizeReadinessStatus(value: string | null | undefined) {
-  if (value === "critical") return "critical" as const;
-  if (value === "warning") return "warning" as const;
-  if (value === "inactive") return "inactive" as const;
-  if (value === "configuration_blocked") return "configuration_blocked" as const;
-  return "healthy" as const;
+function normalizeReadinessStatus(
+  value: string | null | undefined,
+): ReadinessStatus {
+  if (value === "healthy") return "healthy";
+  if (value === "critical") return "critical";
+  if (value === "warning") return "warning";
+  if (value === "inactive") return "inactive";
+  if (value === "configuration_blocked") return "configuration_blocked";
+  return "unknown";
 }
 
 function readinessRank(value: string | null | undefined) {
@@ -212,11 +288,12 @@ function readinessRank(value: string | null | undefined) {
   if (status === "critical") return 0;
   if (status === "configuration_blocked") return 1;
   if (status === "warning") return 2;
-  if (status === "inactive") return 3;
-  return 4;
+  if (status === "unknown") return 3;
+  if (status === "inactive") return 4;
+  return 5;
 }
 
-function statusAppearance(status: ReturnType<typeof normalizeReadinessStatus>) {
+function statusAppearance(status: ReadinessStatus) {
   if (status === "critical") {
     return {
       card: "border-rose-200 bg-rose-50/30",
@@ -238,6 +315,13 @@ function statusAppearance(status: ReturnType<typeof normalizeReadinessStatus>) {
       badge: "border-amber-200 bg-amber-50 text-amber-700",
     };
   }
+  if (status === "unknown") {
+    return {
+      card: "border-slate-300 bg-slate-50/60",
+      icon: "bg-slate-200 text-slate-700",
+      badge: "border-slate-300 bg-slate-100 text-slate-700",
+    };
+  }
   if (status === "inactive") {
     return {
       card: "border-slate-200 bg-slate-50/50",
@@ -252,24 +336,45 @@ function statusAppearance(status: ReturnType<typeof normalizeReadinessStatus>) {
   };
 }
 
-function readinessNote(row: ReadinessRow) {
+function readinessNote(row: ReadinessRow, status: ReadinessStatus) {
   const details = row.details ?? {};
-  const blocker = typeof details.blocker_message === "string" ? details.blocker_message : null;
+  const blocker =
+    typeof details.blocker_message === "string"
+      ? details.blocker_message
+      : null;
   if (blocker) return blocker;
 
-  if (row.readiness_key === "search_indexing" && row.health_status === "inactive") {
+  if (status === "unknown") {
+    return "Health state is not recognized by the current System Health contract. Verify the source view before treating this capability as healthy.";
+  }
+  if (
+    row.readiness_key === "search_indexing" &&
+    row.health_status === "inactive"
+  ) {
     return `Indexing is disabled. ${safeNumber(details.pending).toLocaleString()} queued item(s) are informational until indexing is enabled.`;
   }
-  if (row.readiness_key === "automation_runtime" && row.health_status === "inactive") {
+  if (
+    row.readiness_key === "automation_runtime" &&
+    row.health_status === "inactive"
+  ) {
     return "No active runtime workflows are configured, so the disabled scheduler is not an incident.";
   }
-  if (row.readiness_key === "instagram_automation" && row.health_status === "inactive") {
+  if (
+    row.readiness_key === "instagram_automation" &&
+    row.health_status === "inactive"
+  ) {
     return "No active Instagram automation rules are configured.";
   }
-  if (row.readiness_key === "conversion_feedback" && row.health_status === "inactive") {
+  if (
+    row.readiness_key === "conversion_feedback" &&
+    row.health_status === "inactive"
+  ) {
     return "No active conversion-feedback routes are configured.";
   }
-  if (row.readiness_key === "course_catalog_sync" && row.operational_status === "manual_success") {
+  if (
+    row.readiness_key === "course_catalog_sync" &&
+    row.operational_status === "manual_success"
+  ) {
     return "The latest manual course-catalog sync completed successfully; no scheduled freshness SLA is configured.";
   }
   if (row.readiness_key === "meta_ads_readiness") {
@@ -285,7 +390,10 @@ function safeNumber(value: unknown) {
 }
 
 function pretty(value: string) {
-  return value.replaceAll(":", ": ").replaceAll("_", " ").replace(/\b\w/g, (character) => character.toUpperCase());
+  return value
+    .replaceAll(":", ": ")
+    .replaceAll("_", " ")
+    .replace(/\b\w/g, (character) => character.toUpperCase());
 }
 
 function formatDateTime(value?: string | null) {
