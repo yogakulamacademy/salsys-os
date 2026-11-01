@@ -7,8 +7,20 @@ const historicalMigration = fs.readFileSync(historicalMigrationPath, 'utf8');
 const hardeningMigrationPath =
   'supabase/migrations/20261101155326_r10_command_center_recommendation_acceptance_hardening_v1.sql';
 const hardeningMigration = fs.readFileSync(hardeningMigrationPath, 'utf8');
+const feedbackMigration = fs.readFileSync(
+  'supabase/migrations/20261101151403_r10_recommendation_security_hardening_v1.sql',
+  'utf8',
+);
 const route = fs.readFileSync(
   'app/api/intelligence/recommendations/present/route.ts',
+  'utf8',
+);
+const feedbackRoute = fs.readFileSync(
+  'app/api/intelligence/recommendations/feedback/route.ts',
+  'utf8',
+);
+const lifecycle = fs.readFileSync(
+  'lib/intelligence/recommendation-lifecycle.ts',
   'utf8',
 );
 const component = fs.readFileSync(
@@ -24,7 +36,7 @@ function normalizedSql(source) {
 
 function requireText(source, needle, label) {
   if (!source.includes(needle)) {
-    throw new Error(`R10-P1 verification failed: missing ${label} (${needle})`);
+    throw new Error(`R10 recommendation verification failed: missing ${label} (${needle})`);
   }
 }
 
@@ -91,6 +103,21 @@ for (const [needle, label] of [
 }
 
 for (const [needle, label] of [
+  ['record_system_intelligence_recommendation_feedback_v1', 'hardened human feedback RPC'],
+  ["p_event_type not in ('accepted','dismissed','action_started','action_completed')", 'feedback event allowlist'],
+  ['for update;', 'feedback row lock'],
+  ["state='accepted', accepted_at=now()", 'accepted lifecycle update'],
+  ["state='dismissed', dismissed_at=now()", 'dismissed lifecycle update'],
+  ["state='acted', acted_at=now()", 'action-start lifecycle update'],
+  ["state='acted', completed_at=now()", 'completion timestamp without invented state'],
+  ['INTELLIGENCE_TRANSITION_INVALID', 'fail-closed transition guard'],
+  ['INTELLIGENCE_ACTION_ALREADY_COMPLETED', 'completed-action guard'],
+  ['it executes no external customer/provider action', 'no external action contract'],
+]) {
+  requireText(feedbackMigration, needle, label);
+}
+
+for (const [needle, label] of [
   ['export async function POST(request: NextRequest)', 'POST-only presentation boundary'],
   ['request.headers.get("origin") !== request.nextUrl.origin', 'same-origin request guard'],
   ['getCurrentWorkspaceContext(supabase)', 'server-derived workspace context'],
@@ -102,15 +129,29 @@ for (const [needle, label] of [
   ['resolve_system_intelligence_signal_episode_v1', 'episode resolution'],
   ['touch_system_intelligence_recommendation_v2', 'hardened presentation RPC'],
   ['String(existing.state ?? "") !== "active"', 'terminal/non-active pre-suppression'],
-  ['unavailableSignals.push(config.signalId)', 'per-signal failure isolation'],
-  ['partial: unavailableSignals.length > 0', 'partial success disclosure'],
-  ['recommendations.length === 0 && unavailableSignals.length > 0', 'full failure boundary'],
+  ['INTELLIGENCE_EPISODE_TERMINAL', 'terminal-touch race detection'],
+  ['const { data: committedData', 'committed-work read'],
+  ['.in("state", ["accepted", "acted"])', 'accepted/in-progress persisted work'],
+  ['.is("dismissed_at", null)', 'dismissed committed-work exclusion'],
+  ['.is("completed_at", null)', 'completed committed-work exclusion'],
+  ['normalizeRecommendationLifecycle(row)', 'authoritative committed lifecycle normalization'],
+  ['lifecycleState: "active"', 'fresh active lifecycle response'],
+  ['committedUnavailable', 'committed-read availability boundary'],
+  ['const partial = unavailableSignals.length > 0 || committedUnavailable', 'combined partial-success boundary'],
   ['p_source_version: "r10-p1"', 'P1 recommendation provenance'],
   ['p_category: "crm_operations"', 'deterministic CRM category'],
   ['evidenceClass: "deterministic_crm"', 'explicit evidence class'],
   ['"Cache-Control": "private, no-store"', 'private/no-store response'],
 ]) {
   requireText(route, needle, label);
+}
+
+const committedReadIndex = route.indexOf('const { data: committedData');
+if (committedReadIndex < 0) {
+  throw new Error('R10-P2 committed recommendation read is missing.');
+}
+if (route.slice(committedReadIndex).includes('touch_system_intelligence_recommendation_v2')) {
+  throw new Error('R10-P2 committed recommendations must not create another shown/touch event.');
 }
 
 for (const signal of [
@@ -133,30 +174,95 @@ for (const forbidden of [
   'score: 80',
 ]) {
   if (route.includes(forbidden)) {
-    throw new Error(`R10-P1 presentation must not consume or invent unsupported intelligence: ${forbidden}`);
+    throw new Error(`R10 presentation must not consume or invent unsupported intelligence: ${forbidden}`);
   }
 }
 
 if (/export\s+async\s+function\s+GET\s*\(/.test(route)) {
-  throw new Error('R10-P1 recommendation presentation must not mutate from a GET handler.');
+  throw new Error('R10 recommendation presentation must not mutate from a GET handler.');
+}
+
+for (const [needle, label] of [
+  ['RECOMMENDATION_FEEDBACK_EVENTS', 'shared four-event feedback allowlist'],
+  ['"active"', 'active normalized lifecycle'],
+  ['"accepted"', 'accepted normalized lifecycle'],
+  ['"in_progress"', 'in-progress normalized lifecycle'],
+  ['"completed"', 'completed normalized lifecycle'],
+  ['"dismissed"', 'dismissed normalized lifecycle'],
+  ['"expired"', 'expired normalized lifecycle'],
+  ['if (lifecycle === "active") return ["accepted", "dismissed"]', 'active legal actions'],
+  ['if (lifecycle === "accepted") return ["action_started", "dismissed"]', 'accepted legal actions'],
+  ['if (lifecycle === "in_progress") return ["action_completed"]', 'in-progress legal action'],
+  ['parseRecommendationEpisodeSequence', 'historical episode parsing'],
+]) {
+  requireText(lifecycle, needle, label);
+}
+
+for (const [needle, label] of [
+  ['export async function POST(request: NextRequest)', 'feedback POST boundary'],
+  ['request.headers.get("origin") !== request.nextUrl.origin', 'feedback same-origin guard'],
+  ['getCurrentWorkspaceContext(supabase)', 'feedback server-derived workspace'],
+  ['new Set(["owner", "admin", "manager"])', 'feedback privileged role boundary'],
+  ['const MAX_NOTE_LENGTH = 500', 'feedback note bound'],
+  ['isRecommendationFeedbackEvent(eventType)', 'feedback event validation'],
+  ['record_system_intelligence_recommendation_feedback_v1', 'feedback RPC invocation'],
+  ['readHomeRecommendation', 'authoritative recommendation read-back'],
+  ['normalizeRecommendationLifecycle(row)', 'feedback lifecycle normalization'],
+  ['getAvailableRecommendationFeedbackEvents(lifecycleState)', 'authoritative next actions'],
+  ['INTELLIGENCE_TRANSITION_INVALID', 'transition-conflict mapping'],
+  ['INTELLIGENCE_ACTION_ALREADY_COMPLETED', 'completed-conflict mapping'],
+  ['return 409', 'HTTP conflict status'],
+  ['"Cache-Control": "private, no-store"', 'feedback private/no-store response'],
+  ['.eq("surface", "home")', 'feedback Home family scope'],
+  ['.eq("source_version", "r10-p1")', 'feedback P1 source scope'],
+]) {
+  requireText(feedbackRoute, needle, label);
+}
+
+if (/\.from\(["']system_intelligence_recommendations["']\)[\s\S]{0,260}\.(?:insert|update|delete)\(/.test(feedbackRoute)) {
+  throw new Error('R10-P2 feedback route must not directly mutate recommendation tables.');
+}
+if (/\.from\(["']system_intelligence_recommendation_events["']\)[\s\S]{0,260}\.(?:insert|update|delete)\(/.test(feedbackRoute)) {
+  throw new Error('R10-P2 feedback route must not directly mutate recommendation event tables.');
 }
 
 for (const [needle, label] of [
   ['fetch("/api/intelligence/recommendations/present"', 'client presentation request'],
+  ['fetch("/api/intelligence/recommendations/feedback"', 'client feedback request'],
   ['method: "POST"', 'client POST method'],
   ['Deterministic CRM guidance', 'deterministic guidance label'],
   ['they are not conversion probabilities', 'non-probability disclosure'],
   ['Observed evidence', 'observed evidence badge'],
-  ['Some recommendation signals are temporarily unavailable', 'partial-success disclosure'],
-  ['Recommended actions unavailable', 'fail-closed unavailable state'],
-  ['No new deterministic recommendations right now', 'zero-recommendation state'],
+  ['Some recommendation data is temporarily unavailable', 'partial-success disclosure'],
+  ['No current deterministic recommendation work', 'zero-work state'],
+  ['label="Accept"', 'Accept control'],
+  ['label="Start action"', 'Start action control'],
+  ['label="Mark complete"', 'Mark complete control'],
+  ['Dismiss recommendation?', 'Dismiss confirmation'],
+  ['Optional workflow note', 'optional workflow note'],
+  ['maxLength={500}', 'client note bound'],
+  ['does not claim that the customer or business outcome was successful', 'completion non-outcome disclosure'],
+  ['Open work queue', 'separate work-queue navigation'],
+  ['getAvailableRecommendationFeedbackEvents(current.lifecycleState)', 'state-derived controls'],
+  ['payload?.recommendation', 'authoritative feedback state reconciliation'],
 ]) {
   requireText(component, needle, label);
 }
 
-for (const forbidden of ['>Accept<', '>Dismiss<', 'Mark complete', 'Start action']) {
-  if (component.includes(forbidden)) {
-    throw new Error(`R10-P1 must not activate P2 feedback controls yet: ${forbidden}`);
+for (const forbidden of [
+  'observe_system_intelligence_recommendation_outcomes_v1',
+  'recompute_system_intelligence_learning_profile_v1',
+  'conversion_probability',
+]) {
+  for (const [source, label] of [
+    [route, 'presentation route'],
+    [feedbackRoute, 'feedback route'],
+    [component, 'recommendation UI'],
+    [lifecycle, 'lifecycle helper'],
+  ]) {
+    if (source.includes(forbidden)) {
+      throw new Error(`R10-P2 ${label} must not activate P3/predictive behavior: ${forbidden}`);
+    }
   }
 }
 
@@ -166,7 +272,7 @@ requireText(home, 'AttentionRow', 'existing factual Attention cards');
 
 const directMutationGrant = /grant\s+(?:insert|update|delete|truncate|all)[^;]*system_intelligence_recommendation_signal_state[^;]*authenticated/i;
 if (directMutationGrant.test(historicalMigration) || directMutationGrant.test(hardeningMigration)) {
-  throw new Error('R10-P1 signal episode state must not be directly mutable by authenticated clients.');
+  throw new Error('R10 signal episode state must not be directly mutable by authenticated clients.');
 }
 
 for (const source of [historicalMigration, hardeningMigration]) {
@@ -177,9 +283,9 @@ for (const source of [historicalMigration, hardeningMigration]) {
     'truncate table public.system_intelligence_recommendation_events',
   ]) {
     if (source.toLowerCase().includes(forbidden)) {
-      throw new Error(`R10-P1 migrations must not seed or truncate recommendation evidence: ${forbidden}`);
+      throw new Error(`R10 migrations must not seed or truncate recommendation evidence: ${forbidden}`);
     }
   }
 }
 
-console.log('R10 Command Center Recommendations V1 acceptance contracts verified.');
+console.log('R10 Command Center Recommendations + P2 Human Feedback contracts verified.');
