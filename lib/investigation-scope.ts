@@ -8,6 +8,8 @@ export type InvestigationScope = {
   country?: string;
   stage?: string;
   channel?: string;
+  creationChannel?: string;
+  lastTouchSource?: string;
   owner?: string;
   platform?: string;
   outcome?: string;
@@ -40,6 +42,8 @@ const scopeLabels: Partial<Record<keyof InvestigationScope, string>> = {
   country: "Country",
   stage: "Stage",
   channel: "Channel",
+  creationChannel: "Creation Channel",
+  lastTouchSource: "Last Marketing Touch",
   owner: "Owner",
   platform: "Platform",
   outcome: "Outcome",
@@ -50,7 +54,7 @@ const scopeLabels: Partial<Record<keyof InvestigationScope, string>> = {
 
 export function captureInvestigationScope(search: string): InvestigationScope {
   const params = new URLSearchParams(search.startsWith("?") ? search.slice(1) : search);
-  const get = (key: keyof InvestigationScope) => params.get(key)?.trim() || undefined;
+  const get = (key: string) => params.get(key)?.trim() || undefined;
 
   return compactScope({
     q: get("q"),
@@ -60,6 +64,8 @@ export function captureInvestigationScope(search: string): InvestigationScope {
     country: get("country"),
     stage: get("stage"),
     channel: get("channel"),
+    creationChannel: get("creation_channel"),
+    lastTouchSource: get("last_touch_source"),
     owner: get("owner"),
     platform: get("platform"),
     outcome: get("outcome"),
@@ -116,6 +122,8 @@ export function transferInvestigationScope(
     add("course", "course", scope.course);
     add("stage", "stage", scope.stage);
     add("channel", "channel", scope.channel);
+    add("creation_channel", "creationChannel", scope.creationChannel);
+    add("last_touch_source", "lastTouchSource", scope.lastTouchSource);
     add("owner", "owner", scope.owner);
   } else if (url.pathname === "/performance") {
     const range = performanceRange(scope);
@@ -176,6 +184,8 @@ export function describeInvestigationScope(scope: InvestigationScope): Investiga
   add("country", scope.country);
   add("stage", scope.stage);
   add("channel", scope.channel);
+  add("creationChannel", scope.creationChannel);
+  add("lastTouchSource", scope.lastTouchSource);
   add("owner", scope.owner);
   add("platform", scope.platform);
   add("outcome", scope.outcome);
