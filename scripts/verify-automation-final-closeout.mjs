@@ -72,7 +72,7 @@ expectIncludes(settingsActions, 'requires_human_approval: true', 'WhatsApp human
 expectIncludes(settingsActions, 'current_published_version', 'Runtime activation must remain pinned to a published version');
 expectIncludes(publishActions, 'validation_snapshot', 'Flow publishing must retain validation evidence');
 expectIncludes(publishActions, 'definition_hash', 'Flow publishing must retain definition integrity evidence');
-expectIncludes(publishActions, 'Runtime remains OFF until you explicitly enable it', 'Publishing must not imply runtime activation');
+expectIncludes(publishActions, 'runtime execution remains OFF until explicitly enabled', 'Publishing must not imply runtime activation');
 expectIncludes(scheduler, ".eq('status', 'active')", 'Scheduler must scan active workflows only');
 expectIncludes(scheduler, ".eq('runtime_flow_enabled', true)", 'Scheduler must scan runtime-enabled workflows only');
 
