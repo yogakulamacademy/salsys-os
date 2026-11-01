@@ -133,12 +133,18 @@ export function transferInvestigationScope(
     add("employee", "employee", scope.employee);
   } else if (url.pathname === "/revenue") {
     add("source", "source", scope.source);
+    add("creation_channel", "creationChannel", scope.creationChannel);
+    add("last_touch_source", "lastTouchSource", scope.lastTouchSource);
 
-    // Revenue only applies source focus when investigation mode is explicit.
-    // If a structured source is present, make that focus active rather than
-    // leaving a source query parameter that the workspace would otherwise ignore.
-    if (url.searchParams.get("source")?.trim() && !url.searchParams.has("investigation")) {
-      url.searchParams.set("investigation", "1");
+    const exactAttributionActive = Boolean(
+      url.searchParams.get("source")?.trim() ||
+        url.searchParams.get("creation_channel")?.trim() ||
+        url.searchParams.get("last_touch_source")?.trim(),
+    );
+
+    if (exactAttributionActive) {
+      if (!url.searchParams.has("from")) url.searchParams.set("from", "attribution");
+      url.searchParams.set("attribution_scope", "1");
     }
   } else if (url.pathname === "/admissions") {
     const view = url.searchParams.get("view")?.trim() || "overview";
@@ -149,12 +155,21 @@ export function transferInvestigationScope(
       add("location", "location", scope.location);
       add("stage", "stage", scope.stage);
       add("owner", "owner", scope.owner);
+      add("creation_channel", "creationChannel", scope.creationChannel);
+      add("last_touch_source", "lastTouchSource", scope.lastTouchSource);
     } else if (view === "capacity") {
       add("course", "course", scope.course);
       add("location", "location", scope.location);
     }
 
-    if (applied.length > 0 && !url.searchParams.has("scope")) {
+    const exactAttributionActive = Boolean(
+      url.searchParams.get("creation_channel")?.trim() ||
+        url.searchParams.get("last_touch_source")?.trim(),
+    );
+
+    if (exactAttributionActive) {
+      url.searchParams.set("scope", "attribution");
+    } else if (applied.length > 0 && !url.searchParams.has("scope")) {
       url.searchParams.set("scope", "1");
     }
   }
