@@ -1,9 +1,15 @@
 "use client";
 
 import Link from "next/link";
-import type { MouseEvent, ReactNode } from "react";
+import { useEffect, useState, type MouseEvent, type ReactNode } from "react";
 
 import { canonicalizeWorkspaceHref } from "@/lib/canonical-workspace-routes";
+import {
+  summarizeInvestigationScope,
+  transferInvestigationScope,
+  type InvestigationScope,
+  type InvestigationScopeChip,
+} from "@/lib/investigation-scope";
 import type { MetricEvidenceState } from "@/lib/metric-definitions";
 
 export const METRIC_INVESTIGATION_STORAGE_KEY = "salsys.metric-investigation.v1";
@@ -18,6 +24,8 @@ export type StoredMetricInvestigation = {
   evidenceLabel?: string;
   evidenceState?: MetricEvidenceState;
   scopeLabel?: string;
+  scope?: InvestigationScope;
+  appliedScope?: InvestigationScopeChip[];
   createdAt: number;
 };
 
@@ -41,6 +49,22 @@ export function DecisionMetricLink({
   children: ReactNode;
 }) {
   const canonicalHref = canonicalizeWorkspaceHref(href);
+  const [resolvedHref, setResolvedHref] = useState(canonicalHref);
+
+  useEffect(() => {
+    if (!canonicalHref.startsWith("/")) {
+      setResolvedHref(canonicalHref);
+      return;
+    }
+
+    try {
+      setResolvedHref(
+        transferInvestigationScope(canonicalHref, window.location.search).href,
+      );
+    } catch {
+      setResolvedHref(canonicalHref);
+    }
+  }, [canonicalHref]);
 
   function rememberInvestigation(event: MouseEvent<HTMLAnchorElement>) {
     if (
@@ -58,16 +82,22 @@ export function DecisionMetricLink({
 
     try {
       const sourcePath = `${window.location.pathname}${window.location.search}`;
+      const transfer = transferInvestigationScope(
+        canonicalHref,
+        window.location.search,
+      );
       const context: StoredMetricInvestigation = {
         sourcePath,
         sourceLabel: routeLabel(window.location.pathname),
-        targetPath: canonicalHref,
+        targetPath: transfer.href,
         metricLabel,
         metricValue,
         metricDetail,
         evidenceLabel,
         evidenceState,
-        scopeLabel: reportingScope(window.location.search),
+        scopeLabel: summarizeInvestigationScope(transfer.scope),
+        scope: transfer.scope,
+        appliedScope: transfer.applied,
         createdAt: Date.now(),
       };
       window.sessionStorage.setItem(
@@ -80,21 +110,10 @@ export function DecisionMetricLink({
   }
 
   return (
-    <Link href={canonicalHref} className={className} onClick={rememberInvestigation}>
+    <Link href={resolvedHref} className={className} onClick={rememberInvestigation}>
       {children}
     </Link>
   );
-}
-
-function reportingScope(search: string) {
-  const params = new URLSearchParams(search);
-  const period = params.get("period")?.trim();
-  const from = params.get("from")?.trim();
-  const to = params.get("to")?.trim();
-
-  if (period === "custom" && from && to) return `${from} → ${to}`;
-  if (period) return pretty(period);
-  return undefined;
 }
 
 function routeLabel(pathname: string) {
