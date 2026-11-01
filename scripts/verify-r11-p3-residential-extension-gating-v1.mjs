@@ -8,6 +8,10 @@ const triggerContextMigration = fs.readFileSync(
   'supabase/migrations/20261101193100_r11_p3_residential_trigger_context_v1.sql',
   'utf8',
 );
+const anonGrantHardeningMigration = fs.readFileSync(
+  'supabase/migrations/20261101195000_r11_p3_anon_residential_grant_hardening_v1.sql',
+  'utf8',
+);
 const educationAccess = fs.readFileSync('lib/education-access.ts', 'utf8');
 const courseLayout = fs.readFileSync('app/course-management/layout.tsx', 'utf8');
 const courseCss = fs.readFileSync(
@@ -75,13 +79,15 @@ expect(
   'residential canonical policies/boundaries must repeatedly enforce wellness_residential.',
 );
 
-for (const table of [
+const residentialTables = [
   'accommodation_properties',
   'accommodation_rooms',
   'batch_accommodation_types',
   'batch_accommodation_room_pool',
   'enrollment_accommodation_assignments',
-]) {
+];
+
+for (const table of residentialTables) {
   has(
     migration,
     `revoke all privileges on table public.${table} from authenticated`,
@@ -91,6 +97,11 @@ for (const table of [
     migration,
     `grant select, insert, update on table public.${table} to authenticated`,
     `${table} SELECT/INSERT/UPDATE grant`,
+  );
+  has(
+    anonGrantHardeningMigration,
+    `revoke all privileges on table public.${table} from anon`,
+    `${table} anonymous privilege reset`,
   );
 }
 
@@ -107,6 +118,28 @@ for (const forbiddenGrant of [
   expect(
     !migration.toLowerCase().includes(forbiddenGrant),
     `P3 must not restore broad authenticated privilege ${forbiddenGrant}`,
+  );
+}
+
+for (const forbiddenAnonGrant of [
+  'grant select on table public.accommodation_',
+  'grant insert on table public.accommodation_',
+  'grant update on table public.accommodation_',
+  'grant delete on table public.accommodation_',
+  'grant truncate on table public.accommodation_',
+  'grant trigger on table public.accommodation_',
+  'grant references on table public.accommodation_',
+  'grant select on table public.batch_accommodation_',
+  'grant insert on table public.batch_accommodation_',
+  'grant update on table public.batch_accommodation_',
+  'grant delete on table public.batch_accommodation_',
+  'grant truncate on table public.batch_accommodation_',
+  'grant trigger on table public.batch_accommodation_',
+  'grant references on table public.batch_accommodation_',
+]) {
+  expect(
+    !anonGrantHardeningMigration.toLowerCase().includes(forbiddenAnonGrant),
+    `P3 anon hardening must not grant residential table privilege ${forbiddenAnonGrant}`,
   );
 }
 
