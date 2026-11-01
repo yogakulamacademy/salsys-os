@@ -5,7 +5,8 @@
 -- - preserve the public Course Management RPC signature while moving its proven
 --   large aggregator behind a capability/role guard;
 -- - harden the existing short Admissions snapshot entry point in place;
--- - prevent non-Education tenants from creating/changing Education-only Lead fields.
+-- - prevent non-Education tenants from creating/changing Education-only Lead fields;
+-- - capability-gate canonical Enrollment truth while preserving existing role rules.
 --
 -- UI/navigation/form gating is implemented in application code in the same P1.
 
@@ -164,5 +165,121 @@ execute function public.enforce_lead_education_capability_v1();
 
 comment on function public.enforce_lead_education_capability_v1() is
 'R11-P1 canonical Lead capability guard. Non-Education inserts cannot create Education preference values; updates preserve any historical values but cannot change them.';
+
+-- Enrollment truth belongs to Education Core. Keep its existing lead-access
+-- and admin/write semantics, adding capability state as an independent gate.
+alter policy enrollments_read
+  on public.enrollments
+  using (
+    public.organization_has_capability(organization_id, 'education_core')
+    and public.is_organization_member(organization_id)
+    and public.can_access_lead(lead_id)
+    and exists (
+      select 1 from public.leads l
+      where l.id = enrollments.lead_id
+        and l.organization_id = enrollments.organization_id
+    )
+    and (
+      course_id is null
+      or exists (
+        select 1 from public.courses c
+        where c.id = enrollments.course_id
+          and c.organization_id = enrollments.organization_id
+      )
+    )
+    and (
+      batch_id is null
+      or exists (
+        select 1 from public.course_batches cb
+        where cb.id = enrollments.batch_id
+          and cb.organization_id = enrollments.organization_id
+      )
+    )
+  );
+
+alter policy enrollments_insert
+  on public.enrollments
+  with check (
+    public.organization_has_capability(organization_id, 'education_core')
+    and public.is_crm_admin()
+    and public.can_mutate_organization(organization_id)
+    and public.is_organization_member(organization_id)
+    and exists (
+      select 1 from public.leads l
+      where l.id = enrollments.lead_id
+        and l.organization_id = enrollments.organization_id
+    )
+    and (
+      course_id is null
+      or exists (
+        select 1 from public.courses c
+        where c.id = enrollments.course_id
+          and c.organization_id = enrollments.organization_id
+      )
+    )
+    and (
+      batch_id is null
+      or exists (
+        select 1 from public.course_batches cb
+        where cb.id = enrollments.batch_id
+          and cb.organization_id = enrollments.organization_id
+      )
+    )
+  );
+
+alter policy enrollments_update
+  on public.enrollments
+  using (
+    public.organization_has_capability(organization_id, 'education_core')
+    and public.is_crm_admin()
+    and public.can_mutate_organization(organization_id)
+    and public.is_organization_member(organization_id)
+    and exists (
+      select 1 from public.leads l
+      where l.id = enrollments.lead_id
+        and l.organization_id = enrollments.organization_id
+    )
+  )
+  with check (
+    public.organization_has_capability(organization_id, 'education_core')
+    and public.is_crm_admin()
+    and public.can_mutate_organization(organization_id)
+    and public.is_organization_member(organization_id)
+    and exists (
+      select 1 from public.leads l
+      where l.id = enrollments.lead_id
+        and l.organization_id = enrollments.organization_id
+    )
+    and (
+      course_id is null
+      or exists (
+        select 1 from public.courses c
+        where c.id = enrollments.course_id
+          and c.organization_id = enrollments.organization_id
+      )
+    )
+    and (
+      batch_id is null
+      or exists (
+        select 1 from public.course_batches cb
+        where cb.id = enrollments.batch_id
+          and cb.organization_id = enrollments.organization_id
+      )
+    )
+  );
+
+alter policy enrollments_delete
+  on public.enrollments
+  using (
+    public.organization_has_capability(organization_id, 'education_core')
+    and public.is_crm_admin()
+    and public.can_mutate_organization(organization_id)
+    and public.is_organization_member(organization_id)
+    and exists (
+      select 1 from public.leads l
+      where l.id = enrollments.lead_id
+        and l.organization_id = enrollments.organization_id
+    )
+  );
 
 commit;
