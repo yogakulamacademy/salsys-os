@@ -1,3 +1,4 @@
+import crypto from 'node:crypto';
 import fs from 'node:fs';
 
 const migration = fs.readFileSync(
@@ -6,6 +7,10 @@ const migration = fs.readFileSync(
 );
 const triggerContextMigration = fs.readFileSync(
   'supabase/migrations/20261101193100_r11_p3_residential_trigger_context_v1.sql',
+  'utf8',
+);
+const anonGrantHardeningMigration = fs.readFileSync(
+  'supabase/migrations/20261101195631_r11_p3_anon_residential_grant_hardening_v1.sql',
   'utf8',
 );
 const educationAccess = fs.readFileSync('lib/education-access.ts', 'utf8');
@@ -27,6 +32,16 @@ function expect(condition, message) {
 function has(source, needle, label) {
   expect(source.includes(needle), `missing ${label} (${needle})`);
 }
+
+expect(
+  Buffer.byteLength(anonGrantHardeningMigration, 'utf8') === 1942,
+  'ledgered residential grant hardening byte length must remain 1942.',
+);
+expect(
+  crypto.createHash('md5').update(anonGrantHardeningMigration, 'utf8').digest('hex') ===
+    '863a1bed570e34986c10a226330f21cf',
+  'ledgered residential grant hardening SQL must match production MD5 863a1bed570e34986c10a226330f21cf.',
+);
 
 for (const [needle, label] of [
   ["organization_has_residential_data_v1", 'canonical residential data detector'],
@@ -75,13 +90,15 @@ expect(
   'residential canonical policies/boundaries must repeatedly enforce wellness_residential.',
 );
 
-for (const table of [
+const residentialTables = [
   'accommodation_properties',
   'accommodation_rooms',
   'batch_accommodation_types',
   'batch_accommodation_room_pool',
   'enrollment_accommodation_assignments',
-]) {
+];
+
+for (const table of residentialTables) {
   has(
     migration,
     `revoke all privileges on table public.${table} from authenticated`,
@@ -91,6 +108,32 @@ for (const table of [
     migration,
     `grant select, insert, update on table public.${table} to authenticated`,
     `${table} SELECT/INSERT/UPDATE grant`,
+  );
+  has(
+    anonGrantHardeningMigration,
+    `revoke all privileges on table public.${table} from anon`,
+    `${table} anonymous privilege reset`,
+  );
+}
+
+const residentialViews = [
+  'v_batch_accommodation_inventory',
+  'v_batch_accommodation_live_inventory',
+  'v_batch_accommodation_summary',
+  'v_batch_enrollment_accommodation_roster',
+  'v_enrollment_accommodation_assignments',
+];
+
+for (const view of residentialViews) {
+  has(
+    anonGrantHardeningMigration,
+    `revoke all privileges on table public.${view} from anon, authenticated`,
+    `${view} anonymous/authenticated privilege reset`,
+  );
+  has(
+    anonGrantHardeningMigration,
+    `grant select on table public.${view} to authenticated`,
+    `${view} authenticated SELECT-only grant`,
   );
 }
 
@@ -107,6 +150,19 @@ for (const forbiddenGrant of [
   expect(
     !migration.toLowerCase().includes(forbiddenGrant),
     `P3 must not restore broad authenticated privilege ${forbiddenGrant}`,
+  );
+}
+
+const hardeningStatements = anonGrantHardeningMigration
+  .split(';')
+  .map((statement) => statement.trim().toLowerCase())
+  .filter(Boolean);
+
+for (const statement of hardeningStatements) {
+  if (!statement.startsWith('grant ')) continue;
+  expect(
+    !/\bto\s+anon\b/.test(statement),
+    `P3 residential hardening must not grant any privilege to anon (${statement})`,
   );
 }
 
