@@ -3,7 +3,7 @@
 **Checkpoint date:** 2026-11-01  
 **Canonical repository:** `yogakulamacademy/salsys-os`  
 **Production branch:** `main`  
-**Verified production head:** `1daf2c6d019a3cc8c899bc9d8d0c996ceee64e21`  
+**Verified production head:** `d5bbe5841e6a4e0f0647b1e1823efc8522fa10da`  
 **Fast resume file:** `docs/SalsysOS_Active_Handoff.md`
 
 > Historical checkpoint files under `docs/checkpoints/` are immutable evidence records.
@@ -19,157 +19,163 @@ Current state:
 - broad 14-surface engineering closeout: complete;
 - R9 AEO / GEO / AI Visibility V1: formally closed;
 - R10 audit/design: complete;
-- **R10-P0 Recommendation Security & Reproducibility Hardening: complete and production-verified**;
-- current exact checkpoint: **R10-P1 — Deterministic Recommended Actions on Command Center — Episode Design & Implementation**.
+- R10-P0 Recommendation Security & Reproducibility Hardening: complete and production-verified;
+- **R10-P1 Deterministic Recommended Actions on Command Center: complete, acceptance-hardened and production-verified**;
+- current exact checkpoint: **R10-P2 — Human Feedback Lifecycle UI — audit/design before implementation**.
 
 Read first:
 
+- `docs/checkpoints/M-2026-11-01-R10-P1-Closeout-v1.md`
+- `docs/checkpoints/M-2026-11-01-R10-P1-Episode-Design-v1.md`
 - `docs/checkpoints/M-2026-11-01-R10-P0-Recommendation-Hardening-Closeout-v1.md`
 - `docs/checkpoints/M-2026-11-01-R10-Audit-Design-v1.md`
 
 ---
 
-## 2. R10-P0 verified release
+## 2. R10-P1 verified release
 
-Engineering PR #410:
+Implementation PR #413 introduced the deterministic Command Center recommendation surface. Acceptance-hardening PR #414 closed the remaining scoring, presentation-consistency and provenance gaps.
+
+Final production release:
 
 ```text
-main SHA                   1daf2c6d019a3cc8c899bc9d8d0c996ceee64e21
-CI                         #1342 passed
-CodeQL                     #627 passed
-Production Smoke           #159 passed
+PR                         #414
+main SHA                   d5bbe5841e6a4e0f0647b1e1823efc8522fa10da
+CI                         #1354 passed
+CodeQL                     #639 passed
+Production Smoke           #163 passed
 Vercel production          READY on exact SHA
 ```
 
-Production migration:
+Production migrations:
 
 ```text
-version                    20261101151403
-name                       r10_recommendation_security_hardening_v1
-repository file            20261101154500_r10_recommendation_security_hardening_v1.sql
+20261101153414  r10_command_center_recommendation_episodes_v1
+20261101155326  r10_command_center_recommendation_acceptance_hardening_v1
 ```
 
-Eight historical recommendation-lifecycle migrations are also restored in source control and protected by production-ledger MD5 verification.
+Both migration source files are aligned to their production ledger versions and protected by normalized MD5 verification.
+
+P0 source provenance is also aligned to the actual production version:
+
+```text
+20261101151403  r10_recommendation_security_hardening_v1
+```
 
 ---
 
-## 3. P0 production acceptance
+## 3. P1 production acceptance
 
-Current recommendation evidence remains intentionally empty:
-
-```text
-recommendations                    0
-recommendation_events              0
-orphan_or_tenant_mismatch_rows     0
-```
-
-Production now enforces:
-
-- composite recommendation/event tenant FK;
-- explicit event RLS tenant comparison;
-- target Lead array <= 500;
-- target count equals stored target array cardinality;
-- single accepted/dismissed/action_started/action_completed lifecycle event per recommendation;
-- authenticated table access = SELECT only;
-- legacy v1 creator inaccessible to app roles;
-- v2 creator = SECURITY DEFINER + owner/admin/manager + session-derived tenant + target Lead tenant validation;
-- feedback RPC = SECURITY DEFINER + owner/admin/manager + fail-closed transitions + idempotent retry behavior;
-- outcome observer = service-role-only machine boundary.
-
-No recommendation UI or recommendation data was activated during P0.
-
----
-
-## 4. Predictive safety boundary remains locked
-
-Production still does not have enough outcome history for a defensible trained lead-conversion model:
-
-```text
-total_leads                         603
-labeled_outcomes                      1
-positive_outcomes                     1
-negative_outcomes                     0
-prediction_generation_allowed         false
-predictive_readiness_status           insufficient_positive_outcomes
-```
-
-Do not publish conversion probabilities or treat the deterministic event-intelligence rows as trained predictions.
-
----
-
-## 5. Exact next checkpoint — R10-P1
-
-Build a separate **Recommended actions** layer on `/home` using only fresh, directly observed CRM operating facts:
+The live `/home` Command Center now has a separate **Recommended actions** layer using only four approved deterministic CRM signals:
 
 1. reply backlog;
 2. overdue follow-ups;
 3. first touch needed;
 4. payment pending.
 
-Existing factual Attention cards remain unchanged.
+The existing factual Attention / Action Queue surfaces remain unchanged.
 
-Exclude from P1:
+P1 behavior now enforces:
 
-- stale event-intelligence predictions;
-- unready predictive probabilities;
-- generic raw system-failure counts;
-- browser-only payment/enrollment/revenue claims;
-- AI-generated recommendation prose;
-- autonomous external/customer/provider actions.
+- owner/admin/manager presentation boundary;
+- tenant authority derived server-side;
+- authenticated POST presentation boundary with private/no-store response;
+- persistent per-signal episode state;
+- stable episode keys across target membership churn;
+- a new episode only after an observed clear -> recur transition;
+- target working set capped at 50 Leads while the baseline retains the full signal count;
+- canonical deterministic admissions `priority_score` reused for ordering;
+- no invented 95/90/85/80 recommendation scoring scale;
+- priority explicitly presented as ordering evidence, not probability/confidence;
+- terminal recommendation keys cannot be touched/shown again;
+- partial per-signal failures do not discard already-persisted successful presentations;
+- partial availability is disclosed in the UI;
+- no predictive probabilities, stale prediction sources, AI-generated recommendation prose or autonomous external actions.
 
-Recommendation scores are deterministic priority scores, not probabilities or confidence values.
+Post-deploy database acceptance remained intentionally evidence-neutral:
 
----
+```text
+recommendations                    0
+recommendation_events              0
+signal_state_rows                  0
+```
 
-## 6. P1 episode-key contract must be finalized before code
+These zeroes are valid because no synthetic operator presentation was executed. Real evidence should be created only when a real privileged operator actually presents the production surface.
 
-`touch_system_intelligence_recommendation_v2` upserts by `(organization_id, recommendation_key)` and records `shown` on every call.
-
-Therefore P1 must guarantee:
-
-- a terminal dismissed/completed recommendation is never touched back into the same episode;
-- repeated Home loads show/refresh the same unresolved episode rather than create duplicates;
-- a new recommendation episode is created only when the underlying CRM condition genuinely clears and later recurs, or when a deterministic episode fingerprint changes;
-- `shown` is recorded only for recommendations actually rendered on the privileged Command Center request;
-- target Lead membership/fingerprint changes do not silently rewrite historical terminal episodes.
-
-Preferred design direction: derive a deterministic episode fingerprint from the live signal + bounded target Lead set + signal-specific boundary timestamp/state, hash it server-side, and use that fingerprint in the recommendation key. The exact signal-specific boundary rules must be verified against available CRM timestamps before implementation.
-
----
-
-## 7. P1 authorization/product boundary
-
-`/home` already requires:
-
-`owner | admin | manager`
-
-P1 should preserve that boundary.
-
-Generation/presentation flow:
-
-1. privileged user requests `/home`;
-2. server derives active tenant;
-3. server evaluates the four deterministic CRM signals;
-4. server resolves the current episode key;
-5. only recommendations actually rendered call hardened v2 touch;
-6. page reads/render current recommendation rows in a clearly labeled Recommended actions panel.
-
-No background generator is needed for P1.
+Authenticated direct table access remains SELECT-only for recommendation and recommendation-event tables.
 
 ---
 
-## 8. Later R10 checkpoints
+## 4. Live candidate parity at closeout
 
-After P1:
+A read-only production parity check after hardening showed the P1 deterministic candidate baselines matched the canonical Home metrics at the time of verification:
 
-- **R10-P2 — Human Feedback Lifecycle UI**: Accept / Dismiss / Start action / Mark complete through the hardened RPC;
+```text
+reply backlog / needs reply         575
+follow-ups due                       22
+first touch needed                    0
+payment pending                       9
+```
+
+Observed max canonical priority scores for active candidate families at that moment:
+
+```text
+reply backlog                        47
+overdue follow-ups                   68
+payment pending                      40
+```
+
+These are live operating facts, not fixtures. Counts may change with real CRM activity.
+
+---
+
+## 5. Predictive safety boundary remains locked
+
+R10-P1 is deterministic operational guidance. It does **not** activate a trained conversion model.
+
+Do not publish conversion probabilities or reinterpret deterministic priority scores as probability/confidence while predictive readiness remains blocked by insufficient real labeled outcomes.
+
+No fake outcomes, conversions, revenue or training evidence may be created to satisfy readiness gates.
+
+---
+
+## 6. Exact next checkpoint — R10-P2 audit/design
+
+Before adding feedback controls, audit the existing recommendation lifecycle and hardened feedback RPC against the desired human workflow:
+
+- Accept;
+- Dismiss;
+- Start action;
+- Mark complete.
+
+The P2 audit must verify, read-only first:
+
+1. exact legal lifecycle transitions and terminal states;
+2. retry/idempotency behavior for every action;
+3. owner/admin/manager authorization and server-derived tenant binding;
+4. how accepted/started/completed timestamps and actors are recorded;
+5. how dismissal reasons or completion evidence should be represented without inventing evidence;
+6. how the UI handles stale recommendation state / concurrent operator actions;
+7. which actions are reversible, if any, and which remain terminal;
+8. how navigation/work-queue actions remain separate from recommendation lifecycle feedback;
+9. what P2 must expose to P3 without claiming causal outcome attribution;
+10. regression tests needed to preserve the P1 episode/presentation contract.
+
+Do **not** implement P2 controls until this audit/design is locked.
+
+---
+
+## 7. Later R10 checkpoint
+
+After P2:
+
 - **R10-P3 — Observed Outcome & Learning Runner**: service-role scheduled observation of downstream CRM/payment/enrollment evidence and learning-profile recomputation.
 
-Predictive model promotion remains separately gated by real outcome evidence.
+Predictive model promotion remains separately gated by sufficient real outcome evidence.
 
 ---
 
-## 9. Parked boundaries
+## 8. Parked boundaries
 
 Do not resume automatically:
 
@@ -182,7 +188,7 @@ Do not create fake data to make any parked boundary green.
 
 ---
 
-## 10. Locked engineering rules
+## 9. Locked engineering rules
 
 - one controlled checkpoint at a time;
 - verify before modifying;
@@ -196,12 +202,12 @@ Do not create fake data to make any parked boundary green.
 
 ---
 
-## 11. Resume instruction
+## 10. Resume instruction
 
 1. read `docs/SalsysOS_Active_Handoff.md`;
-2. read the P0 closeout and R10 audit/design checkpoints;
+2. read the R10-P1 closeout and episode-design checkpoints;
 3. verify current `main`, Supabase and Vercel provenance;
-4. audit the timestamps/IDs needed for the four P1 episode fingerprints;
-5. finalize the P1 episode-key contract;
-6. only then implement P1;
-7. do not add feedback buttons or outcome runners until their own checkpoints.
+4. audit the current feedback RPC/lifecycle schema and existing recommendation UI read-only;
+5. finalize the R10-P2 human-feedback state/UX contract;
+6. only then implement P2;
+7. do not start P3 outcome observation or predictive promotion during P2.
