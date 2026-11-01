@@ -196,6 +196,7 @@ declare
   v_organization_id uuid := public.current_tenant_organization_id();
   v_state public.system_intelligence_recommendation_signal_state%rowtype;
   v_new_episode boolean := false;
+  v_current_key text;
 begin
   if auth.uid() is null or v_organization_id is null then
     raise exception 'AUTHENTICATED_TENANT_REQUIRED';
@@ -268,6 +269,27 @@ begin
         and s.signal_id = p_signal_id;
     end if;
   else
+    if v_state.is_active and v_state.episode_sequence > 0 then
+      v_current_key := format(
+        'home:%s:episode:%s',
+        v_state.signal_id,
+        v_state.episode_sequence
+      );
+
+      update public.system_intelligence_recommendations r
+      set
+        state = 'expired',
+        updated_by = auth.uid(),
+        updated_at = now()
+      where r.organization_id = v_organization_id
+        and r.recommendation_key = v_current_key
+        and r.state = 'active'
+        and r.accepted_at is null
+        and r.dismissed_at is null
+        and r.acted_at is null
+        and r.completed_at is null;
+    end if;
+
     update public.system_intelligence_recommendation_signal_state s
     set
       is_active = false,
@@ -311,6 +333,6 @@ grant execute on function public.resolve_system_intelligence_signal_episode_v1(t
   to authenticated;
 
 comment on function public.resolve_system_intelligence_signal_episode_v1(text,boolean,numeric) is
-  'R10-P1 privileged signal episode resolver. A new episode begins only after the signal was previously observed inactive; missing clear observations never fabricate a recurrence.';
+  'R10-P1 privileged signal episode resolver. A new episode begins only after the signal was previously observed inactive; missing clear observations never fabricate a recurrence. Clearing expires only untouched active recommendations for that episode.';
 
 commit;
