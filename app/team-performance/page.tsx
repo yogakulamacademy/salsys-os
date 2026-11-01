@@ -1,5 +1,4 @@
 import Link from 'next/link';
-import { redirect } from 'next/navigation';
 
 import {
   Activity,
@@ -30,7 +29,7 @@ import {
   TeamPerformanceInsights,
 } from '@/components/team-performance-insights';
 
-import { useMockData } from '@/lib/config';
+import { requireAdminWorkspaceAccess } from '@/lib/route-access';
 
 import {
   getTeamAssignmentFairnessSnapshot,
@@ -40,8 +39,6 @@ import {
   type TeamPerformanceEmployee,
   type TeamRecentWork,
 } from '@/lib/team-performance-data';
-
-import { createClient } from '@/lib/supabase/server';
 
 export const dynamic = 'force-dynamic';
 
@@ -272,60 +269,7 @@ function resolveRange(
 }
 
 async function requireAdmin() {
-  if (useMockData) {
-    return;
-  }
-
-  const supabase =
-    await createClient();
-
-  const {
-    data: {
-      user,
-    },
-  } =
-    await supabase
-      .auth
-      .getUser();
-
-  if (!user) {
-    redirect('/login');
-  }
-
-  const {
-    data: profile,
-    error,
-  } =
-    await supabase
-      .from(
-        'profiles'
-      )
-      .select(
-        'role,active'
-      )
-      .eq(
-        'id',
-        user.id
-      )
-      .maybeSingle();
-
-  if (
-    error ||
-    !profile ||
-    profile.active !==
-      true
-  ) {
-    redirect('/login');
-  }
-
-  if (
-    profile.role !==
-    'admin'
-  ) {
-    redirect(
-      '/dashboard?restricted=1'
-    );
-  }
+  await requireAdminWorkspaceAccess();
 }
 
 function percentage(
@@ -364,6 +308,12 @@ function roleLabel(
     role === 'admissions'
   ) {
     return 'Employee';
+  }
+
+  if (
+    role === 'owner'
+  ) {
+    return 'Owner';
   }
 
   if (
@@ -1282,7 +1232,7 @@ export default async function TeamPerformancePage({
             value={
               snapshot.summary.teamMembers
             }
-            note="Active Admin, Manager and Employee accounts included in the read model."
+            note="Active Owner, Admin and Employee accounts included in the read model."
             icon={
               <UsersRound
                 size={19}
