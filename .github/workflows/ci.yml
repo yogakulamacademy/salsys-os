@@ -97,6 +97,9 @@ jobs:
       - name: Verify Customer 360 Identity Closeout Contracts
         run: npm run verify:customer360-identity
 
+      - name: Verify CRM + Customer 360 Final Closeout Contracts
+        run: npm run verify:crm-customer360-final-closeout
+
       - name: Verify Onboarding Foundation Contracts
         run: npm run verify:onboarding-foundation
 
