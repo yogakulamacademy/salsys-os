@@ -147,7 +147,12 @@ function resolveInvestigationScope(
 
   // A concrete selected attribution dimension is stronger evidence than a
   // fuzzy finder query. Do not let the query silently narrow the destination.
-  if (explicit.source || explicit.channel) {
+  if (
+    explicit.source ||
+    explicit.channel ||
+    explicit.creationChannel ||
+    explicit.lastTouchSource
+  ) {
     delete merged.q;
   }
 
