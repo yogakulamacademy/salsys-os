@@ -3,7 +3,10 @@ import "server-only";
 import { redirect } from "next/navigation";
 
 import { createClient } from "@/lib/supabase/server";
-import { getCurrentWorkspaceContext } from "@/lib/workspace";
+import {
+  canAccessEducationOperationsForCurrentSession,
+  getCurrentWorkspaceContext,
+} from "@/lib/workspace";
 
 const PRIVILEGED_ROLES = new Set(["owner", "admin", "manager"]);
 const ADMIN_ROLES = new Set(["owner", "admin"]);
@@ -43,4 +46,19 @@ export function requireAdminWorkspaceAccess() {
 
 export function requireAutomationApprovalWorkspaceAccess() {
   return requireWorkspaceRole(AUTOMATION_APPROVAL_ROLES);
+}
+
+export async function requireEducationOperationsAccess() {
+  const workspace = await requireWorkspaceRole(PRIVILEGED_ROLES);
+  const supabase = await createClient();
+  const allowed = await canAccessEducationOperationsForCurrentSession(
+    supabase,
+    workspace.organizationId,
+  );
+
+  if (!allowed) {
+    redirect("/dashboard?restricted=education");
+  }
+
+  return workspace;
 }

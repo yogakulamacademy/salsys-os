@@ -270,3 +270,73 @@ export async function getCurrentWorkspaceContext(
 
   return getWorkspaceContextForUser(supabase, user.id);
 }
+
+export async function getEnabledOrganizationCapabilities(
+  supabase: ServerSupabaseClient,
+  organizationId: string,
+): Promise<string[]> {
+  const { data, error } = await supabase
+    .from("organization_capabilities")
+    .select("capability_code")
+    .eq("organization_id", organizationId)
+    .eq("enabled", true);
+
+  if (error) {
+    throw new Error(
+      `Unable to load workspace capabilities: ${safeUpstreamErrorMessage(
+        error,
+        "Supabase capability lookup failed",
+      )}`,
+    );
+  }
+
+  return Array.from(
+    new Set(
+      (data ?? [])
+        .map((row) => String(row.capability_code ?? "").trim())
+        .filter(Boolean),
+    ),
+  ).sort();
+}
+
+export async function organizationHasCapabilityForCurrentSession(
+  supabase: ServerSupabaseClient,
+  organizationId: string,
+  capabilityCode: string,
+): Promise<boolean> {
+  const { data, error } = await supabase.rpc("organization_has_capability", {
+    p_organization_id: organizationId,
+    p_capability_code: capabilityCode,
+  });
+
+  if (error) {
+    throw new Error(
+      `Unable to verify workspace capability: ${safeUpstreamErrorMessage(
+        error,
+        "Supabase capability check failed",
+      )}`,
+    );
+  }
+
+  return data === true;
+}
+
+export async function canAccessEducationOperationsForCurrentSession(
+  supabase: ServerSupabaseClient,
+  organizationId: string,
+): Promise<boolean> {
+  const { data, error } = await supabase.rpc("can_access_education_operations", {
+    p_organization_id: organizationId,
+  });
+
+  if (error) {
+    throw new Error(
+      `Unable to verify Education workspace access: ${safeUpstreamErrorMessage(
+        error,
+        "Supabase Education access check failed",
+      )}`,
+    );
+  }
+
+  return data === true;
+}
