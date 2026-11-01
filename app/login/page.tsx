@@ -3,6 +3,7 @@ import { LockKeyhole, ShieldCheck, Sparkles } from 'lucide-react';
 
 import { signInAction } from '@/app/actions/auth';
 import { useMockData } from '@/lib/config';
+import { SALSYSOS_VERSION_LABEL } from '@/lib/product-version';
 
 export default async function LoginPage({
   searchParams,
@@ -24,7 +25,12 @@ export default async function LoginPage({
           </div>
 
           <div>
-            <div className="text-[15px] font-semibold text-copy-strong">SalsysOS</div>
+            <div className="flex items-center gap-2">
+              <div className="text-[15px] font-semibold text-copy-strong">SalsysOS</div>
+              <span className="rounded-full border border-line bg-surface-soft px-2 py-0.5 text-[10px] font-semibold text-copy-muted">
+                {SALSYSOS_VERSION_LABEL}
+              </span>
+            </div>
             <div className="mt-0.5 text-[12px] text-copy-muted">
               Sales + Analysis Operating System
             </div>
