@@ -24,6 +24,7 @@ const data = read('lib/course-management-data.ts');
 const overview = read('app/operations/page.tsx');
 const availability = read('app/availability/page.tsx');
 const courseLayout = read('app/course-management/layout.tsx');
+const coursePage = read('app/course-management/page.tsx');
 const enrollmentsPage = read('app/enrollments/page.tsx');
 const enrollmentsData = read('lib/enrollments-data.ts');
 const operationsAccess = read('lib/operations-access.ts');
@@ -94,7 +95,7 @@ expectNotIncludes(enrollmentsData, 'current_stage === "enrolled"', 'Enrollment w
 
 expectIncludes(operationsAccess, 'new Set(["owner", "admin", "manager"])', 'Operations access must remain owner/admin/manager only');
 expectIncludes(courseActions, 'Published seats remaining cannot exceed batch capacity', 'Published-seat guard must remain enforced');
-expectIncludes(courseActions, 'Capacity cannot be saved below this number.', 'Course Management UI must preserve capacity floor guidance');
 expectIncludes(courseActions, 'update_course_batch_admin_v2', 'Course Management writes must remain on tenant-aware admin RPC');
+expectIncludes(coursePage, 'Capacity cannot be saved below this number.', 'Course Management UI must preserve capacity floor guidance');
 
 console.log('Operations final closeout contracts verified.');
