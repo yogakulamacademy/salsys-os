@@ -34,6 +34,10 @@ const nextConfig: NextConfig = {
     return {
       beforeFiles: [
         {
+          source: '/automation/approvals',
+          destination: '/automation-approvals',
+        },
+        {
           source: '/admissions',
           has: [
             {
