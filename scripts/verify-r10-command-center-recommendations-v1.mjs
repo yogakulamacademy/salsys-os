@@ -4,10 +4,9 @@ import fs from 'node:fs';
 const historicalMigrationPath =
   'supabase/migrations/20261101153414_r10_command_center_recommendation_episodes_v1.sql';
 const historicalMigration = fs.readFileSync(historicalMigrationPath, 'utf8');
-const hardeningMigration = fs.readFileSync(
-  'supabase/migrations/20261101170000_r10_command_center_recommendation_acceptance_hardening_v1.sql',
-  'utf8',
-);
+const hardeningMigrationPath =
+  'supabase/migrations/20261101155326_r10_command_center_recommendation_acceptance_hardening_v1.sql';
+const hardeningMigration = fs.readFileSync(hardeningMigrationPath, 'utf8');
 const route = fs.readFileSync(
   'app/api/intelligence/recommendations/present/route.ts',
   'utf8',
@@ -37,6 +36,17 @@ const historicalMd5 = crypto
 if (historicalMd5 !== '7df18580cdc6da5c21d90dabcd2ee19c') {
   throw new Error(
     `R10-P1 historical migration drift for ${historicalMigrationPath}: expected 7df18580cdc6da5c21d90dabcd2ee19c, got ${historicalMd5}`,
+  );
+}
+
+const hardeningMd5 = crypto
+  .createHash('md5')
+  .update(normalizedSql(hardeningMigration))
+  .digest('hex');
+
+if (hardeningMd5 !== 'bba754a1abb504a34694d3f8420952da') {
+  throw new Error(
+    `R10-P1 hardening migration drift for ${hardeningMigrationPath}: expected bba754a1abb504a34694d3f8420952da, got ${hardeningMd5}`,
   );
 }
 
