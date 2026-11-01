@@ -19,15 +19,14 @@ import {
   type StoredMetricInvestigation,
 } from "@/components/intelligence/decision-metric-link";
 import { canonicalizeWorkspaceHref } from "@/lib/canonical-workspace-routes";
+import { transferInvestigationScope } from "@/lib/investigation-scope";
 import type { MetricEvidenceState } from "@/lib/metric-definitions";
-import { resolveMetricNextCheck } from "@/lib/metric-investigation-guidance";
+import {
+  resolveMetricNextCheck,
+  resolveMetricRelatedLinks,
+} from "@/lib/metric-investigation-guidance";
 
 const METRIC_CONTEXT_TTL_MS = 30 * 60 * 1000;
-
-type RelatedLink = {
-  label: string;
-  href: string;
-};
 
 const evidenceStyles: Record<MetricEvidenceState, string> = {
   observed:
@@ -104,11 +103,18 @@ export function InvestigationContextBar() {
 
   const currentPath = `${pathname}${searchParams.size ? `?${searchParams.toString()}` : ""}`;
   const nextCheck = resolveMetricNextCheck(metricContext.metricLabel);
-  const relatedLinks = metricRelatedLinks(metricContext.metricLabel)
-    .map((item) => ({
-      ...item,
-      href: canonicalizeWorkspaceHref(item.href),
-    }))
+  const relatedLinks = resolveMetricRelatedLinks(metricContext.metricLabel)
+    .map((item) => {
+      const transfer = transferInvestigationScope(
+        item.href,
+        metricContext.scope ?? {},
+      );
+      return {
+        ...item,
+        href: transfer.href,
+        applied: transfer.applied,
+      };
+    })
     .filter(
       (item) =>
         item.href !== currentPath && item.href !== metricContext.targetPath,
@@ -185,8 +191,13 @@ export function InvestigationContextBar() {
                   {metricContext.evidenceLabel}
                 </span>
               ) : null}
+              {metricContext.appliedScope?.length ? (
+                <span className="rounded-full border border-brand-200 bg-brand-50 px-2 py-1 text-[9px] font-semibold text-brand-700 dark:border-brand-900/60 dark:bg-brand-950/25 dark:text-brand-300">
+                  {metricContext.appliedScope.length} compatible {metricContext.appliedScope.length === 1 ? "filter" : "filters"} applied
+                </span>
+              ) : null}
               <span className="text-[9px] font-semibold text-copy-subtle">
-                Reference context only · destination data remains authoritative
+                Destination data remains authoritative
               </span>
             </div>
           </div>
@@ -199,7 +210,9 @@ export function InvestigationContextBar() {
                 className="btn-secondary"
                 onClick={() => continueMetricContext(metricContext, item.href)}
               >
-                {item.label} <ArrowRight size={13} />
+                {item.label}
+                {item.applied.length ? ` · ${item.applied.length} scoped` : ""}
+                <ArrowRight size={13} />
               </Link>
             ))}
             <Link href={metricContext.sourcePath} className="btn-secondary">
@@ -217,7 +230,7 @@ export function InvestigationContextBar() {
       </div>
 
       <div className="flex items-center gap-2 border-t border-line bg-surface-muted/55 px-4 py-2.5 text-[10px] font-medium text-copy-muted sm:px-5">
-        <ArrowRight size={11} /> The investigation thread preserves the question you were following; it does not synchronize filters or infer missing evidence.
+        <ArrowRight size={11} /> The investigation thread carries only filters the destination explicitly supports; unsupported scope remains context and never silently changes evidence.
       </div>
     </section>
   );
@@ -296,126 +309,18 @@ function SourceInvestigationBar({
   );
 }
 
-function metricRelatedLinks(metricLabel: string): RelatedLink[] {
-  const metric = metricLabel.trim().toLowerCase();
-
-  if (metric === "new leads" || metric.includes("first touch")) {
-    return [
-      { label: "Work Queue", href: "/admissions?view=queue" },
-      { label: "Leads", href: "/leads" },
-    ];
-  }
-
-  if (
-    metric.includes("capacity") ||
-    metric.includes("calculated open") ||
-    metric.includes("demand pressure") ||
-    metric.includes("seats remain") ||
-    metric.includes("upcoming batches") ||
-    metric.includes("enrollment closed")
-  ) {
-    return [
-      { label: "Admissions Capacity", href: "/admissions?view=capacity" },
-      { label: "Operations", href: "/operations" },
-    ];
-  }
-
-  if (
-    metric.includes("contact coverage") ||
-    metric.includes("median first response") ||
-    metric.includes("median inbound response") ||
-    metric.includes("never contacted") ||
-    metric.includes("response time") ||
-    metric.includes("response rate")
-  ) {
-    return [
-      { label: "Response & SLA", href: "/performance?view=response" },
-      { label: "Leads", href: "/leads" },
-    ];
-  }
-
-  if (
-    metric.includes("inbound contacts") ||
-    metric.includes("outbound contacts") ||
-    metric.includes("total contacts") ||
-    metric.includes("marked successful")
-  ) {
-    return [
-      { label: "Communication", href: "/performance?view=communication" },
-      { label: "Leads", href: "/leads" },
-    ];
-  }
-
-  if (metric.includes("payment")) {
-    return [
-      { label: "Payments", href: "/admissions?view=payments" },
-      { label: "Revenue", href: "/revenue" },
-    ];
-  }
-
-  if (metric.includes("qualified")) {
-    return [
-      { label: "Funnel", href: "/marketing?view=funnel" },
-      { label: "Pipeline", href: "/admissions?view=pipeline" },
-    ];
-  }
-
-  if (metric.includes("enroll")) {
-    return [
-      { label: "Pipeline", href: "/admissions?view=pipeline" },
-      { label: "Revenue", href: "/revenue" },
-    ];
-  }
-
-  if (metric.includes("collected") || metric.includes("revenue")) {
-    return [
-      { label: "Revenue", href: "/revenue" },
-      { label: "Payments", href: "/admissions?view=payments" },
-    ];
-  }
-
-  if (metric.includes("reply")) {
-    return [
-      { label: "Inbox", href: "/conversations" },
-      { label: "Response & SLA", href: "/performance?view=response" },
-    ];
-  }
-
-  if (metric.includes("follow")) {
-    return [
-      { label: "Follow-ups", href: "/follow-ups" },
-      { label: "Work Queue", href: "/admissions?view=queue" },
-    ];
-  }
-
-  if (metric.includes("pipeline") || metric.includes("high intent")) {
-    return [
-      { label: "Pipeline", href: "/admissions?view=pipeline" },
-      { label: "Revenue", href: "/revenue" },
-    ];
-  }
-
-  if (metric.includes("lead")) {
-    return [
-      { label: "Leads", href: "/leads" },
-      { label: "Attribution", href: "/marketing?view=attribution" },
-    ];
-  }
-
-  return [];
-}
-
 function continueMetricContext(
   context: StoredMetricInvestigation,
   href: string,
 ) {
   try {
-    const canonicalHref = canonicalizeWorkspaceHref(href);
+    const transfer = transferInvestigationScope(href, context.scope ?? {});
     window.sessionStorage.setItem(
       METRIC_INVESTIGATION_STORAGE_KEY,
       JSON.stringify({
         ...context,
-        targetPath: canonicalHref,
+        targetPath: transfer.href,
+        appliedScope: transfer.applied,
         createdAt: Date.now(),
       }),
     );
