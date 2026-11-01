@@ -25,25 +25,17 @@ create table public.system_intelligence_recommendation_signal_state (
   constraint system_intelligence_recommendation_signal_state_value_check
     check (last_signal_value >= 0),
   constraint system_intelligence_recommendation_signal_state_active_episode_check
-    check (
-      (is_active = false)
-      or (episode_sequence > 0 and episode_started_at is not null)
-    )
+    check ((is_active = false) or (episode_sequence > 0 and episode_started_at is not null))
 );
 
 alter table public.system_intelligence_recommendation_signal_state enable row level security;
-
-revoke all on table public.system_intelligence_recommendation_signal_state
-  from public, anon, authenticated;
-grant select on table public.system_intelligence_recommendation_signal_state
-  to authenticated;
-grant all on table public.system_intelligence_recommendation_signal_state
-  to service_role;
+revoke all on table public.system_intelligence_recommendation_signal_state from public, anon, authenticated;
+grant select on table public.system_intelligence_recommendation_signal_state to authenticated;
+grant all on table public.system_intelligence_recommendation_signal_state to service_role;
 
 create policy system_intelligence_recommendation_signal_state_select
 on public.system_intelligence_recommendation_signal_state
-for select
-to authenticated
+for select to authenticated
 using (
   public.session_is_bound_to_organization(organization_id)
   and public.is_organization_member(organization_id)
@@ -68,44 +60,28 @@ with lead_attention as materialized (
    and a.lead_id = v.id
 ),
 reply_candidates as (
-  select
-    organization_id,
-    'reply_backlog'::text as signal_id,
-    lead_id,
-    coalesce(last_inbound_at, latest_message_at, created_at) as signal_at
+  select organization_id, 'reply_backlog'::text as signal_id, lead_id,
+         coalesce(last_inbound_at, latest_message_at, created_at) as signal_at
   from lead_attention
   where needs_reply = true
 ),
 overdue_per_lead as (
-  select
-    f.organization_id,
-    f.lead_id,
-    min(f.due_at) as signal_at
+  select f.organization_id, f.lead_id, min(f.due_at) as signal_at
   from public.v_followups_due f
   where f.lead_id is not null
   group by f.organization_id, f.lead_id
 ),
 overdue_metrics as (
-  select
-    f.organization_id,
-    count(*)::bigint as baseline_value
+  select f.organization_id, count(*)::bigint as baseline_value
   from public.v_followups_due f
   group by f.organization_id
 ),
 overdue_candidates as (
-  select
-    o.organization_id,
-    'overdue_followups'::text as signal_id,
-    o.lead_id,
-    o.signal_at
+  select o.organization_id, 'overdue_followups'::text as signal_id, o.lead_id, o.signal_at
   from overdue_per_lead o
 ),
 first_touch_candidates as (
-  select
-    organization_id,
-    'first_touch_needed'::text as signal_id,
-    lead_id,
-    created_at as signal_at
+  select organization_id, 'first_touch_needed'::text as signal_id, lead_id, created_at as signal_at
   from lead_attention
   where current_stage = 'new'
     and latest_message_at is null
@@ -128,12 +104,9 @@ payment_candidates as (
 ),
 all_candidates as (
   select * from reply_candidates
-  union all
-  select * from overdue_candidates
-  union all
-  select * from first_touch_candidates
-  union all
-  select * from payment_candidates
+  union all select * from overdue_candidates
+  union all select * from first_touch_candidates
+  union all select * from payment_candidates
 ),
 ranked as (
   select
@@ -145,9 +118,7 @@ ranked as (
       partition by c.organization_id, c.signal_id
       order by c.signal_at asc nulls last, c.lead_id
     )::bigint as target_rank,
-    count(*) over (
-      partition by c.organization_id, c.signal_id
-    )::bigint as candidate_lead_count
+    count(*) over (partition by c.organization_id, c.signal_id)::bigint as candidate_lead_count
   from all_candidates c
 )
 select
@@ -157,8 +128,7 @@ select
   r.signal_at,
   r.target_rank,
   case
-    when r.signal_id = 'overdue_followups'
-      then coalesce(o.baseline_value, 0::bigint)
+    when r.signal_id = 'overdue_followups' then coalesce(o.baseline_value, 0::bigint)
     else r.candidate_lead_count
   end::bigint as baseline_value
 from ranked r
@@ -166,10 +136,8 @@ left join overdue_metrics o
   on o.organization_id = r.organization_id
  and r.signal_id = 'overdue_followups';
 
-revoke all on table public.v_r10_command_center_recommendation_candidates_v1
-  from public, anon;
-grant select on table public.v_r10_command_center_recommendation_candidates_v1
-  to authenticated, service_role;
+revoke all on table public.v_r10_command_center_recommendation_candidates_v1 from public, anon;
+grant select on table public.v_r10_command_center_recommendation_candidates_v1 to authenticated, service_role;
 
 comment on view public.v_r10_command_center_recommendation_candidates_v1 is
   'R10-P1 deterministic Command Center recommendation candidates. Mirrors current CRM attention semantics, ranks oldest actionable Leads first, and keeps overdue task baseline count separate from deduplicated Lead targets.';
@@ -202,19 +170,11 @@ begin
     raise exception 'AUTHENTICATED_TENANT_REQUIRED';
   end if;
 
-  if not public.has_organization_role(
-    v_organization_id,
-    array['owner','admin','manager']::text[]
-  ) then
+  if not public.has_organization_role(v_organization_id, array['owner','admin','manager']::text[]) then
     raise exception 'INTELLIGENCE_PRIVILEGED_ROLE_REQUIRED';
   end if;
 
-  if p_signal_id not in (
-    'reply_backlog',
-    'overdue_followups',
-    'first_touch_needed',
-    'payment_pending'
-  ) then
+  if p_signal_id not in ('reply_backlog','overdue_followups','first_touch_needed','payment_pending') then
     raise exception 'INTELLIGENCE_SIGNAL_UNSUPPORTED';
   end if;
 
@@ -223,24 +183,13 @@ begin
   end if;
 
   insert into public.system_intelligence_recommendation_signal_state (
-    organization_id,
-    signal_id,
-    is_active,
-    episode_sequence,
-    last_signal_value,
-    last_evaluated_at
+    organization_id, signal_id, is_active, episode_sequence, last_signal_value, last_evaluated_at
   ) values (
-    v_organization_id,
-    p_signal_id,
-    false,
-    0,
-    0,
-    now()
+    v_organization_id, p_signal_id, false, 0, 0, now()
   )
   on conflict (organization_id, signal_id) do nothing;
 
-  select s.*
-    into v_state
+  select s.* into v_state
   from public.system_intelligence_recommendation_signal_state s
   where s.organization_id = v_organization_id
     and s.signal_id = p_signal_id
@@ -270,17 +219,10 @@ begin
     end if;
   else
     if v_state.is_active and v_state.episode_sequence > 0 then
-      v_current_key := format(
-        'home:%s:episode:%s',
-        v_state.signal_id,
-        v_state.episode_sequence
-      );
+      v_current_key := format('home:%s:episode:%s', v_state.signal_id, v_state.episode_sequence);
 
       update public.system_intelligence_recommendations r
-      set
-        state = 'expired',
-        updated_by = auth.uid(),
-        updated_at = now()
+      set state = 'expired', updated_by = auth.uid(), updated_at = now()
       where r.organization_id = v_organization_id
         and r.recommendation_key = v_current_key
         and r.state = 'active'
@@ -301,8 +243,7 @@ begin
       and s.signal_id = p_signal_id;
   end if;
 
-  select s.*
-    into v_state
+  select s.* into v_state
   from public.system_intelligence_recommendation_signal_state s
   where s.organization_id = v_organization_id
     and s.signal_id = p_signal_id;
@@ -316,12 +257,7 @@ begin
     v_state.last_cleared_at,
     v_new_episode,
     case
-      when v_state.is_active then
-        format(
-          'home:%s:episode:%s',
-          v_state.signal_id,
-          v_state.episode_sequence
-        )
+      when v_state.is_active then format('home:%s:episode:%s', v_state.signal_id, v_state.episode_sequence)
       else null::text
     end;
 end;

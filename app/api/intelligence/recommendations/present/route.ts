@@ -22,6 +22,8 @@ type CandidateRow = {
   signal_at: string | null;
   target_rank: number | string;
   baseline_value: number | string;
+  priority_score: number | string | null;
+  max_priority_score: number | string | null;
 };
 
 type EpisodeRow = {
@@ -34,7 +36,6 @@ type EpisodeRow = {
 type RecommendationConfig = {
   signalId: SignalId;
   title: string;
-  score: number;
   actionText: string;
   reasonText: (baseline: number, targets: number) => string;
   baselineMetric: string;
@@ -46,7 +47,6 @@ const recommendationConfigs: RecommendationConfig[] = [
   {
     signalId: "payment_pending",
     title: "Reconcile payment-pending opportunities",
-    score: 95,
     actionText: "Review payment-pending opportunities and reconcile the next required step.",
     reasonText: (baseline, targets) =>
       `${baseline.toLocaleString("en-IN")} opportunities are currently at payment stage. The working set starts with ${targets.toLocaleString("en-IN")} oldest payment-stage lead${targets === 1 ? "" : "s"}.`,
@@ -57,7 +57,6 @@ const recommendationConfigs: RecommendationConfig[] = [
   {
     signalId: "overdue_followups",
     title: "Complete overdue follow-ups",
-    score: 90,
     actionText: "Work the oldest overdue follow-ups first.",
     reasonText: (baseline, targets) =>
       `${baseline.toLocaleString("en-IN")} follow-up task${baseline === 1 ? " is" : "s are"} already due. The working set covers ${targets.toLocaleString("en-IN")} lead${targets === 1 ? "" : "s"} with the earliest overdue actions.`,
@@ -68,7 +67,6 @@ const recommendationConfigs: RecommendationConfig[] = [
   {
     signalId: "reply_backlog",
     title: "Work the oldest unanswered conversations",
-    score: 85,
     actionText: "Reply to the oldest active conversations still waiting on your team.",
     reasonText: (baseline, targets) =>
       `${baseline.toLocaleString("en-IN")} active conversation${baseline === 1 ? " is" : "s are"} waiting for a reply. Start with the oldest ${targets.toLocaleString("en-IN")} lead${targets === 1 ? "" : "s"} in the bounded working set.`,
@@ -79,7 +77,6 @@ const recommendationConfigs: RecommendationConfig[] = [
   {
     signalId: "first_touch_needed",
     title: "Make first contact with untouched new leads",
-    score: 80,
     actionText: "Start the first outbound touch for new CRM opportunities with no recorded message or contact.",
     reasonText: (baseline, targets) =>
       `${baseline.toLocaleString("en-IN")} new opportunit${baseline === 1 ? "y has" : "ies have"} no recorded message or first contact. The working set starts with the oldest ${targets.toLocaleString("en-IN")} lead${targets === 1 ? "" : "s"}.`,
@@ -132,9 +129,9 @@ export async function POST(request: NextRequest) {
     const db = supabase as any;
 
     const { data: candidateData, error: candidateError } = await db
-      .from("v_r10_command_center_recommendation_candidates_v1")
+      .from("v_r10_command_center_recommendation_candidates_v2")
       .select(
-        "organization_id,signal_id,lead_id,signal_at,target_rank,baseline_value",
+        "organization_id,signal_id,lead_id,signal_at,target_rank,baseline_value,priority_score,max_priority_score",
       )
       .eq("organization_id", organizationId)
       .lte("target_rank", TARGET_LIMIT)
@@ -153,10 +150,14 @@ export async function POST(request: NextRequest) {
       (candidateData ?? []) as CandidateRow[],
     );
     const recommendations: Array<Record<string, unknown>> = [];
+    const unavailableSignals: SignalId[] = [];
 
     for (const config of recommendationConfigs) {
       const rows = candidateGroups.get(config.signalId) ?? [];
       const baseline = rows.length ? safeNumber(rows[0].baseline_value) : 0;
+      const score = rows.length
+        ? clampPriority(safeNumber(rows[0].max_priority_score))
+        : 0;
       const targetIds = rows
         .map((row) => String(row.lead_id ?? "").trim())
         .filter(Boolean)
@@ -172,14 +173,12 @@ export async function POST(request: NextRequest) {
       );
 
       if (episodeError) {
+        unavailableSignals.push(config.signalId);
         console.error(
           `R10 recommendation episode resolution failed for ${config.signalId}`,
           episodeError,
         );
-        return NextResponse.json(
-          { ok: false, error: "Recommended actions are temporarily unavailable." },
-          { status: 503, headers: privateHeaders },
-        );
+        continue;
       }
 
       const episode = ((episodeData ?? [])[0] ?? null) as EpisodeRow | null;
@@ -197,11 +196,9 @@ export async function POST(request: NextRequest) {
         .maybeSingle();
 
       if (existingError) {
+        unavailableSignals.push(config.signalId);
         console.error("R10 recommendation state read failed", existingError);
-        return NextResponse.json(
-          { ok: false, error: "Recommended actions are temporarily unavailable." },
-          { status: 503, headers: privateHeaders },
-        );
+        continue;
       }
 
       if (
@@ -221,7 +218,7 @@ export async function POST(request: NextRequest) {
           p_signal_id: config.signalId,
           p_category: "crm_operations",
           p_role_scope: "owner_admin_manager",
-          p_score: config.score,
+          p_score: score,
           p_action_text: config.actionText,
           p_reason_text: reasonText,
           p_baseline_metric: config.baselineMetric,
@@ -232,14 +229,12 @@ export async function POST(request: NextRequest) {
       );
 
       if (touchError || !recommendationId) {
+        unavailableSignals.push(config.signalId);
         console.error(
           `R10 recommendation presentation failed for ${config.signalId}`,
           touchError,
         );
-        return NextResponse.json(
-          { ok: false, error: "Recommended actions are temporarily unavailable." },
-          { status: 503, headers: privateHeaders },
-        );
+        continue;
       }
 
       recommendations.push({
@@ -247,7 +242,7 @@ export async function POST(request: NextRequest) {
         signalId: config.signalId,
         episodeSequence: safeNumber(episode.episode_sequence),
         title: config.title,
-        score: config.score,
+        score,
         actionText: config.actionText,
         reasonText,
         baselineValue: baseline,
@@ -261,10 +256,19 @@ export async function POST(request: NextRequest) {
       safeNumber(right.score) - safeNumber(left.score),
     );
 
+    if (recommendations.length === 0 && unavailableSignals.length > 0) {
+      return NextResponse.json(
+        { ok: false, error: "Recommended actions are temporarily unavailable." },
+        { status: 503, headers: privateHeaders },
+      );
+    }
+
     return NextResponse.json(
       {
         ok: true,
         evidenceClass: "deterministic_crm",
+        partial: unavailableSignals.length > 0,
+        unavailableSignals,
         recommendations,
       },
       { headers: privateHeaders },
@@ -298,4 +302,8 @@ function isSignalId(value: string): value is SignalId {
 function safeNumber(value: unknown) {
   const number = Number(value ?? 0);
   return Number.isFinite(number) ? number : 0;
+}
+
+function clampPriority(value: number) {
+  return Math.max(0, Math.min(100, Math.round(value)));
 }

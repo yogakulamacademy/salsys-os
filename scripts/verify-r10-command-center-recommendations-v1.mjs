@@ -1,9 +1,12 @@
+import crypto from 'node:crypto';
 import fs from 'node:fs';
 
-const migration = fs.readFileSync(
-  'supabase/migrations/20261101162000_r10_command_center_recommendation_episodes_v1.sql',
-  'utf8',
-);
+const historicalMigrationPath =
+  'supabase/migrations/20261101153414_r10_command_center_recommendation_episodes_v1.sql';
+const historicalMigration = fs.readFileSync(historicalMigrationPath, 'utf8');
+const hardeningMigrationPath =
+  'supabase/migrations/20261101155326_r10_command_center_recommendation_acceptance_hardening_v1.sql';
+const hardeningMigration = fs.readFileSync(hardeningMigrationPath, 'utf8');
 const route = fs.readFileSync(
   'app/api/intelligence/recommendations/present/route.ts',
   'utf8',
@@ -15,10 +18,36 @@ const component = fs.readFileSync(
 const layout = fs.readFileSync('app/home/layout.tsx', 'utf8');
 const home = fs.readFileSync('app/home/page.tsx', 'utf8');
 
+function normalizedSql(source) {
+  return source.replace(/\r\n/g, '\n').trimEnd();
+}
+
 function requireText(source, needle, label) {
   if (!source.includes(needle)) {
     throw new Error(`R10-P1 verification failed: missing ${label} (${needle})`);
   }
+}
+
+const historicalMd5 = crypto
+  .createHash('md5')
+  .update(normalizedSql(historicalMigration))
+  .digest('hex');
+
+if (historicalMd5 !== '7df18580cdc6da5c21d90dabcd2ee19c') {
+  throw new Error(
+    `R10-P1 historical migration drift for ${historicalMigrationPath}: expected 7df18580cdc6da5c21d90dabcd2ee19c, got ${historicalMd5}`,
+  );
+}
+
+const hardeningMd5 = crypto
+  .createHash('md5')
+  .update(normalizedSql(hardeningMigration))
+  .digest('hex');
+
+if (hardeningMd5 !== 'bba754a1abb504a34694d3f8420952da') {
+  throw new Error(
+    `R10-P1 hardening migration drift for ${hardeningMigrationPath}: expected bba754a1abb504a34694d3f8420952da, got ${hardeningMd5}`,
+  );
 }
 
 for (const [needle, label] of [
@@ -42,7 +71,23 @@ for (const [needle, label] of [
   ["'home:%s:episode:%s'", 'stable episode recommendation key'],
   ['missing clear observations never fabricate a recurrence', 'conservative recurrence contract'],
 ]) {
-  requireText(migration, needle, label);
+  requireText(historicalMigration, needle, label);
+}
+
+for (const [needle, label] of [
+  ['v_r10_command_center_recommendation_candidates_v2', 'priority-enriched candidate view'],
+  ['v_admissions_priority_queue', 'canonical operational priority source'],
+  ['priority_score', 'canonical per-Lead priority evidence'],
+  ['max_priority_score', 'aggregate signal priority evidence'],
+  ["public.system_intelligence_recommendations.state = 'active'", 'atomic active-state touch guard'],
+  ['accepted_at is null', 'accepted terminal touch guard'],
+  ['dismissed_at is null', 'dismissed terminal touch guard'],
+  ['acted_at is null', 'acted terminal touch guard'],
+  ['completed_at is null', 'completed terminal touch guard'],
+  ['INTELLIGENCE_EPISODE_TERMINAL', 'terminal episode failure'],
+  ['creates no recommendation, recommendation-event, or signal-state rows', 'no-seeding contract'],
+]) {
+  requireText(hardeningMigration, needle, label);
 }
 
 for (const [needle, label] of [
@@ -51,10 +96,15 @@ for (const [needle, label] of [
   ['getCurrentWorkspaceContext(supabase)', 'server-derived workspace context'],
   ['new Set(["owner", "admin", "manager"])', 'privileged route role boundary'],
   ['const TARGET_LIMIT = 50', 'bounded working target set'],
-  ['v_r10_command_center_recommendation_candidates_v1', 'candidate read'],
+  ['v_r10_command_center_recommendation_candidates_v2', 'acceptance-hardened candidate read'],
+  ['max_priority_score', 'canonical operational priority consumption'],
+  ['clampPriority', 'bounded operational priority'],
   ['resolve_system_intelligence_signal_episode_v1', 'episode resolution'],
-  ['touch_system_intelligence_recommendation_v2', 'hardened P0 presentation RPC'],
-  ['String(existing.state ?? "") !== "active"', 'terminal/non-active suppression'],
+  ['touch_system_intelligence_recommendation_v2', 'hardened presentation RPC'],
+  ['String(existing.state ?? "") !== "active"', 'terminal/non-active pre-suppression'],
+  ['unavailableSignals.push(config.signalId)', 'per-signal failure isolation'],
+  ['partial: unavailableSignals.length > 0', 'partial success disclosure'],
+  ['recommendations.length === 0 && unavailableSignals.length > 0', 'full failure boundary'],
   ['p_source_version: "r10-p1"', 'P1 recommendation provenance'],
   ['p_category: "crm_operations"', 'deterministic CRM category'],
   ['evidenceClass: "deterministic_crm"', 'explicit evidence class'],
@@ -77,9 +127,13 @@ for (const forbidden of [
   'lead_scoring_predictions',
   'conversion_probability',
   'prediction_generation_allowed',
+  'score: 95',
+  'score: 90',
+  'score: 85',
+  'score: 80',
 ]) {
   if (route.includes(forbidden)) {
-    throw new Error(`R10-P1 presentation must not consume predictive/stale sources: ${forbidden}`);
+    throw new Error(`R10-P1 presentation must not consume or invent unsupported intelligence: ${forbidden}`);
   }
 }
 
@@ -93,6 +147,7 @@ for (const [needle, label] of [
   ['Deterministic CRM guidance', 'deterministic guidance label'],
   ['they are not conversion probabilities', 'non-probability disclosure'],
   ['Observed evidence', 'observed evidence badge'],
+  ['Some recommendation signals are temporarily unavailable', 'partial-success disclosure'],
   ['Recommended actions unavailable', 'fail-closed unavailable state'],
   ['No new deterministic recommendations right now', 'zero-recommendation state'],
 ]) {
@@ -110,8 +165,21 @@ requireText(home, 'title="Action queue"', 'existing factual Action Queue');
 requireText(home, 'AttentionRow', 'existing factual Attention cards');
 
 const directMutationGrant = /grant\s+(?:insert|update|delete|truncate|all)[^;]*system_intelligence_recommendation_signal_state[^;]*authenticated/i;
-if (directMutationGrant.test(migration)) {
+if (directMutationGrant.test(historicalMigration) || directMutationGrant.test(hardeningMigration)) {
   throw new Error('R10-P1 signal episode state must not be directly mutable by authenticated clients.');
 }
 
-console.log('R10 Command Center Recommendations V1 contracts verified.');
+for (const source of [historicalMigration, hardeningMigration]) {
+  for (const forbidden of [
+    'insert into public.system_intelligence_recommendations values',
+    'insert into public.system_intelligence_recommendation_events values',
+    'truncate table public.system_intelligence_recommendations',
+    'truncate table public.system_intelligence_recommendation_events',
+  ]) {
+    if (source.toLowerCase().includes(forbidden)) {
+      throw new Error(`R10-P1 migrations must not seed or truncate recommendation evidence: ${forbidden}`);
+    }
+  }
+}
+
+console.log('R10 Command Center Recommendations V1 acceptance contracts verified.');
