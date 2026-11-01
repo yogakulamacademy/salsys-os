@@ -3,7 +3,7 @@
 **Checkpoint date:** 2026-11-01  
 **Canonical repository:** `yogakulamacademy/salsys-os`  
 **Production branch:** `main`  
-**Latest production runtime head:** `742f9d88290332d53e41a025c48295c6aa41818c`  
+**Latest production runtime head:** `616458d5f089bd6e07815f6b44a0c724a05cc9e0`  
 **Fast resume file:** `docs/SalsysOS_Active_Handoff.md`
 
 > Historical checkpoint files under `docs/checkpoints/` are immutable evidence records.
@@ -21,172 +21,154 @@ Current state:
 - R10 V1 (P0-P3): closed;
 - post-R10 rebaseline: complete;
 - R11 Education / Wellness Vertical Pack V1 audit/design: complete and locked;
-- **R11-P0 Capability + Security Foundation: complete and production-accepted**;
-- **current exact checkpoint: R11-P1 — Product Surface Gating**.
+- R11-P0 Capability + Security Foundation: complete and production-accepted;
+- **R11-P1 Product Surface Gating: complete and production-accepted**;
+- **current exact checkpoint: R11-P2 — Catalog Adapter Boundary**.
 
 Read first:
 
-1. `docs/checkpoints/M-2026-11-01-R11-P0-Capability-Security-Foundation-v1.md`
+1. `docs/checkpoints/M-2026-11-01-R11-P1-Product-Surface-Gating-v1.md`
 2. `docs/checkpoints/M-2026-11-01-R11-Vertical-Pack-Audit-Design-v1.md`
 3. `docs/SalsysOS_Active_Handoff.md`
 
 ---
 
-## 2. R11-P0 production truth
+## 2. R11-P1 production truth
 
 Production merge:
 
 ```text
-PR        #424
-main SHA  742f9d88290332d53e41a025c48295c6aa41818c
+PR        #426
+main SHA  616458d5f089bd6e07815f6b44a0c724a05cc9e0
 ```
 
-Supabase migration:
+Supabase migration ledger:
 
 ```text
-version 20261101174300
-name    r11_capability_security_foundation_v1
+20261101181750  r11_p1_education_surface_authorization_v1
+20261101181833  r11_p1_lead_capability_trigger_context_v1
 ```
 
 Vercel production:
 
 ```text
-deployment dpl_FKSi2T6LMKwhHnWngD4f6hPdeQef
+deployment dpl_Ht1voiBU1B958cUfj4yBQ3px5JNQ
 state      READY
-SHA        742f9d88290332d53e41a025c48295c6aa41818c
+SHA        616458d5f089bd6e07815f6b44a0c724a05cc9e0
+aliases    crm.salsysos.com / salsysos.com / www.salsysos.com
 ```
 
 Release gates:
 
 ```text
-Production Smoke #173   passed
-CodeQL #668             passed
-CI #1383 attempt 2      passed
+Production Smoke #175 attempt 2  passed after DB migrations
+CodeQL #672                     passed
+CI #1387                        passed
 ```
 
 ---
 
-## 3. Canonical capability model now live
+## 3. Capability-aware product surface now live
 
-Capability state is separate from functional workspaces and separate from future billing.
+Enabled capability codes are exposed through trusted server-derived workspace context.
 
-```text
-education_core
-wellness_residential      -> requires education_core
-education_catalog_sync    -> requires education_core
-```
-
-Canonical tables/helpers:
-
-```text
-capability_catalog
-organization_capabilities
-organization_has_capability(org_id, capability_code)
-set_organization_capability_v1(...)
-```
-
-Capability mutation remains trusted/service-role only. Unknown/disabled capability codes fail closed.
-
----
-
-## 4. Current tenant capability state
-
-Yogakulam Academy has all three R11 capabilities explicitly enabled from real production usage.
-
-```text
-Yogakulam Academy  courses 16  batches 85  all 3 capabilities enabled
-Demo org           courses 0   batches 0   no capability rows
-SalsysOS           courses 0   batches 0   no capability rows
-Test Yoga School   courses 0   batches 0   no capability rows
-```
-
-No synthetic second-tenant Education data was created.
-
----
-
-## 5. Course-management security boundary after P0
-
-Authenticated direct table privileges are now exactly:
-
-```text
-courses        SELECT / INSERT / UPDATE
-course_batches SELECT / INSERT / UPDATE
-```
-
-No authenticated direct `DELETE`, `TRUNCATE`, `TRIGGER`, or `REFERENCES` remains.
-
-Course/batch reads now require `education_core`.
-
-Course-management mutation authority requires:
+Education management surfaces require:
 
 ```text
 education_core
 +
-valid bound tenant
+session-bound organization
 +
 owner/admin/manager role
 ```
 
-Hardened explicit-org V2 batch-admin RPCs are executable by authenticated sessions and service role. Legacy implicit-org V1 RPCs remain unavailable to authenticated users.
+Education navigation is hidden when the capability is disabled, but authorization is enforced independently at server/data boundaries.
+
+Covered product surfaces include:
+
+```text
+Admissions
+Operations
+Availability
+Course Management / Programs & Batches
+Enrollments
+Education-specific Lead controls
+```
+
+For non-Education organizations, Lead create/edit uses a generic CRM form and does not load course/batch data.
+
+Canonical Lead truth also has a trigger preventing non-Education tenants from creating/changing Education-only preference values. Enrollment RLS independently requires `education_core`.
 
 ---
 
-## 6. Health after P0
+## 4. Current tenant capability/data state
 
-- CRM Core V2: healthy, 0 integrity issues;
-- Customer 360 V2: degraded only because of the same 2 pre-existing open identity conflicts;
-- PA-1 identity decision remains a separate parked human-approval boundary;
-- no R11-P0 data-health regression detected.
+```text
+Yogakulam Academy  education_core=true
+                    education_catalog_sync=true
+                    wellness_residential=true
+                    courses=16 batches=85 enrollments=0
+
+Demo org           no R11 capability rows; courses=0 batches=0 enrollments=0
+SalsysOS           no R11 capability rows; courses=0 batches=0 enrollments=0
+Test Yoga School   no R11 capability rows; courses=0 batches=0 enrollments=0
+```
+
+No synthetic second-tenant Education data exists.
+
+Authenticated runtime proof:
+
+```text
+Yogakulam Education operations access  true
+SalsysOS Education operations access   false
+Course Management                      16 courses / 85 batches
+Admissions snapshot                    canonical object
+```
 
 ---
 
-## 7. Exact R11-P1 goal
+## 5. Health after P1
 
-P1 makes the product surface consistently obey the capability model.
+```text
+CRM Core V2             healthy / 0 integrity issues
+Admissions automation   healthy / 96 runs / 0 failures in 24h
+Customer 360 V2         degraded only by 2 pre-existing identity conflicts
+```
 
-Required scope:
+The Customer 360 warning is not an R11-P1 regression.
 
-1. expose organization capability state through a trusted server/workspace context;
-2. capability-gate sidebar/navigation;
-3. capability + role gate Course Management direct route/data access;
-4. capability-gate Admissions/Education-specific surfaces;
-5. hide Education-specific Lead selectors/controls for organizations without `education_core` while preserving nullable canonical database fields;
-6. prove generic CRM remains functional for non-Education organizations;
-7. preserve Yogakulam's existing Education behavior.
-
-Navigation hiding is not authorization. Server/data boundaries must fail closed too.
+The rollback-only Lead DML test was blocked by the connector before PostgreSQL execution; no customer row was touched and no DML result is claimed.
 
 ---
 
-## 8. P1 design constraints
+## 6. Exact R11-P2 goal
 
-- do not remove Education columns from generic Lead/Person schemas;
-- do not infer access from organization name or onboarding `industry`;
-- do not overload `organization_workspaces` as capability state;
-- do not create fake Test Yoga School courses/batches for acceptance;
-- do not refactor the Yogakulam catalog adapter yet (P2);
-- do not build residential/accommodation surface gating yet (P3);
+P2 introduces a reusable Education catalog adapter boundary **without rewriting the proven Yogakulam parser**.
+
+Locked scope:
+
+1. define a generic Education catalog adapter interface/registry;
+2. preserve the working Yogakulam adapter behind a provider key;
+3. make adapter selection tenant-configurable through non-secret capability config;
+4. prevent external sync execution when `education_catalog_sync` or provider configuration is absent;
+5. keep tenant-scoped sync ledger/health canonical;
+6. keep manual course/batch management available under `education_core` without external sync.
+
+---
+
+## 7. P2 constraints
+
+- do not convert the Yogakulam adapter into a generic scraper/parser;
+- do not put provider secrets in capability JSON/config;
+- do not infer provider selection from organization name;
+- do not create fake production catalog/sync data for a second tenant;
+- do not require external sync for Education Core;
+- do not start residential/accommodation surface gating yet (R11-P3);
 - do not add billing/subscription/plan entitlement logic (R13).
 
 ---
 
-## 9. Later phases
-
-### R11-P2 — Catalog adapter boundary
-
-Preserve the proven Yogakulam adapter as one provider behind a generic tenant-configured adapter selection boundary.
-
-### R11-P3 — Optional Residential extension gating
-
-Capability-gate accommodation/residential surfaces while keeping Education Core usable without residential data.
-
-### R13 — commercial SaaS shell
-
-Public signup, billing/subscriptions, plan entitlements, signup abuse controls, customer-controlled deletion and billing-driven suspension remain later scope.
-
----
-
-## 10. Parked boundaries
+## 8. Parked boundaries
 
 Do not resume automatically:
 
@@ -199,12 +181,13 @@ Do not resume automatically:
 
 ---
 
-## 11. Resume instruction
+## 9. Resume instruction
 
 1. verify current `main`, Supabase and Vercel provenance;
-2. read the R11-P0 production closeout and locked R11 design;
-3. audit P1 surface dependencies read-only before changing code;
-4. implement **R11-P1 only**;
-5. prove non-Education organizations cannot see/use Education-only product surfaces while generic CRM still works;
-6. preserve Yogakulam's real Education behavior;
-7. do not begin P2/P3 until P1 is production-accepted.
+2. read the R11-P1 production closeout and locked R11 design;
+3. audit the current Yogakulam catalog sync route, adapter and sync ledger read-only;
+4. finalize the smallest provider registry/config contract before code;
+5. implement **R11-P2 only**;
+6. preserve the proven Yogakulam adapter and real 16-course / 85-batch behavior;
+7. prove missing/disabled sync capability or provider config fails closed without fake tenant data;
+8. do not begin P3 until P2 is production-accepted.
