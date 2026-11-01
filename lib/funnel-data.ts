@@ -126,51 +126,135 @@ export async function getFunnelWorkspace(): Promise<FunnelWorkspace> {
     );
   }
 
-  if (!isStatementTimeout(v2Result.error)) {
-    throw new Error(`Unable to load funnel workspace: ${v2Result.error.message}`);
+  console.error("Funnel V2 read degraded:", v2Result.error.message);
+
+  // Rollback/compatibility path: keep the existing aggregate RPC available while
+  // V2 is being deployed or if it ever degrades independently.
+  const legacyRpcResult = await supabase.rpc("get_funnel_workspace", {
+    p_organization_id: organizationId,
+  });
+
+  if (!legacyRpcResult.error) {
+    return applyProviderVisibility(
+      {
+        ...parseRpcPayload((legacyRpcResult.data ?? {}) as RpcPayload),
+        fallback: true,
+        warning:
+          `Funnel V2 unavailable: ${v2Result.error.message}. ` +
+          "Loaded the previous aggregate read model.",
+      },
+      visibility,
+    );
   }
 
   console.error(
-    "Funnel workspace v2 timed out; using bounded fallback:",
-    v2Result.error.message,
+    "Funnel compatibility RPC degraded:",
+    legacyRpcResult.error.message,
+  );
+
+  const fallback = await getMinimalLegacyWorkspace(
+    supabase,
+    organizationId,
   );
 
   return applyProviderVisibility(
-    await getBoundedFallbackWorkspace(supabase, organizationId),
+    {
+      ...fallback,
+      fallback: true,
+      warning:
+        `Funnel read models unavailable: ${v2Result.error.message}; ` +
+        `${legacyRpcResult.error.message}. ` +
+        "Loaded a reduced compatibility view to protect database health.",
+    },
     visibility,
   );
 }
 
 function parseRpcPayload(payload: RpcPayload): FunnelWorkspace {
+  const funnel = payload.funnel ?? {};
+  const google = payload.google_ads ?? {};
+  const meta = payload.meta_ads ?? {};
+
   return {
     funnel: {
-      overview: payload.funnel?.overview ?? {},
-      daily: payload.funnel?.daily ?? [],
-      newReturning: payload.funnel?.new_returning ?? [],
-      sources: payload.funnel?.sources ?? [],
-      firstTouch: payload.funnel?.first_touch ?? [],
-      landingPages: payload.funnel?.landing_pages ?? [],
-      countries: payload.funnel?.countries ?? [],
-      events: payload.funnel?.events ?? [],
-      repeat: payload.funnel?.repeat ?? {},
-      distribution: payload.funnel?.distribution ?? [],
+      overview: funnel.overview ?? {},
+      daily: funnel.daily ?? [],
+      newReturning: funnel.new_returning ?? [],
+      sources: funnel.sources ?? [],
+      firstTouch: funnel.first_touch ?? [],
+      landingPages: funnel.landing_pages ?? [],
+      countries: funnel.countries ?? [],
+      events: funnel.events ?? [],
+      repeat: funnel.repeat ?? {},
+      distribution: funnel.distribution ?? [],
     },
     googleAds: {
-      overview: payload.google_ads?.overview ?? {},
-      campaigns: payload.google_ads?.campaigns ?? [],
-      coverage: payload.google_ads?.coverage ?? {},
-      matches: payload.google_ads?.matches ?? [],
-      unmatchedCount: Number(payload.google_ads?.unmatched_count ?? 0),
+      overview: google.overview ?? {},
+      campaigns: google.campaigns ?? [],
+      coverage: google.coverage ?? {},
+      matches: google.matches ?? [],
+      unmatchedCount: toNumber(google.unmatched_count),
     },
     metaAds: {
-      overview: payload.meta_ads?.overview ?? {},
-      coverage: payload.meta_ads?.coverage ?? {},
-      campaigns: payload.meta_ads?.campaigns ?? [],
-      adsets: payload.meta_ads?.adsets ?? [],
-      ads: payload.meta_ads?.ads ?? [],
+      overview: meta.overview ?? {},
+      coverage: meta.coverage ?? {},
+      campaigns: meta.campaigns ?? [],
+      adsets: meta.adsets ?? [],
+      ads: meta.ads ?? [],
     },
     fallback: false,
     warning: null,
+  };
+}
+
+async function getMinimalLegacyWorkspace(
+  supabase: SupabaseClient,
+  organizationId: string,
+): Promise<Omit<FunnelWorkspace, "fallback" | "warning">> {
+  const [overviewResult, dailyResult, sourceResult] = await Promise.all([
+    supabase
+      .from("v_end_to_end_funnel_30d")
+      .select("*")
+      .eq("organization_id", organizationId)
+      .maybeSingle(),
+    supabase
+      .from("v_funnel_daily_30d")
+      .select("*")
+      .eq("organization_id", organizationId)
+      .order("date", { ascending: true }),
+    supabase
+      .from("v_funnel_source_30d")
+      .select("*")
+      .eq("organization_id", organizationId)
+      .order("sessions", { ascending: false })
+      .limit(20),
+  ]);
+
+  for (const [label, result] of [
+    ["overview", overviewResult],
+    ["daily", dailyResult],
+    ["source", sourceResult],
+  ] as const) {
+    if (result.error) {
+      console.error(`Funnel fallback ${label} read degraded:`, result.error.message);
+    }
+  }
+
+  return {
+    funnel: {
+      overview: overviewResult.error ? {} : overviewResult.data ?? {},
+      daily: dailyResult.error ? [] : dailyResult.data ?? [],
+      newReturning: [],
+      sources: sourceResult.error ? [] : sourceResult.data ?? [],
+      firstTouch: [],
+      landingPages: [],
+      countries: [],
+      events: [],
+      repeat: {},
+      distribution: [],
+    },
+    googleAds: emptyGoogleAds(),
+    metaAds: emptyMetaAds(),
   };
 }
 
@@ -182,129 +266,44 @@ function applyProviderVisibility(
     ...workspace,
     googleAds: visibility.googleConnected
       ? workspace.googleAds
-      : {
-          overview: {},
-          campaigns: [],
-          coverage: {},
-          matches: [],
-          unmatchedCount: 0,
-        },
+      : emptyGoogleAds(),
     metaAds: visibility.metaConnected
       ? workspace.metaAds
-      : {
-          overview: {},
-          coverage: {},
-          campaigns: [],
-          adsets: [],
-          ads: [],
-        },
+      : emptyMetaAds(),
   };
 }
 
-async function getBoundedFallbackWorkspace(
-  supabase: SupabaseClient,
-  organizationId: string,
-): Promise<FunnelWorkspace> {
-  const [summaryResult, dailyResult, sourcesResult, countriesResult] =
-    await Promise.all([
-      supabase
-        .from("analytics_daily_funnel")
-        .select("sessions, users, leads, cta_clicks, form_starts, form_submits")
-        .eq("organization_id", organizationId)
-        .order("date", { ascending: false })
-        .limit(90),
-      supabase
-        .from("analytics_daily_funnel")
-        .select("date, sessions, users, leads, cta_clicks, form_starts, form_submits")
-        .eq("organization_id", organizationId)
-        .order("date", { ascending: false })
-        .limit(90),
-      supabase
-        .from("analytics_source_summary")
-        .select("source, medium, sessions, users, leads")
-        .eq("organization_id", organizationId)
-        .order("sessions", { ascending: false })
-        .limit(100),
-      supabase
-        .from("analytics_country_summary")
-        .select("country, sessions, users, leads")
-        .eq("organization_id", organizationId)
-        .order("sessions", { ascending: false })
-        .limit(100),
-    ]);
-
-  for (const result of [
-    summaryResult,
-    dailyResult,
-    sourcesResult,
-    countriesResult,
-  ]) {
-    if (result.error && !isMissingRelation(result.error)) {
-      throw new Error(`Unable to load funnel fallback: ${result.error.message}`);
-    }
-  }
-
-  const summaryRows = summaryResult.data ?? [];
-  const overview = summaryRows.reduce(
-    (acc, row) => ({
-      sessions: acc.sessions + Number(row.sessions ?? 0),
-      users: acc.users + Number(row.users ?? 0),
-      leads: acc.leads + Number(row.leads ?? 0),
-      cta_clicks: acc.cta_clicks + Number(row.cta_clicks ?? 0),
-      form_starts: acc.form_starts + Number(row.form_starts ?? 0),
-      form_submits: acc.form_submits + Number(row.form_submits ?? 0),
-    }),
-    {
-      sessions: 0,
-      users: 0,
-      leads: 0,
-      cta_clicks: 0,
-      form_starts: 0,
-      form_submits: 0,
-    },
-  );
-
+function emptyGoogleAds(): GoogleAdsBusinessData {
   return {
-    funnel: {
-      overview,
-      daily: (dailyResult.data ?? []).slice().reverse(),
-      newReturning: [],
-      sources: sourcesResult.data ?? [],
-      firstTouch: [],
-      landingPages: [],
-      countries: countriesResult.data ?? [],
-      events: [],
-      repeat: {},
-      distribution: [],
-    },
-    googleAds: {
-      overview: {},
-      campaigns: [],
-      coverage: {},
-      matches: [],
-      unmatchedCount: 0,
-    },
-    metaAds: {
-      overview: {},
-      coverage: {},
-      campaigns: [],
-      adsets: [],
-      ads: [],
-    },
-    fallback: true,
-    warning:
-      "The canonical funnel RPC timed out. SalsysOS is showing a bounded analytics fallback; Ads detail is hidden unless provider visibility confirms the connection.",
+    overview: {},
+    campaigns: [],
+    coverage: {},
+    matches: [],
+    unmatchedCount: 0,
+  };
+}
+
+function emptyMetaAds(): MetaAdsBusinessData {
+  return {
+    overview: {},
+    coverage: {},
+    campaigns: [],
+    adsets: [],
+    ads: [],
   };
 }
 
 function isStatementTimeout(error: unknown) {
-  const record = error as { code?: string; message?: string } | null;
+  const message =
+    error instanceof Error ? error.message : String(error ?? "");
+
   return (
-    record?.code === "57014" ||
-    String(record?.message ?? "").toLowerCase().includes("statement timeout")
+    message.includes("statement timeout") ||
+    message.includes("canceling statement")
   );
 }
 
-function isMissingRelation(error: unknown) {
-  return (error as { code?: string } | null)?.code === "42P01";
+function toNumber(value: unknown) {
+  const number = Number(value ?? 0);
+  return Number.isFinite(number) ? number : 0;
 }
