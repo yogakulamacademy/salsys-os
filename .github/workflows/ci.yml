@@ -106,6 +106,9 @@ jobs:
       - name: Verify CRM + Customer 360 Final Closeout Contracts
         run: npm run verify:crm-customer360-final-closeout
 
+      - name: Verify PA-1 Human-Approved Identity Merge Contracts
+        run: npm run verify:human-approved-identity-merge-v1
+
       - name: Verify Admissions Final Closeout Contracts
         run: npm run verify:admissions-final-closeout
 
