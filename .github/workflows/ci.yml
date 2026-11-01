@@ -121,6 +121,9 @@ jobs:
       - name: Verify Home Command Center Final Closeout Contracts
         run: npm run verify:home-command-center-final-closeout
 
+      - name: Verify Conversations Final Closeout Contracts
+        run: npm run verify:conversations-final-closeout
+
       - name: Verify Onboarding Foundation Contracts
         run: npm run verify:onboarding-foundation
 

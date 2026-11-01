@@ -66,6 +66,14 @@ export default async function ConversationsPage({
     ? conversationSummary.find((lead) => lead.id === selectedId) ?? null
     : null;
   const organizationId = workspaceContext?.activeOrganizationId ?? null;
+  const evidenceWarnings = mock ? [] : workspace.evidence.warnings;
+  const inboxModeLabel = mock
+    ? "Demo data"
+    : workspace.evidence.workspaceSource === "legacy_compatibility"
+      ? "Compatibility inbox"
+      : team.canManageAssignments
+        ? "Team inbox"
+        : "My workspace";
 
   const hasTelephoneContact =
     selectedId && selected
@@ -358,7 +366,7 @@ export default async function ConversationsPage({
           <ContextLine label="Country" value={selected.country || "Not recorded"} />
           <ContextLine label="Course" value={selected.course || "Not selected"} />
           <ContextLine
-            label="Source"
+            label="Lead creation"
             value={selected.leadCreationChannel.replaceAll("_", " ")}
           />
           <ContextLine
@@ -526,11 +534,16 @@ export default async function ConversationsPage({
           <InboxMetric label="Priority" value={priorityCount} attention={priorityCount > 0} />
           <InboxMetric label="Unassigned" value={unassignedCount} attention={unassignedCount > 0} />
           <span className="rounded-ui border border-line bg-surface px-2.5 py-2 text-[11px] font-semibold text-copy-muted">
-            {mock ? "Demo data" : team.canManageAssignments ? "Team inbox" : "My workspace"}
+            {inboxModeLabel}
           </span>
         </div>
       </section>
 
+      {evidenceWarnings.map((warning, index) => (
+        <Notice key={`${index}-${warning}`} tone="warning" title="Compatibility evidence active">
+          {warning}
+        </Notice>
+      ))}
       {query.error ? <Notice tone="error">{query.error}</Notice> : null}
       {noticeText ? <Notice tone="success">{noticeText}</Notice> : null}
 
