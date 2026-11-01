@@ -142,39 +142,16 @@ for (const forbiddenGrant of [
   );
 }
 
-for (const forbiddenAnonGrant of [
-  'grant select on table public.accommodation_',
-  'grant insert on table public.accommodation_',
-  'grant update on table public.accommodation_',
-  'grant delete on table public.accommodation_',
-  'grant truncate on table public.accommodation_',
-  'grant trigger on table public.accommodation_',
-  'grant references on table public.accommodation_',
-  'grant select on table public.batch_accommodation_',
-  'grant insert on table public.batch_accommodation_',
-  'grant update on table public.batch_accommodation_',
-  'grant delete on table public.batch_accommodation_',
-  'grant truncate on table public.batch_accommodation_',
-  'grant trigger on table public.batch_accommodation_',
-  'grant references on table public.batch_accommodation_',
-  'grant select on table public.v_batch_accommodation_',
-  'grant insert on table public.v_batch_accommodation_',
-  'grant update on table public.v_batch_accommodation_',
-  'grant delete on table public.v_batch_accommodation_',
-  'grant truncate on table public.v_batch_accommodation_',
-  'grant trigger on table public.v_batch_accommodation_',
-  'grant references on table public.v_batch_accommodation_',
-  'grant select on table public.v_enrollment_accommodation_',
-  'grant insert on table public.v_enrollment_accommodation_',
-  'grant update on table public.v_enrollment_accommodation_',
-  'grant delete on table public.v_enrollment_accommodation_',
-  'grant truncate on table public.v_enrollment_accommodation_',
-  'grant trigger on table public.v_enrollment_accommodation_',
-  'grant references on table public.v_enrollment_accommodation_',
-]) {
+const hardeningStatements = anonGrantHardeningMigration
+  .split(';')
+  .map((statement) => statement.trim().toLowerCase())
+  .filter(Boolean);
+
+for (const statement of hardeningStatements) {
+  if (!statement.startsWith('grant ')) continue;
   expect(
-    !anonGrantHardeningMigration.toLowerCase().includes(forbiddenAnonGrant),
-    `P3 anon hardening must not grant residential privilege ${forbiddenAnonGrant}`,
+    !/\bto\s+anon\b/.test(statement),
+    `P3 residential hardening must not grant any privilege to anon (${statement})`,
   );
 }
 
