@@ -1,14 +1,14 @@
 # SalsysOS Active Handoff
 
 **Purpose:** Fast recovery after an interrupted engineering session.  
-**Updated:** 2026-11-01  
+**Updated:** 2026-11-02  
 **Repository:** `yogakulamacademy/salsys-os`  
 **Production branch:** `main`
 
 Read first:
 
 1. `docs/SalsysOS_Current_Checkpoint.md`
-2. `docs/checkpoints/M-2026-11-01-R11-P1-Product-Surface-Gating-v1.md`
+2. `docs/checkpoints/M-2026-11-02-R11-P2-Catalog-Adapter-Boundary-v1.md`
 3. `docs/checkpoints/M-2026-11-01-R11-Vertical-Pack-Audit-Design-v1.md`
 
 Historical checkpoint files are immutable evidence records.
@@ -17,26 +17,25 @@ Historical checkpoint files are immutable evidence records.
 
 ## 1. Exact continuation point
 
-**R11-P2 — Catalog Adapter Boundary**
+**R11-P3 — Optional Residential Extension Gating**
 
-R11-P0 and R11-P1 are complete and production-accepted.
+R11-P0, P1 and P2 are complete and production-accepted.
 
-P2 must put a generic tenant-configured Education catalog adapter selection boundary around the existing proven Yogakulam adapter. Do **not** rewrite the Yogakulam parser into a generic scraper.
+P3 must capability-gate residential-only accommodation/inventory/assignment controls and surfaced residential commercial fields through `wellness_residential`, while preserving base Education Core behavior.
 
-Do not begin R11-P3 residential/accommodation surface gating until P2 is production-accepted.
+Use read-only audit first. Do not seed fake residential data.
 
 ---
 
-## 2. P1 production baseline
+## 2. P2 production baseline
 
 ```text
-Feature PR / merge SHA   #426 / 616458d5f089bd6e07815f6b44a0c724a05cc9e0
-Supabase migration       20261101181750 r11_p1_education_surface_authorization_v1
-Supabase migration       20261101181833 r11_p1_lead_capability_trigger_context_v1
-Vercel deployment        dpl_Ht1voiBU1B958cUfj4yBQ3px5JNQ READY
-Production Smoke         #175 attempt 2 passed after DB migrations
-CodeQL                   #672 passed
-CI                       #1387 passed
+Feature PR / merge SHA   #428 / 8bbe594050a17a95a7dd762a4db0f7b09a3430ba
+Supabase migration       20261101184439 r11_p2_catalog_adapter_config_v1
+Vercel deployment        dpl_GrPwvL6vykgbkJUqgMqh2q33S1VV READY
+Production Smoke         #177 passed
+CodeQL                   #676 passed
+CI                       #1391 passed
 ```
 
 Production aliases on that deployment include:
@@ -55,6 +54,7 @@ www.salsysos.com
 Yogakulam Academy  education_core=true
                     education_catalog_sync=true
                     wellness_residential=true
+                    sync provider=yogakulam_website
                     courses=16 batches=85 enrollments=0
 
 Demo org           no R11 capability rows; courses=0 batches=0 enrollments=0
@@ -62,60 +62,32 @@ SalsysOS           no R11 capability rows; courses=0 batches=0 enrollments=0
 Test Yoga School   no R11 capability rows; courses=0 batches=0 enrollments=0
 ```
 
+`education_catalog_sync` config schema version is `2`.
+
 No fake second-tenant Education data exists.
 
 ---
 
-## 4. P1 security/product truth to preserve
+## 4. P2 architecture to preserve
 
-Enabled capability codes are supplied through trusted server-derived workspace context.
+- external sync provider selection is explicit tenant config;
+- provider key for Yogakulam is `yogakulam_website`;
+- the proven Yogakulam parser/sync engine remains intact behind the adapter registry;
+- provider secrets stay outside capability JSON;
+- missing/disabled sync capability or provider config fails closed;
+- manual Education Core catalog management remains independent of external sync;
+- `course_catalog_sync_runs` remains tenant/source scoped and canonical.
 
-Education management surfaces require `education_core` + bound organization + owner/admin/manager.
-
-Navigation hiding is UX only; server/data boundaries fail closed independently.
-
-Education route family includes:
+Current sync history remains unchanged:
 
 ```text
-/admissions
-/operations
-/availability
-/course-management
-/enrollments
+Yogakulam sync runs  3
+latest run           2026-10-03
 ```
-
-Non-Education Lead create/edit:
-
-- does not load course/batch data;
-- uses the generic CRM form;
-- does not render course/batch/location/month/mode Education controls.
-
-Canonical DB protection:
-
-- Lead trigger blocks creation/change of Education-only preference fields for non-Education tenants while preserving historical values;
-- Enrollment RLS requires `education_core` in addition to its prior access/admin rules;
-- public Course Management and Admissions product RPCs enforce capability + privileged role.
-
-Important nuance: do not rely on service-role traversal of the public Course Management product wrapper; its preserved internal aggregator still enforces authenticated CRM-user checks. The verified P1 product path is authenticated owner/admin/manager.
 
 ---
 
-## 5. Production runtime proof
-
-Using an existing bound privileged Yogakulam session, read-only acceptance proved:
-
-```text
-Yogakulam Education operations access  true
-SalsysOS Education operations access   false
-Course Management                      16 courses / 85 batches
-Admissions snapshot                    canonical object
-```
-
-The connector blocked the rollback-only Lead UPDATE test before PostgreSQL execution. No customer row was touched and no DML success should be inferred.
-
----
-
-## 6. Health boundary
+## 5. Health boundary
 
 ```text
 CRM Core V2             healthy / 0 integrity issues
@@ -127,44 +99,66 @@ The PA-1 identity decision remains a separate parked human-review boundary.
 
 ---
 
-## 7. R11-P2 required scope
+## 6. R11-P3 required scope
 
-Locked design sequence:
+Locked design rule for `wellness_residential`:
 
-1. define a generic Education catalog adapter interface/registry;
-2. keep the existing Yogakulam adapter intact behind a provider key;
-3. make adapter selection tenant-configurable through **non-secret** capability config;
-4. fail closed when `education_catalog_sync` or provider configuration is absent;
-5. keep sync run ledger and health tenant-scoped/canonical;
-6. keep manual course/batch management available under `education_core` even without external sync.
+> Gates residential-only accommodation/inventory/assignment controls and residential commercial fields where surfaced. It does not control base course/batch/admissions functionality.
 
-Current design evidence says the sync route directly calls `syncYogakulamCourseCatalog(...)`; P2 should replace that hard-coded selection seam, not rewrite the adapter itself.
+Audit and implementation must cover, where currently exposed:
 
----
+```text
+accommodation_properties
+accommodation_rooms
+batch_accommodation_types
+batch_accommodation_room_pool
+enrollment_accommodation_assignments
+live inventory / roster views
+```
 
-## 8. P2 constraints
-
-- no generic rewrite of Yogakulam parsing logic;
-- no provider secret in capability config JSON;
-- no provider inference from org name or onboarding industry;
-- no fake Test Yoga School catalog/sync records in production;
-- no dependency from `education_core` to external sync;
-- no P3 residential/accommodation surface work;
-- no R13 billing/subscription/entitlement work.
+Also audit residential-commercial fields already present on batch/course-management surfaces, including private/shared/course-only price and accommodation capacity/remaining/note.
 
 ---
 
-## 9. Acceptance strategy for P2
+## 7. Current residential evidence
 
-Use real Yogakulam data plus non-mutating/rollback/CI proof:
+Locked design evidence before P3:
 
-- Yogakulam provider resolves through the new registry/config boundary;
-- current real catalog behavior remains 16 courses / 85 batches unless the upstream source legitimately changes during validation;
-- missing provider config fails closed;
-- disabled `education_catalog_sync` fails closed;
-- manual Education Core catalog management remains independent;
-- non-Education tenants remain without fake courses/batches/sync runs;
-- sync ledger/health remains organization-scoped.
+```text
+accommodation properties     1
+rooms                        0
+batch accommodation types    0
+room-pool rows                0
+assignments                   0
+```
+
+This sparse evidence is intentional. Do not create synthetic inventory just to exercise P3.
+
+---
+
+## 8. P3 safety constraints
+
+- no fake rooms, room pools, assignments or second-tenant residential data;
+- no broad Education behavior change when `wellness_residential` is disabled;
+- no provider/catalog changes — P2 is closed;
+- no billing/subscription/plan-entitlement work — R13 remains separate;
+- preserve tenant, role, identity and privacy boundaries;
+- navigation hiding is never the sole authorization boundary;
+- prefer existing real data + read-only/rollback verification.
+
+---
+
+## 9. Acceptance strategy for P3
+
+Prove at minimum:
+
+- Yogakulam retains its current intended residential capability behavior;
+- non-residential/non-enabled tenants cannot access residential-only surfaces/data controls;
+- base Education Core Course Management/Admissions remains functional without `wellness_residential`;
+- residential canonical tables/views retain tenant isolation;
+- no synthetic production inventory is introduced;
+- CRM/Admissions/Customer 360 health does not regress;
+- CI, CodeQL, Production Smoke and exact Vercel SHA are green.
 
 ---
 
