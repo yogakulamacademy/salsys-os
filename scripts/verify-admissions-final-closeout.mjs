@@ -57,9 +57,13 @@ for (const [needle, label] of [
 
 for (const [needle, label] of [
   ["from('v_admissions_automation_health')", 'canonical automation-health read'],
+  ["from('v_admissions_upcoming_batch_capacity')", 'canonical capacity-readiness read'],
   ['Admissions automation healthy', 'healthy automation state'],
   ['Admissions automation requires review', 'degraded automation state'],
   ['No healthy state is inferred', 'fail-closed health copy'],
+  ['Capacity setup incomplete', 'missing capacity warning'],
+  ['Seat pressure remains unknown', 'unknown capacity semantics'],
+  ['Manage batch capacity', 'capacity repair path'],
 ]) {
   requireText(layout, needle, label);
 }
