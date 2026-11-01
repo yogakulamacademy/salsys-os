@@ -88,9 +88,6 @@ jobs:
       - name: Verify WhatsApp Growth Contracts
         run: npm run verify:whatsapp-growth
 
-      - name: Verify WhatsApp Final Closeout Contracts
-        run: npm run verify:whatsapp-final-closeout
-
       - name: Verify Instagram Operations Contracts
         run: npm run verify:instagram-operations
 
@@ -120,6 +117,12 @@ jobs:
 
       - name: Verify AI Knowledge Final Closeout Contracts
         run: npm run verify:ai-knowledge-final-closeout
+
+      - name: Verify Home Command Center Final Closeout Contracts
+        run: npm run verify:home-command-center-final-closeout
+
+      - name: Verify Conversations Final Closeout Contracts
+        run: npm run verify:conversations-final-closeout
 
       - name: Verify Onboarding Foundation Contracts
         run: npm run verify:onboarding-foundation

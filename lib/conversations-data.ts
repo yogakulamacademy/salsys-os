@@ -19,6 +19,16 @@ export type {
   ConversationWorkspaceResult,
 } from "@/lib/conversations-data-core";
 
+export type ConversationWorkspaceEvidence = {
+  workspaceSource: "canonical_rpc" | "legacy_compatibility";
+  contactGrouping: "person" | "lead_fallback" | "not_applicable";
+  warnings: string[];
+};
+
+export type ConversationWorkspaceView = ConversationWorkspaceResult & {
+  evidence: ConversationWorkspaceEvidence;
+};
+
 type PersonLeadLink = {
   lead_id?: string | null;
   person_id?: string | null;
@@ -31,14 +41,34 @@ const priorityRank: Record<ConversationPriority, number> = {
   waiting: 1,
 };
 
+function baseEvidence(workspace: ConversationWorkspaceResult): ConversationWorkspaceEvidence {
+  return workspace.optimized
+    ? {
+        workspaceSource: "canonical_rpc",
+        contactGrouping: "not_applicable",
+        warnings: [],
+      }
+    : {
+        workspaceSource: "legacy_compatibility",
+        contactGrouping: "not_applicable",
+        warnings: [
+          "The canonical Conversations read model is unavailable. This inbox is using the compatibility read path, so queue counts and assignment controls may differ until canonical evidence recovers.",
+        ],
+      };
+}
+
 export async function getConversationsWorkspace(
   requestedLeadId?: string,
-): Promise<ConversationWorkspaceResult> {
+): Promise<ConversationWorkspaceView> {
   const workspace = await getCoreConversationsWorkspace(requestedLeadId);
   const baseRows = workspace.conversationSummary;
+  const evidence = baseEvidence(workspace);
 
   if (baseRows.length === 0) {
-    return workspace;
+    return {
+      ...workspace,
+      evidence,
+    };
   }
 
   try {
@@ -67,6 +97,10 @@ export async function getConversationsWorkspace(
         ...workspace.metrics,
         activeConversations: groupedRows.length,
       },
+      evidence: {
+        ...evidence,
+        contactGrouping: "person",
+      },
     };
   } catch (error) {
     console.warn("[conversations] Contact grouping unavailable; using Lead-level queue", {
@@ -76,6 +110,14 @@ export async function getConversationsWorkspace(
     return {
       ...workspace,
       conversationSummary: baseRows.map(withSingleOpportunityIdentity),
+      evidence: {
+        ...evidence,
+        contactGrouping: "lead_fallback",
+        warnings: [
+          ...evidence.warnings,
+          "Contact identity grouping could not be verified. Inbox rows and headline counts are shown at Lead / Opportunity level instead of Contact level.",
+        ],
+      },
     };
   }
 }
