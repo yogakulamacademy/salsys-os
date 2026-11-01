@@ -39,10 +39,32 @@ const nextConfig: NextConfig = {
             {
               type: 'query',
               key: 'scope',
+              value: 'attribution',
+            },
+          ],
+          destination: '/admissions/attribution',
+        },
+        {
+          source: '/admissions',
+          has: [
+            {
+              type: 'query',
+              key: 'scope',
               value: '1',
             },
           ],
           destination: '/admissions/scoped',
+        },
+        {
+          source: '/revenue',
+          has: [
+            {
+              type: 'query',
+              key: 'attribution_scope',
+              value: '1',
+            },
+          ],
+          destination: '/revenue/attribution',
         },
       ],
       afterFiles: [],
