@@ -26,6 +26,9 @@ const contactPerformance = read('components/performance/contact-performance-work
 const admissionsAttribution = read('app/admissions/attribution/page.tsx');
 const revenueAttribution = read('app/revenue/attribution/page.tsx');
 const nextConfig = read('next.config.ts');
+const campaignEvidenceGate = read(
+  'supabase/migrations/20261101041000_marketing_campaign_evidence_health_gate_v1.sql',
+);
 
 for (const [needle, label] of [
   ['const view = url.searchParams.get("view")?.trim() || "overview";', 'view-aware Marketing transfer'],
@@ -128,6 +131,21 @@ for (const [needle, label] of [
   ["destination: '/revenue/attribution'", 'Revenue focused attribution renderer'],
 ]) {
   requireText(nextConfig, needle, label);
+}
+
+for (const [needle, label] of [
+  ['rename to get_campaigns_workspace_internal_v2', 'internalized optimized Campaigns RPC'],
+  ['from public.v_google_ads_sync_health', 'Google Ads sync-health evidence gate'],
+  ['from public.v_meta_ads_sync_health', 'Meta Ads sync-health evidence gate'],
+  ["interval '72 hours'", 'paid-media freshness threshold'],
+  ["coalesce(v_google_health.last_sync_status, '') <> 'success'", 'Google Ads failed-sync gate'],
+  ["coalesce(v_meta_health.last_sync_status, '') <> 'success'", 'Meta Ads failed-sync gate'],
+  ["raise exception 'Paid-media evidence health gate: %'", 'fail-closed stale-evidence boundary'],
+  ['return public.get_campaigns_workspace_internal_v2(', 'healthy-path internal Campaigns delegation'],
+  ['from public, anon, authenticated;', 'internal Campaigns RPC not executable by authenticated users'],
+  ['to authenticated, service_role;', 'public Campaigns RPC remains authorized app surface'],
+]) {
+  requireText(campaignEvidenceGate, needle, label);
 }
 
 console.log('Cross-workspace investigation scope contracts verified.');
