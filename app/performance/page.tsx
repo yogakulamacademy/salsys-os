@@ -1,10 +1,9 @@
 import Link from "next/link";
-import { redirect } from "next/navigation";
 import { Activity, MessageSquareText, UsersRound } from "lucide-react";
 
 import TeamPerformancePage from "@/app/team-performance/page";
 import { ContactPerformanceWorkspace } from "@/components/performance/contact-performance-workspace";
-import { createClient } from "@/lib/supabase/server";
+import { requireAdminWorkspaceAccess } from "@/lib/route-access";
 
 type PerformanceView = "team" | "response" | "communication";
 
@@ -22,7 +21,7 @@ export const dynamic = "force-dynamic";
 
 export default async function PerformancePage({ searchParams }: { searchParams: Promise<PageQuery> }) {
   const query = await searchParams;
-  await requirePerformanceAccess();
+  await requireAdminWorkspaceAccess();
 
   const view: PerformanceView = query.view === "response" || query.view === "communication" ? query.view : "team";
 
@@ -101,13 +100,4 @@ function PerformanceNavigation({ active }: { active: PerformanceView }) {
       </div>
     </section>
   );
-}
-
-async function requirePerformanceAccess() {
-  const mock = process.env.NEXT_PUBLIC_USE_MOCK_DATA !== "false";
-  if (mock) return;
-
-  const supabase = await createClient();
-  const { data: isAdmin, error } = await supabase.rpc("is_crm_admin");
-  if (error || isAdmin !== true) redirect("/dashboard?restricted=1");
 }
