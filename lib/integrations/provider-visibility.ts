@@ -9,12 +9,16 @@ export type ProviderVisibility = {
   organizationId: string;
   googleConnected: boolean;
   metaConnected: boolean;
+  instagramConnected: boolean;
+  whatsappConnected: boolean;
 };
 
 type ProviderVisibilityRpc = {
   organization_id?: string | null;
   google_connected?: boolean | null;
   meta_connected?: boolean | null;
+  instagram_connected?: boolean | null;
+  whatsapp_connected?: boolean | null;
 };
 
 export async function getProviderVisibility(
@@ -51,5 +55,9 @@ export async function getProviderVisibility(
       payload.google_connected === true,
     metaConnected:
       payload.meta_connected === true,
+    instagramConnected:
+      payload.instagram_connected === true,
+    whatsappConnected:
+      payload.whatsapp_connected === true,
   };
 }
