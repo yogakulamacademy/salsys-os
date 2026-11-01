@@ -125,6 +125,13 @@ export function transferInvestigationScope(
     add("employee", "employee", scope.employee);
   } else if (url.pathname === "/revenue") {
     add("source", "source", scope.source);
+
+    // Revenue only applies source focus when investigation mode is explicit.
+    // If a structured source is present, make that focus active rather than
+    // leaving a source query parameter that the workspace would otherwise ignore.
+    if (url.searchParams.get("source")?.trim() && !url.searchParams.has("investigation")) {
+      url.searchParams.set("investigation", "1");
+    }
   } else if (url.pathname === "/admissions") {
     const view = url.searchParams.get("view")?.trim() || "overview";
 
