@@ -11,6 +11,7 @@ export type EducationAccessState = {
   organizationId: string;
   role: string;
   educationEnabled: boolean;
+  residentialEnabled: boolean;
   operationsAccess: boolean;
 };
 
@@ -23,11 +24,16 @@ export async function getEducationAccessState(): Promise<EducationAccessState> {
     throw new Error("Unable to resolve Education access: no active workspace.");
   }
 
-  const [educationEnabled, operationsAccess] = await Promise.all([
+  const [educationEnabled, residentialEnabled, operationsAccess] = await Promise.all([
     organizationHasCapabilityForCurrentSession(
       supabase,
       active.organizationId,
       "education_core",
+    ),
+    organizationHasCapabilityForCurrentSession(
+      supabase,
+      active.organizationId,
+      "wellness_residential",
     ),
     canAccessEducationOperationsForCurrentSession(
       supabase,
@@ -39,6 +45,7 @@ export async function getEducationAccessState(): Promise<EducationAccessState> {
     organizationId: active.organizationId,
     role: active.role,
     educationEnabled,
+    residentialEnabled,
     operationsAccess,
   };
 }
@@ -46,6 +53,11 @@ export async function getEducationAccessState(): Promise<EducationAccessState> {
 export async function isEducationCoreEnabledForCurrentSession() {
   const state = await getEducationAccessState();
   return state.educationEnabled;
+}
+
+export async function isWellnessResidentialEnabledForCurrentSession() {
+  const state = await getEducationAccessState();
+  return state.residentialEnabled;
 }
 
 export async function canAccessEducationOperationsForCurrentWorkspace() {

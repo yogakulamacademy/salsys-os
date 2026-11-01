@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import { AlertTriangle, DatabaseZap } from "lucide-react";
 
 import { OperationsJourneyBar } from "@/components/operations/operations-journey-bar";
+import { isWellnessResidentialEnabledForCurrentSession } from "@/lib/education-access";
 import { requireOperationsAccess } from "@/lib/operations-access";
 import { createClient } from "@/lib/supabase/server";
 
@@ -15,10 +16,13 @@ type CapacityReadinessRow = {
 export default async function CourseManagementLayout({ children }: { children: ReactNode }) {
   const workspace = await requireOperationsAccess();
   const supabase = await createClient();
-  const capacityResult = await supabase
-    .from("v_admissions_upcoming_batch_capacity")
-    .select("batch_id,capacity")
-    .eq("organization_id", workspace.organizationId);
+  const [capacityResult, residentialEnabled] = await Promise.all([
+    supabase
+      .from("v_admissions_upcoming_batch_capacity")
+      .select("batch_id,capacity")
+      .eq("organization_id", workspace.organizationId),
+    isWellnessResidentialEnabledForCurrentSession(),
+  ]);
 
   const capacityRows = capacityResult.error
     ? null
@@ -28,7 +32,12 @@ export default async function CourseManagementLayout({ children }: { children: R
     : null;
 
   return (
-    <div className="course-management-scope space-y-4">
+    <div
+      className={`course-management-scope space-y-4 ${
+        residentialEnabled ? "residential-enabled" : "residential-disabled"
+      }`}
+      data-wellness-residential={residentialEnabled ? "enabled" : "disabled"}
+    >
       <OperationsJourneyBar />
 
       {missingCapacityCount == null ? (
