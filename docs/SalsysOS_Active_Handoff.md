@@ -4,246 +4,214 @@
 **Updated:** 2026-11-01  
 **Repository:** `yogakulamacademy/salsys-os`  
 **Production branch:** `main`  
-**Verified production head at acceptance start:** `ca4de2d58fc7d950376ff0bf8150fe812c04386b`
+**Verified production head:** `acf45497b4e40c4c270d2c4122d160f07eb02cb4`
 
 Read this file first when resuming active work. Then read:
 
 1. `docs/SalsysOS_Current_Checkpoint.md`
 2. `docs/SalsysOS_North_Star_Product_Context.md`
-3. `docs/checkpoints/M-2026-11-01-Real-Activity-Acceptance-v1.md`
+3. `docs/checkpoints/M-2026-11-01-Provider-Readiness-Parity-v1.md`
+4. `docs/checkpoints/M-2026-11-01-Real-Activity-Acceptance-v1.md`
 
 Historical checkpoint files are evidence records and must not be rewritten to match later state.
 
 ---
 
-## 1. Product identity and execution rule
+## 1. Current position
 
 SalsysOS = **Sales + Analysis Operating System**.
 
-Canonical loop:
+The broad 14-surface engineering closeout is complete. Production Acceptance has now established the real operating path through Admissions/follow-up/payment-start and has separated current provider/configuration blockers from internal runtime defects.
 
-`marketing -> traffic -> source/campaign/content -> anonymous journey -> identity -> lead/opportunity -> conversation -> intent/affinity -> salesperson/follow-up -> booking/payment/enrollment -> revenue -> attribution -> recommendation -> action -> observed outcome -> learning`
+There is no newly identified internal production defect that should be patched before the next roadmap rebaseline.
 
-Execution rule:
+Exact continuation point:
 
-> **Verify first, close one controlled checkpoint at a time, and never replace missing evidence with assumptions.**
-
----
-
-## 2. Stable closeout state
-
-The prior broad 14-surface engineering closeout is complete. Do not reopen it without production evidence of regression.
-
-Current production health already verified:
-
-- CRM Core: healthy;
-- Admissions Automation: healthy;
-- Universal Tracking: healthy / collecting;
-- Website Lead Capture: healthy;
-- GA4: healthy;
-- Google Search Console: healthy;
-- Privacy Compliance: healthy;
-- WhatsApp: healthy.
-
-Parked states:
-
-- Google Ads: external production-access approval blocker;
-- Meta Ads: provider permission / App Review dependency;
-- Search Indexing: intentionally inactive;
-- Customer 360: two unresolved human-review identity conflicts.
+**North-Star Rebaseline & Next Roadmap Selection**
 
 ---
 
-## 3. PA-1 identity merge — capability complete, decision deferred
+## 2. Latest release
 
-PA-1 engineering is complete and production-deployed through PRs #400, #401 and #402.
-
-The live identity pair remains intentionally untouched:
+Provider Readiness Parity V1:
 
 ```text
-open pair conflicts      2
-source Person status     active
-merge audit rows         0
+PR                         #404
+main SHA                   acf45497b4e40c4c270d2c4122d160f07eb02cb4
+CI                         #1330 passed
+CodeQL                     #615 passed
+Production Smoke           #153 passed
+Vercel production          READY on exact SHA
 ```
 
-Do not perform the live merge or dismiss the conflicts unless a human explicitly approves one of those outcomes. The relevant identifiers are unverified.
+Production migration:
 
-This unresolved decision does **not** block unrelated production-acceptance work.
+```text
+version                    20261101141224
+name                       google_ads_operational_readiness_v1
+```
 
 ---
 
-## 4. Real-activity production acceptance
+## 3. Stable healthy surfaces
 
-A read-only production trace was run across:
+```text
+CRM Core Integrity          healthy
+Admissions Automation      healthy
+Universal Tracking         healthy / collecting
+Website Lead Capture       healthy
+GA4                        healthy
+Google Search Console      healthy
+Privacy Compliance         healthy
+WhatsApp                   healthy
+```
 
-`Lead -> Admissions -> Conversation -> Follow-up -> Payment/Enrollment -> Revenue`
+---
 
-Live inventory observed:
+## 4. Provider readiness
+
+### Google Ads
+
+Raw sync remains failed with Google 403:
+
+`CLOUD_PROJECT_NOT_APPROVED_FOR_PRODUCTION`
+
+The Google connection itself is connected, the `adwords` OAuth scope is present, and one production Ads customer is selected.
+
+Operational Readiness now correctly reports:
+
+```text
+health_status              configuration_blocked
+operational_status         configuration_blocked
+blocker_code               google_cloud_project_test_access
+```
+
+External action required: obtain Explorer/Basic/Standard Google Ads API production access for the OAuth Cloud project.
+
+Do not rotate SalsysOS credentials or change the selected customer just to suppress the raw failed-sync evidence.
+
+### Meta Ads
+
+Current readiness remains:
+
+```text
+health_status              configuration_blocked
+blocker_code               meta_ads_permission_missing
+ads_read/ads_management    missing
+selected_ad_account        none
+```
+
+External action required: update Meta business/app permissions, reconnect, discover accounts and select the intended production ad account.
+
+Neither provider state is a newly identified SalsysOS runtime regression.
+
+---
+
+## 5. Real-activity acceptance already proven
+
+Live trace:
+
+`Lead -> Admissions -> Conversation -> Follow-up -> Booking -> Payment Started`
+
+Observed inventory at acceptance time:
 
 ```text
 leads                         596
 conversations                 566
 admissions_auto_task_events    20
 follow-up tasks                22
-lead contact logs              16
 payments                        2
 enrollments                     0
-conversion facts                1
 ```
 
-### Production-proven
-
-- Lead presence / ingestion;
-- Conversation presence;
-- Admissions automation event creation;
-- Admissions -> follow-up task creation;
-- trusted `booking.completed` intake;
-- trusted `payment.started` intake;
-- durable raw-event persistence and projection for active booking/payment-start flow.
-
-All 20 Admissions automation events inspected have a matching canonical follow-up task for the same Lead, title and due time.
+All 20 Admissions automation events inspected had a matching follow-up task.
 
 ---
 
-## 5. Commerce completion status
+## 6. PARKED — commerce completion
 
-Canonical Commerce Event Readiness currently reports:
+Current state remains:
 
 ```text
-health_status                configuration_blocked
-operational_status           payment_completion_missing
-booking.completed (30d)      19
-payment.started (30d)         2
-payment.completed (30d)       0
-enrollment.completed (30d)    0
+booking.completed       19
+payment.started          2
+payment.completed        0
+enrollment.completed     0
+readiness                configuration_blocked / payment_completion_missing
 ```
 
-Both `payment.started` events projected successfully into canonical Payment rows, but both remain pending.
+The internal SalsysOS projector is ready; the remaining work is the live Yogakulam PHP verified-success emitter.
 
-There is no live authoritative paid Payment or canonical Enrollment from the Yogakulam checkout yet.
+The user explicitly chose to **skip this deployment for now**.
 
-Raw-event processing evidence:
+Do not resume the Hostinger/PHP patch unless the user chooses to return to it. Do not manufacture payment/enrollment/revenue evidence.
+
+---
+
+## 7. PARKED — PA-1 live identity decision
+
+PA-1 engineering is complete, but the live pair remains untouched:
 
 ```text
-booking.completed    17 processed
-booking.completed     2 dead_letter
-payment.started       2 processed
-payment.completed     0 received
-enrollment.completed  0 received
+open conflicts          2
+source Person           active
+merge audit rows        0
 ```
 
-The two booking dead letters are the already-reconciled duplicate/identity-ambiguous pair from `M-2026-10-30-Booking-Dead-Letter-Reconciliation-v1.md`; they are not a new regression and must remain untouched until authoritative reservation status exists.
+Do not merge or dismiss without explicit human approval.
 
 ---
 
-## 6. Internal SalsysOS commerce side is ready
+## 8. PARKED — Search Indexing
 
-Verified production functions already support the completion path:
-
-- `process_payment_raw_event_v1` handles `payment.started` and `payment.completed`;
-- canonical Payment projection is idempotent;
-- paid Payment state triggers closed-won promotion;
-- `process_enrollment_raw_event_v1` handles `enrollment.completed`;
-- Enrollment projection is idempotent;
-- durable trusted events persist before projection and can be retried safely.
-
-Do not patch the SalsysOS projector merely because completion events are absent. The missing boundary is upstream.
+Search Indexing remains intentionally disabled. OpenSearch is derived/rebuildable and must not be activated simply to make health green.
 
 ---
 
-## 7. EXACT CONTINUATION POINT — LIVE VERIFIED-PAYMENT EMITTER
+## 9. EXACT CONTINUATION POINT — NORTH-STAR REBASELINE
 
-The next work item is the external Yogakulam PHP verified-success integration.
+Run a read-only end-to-end R0-R14 rebaseline against current repository + production evidence before implementing another phase.
 
-Current live source:
+The output must:
 
-```text
-source_system       website_backend
-integration         yogakulam_php_backend
-site                www.yogakulam.com
-```
+1. identify what is actually complete;
+2. identify what is implemented but not production-proven;
+3. identify what is externally/human blocked and therefore parked;
+4. identify the highest-value remaining internal product gap that can be advanced now;
+5. choose exactly one next checkpoint and define its acceptance contract before code.
 
-Validated repository assets already exist:
+Do not rely on the old roadmap percentages alone. Verify the current implementation and production state.
 
-- `integrations/php/yogakulam-verified-payment-enrollment.php`
-- `integrations/php/yogakulam-direct-upi-completion.php`
-- `docs/checkpoints/M-2026-10-30-Live-Commerce-Handler-Audit-v2.md`
-- `docs/checkpoints/M-2026-10-30-Live-Yogakulam-Commerce-Patch-Manifest-v1.md`
+Likely candidate areas to compare:
 
-Required live handler wiring:
-
-1. PayPal verified-success path;
-2. ICICI verified-return path;
-3. Direct UPI admin verification path.
-
-Completion events must be emitted only after authoritative verification and after the local payment transaction commits as `paid`. Tracking remains fail-open and must never roll back a real payment.
-
-Never emit `payment.completed` from a browser success page or an unverified payment/proof.
+- R9 AEO / GEO / AI Visibility;
+- R10 Predictive Intelligence + Owner Command Center;
+- R11 Wellness / Education productization;
+- R13 Commercial SaaS readiness.
 
 ---
 
-## 8. Required live acceptance proof
+## 10. Safety rules
 
-After deploying the verified-success handlers to the Yogakulam host, execute one controlled real verified payment and require:
-
-```text
-booking.completed
-payment.started
-payment.completed
-enrollment.completed
-```
-
-Then verify:
-
-- no raw-event processing failure for the controlled sequence;
-- existing Payment becomes paid/verified without duplication;
-- Enrollment identity is deterministic: `ENR-<booking_reference>`;
-- no duplicate Enrollment on retry/revisit;
-- realized revenue equals business subtotal, excluding processor surcharge;
-- Customer 360 shows the payment + enrollment journey;
-- funnel/attribution receives the realized conversion;
-- System Health shows no new internal defect.
-
-Until that occurs, commerce remains:
-
-`configuration_blocked / payment_completion_missing`
-
-Do not manufacture production `payment.completed`, Enrollment or revenue records to make readiness green.
-
----
-
-## 9. After commerce proof
-
-1. reconcile Revenue, Customer 360 and attribution against the verified transaction;
-2. continue broader real-activity acceptance only where evidence exists;
-3. keep Google Ads parked as external approval work;
-4. keep Meta Ads provider/App Review work separate;
-5. leave Search Indexing inactive;
-6. return to the PA-1 live identity decision only with explicit human approval;
-7. choose the next genuine North-Star/productization checkpoint.
-
----
-
-## 10. Safety rules that must not regress
-
+- one controlled checkpoint at a time;
+- verify before modifying;
+- production evidence beats stale planning notes;
 - tenant authority is server-derived;
-- PostgreSQL/Supabase remains canonical transactional truth;
-- browser telemetry does not establish authoritative payment/enrollment/revenue truth;
-- observed, matched, attributed, inferred and modelled evidence remain distinct;
-- no fabricated production events, conversions, revenue or outcomes;
-- no automatic identity merge from ambiguous evidence;
+- PostgreSQL remains canonical truth;
+- OpenSearch remains derived/rebuildable;
+- provider errors remain raw evidence even when readiness classifies them as external/configuration blocked;
+- no fake events, conversions, revenue, outcomes or training evidence;
+- no automatic ambiguous identity merge;
+- browser behavior does not establish payment/enrollment/revenue truth;
 - privacy/legal restrictions fail closed;
-- high-impact autonomous actions remain human-governed unless explicitly activated;
-- never create or mutate production customer data merely to make a health metric green.
+- high-impact automation stays human-governed unless explicitly activated.
 
 ---
 
 ## 11. Resume instruction
 
-When resuming:
-
-1. verify current `main`, production Supabase state and Vercel production SHA;
+1. verify `main`, Supabase production and Vercel production provenance;
 2. read this file and `docs/SalsysOS_Current_Checkpoint.md`;
-3. read `docs/checkpoints/M-2026-11-01-Real-Activity-Acceptance-v1.md`;
-4. continue from Section 7;
-5. do not perform the PA-1 live identity merge without explicit human approval.
+3. read `docs/SalsysOS_North_Star_Product_Context.md`;
+4. continue from Section 9;
+5. do not resume the parked commerce or PA-1 live decision without an explicit user choice.
