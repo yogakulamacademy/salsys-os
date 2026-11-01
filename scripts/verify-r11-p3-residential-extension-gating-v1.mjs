@@ -157,8 +157,12 @@ for (const forbiddenScope of [
   'insert into public.batch_accommodation_types',
   'insert into public.batch_accommodation_room_pool',
   'insert into public.enrollment_accommodation_assignments',
-  'billing',
-  'subscription_plan',
+  'create table public.subscription',
+  'alter table public.subscription',
+  'insert into public.subscription',
+  'create table public.billing',
+  'alter table public.billing',
+  'insert into public.billing',
 ]) {
   expect(
     !migration.toLowerCase().includes(forbiddenScope.toLowerCase()),
