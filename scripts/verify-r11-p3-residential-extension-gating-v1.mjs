@@ -4,6 +4,10 @@ const migration = fs.readFileSync(
   'supabase/migrations/20261101193000_r11_p3_residential_capability_boundary_v1.sql',
   'utf8',
 );
+const triggerContextMigration = fs.readFileSync(
+  'supabase/migrations/20261101193100_r11_p3_residential_trigger_context_v1.sql',
+  'utf8',
+);
 const educationAccess = fs.readFileSync('lib/education-access.ts', 'utf8');
 const courseLayout = fs.readFileSync('app/course-management/layout.tsx', 'utf8');
 const courseCss = fs.readFileSync(
@@ -49,6 +53,22 @@ for (const [needle, label] of [
 ]) {
   has(migration, needle, label);
 }
+
+for (const [needle, label] of [
+  ["join public.organization_capabilities oc", 'maintenance-safe canonical capability lookup'],
+  ["oc.capability_code = 'wellness_residential'", 'maintenance-safe residential capability code'],
+  ["oc.enabled = true", 'maintenance-safe enabled state'],
+  ["join public.capability_catalog cc", 'active capability catalog lookup'],
+  ["new.price_private := null", 'maintenance-safe private price suppression'],
+  ["new.accommodation_remaining := null", 'maintenance-safe accommodation suppression'],
+]) {
+  has(triggerContextMigration, needle, label);
+}
+
+expect(
+  !triggerContextMigration.includes('organization_has_capability(new.organization_id'),
+  'final course-batch trigger must not depend on auth.role() session context.',
+);
 
 expect(
   (migration.match(/organization_has_capability\([^\n]+wellness_residential/g) ?? []).length >= 10,
