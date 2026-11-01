@@ -59,7 +59,7 @@ expectIncludes(approvalLayout, 'Approval-only automation access.', 'Admissions a
 expectIncludes(approvalLayout, '<AutomationNavigation />', 'Privileged approval reviewers must retain Automation navigation');
 
 expectIncludes(automationLayout, '<AutomationSubmissionGuard />', 'Automation repeated-submit guard must be mounted in Automation Studio');
-expectIncludes(submissionGuard, 'Save draft', 'Repeated-submit guard must cover draft creation');
+expectIncludes(submissionGuard, 'save draft', 'Repeated-submit guard must cover draft creation');
 expectIncludes(submissionGuard, "form.getAttribute(GUARDED_FORM_ATTR) === 'active'", 'Repeated-submit guard must lock the whole create form');
 expectIncludes(submissionGuard, 'event.preventDefault();', 'Repeated-submit guard must cancel duplicate submissions');
 expectIncludes(submissionGuard, 'event.stopImmediatePropagation();', 'Repeated-submit guard must stop duplicate server-action dispatch');
