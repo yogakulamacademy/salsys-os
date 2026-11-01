@@ -76,6 +76,9 @@ jobs:
       - name: Verify Commercial Intelligence Contracts
         run: npm run verify:commercial-intelligence
 
+      - name: Verify Cross-Workspace Investigation Scope Contracts
+        run: npm run verify:investigation-scope
+
       - name: Verify WhatsApp Operations Contracts
         run: npm run verify:whatsapp-operations
 
