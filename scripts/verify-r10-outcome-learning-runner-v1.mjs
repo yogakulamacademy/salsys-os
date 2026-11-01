@@ -1,7 +1,8 @@
+import crypto from 'node:crypto';
 import fs from 'node:fs';
 
 const migrationPath =
-  'supabase/migrations/20261101165000_r10_outcome_learning_runner_v1.sql';
+  'supabase/migrations/20261101164458_r10_outcome_learning_runner_v1.sql';
 const migration = fs.readFileSync(migrationPath, 'utf8');
 const lower = migration.toLowerCase();
 const presentation = fs.readFileSync(
@@ -20,6 +21,24 @@ function expect(condition, message) {
 function requireText(source, needle, label) {
   expect(source.includes(needle), `missing ${label} (${needle})`);
 }
+
+function normalizedSql(source) {
+  return source.replace(/\r\n/g, '\n').trimEnd();
+}
+
+const migrationMd5 = crypto
+  .createHash('md5')
+  .update(normalizedSql(migration))
+  .digest('hex');
+
+expect(
+  Buffer.byteLength(migration, 'utf8') === 28799,
+  `production migration byte length drift: expected 28799, got ${Buffer.byteLength(migration, 'utf8')}`,
+);
+expect(
+  migrationMd5 === '8d1fa6a3f4b032300b84212fd0fc0571',
+  `production migration ledger drift: expected 8d1fa6a3f4b032300b84212fd0fc0571, got ${migrationMd5}`,
+);
 
 for (const [needle, label] of [
   ['system_intelligence_outcome_runs', 'tenant-scoped outcome run ledger'],
@@ -46,7 +65,7 @@ for (const [needle, label] of [
   ["'partial'", 'partial-run state'],
   ["'intelligence_outcomes'", 'System Health system key'],
   ["'Recommendation Outcome Learning'", 'System Health system label'],
-  ["lower(coalesce(l.latest_status,'')) = 'partial'", 'partial health warning'],
+  ["lower(coalesce(l.latest_status,''))='partial'", 'partial health warning'],
   ["'*/15 * * * *'", '15-minute cron cadence'],
   ["'salsys-intelligence-outcome-learning-v1'", 'single named P3 cron job'],
   ["select public.sweep_system_intelligence_recommendation_outcomes_v1(null,50,'cron');", 'cron uses hardened sweep'],
@@ -81,7 +100,7 @@ expect(
 );
 requireText(
   sweepSource,
-  'observe_system_intelligence_recommendation_outcomes_v2(v_org.id, v_limit)',
+  'observe_system_intelligence_recommendation_outcomes_v2(v_org.id,v_limit)',
   'runner V2 observer call',
 );
 requireText(
@@ -109,12 +128,12 @@ for (const fnName of [
 ]) {
   requireText(
     migration,
-    `revoke all on function public.${fnName}\n  from public, anon, authenticated`,
+    `revoke all on function public.${fnName} from public, anon, authenticated`,
     `${fnName} untrusted EXECUTE revocation`,
   );
   requireText(
     migration,
-    `grant execute on function public.${fnName}\n  to service_role`,
+    `grant execute on function public.${fnName} to service_role`,
     `${fnName} service-role boundary`,
   );
 }
