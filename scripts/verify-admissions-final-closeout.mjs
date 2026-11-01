@@ -16,7 +16,7 @@ function forbidText(source, needle, label) {
   }
 }
 
-const migration = read('supabase/migrations/20261101050000_admissions_final_closeout_v1.sql');
+const migration = read('supabase/migrations/20261101051000_admissions_upcoming_capacity_start_boundary_v2.sql');
 const data = read('lib/admissions-data.ts');
 const layout = read('app/admissions/layout.tsx');
 const page = read('app/admissions/page.tsx');
@@ -26,12 +26,18 @@ const ci = read('.github/workflows/ci.yml');
 
 for (const [needle, label] of [
   ['with (security_invoker = true)', 'security-invoker upcoming-capacity view'],
-  ['coalesce(end_date, start_date) >= current_date', 'effective upcoming schedule boundary'],
+  ['start_date >= current_date', 'strict upcoming start-date boundary'],
   ['active = true', 'active batch boundary'],
   ['capacity_status', 'capacity evidence preservation'],
+  ['start_date is authoritative', 'documented schedule semantics'],
 ]) {
   requireText(migration, needle, label);
 }
+forbidText(
+  migration,
+  'coalesce(end_date, start_date)',
+  'end-date fallback that can retain historical batches',
+);
 
 for (const [needle, label] of [
   ["snapshotSource: 'canonical'", 'canonical snapshot provenance'],
