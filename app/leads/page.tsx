@@ -1,14 +1,16 @@
 import Link from "next/link";
 import { MoreHorizontal, Plus } from "lucide-react";
 
+import { LeadsAttributionScopeBar } from "@/components/leads-attribution-scope-bar";
 import { LeadsCleanTable } from "@/components/leads-clean-table";
 import { RecentBookingActivity } from "@/components/recent-booking-activity";
 import { TeamAssignmentPanel } from "@/components/team-assignment-panel";
 import { Notice, PageHeader } from "@/components/ui";
 import {
-  getLeadsWorkspacePage,
-  parseLeadsWorkspaceParams,
-} from "@/lib/leads-data";
+  getLeadsWorkspacePageWithAttributionScope,
+  parseLeadsAttributionScope,
+} from "@/lib/leads-attribution-scope";
+import { parseLeadsWorkspaceParams } from "@/lib/leads-data";
 import { isMockMode } from "@/lib/data";
 import styles from "./leads.module.css";
 
@@ -20,6 +22,8 @@ type LeadsPageProps = {
     stage?: string | string[];
     source?: string | string[];
     channel?: string | string[];
+    creation_channel?: string | string[];
+    last_touch_source?: string | string[];
     owner?: string | string[];
     course?: string | string[];
     aging?: string | string[];
@@ -32,7 +36,8 @@ type LeadsPageProps = {
 export default async function LeadsPage({ searchParams }: LeadsPageProps) {
   const params = await searchParams;
   const filters = parseLeadsWorkspaceParams(params);
-  const workspace = await getLeadsWorkspacePage(filters);
+  const attributionScope = parseLeadsAttributionScope(params);
+  const workspace = await getLeadsWorkspacePageWithAttributionScope(filters, attributionScope);
   const mock = isMockMode();
   const notice = one(params.notice);
   const error = one(params.error);
@@ -81,6 +86,8 @@ export default async function LeadsPage({ searchParams }: LeadsPageProps) {
           {workspace.warning}
         </Notice>
       ) : null}
+
+      <LeadsAttributionScopeBar scope={attributionScope} />
 
       <RecentBookingActivity />
 
