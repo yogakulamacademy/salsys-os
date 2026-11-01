@@ -30,6 +30,9 @@ const marketingSurface = `${marketingPage}\n${marketingCanonicalWorkspace}\n${ma
 const revenuePage = read('app/revenue/page.tsx');
 const funnelLayout = read('app/funnel/layout.tsx');
 const revenueLayout = read('app/revenue/layout.tsx');
+const revenueReadiness = read('lib/revenue-readiness.ts');
+const revenueReadinessNotice = read('components/revenue-readiness-notice.tsx');
+const revenueCloseoutMigration = read('supabase/migrations/20261101043000_revenue_final_closeout_v1.sql');
 
 expectIncludes(engine, 'buildFunnelIntelligence', 'funnel intelligence builder missing');
 expectIncludes(engine, 'buildAttributionIntelligence', 'attribution intelligence builder missing');
@@ -58,5 +61,49 @@ expectIncludes(revenuePage, '/marketing?view=attribution', 'Revenue must route a
 
 expectNotIncludes(funnelLayout, 'CommercialIntelligencePanel', 'Funnel layout must not append duplicate intelligence presentation');
 expectNotIncludes(revenueLayout, 'CommercialIntelligencePanel', 'Revenue layout must not append duplicate intelligence presentation');
+expectIncludes(revenueLayout, 'RevenueReadinessNotice', 'Revenue layout must surface forecast readiness before downstream evidence');
+
+for (const [needle, label] of [
+  ['get_revenue_readiness_v1', 'Revenue readiness RPC client'],
+  ['openLeads', 'open-lead readiness count'],
+  ['unvaluedLeads', 'missing-value readiness count'],
+  ['undatedLeads', 'missing-close-date readiness count'],
+  ['pendingPaymentRequests', 'pending-payment workflow count'],
+  ['available: false', 'readiness unavailable state'],
+]) {
+  expectIncludes(revenueReadiness, needle, label);
+}
+
+for (const [needle, label] of [
+  ['Revenue forecast readiness', 'Revenue readiness heading'],
+  ['Commercial value coverage', 'commercial value coverage metric'],
+  ['Expected close coverage', 'expected close coverage metric'],
+  ['Pending payment requests', 'pending payment request metric'],
+  ['never count as collected revenue until payment evidence is marked paid', 'pending-payment revenue guard'],
+  ['/admissions?view=pipeline', 'pipeline readiness action'],
+  ['/admissions?view=payments', 'payment queue readiness action'],
+]) {
+  expectIncludes(revenueReadinessNotice, needle, label);
+}
+
+for (const [needle, label] of [
+  ['create or replace view public.v_lead_revenue_status', 'canonical lead Revenue status view'],
+  ['with (security_invoker = true)', 'Revenue status security-invoker boundary'],
+  ['coalesce(l.potential_value, latest_enrollment.total_value)::numeric(12,2)', 'forecast/status value fallback consistency'],
+  ["latest_enrollment.currency,\n      'INR'", 'forecast/status currency fallback consistency'],
+  ['left join lateral (', 'latest enrollment fallback join'],
+  ['pt.currency = upper(', 'payment totals canonical-currency match'],
+  ['create or replace function public.get_revenue_readiness_v1', 'Revenue readiness RPC'],
+  ['public.is_organization_member(p_organization_id)', 'Revenue readiness tenant authorization'],
+  ["'unvalued_leads'", 'Revenue unvalued readiness evidence'],
+  ["'undated_leads'", 'Revenue undated readiness evidence'],
+  ["'valued_undated_leads'", 'Revenue valued-undated evidence'],
+  ["p.status::text = 'pending'", 'pending payment request workflow evidence'],
+  ['Pending payment requests are counted as workflow items only and are never included in collected revenue.', 'pending payment accounting semantics'],
+  ['from public, anon;', 'Revenue readiness anonymous execution revoked'],
+  ['to authenticated, service_role;', 'Revenue readiness authorized execution'],
+]) {
+  expectIncludes(revenueCloseoutMigration, needle, label);
+}
 
 console.log('Commercial intelligence contracts verified across canonical workspaces.');
