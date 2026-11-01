@@ -7,7 +7,10 @@ import {
   UsersRound,
 } from 'lucide-react';
 
-import { dismissIdentityResolutionConflictAction } from '@/app/actions/identity-resolution';
+import {
+  dismissIdentityResolutionConflictAction,
+  mergeIdentityResolutionConflictAction,
+} from '@/app/actions/identity-resolution';
 import styles from '@/components/crm/crm-studio.module.css';
 import { getLeads } from '@/lib/data';
 import { createClient } from '@/lib/supabase/server';
@@ -30,6 +33,7 @@ type DataQualityPageProps = {
   searchParams: Promise<{
     notice?: string | string[];
     error?: string | string[];
+    merge?: string | string[];
   }>;
 };
 
@@ -59,6 +63,7 @@ export default async function DataQualityPage({ searchParams }: DataQualityPageP
   const params = await searchParams;
   const notice = one(params.notice);
   const error = one(params.error);
+  const mergeConflictId = one(params.merge);
 
   const supabase = await createClient();
   const {
@@ -137,6 +142,16 @@ export default async function DataQualityPage({ searchParams }: DataQualityPageP
           <div>
             <strong>Identity conflict reviewed</strong>
             The conflict was dismissed after human review. No Person records, identifiers or lead links were merged or rewritten.
+          </div>
+        </div>
+      ) : null}
+
+      {notice === 'identity-conflict-merged' ? (
+        <div className={styles.emptyNote}>
+          <ShieldCheck size={18} />
+          <div>
+            <strong>Identity merge completed</strong>
+            The candidate Contact was merged into the current canonical Contact after human approval. Identity, opportunity and session ownership were reconciled transactionally and the source Contact was retained as a merged audit record.
           </div>
         </div>
       ) : null}
@@ -232,7 +247,7 @@ export default async function DataQualityPage({ searchParams }: DataQualityPageP
             <div className={styles.pageKicker}>Identity conflict review</div>
             <h2>Canonical identity decisions requiring a person</h2>
             <p>
-              Exact identifier conflicts are surfaced here rather than silently merging Contacts. Dismiss only after confirming the records are distinct or the evidence is not valid for identity reuse.
+              Exact identifier conflicts are surfaced here rather than silently merging Contacts. Compare both Contact records before deciding whether the evidence represents one person or two distinct people.
             </p>
           </div>
           <span className={identityConflictLoadError ? styles.pillRed : styles.pillAmber}>
@@ -277,6 +292,13 @@ export default async function DataQualityPage({ searchParams }: DataQualityPageP
                     ? conflict.candidate_person_ids.filter(Boolean)
                     : [];
                   const firstCandidateId = candidateIds[0] ?? null;
+                  const mergeEligible = Boolean(
+                    conflict.person_id
+                    && firstCandidateId
+                    && candidateIds.length === 1
+                    && firstCandidateId !== conflict.person_id,
+                  );
+                  const mergeConfirmationOpen = mergeConflictId === conflict.id;
 
                   return (
                     <tr key={conflict.id}>
@@ -315,16 +337,48 @@ export default async function DataQualityPage({ searchParams }: DataQualityPageP
                             </Link>
                           ) : null}
                           {canReviewIdentityConflicts ? (
-                            <form action={dismissIdentityResolutionConflictAction}>
-                              <input type="hidden" name="conflict_id" value={conflict.id} />
-                              <button type="submit" className={styles.button}>
-                                Dismiss as distinct
-                              </button>
-                            </form>
+                            <>
+                              <form action={dismissIdentityResolutionConflictAction}>
+                                <input type="hidden" name="conflict_id" value={conflict.id} />
+                                <button type="submit" className={styles.button}>
+                                  Dismiss as distinct
+                                </button>
+                              </form>
+
+                              {mergeEligible ? (
+                                mergeConfirmationOpen ? (
+                                  <>
+                                    <form action={mergeIdentityResolutionConflictAction}>
+                                      <input type="hidden" name="conflict_id" value={conflict.id} />
+                                      <button type="submit" className={styles.buttonPrimary}>
+                                        Confirm same person & merge
+                                      </button>
+                                    </form>
+                                    <Link href="/data-quality" className={styles.button}>
+                                      Cancel merge
+                                    </Link>
+                                  </>
+                                ) : (
+                                  <Link
+                                    href={`/data-quality?merge=${encodeURIComponent(conflict.id)}`}
+                                    className={styles.button}
+                                  >
+                                    Same person
+                                  </Link>
+                                )
+                              ) : candidateIds.length > 1 ? (
+                                <span className={styles.pillGray}>Multi-candidate review only</span>
+                              ) : null}
+                            </>
                           ) : (
                             <span className={styles.pillGray}>Manager review required</span>
                           )}
                         </div>
+                        {mergeConfirmationOpen && mergeEligible ? (
+                          <div className={styles.micro}>
+                            Confirm only after comparing both Contact records. The database will still block the merge if active privacy, legal or ad-delivery state makes the operation unsafe.
+                          </div>
+                        ) : null}
                       </td>
                     </tr>
                   );
@@ -349,7 +403,7 @@ export default async function DataQualityPage({ searchParams }: DataQualityPageP
             <AlertTriangle size={18} />
             <div>
               <strong>No automatic merge from this workspace</strong>
-              If two records may be the same person, keep the conflict open and compare the current and candidate Contact records. Dismissal only records a human decision that the conflict should not merge identity.
+              One-candidate conflicts can be merged only through an explicit two-step manager/admin confirmation after comparing both Contact records. Multi-candidate conflicts remain review-only, and the database fails closed around active privacy, legal and ad-activation dependencies.
             </div>
           </div>
         </div>
