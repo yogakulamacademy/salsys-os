@@ -19,149 +19,161 @@ Current state:
 - broad 14-surface engineering closeout: complete;
 - R9 V1: closed;
 - R10 V1 (P0-P3): closed;
-- **R11 Education / Wellness Vertical Pack V1 (P0-P3): closed and production-accepted**;
-- current exact checkpoint: **R13 — Commercial SaaS Readiness — Audit & Design**.
+- R11 Education / Wellness Vertical Pack V1 (P0-P3): closed and production-accepted;
+- **R13 Commercial SaaS Readiness audit/design: complete and locked**;
+- **current exact checkpoint: R13-P0 — Commercial State Foundation**.
 
 Read first:
 
-1. `docs/checkpoints/M-2026-11-02-R11-V1-Production-Closeout-v1.md`
-2. `docs/SalsysOS_Active_Handoff.md`
-3. `docs/SalsysOS_North_Star_Product_Context.md`
+1. `docs/checkpoints/M-2026-11-02-R13-Commercial-SaaS-Audit-Design-v1.md`
+2. `docs/checkpoints/M-2026-11-02-R11-V1-Production-Closeout-v1.md`
+3. `docs/SalsysOS_Active_Handoff.md`
 
 ---
 
-## 2. Verified R11 production release
+## 2. R13 audit result
 
-Final R11 runtime:
+Production already has strong tenant primitives:
 
-```text
-main SHA             1846b1fc845b0325f0a8ac6b409c67744d65245e
-CI                   #1404 passed
-CodeQL               #689 passed
-Production Smoke     #180 passed
-Vercel production    READY on exact SHA
-Vercel deployment    dpl_5j1m4wM11NeLShzkV6z3peWz25ED
-```
+- platform-admin-only controlled organization provisioning;
+- owner Auth identity creation with rollback on failed DB provisioning;
+- service-role-only provisioning RPC;
+- functional workspace provisioning;
+- owner membership;
+- onboarding with opt-in enforcement;
+- organization statuses `active / suspended / archived`;
+- explicit R11 runtime capabilities.
 
-R11 production migrations:
+But production has no canonical SaaS commercial schema for:
 
-```text
-20261101174300 r11_capability_security_foundation_v1
-20261101181750 r11_p1_education_surface_authorization_v1
-20261101181833 r11_p1_lead_capability_trigger_context_v1
-20261101184439 r11_p2_catalog_adapter_config_v1
-20261101193508 r11_p3_residential_capability_boundary_v1
-20261101193522 r11_p3_residential_trigger_context_v1
-20261101195631 r11_p3_anon_residential_grant_hardening_v1
-```
+- plans;
+- plan entitlements;
+- organization subscriptions;
+- SaaS invoices;
+- trials;
+- billing-provider customer/subscription state.
 
-Final P3 hardening provenance:
-
-```text
-file   20261101195631_r11_p3_anon_residential_grant_hardening_v1.sql
-bytes  1942
-MD5    863a1bed570e34986c10a226330f21cf
-```
+The existing `payments` table is Lead/Enrollment customer-commerce truth and must not be reused for SalsysOS billing.
 
 ---
 
-## 3. R11 V1 product boundary now proven
+## 3. Locked commercial concepts
 
-Capabilities are explicit organization state, separate from workspaces and separate from billing:
-
-```text
-education_core
-education_catalog_sync      requires education_core
-wellness_residential        requires education_core
-```
-
-Production Yogakulam state:
+Keep these separate:
 
 ```text
-education_core          true
-education_catalog_sync  true
-wellness_residential    true
-catalog provider        yogakulam_website
-courses / batches       16 / 85
+organization lifecycle       organizations.status
+commercial subscription      trialing / active / past_due / canceled / expired
+commercial entitlements      what a logical plan permits
+runtime capabilities         what the organization actually has enabled/configured
 ```
 
-Other active organizations remain without synthetic Education/residential data.
+A `past_due` subscription does not directly suspend an organization.
 
-R11 guarantees now include:
+A plan entitlement does not directly enable/disable a runtime capability.
 
-- generic CRM remains usable without Education capabilities;
-- Education-specific navigation/routes/RPCs/Lead controls fail closed for non-Education tenants;
-- external catalog provider selection is tenant-configured and provider-neutral;
-- the Yogakulam adapter is one provider implementation, not the core architecture;
-- residential truth is optional and separately capability-gated;
-- residential base tables/views use least privilege;
-- no synthetic second-tenant or residential evidence was introduced for closeout.
+Capability configuration remains canonical product/runtime truth.
 
 ---
 
-## 4. R11 final health boundary
+## 4. Exact R13-P0 scope
 
-```text
-CRM Core V2             healthy / 0 integrity issues
-Admissions automation   healthy / 96 runs / 0 failures in 24h
-Customer 360 V2         degraded only by 2 pre-existing identity conflicts
-```
+P0 introduces a provider-neutral commercial state model only.
 
-The Customer 360 warning is not an R11 regression.
+Required structures:
 
----
+1. logical plan catalog;
+2. plan -> capability entitlement mapping;
+3. organization subscription state;
+4. append-only subscription event/audit ledger;
+5. read-only commercial readiness/drift view.
 
-## 5. Residential security boundary
+P0 constraints:
 
-Base tables:
-
-```text
-anon           no direct privileges
-authenticated  SELECT / INSERT / UPDATE only
-```
-
-Security-invoker residential views:
-
-```text
-anon           no privileges
-authenticated  SELECT only
-```
-
-Accommodation mutation RPCs remain service-role-only.
-
-A rollback-only attempt to disable Yogakulam `wellness_residential` while its real accommodation property exists correctly failed with:
-
-`WELLNESS_RESIDENTIAL_DATA_PRESENT`
-
-No business state changed.
+- do not choose Stripe/another provider;
+- do not create public signup;
+- do not suspend/activate/archive organizations;
+- do not mutate runtime capabilities;
+- do not seed invented plan names/prices;
+- do not backfill fake subscriptions for the four existing organizations;
+- existing organizations without a subscription row are `unmanaged_legacy`;
+- do not fabricate subscription events for acceptance.
 
 ---
 
-## 6. Exact next checkpoint — R13 AUDIT & DESIGN
+## 5. P0 security contract
 
-R13 is the next major internal product gap. Controlled provisioning/onboarding exists, but the commercial SaaS shell is not yet built.
-
-Audit read-only before implementation.
-
-Required design questions:
-
-1. public/self-serve signup and tenant creation;
-2. billing/subscription state model;
-3. plan/entitlement model;
-4. mapping plan entitlements onto existing capability state without conflating billing truth and capability truth;
-5. trial, active, past-due, suspended, cancelled and reactivation semantics;
-6. signup abuse controls / throttling;
-7. customer-controlled organization deletion/export/retention boundaries;
-8. billing-driven suspension while preserving canonical customer data;
-9. platform-admin override/recovery paths;
-10. migration/backfill for existing organizations;
-11. what can be implemented provider-neutrally before selecting a billing provider.
-
-No R13 implementation code until the audit/design contract is locked.
+- commercial truth mutation is service-role/platform-controlled;
+- no browser-direct INSERT/UPDATE/DELETE/TRUNCATE on commercial truth tables;
+- any future authenticated read surface must be tenant-scoped and owner/admin-authorized;
+- plan/provider metadata contains no secrets;
+- subscription events are append-only evidence;
+- provider references are nullable/provider-neutral;
+- no SECURITY DEFINER endpoint is broadly executable without explicit grants + internal authorization.
 
 ---
 
-## 7. Parked boundaries
+## 6. Existing organizations preservation rule
+
+P0 must leave all four existing organizations unchanged:
+
+```text
+organization status      unchanged
+memberships               unchanged
+workspaces                unchanged
+onboarding                unchanged
+capabilities              unchanged
+commercial subscriptions  no production backfill
+subscription events       no synthetic rows
+```
+
+Rollback-only tests are allowed but must leave zero rows/evidence behind.
+
+---
+
+## 7. Later R13 phases
+
+```text
+P1 Entitlement Governance + Platform Admin Controls
+P2 Self-Serve Trial Signup + Abuse Controls
+P3 Billing Provider Boundary + Verified Webhooks
+P4 Commercial Enforcement + Suspension/Recovery + Offboarding
+```
+
+Do not pull P1-P4 work into P0.
+
+---
+
+## 8. Organization deletion/offboarding rule
+
+Hard deletion is not a normal customer operation.
+
+The schema contains many organization FKs using RESTRICT/NO ACTION around CRM, raw events, identity, payments and analytics.
+
+Customer account deletion must eventually be an export/offboarding/archive/retention workflow with legal/privacy checks, not `DELETE FROM organizations`.
+
+---
+
+## 9. P0 acceptance contract
+
+Before P0 is complete:
+
+1. plan/entitlement/subscription/event structures exist;
+2. lifecycle statuses and one-current-subscription invariant are constrained;
+3. entitlements reference existing capability catalog;
+4. no CRM `payments` reuse;
+5. event ledger is auditable/append-only;
+6. readiness distinguishes `unmanaged_legacy` from managed state;
+7. entitlement/runtime drift is diagnostic only;
+8. all existing organization/capability/onboarding truth is unchanged;
+9. no fake plans/subscriptions/events remain in production;
+10. rollback lifecycle tests pass;
+11. CRM/Admissions/Customer 360 health does not regress;
+12. CI, CodeQL, Production Smoke and exact Vercel provenance are green.
+
+---
+
+## 10. Parked boundaries
 
 Do not resume automatically:
 
@@ -171,32 +183,3 @@ Do not resume automatically:
 - Meta Ads provider approval/account selection;
 - Search Indexing activation;
 - predictive-model promotion / automatic learning-based recommendation ranking.
-
----
-
-## 8. Locked engineering rules
-
-- one controlled checkpoint at a time;
-- verify before modifying;
-- production truth beats planning estimates;
-- tenant authority is server-derived;
-- PostgreSQL/Supabase remains canonical transactional truth;
-- capabilities are product/runtime truth, not a synonym for billing entitlements;
-- OpenSearch remains derived/rebuildable;
-- observed/deterministic/inferred/modelled evidence remain distinct;
-- no fake events, customers, revenue, subscriptions, outcomes or training evidence;
-- privacy/legal restrictions fail closed;
-- provider failures remain raw evidence;
-- migrations, CI, CodeQL, Vercel provenance and live readback are part of completion.
-
----
-
-## 9. Resume instruction
-
-1. verify current `main`, Supabase and Vercel provenance;
-2. read the R11 V1 closeout record;
-3. audit existing organization provisioning/onboarding and any hidden commercial/billing code read-only;
-4. inventory subscription/plan/entitlement gaps against production schema and app routes;
-5. define the smallest provider-neutral R13 V1 contract;
-6. lock the audit/design checkpoint before implementation;
-7. do not resume parked commerce/provider/PA-1 work without its own explicit decision.
