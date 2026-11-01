@@ -106,6 +106,9 @@ jobs:
       - name: Verify Performance Final Closeout Contracts
         run: npm run verify:performance-final-closeout
 
+      - name: Verify Automation Final Closeout Contracts
+        run: npm run verify:automation-final-closeout
+
       - name: Verify Onboarding Foundation Contracts
         run: npm run verify:onboarding-foundation
 

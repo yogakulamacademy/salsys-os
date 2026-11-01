@@ -169,10 +169,10 @@ export default async function SmartTriggersPage({
               .select('id', { count: 'exact', head: true })
               .eq('organization_id', organizationId),
             supabase
-              .from('automation_runs')
+              .from('automation_approval_requests')
               .select('id', { count: 'exact', head: true })
               .eq('organization_id', organizationId)
-              .eq('status', 'awaiting_approval'),
+              .eq('status', 'pending'),
           ]);
 
           canManage = manageData === true;
@@ -266,7 +266,7 @@ export default async function SmartTriggersPage({
         <MetricCard
           label="Awaiting approval"
           value={awaitingApproval}
-          note="Requires human review"
+          note="Pending requests in the human approval queue"
           icon={<Clock3 size={17} />}
           tone="approval"
         />

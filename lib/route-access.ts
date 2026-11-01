@@ -7,6 +7,7 @@ import { getCurrentWorkspaceContext } from "@/lib/workspace";
 
 const PRIVILEGED_ROLES = new Set(["owner", "admin", "manager"]);
 const ADMIN_ROLES = new Set(["owner", "admin"]);
+const AUTOMATION_APPROVAL_ROLES = new Set(["owner", "admin", "manager", "admissions"]);
 
 async function requireWorkspaceRole(allowedRoles: Set<string>) {
   const supabase = await createClient();
@@ -38,4 +39,8 @@ export function requirePrivilegedWorkspaceAccess() {
 
 export function requireAdminWorkspaceAccess() {
   return requireWorkspaceRole(ADMIN_ROLES);
+}
+
+export function requireAutomationApprovalWorkspaceAccess() {
+  return requireWorkspaceRole(AUTOMATION_APPROVAL_ROLES);
 }
