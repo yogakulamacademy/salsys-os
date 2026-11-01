@@ -3,9 +3,8 @@
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 
+import { requirePlatformAdminAccess } from '@/lib/platform-admin-access';
 import { createAdminClient } from '@/lib/supabase/admin';
-import { createClient } from '@/lib/supabase/server';
-import { getCurrentWorkspaceContext } from '@/lib/workspace';
 
 function value(formData: FormData, key: string) {
   return String(formData.get(key) ?? '').trim();
@@ -25,41 +24,8 @@ function slugify(value: string) {
     .slice(0, 80);
 }
 
-async function requirePlatformAdmin() {
-  const supabase = await createClient();
-  const {
-    data: { user },
-    error: authError,
-  } = await supabase.auth.getUser();
-
-  if (authError || !user) redirect('/login');
-
-  const workspace = await getCurrentWorkspaceContext(supabase);
-  const active = workspace.activeWorkspace;
-
-  if (
-    !active ||
-    active.organizationSlug !== 'salsysos' ||
-    !['owner', 'admin'].includes(active.role)
-  ) {
-    redirect('/dashboard');
-  }
-
-  const { data: profile, error: profileError } = await supabase
-    .from('profiles')
-    .select('id,active')
-    .eq('id', user.id)
-    .maybeSingle();
-
-  if (profileError || !profile || profile.active !== true) {
-    redirect('/dashboard');
-  }
-
-  return { user };
-}
-
 export async function provisionCustomerOrganizationAction(formData: FormData) {
-  await requirePlatformAdmin();
+  await requirePlatformAdminAccess();
 
   const organizationName = value(formData, 'organization_name');
   const requestedSlug = value(formData, 'organization_slug');
@@ -150,12 +116,27 @@ export async function provisionCustomerOrganizationAction(formData: FormData) {
   );
 
   if (provisionError || !organizationId) {
-    await admin.auth.admin.deleteUser(ownerUserId);
+    const { error: rollbackError } = await admin.auth.admin.deleteUser(ownerUserId);
+
+    if (rollbackError) {
+      console.error('Customer organization provisioning cleanup failed', {
+        ownerUserId,
+        provisioningError: provisionError?.message ?? 'Unknown provisioning error.',
+        cleanupError: rollbackError.message,
+      });
+
+      redirect(
+        organizationsUrl(
+          'error',
+          'Customer workspace provisioning failed, and SalsysOS could not verify removal of the temporary owner login. Do not retry this email until a platform administrator removes the orphaned Auth identity.',
+        ),
+      );
+    }
 
     redirect(
       organizationsUrl(
         'error',
-        `Owner login was rolled back because the customer workspace could not be provisioned: ${provisionError?.message ?? 'Unknown provisioning error.'}`,
+        `Owner login was removed because the customer workspace could not be provisioned: ${provisionError?.message ?? 'Unknown provisioning error.'}`,
       ),
     );
   }
