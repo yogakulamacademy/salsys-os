@@ -20,7 +20,7 @@ select
     l.lead_code
   ) as lead_name,
   l.current_stage,
-  coalesce(l.potential_value, latest_enrollment.total_value) as potential_value,
+  coalesce(l.potential_value, latest_enrollment.total_value)::numeric(12,2) as potential_value,
   upper(
     coalesce(
       l.potential_currency,
