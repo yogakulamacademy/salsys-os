@@ -3,7 +3,7 @@
 **Checkpoint date:** 2026-11-01  
 **Canonical repository:** `yogakulamacademy/salsys-os`  
 **Production branch:** `main`  
-**Verified production head:** `e380a0815915b8b53e7fb19a54a2fdf974c68fba`  
+**Verified production head:** `1daf2c6d019a3cc8c899bc9d8d0c996ceee64e21`  
 **Fast resume file:** `docs/SalsysOS_Active_Handoff.md`
 
 > Historical checkpoint files under `docs/checkpoints/` are immutable evidence records.
@@ -18,190 +18,154 @@ Current state:
 
 - broad 14-surface engineering closeout: complete;
 - R9 AEO / GEO / AI Visibility V1: formally closed;
-- North-Star rebaseline: complete;
-- R10 recommendation lifecycle audit/design: complete;
-- current exact checkpoint: **R10-P0 — Recommendation Security & Reproducibility Hardening**.
+- R10 audit/design: complete;
+- **R10-P0 Recommendation Security & Reproducibility Hardening: complete and production-verified**;
+- current exact checkpoint: **R10-P1 — Deterministic Recommended Actions on Command Center — Episode Design & Implementation**.
 
 Read first:
 
-`docs/checkpoints/M-2026-11-01-R10-Audit-Design-v1.md`
+- `docs/checkpoints/M-2026-11-01-R10-P0-Recommendation-Hardening-Closeout-v1.md`
+- `docs/checkpoints/M-2026-11-01-R10-Audit-Design-v1.md`
 
 ---
 
-## 2. Verified R9 closeout release
+## 2. R10-P0 verified release
 
-PR #408 formalized R9 closeout.
+Engineering PR #410:
 
 ```text
-main SHA                   e380a0815915b8b53e7fb19a54a2fdf974c68fba
-CI                         #1338 passed
-CodeQL                     #623 passed
-Production Smoke           #157 passed
+main SHA                   1daf2c6d019a3cc8c899bc9d8d0c996ceee64e21
+CI                         #1342 passed
+CodeQL                     #627 passed
+Production Smoke           #159 passed
 Vercel production          READY on exact SHA
 ```
 
-R9 remains closed with honest zero measured mentions/recommendations/citations and clean direct-evidence integrity.
-
----
-
-## 3. R10 audit result
-
-R10's foundation is materially implemented already.
-
-Production inventory:
+Production migration:
 
 ```text
-system_intelligence_snapshots                 313
-system_intelligence_events                     84
-system_intelligence_recommendations             0
-system_intelligence_recommendation_events       0
-system_intelligence_learning_profiles            0
-event_intelligence_predictions                767
-event_intelligence_prediction_outcomes           0
-lead_scoring_predictions                        0
+version                    20261101151403
+name                       r10_recommendation_security_hardening_v1
+repository file            20261101154500_r10_recommendation_security_hardening_v1.sql
 ```
 
-Existing R10 capabilities include:
-
-- system-awareness snapshots/events;
-- recommendation + recommendation-event ledgers;
-- recommendation feedback functions;
-- downstream outcome observer;
-- recommendation effectiveness / learning surfaces;
-- privacy-gated lead feature snapshots;
-- predictive-readiness/model-promotion guardrails;
-- Owner Command Center contract.
-
-The missing product loop is:
-
-`fresh observed signal -> recommendation -> privileged human action -> observed outcome -> learning`
+Eight historical recommendation-lifecycle migrations are also restored in source control and protected by production-ledger MD5 verification.
 
 ---
 
-## 4. Predictive model remains gated
+## 3. P0 production acceptance
 
-Current production readiness:
+Current recommendation evidence remains intentionally empty:
+
+```text
+recommendations                    0
+recommendation_events              0
+orphan_or_tenant_mismatch_rows     0
+```
+
+Production now enforces:
+
+- composite recommendation/event tenant FK;
+- explicit event RLS tenant comparison;
+- target Lead array <= 500;
+- target count equals stored target array cardinality;
+- single accepted/dismissed/action_started/action_completed lifecycle event per recommendation;
+- authenticated table access = SELECT only;
+- legacy v1 creator inaccessible to app roles;
+- v2 creator = SECURITY DEFINER + owner/admin/manager + session-derived tenant + target Lead tenant validation;
+- feedback RPC = SECURITY DEFINER + owner/admin/manager + fail-closed transitions + idempotent retry behavior;
+- outcome observer = service-role-only machine boundary.
+
+No recommendation UI or recommendation data was activated during P0.
+
+---
+
+## 4. Predictive safety boundary remains locked
+
+Production still does not have enough outcome history for a defensible trained lead-conversion model:
 
 ```text
 total_leads                         603
 labeled_outcomes                      1
 positive_outcomes                     1
 negative_outcomes                     0
-labeled_outcome_rate_pct             0.2
 prediction_generation_allowed         false
 predictive_readiness_status           insufficient_positive_outcomes
 ```
 
-Do not generate trained lead-conversion probabilities or present the deterministic event-intelligence ledger as a predictive conversion model.
-
-The 767 event-intelligence rows are deterministic rules; the only active family has 101 stale SEO opportunity rows and zero fresh active predictions.
+Do not publish conversion probabilities or treat the deterministic event-intelligence rows as trained predictions.
 
 ---
 
-## 5. R10-P0 blockers
+## 5. Exact next checkpoint — R10-P1
 
-### A. Recommendation-event tenant policy defect
+Build a separate **Recommended actions** layer on `/home` using only fresh, directly observed CRM operating facts:
 
-The current INSERT RLS policy effectively compares:
+1. reply backlog;
+2. overdue follow-ups;
+3. first touch needed;
+4. payment pending.
 
-`r.organization_id = r.organization_id`
+Existing factual Attention cards remain unchanged.
 
-rather than recommendation organization to event organization.
+Exclude from P1:
 
-Current production has zero recommendation-event rows and zero observed mismatches, so there is no current contamination evidence.
+- stale event-intelligence predictions;
+- unready predictive probabilities;
+- generic raw system-failure counts;
+- browser-only payment/enrollment/revenue claims;
+- AI-generated recommendation prose;
+- autonomous external/customer/provider actions.
 
-P0 must add both:
+Recommendation scores are deterministic priority scores, not probabilities or confidence values.
 
-- explicit correct RLS tenant comparison;
-- composite `(recommendation_id, organization_id)` foreign-key enforcement.
+---
 
-### B. Authenticated mutation privileges are too broad
+## 6. P1 episode-key contract must be finalized before code
 
-`authenticated` currently holds DELETE/INSERT/REFERENCES/SELECT/TRIGGER/TRUNCATE/UPDATE on both recommendation tables.
+`touch_system_intelligence_recommendation_v2` upserts by `(organization_id, recommendation_key)` and records `shown` on every call.
 
-P0 must reduce browser/authenticated table access to the minimum required surface.
+Therefore P1 must guarantee:
 
-### C. Mutating RPC authorization is too broad
+- a terminal dismissed/completed recommendation is never touched back into the same episode;
+- repeated Home loads show/refresh the same unresolved episode rather than create duplicates;
+- a new recommendation episode is created only when the underlying CRM condition genuinely clears and later recurs, or when a deterministic episode fingerprint changes;
+- `shown` is recorded only for recommendations actually rendered on the privileged Command Center request;
+- target Lead membership/fingerprint changes do not silently rewrite historical terminal episodes.
 
-Recommendation creation, recommendation feedback and outcome observation are currently executable by authenticated members.
+Preferred design direction: derive a deterministic episode fingerprint from the live signal + bounded target Lead set + signal-specific boundary timestamp/state, hash it server-side, and use that fingerprint in the recommendation key. The exact signal-specific boundary rules must be verified against available CRM timestamps before implementation.
 
-The product already has `has_organization_role(org_id, roles[])` and `/home` already requires:
+---
+
+## 7. P1 authorization/product boundary
+
+`/home` already requires:
 
 `owner | admin | manager`
 
-P0 must align recommendation creation/feedback to that privileged boundary and move machine outcome observation to service-role execution.
+P1 should preserve that boundary.
 
-### D. Target array bound is incomplete
+Generation/presentation flow:
 
-`target_lead_count <= 500` is enforced, but `target_lead_ids` array cardinality is not.
+1. privileged user requests `/home`;
+2. server derives active tenant;
+3. server evaluates the four deterministic CRM signals;
+4. server resolves the current episode key;
+5. only recommendations actually rendered call hardened v2 touch;
+6. page reads/render current recommendation rows in a clearly labeled Recommended actions panel.
 
-P0 must enforce the actual stored array bound.
-
-### E. Lifecycle transition rules are not strict enough
-
-P0 must fail closed on invalid transitions and make retries idempotent.
-
-### F. Recommendation-lifecycle migration provenance is incomplete
-
-Production contains ledgered recommendation-lifecycle migrations absent from source control.
-
-P0 must restore the exact required historical SQL from the Supabase migration ledger and pin it to ledger hashes before the new hardening migration is allowed to depend on it.
+No background generator is needed for P1.
 
 ---
 
-## 6. R10-P0 acceptance contract
+## 8. Later R10 checkpoints
 
-P0 is complete only when:
+After P1:
 
-1. required historical recommendation-lifecycle migrations are restored exactly from the production ledger;
-2. restored files are hash-protected in CI;
-3. recommendation/event cross-tenant linkage is impossible at RLS + FK layers;
-4. current mismatch/orphan counts remain zero;
-5. authenticated direct mutation privileges are removed unless explicitly required by a controlled boundary;
-6. recommendation creation is owner/admin/manager or trusted service only;
-7. human feedback is owner/admin/manager only;
-8. outcome observation is service-role machine only;
-9. target Lead arrays cannot exceed the intended bound;
-10. invalid lifecycle transitions fail closed;
-11. retrying a lifecycle command does not duplicate lifecycle events;
-12. current recommendation/event row counts remain zero during P0;
-13. no synthetic recommendation/outcome rows are inserted for testing;
-14. CI, CodeQL, migration provenance, deploy provenance and post-deploy read-only verification pass.
+- **R10-P2 — Human Feedback Lifecycle UI**: Accept / Dismiss / Start action / Mark complete through the hardened RPC;
+- **R10-P3 — Observed Outcome & Learning Runner**: service-role scheduled observation of downstream CRM/payment/enrollment evidence and learning-profile recomputation.
 
-No recommendation UI is activated in P0.
-
----
-
-## 7. R10-P1 after P0
-
-After P0 closes, build **Deterministic Recommended Actions on Command Center**.
-
-V1 source signals are limited to fresh observed CRM facts:
-
-- reply backlog;
-- overdue follow-ups;
-- first touch needed;
-- payment pending.
-
-Exclude:
-
-- stale event-intelligence predictions;
-- unready conversion probabilities;
-- generic raw system-failure counts;
-- browser-only payment/enrollment/revenue claims;
-- autonomous external actions.
-
-Existing observed attention cards on `/home` remain unchanged. Recommendations appear in a separate clearly labeled layer.
-
----
-
-## 8. Important awareness caveat
-
-`v_r10_system_awareness_v1` currently ranks raw system failures ahead of CRM pressure.
-
-The current 24-hour failure is Google Ads, which is the known external Cloud-project production-access blocker. Operational Readiness correctly labels it `configuration_blocked`.
-
-Therefore generic system-health recommendations are excluded from R10 V1 until awareness becomes provider-readiness-aware.
+Predictive model promotion remains separately gated by real outcome evidence.
 
 ---
 
@@ -209,7 +173,7 @@ Therefore generic system-health recommendations are excluded from R10 V1 until a
 
 Do not resume automatically:
 
-- commerce completion / live Hostinger PHP emitter;
+- commerce completion / Hostinger PHP verified completion emitter;
 - PA-1 live identity decision;
 - Google/Meta provider approval work;
 - Search Indexing activation.
@@ -235,7 +199,9 @@ Do not create fake data to make any parked boundary green.
 ## 11. Resume instruction
 
 1. read `docs/SalsysOS_Active_Handoff.md`;
-2. read `docs/checkpoints/M-2026-11-01-R10-Audit-Design-v1.md`;
+2. read the P0 closeout and R10 audit/design checkpoints;
 3. verify current `main`, Supabase and Vercel provenance;
-4. continue with **R10-P0** only;
-5. do not activate recommendation UI during P0.
+4. audit the timestamps/IDs needed for the four P1 episode fingerprints;
+5. finalize the P1 episode-key contract;
+6. only then implement P1;
+7. do not add feedback buttons or outcome runners until their own checkpoints.
