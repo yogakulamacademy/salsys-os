@@ -4,15 +4,13 @@
 **Updated:** 2026-11-01  
 **Repository:** `yogakulamacademy/salsys-os`  
 **Production branch:** `main`  
-**Verified production runtime head:** `5162d40f324ec79157c0db24ff2c303ef325ea62`  
-**Latest docs closeout merge:** `4ddcea8b661d7371c3e6c52adcb0b75f4c724ec1`
+**Verified production runtime head:** `0ff9a29096c44975ba3ea39099e7ecfa1a7bd0ac`
 
 Read first:
 
 1. `docs/SalsysOS_Current_Checkpoint.md`
-2. `docs/checkpoints/M-2026-11-01-R10-P3-Outcome-Learning-Audit-Design-v1.md`
-3. `docs/checkpoints/M-2026-11-01-R10-P2-Human-Feedback-Closeout-v1.md`
-4. `docs/checkpoints/M-2026-11-01-R10-P2-Human-Feedback-Audit-Design-v1.md`
+2. `docs/checkpoints/M-2026-11-01-R10-V1-Engineering-Closeout-v1.md`
+3. `docs/checkpoints/M-2026-11-01-North-Star-Rebaseline-v1.md`
 
 Historical checkpoint files are immutable evidence records.
 
@@ -20,180 +18,131 @@ Historical checkpoint files are immutable evidence records.
 
 ## 1. Exact continuation point
 
-**R10-P3 — Observed Outcome & Learning Runner — implementation against locked design**
+**Post-R10 North-Star Rebaseline & Next Roadmap Selection — read-only first.**
 
-P3 audit/design is complete. Do not redesign the evidence model during implementation unless a new verified invariant gap is found.
+R10 V1 engineering is closed. Do not invent an R10-P4 merely because real recommendation/feedback/outcome samples are currently zero.
 
 ---
 
-## 2. P2 runtime remains verified
+## 2. R10 V1 status
 
 ```text
-Implementation PR           #417
-runtime SHA                 5162d40f324ec79157c0db24ff2c303ef325ea62
-post-merge CI               #1360 passed
-post-merge CodeQL           #645 passed
-Production Smoke            #166 passed
-Vercel production           READY on exact runtime SHA
+R10-P0  Recommendation security / reproducibility       complete
+R10-P1  Deterministic Command Center recommendations    complete
+R10-P2  Human feedback lifecycle                        complete
+R10-P3  Observed outcome + descriptive learning runner  complete
 ```
 
-No synthetic recommendation, feedback or outcome evidence was created during P2 acceptance.
-
----
-
-## 3. P3 audit findings to fix before scheduling
-
-### Machine observer mismatch
-
-Legacy `observe_system_intelligence_recommendation_outcomes_v1(...)` is granted only to trusted machine roles but still requires `auth.uid()` plus a user-bound tenant session.
-
-**Do not schedule V1.**
-
-Build a V2 observer with explicit organization scope and a trusted machine boundary.
-
-### Source-family mismatch
-
-Live Command Center recommendations use:
+Latest R10 runtime release:
 
 ```text
-source_version = 'r10-p1'
+PR                         #420
+main SHA                   0ff9a29096c44975ba3ea39099e7ecfa1a7bd0ac
+PR CI                      #1371 passed
+PR CodeQL                  #656 passed
+post-merge CI              #1372 passed
+post-merge CodeQL          #657 passed
+Production Smoke           #169 passed
+Vercel production          READY on exact SHA
 ```
 
-Current effectiveness/action-completion functions filter only `source_version='v2'` and would omit live R10 recommendations.
-
-### Learning sample duplication
-
-Legacy learning recomputation counts outcome event rows. Repeated newer temporal observations for one recommendation can therefore over-weight that recommendation.
-
-P3 V2 must use one latest outcome sample per recommendation.
-
-### Learning-profile privilege defect
-
-`authenticated` currently has broad direct table privileges on `system_intelligence_learning_profiles`, including mutation and TRUNCATE.
-
-P3 must reduce this table to tenant-RLS SELECT-only for authenticated users.
-
-### No outcome-run telemetry
-
-There is no recommendation-outcome run ledger or System Health source. The generic `system_intelligence_events` vocabulary is not a suitable runner ledger.
-
----
-
-## 4. Locked P3 implementation
-
-Add:
+Supabase P3 migration:
 
 ```text
-observe_system_intelligence_recommendation_outcomes_v2(org_id, limit)
-recompute_system_intelligence_learning_profile_v2(org_id, signal_id, role_scope)
-system_intelligence_outcome_runs
-sweep_system_intelligence_recommendation_outcomes_v1(...)
+version                    20261101164458
+name                       r10_outcome_learning_runner_v1
+MD5                        8d1fa6a3f4b032300b84212fd0fc0571
 ```
 
-Also:
-
-- include supported source families `('v2','r10-p1')` in effectiveness/completion reads;
-- revoke authenticated learning-profile mutations/TRUNCATE;
-- run one database-native sweep every 15 minutes through `pg_cron`;
-- isolate tenant failures so one organization cannot abort the full sweep;
-- integrate the outcome-run ledger into canonical `v_system_health`;
-- preserve non-causal outcome wording;
-- extend R10 regression verification.
-
 ---
 
-## 5. Machine observer boundary
+## 3. R10 runner is operationally proven
 
-V2 observer must:
+The single P3 cron runs every 15 minutes.
 
-- be `SECURITY DEFINER` with fixed `search_path`;
-- accept an explicit organization ID;
-- validate organization existence/activity;
-- be executable only from trusted database/service-role paths;
-- never derive machine tenancy from browser/session state;
-- process only the specified tenant's acted recommendations with target Leads;
-- preserve the existing 15-minute post-action boundary;
-- insert an outcome event only for genuinely newer downstream evidence or first 72-hour inconclusive state;
-- update latest recommendation outcome fields in the same transaction;
-- retain the explicit statement that temporal evidence is not causal attribution.
-
----
-
-## 6. Learning remains descriptive
-
-V2 learning recomputation must aggregate at most one latest outcome sample per recommendation.
-
-Do **not** apply `system_intelligence_learning_profiles.score_adjustment` to live P1 recommendation ranking during P3.
-
-Live priority remains the canonical deterministic admissions priority.
-
-Learning aggregates are descriptive evidence, not probability/confidence for conversion and not proof of causal success.
-
----
-
-## 7. Runner and operational health
-
-Initial cron cadence:
+During closeout it naturally executed twice across all 4 active organizations:
 
 ```text
-*/15 * * * *
+outcome-run rows                 8
+latest tenant run status         success for all 4
+System Health                    healthy for all 4
+recommendations scanned          0
+outcome events recorded          0
+learning profiles recomputed     0
 ```
 
-Add tenant-scoped `system_intelligence_outcome_runs` for operational telemetry:
-
-- status;
-- scanned/observed counts;
-- positive/negative/mixed/inconclusive counts;
-- learning profiles recomputed;
-- compact error evidence;
-- timestamps.
-
-A successful sweep with zero outcome observations is valid operational telemetry and does not fabricate a business outcome.
-
-System Health must derive runner health from this run ledger, not from whether recommendations/outcomes happen to exist.
+This is valid runner telemetry and does not fabricate business evidence.
 
 ---
 
-## 8. Implementation order
+## 4. R10 business-effectiveness evidence remains intentionally empty
 
-1. create P3 hardening migration;
-2. lock learning-profile table to authenticated SELECT-only;
-3. add run ledger + RLS;
-4. add V2 machine observer;
-5. add V2 latest-per-recommendation learning recompute;
-6. correct supported recommendation source-family reads;
-7. add bounded per-tenant sweep runner;
-8. register exactly one 15-minute cron job;
-9. extend `v_system_health`;
-10. extend R10 verifier;
-11. CI + CodeQL;
-12. apply migration only after gates are green;
-13. verify cron, System Health, grants and evidence counts read-only;
-14. do not seed recommendation/outcome/learning evidence;
-15. close P3 only after production acceptance.
+At closeout:
+
+```text
+recommendations              0
+recommendation events        0
+learning profiles            0
+```
+
+Real recommendation activity must accumulate organically through the privileged Command Center.
+
+Do not seed fake presentations, feedback, actions, downstream outcomes or learning samples.
 
 ---
 
-## 9. Parked work
+## 5. Predictive promotion remains parked
 
-Do not resume automatically:
+Do not:
 
-- predictive model promotion;
-- automatic learning-based priority adjustment;
-- commerce completion / Hostinger PHP emitter;
+- publish trained conversion probability without readiness evidence;
+- reinterpret deterministic predictions as a trained model;
+- apply descriptive learning-profile score adjustments to live P1 priority;
+- claim recommendation causality from temporal downstream movement.
+
+Any predictive-ranking phase requires a separate evidence-backed checkpoint.
+
+---
+
+## 6. Other parked work — do not resume automatically
+
+- Yogakulam live commerce completion / Hostinger PHP emitter;
 - PA-1 live identity decision;
-- Google/Meta provider approval;
-- Search Indexing activation.
+- Google Ads external production API approval;
+- Meta Ads external permission/App Review/account selection;
+- broad Search Indexing activation.
 
 ---
 
-## 10. Safety rules
+## 7. NEXT WORK — POST-R10 REBASELINE
 
-- one controlled checkpoint at a time;
+Run a read-only comparison of the highest-value remaining internal product gaps.
+
+Primary candidates:
+
+### R11 Wellness / Education Productization
+
+Existing Yogakulam depth already includes real courses, batches, capacity, affinity and recommendation structures. Audit what is tenant-specific versus reusable vertical-pack capability.
+
+### R13 Commercial SaaS Readiness
+
+Provisioning/onboarding exists, but prior audit found public signup, billing/subscription enforcement, plan entitlements, signup abuse controls and customer-controlled organization deletion intentionally unimplemented.
+
+### Smaller cross-cutting gap
+
+If current production/repository evidence reveals a smaller high-value internal gap, compare it honestly against R11/R13 before selecting a large phase.
+
+The rebaseline must select **one** next checkpoint and define its acceptance/design contract before code.
+
+---
+
+## 8. Safety rules
+
 - verify before modifying;
-- no fake recommendation/feedback/outcome/learning evidence;
-- no trained probabilities while readiness is blocked;
-- no autonomous external/customer action;
+- one controlled checkpoint at a time;
 - PostgreSQL remains canonical truth;
-- machine tenant scope must be explicit;
-- temporal outcome evidence must never be presented as causal attribution.
+- tenant authority is server-derived/explicit;
+- observed, deterministic, inferred and trained/modelled evidence remain distinct;
+- no fake recommendations, outcomes, revenue or learning evidence;
+- high-impact actions remain human-governed;
+- do not reopen external/human-blocked work without the required decision/dependency.
