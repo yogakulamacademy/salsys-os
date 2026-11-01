@@ -87,10 +87,10 @@ export default async function AutomationOverviewPage() {
               .select('status')
               .eq('organization_id', organizationId),
             supabase
-              .from('automation_action_runs')
+              .from('automation_approval_requests')
               .select('id', { count: 'exact', head: true })
               .eq('organization_id', organizationId)
-              .eq('status', 'awaiting_approval'),
+              .eq('status', 'pending'),
             supabase
               .from('automation_whatsapp_templates')
               .select('approval_status,active')
@@ -290,7 +290,7 @@ export default async function AutomationOverviewPage() {
         <MetricCard
           label="Awaiting approval"
           value={dataAvailable ? awaitingApproval : '—'}
-          note={dataAvailable ? 'Human decision required' : 'Approval queue unavailable'}
+          note={dataAvailable ? 'Pending requests in the human approval queue' : 'Approval queue unavailable'}
           icon={ShieldCheck}
         />
       </section>
