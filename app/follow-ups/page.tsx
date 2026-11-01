@@ -13,10 +13,8 @@ import {
   Sparkles,
 } from "lucide-react";
 
-import {
-  completeFollowUpAction,
-  snoozeFollowUpAction,
-} from "@/app/actions/crm";
+import { completeFollowUpAction } from "@/app/actions/crm";
+import { snoozeFollowUpFromQueueAction } from "@/app/follow-ups/actions";
 
 import { SubmitButton } from "@/components/submit-button";
 import {
@@ -53,6 +51,12 @@ export default async function FollowUpsPage({
 
   const { tasks, summary, pagination } = workspace;
   const mock = isMockMode();
+  const queueStatus = mock ? "Testing" : workspace.fallback ? "Fallback" : "Live";
+  const queueStatusNote = mock
+    ? "Changes are not persisted in mock mode"
+    : workspace.fallback
+      ? "Canonical queue unavailable; compatibility data is shown with reduced task-type detail"
+      : "Canonical tenant-scoped due-task queue from Supabase";
 
   return (
     <div className="followups-polish">
@@ -63,11 +67,13 @@ export default async function FollowUpsPage({
         actions={
           <span
             className={`followups-live-badge ${
-              mock ? "followups-live-badge-mock" : "followups-live-badge-active"
+              mock || workspace.fallback
+                ? "followups-live-badge-mock"
+                : "followups-live-badge-active"
             }`}
           >
             <span className="followups-live-dot" />
-            {mock ? "Mock mode" : "Live queue"}
+            {mock ? "Mock mode" : workspace.fallback ? "Fallback queue" : "Live queue"}
           </span>
         }
       />
@@ -86,11 +92,17 @@ export default async function FollowUpsPage({
         </Notice>
       ) : null}
 
+      {requestedPage !== pagination.page && pagination.total > 0 ? (
+        <Notice tone="warning" title="Page adjusted">
+          Page {requestedPage.toLocaleString()} is outside the current queue. Showing page {pagination.page.toLocaleString()} of {pagination.totalPages.toLocaleString()} instead.
+        </Notice>
+      ) : null}
+
       <section className="followups-summary-grid">
         <FollowUpSummaryCard
           label="Due now"
           value={summary.dueNow.toLocaleString()}
-          note="Open or rescheduled tasks at or after their due time"
+          note="Open or rescheduled tasks whose due time has arrived or passed"
           tone="urgent"
           icon={<Clock size={17} />}
         />
@@ -106,20 +118,20 @@ export default async function FollowUpsPage({
         <FollowUpSummaryCard
           label="Payment checks"
           value={summary.paymentChecks.toLocaleString()}
-          note="Customer-reported payments waiting for verification"
+          note={
+            workspace.fallback
+              ? "Not classified separately by the compatibility queue"
+              : "Customer-reported payments waiting for verification"
+          }
           tone={summary.paymentChecks > 0 ? "priority" : "healthy"}
           icon={<CircleDollarSign size={17} />}
         />
 
         <FollowUpSummaryCard
           label="Queue status"
-          value={mock ? "Testing" : "Live"}
-          note={
-            mock
-              ? "Changes are not persisted in mock mode"
-              : "Tasks are stored in Supabase and refreshed live"
-          }
-          tone="healthy"
+          value={queueStatus}
+          note={queueStatusNote}
+          tone={workspace.fallback ? "priority" : "healthy"}
           icon={<CheckCircle2 size={17} />}
         />
       </section>
@@ -198,7 +210,7 @@ export default async function FollowUpsPage({
                         <ChannelBadge channel={task.channel} />
                         <span className="followup-due-time">
                           <Clock size={14} />
-                          {formatDateTime(task.dueAt)}
+                          {formatDateTime(task.dueAt)} IST
                         </span>
                       </div>
                     </div>
@@ -221,14 +233,14 @@ export default async function FollowUpsPage({
                       ) : null}
 
                       <form
-                        action={snoozeFollowUpAction}
+                        action={snoozeFollowUpFromQueueAction}
                         className="followup-reschedule-form"
                       >
                         <input type="hidden" name="task_id" value={task.id} />
 
                         <span className="followup-reschedule-label">
                           <RotateCcw size={13} />
-                          Reschedule
+                          Reschedule (IST)
                         </span>
 
                         <input
@@ -236,7 +248,7 @@ export default async function FollowUpsPage({
                           type="datetime-local"
                           name="due_at"
                           required
-                          aria-label={`New task time for ${task.leadName}`}
+                          aria-label={`New task time in IST for ${task.leadName}`}
                         />
 
                         <SubmitButton
