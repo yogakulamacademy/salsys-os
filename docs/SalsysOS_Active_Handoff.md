@@ -4,14 +4,13 @@
 **Updated:** 2026-11-01  
 **Repository:** `yogakulamacademy/salsys-os`  
 **Production branch:** `main`  
-**Verified production head:** `9075c8dcc760204477a31c054f117a15f04d0d4b`
+**Verified production head:** `e380a0815915b8b53e7fb19a54a2fdf974c68fba`
 
-Read this file first when resuming, then:
+Read first:
 
 1. `docs/SalsysOS_Current_Checkpoint.md`
-2. `docs/checkpoints/M-2026-11-01-R9-Production-Closeout-v1.md`
-3. `docs/checkpoints/M-2026-11-01-North-Star-Rebaseline-v1.md`
-4. `docs/SalsysOS_North_Star_Product_Context.md`
+2. `docs/checkpoints/M-2026-11-01-R10-Audit-Design-v1.md`
+3. `docs/checkpoints/M-2026-11-01-R9-Production-Closeout-v1.md`
 
 Historical checkpoint files are immutable evidence records.
 
@@ -19,176 +18,147 @@ Historical checkpoint files are immutable evidence records.
 
 ## 1. Exact continuation point
 
-**R10 — Recommendation Lifecycle & Action-Outcome Learning V1 — Audit & Design**
+**R10-P0 — Recommendation Security & Reproducibility Hardening**
 
-R9 AEO / GEO / AI Visibility V1 is formally closed.
-
-Do not begin R10 implementation until the existing schema, writers, UI consumers, safety boundaries and outcome contracts have been audited and the smallest V1 design is finalized.
+The R10 read-only audit/design is complete. No recommendation UI or recommendation data has been activated yet.
 
 ---
 
-## 2. R9 closeout result
-
-Production closeout remains clean:
+## 2. Current R10 production baseline
 
 ```text
-r9_closeout_status                   ready_for_r9_closeout
-technical_integrity_clean            true
-operational_status                   healthy
-completed_probe_runs                 1
-failed_probe_runs                    0
-model_observations                   1
-mention_observations                 0
-recommendation_observations          0
-citations_observed                   0
-orphan_observations                  0
-orphan_citations                     0
-observation_tenant_mismatches        0
-citation_tenant_mismatches           0
+system_intelligence_snapshots                 313
+system_intelligence_events                     84
+system_intelligence_recommendations             0
+system_intelligence_recommendation_events       0
+system_intelligence_learning_profiles            0
+event_intelligence_predictions                767
+event_intelligence_prediction_outcomes           0
+lead_scoring_predictions                        0
 ```
 
-Direct probe evidence is valid measured zero-positive evidence:
+The recommendation lifecycle is dormant, not absent.
+
+---
+
+## 3. Predictive safety boundary
 
 ```text
-provider             anthropic
-model                claude-sonnet-5-5
-status               completed
-brand_mentioned      false
-brand_recommended    false
-mention_count        0
-citation_count       0
-measured_result      not_observed
+total_leads                         603
+labeled_outcomes                      1
+positive_outcomes                     1
+negative_outcomes                     0
+prediction_generation_allowed         false
+predictive_readiness_status           insufficient_positive_outcomes
 ```
 
-GA4 separately observed AI referral traffic from ChatGPT and Gemini. Deterministic readiness, observed referrals and direct model-probe evidence remain separate.
+Do not publish trained conversion probabilities.
+
+The 767 event-intelligence predictions are deterministic rules, not a trained conversion model. The only active family has 101 stale SEO opportunity rows and zero fresh active predictions.
 
 ---
 
-## 3. R9 reproducibility fix
+## 4. P0 defects to fix
 
-During closeout, four R9 migrations were found in the production Supabase migration ledger but missing from source control.
+### Tenant linkage
 
-PR #407 restored the exact historical SQL and added `verify:r9-migration-reproducibility-v1`, pinned to production-ledger MD5 hashes.
+Recommendation-event INSERT RLS currently has a tautological tenant comparison. Add explicit outer-event org comparison plus composite tenant FK.
 
-Release:
+### Permissions
 
-```text
-main SHA                   9075c8dcc760204477a31c054f117a15f04d0d4b
-CI                         #1336 passed
-CodeQL                     #621 passed
-Production Smoke           #156 passed
-Vercel production          READY on exact SHA
-```
+Authenticated currently has broad mutation privileges on recommendation tables. Reduce to the minimum controlled surface.
 
-No production migration was re-applied and no AI-visibility evidence changed.
+### RPC roles
 
----
+Recommendation creation, feedback and outcome observation are currently callable by authenticated members.
 
-## 4. Why R10 is next
+Use canonical `has_organization_role()` and align human mutation with Home's privileged boundary:
 
-Production currently has:
+`owner | admin | manager`
 
-```text
-event_intelligence_predictions             767
-event_intelligence_prediction_outcomes       0
-system_intelligence_recommendations           0
-system_intelligence_recommendation_events     0
-lead_scoring_predictions                      0
-```
+Outcome observation becomes service-role machine execution.
 
-`v_r10_recommendation_effectiveness_v1` reports:
+### Target bound
 
-`learning_status = no_recommendations`
+Enforce actual `target_lead_ids` cardinality <= 500, not only the stored count field.
 
-The missing North-Star loop is:
+### Lifecycle transitions
 
-`prediction -> recommendation -> human action -> observed outcome -> learning`
+Enforce valid transitions and retry idempotency.
+
+### Migration provenance
+
+Restore exact production-ledger recommendation-lifecycle migrations needed by the hardening migration and pin them to production-ledger hashes.
 
 ---
 
-## 5. R10 audit scope — no writes
+## 5. P0 acceptance contract
 
-Inspect before implementation:
+P0 must finish with:
 
-1. prediction tables and their source/evidence model;
-2. prediction outcome schema and intended outcome linkage;
-3. recommendation and recommendation-event tables;
-4. R10 effectiveness, calibration and accuracy views;
-5. Owner Command Center / Home recommendation surfaces;
-6. any existing recommendation writer, RPC, cron, job or automation path;
-7. RLS and server authorization boundaries;
-8. recommendation action taxonomy;
-9. observed outcome linkage to CRM/business facts;
-10. stale/low-confidence prediction handling;
-11. audit/reversibility requirements;
-12. whether existing schema is sufficient for the smallest safe V1 or needs additive changes.
+- exact historical migration provenance in source control;
+- tenant-safe recommendation/event relationship at RLS + FK layers;
+- zero current cross-tenant/orphan recommendation-event rows;
+- browser direct mutations removed;
+- owner/admin/manager recommendation creation + feedback;
+- service-role-only outcome observation;
+- bounded target arrays;
+- fail-closed/idempotent lifecycle transitions;
+- recommendation rows remain 0;
+- recommendation event rows remain 0;
+- no synthetic test recommendation/outcome rows;
+- CI, CodeQL, deployment and post-deploy checks green.
 
-Expected design principles:
-
-- advisory/recommendation-first;
-- no high-impact autonomous execution by default;
-- tenant-scoped and server-authorized;
-- source prediction/evidence retained;
-- confidence and uncertainty visible;
-- lifecycle events append-only and auditable;
-- success learned only from observed outcomes;
-- stale/low-confidence evidence fails safe;
-- no fabricated recommendation outcomes.
+Do not add UI in P0.
 
 ---
 
-## 6. Parked work — do not resume automatically
+## 6. R10-P1 after P0
 
-### Commerce
+Add a separate **Recommended actions** layer to `/home` using fresh observed CRM facts only:
 
-```text
-booking.completed       19
-payment.started          2
-payment.completed        0
-enrollment.completed     0
-```
+- reply backlog;
+- overdue follow-ups;
+- first touch needed;
+- payment pending.
 
-User chose to skip the live Hostinger/PHP completion deployment.
+Do not replace the existing observed attention cards.
 
-### PA-1 live identity decision
+Do not use:
 
-```text
-open conflicts          2
-source Person           active
-merge audit rows        0
-```
-
-Requires explicit human approval.
-
-### Provider actions
-
-- Google Ads: external Cloud-project production access;
-- Meta Ads: external Ads permission / account selection.
-
-### Search Indexing
-
-Intentionally inactive.
+- stale event predictions;
+- unready predictive probabilities;
+- generic raw system failures;
+- autonomous customer/provider actions.
 
 ---
 
-## 7. Other roadmap notes
+## 7. System-awareness caveat
 
-R8 is implemented but crawl evidence coverage remains incomplete; do not rebuild R8 merely because its readiness band is degraded.
+The current raw system-awareness top issue is `system_failures` because the 24-hour failure is Google Ads.
 
-R11 already has substantial Yogakulam vertical depth.
+That is the known external Google production-access blocker, not an internal runtime regression.
 
-R13 remains a larger commercial productization program with public signup, billing/subscription enforcement and plan entitlements still intentionally unimplemented.
+Therefore generic system-failure recommendations remain excluded until R10 awareness consumes provider-readiness classification.
 
 ---
 
-## 8. Safety rules
+## 8. Parked work
+
+Do not resume automatically:
+
+- commerce completion / Hostinger PHP verified completion emitter;
+- PA-1 live identity decision;
+- Google/Meta provider approval work;
+- Search Indexing activation.
+
+---
+
+## 9. Safety rules
 
 - one controlled checkpoint at a time;
 - verify before modifying;
 - PostgreSQL remains canonical truth;
-- OpenSearch remains derived/rebuildable;
-- observed/deterministic/inferred/modelled evidence remains distinct;
-- no fake citations, events, conversions, revenue, recommendations or outcomes;
-- no automatic ambiguous identity merge;
-- high-impact actions remain human-governed unless explicitly activated;
-- do not resume parked commerce/PA-1/provider work without the appropriate external or human action.
+- no fake recommendations, outcomes, revenue, conversions or training evidence;
+- stale predictive evidence fails safe;
+- high-impact actions remain human-governed.
