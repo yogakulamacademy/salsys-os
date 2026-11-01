@@ -76,6 +76,8 @@ type RpcPayload = {
   };
 };
 
+type SupabaseClient = Awaited<ReturnType<typeof createClient>>;
+
 export async function getFollowUpsWorkspace({
   page = 1,
   pageSize = 50,
@@ -102,48 +104,97 @@ export async function getFollowUpsWorkspace({
   }
 
   const organizationId = await requireCurrentOrganizationId(supabase, user.id);
-  const { data, error } = await supabase.rpc('get_followups_workspace', {
-    p_organization_id: organizationId,
-    p_page: safePage,
-    p_page_size: safePageSize,
-  });
+  const first = await loadCanonicalWorkspace(
+    supabase,
+    organizationId,
+    safePage,
+    safePageSize,
+  );
 
-  if (error) {
+  if (first.error) {
     const tasks = await getFollowUps();
     return buildLocalWorkspace(
       tasks,
       safePage,
       safePageSize,
       true,
-      `Optimized follow-up read model unavailable: ${error.message}`,
+      `Optimized follow-up read model unavailable: ${first.error}`,
     );
   }
 
-  const payload = (data ?? {}) as RpcPayload;
+  let workspace = parseRpcWorkspace(first.payload, safePage, safePageSize);
+
+  if (
+    workspace.pagination.total > 0 &&
+    workspace.pagination.page > workspace.pagination.totalPages
+  ) {
+    const lastPage = workspace.pagination.totalPages;
+    const clamped = await loadCanonicalWorkspace(
+      supabase,
+      organizationId,
+      lastPage,
+      safePageSize,
+    );
+
+    if (clamped.error) {
+      const tasks = await getFollowUps();
+      return buildLocalWorkspace(
+        tasks,
+        lastPage,
+        safePageSize,
+        true,
+        `Optimized follow-up read model became unavailable while clamping pagination: ${clamped.error}`,
+      );
+    }
+
+    workspace = parseRpcWorkspace(clamped.payload, lastPage, safePageSize);
+  }
+
+  return workspace;
+}
+
+async function loadCanonicalWorkspace(
+  supabase: SupabaseClient,
+  organizationId: string,
+  page: number,
+  pageSize: number,
+) {
+  const { data, error } = await supabase.rpc('get_followups_workspace', {
+    p_organization_id: organizationId,
+    p_page: page,
+    p_page_size: pageSize,
+  });
+
+  return {
+    payload: (data ?? {}) as RpcPayload,
+    error: error?.message ?? null,
+  };
+}
+
+function parseRpcWorkspace(
+  payload: RpcPayload,
+  fallbackPage: number,
+  fallbackPageSize: number,
+): FollowUpsWorkspace {
   const tasks = (payload.tasks ?? [])
     .filter((row) => Boolean(row.task_id && row.lead_id && row.due_at))
     .map(mapRpcTask);
 
-  const summary = {
-    dueNow: toNumber(payload.summary?.due_now),
-    highIntentQueue: toNumber(payload.summary?.high_intent_queue),
-    paymentChecks: toNumber(payload.summary?.payment_checks),
-  };
-
   const total = toNumber(payload.pagination?.total);
-  const totalPages = Math.max(
-    1,
-    toNumber(payload.pagination?.total_pages, 1),
-  );
+  const totalPages = Math.max(1, toNumber(payload.pagination?.total_pages, 1));
 
   return {
     tasks,
-    summary,
+    summary: {
+      dueNow: toNumber(payload.summary?.due_now),
+      highIntentQueue: toNumber(payload.summary?.high_intent_queue),
+      paymentChecks: toNumber(payload.summary?.payment_checks),
+    },
     pagination: {
-      page: Math.max(1, toNumber(payload.pagination?.page, safePage)),
+      page: Math.max(1, toNumber(payload.pagination?.page, fallbackPage)),
       pageSize: Math.max(
         1,
-        toNumber(payload.pagination?.page_size, safePageSize),
+        toNumber(payload.pagination?.page_size, fallbackPageSize),
       ),
       total,
       totalPages,
