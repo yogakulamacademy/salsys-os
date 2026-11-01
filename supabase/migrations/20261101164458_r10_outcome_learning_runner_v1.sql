@@ -71,4 +71,47 @@ begin
          or exists (select 1 from public.lead_stage_history h where h.lead_id=target.lead_id and h.changed_at>=v_recommendation.acted_at and h.to_stage in ('contacted','engaged','qualified','high_intent','payment_pending','enrolled') and (case h.to_stage when 'contacted' then 2 when 'engaged' then 3 when 'qualified' then 4 when 'high_intent' then 5 when 'payment_pending' then 6 when 'enrolled' then 7 else 0 end) > (case h.from_stage when 'new' then 1 when 'contacted' then 2 when 'engaged' then 3 when 'qualified' then 4 when 'high_intent' then 5 when 'payment_pending' then 6 when 'enrolled' then 7 else 0 end))) as has_positive,
         (exists (select 1 from public.lead_stage_history h where h.lead_id=target.lead_id and h.changed_at>=v_recommendation.acted_at and h.to_stage in ('lost','unqualified'))
          or exists (select 1 from public.enrollments e where e.organization_id=p_organization_id and e.lead_id=target.lead_id and e.status='cancelled' and coalesce(e.updated_at,e.created_at)>=v_recommendation.acted_at)
-         or exists (select 1 from public.payments p where p.organization_id=p_organizatio
+         or exists (select 1 from public.payments p where p.organization_id=p_organization_id and p.lead_id=target.lead_id and p.status in ('refunded','partially_refunded') and coalesce(p.updated_at,p.created_at)>=v_recommendation.acted_at)) as has_negative,
+        greatest(
+          coalesce((select max(coalesce(p.paid_at,p.updated_at,p.created_at)) from public.payments p where p.organization_id=p_organization_id and p.lead_id=target.lead_id and p.status in ('paid','refunded','partially_refunded') and coalesce(p.paid_at,p.updated_at,p.created_at)>=v_recommendation.acted_at),'-infinity'::timestamptz),
+          coalesce((select max(coalesce(e.enrolled_at,e.updated_at,e.created_at)) from public.enrollments e where e.organization_id=p_organization_id and e.lead_id=target.lead_id and e.status in ('confirmed','completed','cancelled') and coalesce(e.enrolled_at,e.updated_at,e.created_at)>=v_recommendation.acted_at),'-infinity'::timestamptz),
+          coalesce((select max(h.changed_at) from public.lead_stage_history h where h.lead_id=target.lead_id and h.changed_at>=v_recommendation.acted_at and h.to_stage in ('contacted','engaged','qualified','high_intent','payment_pending','enrolled','lost','unqualified')),'-infinity'::timestamptz)
+        ) as latest_evidence_at
+      from unnest(v_recommendation.target_lead_ids) as target(lead_id)
+    ) evidence;
+    if v_latest_evidence_at='-infinity'::timestamptz then v_latest_evidence_at:=null; end if;
+    if v_latest_evidence_at is not null and v_recommendation.last_business_outcome_at is not null and v_latest_evidence_at <= v_recommendation.last_business_outcome_at then continue; end if;
+    if coalesce(v_positive_leads,0)>0 and coalesce(v_negative_leads,0)>0 then v_outcome_class:='mixed';
+    elsif coalesce(v_positive_leads,0)>0 then v_outcome_class:='positive';
+    elsif coalesce(v_negative_leads,0)>0 then v_outcome_class:='negative';
+    elsif now()>=v_recommendation.acted_at+interval '72 hours' and v_recommendation.last_business_outcome_at is null then v_outcome_class:='inconclusive'; else continue; end if;
+    v_outcome_delta:=coalesce(v_positive_leads,0)-coalesce(v_negative_leads,0);
+    v_summary:=left(format('After action start, %s target lead(s) showed positive downstream movement and %s showed negative downstream movement. This is temporal outcome evidence, not causal attribution.',coalesce(v_positive_leads,0),coalesce(v_negative_leads,0)),800);
+    insert into public.system_intelligence_recommendation_events(organization_id,recommendation_id,event_type,actor_user_id,outcome_class,outcome_metric,outcome_delta,note)
+    values(p_organization_id,v_recommendation.id,'outcome_observed',null,v_outcome_class,'target_lead_business_outcome',v_outcome_delta,left(v_summary,500));
+    update public.system_intelligence_recommendations set last_outcome_at=now(),last_outcome_class=v_outcome_class,last_outcome_value=v_outcome_delta,last_business_outcome_at=now(),last_business_outcome_class=v_outcome_class,last_business_outcome_summary=v_summary,updated_at=now() where id=v_recommendation.id and organization_id=p_organization_id;
+    v_observed:=v_observed+1; if v_outcome_class='positive' then v_positive:=v_positive+1; end if; if v_outcome_class='negative' then v_negative:=v_negative+1; end if; if v_outcome_class='mixed' then v_mixed:=v_mixed+1; end if; if v_outcome_class='inconclusive' then v_inconclusive:=v_inconclusive+1; end if;
+  end loop;
+  return query select v_scanned,v_observed,v_positive,v_negative,v_mixed,v_inconclusive;
+end; $$;
+revoke all on function public.observe_system_intelligence_recommendation_outcomes_v2(uuid,integer) from public, anon, authenticated;
+grant execute on function public.observe_system_intelligence_recommendation_outcomes_v2(uuid,integer) to service_role;
+comment on function public.observe_system_intelligence_recommendation_outcomes_v2(uuid,integer) is 'R10-P3 trusted machine observer. Uses explicit tenant scope and row locking, records only newer temporal downstream evidence, and never claims causal attribution.';
+
+create or replace function public.recompute_system_intelligence_learning_profile_v2(p_organization_id uuid,p_signal_id text,p_role_scope text)
+returns boolean language plpgsql security definer set search_path=public,pg_temp as $$
+declare v_samples integer:=0; v_positive integer:=0; v_neutral integer:=0; v_negative integer:=0; v_mixed integer:=0; v_inconclusive integer:=0; v_adjustment integer:=0; v_confidence numeric:=0;
+begin
+  if p_organization_id is null or nullif(btrim(coalesce(p_signal_id,'')),'') is null or nullif(btrim(coalesce(p_role_scope,'')),'') is null then raise exception 'INTELLIGENCE_LEARNING_SCOPE_REQUIRED'; end if;
+  if not exists(select 1 from public.organizations o where o.id=p_organization_id and o.status='active') then raise exception 'INTELLIGENCE_ORGANIZATION_NOT_ACTIVE'; end if;
+  select count(*) filter(where r.last_business_outcome_class in ('positive','neutral','negative','mixed'))::integer,count(*) filter(where r.last_business_outcome_class='positive')::integer,count(*) filter(where r.last_business_outcome_class='neutral')::integer,count(*) filter(where r.last_business_outcome_class='negative')::integer,count(*) filter(where r.last_business_outcome_class='mixed')::integer,count(*) filter(where r.last_business_outcome_class='inconclusive')::integer
+  into v_samples,v_positive,v_neutral,v_negative,v_mixed,v_inconclusive from public.system_intelligence_recommendations r where r.organization_id=p_organization_id and r.signal_id=p_signal_id and r.role_scope=p_role_scope and r.source_version in ('v2','r10-p1') and r.last_business_outcome_class is not null;
+  if v_samples>=5 then v_adjustment:=round(8.0*(v_positive-v_negative)/greatest(v_samples,1)); v_adjustment:=greatest(-8,least(8,v_adjustment)); v_confidence:=least(1.0,v_samples/20.0); end if;
+  insert into public.system_intelligence_learning_profiles(organization_id,signal_id,role_scope,outcome_samples,positive_count,neutral_count,negative_count,mixed_count,inconclusive_count,score_adjustment,confidence,last_recomputed_at,updated_at)
+  values(p_organization_id,p_signal_id,p_role_scope,v_samples,v_positive,v_neutral,v_negative,v_mixed,v_inconclusive,v_adjustment,v_confidence,now(),now())
+  on conflict(organization_id,signal_id,role_scope) do update set outcome_samples=excluded.outcome_samples,positive_count=excluded.positive_count,neutral_count=excluded.neutral_count,negative_count=excluded.negative_count,mixed_count=excluded.mixed_count,inconclusive_count=excluded.inconclusive_count,score_adjustment=excluded.score_adjustment,confidence=excluded.confidence,last_recomputed_at=now(),updated_at=now();
+  return true;
+end; $$;
+revoke all on function public.recompute_system_intelligence_learning_profile_v2(uuid,text,text) from public, anon, authenticated;
+grant execute on function public.recompute_system_intelligence_learning_profile_v2(uuid,text,text) to service_role;
+comment on function public.recompute_system_intelligence_learning_profile_v2(uuid,text,text) is 'R10-P3 trusted descriptive learning recomputati
