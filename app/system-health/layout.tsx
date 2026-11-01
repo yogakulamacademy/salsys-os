@@ -1,7 +1,13 @@
-import { AlertTriangle, CheckCircle2, Database, ShieldCheck } from "lucide-react";
+import {
+  AlertTriangle,
+  CheckCircle2,
+  Database,
+  ShieldCheck,
+} from "lucide-react";
 import { redirect } from "next/navigation";
 import type { ReactNode } from "react";
 
+import { PageHeader } from "@/components/ui";
 import { isMockMode } from "@/lib/data";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
@@ -9,14 +15,14 @@ import { getWorkspaceContextForUser } from "@/lib/workspace";
 import OperationalReadinessSection from "./operational-readiness-section";
 import "./system-health-mobile.css";
 
-type IntegrityStatus = "healthy" | "warning" | string;
+type IntegrityStatus = "healthy" | "warning" | "unknown";
 
 type SystemIntegrityRow = {
   integrity_key: string;
   integrity_name: string;
   integrity_group: string;
   source_status: string | null;
-  health_status: IntegrityStatus;
+  health_status: string | null;
   issue_count: number | string | null;
   details: Record<string, unknown> | null;
   checked_at: string | null;
@@ -26,6 +32,15 @@ type IntegrityLoadResult = {
   rows: SystemIntegrityRow[];
   error: string | null;
 };
+
+type BaseOperationalEvidence = {
+  available: boolean;
+  error: string | null;
+  unknownStatuses: string[];
+  monitoredSystems: number;
+};
+
+const BASE_HEALTH_STATUSES = new Set(["healthy", "warning", "critical"]);
 
 export default async function SystemHealthLayout({
   children,
@@ -37,13 +52,20 @@ export default async function SystemHealthLayout({
   }
 
   const organizationId = await requireIntegrityAdminAccess();
-  const { rows, error } = await loadIntegrityHealth(organizationId);
+  const [baseEvidence, integrity] = await Promise.all([
+    loadBaseOperationalEvidence(organizationId),
+    loadIntegrityHealth(organizationId),
+  ]);
 
   return (
     <>
-      {children}
+      {baseEvidence.available ? (
+        children
+      ) : (
+        <OperationalEvidenceUnavailable evidence={baseEvidence} />
+      )}
       <div className="system-health-polish mt-4">
-        <DataIntegritySection rows={rows} error={error} />
+        <DataIntegritySection rows={integrity.rows} error={integrity.error} />
         <OperationalReadinessSection organizationId={organizationId} />
       </div>
     </>
@@ -94,6 +116,70 @@ async function requireIntegrityAdminAccess(): Promise<string> {
   return workspace.activeWorkspace.organizationId;
 }
 
+async function loadBaseOperationalEvidence(
+  organizationId: string,
+): Promise<BaseOperationalEvidence> {
+  /*
+   * This is a fail-closed presentation gate for the mature base System Health
+   * page. The page still owns the detailed monitoring queries. The layout
+   * independently verifies that the canonical health rows are readable and use
+   * only the status vocabulary the page knows how to render before allowing a
+   * green/amber/red overview to appear.
+   *
+   * Because service_role bypasses RLS, the read is explicitly tenant-scoped.
+   */
+  const admin = createAdminClient() as any;
+  const result = await admin
+    .from("v_system_health")
+    .select("health_status")
+    .eq("organization_id", organizationId);
+
+  if (result.error) {
+    return {
+      available: false,
+      error: `Operational health evidence could not be verified: ${result.error.message}`,
+      unknownStatuses: [],
+      monitoredSystems: 0,
+    };
+  }
+
+  const rows = (result.data ?? []) as Array<{ health_status: string | null }>;
+  const unknownStatuses = Array.from(
+    new Set(
+      rows
+        .map((row) => String(row.health_status ?? "").trim().toLowerCase())
+        .filter((status) => !BASE_HEALTH_STATUSES.has(status)),
+    ),
+  ).sort();
+
+  if (rows.length === 0) {
+    return {
+      available: false,
+      error:
+        "No canonical operational-health rows are available. The workspace will not infer zero incidents or a healthy state from missing evidence.",
+      unknownStatuses,
+      monitoredSystems: 0,
+    };
+  }
+
+  if (unknownStatuses.length > 0) {
+    return {
+      available: false,
+      error:
+        "One or more operational-health states are not recognized by the current System Health contract. Verify the source view before treating the workspace as healthy.",
+      unknownStatuses,
+      monitoredSystems: rows.length,
+    };
+  }
+
+  return {
+    available: true,
+    error: null,
+    unknownStatuses: [],
+    monitoredSystems: rows.length,
+  };
+}
+
 async function loadIntegrityHealth(
   organizationId: string,
 ): Promise<IntegrityLoadResult> {
@@ -126,6 +212,47 @@ async function loadIntegrityHealth(
   });
 
   return { rows, error: null };
+}
+
+function OperationalEvidenceUnavailable({
+  evidence,
+}: {
+  evidence: BaseOperationalEvidence;
+}) {
+  return (
+    <div className="system-health-polish">
+      <PageHeader
+        eyebrow="Operations monitoring"
+        title="System health"
+        description="Operational health evidence is unavailable or outside the current status contract. SalsysOS will not convert missing or unrecognized monitoring evidence into a healthy state."
+      />
+
+      <section className="rounded-2xl border border-amber-200 bg-amber-50/50 p-5 shadow-sm">
+        <div className="flex items-start gap-3">
+          <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-amber-100 text-amber-700">
+            <AlertTriangle size={18} />
+          </span>
+          <div>
+            <div className="text-sm font-semibold text-slate-900">
+              Operational health evidence needs verification
+            </div>
+            <p className="mt-1 text-xs leading-5 text-slate-600">
+              {evidence.error ||
+                "The canonical operational-health evidence could not be verified."}
+            </p>
+            <div className="mt-3 text-xs font-semibold text-slate-500">
+              Monitored rows: {evidence.monitoredSystems || "—"}
+            </div>
+            {evidence.unknownStatuses.length > 0 ? (
+              <div className="mt-1 text-xs text-amber-800">
+                Unrecognized state(s): {evidence.unknownStatuses.join(", ")}
+              </div>
+            ) : null}
+          </div>
+        </div>
+      </section>
+    </div>
+  );
 }
 
 function DataIntegritySection({
@@ -175,7 +302,8 @@ function DataIntegritySection({
             No integrity-health rows available
           </div>
           <div className="mt-1 text-xs text-slate-400">
-            Verify the normalized integrity health view in Supabase.
+            Missing integrity evidence is not treated as healthy. Verify the
+            normalized integrity-health view in Supabase.
           </div>
         </div>
       )}
@@ -184,16 +312,20 @@ function DataIntegritySection({
 }
 
 function IntegrityCard({ row }: { row: SystemIntegrityRow }) {
-  const warning = normalizeIntegrityStatus(row.health_status) === "warning";
+  const status = normalizeIntegrityStatus(row.health_status);
   const details = row.details ?? {};
   const issueCount = safeNumber(row.issue_count);
+  const warning = status === "warning";
+  const unknown = status === "unknown";
 
   return (
     <article
       className={`rounded-2xl border p-4 ${
         warning
           ? "border-amber-200 bg-amber-50/25"
-          : "border-slate-200 bg-white"
+          : unknown
+            ? "border-slate-300 bg-slate-50/60"
+            : "border-slate-200 bg-white"
       }`}
     >
       <div className="flex items-start justify-between gap-3">
@@ -202,10 +334,16 @@ function IntegrityCard({ row }: { row: SystemIntegrityRow }) {
             className={`grid h-10 w-10 shrink-0 place-items-center rounded-xl ${
               warning
                 ? "bg-amber-100 text-amber-700"
-                : "bg-emerald-50 text-emerald-700"
+                : unknown
+                  ? "bg-slate-200 text-slate-700"
+                  : "bg-emerald-50 text-emerald-700"
             }`}
           >
-            {warning ? <AlertTriangle size={18} /> : <CheckCircle2 size={18} />}
+            {status === "healthy" ? (
+              <CheckCircle2 size={18} />
+            ) : (
+              <AlertTriangle size={18} />
+            )}
           </span>
 
           <div className="min-w-0">
@@ -222,10 +360,12 @@ function IntegrityCard({ row }: { row: SystemIntegrityRow }) {
           className={`inline-flex shrink-0 items-center rounded-full border px-2.5 py-1 text-[9px] font-semibold uppercase tracking-[.08em] ${
             warning
               ? "border-amber-200 bg-amber-50 text-amber-700"
-              : "border-emerald-200 bg-emerald-50 text-emerald-700"
+              : unknown
+                ? "border-slate-300 bg-slate-100 text-slate-700"
+                : "border-emerald-200 bg-emerald-50 text-emerald-700"
           }`}
         >
-          {warning ? "warning" : "healthy"}
+          {status}
         </span>
       </div>
 
@@ -240,6 +380,13 @@ function IntegrityCard({ row }: { row: SystemIntegrityRow }) {
           value={pretty(row.source_status || "unknown")}
         />
       </div>
+
+      {unknown ? (
+        <div className="mt-3 rounded-xl border border-slate-200 bg-white/80 px-3 py-2.5 text-[11px] leading-5 text-slate-600">
+          Integrity status is not recognized by the current System Health
+          contract. Verify the source view before treating this check as healthy.
+        </div>
+      ) : null}
 
       {row.integrity_key === "crm_core" ? (
         <div className="mt-4 grid gap-2 border-t border-slate-200/70 pt-3 sm:grid-cols-2">
@@ -352,12 +499,19 @@ function IntegrityDetail({
   );
 }
 
-function normalizeIntegrityStatus(value: string | null | undefined) {
-  return value === "warning" ? "warning" as const : "healthy" as const;
+function normalizeIntegrityStatus(
+  value: string | null | undefined,
+): IntegrityStatus {
+  if (value === "healthy") return "healthy";
+  if (value === "warning") return "warning";
+  return "unknown";
 }
 
 function integrityRank(value: string | null | undefined) {
-  return normalizeIntegrityStatus(value) === "warning" ? 1 : 2;
+  const status = normalizeIntegrityStatus(value);
+  if (status === "warning") return 0;
+  if (status === "unknown") return 1;
+  return 2;
 }
 
 function detailNumber(details: Record<string, unknown>, key: string) {
