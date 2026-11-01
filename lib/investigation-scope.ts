@@ -52,9 +52,15 @@ const scopeLabels: Partial<Record<keyof InvestigationScope, string>> = {
   employee: "Employee",
 };
 
+const performanceRanges = new Set(["7d", "30d", "month", "last_month"]);
+
 export function captureInvestigationScope(search: string): InvestigationScope {
   const params = new URLSearchParams(search.startsWith("?") ? search.slice(1) : search);
   const get = (key: string) => params.get(key)?.trim() || undefined;
+  const getDate = (key: string) => {
+    const value = get(key);
+    return isIsoDate(value) ? value : undefined;
+  };
 
   return compactScope({
     q: get("q"),
@@ -70,11 +76,11 @@ export function captureInvestigationScope(search: string): InvestigationScope {
     platform: get("platform"),
     outcome: get("outcome"),
     period: get("period"),
-    from: get("from"),
-    to: get("to"),
+    from: getDate("from"),
+    to: getDate("to"),
     range: get("range"),
-    start: get("start"),
-    end: get("end"),
+    start: getDate("start"),
+    end: getDate("end"),
     employee: get("employee"),
   });
 }
@@ -109,13 +115,23 @@ export function transferInvestigationScope(
   };
 
   if (url.pathname === "/marketing") {
-    add("q", scope.q ? "q" : "source", scope.q || scope.source);
-    add("course", "course", scope.course);
-    add("location", "location", scope.location);
-    add("country", "country", scope.country);
-    add("stage", "stage", scope.stage);
-    add("platform", "platform", scope.platform);
-    add("outcome", "outcome", scope.outcome);
+    const view = url.searchParams.get("view")?.trim() || "overview";
+
+    if (view === "campaigns") {
+      add("q", "q", scope.q);
+      add("platform", "platform", scope.platform);
+      add("outcome", "outcome", scope.outcome);
+    } else if (view === "attribution") {
+      if (scope.q) {
+        add("q", "q", scope.q);
+      } else {
+        add("q", "source", scope.source, "Search");
+      }
+      add("course", "course", scope.course);
+      add("location", "location", scope.location);
+      add("country", "country", scope.country);
+      add("stage", "stage", scope.stage);
+    }
   } else if (url.pathname === "/leads") {
     add("q", "q", scope.q);
     add("source", "source", scope.source);
@@ -126,11 +142,15 @@ export function transferInvestigationScope(
     add("last_touch_source", "lastTouchSource", scope.lastTouchSource);
     add("owner", "owner", scope.owner);
   } else if (url.pathname === "/performance") {
-    const range = performanceRange(scope);
-    if (range.range) add("range", range.sourceKey, range.range, "Range");
-    if (range.start) add("start", "from", range.start, "Start");
-    if (range.end) add("end", "to", range.end, "End");
-    add("employee", "employee", scope.employee);
+    const view = url.searchParams.get("view")?.trim() || "team";
+
+    if (view === "team") {
+      const range = performanceRange(scope);
+      if (range.range) add("range", range.sourceKey, range.range, "Range");
+      if (range.start) add("start", "from", range.start, "Start");
+      if (range.end) add("end", "to", range.end, "End");
+      add("employee", "employee", scope.employee);
+    }
   } else if (url.pathname === "/revenue") {
     add("source", "source", scope.source);
     add("creation_channel", "creationChannel", scope.creationChannel);
@@ -204,12 +224,13 @@ export function describeInvestigationScope(scope: InvestigationScope): Investiga
   add("owner", scope.owner);
   add("platform", scope.platform);
   add("outcome", scope.outcome);
+  add("employee", scope.employee);
 
-  if (scope.period === "custom" && scope.from && scope.to) {
+  if (scope.period === "custom" && validDateRange(scope.from, scope.to)) {
     chips.push({ key: "period", label: "Period", value: `${scope.from} → ${scope.to}` });
   } else if (scope.period) {
     add("period", scope.period);
-  } else if (scope.range === "custom" && scope.start && scope.end) {
+  } else if (scope.range === "custom" && validDateRange(scope.start, scope.end)) {
     chips.push({ key: "range", label: "Range", value: `${scope.start} → ${scope.end}` });
   } else if (scope.range) {
     add("range", scope.range);
@@ -234,20 +255,35 @@ function performanceRange(scope: InvestigationScope): {
   end?: string;
   sourceKey: keyof InvestigationScope;
 } {
-  if (scope.range) {
-    return {
-      range: scope.range,
-      start: scope.range === "custom" ? scope.start : undefined,
-      end: scope.range === "custom" ? scope.end : undefined,
-      sourceKey: "range",
-    };
+  if (scope.range === "custom") {
+    if (validDateRange(scope.start, scope.end)) {
+      return {
+        range: "custom",
+        start: scope.start,
+        end: scope.end,
+        sourceKey: "range",
+      };
+    }
+    return { sourceKey: "range" };
   }
 
-  if (scope.period === "custom" && scope.from && scope.to) {
-    return { range: "custom", start: scope.from, end: scope.to, sourceKey: "period" };
+  if (scope.range && performanceRanges.has(scope.range)) {
+    return { range: scope.range, sourceKey: "range" };
   }
 
-  if (["7d", "30d", "month", "last_month"].includes(scope.period || "")) {
+  if (scope.period === "custom") {
+    if (validDateRange(scope.from, scope.to)) {
+      return {
+        range: "custom",
+        start: scope.from,
+        end: scope.to,
+        sourceKey: "period",
+      };
+    }
+    return { sourceKey: "period" };
+  }
+
+  if (scope.period && performanceRanges.has(scope.period)) {
     return { range: scope.period, sourceKey: "period" };
   }
 
@@ -258,6 +294,16 @@ function compactScope(scope: InvestigationScope): InvestigationScope {
   return Object.fromEntries(
     Object.entries(scope).filter(([, value]) => typeof value === "string" && value.trim().length > 0),
   ) as InvestigationScope;
+}
+
+function isIsoDate(value?: string): value is string {
+  if (!value || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+  const date = new Date(`${value}T00:00:00Z`);
+  return !Number.isNaN(date.getTime()) && date.toISOString().slice(0, 10) === value;
+}
+
+function validDateRange(start?: string, end?: string): start is string {
+  return isIsoDate(start) && isIsoDate(end) && start <= end;
 }
 
 function prettyScopeValue(key: keyof InvestigationScope, value: string) {
