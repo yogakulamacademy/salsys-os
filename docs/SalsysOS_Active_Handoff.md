@@ -4,23 +4,21 @@
 **Updated:** 2026-11-01  
 **Repository:** `yogakulamacademy/salsys-os`  
 **Production branch:** `main`  
-**Verified production head before this docs-only closeout:** `3362aa01bb777c9ea482199d80268f1a2df02177`
+**Verified production head at acceptance start:** `ca4de2d58fc7d950376ff0bf8150fe812c04386b`
 
-Read this file first when resuming active engineering. Then read:
+Read this file first when resuming active work. Then read:
 
 1. `docs/SalsysOS_Current_Checkpoint.md`
 2. `docs/SalsysOS_North_Star_Product_Context.md`
-3. the latest relevant file under `docs/checkpoints/`
+3. `docs/checkpoints/M-2026-11-01-Real-Activity-Acceptance-v1.md`
 
-Historical checkpoint files are evidence records and must not be rewritten to make earlier work look different.
+Historical checkpoint files are evidence records and must not be rewritten to match later state.
 
 ---
 
 ## 1. Product identity and execution rule
 
 SalsysOS = **Sales + Analysis Operating System**.
-
-It is a tenant-safe Sales + Customer Journey + Revenue Intelligence operating system, not a generic CRM.
 
 Canonical loop:
 
@@ -32,181 +30,35 @@ Execution rule:
 
 ---
 
-## 2. Nov. 1 engineering closeout status
+## 2. Stable closeout state
 
-The prior 14-surface final-closeout sweep is **COMPLETE**.
+The prior broad 14-surface engineering closeout is complete. Do not reopen it without production evidence of regression.
 
-The completed surfaces include the production boundaries around:
+Current production health already verified:
 
-- Home / Command Center
-- CRM + Customer 360
-- Admissions
-- Conversations
-- WhatsApp
-- Performance / Team
-- Automation
-- Operations
-- Settings
-- AI / Knowledge
-- Tracking & Data
-- System Health
-- Platform administration
-- Customer onboarding / provisioning
-
-Platform onboarding final closeout was merged in PR #399. Its production invariants were revalidated before PA-1 work began:
-
-- 4 active organizations;
-- 0 active organizations without an Owner/Admin;
-- 1 enforced onboarding row;
-- 0 incomplete enforced onboarding rows;
-- 0 active password-recovery grants.
-
-Do not reopen the old 14-surface checklist unless production evidence shows a regression.
-
----
-
-## 3. Current phase — Production Acceptance & Operational Closeout
-
-The active program is **production acceptance under real tenant activity**.
-
-Current acceptance evidence for Yogakulam Academy:
-
-- CRM Core Integrity: healthy;
+- CRM Core: healthy;
 - Admissions Automation: healthy;
 - Universal Tracking: healthy / collecting;
 - Website Lead Capture: healthy;
 - GA4: healthy;
-- Search Console: healthy;
+- Google Search Console: healthy;
 - Privacy Compliance: healthy;
-- WhatsApp system health: healthy.
+- WhatsApp: healthy.
 
-Expected/non-regression states still visible:
+Parked states:
 
-- Google Ads: external production-access blocker (`CLOUD_PROJECT_NOT_APPROVED_FOR_PRODUCTION`);
-- Meta Ads: stale/provider permission + App Review dependency;
+- Google Ads: external production-access approval blocker;
+- Meta Ads: provider permission / App Review dependency;
 - Search Indexing: intentionally inactive;
-- Customer 360: two open human-review identity conflicts.
-
-Provider blockers must not be misclassified as SalsysOS implementation defects.
+- Customer 360: two unresolved human-review identity conflicts.
 
 ---
 
-## 4. PA-1 — Human-Approved Identity Merge & Conflict Resolution
+## 3. PA-1 identity merge — capability complete, decision deferred
 
-PA-1 was created after the production acceptance pass found two identity conflicts for the same live Lead/current Person and the same candidate Person.
+PA-1 engineering is complete and production-deployed through PRs #400, #401 and #402.
 
-Important evidence:
-
-- both conflicts point to the same candidate Person;
-- one conflict is phone ownership and one is email ownership;
-- the identifiers are unverified;
-- automatic merging is therefore intentionally prohibited.
-
-### PA-1 implementation
-
-PR #400 merged:
-
-`PA-1: add human-approved identity merge and conflict resolution`
-
-Main SHA after PR #400:
-
-`f2abceb35b37f039b3382958b9a375bc32546f93`
-
-Production migration:
-
-`human_approved_identity_merge_v1`
-
-Migration ledger version:
-
-`20261101125123`
-
-Controlled capability:
-
-- `person_merge_audit_v1`
-- `merge_identity_resolution_conflict_v1(uuid)`
-- Data Quality two-step flow: `Same person` -> `Confirm same person & merge`
-
-### PA-1 safety boundary
-
-- one-candidate conflicts only;
-- manager/admin human approval required;
-- same-tenant source/target Persons;
-- pair-scoped transaction lock;
-- no automatic/probabilistic merge;
-- no hard Person/identifier/Lead-link/Session-link deletion;
-- source Person remains a `merged` audit shell;
-- canonical identifiers, Lead links and Session links move transactionally;
-- captured consent subject/decision/source evidence remains preserved;
-- active privacy/legal/ad-delivery state blocks the merge;
-- multi-candidate conflicts remain review-only;
-- durable merge audit required.
-
-### Rollback-only production proof
-
-Before persistent deployment, the real two-conflict pair was exercised inside a production transaction and rolled back.
-
-Inside the transaction:
-
-- both pair conflicts resolved;
-- source Person became `merged`;
-- 2 identifiers moved;
-- 2 sessions moved;
-- 4 consent receipts re-associated;
-- 1 merge audit row created.
-
-Post-rollback proof confirmed production customer identity remained unchanged.
-
----
-
-## 5. PA-1 post-deploy closeout — COMPLETE
-
-After PR #400 deployment, Supabase performance advisor identified three missing FK indexes on `person_merge_audit_v1`.
-
-PR #401 merged the focused advisor closeout and refreshed the canonical operational documents.
-
-Current verified production head before this docs-only update:
-
-`3362aa01bb777c9ea482199d80268f1a2df02177`
-
-Follow-up migration:
-
-`person_merge_audit_fk_indexes_v1`
-
-Migration ledger version:
-
-`20261101130010`
-
-Verified indexes:
-
-- `idx_person_merge_audit_v1_initiating_conflict_id`
-- `idx_person_merge_audit_v1_source_person_id`
-- `idx_person_merge_audit_v1_target_person_id`
-
-Performance advisor rerun confirms the three PA-1 unindexed-FK findings are gone.
-
-The indexes may initially appear under `unused_index`; that is expected before real merge/audit traffic exists and is not a reason to remove them.
-
----
-
-## 6. Final production evidence for PA-1 engineering
-
-For `main` SHA:
-
-`3362aa01bb777c9ea482199d80268f1a2df02177`
-
-Verified:
-
-```text
-Production Smoke #149   success
-CI #1324                success
-CodeQL #609             success
-Vercel deployment       dpl_2Mc3a8fnuHhSKQLRND4QaFP8bFJT
-Vercel state            READY
-Git commit provenance   exact SHA verified
-crm.salsysos.com        production alias present
-```
-
-Current live customer-data boundary:
+The live identity pair remains intentionally untouched:
 
 ```text
 open pair conflicts      2
@@ -214,90 +66,184 @@ source Person status     active
 merge audit rows         0
 ```
 
-**No live identity merge has been performed.**
+Do not perform the live merge or dismiss the conflicts unless a human explicitly approves one of those outcomes. The relevant identifiers are unverified.
 
-PA-1 engineering and post-deploy closeout are complete.
+This unresolved decision does **not** block unrelated production-acceptance work.
 
 ---
 
-## 7. Exact continuation point — HUMAN APPROVAL
+## 4. Real-activity production acceptance
 
-Stop engineering changes here.
+A read-only production trace was run across:
 
-The next step is a human decision on the live identity pair:
+`Lead -> Admissions -> Conversation -> Follow-up -> Payment/Enrollment -> Revenue`
+
+Live inventory observed:
 
 ```text
-Lead                LD-012063 / RANJAN SRI
-Current Person      745f0691-1edd-49c5-bbe0-89b36e709980
-Candidate Person    195e7642-c0bf-4425-8bb5-aaa8d81f781c
-Open conflicts      2
-Evidence             phone + email ownership overlap
-Identifier status    unverified
-Merge audit rows     0
+leads                         596
+conversations                 566
+admissions_auto_task_events    20
+follow-up tasks                22
+lead contact logs              16
+payments                        2
+enrollments                     0
+conversion facts                1
 ```
 
-Available outcomes:
+### Production-proven
 
-1. **Same person** — explicitly approve the PA-1 controlled merge.
-2. **Different people / evidence not reusable** — dismiss the conflicts as distinct through the existing human-review path.
+- Lead presence / ingestion;
+- Conversation presence;
+- Admissions automation event creation;
+- Admissions -> follow-up task creation;
+- trusted `booking.completed` intake;
+- trusted `payment.started` intake;
+- durable raw-event persistence and projection for active booking/payment-start flow.
 
-Do not infer either outcome from similarity alone because the identifiers are unverified.
-
-If same-person approval is given, re-read the live pair immediately before execution, then perform one controlled merge and verify:
-
-- open conflicts for pair = 0;
-- source Person status = `merged`;
-- source canonical identifiers = 0;
-- source canonical sessions = 0;
-- one merge audit row exists;
-- surviving Person remains linked to the live Lead;
-- CRM Core Integrity remains healthy;
-- Customer 360 Integrity returns healthy;
-- Privacy Compliance remains healthy.
-
-Expected historical row movement from rollback proof, subject to no intervening live changes:
-
-- identifiers moved: 2;
-- sessions moved: 2;
-- consent receipts moved: 4;
-- conflicts resolved: 2.
+All 20 Admissions automation events inspected have a matching canonical follow-up task for the same Lead, title and due time.
 
 ---
 
-## 8. Next production-acceptance sequence after PA-1 decision
+## 5. Commerce completion status
 
-1. park Google Ads as an external approval blocker;
-2. park/track Meta Ads permission + App Review dependencies separately;
-3. run broader real-activity acceptance across:
-   `Lead -> Admissions -> Conversation -> Follow-up -> Payment/Enrollment -> Revenue`;
-4. investigate only evidence-backed defects;
-5. keep Search Indexing disabled until its dedicated activation checkpoint;
-6. then choose the next genuine North-Star/productization checkpoint rather than reopening already-closed surfaces.
+Canonical Commerce Event Readiness currently reports:
+
+```text
+health_status                configuration_blocked
+operational_status           payment_completion_missing
+booking.completed (30d)      19
+payment.started (30d)         2
+payment.completed (30d)       0
+enrollment.completed (30d)    0
+```
+
+Both `payment.started` events projected successfully into canonical Payment rows, but both remain pending.
+
+There is no live authoritative paid Payment or canonical Enrollment from the Yogakulam checkout yet.
+
+Raw-event processing evidence:
+
+```text
+booking.completed    17 processed
+booking.completed     2 dead_letter
+payment.started       2 processed
+payment.completed     0 received
+enrollment.completed  0 received
+```
+
+The two booking dead letters are the already-reconciled duplicate/identity-ambiguous pair from `M-2026-10-30-Booking-Dead-Letter-Reconciliation-v1.md`; they are not a new regression and must remain untouched until authoritative reservation status exists.
 
 ---
 
-## 9. Architecture / safety rules that must not regress
+## 6. Internal SalsysOS commerce side is ready
+
+Verified production functions already support the completion path:
+
+- `process_payment_raw_event_v1` handles `payment.started` and `payment.completed`;
+- canonical Payment projection is idempotent;
+- paid Payment state triggers closed-won promotion;
+- `process_enrollment_raw_event_v1` handles `enrollment.completed`;
+- Enrollment projection is idempotent;
+- durable trusted events persist before projection and can be retried safely.
+
+Do not patch the SalsysOS projector merely because completion events are absent. The missing boundary is upstream.
+
+---
+
+## 7. EXACT CONTINUATION POINT — LIVE VERIFIED-PAYMENT EMITTER
+
+The next work item is the external Yogakulam PHP verified-success integration.
+
+Current live source:
+
+```text
+source_system       website_backend
+integration         yogakulam_php_backend
+site                www.yogakulam.com
+```
+
+Validated repository assets already exist:
+
+- `integrations/php/yogakulam-verified-payment-enrollment.php`
+- `integrations/php/yogakulam-direct-upi-completion.php`
+- `docs/checkpoints/M-2026-10-30-Live-Commerce-Handler-Audit-v2.md`
+- `docs/checkpoints/M-2026-10-30-Live-Yogakulam-Commerce-Patch-Manifest-v1.md`
+
+Required live handler wiring:
+
+1. PayPal verified-success path;
+2. ICICI verified-return path;
+3. Direct UPI admin verification path.
+
+Completion events must be emitted only after authoritative verification and after the local payment transaction commits as `paid`. Tracking remains fail-open and must never roll back a real payment.
+
+Never emit `payment.completed` from a browser success page or an unverified payment/proof.
+
+---
+
+## 8. Required live acceptance proof
+
+After deploying the verified-success handlers to the Yogakulam host, execute one controlled real verified payment and require:
+
+```text
+booking.completed
+payment.started
+payment.completed
+enrollment.completed
+```
+
+Then verify:
+
+- no raw-event processing failure for the controlled sequence;
+- existing Payment becomes paid/verified without duplication;
+- Enrollment identity is deterministic: `ENR-<booking_reference>`;
+- no duplicate Enrollment on retry/revisit;
+- realized revenue equals business subtotal, excluding processor surcharge;
+- Customer 360 shows the payment + enrollment journey;
+- funnel/attribution receives the realized conversion;
+- System Health shows no new internal defect.
+
+Until that occurs, commerce remains:
+
+`configuration_blocked / payment_completion_missing`
+
+Do not manufacture production `payment.completed`, Enrollment or revenue records to make readiness green.
+
+---
+
+## 9. After commerce proof
+
+1. reconcile Revenue, Customer 360 and attribution against the verified transaction;
+2. continue broader real-activity acceptance only where evidence exists;
+3. keep Google Ads parked as external approval work;
+4. keep Meta Ads provider/App Review work separate;
+5. leave Search Indexing inactive;
+6. return to the PA-1 live identity decision only with explicit human approval;
+7. choose the next genuine North-Star/productization checkpoint.
+
+---
+
+## 10. Safety rules that must not regress
 
 - tenant authority is server-derived;
 - PostgreSQL/Supabase remains canonical transactional truth;
-- OpenSearch remains derived/rebuildable when enabled;
-- browser telemetry does not establish payment/enrollment/revenue truth;
+- browser telemetry does not establish authoritative payment/enrollment/revenue truth;
 - observed, matched, attributed, inferred and modelled evidence remain distinct;
-- identity ambiguity stays ambiguous until deterministic evidence or explicit human review resolves it;
-- no fingerprinting or consent circumvention;
-- no fabricated traffic, conversions, revenue, outcomes or predictive evidence;
-- customer-visible/high-impact autonomous actions remain fail-closed unless explicitly enabled;
-- privacy/legal holds must block destructive identity operations;
-- never create or mutate production customer data just to make a health metric green.
+- no fabricated production events, conversions, revenue or outcomes;
+- no automatic identity merge from ambiguous evidence;
+- privacy/legal restrictions fail closed;
+- high-impact autonomous actions remain human-governed unless explicitly activated;
+- never create or mutate production customer data merely to make a health metric green.
 
 ---
 
-## 10. Resume instruction
+## 11. Resume instruction
 
-When resuming after interruption:
+When resuming:
 
-1. verify current `main` before modifying anything;
-2. read this file + Current Checkpoint + North-Star context;
-3. continue from Section 7;
-4. do not rebuild PA-1 unless verification finds a regression;
-5. do not perform the live identity merge without explicit human approval.
+1. verify current `main`, production Supabase state and Vercel production SHA;
+2. read this file and `docs/SalsysOS_Current_Checkpoint.md`;
+3. read `docs/checkpoints/M-2026-11-01-Real-Activity-Acceptance-v1.md`;
+4. continue from Section 7;
+5. do not perform the PA-1 live identity merge without explicit human approval.
