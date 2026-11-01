@@ -8,8 +8,8 @@
 Read first:
 
 1. `docs/SalsysOS_Current_Checkpoint.md`
-2. `docs/checkpoints/M-2026-11-01-R11-Vertical-Pack-Audit-Design-v1.md`
-3. `docs/checkpoints/M-2026-11-01-Post-R10-Rebaseline-v1.md`
+2. `docs/checkpoints/M-2026-11-01-R11-P0-Capability-Security-Foundation-v1.md`
+3. `docs/checkpoints/M-2026-11-01-R11-Vertical-Pack-Audit-Design-v1.md`
 
 Historical checkpoint files are immutable evidence records.
 
@@ -17,157 +17,139 @@ Historical checkpoint files are immutable evidence records.
 
 ## 1. Exact continuation point
 
-**R11-P0 — Capability + Security Foundation**
+**R11-P1 — Product Surface Gating**
 
-The R11 Education/Wellness Vertical Pack audit/design is complete and locked. Implement P0 only; do not begin product-surface gating, adapter refactoring or residential UI changes until P0 is production-accepted.
+R11-P0 is complete and production-accepted. The capability/security foundation is live. P1 must make navigation, routes, data surfaces and Education-specific controls consistently obey that capability model.
+
+Do not begin P2 catalog-adapter work or P3 residential-surface work until P1 is production-accepted.
 
 ---
 
-## 2. Locked capability model
-
-Introduce product capability state separate from workspaces and billing:
+## 2. P0 production baseline
 
 ```text
-capability_catalog
-organization_capabilities
+PR / merge SHA      #424 / 742f9d88290332d53e41a025c48295c6aa41818c
+Supabase migration  20261101174300 r11_capability_security_foundation_v1
+Vercel deployment   dpl_FKSi2T6LMKwhHnWngD4f6hPdeQef READY
+Production Smoke    #173 passed
+CodeQL               #668 passed
+CI                    #1383 attempt 2 passed
 ```
 
-V1 codes:
+The initial CI #1383 attempt was cancelled during Build after prior checks passed; rerun attempt 2 completed successfully including the full Build. No corrective code patch was required.
+
+---
+
+## 3. Live capability state
+
+V1 capability codes:
 
 ```text
 education_core
-wellness_residential
-education_catalog_sync
+wellness_residential      -> education_core
+education_catalog_sync    -> education_core
 ```
 
-Dependencies:
+Live tenant state:
 
 ```text
-wellness_residential   -> education_core
-education_catalog_sync -> education_core
+Yogakulam Academy  education_core=true
+                    education_catalog_sync=true
+                    wellness_residential=true
+                    courses=16 batches=85
+
+Demo org           all R11 capabilities=false / no rows; courses=0 batches=0
+SalsysOS           all R11 capabilities=false / no rows; courses=0 batches=0
+Test Yoga School   all R11 capabilities=false / no rows; courses=0 batches=0
 ```
 
-Onboarding industry is a suggestion only, never access authority.
+No fake second-tenant Education data exists.
 
 ---
 
-## 3. P0 course/batch privilege hardening
+## 4. P0 security truth to preserve
 
-Current course/batch RLS already limits administration to owner/admin/manager, but authenticated table grants are broader than necessary.
-
-P0 target authenticated course/batch privileges:
+Authenticated direct table grants:
 
 ```text
-SELECT
-INSERT
-UPDATE
+courses        SELECT / INSERT / UPDATE
+course_batches SELECT / INSERT / UPDATE
 ```
 
-Remove direct authenticated:
+Authenticated direct DELETE/TRUNCATE/TRIGGER/REFERENCES are removed.
+
+Course/batch reads require `education_core`.
+
+Course-management mutation requires `education_core` plus tenant-bound owner/admin/manager authority.
+
+Hardened explicit-org V2 course-admin RPCs:
 
 ```text
-DELETE
-TRUNCATE
-TRIGGER
-REFERENCES
+update_course_batch_admin_v2
+set_course_batch_enrollment_state_v2
+set_course_batch_active_state_v2
 ```
 
-No current application course/batch delete path was found.
+Authenticated + service_role EXECUTE is allowed because each hardened V2 function performs its own tenant/role authorization and preserves `auth.uid()` audit attribution.
+
+Legacy V1 implicit-org course-admin RPCs remain blocked to authenticated users.
 
 ---
 
-## 4. P0 hardened V2 RPC compatibility
+## 5. Dependency proof
 
-Current Course Management server actions use the authenticated user/session Supabase client for these hardened explicit-org functions:
+Rollback-only production test proved:
 
-```text
-update_course_batch_admin_v2(uuid,uuid,integer,integer,numeric,text,text)
-set_course_batch_enrollment_state_v2(uuid,uuid,boolean,text)
-set_course_batch_active_state_v2(uuid,uuid,boolean)
-```
+- dependent capability enablement fails without `education_core`;
+- `education_core` disablement fails while dependent capabilities remain enabled;
+- the rollback left Demo org unchanged with zero capability rows.
 
-Each function is `SECURITY DEFINER` and internally calls `can_administer_course_management(org_id)`, which requires bound-tenant owner/admin/manager authorization for authenticated users and preserves `auth.uid()` in audit events.
-
-Current function ACLs are service-role-only due to historical grant drift.
-
-P0 must:
-
-- grant authenticated EXECUTE only on these three hardened V2 RPCs;
-- keep legacy V1 course-admin RPCs revoked from authenticated users;
-- keep function-internal tenant/role checks intact;
-- not replace the user-facing server actions with a service-role client.
+Unknown capability codes fail closed.
 
 ---
 
-## 5. Capability authority
+## 6. Health boundary
 
-Add a canonical tenant-safe capability helper.
-
-Requirements:
-
-- explicit org identity;
-- tenant-bound authenticated read path;
-- trusted server/service mutation path;
-- unknown/disabled codes fail closed;
-- dependency rules fail closed;
-- config contains no provider secrets.
-
-Capability activation is high-impact configuration and must not be directly writable by arbitrary members.
+- CRM Core V2: healthy, integrity issues 0;
+- Customer 360 V2: degraded only because of 2 pre-existing identity conflicts;
+- PA-1 identity decision remains parked and must not be inferred or auto-resolved.
 
 ---
 
-## 6. Existing tenant preservation
+## 7. R11-P1 required scope
 
-Yogakulam is the only current tenant with real Education catalog data:
+Audit first, then implement only what is needed for:
 
-```text
-courses         16
-course batches  85
-```
+1. trusted workspace/server exposure of capability state;
+2. capability-aware sidebar/navigation;
+3. Course Management direct route/data authorization using capability + role;
+4. Admissions route/surface gating where course/batch semantics are required;
+5. Education-specific Lead course/batch selectors hidden or disabled for non-Education tenants;
+6. generic Leads/Pipeline/Revenue/Conversations remaining usable without `education_core`;
+7. Yogakulam retaining its existing Education experience.
 
-P0 must preserve that real behavior through explicit capability activation.
-
-Use stable slug `yogakulam-academy` for migration lookup; do not hardcode the generated organization UUID.
-
-Do not infer capability from organization name or onboarding industry.
-
-Do not create fake courses/batches for Test Yoga School or another tenant.
+Navigation hiding alone is never authorization.
 
 ---
 
-## 7. Later R11 phases
+## 8. P1 constraints
 
-Do not pull into P0:
+- keep generic Lead/Person Education columns nullable and canonical;
+- do not infer capability from `industry`, org name, or presence of nullable fields;
+- do not mutate `organization_workspaces` to represent vertical access;
+- do not seed Test Yoga School or another tenant with fake courses/batches;
+- do not refactor `lib/integrations/yogakulam-courses.ts` yet;
+- do not add residential UI gating yet;
+- do not add billing/subscription/plan-entitlement logic.
 
-- **P1:** route/navigation/lead-control capability gating;
-- **P2:** generic external catalog adapter boundary;
+---
+
+## 9. Later R11 phases
+
+- **P2:** generic catalog adapter registry/config boundary; Yogakulam remains one provider implementation.
 - **P3:** optional residential/accommodation surface gating.
 
-The existing Yogakulam adapter remains untouched during P0.
-
----
-
-## 8. R13 remains later
-
-No billing/subscriptions/public signup/plan entitlements in R11-P0.
-
-R13 commercial packaging follows after the reusable vertical boundary is proven.
-
----
-
-## 9. Acceptance rules
-
-P0 must finish with:
-
-- canonical capability catalog/state;
-- tenant-safe fail-closed helper;
-- trusted activation boundary;
-- dependency enforcement;
-- least-privilege course/batch grants;
-- authenticated V2 course-admin RPC path restored while V1 remains blocked;
-- explicit Yogakulam capability state;
-- zero fake second-tenant vertical data;
-- CI/CodeQL/deployment/provenance/readback green.
+R13 commercial SaaS packaging remains after R11 productization.
 
 ---
 
