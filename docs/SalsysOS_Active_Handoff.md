@@ -9,9 +9,10 @@ Read first:
 
 1. `docs/SalsysOS_Current_Checkpoint.md`
 2. `docs/checkpoints/M-2026-11-02-R13-Commercial-SaaS-Audit-Design-v1.md`
-3. `docs/checkpoints/M-2026-11-02-R11-V1-Production-Closeout-v1.md`
+3. `docs/checkpoints/M-2026-11-02-R11-V1-Scope-Revision-No-Accommodation-v2.md`
+4. `docs/checkpoints/M-2026-11-02-R11-V1-Production-Closeout-v1.md` — historical implementation evidence
 
-Historical checkpoint files are immutable evidence records.
+Historical checkpoint files are immutable evidence records. The R11 scope-revision checkpoint supersedes the residential/accommodation product requirement without deleting historical security or migration evidence.
 
 ---
 
@@ -19,7 +20,19 @@ Historical checkpoint files are immutable evidence records.
 
 **R13-P0 — Commercial State Foundation**
 
-R11 V1 is complete. R13 audit/design is complete and locked.
+R11 V1 is complete under the revised scope:
+
+```text
+R11-P0 Capability + Security Foundation       COMPLETE
+R11-P1 Education Product Surface Gating       COMPLETE
+R11-P2 Generic Catalog Adapter Boundary       COMPLETE
+R11-P3 Accommodation / Residential Extension  CANCELLED / RETIRED FROM PRODUCT SCOPE
+R11 V1                                         COMPLETE
+```
+
+Accommodation property/room/bed inventory, occupancy, room pools and student-room assignment are not SalsysOS Education product features. Existing mature database/security structures may remain dormant and must not be reintroduced as CRM product surfaces.
+
+R13 audit/design is complete and locked.
 
 P0 is provider-neutral commercial structure only. Do not implement signup, provider billing, suspension or offboarding yet.
 
@@ -145,6 +158,7 @@ Hard organization deletion is not a normal customer action because canonical CRM
 
 Do not resume automatically:
 
+- legacy accommodation/residential database structures — dormant only, not active product scope;
 - Yogakulam Hostinger/PHP commerce completion;
 - PA-1 live identity decision;
 - Google Ads production approval;
