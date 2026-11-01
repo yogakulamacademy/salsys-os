@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { getEnabledOrganizationCapabilities } from "@/lib/workspace";
 
 type WorkspaceRpcPayload = {
   organization_id?: unknown;
@@ -65,6 +66,11 @@ export async function GET() {
       throw new Error("Unable to load workspace: workspace access denied.");
     }
 
+    const capabilities = await getEnabledOrganizationCapabilities(
+      supabase,
+      organizationId,
+    );
+
     const activeWorkspace = {
       organizationId,
       organizationName,
@@ -72,13 +78,15 @@ export async function GET() {
       role,
     };
 
-    // The client receives only the session-bound tenant. Organization switching
-    // is intentionally not exposed in the normal SalsysOS UI/API.
+    // The client receives only the session-bound tenant and its enabled product
+    // capabilities. Organization switching and capability mutation are not
+    // exposed through this normal workspace endpoint.
     return NextResponse.json(
       {
         activeOrganizationId: organizationId,
         activeWorkspace,
         memberships: [activeWorkspace],
+        capabilities,
         selectionRequired: false,
       },
       { headers: { "Cache-Control": "no-store" } },
