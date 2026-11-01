@@ -114,4 +114,43 @@ begin
 end; $$;
 revoke all on function public.recompute_system_intelligence_learning_profile_v2(uuid,text,text) from public, anon, authenticated;
 grant execute on function public.recompute_system_intelligence_learning_profile_v2(uuid,text,text) to service_role;
-comment on function public.recompute_system_intelligence_learning_profile_v2(uuid,text,text) is 'R10-P3 trusted descriptive learning recomputati
+comment on function public.recompute_system_intelligence_learning_profile_v2(uuid,text,text) is 'R10-P3 trusted descriptive learning recomputation. Each recommendation contributes at most its latest business-outcome class; score_adjustment is not automatically applied to live priority.';
+
+create or replace function public.get_system_intelligence_recommendation_effectiveness_v1()
+returns table(signal_id text,role_scope text,category text,recommendation_count bigint,shown_count bigint,accepted_count bigint,dismissed_count bigint,acted_count bigint,outcome_observed_count bigint,positive_count bigint,negative_count bigint,mixed_count bigint,inconclusive_count bigint,action_rate numeric,positive_resolved_rate numeric,negative_resolved_rate numeric,sample_band text)
+language plpgsql set search_path=public as $$
+declare v_organization_id uuid:=public.current_tenant_organization_id();
+begin
+ if auth.uid() is null or v_organization_id is null then raise exception 'AUTHENTICATED_TENANT_REQUIRED'; end if;
+ if not public.session_is_bound_to_organization(v_organization_id) or not public.is_organization_member(v_organization_id) then raise exception 'TENANT_ACCESS_DENIED'; end if;
+ return query with grouped as(select r.signal_id,r.role_scope,r.category,count(*)::bigint recommendation_count,coalesce(sum(r.shown_count),0)::bigint shown_count,count(*) filter(where r.accepted_at is not null)::bigint accepted_count,count(*) filter(where r.dismissed_at is not null)::bigint dismissed_count,count(*) filter(where r.acted_at is not null)::bigint acted_count,count(*) filter(where r.last_business_outcome_class is not null)::bigint outcome_observed_count,count(*) filter(where r.last_business_outcome_class='positive')::bigint positive_count,count(*) filter(where r.last_business_outcome_class='negative')::bigint negative_count,count(*) filter(where r.last_business_outcome_class='mixed')::bigint mixed_count,count(*) filter(where r.last_business_outcome_class='inconclusive')::bigint inconclusive_count from public.system_intelligence_recommendations r where r.organization_id=v_organization_id and r.source_version in ('v2','r10-p1') group by r.signal_id,r.role_scope,r.category), scored as(select g.*,(g.positive_count+g.negative_count+g.mixed_count) resolved_count from grouped g)
+ select s.signal_id,s.role_scope,s.category,s.recommendation_count,s.shown_count,s.accepted_count,s.dismissed_count,s.acted_count,s.outcome_observed_count,s.positive_count,s.negative_count,s.mixed_count,s.inconclusive_count,case when s.recommendation_count=0 then null else round(s.acted_count::numeric/s.recommendation_count::numeric,4) end,case when s.resolved_count=0 then null else round(s.positive_count::numeric/s.resolved_count::numeric,4) end,case when s.resolved_count=0 then null else round(s.negative_count::numeric/s.resolved_count::numeric,4) end,case when s.outcome_observed_count<5 then 'insufficient' when s.outcome_observed_count<20 then 'emerging' when s.outcome_observed_count<50 then 'established' else 'mature' end from scored s order by s.outcome_observed_count desc,s.acted_count desc,s.shown_count desc,s.signal_id asc;
+end; $$;
+
+create or replace function public.get_system_intelligence_action_completion_effectiveness_v1()
+returns table(signal_id text,role_scope text,category text,acted_count bigint,completed_count bigint,started_not_completed_count bigint,completion_rate numeric)
+language plpgsql set search_path=public as $$
+declare v_organization_id uuid:=public.current_tenant_organization_id();
+begin
+ if auth.uid() is null or v_organization_id is null then raise exception 'AUTHENTICATED_TENANT_REQUIRED'; end if;
+ if not public.session_is_bound_to_organization(v_organization_id) or not public.is_organization_member(v_organization_id) then raise exception 'TENANT_ACCESS_DENIED'; end if;
+ return query with grouped as(select r.signal_id,r.role_scope,r.category,count(*) filter(where r.acted_at is not null)::bigint acted_count,count(*) filter(where r.completed_at is not null)::bigint completed_count from public.system_intelligence_recommendations r where r.organization_id=v_organization_id and r.source_version in ('v2','r10-p1') group by r.signal_id,r.role_scope,r.category)
+ select g.signal_id,g.role_scope,g.category,g.acted_count,g.completed_count,greatest(g.acted_count-g.completed_count,0)::bigint,case when g.acted_count=0 then null else round(g.completed_count::numeric/g.acted_count::numeric,4) end from grouped g where g.acted_count>0 order by g.completed_count desc,g.acted_count desc,g.signal_id asc;
+end; $$;
+
+create or replace function public.sweep_system_intelligence_recommendation_outcomes_v1(p_organization_id uuid default null,p_per_org_limit integer default 50,p_trigger_source text default 'cron')
+returns jsonb language plpgsql security definer set search_path=public,pg_temp as $$
+declare v_org record; v_observation record; v_pair record; v_run_id uuid; v_recomputed integer; v_learning_failures integer; v_learning_error text; v_status text; v_scanned_orgs integer:=0; v_success_orgs integer:=0; v_partial_orgs integer:=0; v_failed_orgs integer:=0; v_scanned_recommendations integer:=0; v_observed_events integer:=0; v_positive integer:=0; v_negative integer:=0; v_mixed integer:=0; v_inconclusive integer:=0; v_profiles integer:=0; v_limit integer:=greatest(1,least(coalesce(p_per_org_limit,50),200));
+begin
+ if p_trigger_source not in ('cron','manual','acceptance') then raise exception 'INTELLIGENCE_OUTCOME_TRIGGER_INVALID'; end if;
+ for v_org in select o.id from public.organizations o where o.status='active' and (p_organization_id is null or o.id=p_organization_id) order by o.id loop
+  v_scanned_orgs:=v_scanned_orgs+1; v_recomputed:=0; v_learning_failures:=0; v_learning_error:=null;
+  insert into public.system_intelligence_outcome_runs(organization_id,trigger_source,status,started_at) values(v_org.id,p_trigger_source,'running',now()) returning id into v_run_id;
+  begin
+   select * into v_observation from public.observe_system_intelligence_recommendation_outcomes_v2(v_org.id,v_limit);
+   for v_pair in select distinct r.signal_id,r.role_scope from public.system_intelligence_recommendations r where r.organization_id=v_org.id and r.source_version in ('v2','r10-p1') and r.last_business_outcome_class is not null order by r.signal_id,r.role_scope loop
+    begin perform public.recompute_system_intelligence_learning_profile_v2(v_org.id,v_pair.signal_id,v_pair.role_scope); v_recomputed:=v_recomputed+1;
+    exception when others then v_learning_failures:=v_learning_failures+1; if v_learning_error is null then v_learning_error:=left(sqlstate||': '||sqlerrm,1800); end if; end;
+   end loop;
+   if v_learning_failures>0 then v_status:='partial'; v_partial_orgs:=v_partial_orgs+1; else v_status:='success'; v_success_orgs:=v_success_orgs+1; end if;
+   update public.system_intelligence_outcome_runs set status=v_status,recommendations_scanned=coalesce(v_observation.scanned_count,0),outcome_events_recorded=coalesce(v_observation.observed_count,0),positive_count=coalesce(v_observation.positive_count,0),negative_count=coalesce(v_observation.negative_count,0),mixed_count=coalesce
