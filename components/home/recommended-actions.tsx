@@ -27,14 +27,22 @@ type Recommendation = {
 type PresentationResponse = {
   ok: boolean;
   evidenceClass?: string;
+  partial?: boolean;
+  unavailableSignals?: string[];
   recommendations?: Recommendation[];
   error?: string;
+};
+
+type ReadyState = {
+  status: "ready";
+  recommendations: Recommendation[];
+  partial: boolean;
 };
 
 export function RecommendedActions() {
   const [state, setState] = useState<
     | { status: "loading" }
-    | { status: "ready"; recommendations: Recommendation[] }
+    | ReadyState
     | { status: "error"; message: string }
   >({ status: "loading" });
 
@@ -64,6 +72,7 @@ export function RecommendedActions() {
         setState({
           status: "ready",
           recommendations: payload.recommendations ?? [],
+          partial: payload.partial === true,
         });
       } catch (error) {
         if (controller.signal.aborted) return;
@@ -124,13 +133,25 @@ export function RecommendedActions() {
           </div>
         </div>
       ) : state.recommendations.length ? (
-        <div className="grid gap-3 p-4 lg:grid-cols-2">
-          {state.recommendations.map((recommendation) => (
-            <RecommendationCard
-              key={recommendation.id}
-              recommendation={recommendation}
-            />
-          ))}
+        <div>
+          {state.partial ? (
+            <div className="mx-4 mt-4 flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2.5 text-[11px] leading-5 text-amber-800 dark:border-amber-900/60 dark:bg-amber-950/20 dark:text-amber-200">
+              <AlertTriangle size={14} className="mt-0.5 shrink-0" />
+              <span>
+                Some recommendation signals are temporarily unavailable. The
+                actions below were persisted successfully and remain grounded in
+                observed CRM evidence.
+              </span>
+            </div>
+          ) : null}
+          <div className="grid gap-3 p-4 lg:grid-cols-2">
+            {state.recommendations.map((recommendation) => (
+              <RecommendationCard
+                key={recommendation.id}
+                recommendation={recommendation}
+              />
+            ))}
+          </div>
         </div>
       ) : (
         <div className="px-5 py-8 text-center">
