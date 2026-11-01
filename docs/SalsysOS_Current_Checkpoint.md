@@ -3,7 +3,7 @@
 **Checkpoint date:** 2026-11-02  
 **Canonical repository:** `yogakulamacademy/salsys-os`  
 **Production branch:** `main`  
-**Latest production runtime head:** `8bbe594050a17a95a7dd762a4db0f7b09a3430ba`  
+**Verified production runtime head:** `1846b1fc845b0325f0a8ac6b409c67744d65245e`  
 **Fast resume file:** `docs/SalsysOS_Active_Handoff.md`
 
 > Historical checkpoint files under `docs/checkpoints/` are immutable evidence records.
@@ -19,110 +19,87 @@ Current state:
 - broad 14-surface engineering closeout: complete;
 - R9 V1: closed;
 - R10 V1 (P0-P3): closed;
-- post-R10 rebaseline: complete;
-- R11 Education / Wellness Vertical Pack V1 audit/design: complete and locked;
-- R11-P0 Capability + Security Foundation: complete and production-accepted;
-- R11-P1 Product Surface Gating: complete and production-accepted;
-- **R11-P2 Catalog Adapter Boundary: complete and production-accepted**;
-- **current exact checkpoint: R11-P3 — Optional Residential Extension Gating**.
+- **R11 Education / Wellness Vertical Pack V1 (P0-P3): closed and production-accepted**;
+- current exact checkpoint: **R13 — Commercial SaaS Readiness — Audit & Design**.
 
 Read first:
 
-1. `docs/checkpoints/M-2026-11-02-R11-P2-Catalog-Adapter-Boundary-v1.md`
-2. `docs/checkpoints/M-2026-11-01-R11-Vertical-Pack-Audit-Design-v1.md`
-3. `docs/SalsysOS_Active_Handoff.md`
+1. `docs/checkpoints/M-2026-11-02-R11-V1-Production-Closeout-v1.md`
+2. `docs/SalsysOS_Active_Handoff.md`
+3. `docs/SalsysOS_North_Star_Product_Context.md`
 
 ---
 
-## 2. R11-P2 production truth
+## 2. Verified R11 production release
 
-Production merge:
+Final R11 runtime:
 
 ```text
-PR        #428
-main SHA  8bbe594050a17a95a7dd762a4db0f7b09a3430ba
+main SHA             1846b1fc845b0325f0a8ac6b409c67744d65245e
+CI                   #1404 passed
+CodeQL               #689 passed
+Production Smoke     #180 passed
+Vercel production    READY on exact SHA
+Vercel deployment    dpl_5j1m4wM11NeLShzkV6z3peWz25ED
 ```
 
-Supabase migration ledger:
+R11 production migrations:
 
 ```text
-20261101184439  r11_p2_catalog_adapter_config_v1
+20261101174300 r11_capability_security_foundation_v1
+20261101181750 r11_p1_education_surface_authorization_v1
+20261101181833 r11_p1_lead_capability_trigger_context_v1
+20261101184439 r11_p2_catalog_adapter_config_v1
+20261101193508 r11_p3_residential_capability_boundary_v1
+20261101193522 r11_p3_residential_trigger_context_v1
+20261101195631 r11_p3_anon_residential_grant_hardening_v1
 ```
 
-Provider/capability state:
+Final P3 hardening provenance:
 
 ```text
-education_catalog_sync config schema version  2
-Yogakulam sync enabled                        true
-Yogakulam provider                            yogakulam_website
-Yogakulam courses / batches                   16 / 85
-Other active orgs courses / batches           0 / 0
-Other active org sync capability              absent
-```
-
-Sync ledger remained unchanged during P2 acceptance:
-
-```text
-Yogakulam sync runs  3
-latest run           2026-10-03
-```
-
-Vercel production:
-
-```text
-deployment dpl_GrPwvL6vykgbkJUqgMqh2q33S1VV
-state      READY
-SHA        8bbe594050a17a95a7dd762a4db0f7b09a3430ba
-aliases    crm.salsysos.com / salsysos.com / www.salsysos.com
-```
-
-Release gates:
-
-```text
-PR CI #1390               passed
-PR CodeQL #675            passed
-Production CI #1391       passed
-Production CodeQL #676    passed
-Production Smoke #177     passed
+file   20261101195631_r11_p3_anon_residential_grant_hardening_v1.sql
+bytes  1942
+MD5    863a1bed570e34986c10a226330f21cf
 ```
 
 ---
 
-## 3. R11 capability/data baseline to preserve
+## 3. R11 V1 product boundary now proven
+
+Capabilities are explicit organization state, separate from workspaces and separate from billing:
 
 ```text
-Yogakulam Academy  education_core=true
-                    education_catalog_sync=true
-                    wellness_residential=true
-                    courses=16 batches=85 enrollments=0
-
-Demo org           no R11 capability rows; courses=0 batches=0 enrollments=0
-SalsysOS           no R11 capability rows; courses=0 batches=0 enrollments=0
-Test Yoga School   no R11 capability rows; courses=0 batches=0 enrollments=0
+education_core
+education_catalog_sync      requires education_core
+wellness_residential        requires education_core
 ```
 
-No synthetic second-tenant Education data exists.
+Production Yogakulam state:
 
-`education_core` remains independent of external sync. Manual course/batch management remains available without `education_catalog_sync`.
+```text
+education_core          true
+education_catalog_sync  true
+wellness_residential    true
+catalog provider        yogakulam_website
+courses / batches       16 / 85
+```
+
+Other active organizations remain without synthetic Education/residential data.
+
+R11 guarantees now include:
+
+- generic CRM remains usable without Education capabilities;
+- Education-specific navigation/routes/RPCs/Lead controls fail closed for non-Education tenants;
+- external catalog provider selection is tenant-configured and provider-neutral;
+- the Yogakulam adapter is one provider implementation, not the core architecture;
+- residential truth is optional and separately capability-gated;
+- residential base tables/views use least privilege;
+- no synthetic second-tenant or residential evidence was introduced for closeout.
 
 ---
 
-## 4. P2 architecture now live
-
-The external Education catalog-sync route no longer hard-codes Yogakulam provider selection.
-
-Instead:
-
-1. tenant capability/provider config is resolved;
-2. the generic adapter registry selects a provider by explicit key;
-3. `yogakulam_website` delegates to the existing proven Yogakulam parser/sync engine;
-4. missing/disabled sync capability, missing provider config, unsupported provider, and ambiguous multi-tenant sync execution fail closed;
-5. provider secrets remain environment-backed, not capability-config backed;
-6. tenant-scoped sync ledger/health remains canonical.
-
----
-
-## 5. Health after P2
+## 4. R11 final health boundary
 
 ```text
 CRM Core V2             healthy / 0 integrity issues
@@ -130,83 +107,96 @@ Admissions automation   healthy / 96 runs / 0 failures in 24h
 Customer 360 V2         degraded only by 2 pre-existing identity conflicts
 ```
 
-The Customer 360 warning is not an R11-P2 regression.
+The Customer 360 warning is not an R11 regression.
 
 ---
 
-## 6. Exact R11-P3 goal
+## 5. Residential security boundary
 
-P3 applies the optional `wellness_residential` capability to residential-only product surfaces and canonical data boundaries.
-
-Locked scope:
-
-1. capability-gate accommodation/residential surfaces;
-2. preserve the organization-aware accommodation model;
-3. gate residential-only inventory/room/assignment controls;
-4. gate surfaced residential commercial fields such as private/shared/course-only accommodation pricing and accommodation capacity/remaining/note;
-5. preserve base Education Core course/batch/admissions functionality when `wellness_residential` is disabled;
-6. do not create synthetic rooms, room-pool rows, assignments, or second-tenant residential data merely for proof.
-
----
-
-## 7. Current residential evidence
-
-The live normalized subsystem already includes:
+Base tables:
 
 ```text
-accommodation_properties
-accommodation_rooms
-batch_accommodation_types
-batch_accommodation_room_pool
-enrollment_accommodation_assignments
-live inventory / roster views
+anon           no direct privileges
+authenticated  SELECT / INSERT / UPDATE only
 ```
 
-Earlier locked design evidence:
+Security-invoker residential views:
 
 ```text
-accommodation properties     1
-rooms                        0
-batch accommodation types    0
-room-pool rows                0
-assignments                   0
+anon           no privileges
+authenticated  SELECT only
 ```
 
-P3 must treat this as an optional extension, not as a required Education invariant.
+Accommodation mutation RPCs remain service-role-only.
+
+A rollback-only attempt to disable Yogakulam `wellness_residential` while its real accommodation property exists correctly failed with:
+
+`WELLNESS_RESIDENTIAL_DATA_PRESENT`
+
+No business state changed.
 
 ---
 
-## 8. P3 constraints
+## 6. Exact next checkpoint — R13 AUDIT & DESIGN
 
-- do not make `wellness_residential` control base courses/batches/admissions;
-- do not add fake residential inventory or assignments;
-- do not infer capability from organization name, industry, nullable data, or location;
-- do not add billing/subscription/plan-entitlement logic (R13);
-- preserve existing tenant/role/privacy boundaries;
-- use read-only audit first before implementation.
+R13 is the next major internal product gap. Controlled provisioning/onboarding exists, but the commercial SaaS shell is not yet built.
+
+Audit read-only before implementation.
+
+Required design questions:
+
+1. public/self-serve signup and tenant creation;
+2. billing/subscription state model;
+3. plan/entitlement model;
+4. mapping plan entitlements onto existing capability state without conflating billing truth and capability truth;
+5. trial, active, past-due, suspended, cancelled and reactivation semantics;
+6. signup abuse controls / throttling;
+7. customer-controlled organization deletion/export/retention boundaries;
+8. billing-driven suspension while preserving canonical customer data;
+9. platform-admin override/recovery paths;
+10. migration/backfill for existing organizations;
+11. what can be implemented provider-neutrally before selecting a billing provider.
+
+No R13 implementation code until the audit/design contract is locked.
 
 ---
 
-## 9. Parked boundaries
+## 7. Parked boundaries
 
 Do not resume automatically:
 
-- live Yogakulam commerce completion;
+- live Yogakulam PHP commerce completion;
 - PA-1 live identity decision;
 - Google Ads production approval;
 - Meta Ads provider approval/account selection;
 - Search Indexing activation;
-- predictive-model promotion / learning-based ranking.
+- predictive-model promotion / automatic learning-based recommendation ranking.
 
 ---
 
-## 10. Resume instruction
+## 8. Locked engineering rules
+
+- one controlled checkpoint at a time;
+- verify before modifying;
+- production truth beats planning estimates;
+- tenant authority is server-derived;
+- PostgreSQL/Supabase remains canonical transactional truth;
+- capabilities are product/runtime truth, not a synonym for billing entitlements;
+- OpenSearch remains derived/rebuildable;
+- observed/deterministic/inferred/modelled evidence remain distinct;
+- no fake events, customers, revenue, subscriptions, outcomes or training evidence;
+- privacy/legal restrictions fail closed;
+- provider failures remain raw evidence;
+- migrations, CI, CodeQL, Vercel provenance and live readback are part of completion.
+
+---
+
+## 9. Resume instruction
 
 1. verify current `main`, Supabase and Vercel provenance;
-2. read the R11-P2 production closeout and locked R11 design;
-3. audit accommodation tables, views, grants/RLS, current routes/components and residential commercial fields read-only;
-4. identify the smallest `wellness_residential` capability boundary without changing base Education behavior;
-5. implement **R11-P3 only**;
-6. use existing real Yogakulam residential evidence and non-mutating/rollback proof;
-7. do not seed fake accommodation data;
-8. after P3 production acceptance, formally close R11 V1 before selecting the next roadmap checkpoint.
+2. read the R11 V1 closeout record;
+3. audit existing organization provisioning/onboarding and any hidden commercial/billing code read-only;
+4. inventory subscription/plan/entitlement gaps against production schema and app routes;
+5. define the smallest provider-neutral R13 V1 contract;
+6. lock the audit/design checkpoint before implementation;
+7. do not resume parked commerce/provider/PA-1 work without its own explicit decision.
