@@ -6,7 +6,7 @@
 **Verified production runtime head:** `1846b1fc845b0325f0a8ac6b409c67744d65245e`  
 **Fast resume file:** `docs/SalsysOS_Active_Handoff.md`
 
-> Historical checkpoint files under `docs/checkpoints/` are immutable evidence records.
+> Historical checkpoint files under `docs/checkpoints/` are immutable evidence records. Later scope-revision checkpoints supersede product requirements without deleting historical implementation evidence.
 
 ---
 
@@ -19,15 +19,40 @@ Current state:
 - broad 14-surface engineering closeout: complete;
 - R9 V1: closed;
 - R10 V1 (P0-P3): closed;
-- R11 Education / Wellness Vertical Pack V1 (P0-P3): closed and production-accepted;
+- **R11 Education / Wellness Vertical Pack V1: CLOSED and production-accepted under revised scope**;
+- R11-P0 Capability + Security Foundation: complete;
+- R11-P1 Education Product Surface Gating: complete;
+- R11-P2 Generic Catalog Adapter Boundary: complete and production-accepted;
+- R11-P3 Accommodation / Residential Extension: **cancelled / retired from active product scope**;
 - **R13 Commercial SaaS Readiness audit/design: complete and locked**;
 - **current exact checkpoint: R13-P0 — Commercial State Foundation**.
 
 Read first:
 
 1. `docs/checkpoints/M-2026-11-02-R13-Commercial-SaaS-Audit-Design-v1.md`
-2. `docs/checkpoints/M-2026-11-02-R11-V1-Production-Closeout-v1.md`
-3. `docs/SalsysOS_Active_Handoff.md`
+2. `docs/checkpoints/M-2026-11-02-R11-V1-Scope-Revision-No-Accommodation-v2.md`
+3. `docs/checkpoints/M-2026-11-02-R11-V1-Production-Closeout-v1.md` — historical implementation evidence
+4. `docs/SalsysOS_Active_Handoff.md`
+
+### R11 scope lock
+
+Accommodation/property/room operations are not part of the Wellness / Education product.
+
+Keep only simple commercial context where useful for sales, qualification or pricing, such as:
+
+- residential / online / non-residential mode;
+- Private / Twin / Shared package preference;
+- package-inclusive price.
+
+Do not build or expose:
+
+- accommodation property/venue management;
+- physical room/bed inventory;
+- room pools or occupancy management;
+- student-to-room allocation;
+- room maintenance/operations workflows.
+
+Existing mature accommodation/residential database structures may remain dormant. Do not delete them merely for cleanup and do not make them an R11 acceptance dependency.
 
 ---
 
@@ -177,6 +202,7 @@ Before P0 is complete:
 
 Do not resume automatically:
 
+- legacy accommodation/residential database structures — dormant only, not active product scope;
 - live Yogakulam PHP commerce completion;
 - PA-1 live identity decision;
 - Google Ads production approval;
