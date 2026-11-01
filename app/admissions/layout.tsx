@@ -3,7 +3,7 @@ import Link from 'next/link';
 import { AlertTriangle, CheckCircle2, DatabaseZap } from 'lucide-react';
 
 import { CrmWorkspaceFrame } from '@/components/crm/crm-workspace-frame';
-import { requirePrivilegedWorkspaceAccess } from '@/lib/route-access';
+import { requireEducationOperationsAccess } from '@/lib/route-access';
 import { createClient } from '@/lib/supabase/server';
 
 type AutomationHealthRow = {
@@ -20,7 +20,7 @@ type CapacityReadinessRow = {
 };
 
 export default async function AdmissionsLayout({ children }: { children: ReactNode }) {
-  const workspace = await requirePrivilegedWorkspaceAccess();
+  const workspace = await requireEducationOperationsAccess();
   const supabase = await createClient();
 
   const [healthResult, capacityResult] = await Promise.all([
