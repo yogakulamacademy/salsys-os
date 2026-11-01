@@ -41,9 +41,13 @@ export default async function OperationalReadinessSection({
    * that already-authorized organizationId.
    */
   const admin = createAdminClient() as any;
-  const [result, commerceResult] = await Promise.all([
+  const [result, googleAdsResult, commerceResult] = await Promise.all([
     admin
       .from("v_system_operational_readiness_v1")
+      .select("*")
+      .eq("organization_id", organizationId),
+    admin
+      .from("v_google_ads_operational_readiness_v1")
       .select("*")
       .eq("organization_id", organizationId),
     admin
@@ -71,6 +75,9 @@ export default async function OperationalReadinessSection({
 
   const rows = ([
     ...((result.data ?? []) as ReadinessRow[]),
+    ...(googleAdsResult.error
+      ? []
+      : ((googleAdsResult.data ?? []) as ReadinessRow[])),
     ...(commerceResult.error
       ? []
       : ((commerceResult.data ?? []) as ReadinessRow[])),
@@ -83,6 +90,18 @@ export default async function OperationalReadinessSection({
   return (
     <section className="card mt-4 overflow-hidden">
       <SectionHeader />
+
+      {googleAdsResult.error ? (
+        <div className="mx-4 mt-4 flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 px-3.5 py-3 text-xs text-amber-800">
+          <AlertTriangle size={15} className="mt-0.5 shrink-0" />
+          <div>
+            <div className="font-semibold">
+              Google Ads readiness is temporarily unavailable.
+            </div>
+            <div className="mt-1 leading-5">{googleAdsResult.error.message}</div>
+          </div>
+        </div>
+      ) : null}
 
       {commerceResult.error ? (
         <div className="mx-4 mt-4 flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 px-3.5 py-3 text-xs text-amber-800">
