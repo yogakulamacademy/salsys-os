@@ -541,29 +541,39 @@ function AttributionDrillDown({
   if (!scope) {
     return (
       <div className="mt-4 rounded-xl border border-dashed border-slate-200 px-3 py-3 text-[10px] leading-5 text-slate-500 dark:border-slate-800">
-        {model === "lead_creation"
-          ? "Lead Creation is a canonical creation channel, but the destination workspaces do not yet expose an exact lead-creation-channel filter. No fuzzy handoff is generated."
-          : "Last Marketing Touch is canonical marketing evidence, but the destination workspaces do not yet expose an exact last-marketing-touch filter. No first-touch substitution is made."}
+        An exact destination filter is not available for this attribution evidence, so no fuzzy handoff is generated.
       </div>
     );
   }
 
-  const metricLabel = model === "first_touch" ? "First-touch source" : "Current channel";
+  const metricLabel =
+    model === "first_touch"
+      ? "First-touch source"
+      : model === "lead_creation"
+        ? "Lead creation channel"
+        : model === "last_touch"
+          ? "Last marketing touch"
+          : "Current channel";
   const evidenceLabel = `Attribution · ${modelLabel(model)}`;
   const secondaryClass =
     "inline-flex min-h-9 items-center justify-center rounded-lg border border-slate-200 px-2.5 text-center text-[10px] font-bold text-slate-700 transition hover:bg-white dark:border-slate-800 dark:text-slate-200 dark:hover:bg-slate-950";
   const primaryClass =
     "inline-flex min-h-9 items-center justify-center rounded-lg bg-slate-950 px-2.5 text-center text-[10px] font-bold text-white transition hover:bg-slate-800 dark:bg-white dark:text-slate-950 dark:hover:bg-slate-100";
 
-  if (model === "current_channel") {
+  if (model !== "first_touch") {
+    const explanation =
+      model === "lead_creation"
+        ? "Lead Creation is handed to Leads as its native creation-channel filter. It is not relabelled as current channel or acquisition source."
+        : model === "last_touch"
+          ? "Last Marketing Touch is handed to Leads as its native last-touch-source filter. It is not substituted for first-touch acquisition."
+          : "Current Channel is handed to Leads as its native channel filter. It is not relabelled as an acquisition source.";
+
     return (
       <div className="mt-4">
         <div className="text-[9px] font-black uppercase tracking-[0.08em] text-slate-400">
           Exact downstream investigation
         </div>
-        <p className="mt-1 text-[10px] leading-5 text-slate-500">
-          Current Channel can be handed to Leads as its native channel filter. It is not re-labelled as an acquisition source.
-        </p>
+        <p className="mt-1 text-[10px] leading-5 text-slate-500">{explanation}</p>
         <div className="mt-3">
           <DecisionMetricLink
             href="/leads"
@@ -642,6 +652,14 @@ function buildAttributionInvestigationScope(
 
   if (model === "first_touch") {
     return compactInvestigationScope({ ...shared, source: value });
+  }
+
+  if (model === "lead_creation") {
+    return compactInvestigationScope({ ...shared, creationChannel: value });
+  }
+
+  if (model === "last_touch") {
+    return compactInvestigationScope({ ...shared, lastTouchSource: value });
   }
 
   if (model === "current_channel") {
