@@ -4,6 +4,10 @@ const migration = fs.readFileSync(
   'supabase/migrations/20261101180500_r11_p1_education_surface_authorization_v1.sql',
   'utf8',
 );
+const leadTriggerContextMigration = fs.readFileSync(
+  'supabase/migrations/20261101180600_r11_p1_lead_capability_trigger_context_v1.sql',
+  'utf8',
+);
 const workspaceRoute = fs.readFileSync('app/api/workspace/route.ts', 'utf8');
 const workspaceLib = fs.readFileSync('lib/workspace.ts', 'utf8');
 const operationsAccess = fs.readFileSync('lib/operations-access.ts', 'utf8');
@@ -53,25 +57,47 @@ for (const [needle, label] of [
   has(migration, needle, label);
 }
 
+for (const [needle, label] of [
+  ['from public.organization_capabilities oc', 'direct organization capability truth lookup'],
+  ["oc.capability_code = 'education_core'", 'direct Education Core lookup'],
+  ["cc.status = 'active'", 'active capability catalog requirement'],
+  ["o.status = 'active'", 'active organization requirement'],
+  ['new.preferred_batch_id := null', 'auth-context-independent insert sanitization'],
+  ['new.preferred_batch_id := old.preferred_batch_id', 'auth-context-independent historical preservation'],
+]) {
+  has(leadTriggerContextMigration, needle, label);
+}
+
+expect(
+  !leadTriggerContextMigration.includes('auth.role()'),
+  'canonical Lead trigger must not depend on JWT auth role context.',
+);
+expect(
+  !leadTriggerContextMigration.includes('organization_has_capability('),
+  'canonical Lead trigger must query capability truth directly rather than a session-gated helper.',
+);
+
 expect(
   migration.match(/organization_has_capability\(organization_id, 'education_core'\)/g)?.length >= 4,
   'all Enrollment policies must require Education Core.',
 );
 
-for (const forbidden of [
-  'insert into public.courses',
-  'insert into public.course_batches',
-  'insert into public.enrollments',
-  'insert into public.organization_workspaces',
-  'update public.organization_workspaces',
-  'delete from public.organization_workspaces',
-  'yogakulam-courses',
-  'wellness_residential',
-]) {
-  expect(
-    !migration.toLowerCase().includes(forbidden.toLowerCase()),
-    `P1 migration must not drift into unrelated/future scope (${forbidden})`,
-  );
+for (const source of [migration, leadTriggerContextMigration]) {
+  for (const forbidden of [
+    'insert into public.courses',
+    'insert into public.course_batches',
+    'insert into public.enrollments',
+    'insert into public.organization_workspaces',
+    'update public.organization_workspaces',
+    'delete from public.organization_workspaces',
+    'yogakulam-courses',
+    'wellness_residential',
+  ]) {
+    expect(
+      !source.toLowerCase().includes(forbidden.toLowerCase()),
+      `P1 migrations must not drift into unrelated/future scope (${forbidden})`,
+    );
+  }
 }
 
 for (const [source, needle, label] of [
