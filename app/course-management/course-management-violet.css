@@ -157,6 +157,15 @@
   color: var(--success);
 }
 
+/* Residential pricing is an optional extension, not Education Core. The public
+   Course Management RPC already removes residential values when disabled; this
+   hides the corresponding labels so the UI does not imply residential support. */
+.course-management-scope.residential-disabled article.rounded-2xl.border
+  > div.mt-4.flex.flex-wrap.items-center.justify-between.gap-3
+  > span:first-child {
+  display: none;
+}
+
 /* Operating rules and audit trail are supporting evidence. */
 .course-management-scope aside > section.card-pad {
   box-shadow: none;
