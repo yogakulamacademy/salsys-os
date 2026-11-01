@@ -3,7 +3,10 @@ import "server-only";
 import { redirect } from "next/navigation";
 
 import { createClient } from "@/lib/supabase/server";
-import { getCurrentWorkspaceContext } from "@/lib/workspace";
+import {
+  canAccessEducationOperationsForCurrentSession,
+  getCurrentWorkspaceContext,
+} from "@/lib/workspace";
 
 const OPERATIONS_ROLES = new Set(["owner", "admin", "manager"]);
 
@@ -26,6 +29,15 @@ export async function requireOperationsAccess() {
 
   if (!OPERATIONS_ROLES.has(workspace.activeWorkspace.role)) {
     redirect("/dashboard?restricted=1");
+  }
+
+  const educationAccess = await canAccessEducationOperationsForCurrentSession(
+    supabase,
+    workspace.activeWorkspace.organizationId,
+  );
+
+  if (!educationAccess) {
+    redirect("/dashboard?restricted=education");
   }
 
   return workspace.activeWorkspace;
