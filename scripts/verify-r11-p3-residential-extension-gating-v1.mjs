@@ -105,6 +105,27 @@ for (const table of residentialTables) {
   );
 }
 
+const residentialViews = [
+  'v_batch_accommodation_inventory',
+  'v_batch_accommodation_live_inventory',
+  'v_batch_accommodation_summary',
+  'v_batch_enrollment_accommodation_roster',
+  'v_enrollment_accommodation_assignments',
+];
+
+for (const view of residentialViews) {
+  has(
+    anonGrantHardeningMigration,
+    `revoke all privileges on table public.${view} from anon, authenticated`,
+    `${view} anonymous/authenticated privilege reset`,
+  );
+  has(
+    anonGrantHardeningMigration,
+    `grant select on table public.${view} to authenticated`,
+    `${view} authenticated SELECT-only grant`,
+  );
+}
+
 for (const forbiddenGrant of [
   'grant delete on table public.accommodation_',
   'grant truncate on table public.accommodation_',
@@ -136,10 +157,24 @@ for (const forbiddenAnonGrant of [
   'grant truncate on table public.batch_accommodation_',
   'grant trigger on table public.batch_accommodation_',
   'grant references on table public.batch_accommodation_',
+  'grant select on table public.v_batch_accommodation_',
+  'grant insert on table public.v_batch_accommodation_',
+  'grant update on table public.v_batch_accommodation_',
+  'grant delete on table public.v_batch_accommodation_',
+  'grant truncate on table public.v_batch_accommodation_',
+  'grant trigger on table public.v_batch_accommodation_',
+  'grant references on table public.v_batch_accommodation_',
+  'grant select on table public.v_enrollment_accommodation_',
+  'grant insert on table public.v_enrollment_accommodation_',
+  'grant update on table public.v_enrollment_accommodation_',
+  'grant delete on table public.v_enrollment_accommodation_',
+  'grant truncate on table public.v_enrollment_accommodation_',
+  'grant trigger on table public.v_enrollment_accommodation_',
+  'grant references on table public.v_enrollment_accommodation_',
 ]) {
   expect(
     !anonGrantHardeningMigration.toLowerCase().includes(forbiddenAnonGrant),
-    `P3 anon hardening must not grant residential table privilege ${forbiddenAnonGrant}`,
+    `P3 anon hardening must not grant residential privilege ${forbiddenAnonGrant}`,
   );
 }
 
