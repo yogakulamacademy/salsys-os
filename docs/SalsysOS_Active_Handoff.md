@@ -4,153 +4,101 @@
 **Updated:** 2026-11-01  
 **Repository:** `yogakulamacademy/salsys-os`  
 **Production branch:** `main`  
-**Verified production head:** `acf45497b4e40c4c270d2c4122d160f07eb02cb4`
+**Verified production head:** `1577f637e8cea3f8dbce8ef79f001667a1666540`
 
-Read this file first when resuming active work. Then read:
+Read this file first when resuming, then:
 
 1. `docs/SalsysOS_Current_Checkpoint.md`
-2. `docs/SalsysOS_North_Star_Product_Context.md`
-3. `docs/checkpoints/M-2026-11-01-Provider-Readiness-Parity-v1.md`
-4. `docs/checkpoints/M-2026-11-01-Real-Activity-Acceptance-v1.md`
+2. `docs/checkpoints/M-2026-11-01-North-Star-Rebaseline-v1.md`
+3. `docs/SalsysOS_North_Star_Product_Context.md`
 
-Historical checkpoint files are evidence records and must not be rewritten to match later state.
-
----
-
-## 1. Current position
-
-SalsysOS = **Sales + Analysis Operating System**.
-
-The broad 14-surface engineering closeout is complete. Production Acceptance has now established the real operating path through Admissions/follow-up/payment-start and has separated current provider/configuration blockers from internal runtime defects.
-
-There is no newly identified internal production defect that should be patched before the next roadmap rebaseline.
-
-Exact continuation point:
-
-**North-Star Rebaseline & Next Roadmap Selection**
+Historical checkpoint files are immutable evidence records.
 
 ---
 
-## 2. Latest release
+## 1. Exact continuation point
 
-Provider Readiness Parity V1:
+**R9 — AEO / GEO / AI Visibility Production Closeout V1**
 
-```text
-PR                         #404
-main SHA                   acf45497b4e40c4c270d2c4122d160f07eb02cb4
-CI                         #1330 passed
-CodeQL                     #615 passed
-Production Smoke           #153 passed
-Vercel production          READY on exact SHA
-```
-
-Production migration:
-
-```text
-version                    20261101141224
-name                       google_ads_operational_readiness_v1
-```
+The North-Star rebaseline is complete. Do not start R10 implementation until R9 closeout is formally finished.
 
 ---
 
-## 3. Stable healthy surfaces
+## 2. Why R9 is ready
+
+Production `v_seo_r9_closeout_readiness_v1` reports:
 
 ```text
-CRM Core Integrity          healthy
-Admissions Automation      healthy
-Universal Tracking         healthy / collecting
-Website Lead Capture       healthy
-GA4                        healthy
-Google Search Console      healthy
-Privacy Compliance         healthy
-WhatsApp                   healthy
+r9_closeout_status                   ready_for_r9_closeout
+technical_integrity_clean            true
+completed_probe_runs                 1
+model_observations                   1
+orphan_observations                  0
+orphan_citations                     0
+observation_tenant_mismatches        0
+citation_tenant_mismatches           0
+completed_missing_completed_at       0
+failed_missing_error                 0
 ```
+
+Live evidence includes 195 AEO rows, 195 GEO rows, 707 answer-query rows, 5,402 answer impressions, 128 GA4 AI sessions, 67 AI referral sessions, 16 pages with AI referrals, 2 AI-linked leads, two observed AI providers and one genuine completed probe/model observation.
+
+Citation and mention observations are currently zero. Preserve those as honest zero evidence.
 
 ---
 
-## 4. Provider readiness
+## 3. R9 closeout contract
 
-### Google Ads
+Verify read-only:
 
-Raw sync remains failed with Google 403:
+1. readiness remains `ready_for_r9_closeout`;
+2. technical integrity remains clean;
+3. at least one genuine completed provider probe exists;
+4. at least one measured model observation exists;
+5. orphan and tenant-mismatch checks remain zero;
+6. completed/failed probe evidence remains structurally complete;
+7. deterministic readiness stays separate from measured visibility;
+8. GA4 AI referrals remain observed evidence;
+9. zero citation/mention evidence remains zero;
+10. no code/data change is made unless verification reveals a real defect.
 
-`CLOUD_PROJECT_NOT_APPROVED_FOR_PRODUCTION`
-
-The Google connection itself is connected, the `adwords` OAuth scope is present, and one production Ads customer is selected.
-
-Operational Readiness now correctly reports:
-
-```text
-health_status              configuration_blocked
-operational_status         configuration_blocked
-blocker_code               google_cloud_project_test_access
-```
-
-External action required: obtain Explorer/Basic/Standard Google Ads API production access for the OAuth Cloud project.
-
-Do not rotate SalsysOS credentials or change the selected customer just to suppress the raw failed-sync evidence.
-
-### Meta Ads
-
-Current readiness remains:
-
-```text
-health_status              configuration_blocked
-blocker_code               meta_ads_permission_missing
-ads_read/ads_management    missing
-selected_ad_account        none
-```
-
-External action required: update Meta business/app permissions, reconnect, discover accounts and select the intended production ad account.
-
-Neither provider state is a newly identified SalsysOS runtime regression.
+If these pass, close R9 with evidence/documentation only.
 
 ---
 
-## 5. Real-activity acceptance already proven
+## 4. Next build after R9
 
-Live trace:
+**R10 — Recommendation Lifecycle & Action-Outcome Learning V1**
 
-`Lead -> Admissions -> Conversation -> Follow-up -> Booking -> Payment Started`
-
-Observed inventory at acceptance time:
+Production currently has:
 
 ```text
-leads                         596
-conversations                 566
-admissions_auto_task_events    20
-follow-up tasks                22
-payments                        2
-enrollments                     0
+event_intelligence_predictions             767
+event_intelligence_prediction_outcomes       0
+system_intelligence_recommendations           0
+system_intelligence_recommendation_events     0
 ```
 
-All 20 Admissions automation events inspected had a matching follow-up task.
+`v_r10_recommendation_effectiveness_v1` says `learning_status = no_recommendations`.
+
+This is the clearest next internal product gap once R9 is closed.
 
 ---
 
-## 6. PARKED — commerce completion
+## 5. Parked work — do not resume automatically
 
-Current state remains:
+### Commerce
+
+User chose to skip live Hostinger/PHP completion deployment.
 
 ```text
 booking.completed       19
 payment.started          2
 payment.completed        0
 enrollment.completed     0
-readiness                configuration_blocked / payment_completion_missing
 ```
 
-The internal SalsysOS projector is ready; the remaining work is the live Yogakulam PHP verified-success emitter.
-
-The user explicitly chose to **skip this deployment for now**.
-
-Do not resume the Hostinger/PHP patch unless the user chooses to return to it. Do not manufacture payment/enrollment/revenue evidence.
-
----
-
-## 7. PARKED — PA-1 live identity decision
-
-PA-1 engineering is complete, but the live pair remains untouched:
+### PA-1 live identity decision
 
 ```text
 open conflicts          2
@@ -158,60 +106,36 @@ source Person           active
 merge audit rows        0
 ```
 
-Do not merge or dismiss without explicit human approval.
+Requires explicit human approval.
+
+### Provider actions
+
+- Google Ads: external Cloud-project production access;
+- Meta Ads: external Ads permission / account selection.
+
+### Search Indexing
+
+Intentionally inactive.
 
 ---
 
-## 8. PARKED — Search Indexing
+## 6. Other rebaseline notes
 
-Search Indexing remains intentionally disabled. OpenSearch is derived/rebuildable and must not be activated simply to make health green.
+R8 is implemented but current crawl coverage is only 9.7%; treat this as operational evidence coverage, not a rebuild request.
 
----
+R11 already has substantial Yogakulam vertical depth: 16 courses, 85 batches, 63 upcoming-capacity rows, 21 person/course affinity rows and 20 course-recommendation rows.
 
-## 9. EXACT CONTINUATION POINT — NORTH-STAR REBASELINE
-
-Run a read-only end-to-end R0-R14 rebaseline against current repository + production evidence before implementing another phase.
-
-The output must:
-
-1. identify what is actually complete;
-2. identify what is implemented but not production-proven;
-3. identify what is externally/human blocked and therefore parked;
-4. identify the highest-value remaining internal product gap that can be advanced now;
-5. choose exactly one next checkpoint and define its acceptance contract before code.
-
-Do not rely on the old roadmap percentages alone. Verify the current implementation and production state.
-
-Likely candidate areas to compare:
-
-- R9 AEO / GEO / AI Visibility;
-- R10 Predictive Intelligence + Owner Command Center;
-- R11 Wellness / Education productization;
-- R13 Commercial SaaS readiness.
+R13 remains a larger commercial productization program because public signup, billing/subscription enforcement and plan entitlements are intentionally not yet implemented.
 
 ---
 
-## 10. Safety rules
+## 7. Safety rules
 
-- one controlled checkpoint at a time;
 - verify before modifying;
-- production evidence beats stale planning notes;
-- tenant authority is server-derived;
+- one checkpoint at a time;
 - PostgreSQL remains canonical truth;
 - OpenSearch remains derived/rebuildable;
-- provider errors remain raw evidence even when readiness classifies them as external/configuration blocked;
-- no fake events, conversions, revenue, outcomes or training evidence;
+- observed/deterministic/inferred evidence remains distinct;
+- no fake citations, events, conversions, revenue or outcomes;
 - no automatic ambiguous identity merge;
-- browser behavior does not establish payment/enrollment/revenue truth;
-- privacy/legal restrictions fail closed;
-- high-impact automation stays human-governed unless explicitly activated.
-
----
-
-## 11. Resume instruction
-
-1. verify `main`, Supabase production and Vercel production provenance;
-2. read this file and `docs/SalsysOS_Current_Checkpoint.md`;
-3. read `docs/SalsysOS_North_Star_Product_Context.md`;
-4. continue from Section 9;
-5. do not resume the parked commerce or PA-1 live decision without an explicit user choice.
+- do not resume parked commerce/PA-1/provider work without the appropriate external or human action.
