@@ -60,8 +60,11 @@ expectIncludes(approvalLayout, '<AutomationNavigation />', 'Privileged approval 
 
 expectIncludes(automationLayout, '<AutomationSubmissionGuard />', 'Automation repeated-submit guard must be mounted in Automation Studio');
 expectIncludes(submissionGuard, 'Save draft', 'Repeated-submit guard must cover draft creation');
-expectIncludes(submissionGuard, "submitter.disabled = true", 'Repeated-submit guard must disable the initiating create control');
-expectIncludes(submissionGuard, "submitter.setAttribute('aria-busy', 'true')", 'Repeated-submit guard must expose in-flight state');
+expectIncludes(submissionGuard, "form.getAttribute(GUARDED_FORM_ATTR) === 'active'", 'Repeated-submit guard must lock the whole create form');
+expectIncludes(submissionGuard, 'event.preventDefault();', 'Repeated-submit guard must cancel duplicate submissions');
+expectIncludes(submissionGuard, 'event.stopImmediatePropagation();', 'Repeated-submit guard must stop duplicate server-action dispatch');
+expectIncludes(submissionGuard, "form.setAttribute('aria-busy', 'true')", 'Repeated-submit guard must expose form in-flight state');
+expectIncludes(submissionGuard, 'control.disabled = true;', 'Repeated-submit guard must disable guarded create controls');
 expectNotIncludes(submissionGuard, 'workflow name', 'Repeated-submit protection must not enforce workflow-name uniqueness');
 
 expectIncludes(settingsActions, 'autonomous_send_enabled: false', 'WhatsApp autonomous send must remain fail-closed');
