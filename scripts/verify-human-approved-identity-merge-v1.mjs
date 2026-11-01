@@ -19,6 +19,9 @@ function forbidText(source, needle, label) {
 const migration = read(
   'supabase/migrations/20261101130000_human_approved_identity_merge_v1.sql',
 );
+const advisorCloseoutMigration = read(
+  'supabase/migrations/20261101131500_person_merge_audit_fk_indexes_v1.sql',
+);
 const action = read('app/actions/identity-resolution.ts');
 const dataQuality = read('app/data-quality/page.tsx');
 const packageJson = read('package.json');
@@ -50,6 +53,17 @@ for (const [needle, label] of [
   ['to authenticated, service_role', 'explicit RPC execution grant'],
 ]) {
   requireText(migration, needle, label);
+}
+
+for (const [needle, label] of [
+  ['idx_person_merge_audit_v1_initiating_conflict_id', 'initiating-conflict FK index'],
+  ['on public.person_merge_audit_v1 (initiating_conflict_id)', 'initiating-conflict index target'],
+  ['idx_person_merge_audit_v1_source_person_id', 'source-Person FK index'],
+  ['on public.person_merge_audit_v1 (source_person_id)', 'source-Person index target'],
+  ['idx_person_merge_audit_v1_target_person_id', 'target-Person FK index'],
+  ['on public.person_merge_audit_v1 (target_person_id)', 'target-Person index target'],
+]) {
+  requireText(advisorCloseoutMigration, needle, label);
 }
 
 for (const [needle, label] of [
