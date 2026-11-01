@@ -3,8 +3,7 @@
 **Checkpoint date:** 2026-11-01  
 **Canonical repository:** `yogakulamacademy/salsys-os`  
 **Production branch:** `main`  
-**Latest verified R10 runtime head:** `0ff9a29096c44975ba3ea39099e7ecfa1a7bd0ac`  
-**Latest canonical docs head before this branch:** `ac421002be3ee8f7983f464f75c4f20acd2265f3`  
+**Canonical rebaseline head before this design branch:** `85c81fadc5acd41f0fd0c1f37cfa8212eeaa15c1`  
 **Fast resume file:** `docs/SalsysOS_Active_Handoff.md`
 
 > Historical checkpoint files under `docs/checkpoints/` are immutable evidence records.
@@ -18,194 +17,217 @@ SalsysOS is a **Sales + Analysis Operating System**.
 Current state:
 
 - broad 14-surface engineering closeout: complete;
-- R9 AEO / GEO / AI Visibility V1: closed;
-- R10 Predictive Intelligence + Owner Command Center V1 engineering: closed through P0-P3;
-- post-R10 North-Star rebaseline: complete;
-- **current exact checkpoint: R11 — Education / Wellness Vertical Pack V1 — Audit & Design**.
+- R9 V1: closed;
+- R10 V1 (P0-P3): closed;
+- post-R10 rebaseline: complete;
+- R11 Education / Wellness Vertical Pack V1 audit/design: **complete and locked**;
+- **current exact checkpoint: R11-P0 — Capability + Security Foundation**.
 
 Read first:
 
+- `docs/checkpoints/M-2026-11-01-R11-Vertical-Pack-Audit-Design-v1.md`
 - `docs/checkpoints/M-2026-11-01-Post-R10-Rebaseline-v1.md`
-- `docs/checkpoints/M-2026-11-01-R10-V1-Engineering-Closeout-v1.md`
 - `docs/SalsysOS_Active_Handoff.md`
 
 ---
 
-## 2. Why R11 is next
+## 2. Locked R11 capability model
 
-Production has a substantial real education/wellness operating layer:
+R11 introduces product capability state separate from functional workspaces and separate from future billing.
+
+Canonical model to implement:
 
 ```text
-active organizations                  4
-courses                              16
-course batches                       85
-upcoming capacity rows               63
-person/course affinity rows          21
-person/course recommendation rows    20
+capability_catalog
+organization_capabilities
 ```
 
-All current course and batch rows belong to Yogakulam Academy.
-
-The other active organizations, including `Test Yoga School`, currently have no course/batch data.
-
-Interpretation:
-
-- the vertical engine is real and production-used;
-- the core schema is already organization-scoped and largely generic;
-- the missing product layer is reusable configuration/activation and second-tenant readiness, not another Yogakulam-specific feature set.
-
----
-
-## 3. Existing R11 foundation is already reusable
-
-`courses` is organization-scoped and models generic education concepts:
-
-- code / name / category / hours;
-- active state;
-- metadata;
-- source/external identity and sync timestamps.
-
-`course_batches` is organization-scoped and models:
-
-- course linkage and batch code;
-- location / delivery mode / timezone;
-- dates/times;
-- capacity and seats remaining;
-- currency and pricing;
-- enrollment state;
-- optional accommodation capacity/remaining;
-- external-source identity and sync metadata.
-
-Key application boundaries are already tenant-scoped:
-
-- course-management writes include `organization_id`;
-- Admissions uses organization-scoped canonical snapshots;
-- capacity management operates through the batch/organization boundary.
-
-R11 therefore does **not** require a foundational data-model rewrite.
-
----
-
-## 4. Exact R11 audit/design questions
-
-Before implementation, define and verify:
-
-1. the organization-level vertical/capability model;
-2. generic Education core vs Wellness/Residential extensions;
-3. route/navigation/action gating for organizations without the pack;
-4. role/permission boundaries for course and batch administration;
-5. second-tenant configuration without copying Yogakulam data or logic;
-6. tenant-configurable course/catalog source synchronization;
-7. optional/non-destructive vertical defaults or templates;
-8. acceptance proof for reuse that does not seed fake customer activity.
-
-Do **not** create fake courses/batches in `Test Yoga School` merely to make multi-tenant readiness appear proven.
-
----
-
-## 5. R13 remains the next larger commercial program
-
-Controlled tenant provisioning/onboarding is already healthy:
+V1 capability codes:
 
 ```text
-active organizations                  4
-active orgs with owner/admin          4
-active orgs without owner/admin       0
-organization_onboarding rows          1
-enforced onboarding rows              1
-incomplete enforced onboarding        0
+education_core
+wellness_residential
+education_catalog_sync
 ```
 
-However, public signup and commercial entitlement infrastructure remain unimplemented:
+Dependencies:
 
-- billing/subscription enforcement;
-- plan limits/entitlements;
-- public tenant signup;
-- signup abuse controls/throttling;
-- customer-controlled organization deletion;
-- automated billing-triggered suspension;
-- cross-tenant workspace switching.
+```text
+wellness_residential   requires education_core
+education_catalog_sync requires education_core
+```
 
-Sequence decision: define/prove the reusable vertical pack first, then commercialize that product boundary through R13.
+Onboarding `industry` may suggest a pack but is never authorization.
+
+`organization_workspaces` remains the functional workspace model and must not be overloaded as vertical capability state.
 
 ---
 
-## 6. Generic workspace shell
+## 3. Existing Education engine remains canonical
 
-All current active organizations receive the same enabled workspace shell:
+No foundational rewrite is planned.
+
+Existing tenant-scoped truth remains:
+
+- courses;
+- course batches;
+- Admissions capacity/demand;
+- Lead/Person nullable course/batch preferences;
+- enrollment linkage;
+- person/course affinity/recommendation;
+- course-management audit/state;
+- course catalog sync ledger/health.
+
+Education-specific fields embedded in generic CRM remain nullable; R11 surface gating hides/disables their product controls for tenants without `education_core`.
+
+---
+
+## 4. R11-P0 security prerequisite
+
+Current RLS write checks correctly limit course management administration to:
 
 ```text
+owner
 admin
-finance
-marketing
-reports
-sales
+manager
+service_role
 ```
 
-Education/Wellness capability is not currently represented as a formal organization-level vertical pack/capability profile.
+However authenticated table grants on `courses` and `course_batches` currently include unnecessary broad privileges such as `DELETE`, `TRUNCATE`, `TRIGGER` and `REFERENCES`.
 
-That is a central R11 audit target.
+Repository audit found no active application delete path for courses/batches.
+
+P0 must reduce the authenticated direct table boundary to only the privileges required by current application behavior:
+
+```text
+SELECT
+INSERT
+UPDATE
+```
+
+subject to RLS + tenant + role + capability checks.
+
+Authenticated users must not retain direct:
+
+```text
+DELETE
+TRUNCATE
+TRIGGER
+REFERENCES
+```
 
 ---
 
-## 7. R10 remains closed
+## 5. P0 capability authority
 
-R10-P0 through P3 are complete. Real recommendation effectiveness must accumulate organically.
+P0 must provide a canonical tenant-safe helper equivalent to:
 
-Do not invent an R10-P4 merely because recommendation/feedback/outcome sample counts are currently zero.
+```text
+organization_has_capability(org_id, capability_code)
+```
 
-Predictive model promotion and automatic learning-based re-ranking remain evidence-gated.
+Requirements:
+
+- explicit organization identity;
+- authenticated tenant binding for user-facing reads;
+- trusted service/server path for administrative activation;
+- unknown/disabled codes fail closed;
+- capability dependencies cannot be bypassed;
+- capability JSON/config contains non-secret configuration only.
+
+Capability mutation is a high-impact configuration action. R11-P0 should keep it behind a trusted platform/admin server boundary rather than direct arbitrary-member writes.
 
 ---
 
-## 8. Other parked boundaries
+## 6. Existing organization activation strategy
+
+P0 must preserve current real Yogakulam behavior through explicit capability activation, not name/industry inference.
+
+Expected:
+
+```text
+Yogakulam Academy
+  education_core          enabled
+  education_catalog_sync  enabled
+  wellness_residential    explicit product decision/config
+
+Other organizations
+  disabled unless deliberately configured
+```
+
+Do not seed courses/batches into `Test Yoga School` or another tenant.
+
+---
+
+## 7. Later R11 phases — not P0 scope
+
+### R11-P1 — Product surface gating
+
+- workspace/server capability context;
+- sidebar/navigation gating;
+- Course Management direct route/data capability + role gating;
+- Admissions/Education-specific surface gating;
+- Education-specific Lead controls hidden for non-Education tenants.
+
+### R11-P2 — Catalog adapter boundary
+
+- generic adapter registry/interface;
+- preserve `yogakulam_website` as one adapter;
+- tenant-configurable non-secret adapter selection;
+- sync execution fails closed without capability/config.
+
+### R11-P3 — Optional Residential extension
+
+- capability-gate accommodation/residential surfaces;
+- Education core remains usable without residential data.
+
+Do not implement P1/P2/P3 as part of P0 unless a verified dependency makes it unavoidable.
+
+---
+
+## 8. R13 remains later
+
+Do not add signup/billing/subscriptions/plan entitlements to R11-P0.
+
+R13 will later attach commercial packaging to the capability/product boundary after R11 is productized.
+
+---
+
+## 9. R11-P0 acceptance contract
+
+P0 is complete only when:
+
+1. capability catalog/state is canonical and tenant-safe;
+2. capability state is distinct from functional workspace state;
+3. dependency rules fail closed;
+4. mutation authority is trusted/admin-controlled;
+5. authenticated course/batch table grants are least-privilege and no longer include DELETE/TRUNCATE/TRIGGER/REFERENCES;
+6. existing owner/admin/manager course mutation remains functional under capability authority;
+7. Yogakulam's real Education use is preserved through explicit capability state;
+8. other tenants receive no fake vertical data;
+9. no route/UI/catalog-adapter rewrite is smuggled into P0;
+10. migration provenance, CI, CodeQL, deployment and production readback are clean.
+
+---
+
+## 10. Parked boundaries
 
 Do not resume automatically:
 
-- Yogakulam live commerce completion / Hostinger PHP emitter;
+- live Yogakulam commerce completion;
 - PA-1 live identity decision;
-- Google Ads production API approval;
-- Meta Ads permission/App Review/account selection;
-- broad Search Indexing activation.
-
----
-
-## 9. R11 audit acceptance contract
-
-The audit/design checkpoint is complete only when it produces:
-
-- a clear vertical capability configuration model;
-- a documented generic Education core;
-- documented optional Wellness/Residential extensions;
-- a route/navigation/authorization gating contract;
-- a tenant-configurable catalog/source-sync contract;
-- a safe second-tenant enablement path;
-- an implementation sequence with no synthetic production data requirement;
-- explicit non-goals preventing R13 billing/signup scope from leaking into R11.
-
-No product code should be implemented until that contract is locked.
-
----
-
-## 10. Locked engineering rules
-
-- one controlled checkpoint at a time;
-- verify before modifying;
-- production facts beat stale planning percentages;
-- PostgreSQL/Supabase remains canonical truth;
-- tenant authority remains explicit/server-derived;
-- vertical capability must never bypass existing tenant/role permissions;
-- no fake customer/course/batch/recommendation/revenue evidence;
-- generic education concepts must remain distinct from optional wellness-specific extensions;
-- external/human-blocked work stays parked unless explicitly resumed.
+- Google Ads production approval;
+- Meta Ads provider approval/account selection;
+- Search Indexing activation;
+- predictive-model promotion / learning-based ranking.
 
 ---
 
 ## 11. Resume instruction
 
 1. read `docs/SalsysOS_Active_Handoff.md`;
-2. read `docs/checkpoints/M-2026-11-01-Post-R10-Rebaseline-v1.md`;
+2. read the locked R11 audit/design checkpoint;
 3. verify current `main`, Supabase and Vercel provenance;
-4. continue the R11 read-only audit;
-5. lock the R11 Vertical Pack V1 design before implementation;
-6. do not seed a second tenant with fake vertical data for acceptance.
+4. implement **R11-P0 only** against the locked contract;
+5. do not create fake second-tenant Education data;
+6. do not begin P1/P2/P3 before P0 production acceptance is complete.
