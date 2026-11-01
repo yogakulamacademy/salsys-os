@@ -2,10 +2,11 @@ import "server-only";
 
 import { createAdminClient } from "@/lib/supabase/admin";
 import { syncYogakulamCourseCatalog } from "@/lib/integrations/yogakulam-courses";
-import type { EducationCatalogSyncTrigger } from "@/lib/integrations/education-catalog";
 
 const DEFAULT_YOGAKULAM_FEED_URL =
   "https://www.yogakulam.com/api/crm/course-batches.php";
+
+type CatalogSyncTrigger = "manual" | "cron" | "webhook";
 
 function yogakulamCourseFeedUrl() {
   return (
@@ -55,7 +56,7 @@ export async function syncYogakulamCatalogAdapter({
   trigger,
 }: {
   organizationId: string;
-  trigger: EducationCatalogSyncTrigger;
+  trigger: CatalogSyncTrigger;
   config: Record<string, unknown>;
 }) {
   // Keep the proven Yogakulam parser/sync implementation intact. The adapter
