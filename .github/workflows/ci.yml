@@ -103,6 +103,9 @@ jobs:
       - name: Verify Admissions Final Closeout Contracts
         run: npm run verify:admissions-final-closeout
 
+      - name: Verify Performance Final Closeout Contracts
+        run: npm run verify:performance-final-closeout
+
       - name: Verify Onboarding Foundation Contracts
         run: npm run verify:onboarding-foundation
 
