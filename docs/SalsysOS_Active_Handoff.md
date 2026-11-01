@@ -1,18 +1,18 @@
 # SalsysOS Active Handoff
 
-**Purpose:** fast recovery after an interrupted conversation or tool connection.  
-**Updated:** 2026-10-20  
+**Purpose:** Fast recovery after an interrupted engineering session.  
+**Updated:** 2026-11-01  
 **Repository:** `yogakulamacademy/salsys-os`  
 **Production branch:** `main`  
-**Production head at this handoff:** `1a15f8fca89c7f76f7111eeb92b221e43cd82437`
+**Verified production head before this documentation follow-up:** `f2abceb35b37f039b3382958b9a375bc32546f93`
 
 Read this file first when resuming active engineering. Then read:
 
-- `docs/SalsysOS_Current_Checkpoint.md`
-- `docs/SalsysOS_North_Star_Product_Context.md`
-- the latest relevant file under `docs/checkpoints/`
+1. `docs/SalsysOS_Current_Checkpoint.md`
+2. `docs/SalsysOS_North_Star_Product_Context.md`
+3. the latest relevant file under `docs/checkpoints/`
 
-Historical checkpoint files are evidence records and should not be rewritten to make earlier work look different.
+Historical checkpoint files are evidence records and must not be rewritten to make earlier work look different.
 
 ---
 
@@ -20,368 +20,239 @@ Historical checkpoint files are evidence records and should not be rewritten to 
 
 SalsysOS = **Sales + Analysis Operating System**.
 
-It is being built as a **Customer Journey Intelligence + Revenue Intelligence operating system**, not a generic CRM.
+It is a tenant-safe Sales + Customer Journey + Revenue Intelligence operating system, not a generic CRM.
 
-Core loop:
+Canonical loop:
 
-`marketing -> traffic -> source/campaign/content -> anonymous journey -> identity -> lead -> conversation -> intent/affinity -> salesperson/follow-up -> booking/payment/enrollment -> revenue -> attribution -> feature state -> prediction/recommendation -> action -> observed outcome -> learning`
+`marketing -> traffic -> source/campaign/content -> anonymous journey -> identity -> lead/opportunity -> conversation -> intent/affinity -> salesperson/follow-up -> booking/payment/enrollment -> revenue -> attribution -> recommendation -> action -> observed outcome -> learning`
 
-Execution rule currently in force:
+Execution rule:
 
-> **Close one product area completely before moving to the next.**
-
-Do not skip an unresolved production-integrity blocker.
+> **Verify first, close one controlled checkpoint at a time, and never replace missing evidence with assumptions.**
 
 ---
 
-## 2. Ordered closeout status
+## 2. Nov. 1 engineering closeout status
 
-### Area 1 — Core CRM + lead/customer management
+The prior 14-surface final-closeout sweep is **COMPLETE**.
 
-**CLOSED — V1 production-integrity level.**
+The completed surfaces include the production boundaries around:
 
-Evidence:
+- Home / Command Center
+- CRM + Customer 360
+- Admissions
+- Conversations
+- WhatsApp
+- Performance / Team
+- Automation
+- Operations
+- Settings
+- AI / Knowledge
+- Tracking & Data
+- System Health
+- Platform administration
+- Customer onboarding / provisioning
 
-- `docs/checkpoints/M-2026-10-20-CRM-Core-Closeout-v1.md`
-- production integrity health = healthy;
-- zero audited integrity issues;
-- canonical stage/history, ownership, tenant and message-lineage invariants protected.
+Platform onboarding final closeout was merged in PR #399. Its production invariants were revalidated before PA-1 work began:
 
-### Area 2 — Customer Journey / Person 360 / Identity
+- 4 active organizations;
+- 0 active organizations without an Owner/Admin;
+- 1 enforced onboarding row;
+- 0 incomplete enforced onboarding rows;
+- 0 active password-recovery grants.
 
-**CLOSED — V1 production-integrity level.**
-
-Evidence:
-
-- `docs/checkpoints/M-2026-10-20-Customer360-Identity-Closeout-v1.md`
-- exact-session anonymous-to-lead/Person handoff is one atomic service-role-only transaction;
-- conservative explicit identity policies;
-- production identity health = healthy;
-- zero audited integrity issues.
-
-### Area 3 — Universal Tracking SDK + Consent
-
-**ACTIVE. Engineering platform is substantially built; live production closeout remains open.**
-
-Latest engineering evidence:
-
-- PR #89 — live tracking/consent closeout health;
-- PR #90 — publishable cross-platform client SDK V1;
-- PR #91 — Web Platform Adapters V1;
-- PR #92 — installable WordPress Tracking Adapter V1;
-- PR #93 — Tracking Sources management UI V1;
-- `docs/checkpoints/M-2026-10-20-Universal-Tracking-Platform-Engineering-v1.md`.
-
-Current production tracking health for Yogakulam:
-
-- 4 active browser sources;
-- 4/4 strict origin sources;
-- 0 missing privacy-notice versions;
-- GPC enabled on all;
-- optional consent required on all;
-- 0 Universal browser events observed through the new path;
-- 0 browser consent receipts through the new path;
-- `backend_status = not_live`;
-- 0 publishable Android/iOS/Shopify client sources currently provisioned for Yogakulam.
-
-Therefore **tracking engineering is not the same as live closeout**. Do not mark Area 3 closed until the live website and trusted business-event E2E journey is proven.
-
-### Next areas after Area 3
-
-4. Funnel + Attribution + Revenue — final E2E revenue reconciliation
-5. WhatsApp Automation — remaining broad Operations/Growth production proof
-6. Instagram Automation — Meta permission + live E2E proof
-7. Smart Triggers / workflow engine — final closeout audit
-8. SEO / AEO / search intelligence — final closeout audit
-9. Event Intelligence / feature store — final closeout audit
-10. Predictive-model infrastructure — final readiness/promotion closeout
-11. Proven predictive accuracy — data-dependent real-outcome calibration
-12. R11–R14 advanced autonomy/productization/commercial expansion
+Do not reopen the old 14-surface checklist unless production evidence shows a regression.
 
 ---
 
-## 3. Universal Tracking Platform — current architecture
+## 3. Current phase — Production Acceptance & Operational Closeout
 
-One canonical event system must support all target platforms.
+The active program is no longer broad implementation closeout. It is **production acceptance under real tenant activity**.
 
-Target chain:
+Current acceptance evidence for Yogakulam Academy:
 
-`SDK/adapter -> canonical event contract -> privacy/authority gate -> PostgreSQL raw_events -> processing -> identity/journey -> attribution/revenue -> features/predictions -> outcomes`
+- CRM Core Integrity: healthy;
+- Admissions Automation: healthy;
+- Universal Tracking: healthy / collecting;
+- Website Lead Capture: healthy;
+- GA4: healthy;
+- Search Console: healthy;
+- Privacy Compliance: healthy;
+- WhatsApp system health: healthy.
 
-PostgreSQL is authoritative. OpenSearch is derived/rebuildable only.
+Expected/non-regression states still visible:
 
-### Browser/web foundation
+- Google Ads: external production-access blocker (`CLOUD_PROJECT_NOT_APPROVED_FOR_PRODUCTION`);
+- Meta Ads: stale/provider permission + App Review dependency;
+- Search Indexing: intentionally inactive;
+- Customer 360: two open human-review identity conflicts.
 
-- `public/salsys-intelligence.js`
-- `public/salsys-tracker.js`
-- `public/salsys-consent.js`
-- `/api/events/browser/v1`
-- `/api/events/identify/v1`
-- `/api/privacy/consent/v1`
-
-Browser SDK supports anonymous visitor/session identity, UTMs/click IDs, first/session touch, page/session/CTA/form events, SPA navigation, form decoration, consent/GPC handling, sanitization and retry queue.
-
-### Publishable client foundation
-
-- `/api/events/client/v1`
-- `/api/privacy/consent/client/v1`
-- publishable `client` source type;
-- no trusted secret embedded in apps/storefronts;
-- `app.*` and safe `web.*` telemetry only;
-- PII-key redaction;
-- source-scoped rate limits;
-- consent receipts;
-- SDK provenance and source health.
-
-### Android
-
-Kotlin SDK V1 under `sdk/android/`.
-
-Includes:
-
-- publishable source key;
-- `app.*` telemetry;
-- consent state;
-- anonymous visitor/session IDs;
-- bounded offline queue/retry;
-- SDK name/version/platform metadata;
-- no trusted server secret.
-
-### iOS
-
-Swift Package SDK V1 under `sdk/ios/` with equivalent consent/session/offline/provenance behavior.
-
-### WordPress
-
-Installable plugin:
-
-`integrations/wordpress/salsys-tracking/`
-
-It loads the canonical browser SDK and optional Salsys consent UI. It does **not** create a separate tracking engine or database.
-
-### Webflow / Framer / custom sites
-
-Use the same canonical browser SDK through platform-appropriate site-level custom-code installation.
-
-### Shopify
-
-Adapters under `integrations/shopify/`:
-
-- Custom Pixel adapter;
-- Web Pixel Extension source.
-
-Shopify browser/pixel events are observational only. Confirmed order/payment/refund/revenue truth stays server-side.
-
-### Trusted server events
-
-`/api/events/v1`
-
-Authenticated source secret is required. Use this for authoritative business facts such as payment success, enrollment, refund and revenue.
-
-### Source management UI
-
-Tracking Sources workspace exists at the product layer with platform cards for:
-
-- custom web;
-- WordPress;
-- Webflow;
-- Framer;
-- Shopify;
-- Android;
-- iOS.
-
-It supports tenant-bound provisioning, install instructions, privacy/source health, SDK provenance, last-seen and event counters.
+The provider blockers must not be misclassified as SalsysOS implementation defects.
 
 ---
 
-## 4. Tracking closeout — exact remaining work
+## 4. PA-1 — Human-Approved Identity Merge & Conflict Resolution
 
-The next controlled checkpoint is **live Yogakulam cutover**.
+PA-1 was created after the production acceptance pass found two identity conflicts for the same live Lead/Person pair.
 
-Required proof sequence:
+Important evidence:
 
-1. identify the actual shared live-site script/layout files;
-2. audit current GTM/GA/Meta/legacy Salsys/YK tracker placement;
-3. install `salsys-intelligence.js` and `salsys-consent.js` exactly once;
-4. avoid duplicate legacy + Universal tracking;
-5. Reject All -> optional analytics must not persist;
-6. Accept All -> canonical `web.session_started` + `web.page_viewed`;
-7. Customize -> purpose-specific consent evidence;
-8. withdraw consent -> correct receipt/state and storage cleanup;
-9. GPC -> sale/sharing opted out where applicable;
-10. verify CTA events;
-11. mark real lead forms with Salsys lead-form selector/attribute;
-12. prove form start/submit events without sending arbitrary input values;
-13. preserve visitor/session IDs through lead capture;
-14. server-side `/api/events/identify/v1` -> exact-session lead/Person link;
-15. trusted server booking/payment/enrollment/revenue events;
-16. reconcile one controlled journey across Tracking, Person 360, Funnel, Attribution and Revenue;
-17. health view reaches `backend_closeout_candidate` with no rejections/dead letters/stuck processing;
-18. only then close Area 3.
+- both conflicts point to the same candidate Person;
+- one conflict is phone ownership and one is email ownership;
+- the identifiers are unverified;
+- automatic merging is therefore intentionally prohibited.
 
-Do not invent a Hostinger path. Earlier project files show shared include calls such as `includes/inside-head-script.php`, `includes/script.php`, and `includes/inside-body-script.php`, but the actual live hosting root/path still needs direct confirmation before editing.
+### PA-1 production capability
 
----
+PR #400 merged:
 
-## 5. WhatsApp Automation — current state
+`PA-1: add human-approved identity merge and conflict resolution`
 
-WhatsApp Operations/Growth V1 engineering is highly complete.
+Merged production code head:
 
-Implemented across PRs #80–#83 and earlier Smart Trigger milestones:
+`f2abceb35b37f039b3382958b9a375bc32546f93`
 
-- shared CRM inbox;
-- human replies + AI-assisted drafts;
-- quick replies;
-- Meta template sync;
-- reusable audience segments;
-- broadcast campaign builder;
-- schedule/approval/pause/cancel lifecycle;
-- guarded per-recipient provider runner;
-- suppression/STOP;
-- frequency caps;
-- quiet hours;
-- verified-primary-contact checks;
-- approved-template checks;
-- idempotency;
-- retry/re-arm controls;
-- sent/delivered/read/replied reconciliation;
-- personalization;
-- Control/Challenger A/B campaigns;
-- recipient/variant snapshot freezing;
-- reply routing;
-- operational conversion/revenue attribution;
-- hardened service-role execution boundary.
+Production migration applied:
 
-Production safety defaults remain fail-closed unless a separate approved checkpoint arms them.
+`human_approved_identity_merge_v1`
 
-The controlled WhatsApp safety/E2E chain has been proven previously. Broader Operations/Growth live campaign proof remains a later ordered closeout item.
+Production migration ledger version:
 
----
+`20261101125123`
 
-## 6. Instagram Automation — current state
+New controlled capability:
 
-Instagram Operations V1 is merged/deployed.
+- `person_merge_audit_v1`
+- `merge_identity_resolution_conflict_v1(uuid)`
+- Data Quality two-step flow: `Same person` -> `Confirm same person & merge`
 
-Implemented:
+### PA-1 safety boundary
 
-- inbound DM -> CRM;
-- human outbound replies;
-- 24-hour standard reachability enforcement;
-- quick replies;
-- keyword/event rules;
-- comment webhook ingestion;
-- guarded one-time comment -> private-DM automation;
-- STOP/suppression;
-- frequency limits;
-- human approvals;
-- idempotency;
-- fail-closed provider/pilot controls;
-- scheduled runner;
-- CRM message lineage/reply reconciliation;
-- Instagram Operations workspace.
+- one-candidate conflicts only;
+- manager/admin human approval required;
+- same-tenant source/target Persons;
+- pair-scoped transaction lock;
+- no automatic/probabilistic merge;
+- no hard Person/identifier/Lead-link/Session-link deletion;
+- source Person remains a `merged` audit shell;
+- canonical identifiers, Lead links and Session links move transactionally;
+- captured consent subject/decision/source evidence remains preserved;
+- active privacy/legal/ad-delivery state blocks the merge;
+- multi-candidate conflicts remain review-only;
+- durable merge audit is required.
 
-External live dependency:
+### Rollback-only production proof
 
-- connected Instagram account must be reauthorized with `instagram_business_manage_comments`;
-- relevant Meta webhook/app permissions must be active.
+Before persistent deployment, the real two-conflict pair was exercised inside a production transaction and rolled back.
 
-Do not introduce cold/bulk Instagram DM behavior; the design intentionally follows Meta's user-initiated model.
+Assertions inside the transaction:
+
+- both pair conflicts resolved;
+- source Person became `merged`;
+- 2 identifiers moved;
+- 2 sessions moved;
+- 4 consent receipts re-associated;
+- 1 merge audit row created.
+
+Post-rollback proof confirmed production customer identity remained unchanged.
+
+After persistent schema deployment:
+
+- the PA-1 table/RPC exist;
+- RLS is enabled on the audit table;
+- anon cannot execute the merge RPC;
+- direct anon/authenticated audit-table access is denied;
+- authenticated execution still requires the function's explicit manager/admin authorization check;
+- the two live conflicts remain open;
+- source Person remains active;
+- merge audit rows remain 0.
+
+**No live customer identity merge has been performed.**
 
 ---
 
-## 7. Event Intelligence / predictive state
+## 5. PA-1 post-deploy advisor follow-up
 
-Infrastructure exists for:
+Supabase advisors were run after deployment.
 
-- immutable `raw_events`;
-- tracking sources/contracts;
-- feature store;
-- deterministic prediction ledger;
-- freshness/expiry guards;
-- privacy-aware signal quality;
-- Safe-V2 lead feature snapshots;
-- realized-outcome observation;
-- calibration metrics/drift instrumentation;
-- scheduled outcome observer;
-- derived OpenSearch feature/prediction projections.
+Security advisor:
 
-Critical truth:
+- PA-1 audit-table `RLS enabled / no policy` notice is intentional because direct table privileges are revoked;
+- PA-1 authenticated SECURITY DEFINER notice is expected and protected by `auth.uid()` + `can_administer_organization_crm(...)` inside the function and anon execute revocation;
+- other security-advisor findings are pre-existing and are not introduced by PA-1.
 
-**Do not claim calibrated predictive accuracy yet.**
+Performance advisor found three PA-1-specific unindexed foreign keys on `person_merge_audit_v1`:
 
-Current bottlenecks remain real data:
+- `initiating_conflict_id`
+- `source_person_id`
+- `target_person_id`
 
-- no genuine production `lead_conversion_probability` outputs established as calibrated probabilities;
-- Safe-V2 labeled training evidence is insufficient;
-- live consented web behavior is still missing from the Universal tracking path;
-- model training/promotion must remain blocked until privacy-safe labels/outcomes meet thresholds.
-
-Rules/deterministic scores must remain clearly distinct from probabilities.
+A focused follow-up migration is being completed to index those three columns. Do not treat that advisor cleanup as a change to merge semantics.
 
 ---
 
-## 8. Production/CI state at this handoff
+## 6. Production deployment evidence
 
-Current main head:
+For PR #400 merge head `f2abceb35b37f039b3382958b9a375bc32546f93`:
 
-`1a15f8fca89c7f76f7111eeb92b221e43cd82437`
-
-Latest main CI:
-
-- run #266;
-- conclusion: **success**.
-
-Current production Vercel deployment for that SHA:
-
-- deployment: `dpl_6HpMP49zHgzq8zhzUgkv7r41iRG5`;
-- state: **READY**;
-- target: production.
-
-Latest Universal Tracking production migrations confirmed applied:
-
-- `tracking_live_closeout_health_v1`;
-- `universal_publishable_client_v1`;
-- `tracking_client_source_health_v1`.
+- Production Smoke #148: success;
+- CI #1322: success;
+- CodeQL #607: success;
+- Vercel production deployment: `dpl_6bjy6sCXnq6Yu7DPeZqAqjDmDTMx`;
+- Vercel state: READY;
+- exact Git SHA metadata: verified;
+- production alias `crm.salsysos.com`: present.
 
 ---
 
-## 9. Safety and architecture rules that must not regress
+## 7. Current exact continuation point
 
-- tenant/org authority is server-derived;
-- client-provided IDs never authorize tenant access;
-- PostgreSQL remains source of truth;
-- OpenSearch remains derived/rebuildable;
-- no trusted server secret in browser/mobile/Shopify client code;
-- browser/mobile telemetry cannot establish payment/enrollment/revenue truth;
-- exact-session identity handoff remains tenant-bound and atomic;
-- consent/privacy is enforced before optional behavioral persistence where required;
+Complete the **PA-1 post-deploy closeout** first:
+
+1. merge/deploy the three audit FK indexes;
+2. rerun performance advisor and confirm those three PA-1 notices are gone;
+3. confirm production remains on the exact new main SHA and all gates are green;
+4. update the canonical Current Checkpoint with final evidence.
+
+Then stop before the consequential customer action and obtain explicit human confirmation for the live same-person decision.
+
+After explicit confirmation, execute **one** PA-1 merge through the controlled Data Quality workflow (or the same authenticated RPC boundary), then verify:
+
+- open identity conflicts for the pair = 0;
+- source Person status = `merged`;
+- identifiers/sessions/consent associations moved as expected;
+- exactly one merge audit record exists;
+- surviving Person remains linked to the live Lead;
+- CRM Core Integrity remains healthy;
+- Customer 360 Integrity returns healthy;
+- Privacy Compliance remains healthy.
+
+Do not merge the two live Persons merely because the evidence looks likely. Their identifiers are unverified, so the human approval boundary is intentional.
+
+---
+
+## 8. Next production-acceptance sequence after PA-1
+
+1. park Google Ads as an external approval blocker;
+2. park/track Meta Ads permission + App Review dependencies separately;
+3. run broader real-activity acceptance across:
+   `Lead -> Admissions -> Conversation -> Follow-up -> Payment/Enrollment -> Revenue`;
+4. investigate only evidence-backed defects;
+5. keep Search Indexing disabled until its dedicated activation checkpoint;
+6. then choose the next genuine North-Star/productization checkpoint rather than reopening already-closed surfaces.
+
+---
+
+## 9. Architecture / safety rules that must not regress
+
+- tenant authority is server-derived;
+- PostgreSQL/Supabase remains canonical transactional truth;
+- OpenSearch remains derived/rebuildable when enabled;
+- browser telemetry does not establish payment/enrollment/revenue truth;
+- observed, matched, attributed, inferred and modelled evidence remain distinct;
+- identity ambiguity stays ambiguous until deterministic evidence or explicit human review resolves it;
 - no fingerprinting or consent circumvention;
-- unavailable behavior = unknown, not negative intent;
-- no fabricated traffic, rankings, revenue, conversions, outcomes or model-training evidence;
-- no calibrated-probability claim without real evaluation evidence;
-- autonomous/high-impact customer actions remain fail-closed/human-governed unless explicitly enabled;
-- do not mix unrelated work into controlled checkpoints.
-
----
-
-## 10. Current planning estimates
-
-Planning estimates only — not telemetry-derived:
-
-- Core product through roughly R10: about **96%** complete;
-- full R0–R14 North-Star: about **77%** complete.
-
-The tracking platform engineering expansion does not by itself make Area 3 100% complete because live tenant installation and end-to-end production reconciliation remain unproven.
-
----
-
-## 11. Resume instruction
-
-When resuming after interruption:
-
-1. verify current `main` before modifying anything;
-2. read this handoff + current checkpoint + North-Star context;
-3. confirm whether Area 3 live website cutover is still the active blocker;
-4. do not rebuild completed SDK/adapters unless verification finds regression;
-5. continue one controlled checkpoint at a time;
-6. after each meaningful milestone, update this handoff and the canonical checkpoint/context docs.
+- no fabricated traffic, conversions, revenue, outcomes or predictive evidence;
+- customer-visible/high-impact autonomous actions remain fail-closed unless explicitly enabled;
+- privacy/legal holds must block destructive identity operations;
+- never create or mutate production customer data just to make a health metric green.
