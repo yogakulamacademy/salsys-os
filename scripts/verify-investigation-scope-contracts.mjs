@@ -17,6 +17,7 @@ function rejectText(source, needle, label) {
 }
 
 const scope = read('lib/investigation-scope.ts');
+const decisionMetricLink = read('components/intelligence/decision-metric-link.tsx');
 const marketing = read('app/marketing/canonical-workspace.tsx');
 const leads = read('app/leads/page.tsx');
 const performance = read('app/performance/page.tsx');
@@ -45,6 +46,16 @@ for (const [needle, label] of [
 
 rejectText(scope, 'from: get("from")', 'unvalidated date/from marker capture');
 rejectText(scope, 'to: get("to")', 'unvalidated date/to marker capture');
+
+for (const [needle, label] of [
+  ['explicit.source ||', 'First Touch exact scope precedence'],
+  ['explicit.channel ||', 'Current Channel exact scope precedence'],
+  ['explicit.creationChannel ||', 'Lead Creation exact scope precedence'],
+  ['explicit.lastTouchSource', 'Last Marketing Touch exact scope precedence'],
+  ['delete merged.q;', 'fuzzy finder query removal for explicit attribution evidence'],
+]) {
+  requireText(decisionMetricLink, needle, label);
+}
 
 for (const [needle, label] of [
   ['view?: string;', 'Marketing view query contract'],
