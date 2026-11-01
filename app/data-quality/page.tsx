@@ -1,11 +1,37 @@
 import Link from 'next/link';
-import { AlertTriangle, ArrowRight, DatabaseZap, ShieldCheck, UsersRound } from 'lucide-react';
+import {
+  AlertTriangle,
+  ArrowRight,
+  DatabaseZap,
+  ShieldCheck,
+  UsersRound,
+} from 'lucide-react';
 
+import { dismissIdentityResolutionConflictAction } from '@/app/actions/identity-resolution';
 import styles from '@/components/crm/crm-studio.module.css';
 import { getLeads } from '@/lib/data';
+import { createClient } from '@/lib/supabase/server';
+import { requireCurrentOrganizationId } from '@/lib/workspace';
 import type { LeadOverview } from '@/types/crm';
 
 type Gap = 'Ownership' | 'Contact fields' | 'Source unknown' | 'Course missing';
+
+type IdentityConflictRow = {
+  id: string;
+  lead_id: string;
+  person_id: string | null;
+  conflict_type: string;
+  candidate_person_ids: string[] | null;
+  evidence: unknown;
+  detected_at: string | null;
+};
+
+type DataQualityPageProps = {
+  searchParams: Promise<{
+    notice?: string | string[];
+    error?: string | string[];
+  }>;
+};
 
 function gaps(lead: LeadOverview): Gap[] {
   const items: Gap[] = [];
@@ -29,8 +55,46 @@ function gapClass(gap: Gap) {
   return styles.pillGray;
 }
 
-export default async function DataQualityPage() {
-  const leads = await getLeads();
+export default async function DataQualityPage({ searchParams }: DataQualityPageProps) {
+  const params = await searchParams;
+  const notice = one(params.notice);
+  const error = one(params.error);
+
+  const supabase = await createClient();
+  const {
+    data: { user },
+    error: userError,
+  } = await supabase.auth.getUser();
+
+  if (userError || !user) return null;
+
+  const organizationId = await requireCurrentOrganizationId(supabase, user.id);
+
+  const [leads, conflictsResult, reviewPermissionResult] = await Promise.all([
+    getLeads(),
+    supabase
+      .from('identity_resolution_conflicts')
+      .select(
+        'id,lead_id,person_id,conflict_type,candidate_person_ids,evidence,detected_at',
+      )
+      .eq('organization_id', organizationId)
+      .eq('status', 'open')
+      .order('detected_at', { ascending: false })
+      .limit(50),
+    (supabase as any).rpc('can_administer_organization_crm', {
+      p_organization_id: organizationId,
+    }),
+  ]);
+
+  const canReviewIdentityConflicts =
+    !reviewPermissionResult.error && reviewPermissionResult.data === true;
+
+  const identityConflicts = conflictsResult.error
+    ? []
+    : ((conflictsResult.data ?? []) as IdentityConflictRow[]);
+  const identityConflictLoadError = conflictsResult.error
+    ? 'Identity conflict evidence is temporarily unavailable. No conflict count is inferred while the canonical read is degraded.'
+    : null;
 
   const unassigned = leads.filter((lead) => !lead.owner || lead.owner === 'Unassigned').length;
   const missingContact = leads.filter((lead) => !lead.email && !lead.phone).length;
@@ -44,6 +108,7 @@ export default async function DataQualityPage() {
   const knownCampaigns = leads.filter(
     (lead) => lead.firstTouchCampaign && lead.firstTouchCampaign !== 'Unattributed',
   ).length;
+  const leadById = new Map(leads.map((lead) => [lead.id, lead]));
 
   return (
     <div>
@@ -66,11 +131,40 @@ export default async function DataQualityPage() {
         </div>
       </header>
 
+      {notice === 'identity-conflict-dismissed' ? (
+        <div className={styles.emptyNote}>
+          <ShieldCheck size={18} />
+          <div>
+            <strong>Identity conflict reviewed</strong>
+            The conflict was dismissed after human review. No Person records, identifiers or lead links were merged or rewritten.
+          </div>
+        </div>
+      ) : null}
+
+      {error ? (
+        <div className={styles.emptyNote}>
+          <AlertTriangle size={18} />
+          <div>
+            <strong>Review action could not be completed</strong>
+            {error}
+          </div>
+        </div>
+      ) : null}
+
       <section className={styles.metricGrid}>
         <Metric label="Ownership" value={unassigned} note="Unassigned lead records" />
         <Metric label="Contact coverage" value={missingContact} note="No phone or email available" />
         <Metric label="Acquisition" value={unknownSource} note="Unknown first-touch source" />
         <Metric label="Profile completeness" value={missingCourse} note="Course not selected" />
+        <Metric
+          label="Identity review"
+          value={identityConflicts.length}
+          note={
+            identityConflictLoadError
+              ? 'Canonical conflict read unavailable'
+              : 'Open conflicts awaiting human review'
+          }
+        />
       </section>
 
       <section className={styles.panel}>
@@ -132,6 +226,135 @@ export default async function DataQualityPage() {
         </div>
       </section>
 
+      <section className={styles.panel}>
+        <div className={styles.panelHead}>
+          <div>
+            <div className={styles.pageKicker}>Identity conflict review</div>
+            <h2>Canonical identity decisions requiring a person</h2>
+            <p>
+              Exact identifier conflicts are surfaced here rather than silently merging Contacts. Dismiss only after confirming the records are distinct or the evidence is not valid for identity reuse.
+            </p>
+          </div>
+          <span className={identityConflictLoadError ? styles.pillRed : styles.pillAmber}>
+            {identityConflictLoadError ? 'Unavailable' : `${identityConflicts.length} open`}
+          </span>
+        </div>
+
+        {identityConflictLoadError ? (
+          <div className={styles.panelBody}>
+            <div className={styles.emptyNote}>
+              <AlertTriangle size={18} />
+              <div>
+                <strong>Identity evidence is temporarily unavailable</strong>
+                {identityConflictLoadError}
+              </div>
+            </div>
+          </div>
+        ) : identityConflicts.length ? (
+          <div className={styles.tableViewport}>
+            <table className={styles.dataTable}>
+              <thead>
+                <tr>
+                  <th>Lead</th>
+                  <th>Conflict</th>
+                  <th>Evidence</th>
+                  <th>Candidate</th>
+                  <th>Detected</th>
+                  <th>Action</th>
+                </tr>
+              </thead>
+              <tbody>
+                {identityConflicts.map((conflict) => {
+                  const lead = leadById.get(conflict.lead_id);
+                  const evidence = asRecord(conflict.evidence);
+                  const identifierType = pretty(
+                    stringValue(evidence?.identifier_type) || 'identifier',
+                  );
+                  const sourceSystem = pretty(
+                    stringValue(evidence?.source_system) || 'identity engine',
+                  );
+                  const candidateIds = Array.isArray(conflict.candidate_person_ids)
+                    ? conflict.candidate_person_ids.filter(Boolean)
+                    : [];
+                  const firstCandidateId = candidateIds[0] ?? null;
+
+                  return (
+                    <tr key={conflict.id}>
+                      <td>
+                        <div className={styles.leadName}>{lead?.name || 'Accessible lead'}</div>
+                        <div className={styles.micro}>{lead?.leadCode || conflict.lead_id}</div>
+                      </td>
+                      <td>
+                        <span className={styles.pillAmber}>{pretty(conflict.conflict_type)}</span>
+                      </td>
+                      <td>
+                        <div>{identifierType}</div>
+                        <div className={styles.micro}>Source · {sourceSystem}</div>
+                      </td>
+                      <td>
+                        <div>{candidateIds.length} candidate contact{candidateIds.length === 1 ? '' : 's'}</div>
+                        <div className={styles.micro}>Exact value is intentionally not shown in this queue.</div>
+                      </td>
+                      <td>{formatDateTime(conflict.detected_at)}</td>
+                      <td>
+                        <div className={styles.pageActions}>
+                          <Link href={`/leads/${conflict.lead_id}`} className={styles.button}>
+                            Lead <ArrowRight size={12} />
+                          </Link>
+                          {conflict.person_id ? (
+                            <Link
+                              href={`/customer-360/${conflict.person_id}?opportunity=${conflict.lead_id}`}
+                              className={styles.button}
+                            >
+                              Current contact
+                            </Link>
+                          ) : null}
+                          {firstCandidateId ? (
+                            <Link href={`/customer-360/${firstCandidateId}`} className={styles.button}>
+                              Candidate
+                            </Link>
+                          ) : null}
+                          {canReviewIdentityConflicts ? (
+                            <form action={dismissIdentityResolutionConflictAction}>
+                              <input type="hidden" name="conflict_id" value={conflict.id} />
+                              <button type="submit" className={styles.button}>
+                                Dismiss as distinct
+                              </button>
+                            </form>
+                          ) : (
+                            <span className={styles.pillGray}>Manager review required</span>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <div className={styles.panelBody}>
+            <div className={styles.emptyNote}>
+              <ShieldCheck size={18} />
+              <div>
+                <strong>No open identity conflicts</strong>
+                The canonical identity graph has no conflicts waiting for human review.
+              </div>
+            </div>
+          </div>
+        )}
+
+        <div className={styles.panelBody}>
+          <div className={styles.emptyNote}>
+            <AlertTriangle size={18} />
+            <div>
+              <strong>No automatic merge from this workspace</strong>
+              If two records may be the same person, keep the conflict open and compare the current and candidate Contact records. Dismissal only records a human decision that the conflict should not merge identity.
+            </div>
+          </div>
+        </div>
+      </section>
+
       <div className={styles.splitGrid}>
         <section className={styles.panel}>
           <div className={styles.panelHead}>
@@ -144,10 +367,10 @@ export default async function DataQualityPage() {
           </div>
           <div className={styles.panelBody}>
             <div className={styles.emptyNote}>
-              <AlertTriangle size={18} />
+              <ShieldCheck size={18} />
               <div>
-                <strong>No automatic merge from this workspace</strong>
-                Duplicate decisions require verified identifiers and human review. Generic names, channels or similar course interests are not sufficient evidence for a merge.
+                <strong>Primary-contact uniqueness is enforced at the database boundary</strong>
+                Each lead can have at most one primary contact per contact type. Ingestion paths cannot create duplicate primary email, phone or messaging identities.
               </div>
             </div>
           </div>
@@ -200,4 +423,38 @@ function Evidence({
       <span className={muted ? styles.pillGray : styles.pill}>{value}</span>
     </div>
   );
+}
+
+function one(value: string | string[] | undefined) {
+  if (Array.isArray(value)) return value[0] ?? '';
+  return value ?? '';
+}
+
+function asRecord(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === 'object' && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : null;
+}
+
+function stringValue(value: unknown) {
+  return value == null ? '' : String(value).trim();
+}
+
+function pretty(value: string) {
+  return value
+    .replace(/[_-]+/g, ' ')
+    .replace(/\b\w/g, (character) => character.toUpperCase());
+}
+
+function formatDateTime(value: string | null) {
+  if (!value) return '—';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '—';
+  return new Intl.DateTimeFormat('en-IN', {
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  }).format(date);
 }
