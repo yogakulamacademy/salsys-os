@@ -126,7 +126,22 @@ export function transferInvestigationScope(
   } else if (url.pathname === "/revenue") {
     add("source", "source", scope.source);
   } else if (url.pathname === "/admissions") {
-    add("owner", "owner", scope.owner);
+    const view = url.searchParams.get("view")?.trim() || "overview";
+
+    if (view === "queue" || view === "payments") {
+      add("source", "source", scope.source);
+      add("course", "course", scope.course);
+      add("location", "location", scope.location);
+      add("stage", "stage", scope.stage);
+      add("owner", "owner", scope.owner);
+    } else if (view === "capacity") {
+      add("course", "course", scope.course);
+      add("location", "location", scope.location);
+    }
+
+    if (applied.length > 0 && !url.searchParams.has("scope")) {
+      url.searchParams.set("scope", "1");
+    }
   }
 
   return {

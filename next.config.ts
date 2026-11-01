@@ -30,6 +30,25 @@ const nextConfig: NextConfig = {
       },
     ];
   },
+  async rewrites() {
+    return {
+      beforeFiles: [
+        {
+          source: '/admissions',
+          has: [
+            {
+              type: 'query',
+              key: 'scope',
+              value: '1',
+            },
+          ],
+          destination: '/admissions/scoped',
+        },
+      ],
+      afterFiles: [],
+      fallback: [],
+    };
+  },
 };
 
 export default nextConfig;
