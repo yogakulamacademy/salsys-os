@@ -6,6 +6,10 @@ export type MetricRelatedLink = {
 export function resolveMetricNextCheck(metricLabel: string): string | null {
   const metric = metricLabel.trim().toLowerCase();
 
+  if (metric.includes("lead creation") || metric.includes("last marketing touch")) {
+    return "Compare the exact authorized lead cohort with Admissions workload and valued Revenue opportunities; do not substitute first-touch or current-channel evidence.";
+  }
+
   if (metric === "new leads" || metric.includes("first touch")) {
     return "Confirm ownership and first-touch status before judging lead quality or escalating priority.";
   }
@@ -78,6 +82,13 @@ export function resolveMetricNextCheck(metricLabel: string): string | null {
 
 export function resolveMetricRelatedLinks(metricLabel: string): MetricRelatedLink[] {
   const metric = metricLabel.trim().toLowerCase();
+
+  if (metric.includes("lead creation") || metric.includes("last marketing touch")) {
+    return [
+      { label: "Admissions Queue", href: "/admissions?view=queue" },
+      { label: "Revenue", href: "/revenue" },
+    ];
+  }
 
   if (metric === "new leads" || metric.includes("first touch")) {
     return [
