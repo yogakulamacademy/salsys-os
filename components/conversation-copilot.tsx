@@ -162,14 +162,14 @@ export function ConversationCopilot({
                 <div className="mt-2 space-y-1.5 text-[9px] leading-4 text-copy-muted dark:text-slate-300">
                   <div className="flex items-start gap-2">
                     <CheckCircle2 size={11} className="mt-0.5 shrink-0 text-success" />
-                    <span>Live CRM course, batch, lead and conversation context is used as the primary source of truth.</span>
+                    <span>Live CRM course, batch and lead data is the factual source of truth; conversation history is conversational context only.</span>
                   </div>
                   <div className="flex items-start gap-2">
                     <CheckCircle2 size={11} className="mt-0.5 shrink-0 text-success" />
                     <span>
                       {result.knowledgeUsed > 0
-                        ? `${result.knowledgeUsed} approved organization knowledge source${result.knowledgeUsed === 1 ? "" : "s"} matched this request.`
-                        : "No approved knowledge article matched this request; the draft is grounded only in live CRM context and conversation history."}
+                        ? `${result.knowledgeUsed} approved organization knowledge match${result.knowledgeUsed === 1 ? "" : "es"} supported this request.`
+                        : "No approved organization knowledge matched this request; organization-specific facts must still be supported by live CRM data rather than older conversation claims."}
                     </span>
                   </div>
                   <div className="text-[8px] text-copy-subtle">
