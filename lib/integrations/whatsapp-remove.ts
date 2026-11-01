@@ -13,7 +13,6 @@ type WhatsAppConnectionRow = {
   external_account_id: string | null;
   account_name: string | null;
   access_token_ciphertext: string | null;
-  provider_metadata: Record<string, unknown> | null;
 };
 
 type MetaResponse = {
@@ -109,7 +108,7 @@ export async function removeWhatsAppForOrganization(
   const { data: rawConnection, error: connectionError } = await admin
     .from('integration_connections')
     .select(
-      'id,organization_id,provider,status,external_account_id,account_name,access_token_ciphertext,provider_metadata',
+      'id,organization_id,provider,status,external_account_id,account_name,access_token_ciphertext',
     )
     .eq('id', connectionId)
     .eq('organization_id', organizationId)
@@ -156,79 +155,28 @@ export async function removeWhatsAppForOrganization(
       'SalsysOS removed the local connection. No saved Meta credential was available to remove the WABA webhook subscription.';
   }
 
-  const now = new Date().toISOString();
-  const previousMetadata =
-    connection.provider_metadata &&
-    typeof connection.provider_metadata === 'object'
-      ? connection.provider_metadata
-      : {};
-
-  const { error: accountError } = await admin
-    .from('whatsapp_accounts')
-    .update({
-      active: false,
-      is_default: false,
-    })
-    .eq('organization_id', organizationId)
-    .eq('connection_id', connectionId);
-
-  if (accountError) {
-    throw new Error(
-      `Unable to deactivate the WhatsApp phone mapping: ${accountError.message}`,
-    );
-  }
-
-  const { error: assetsError } = await admin
-    .from('integration_assets')
-    .delete()
-    .eq('organization_id', organizationId)
-    .eq('connection_id', connectionId);
-
-  if (assetsError) {
-    throw new Error(
-      `Unable to clear the WhatsApp integration assets: ${assetsError.message}`,
-    );
-  }
-
-  const { error: connectionUpdateError } = await admin
-    .from('integration_connections')
-    .update({
-      status: 'revoked',
-      access_token_ciphertext: null,
-      refresh_token_ciphertext: null,
-      token_expires_at: null,
-      last_error: providerWarning,
-      provider_metadata: {
-        ...previousMetadata,
-        removed_from_salsys_at: now,
-        provider_webhook_unsubscribed: providerUnsubscribed,
-      },
-    })
-    .eq('id', connectionId)
-    .eq('organization_id', organizationId)
-    .eq('provider', 'whatsapp');
-
-  if (connectionUpdateError) {
-    throw new Error(
-      `Unable to remove the WhatsApp connection: ${connectionUpdateError.message}`,
-    );
-  }
-
-  await admin.from('integration_audit_log').insert({
-    organization_id: organizationId,
-    connection_id: connectionId,
-    provider: 'whatsapp',
-    event_type: 'removed',
-    actor_user_id: actorUserId,
-    detail: {
-      account_name: connection.account_name,
-      waba_id: wabaId || null,
-      provider_webhook_unsubscribed: providerUnsubscribed,
-      provider_warning: providerWarning,
-      historical_crm_data_preserved: true,
-      phone_deregistered: false,
+  /*
+   * The provider operation is necessarily external. Everything local after it
+   * is one database transaction: phone mappings, assets, encrypted
+   * credentials, connection status and audit evidence either all finalize or
+   * all roll back together.
+   */
+  const { error: finalizeError } = await admin.rpc(
+    'finalize_whatsapp_removal_v1',
+    {
+      p_organization_id: organizationId,
+      p_connection_id: connectionId,
+      p_actor_user_id: actorUserId,
+      p_provider_unsubscribed: providerUnsubscribed,
+      p_provider_warning: providerWarning,
     },
-  });
+  );
+
+  if (finalizeError) {
+    throw new Error(
+      `Unable to finalize the WhatsApp removal: ${finalizeError.message}`,
+    );
+  }
 
   return {
     connectionId,
