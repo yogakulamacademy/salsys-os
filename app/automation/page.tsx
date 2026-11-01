@@ -13,6 +13,7 @@ import {
   Zap,
 } from 'lucide-react';
 
+import { getWhatsAppSenderReadiness, type WhatsAppSenderReadiness } from '@/lib/integrations/whatsapp-sender-readiness';
 import { createClient } from '@/lib/supabase/server';
 import { getCurrentWorkspaceContext } from '@/lib/workspace';
 
@@ -65,7 +66,7 @@ export default async function AutomationOverviewPage() {
   let workflows: WorkflowRow[] = [];
   let templates: TemplateRow[] = [];
   let awaitingApproval = 0;
-  let activeWhatsAppAccounts = 0;
+  let senderReadiness: WhatsAppSenderReadiness | null = null;
   let latestSync: SyncRow | null = null;
   let runs: RunRow[] = [];
   let loadError: string | null = null;
@@ -80,7 +81,7 @@ export default async function AutomationOverviewPage() {
         const since = new Date(Date.now() - 6 * 24 * 60 * 60 * 1000);
         since.setHours(0, 0, 0, 0);
 
-        const [workflowResult, approvalResult, templateResult, syncResult, whatsappResult, runResult] =
+        const [workflowResult, approvalResult, templateResult, syncResult, senderResult, runResult] =
           await Promise.all([
             supabase
               .from('automation_workflows')
@@ -102,11 +103,7 @@ export default async function AutomationOverviewPage() {
               .order('started_at', { ascending: false })
               .limit(1)
               .maybeSingle(),
-            supabase
-              .from('whatsapp_accounts')
-              .select('id', { count: 'exact', head: true })
-              .eq('organization_id', organizationId)
-              .eq('active', true),
+            getWhatsAppSenderReadiness(organizationId),
             supabase
               .from('automation_action_runs')
               .select('id,status,created_at')
@@ -120,14 +117,13 @@ export default async function AutomationOverviewPage() {
           approvalResult.error ||
           templateResult.error ||
           syncResult.error ||
-          whatsappResult.error ||
           runResult.error;
         if (error) throw error;
 
         workflows = (workflowResult.data ?? []) as WorkflowRow[];
         templates = (templateResult.data ?? []) as TemplateRow[];
         awaitingApproval = approvalResult.count ?? 0;
-        activeWhatsAppAccounts = whatsappResult.count ?? 0;
+        senderReadiness = senderResult;
         latestSync = (syncResult.data ?? null) as SyncRow | null;
         runs = (runResult.data ?? []) as RunRow[];
       }
@@ -137,13 +133,14 @@ export default async function AutomationOverviewPage() {
   }
 
   const dataAvailable = loadError == null;
+  const senderConnected = senderReadiness?.connected === true;
   const activeFlows = workflows.filter((row) => row.status === 'active').length;
   const activeTemplates = templates.filter((row) => row.active);
   const approvedTemplates = activeTemplates.filter((row) => row.approval_status === 'approved').length;
   const pendingTemplates = activeTemplates.filter((row) => row.approval_status === 'pending').length;
   const rejectedTemplates = activeTemplates.filter((row) => row.approval_status === 'rejected').length;
   const syncNeedsAttention = dataAvailable && latestSync?.status === 'failed' ? 1 : 0;
-  const providerNeedsAttention = dataAvailable && activeWhatsAppAccounts === 0 ? 1 : 0;
+  const providerNeedsAttention = dataAvailable && !senderConnected ? 1 : 0;
   const attentionCount = dataAvailable
     ? awaitingApproval + pendingTemplates + rejectedTemplates + syncNeedsAttention + providerNeedsAttention
     : null;
@@ -157,8 +154,10 @@ export default async function AutomationOverviewPage() {
     },
     {
       label: 'Connect a WhatsApp sender',
-      hint: activeWhatsAppAccounts ? `${activeWhatsAppAccounts} active sender${activeWhatsAppAccounts === 1 ? '' : 's'}` : 'No active sender verified',
-      ok: activeWhatsAppAccounts > 0,
+      hint: senderConnected
+        ? `${senderReadiness?.displayPhoneNumber ?? 'Default sender'} bound and connected`
+        : senderReadiness?.issueMessage ?? 'No connected default sender verified',
+      ok: senderConnected,
       href: '/settings/integrations',
     },
     {
@@ -241,6 +240,11 @@ export default async function AutomationOverviewPage() {
       {loadError ? (
         <div className="rounded-lg border border-[#efd9d5] bg-[#fcf0ef] px-4 py-3 text-[11px] font-medium text-[#ae4545]">
           Automation data is temporarily unavailable. Metrics and readiness states are hidden until the data can be verified.
+        </div>
+      ) : null}
+      {senderReadiness && senderReadiness.unboundActiveAccountCount > 0 ? (
+        <div className="rounded-lg border border-[#ecdcae] bg-[#fff9e8] px-4 py-3 text-[11px] leading-5 text-[#8a641d]">
+          {senderReadiness.unboundActiveAccountCount} unbound historical active WhatsApp account record{senderReadiness.unboundActiveAccountCount === 1 ? '' : 's'} are excluded from launch readiness. Only the connected default sender counts.
         </div>
       ) : null}
 
@@ -408,13 +412,13 @@ export default async function AutomationOverviewPage() {
               <div className="mt-0.5 text-[9px] text-[#6d7c76]">
                 {!dataAvailable
                   ? 'Connection status unavailable'
-                  : activeWhatsAppAccounts
-                    ? `${activeWhatsAppAccounts} active sender${activeWhatsAppAccounts === 1 ? '' : 's'}`
-                    : 'No active sender verified'}
+                  : senderConnected
+                    ? `${senderReadiness?.displayPhoneNumber ?? 'Default sender'} connected${senderReadiness && senderReadiness.unboundActiveAccountCount > 0 ? ` · ${senderReadiness.unboundActiveAccountCount} unbound record${senderReadiness.unboundActiveAccountCount === 1 ? '' : 's'} ignored` : ''}`
+                    : senderReadiness?.issueMessage ?? 'No connected default sender verified'}
               </div>
             </div>
-            <span className={`rounded-md px-2 py-1 text-[9px] font-semibold ${!dataAvailable ? 'bg-[#f0f3f1] text-[#69796f]' : activeWhatsAppAccounts ? 'bg-[#eaf5ed] text-[#397052]' : 'bg-[#fcf4e5] text-[#9b6720]'}`}>
-              {!dataAvailable ? 'Unavailable' : activeWhatsAppAccounts ? 'Connected' : 'Not connected'}
+            <span className={`rounded-md px-2 py-1 text-[9px] font-semibold ${!dataAvailable ? 'bg-[#f0f3f1] text-[#69796f]' : senderConnected ? 'bg-[#eaf5ed] text-[#397052]' : 'bg-[#fcf4e5] text-[#9b6720]'}`}>
+              {!dataAvailable ? 'Unavailable' : senderConnected ? 'Connected' : 'Not connected'}
             </span>
             <Link href="/automation/whatsapp" aria-label="Open WhatsApp operations"><ArrowRight size={13} className="text-[#91a096]" /></Link>
           </div>

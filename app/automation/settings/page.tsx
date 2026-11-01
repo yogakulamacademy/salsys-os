@@ -17,6 +17,7 @@ import {
   updateWorkflowRuntimeAction,
   updateWorkflowSafetyAction,
 } from '@/app/automation/settings/actions';
+import { getWhatsAppSenderReadiness, type WhatsAppSenderReadiness } from '@/lib/integrations/whatsapp-sender-readiness';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { createClient } from '@/lib/supabase/server';
 import { getCurrentWorkspaceContext } from '@/lib/workspace';
@@ -88,8 +89,8 @@ export default async function AutomationSettingsPage({ searchParams }: { searchP
   let workflows: WorkflowRow[] = [];
   let policy: MessagingPolicy = { policy_enabled: false, autonomous_send_enabled: false, requires_human_approval: true, max_messages_24h: 3, max_messages_7d: 8, min_gap_minutes: 30 };
   let provider: ProviderSettings = { provider_send_enabled: false, pilot_mode_enabled: false, pilot_max_messages: 1, pilot_lead_id: null, pilot_require_verified_primary_whatsapp: true, pilot_started_at: null };
+  let senderReadiness: WhatsAppSenderReadiness | null = null;
   let approvedTemplates = 0;
-  let activeWhatsAppAccounts = 0;
   let loadError: string | null = null;
 
   try {
@@ -98,22 +99,22 @@ export default async function AutomationSettingsPage({ searchParams }: { searchP
     organizationName = workspace.activeWorkspace?.organizationName || organizationName;
     if (organizationId) {
       const admin = createAdminClient();
-      const [{ data: manageData, error: manageError }, { data: workflowRows, error: workflowError }, { data: policyRow, error: policyError }, { data: providerRow, error: providerError }, { count: templateCount, error: templateError }, { count: accountCount, error: accountError }] = await Promise.all([
+      const [{ data: manageData, error: manageError }, { data: workflowRows, error: workflowError }, { data: policyRow, error: policyError }, { data: providerRow, error: providerError }, { count: templateCount, error: templateError }, senderResult] = await Promise.all([
         supabase.rpc('can_manage_organization', { p_organization_id: organizationId }),
         supabase.from('automation_workflows').select('id,name,status,approval_mode,stop_on_reply,quiet_hours_enabled,quiet_hours_start,quiet_hours_end,timezone,current_published_version,runtime_flow_enabled').eq('organization_id', organizationId).neq('status', 'archived').order('updated_at', { ascending: false }),
         admin.from('automation_messaging_policies').select('policy_enabled,autonomous_send_enabled,requires_human_approval,max_messages_24h,max_messages_7d,min_gap_minutes').eq('organization_id', organizationId).eq('channel', 'whatsapp').maybeSingle(),
         admin.from('automation_provider_send_settings').select('provider_send_enabled,pilot_mode_enabled,pilot_max_messages,pilot_lead_id,pilot_require_verified_primary_whatsapp,pilot_started_at').eq('organization_id', organizationId).eq('channel', 'whatsapp').eq('provider', 'meta_cloud_api').maybeSingle(),
         admin.from('automation_whatsapp_templates').select('id', { count: 'exact', head: true }).eq('organization_id', organizationId).eq('approval_status', 'approved').eq('active', true),
-        admin.from('whatsapp_accounts').select('id', { count: 'exact', head: true }).eq('organization_id', organizationId).eq('active', true),
+        getWhatsAppSenderReadiness(organizationId),
       ]);
       canManage = manageData === true;
-      const error = manageError || workflowError || policyError || providerError || templateError || accountError;
+      const error = manageError || workflowError || policyError || providerError || templateError;
       if (error) throw error;
       workflows = (workflowRows ?? []) as WorkflowRow[];
       if (policyRow) policy = policyRow as MessagingPolicy;
       if (providerRow) provider = providerRow as ProviderSettings;
+      senderReadiness = senderResult;
       approvedTemplates = templateCount ?? 0;
-      activeWhatsAppAccounts = accountCount ?? 0;
     }
   } catch (error) {
     loadError = error instanceof Error ? error.message : 'Unable to load automation settings.';
@@ -121,6 +122,10 @@ export default async function AutomationSettingsPage({ searchParams }: { searchP
 
   const activeRuntimeWorkflows = workflows.filter((workflow) => workflow.status === 'active' && workflow.runtime_flow_enabled).length;
   const providerBoundaryClosed = provider.provider_send_enabled !== true;
+  const senderConnected = senderReadiness?.connected === true;
+  const senderNote = senderConnected
+    ? `${senderReadiness?.displayPhoneNumber ?? 'Default sender'} connected${senderReadiness && senderReadiness.unboundActiveAccountCount > 0 ? ` · ${senderReadiness.unboundActiveAccountCount} unbound historical record${senderReadiness.unboundActiveAccountCount === 1 ? '' : 's'} ignored` : ''}`
+    : senderReadiness?.issueMessage ?? 'Sender readiness unavailable';
 
   return (
     <div className="space-y-5">
@@ -138,12 +143,13 @@ export default async function AutomationSettingsPage({ searchParams }: { searchP
 
       {query.notice ? <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-800">{query.notice}</div> : null}
       {query.error || loadError ? <div className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-medium text-rose-800">{query.error || loadError}</div> : null}
+      {senderReadiness && senderReadiness.unboundActiveAccountCount > 0 ? <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs leading-5 text-amber-800">WhatsApp readiness ignores {senderReadiness.unboundActiveAccountCount} unbound historical active account record{senderReadiness.unboundActiveAccountCount === 1 ? '' : 's'}. Only the bound connected default sender can satisfy rollout readiness.</div> : null}
 
       <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <MetricCard label="Runtime workflows" value={activeRuntimeWorkflows} note="Active and runtime enabled" icon={Power} tone="violet" />
         <MetricCard label="Messaging policy" value={statusPill(policy.policy_enabled, 'Enabled', 'Blocked')} note="Autonomous send remains locked off" icon={ShieldCheck} tone="amber" />
         <MetricCard label="Provider boundary" value={statusPill(!providerBoundaryClosed, 'Provider ON', 'Provider OFF')} note="Separate final provider gate" icon={LockKeyhole} tone="sky" />
-        <MetricCard label="WhatsApp readiness" value={approvedTemplates} note={`${approvedTemplates} approved templates · ${activeWhatsAppAccounts} active account${activeWhatsAppAccounts === 1 ? '' : 's'}`} icon={MessageCircle} tone="emerald" />
+        <MetricCard label="WhatsApp readiness" value={statusPill(senderConnected, 'Sender connected', 'Sender unavailable')} note={`${approvedTemplates} approved template${approvedTemplates === 1 ? '' : 's'} · ${senderNote}`} icon={MessageCircle} tone={senderConnected ? 'emerald' : 'amber'} />
       </section>
 
       <section className="grid gap-4 xl:grid-cols-2">

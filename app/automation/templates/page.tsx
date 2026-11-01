@@ -3,16 +3,10 @@ import {
   type TemplateSyncRunRow,
   type TemplateWorkspaceRow,
 } from '@/app/automation/templates/template-workspace';
+import { getWhatsAppSenderReadiness, type WhatsAppSenderReadiness } from '@/lib/integrations/whatsapp-sender-readiness';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { createClient } from '@/lib/supabase/server';
 import { getCurrentWorkspaceContext } from '@/lib/workspace';
-
-type AccountRow = {
-  id: string;
-  display_phone_number: string | null;
-  active: boolean;
-  is_default: boolean;
-};
 
 export default async function WhatsAppTemplatesPage() {
   const supabase = await createClient();
@@ -29,7 +23,7 @@ export default async function WhatsAppTemplatesPage() {
   }
 
   let role: string | null = null;
-  let account: AccountRow | null = null;
+  let senderReadiness: WhatsAppSenderReadiness | null = null;
   let templates: TemplateWorkspaceRow[] = [];
   let latestSync: TemplateSyncRunRow | null = null;
   let loadError: string | null = null;
@@ -41,14 +35,8 @@ export default async function WhatsAppTemplatesPage() {
 
     if (organizationId) {
       const admin = createAdminClient();
-      const [accountResult, templateResult, syncResult] = await Promise.all([
-        admin
-          .from('whatsapp_accounts')
-          .select('id,display_phone_number,active,is_default')
-          .eq('organization_id', organizationId)
-          .eq('active', true)
-          .eq('is_default', true)
-          .maybeSingle(),
+      const [senderResult, templateResult, syncResult] = await Promise.all([
+        getWhatsAppSenderReadiness(organizationId),
         admin
           .from('automation_whatsapp_templates')
           .select(
@@ -70,10 +58,10 @@ export default async function WhatsAppTemplatesPage() {
           .maybeSingle(),
       ]);
 
-      const error = accountResult.error || templateResult.error || syncResult.error;
+      const error = templateResult.error || syncResult.error;
       if (error) throw error;
 
-      account = (accountResult.data ?? null) as AccountRow | null;
+      senderReadiness = senderResult;
       templates = (templateResult.data ?? []) as TemplateWorkspaceRow[];
       latestSync = (syncResult.data ?? null) as TemplateSyncRunRow | null;
     }
@@ -91,11 +79,17 @@ export default async function WhatsAppTemplatesPage() {
         </div>
       ) : null}
 
+      {senderReadiness && senderReadiness.unboundActiveAccountCount > 0 ? (
+        <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs leading-5 text-amber-800">
+          {senderReadiness.unboundActiveAccountCount} unbound historical active WhatsApp account record{senderReadiness.unboundActiveAccountCount === 1 ? '' : 's'} are excluded from template readiness. Only the connected default sender is eligible for sync.
+        </div>
+      ) : null}
+
       <TemplateWorkspace
         templates={templates}
         latestSync={latestSync}
-        accountPhone={account?.display_phone_number ?? null}
-        accountConnected={Boolean(account)}
+        accountPhone={senderReadiness?.displayPhoneNumber ?? null}
+        accountConnected={senderReadiness?.connected === true}
         canSync={canSync}
       />
     </div>
