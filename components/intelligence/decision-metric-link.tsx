@@ -5,6 +5,7 @@ import { useEffect, useState, type MouseEvent, type ReactNode } from "react";
 
 import { canonicalizeWorkspaceHref } from "@/lib/canonical-workspace-routes";
 import {
+  captureInvestigationScope,
   summarizeInvestigationScope,
   transferInvestigationScope,
   type InvestigationScope,
@@ -37,6 +38,7 @@ export function DecisionMetricLink({
   metricDetail,
   evidenceLabel,
   evidenceState,
+  investigationScope,
   children,
 }: {
   href: string;
@@ -46,6 +48,7 @@ export function DecisionMetricLink({
   metricDetail?: string;
   evidenceLabel?: string;
   evidenceState?: MetricEvidenceState;
+  investigationScope?: InvestigationScope;
   children: ReactNode;
 }) {
   const canonicalHref = canonicalizeWorkspaceHref(href);
@@ -58,13 +61,17 @@ export function DecisionMetricLink({
     }
 
     try {
+      const scope = resolveInvestigationScope(
+        window.location.search,
+        investigationScope,
+      );
       setResolvedHref(
-        transferInvestigationScope(canonicalHref, window.location.search).href,
+        transferInvestigationScope(canonicalHref, scope).href,
       );
     } catch {
       setResolvedHref(canonicalHref);
     }
-  }, [canonicalHref]);
+  }, [canonicalHref, investigationScope]);
 
   function rememberInvestigation(event: MouseEvent<HTMLAnchorElement>) {
     if (
@@ -82,9 +89,13 @@ export function DecisionMetricLink({
 
     try {
       const sourcePath = `${window.location.pathname}${window.location.search}`;
+      const scope = resolveInvestigationScope(
+        window.location.search,
+        investigationScope,
+      );
       const transfer = transferInvestigationScope(
         canonicalHref,
-        window.location.search,
+        scope,
       );
       const context: StoredMetricInvestigation = {
         sourcePath,
@@ -114,6 +125,33 @@ export function DecisionMetricLink({
       {children}
     </Link>
   );
+}
+
+function resolveInvestigationScope(
+  search: string,
+  explicitScope?: InvestigationScope,
+): InvestigationScope {
+  const currentScope = captureInvestigationScope(search);
+  if (!explicitScope) return currentScope;
+
+  const explicit = Object.fromEntries(
+    Object.entries(explicitScope).filter(
+      ([, value]) => typeof value === "string" && value.trim().length > 0,
+    ),
+  ) as InvestigationScope;
+
+  const merged: InvestigationScope = {
+    ...currentScope,
+    ...explicit,
+  };
+
+  // A concrete selected attribution dimension is stronger evidence than a
+  // fuzzy finder query. Do not let the query silently narrow the destination.
+  if (explicit.source || explicit.channel) {
+    delete merged.q;
+  }
+
+  return merged;
 }
 
 function routeLabel(pathname: string) {
