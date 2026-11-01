@@ -71,9 +71,15 @@ expect(
 );
 expect(
   readiness.includes('.from("v_system_operational_readiness_v1")') &&
+    readiness.includes('.from("v_google_ads_operational_readiness_v1")') &&
     readiness.includes('.from("v_commerce_event_readiness_v1")') &&
-    readiness.match(/\.eq\("organization_id", organizationId\)/g)?.length >= 2,
-  "Operational Readiness service-role reads must remain explicitly tenant-scoped.",
+    readiness.match(/\.eq\("organization_id", organizationId\)/g)?.length >= 3,
+  "Operational Readiness service-role reads for base, Google Ads, and commerce must remain explicitly tenant-scoped.",
+);
+expect(
+  readiness.includes("Google Ads readiness is temporarily unavailable.") &&
+    readiness.includes("Commerce event readiness is temporarily unavailable."),
+  "Companion readiness-source failures must be disclosed rather than silently omitted.",
 );
 expect(
   page.includes("await requireAdminAccess()") &&
