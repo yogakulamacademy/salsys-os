@@ -6,6 +6,11 @@ import { createPortal } from "react-dom";
 
 import { DecisionMetricLink } from "@/components/intelligence/decision-metric-link";
 import {
+  captureInvestigationScope,
+  describeInvestigationScope,
+  transferInvestigationScope,
+} from "@/lib/investigation-scope";
+import {
   resolveMetricNextCheck,
   resolveMetricRelatedLinks,
 } from "@/lib/metric-investigation-guidance";
@@ -70,8 +75,12 @@ export function MetricInvestigatorCard({
 }) {
   const [open, setOpen] = useState(false);
   const [mounted, setMounted] = useState(false);
+  const [sourceSearch, setSourceSearch] = useState("");
 
-  useEffect(() => setMounted(true), []);
+  useEffect(() => {
+    setMounted(true);
+    setSourceSearch(window.location.search);
+  }, []);
 
   useEffect(() => {
     if (!open) return;
@@ -91,9 +100,17 @@ export function MetricInvestigatorCard({
   }, [open]);
 
   const nextCheck = resolveMetricNextCheck(label);
-  const relatedLinks = resolveMetricRelatedLinks(label).filter(
-    (item) => item.href !== href,
-  );
+  const scope = captureInvestigationScope(sourceSearch);
+  const scopeChips = describeInvestigationScope(scope);
+  const relatedLinks = resolveMetricRelatedLinks(label)
+    .filter((item) => item.href !== href)
+    .map((item) => ({
+      ...item,
+      transfer: transferInvestigationScope(item.href, scope),
+    }));
+  const primaryTransfer = href
+    ? transferInvestigationScope(href, scope)
+    : null;
 
   return (
     <>
@@ -192,6 +209,27 @@ export function MetricInvestigatorCard({
                     />
                   </section>
 
+                  {scopeChips.length ? (
+                    <section className="mt-5 rounded-2xl border border-brand-200 bg-brand-50/55 p-4 dark:border-brand-900/60 dark:bg-brand-950/15">
+                      <div className="text-[10px] font-bold uppercase tracking-[0.1em] text-brand-700 dark:text-brand-300">
+                        Investigation scope
+                      </div>
+                      <div className="mt-2 flex flex-wrap gap-2">
+                        {scopeChips.slice(0, 6).map((chip) => (
+                          <span
+                            key={`${chip.key}:${chip.value}`}
+                            className="rounded-full border border-brand-200 bg-surface px-2.5 py-1 text-[10px] font-semibold text-copy-muted dark:border-brand-900/60"
+                          >
+                            {chip.label}: {chip.value}
+                          </span>
+                        ))}
+                      </div>
+                      <p className="mt-2 text-[10px] leading-4 text-copy-subtle">
+                        Compatible filters follow the investigation automatically. Unsupported dimensions remain context only and never silently change destination data.
+                      </p>
+                    </section>
+                  ) : null}
+
                   {relatedLinks.length ? (
                     <section className="mt-5">
                       <div className="text-[10px] font-bold uppercase tracking-[0.1em] text-copy-subtle">
@@ -201,7 +239,7 @@ export function MetricInvestigatorCard({
                         {relatedLinks.slice(0, 3).map((item) => (
                           <DecisionMetricLink
                             key={item.href}
-                            href={item.href}
+                            href={item.transfer.href}
                             className="flex items-center justify-between gap-3 rounded-xl border border-line bg-surface px-3.5 py-3 text-sm font-semibold text-copy-strong transition hover:border-line-strong hover:bg-surface-muted"
                             metricLabel={label}
                             metricValue={value}
@@ -209,8 +247,15 @@ export function MetricInvestigatorCard({
                             evidenceLabel={evidenceLabel}
                             evidenceState={evidenceState}
                           >
-                            <span>{item.label}</span>
-                            <ArrowRight size={14} className="text-brand-700 dark:text-brand-300" />
+                            <span className="min-w-0">
+                              <span className="block">{item.label}</span>
+                              {item.transfer.applied.length ? (
+                                <span className="mt-0.5 block text-[9px] font-semibold text-brand-700 dark:text-brand-300">
+                                  {item.transfer.applied.length} compatible {item.transfer.applied.length === 1 ? "filter" : "filters"} carried
+                                </span>
+                              ) : null}
+                            </span>
+                            <ArrowRight size={14} className="shrink-0 text-brand-700 dark:text-brand-300" />
                           </DecisionMetricLink>
                         ))}
                       </div>
@@ -219,9 +264,9 @@ export function MetricInvestigatorCard({
                 </div>
 
                 <div className="border-t border-line bg-surface px-5 py-4 sm:px-6">
-                  {href ? (
+                  {primaryTransfer ? (
                     <DecisionMetricLink
-                      href={href}
+                      href={primaryTransfer.href}
                       className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-brand-700 px-4 text-sm font-semibold text-white transition hover:bg-brand-800"
                       metricLabel={label}
                       metricValue={value}
@@ -229,7 +274,9 @@ export function MetricInvestigatorCard({
                       evidenceLabel={evidenceLabel}
                       evidenceState={evidenceState}
                     >
-                      Open supporting workspace <ArrowRight size={14} />
+                      Open supporting workspace
+                      {primaryTransfer.applied.length ? ` · ${primaryTransfer.applied.length} scoped` : ""}
+                      <ArrowRight size={14} />
                     </DecisionMetricLink>
                   ) : (
                     <button
@@ -241,7 +288,7 @@ export function MetricInvestigatorCard({
                     </button>
                   )}
                   <p className="mt-2 text-center text-[10px] leading-4 text-copy-subtle">
-                    Context is preserved for navigation only. Destination data remains authoritative.
+                    Compatible filters are carried automatically; destination evidence remains authoritative.
                   </p>
                 </div>
               </section>
