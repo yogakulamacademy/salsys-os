@@ -12,6 +12,7 @@ import {
   Workflow,
 } from 'lucide-react';
 
+import { getWhatsAppSenderReadiness, type WhatsAppSenderReadiness } from '@/lib/integrations/whatsapp-sender-readiness';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { createClient } from '@/lib/supabase/server';
 import { getCurrentWorkspaceContext } from '@/lib/workspace';
@@ -101,7 +102,7 @@ export default async function AutomationReadinessPage() {
   if (!user) return <div className="card-pad text-sm text-slate-600">Sign in to review automation rollout readiness.</div>;
 
   let organizationName = 'Current organization';
-  let defaultAccount = false;
+  let senderReadiness: WhatsAppSenderReadiness | null = null;
   let approvedTemplateCount = 0;
   let workflows: WorkflowRow[] = [];
   let policy: PolicyRow | null = null;
@@ -115,17 +116,17 @@ export default async function AutomationReadinessPage() {
     organizationName = workspace.activeWorkspace?.organizationName || organizationName;
     if (organizationId) {
       const admin = createAdminClient();
-      const [accountResult, templateResult, workflowResult, policyResult, providerResult, suppressionResult] = await Promise.all([
-        admin.from('whatsapp_accounts').select('id', { count: 'exact', head: true }).eq('organization_id', organizationId).eq('active', true).eq('is_default', true),
+      const [senderResult, templateResult, workflowResult, policyResult, providerResult, suppressionResult] = await Promise.all([
+        getWhatsAppSenderReadiness(organizationId),
         admin.from('automation_whatsapp_templates').select('id', { count: 'exact', head: true }).eq('organization_id', organizationId).eq('active', true).eq('approval_status', 'approved'),
         admin.from('automation_workflows').select('id,name,status,current_published_version,runtime_flow_enabled,stop_on_reply,quiet_hours_enabled').eq('organization_id', organizationId).neq('status', 'archived').order('updated_at', { ascending: false }),
         admin.from('automation_messaging_policies').select('policy_enabled,autonomous_send_enabled,requires_human_approval,max_messages_24h,max_messages_7d,min_gap_minutes').eq('organization_id', organizationId).eq('channel', 'whatsapp').maybeSingle(),
         admin.from('automation_provider_send_settings').select('provider_send_enabled,pilot_mode_enabled,pilot_max_messages,pilot_lead_id,pilot_started_at,pilot_require_verified_primary_whatsapp').eq('organization_id', organizationId).eq('channel', 'whatsapp').eq('provider', 'meta_cloud_api').maybeSingle(),
         admin.from('automation_suppressions').select('id', { count: 'exact', head: true }).eq('organization_id', organizationId).eq('channel', 'whatsapp').eq('active', true),
       ]);
-      const error = accountResult.error || templateResult.error || workflowResult.error || policyResult.error || providerResult.error || suppressionResult.error;
+      const error = templateResult.error || workflowResult.error || policyResult.error || providerResult.error || suppressionResult.error;
       if (error) throw error;
-      defaultAccount = (accountResult.count ?? 0) > 0;
+      senderReadiness = senderResult;
       approvedTemplateCount = templateResult.count ?? 0;
       workflows = (workflowResult.data ?? []) as WorkflowRow[];
       policy = (policyResult.data ?? null) as PolicyRow | null;
@@ -136,6 +137,10 @@ export default async function AutomationReadinessPage() {
     loadError = error instanceof Error ? error.message : 'Unable to calculate rollout readiness.';
   }
 
+  const senderConnected = senderReadiness?.connected === true;
+  const senderNote = senderConnected
+    ? `${senderReadiness?.displayPhoneNumber ?? 'Default sender'} is bound to a connected WhatsApp integration.${senderReadiness && senderReadiness.unboundActiveAccountCount > 0 ? ` ${senderReadiness.unboundActiveAccountCount} unbound historical active account record${senderReadiness.unboundActiveAccountCount === 1 ? '' : 's'} excluded from readiness.` : ''}`
+    : senderReadiness?.issueMessage ?? 'Connect WhatsApp Business and select a bound active default sender.';
   const publishedWorkflows = workflows.filter((row) => row.current_published_version !== null);
   const runtimeWorkflows = publishedWorkflows.filter((row) => row.status === 'active' && row.runtime_flow_enabled);
   const safePolicyDefaults = policy?.autonomous_send_enabled === false && policy?.requires_human_approval === true;
@@ -143,8 +148,8 @@ export default async function AutomationReadinessPage() {
   const pilotConfigured = provider?.pilot_mode_enabled === true && Boolean(provider.pilot_lead_id) && provider.pilot_max_messages === 1 && provider.pilot_require_verified_primary_whatsapp === true;
 
   const setupItems: ReadinessItem[] = [
-    { label: 'WhatsApp connection', description: defaultAccount ? 'An active default WhatsApp sender is connected.' : 'Connect WhatsApp Business and select an active default sender.', state: defaultAccount ? 'ready' : 'next', href: '/settings/integrations', action: defaultAccount ? 'Review connection' : 'Connect WhatsApp' },
-    { label: 'Approved WhatsApp template', description: approvedTemplateCount > 0 ? `${approvedTemplateCount} active provider-approved template${approvedTemplateCount === 1 ? '' : 's'} available.` : 'Sync at least one provider-approved template before template-based customer sends.', state: approvedTemplateCount > 0 ? 'ready' : defaultAccount ? 'next' : 'blocked', href: '/automation/templates', action: approvedTemplateCount > 0 ? 'Review templates' : 'Sync templates' },
+    { label: 'WhatsApp connection', description: senderNote, state: senderConnected ? 'ready' : 'next', href: '/settings/integrations', action: senderConnected ? 'Review connection' : 'Connect WhatsApp' },
+    { label: 'Approved WhatsApp template', description: approvedTemplateCount > 0 ? `${approvedTemplateCount} active provider-approved template${approvedTemplateCount === 1 ? '' : 's'} available.` : 'Sync at least one provider-approved template before template-based customer sends.', state: approvedTemplateCount > 0 ? 'ready' : senderConnected ? 'next' : 'blocked', href: '/automation/templates', action: approvedTemplateCount > 0 ? 'Review templates' : 'Sync templates' },
     { label: 'Workflow foundation', description: workflows.length > 0 ? `${workflows.length} non-archived workflow${workflows.length === 1 ? '' : 's'} configured.` : 'Create the workflow as a draft first.', state: workflows.length > 0 ? 'ready' : 'next', href: '/automation/triggers', action: workflows.length > 0 ? 'Review workflows' : 'Create draft' },
     { label: 'Published flow version', description: publishedWorkflows.length > 0 ? `${publishedWorkflows.length} workflow${publishedWorkflows.length === 1 ? ' has' : 's have'} a published version.` : 'Validate and publish a flow before runtime can be enabled.', state: publishedWorkflows.length > 0 ? 'ready' : workflows.length > 0 ? 'next' : 'blocked', href: '/automation/flow-builder', action: 'Open Flow Builder' },
     { label: 'Human-approval safety defaults', description: safePolicyDefaults ? 'Autonomous customer sending is disabled and human approval is required.' : 'Restore human approval and disable autonomous sending before rollout.', state: safePolicyDefaults ? 'ready' : 'blocked', href: '/automation/settings', action: 'Review safety' },
@@ -174,7 +179,7 @@ export default async function AutomationReadinessPage() {
       {loadError ? <div className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-medium text-rose-800">Readiness data is temporarily unavailable.</div> : null}
 
       <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        <SummaryCard icon={Smartphone} label="Sender" value={defaultAccount ? 'Connected' : 'Not connected'} note={defaultAccount ? 'Default WhatsApp sender available' : 'Connect WhatsApp Business'} tone={defaultAccount ? 'emerald' : 'violet'} />
+        <SummaryCard icon={Smartphone} label="Sender" value={senderConnected ? 'Connected' : 'Not connected'} note={senderNote} tone={senderConnected ? 'emerald' : 'violet'} />
         <SummaryCard icon={MessageSquareText} label="Approved templates" value={approvedTemplateCount} note="Available for eligible sends" tone="emerald" />
         <SummaryCard icon={Workflow} label="Published workflows" value={publishedWorkflows.length} note="Validated and published" tone="violet" />
         <SummaryCard icon={ShieldCheck} label="Foundation" value={`${readyFoundationCount} / ${setupItems.length}`} note={foundationReady ? 'Setup foundation complete' : 'Setup steps remaining'} tone={foundationReady ? 'emerald' : 'amber'} />
