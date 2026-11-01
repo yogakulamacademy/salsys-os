@@ -393,7 +393,9 @@ async function loadCourseManagementFallback(
     const demand = demandByBatch.get(batchId) ?? emptyDemandMetrics();
     const capacity = nullableNumber(batch.capacity);
     const calculatedSeatsRemaining =
-      capacity == null ? null : Math.max(capacity - enrolledCount, 0);
+      capacity == null || capacity <= 0
+        ? null
+        : Math.max(capacity - enrolledCount, 0);
     const effectiveActive =
       batch.active !== false &&
       batch.local_enabled !== false &&
@@ -454,7 +456,7 @@ async function loadCourseManagementFallback(
   const upcomingBatches = baseBatches.filter(
     (batch) =>
       batch.effective_active === true &&
-      (!batch.end_date || batch.end_date >= today),
+      Boolean(batch.start_date && batch.start_date >= today),
   );
 
   const summary: CourseManagementSummary = {
@@ -475,8 +477,10 @@ async function loadCourseManagementFallback(
     closedEnrollment: upcomingBatches.filter(
       (batch) => batch.enrollment_open === false,
     ).length,
-    needsCapacity: upcomingBatches.filter((batch) => batch.capacity == null)
-      .length,
+    needsCapacity: upcomingBatches.filter((batch) => {
+      const capacity = nullableNumber(batch.capacity);
+      return capacity == null || capacity <= 0;
+    }).length,
     demandPressure: upcomingBatches.filter((batch) =>
       DEMAND_PRESSURE_STATUSES.has(String(batch.capacity_status ?? "")),
     ).length,
@@ -551,17 +555,17 @@ function matchesBatchFilters(
   if (state === "inactive") return batch.effective_active === false;
   if (state === "closed") return batch.enrollment_open === false;
 
-  const isCurrent = !batch.end_date || batch.end_date >= today;
+  const isFuture = Boolean(batch.start_date && batch.start_date >= today);
 
   if (state === "open") {
     return (
       batch.effective_active === true &&
       batch.enrollment_open !== false &&
-      isCurrent
+      isFuture
     );
   }
 
-  return batch.effective_active === true && isCurrent;
+  return batch.effective_active === true && isFuture;
 }
 
 function calculateCapacityStatus({

@@ -17,7 +17,11 @@ export default async function AvailabilityPage() {
   const workspace = await getCourseManagementWorkspace({ query: "", location: "all", state: "all" });
   const today = new Date().toISOString().slice(0, 10);
   const batches = workspace.batches
-    .filter((row) => row.effective_active === true && (!row.end_date || row.end_date >= today))
+    .filter(
+      (row) =>
+        row.effective_active === true &&
+        Boolean(row.start_date && row.start_date >= today),
+    )
     .sort((a, b) => severity(b) - severity(a) || String(a.start_date ?? "9999").localeCompare(String(b.start_date ?? "9999")));
 
   const open = batches.filter((row) => availabilityState(row) === "open").length;
@@ -34,7 +38,7 @@ export default async function AvailabilityPage() {
       <PageHeader
         eyebrow="Operations · Availability"
         title="Availability & Capacity"
-        description="See which batches can still accept students, which are filling, and where demand or setup issues need intervention."
+        description="See which future batches can still accept students, which are filling, and where demand or setup issues need intervention."
         actions={<Link href="/course-management" className="btn-primary">Manage batches <ArrowRight size={14} /></Link>}
       />
 
@@ -44,28 +48,35 @@ export default async function AvailabilityPage() {
         </div>
       ) : null}
 
+      {setup > 0 ? (
+        <div className="rounded-xl border border-amber-200 bg-amber-50/70 px-4 py-3 text-xs leading-5 text-amber-900">
+          <strong>Future capacity setup is incomplete.</strong>{" "}
+          {setup.toLocaleString("en-IN")} future active batch{setup === 1 ? "" : "es"} {setup === 1 ? "does" : "do"} not have positive capacity configured. Open-seat totals remain unknown for those batches until capacity is recorded.
+        </div>
+      ) : null}
+
       <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-6">
-        <Metric icon={<CheckCircle2 size={17} />} label="Open" value={open} note="Accepting enrollment" />
+        <Metric icon={<CheckCircle2 size={17} />} label="Open" value={open} note="Future batches accepting enrollment" />
         <Metric icon={<UsersRound size={17} />} label="Filling" value={filling} note="Near capacity / demand pressure" alert={filling > 0} />
         <Metric icon={<LockKeyhole size={17} />} label="Full / closed" value={full} note="No operational availability" alert={full > 0} />
-        <Metric icon={<AlertTriangle size={17} />} label="Needs setup" value={setup} note="Capacity unavailable" alert={setup > 0} />
-        <Metric icon={<CircleDollarSign size={17} />} label="Payment pending" value={paymentPressure} note="Across upcoming batches" alert={paymentPressure > 0} />
-        <Metric icon={<CalendarDays size={17} />} label="Needs reply" value={replyPressure} note="Prospects awaiting response" alert={replyPressure > 0} />
+        <Metric icon={<AlertTriangle size={17} />} label="Needs setup" value={setup} note="Future capacity unavailable" alert={setup > 0} />
+        <Metric icon={<CircleDollarSign size={17} />} label="Payment pending" value={paymentPressure} note="Across future batches" alert={paymentPressure > 0} />
+        <Metric icon={<CalendarDays size={17} />} label="Needs reply" value={replyPressure} note="Future-batch prospects awaiting response" alert={replyPressure > 0} />
       </section>
 
       <section className="card-pad min-w-0">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
             <div className="eyebrow">Decision queue</div>
-            <div className="section-title mt-1">Upcoming batch availability</div>
-            <p className="mt-1 text-xs text-copy-muted">Operational availability is based on effective batch state, enrollment-open state, confirmed seats and active demand.</p>
+            <div className="section-title mt-1">Future batch availability</div>
+            <p className="mt-1 text-xs text-copy-muted">Operational availability is based on future batch start date, effective batch state, enrollment-open state, confirmed seats and active demand.</p>
           </div>
-          <div className="text-[11px] font-semibold text-copy-subtle">{batches.length} upcoming / active</div>
+          <div className="text-[11px] font-semibold text-copy-subtle">{batches.length} future active</div>
         </div>
 
         <div className="mt-4 grid gap-3">
           {batches.length ? batches.map((row) => <BatchRow key={row.batch_id} row={row} />) : (
-            <div className="rounded-xl border border-dashed border-line px-4 py-10 text-center text-sm text-copy-subtle">No active upcoming batches are available in this workspace.</div>
+            <div className="rounded-xl border border-dashed border-line px-4 py-10 text-center text-sm text-copy-subtle">No future active batches are available in this workspace.</div>
           )}
         </div>
       </section>
@@ -96,7 +107,7 @@ function BatchRow({ row }: { row: CourseManagementBatchRow }) {
         <div className="mt-1 text-[11px] text-copy-muted">{row.batch_code || "Batch"} · {row.location || "Location not set"} · {dateRange(row.start_date, row.end_date)}</div>
       </div>
       <Cell label="Enrolled" value={String(enrolled)} />
-      <Cell label="Capacity" value={capacity == null ? "Unknown" : String(capacity)} />
+      <Cell label="Capacity" value={capacity == null || capacity <= 0 ? "Unknown" : String(capacity)} />
       <Cell label="Open seats" value={openSeats == null ? "Unknown" : String(openSeats)} />
       <Cell label="Active demand" value={String(prospects)} />
       <Cell label="Hot / pending" value={`${hot} / ${payment}`} />
@@ -111,7 +122,7 @@ function BatchRow({ row }: { row: CourseManagementBatchRow }) {
 function availabilityState(row: CourseManagementBatchRow): "open" | "filling" | "full" | "setup" {
   if (row.enrollment_open === false) return "full";
   const status = String(row.capacity_status ?? "").toLowerCase();
-  if (row.capacity == null || status === "missing_capacity") return "setup";
+  if (row.capacity == null || n(row.capacity) <= 0 || status === "capacity_not_set" || status === "missing_capacity") return "setup";
   if (["overbooked", "full"].includes(status) || n(row.calculated_seats_remaining) <= 0) return "full";
   if (["near_full", "payment_pressure", "demand_exceeds_open_seats"].includes(status)) return "filling";
   return "open";

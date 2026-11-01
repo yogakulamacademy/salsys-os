@@ -5,6 +5,7 @@ import {
   BookOpen,
   CalendarDays,
   CircleDollarSign,
+  DatabaseZap,
   GraduationCap,
   ShieldCheck,
   Users,
@@ -31,8 +32,20 @@ export default async function OperationsOverviewPage() {
 
   const { courses, batches, summary } = workspace;
   const activePrograms = courses.filter((course) => course.active).length;
-  const activeBatches = batches.filter((batch) => batch.effective_active === true).length;
-  const pressureBatches = batches
+  const today = new Date().toISOString().slice(0, 10);
+  const futureBatches = batches.filter(
+    (batch) =>
+      batch.effective_active === true &&
+      Boolean(batch.start_date && batch.start_date >= today),
+  );
+  const capacityConfigured = Math.max(
+    summary.upcomingBatches - summary.needsCapacity,
+    0,
+  );
+  const hasKnownCapacity = capacityConfigured > 0;
+  const capacityEvidenceComplete =
+    summary.upcomingBatches > 0 && summary.needsCapacity === 0;
+  const pressureBatches = futureBatches
     .filter((batch) => {
       const status = String(batch.capacity_status ?? "").toLowerCase();
       return ["overbooked", "full", "near_full", "payment_pressure", "demand_exceeds_open_seats"].includes(status);
@@ -51,7 +64,7 @@ export default async function OperationsOverviewPage() {
       <PageHeader
         eyebrow="Operations · Capacity & delivery"
         title="Operations Overview"
-        description="Monitor programs, upcoming batches, confirmed enrollments, open capacity and operational pressure from one workspace."
+        description="Monitor programs, future batches, confirmed enrollments, known capacity and operational pressure from one workspace."
         actions={
           <Link href="/course-management" className="btn-primary">
             Manage programs & batches <ArrowRight size={14} />
@@ -63,6 +76,25 @@ export default async function OperationsOverviewPage() {
         <div className="rounded-xl border border-amber-100 bg-amber-50 px-4 py-3 text-xs text-amber-800 dark:border-amber-900/50 dark:bg-amber-950/20 dark:text-amber-200">
           Operations is using a fallback evidence path. {workspace.degradedReason ?? "Some auxiliary intelligence may be reduced."}
         </div>
+      ) : null}
+
+      {summary.needsCapacity > 0 ? (
+        <section className="flex flex-col gap-3 rounded-2xl border border-amber-200 bg-amber-50/70 px-4 py-4 text-amber-950 dark:border-amber-900/60 dark:bg-amber-950/20 dark:text-amber-100 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-start gap-3">
+            <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-amber-100 text-amber-700 dark:bg-amber-950/50 dark:text-amber-300">
+              <DatabaseZap size={17} />
+            </span>
+            <div>
+              <div className="text-sm font-semibold">Future capacity setup incomplete</div>
+              <p className="mt-1 max-w-4xl text-xs leading-5 text-amber-800 dark:text-amber-200">
+                {summary.needsCapacity.toLocaleString("en-IN")} of {summary.upcomingBatches.toLocaleString("en-IN")} future active batch{summary.upcomingBatches === 1 ? "" : "es"} {summary.needsCapacity === 1 ? "does" : "do"} not have positive capacity configured. Unknown capacity is not treated as zero seats, and open-seat evidence is shown only for capacity-set future batches.
+              </p>
+            </div>
+          </div>
+          <Link href="/course-management" className="btn-secondary shrink-0">
+            Configure capacity <ArrowRight size={13} />
+          </Link>
+        </section>
       ) : null}
 
       {commerceNeedsAttention && commerce ? (
@@ -83,16 +115,17 @@ export default async function OperationsOverviewPage() {
           icon={<CalendarDays size={17} />}
           label="Upcoming batches"
           value={summary.upcomingBatches.toLocaleString("en-IN")}
-          detail={`${activeBatches.toLocaleString("en-IN")} active batches`}
+          detail="Active batches with start date today or later"
           href="/course-management"
-          evidenceLabel="Batch schedule"
-          definition="Upcoming scheduled batches visible in the current operations workspace."
+          evidenceLabel="Future batch schedule"
+          evidenceState="observed"
+          definition="Active scheduled batches whose recorded start date is today or later. Already-started batches do not enter future-capacity totals."
         />
         <DecisionMetricCard
           icon={<GraduationCap size={17} />}
           label="Confirmed enrolled"
           value={summary.totalEnrolled.toLocaleString("en-IN")}
-          detail="Confirmed outcomes in upcoming batches"
+          detail="Confirmed outcomes in future batches"
           href="/enrollments"
           tone={summary.totalEnrolled > 0 ? "positive" : "neutral"}
           evidenceLabel="Enrollment truth"
@@ -101,33 +134,41 @@ export default async function OperationsOverviewPage() {
         <DecisionMetricCard
           icon={<ShieldCheck size={17} />}
           label="Calculated open"
-          value={summary.totalOpenSeats.toLocaleString("en-IN")}
-          detail="Capacity minus confirmed enrollment"
+          value={hasKnownCapacity ? summary.totalOpenSeats.toLocaleString("en-IN") : "—"}
+          detail={
+            !hasKnownCapacity
+              ? "Unknown until future batch capacity is configured"
+              : capacityEvidenceComplete
+                ? "Known future capacity minus confirmed enrollment"
+                : `${capacityConfigured.toLocaleString("en-IN")} capacity-set future batches · ${summary.needsCapacity.toLocaleString("en-IN")} unknown`
+          }
           href="/availability"
-          evidenceLabel="Capacity calculation"
-          definition="Calculated remaining seats after subtracting confirmed enrollments from recorded batch capacity."
+          evidenceLabel="Future capacity calculation"
+          evidenceState={!hasKnownCapacity ? "unknown" : capacityEvidenceComplete ? "derived" : "partial"}
+          definition="Calculated remaining seats only where positive future batch capacity is recorded. Missing capacity remains unknown and is never interpreted as zero seats."
         />
         <DecisionMetricCard
           icon={<AlertTriangle size={17} />}
           label="Enrollment closed"
           value={summary.closedEnrollment.toLocaleString("en-IN")}
-          detail="Upcoming batches closed to enrollment"
+          detail="Future batches closed to enrollment"
           href="/course-management"
           tone={summary.closedEnrollment > 0 ? "warning" : "positive"}
           statusLabel={summary.closedEnrollment > 0 ? "Review" : "Clear"}
           evidenceLabel="Batch state"
-          definition="Upcoming batches whose enrollment state is currently closed."
+          definition="Future active batches whose enrollment state is currently closed."
         />
         <DecisionMetricCard
           icon={<Users size={17} />}
           label="Demand pressure"
           value={summary.demandPressure.toLocaleString("en-IN")}
-          detail={`${summary.needsCapacity.toLocaleString("en-IN")} batches missing capacity`}
+          detail={`${summary.needsCapacity.toLocaleString("en-IN")} future batches missing capacity`}
           href="/availability"
           tone={summary.demandPressure + summary.needsCapacity > 0 ? "warning" : "positive"}
           statusLabel={summary.demandPressure + summary.needsCapacity > 0 ? "Attention" : "Healthy"}
-          evidenceLabel="Demand vs capacity"
-          definition="Operational warning when active prospects or payment-pending demand approaches or exceeds known open capacity."
+          evidenceLabel="Demand vs known capacity"
+          evidenceState={summary.needsCapacity > 0 ? "partial" : "derived"}
+          definition="Operational warning when active prospects or payment-pending demand approaches or exceeds known future open capacity. Missing capacity remains a separate setup gap."
         />
       </section>
 
@@ -135,9 +176,9 @@ export default async function OperationsOverviewPage() {
         <div className="card-pad min-w-0">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
-              <div className="eyebrow">Batch availability</div>
+              <div className="eyebrow">Future batch availability</div>
               <div className="section-title mt-1">Operational pressure</div>
-              <p className="mt-1 text-xs text-copy-muted">Batches where confirmed seats or active demand deserve a capacity decision now.</p>
+              <p className="mt-1 text-xs text-copy-muted">Future batches where confirmed seats or active demand deserve a capacity decision now.</p>
             </div>
             <Link href="/course-management" className="btn-secondary">Open batch management</Link>
           </div>
@@ -147,7 +188,7 @@ export default async function OperationsOverviewPage() {
               <PressureBatchCard key={batch.batch_id} batch={batch} />
             )) : (
               <div className="rounded-xl border border-dashed border-line px-4 py-8 text-center text-sm text-copy-subtle">
-                No capacity or demand-pressure alerts are active right now.
+                No known future capacity or demand-pressure alerts are active right now. Batches without capacity remain a separate setup gap above.
               </div>
             )}
           </div>
@@ -157,9 +198,10 @@ export default async function OperationsOverviewPage() {
           <div className="eyebrow">Operating truth</div>
           <div className="section-title mt-1">What these numbers mean</div>
           <div className="mt-4 space-y-3 text-xs leading-5 text-copy-muted">
+            <Info title="Future cohort" text="Capacity planning uses active batches whose recorded start date is today or later. Already-started batches remain manageable, but do not enter future availability totals." />
             <Info title="Confirmed enrolled" text="Enrollment records in confirmed/completed state, plus legacy enrolled-stage fallback where needed." />
-            <Info title="Calculated open" text="Batch capacity minus confirmed enrollments. This remains separate from manually published seats." />
-            <Info title="Demand pressure" text="Operational warning when active prospects or payment-pending demand approaches or exceeds available capacity." />
+            <Info title="Calculated open" text="Known positive batch capacity minus confirmed enrollments. Missing future capacity is unknown, not zero, and remains separate from manually published seats." />
+            <Info title="Demand pressure" text="Operational warning when active prospects or payment-pending demand approaches or exceeds known future availability. No pressure conclusion is inferred where capacity is missing." />
           </div>
         </aside>
       </section>
