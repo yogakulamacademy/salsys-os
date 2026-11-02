@@ -177,10 +177,13 @@ async function fixture(run) {
       `insert into public.leads(
         id,lead_code,first_name,last_name,current_stage,status,expected_close_date,
         potential_value,potential_currency,organization_id
-      ) values($1,'LD-000001','Asha','Test','qualified','open','2026-12-15',1000,'INR',$2);
-       insert into public.organization_lead_stage_probabilities(organization_id,stage,probability)
-       values($2,'qualified',0.5),($2,'enrolled',1.0);`,
+      ) values($1,'LD-000001','Asha','Test','qualified','open','2026-12-15',1000,'INR',$2)`,
       [lead, org],
+    );
+    await owner.query(
+      `insert into public.organization_lead_stage_probabilities(organization_id,stage,probability)
+       values($1,'qualified',0.5),($1,'enrolled',1.0)`,
+      [org],
     );
     await run({ owner });
   } finally {
@@ -225,10 +228,13 @@ test('after enrollment the latest enrollment contract value and currency overrid
   fixture(async ({ owner }) => {
     await owner.query(
       `insert into public.enrollments(id,lead_id,organization_id,total_value,currency,created_at)
-       values($1,$2,$3,800,'USD','2026-11-02T10:00:00Z');
-       insert into public.lead_payment_totals_fixture(organization_id,lead_id,currency,gross_paid,refunds,net_paid)
-       values($3,$2,'INR',999,0,999),($3,$2,'USD',200,0,200);`,
+       values($1,$2,$3,800,'USD','2026-11-02T10:00:00Z')`,
       [enrollment, lead, org],
+    );
+    await owner.query(
+      `insert into public.lead_payment_totals_fixture(organization_id,lead_id,currency,gross_paid,refunds,net_paid)
+       values($1,$2,'INR',999,0,999),($1,$2,'USD',200,0,200)`,
+      [org, lead],
     );
 
     const revenue = (
@@ -259,10 +265,13 @@ test('latest enrollment wins when multiple canonical enrollments exist', () =>
     await owner.query(
       `insert into public.enrollments(id,lead_id,organization_id,total_value,currency,created_at)
        values($1,$2,$3,800,'USD','2026-11-01T10:00:00Z'),
-             ($4,$2,$3,700,'INR','2026-11-03T10:00:00Z');
-       insert into public.lead_payment_totals_fixture(organization_id,lead_id,currency,gross_paid,refunds,net_paid)
-       values($3,$2,'INR',300,0,300);`,
+             ($4,$2,$3,700,'INR','2026-11-03T10:00:00Z')`,
       [enrollment, lead, org, randomUUID()],
+    );
+    await owner.query(
+      `insert into public.lead_payment_totals_fixture(organization_id,lead_id,currency,gross_paid,refunds,net_paid)
+       values($1,$2,'INR',300,0,300)`,
+      [org, lead],
     );
     const row = (
       await owner.query(`select potential_value::text,currency,outstanding_balance::text
