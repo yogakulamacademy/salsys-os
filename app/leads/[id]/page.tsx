@@ -26,6 +26,7 @@ import {
   updateLeadStageAction,
 } from "@/app/actions/crm";
 
+import { ContractValueCard } from "@/components/contract-value-card";
 import { PaymentCard } from "@/components/payment-card";
 import { Person360SummaryCard } from "@/components/person-360-summary";
 import { JourneyEvidencePanel } from "@/components/journey-evidence-panel";
@@ -393,11 +394,7 @@ export default async function LeadDetailPage({
 
 
 
-
-
               LEAD INTELLIGENCE
-
-
 
 
 
@@ -506,6 +503,14 @@ export default async function LeadDetailPage({
           ================================================= */}
 
           <PaidMediaAcquisition leadId={id} />
+
+          {/* =================================================
+
+              CONTRACT VALUE
+
+          ================================================= */}
+
+          <ContractValueCard leadId={id} />
 
           {/* =================================================
 
@@ -660,11 +665,7 @@ export default async function LeadDetailPage({
 
 
 
-
-
               RECENT INTERACTIONS
-
-
 
 
 
@@ -753,11 +754,7 @@ export default async function LeadDetailPage({
 
 
 
-
-
             RIGHT SIDEBAR
-
-
 
 
 
@@ -1082,6 +1079,12 @@ function noticeText(notice: string) {
 
     "payment-recorded": "Payment recorded successfully.",
 
+    "contract-adjusted":
+      "Contract value updated. No payment or refund was created.",
+
+    "contract-adjusted-overpayment":
+      "Contract value updated. The lead may now have an overpayment that requires separate human review; no refund was created.",
+
     "mock-update": "Mock mode: changes were not persisted.",
 
     "mock-stage": "Mock mode: stage change was not persisted.",
@@ -1093,6 +1096,9 @@ function noticeText(notice: string) {
     "mock-contact-logged": "Mock mode: contact was not persisted.",
 
     "mock-payment": "Mock mode: payment was not persisted.",
+
+    "mock-contract-adjustment":
+      "Mock mode: contract adjustment was not persisted.",
   };
 
   return messages[notice] ?? notice;
