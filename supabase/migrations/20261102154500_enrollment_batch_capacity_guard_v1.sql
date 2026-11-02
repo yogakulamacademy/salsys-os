@@ -1,8 +1,13 @@
 -- Authoritative capacity guard for batches that explicitly configure a positive capacity.
 -- NULL/0 preserve the existing `capacity_not_set` product semantics.
 -- `seats_remaining` remains a published/manual planning field and is not used as truth.
+-- Internal helpers live in app_private so no new SECURITY DEFINER API surface is added.
 
-create or replace function public.assert_batch_capacity_v1(
+create schema if not exists app_private authorization postgres;
+revoke all on schema app_private from public, anon;
+grant usage on schema app_private to authenticated, service_role;
+
+create or replace function app_private.assert_batch_capacity_v1(
   p_organization_id uuid,
   p_batch_id uuid
 )
@@ -87,10 +92,10 @@ begin
 end;
 $function$;
 
-revoke all on function public.assert_batch_capacity_v1(uuid,uuid)
+revoke all on function app_private.assert_batch_capacity_v1(uuid,uuid)
   from public, anon, authenticated, service_role;
 
-create or replace function public.enforce_enrollment_batch_capacity_v1()
+create or replace function app_private.enforce_enrollment_batch_capacity_v1()
 returns trigger
 language plpgsql
 security definer
@@ -99,7 +104,7 @@ as $function$
 begin
   if tg_op = 'INSERT' then
     if new.batch_id is not null then
-      perform public.assert_batch_capacity_v1(new.organization_id, new.batch_id);
+      perform app_private.assert_batch_capacity_v1(new.organization_id, new.batch_id);
     end if;
     return new;
   end if;
@@ -110,31 +115,31 @@ begin
      and new.batch_id is not null
      and old.batch_id is distinct from new.batch_id then
     if old.batch_id < new.batch_id then
-      perform public.assert_batch_capacity_v1(old.organization_id, old.batch_id);
-      perform public.assert_batch_capacity_v1(new.organization_id, new.batch_id);
+      perform app_private.assert_batch_capacity_v1(old.organization_id, old.batch_id);
+      perform app_private.assert_batch_capacity_v1(new.organization_id, new.batch_id);
     else
-      perform public.assert_batch_capacity_v1(new.organization_id, new.batch_id);
-      perform public.assert_batch_capacity_v1(old.organization_id, old.batch_id);
+      perform app_private.assert_batch_capacity_v1(new.organization_id, new.batch_id);
+      perform app_private.assert_batch_capacity_v1(old.organization_id, old.batch_id);
     end if;
   elsif old.batch_id is not null
         and (new.batch_id is null
           or old.organization_id is distinct from new.organization_id) then
-    perform public.assert_batch_capacity_v1(old.organization_id, old.batch_id);
+    perform app_private.assert_batch_capacity_v1(old.organization_id, old.batch_id);
     if new.batch_id is not null then
-      perform public.assert_batch_capacity_v1(new.organization_id, new.batch_id);
+      perform app_private.assert_batch_capacity_v1(new.organization_id, new.batch_id);
     end if;
   elsif new.batch_id is not null then
-    perform public.assert_batch_capacity_v1(new.organization_id, new.batch_id);
+    perform app_private.assert_batch_capacity_v1(new.organization_id, new.batch_id);
   end if;
 
   return new;
 end;
 $function$;
 
-revoke all on function public.enforce_enrollment_batch_capacity_v1()
+revoke all on function app_private.enforce_enrollment_batch_capacity_v1()
   from public, anon, authenticated, service_role;
 
-create or replace function public.enforce_lead_batch_capacity_fallback_v1()
+create or replace function app_private.enforce_lead_batch_capacity_fallback_v1()
 returns trigger
 language plpgsql
 security definer
@@ -146,7 +151,7 @@ begin
   if new.preferred_batch_id is not null
      and new.current_stage = 'enrolled'::public.lead_stage
      and new.status <> 'archived'::public.lead_status then
-    perform public.assert_batch_capacity_v1(
+    perform app_private.assert_batch_capacity_v1(
       new.organization_id,
       new.preferred_batch_id
     );
@@ -156,7 +161,7 @@ begin
 end;
 $function$;
 
-revoke all on function public.enforce_lead_batch_capacity_fallback_v1()
+revoke all on function app_private.enforce_lead_batch_capacity_fallback_v1()
   from public, anon, authenticated, service_role;
 
 -- AFTER triggers see the final row state. If the guard raises, PostgreSQL rolls
@@ -166,10 +171,10 @@ drop trigger if exists enforce_enrollment_batch_capacity_v1 on public.enrollment
 create trigger enforce_enrollment_batch_capacity_v1
 after insert or update of organization_id, lead_id, batch_id, status, created_at, updated_at
 on public.enrollments
-for each row execute function public.enforce_enrollment_batch_capacity_v1();
+for each row execute function app_private.enforce_enrollment_batch_capacity_v1();
 
 drop trigger if exists enforce_lead_batch_capacity_fallback_v1 on public.leads;
 create trigger enforce_lead_batch_capacity_fallback_v1
 after insert or update of organization_id, preferred_batch_id, current_stage, status
 on public.leads
-for each row execute function public.enforce_lead_batch_capacity_fallback_v1();
+for each row execute function app_private.enforce_lead_batch_capacity_fallback_v1();
