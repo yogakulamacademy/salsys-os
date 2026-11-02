@@ -165,12 +165,12 @@ export default async function Customer360Page() {
         </section>
       ) : null}
 
-      <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+      {customers.length > 0 ? <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <Metric icon={<UsersRound size={17} />} label="Contacts" value={customers.length} note="Canonical Person records visible here" />
         <Metric icon={<ContactRound size={17} />} label="Active opportunities" value={activeOpportunities} note="Open sales opportunities across contacts" />
         <Metric icon={<UserRoundCheck size={17} />} label="Multi-opportunity" value={multiOpportunity} note="Contacts with more than one accessible opportunity" />
         <Metric icon={<ShieldCheck size={17} />} label="Verified identity" value={verifiedIdentity} note="Contacts with verified identifiers" />
-      </section>
+      </section> : null}
 
       <section className="overflow-hidden rounded-panel border border-line bg-surface shadow-xs">
         <div className="flex flex-col gap-3 border-b border-line px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
@@ -259,7 +259,7 @@ export default async function Customer360Page() {
               ) : (
                 <tr>
                   <td colSpan={6}>
-                    <EmptyState title="No customer profiles available" description="Profiles appear when enquiries are linked to verified customer identities. Your enquiries remain available in Leads." action={<Link href="/leads" className="btn-secondary">Open leads</Link>} />
+                    <EmptyState title={warnings.length ? "Customer profiles are temporarily unavailable" : "No customer profiles available"} description={warnings.length ? "Some identity data could not be loaded. Your accessible enquiries remain available in Leads." : "Profiles appear when enquiries are linked to customer identities. Your enquiries remain available in Leads."} action={<Link href="/leads" className="btn-secondary">Open leads</Link>} />
                   </td>
                 </tr>
               )}

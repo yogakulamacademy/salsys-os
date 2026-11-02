@@ -94,7 +94,7 @@ export function CourseManagementSelector({ courses, batches, selectedCourseId, s
 
           <div className="section-title mt-1">
 
-            Select what you want to manage
+            {courses.length ? 'Select what you want to manage' : 'Start your course catalog'}
 
           </div>
 
@@ -102,9 +102,7 @@ export function CourseManagementSelector({ courses, batches, selectedCourseId, s
 
           <p className="mt-1 text-xs leading-5 text-slate-400">
 
-            Choose a course first, then select one of its batches.
-
-            Only the selected batch opens in the editor.
+            {courses.length ? 'Choose a course first, then select one of its batches. Only the selected batch opens in the editor.' : 'Create the first course, then add dates and capacity for its batches.'}
 
           </p>
 
@@ -138,7 +136,7 @@ export function CourseManagementSelector({ courses, batches, selectedCourseId, s
             setShowNewBatch(false);
             setShowDuplicateBatch(false);
             setShowEditCourse((current) => !current);
-        }} className="btn-secondary disabled:cursor-not-allowed disabled:opacity-50">
+        }} className={courses.length ? "btn-secondary disabled:cursor-not-allowed disabled:opacity-50" : "hidden"}>
 
             {showEditCourse ? (<X size={15}/>) : (<Pencil size={15}/>)}
 
@@ -155,7 +153,7 @@ export function CourseManagementSelector({ courses, batches, selectedCourseId, s
             setShowEditCourse(false);
             setShowDuplicateBatch(false);
             setShowNewBatch((current) => !current);
-        }} className="btn-primary disabled:cursor-not-allowed disabled:opacity-50">
+        }} className={courses.length ? "btn-primary disabled:cursor-not-allowed disabled:opacity-50" : "hidden"}>
 
             {showNewBatch ? (<X size={15}/>) : (<Plus size={15}/>)}
 
@@ -172,7 +170,7 @@ export function CourseManagementSelector({ courses, batches, selectedCourseId, s
             setShowEditCourse(false);
             setShowNewBatch(false);
             setShowDuplicateBatch((current) => !current);
-        }} className="btn-secondary disabled:cursor-not-allowed disabled:opacity-50">
+        }} className={courses.length ? "btn-secondary disabled:cursor-not-allowed disabled:opacity-50" : "hidden"}>
 
             {showDuplicateBatch ? (<X size={15}/>) : (<Copy size={15}/>)}
 
@@ -190,7 +188,7 @@ export function CourseManagementSelector({ courses, batches, selectedCourseId, s
 
 
 
-      <div className="mt-5 grid gap-4 lg:grid-cols-2">
+      <div className={courses.length ? "mt-5 grid gap-4 lg:grid-cols-2" : "hidden"}>
 
         <label>
 

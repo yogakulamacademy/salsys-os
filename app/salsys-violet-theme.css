@@ -17,6 +17,9 @@
   --app-brand-600: #6a56d2;
   --app-brand-100: #e4def8;
   --app-brand-50: #f3f0fb;
+  --app-interaction: #4f46e5;
+  --app-interaction-hover: #4338ca;
+  --app-focus: #4263eb;
 
   /* Neutral surfaces */
   --app-bg: #f5f6f8;
@@ -147,17 +150,17 @@ input:focus-visible,
 select:focus-visible,
 textarea:focus-visible,
 [tabindex]:focus-visible {
-  outline-color: rgba(87, 67, 197, 0.42);
+  outline-color: var(--app-focus);
 }
 
 /* Shared controls -------------------------------------------------------- */
 .btn-primary {
-  background: var(--app-brand-700);
+  background: var(--app-interaction);
   box-shadow: none;
 }
 
 .btn-primary:hover {
-  background: var(--app-brand-800);
+  background: var(--app-interaction-hover);
   box-shadow: none;
 }
 
@@ -306,6 +309,7 @@ textarea:focus-visible,
 .salsys-meta-sidebar-shell table { background: var(--app-surface); font-variant-numeric: tabular-nums; }
 .salsys-meta-sidebar-shell table th { background: var(--app-surface-soft); font-size: 12px; font-weight: 600; letter-spacing: 0; }
 .salsys-meta-sidebar-shell table td { font-size: 13px; }
+.salsys-meta-sidebar-shell table tbody td { padding-top: 14px; padding-bottom: 14px; vertical-align: middle; }
 .salsys-meta-sidebar-shell table tbody tr:focus-visible { outline: 2px solid var(--app-brand-700); outline-offset: -2px; }
 .salsys-meta-sidebar-shell input, .salsys-meta-sidebar-shell select { border-radius: 8px; }
 .ui-empty-state button:disabled { opacity: .5; }
@@ -315,4 +319,5 @@ body .crm-focused-workspace > div:last-child { padding: 0; }
   .ui-page-title { font-size: 24px; }
   .ui-empty-state { min-height: 240px; padding: 28px 16px; }
   .salsys-brand-descriptor { font-size: 10px; }
+  .salsys-meta-sidebar-shell td .ui-empty-state { position: sticky; left: 0; width: calc(100vw - 64px); max-width: 100%; }
 }

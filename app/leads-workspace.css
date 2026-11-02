@@ -119,12 +119,12 @@
   color: var(--salsys-primary, #5743c5) !important;
 }
 
-[aria-label="Lead Inspector"] a[href^="/conversations"] {
+[aria-label="Lead Inspector"] a[href^="/conversations"]:not(.btn-primary) {
   border-color: var(--salsys-border, #e6e3ef) !important;
   color: var(--salsys-primary, #5743c5) !important;
 }
 
-[aria-label="Lead Inspector"] a[href^="/conversations"]:hover {
+[aria-label="Lead Inspector"] a[href^="/conversations"]:not(.btn-primary):hover {
   background: var(--salsys-primary-softer, #f3f0fb) !important;
 }
 

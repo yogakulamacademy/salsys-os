@@ -3,7 +3,7 @@ import type { ReactNode } from "react";
 import { AlertTriangle, ArrowRight, CalendarDays, CircleDollarSign, GraduationCap, LockKeyhole, MapPin, PauseCircle, PlayCircle, Save, ShieldCheck, UnlockKeyhole, Users, } from "lucide-react";
 import { setCourseBatchActiveStateAction, setCourseBatchEnrollmentStateAction, updateCourseBatchAdminAction, } from "@/app/course-management/actions";
 import { CourseManagementSelector } from "@/components/course-management-selector";
-import { PageHeader } from "@/components/ui";
+import { EmptyState, Notice, PageHeader } from "@/components/ui";
 import { getCourseManagementWorkspace, type CourseManagementAuditRow, type CourseManagementBatchRow, type CourseManagementCourseRow, } from "@/lib/course-management-data";
 type CourseRow = CourseManagementCourseRow;
 type BatchRow = CourseManagementBatchRow;
@@ -91,7 +91,8 @@ export default async function CourseManagementPage({ searchParams, }: {
 
 
 
-      <section className="mt-6 grid gap-3 sm:grid-cols-2 xl:grid-cols-6">
+      {workspace.degraded ? <Notice tone="warning" title="Course data is incomplete">Some source data could not be loaded. Review the connection before relying on capacity totals.</Notice> : null}
+      {batches.length > 0 && !workspace.degraded ? <section className="mt-6 grid gap-3 sm:grid-cols-2 xl:grid-cols-6" aria-label="Course capacity summary">
 
         <SummaryCard icon={<CalendarDays size={17}/>} label="Upcoming batches" value={upcomingBatches} sub="Active or ongoing"/>
 
@@ -115,7 +116,7 @@ export default async function CourseManagementPage({ searchParams, }: {
 
         <SummaryCard icon={<AlertTriangle size={17}/>} label="Needs attention" value={needsCapacity + demandPressure} sub={`${needsCapacity} missing capacity · ${demandPressure} demand pressure`} alert={needsCapacity + demandPressure > 0}/>
 
-      </section>
+      </section> : null}
 
 
 
@@ -125,48 +126,16 @@ export default async function CourseManagementPage({ searchParams, }: {
 
       {selectedCourse && (<CourseDetailsCard course={selectedCourse} totalBatches={batchesForSelectedCourse.length} activeBatches={activeBatchesForSelectedCourse}/>)}
 
-      <section className="mt-4 grid gap-4 2xl:grid-cols-[1fr_320px]">
+      <section className={courses.length ? "mt-4 grid gap-4 2xl:grid-cols-[1fr_320px]" : "mt-4"}>
 
         <div className="space-y-4">
 
-          {!selectedCourseId ? (<div className="card-pad py-14 text-center">
-
-              <div className="text-sm font-bold text-slate-700">
-
-                No courses have been created yet.
-
-              </div>
-
-
-
-              <div className="mt-1 text-xs text-slate-400">
-
-                Create your first course to begin managing batches.
-
-              </div>
-
-            </div>) : !selectedBatch ? (<div className="card-pad py-14 text-center">
-
-              <div className="text-sm font-bold text-slate-700">
-
-                No batches have been created for this course yet.
-
-              </div>
-
-
-
-              <div className="mt-1 text-xs text-slate-400">
-
-                This course is ready. Add its first batch to start admissions.
-
-              </div>
-
-            </div>) : (<BatchAdminCard key={selectedBatch.batch_id} row={selectedBatch} returnTo={returnTo}/>)}
+          {!selectedCourseId ? (<div className="card-pad"><EmptyState title="No courses yet" description="Create a course using New Course above, or connect the course catalog your team uses." /></div>) : !selectedBatch ? (<div className="card-pad"><EmptyState title="No batches for this course yet" description="Use New Batch above to add dates and capacity before opening admissions." /></div>) : (<BatchAdminCard key={selectedBatch.batch_id} row={selectedBatch} returnTo={returnTo}/>)}
         </div>
 
 
 
-        <aside className="space-y-4">
+        <aside className={courses.length ? "space-y-4" : "hidden"}>
 
           <section className="card-pad">
 

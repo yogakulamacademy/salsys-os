@@ -8,9 +8,13 @@
 
 ### UI workstream update — 2 November 2026
 
+**Journey/growth continuation:** the user explicitly selected Journey/growth improvements before R13, alongside shared UI consistency across the existing destinations. The isolated `codex/journey-evidence-foundation` branch builds on UI PR #437 without changing that review branch. See `docs/JOURNEY-EVIDENCE-CHECKPOINT.md` for implemented scope, counting/privacy boundaries, executable tests and remaining financial/identity integration gates. No roadmap completion percentages, production acceptance or full GT-01 financial pass are asserted. R13 commercial implementation has not started in this workstream.
+
+**Critical retained requirement — AI Knowledge:** read `docs/AI-KNOWLEDGE-AGENT-WORKFLOW.md` before the next workflow/automation implementation. The target is one Knowledge + Sales Asset Library and a shared WhatsApp/Instagram Conversation Agent: routine permitted replies/assets automatic, explicit risk/commercial approval checkpoints, canonical stage changes, verified payment authority, observability and tenant/privacy controls. This is a mandatory upcoming dependency, not a completed capability or an authorization to enable autonomous sends. Existing approved-knowledge retrieval and draft-only Co-Pilot must be extended and verified; the note's zero-item production count and readiness percentages remain unverified claims.
+
 The user approved the neutral/violet reference style and requested consistent UI/UX across the product. The isolated branch `codex/unified-ui-reference-style` implements shared identity, panels, controls, illustrated empty states, an unselected Inbox without dashboard statistic cards, responsive context layout and keyboard modal behavior. See `docs/UI-CONSISTENCY.md` for screen rules and the repeatable local test setup.
 
-This is source implementation and synthetic local UI evidence, **not a production release or acceptance claim**. The production head recorded above is historical checkpoint evidence and was not updated by this work. The R13 roadmap position below is preserved. Immediate user priority is UI review/fixes; the broader journey, attribution, search/AI visibility and growth expansion resumes after UI acceptance.
+This is source implementation and synthetic UI evidence, **not a production release or acceptance claim**. The production head recorded above is historical checkpoint evidence and was not updated by this work. The R13 commercial roadmap position below is preserved. The user authorized source Journey/growth improvements alongside shared UI consistency; production-role, financial and release acceptance gates still apply.
 
 The Master Context v1.2 strategy, vertical boundaries and roadmaps remain unchanged. The prior product review and acceptance fixture remain proposed behavior; local UI tests do not validate the full journey/payment fixture or production provider outcomes.
 

@@ -1,9 +1,13 @@
 # SalsysOS Active Handoff
 
+Smart/dynamic Journey continuation: read `SMART-JOURNEY-WORKSPACE.md` alongside the critical `AI-KNOWLEDGE-AGENT-WORKFLOW.md`. The new service reminders and evidence interactions do not enable autonomous sending or complete the financial/identity gates.
+
 **Purpose:** Fast recovery after an interrupted engineering session.  
 **Updated:** 2026-11-02  
 **Repository:** `yogakulamacademy/salsys-os`  
 **Production branch:** `main`
+
+**Current user-prioritized workstream:** shared UI consistency → Journey/growth improvements → R13. The isolated Journey branch builds on draft UI PR #437; neither is production acceptance. Read `docs/JOURNEY-EVIDENCE-CHECKPOINT.md` and the **critical** `docs/AI-KNOWLEDGE-AGENT-WORKFLOW.md`. AI Knowledge, approved sales assets and the future risk-governed WhatsApp/Instagram agent must remain in the upcoming workflow. Current draft-only messaging is not changed by the planning update. The commercial R13 continuation point below is preserved for when that workstream resumes.
 
 Read first:
 

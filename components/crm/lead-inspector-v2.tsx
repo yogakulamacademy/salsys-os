@@ -27,6 +27,9 @@ import {
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useModalFocus } from "@/components/use-modal-focus";
+import { JourneyEvidencePanel } from "@/components/journey-evidence-panel";
+import type { JourneyEvidence } from "@/lib/journey-evidence";
+import { createLatestReadGuard } from "@/lib/latest-read";
 
 type InspectorTab = "overview" | "journey" | "activity";
 type Availability = "available" | "empty" | "unavailable";
@@ -166,6 +169,7 @@ type InspectorLead = {
 };
 
 type InspectorPayload = {
+  journeyEvidence?: JourneyEvidence;
   schemaVersion: "lead_inspector_v1";
   generatedAt: string;
   lead: InspectorLead;
@@ -226,7 +230,8 @@ export function LeadInspector({
 }) {
   const [mounted, setMounted] = useState(false);
   const [tab, setTab] = useState<InspectorTab>("overview");
-  const [payload, setPayload] = useState<InspectorPayload | null>(null);
+  const [storedPayload, setPayload] = useState<InspectorPayload | null>(null);
+  const payload = storedPayload?.lead.id === leadId ? storedPayload : null;
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
@@ -240,37 +245,50 @@ export function LeadInspector({
   const [actionLoading, setActionLoading] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
   const [actionSuccess, setActionSuccess] = useState<string | null>(null);
+  const readGuard = useRef(createLatestReadGuard());
+  const refreshSequence = useRef(0);
+  const selection = useRef({ id: leadId, version: 0 });
+  if (selection.current.id !== leadId) selection.current = { id: leadId, version: selection.current.version + 1 };
 
   useEffect(() => setMounted(true), []);
 
   const loadLead = useCallback(async (id: string, signal?: AbortSignal) => {
-    const response = await fetch(`/api/leads/${encodeURIComponent(id)}/inspector`, {
-      cache: "no-store",
-      signal,
-    });
-    const body = (await response.json()) as ApiResponse;
-    if (!response.ok || !body.ok) {
-      throw new Error(body.ok ? "Unable to load lead." : body.error);
+    const request = readGuard.current.start();
+    const version = selection.current.version;
+    signal?.addEventListener('abort', request.cancel, { once: true });
+    if (signal?.aborted) request.cancel();
+    try {
+      const response = await fetch(`/api/leads/${encodeURIComponent(id)}/inspector`, { cache: "no-store", signal: request.signal });
+      const body = (await response.json()) as ApiResponse;
+      if (!request.isCurrent() || selection.current.id !== id || selection.current.version !== version) throw new DOMException('Superseded read', 'AbortError');
+      if (!response.ok || !body.ok) throw new Error(body.ok ? "Unable to load lead." : body.error);
+      if (body.data.lead.id !== id) throw new Error('The returned lead does not match this selection. Refresh to retry.');
+      setPayload(body.data);
+      setLoadedAt(Date.now());
+      return body.data;
+    } finally {
+      signal?.removeEventListener('abort', request.cancel);
     }
-    setPayload(body.data);
-    setLoadedAt(Date.now());
-    return body.data;
   }, []);
 
   const refreshLead = useCallback(async () => {
     if (!leadId || refreshing) return;
+    const run = ++refreshSequence.current;
     setRefreshing(true);
     setError(null);
     try {
       await loadLead(leadId);
     } catch (reason) {
-      setError(reason instanceof Error ? reason.message : "Unable to refresh lead.");
+      if (run === refreshSequence.current && !(reason instanceof Error && reason.name === 'AbortError')) setError(reason instanceof Error ? reason.message : "Unable to refresh lead.");
     } finally {
-      setRefreshing(false);
+      if (run === refreshSequence.current) setRefreshing(false);
     }
   }, [leadId, loadLead, refreshing]);
 
   useEffect(() => {
+    refreshSequence.current++;
+    setRefreshing(false);
+    setActionLoading(false);
     if (!leadId) {
       setPayload(null);
       setError(null);
@@ -292,14 +310,14 @@ export function LeadInspector({
     const controller = new AbortController();
     void loadLead(leadId, controller.signal)
       .catch((reason) => {
-        if (controller.signal.aborted) return;
+        if (controller.signal.aborted || (reason instanceof Error && reason.name === 'AbortError')) return;
         setError(reason instanceof Error ? reason.message : "Unable to load lead.");
       })
       .finally(() => {
         if (!controller.signal.aborted) setLoading(false);
       });
 
-    return () => controller.abort();
+    return () => { controller.abort(); readGuard.current.invalidate(); };
   }, [leadId, loadLead]);
 
   useEffect(() => {
@@ -315,6 +333,7 @@ export function LeadInspector({
     if (!leadId) return;
 
     function refreshIfStale() {
+      if (!payload || loading) return;
       if (Date.now() - loadedAt < 45_000) return;
       void refreshLead();
     }
@@ -329,7 +348,7 @@ export function LeadInspector({
       window.removeEventListener("focus", refreshIfStale);
       document.removeEventListener("visibilitychange", onVisibility);
     };
-  }, [leadId, loadedAt, refreshLead]);
+  }, [leadId, loadedAt, refreshLead, Boolean(payload), loading]);
 
   async function submitFollowup(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -348,6 +367,7 @@ export function LeadInspector({
     setActionLoading(true);
     setActionError(null);
     setActionSuccess(null);
+    const actionSelection = selection.current.version;
 
     try {
       const response = await fetch(`/api/leads/${encodeURIComponent(leadId)}/inspector`, {
@@ -361,6 +381,7 @@ export function LeadInspector({
         }),
       });
       const body = (await response.json()) as ActionResponse;
+      if (selection.current.version !== actionSelection) return;
       if (!response.ok || !body.ok) {
         throw new Error(body.ok ? "Unable to create follow-up." : body.error);
       }
@@ -369,11 +390,12 @@ export function LeadInspector({
       setFollowupOpen(false);
       await loadLead(leadId);
     } catch (reason) {
+      if (selection.current.version !== actionSelection || (reason instanceof Error && reason.name === 'AbortError')) return;
       setActionError(
         reason instanceof Error ? reason.message : "Unable to create follow-up.",
       );
     } finally {
-      setActionLoading(false);
+      if (selection.current.version === actionSelection) setActionLoading(false);
     }
   }
 
@@ -459,7 +481,7 @@ export function LeadInspector({
             <div className="mt-4 flex flex-wrap items-center gap-2">
               <Link
                 href={`/conversations?lead=${payload.lead.id}`}
-                className="inline-flex h-8 items-center gap-1.5 rounded-md bg-[#216551] px-3 text-[11px] font-semibold text-white transition hover:bg-[#174D3B]"
+                className="btn-primary inline-flex h-8 items-center gap-1.5 px-3 text-[11px]"
               >
                 <MessageCircle size={12} /> Conversation
               </Link>
@@ -559,7 +581,11 @@ export function LeadInspector({
                   onSubmit={submitFollowup}
                 />
               ) : null}
-              {tab === "journey" ? <JourneyTab payload={payload} /> : null}
+              {tab === "journey" ? <JourneyTab payload={payload} onRefresh={() => void refreshLead()} refreshing={refreshing} readFailed={Boolean(error)} onFollowup={plan => {
+                setTab('overview'); setFollowupOpen(plan);
+                if (plan) { setFollowupTitle(`Follow up with ${payload.lead.name || 'this lead'}`); setFollowupDescription('Review the conversation and agree on the next service step.'); }
+                window.requestAnimationFrame(() => dialogRef.current?.querySelector<HTMLButtonElement>('nav button')?.focus());
+              }} /> : null}
               {tab === "activity" ? <ActivityTab payload={payload} /> : null}
             </div>
           ) : null}
@@ -983,7 +1009,8 @@ function SmartFollowupComposer({
   );
 }
 
-function JourneyTab({ payload }: { payload: InspectorPayload }) {
+function JourneyTab({ payload, onRefresh, refreshing, readFailed, onFollowup }: { payload: InspectorPayload; onRefresh: () => void; refreshing: boolean; readFailed: boolean; onFollowup: (plan: boolean) => void }) {
+  if (payload.journeyEvidence) return <JourneyEvidencePanel evidence={payload.journeyEvidence} context={{ leadId: payload.lead.id, stage: payload.lead.stage, owner: payload.lead.owner, nextFollowupAt: payload.lead.nextFollowupAt, readAt: payload.generatedAt, tasks: payload.openTasks, tasksState: payload.availability.openTasks }} onRefresh={onRefresh} refreshing={refreshing} readFailed={readFailed} onAction={action => { if (action.code === 'followup') onFollowup(action.label === 'Plan follow-up'); }} />;
   if (payload.availability.journey === "unavailable") {
     return <EmptyState title="Journey unavailable" body="The canonical Person journey could not be loaded. The Inspector is not substituting inferred events." />;
   }
