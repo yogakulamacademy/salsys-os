@@ -1,5 +1,7 @@
 # SalsysOS upcoming workflow
 
+**Smart/dynamic continuation:** `SMART-JOURNEY-WORKSPACE.md` extends the current Journey with explainable CRM service steps, interactive evidence filters/page drill-down and guarded refresh. This is part of the shared UI/Journey checkpoint, not completion of the financial, permission or critical AI gates below.
+
 Updated 2 November 2026 from the user's explicit priority: **Journey/growth, then R13**. Master Context v1.2 remains the strategic baseline. Existing R9/R10/R11 closeout claims are preserved as repository checkpoint history, not new verification or percentage estimates.
 
 1. **Shared UI and enquiry Journey evidence — current review work.** Preserve current information architecture and product identity. Use illustrated/icon empty states with one strong sentence, short explanation and at most one useful CTA; keep list headers/compact filters; avoid no-record zero-stat strips; use restrained indigo/blue interactions. Cover Conversations, Leads, Customer 360, Admissions and Course Management, and reuse these primitives for future R13 screens. Details: `UI-CONSISTENCY.md`, `JOURNEY-EVIDENCE-CHECKPOINT.md`.

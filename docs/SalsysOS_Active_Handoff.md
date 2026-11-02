@@ -1,5 +1,7 @@
 # SalsysOS Active Handoff
 
+Smart/dynamic Journey continuation: read `SMART-JOURNEY-WORKSPACE.md` alongside the critical `AI-KNOWLEDGE-AGENT-WORKFLOW.md`. The new service reminders and evidence interactions do not enable autonomous sending or complete the financial/identity gates.
+
 **Purpose:** Fast recovery after an interrupted engineering session.  
 **Updated:** 2026-11-02  
 **Repository:** `yogakulamacademy/salsys-os`  

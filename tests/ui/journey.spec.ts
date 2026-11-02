@@ -2,12 +2,116 @@ import { expect, test } from '@playwright/test';
 import fixture from '../growth/fixtures/gt01.json';
 import { buildJourneyEvidence, type JourneyRecord } from '../../lib/journey-evidence';
 
+async function smartRead(body: any, changes: Record<string, unknown> = {}) {
+  const asOf = new Date().toISOString();
+  const enquiryAt = new Date(Date.now() - 2 * 86_400_000).toISOString();
+  const rows: JourneyRecord[] = [
+    { organization_id: 'synthetic-org', person_id: 'synthetic-person', lead_id: body.data.lead.id, journey_event_key: 'v1', source_record_id: 'v1', source_table: 'touchpoints', event_category: 'digital', event_type: 'page_view', event_at: new Date(Date.now() - 3_600_000).toISOString(), web_session_id: 'session-a', source: 'google', metadata: { page_path: '/courses/yoga' } },
+    { organization_id: 'synthetic-org', person_id: 'synthetic-person', lead_id: body.data.lead.id, journey_event_key: 'v2', source_record_id: 'v2', source_table: 'touchpoints', event_category: 'digital', event_type: 'page_view', event_at: new Date(Date.now() - 7_200_000).toISOString(), web_session_id: 'session-b', source: 'instagram', metadata: { page_path: '/fees' } },
+  ];
+  return { ...body, data: { ...body.data, generatedAt: asOf, lead: { ...body.data.lead, owner: 'Reviewer', stage: 'qualified', nextFollowupAt: new Date(Date.now() - 86_400_000).toISOString() }, openTasks: [], availability: { ...body.data.availability, openTasks: 'empty' }, journeyEvidence: buildJourneyEvidence({ organizationId: 'synthetic-org', personId: 'synthetic-person', leadId: body.data.lead.id, enquiryAt, asOf, rows, total: rows.length }), ...changes } };
+}
+
 test.beforeEach(async ({ context }) => {
   const user = { id: '00000000-0000-4000-8000-000000000001', aud: 'authenticated', role: 'authenticated', email: 'reviewer@example.test', app_metadata: { provider: 'email' }, user_metadata: {} };
   const b64 = (value: unknown) => Buffer.from(JSON.stringify(value)).toString('base64url');
   const expires = Math.floor(Date.now() / 1000) + 3600;
   const token = `${b64({ alg: 'HS256', typ: 'JWT' })}.${b64({ sub: user.id, role: 'authenticated', aud: 'authenticated', exp: expires })}.synthetic-local-fixture`;
   await context.addCookies([{ name: 'sb-127-auth-token', value: `base64-${b64({ access_token: token, refresh_token: 'synthetic-local-refresh', expires_at: expires, expires_in: 3600, token_type: 'bearer', user })}`, domain: '127.0.0.1', path: '/', sameSite: 'Lax' }]);
+});
+
+test('smart Journey filters drill into evidence and review an existing commitment without writing', async ({ page }) => {
+  let writes = 0;
+  await page.route('**/api/leads/*/inspector', async route => {
+    if (route.request().method() !== 'GET') { writes++; await route.abort(); return; }
+    const response = await route.fetch();
+    await route.fulfill({ json: await smartRead(await response.json()) });
+  });
+  await page.goto('/leads');
+  await page.locator('tbody tr[tabindex="0"]').first().click();
+  const inspector = page.getByRole('dialog', { name: 'Lead Inspector', exact: true });
+  await inspector.getByRole('button', { name: /^Journey/ }).click();
+  const panel = inspector.getByRole('region', { name: 'Enquiry journey evidence' });
+  await expect(panel.getByRole('heading', { name: 'Review the overdue follow-up' })).toBeVisible();
+  await expect(panel.getByText(/Behavioural recommendations remain unavailable/)).toBeVisible();
+  await panel.getByRole('button', { name: 'Filter to /fees', exact: true }).click();
+  await expect(panel.getByRole('list', { name: 'Journey events' }).locator('li')).toHaveCount(1);
+  await panel.getByRole('button', { name: 'Reset filters', exact: true }).click();
+  await panel.getByRole('combobox', { name: 'Source', exact: true }).selectOption('Google');
+  await expect(panel.getByRole('list', { name: 'Journey events' }).locator('li')).toHaveCount(1);
+  await panel.getByRole('searchbox', { name: 'Search evidence', exact: true }).fill('missing-page');
+  await expect(panel.getByText('No activity matches these filters')).toBeVisible();
+  await panel.getByRole('button', { name: 'Show all activity' }).click();
+  await expect(panel.getByRole('list', { name: 'Journey events' }).locator('li')).toHaveCount(2);
+  await page.setViewportSize({ width: 390, height: 900 });
+  await panel.getByRole('heading', { name: 'Journey for this enquiry', exact: true }).scrollIntoViewIfNeeded();
+  await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
+  await page.screenshot({ animations: 'disabled', path: 'test-results/smart-journey-mobile.png' });
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await panel.getByRole('heading', { name: 'Journey for this enquiry', exact: true }).scrollIntoViewIfNeeded();
+  await page.screenshot({ animations: 'disabled', path: 'test-results/smart-journey-desktop.png' });
+  await panel.getByRole('button', { name: 'Review follow-up', exact: true }).click();
+  await expect(inspector.getByRole('region', { name: 'Enquiry journey evidence' })).toHaveCount(0);
+  await expect(inspector.getByRole('textbox', { name: 'Follow-up', exact: true })).toHaveCount(0);
+  expect(writes).toBe(0);
+});
+
+test('refresh preserves filters, replaces current context and disables guidance after a failed read', async ({ page }) => {
+  let read = 0;
+  await page.route('**/api/leads/*/inspector', async route => {
+    read++;
+    if (read === 3) { await route.fulfill({ status: 503, json: { ok: false, error: 'Synthetic source temporarily unavailable' } }); return; }
+    const response = await route.fetch(); const body = await response.json();
+    const next = await smartRead(body);
+    if (read === 2) {
+      next.data.lead.stage = 'enrolled';
+      next.data.journeyEvidence.events = next.data.journeyEvidence.events.map((event: any) => ({ ...event, source: 'Instagram' }));
+    }
+    await route.fulfill({ json: next });
+  });
+  await page.goto('/leads'); await page.locator('tbody tr[tabindex="0"]').first().click();
+  const inspector = page.getByRole('dialog', { name: 'Lead Inspector', exact: true });
+  await inspector.getByRole('button', { name: /^Journey/ }).click();
+  const panel = inspector.getByRole('region', { name: 'Enquiry journey evidence' });
+  await panel.getByRole('combobox', { name: 'Source', exact: true }).selectOption('Google');
+  await panel.getByRole('button', { name: 'Refresh Journey', exact: true }).click();
+  await expect(panel.getByRole('heading', { name: 'Review the recorded outcome' })).toBeVisible();
+  await expect(panel.getByRole('combobox', { name: 'Source', exact: true })).toHaveValue('Google');
+  await expect(panel.getByRole('option', { name: 'Google (not in this read)', exact: true })).toHaveCount(1);
+  await panel.getByRole('button', { name: 'Refresh Journey', exact: true }).click();
+  await expect(panel.getByRole('heading', { name: 'Refresh before choosing the next action' })).toBeVisible();
+  await expect(panel.getByRole('button', { name: 'Refresh records', exact: true })).toBeVisible();
+  await expect(panel.getByText('No activity matches these filters')).toBeVisible();
+});
+
+test('a delayed refresh cannot replace a newly selected lead', async ({ page }) => {
+  let reads = 0; let release: () => void = () => {};
+  const held = new Promise<void>(resolve => { release = resolve; });
+  let finishOld: () => void = () => {};
+  const oldFinished = new Promise<void>(resolve => { finishOld = resolve; });
+  await page.route('**/api/leads/*/inspector', async route => {
+    const n = ++reads;
+    const response = await route.fetch(); const body = await response.json();
+    const next = await smartRead(body);
+    if (n === 2) { next.data.lead.name = 'OLD RESPONSE MUST NOT WIN'; await held; }
+    if (n === 3) next.data.lead.name = 'CURRENT LEAD SHOULD STAY';
+    try { await route.fulfill({ json: next }); } catch { /* The superseded browser request may already be cancelled. */ }
+    finally { if (n === 2) finishOld(); }
+  });
+  await page.goto('/leads');
+  await page.locator('tbody tr[tabindex="0"]').first().click();
+  const inspector = page.getByRole('dialog', { name: 'Lead Inspector', exact: true });
+  await expect(inspector.getByRole('button', { name: 'Refresh Lead Inspector', exact: true })).toBeEnabled();
+  await inspector.getByRole('button', { name: 'Refresh Lead Inspector', exact: true }).click();
+  await expect.poll(() => reads).toBe(2);
+  await inspector.getByRole('button', { name: 'Close', exact: true }).click();
+  await page.locator('tbody tr[tabindex="0"]').nth(1).click();
+  await expect(inspector.getByRole('heading', { name: 'CURRENT LEAD SHOULD STAY', exact: true })).toBeVisible();
+  release();
+  await oldFinished;
+  await expect.poll(() => reads).toBe(3);
+  await expect(inspector.getByText('OLD RESPONSE MUST NOT WIN')).toHaveCount(0);
+  await expect(inspector.getByRole('heading', { name: 'CURRENT LEAD SHOULD STAY', exact: true })).toBeVisible();
 });
 
 test('GT-01 Journey panel shows scoped counts, filters activity and fits phone width', async ({ page }) => {

@@ -493,7 +493,7 @@ export default async function LeadDetailPage({
           {/* =================================================
               CANONICAL CUSTOMER JOURNEY
           ================================================= */}
-          <JourneyEvidencePanel evidence={buildJourneyEvidence({
+          <JourneyEvidencePanel context={{ leadId: id, stage: lead.stage, owner: lead.owner, nextFollowupAt: lead.nextFollowupAt, readAt: new Date().toISOString() }} evidence={buildJourneyEvidence({
             organizationId: personJourney.organizationId, personId: personJourney.personId,
             leadId: id, enquiryAt: lead.createdAt, asOf: new Date().toISOString(),
             rows: personJourney.journey, total: personJourney.journeyTotal, readState: personJourney.readState,
@@ -517,12 +517,12 @@ export default async function LeadDetailPage({
 
           ================================================= */}
 
-          <PaymentCard
+          <div id="payments"><PaymentCard
             potentialValue={lead.potentialValue ?? lead.value}
             potentialCurrency={lead.potentialCurrency ?? lead.currency}
             payments={payments}
             action={paymentAction}
-          />
+          /></div>
 
           {/* =================================================
 

@@ -1,5 +1,7 @@
 # Journey evidence — first controlled checkpoint
 
+**Smart/dynamic continuation:** see `SMART-JOURNEY-WORKSPACE.md` for CRM service reminders, combined evidence filters, page drill-down, loaded-record age and guarded refresh. These extend this presentation checkpoint; they do not complete the financial/identity/permission gates or the critical AI agent acceptance cases.
+
 Baseline: Master Context v1.2 and the accepted direction in the growth/journey plan. This extends the existing R2/R4 foundations; it does not restart R9/R10, replace the existing SEO modules, or change the two master roadmaps. The user confirmed Journey/growth before R13 commercial implementation.
 
 ## Implemented scope
