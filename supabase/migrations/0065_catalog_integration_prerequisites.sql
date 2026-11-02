@@ -48,10 +48,40 @@ as $$
     or public.is_crm_admin();
 $$;
 
+-- Pre-workspace compatibility helper. At this point in history the CRM used the
+-- active-profile gate for lead access. Later migrations replace this function
+-- with workspace-role and assignment-aware authorization.
+create or replace function public.can_access_lead(
+  p_lead_id uuid
+)
+returns boolean
+language sql
+stable
+security definer
+set search_path = public, auth, pg_temp
+as $$
+  select
+    p_lead_id is not null
+    and exists (
+      select 1
+      from public.leads l
+      where l.id = p_lead_id
+    )
+    and (
+      auth.role() = 'service_role'
+      or (
+        auth.role() = 'authenticated'
+        and public.is_crm_user()
+      )
+    );
+$$;
+
 revoke all on function public.is_crm_admin() from public, anon;
 revoke all on function public.can_view_lead_pii() from public, anon;
+revoke all on function public.can_access_lead(uuid) from public, anon;
 
 grant execute on function public.is_crm_admin() to authenticated, service_role;
 grant execute on function public.can_view_lead_pii() to authenticated, service_role;
+grant execute on function public.can_access_lead(uuid) to authenticated, service_role;
 
 commit;
