@@ -27,6 +27,8 @@ import {
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useModalFocus } from "@/components/use-modal-focus";
+import { JourneyEvidencePanel } from "@/components/journey-evidence-panel";
+import type { JourneyEvidence } from "@/lib/journey-evidence";
 
 type InspectorTab = "overview" | "journey" | "activity";
 type Availability = "available" | "empty" | "unavailable";
@@ -166,6 +168,7 @@ type InspectorLead = {
 };
 
 type InspectorPayload = {
+  journeyEvidence?: JourneyEvidence;
   schemaVersion: "lead_inspector_v1";
   generatedAt: string;
   lead: InspectorLead;
@@ -459,7 +462,7 @@ export function LeadInspector({
             <div className="mt-4 flex flex-wrap items-center gap-2">
               <Link
                 href={`/conversations?lead=${payload.lead.id}`}
-                className="inline-flex h-8 items-center gap-1.5 rounded-md bg-[#216551] px-3 text-[11px] font-semibold text-white transition hover:bg-[#174D3B]"
+                className="btn-primary inline-flex h-8 items-center gap-1.5 px-3 text-[11px]"
               >
                 <MessageCircle size={12} /> Conversation
               </Link>
@@ -984,6 +987,7 @@ function SmartFollowupComposer({
 }
 
 function JourneyTab({ payload }: { payload: InspectorPayload }) {
+  if (payload.journeyEvidence) return <JourneyEvidencePanel evidence={payload.journeyEvidence} />;
   if (payload.availability.journey === "unavailable") {
     return <EmptyState title="Journey unavailable" body="The canonical Person journey could not be loaded. The Inspector is not substituting inferred events." />;
   }

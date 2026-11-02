@@ -84,7 +84,8 @@
     "verify:ad-activation-runner-operations": "node scripts/verify-ad-activation-runner-operations.mjs",
     "verify:ad-activation-canary-boundary": "node scripts/verify-ad-activation-canary-boundary.mjs",
     "test:ui": "playwright test",
-    "test:ui:unit": "node --test tests/ui/presentation.test.cjs"
+    "test:ui:unit": "node --test tests/ui/presentation.test.cjs",
+    "test:journey": "node --test tests/growth/*.test.cjs"
   },
   "dependencies": {
     "@google-analytics/data": "^7.2.0",

@@ -4,12 +4,14 @@ import { getLead, getLeadPayments } from "@/lib/data";
 import {
   getPersonJourneyForLead,
   type Person360Summary,
-  type PersonJourneyEvent,
 } from "@/lib/person-journey-data";
+import { buildJourneyEvidence, type JourneyEvidence } from "@/lib/journey-evidence";
 import { createClient } from "@/lib/supabase/server";
 import type { LeadDetail } from "@/types/crm";
 
 export type LeadInspectorAvailability = "available" | "empty" | "unavailable";
+const PERSON_FIELDS = ['person_id', 'session_count', 'sessions_30d', 'touchpoint_count', 'page_view_count', 'message_count', 'enrollment_count', 'latest_lead_engagement_score', 'latest_lead_behaviour_temperature', 'latest_lead_behaviour_reason'] as const;
+export type LeadInspectorPerson = Pick<Person360Summary, typeof PERSON_FIELDS[number]>;
 
 export type LeadInspectorContactLog = {
   id: string;
@@ -90,8 +92,9 @@ export type LeadInspectorPayload = {
   lead: LeadDetail & Record<string, unknown>;
   payments: LeadInspectorPayment[];
   openTasks: LeadInspectorTask[];
-  person: Person360Summary | null;
-  journey: PersonJourneyEvent[];
+  person: LeadInspectorPerson | null;
+  journeyEvidence: JourneyEvidence;
+  journey: Array<{ journey_event_key: string; event_at: string; event_category: string; event_type: string; channel: null; source: string; title: string; summary: string | null }>;
   journeyTotal: number;
   contactLogs: LeadInspectorContactLog[];
   contactSummary: LeadInspectorContactSummary | null;
@@ -261,18 +264,36 @@ export async function getLeadInspectorData(
       null) as LeadInspectorSalesIntelligence | null;
   }
 
-  const person = personJourney?.person ?? null;
-  const journey = personJourney?.journey ?? [];
-  const journeyTotal = personJourney?.journeyTotal ?? 0;
+  const person = personJourney?.person
+    ? Object.fromEntries(PERSON_FIELDS.map(field => [field, personJourney.person![field]])) as LeadInspectorPerson
+    : null;
+  const generatedAt = new Date().toISOString();
+  const journeyEvidence = buildJourneyEvidence({
+    organizationId: personJourney?.organizationId ?? null,
+    personId: personJourney?.personId ?? null,
+    leadId: normalizedLeadId, enquiryAt: lead.createdAt, asOf: generatedAt,
+    rows: personJourney?.journey ?? [], total: personJourney?.journeyTotal ?? 0,
+    readState: personJourney?.readState ?? (journeyResult.status === "rejected" ? "unavailable" : "available"),
+  });
+  // The browser receives an allowlisted, enquiry-scoped projection. Raw matching
+  // identifiers, URLs, metadata and other opportunities do not cross this boundary.
+  const journey = journeyEvidence.events.map(event => ({
+    journey_event_key: event.key, event_at: event.at,
+    event_category: event.kind === "website" ? "digital" : "business",
+    event_type: event.type, channel: null, source: event.source,
+    title: event.title, summary: event.page,
+  }));
+  const journeyTotal = journey.length;
 
   return {
     schemaVersion: "lead_inspector_v1",
-    generatedAt: new Date().toISOString(),
+    generatedAt,
     lead: lead as LeadDetail & Record<string, unknown>,
     payments: payments as LeadInspectorPayment[],
     openTasks,
     person,
     journey,
+    journeyEvidence,
     journeyTotal,
     contactLogs,
     contactSummary,
@@ -296,7 +317,7 @@ export async function getLeadInspectorData(
             ? "available"
             : "empty",
       journey:
-        journeyResult.status === "rejected"
+        journeyEvidence.state === "unavailable" || journeyEvidence.state === "restricted"
           ? "unavailable"
           : journey.length > 0
             ? "available"

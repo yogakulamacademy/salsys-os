@@ -94,8 +94,8 @@ test('workspace search finds permitted commands and supports keyboard dismissal'
   await expect(dialog).toHaveCount(0);
 });
 
-test('shared brand and neutral panels render across core destinations', async ({ page }) => {
-  for (const route of ['/home', '/leads', '/marketing', '/revenue', '/performance', '/automation', '/settings/overview']) {
+for (const route of ['/home', '/leads', '/marketing', '/revenue', '/performance', '/automation', '/settings/overview']) {
+  test(`shared brand and responsive layout: ${route}`, async ({ page }) => {
     await page.goto(route);
     await expect(page.getByText('Application error: a server-side exception has occurred', { exact: false })).toHaveCount(0);
     await expect(page.locator('main h1').first()).toBeVisible();
@@ -108,7 +108,10 @@ test('shared brand and neutral panels render across core destinations', async ({
     }
     await page.setViewportSize({ width: 1440, height: 1000 });
     await page.screenshot({ animations: 'disabled', path: `test-results/${route.replaceAll('/', '-')}-desktop.png` });
-  }
+  });
+}
+
+test('Home supports the shared dark theme', async ({ page }) => {
   await page.goto('/home');
   await page.screenshot({ animations: 'disabled', path: 'test-results/home-desktop.png' });
   await page.locator('details.topbar-profile-menu > summary').click();

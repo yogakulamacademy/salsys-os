@@ -1,0 +1,422 @@
+{
+  "fixture_version": "1.0",
+  "scenario": "GT-01",
+  "title": "Permitted pre/post-enquiry journey with conserved acquisition credit",
+  "strategic_baseline": "SalsysOS Master Context v1.2, locked 2026-11-02",
+  "execution_status": "NOT_RUN_AGAINST_SALSYSOS",
+  "purpose": "Synthetic logical inputs and assertions. Requires mapping to actual APIs/schema. Not a production import or provider payload.",
+  "independence": "Separate from the earlier eight-person ST-001 fixture. Do not add these counts or cash to its oracle.",
+  "safety": {
+    "external_sends": false,
+    "production_replay": false,
+    "environment": "isolated test environment after tenant isolation readiness",
+    "seed_expected_states": false,
+    "tenant_creation": "No organizations are created by this file or generator. Follow the actual environment readiness process."
+  },
+  "scope": {
+    "tenant": "GT-A",
+    "as_of": "2026-10-15T12:00:00+05:30",
+    "timezone": "Asia/Kolkata",
+    "currency": "INR",
+    "money_unit": "paise"
+  },
+  "policy": {
+    "id": "GT-POLICY-1",
+    "description": "Explicit synthetic policy decision, not a universal legal-basis prescription.",
+    "effective_from": "2026-09-28T08:00:00+05:30",
+    "permissions": {
+      "analytics": true,
+      "lead_intelligence": true,
+      "historical_identity_linking": true,
+      "service_communications": true,
+      "marketing_messages": false,
+      "ad_activation": false,
+      "ad_export": false,
+      "model_training": false
+    },
+    "consent_ledger_deliveries_are_separate_from_event_deliveries": true,
+    "notice_version": "synthetic-notice-v1"
+  },
+  "identity": {
+    "person": {
+      "id": "GT-P1",
+      "tenant": "GT-A",
+      "name": "Alex",
+      "email": "alex@salsys-test.example"
+    },
+    "visitor_id": "GT-V1",
+    "link": {
+      "person_id": "GT-P1",
+      "visitor_id": "GT-V1",
+      "established_at": "2026-10-02T10:05:01+05:30",
+      "evidence": "Explicit trusted test-adapter identity proof plus permitted linking; not email normalization or device ID alone."
+    },
+    "isolation_sentinel": {
+      "tenant": "GT-B",
+      "person_id": "GT-B-P1",
+      "email": "alex@salsys-test.example",
+      "campaign_id": "G1",
+      "instruction_as_data": "Sentinel for negative cases only; must not join to GT-A."
+    }
+  },
+  "opportunity": {
+    "id": "GT-O1",
+    "person_id": "GT-P1",
+    "created_by_event": "GT-E05",
+    "course_id": "GT-COURSE1",
+    "batch_id": "GT-BATCH1",
+    "opening_stage": "New",
+    "original_commitment_minor": 9000000,
+    "required_deposit_minor": 3000000,
+    "opening_batch_capacity": 24,
+    "opening_reserved_seats": 0,
+    "enrollment_rule": "Verified net allocated receipts meet deposit AND atomic course/batch seat reservation. No cancellation in GT-01."
+  },
+  "counting_contract": {
+    "before": "event occurred_at strictly less than authoritative lead_created_at",
+    "after": "event occurred_at at or after authoritative lead_created_at",
+    "sessions": "classify by session start; no session spans the boundary in GT-01",
+    "page_views": "unique page_view source events only; form, CRM, finance and consent records are not page views",
+    "dedupe": "tenant + source + source_event_id; also protect financial transaction business effects",
+    "receipt_time": "used for ingestion-lag diagnosis, not reclassifying occurrence"
+  },
+  "sessions": [
+    {
+      "id": "GT-S1",
+      "started_at": "2026-09-28T09:00:00+05:30",
+      "source": "google",
+      "medium": "cpc",
+      "campaign_id": "G1"
+    },
+    {
+      "id": "GT-S2",
+      "started_at": "2026-10-02T10:00:00+05:30",
+      "source": "meta",
+      "medium": "paid_social",
+      "campaign_id": "M1"
+    },
+    {
+      "id": "GT-S3",
+      "started_at": "2026-10-03T11:00:00+05:30",
+      "source": "direct",
+      "medium": "none",
+      "campaign_id": null
+    },
+    {
+      "id": "GT-S4",
+      "started_at": "2026-10-04T12:00:00+05:30",
+      "source": "direct",
+      "medium": "none",
+      "campaign_id": null
+    }
+  ],
+  "acquisition_evidence": {
+    "basis": "Observed synthetic website landing tags; no person-level ad impression history or independently verified provider click is asserted.",
+    "attribution_window_days": 30,
+    "direct_rule": "Ignore direct if an earlier eligible non-direct acquisition touch exists in window",
+    "scope": "Opportunity acquisition cohort; outcomes observed through frozen cutoff",
+    "endpoint": "GT-E05 lead_created",
+    "first_eligible": "G1",
+    "last_eligible_before_enquiry": "M1",
+    "money_basis": "Verified collections less successful refunds, allocated once per model to this opportunity"
+  },
+  "event_deliveries": [
+    {
+      "delivery_id": "GT-D1",
+      "source_event_id": "GT-E01",
+      "tenant": "GT-A",
+      "source": "synthetic_adapter",
+      "event_type": "page_view",
+      "occurred_at": "2026-09-28T09:00:00+05:30",
+      "received_at": "2026-09-28T09:00:00+05:30",
+      "evidence_class": "Observed",
+      "session_id": "GT-S1",
+      "visitor_id": "GT-V1",
+      "page_path": "/200H",
+      "policy_reference": "GT-POLICY-1"
+    },
+    {
+      "delivery_id": "GT-D2",
+      "source_event_id": "GT-E02",
+      "tenant": "GT-A",
+      "source": "synthetic_adapter",
+      "event_type": "page_view",
+      "occurred_at": "2026-09-28T09:04:00+05:30",
+      "received_at": "2026-09-28T09:04:00+05:30",
+      "evidence_class": "Observed",
+      "session_id": "GT-S1",
+      "visitor_id": "GT-V1",
+      "page_path": "/pricing",
+      "policy_reference": "GT-POLICY-1"
+    },
+    {
+      "delivery_id": "GT-D3",
+      "source_event_id": "GT-E03",
+      "tenant": "GT-A",
+      "source": "synthetic_adapter",
+      "event_type": "page_view",
+      "occurred_at": "2026-10-02T10:00:00+05:30",
+      "received_at": "2026-10-02T10:00:00+05:30",
+      "evidence_class": "Observed",
+      "session_id": "GT-S2",
+      "visitor_id": "GT-V1",
+      "page_path": "/200H",
+      "policy_reference": "GT-POLICY-1"
+    },
+    {
+      "delivery_id": "GT-D4",
+      "source_event_id": "GT-E04",
+      "tenant": "GT-A",
+      "source": "synthetic_adapter",
+      "event_type": "form_submit",
+      "occurred_at": "2026-10-02T10:05:00+05:30",
+      "received_at": "2026-10-02T10:05:00+05:30",
+      "visitor_id": "GT-V1",
+      "session_id": "GT-S2",
+      "intake_request_id": "GT-INTAKE1",
+      "policy_reference": "GT-POLICY-1"
+    },
+    {
+      "delivery_id": "GT-D5",
+      "source_event_id": "GT-E05",
+      "tenant": "GT-A",
+      "source": "synthetic_adapter",
+      "event_type": "lead_created",
+      "occurred_at": "2026-10-02T10:05:01+05:30",
+      "received_at": "2026-10-02T10:05:01+05:30",
+      "authority": "trusted_synthetic_crm_adapter",
+      "person_id": "GT-P1",
+      "opportunity_id": "GT-O1",
+      "intake_request_id": "GT-INTAKE1"
+    },
+    {
+      "delivery_id": "GT-D6",
+      "source_event_id": "GT-E06",
+      "tenant": "GT-A",
+      "source": "synthetic_adapter",
+      "event_type": "page_view",
+      "occurred_at": "2026-10-03T11:00:00+05:30",
+      "received_at": "2026-10-03T11:00:00+05:30",
+      "evidence_class": "Observed",
+      "session_id": "GT-S3",
+      "visitor_id": "GT-V1",
+      "page_path": "/curriculum",
+      "policy_reference": "GT-POLICY-1"
+    },
+    {
+      "delivery_id": "GT-D7",
+      "source_event_id": "GT-E07",
+      "tenant": "GT-A",
+      "source": "synthetic_adapter",
+      "event_type": "page_view",
+      "occurred_at": "2026-10-03T11:05:00+05:30",
+      "received_at": "2026-10-03T11:05:00+05:30",
+      "evidence_class": "Observed",
+      "session_id": "GT-S3",
+      "visitor_id": "GT-V1",
+      "page_path": "/pricing",
+      "policy_reference": "GT-POLICY-1"
+    },
+    {
+      "delivery_id": "GT-D8",
+      "source_event_id": "GT-E08",
+      "tenant": "GT-A",
+      "source": "synthetic_adapter",
+      "event_type": "page_view",
+      "occurred_at": "2026-10-04T12:00:00+05:30",
+      "received_at": "2026-10-04T12:00:00+05:30",
+      "evidence_class": "Observed",
+      "session_id": "GT-S4",
+      "visitor_id": "GT-V1",
+      "page_path": "/200H",
+      "policy_reference": "GT-POLICY-1"
+    },
+    {
+      "delivery_id": "GT-D9",
+      "source_event_id": "GT-E09",
+      "tenant": "GT-A",
+      "source": "synthetic_adapter",
+      "event_type": "page_view",
+      "occurred_at": "2026-10-04T12:03:00+05:30",
+      "received_at": "2026-10-04T12:03:00+05:30",
+      "evidence_class": "Observed",
+      "session_id": "GT-S4",
+      "visitor_id": "GT-V1",
+      "page_path": "/payment-information",
+      "policy_reference": "GT-POLICY-1"
+    },
+    {
+      "delivery_id": "GT-D10",
+      "source_event_id": "GT-E10",
+      "tenant": "GT-A",
+      "source": "synthetic_adapter",
+      "event_type": "verified_payment",
+      "occurred_at": "2026-10-05T14:00:00+05:30",
+      "received_at": "2026-10-05T14:00:00+05:30",
+      "authority": "trusted_synthetic_finance_adapter",
+      "opportunity_id": "GT-O1",
+      "transaction_id": "GT-TX1",
+      "amount_minor": 3000000,
+      "currency": "INR"
+    },
+    {
+      "delivery_id": "GT-D11",
+      "source_event_id": "GT-E11",
+      "tenant": "GT-A",
+      "source": "synthetic_adapter",
+      "event_type": "verified_payment",
+      "occurred_at": "2026-10-08T14:00:00+05:30",
+      "received_at": "2026-10-08T14:00:00+05:30",
+      "authority": "trusted_synthetic_finance_adapter",
+      "opportunity_id": "GT-O1",
+      "transaction_id": "GT-TX2",
+      "amount_minor": 6000000,
+      "currency": "INR"
+    },
+    {
+      "delivery_id": "GT-D12",
+      "source_event_id": "GT-E12",
+      "tenant": "GT-A",
+      "source": "synthetic_adapter",
+      "event_type": "approved_commitment_reduction",
+      "occurred_at": "2026-10-10T09:00:00+05:30",
+      "received_at": "2026-10-10T09:00:00+05:30",
+      "authority": "authorized_synthetic_finance_reviewer",
+      "opportunity_id": "GT-O1",
+      "adjustment_id": "GT-ADJ1",
+      "amount_minor": 1000000,
+      "currency": "INR"
+    },
+    {
+      "delivery_id": "GT-D13",
+      "source_event_id": "GT-E13",
+      "tenant": "GT-A",
+      "source": "synthetic_adapter",
+      "event_type": "verified_refund",
+      "occurred_at": "2026-10-10T10:00:00+05:30",
+      "received_at": "2026-10-10T10:00:00+05:30",
+      "authority": "trusted_synthetic_finance_adapter",
+      "opportunity_id": "GT-O1",
+      "transaction_id": "GT-RF1",
+      "original_transaction_id": "GT-TX2",
+      "approved_adjustment_id": "GT-ADJ1",
+      "amount_minor": 1000000,
+      "currency": "INR"
+    },
+    {
+      "delivery_id": "GT-D14",
+      "source_event_id": "GT-E02",
+      "tenant": "GT-A",
+      "source": "synthetic_adapter",
+      "event_type": "page_view",
+      "occurred_at": "2026-09-28T09:04:00+05:30",
+      "received_at": "2026-09-28T09:04:05+05:30",
+      "evidence_class": "Observed",
+      "session_id": "GT-S1",
+      "visitor_id": "GT-V1",
+      "page_path": "/pricing",
+      "policy_reference": "GT-POLICY-1"
+    },
+    {
+      "delivery_id": "GT-D15",
+      "source_event_id": "GT-E10",
+      "tenant": "GT-A",
+      "source": "synthetic_adapter",
+      "event_type": "verified_payment",
+      "occurred_at": "2026-10-05T14:00:00+05:30",
+      "received_at": "2026-10-05T14:01:00+05:30",
+      "authority": "trusted_synthetic_finance_adapter",
+      "opportunity_id": "GT-O1",
+      "transaction_id": "GT-TX1",
+      "amount_minor": 3000000,
+      "currency": "INR"
+    }
+  ],
+  "aggregate_search": {
+    "source": "synthetic GSC adapter",
+    "property": "https://academy.salsys-test.example/",
+    "source_date": "2026-10-01",
+    "source_timezone": "America/Los_Angeles",
+    "page": "/200H",
+    "country": "IND",
+    "device": "MOBILE",
+    "type": "web",
+    "page_totals": {
+      "impressions": 20000,
+      "clicks": 1000
+    },
+    "separate_query_grain_rows": [
+      {
+        "query": "200 hour training example",
+        "impressions": 12000,
+        "clicks": 600
+      },
+      {
+        "query": "course certification example",
+        "impressions": 3000,
+        "clicks": 150
+      }
+    ],
+    "query_coverage_reason": "Not represented in supplied rows; no attribution to individual people and no assumption all residuals have one cause.",
+    "gen_ai_subset": {
+      "impressions": 500,
+      "note": "Already included in the 20000 total impressions; not additive."
+    },
+    "api_availability": "Synthetic data only, not a claim that a live API exposes this report."
+  },
+  "aggregate_ai_visibility": {
+    "source": "synthetic supported-surface citation report",
+    "date": "2026-10-01",
+    "page": "/200H",
+    "citations": 40,
+    "evidence_class": "Aggregate",
+    "creates_person_event": false
+  },
+  "expected_results": {
+    "scope": "GT-A only, frozen cutoff",
+    "people": 1,
+    "opportunities": 1,
+    "event_deliveries": 15,
+    "distinct_source_events": 13,
+    "duplicate_event_deliveries": 2,
+    "sessions": 4,
+    "pre_enquiry_session_starts": 2,
+    "post_enquiry_session_starts": 2,
+    "unique_page_views": 7,
+    "pre_enquiry_page_views": 3,
+    "post_enquiry_page_views": 4,
+    "form_submissions": 1,
+    "authoritative_lead_creations": 1,
+    "financial_movements": 3,
+    "successful_collections": 2,
+    "successful_refunds": 1,
+    "gross_collected_minor": 9000000,
+    "refunds_minor": 1000000,
+    "net_cash_minor": 8000000,
+    "current_commitment_minor": 8000000,
+    "outstanding_minor": 0,
+    "confirmed_enrollments": 1,
+    "remaining_batch_seats": 23,
+    "attribution": {
+      "first_touch": {
+        "G1": 8000000
+      },
+      "last_eligible_before_enquiry": {
+        "M1": 8000000
+      },
+      "currency": "INR"
+    },
+    "reported_search_clicks": 1000,
+    "query_row_clicks": 750,
+    "unrepresented_query_clicks": 250,
+    "reported_search_impressions": 20000,
+    "total_with_gen_ai_subset_not_added": 20000,
+    "person_linked_search_queries": 0,
+    "person_events_created_from_aggregate_citations": 0,
+    "automatic_marketing_sends": 0,
+    "ad_audience_additions": 0,
+    "ad_exports": 0,
+    "predicted_purchase_probability": null
+  },
+  "exception_case_index": "GT-02 through GT-30 in SalsysOS-master-aligned-growth-and-journey-plan.md. Each is a separate reset/branch scenario, not cumulative input to GT-01."
+}

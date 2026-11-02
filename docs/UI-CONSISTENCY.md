@@ -4,6 +4,8 @@ This implementation extends the existing SalsysOS interface. It uses the supplie
 
 ## Shared foundations
 
+User-confirmed continuation: maintain the current SalsysOS information architecture. Use one strong sentence, a short explanation and at most one useful CTA per empty state. Keep table headers and compact filters when a table is empty, use comfortable row spacing and clean status pills, and suppress summary strips when the module has no records. Genuine zero values within a populated module remain valid information. Keep errors/restricted access separate from empty data. The product mark retains SalsysOS's brand; interaction/focus tokens use restrained indigo/blue. Apply these shared primitives to later R13 SaaS screens when those screens are implemented, without starting commercial scope here.
+
 - Use `app/salsys-violet-theme.css` for product colors, neutral surfaces, text, borders and radii. Older `--salsys-*` variables resolve to these canonical tokens.
 - Use `BrandMark` / `BrandIdentity` from `components/brand.tsx` for product identity. Organization logos and contact avatars are separate identities.
 - Use `EmptyState` from `components/ui.tsx` and the original inline `EmptyArtwork` variants. Preserve the relevant search, filters and table headers around list empty states.

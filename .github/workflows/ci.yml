@@ -244,6 +244,9 @@ jobs:
       - name: Verify presentation and secure contact failure states
         run: npm run test:ui:unit
 
+      - name: Verify enquiry journey evidence and privacy projection
+        run: npm run test:journey
+
       - name: Build
         shell: bash
         run: |

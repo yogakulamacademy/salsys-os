@@ -247,6 +247,7 @@ export default async function AdmissionsDeskPage({
           batchCapacity={batchCapacity}
           needsReplyCount={needsReplyCount}
           unreadCount={unreadCount}
+          inboxKnown={snapshot.needsReplyTotal !== null && snapshot.unreadTotal !== null}
           overdueCount={overdue.length}
           newLeadCount={newLeads.length}
           paymentCount={paymentPending.length}
@@ -292,6 +293,7 @@ function AdmissionsOverview({
   newLeadCount,
   paymentCount,
   paymentOutstanding,
+  inboxKnown,
 }: {
   brief: string;
   priorityQueue: PriorityRow[];
@@ -302,7 +304,11 @@ function AdmissionsOverview({
   newLeadCount: number;
   paymentCount: number;
   paymentOutstanding: OutstandingSummary;
+  inboxKnown: boolean;
 }) {
+  if (!priorityQueue.length && !batchCapacity.length && needsReplyCount + unreadCount + overdueCount + newLeadCount + paymentCount === 0) {
+    return <EmptyState title={inboxKnown ? "No admissions activity yet" : "Admissions evidence is incomplete"} description={inboxKnown ? "Enquiries, follow-ups and batch demand will appear here as they are recorded." : "Some queue counts are unavailable. Open the underlying enquiries to review current work."} action={<Link href="/leads" className="btn-primary">Open leads</Link>} />;
+  }
   const paymentDetail = paymentOutstanding.hasAmount
     ? `${paymentOutstanding.display} recorded outstanding`
     : paymentOutstanding.missingCurrencyRecords > 0
@@ -327,14 +333,14 @@ function AdmissionsOverview({
         </Link>
       </section>
 
-      <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4" aria-label="Admissions action signals">
+      {needsReplyCount + overdueCount + newLeadCount + paymentCount > 0 ? <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4" aria-label="Admissions action signals">
         <DecisionMetricCard
           href="/conversations"
           label="Needs reply"
-          value={formatNumber(needsReplyCount)}
+          value={inboxKnown ? formatNumber(needsReplyCount) : "—"}
           detail={unreadCount > 0 ? `${unreadCount} unread inbound` : "Conversation attention"}
-          tone={needsReplyCount > 0 ? "warning" : "positive"}
-          statusLabel={needsReplyCount > 0 ? "Attention" : "Clear"}
+          tone={!inboxKnown ? "neutral" : needsReplyCount > 0 ? "warning" : "positive"}
+          statusLabel={!inboxKnown ? "Unknown" : needsReplyCount > 0 ? "Attention" : "Clear"}
           icon={<Inbox size={16} />}
           evidenceLabel="Conversation state"
           definition="Active conversations currently recorded as needing a human reply. This is an action queue signal; it does not infer customer intent."
@@ -370,7 +376,7 @@ function AdmissionsOverview({
           evidenceLabel="CRM intake state"
           definition="Leads currently recorded in the New stage. Intake volume is descriptive and is not treated as quality by itself."
         />
-      </section>
+      </section> : null}
 
       <section className="grid gap-5 xl:grid-cols-[minmax(0,1.25fr)_minmax(340px,.75fr)]">
         <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-950">
@@ -451,31 +457,25 @@ function PaymentsView({ rows, outstanding }: { rows: RevenueRow[]; outstanding: 
 
   return (
     <div className="space-y-4">
-      <section className="grid gap-3 sm:grid-cols-3">
+      {rows.length > 0 ? <section className="grid gap-3 sm:grid-cols-3">
         <PerformanceMetric label="Payment-stage leads" value={formatNumber(rows.length)} detail="Current payment-pending opportunities" />
         <PerformanceMetric label="Recorded outstanding" value={outstanding.hasAmount ? outstanding.display : "—"} detail={outstandingDetail} attention={outstanding.hasAmount} />
         <PerformanceMetric label="Next action" value="Follow up" detail="Resolve payment questions, proof and collection status" />
-      </section>
+      </section> : null}
 
       <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-950">
         <PanelHeader eyebrow="Conversion" title="Payment-pending opportunities" href="/revenue" action="Open revenue" />
-        {rows.length ? (
-          <div className="divide-y divide-slate-100 dark:divide-slate-900">
-            {rows.map((row) => (
-              <Link key={row.lead_id} href={`/leads/${row.lead_id}`} className="group grid gap-3 px-5 py-4 transition hover:bg-slate-50 dark:hover:bg-slate-900/60 sm:grid-cols-[minmax(0,1fr)_160px_140px_auto] sm:items-center">
-                <div className="min-w-0">
-                  <div className="truncate text-sm font-semibold text-slate-950 dark:text-white">{row.lead_name || "Lead"}</div>
-                  <div className="mt-0.5 text-xs text-slate-500">{pretty(row.current_stage || "payment_pending")}</div>
-                </div>
-                <div><div className="text-[10px] text-slate-400">Status</div><div className="mt-0.5 text-sm font-medium text-slate-700 dark:text-slate-200">{pretty(row.payment_status || "pending")}</div></div>
-                <div className="sm:text-right"><div className="text-[10px] text-slate-400">Outstanding</div><div className="mt-0.5 text-sm font-semibold text-slate-950 dark:text-white">{row.outstanding_balance == null || !row.currency ? "—" : formatMoney(row.outstanding_balance, row.currency)}</div></div>
-                <ArrowRight size={14} className="text-slate-300 transition group-hover:translate-x-0.5" />
-              </Link>
-            ))}
-          </div>
-        ) : (
-          <SimpleEmpty title="No payment-pending opportunities" detail="Payment-stage leads will appear here when recorded." />
-        )}
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-[620px] border-collapse text-left">
+            <thead><tr><th className="px-5 py-3">Opportunity</th><th className="px-5 py-3">Status</th><th className="px-5 py-3 text-right">Outstanding</th><th className="px-5 py-3"><span className="sr-only">Action</span></th></tr></thead>
+            <tbody>{rows.length ? rows.map(row => <tr key={row.lead_id} className="border-t border-line">
+              <td className="px-5"><Link href={`/leads/${row.lead_id}`} className="font-medium text-copy-strong hover:underline">{row.lead_name || 'Lead'}</Link><div className="mt-1 text-xs text-copy-muted">{pretty(row.current_stage || 'payment_pending')}</div></td>
+              <td className="px-5"><span className="inline-flex rounded-full bg-surface-muted px-2.5 py-1 text-xs font-medium text-copy-muted">{pretty(row.payment_status || 'pending')}</span></td>
+              <td className="px-5 text-right font-medium text-copy-strong">{row.outstanding_balance == null || !row.currency ? '—' : formatMoney(row.outstanding_balance, row.currency)}</td>
+              <td className="px-5"><Link href={`/leads/${row.lead_id}`} className="text-xs text-brand-700">Open <span className="sr-only">{row.lead_name || 'lead'}</span></Link></td>
+            </tr>) : <tr><td colSpan={4}><SimpleEmpty title="No payment-pending opportunities" detail="Payment-stage leads will appear here when recorded." /></td></tr>}</tbody>
+          </table>
+        </div>
       </section>
     </div>
   );
@@ -491,11 +491,11 @@ function CapacityView({ rows }: { rows: AdmissionsBatchCapacityRow[] }) {
 
   return (
     <div className="space-y-4">
-      <section className="grid gap-3 sm:grid-cols-3">
+      {rows.length > 0 ? <section className="grid gap-3 sm:grid-cols-3">
         <PerformanceMetric label="Upcoming batches" value={formatNumber(rows.length)} detail="Batches represented in current admissions demand" />
         <PerformanceMetric label="Hot prospects" value={formatNumber(hot)} detail="High-intent demand attached to upcoming batches" />
         <PerformanceMetric label="Near capacity" value={formatNumber(nearCapacity)} detail={`${formatNumber(seats)} calculated seats remain across visible batches`} attention={nearCapacity > 0} />
-      </section>
+      </section> : null}
 
       <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-950">
         <PanelHeader eyebrow="Demand planning" title="Batch capacity & prospect pressure" href="/course-management" action="Manage batches" />

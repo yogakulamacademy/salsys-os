@@ -1,15 +1,15 @@
 .course-management-scope {
-  --operations-accent: var(--brand-700);
+  --operations-accent: var(--app-interaction);
 }
 
 .course-management-scope .card-pad {
-  border-color: var(--line);
-  background: var(--surface);
+  border-color: var(--app-border);
+  background: var(--app-surface);
   box-shadow: var(--shadow-xs);
 }
 
 .course-management-scope .eyebrow {
-  color: var(--brand-700);
+  color: var(--app-interaction);
   letter-spacing: 0.12em;
 }
 
@@ -17,58 +17,58 @@
 .course-management-scope .text-slate-900,
 .course-management-scope .text-slate-800,
 .course-management-scope .text-slate-700 {
-  color: var(--copy-strong);
+  color: var(--app-text-strong);
 }
 
 .course-management-scope .text-slate-600,
 .course-management-scope .text-slate-500,
 .course-management-scope .text-slate-400 {
-  color: var(--copy-muted);
+  color: var(--app-text-muted);
 }
 
 .course-management-scope .border-slate-100,
 .course-management-scope .border-slate-200 {
-  border-color: var(--line);
+  border-color: var(--app-border);
 }
 
 .course-management-scope .bg-slate-50,
 .course-management-scope .bg-slate-50\/70,
 .course-management-scope .bg-slate-50\/80 {
-  background: var(--surface-muted);
+  background: var(--app-surface-muted);
 }
 
 .course-management-scope .input {
-  border-color: var(--line);
-  background: var(--surface);
-  color: var(--copy-strong);
+  border-color: var(--app-border);
+  background: var(--app-surface);
+  color: var(--app-text-strong);
 }
 
 .course-management-scope .input:focus {
-  border-color: var(--brand-700);
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--brand-700) 12%, transparent);
+  border-color: var(--app-interaction);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--app-interaction) 12%, transparent);
 }
 
 .course-management-scope .btn-primary {
-  background: var(--brand-700);
-  border-color: var(--brand-700);
+  background: var(--app-interaction);
+  border-color: var(--app-interaction);
   color: #fff;
 }
 
 .course-management-scope .btn-primary:hover {
-  background: var(--brand-900);
-  border-color: var(--brand-900);
+  background: var(--app-interaction-hover);
+  border-color: var(--app-interaction-hover);
 }
 
 .course-management-scope .btn-secondary {
-  border-color: var(--line);
-  background: var(--surface);
-  color: var(--copy-muted);
+  border-color: var(--app-border);
+  background: var(--app-surface);
+  color: var(--app-text-muted);
 }
 
 .course-management-scope .btn-secondary:hover {
-  border-color: color-mix(in srgb, var(--brand-700) 24%, var(--line));
-  background: var(--brand-50);
-  color: var(--copy-strong);
+  border-color: color-mix(in srgb, var(--app-interaction) 24%, var(--app-border));
+  background: var(--app-brand-50);
+  color: var(--app-text-strong);
 }
 
 /* Summary metrics become operational signals, not oversized dashboard cards. */
@@ -78,21 +78,21 @@
 
 .course-management-scope > section:first-of-type > div {
   min-height: 118px;
-  border-color: var(--line);
-  background: var(--surface);
+  border-color: var(--app-border);
+  background: var(--app-surface);
   box-shadow: none;
 }
 
 .course-management-scope > section:first-of-type > div[class*='border-red'],
 .course-management-scope > section:first-of-type > div[class*='border-amber'] {
-  border-color: color-mix(in srgb, var(--warning) 34%, var(--line));
-  background: color-mix(in srgb, var(--warning) 5%, var(--surface));
+  border-color: color-mix(in srgb, var(--app-warning) 34%, var(--app-border));
+  background: color-mix(in srgb, var(--app-warning) 5%, var(--app-surface));
 }
 
 /* Batch selector is the main control surface. */
 .course-management-scope .card-pad.mt-4:has(select) {
-  border-color: color-mix(in srgb, var(--brand-700) 22%, var(--line));
-  background: color-mix(in srgb, var(--brand-50) 30%, var(--surface));
+  border-color: color-mix(in srgb, var(--app-interaction) 22%, var(--app-border));
+  background: color-mix(in srgb, var(--app-brand-50) 30%, var(--app-surface));
 }
 
 .course-management-scope .card-pad.mt-4:has(select) > div:first-child {
@@ -100,7 +100,7 @@
 }
 
 .course-management-scope .card-pad.mt-4:has(select) .field-label {
-  color: var(--copy-muted);
+  color: var(--app-text-muted);
   font-weight: 700;
 }
 
@@ -110,28 +110,28 @@
 
 /* Nested create/edit forms should read as focused tasks. */
 .course-management-scope .rounded-2xl.border.border-slate-200.bg-slate-50\/70.p-5 {
-  border-color: color-mix(in srgb, var(--brand-700) 18%, var(--line));
-  background: var(--surface);
-  box-shadow: inset 3px 0 0 color-mix(in srgb, var(--brand-700) 76%, transparent);
+  border-color: color-mix(in srgb, var(--app-interaction) 18%, var(--app-border));
+  background: var(--app-surface);
+  box-shadow: inset 3px 0 0 color-mix(in srgb, var(--app-interaction) 76%, transparent);
 }
 
 /* Selected course details remain useful context but quieter than the batch editor. */
 .course-management-scope section.card-pad.mt-4:not(:has(form)) {
-  background: color-mix(in srgb, var(--surface-muted) 58%, var(--surface));
+  background: color-mix(in srgb, var(--app-surface-muted) 58%, var(--app-surface));
 }
 
 .course-management-scope section.card-pad.mt-4:not(:has(form)) .rounded-xl.border {
-  border-color: var(--line);
-  background: var(--surface);
+  border-color: var(--app-border);
+  background: var(--app-surface);
 }
 
 /* The main selected-batch card gets stronger hierarchy. */
 .course-management-scope article.rounded-2xl.border {
   position: relative;
   overflow: hidden;
-  border-color: color-mix(in srgb, var(--brand-700) 24%, var(--line));
-  background: var(--surface);
-  box-shadow: 0 12px 34px color-mix(in srgb, var(--brand-700) 7%, transparent);
+  border-color: color-mix(in srgb, var(--app-interaction) 24%, var(--app-border));
+  background: var(--app-surface);
+  box-shadow: 0 12px 34px color-mix(in srgb, var(--app-interaction) 7%, transparent);
 }
 
 .course-management-scope article.rounded-2xl.border::before {
@@ -139,21 +139,21 @@
   position: absolute;
   inset: 0 0 auto 0;
   height: 3px;
-  background: var(--brand-700);
+  background: var(--app-interaction);
 }
 
 .course-management-scope article.rounded-2xl.border form button:not(.btn-primary):not(.btn-secondary) {
-  border-color: var(--line);
-  background: var(--surface);
+  border-color: var(--app-border);
+  background: var(--app-surface);
 }
 
 .course-management-scope article.rounded-2xl.border form button[class*='text-red'] {
-  border-color: color-mix(in srgb, var(--error) 28%, var(--line));
+  border-color: color-mix(in srgb, var(--error) 28%, var(--app-border));
   color: var(--error);
 }
 
 .course-management-scope article.rounded-2xl.border form button[class*='text-emerald'] {
-  border-color: color-mix(in srgb, var(--success) 28%, var(--line));
+  border-color: color-mix(in srgb, var(--success) 28%, var(--app-border));
   color: var(--success);
 }
 
@@ -172,17 +172,17 @@
 }
 
 .course-management-scope aside > section.card-pad:first-child {
-  background: color-mix(in srgb, var(--brand-50) 24%, var(--surface));
+  background: color-mix(in srgb, var(--app-brand-50) 24%, var(--app-surface));
 }
 
 .course-management-scope aside > section.card-pad:last-child {
-  background: var(--surface-muted);
+  background: var(--app-surface-muted);
 }
 
 .course-management-scope aside .rounded-xl.border.border-slate-100,
 .course-management-scope aside .rounded-xl.bg-slate-50 {
-  border-color: var(--line);
-  background: var(--surface);
+  border-color: var(--app-border);
+  background: var(--app-surface);
 }
 
 @media (max-width: 768px) {

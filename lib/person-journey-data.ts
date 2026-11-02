@@ -3,6 +3,7 @@ import "server-only";
 import { useMockData } from "@/lib/config";
 import { createClient } from "@/lib/supabase/server";
 import { requireCurrentOrganizationId } from "@/lib/workspace";
+import type { JourneyReadState } from "@/lib/journey-evidence";
 
 export type Person360Summary = {
   person_id: string;
@@ -73,6 +74,7 @@ export type PersonJourneyEvent = {
 };
 
 export type PersonJourneyPayload = {
+  readState: JourneyReadState;
   organizationId: string | null;
   leadId: string;
   personId: string | null;
@@ -210,6 +212,7 @@ function workspacePayload(
       : null;
 
   return {
+    readState: personId ? "available" : "not_linked",
     organizationId,
     leadId,
     personId,
@@ -261,7 +264,7 @@ export async function getPersonJourneyForLead(
     }
 
     if (current.access_granted === false) {
-      return emptyPayload(organizationId, normalizedLeadId);
+      return emptyPayload(organizationId, normalizedLeadId, "restricted");
     }
 
     if (current.__legacyFallbackRequired !== true) {
@@ -323,7 +326,7 @@ async function getLegacyAuthorizedPersonJourney(
   }
 
   if (!canAccess) {
-    return emptyPayload(organizationId, leadId);
+    return emptyPayload(organizationId, leadId, "restricted");
   }
 
   return getPersonJourneyFallback(db, organizationId, leadId, limit, true);
@@ -497,6 +500,7 @@ async function getLegacyPersonJourney(
   }
 
   return {
+    readState: journeyResult.error ? "unavailable" : "available",
     organizationId,
     leadId,
     personId,
@@ -509,8 +513,10 @@ async function getLegacyPersonJourney(
 function emptyPayload(
   organizationId: string | null,
   leadId: string,
+  readState: JourneyReadState = "not_linked",
 ): PersonJourneyPayload {
   return {
+    readState,
     organizationId,
     leadId,
     personId: null,

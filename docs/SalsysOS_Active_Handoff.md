@@ -5,6 +5,8 @@
 **Repository:** `yogakulamacademy/salsys-os`  
 **Production branch:** `main`
 
+**Current user-prioritized workstream:** shared UI consistency → Journey/growth improvements → R13. The isolated Journey branch builds on draft UI PR #437; neither is production acceptance. Read `docs/JOURNEY-EVIDENCE-CHECKPOINT.md` and the **critical** `docs/AI-KNOWLEDGE-AGENT-WORKFLOW.md`. AI Knowledge, approved sales assets and the future risk-governed WhatsApp/Instagram agent must remain in the upcoming workflow. Current draft-only messaging is not changed by the planning update. The commercial R13 continuation point below is preserved for when that workstream resumes.
+
 Read first:
 
 1. `docs/SalsysOS_Current_Checkpoint.md`

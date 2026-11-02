@@ -28,8 +28,8 @@ import {
 
 import { PaymentCard } from "@/components/payment-card";
 import { Person360SummaryCard } from "@/components/person-360-summary";
-import { LeadJourneyIntelligence } from "@/components/lead-journey-intelligence";
-import { PersonJourneyTimeline } from "@/components/person-journey-timeline";
+import { JourneyEvidencePanel } from "@/components/journey-evidence-panel";
+import { buildJourneyEvidence } from "@/lib/journey-evidence";
 import { PaidMediaAcquisition } from "@/components/paid-media-acquisition";
 
 import {
@@ -493,15 +493,11 @@ export default async function LeadDetailPage({
           {/* =================================================
               CANONICAL CUSTOMER JOURNEY
           ================================================= */}
-          <PersonJourneyTimeline
-            events={personJourney.journey}
-            total={personJourney.journeyTotal}
-          />
-
-          {/* =================================================
-              WEBSITE JOURNEY INTELLIGENCE
-          ================================================= */}
-          <LeadJourneyIntelligence leadId={id} />
+          <JourneyEvidencePanel evidence={buildJourneyEvidence({
+            organizationId: personJourney.organizationId, personId: personJourney.personId,
+            leadId: id, enquiryAt: lead.createdAt, asOf: new Date().toISOString(),
+            rows: personJourney.journey, total: personJourney.journeyTotal, readState: personJourney.readState,
+          })} />
 
           {/* =================================================
 
