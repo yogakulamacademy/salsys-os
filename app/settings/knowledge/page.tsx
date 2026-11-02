@@ -15,7 +15,8 @@ import {
   archiveKnowledgeDocumentAction,
   createKnowledgeDocumentAction,
 } from '@/app/settings/knowledge/actions';
-import { PageHeader, StatCard } from '@/components/ui';
+import { EmptyState, PageHeader } from '@/components/ui';
+import { KnowledgeRetrievalPreview } from '@/components/knowledge-retrieval-preview';
 import { getSupabasePublicConfig, useMockData } from '@/lib/config';
 import { createClient } from '@/lib/supabase/server';
 import { getCurrentWorkspaceContext } from '@/lib/workspace';
@@ -86,17 +87,21 @@ export default async function KnowledgeSettingsPage({
   let canManage = false;
   let organizationName = 'Current organization';
   let loadError: string | null = null;
+  let activeOrganizationId: string | null = null;
+  let partial = false;
+  if (!live) loadError = useMockData ? 'Demo mode: live knowledge has not been loaded.' : 'Configure a live workspace before loading knowledge.';
 
   if (live) {
     const supabase = await createClient();
     const {
-      data: { user },
+      data: { user }, error: authError,
     } = await supabase.auth.getUser();
 
     if (user) {
       try {
         const workspace = await getCurrentWorkspaceContext(supabase);
         const organizationId = workspace.activeOrganizationId;
+        activeOrganizationId = organizationId;
         organizationName = workspace.activeWorkspace?.organizationName || organizationName;
 
         if (organizationId) {
@@ -110,7 +115,8 @@ export default async function KnowledgeSettingsPage({
                 'id, title, category, status, content, version, valid_from, valid_until, approved_at, created_at, updated_at',
               )
               .eq('organization_id', organizationId)
-              .order('updated_at', { ascending: false }),
+              .order('updated_at', { ascending: false })
+              .limit(201),
           ]);
 
           canManage = manageData === true;
@@ -118,13 +124,14 @@ export default async function KnowledgeSettingsPage({
           if (error) {
             loadError = error.message;
           } else {
-            documents = (data ?? []) as KnowledgeDocument[];
+            partial = (data ?? []).length > 200;
+            documents = (data ?? []).slice(0, 200) as KnowledgeDocument[];
           }
-        }
+        } else loadError = 'Select an active workspace before loading knowledge.';
       } catch (error) {
         loadError = error instanceof Error ? error.message : 'Unable to load AI knowledge.';
       }
-    }
+    } else loadError = authError ? 'Unable to verify your session. Sign in again.' : 'Sign in before loading organization knowledge.';
   }
 
   const approved = documents.filter((document) => document.status === 'approved').length;
@@ -153,23 +160,30 @@ export default async function KnowledgeSettingsPage({
         </div>
       ) : null}
 
-      <div className="grid gap-4 md:grid-cols-4">
-        <StatCard label="Knowledge items" value={String(documents.length)} icon={<Database size={18} />} />
-        <StatCard label="Approved" value={String(approved)} icon={<CheckCircle2 size={18} />} note="Available to AI" />
-        <StatCard label="Draft / review" value={String(drafts)} icon={<Clock3 size={18} />} note="Not used by AI" />
-        <StatCard label="Archived" value={String(archived)} icon={<Archive size={18} />} note="Excluded from retrieval" />
-      </div>
+      {!loadError && documents.length > 0 ? <section aria-label="Knowledge library summary" className="rounded-xl border border-line bg-surface px-4 py-3">
+        <div className="flex flex-wrap gap-x-5 gap-y-2 text-sm text-copy">
+          <span><strong className="text-copy-strong">{documents.length}</strong> knowledge items in this view</span>
+          {approved > 0 ? <span><strong className="text-copy-strong">{approved}</strong> approved status</span> : null}
+          {drafts > 0 ? <span><strong className="text-copy-strong">{drafts}</strong> draft / review</span> : null}
+          {archived > 0 ? <span><strong className="text-copy-strong">{archived}</strong> archived</span> : null}
+        </div>
+        <p className="mt-1 text-xs text-copy-muted">Approval status is separate from validity, source eligibility and whether a question matches.</p>
+      </section> : null}
+
+      {partial ? <p className="text-sm text-copy-muted">Showing the 200 most recently updated items; counts describe this view. The retrieval preview searches all eligible knowledge.</p> : null}
+
+      <KnowledgeRetrievalPreview key={activeOrganizationId ?? 'unavailable'} enabled={live && canManage && !loadError} />
 
       <div className="grid gap-6 xl:grid-cols-[minmax(0,0.9fr)_minmax(0,1.6fr)]">
-        <section className="card-pad">
+        <section className="card-pad" id="knowledge-create">
           <div className="flex items-start gap-3">
             <div className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-violet-50 text-violet-700">
               <Plus size={18} />
             </div>
             <div>
-              <h2 className="text-base font-bold text-slate-950">Add approved organization knowledge</h2>
+              <h2 className="text-base font-bold text-slate-950">Add source-backed organization knowledge</h2>
               <p className="mt-1 text-sm leading-6 text-slate-500">
-                Add policy, course, payment, accommodation, FAQ, or sales knowledge without mixing tenants.
+                Prepare policies, FAQs, payment processes, package inclusions and sales guidance from business-approved sources. Live CRM remains authoritative for current prices, dates and availability.
               </p>
             </div>
           </div>
@@ -252,20 +266,16 @@ export default async function KnowledgeSettingsPage({
               </div>
               <div>
                 <h2 className="text-base font-bold text-slate-950">Knowledge library</h2>
-                <p className="mt-1 text-sm text-slate-500">Tenant-scoped and approval-aware.</p>
+                <p className="mt-1 text-sm text-slate-500">Approved answers and policy drafts for this organization.</p>
               </div>
             </div>
             <div className="rounded-full bg-violet-50 px-3 py-1 text-xs font-bold text-violet-700">
-              Lexical retrieval V1
+              Approved-only search
             </div>
           </div>
 
           {documents.length === 0 ? (
-            <div className="mt-6 rounded-2xl border border-dashed border-slate-200 px-6 py-10 text-center">
-              <BookOpenCheck className="mx-auto text-slate-300" size={28} />
-              <div className="mt-3 text-sm font-semibold text-slate-800">No organization knowledge yet</div>
-              <div className="mt-1 text-sm text-slate-500">Add the first approved answer on the left.</div>
-            </div>
+            <EmptyState title={loadError ? 'Knowledge could not be loaded' : 'Build your approved business knowledge'} description={loadError ? 'Readiness is unknown until the workspace can be read. An unavailable library is not an empty library.' : 'Start with a source-backed draft, have an organization admin approve it, then test retrieval with a real customer question.'} action={!loadError && canManage ? <a className="btn-primary" href="#knowledge-create">Add the first draft</a> : undefined} />
           ) : (
             <div className="mt-5 space-y-3">
               {documents.map((document) => (

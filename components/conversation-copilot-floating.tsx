@@ -14,6 +14,7 @@ import {
 import { useSearchParams } from "next/navigation";
 import { useEffect, useState, useTransition } from "react";
 import { createPortal } from "react-dom";
+import { KnowledgeEvidenceList } from '@/components/knowledge-evidence-list';
 
 import {
   generateCopilotReplyAction,
@@ -313,7 +314,7 @@ export function ConversationCopilotFloating() {
                   {result.knowledgeUsed > 0 ? (
                     <span className="inline-flex items-center gap-1 rounded-full bg-violet-50 px-2 py-1 text-violet-700 ring-1 ring-inset ring-violet-200 dark:bg-violet-950/30 dark:text-violet-300 dark:ring-violet-900">
                       <BookOpenCheck size={10} />
-                      {result.knowledgeUsed} knowledge source{result.knowledgeUsed === 1 ? "" : "s"}
+                      {result.knowledgeUsed} knowledge match{result.knowledgeUsed === 1 ? "" : "es"}
                     </span>
                   ) : null}
                 </div>
@@ -362,6 +363,7 @@ export function ConversationCopilotFloating() {
                   {showWhy ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
                 </button>
 
+                <KnowledgeEvidenceList evidence={result.knowledgeEvidence} />
                 {showWhy ? (
                   <div className="rounded-xl border border-slate-100 bg-slate-50/80 p-3 text-[9px] leading-4 text-slate-600 dark:border-slate-800 dark:bg-slate-900/50 dark:text-slate-300">
                     <div className="font-black text-slate-700 dark:text-slate-200">Safety / routing reason</div>
@@ -369,7 +371,7 @@ export function ConversationCopilotFloating() {
                     <div className="mt-2 flex flex-wrap gap-2 text-[8px] text-slate-400">
                       <span>Intent: {result.intent || "general enquiry"}</span>
                       <span>·</span>
-                      <span>Knowledge used: {result.knowledgeUsed}</span>
+                      <span>Knowledge matches: {result.knowledgeUsed}</span>
                       <span>·</span>
                       <span>Model: {result.model}</span>
                     </div>
