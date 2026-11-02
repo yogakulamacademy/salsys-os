@@ -35,6 +35,13 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+
+          # Production records person_course_affinity as version 029. The course
+          # capture variant was applied later as version 20261025130118, even
+          # though the repository still carries the legacy 029 filename.
+          mv supabase/migrations/029_course_capture_value_variants.sql \
+             supabase/migrations/20261025130118_029_course_capture_value_variants.sql
+
           cp supabase/recovery/007_catalog_authorization_prerequisite.sql supabase/migrations/0065_recovery_catalog_authorization.sql
           cp supabase/recovery/016_enrollments_tenant_baseline.sql supabase/migrations/0154_recovery_enrollments_tenant.sql
           cp supabase/recovery/016_lead_contact_logs_baseline.sql supabase/migrations/0155_recovery_lead_contact_logs.sql
