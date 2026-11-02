@@ -1,0 +1,68 @@
+name: Migration Replay
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'supabase/**'
+      - '.github/workflows/migration-replay.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: migration-replay-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  clean-replay:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      SUPABASE_TELEMETRY_DISABLED: '1'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+
+      - name: Setup Supabase CLI
+        uses: supabase/setup-cli@1dedf2c611547ede7232d26866dd3c56ab903bbb # v1
+        with:
+          version: 3.0.0
+
+      - name: Stage historical recovery prerequisites
+        shell: bash
+        run: |
+          set -euo pipefail
+          cp supabase/recovery/016_enrollments_tenant_baseline.sql supabase/migrations/0154_recovery_enrollments_tenant.sql
+          cp supabase/recovery/016_lead_contact_logs_baseline.sql supabase/migrations/0155_recovery_lead_contact_logs.sql
+          cp supabase/recovery/016_journey_views_baseline.sql supabase/migrations/0156_recovery_journey_views.sql
+          cp supabase/recovery/017_payments_tenant_baseline.sql supabase/migrations/0165_recovery_payments_tenant.sql
+
+      - name: Start local Supabase database
+        shell: bash
+        run: |
+          set -o pipefail
+          supabase db start 2>&1 | tee migration-replay.log
+
+      - name: Replay migrations from a clean database
+        shell: bash
+        run: |
+          set -o pipefail
+          supabase db reset --local 2>&1 | tee -a migration-replay.log
+
+      - name: Show local migration state
+        if: always()
+        shell: bash
+        run: |
+          supabase migration list --local 2>&1 | tee -a migration-replay.log || true
+
+      - name: Upload migration replay diagnostics
+        if: always()
+        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
+        with:
+          name: migration-replay-diagnostics
+          path: migration-replay.log
+          if-no-files-found: ignore
+          retention-days: 3
