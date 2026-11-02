@@ -278,7 +278,7 @@ function buildRevenueDecisionBrief(
     ? `${unvaluedLeads} open ${unvaluedLeads === 1 ? "lead is" : "leads are"} limiting forecast readiness.`
     : closingThisMonth.length > 0
       ? `${closingThisMonth.length} ${closingThisMonth.length === 1 ? "opportunity is" : "opportunities are"} expected to close this month.`
-      : "Revenue evidence is reconciled; focus on pipeline quality and collection timing.";
+      : "Review pipeline quality and collection timing.";
 
   const summary = unvaluedLeads > 0
     ? "Collected revenue and open commercial value are visible, but forecasts remain incomplete until those leads receive explicit potential values. Currency truth stays separate in the underlying ledger."
@@ -306,17 +306,19 @@ function buildRevenueDecisionBrief(
         label: "Weighted planning value",
         value: weighted,
         detail: "Deterministic stage-weighted planning value; not probability.",
+        statusLabel: "Calculated",
         tone: "neutral" as const,
       },
       {
         label: "Outstanding balances",
         value: outstanding,
+        statusLabel: unvaluedLeads > 0 || active.length === 0 ? "Incomplete" : undefined,
         detail: closingThisMonth.length
           ? `${closingThisMonth.length} expected close ${closingThisMonth.length === 1 ? "record" : "records"} this month.`
           : "No expected-close cohort is visible this month.",
         tone: active.some((row) => row.outstanding > 0)
           ? ("watch" as const)
-          : ("positive" as const),
+          : unvaluedLeads > 0 || active.length === 0 ? ("neutral" as const) : ("positive" as const),
       },
     ],
     actions: [

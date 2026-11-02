@@ -1,14 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import { getEnabledOrganizationCapabilities } from "@/lib/workspace";
-
-type WorkspaceRpcPayload = {
-  organization_id?: unknown;
-  active_organization_id?: unknown;
-  organization_name?: unknown;
-  organization_slug?: unknown;
-  role?: unknown;
-};
+import { getCurrentWorkspaceContext, getEnabledOrganizationCapabilities } from "@/lib/workspace";
 
 function cleanText(value: unknown) {
   return typeof value === "string" ? value.trim() : String(value ?? "").trim();
@@ -42,25 +34,13 @@ export async function GET() {
   }
 
   try {
-    const { data, error } = await supabase.rpc(
-      "get_current_workspace_context_v1",
-    );
-
-    if (error) {
-      throw new Error(`Unable to load workspace: ${error.message}`);
-    }
-
-    if (!data || typeof data !== "object" || Array.isArray(data)) {
-      throw new Error("Unable to load workspace: invalid workspace context.");
-    }
-
-    const payload = data as WorkspaceRpcPayload;
-    const organizationId = cleanText(
-      payload.active_organization_id ?? payload.organization_id,
-    );
-    const organizationName = cleanText(payload.organization_name);
-    const organizationSlug = cleanText(payload.organization_slug);
-    const role = cleanText(payload.role);
+    // Use the same session-bound resolver as server pages, including its
+    // membership-validated compatibility path when the fast RPC is unavailable.
+    const workspace = await getCurrentWorkspaceContext(supabase);
+    const organizationId = cleanText(workspace.activeWorkspace?.organizationId);
+    const organizationName = cleanText(workspace.activeWorkspace?.organizationName);
+    const organizationSlug = cleanText(workspace.activeWorkspace?.organizationSlug);
+    const role = cleanText(workspace.activeWorkspace?.role);
 
     if (!organizationId || !role) {
       throw new Error("Unable to load workspace: workspace access denied.");

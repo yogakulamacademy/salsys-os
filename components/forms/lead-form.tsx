@@ -252,9 +252,9 @@ export function LeadForm({
   ======================================================= */
 
   const courseBatches = useMemo(
-    () => batches.filter((batch) => !courseId || batch.courseId === courseId),
+    () => batches.filter((batch) => (!courseId || batch.courseId === courseId) && (batch.id === batchId || !batch.endDate || new Date(`${batch.endDate}T23:59:59Z`).getTime() >= Date.now())),
 
-    [batches, courseId],
+    [batches, courseId, batchId],
   );
 
   /* =======================================================
@@ -486,7 +486,7 @@ export function LeadForm({
           {/* BATCH */}
 
           <label className="block">
-            <span className="field-label">Upcoming batch</span>
+            <span className="field-label">Current or upcoming batch</span>
 
             <select
               className="input"
@@ -941,12 +941,12 @@ export function LeadForm({
 
           <div className="mt-5 grid gap-4 md:grid-cols-2">
             <label className="block">
-              <span className="field-label">Lead created through</span>
+              <span className="field-label">Reported enquiry channel</span>
 
               <select
                 className="input"
                 name="lead_creation_channel"
-                defaultValue="website"
+                defaultValue="other"
               >
                 {channels.map(([value, label]) => (
                   <option key={value} value={value}>

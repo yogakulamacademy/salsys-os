@@ -20,7 +20,11 @@ const securityHeaders = [
 ];
 
 const nextConfig: NextConfig = {
+  // Keep local visual QA artifacts separate from a production build.
+  distDir: process.env.SALSYS_BUILD_DIR || '.next',
+  outputFileTracingRoot: process.cwd(),
   reactStrictMode: true,
+  devIndicators: false,
   poweredByHeader: false,
   async headers() {
     return [

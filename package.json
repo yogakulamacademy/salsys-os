@@ -82,7 +82,9 @@
     "verify:ad-activation-meta-transport": "node scripts/verify-ad-activation-meta-transport.mjs",
     "verify:ad-activation-execution-runner": "node scripts/verify-ad-activation-execution-runner.mjs",
     "verify:ad-activation-runner-operations": "node scripts/verify-ad-activation-runner-operations.mjs",
-    "verify:ad-activation-canary-boundary": "node scripts/verify-ad-activation-canary-boundary.mjs"
+    "verify:ad-activation-canary-boundary": "node scripts/verify-ad-activation-canary-boundary.mjs",
+    "test:ui": "playwright test",
+    "test:ui:unit": "node --test tests/ui/presentation.test.cjs"
   },
   "dependencies": {
     "@google-analytics/data": "^7.2.0",
@@ -97,6 +99,7 @@
     "recharts": "^3.10.1"
   },
   "devDependencies": {
+    "@playwright/test": "1.64.1",
     "@types/node": "^24.5.2",
     "@types/react": "^19.1.16",
     "@types/react-dom": "^19.1.9",

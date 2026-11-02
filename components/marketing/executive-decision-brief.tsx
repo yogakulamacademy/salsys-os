@@ -12,6 +12,7 @@ export type DecisionBriefSignal = {
   value: string;
   detail: string;
   tone?: "positive" | "watch" | "neutral" | "risk";
+  statusLabel?: string;
 };
 
 export type DecisionBriefAction = {
@@ -129,14 +130,14 @@ function SignalCard({ signal }: { signal: DecisionBriefSignal }) {
           ? "text-amber-700 dark:text-amber-300"
           : "text-copy-muted";
 
-  const statusLabel =
+  const statusLabel = signal.statusLabel ?? (
     tone === "positive"
       ? "Healthy"
       : tone === "risk"
         ? "Action"
         : tone === "watch"
           ? "Review"
-          : "Observed";
+          : "Recorded");
 
   return (
     <article

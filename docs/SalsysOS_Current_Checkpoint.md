@@ -6,6 +6,14 @@
 **Verified production runtime head:** `1846b1fc845b0325f0a8ac6b409c67744d65245e`  
 **Fast resume file:** `docs/SalsysOS_Active_Handoff.md`
 
+### UI workstream update — 2 November 2026
+
+The user approved the neutral/violet reference style and requested consistent UI/UX across the product. The isolated branch `codex/unified-ui-reference-style` implements shared identity, panels, controls, illustrated empty states, an unselected Inbox without dashboard statistic cards, responsive context layout and keyboard modal behavior. See `docs/UI-CONSISTENCY.md` for screen rules and the repeatable local test setup.
+
+This is source implementation and synthetic local UI evidence, **not a production release or acceptance claim**. The production head recorded above is historical checkpoint evidence and was not updated by this work. The R13 roadmap position below is preserved. Immediate user priority is UI review/fixes; the broader journey, attribution, search/AI visibility and growth expansion resumes after UI acceptance.
+
+The Master Context v1.2 strategy, vertical boundaries and roadmaps remain unchanged. The prior product review and acceptance fixture remain proposed behavior; local UI tests do not validate the full journey/payment fixture or production provider outcomes.
+
 > Historical checkpoint files under `docs/checkpoints/` are immutable evidence records. Later scope-revision checkpoints supersede product requirements without deleting historical implementation evidence.
 
 ---

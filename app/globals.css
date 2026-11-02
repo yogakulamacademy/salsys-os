@@ -4809,12 +4809,6 @@ html.dark .conversation-context-pane option {
    ---------------------------------------------------------------------- */
 
 @media (max-width: 1023px) {
-  .conversation-workspace {
-    display: block !important;
-    height: auto !important;
-    min-height: 0 !important;
-    overflow: visible !important;
-  }
 
   .conversation-list-pane {
     max-height: 390px;

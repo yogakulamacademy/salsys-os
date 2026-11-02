@@ -23,12 +23,22 @@ export function ConversationWorkspaceShell({
   const searchParams = useSearchParams();
   const [desktopContextOpen, setDesktopContextOpen] = useState(true);
   const [mobileContextOpen, setMobileContextOpen] = useState(false);
+  const [wideLayout, setWideLayout] = useState(false);
+  const workspaceRef = useRef<HTMLDivElement | null>(null);
   const drawerRef = useRef<HTMLElement | null>(null);
   const mobileBarTriggerRef = useRef<HTMLButtonElement | null>(null);
   const tabletTriggerRef = useRef<HTMLButtonElement | null>(null);
-  const showDesktopContext = hasConversation && desktopContextOpen;
+  const showDesktopContext = hasConversation && desktopContextOpen && wideLayout;
   const hasExplicitLeadSelection = Boolean(searchParams.get("lead"));
   const mobileConversationOpen = hasConversation && hasExplicitLeadSelection;
+
+  useEffect(() => {
+    const workspace = workspaceRef.current;
+    if (!workspace) return;
+    const observer = new ResizeObserver(([entry]) => setWideLayout(entry.contentRect.width >= 1020));
+    observer.observe(workspace);
+    return () => observer.disconnect();
+  }, []);
 
   useEffect(() => {
     if (!hasConversation) return;
@@ -37,7 +47,7 @@ export function ConversationWorkspaceShell({
       if (event.altKey && event.key.toLowerCase() === "i") {
         if (window.matchMedia("(max-width: 620px)").matches && !mobileConversationOpen) return;
         event.preventDefault();
-        if (window.matchMedia("(min-width: 1171px)").matches) {
+        if (wideLayout) {
           setDesktopContextOpen((value) => !value);
         } else {
           setMobileContextOpen((value) => !value);
@@ -68,7 +78,7 @@ export function ConversationWorkspaceShell({
 
     document.addEventListener("keydown", onShortcut);
     return () => document.removeEventListener("keydown", onShortcut);
-  }, [hasConversation, mobileContextOpen, mobileConversationOpen, router]);
+  }, [hasConversation, mobileContextOpen, mobileConversationOpen, router, wideLayout]);
 
   useEffect(() => {
     if (!mobileContextOpen) return;
@@ -125,11 +135,8 @@ export function ConversationWorkspaceShell({
   return (
     <>
       <div
-        className={`conversation-workspace relative min-h-[560px] overflow-hidden rounded-panel border border-line bg-surface shadow-card min-[621px]:grid min-[621px]:h-[calc(100dvh-199px)] min-[621px]:min-h-[610px] min-[621px]:grid-cols-[290px_minmax(0,1fr)] min-[1171px]:grid-cols-[312px_minmax(360px,1fr)] min-[1700px]:grid-cols-[330px_minmax(460px,1fr)] ${
-          showDesktopContext
-            ? "min-[1171px]:grid-cols-[312px_minmax(360px,1fr)_300px] min-[1500px]:grid-cols-[312px_minmax(420px,1fr)_316px] min-[1700px]:grid-cols-[330px_minmax(460px,1fr)_324px]"
-            : ""
-        }`}
+        ref={workspaceRef}
+        className={`conversation-workspace relative overflow-hidden rounded-panel border border-line bg-surface ${showDesktopContext ? "inbox-context-open" : ""}`}
       >
         <div
           className={`min-h-0 overflow-hidden border-r border-line ${
@@ -145,7 +152,7 @@ export function ConversationWorkspaceShell({
               ? mobileConversationOpen
                 ? "flex flex-col"
                 : "hidden min-[621px]:flex min-[621px]:flex-col"
-              : "hidden min-[621px]:block"
+              : "hidden min-[621px]:flex min-[621px]:flex-col"
           }`}
         >
           {hasConversation ? (
@@ -177,41 +184,41 @@ export function ConversationWorkspaceShell({
 
             {hasConversation ? (
               <>
-                <button
+                {wideLayout ? <button
                   type="button"
                   onClick={() => setDesktopContextOpen((value) => !value)}
-                  className="absolute right-3 top-3 z-30 hidden h-9 items-center gap-1.5 rounded-ui border border-line bg-surface/95 px-2.5 text-[12px] font-semibold text-copy-muted shadow-sm backdrop-blur transition hover:bg-brand-50 hover:text-brand-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-700/40 min-[1171px]:inline-flex"
+                  className="absolute right-3 top-3 z-30 inline-flex h-9 items-center gap-1.5 rounded-ui border border-line bg-surface/95 px-2.5 text-[12px] font-semibold text-copy-muted shadow-sm backdrop-blur transition hover:bg-brand-50 hover:text-brand-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-700/40"
                   aria-label={showDesktopContext ? "Hide customer context" : "Show customer context"}
                   title={`${showDesktopContext ? "Hide customer context" : "Show customer context"} · Alt+I`}
                 >
                   {showDesktopContext ? <PanelRightClose size={14} /> : <PanelRightOpen size={14} />}
                   {showDesktopContext ? "Hide context" : "Customer context"}
-                </button>
+                </button> : null}
 
-                <button
+                {!wideLayout ? <button
                   ref={tabletTriggerRef}
                   type="button"
                   onClick={() => setMobileContextOpen(true)}
-                  className="absolute right-3 top-3 z-30 hidden h-9 items-center gap-1.5 rounded-ui border border-line bg-surface/95 px-2.5 text-[12px] font-semibold text-brand-700 shadow-sm backdrop-blur focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-700/40 min-[621px]:inline-flex min-[1171px]:hidden"
+                  className="absolute right-3 top-3 z-30 hidden h-9 items-center gap-1.5 rounded-ui border border-line bg-surface/95 px-2.5 text-[12px] font-semibold text-brand-700 shadow-sm backdrop-blur focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-700/40 min-[621px]:inline-flex"
                   aria-label="Open customer context"
                   aria-expanded={mobileContextOpen}
                   title="Open customer context · Alt+I"
                 >
                   <Sparkles size={14} /> Context
-                </button>
+                </button> : null}
               </>
             ) : null}
           </div>
         </div>
 
         {showDesktopContext ? (
-          <aside className="hidden min-h-0 overflow-y-auto border-l border-line bg-surface [scrollbar-width:thin] min-[1171px]:block">
+          <aside className="inbox-desktop-context min-h-0 overflow-y-auto border-l border-line bg-surface [scrollbar-width:thin]">
             {context}
           </aside>
         ) : null}
 
         {hasConversation && mobileContextOpen ? (
-          <div className="fixed inset-0 z-50 min-[1171px]:hidden">
+          <div className="fixed inset-0 z-[160]">
             <button
               type="button"
               aria-label="Close customer context"
@@ -311,10 +318,6 @@ export function ConversationWorkspaceShell({
             font-size: 26px !important;
           }
 
-          .conversation-workspace {
-            min-height: calc(100dvh - 178px);
-            border-radius: 12px;
-          }
 
           .conversation-workspace section.flex.h-full > header {
             padding: 10px 12px !important;

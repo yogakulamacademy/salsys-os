@@ -16,7 +16,7 @@ export default async function ConversationsLayout({ children }: { children: Reac
   }
 
   return (
-    <CrmWorkspaceFrame>
+    <CrmWorkspaceFrame focused>
       {children}
       <ConversationCollaborationDock />
       <InstagramWhatsAppHandoffBanner />

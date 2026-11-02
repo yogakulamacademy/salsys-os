@@ -34,6 +34,7 @@ import type {
   LeadsWorkspaceSummary,
 } from "@/lib/leads-data";
 import type { LeadOverview } from "@/types/crm";
+import { personInitials, sourceLabel } from "@/lib/ui-format";
 
 type EnrichedLead = {
   lead: LeadOverview;
@@ -448,14 +449,14 @@ export function LeadsCleanTable({
 
                       {visibleColumns.includes("contact") ? (
                         <td className="px-3 py-3">
-                          <div className="max-w-[220px] truncate text-[11px] text-copy">{lead.email || lead.phone || "—"}</div>
+                          <div className="max-w-[220px] truncate text-[12px] text-copy">{lead.email || lead.phone || (lead.contactAvailability === "unavailable" ? "Temporarily unavailable" : lead.contactAvailability === "restricted" ? "Restricted" : "Not recorded")}</div>
                           <div className="mt-1"><ChannelBadge channel={lead.currentContactChannel} /></div>
                         </td>
                       ) : null}
 
                       {visibleColumns.includes("source") ? (
                         <td className="px-3 py-3">
-                          <div className="max-w-[160px] truncate text-[11px] font-medium text-copy">{pretty(lead.firstTouchSource || "Unknown")}</div>
+                          <div className="max-w-[160px] truncate text-[11px] font-medium text-copy" title={`Recorded source: ${lead.firstTouchSource || "Unknown"}`}>{sourceLabel(lead.firstTouchSource || "Unknown")}</div>
                           <div className="mt-0.5 max-w-[160px] truncate text-[10px] text-copy-subtle">{lead.firstTouchCampaign || lead.firstTouchMedium || "—"}</div>
                         </td>
                       ) : null}
@@ -611,7 +612,7 @@ function sortLabel(sort: LeadsWorkspaceFilters["sort"]) {
 }
 
 function initials(value: string) {
-  return value.split(/\s+/).filter(Boolean).map((part) => part[0]).slice(0, 2).join("").toUpperCase() || "L";
+  return personInitials(value);
 }
 
 function avatarTone(channel: LeadOverview["currentContactChannel"]) {

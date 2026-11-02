@@ -17,6 +17,7 @@ import {
 
 import { DecisionMetricCard } from "@/components/intelligence/decision-metric-card";
 import { isMockMode } from "@/lib/data";
+import { percentageWidth, sourceLabel } from "@/lib/ui-format";
 import {
   getDashboardSnapshot,
   type DashboardBatchDemand,
@@ -873,7 +874,7 @@ function RevenueTrend({
 }
 
 function SourceRow({ source }: { source: DashboardPeriodSource }) {
-  const width = Math.max(3, Math.min(100, source.conversionRate ?? 0));
+  const width = percentageWidth(source.conversionRate);
   const smallSample = source.leads > 0 && source.leads < 10;
 
   return (
@@ -883,7 +884,7 @@ function SourceRow({ source }: { source: DashboardPeriodSource }) {
     >
       <div className="min-w-0">
         <div className="truncate text-sm font-semibold text-copy-strong">
-          {pretty(source.source)}
+          {sourceLabel(source.source)}
         </div>
         <div className="mt-0.5 text-[10px] text-copy-subtle">
           {source.leads} leads · {source.qualified} qualified
@@ -1061,8 +1062,14 @@ function buildExecutiveBrief({
   const leadChange = analytics.available.leads
     ? analytics.leads.changePercent
     : null;
+  const attentionPhrases: Record<string, string> = {
+    "Needs reply": topAttention?.value === 1 ? "conversation is waiting for a reply" : "conversations are waiting for a reply",
+    "Overdue follow-ups": topAttention?.value === 1 ? "follow-up is overdue" : "follow-ups are overdue",
+    "First touch needed": topAttention?.value === 1 ? "lead needs a first contact" : "leads need a first contact",
+    "Payment pending": topAttention?.value === 1 ? "opportunity needs payment follow-up" : "opportunities need payment follow-up",
+  };
   const title = topAttention
-    ? `${topAttention.value.toLocaleString("en-IN")} ${topAttention.label.toLowerCase()} should be reviewed first.`
+    ? `${topAttention.value.toLocaleString("en-IN")} ${attentionPhrases[topAttention.label] ?? "items need attention"}.`
     : leadChange != null && leadChange > 0
       ? `Lead volume is up ${leadChange.toFixed(1)}% with no urgent action backlog.`
       : "The workspace has no urgent operational backlog right now.";

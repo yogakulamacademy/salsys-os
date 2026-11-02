@@ -4,13 +4,13 @@ import { CrmLeadInspectorBridge } from '@/components/crm/crm-lead-inspector-brid
 import { CrmNavigation } from '@/components/crm/crm-navigation';
 import workspaceStyles from '@/components/marketing/marketing-workspace-frame.module.css';
 
-export function CrmWorkspaceFrame({ children }: { children: ReactNode }) {
+export function CrmWorkspaceFrame({ children, focused = false }: { children: ReactNode; focused?: boolean }) {
   return (
     <>
       <div
-        className={`crm-brand-scope ${workspaceStyles.studio} grid gap-5 lg:grid-cols-[220px_minmax(0,1fr)] xl:grid-cols-[238px_minmax(0,1fr)] xl:gap-6`}
+        className={`crm-brand-scope ${workspaceStyles.studio} ${focused ? 'crm-focused-workspace' : 'grid gap-5 lg:grid-cols-[220px_minmax(0,1fr)] xl:grid-cols-[238px_minmax(0,1fr)] xl:gap-6'}`}
       >
-        <CrmNavigation />
+        {!focused ? <CrmNavigation /> : null}
         <div className="min-w-0 pb-8">
           <CrmLeadInspectorBridge>{children}</CrmLeadInspectorBridge>
         </div>
@@ -46,7 +46,7 @@ export function CrmWorkspaceFrame({ children }: { children: ReactNode }) {
           background: transparent !important;
         }
 
-        body:has(.crm-brand-scope) .legacy-shell-host aside svg,
+        body:has(.crm-brand-scope) .legacy-shell-host aside[aria-label='CRM navigation'] svg,
         body:has(.crm-brand-scope) .legacy-shell-host header svg {
           color: var(--app-text-subtle);
         }

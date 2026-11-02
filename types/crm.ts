@@ -23,6 +23,7 @@ export interface LeadOverview {
   name: string;
   email?: string;
   phone?: string;
+  contactAvailability?: 'available' | 'missing' | 'restricted' | 'unavailable';
   course: string;
   location: string;
   country: string;

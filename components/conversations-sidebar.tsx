@@ -4,6 +4,8 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { Clock3, Flag, MessageCircle, Search, UsersRound, X } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { EmptyState } from "@/components/ui";
+import { personInitials } from "@/lib/ui-format";
 
 import type { Channel, LeadStage } from "@/types/crm";
 
@@ -58,6 +60,7 @@ export function ConversationsSidebar({
   const [now, setNow] = useState(0);
   const [mobileViewport, setMobileViewport] = useState(false);
   const searchRef = useRef<HTMLInputElement | null>(null);
+  const [visibleCount, setVisibleCount] = useState(50);
 
   useEffect(() => {
     const update = () => setNow(Date.now());
@@ -155,6 +158,8 @@ export function ConversationsSidebar({
     });
   }, [channelFilter, currentUserId, filter, leads, now, priorityFilter, scope, search, selectedId]);
 
+  useEffect(() => { setVisibleCount(50); }, [search, scope, filter, priorityFilter, channelFilter]);
+
   function handleFilterKeyDown(event: React.KeyboardEvent<HTMLDivElement>) {
     if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
 
@@ -189,10 +194,10 @@ export function ConversationsSidebar({
         <div className="flex items-center justify-between gap-3">
           <div>
             <div className="text-[15px] font-semibold tracking-[-0.02em] text-copy-strong">
-              Inbox queue
+              Conversations
             </div>
             <div className="mt-1 text-[11.5px] leading-5 text-copy-muted">
-              One Contact per row · Opportunity context stays selectable
+              All your customer conversations
             </div>
           </div>
           <span className="rounded-md bg-brand-50 px-2 py-1 text-[11px] font-semibold text-brand-700">
@@ -273,7 +278,7 @@ export function ConversationsSidebar({
 
       <div className="grid shrink-0 grid-cols-2 gap-2 border-b border-line bg-surface px-4 py-2.5">
         <label className="min-w-0">
-          <span className="sr-only">Channel filter</span>
+          <span className="mb-1 block text-xs font-medium text-copy-muted">Channel</span>
           <select
             value={channelFilter}
             onChange={(event) => setChannelFilter(event.target.value as ChannelFilter)}
@@ -286,7 +291,7 @@ export function ConversationsSidebar({
           </select>
         </label>
         <label className="min-w-0">
-          <span className="sr-only">Priority filter</span>
+          <span className="mb-1 block text-xs font-medium text-copy-muted">Priority</span>
           <select
             value={priorityFilter}
             onChange={(event) => setPriorityFilter(event.target.value as PriorityFilter)}
@@ -300,30 +305,16 @@ export function ConversationsSidebar({
           </select>
         </label>
         <span className="col-span-2 text-right text-[10.5px] text-copy-subtle" aria-live="polite">
-          {filteredLeads.length} contacts shown
+          {filteredLeads.length} {filteredLeads.length === 1 ? "conversation" : "conversations"} in this view
         </span>
       </div>
 
       <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain [scrollbar-width:thin]">
         {filteredLeads.length === 0 ? (
-          <div className="grid min-h-[280px] place-items-center px-6 text-center">
-            <div>
-              <div className="mx-auto grid h-11 w-11 place-items-center rounded-xl bg-brand-50 text-brand-700">
-                {filter === "snoozed" ? <Clock3 size={18} /> : <MessageCircle size={18} />}
-              </div>
-              <div className="mt-3 text-[13px] font-semibold text-copy-strong">
-                {filter === "snoozed"
-                  ? "Nothing snoozed"
-                  : filter === "unread" && !search && priorityFilter === "all" && channelFilter === "all"
-                    ? "You’re all caught up"
-                    : "No matching conversations"}
-              </div>
-              <div className="mt-1 text-[12px] leading-5 text-copy-muted">
-                {filter === "snoozed"
-                  ? "Snoozed conversations return automatically when their timer expires."
-                  : "Try another ownership scope, search or filter."}
-              </div>
-              {hasFilters ? (
+          <EmptyState compact variant="conversation"
+            title={leads.length === 0 ? "No conversations yet" : filter === "snoozed" ? "Nothing snoozed" : filter === "unread" && !search && channelFilter === "all" && priorityFilter === "all" ? "You’re all caught up" : "No matching conversations"}
+            description={leads.length === 0 ? "New conversations will appear here when customers get in touch." : filter === "snoozed" ? "Snoozed conversations return when their timer expires." : "Try another owner, search or filter."}
+            action={hasFilters ? (
                 <button
                   type="button"
                   onClick={() => {
@@ -337,11 +328,10 @@ export function ConversationsSidebar({
                 >
                   Reset inbox filters
                 </button>
-              ) : null}
-            </div>
-          </div>
+              ) : undefined}
+          />
         ) : (
-          filteredLeads.map((lead) => {
+          filteredLeads.slice(0, visibleCount).map((lead) => {
             const selected =
               (lead.id === selectedId || Boolean(selectedId && lead.relatedLeadIds?.includes(selectedId))) &&
               (!mobileViewport || explicitLeadId === lead.id || Boolean(explicitLeadId && lead.relatedLeadIds?.includes(explicitLeadId)));
@@ -349,11 +339,12 @@ export function ConversationsSidebar({
             return <ConversationRow key={lead.personId || lead.id} lead={lead} selected={selected} now={now} />;
           })
         )}
+        {filteredLeads.length > visibleCount ? <div className="p-3 text-center"><button type="button" className="btn-secondary w-full" onClick={() => setVisibleCount(count => count + 50)}>Show more conversations</button></div> : null}
       </div>
 
       <div className="shrink-0 border-t border-line px-4 py-2.5 text-[11px] text-copy-subtle">
         <span className="inline-flex items-center gap-1.5">
-          <UsersRound size={12} /> Contact identity is shared · opportunity context remains lead-scoped
+          <UsersRound size={12} /> {Math.min(visibleCount, filteredLeads.length)} of {filteredLeads.length} conversations loaded
         </span>
       </div>
     </aside>
@@ -556,15 +547,7 @@ function isSnoozed(lead: ConversationLeadSummary, now: number) {
 }
 
 function initials(name: string) {
-  return (
-    name
-      .split(" ")
-      .filter(Boolean)
-      .map((part) => Array.from(part)[0] ?? "")
-      .slice(0, 2)
-      .join("")
-      .toLocaleUpperCase("en-IN") || "?"
-  );
+  return personInitials(name);
 }
 
 function formatWaitingTime(value: string, now: number) {

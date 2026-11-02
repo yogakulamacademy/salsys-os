@@ -42,14 +42,13 @@ export async function MarketingCommandCenterOverview() {
   const totalLeads = positiveNumber(overview.leads, campaigns.summary.leads);
   const qualified = positiveNumber(overview.qualified_leads, campaigns.summary.qualified);
   const enrolled = positiveNumber(overview.enrolled_leads, campaigns.summary.enrolled);
-  const traffic = positiveNumber(overview.sessions, campaigns.summary.clicks);
+  const traffic = numberValue(overview.sessions);
   const highIntent = sumCampaign(campaigns.campaigns, 'highIntent');
   const paymentPending = sumCampaign(campaigns.campaigns, 'paymentPending');
   const spendInr = campaigns.summary.spendByCurrency.INR ?? 0;
   const revenueInr = revenue.totalsByCurrency.find((row) => row.currency.toUpperCase() === 'INR')?.actual ?? campaigns.summary.revenueInr;
   const revenueUsd = revenue.totalsByCurrency.find((row) => row.currency.toUpperCase() === 'USD')?.actual ?? campaigns.summary.revenueUsd;
-  const roasComplete = campaigns.campaigns.length > 0 && campaigns.campaigns.every((row) => row.roas !== null && row.spendCurrency.toUpperCase() === 'INR');
-  const roas = roasComplete && spendInr > 0 ? revenueInr / spendInr : null;
+  // Spend and collected revenue have different cohorts; their ratio is not paid ROAS.
 
   const sourceRows = sources.length ? sources : fallbackAcquisition(campaigns.campaigns);
   const maxLeadVolume = Math.max(1, ...sourceRows.map((row) => row.leads));
@@ -67,7 +66,8 @@ export async function MarketingCommandCenterOverview() {
   const movement = buildMovement(funnel.funnel.daily);
   const evidenceKnown = campaigns.summary.campaigns > 0 ? Math.max(0, campaigns.summary.campaigns - missingRoas) : 0;
   const evidenceCoverage = campaigns.summary.campaigns > 0 ? (evidenceKnown / campaigns.summary.campaigns) * 100 : null;
-  const attention = buildAttentionQueue({ poorCampaign, missingRoas, strongest, movement, campaignCount: campaigns.summary.campaigns });
+  const sourceEvidenceLimited = Boolean(campaigns.warning);
+  const attention = buildAttentionQueue({ poorCampaign: sourceEvidenceLimited ? undefined : poorCampaign, missingRoas, strongest: sourceEvidenceLimited ? undefined : strongest, movement, campaignCount: campaigns.summary.campaigns });
   const primaryAttention = attention[0] ?? null;
   const warnings = [campaigns.warning, funnel.warning, revenue.warning].filter(Boolean) as string[];
 
@@ -111,7 +111,7 @@ export async function MarketingCommandCenterOverview() {
         <DecisionMetric label="Spend" value={formatMoney(spendInr, 'INR', true)} note="Observed paid media" />
         <DecisionMetric label="Leads" value={formatNumber(totalLeads)} note={`${formatPercent(qualified, totalLeads)} qualified`} />
         <DecisionMetric label="Qualified" value={formatNumber(qualified)} note={`${formatNumber(enrolled)} enrolled`} />
-        <DecisionMetric label="Revenue" value={formatMoney(revenueInr, 'INR', true)} note={roas === null ? 'ROAS partial' : `${roas.toFixed(1)}× paid ROAS`} />
+        <DecisionMetric label="Collected this month" value={formatMoney(revenueInr, 'INR', true)} note="Separate from acquisition-period outcomes" />
       </section>
 
       <section className={styles.operatingGrid}>
@@ -150,7 +150,7 @@ export async function MarketingCommandCenterOverview() {
 
           <div className={styles.journeyStages}>
             <JourneyStage label="Traffic" value={traffic} detail="Observed sessions" />
-            <JourneyStage label="Leads" value={totalLeads} detail={traffic > 0 ? `${formatPercent(totalLeads, traffic)} of traffic` : 'Observed CRM leads'} />
+            <JourneyStage label="Leads" value={totalLeads} detail="CRM enquiries · separate population" />
             <JourneyStage label="Qualified" value={qualified} detail={`${formatPercent(qualified, totalLeads)} of leads`} />
             <JourneyStage label="High intent" value={highIntent} detail={`${formatPercent(highIntent, totalLeads)} of leads`} />
             <JourneyStage label="Payment pending" value={paymentPending} detail={`${formatPercent(paymentPending, totalLeads)} of leads`} />
@@ -168,12 +168,12 @@ export async function MarketingCommandCenterOverview() {
               <div className={styles.readinessHero}>
                 <ShieldCheck size={18} />
                 <div>
-                  <strong>{evidenceCoverage === null ? 'Coverage unknown' : `${evidenceCoverage.toFixed(0)}% campaign coverage`}</strong>
-                  <span>{missingRoas > 0 ? `${missingRoas} campaigns still lack complete efficiency evidence.` : 'Campaign efficiency evidence is complete for the current scope.'}</span>
+                  <strong>{sourceEvidenceLimited ? 'Campaign evidence needs review' : evidenceCoverage === null ? 'Coverage unknown' : `${evidenceCoverage.toFixed(0)}% efficiency-field completeness`}</strong>
+                  <span>{sourceEvidenceLimited ? 'Some source data is stale or unavailable. Cached values are directional.' : missingRoas > 0 ? `${missingRoas} campaigns lack efficiency fields.` : 'Field completeness does not establish attribution coverage or freshness.'}</span>
                 </div>
               </div>
               <div className={styles.evidenceList}>
-                <EvidenceRow label="Paid ROAS" value={roas === null ? 'Partial' : `${roas.toFixed(1)}×`} tone={roas === null ? 'warning' : 'good'} />
+                <EvidenceRow label="Paid ROAS" value="Requires a matched cohort" tone="warning" />
                 <EvidenceRow label="Lead volume movement" value={movement.leads.delta === null ? 'No history' : shortDelta(movement.leads.delta)} />
                 <EvidenceRow label="Qualified momentum" value={movement.qualified.delta === null ? 'No history' : shortDelta(movement.qualified.delta)} tone={movement.qualified.delta !== null && movement.qualified.delta < -10 ? 'warning' : 'neutral'} />
                 <EvidenceRow label="Revenue scope" value={revenueUsd > 0 ? 'Multi-currency' : 'INR'} />

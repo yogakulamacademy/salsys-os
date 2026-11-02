@@ -1,6 +1,8 @@
 "use client";
 
 import Link from "next/link";
+import { BrandMark } from "@/components/brand";
+import { useModalFocus } from "@/components/use-modal-focus";
 import { usePathname } from "next/navigation";
 import {
   BarChart3,
@@ -69,6 +71,8 @@ export function DesktopHoverSidebarV3() {
   const primaryRef = useRef<HTMLElement | null>(null);
   const [open, setOpen] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
+  const mobileDrawerRef = useRef<HTMLElement | null>(null);
+  useModalFocus(mobileOpen, mobileDrawerRef, () => setMobileOpen(false));
   const [role, setRole] = useState<string | null>(null);
   const [organizationName, setOrganizationName] = useState("SalsysOS");
 
@@ -148,15 +152,6 @@ export function DesktopHoverSidebarV3() {
       document.removeEventListener("keydown", escape);
     };
   }, [open]);
-
-  useEffect(() => {
-    if (!mobileOpen) return;
-    const previous = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    return () => {
-      document.body.style.overflow = previous;
-    };
-  }, [mobileOpen]);
 
   const sections = useMemo<SectionLink[]>(() => {
     if (employee) {
@@ -332,8 +327,8 @@ export function DesktopHoverSidebarV3() {
         aria-label="Primary navigation"
       >
         <div className="flex h-16 shrink-0 items-center border-b border-line px-3">
-          <Link href={employee ? "/dashboard" : "/home"} onClick={closeNav} className="flex min-w-0 items-center gap-3">
-            <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-brand-900 text-[12px] font-semibold text-white shadow-sm">SO</span>
+          <Link href={employee ? "/dashboard" : "/home"} aria-label="SalsysOS home" onClick={closeNav} className="flex min-w-0 items-center gap-3">
+            <BrandMark />
             {open ? (
               <span className="min-w-0">
                 <span className="block truncate text-[14px] font-semibold text-copy-strong">SalsysOS</span>
@@ -368,6 +363,7 @@ export function DesktopHoverSidebarV3() {
         <div className="shrink-0 border-t border-line p-2.5">
           <button
             type="button"
+            aria-label="Search workspaces and actions"
             onClick={() => {
               askSalsys();
               closeNav();
@@ -375,7 +371,7 @@ export function DesktopHoverSidebarV3() {
             className={`flex h-10 w-full items-center rounded-ui text-copy-muted transition hover:bg-brand-50 hover:text-brand-700 ${open ? "gap-3 px-3" : "justify-center"}`}
           >
             <Sparkles size={18} strokeWidth={1.8} />
-            {open ? <span className="text-[13px] font-medium">Ask Salsys</span> : null}
+            {open ? <span className="text-[13px] font-medium">Workspace search</span> : null}
           </button>
 
           <div className={open ? "mt-2 flex items-center gap-2 px-3 py-1 text-[11px] text-copy-subtle" : "mt-2 flex justify-center py-1"}>
@@ -390,13 +386,14 @@ export function DesktopHoverSidebarV3() {
           <button
             type="button"
             className="absolute inset-0 bg-brand-950/30 backdrop-blur-[2px]"
+            data-modal-backdrop tabIndex={-1} aria-hidden="true"
             aria-label="Close navigation"
             onClick={() => setMobileOpen(false)}
           />
 
-          <aside className="absolute inset-y-0 left-0 flex w-[min(90vw,360px)] flex-col border-r border-line bg-surface shadow-panel">
+          <aside ref={mobileDrawerRef} role="dialog" aria-modal="true" aria-label="SalsysOS navigation" tabIndex={-1} className="absolute inset-y-0 left-0 flex w-[min(90vw,360px)] flex-col border-r border-line bg-surface shadow-panel">
             <div className="flex h-16 shrink-0 items-center gap-3 border-b border-line px-4">
-              <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-brand-900 text-[12px] font-semibold text-white shadow-sm">SO</span>
+              <BrandMark />
               <div className="min-w-0 flex-1">
                 <div className="truncate text-[14px] font-semibold text-copy-strong">SalsysOS</div>
                 <div className="truncate text-[11px] text-copy-subtle">{organizationName}</div>
@@ -424,7 +421,7 @@ export function DesktopHoverSidebarV3() {
                   <Sparkles size={16} strokeWidth={1.8} />
                 </span>
                 <span className="min-w-0 flex-1">
-                  <span className="block text-[13px] font-semibold">Ask Salsys</span>
+                  <span className="block text-[13px] font-semibold">Workspace search</span>
                   <span className="block truncate text-[10px] text-copy-subtle">Find evidence, navigate or move work forward</span>
                 </span>
               </button>

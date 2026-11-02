@@ -45,10 +45,14 @@ import {
   type ReactNode,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from "react";
 import { signOutAction } from "@/app/actions/auth";
 import { LiveRefresh } from "@/components/live-refresh";
+import { BrandMark } from "@/components/brand";
+import { useModalFocus } from "@/components/use-modal-focus";
+import { personInitials } from "@/lib/ui-format";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { createClient as createBrowserClient } from "@/lib/supabase/browser";
 
@@ -107,28 +111,7 @@ function isNavActive(pathname: string, href: string) {
   return pathname === href || pathname.startsWith(`${href}/`);
 }
 
-function BrandMark() {
-  return (
-    <div
-      className="grid h-10 w-10 place-items-center rounded-xl bg-slate-950 text-[13px] font-black tracking-[-0.03em] text-white shadow-sm dark:bg-white dark:text-slate-950"
-      aria-hidden="true"
-    >
-      SO
-    </div>
-  );
-}
-
-function initials(name: string) {
-  const value = name
-    .split(/\s+/)
-    .filter(Boolean)
-    .map((part) => part[0])
-    .slice(0, 2)
-    .join("")
-    .toUpperCase();
-
-  return value || "SO";
-}
+function initials(name: string) { return personInitials(name); }
 
 function sectionForPath(pathname: string, sections: NavSection[]) {
   return (
@@ -150,6 +133,10 @@ export function AppShell({ children }: { children: ReactNode }) {
   const [secondaryCollapsed, setSecondaryCollapsed] = useState(false);
   const [askOpen, setAskOpen] = useState(false);
   const [commandQuery, setCommandQuery] = useState("");
+  const commandRef = useRef<HTMLElement | null>(null);
+  const [shortcutLabel, setShortcutLabel] = useState("Ctrl K");
+  useModalFocus(askOpen, commandRef, () => setAskOpen(false));
+  useEffect(() => setShortcutLabel(/Mac|iPhone|iPad/.test(navigator.platform) ? "⌘K" : "Ctrl K"), []);
 
   const mock = process.env.NEXT_PUBLIC_USE_MOCK_DATA !== "false";
   const activeWorkspace = workspace?.activeWorkspace ?? null;
@@ -461,13 +448,13 @@ export function AppShell({ children }: { children: ReactNode }) {
   }, []);
 
   useEffect(() => {
-    if (!mobileOpen && !askOpen) return;
+    if (!mobileOpen) return;
     const previous = document.body.style.overflow;
     document.body.style.overflow = "hidden";
     return () => {
       document.body.style.overflow = previous;
     };
-  }, [mobileOpen, askOpen]);
+  }, [mobileOpen]);
 
   useEffect(() => {
     let cancelled = false;
@@ -754,11 +741,11 @@ export function AppShell({ children }: { children: ReactNode }) {
               <Sparkles size={16} />
             </span>
             <span className="min-w-0">
-              <span className="block text-xs font-bold text-slate-900 dark:text-white">Ask Salsys</span>
+              <span className="block text-xs font-bold text-slate-900 dark:text-white">Workspace search</span>
               <span className="block truncate text-[10px] text-slate-500">Investigate or jump to action</span>
             </span>
             <kbd className="ml-auto hidden rounded border border-violet-100 bg-white px-1.5 py-0.5 text-[9px] font-semibold text-slate-400 xl:inline dark:border-slate-800 dark:bg-slate-900">
-              ⌘K
+              {shortcutLabel}
             </kbd>
           </button>
         </aside>
@@ -803,16 +790,16 @@ export function AppShell({ children }: { children: ReactNode }) {
           <button
             type="button"
             onClick={() => setAskOpen(true)}
-            className="mx-auto flex h-9 w-full max-w-xl items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 text-left text-xs text-slate-400 transition hover:border-slate-300 hover:bg-white md:mx-4 dark:border-slate-800 dark:bg-slate-900 dark:hover:border-slate-700"
+            className="mx-auto flex h-9 min-w-0 flex-1 max-w-xl items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 text-left text-xs text-slate-400 transition hover:border-slate-300 hover:bg-white md:mx-4 dark:border-slate-800 dark:bg-slate-900 dark:hover:border-slate-700"
           >
             <Sparkles size={15} className="text-violet-500" />
-            <span className="truncate">Ask Salsys or find anything…</span>
+            <span className="truncate">Search workspaces and actions…</span>
             <kbd className="ml-auto hidden rounded border border-slate-200 bg-white px-1.5 py-0.5 text-[9px] font-semibold text-slate-400 sm:inline dark:border-slate-700 dark:bg-slate-950">
-              ⌘K
+              {shortcutLabel}
             </kbd>
           </button>
 
-          <div className="ml-auto flex items-center gap-2">
+          <div className="ml-auto flex shrink-0 items-center gap-2">
             {!mock && workspaceMemberships.length > 1 ? (
               <select
                 aria-label="Select workspace"
@@ -841,7 +828,7 @@ export function AppShell({ children }: { children: ReactNode }) {
             ) : null}
 
             <details className="topbar-notification-menu relative">
-              <summary className="grid h-9 w-9 cursor-pointer list-none place-items-center rounded-lg border border-slate-200 text-slate-500 transition hover:bg-slate-50 hover:text-slate-950 dark:border-slate-800 dark:hover:bg-slate-900 dark:hover:text-white">
+              <summary aria-label="Open notifications" className="grid h-9 w-9 cursor-pointer list-none place-items-center rounded-lg border border-slate-200 text-slate-500 transition hover:bg-slate-50 hover:text-slate-950 dark:border-slate-800 dark:hover:bg-slate-900 dark:hover:text-white">
                 <Bell size={16} />
               </summary>
               <div className="absolute right-0 mt-2 w-[320px] rounded-2xl border border-slate-200 bg-white p-2 shadow-xl dark:border-slate-800 dark:bg-slate-950">
@@ -878,7 +865,7 @@ export function AppShell({ children }: { children: ReactNode }) {
             </details>
 
             <details className="topbar-profile-menu relative">
-              <summary className="flex h-9 cursor-pointer list-none items-center gap-2 rounded-lg pl-1 pr-1.5 transition hover:bg-slate-50 dark:hover:bg-slate-900">
+              <summary aria-label="Open account menu" className="flex h-9 cursor-pointer list-none items-center gap-2 rounded-lg pl-1 pr-1.5 transition hover:bg-slate-50 dark:hover:bg-slate-900">
                 <span className="grid h-8 w-8 place-items-center rounded-lg bg-slate-100 text-[11px] font-black text-slate-700 dark:bg-slate-900 dark:text-slate-200">
                   {initials(displayName)}
                 </span>
@@ -996,17 +983,18 @@ export function AppShell({ children }: { children: ReactNode }) {
           <button
             type="button"
             className="absolute inset-0 bg-slate-950/35 backdrop-blur-[2px]"
+            data-modal-backdrop tabIndex={-1} aria-hidden="true"
             onClick={() => setAskOpen(false)}
             aria-label="Close Ask Salsys"
           />
-          <section className="relative w-full max-w-2xl overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl dark:border-slate-800 dark:bg-slate-950">
+          <section ref={commandRef} role="dialog" aria-modal="true" aria-label="Search workspaces and actions" tabIndex={-1} className="relative w-full max-w-2xl overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl dark:border-slate-800 dark:bg-slate-950">
             <div className="flex items-center gap-3 border-b border-slate-100 px-4 py-3 dark:border-slate-900">
               <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-violet-50 text-violet-600 dark:bg-violet-950/40 dark:text-violet-300">
                 <Sparkles size={17} />
               </span>
               <div className="min-w-0 flex-1">
-                <div className="text-sm font-black text-slate-900 dark:text-white">Ask Salsys</div>
-                <div className="text-[10px] text-slate-500">Find evidence, navigate and move work forward</div>
+                <div className="text-sm font-black text-slate-900 dark:text-white">Workspace search</div>
+                <div className="text-[10px] text-slate-500">Find a workspace or an action</div>
               </div>
               <button
                 type="button"
@@ -1025,7 +1013,7 @@ export function AppShell({ children }: { children: ReactNode }) {
                   autoFocus
                   value={commandQuery}
                   onChange={(event) => setCommandQuery(event.target.value)}
-                  placeholder="Ask a business question or find a workspace…"
+                  placeholder="Search leads, inbox, revenue…"
                   className="h-11 min-w-0 flex-1 bg-transparent text-sm text-slate-900 outline-none placeholder:text-slate-400 dark:text-white"
                 />
                 <kbd className="rounded border border-slate-200 bg-white px-1.5 py-0.5 text-[9px] font-semibold text-slate-400 dark:border-slate-700 dark:bg-slate-950">Esc</kbd>
@@ -1063,7 +1051,7 @@ export function AppShell({ children }: { children: ReactNode }) {
                 <div className="rounded-xl border border-dashed border-slate-200 px-4 py-8 text-center dark:border-slate-800">
                   <BrainCircuit size={22} className="mx-auto text-slate-300" />
                   <div className="mt-2 text-xs font-bold text-slate-700 dark:text-slate-200">No command matches yet</div>
-                  <div className="mt-1 text-[11px] text-slate-500">Natural-language reasoning will connect here without inventing answers.</div>
+                  <div className="mt-1 text-[11px] text-slate-500">Try a workspace name such as Leads, Inbox or Revenue.</div>
                 </div>
               )}
             </div>

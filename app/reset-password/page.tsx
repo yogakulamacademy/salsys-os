@@ -1,3 +1,4 @@
+import { BrandMark } from "@/components/brand";
 import { cookies } from 'next/headers';
 import { KeyRound, ShieldCheck } from 'lucide-react';
 
@@ -48,7 +49,7 @@ export default async function ResetPasswordPage({
     <div className="grid min-h-screen place-items-center bg-mist px-4 py-10">
       <div className="w-full max-w-md rounded-[20px] border border-line bg-surface p-7 shadow-panel sm:p-9">
         <div className="mb-7 flex items-center gap-3">
-          <div className="grid h-12 w-12 place-items-center rounded-xl bg-brand-900 text-[14px] font-bold text-white shadow-sm">SO</div>
+          <BrandMark size="large" />
           <div>
             <div className="text-[15px] font-semibold text-copy-strong">SalsysOS</div>
             <div className="mt-0.5 text-[12px] text-copy-muted">Secure account recovery</div>

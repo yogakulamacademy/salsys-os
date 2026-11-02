@@ -1,7 +1,8 @@
 "use client";
 
 import { ArrowRight, CheckCircle2, Info, PanelRightOpen, X } from "lucide-react";
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useModalFocus } from "@/components/use-modal-focus";
 import { createPortal } from "react-dom";
 
 import { DecisionMetricLink } from "@/components/intelligence/decision-metric-link";
@@ -76,28 +77,13 @@ export function MetricInvestigatorCard({
   const [open, setOpen] = useState(false);
   const [mounted, setMounted] = useState(false);
   const [sourceSearch, setSourceSearch] = useState("");
+  const dialogRef = useRef<HTMLElement | null>(null);
+  useModalFocus(mounted && open, dialogRef, () => setOpen(false));
 
   useEffect(() => {
     setMounted(true);
     setSourceSearch(window.location.search);
   }, []);
-
-  useEffect(() => {
-    if (!open) return;
-
-    const previousOverflow = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") setOpen(false);
-    };
-
-    window.addEventListener("keydown", onKeyDown);
-    return () => {
-      document.body.style.overflow = previousOverflow;
-      window.removeEventListener("keydown", onKeyDown);
-    };
-  }, [open]);
 
   const nextCheck = resolveMetricNextCheck(label);
   const scope = captureInvestigationScope(sourceSearch);
@@ -128,6 +114,7 @@ export function MetricInvestigatorCard({
         ? createPortal(
             <div className="fixed inset-0 z-[120]" role="presentation">
               <button
+                data-modal-backdrop tabIndex={-1} aria-hidden="true"
                 type="button"
                 className="absolute inset-0 bg-slate-950/35 backdrop-blur-[1px]"
                 aria-label="Close metric investigation"
@@ -135,6 +122,8 @@ export function MetricInvestigatorCard({
               />
 
               <section
+                ref={dialogRef}
+                tabIndex={-1}
                 role="dialog"
                 aria-modal="true"
                 aria-labelledby="metric-investigator-title"
@@ -316,7 +305,7 @@ function formatDeltaSummary(
   direction: MetricDeltaDirection,
   comparisonLabel?: string,
 ) {
-  const comparison = comparisonLabel || "the previous comparable period";
+  const comparison = (comparisonLabel || "the previous comparable period").replace(/^(?:vs\.?|versus)\s+/i, "");
 
   if (delta == null) return `No reliable baseline is available for ${comparison}.`;
   if (delta === 0) return `No material change versus ${comparison}.`;
