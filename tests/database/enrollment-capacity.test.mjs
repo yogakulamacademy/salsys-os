@@ -31,6 +31,10 @@ const org = '10000000-0000-4000-8000-000000000001';
 const otherOrg = '10000000-0000-4000-8000-000000000002';
 
 const foundation = `
+create schema app_private authorization postgres;
+revoke all on schema app_private from public, anon;
+grant usage on schema app_private to authenticated, service_role;
+
 create type public.lead_stage as enum ('new','engaged','payment_pending','enrolled','closed_won');
 create type public.lead_status as enum ('open','won','lost','archived');
 create type public.enrollment_status as enum ('pending','confirmed','cancelled','completed','deferred');
@@ -332,13 +336,13 @@ test('two concurrent confirmations for the final seat serialize and only one com
     assert.equal(count.rows[0].n, 1);
   }));
 
-test('capacity helpers cannot be called directly by API roles', () =>
+test('capacity helpers stay private and cannot be called directly by API roles', () =>
   fixture(async ({ owner }) => {
     const rows = (
       await owner.query(`select role_name,
-        has_function_privilege(role_name,'public.assert_batch_capacity_v1(uuid,uuid)','EXECUTE') as assert_capacity,
-        has_function_privilege(role_name,'public.enforce_enrollment_batch_capacity_v1()','EXECUTE') as enrollment_trigger,
-        has_function_privilege(role_name,'public.enforce_lead_batch_capacity_fallback_v1()','EXECUTE') as lead_trigger
+        has_function_privilege(role_name,'app_private.assert_batch_capacity_v1(uuid,uuid)','EXECUTE') as assert_capacity,
+        has_function_privilege(role_name,'app_private.enforce_enrollment_batch_capacity_v1()','EXECUTE') as enrollment_trigger,
+        has_function_privilege(role_name,'app_private.enforce_lead_batch_capacity_fallback_v1()','EXECUTE') as lead_trigger
       from unnest(array['anon','authenticated','service_role']) role_name`)
     ).rows;
 
