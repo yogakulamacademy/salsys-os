@@ -55,7 +55,7 @@ Pending, failed, refunded, refund-kind and zero-value rows cannot satisfy the ru
 
 Non-commerce enrollment sources remain unaffected unless they explicitly declare the verified-payment confirmation basis. The implementation is `20261102161000_enrollment_verified_payment_evidence_v1.sql`; its helper lives in `app_private` and is not API-callable.
 
-Queue ordering is not trusted for correctness. Vercel queue delivery is at-least-once with approximate ordering, and the production tracking recovery job re-enters the canonical dispatcher on a one-minute schedule with bounded retry settings. Therefore an early payment-backed enrollment can fail closed while payment evidence is absent and be retried through the existing projection recovery path after the canonical paid payment exists. This remains bounded recovery, not an excuse to ignore dead-letter monitoring.
+Queue ordering is not trusted for correctness. Current Vercel queue documentation describes at-least-once delivery with approximate ordering. Separately, read-only production inspection confirmed an active one-minute tracking recovery job that re-enters the canonical dispatcher with bounded retry settings. Therefore an early payment-backed enrollment can fail closed while payment evidence is absent and be retried through the existing projection recovery path after the canonical paid payment exists. This remains bounded recovery, not an excuse to ignore dead-letter monitoring.
 
 ## Migration boundary and processor provenance
 
