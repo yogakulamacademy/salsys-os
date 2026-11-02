@@ -179,8 +179,10 @@ test('processor remains service-role only and helper remains private after patch
 
 test('migration fails closed when the reviewed association baseline is missing', () =>
   fixture(async (client) => {
-    await client.query(`create or replace function public.process_enrollment_raw_event_v1(uuid,uuid)
-      returns jsonb language sql security definer set search_path=''
+    await client.query(`create or replace function public.process_enrollment_raw_event_v1(
+      p_organization_id uuid,
+      p_raw_event_id uuid
+    ) returns jsonb language sql security definer set search_path=''
       as $$ select jsonb_build_object('ok',true) $$;`);
     await assert.rejects(
       client.query(migration),
