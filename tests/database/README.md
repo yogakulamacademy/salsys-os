@@ -9,7 +9,7 @@ SALSYS_ALLOW_LOCAL_DB_TESTS=1
 SALSYS_TEST_DATABASE_URL=postgres://<test-admin>:<test-password>@127.0.0.1:<test-port>/postgres
 ```
 
-The runner requires a literal loopback host and the `postgres` administration database. Use a dedicated test cluster. It creates random `salsys_refund_test_<uuid>`, capacity and payment-evidence databases and drops only databases it created. It does not accept a Supabase project URL or load application environment files. Roles are initialized only if absent; production credentials are neither needed nor accepted as a remote connection.
+The runner requires a literal loopback host and the `postgres` administration database. Use a dedicated test cluster. It creates random refund, capacity and payment-evidence databases and drops only databases it created. It does not accept a Supabase project URL or load application environment files. Roles are initialized only if absent; production credentials are neither needed nor accepted as a remote connection.
 
 Tests use exact repository refund/verification commands and authorization helpers with reduced foundation tables. `local-auth-bootstrap.sql` supplies compatibility functions that read synthetic claims; it does **not** validate a Supabase JWT, issue a session or reproduce Auth infrastructure. The existing rollback-only fixture is also executed and checked for cleanup.
 
@@ -59,7 +59,16 @@ The exact deployed pre-patch definitions were recovered read-only from the produ
 
 ## Current evidence boundary
 
-On branch head `1e672345ea79ba22c67fcba2f1b86206c58c7fd6`, the independent PostgreSQL financial job passed **62 tests, 62 passed, 0 failed**.
+On branch head `1e672345ea79ba22c67fcba2f1b86206c58c7fd6`, the independent PostgreSQL financial job passed **62 tests, 62 passed, 0 failed**, and CodeQL #733 passed. The later documentation-only commits must still complete their own CI/CodeQL run before merge consideration.
+
+The six draft migrations covered by this branch are:
+
+1. `20261102063943_atomic_refund_command_v1.sql`
+2. `20261102095354_refund_request_replay_binding_v1.sql`
+3. `20261102115513_payment_enrollment_association_v1.sql`
+4. `20261102115600_enrollment_processor_payment_association_v1.sql`
+5. `20261102154500_enrollment_batch_capacity_guard_v1.sql`
+6. `20261102161000_enrollment_verified_payment_evidence_v1.sql`
 
 Passing these tests is financial-subsystem evidence. It does not certify live provider delivery, real Supabase Auth/identity/consent, full-schema migration-history reproducibility, a governed financial correction/contractual-adjustment workflow, or the final GT-01 Hostinger/provider journey. Those require separate staging/live acceptance.
 
