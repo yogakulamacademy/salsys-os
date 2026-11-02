@@ -18,7 +18,7 @@ const source = buildRefundReadinessSql();
 const schema = source.slice(0, source.indexOf('create temp table assertions'));
 const seedStart = source.indexOf('insert into public.organizations(id) values');
 const seeds = source.slice(seedStart, source.indexOf('\nset local role authenticated;', seedStart));
-const paymentProcessorBaseline = fs.readFileSync('tests/database/process-enrollment-raw-event-v1.production-baseline.sql','utf8');
+const enrollmentProcessorBaseline = fs.readFileSync('tests/database/process-enrollment-raw-event-v1.production-baseline.sql','utf8');
 
 before(async () => {
   await admin.connect();
@@ -29,6 +29,12 @@ before(async () => {
   end; $$;`);
 });
 after(async () => { await admin.end(); });
+
+async function authenticate(client) {
+  await client.query('begin');
+  await client.query('set local role authenticated');
+  await client.query(`select set_config('request.jwt.claims',$1,true)`,[JSON.stringify(claims)]);
+}
 
 async function fixture(run) {
   const database = `salsys_refund_test_${randomUUID().replaceAll('-','')}`;
@@ -42,12 +48,17 @@ async function fixture(run) {
     await owner.query(fs.readFileSync(new URL('./local-auth-bootstrap.sql',import.meta.url),'utf8'));
     await owner.query(`${schema}\n${seeds}\ncommit;`);
     const user = await connect();
-    await user.query('begin');
-    await user.query('set local role authenticated');
-    await user.query(`select set_config('request.jwt.claims',$1,true)`,[JSON.stringify(claims)]);
+    await authenticate(user);
     const original = (await user.query(
       `select public.verify_payment_v1($1,100,'INR','deposit','bank_transfer','provider-replay-original') as result`,[lead]
     )).rows[0].result.payment_id;
+    await user.query('commit');
+
+    // Booking identity exists before the refund. Once a linked refund exists this
+    // identity is intentionally immutable, matching the real event order.
+    await owner.query(`update public.payments set metadata=metadata||jsonb_build_object('booking_reference','SYN-PROVIDER-B1') where id=$1`,[original]);
+
+    await authenticate(user);
     const refund = (await user.query(
       `select public.record_refund_v1($1,$2,10,'INR',$3,'bank_transfer','provider-replay-refund',null,'Synthetic bank return verified') as result`,
       [lead,original,randomUUID()]
@@ -97,8 +108,7 @@ test('conflicting provider replay cannot rewrite refunded financial truth', () =
 
 test('after guarded late enrollment association a same-enrollment provider replay remains idempotent', () => fixture(async f => {
   const enrollment=randomUUID(), raw=randomUUID();
-  await f.owner.query(`update public.payments set metadata=metadata||jsonb_build_object('booking_reference','SYN-PROVIDER-B1') where id=$1`,[f.original]);
-  await f.owner.query(`insert into public.enrollments(id,organization_id,lead_id,metadata) values($1,$2,$3,$4)`,[
+  await f.owner.query(`insert into public.enrollments(id,organization_id,lead_id,currency,metadata) values($1,$2,$3,'INR',$4)`,[
     enrollment,org,lead,{booking_reference:'SYN-PROVIDER-B1',raw_event_id:raw,trusted_server_event:true}
   ]);
   const linked=(await f.owner.query(`select public.associate_booking_payments_enrollment_v1($1,$2,$3,$4,$5) as result`,[
@@ -112,6 +122,6 @@ test('after guarded late enrollment association a same-enrollment provider repla
 }));
 
 test('captured enrollment processor baseline still contains the provider-association boundary being replaced', () => {
-  assert.match(paymentProcessorBaseline,/update public\.payments p set enrollment_id=v_enrollment_id,updated_at=now\(\)/);
-  assert.match(paymentProcessorBaseline,/p\.metadata->>'booking_reference'=v_booking_reference/);
+  assert.match(enrollmentProcessorBaseline,/update public\.payments p set enrollment_id=v_enrollment_id,updated_at=now\(\)/);
+  assert.match(enrollmentProcessorBaseline,/p\.metadata->>'booking_reference'=v_booking_reference/);
 });
