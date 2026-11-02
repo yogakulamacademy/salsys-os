@@ -175,7 +175,15 @@ export async function recordRefundAction(
   const parsedAmount = parsePaymentAmount(formData.get("refund_amount"));
   const amount = parsedAmount.state === 'valid' ? parsedAmount.value : null;
   const currency = currencyValue(formData, "refund_currency");
-  const paidAt = paidAtValue(formData);
+  const paidAt = textValue(formData, 'paid_at') ? paidAtValue(formData) : null;
+  const originalPaymentId = textValue(formData, 'original_payment_id');
+  const requestId = textValue(formData, 'refund_request_id');
+  const notes = textValue(formData, 'refund_notes');
+  const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+  if (!originalPaymentId || !uuid.test(originalPaymentId) || !requestId || !uuid.test(requestId) || !notes) {
+    redirect(`/leads/${leadId}?error=${encodeURIComponent('Select the original paid transaction and enter a refund reason. Reload the form if its request ID is missing.')}`);
+  }
 
   if (amount === null || amount <= 0) {
     redirect(
@@ -191,88 +199,27 @@ export async function recordRefundAction(
     );
   }
 
-  if (!paidAt) {
+  if (textValue(formData, 'paid_at') && !paidAt) {
     redirect(
       `/leads/${leadId}?error=${encodeURIComponent("Invalid refund date.")}`,
     );
   }
 
   const supabase = await createClient();
-  const {
-    data: { user },
-    error: authError,
-  } = await supabase.auth.getUser();
-
-  if (authError || !user) {
-    redirect("/login");
-  }
-
-  const { data: lead, error: leadError } = await supabase
-    .from("leads")
-    .select("organization_id")
-    .eq("id", leadId)
-    .maybeSingle();
-
-  if (leadError || !lead?.organization_id) {
-    redirect(
-      `/leads/${leadId}?error=${encodeURIComponent(
-        leadError?.message || "Unable to resolve the lead workspace.",
-      )}`,
-    );
-  }
-
-  const provider = textValue(formData, "refund_provider");
-  const reference = textValue(formData, "refund_reference");
-  const notes = textValue(formData, "refund_notes");
-
-  const { data: payment, error } = await supabase
-    .from("payments")
-    .insert({
-      organization_id: lead.organization_id,
-      lead_id: leadId,
-      payment_kind: "refund",
-      status: "refunded",
-      amount,
-      currency,
-      provider,
-      external_payment_id: reference,
-      paid_at: paidAt,
-      metadata: {
-        source: "crm_manual_refund",
-        recorded_by: user.id,
-        recorded_at: new Date().toISOString(),
-        notes,
-      },
-    })
-    .select("id")
-    .single();
-
-  if (error) {
-    redirect(`/leads/${leadId}?error=${encodeURIComponent(error.message)}`);
-  }
-
-  const { error: activityError } = await supabase.from("activities").insert({
-    lead_id: leadId,
-    activity_type: "refund_recorded",
-    actor_type: "human",
-    actor_id: user.id,
-    title: "Refund recorded",
-    details: `${currency} ${amount}` + (provider ? ` · ${provider}` : ""),
-    metadata: {
-      payment_id: payment.id,
-      payment_kind: "refund",
-      currency,
-      amount,
-      reference,
-    },
+  const { data, error } = await (supabase as any).rpc('record_refund_v1', {
+    p_lead_id: leadId,
+    p_original_payment_id: originalPaymentId,
+    p_request_id: requestId,
+    p_amount: amount,
+    p_currency: currency,
+    p_provider: textValue(formData, 'refund_provider'),
+    p_reference: textValue(formData, 'refund_reference'),
+    p_paid_at: paidAt,
+    p_note: notes,
   });
 
-  if (activityError) {
-    redirect(
-      `/leads/${leadId}?error=${encodeURIComponent(
-        `Refund was recorded, but audit logging failed: ${activityError.message}`,
-      )}`,
-    );
+  if (error || !data || data.ok !== true || typeof data.payment_id !== 'string') {
+    redirect(`/leads/${leadId}?error=${encodeURIComponent(error?.message || 'Refund confirmation was unavailable. Retry the same request before recording another refund.')}`);
   }
 
   refreshPaymentSurfaces(leadId);

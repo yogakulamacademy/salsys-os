@@ -6,12 +6,26 @@ const organizationId='00000000-0000-4000-8000-000000000002';
 const user={id:userId,aud:'authenticated',role:'authenticated',email:'reviewer@example.test',app_metadata:{provider:'email'},user_metadata:{},created_at:'2026-01-01T00:00:00Z'};
 const workspace={organization_id:organizationId,active_organization_id:organizationId,organization_name:'Demo Academy',organization_slug:'demo-academy',role:'admin',workspace_codes:['sales','marketing','intelligence','operations','automation','system','performance'],organization_status:'active'};
 let knowledgeScenario='empty';
+let financialScenario='empty';
+let refundCalls=[];
+const syntheticLeadId='80000000-0000-4000-8000-000000000001';
+const originalPaymentId='90000000-0000-4000-8000-000000000001';
+const financialPayments=()=>financialScenario==='empty'?[]:[
+  {id:originalPaymentId,payment_kind:'deposit',status:'paid',amount:30000,currency:'INR',provider:'bank_transfer',external_payment_id:'deposit-1',metadata:{},created_at:'2026-11-01T10:00:00Z'},
+  {id:'90000000-0000-4000-8000-000000000002',payment_kind:'balance',status:'paid',amount:60000,currency:'INR',provider:'bank_transfer',external_payment_id:'balance-1',metadata:{},created_at:'2026-11-01T11:00:00Z'},
+  {id:'90000000-0000-4000-8000-000000000003',payment_kind:'refund',status:'refunded',amount:10000,currency:'INR',provider:'bank_transfer',external_payment_id:'refund-1',metadata:financialScenario==='unlinked'?{}:{original_payment_id:originalPaymentId},created_at:'2026-11-01T12:00:00Z'},
+];
 const server=http.createServer(async(req,res)=>{
   res.setHeader('Content-Type','application/json');
   res.setHeader('Access-Control-Allow-Origin',`http://127.0.0.1:${process.env.UI_TEST_PORT || 3107}`);
   res.setHeader('Access-Control-Allow-Headers','authorization,apikey,content-type,x-client-info');
   if(req.method==='OPTIONS'){res.end('{}');return;}
   const url=new URL(req.url,'http://127.0.0.1:3108');
+  if(url.pathname==='/__financial_scenario'){
+    const state=url.searchParams.get('state');if(!['empty','paid','unlinked','employee','error'].includes(state)){res.statusCode=400;res.end('{}');return;}
+    financialScenario=state;refundCalls=[];res.end('{}');return;
+  }
+  if(url.pathname==='/__refund_calls'){res.end(JSON.stringify(refundCalls));return;}
   if(url.pathname==='/__knowledge_scenario'){
     const scenario=url.searchParams.get('state');
     if(!['empty','matched','library-error'].includes(scenario)){res.statusCode=400;res.end('{}');return;}
@@ -19,7 +33,16 @@ const server=http.createServer(async(req,res)=>{
   }
   let result=[];
   if(url.pathname==='/auth/v1/user')result=user;
-  else if(url.pathname==='/rest/v1/rpc/get_current_workspace_context_v1')result=workspace;
+  else if(url.pathname==='/rest/v1/rpc/get_current_workspace_context_v1')result={...workspace,role:financialScenario==='employee'?'employee':workspace.role};
+  else if(url.pathname==='/rest/v1/v_leads_overview')result={id:syntheticLeadId,organization_id:organizationId,lead_name:'Synthetic refund lead',lead_code:'SYN-001',current_stage:'closed_won',intent:'high',current_contact_channel:'whatsapp',created_at:'2026-11-01T09:00:00Z'};
+  else if(url.pathname==='/rest/v1/leads')result={organization_id:organizationId,potential_value:90000,potential_currency:'INR'};
+  else if(url.pathname==='/rest/v1/payments')result=financialPayments();
+  else if(url.pathname==='/rest/v1/rpc/get_current_person_journey_workspace_v1')result={organization_id:organizationId,access_granted:false};
+  else if(url.pathname==='/rest/v1/rpc/record_refund_v1'){
+    let raw='';for await(const chunk of req)raw+=chunk;refundCalls.push(JSON.parse(raw||'{}'));
+    if(financialScenario==='error'){res.statusCode=409;res.end(JSON.stringify({code:'P0001',message:'Refund exceeds the remaining refundable amount'}));return;}
+    result={ok:true,payment_id:'90000000-0000-4000-8000-000000000004',replayed:false};
+  }
   else if(url.pathname==='/rest/v1/rpc/get_current_provider_visibility_v1')result={organization_id:organizationId,google_connected:false,meta_connected:false,instagram_connected:false,whatsapp_connected:false};
   else if(url.pathname==='/rest/v1/rpc/get_admissions_snapshot')result={metrics:{needs_reply:0,unread:0},priority_queue:[],batch_capacity:[]};
   else if(url.pathname==='/rest/v1/rpc/get_course_management_workspace_v2')result={courses:[],batches:[],summary:{},audits:[]};

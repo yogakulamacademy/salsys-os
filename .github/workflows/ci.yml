@@ -265,6 +265,9 @@ jobs:
       - name: Verify knowledge preview with synthetic live-mode services
         run: npm run test:knowledge:ui
 
+      - name: Verify refund controls with synthetic live-mode services
+        run: npm run test:financial:ui
+
       - name: Upload UI evidence
         if: always()
         uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5

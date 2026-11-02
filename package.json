@@ -87,7 +87,8 @@
     "test:ui:unit": "node --test tests/ui/presentation.test.cjs",
     "test:journey": "node --test tests/growth/*.test.cjs",
     "test:readiness": "node --test tests/readiness/*.test.cjs",
-    "test:knowledge:ui": "playwright test --config=playwright.knowledge.config.ts"
+    "test:knowledge:ui": "playwright test --config=playwright.knowledge.config.ts",
+    "test:financial:ui": "playwright test --config=playwright.financial.config.ts"
   },
   "dependencies": {
     "@google-analytics/data": "^7.2.0",

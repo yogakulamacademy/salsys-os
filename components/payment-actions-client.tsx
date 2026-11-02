@@ -2,6 +2,10 @@
 
 import { AlertTriangle, CheckCircle2, CircleDollarSign, RotateCcw } from "lucide-react";
 import { useParams } from "next/navigation";
+import { useState } from 'react';
+import { useFormStatus } from 'react-dom';
+import type { LeadPayment } from '@/lib/data';
+import { getRefundOptions } from '@/lib/refund-options';
 
 import {
   recordRefundAction,
@@ -12,12 +16,19 @@ import {
 export function PaymentActionsClient({
   currency,
   canVerifyPayment,
+  payments,
+  refundRequestId,
 }: {
   currency: string;
   canVerifyPayment: boolean;
+  payments: LeadPayment[];
+  refundRequestId: string;
 }) {
   const params = useParams<{ id?: string }>();
   const leadId = typeof params?.id === "string" ? params.id : "";
+  const [originalId, setOriginalId] = useState('');
+  const refundOptions = getRefundOptions(payments);
+  const selectedPayment = refundOptions.find(p => p.id === originalId);
 
   if (!leadId) return null;
 
@@ -207,17 +218,27 @@ export function PaymentActionsClient({
             }}
             className="border-t border-line p-4"
           >
+            <p className="mb-4 text-xs leading-5 text-copy-muted">
+              Record money already returned and independently verified. This does not send money, change course fees or cancel enrollment.
+              {refundOptions.length === 0 ? ' No eligible paid transaction is available. Existing unlinked refunds need reconciliation before another refund in that currency.' : ''}
+            </p>
+            <input type="hidden" name="refund_request_id" value={refundRequestId} />
+            <input type="hidden" name="refund_currency" value={selectedPayment?.currency ?? ''} />
             <div className="grid gap-4 md:grid-cols-2">
+              <label className="md:col-span-2">
+                <span className="field-label">Original paid transaction</span>
+                <select className="input" name="original_payment_id" required value={originalId} onChange={event => setOriginalId(event.target.value)}>
+                  <option value="">Select a verified payment</option>
+                  {refundOptions.map(payment => <option key={payment.id} value={payment.id}>{payment.label}</option>)}
+                </select>
+              </label>
               <label>
                 <span className="field-label">Refund amount</span>
-                <input className="input" name="refund_amount" type="number" min="0.01" step="0.01" required />
+                <input className="input" name="refund_amount" type="number" min="0.01" max={selectedPayment?.remaining} step="0.01" required disabled={!selectedPayment} />
               </label>
               <label>
                 <span className="field-label">Currency</span>
-                <select className="input" name="refund_currency" defaultValue={currency}>
-                  <option value="USD">USD</option>
-                  <option value="INR">INR</option>
-                </select>
+                <input className="input" readOnly value={selectedPayment?.currency ?? 'Select a payment'} />
               </label>
               <label>
                 <span className="field-label">Method</span>
@@ -237,17 +258,22 @@ export function PaymentActionsClient({
               </label>
             </div>
             <label className="mt-4 block">
-              <span className="field-label">Notes</span>
-              <textarea className="input min-h-20 resize-y" name="refund_notes" placeholder="Refund context…" />
+              <span className="field-label">Reason and verification evidence</span>
+              <textarea className="input min-h-20 resize-y" name="refund_notes" required maxLength={2000} placeholder="Why was this refunded, and where did you verify the return?" />
             </label>
             <div className="mt-4 flex justify-end">
-              <button className="btn-secondary" type="submit">
-                <RotateCcw size={15} /> Record refund
-              </button>
+              <RefundSubmitButton disabled={!selectedPayment} />
             </div>
           </form>
         </details>
       ) : null}
     </div>
   );
+}
+
+function RefundSubmitButton({ disabled }: { disabled: boolean }) {
+  const { pending } = useFormStatus();
+  return <button className="btn-secondary" type="submit" disabled={disabled || pending}>
+    <RotateCcw size={15} />{pending ? 'Recording refund…' : 'Record refund'}
+  </button>;
 }
