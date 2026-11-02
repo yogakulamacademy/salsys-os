@@ -113,7 +113,7 @@ async function insertPayment(
   await owner.query(
     `insert into public.payments(
       id,organization_id,lead_id,provider,external_payment_id,payment_kind,status,amount,currency,metadata
-    ) values($1,$2,$3,$4,$5,$6,$7,$8,$9,jsonb_build_object('booking_reference',$10))`,
+    ) values($1,$2,$3,$4,$5,$6,$7,$8,$9,jsonb_build_object('booking_reference',$10::text))`,
     [id, organizationId, leadId, provider, paymentReference, kind, status, amount, currency, bookingReference],
   );
   return id;
