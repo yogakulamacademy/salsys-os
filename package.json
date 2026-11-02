@@ -84,6 +84,8 @@
     "verify:ad-activation-runner-operations": "node scripts/verify-ad-activation-runner-operations.mjs",
     "verify:ad-activation-canary-boundary": "node scripts/verify-ad-activation-canary-boundary.mjs",
     "test:ui": "playwright test",
+    "test:home": "node --test tests/home/*.test.cjs",
+    "test:home:ui": "playwright test --config=playwright.home.config.ts",
     "test:ui:unit": "node --test tests/ui/presentation.test.cjs",
     "test:journey": "node --test tests/growth/*.test.cjs",
     "test:readiness": "node --test tests/readiness/*.test.cjs",

@@ -267,8 +267,8 @@ for (const forbidden of [
 }
 
 requireText(layout, '<RecommendedActions />', 'Home recommendation surface');
-requireText(home, 'title="Action queue"', 'existing factual Action Queue');
-requireText(home, 'AttentionRow', 'existing factual Attention cards');
+requireText(home, 'title="Upcoming tasks"', 'factual current task queue');
+requireText(home, 'className="home-attention"', 'factual attention links separate from recommendations');
 
 const directMutationGrant = /grant\s+(?:insert|update|delete|truncate|all)[^;]*system_intelligence_recommendation_signal_state[^;]*authenticated/i;
 if (directMutationGrant.test(historicalMigration) || directMutationGrant.test(hardeningMigration)) {

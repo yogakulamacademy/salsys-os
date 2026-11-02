@@ -54,6 +54,7 @@ import { BrandMark } from "@/components/brand";
 import { useModalFocus } from "@/components/use-modal-focus";
 import { personInitials } from "@/lib/ui-format";
 import { ThemeToggle } from "@/components/theme-toggle";
+import { WorkspaceRecordMatches } from "@/components/workspace-record-matches";
 import { createClient as createBrowserClient } from "@/lib/supabase/browser";
 
 type IconType = ComponentType<{
@@ -792,8 +793,8 @@ export function AppShell({ children }: { children: ReactNode }) {
             onClick={() => setAskOpen(true)}
             className="mx-auto flex h-9 min-w-0 flex-1 max-w-xl items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 text-left text-xs text-slate-400 transition hover:border-slate-300 hover:bg-white md:mx-4 dark:border-slate-800 dark:bg-slate-900 dark:hover:border-slate-700"
           >
-            <Sparkles size={15} className="text-violet-500" />
-            <span className="truncate">Search workspaces and actions…</span>
+            <Search size={16} className="text-violet-500" />
+            <span className="truncate">Search records, workspaces and actions…</span>
             <kbd className="ml-auto hidden rounded border border-slate-200 bg-white px-1.5 py-0.5 text-[9px] font-semibold text-slate-400 sm:inline dark:border-slate-700 dark:bg-slate-950">
               {shortcutLabel}
             </kbd>
@@ -818,13 +819,15 @@ export function AppShell({ children }: { children: ReactNode }) {
             ) : null}
 
             {!employee && !profileLoading && !workspaceLoading ? (
-              <Link
-                href="/leads/new"
-                className="hidden h-9 items-center gap-1.5 rounded-lg bg-slate-950 px-3 text-xs font-bold text-white transition hover:bg-slate-800 sm:inline-flex dark:bg-white dark:text-slate-950 dark:hover:bg-slate-200"
-              >
-                <Plus size={14} />
-                New
-              </Link>
+              <details className="relative hidden sm:block">
+                <summary className="flex h-9 cursor-pointer list-none items-center gap-1.5 rounded-lg bg-violet-600 px-3 text-xs font-bold text-white"><Plus size={14} />New</summary>
+                <div className="absolute right-0 z-40 mt-2 w-60 rounded-xl border border-slate-200 bg-white p-2 shadow-xl dark:border-slate-800 dark:bg-slate-950">
+                  <Link href="/leads/new" className="block rounded-lg px-3 py-2 text-xs hover:bg-violet-50 dark:hover:bg-slate-900">New lead</Link>
+                  <Link href="/conversations" className="block rounded-lg px-3 py-2 text-xs hover:bg-violet-50 dark:hover:bg-slate-900">Start a conversation in Inbox</Link>
+                  <Link href="/leads" className="block rounded-lg px-3 py-2 text-xs hover:bg-violet-50 dark:hover:bg-slate-900">Choose a lead to add a task</Link>
+                  <p className="px-3 py-2 text-[10px] text-slate-500">Contacts resolve from lead identity. Campaign creation is managed through connected providers.</p>
+                </div>
+              </details>
             ) : null}
 
             <details className="topbar-notification-menu relative">
@@ -994,7 +997,7 @@ export function AppShell({ children }: { children: ReactNode }) {
               </span>
               <div className="min-w-0 flex-1">
                 <div className="text-sm font-black text-slate-900 dark:text-white">Workspace search</div>
-                <div className="text-[10px] text-slate-500">Find a workspace or an action</div>
+                <div className="text-[10px] text-slate-500">Find records by name, or open a workspace action</div>
               </div>
               <button
                 type="button"
@@ -1021,6 +1024,7 @@ export function AppShell({ children }: { children: ReactNode }) {
             </div>
 
             <div className="max-h-[55vh] overflow-y-auto px-3 pb-3">
+              <WorkspaceRecordMatches key={activeWorkspace?.organizationId ?? 'demo'} query={commandQuery} onSelect={() => setAskOpen(false)} />
               <div className="mb-2 px-2 text-[10px] font-black uppercase tracking-[0.12em] text-slate-400">
                 {commandQuery ? "Best matches" : "Suggested investigations"}
               </div>

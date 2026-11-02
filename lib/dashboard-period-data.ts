@@ -1,7 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { requireCurrentOrganizationId } from "@/lib/workspace";
 
-export type DashboardPeriodPreset = "7d" | "30d" | "90d" | "ytd" | "custom";
+export type DashboardPeriodPreset = "7d" | "30d" | "90d" | "ytd" | "custom" | "today" | "yesterday" | "month" | "lastmonth";
 
 export type DashboardPeriodSelection = {
   preset: DashboardPeriodPreset;
@@ -93,13 +93,13 @@ const QUALIFIED_STAGES = new Set([
   "enrolled",
 ]);
 
-export function resolveDashboardPeriod(input: PeriodInput = {}): DashboardPeriodSelection {
+export function resolveDashboardPeriod(input: PeriodInput = {}, now = new Date()): DashboardPeriodSelection {
   const requested = scalar(input.period).toLowerCase();
-  const today = utcStartOfDay(new Date());
+  const today = utcStartOfDay(now);
   const tomorrow = addUtcDays(today, 1);
 
   let preset: DashboardPeriodPreset =
-    requested === "7d" || requested === "30d" || requested === "90d" || requested === "ytd"
+    requested === "7d" || requested === "30d" || requested === "90d" || requested === "ytd" || requested === "today" || requested === "yesterday" || requested === "month" || requested === "lastmonth"
       ? requested
       : requested === "custom"
         ? "custom"
@@ -111,12 +111,16 @@ export function resolveDashboardPeriod(input: PeriodInput = {}): DashboardPeriod
   if (preset === "7d") start = addUtcDays(today, -6);
   if (preset === "90d") start = addUtcDays(today, -89);
   if (preset === "ytd") start = new Date(Date.UTC(today.getUTCFullYear(), 0, 1));
+  if (preset === "today") start = today;
+  if (preset === "yesterday") { start = addUtcDays(today, -1); endExclusive = today; }
+  if (preset === "month") start = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), 1));
+  if (preset === "lastmonth") { start = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth() - 1, 1)); endExclusive = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), 1)); }
 
   if (preset === "custom") {
     const parsedFrom = parseDateOnly(scalar(input.from));
     const parsedTo = parseDateOnly(scalar(input.to));
 
-    if (parsedFrom && parsedTo && parsedFrom.getTime() <= parsedTo.getTime()) {
+    if (parsedFrom && parsedTo && parsedFrom.getTime() <= parsedTo.getTime() && parsedFrom.getTime() <= today.getTime()) {
       const cappedTo = parsedTo.getTime() > today.getTime() ? today : parsedTo;
       const earliestAllowed = addUtcDays(cappedTo, -365);
       start = parsedFrom.getTime() < earliestAllowed.getTime() ? earliestAllowed : parsedFrom;
@@ -343,7 +347,7 @@ function scalar(value: string | string[] | undefined) {
 function parseDateOnly(value: string) {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return null;
   const date = new Date(`${value}T00:00:00.000Z`);
-  return Number.isNaN(date.getTime()) ? null : date;
+  return Number.isNaN(date.getTime()) || toDateOnly(date) !== value ? null : date;
 }
 
 function utcStartOfDay(value: Date) {

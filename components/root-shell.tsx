@@ -88,7 +88,7 @@ export function RootShell({ children }: { children: ReactNode }) {
 
   return (
     <ProductCapabilityNavigationGate>
-      <div className="salsys-meta-sidebar-shell">
+      <div className={`salsys-meta-sidebar-shell${pathname === '/home' ? ' salsys-home-reference' : ''}`}>
         <CanonicalRouteBridge />
         <DesktopHoverSidebarV3 />
         <div className="legacy-shell-host">
