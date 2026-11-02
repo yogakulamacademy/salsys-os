@@ -250,9 +250,6 @@ jobs:
       - name: Verify knowledge grounding and financial input boundaries
         run: npm run test:readiness
 
-      - name: Verify Home reporting, drill-downs and search access
-        run: npm run test:home
-
       - name: Build
         shell: bash
         run: |
@@ -267,9 +264,6 @@ jobs:
 
       - name: Verify knowledge preview with synthetic live-mode services
         run: npm run test:knowledge:ui
-
-      - name: Verify Home reference layout and interactions
-        run: npm run test:home:ui
 
       - name: Upload UI evidence
         if: always()

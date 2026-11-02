@@ -65,9 +65,9 @@ test('lead queue precedes booking cards and retains table headers for an empty v
 
 test('metric dialog traps focus, closes with Escape and restores its trigger', async ({ page }) => {
   await page.goto('/home');
-  const trigger = page.locator('.home-kpi').first().getByRole('link');
+  const trigger = page.getByRole('button', { name: 'Inspect Leads', exact: true });
   await trigger.click();
-  const dialog = page.getByRole('dialog', { name: 'New leads', exact: true });
+  const dialog = page.getByRole('dialog', { name: 'Leads', exact: true });
   await expect(dialog).toBeVisible();
   await expect.poll(() => dialog.evaluate(el => el.contains(document.activeElement))).toBe(true);
   for (let i = 0; i < 12; i++) {
