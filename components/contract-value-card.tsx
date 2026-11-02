@@ -55,7 +55,7 @@ export async function ContractValueCard({ leadId }: { leadId: string }) {
   if (!useMockData) {
     try {
       const workspace = await getCurrentWorkspaceContext();
-      const role = workspace.organizationRole ?? workspace.activeWorkspace?.role ?? '';
+      const role = workspace.activeWorkspace?.role ?? '';
       canAdjust = role === 'owner' || role === 'admin';
     } catch {
       canAdjust = false;
