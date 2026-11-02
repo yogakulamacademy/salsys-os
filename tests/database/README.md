@@ -59,7 +59,7 @@ The exact deployed pre-patch definitions were recovered read-only from the produ
 
 ## Current evidence boundary
 
-On branch head `1e672345ea79ba22c67fcba2f1b86206c58c7fd6`, the independent PostgreSQL financial job passed **62 tests, 62 passed, 0 failed**, and CodeQL #733 passed. Later commits only update this README and the financial-association documentation; executable application, migration and test logic is unchanged. Those documentation-only heads still require their own CI/CodeQL result before merge consideration.
+On executable branch head `1e672345ea79ba22c67fcba2f1b86206c58c7fd6`, the independent PostgreSQL financial job passed **62 tests, 62 passed, 0 failed**, and CodeQL #733 passed. Subsequent commits only update this README and the financial-association documentation; executable application, migration and test logic is unchanged. The final documentation-only head still requires its own CI/CodeQL result before merge consideration.
 
 The six draft migrations covered by this branch are:
 
