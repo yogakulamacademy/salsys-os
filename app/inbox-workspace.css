@@ -1,20 +1,20 @@
 /* SalsysOS Phase 6F.1 — Unified Inbox visual layer */
 
 .conversations-polish {
-  --inbox-canvas: #f8f7fc;
-  --inbox-surface: #ffffff;
-  --inbox-border: #e6e3ef;
-  --inbox-text: #24213c;
-  --inbox-muted: #67627a;
-  --inbox-primary: #5743c5;
-  --inbox-primary-soft: #ede9fa;
+  --inbox-canvas: var(--app-bg);
+  --inbox-surface: var(--app-surface);
+  --inbox-border: var(--app-border);
+  --inbox-text: var(--app-text-strong);
+  --inbox-muted: var(--app-text-muted);
+  --inbox-primary: var(--app-brand-700);
+  --inbox-primary-soft: var(--app-brand-50);
 }
 
 .conversations-polish .conversation-workspace {
   border-color: var(--inbox-border) !important;
   border-radius: 14px !important;
   background: var(--inbox-surface) !important;
-  box-shadow: 0 10px 30px rgba(36, 33, 60, 0.055) !important;
+  box-shadow: none;
 }
 
 .conversations-polish .conversation-sidebar {
@@ -22,7 +22,7 @@
 }
 
 .conversations-polish .conversation-sidebar > div:first-child {
-  background: linear-gradient(180deg, #fff 0%, #fbfaff 100%);
+  background: var(--app-surface);
 }
 
 .conversations-polish .conversation-sidebar a[aria-current='page'],
@@ -94,34 +94,31 @@
   border: 1px solid rgba(188, 117, 24, 0.18);
 }
 
-@media (min-width: 1171px) {
-  .conversations-polish .conversation-workspace {
-    grid-template-columns: 320px minmax(420px, 1fr) 320px !important;
-  }
+.conversations-polish .conversation-workspace {
+  display: grid;
+  grid-template-columns: minmax(280px, 340px) minmax(0, 1fr);
+  height: max(440px, calc(100dvh - 186px));
+  min-height: 0;
+  overflow: hidden;
+  box-shadow: none;
 }
-
-@media (min-width: 1500px) {
-  .conversations-polish .conversation-workspace {
-    grid-template-columns: 332px minmax(500px, 1fr) 336px !important;
-  }
+.conversations-polish .conversation-workspace.inbox-context-open {
+  grid-template-columns: minmax(280px, 320px) minmax(320px, 1fr) 290px;
 }
-
-@media (max-width: 1170px) and (min-width: 621px) {
-  .conversations-polish .conversation-workspace {
-    grid-template-columns: 300px minmax(0, 1fr) !important;
-  }
-}
-
+.conversations-polish .conversation-workspace > div { min-height: 0; }
+.conversations-polish .inbox-page-heading h1 { font-size: 24px; margin-top: 3px; }
+.inbox-unselected { background: var(--app-surface-soft); }
+.inbox-unselected .ui-empty-state { background: transparent; }
+.conversation-sidebar .ui-empty-state { flex: 1; min-height: 250px; }
 @media (max-width: 620px) {
   .conversations-polish .conversation-workspace {
-    border-radius: 12px !important;
-    box-shadow: none !important;
+    display: block;
+    height: max(420px, calc(100dvh - 190px));
+    min-height: 0;
+    border-radius: 10px;
   }
-
-  .conversations-polish .conversation-sidebar > div:first-child {
-    padding-left: 14px;
-    padding-right: 14px;
-  }
+  .conversations-polish .conversation-workspace > div { height: 100%; }
+  .conversations-polish .conversation-workspace > div.fixed { height: auto; }
 }
 
 html.dark .conversations-polish {

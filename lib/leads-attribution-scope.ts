@@ -9,6 +9,7 @@ import {
 import { createClient } from "@/lib/supabase/server";
 import { requireCurrentOrganizationId } from "@/lib/workspace";
 import type { LeadOverview } from "@/types/crm";
+import { withAuthorizedLeadContacts } from "@/lib/lead-list-contacts";
 
 type SearchParamValue = string | string[] | undefined;
 type SearchParamsLike = Record<string, SearchParamValue>;
@@ -102,7 +103,7 @@ export async function getLeadsWorkspacePageWithAttributionScope(
   const paginationRow = asRecord(payload.pagination) ?? {};
 
   return {
-    leads: rows.map(mapLeadRow),
+    leads: await withAuthorizedLeadContacts(supabase, rows.map(mapLeadRow)),
     intelligence: rows.map(mapIntelligenceRow),
     summary: {
       all: toNumber(summaryRow.all),

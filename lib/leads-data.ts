@@ -4,6 +4,7 @@ import { useMockData } from "@/lib/config";
 import { mockLeads } from "@/lib/mock-data";
 import { getLeads } from "@/lib/data";
 import { requireCurrentOrganizationId } from "@/lib/workspace";
+import { withAuthorizedLeadContacts } from "@/lib/lead-list-contacts";
 
 export const LEADS_PAGE_SIZE = 50;
 
@@ -256,9 +257,7 @@ const {
 
   return {
     leads:
-      rows.map(
-        mapLeadRow,
-      ),
+      await withAuthorizedLeadContacts(supabase, rows.map(mapLeadRow)),
     intelligence:
       rows.map(
         mapIntelligenceRow,
@@ -422,12 +421,13 @@ async function getLegacyWorkspacePage(
       ? `${warning} Aging intelligence fallback also failed: ${intelligenceResult.error.message}`
       : warning;
 
-  return buildWorkspacePageFromRows(
+  const page = buildWorkspacePageFromRows(
     leads,
     intelligence,
     filters,
     combinedWarning,
   );
+  return { ...page, leads: await withAuthorizedLeadContacts(supabase, page.leads) };
 }
 
 function getMockWorkspacePage(

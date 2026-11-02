@@ -241,11 +241,29 @@ jobs:
       - name: Typecheck
         run: npm run typecheck
 
+      - name: Verify presentation and secure contact failure states
+        run: npm run test:ui:unit
+
       - name: Build
         shell: bash
         run: |
           set -o pipefail
           npm run build 2>&1 | tee build.log
+
+      - name: Install local UI browser
+        run: npx playwright install --with-deps --only-shell chromium
+
+      - name: Verify UI with synthetic loopback services
+        run: npm run test:ui
+
+      - name: Upload UI evidence
+        if: always()
+        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
+        with:
+          name: ui-evidence
+          path: test-results/
+          if-no-files-found: ignore
+          retention-days: 3
 
       - name: Upload build log
         if: always()

@@ -25,7 +25,7 @@ import { ConversationTeamControls } from "@/components/conversation-team-control
 import { ConversationWorkspaceShell } from "@/components/conversation-workspace-shell";
 import { ConversationsRealtime } from "@/components/conversations-realtime";
 import { ConversationsSidebar } from "@/components/conversations-sidebar";
-import { Notice, StageBadge } from "@/components/ui";
+import { EmptyState, Notice, StageBadge } from "@/components/ui";
 import { WhatsAppTemplateComposer } from "@/components/whatsapp-template-composer";
 import { getConversationsWorkspace } from "@/lib/conversations-data";
 import { getCourses, isMockMode } from "@/lib/data";
@@ -56,11 +56,14 @@ export default async function ConversationsPage({
 
   const {
     conversationSummary,
-    selectedId,
-    selected,
+    selectedId: resolvedSelectedId,
+    selected: resolvedSelected,
     whatsappWindow,
     team,
   } = workspace;
+  // Opening the inbox must not select or mark a customer's thread as read.
+  const selectedId = query.lead ? resolvedSelectedId : undefined;
+  const selected = query.lead ? resolvedSelected : null;
 
   const selectedSummary = selectedId
     ? conversationSummary.find((lead) => lead.id === selectedId) ?? null
@@ -99,20 +102,6 @@ export default async function ConversationsPage({
           canStartWhatsApp,
         })
       : null;
-
-  const activeConversations = conversationSummary.filter(
-    (lead) => !isFuture(lead.snoozedUntil),
-  );
-  const attentionCount = activeConversations.filter(
-    (lead) => lead.needsReply || lead.needsFirstContact,
-  ).length;
-  const unreadCount = activeConversations.filter((lead) => lead.unread).length;
-  const priorityCount = activeConversations.filter(
-    (lead) => lead.priority === "urgent" || lead.priority === "high",
-  ).length;
-  const unassignedCount = activeConversations.filter(
-    (lead) => !lead.ownerUserId,
-  ).length;
 
   const interactionAction = selectedId
     ? logLeadInteractionAction.bind(null, selectedId)
@@ -175,18 +164,8 @@ export default async function ConversationsPage({
   );
 
   const chat = !selected ? (
-    <section className="grid h-full min-h-[560px] place-items-center bg-surface p-8 text-center">
-      <div>
-        <div className="mx-auto grid h-12 w-12 place-items-center rounded-xl bg-brand-50 text-brand-700">
-          <MessageCircle size={20} />
-        </div>
-        <div className="mt-4 text-[14px] font-semibold text-copy-strong">
-          Select a conversation
-        </div>
-        <p className="mt-1 max-w-sm text-[13px] leading-5 text-copy-muted">
-          Review the inquiry, customer context, ownership and next action without leaving the inbox.
-        </p>
-      </div>
+    <section className="inbox-unselected h-full bg-surface">
+      <EmptyState variant="conversation" title="Select a conversation" description="Choose a conversation on the left to see messages and customer details." />
     </section>
   ) : (
     <section className="flex h-full min-h-0 min-w-0 flex-col overflow-hidden bg-surface">
@@ -513,26 +492,20 @@ export default async function ConversationsPage({
 
   return (
     <div className="conversations-polish space-y-4">
-      <ConversationsRealtime />
+      {!mock ? <ConversationsRealtime /> : null}
 
-      <section className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+      <section className="inbox-page-heading flex flex-wrap items-center justify-between gap-3">
         <div>
           <div className="text-[11px] font-semibold uppercase tracking-[0.14em] text-brand-700">
-            Inbox · Admissions Operations
+            Customer conversations
           </div>
           <h1 className="mt-1.5 text-[30px] font-semibold tracking-[-0.035em] text-copy-strong">
-            Conversations
+            Inbox
           </h1>
-          <p className="mt-1 text-[14px] leading-6 text-copy-muted">
-            Work customer conversations with CRM ownership, reply priority and context in one place.
-          </p>
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
-          <InboxMetric label="Needs reply" value={attentionCount} attention={attentionCount > 0} />
-          <InboxMetric label="Unread" value={unreadCount} attention={unreadCount > 0} />
-          <InboxMetric label="Priority" value={priorityCount} attention={priorityCount > 0} />
-          <InboxMetric label="Unassigned" value={unassignedCount} attention={unassignedCount > 0} />
+          <Link href="/follow-ups" className="btn-secondary">Follow-ups</Link>
           <span className="rounded-ui border border-line bg-surface px-2.5 py-2 text-[11px] font-semibold text-copy-muted">
             {inboxModeLabel}
           </span>

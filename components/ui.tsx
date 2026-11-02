@@ -1,4 +1,6 @@
 import type { ReactNode } from 'react';
+import { EmptyArtwork } from '@/components/empty-artwork';
+import { percentageWidth } from '@/lib/ui-format';
 import {
   AlertCircle,
   AlertTriangle,
@@ -188,7 +190,7 @@ export function ChannelBadge({ channel }: { channel: Channel }) {
 }
 
 export function ProgressBar({ value, max = 100 }: { value: number; max?: number }) {
-  const width = Math.max(3, Math.min(100, (value / max) * 100));
+  const width = percentageWidth(value, max);
   return <div className="h-2 overflow-hidden rounded-full bg-surface-muted"><div className="h-full rounded-full bg-brand-700" style={{ width: `${width}%` }} /></div>;
 }
 
@@ -198,20 +200,22 @@ export function EmptyState({
   icon,
   action,
   compact = false,
+  variant = 'list',
 }: {
   title: string;
   description: string;
   icon?: ReactNode;
   action?: ReactNode;
   compact?: boolean;
+  variant?: 'list' | 'conversation' | 'connection';
 }) {
   return (
-    <div className={`card-pad text-center ${compact ? '!p-5' : ''}`}>
+    <div className={`ui-empty-state ${compact ? 'ui-empty-state-compact' : ''}`}>
       {icon ? (
         <div className="mx-auto mb-3 grid h-10 w-10 place-items-center rounded-xl bg-surface-muted text-copy-subtle">
           {icon}
         </div>
-      ) : null}
+      ) : <EmptyArtwork variant={variant} />}
       <div className="text-sm font-semibold text-copy-strong">{title}</div>
       <div className="mx-auto mt-1 max-w-md text-sm leading-5 text-copy-muted">{description}</div>
       {action ? <div className="mt-4 flex justify-center">{action}</div> : null}

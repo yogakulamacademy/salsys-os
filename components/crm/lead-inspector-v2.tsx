@@ -25,7 +25,8 @@ import {
   X,
   Zap,
 } from "lucide-react";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useModalFocus } from "@/components/use-modal-focus";
 
 type InspectorTab = "overview" | "journey" | "activity";
 type Availability = "available" | "empty" | "unavailable";
@@ -231,6 +232,8 @@ export function LeadInspector({
   const [refreshing, setRefreshing] = useState(false);
   const [loadedAt, setLoadedAt] = useState(0);
   const [followupOpen, setFollowupOpen] = useState(false);
+  const dialogRef = useRef<HTMLDivElement | null>(null);
+  useModalFocus(mounted && Boolean(leadId), dialogRef, () => followupOpen ? setFollowupOpen(false) : onClose());
   const [followupTitle, setFollowupTitle] = useState("");
   const [followupDueAt, setFollowupDueAt] = useState("");
   const [followupDescription, setFollowupDescription] = useState("");
@@ -328,27 +331,6 @@ export function LeadInspector({
     };
   }, [leadId, loadedAt, refreshLead]);
 
-  useEffect(() => {
-    if (!leadId) return;
-    const previous = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-
-    function onKeyDown(event: KeyboardEvent) {
-      if (event.key !== "Escape") return;
-      if (followupOpen) {
-        setFollowupOpen(false);
-        return;
-      }
-      onClose();
-    }
-
-    window.addEventListener("keydown", onKeyDown);
-    return () => {
-      document.body.style.overflow = previous;
-      window.removeEventListener("keydown", onKeyDown);
-    };
-  }, [leadId, followupOpen, onClose]);
-
   async function submitFollowup(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!leadId || !followupTitle.trim() || !followupDueAt) return;
@@ -417,10 +399,13 @@ export function LeadInspector({
     <div
       className="fixed inset-0 z-[150] flex justify-end"
       role="dialog"
+      ref={dialogRef}
+      tabIndex={-1}
       aria-modal="true"
       aria-label="Lead Inspector"
     >
       <button
+        data-modal-backdrop tabIndex={-1} aria-hidden="true"
         type="button"
         onClick={onClose}
         aria-label="Close Lead Inspector"

@@ -8,7 +8,7 @@ import {
   UsersRound,
 } from "lucide-react";
 
-import { PageHeader } from "@/components/ui";
+import { EmptyState, PageHeader } from "@/components/ui";
 import { getLeads } from "@/lib/data";
 import { createClient } from "@/lib/supabase/server";
 import { requireCurrentOrganizationId } from "@/lib/workspace";
@@ -258,10 +258,8 @@ export default async function Customer360Page() {
                 })
               ) : (
                 <tr>
-                  <td colSpan={6} className="px-6 py-12 text-center">
-                    <UsersRound size={20} className="mx-auto text-copy-subtle" />
-                    <div className="mt-2 text-sm font-semibold text-copy-strong">No canonical customer records are available</div>
-                    <div className="mt-1 text-xs text-copy-subtle">Use Leads while identity resolution data is unavailable or no Person links exist yet.</div>
+                  <td colSpan={6}>
+                    <EmptyState title="No customer profiles available" description="Profiles appear when enquiries are linked to verified customer identities. Your enquiries remain available in Leads." action={<Link href="/leads" className="btn-secondary">Open leads</Link>} />
                   </td>
                 </tr>
               )}

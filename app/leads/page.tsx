@@ -89,10 +89,6 @@ export default async function LeadsPage({ searchParams }: LeadsPageProps) {
 
       <LeadsAttributionScopeBar scope={attributionScope} />
 
-      <RecentBookingActivity />
-
-      <TeamAssignmentPanel returnTo="/leads" />
-
       <LeadsCleanTable
         leads={workspace.leads}
         intelligence={workspace.intelligence}
@@ -102,6 +98,12 @@ export default async function LeadsPage({ searchParams }: LeadsPageProps) {
         summary={workspace.summary}
         pagination={workspace.pagination}
       />
+
+      <TeamAssignmentPanel returnTo="/leads" />
+      <details className="ui-panel overflow-hidden">
+        <summary className="cursor-pointer px-5 py-4 text-sm font-semibold text-copy-strong">Recent booking activity</summary>
+        <RecentBookingActivity />
+      </details>
     </div>
   );
 }

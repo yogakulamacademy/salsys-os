@@ -403,7 +403,7 @@ export default async function AutomationOverviewPage() {
         <div className="rounded-xl border border-[#e4eae6] bg-white">
           <div className="flex items-center justify-between border-b border-[#e4eae6] px-5 py-4">
             <h2 className="text-[16px] font-semibold">Your channels</h2>
-            <Link href="/automation/audits" className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-[#216551]">Manage providers <ArrowRight size={12} /></Link>
+            <Link href="/settings/integrations" className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-[#216551]">Manage providers <ArrowRight size={12} /></Link>
           </div>
           <div className="flex items-center gap-3 border-b border-[#e4eae6] px-5 py-4">
             <span className="grid h-8 w-8 place-items-center rounded-lg bg-[#ecf5ed] text-[#216551]"><MessageCircleMore size={16} /></span>

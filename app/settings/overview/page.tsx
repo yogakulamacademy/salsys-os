@@ -47,7 +47,7 @@ export default async function SettingsOverviewPage() {
           href="/settings"
           icon={<SlidersHorizontal size={19} />}
           title="CRM Rules"
-          description="Forecast probabilities, pipeline aging thresholds, environment state and settings audit."
+          description="Pipeline planning weights, aging thresholds, environment state and settings audit."
         />
 
         {admin ? (
