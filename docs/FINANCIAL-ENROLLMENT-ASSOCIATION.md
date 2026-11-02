@@ -30,14 +30,17 @@ The second migration transforms exactly one reviewed legacy association statemen
 
 The applied processor source was traced read-only to the authoritative Supabase migration ledger entry `20261019154130 / event_lifecycle_projection_v1`. That ledger statement is 35,391 bytes with MD5 `79b3de6661e0551f862bdbd4750d41b6`.
 
-The two deployed definitions relevant to this patch were captured verbatim into repository test fixtures:
+The deployed definitions relevant to this patch and its replay behavior were captured verbatim into repository test fixtures:
 
 - `tests/database/process-enrollment-raw-event-v1.production-baseline.sql` — 8,799 bytes, MD5 `4ba0b10a80e0c205a3f6cc07bffa7c16`;
+- `tests/database/process-payment-raw-event-v1.production-baseline.sql` — 6,627 bytes, MD5 `9a002d3693411bd548a58fbd7a937de0`;
 - `tests/database/process-tracking-raw-event-v1.production-baseline.sql` — 4,479 bytes, MD5 `6fa37e3bfe601ed724263c05d7678e39`.
 
-Live readback also confirmed both functions are owned by `postgres`, are `SECURITY DEFINER`, deny anonymous/authenticated execution and grant execution to `service_role`. The application durable-event path calls the dispatcher through the server-side admin client.
+Live readback confirmed all three are owned by `postgres`, are `SECURITY DEFINER`, deny anonymous/authenticated execution and grant execution to `service_role`. The application durable-event path calls the dispatcher through the server-side admin client.
 
-`tests/readiness/financial-processor-baseline.test.cjs` checks the captured byte/hash identity and applies the reviewed source transformation to the complete deployed enrollment definition, while the independent PostgreSQL suite still uses a reduced executable adapter for transactional behavior. This closes the previous source-provenance ambiguity around the processor body; it still does not equal a clean full-schema restore from every historical migration.
+The payment processor preserves an already-paid status, keeps an existing enrollment when no newer supported enrollment is resolved, rewrites amount/currency from a provider event, and refreshes provider-event evidence metadata. The refund guard therefore deliberately permits a same-facts replay but rejects an event that would rewrite protected financial facts after a refund.
+
+`tests/readiness/financial-processor-baseline.test.cjs` checks the captured byte/hash identity, verifies those payment replay semantics from the deployed source, and applies the reviewed source transformation to the complete deployed enrollment definition. The independent PostgreSQL suite still uses reduced executable foundations for transactional behavior. This closes the previous source-provenance ambiguity around the processors; it still does not equal a clean full-schema restore from every historical migration.
 
 No #440 migration has been applied to production. The four draft migration versions remain absent from the production migration ledger and their new columns/functions/tables remain absent from the live schema.
 
