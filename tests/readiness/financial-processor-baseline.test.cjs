@@ -7,11 +7,13 @@ const enrollmentPath = 'tests/database/process-enrollment-raw-event-v1.productio
 const paymentPath = 'tests/database/process-payment-raw-event-v1.production-baseline.sql';
 const dispatcherPath = 'tests/database/process-tracking-raw-event-v1.production-baseline.sql';
 const migrationPath = 'supabase/migrations/20261102115600_enrollment_processor_payment_association_v1.sql';
+const paymentEvidenceMigrationPath = 'supabase/migrations/20261102161000_enrollment_verified_payment_evidence_v1.sql';
 
 const enrollment = fs.readFileSync(enrollmentPath, 'utf8');
 const payment = fs.readFileSync(paymentPath, 'utf8');
 const dispatcher = fs.readFileSync(dispatcherPath, 'utf8');
 const migration = fs.readFileSync(migrationPath, 'utf8');
+const paymentEvidenceMigration = fs.readFileSync(paymentEvidenceMigrationPath, 'utf8');
 
 const md5 = value => crypto.createHash('md5').update(value, 'utf8').digest('hex');
 const occurrences = (value, needle) => value.split(needle).length - 1;
@@ -30,6 +32,14 @@ const anchor = "  if v_enrollment_reference is null then raise exception 'enroll
 const legacyUpdate = `    update public.payments p set enrollment_id=v_enrollment_id,updated_at=now()\n    where p.organization_id=p_organization_id and p.lead_id=v_lead_id and p.enrollment_id is null\n      and p.metadata->>'booking_reference'=v_booking_reference;`;
 const leadLock = `  perform 1 from public.leads where id=v_lead_id and organization_id=p_organization_id for update;\n  if not found then raise exception 'enrollment lead tenant mismatch'; end if;`;
 const replacement = `    perform public.associate_booking_payments_enrollment_v1(\n      p_organization_id,v_lead_id,v_enrollment_id,v_booking_reference,p_raw_event_id\n    );`;
+const paymentEvidenceAnchor = `  v_currency := upper(nullif(btrim(v_payload->>'currency'),''));\n\n  perform pg_advisory_xact_lock(hashtextextended('enrollment-ref:'||p_organization_id::text||':'||v_source.source_system||':'||v_enrollment_reference,0));`;
+const paymentEvidenceReplacement = `  v_currency := upper(nullif(btrim(v_payload->>'currency'),''));\n\n  if lower(coalesce(v_raw.metadata->>'confirmation_basis','')) = 'verified_payment' then\n    perform app_private.assert_verified_payment_enrollment_v1(\n      p_organization_id,\n      v_lead_id,\n      v_booking_reference,\n      nullif(v_raw.metadata->>'payment_reference',''),\n      nullif(v_raw.metadata->>'payment_provider',''),\n      v_currency\n    );\n  end if;\n\n  perform pg_advisory_xact_lock(hashtextextended('enrollment-ref:'||p_organization_id::text||':'||v_source.source_system||':'||v_enrollment_reference,0));`;
+
+function associationPatchedEnrollment() {
+  return enrollment
+    .replace(anchor, `${anchor}\n\n${leadLock}`)
+    .replace(legacyUpdate, replacement);
+}
 
 test('captured production processor definitions retain exact reviewed hashes', () => {
   assert.equal(Buffer.byteLength(enrollment, 'utf8'), production.enrollment.bytes);
@@ -47,10 +57,8 @@ test('the real production enrollment baseline has exactly one reviewed patch tar
   assert.match(enrollment, /insert into public\.touchpoints\(/);
 });
 
-test('the patch logic transforms the real production processor without rewriting surrounding behavior', () => {
-  const patched = enrollment
-    .replace(anchor, `${anchor}\n\n${leadLock}`)
-    .replace(legacyUpdate, replacement);
+test('the association patch transforms the real production processor without rewriting surrounding behavior', () => {
+  const patched = associationPatchedEnrollment();
 
   assert.notEqual(patched, enrollment);
   assert.equal(occurrences(patched, legacyUpdate), 0);
@@ -59,6 +67,46 @@ test('the patch logic transforms the real production processor without rewriting
   assert.match(patched, /perform public\.upsert_tracking_entity_reference_v1\(/);
   assert.match(patched, /insert into public\.touchpoints\(/);
   assert.match(patched, /return jsonb_build_object\('ok',true,'processed',true/);
+});
+
+test('the verified-payment patch applies exactly once after the reviewed association patch', () => {
+  const associationPatched = associationPatchedEnrollment();
+  assert.equal(occurrences(associationPatched, paymentEvidenceAnchor), 1);
+  assert.equal(occurrences(associationPatched, paymentEvidenceReplacement), 0);
+
+  const fullyPatched = associationPatched.replace(
+    paymentEvidenceAnchor,
+    paymentEvidenceReplacement,
+  );
+
+  assert.equal(occurrences(fullyPatched, paymentEvidenceAnchor), 0);
+  assert.equal(occurrences(fullyPatched, paymentEvidenceReplacement), 1);
+  assert.equal(occurrences(fullyPatched, replacement), 1);
+  assert.equal(occurrences(fullyPatched, leadLock), 1);
+  assert.match(fullyPatched, /confirmation_basis',''\)\) = 'verified_payment'/);
+  assert.match(fullyPatched, /app_private\.assert_verified_payment_enrollment_v1/);
+  assert.match(fullyPatched, /payment_reference/);
+  assert.match(fullyPatched, /payment_provider/);
+});
+
+test('payment-backed enforcement is conditional and does not make payment universal for all enrollment sources', () => {
+  assert.match(
+    paymentEvidenceMigration,
+    /if lower\(coalesce\(v_raw\.metadata->>'confirmation_basis',''\)\) = 'verified_payment' then/,
+  );
+  assert.doesNotMatch(
+    paymentEvidenceMigration,
+    /required_fields.*payment_reference/i,
+  );
+  assert.match(
+    paymentEvidenceMigration,
+    /p\.status = 'paid'::public\.payment_status/,
+  );
+  assert.match(
+    paymentEvidenceMigration,
+    /p\.payment_kind <> 'refund'::public\.payment_kind/,
+  );
+  assert.match(paymentEvidenceMigration, /p\.amount > 0/);
 });
 
 test('the deployed payment processor replay semantics match the financial guard tests', () => {
@@ -84,11 +132,17 @@ test('the captured dispatcher still routes payment and enrollment events through
   assert.match(dispatcher, /v_raw\.event_family='enrollment'/);
 });
 
-test('the migration stays fail-closed around the reviewed production patch target', () => {
+test('both enrollment migrations stay fail-closed around the reviewed production patch targets', () => {
   assert.match(migration, /Reviewed enrollment\/dispatcher processor baseline is required/);
   assert.match(migration, /Trusted processor ownership must match the private association helper owner/);
   assert.match(migration, /Expected exactly one reviewed enrollment association and lead-lock anchor/);
   assert.match(migration, /associate_booking_payments_enrollment_v1/);
   assert.match(migration, /revoke all on function public\.process_enrollment_raw_event_v1/);
   assert.match(migration, /grant execute on function public\.process_tracking_raw_event_v1\(uuid,uuid\) to service_role/);
+
+  assert.match(paymentEvidenceMigration, /Reviewed enrollment processor baseline is required before verified-payment enforcement/);
+  assert.match(paymentEvidenceMigration, /Enrollment processor and verified-payment helper ownership must match/);
+  assert.match(paymentEvidenceMigration, /Expected reviewed enrollment payment-association and lead-lock baseline/);
+  assert.match(paymentEvidenceMigration, /revoke all on function public\.process_enrollment_raw_event_v1/);
+  assert.match(paymentEvidenceMigration, /grant execute on function public\.process_enrollment_raw_event_v1\(uuid,uuid\)\s+to service_role/);
 });
