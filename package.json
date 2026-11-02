@@ -88,7 +88,8 @@
     "test:journey": "node --test tests/growth/*.test.cjs",
     "test:readiness": "node --test tests/readiness/*.test.cjs",
     "test:knowledge:ui": "playwright test --config=playwright.knowledge.config.ts",
-    "test:financial:ui": "playwright test --config=playwright.financial.config.ts"
+    "test:financial:ui": "playwright test --config=playwright.financial.config.ts",
+    "test:financial:db": "node --test tests/database/refund-concurrency.test.mjs"
   },
   "dependencies": {
     "@google-analytics/data": "^7.2.0",
@@ -108,6 +109,7 @@
     "@types/react": "^19.1.16",
     "@types/react-dom": "^19.1.9",
     "autoprefixer": "^10.4.21",
+    "pg": "8.23.1",
     "postcss": "^8.5.32",
     "tailwindcss": "^3.4.17",
     "typescript": "^5.9.2"
