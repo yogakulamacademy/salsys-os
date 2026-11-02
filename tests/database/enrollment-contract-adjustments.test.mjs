@@ -166,11 +166,17 @@ async function fixture(run, { seedPayment = true } = {}) {
     await owner.query(foundation);
     await owner.query(migration);
     await owner.query(
-      `insert into public.organizations(id) values($1),($2);
-       insert into public.leads(id,organization_id) values($3,$1);
-       insert into public.enrollments(id,organization_id,lead_id,total_value,currency)
-       values($4,$1,$3,1000,'USD'),($5,$1,$3,null,null);`,
-      [org, otherOrg, lead, enrollment, emptyEnrollment],
+      `insert into public.organizations(id) values($1),($2)`,
+      [org, otherOrg],
+    );
+    await owner.query(
+      `insert into public.leads(id,organization_id) values($1,$2)`,
+      [lead, org],
+    );
+    await owner.query(
+      `insert into public.enrollments(id,organization_id,lead_id,total_value,currency)
+       values($1,$2,$3,1000,'USD'),($4,$2,$3,null,null)`,
+      [enrollment, org, lead, emptyEnrollment],
     );
     if (seedPayment) {
       await owner.query(
