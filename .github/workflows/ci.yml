@@ -247,6 +247,9 @@ jobs:
       - name: Verify enquiry journey evidence and privacy projection
         run: npm run test:journey
 
+      - name: Verify knowledge grounding and financial input boundaries
+        run: npm run test:readiness
+
       - name: Build
         shell: bash
         run: |
@@ -258,6 +261,9 @@ jobs:
 
       - name: Verify UI with synthetic loopback services
         run: npm run test:ui
+
+      - name: Verify knowledge preview with synthetic live-mode services
+        run: npm run test:knowledge:ui
 
       - name: Upload UI evidence
         if: always()

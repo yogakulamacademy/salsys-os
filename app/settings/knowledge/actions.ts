@@ -6,6 +6,27 @@ import { redirect } from 'next/navigation';
 import { useMockData } from '@/lib/config';
 import { createClient } from '@/lib/supabase/server';
 import { requireCurrentOrganizationId } from '@/lib/workspace';
+import { inspectKnowledgeMatches } from '@/lib/knowledge-evidence';
+
+export type KnowledgePreviewResult = { state: 'idle' | 'error' | 'empty' | 'matched'; message: string; matches?: Array<{ documentId: string; title: string; version: number | null; validUntil: string | null; excerpt: string }> };
+
+/** Read-only preview of the same approved, current tenant retrieval used by Co-Pilot. */
+export async function previewKnowledgeAction(formData: FormData): Promise<KnowledgePreviewResult> {
+  if (useMockData) return { state: 'error', message: 'Demo mode does not run live knowledge retrieval.' };
+  const raw = formData.get('query');
+  if (typeof raw !== 'string' || !raw.trim() || raw.trim().length > 500) return { state: 'error', message: 'Enter a question between 1 and 500 characters.' };
+  const { supabase, organizationId } = await currentContext();
+  try {
+    const { data, error } = await supabase.rpc('search_organization_knowledge_v1', { p_organization_id: organizationId, p_query: raw.trim(), p_limit: 6 });
+    if (error) return { state: 'error', message: 'Knowledge retrieval is unavailable. Retry; this is not a no-match result.' };
+    const checked = inspectKnowledgeMatches(data);
+    if (!checked.ok) return { state: 'error', message: checked.error };
+    if (!checked.matches.length) return { state: 'empty', message: 'No approved, currently eligible knowledge matched this question. Add or review a source-backed answer; this does not prove the answer is absent from your business.' };
+    return { state: 'matched', message: 'Approved knowledge retrieved. This preview makes no AI call and sends no message.', matches: checked.matches.map(match => ({ documentId: match.document_id, title: match.title, version: checked.evidence.find(e => e.documentId === match.document_id)?.version ?? null, validUntil: match.valid_until, excerpt: match.content.slice(0, 600) })) };
+  } catch {
+    return { state: 'error', message: 'Knowledge retrieval is unavailable. Retry; this is not a no-match result.' };
+  }
+}
 
 function textValue(formData: FormData, key: string) {
   return String(formData.get(key) ?? '').trim();

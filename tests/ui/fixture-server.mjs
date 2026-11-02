@@ -5,12 +5,18 @@ const userId='00000000-0000-4000-8000-000000000001';
 const organizationId='00000000-0000-4000-8000-000000000002';
 const user={id:userId,aud:'authenticated',role:'authenticated',email:'reviewer@example.test',app_metadata:{provider:'email'},user_metadata:{},created_at:'2026-01-01T00:00:00Z'};
 const workspace={organization_id:organizationId,active_organization_id:organizationId,organization_name:'Demo Academy',organization_slug:'demo-academy',role:'admin',workspace_codes:['sales','marketing','intelligence','operations','automation','system','performance'],organization_status:'active'};
-const server=http.createServer((req,res)=>{
+let knowledgeScenario='empty';
+const server=http.createServer(async(req,res)=>{
   res.setHeader('Content-Type','application/json');
   res.setHeader('Access-Control-Allow-Origin',`http://127.0.0.1:${process.env.UI_TEST_PORT || 3107}`);
   res.setHeader('Access-Control-Allow-Headers','authorization,apikey,content-type,x-client-info');
   if(req.method==='OPTIONS'){res.end('{}');return;}
   const url=new URL(req.url,'http://127.0.0.1:3108');
+  if(url.pathname==='/__knowledge_scenario'){
+    const scenario=url.searchParams.get('state');
+    if(!['empty','matched','library-error'].includes(scenario)){res.statusCode=400;res.end('{}');return;}
+    knowledgeScenario=scenario;res.end('{}');return;
+  }
   let result=[];
   if(url.pathname==='/auth/v1/user')result=user;
   else if(url.pathname==='/rest/v1/rpc/get_current_workspace_context_v1')result=workspace;
@@ -20,6 +26,15 @@ const server=http.createServer((req,res)=>{
   else if(/\/rpc\/(?:can_|organization_has_capability)/.test(url.pathname))result=true;
   else if(url.pathname==='/rest/v1/organization_onboarding')result={status:'completed',enforce_on_sign_in:false};
   else if(url.pathname==='/rest/v1/organization_capabilities')result=[{capability_code:'education_core'},{capability_code:'education_catalog_sync'}];
+  else if(url.pathname==='/rest/v1/knowledge_documents'){
+    if(knowledgeScenario==='library-error'){res.statusCode=503;res.end(JSON.stringify({code:'synthetic_unavailable',message:'Synthetic knowledge library unavailable'}));return;}
+    if(knowledgeScenario==='matched')result=[{id:'50000000-0000-4000-8000-000000000001',title:'Synthetic transfer policy',category:'transfers',status:'approved',content:'Synthetic transfer guidance for preview tests only.',version:2,valid_from:null,valid_until:null,approved_at:'2026-11-01T00:00:00Z',created_at:'2026-11-01T00:00:00Z',updated_at:'2026-11-01T00:00:00Z'}];
+  }
+  else if(url.pathname==='/rest/v1/rpc/search_organization_knowledge_v1'){
+    let raw='';for await(const chunk of req)raw+=chunk;const body=JSON.parse(raw||'{}');
+    if(body.p_query==='fail'){res.statusCode=503;res.end(JSON.stringify({code:'synthetic_unavailable',message:'Synthetic retrieval unavailable'}));return;}
+    if(knowledgeScenario==='matched'&&body.p_query!=='no-match')result=[{chunk_id:'40000000-0000-4000-8000-000000000001',document_id:'50000000-0000-4000-8000-000000000001',title:'Synthetic transfer policy',category:'transfers',content:'Synthetic transfer guidance for preview tests only.',rank:.5,valid_until:null,metadata:{document_version:2}}];
+  }
   else if(url.pathname==='/rest/v1/profiles')result={full_name:'Demo reviewer',role:'admin',active:true};
   else if(req.headers.accept?.includes('application/vnd.pgrst.object+json'))result=null;
   res.end(JSON.stringify(result));

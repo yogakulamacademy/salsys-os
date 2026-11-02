@@ -11,6 +11,7 @@ import {
   WandSparkles,
 } from "lucide-react";
 import { useState, useTransition } from "react";
+import { KnowledgeEvidenceList } from '@/components/knowledge-evidence-list';
 
 import {
   generateCopilotReplyAction,
@@ -168,7 +169,7 @@ export function ConversationCopilot({
                     <CheckCircle2 size={11} className="mt-0.5 shrink-0 text-success" />
                     <span>
                       {result.knowledgeUsed > 0
-                        ? `${result.knowledgeUsed} approved organization knowledge match${result.knowledgeUsed === 1 ? "" : "es"} supported this request.`
+                        ? `${result.knowledgeUsed} approved organization knowledge match${result.knowledgeUsed === 1 ? "" : "es"} retrieved for this draft.`
                         : "No approved organization knowledge matched this request; organization-specific facts must still be supported by live CRM data rather than older conversation claims."}
                     </span>
                   </div>
@@ -178,6 +179,7 @@ export function ConversationCopilot({
                 </div>
               </div>
 
+              <KnowledgeEvidenceList evidence={result.knowledgeEvidence} />
               {result.risk !== "low" ? (
                 <div className="flex items-start gap-2 rounded-lg border border-amber-100 bg-amber-50 px-3 py-2 text-[9px] leading-4 text-amber-800 dark:border-amber-900/40 dark:bg-amber-950/20 dark:text-amber-300">
                   <ShieldAlert size={12} className="mt-0.5 shrink-0" />

@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 
 import { useMockData } from "@/lib/config";
 import { createClient } from "@/lib/supabase/server";
+import { parsePaymentAmount } from "@/lib/payment-input";
 
 const PAYMENT_KINDS = ["deposit", "balance", "full", "other"] as const;
 type VerifiedPaymentKind = (typeof PAYMENT_KINDS)[number];
@@ -12,13 +13,6 @@ type VerifiedPaymentKind = (typeof PAYMENT_KINDS)[number];
 function textValue(formData: FormData, key: string) {
   const value = String(formData.get(key) ?? "").trim();
   return value || null;
-}
-
-function numberValue(formData: FormData, key: string) {
-  const raw = textValue(formData, key);
-  if (raw === null) return null;
-  const value = Number(raw);
-  return Number.isFinite(value) ? value : null;
 }
 
 function currencyValue(formData: FormData, key: string) {
@@ -49,13 +43,14 @@ export async function reportPaymentClaimAction(
     redirect(`/leads/${leadId}?notice=mock-payment-claim`);
   }
 
-  const amount = numberValue(formData, "claimed_amount");
+  const parsedAmount = parsePaymentAmount(formData.get("claimed_amount"));
+  const amount = parsedAmount.state === 'valid' ? parsedAmount.value : null;
   const currency = currencyValue(formData, "claimed_currency");
 
-  if (amount !== null && amount <= 0) {
+  if (parsedAmount.state === 'invalid') {
     redirect(
       `/leads/${leadId}?error=${encodeURIComponent(
-        "Claimed amount must be greater than zero.",
+        "Enter a positive claimed amount with at most two decimal places, or leave it blank.",
       )}`,
     );
   }
@@ -94,7 +89,8 @@ export async function verifyPaymentAction(
     redirect(`/leads/${leadId}?notice=mock-payment-verified`);
   }
 
-  const amount = numberValue(formData, "payment_amount");
+  const parsedAmount = parsePaymentAmount(formData.get("payment_amount"));
+  const amount = parsedAmount.state === 'valid' ? parsedAmount.value : null;
   const currency = currencyValue(formData, "payment_currency");
   const kindRaw = textValue(formData, "payment_kind");
   const paymentKind = PAYMENT_KINDS.includes(kindRaw as VerifiedPaymentKind)
@@ -105,7 +101,7 @@ export async function verifyPaymentAction(
   if (amount === null || amount <= 0) {
     redirect(
       `/leads/${leadId}?error=${encodeURIComponent(
-        "Enter a valid verified payment amount.",
+        "Enter a positive verified amount with at most two decimal places.",
       )}`,
     );
   }
@@ -176,14 +172,15 @@ export async function recordRefundAction(
     redirect(`/leads/${leadId}?notice=mock-refund`);
   }
 
-  const amount = numberValue(formData, "refund_amount");
+  const parsedAmount = parsePaymentAmount(formData.get("refund_amount"));
+  const amount = parsedAmount.state === 'valid' ? parsedAmount.value : null;
   const currency = currencyValue(formData, "refund_currency");
   const paidAt = paidAtValue(formData);
 
   if (amount === null || amount <= 0) {
     redirect(
       `/leads/${leadId}?error=${encodeURIComponent(
-        "Enter a valid refund amount.",
+        "Enter a positive refund amount with at most two decimal places.",
       )}`,
     );
   }
