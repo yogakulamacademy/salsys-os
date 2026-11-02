@@ -387,7 +387,7 @@ begin
     v_actor::text,
     'Enrollment contract value adjusted',
     v_reason,
-    jsonb_build_object(
+    v_metadata || jsonb_build_object(
       'organization_id', p_organization_id,
       'enrollment_id', p_enrollment_id,
       'adjustment_id', v_adjustment_id,
@@ -397,7 +397,7 @@ begin
       'amount_delta', v_new_total - v_enrollment.total_value,
       'currency', upper(v_enrollment.currency),
       'cash_changed', false
-    ) || v_metadata
+    )
   );
 
   delete from app_private.enrollment_contract_value_authorizations
