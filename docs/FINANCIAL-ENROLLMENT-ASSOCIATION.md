@@ -84,9 +84,9 @@ This captured provenance improves reproducibility of the exact processor changes
 
 ## Validation status
 
-On exact branch head `1e672345ea79ba22c67fcba2f1b86206c58c7fd6`, the independent PostgreSQL financial job passed **62/62 tests**. That suite includes refund concurrency/replay, late payment-family association, provider replay, configured-capacity enforcement, final-seat concurrency, verified-payment evidence, dynamic processor patching, fail-closed drift checks and private-helper ACLs.
+On exact branch head `1e672345ea79ba22c67fcba2f1b86206c58c7fd6`, the independent PostgreSQL financial job passed **62/62 tests**. That suite includes refund concurrency/replay, late payment-family association, provider replay, configured-capacity enforcement, final-seat concurrency, verified-payment evidence, dynamic processor patching, fail-closed drift checks and private-helper ACLs. CodeQL #733 also passed on that head.
 
-CodeQL #733 passed on that head. The main CI validation had passed contract checks through TypeScript/readiness and was completing build/UI validation when this document was updated; the documentation update creates a newer head that must be validated again before merge consideration.
+The later commits updating only this documentation and the database-test README do not change executable application, migration or test logic. Their own CI/CodeQL run must still complete before merge consideration.
 
 No #440 migration has been applied to production. None of the six draft migration versions should be treated as deployed merely because branch tests pass. No production business data or provider action was performed by this work.
 
