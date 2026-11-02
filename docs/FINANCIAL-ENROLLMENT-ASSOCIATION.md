@@ -84,15 +84,15 @@ This captured provenance improves reproducibility of the exact processor changes
 
 ## Validation status
 
-On exact branch head `1e672345ea79ba22c67fcba2f1b86206c58c7fd6`, the independent PostgreSQL financial job passed **62/62 tests**. That suite includes refund concurrency/replay, late payment-family association, provider replay, configured-capacity enforcement, final-seat concurrency, verified-payment evidence, dynamic processor patching, fail-closed drift checks and private-helper ACLs. CodeQL #733 also passed on that head.
+On exact executable branch head `1e672345ea79ba22c67fcba2f1b86206c58c7fd6`, the independent PostgreSQL financial job passed **62/62 tests**. That suite includes refund concurrency/replay, late payment-family association, provider replay, configured-capacity enforcement, final-seat concurrency, verified-payment evidence, dynamic processor patching, fail-closed drift checks and private-helper ACLs. CodeQL #733 also passed on that head.
 
-The later commits updating only this documentation and the database-test README do not change executable application, migration or test logic. Their own CI/CodeQL run must still complete before merge consideration.
+Subsequent commits update only this documentation and the database-test README; executable application, migration and test logic remains unchanged. The final documentation-only head must still complete its own CI/CodeQL run before merge consideration.
 
 No #440 migration has been applied to production. None of the six draft migration versions should be treated as deployed merely because branch tests pass. No production business data or provider action was performed by this work.
 
 ## Remaining acceptance
 
-The major branch-level gaps still outside this checkpoint are:
+The major gaps still outside this checkpoint are:
 
 - **Real provider + identity/consent integration evidence.** Synthetic/local database proof is not live provider acceptance.
 - **Governed contractual and correction workflow.** Cash truth and contract value are separate. Discounts/scholarships/approved price changes must not masquerade as refunds, and an erroneous cash record must not be repaired by rewriting immutable payment/refund history. The exact append-only correction model remains a separate design/acceptance gate.
