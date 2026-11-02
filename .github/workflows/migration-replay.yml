@@ -40,6 +40,18 @@ jobs:
           cp supabase/recovery/016_lead_contact_logs_baseline.sql supabase/migrations/0155_recovery_lead_contact_logs.sql
           cp supabase/recovery/016_journey_views_baseline.sql supabase/migrations/0156_recovery_journey_views.sql
           cp supabase/recovery/017_payments_tenant_baseline.sql supabase/migrations/0165_recovery_payments_tenant.sql
+          cp supabase/recovery/018_person_journey_source_baseline.sql supabase/migrations/0175_recovery_person_journey_source.sql
+          cp supabase/recovery/019_leads_workspace_baseline.sql supabase/migrations/0185_recovery_leads_workspace.sql
+          cp supabase/recovery/020_attribution_views_baseline.sql supabase/migrations/0195_recovery_attribution_views.sql
+          cp supabase/recovery/023_integration_connections_baseline.sql supabase/migrations/0225_recovery_integration_connections.sql
+          cp supabase/recovery/030_followups_tenant_baseline.sql supabase/migrations/0295_recovery_followups_tenant.sql
+          cp supabase/recovery/030_lead_geo_baseline.sql supabase/migrations/0296_recovery_lead_geo.sql
+          cp supabase/recovery/030_sales_read_models_baseline.sql supabase/migrations/0297_recovery_sales_read_models.sql
+          cp supabase/recovery/032_integration_assets_baseline.sql supabase/migrations/0315_recovery_integration_assets.sql
+          cp supabase/recovery/039_analytics_seo_warehouse_baseline.sql supabase/migrations/0385_recovery_analytics_seo_warehouse.sql
+          cp supabase/recovery/039_leads_landing_page_baseline.sql supabase/migrations/0386_recovery_leads_landing_page.sql
+          cp supabase/recovery/040_paid_media_warehouse_baseline.sql supabase/migrations/0395_recovery_paid_media_warehouse.sql
+          cp supabase/recovery/040_campaigns_read_models_baseline.sql supabase/migrations/0396_recovery_campaigns_read_models.sql
 
       - name: Start local Supabase database
         shell: bash
