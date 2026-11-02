@@ -24,7 +24,7 @@ for(const name of [...helpers,'verify_payment_v1','promote_paid_payment_to_close
 const initial=fs.readFileSync(path.join(dir,'001_initial_crm.sql'),'utf8');
 const payments=/create table if not exists public\.payments \([\s\S]*?\n\);/.exec(initial)?.[0];
 if(!payments)throw Error('Missing source payment table');
-const refundFiles=files.filter(f=>f.endsWith('_atomic_refund_command_v1.sql')||f.endsWith('_refund_request_replay_binding_v1.sql'));
+const refundFiles=files.filter(f=>f.endsWith('_atomic_refund_command_v1.sql')||f.endsWith('_refund_request_replay_binding_v1.sql')||f.endsWith('_payment_enrollment_association_v1.sql'));
 if(!refundFiles.some(f=>f.endsWith('_atomic_refund_command_v1.sql')))throw Error('Missing refund migration');
 let sql=fs.readFileSync(path.join(root,'tests/database/refund-readiness.fixture.sql'),'utf8');
 for(const [marker,body] of Object.entries({AUTHORIZATION:helpers.map(n=>selected.get(n)).join('\n'),PAYMENTS:payments,COMMANDS:[selected.get('verify_payment_v1'),selected.get('promote_paid_payment_to_closed_won_v1'),...refundFiles.map(f=>fs.readFileSync(path.join(dir,f),'utf8'))].join('\n')}))sql=sql.replace(`-- __${marker}__`,()=>body);

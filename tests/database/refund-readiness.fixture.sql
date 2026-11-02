@@ -24,6 +24,8 @@ create table public.tenant_security_config(singleton boolean primary key,enforce
 insert into public.tenant_security_config values(true,true);
 create table public.leads(id uuid primary key,organization_id uuid references public.organizations(id),
   current_stage public.lead_stage default 'payment_pending',status public.lead_status default 'open',metadata jsonb default '{}');
+create table public.enrollments(id uuid primary key,organization_id uuid references public.organizations(id),
+  lead_id uuid references public.leads(id),metadata jsonb not null default '{}',currency text not null default 'INR');
 create table public.tasks(id uuid primary key,organization_id uuid,lead_id uuid,task_type public.task_type,
   status public.task_status,completed_at timestamptz,metadata jsonb default '{}');
 create table public.activities(id uuid primary key default gen_random_uuid(),lead_id uuid references public.leads(id),

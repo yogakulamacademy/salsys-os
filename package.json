@@ -89,7 +89,7 @@
     "test:readiness": "node --test tests/readiness/*.test.cjs",
     "test:knowledge:ui": "playwright test --config=playwright.knowledge.config.ts",
     "test:financial:ui": "playwright test --config=playwright.financial.config.ts",
-    "test:financial:db": "node --test tests/database/refund-concurrency.test.mjs"
+    "test:financial:db": "node --test --test-concurrency=1 tests/database/*.test.mjs"
   },
   "dependencies": {
     "@google-analytics/data": "^7.2.0",
