@@ -790,7 +790,7 @@ export function AppShell({ children }: { children: ReactNode }) {
           <button
             type="button"
             onClick={() => setAskOpen(true)}
-            className="mx-auto flex h-9 w-full max-w-xl items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 text-left text-xs text-slate-400 transition hover:border-slate-300 hover:bg-white md:mx-4 dark:border-slate-800 dark:bg-slate-900 dark:hover:border-slate-700"
+            className="mx-auto flex h-9 min-w-0 flex-1 max-w-xl items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 text-left text-xs text-slate-400 transition hover:border-slate-300 hover:bg-white md:mx-4 dark:border-slate-800 dark:bg-slate-900 dark:hover:border-slate-700"
           >
             <Sparkles size={15} className="text-violet-500" />
             <span className="truncate">Search workspaces and actions…</span>
@@ -799,7 +799,7 @@ export function AppShell({ children }: { children: ReactNode }) {
             </kbd>
           </button>
 
-          <div className="ml-auto flex items-center gap-2">
+          <div className="ml-auto flex shrink-0 items-center gap-2">
             {!mock && workspaceMemberships.length > 1 ? (
               <select
                 aria-label="Select workspace"

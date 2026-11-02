@@ -104,6 +104,7 @@ test('shared brand and neutral panels render across core destinations', async ({
     for (const width of [768, 390]) {
       await page.setViewportSize({ width, height: 900 });
       await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth), { message: `${route} at ${width}px` }).toBeLessThanOrEqual(width);
+      await expect(page.getByLabel('Open account menu', { exact: true })).toBeInViewport({ ratio: 1 });
     }
     await page.setViewportSize({ width: 1440, height: 1000 });
     await page.screenshot({ animations: 'disabled', path: `test-results/${route.replaceAll('/', '-')}-desktop.png` });
