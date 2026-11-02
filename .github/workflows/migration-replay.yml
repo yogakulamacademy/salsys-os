@@ -32,11 +32,28 @@ jobs:
           version: 3.0.0
 
       - name: Start local Supabase database
-        run: supabase db start
+        shell: bash
+        run: |
+          set -o pipefail
+          supabase db start 2>&1 | tee migration-replay.log
 
       - name: Replay migrations from a clean database
-        run: supabase db reset --local
+        shell: bash
+        run: |
+          set -o pipefail
+          supabase db reset --local 2>&1 | tee -a migration-replay.log
 
       - name: Show local migration state
         if: always()
-        run: supabase migration list --local || true
+        shell: bash
+        run: |
+          supabase migration list --local 2>&1 | tee -a migration-replay.log || true
+
+      - name: Upload migration replay diagnostics
+        if: always()
+        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
+        with:
+          name: migration-replay-diagnostics
+          path: migration-replay.log
+          if-no-files-found: ignore
+          retention-days: 3
