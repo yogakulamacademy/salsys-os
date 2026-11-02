@@ -34,7 +34,6 @@ const plainEnrollment = '50000000-0000-4000-8000-000000000002';
 
 const foundation = `
 create schema app_private authorization postgres;
-create role salsys_fixture_marker nologin;
 
 create table public.leads(
   id uuid primary key,
@@ -150,10 +149,13 @@ async function fixture(run, { drift = false } = {}) {
 
   try {
     const owner = await connect();
-    await owner.query(foundation.replace(
-      drift ? 'total_value=coalesce(v_total_value,e.total_value),' : '__NO_DRIFT__',
-      drift ? 'total_value=case when v_total_value is null then e.total_value else v_total_value end,' : '__NO_DRIFT__',
-    ).replaceAll('__NO_DRIFT__', ''));
+    const foundationSql = drift
+      ? foundation.replace(
+          'total_value=coalesce(v_total_value,e.total_value),',
+          'total_value=case when v_total_value is null then e.total_value else v_total_value end,',
+        )
+      : foundation;
+    await owner.query(foundationSql);
     await owner.query(
       `insert into public.leads(id,organization_id) values($1,$2)`,
       [lead, org],
