@@ -1,26 +1,35 @@
 # SalsysOS Active Handoff
 
-Smart/dynamic Journey continuation: read `SMART-JOURNEY-WORKSPACE.md` alongside the critical `AI-KNOWLEDGE-AGENT-WORKFLOW.md`. The new service reminders and evidence interactions do not enable autonomous sending or complete the financial/identity gates.
-
 **Purpose:** Fast recovery after an interrupted engineering session.  
-**Updated:** 2026-11-02  
+**Updated:** 2026-11-03  
 **Repository:** `yogakulamacademy/salsys-os`  
-**Production branch:** `main`
+**Production branch:** `main`  
+**Verified runtime SHA before this docs-only change:** `57c2abf8638cf4bc08773e25c2d435e4c1387de5`
 
-**Current user-prioritized workstream:** shared UI consistency → Journey/growth improvements → R13. The isolated Journey branch builds on draft UI PR #437; neither is production acceptance. Read `docs/JOURNEY-EVIDENCE-CHECKPOINT.md` and the **critical** `docs/AI-KNOWLEDGE-AGENT-WORKFLOW.md`. AI Knowledge, approved sales assets and the future risk-governed WhatsApp/Instagram agent must remain in the upcoming workflow. Current draft-only messaging is not changed by the planning update. The commercial R13 continuation point below is preserved for when that workstream resumes.
+## ACTIVE PRIORITY — UI/UX, NOT R13/AGENT IMPLEMENTATION
+
+The user explicitly requested: **persist the unfinished technical work in GitHub and switch to UI/UX now**. Read **`docs/checkpoints/M-2026-11-03-UI-Priority-Paused-Work-Handoff-v1.md`** for all verified commits, remaining tasks, migration names, acceptance blockers, safe resume sequence, and planning percentages.
+
+- UI source-of-truth: `docs/UI-CONSISTENCY.md` + `docs/SMART-JOURNEY-WORKSPACE.md` + `docs/JOURNEY-EVIDENCE-CHECKPOINT.md`. UI PR #437 and Journey/UI PR #438 have **both merged**. Do **not** treat the old draft branches as work to merge.
+- For current UI work, discuss the user's **specific selected screen** and approve the minimal, clean, helpful interface plan before implementing; preserve tenant/role security and data meaning. No new screen is selected by this handoff.
+- On **explicit** non-UI resumption, Sales Asset PR #452 is already merged/production-READY, but `20261103215230_sales_asset_course_scope_normalization_v1.sql` and `20261103215330_sales_asset_course_scope_shorthand_v1.sql` are **not applied to production**; the WhatsApp 24-hour pilot window and scope context remain blockers to real media-send acceptance. Verify live state before requesting production SQL approval. Do not send messages autonomously.
+- After controlled asset acceptance: real provider-originated GT-01 financial proof, approved Knowledge + WhatsApp/Instagram Conversation Agent, customer journey/identity/permission closeouts, and R13 commercial implementation (P0–P4) remain on the preserved backlog. The GT-01 internal rollback-only production-schema test passed; that does **not** prove live provider completion.
+- **No production write, provider send, automation activation, PR merge or roadmap completion is authorized by this docs-only checkpoint.** The old R13 section below remains a **paused future plan**, not the active task.
 
 Read first:
+1. `docs/checkpoints/M-2026-11-03-UI-Priority-Paused-Work-Handoff-v1.md`
+2. `docs/SalsysOS_Current_Checkpoint.md`
+3. `docs/UI-CONSISTENCY.md`
+4. `docs/SMART-JOURNEY-WORKSPACE.md`
+5. `docs/AI-KNOWLEDGE-AGENT-WORKFLOW.md` — when non-UI agent work resumes
+6. `docs/checkpoints/M-2026-11-02-R13-Commercial-SaaS-Audit-Design-v1.md` — when R13 resumes
 
-1. `docs/SalsysOS_Current_Checkpoint.md`
-2. `docs/checkpoints/M-2026-11-02-R13-Commercial-SaaS-Audit-Design-v1.md`
-3. `docs/checkpoints/M-2026-11-02-R11-V1-Scope-Revision-No-Accommodation-v2.md`
-4. `docs/checkpoints/M-2026-11-02-R11-V1-Production-Closeout-v1.md` — historical implementation evidence
+Historical checkpoint files remain immutable. R11 accommodation/room/bed management is retired, not an unfinished feature.
 
-Historical checkpoint files are immutable evidence records. The R11 scope-revision checkpoint supersedes the residential/accommodation product requirement without deleting historical security or migration evidence.
 
 ---
 
-## 1. Exact continuation point
+## 1. Paused future R13 continuation point (not active UI work)
 
 **R13-P0 — Commercial State Foundation**
 
