@@ -1,9 +1,10 @@
 begin;
 
 -- CI-only historical recovery prerequisite.
--- course_batch_admin_events and can_view_all_leads() existed out-of-band before
+-- course_batch_admin_events plus can_view_all_leads() and is_crm_employee()
+-- existed out-of-band before
 -- 20261014091441_session_bound_tenant_mutation_policies.sql tightened tenant
--- mutation policies and referenced both objects. Production already contains
+-- mutation policies and referenced these objects. Production already contains
 -- their hardened forms. Do not promote this file into the normal ledger.
 
 create table if not exists public.course_batch_admin_events (
@@ -85,5 +86,24 @@ $function$;
 
 revoke all on function public.can_view_all_leads() from public, anon;
 grant execute on function public.can_view_all_leads() to authenticated, service_role;
+
+create or replace function public.is_crm_employee()
+returns boolean
+language sql
+stable
+security definer
+set search_path to 'public', 'auth', 'pg_temp'
+as $function$
+  select exists (
+    select 1
+    from public.profiles p
+    where p.id = auth.uid()
+      and p.active = true
+      and p.role in ('admissions', 'manager')
+  );
+$function$;
+
+revoke all on function public.is_crm_employee() from public, anon;
+grant execute on function public.is_crm_employee() to authenticated, service_role;
 
 commit;
