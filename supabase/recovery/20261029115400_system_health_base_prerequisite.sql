@@ -281,12 +281,83 @@ comment on view public.v_system_health is
 grant select on public.v_system_health to authenticated, service_role;
 
 -- -----------------------------------------------------------------------------
+-- Remaining privacy-compliance tables from the missing Oct-17 foundation.
+-- These two contracts were created by privacy_compliance_core_v1 but were not
+-- yet present in the consolidated cold-recovery history.
+-- -----------------------------------------------------------------------------
+
+create table if not exists public.privacy_retention_policies (
+  id uuid primary key default gen_random_uuid(),
+  organization_id uuid not null references public.organizations(id) on delete cascade,
+  data_category text not null,
+  purpose_key text,
+  retention_days integer,
+  action text not null default 'review',
+  enabled boolean not null default false,
+  legal_hold_blocks_action boolean not null default true,
+  metadata jsonb not null default '{}'::jsonb,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  unique (organization_id, data_category, purpose_key),
+  check (retention_days is null or retention_days > 0),
+  check (action in ('review','delete','anonymize')),
+  foreign key (organization_id, purpose_key)
+    references public.privacy_processing_purposes(organization_id, purpose_key)
+    on delete restrict
+);
+
+alter table public.privacy_retention_policies enable row level security;
+drop policy if exists privacy_retention_policies_member_read on public.privacy_retention_policies;
+create policy privacy_retention_policies_member_read
+on public.privacy_retention_policies
+for select
+using (
+  exists (
+    select 1
+    from public.organization_members m
+    where m.organization_id = privacy_retention_policies.organization_id
+      and m.user_id = auth.uid()
+      and m.active
+  )
+);
+
+create table if not exists public.privacy_legal_holds (
+  id uuid primary key default gen_random_uuid(),
+  organization_id uuid not null references public.organizations(id) on delete cascade,
+  person_id uuid references public.persons(id) on delete cascade,
+  lead_id uuid references public.leads(id) on delete cascade,
+  reason text not null,
+  active boolean not null default true,
+  starts_at timestamptz not null default now(),
+  ends_at timestamptz,
+  metadata jsonb not null default '{}'::jsonb,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  check (person_id is not null or lead_id is not null)
+);
+
+alter table public.privacy_legal_holds enable row level security;
+drop policy if exists privacy_legal_holds_member_read on public.privacy_legal_holds;
+create policy privacy_legal_holds_member_read
+on public.privacy_legal_holds
+for select
+using (
+  exists (
+    select 1
+    from public.organization_members m
+    where m.organization_id = privacy_legal_holds.organization_id
+      and m.user_id = auth.uid()
+      and m.active
+  )
+);
+
+-- -----------------------------------------------------------------------------
 -- Privacy compliance health read model recovered from production.
 --
 -- Production migration 20261017164301_privacy_compliance_core_v1 created this
 -- view, but that historical migration is absent from source control. The privacy
--- tables it depends on are already reconstructed earlier in the replay, while
--- PH-3 consumes this view when it builds v_system_health_v2.
+-- tables it depends on are reconstructed in the replay, while PH-3 consumes this
+-- view when it builds v_system_health_v2.
 -- -----------------------------------------------------------------------------
 
 create or replace view public.v_privacy_compliance_health
