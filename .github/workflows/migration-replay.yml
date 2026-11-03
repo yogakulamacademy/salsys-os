@@ -108,6 +108,12 @@ jobs:
           cp supabase/recovery/20261014054200_deprecated_course_batch_rpcs_prerequisite.sql \
              supabase/migrations/20261014054200_deprecated_course_batch_rpcs_prerequisite.sql
 
+          # Course catalog finalization was also created out-of-band before its
+          # server-only EXECUTE hardening migration. Stage the exact production
+          # definition immediately before that revoke in the ephemeral replay.
+          cp supabase/recovery/20261014054500_course_catalog_finalize_prerequisite.sql \
+             supabase/migrations/20261014054500_course_catalog_finalize_prerequisite.sql
+
           # The original tracking-source migration exists in production history
           # but was never committed to Git. Stage the minimal authoritative
           # prerequisite at its real production ledger version for clean replay.
