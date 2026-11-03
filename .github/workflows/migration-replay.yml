@@ -109,16 +109,11 @@ jobs:
           cp supabase/recovery/20261014115900_remaining_organization_read_tables_prerequisite.sql \
              supabase/migrations/20261014115900_remaining_organization_read_tables_prerequisite.sql
 
-          # Recover the exact W6 production block that was applied on Oct 14 but
-          # never committed to Git. Reconstruct byte-for-byte from ledger payloads
-          # and verify each statement before local replay can execute it.
           cat supabase/recovery/20261014135430_w6_website_intelligence_foundation.part*.b64 \
             | tr -d '\n\r ' | base64 -d \
             > supabase/migrations/20261014135430_w6_website_intelligence_foundation.sql
           echo "4bb9c6cd658eccfdae1e43e66f86f3ce  supabase/migrations/20261014135430_w6_website_intelligence_foundation.sql" | md5sum -c -
 
-          # The semantic payload's original part02 drifted. These smaller chunks
-          # were compared byte-for-byte with the production migration ledger.
           cat \
             supabase/recovery/20261014135518_w6_semantic_seo_foundation.part01.b64 \
             supabase/recovery/20261014135518_w6_semantic_seo_foundation.part02a.b64 \
@@ -147,9 +142,6 @@ jobs:
             > supabase/migrations/20261014140808_w6_semantic_processing_and_page_query_grain.sql
           echo "1bc2bfd8d73562184c352d073cbfb42c  supabase/migrations/20261014140808_w6_semantic_processing_and_page_query_grain.sql" | md5sum -c -
 
-          # The page opportunity engine is another production-ledger migration
-          # that never reached Git. Reconstruct its exact Oct 14 payload before
-          # later content-intelligence migrations consume the view.
           cat \
             supabase/recovery/20261014141153_w6_semantic_opportunity_engine_v1.part01.b64 \
             supabase/recovery/20261014141153_w6_semantic_opportunity_engine_v1.part02.b64 \
@@ -164,6 +156,9 @@ jobs:
 
           cp supabase/recovery/20261017155803_tracking_sources_core_prerequisite.sql \
              supabase/migrations/20261017155803_tracking_sources_and_event_contracts_v1.sql
+
+          cp supabase/recovery/20261019112000_whatsapp_lineage_tables_prerequisite.sql \
+             supabase/migrations/20261019112000_whatsapp_lineage_tables_prerequisite.sql
 
       - name: Start local Supabase database
         shell: bash
