@@ -719,11 +719,13 @@ function RevenueTrend({
 
 function SourceRow({ source, periodTotal }: { source: DashboardPeriodSource; periodTotal: number | null }) {
   const share = periodTotal != null && periodTotal > 0 ? (source.leads / periodTotal) * 100 : null;
+  const displaySource = sourceLabel(source.source);
+  const alias = displaySource.trim().toLowerCase() !== source.source.trim().toLowerCase();
   return (
     <Link href={"/marketing?source=" + encodeURIComponent(source.source)} className="group block rounded-xl px-2 py-2.5 transition hover:bg-surface-muted">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <span className="block truncate text-xs font-medium text-copy-strong">{sourceLabel(source.source)}</span>
+          <span className="block truncate text-xs font-medium text-copy-strong" title={"CRM source: " + source.source}>{displaySource}{alias ? <span className="ml-1 font-normal text-copy-subtle">· {source.source}</span> : null}</span>
           <span className="mt-0.5 block text-[11px] text-copy-subtle">{source.qualified.toLocaleString("en-IN")} qualified</span>
         </div>
         <span className="shrink-0 text-right text-xs font-semibold tabular-nums text-copy-strong">
@@ -732,7 +734,7 @@ function SourceRow({ source, periodTotal }: { source: DashboardPeriodSource; per
         </span>
       </div>
       <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-surface-muted">
-        <div className="h-full rounded-full bg-brand-600/75" style={{ width: percentageWidth(share) + "%" }} />
+        <div role="progressbar" aria-label={displaySource + " share of selected-period leads"} aria-valuenow={share == null ? undefined : Math.round(share * 10) / 10} aria-valuemin={0} aria-valuemax={100} className="h-full rounded-full bg-brand-700" style={{ width: percentageWidth(share) + "%" }} />
       </div>
     </Link>
   );
