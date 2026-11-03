@@ -2,14 +2,12 @@ import Link from "next/link";
 import {
   AlertTriangle,
   ArrowRight,
-  BookOpen,
   CalendarDays,
   CircleDollarSign,
   Clock3,
   CreditCard,
   Inbox,
   Sparkles,
-  TrendingUp,
   UserRoundCheck,
   Users,
   type LucideIcon,
@@ -183,7 +181,6 @@ export default async function HomePage({ searchParams }: HomePageProps) {
   ];
 
   const activeAttention = attentionItems.filter((item) => item.value > 0);
-  const totalAttention = activeAttention.reduce((sum, item) => sum + item.value, 0);
   const changeSignals = buildChangeSignals(periodAnalytics, metrics.waitingOverHour);
   const executiveBrief = buildExecutiveBrief({
     analytics: periodAnalytics,
