@@ -48,11 +48,10 @@ jobs:
           mv supabase/migrations/030_trusted_business_event_contact_resolution.sql \
              supabase/migrations/20261025131249_trusted_business_event_contact_resolution.sql
 
-          cp supabase/recovery/007_catalog_authorization_prerequisite.sql supabase/migrations/0065_recovery_catalog_authorization.sql
-          cp supabase/recovery/016_enrollments_tenant_baseline.sql supabase/migrations/0154_recovery_enrollments_tenant.sql
-          cp supabase/recovery/016_lead_contact_logs_baseline.sql supabase/migrations/0155_recovery_lead_contact_logs.sql
-          cp supabase/recovery/016_journey_views_baseline.sql supabase/migrations/0156_recovery_journey_views.sql
-          cp supabase/recovery/017_payments_tenant_baseline.sql supabase/migrations/0165_recovery_payments_tenant.sql
+          # Catalog authorization, commerce tenant ownership, and lead contact logs
+          # are now captured by real versioned migrations 0065, 0155, and 0156.
+          # Keep only the journey views that are still absent before migration 016.
+          cp supabase/recovery/016_journey_views_baseline.sql supabase/migrations/0157_recovery_journey_views.sql
           cp supabase/recovery/018_person_journey_source_baseline.sql supabase/migrations/0175_recovery_person_journey_source.sql
           cp supabase/recovery/019_leads_workspace_baseline.sql supabase/migrations/0185_recovery_leads_workspace.sql
           cp supabase/recovery/020_attribution_views_baseline.sql supabase/migrations/0195_recovery_attribution_views.sql
