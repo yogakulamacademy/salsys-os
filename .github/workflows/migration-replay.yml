@@ -139,6 +139,12 @@ jobs:
           cp supabase/recovery/20261014065500_legacy_global_crm_mutators_prerequisite.sql \
              supabase/migrations/20261014065500_legacy_global_crm_mutators_prerequisite.sql
 
+          # The course-batch audit table/trigger/policies also existed out-of-band
+          # before 091441 tightened tenant mutation checks. Stage the pre-hardening
+          # audit contract in the ephemeral replay database only.
+          cp supabase/recovery/20261014091300_course_batch_admin_events_prerequisite.sql \
+             supabase/migrations/20261014091300_course_batch_admin_events_prerequisite.sql
+
           # The original tracking-source migration exists in production history
           # but was never committed to Git. Stage the minimal authoritative
           # prerequisite at its real production ledger version for clean replay.
