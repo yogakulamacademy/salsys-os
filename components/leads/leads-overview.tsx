@@ -85,7 +85,7 @@ export function LeadsOverview({ summary }: LeadsOverviewProps) {
 
   return (
     <div className="space-y-3.5" data-testid="leads-overview">
-      <section aria-label="Leads overview" className="grid grid-cols-2 gap-3 lg:grid-cols-3 2xl:grid-cols-5">
+      <section aria-label="Leads overview" className="grid grid-cols-2 gap-3 lg:grid-cols-3 xl:grid-cols-5">
         {cards.map(({ label, value, detail, icon: Icon, href, surface, tone }) => (
           <Link
             key={label}
