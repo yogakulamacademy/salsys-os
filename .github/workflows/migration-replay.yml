@@ -164,6 +164,9 @@ jobs:
             > supabase/migrations/20261017180156_opensearch_outbox_foundation_v1.sql
           echo "0a54a12149180365dd1a8a22811b26da  supabase/migrations/20261017180156_opensearch_outbox_foundation_v1.sql" | md5sum -c -
 
+          cp supabase/recovery/20261019023002_r10_predictive_lead_scoring_foundation_prerequisite.sql \
+             supabase/migrations/20261019023002_r10_predictive_lead_scoring_foundation_v1.sql
+
           cp supabase/recovery/20261019112000_whatsapp_lineage_tables_prerequisite.sql \
              supabase/migrations/20261019112000_whatsapp_lineage_tables_prerequisite.sql
 
