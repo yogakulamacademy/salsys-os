@@ -76,84 +76,46 @@ jobs:
 
           # The tenant-aware Team Performance and Assignment Fairness RPCs were
           # applied out-of-band before the Reports workspace authorization
-          # migration. The exact historical definitions were recovered from the
-          # October audit snapshot and stored compressed to avoid transcription
-          # drift. Decode them at their pre-authorization point in CI only.
+          # migration. Decode exact historical definitions in CI only.
           base64 -d supabase/recovery/20261013125000_reports_rpc_prerequisite.sql.gz.b64 \
             | gzip -d \
             > supabase/migrations/20261013125000_reports_rpc_prerequisite.sql
 
-          # lead_inbox_reads existed out-of-band before the Sales Conversations
-          # capability migration. Stage the recovered table/RLS contract just
-          # before that migration so later history remains responsible for its
-          # own authorization and optimization changes.
           cp supabase/recovery/20261013183000_lead_inbox_reads_prerequisite.sql \
              supabase/migrations/20261013183000_lead_inbox_reads_prerequisite.sql
 
-          # Eight trigger-only functions existed out-of-band before the Oct 14
-          # EXECUTE hardening migration. Their definitions are recovered from
-          # production and staged immediately before the revokes.
           cp supabase/recovery/20261014053500_trigger_functions_prerequisite.sql \
              supabase/migrations/20261014053500_trigger_functions_prerequisite.sql
 
-          # crm_settings_audit also existed out-of-band before the service-only
-          # table grant hardening migration. Reconstruct only its pre-hardening
-          # table/index/RLS shape in the ephemeral replay database.
           cp supabase/recovery/20261014053800_crm_settings_audit_prerequisite.sql \
              supabase/migrations/20261014053800_crm_settings_audit_prerequisite.sql
 
-          # Three legacy course-batch mutation RPCs existed out-of-band before
-          # their authenticated EXECUTE hardening migration. Stage their exact
-          # historical definitions in CI only so the revoke migration can replay.
           cp supabase/recovery/20261014054200_deprecated_course_batch_rpcs_prerequisite.sql \
              supabase/migrations/20261014054200_deprecated_course_batch_rpcs_prerequisite.sql
 
-          # Course catalog finalization was also created out-of-band before its
-          # server-only EXECUTE hardening migration. Stage the exact production
-          # definition immediately before that revoke in the ephemeral replay.
           cp supabase/recovery/20261014054500_course_catalog_finalize_prerequisite.sql \
              supabase/migrations/20261014054500_course_catalog_finalize_prerequisite.sql
 
-          # Global lead-stage probabilities and stage-aging defaults existed
-          # before tenant-scoped CRM settings were introduced. Stage the exact
-          # legacy default rows so organization-scoped seeding stays semantic.
           cp supabase/recovery/20261014055400_legacy_crm_settings_defaults_prerequisite.sql \
              supabase/migrations/20261014055400_legacy_crm_settings_defaults_prerequisite.sql
 
-          # expected_close_date existed on leads before the tenant-scoped CRM
-          # settings views began projecting it. Recover only that historical
-          # nullable date column immediately before the view migration.
           cp supabase/recovery/20261014055700_lead_expected_close_date_prerequisite.sql \
              supabase/migrations/20261014055700_lead_expected_close_date_prerequisite.sql
 
-          # The earlier 019 recovery compatibility view exposes threshold values
-          # as unconstrained numeric, while the authoritative 055802 migration
-          # defines numeric(8,2). Drop only the CI compatibility view so the real
-          # migration can recreate the authoritative contract without a type-change error.
           cp supabase/recovery/20261014055750_pipeline_aging_view_alignment.sql \
              supabase/migrations/20261014055750_pipeline_aging_view_alignment.sql
 
-          # The original global CRM settings authorization helpers existed
-          # out-of-band before 060716 compatibility reads began using them.
           cp supabase/recovery/20261014060700_legacy_crm_settings_helpers_prerequisite.sql \
              supabase/migrations/20261014060700_legacy_crm_settings_helpers_prerequisite.sql
 
-          # The original global CRM mutators also existed out-of-band. Stage
-          # their exact production definitions immediately before 065535 revokes
-          # authenticated EXECUTE in favor of the tenant-scoped v2 RPCs.
           cp supabase/recovery/20261014065500_legacy_global_crm_mutators_prerequisite.sql \
              supabase/migrations/20261014065500_legacy_global_crm_mutators_prerequisite.sql
 
-          # The course-batch audit table/trigger/policies also existed out-of-band
-          # before 091441 tightened tenant mutation checks. Stage the pre-hardening
-          # audit contract in the ephemeral replay database only.
           cp supabase/recovery/20261014091300_course_batch_admin_events_prerequisite.sql \
              supabase/migrations/20261014091300_course_batch_admin_events_prerequisite.sql
 
-          # Nine dormant accommodation mutation RPCs existed out-of-band before
-          # 092325 reduced them to service-role-only execution. Accommodation
-          # management remains retired product scope; this payload exists only to
-          # reproduce the historical hardening boundary in the ephemeral replay.
+          # Dormant accommodation RPCs are retained solely for historical replay.
+          # Accommodation management remains retired product scope.
           cat supabase/recovery/20261014092250_latent_accommodation_rpcs_prerequisite.part*.b64 \
             | tr -d '\n\r ' \
             | base64 -d \
@@ -161,21 +123,18 @@ jobs:
           echo "fd54c24c82385da0650cbcd2f0d1c7e7c8726415106e275d1a9e270832d152cd  supabase/migrations/20261014092250_latent_accommodation_rpcs_prerequisite.sql" \
             | sha256sum -c -
 
-          # The explicit-organization course-batch admin V2 RPCs also existed
-          # out-of-band before 092425 reduced them to service-role-only execution.
-          # Stage the definitions later captured by the Oct 30 hardening migration.
           cp supabase/recovery/20261014092400_latent_course_v2_rpcs_prerequisite.sql \
              supabase/migrations/20261014092400_latent_course_v2_rpcs_prerequisite.sql
 
-          # can_manage_lead_assignments() existed out-of-band before 100145
-          # hardened its EXECUTE grants. Stage the exact production definition
-          # immediately before that revoke in CI only.
           cp supabase/recovery/20261014100100_can_manage_lead_assignments_prerequisite.sql \
              supabase/migrations/20261014100100_can_manage_lead_assignments_prerequisite.sql
 
-          # The original tracking-source migration exists in production history
-          # but was never committed to Git. Stage the minimal authoritative
-          # prerequisite at its real production ledger version for clean replay.
+          # Three dormant accommodation tables and course_catalog_sync_runs also
+          # existed out-of-band before 115949/120616 tightened their tenant
+          # policies. Reconstruct their pre-hardening contracts in CI only.
+          cp supabase/recovery/20261014115900_remaining_organization_read_tables_prerequisite.sql \
+             supabase/migrations/20261014115900_remaining_organization_read_tables_prerequisite.sql
+
           cp supabase/recovery/20261017155803_tracking_sources_core_prerequisite.sql \
              supabase/migrations/20261017155803_tracking_sources_and_event_contracts_v1.sql
 
