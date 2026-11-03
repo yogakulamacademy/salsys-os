@@ -19,7 +19,7 @@ function forbidText(source, needle, label) {
   }
 }
 
-const migration = read('supabase/migrations/20261101050000_performance_final_closeout_v1.sql');
+const migration = read('supabase/migrations/20261101045049_performance_final_closeout_v1.sql');
 const performance = read('app/performance/page.tsx');
 const team = read('app/team-performance/page.tsx');
 const teamLayout = read('app/team-performance/layout.tsx');

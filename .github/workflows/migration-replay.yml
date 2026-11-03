@@ -48,11 +48,23 @@ jobs:
           mv supabase/migrations/030_trusted_business_event_contact_resolution.sql \
              supabase/migrations/20261025131249_trusted_business_event_contact_resolution.sql
 
-          cp supabase/recovery/007_catalog_authorization_prerequisite.sql supabase/migrations/0065_recovery_catalog_authorization.sql
-          cp supabase/recovery/016_enrollments_tenant_baseline.sql supabase/migrations/0154_recovery_enrollments_tenant.sql
-          cp supabase/recovery/016_lead_contact_logs_baseline.sql supabase/migrations/0155_recovery_lead_contact_logs.sql
-          cp supabase/recovery/016_journey_views_baseline.sql supabase/migrations/0156_recovery_journey_views.sql
-          cp supabase/recovery/017_payments_tenant_baseline.sql supabase/migrations/0165_recovery_payments_tenant.sql
+          # These intelligence migrations have source-local timestamps that do not
+          # match the versions recorded in the live production migration ledger.
+          # Move only the replay working copies; the committed migration files stay untouched.
+          mv supabase/migrations/20261020101500_event_intelligence_outcome_calibration_v1.sql \
+             supabase/migrations/20261020014744_event_intelligence_outcome_calibration_v1.sql
+          mv supabase/migrations/20261020100000_event_intelligence_prediction_freshness_v1.sql \
+             supabase/migrations/20261020015455_event_intelligence_prediction_freshness_v1.sql
+
+          # WhatsApp Growth remains at its source-local dependency-safe position because
+          # this repository creates whatsapp_broadcast_campaigns in the later source-only
+          # Operations Suite. Moving Growth to its production 04:09 version without the
+          # original production broadcast foundation would manufacture a false failure.
+
+          # Catalog authorization, commerce tenant ownership, and lead contact logs
+          # are now captured by real versioned migrations 0065, 0155, and 0156.
+          # Keep only the journey views that are still absent before migration 016.
+          cp supabase/recovery/016_journey_views_baseline.sql supabase/migrations/0157_recovery_journey_views.sql
           cp supabase/recovery/018_person_journey_source_baseline.sql supabase/migrations/0175_recovery_person_journey_source.sql
           cp supabase/recovery/019_leads_workspace_baseline.sql supabase/migrations/0185_recovery_leads_workspace.sql
           cp supabase/recovery/020_attribution_views_baseline.sql supabase/migrations/0195_recovery_attribution_views.sql
@@ -109,6 +121,11 @@ jobs:
           cp supabase/recovery/20261014115900_remaining_organization_read_tables_prerequisite.sql \
              supabase/migrations/20261014115900_remaining_organization_read_tables_prerequisite.sql
 
+          cp supabase/recovery/20261014133200_derived_accommodation_foundation_prerequisite.sql \
+             supabase/migrations/20261014133200_derived_accommodation_foundation_prerequisite.sql
+          cp supabase/recovery/20261014133212_tenant_scope_derived_accommodation_policies.sql \
+             supabase/migrations/20261014133212_tenant_scope_derived_accommodation_policies.sql
+
           cat supabase/recovery/20261014135430_w6_website_intelligence_foundation.part*.b64 \
             | tr -d '\n\r ' | base64 -d \
             > supabase/migrations/20261014135430_w6_website_intelligence_foundation.sql
@@ -154,8 +171,44 @@ jobs:
             > supabase/migrations/20261014141153_w6_semantic_opportunity_engine_v1.sql
           echo "dd2634d72220a015eb0546df040630cd  supabase/migrations/20261014141153_w6_semantic_opportunity_engine_v1.sql" | md5sum -c -
 
+          # The source recovery below intentionally stores two missing production
+          # boundaries together. Split only the replay working copies so the core
+          # Smart Triggers schema is restored before its scheduler/wait evolution.
+          awk '
+            $0 == "-- Production 20261016131221_smart_triggers_v1_foundation" { emit=1 }
+            $0 == "-- Production 20261017091453_automation_runtime_scheduler_foundation_v1" { exit }
+            emit { print }
+          ' supabase/recovery/20261017091453_automation_runtime_scheduler_foundation_v1.sql \
+            > supabase/migrations/20261016131221_smart_triggers_v1_foundation.sql
+          test -s supabase/migrations/20261016131221_smart_triggers_v1_foundation.sql
+
+          cp supabase/recovery/20261016144625_smart_triggers_scheduler_wait_foundation_v1.sql \
+             supabase/migrations/20261016144625_smart_triggers_scheduler_wait_foundation_v1.sql
+          cp supabase/recovery/20261017033628_smart_triggers_flow_graph_foundation_v1.sql \
+             supabase/migrations/20261017033628_smart_triggers_flow_graph_foundation_v1.sql
+          cp supabase/recovery/20261017044549_smart_triggers_flow_versions_v1.sql \
+             supabase/migrations/20261017044549_smart_triggers_flow_versions_v1.sql
+
+          awk '
+            $0 == "-- Production 20261017091453_automation_runtime_scheduler_foundation_v1" { emit=1 }
+            emit { print }
+          ' supabase/recovery/20261017091453_automation_runtime_scheduler_foundation_v1.sql \
+            > supabase/migrations/20261017091453_automation_runtime_scheduler_foundation_v1.sql
+          test -s supabase/migrations/20261017091453_automation_runtime_scheduler_foundation_v1.sql
+
+          cp supabase/recovery/20261017125342_automation_whatsapp_template_registry_prerequisite.sql \
+             supabase/migrations/20261017125342_automation_whatsapp_template_registry_v1.sql
+          cp supabase/recovery/20261017130525_automation_whatsapp_template_sync_prerequisite.sql \
+             supabase/migrations/20261017130525_automation_whatsapp_template_sync_v1.sql
+
           cp supabase/recovery/20261017155803_tracking_sources_core_prerequisite.sql \
              supabase/migrations/20261017155803_tracking_sources_and_event_contracts_v1.sql
+          cp supabase/recovery/20261017161509_crm_lead_attribution_upsert_fix_v1.sql \
+             supabase/migrations/20261017161509_crm_lead_attribution_upsert_fix_v1.sql
+          cp supabase/recovery/20261017162257_attribution_state_machine_v1.sql \
+             supabase/migrations/20261017162257_attribution_state_machine_v1.sql
+          cp supabase/recovery/20261017163029_smart_identity_confidence_engine_prerequisite.sql \
+             supabase/migrations/20261017163029_smart_identity_confidence_engine_v1.sql
 
           cp supabase/recovery/20261017175500_privacy_request_tombstone_prerequisite.sql \
              supabase/migrations/20261017175500_privacy_request_tombstone_prerequisite.sql
@@ -165,11 +218,45 @@ jobs:
             > supabase/migrations/20261017180156_opensearch_outbox_foundation_v1.sql
           echo "0a54a12149180365dd1a8a22811b26da  supabase/migrations/20261017180156_opensearch_outbox_foundation_v1.sql" | md5sum -c -
 
+          cp supabase/recovery/20261018164546_customer360_operational_completeness_v1.sql \
+             supabase/migrations/20261018164546_customer360_operational_completeness_v1.sql
+          cp supabase/recovery/20261018172343_r7_integration_feedback_health_v1.sql \
+             supabase/migrations/20261018172343_r7_integration_feedback_health_v1.sql
+
+          cp supabase/recovery/20261019023002_r10_predictive_lead_scoring_foundation_prerequisite.sql \
+             supabase/migrations/20261019023002_r10_predictive_lead_scoring_foundation_v1.sql
+
           cp supabase/recovery/20261019112000_whatsapp_lineage_tables_prerequisite.sql \
              supabase/migrations/20261019112000_whatsapp_lineage_tables_prerequisite.sql
 
           cp supabase/recovery/20261019150400_build_search_document_v1_prerequisite.sql \
              supabase/migrations/20261019150400_build_search_document_v1_prerequisite.sql
+
+          cp supabase/recovery/20261027203900_revenue_workspace_base_prerequisite.sql \
+             supabase/migrations/20261027203900_revenue_workspace_base_prerequisite.sql
+
+          cp supabase/recovery/20261028040400_course_management_workspace_v2_prerequisite.sql \
+             supabase/migrations/20261028040400_course_management_workspace_v2_prerequisite.sql
+
+          cp supabase/recovery/20261029115400_system_health_base_prerequisite.sql \
+             supabase/migrations/20261029115400_system_health_base_prerequisite.sql
+
+          cp supabase/recovery/20261030155000_admissions_batch_capacity_prerequisite.sql \
+             supabase/migrations/20261030155000_admissions_batch_capacity_prerequisite.sql
+
+          cp supabase/recovery/20261101095350_dashboard_tenant_read_models_prerequisite.sql \
+             supabase/migrations/20261101095350_dashboard_tenant_read_models_prerequisite.sql
+
+          cat supabase/recovery/20261101095400_dashboard_snapshot_internal_v1.part*.b64 \
+            | tr -d '\n\r ' \
+            | base64 -d \
+            > supabase/migrations/20261101095400_dashboard_snapshot_internal_v1_prerequisite.sql
+          echo "966befec94e6dbf791c0067d2649bd59  supabase/migrations/20261101095400_dashboard_snapshot_internal_v1_prerequisite.sql" \
+            | md5sum -c -
+          printf ';\n' >> supabase/migrations/20261101095400_dashboard_snapshot_internal_v1_prerequisite.sql
+
+          cp supabase/recovery/20261101095410_dashboard_snapshot_authorization_prerequisite.sql \
+             supabase/migrations/20261101095410_dashboard_snapshot_authorization_prerequisite.sql
 
       - name: Start local Supabase database
         shell: bash

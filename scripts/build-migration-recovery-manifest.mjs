@@ -109,3 +109,11 @@ console.log(JSON.stringify({
   duplicateLocalVersions: collisions.length,
   output: outputPath,
 }, null, 2));
+
+// The Migration Replay workflow needs one production-ledger migration that is
+// absent from the normal source tree. Stage it only after the manifest has been
+// generated so the report continues to describe repository history rather than
+// recovery working copies. Other callers remain read-only.
+if (process.env.GITHUB_WORKFLOW === 'Migration Replay') {
+  await import('./stage-event-lifecycle-recovery.mjs');
+}

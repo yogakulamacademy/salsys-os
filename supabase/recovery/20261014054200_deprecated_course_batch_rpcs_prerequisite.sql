@@ -5,6 +5,42 @@ begin;
 -- 20261014054340_deprecated_course_batch_rpc_hardening.sql revoked their
 -- authenticated EXECUTE privilege. Production already contains the hardened
 -- functions. Do not promote this file into the normal migration ledger.
+--
+-- The same out-of-band batch-admin contract also depended on three residential
+-- course_batches fields whose creator is absent from both source history and the
+-- production migration ledger. Restore the exact live column/check contract
+-- before recreating the legacy RPCs that reference it.
+
+alter table public.course_batches
+  add column if not exists accommodation_capacity integer,
+  add column if not exists accommodation_remaining integer,
+  add column if not exists accommodation_note text;
+
+do $recovery$
+begin
+  if not exists (
+    select 1
+    from pg_constraint
+    where conrelid = 'public.course_batches'::regclass
+      and conname = 'course_batches_accommodation_capacity_check'
+  ) then
+    alter table public.course_batches
+      add constraint course_batches_accommodation_capacity_check
+      check (accommodation_capacity is null or accommodation_capacity >= 0);
+  end if;
+
+  if not exists (
+    select 1
+    from pg_constraint
+    where conrelid = 'public.course_batches'::regclass
+      and conname = 'course_batches_accommodation_remaining_check'
+  ) then
+    alter table public.course_batches
+      add constraint course_batches_accommodation_remaining_check
+      check (accommodation_remaining is null or accommodation_remaining >= 0);
+  end if;
+end;
+$recovery$;
 
 create or replace function public.set_course_batch_active_state(
   p_batch_id uuid,
