@@ -29,7 +29,7 @@ test('human Sales Asset media audit is tenant scoped and service-role reconciled
     'public.is_organization_member(organization_id)',
     'record_whatsapp_sales_asset_send_success_v1',
     "auth.role() <> 'service_role'",
-    "message_type",
+    'message_type',
     "'sales_asset_id'",
     "'sales_asset_dispatch_audit_id'",
     "'provider_media_id'",
@@ -91,7 +91,7 @@ test('human send action rechecks access, WhatsApp window and live lead scope', (
 
 test('composer routes a selected asset through the dedicated media action without autonomous send', () => {
   assert.match(composer, /sendWhatsAppSalesAssetMessageAction/);
-  assert.match(composer, /formData\.set\("sales_asset_id", selectedAsset\.assetId\)/);
+  assert.match(composer, /formData\.set\("sales_asset_id", assetForSend\.assetId\)/);
   assert.match(composer, /customerMessageSent/);
   assert.match(composer, /Do not resend/i);
   assert.match(composer, /1024/);
