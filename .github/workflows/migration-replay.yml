@@ -90,6 +90,12 @@ jobs:
           cp supabase/recovery/20261013183000_lead_inbox_reads_prerequisite.sql \
              supabase/migrations/20261013183000_lead_inbox_reads_prerequisite.sql
 
+          # Eight trigger-only functions existed out-of-band before the Oct 14
+          # EXECUTE hardening migration. Their definitions are recovered from
+          # production and staged immediately before the revokes.
+          cp supabase/recovery/20261014053500_trigger_functions_prerequisite.sql \
+             supabase/migrations/20261014053500_trigger_functions_prerequisite.sql
+
           # The original tracking-source migration exists in production history
           # but was never committed to Git. Stage the minimal authoritative
           # prerequisite at its real production ledger version for clean replay.
