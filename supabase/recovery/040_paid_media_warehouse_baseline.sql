@@ -316,6 +316,56 @@ create index if not exists idx_meta_ads_sync_runs_org_started
   on public.meta_ads_sync_runs(organization_id, started_at desc);
 
 -- -----------------------------------------------------------------------------
+-- Meta Ads sync-health view recovered from current production catalog.
+-- This historical object has no matching row in the production migration ledger,
+-- but later PH-3 migrations depend on it during a clean rebuild.
+-- -----------------------------------------------------------------------------
+
+create or replace view public.v_meta_ads_sync_health
+with (security_invoker = true)
+as
+with tenant_orgs as (
+  select organization_id
+  from public.meta_ads_campaign_daily
+  union
+  select organization_id
+  from public.meta_ads_sync_runs
+),
+campaign_health as (
+  select
+    organization_id,
+    max(date) as latest_data_date,
+    max(updated_at) as latest_cache_update_at
+  from public.meta_ads_campaign_daily
+  group by organization_id
+),
+latest_runs as (
+  select distinct on (organization_id)
+    organization_id,
+    started_at,
+    completed_at,
+    status,
+    total_rows,
+    error_message
+  from public.meta_ads_sync_runs
+  order by organization_id, started_at desc
+)
+select
+  ch.latest_data_date,
+  ch.latest_cache_update_at,
+  lr.started_at as last_sync_started_at,
+  lr.completed_at as last_sync_completed_at,
+  lr.status as last_sync_status,
+  lr.total_rows as last_sync_total_rows,
+  lr.error_message as last_sync_error,
+  o.organization_id
+from tenant_orgs o
+left join campaign_health ch
+  on ch.organization_id = o.organization_id
+left join latest_runs lr
+  on lr.organization_id = o.organization_id;
+
+-- -----------------------------------------------------------------------------
 -- Updated-at triggers
 -- -----------------------------------------------------------------------------
 
