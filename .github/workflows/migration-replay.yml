@@ -120,6 +120,12 @@ jobs:
           cp supabase/recovery/20261014055400_legacy_crm_settings_defaults_prerequisite.sql \
              supabase/migrations/20261014055400_legacy_crm_settings_defaults_prerequisite.sql
 
+          # expected_close_date existed on leads before the tenant-scoped CRM
+          # settings views began projecting it. Recover only that historical
+          # nullable date column immediately before the view migration.
+          cp supabase/recovery/20261014055700_lead_expected_close_date_prerequisite.sql \
+             supabase/migrations/20261014055700_lead_expected_close_date_prerequisite.sql
+
           # The original tracking-source migration exists in production history
           # but was never committed to Git. Stage the minimal authoritative
           # prerequisite at its real production ledger version for clean replay.
