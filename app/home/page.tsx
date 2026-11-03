@@ -14,11 +14,13 @@ import {
 } from "lucide-react";
 
 import { DecisionMetricCard } from "@/components/intelligence/decision-metric-card";
+import { LeadActivityChart } from "@/components/home/lead-activity-chart";
 import { isMockMode } from "@/lib/data";
 import { percentageWidth, sourceLabel } from "@/lib/ui-format";
 import {
   getDashboardSnapshot,
   type DashboardBatchDemand,
+  type DashboardSnapshot,
 } from "@/lib/dashboard-data";
 import {
   getDashboardPeriodAnalytics,
@@ -69,6 +71,7 @@ export default async function HomePage({ searchParams }: HomePageProps) {
           revenue: [],
           primaryCurrency: null,
           revenueSeries: [],
+          leadSeries: [],
           leads: {
             current: 0,
             previous: 0,
@@ -298,9 +301,15 @@ export default async function HomePage({ searchParams }: HomePageProps) {
 
       <section aria-label="Performance and work queue" className="grid min-w-0 gap-4 xl:grid-cols-[minmax(0,1.65fr)_minmax(300px,.85fr)]">
         <section className="min-w-0 overflow-hidden rounded-2xl border border-line bg-surface">
-          <SectionHeader eyebrow="Performance · period" title="Performance overview" actionHref="/revenue" actionLabel="Open revenue" />
+          <SectionHeader eyebrow="Performance · period" title="Lead activity" actionHref="/leads" actionLabel="Open leads" />
           <div className="p-4 sm:p-5">
-            <RevenueTrend points={periodAnalytics.revenueSeries} currency={periodAnalytics.primaryCurrency} available={periodAnalytics.available.revenue} />
+            <LeadActivityChart
+              points={periodAnalytics.leadSeries}
+              available={periodAnalytics.available.leads}
+              currentTotal={totalLeads}
+              previousTotal={periodAnalytics.available.leads ? periodAnalytics.leads.previous : null}
+              periodLabel={periodAnalytics.period.label}
+            />
             <div className="mt-5 grid gap-3 border-t border-line pt-4 sm:grid-cols-3">
               <SnapshotMetric label="Enrolled leads" value={enrolledLeads == null ? "—" : enrolledLeads.toLocaleString("en-IN")} />
               <SnapshotMetric label="Active pipeline · now" value={metrics.activePipeline.toLocaleString("en-IN")} />
@@ -316,11 +325,15 @@ export default async function HomePage({ searchParams }: HomePageProps) {
                 <SnapshotMetric label="Current pipeline value" value={primaryRevenue ? formatMoney(primaryRevenue.pipeline, primaryRevenue.currency) : "—"} />
                 <SnapshotMetric label="Current weighted value" value={primaryRevenue ? formatMoney(primaryRevenue.weighted, primaryRevenue.currency) : "—"} />
               </div>
+              <RevenueTrend points={periodAnalytics.revenueSeries} currency={periodAnalytics.primaryCurrency} available={periodAnalytics.available.revenue} />
             </details>
           </div>
         </section>
         <section className="min-w-0 overflow-hidden rounded-2xl border border-line bg-surface">
           <SectionHeader eyebrow="Needs attention · current" title="Action queue" actionHref="/admissions" actionLabel="View all" />
+          {metrics.needsReply > 0 ? (
+            <ReplyPressure total={metrics.needsReply} overHour={metrics.waitingOverHour} />
+          ) : null}
           <div className="space-y-1 p-3 sm:p-4">
             {activeAttention.length ? activeAttention.map((item) => <AttentionRow key={item.label} item={item} />) : <EmptyState text="No urgent reply, follow-up, first-touch or payment actions are recorded right now." />}
           </div>
@@ -348,7 +361,7 @@ export default async function HomePage({ searchParams }: HomePageProps) {
         <section className="min-w-0 overflow-hidden rounded-2xl border border-line bg-surface">
           <SectionHeader eyebrow="Sales · current" title="Pipeline health" actionHref="/admissions?view=pipeline" actionLabel="Open pipeline" />
           <div className="p-4">
-            <PipelineSnapshot active={metrics.activePipeline} highIntent={metrics.highIntent} payment={metrics.paymentPending} enrolled={counts.enrolled ?? 0} />
+            <PipelineSnapshot active={metrics.activePipeline} highIntent={metrics.highIntent} payment={metrics.paymentPending} enrolled={counts.enrolled ?? 0} counts={counts} />
           </div>
         </section>
       </section>
@@ -437,13 +450,44 @@ function AttentionRow({ item }: { item: AttentionItem }) {
   );
 }
 
+function ReplyPressure({ total, overHour }: { total: number; overHour: number }) {
+  const older = Math.min(Math.max(0, overHour), Math.max(0, total));
+  const recent = Math.max(0, total - older);
+  const share = total > 0 ? (older / total) * 100 : 0;
+
+  return (
+    <div data-testid="home-reply-pressure" className="mx-4 mt-2 rounded-xl border border-line bg-surface-muted px-3 py-3 sm:mx-5">
+      <div className="flex items-center justify-between gap-3 text-xs">
+        <span className="font-medium text-copy-strong">Reply waiting time</span>
+        <span className="font-semibold tabular-nums text-copy-strong">{share.toFixed(0)}% over 1h</span>
+      </div>
+      <div
+        role="img"
+        aria-label={older + " conversations waiting over an hour, " + recent + " waiting up to an hour"}
+        className="mt-3 flex h-2.5 w-full overflow-hidden rounded-full bg-slate-200 dark:bg-slate-700"
+      >
+        <div className="h-full bg-amber-500 dark:bg-amber-400" style={{ width: percentageWidth(share) + "%" }} />
+        <div className="h-full bg-brand-700/70" style={{ width: percentageWidth(100 - share) + "%" }} />
+      </div>
+      <div className="mt-2.5 flex flex-wrap justify-between gap-x-3 gap-y-1 text-[11px] text-copy-muted">
+        <span><span className="mr-1 inline-block h-2 w-2 rounded-full bg-amber-500" /> Over 1h · {older.toLocaleString("en-IN")}</span>
+        <span><span className="mr-1 inline-block h-2 w-2 rounded-full bg-brand-700" /> Up to 1h · {recent.toLocaleString("en-IN")}</span>
+      </div>
+      <Link href="/conversations" className="mt-3 inline-flex items-center gap-1 text-[11px] font-semibold text-brand-700 dark:text-brand-300">
+        Work reply queue <ArrowRight size={12} />
+      </Link>
+    </div>
+  );
+}
+
 function PipelineSnapshot({
-  active, highIntent, payment, enrolled,
+  active, highIntent, payment, enrolled, counts,
 }: {
   active: number;
   highIntent: number;
   payment: number;
   enrolled: number;
+  counts: DashboardSnapshot["counts"];
 }) {
   const rows = [
     ["Active pipeline", active],
@@ -452,9 +496,43 @@ function PipelineSnapshot({
     ["Enrolled stage", enrolled],
   ] as const;
   const max = Math.max(1, ...rows.map(([, value]) => value));
+  const segments = [
+    { label: "New", value: counts.new, tone: "bg-violet-300 dark:bg-violet-400" },
+    { label: "Contacted / engaged", value: counts.contacted + counts.engaged, tone: "bg-violet-500 dark:bg-violet-500" },
+    { label: "Qualified / high intent", value: counts.qualified + counts.high_intent, tone: "bg-indigo-600 dark:bg-indigo-400" },
+    { label: "Payment pending", value: counts.payment_pending, tone: "bg-amber-500 dark:bg-amber-400" },
+  ];
+  const activeStages = segments.reduce((sum, segment) => sum + segment.value, 0);
 
   return (
     <div className="space-y-4">
+      {activeStages > 0 ? (
+        <div data-testid="home-pipeline-stage-mix" className="rounded-xl bg-surface-muted p-3">
+          <div className="flex items-center justify-between text-[11px]">
+            <span className="font-medium text-copy-strong">Active stage mix</span>
+            <span className="tabular-nums text-copy-muted">{activeStages.toLocaleString("en-IN")} leads</span>
+          </div>
+          <div role="img" aria-label="Distribution across current active CRM stages" className="mt-2.5 flex h-3 overflow-hidden rounded-full bg-surface">
+            {segments.map((segment) => segment.value > 0 ? (
+              <div
+                key={segment.label}
+                className={segment.tone}
+                style={{ width: (segment.value / activeStages) * 100 + "%" }}
+                title={segment.label + ": " + segment.value.toLocaleString("en-IN")}
+              />
+            ) : null)}
+          </div>
+          <div className="mt-2.5 grid grid-cols-2 gap-x-3 gap-y-1.5">
+            {segments.map((segment) => (
+              <div key={segment.label} className="flex items-center gap-1.5 text-[10px] text-copy-muted">
+                <span className={"h-2 w-2 shrink-0 rounded-sm " + segment.tone} />
+                <span className="min-w-0 truncate" title={segment.label}>{segment.label}</span>
+                <span className="ml-auto tabular-nums">{segment.value.toLocaleString("en-IN")}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      ) : null}
       {rows.map(([label, value]) => (
         <div key={label}>
           <div className="flex items-center justify-between gap-3 text-xs">
@@ -462,7 +540,7 @@ function PipelineSnapshot({
             <span className="font-semibold tabular-nums text-copy-strong">{value.toLocaleString("en-IN")}</span>
           </div>
           <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-surface-muted">
-            <div className="h-full rounded-full bg-brand-600/75" style={{ width: percentageWidth((value / max) * 100) + "%" }} />
+            <div className="h-full rounded-full bg-brand-700" style={{ width: percentageWidth((value / max) * 100) + "%" }} />
           </div>
         </div>
       ))}
