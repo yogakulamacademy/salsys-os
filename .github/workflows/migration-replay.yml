@@ -236,6 +236,9 @@ jobs:
           cp supabase/recovery/20261029115400_system_health_base_prerequisite.sql \
              supabase/migrations/20261029115400_system_health_base_prerequisite.sql
 
+          cp supabase/recovery/20261030155000_admissions_batch_capacity_prerequisite.sql \
+             supabase/migrations/20261030155000_admissions_batch_capacity_prerequisite.sql
+
       - name: Start local Supabase database
         shell: bash
         run: |
