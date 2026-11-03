@@ -84,26 +84,26 @@ export function LeadsOverview({ summary }: LeadsOverviewProps) {
   ].filter((value): value is { text: string; detail: string; href: string } => value != null);
 
   return (
-    <div className="space-y-3.5" data-testid="leads-overview">
+    <div className="space-y-2.5" data-testid="leads-overview">
       <section aria-label="Leads overview" className="grid grid-cols-2 gap-3 lg:grid-cols-3 xl:grid-cols-5">
         {cards.map(({ label, value, detail, icon: Icon, href, surface, tone }) => (
           <Link
             key={label}
             href={href}
-            className="group flex min-h-[122px] min-w-0 flex-col justify-between rounded-2xl border border-line bg-surface p-4 transition hover:border-brand-300 hover:shadow-sm focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-700"
+            className="group flex min-h-[106px] min-w-0 flex-col justify-between rounded-2xl border border-line bg-surface p-3 transition hover:border-brand-300 hover:shadow-sm focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-700"
           >
             <div className="flex items-center gap-2.5">
-              <span className={"grid h-9 w-9 shrink-0 place-items-center rounded-xl " + surface + " " + tone}>
+              <span className={"grid h-8 w-8 shrink-0 place-items-center rounded-lg " + surface + " " + tone}>
                 <Icon size={17} aria-hidden />
               </span>
               <span className="min-w-0 text-[11px] font-semibold text-copy-muted">{label}</span>
             </div>
-            <div className="mt-2.5 flex items-end justify-between gap-2">
+            <div className="mt-2 flex items-end justify-between gap-2">
               <div className="min-w-0">
-                <div className="text-[25px] font-semibold leading-none tracking-[-0.035em] tabular-nums text-copy-strong">
+                <div className="text-[23px] font-semibold leading-none tracking-[-0.035em] tabular-nums text-copy-strong">
                   {value.toLocaleString("en-IN")}
                 </div>
-                <p className="mt-1.5 text-[10px] leading-4 text-copy-subtle">{detail}</p>
+                <p className="mt-1 text-[10px] leading-4 text-copy-subtle">{detail}</p>
               </div>
               <ArrowRight size={14} className="mb-1 shrink-0 text-copy-subtle transition group-hover:translate-x-0.5 group-hover:text-brand-700" aria-hidden />
             </div>
@@ -112,7 +112,7 @@ export function LeadsOverview({ summary }: LeadsOverviewProps) {
       </section>
 
       {urgent.length > 0 ? (
-        <section aria-label="Focus now" className="flex flex-col gap-2.5 rounded-xl border border-brand-100 bg-brand-50/45 px-3.5 py-3 sm:flex-row sm:items-center dark:border-brand-900/45 dark:bg-brand-950/15">
+        <section aria-label="Focus now" className="flex flex-col gap-2.5 rounded-xl border border-brand-100 bg-brand-50/45 px-3.5 py-2.5 sm:flex-row sm:items-center dark:border-brand-900/45 dark:bg-brand-950/15">
           <div className="inline-flex shrink-0 items-center gap-2 text-xs font-semibold text-brand-700 dark:text-brand-300 sm:border-r sm:border-line sm:pr-3">
             <span className="grid h-7 w-7 place-items-center rounded-lg bg-brand-100 dark:bg-brand-900/50">
               <ListFilter size={14} aria-hidden />
