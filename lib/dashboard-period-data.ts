@@ -35,6 +35,15 @@ export type DashboardPeriodSource = {
   conversionRate: number | null;
 };
 
+/** Identical day-index buckets from current and previous equal-length periods. */
+export type DashboardLeadActivityPoint = {
+  date: string;
+  currentRange: string;
+  previousRange: string;
+  current: number;
+  previous: number;
+};
+
 export type DashboardPeriodAnalytics = {
   period: DashboardPeriodSelection;
   available: {
@@ -45,6 +54,7 @@ export type DashboardPeriodAnalytics = {
   revenue: DashboardPeriodRevenue[];
   primaryCurrency: string | null;
   revenueSeries: DashboardRevenuePoint[];
+  leadSeries: DashboardLeadActivityPoint[];
   leads: {
     current: number;
     previous: number;
@@ -236,6 +246,7 @@ export async function getDashboardPeriodAnalytics(
     revenue,
     primaryCurrency,
     revenueSeries,
+    leadSeries: !leadResult.error ? buildLeadActivitySeries(currentLeads, previousLeads, period) : [],
     leads: {
       current: currentLeads.length,
       previous: previousLeads.length,
@@ -252,6 +263,64 @@ export async function getDashboardPeriodAnalytics(
     },
     sources: buildSources(currentLeads),
   };
+}
+
+/**
+ * Period lead-volume visualization uses the same authorized `leads` query as the
+ * existing KPI. It adds no new read scope, and never interprets a snapshot stage
+ * as a historical qualification event.
+ *
+ * Group at most about 30 points to keep 90D/YTD/custom readable.
+ */
+function buildLeadActivitySeries(
+  currentRows: LeadRow[],
+  previousRows: LeadRow[],
+  period: DashboardPeriodSelection,
+): DashboardLeadActivityPoint[] {
+  const binDays = Math.max(1, Math.ceil(period.days / 30));
+  const currentStart = new Date(period.startIso);
+  const previousStart = new Date(period.previousStartIso);
+  const groups = Math.ceil(period.days / binDays);
+  const currentCounts = Array.from({ length: groups }, () => 0);
+  const previousCounts = Array.from({ length: groups }, () => 0);
+
+  function accumulate(rows: LeadRow[], start: Date, target: number[]) {
+    for (const row of rows) {
+      if (!row.created_at) continue;
+      const instant = new Date(row.created_at).getTime();
+      if (!Number.isFinite(instant)) continue;
+      const dayIndex = Math.floor((instant - start.getTime()) / 86_400_000);
+      if (dayIndex < 0 || dayIndex >= period.days) continue;
+      target[Math.floor(dayIndex / binDays)] += 1;
+    }
+  }
+
+  accumulate(currentRows, currentStart, currentCounts);
+  accumulate(previousRows, previousStart, previousCounts);
+
+  const formatter = new Intl.DateTimeFormat("en-IN", {
+    day: "numeric",
+    month: "short",
+    timeZone: "UTC",
+  });
+  const dateRange = (start: Date, firstDay: number, lastDay: number) => {
+    const first = addUtcDays(start, firstDay);
+    const last = addUtcDays(start, lastDay);
+    const firstLabel = formatter.format(first);
+    return firstDay === lastDay ? firstLabel : firstLabel + " – " + formatter.format(last);
+  };
+
+  return currentCounts.map((current, index) => {
+    const firstDay = index * binDays;
+    const lastDay = Math.min(period.days - 1, firstDay + binDays - 1);
+    return {
+      date: toDateOnly(addUtcDays(currentStart, firstDay)),
+      currentRange: dateRange(currentStart, firstDay, lastDay),
+      previousRange: dateRange(previousStart, firstDay, lastDay),
+      current,
+      previous: previousCounts[index],
+    };
+  });
 }
 
 function buildSources(rows: LeadRow[]): DashboardPeriodSource[] {
