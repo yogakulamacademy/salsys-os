@@ -21,7 +21,13 @@ for (const file of migrations) {
   }
 }
 for (const name of names) if (!selected.has(name)) throw new Error(`Missing canonical helper ${name}`);
-const files = ['20261016171500_organization_knowledge_v1.sql', '20261016182500_fix_organization_knowledge_search_v1.sql', '20261101063000_ai_knowledge_final_closeout_v1.sql', '20261102053201_knowledge_retrieval_anon_execute_hardening.sql'];
+const files = [
+  '20261016171500_organization_knowledge_v1.sql',
+  '20261016182500_fix_organization_knowledge_search_v1.sql',
+  '20261101063000_ai_knowledge_final_closeout_v1.sql',
+  '20261102053201_knowledge_retrieval_anon_execute_hardening.sql',
+  '20261103190000_ai_knowledge_provenance_readiness_v2.sql',
+];
 const knowledge = files.map(file => `-- Exact source: ${file}\n${fs.readFileSync(path.join(root, 'supabase/migrations', file), 'utf8')}`).join('\n');
 const fixture = fs.readFileSync(path.join(root, 'tests/database/knowledge-readiness.fixture.sql'), 'utf8');
 const sql = fixture.replace('-- __AUTHORIZATION__', () => names.map(name => selected.get(name)).join('\n')).replace('-- __KNOWLEDGE__', () => knowledge);
