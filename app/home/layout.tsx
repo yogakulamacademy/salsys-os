@@ -1,4 +1,5 @@
 import './source-icons.css';
+import './command-center-v2.css';
 
 import { RecommendedActions } from '@/components/home/recommended-actions';
 import { HomeSetupRecommendations } from '@/components/home-setup-recommendations';
