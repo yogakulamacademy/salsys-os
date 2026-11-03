@@ -133,6 +133,12 @@ jobs:
           cp supabase/recovery/20261014055750_pipeline_aging_view_alignment.sql \
              supabase/migrations/20261014055750_pipeline_aging_view_alignment.sql
 
+          # The original global CRM mutators also existed out-of-band. Stage
+          # their exact production definitions immediately before 065535 revokes
+          # authenticated EXECUTE in favor of the tenant-scoped v2 RPCs.
+          cp supabase/recovery/20261014065500_legacy_global_crm_mutators_prerequisite.sql \
+             supabase/migrations/20261014065500_legacy_global_crm_mutators_prerequisite.sql
+
           # The original tracking-source migration exists in production history
           # but was never committed to Git. Stage the minimal authoritative
           # prerequisite at its real production ledger version for clean replay.
