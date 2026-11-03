@@ -74,6 +74,15 @@ jobs:
           cp supabase/recovery/042_paid_media_overview_prerequisite.sql supabase/migrations/0415_recovery_paid_media_overview.sql
           cp supabase/recovery/047_integration_oauth_states_prerequisite.sql supabase/migrations/0465_recovery_integration_oauth_states.sql
 
+          # The tenant-aware Team Performance and Assignment Fairness RPCs were
+          # applied out-of-band before the Reports workspace authorization
+          # migration. The exact historical definitions were recovered from the
+          # October audit snapshot and stored compressed to avoid transcription
+          # drift. Decode them at their pre-authorization point in CI only.
+          base64 -d supabase/recovery/20261013125000_reports_rpc_prerequisite.sql.gz.b64 \
+            | gzip -d \
+            > supabase/migrations/20261013125000_reports_rpc_prerequisite.sql
+
           # The original tracking-source migration exists in production history
           # but was never committed to Git. Stage the minimal authoritative
           # prerequisite at its real production ledger version for clean replay.
