@@ -166,6 +166,17 @@ jobs:
             > supabase/migrations/20261014141153_w6_semantic_opportunity_engine_v1.sql
           echo "dd2634d72220a015eb0546df040630cd  supabase/migrations/20261014141153_w6_semantic_opportunity_engine_v1.sql" | md5sum -c -
 
+          # The source recovery below intentionally stores two missing production
+          # boundaries together. Split only the replay working copies so the core
+          # Smart Triggers schema is restored before its scheduler/wait evolution.
+          awk '
+            $0 == "-- Production 20261016131221_smart_triggers_v1_foundation" { emit=1 }
+            $0 == "-- Production 20261017091453_automation_runtime_scheduler_foundation_v1" { exit }
+            emit { print }
+          ' supabase/recovery/20261017091453_automation_runtime_scheduler_foundation_v1.sql \
+            > supabase/migrations/20261016131221_smart_triggers_v1_foundation.sql
+          test -s supabase/migrations/20261016131221_smart_triggers_v1_foundation.sql
+
           cp supabase/recovery/20261016144625_smart_triggers_scheduler_wait_foundation_v1.sql \
              supabase/migrations/20261016144625_smart_triggers_scheduler_wait_foundation_v1.sql
           cp supabase/recovery/20261017033628_smart_triggers_flow_graph_foundation_v1.sql \
@@ -173,8 +184,12 @@ jobs:
           cp supabase/recovery/20261017044549_smart_triggers_flow_versions_v1.sql \
              supabase/migrations/20261017044549_smart_triggers_flow_versions_v1.sql
 
-          cp supabase/recovery/20261017091453_automation_runtime_scheduler_foundation_v1.sql \
-             supabase/migrations/20261017091453_automation_runtime_scheduler_foundation_v1.sql
+          awk '
+            $0 == "-- Production 20261017091453_automation_runtime_scheduler_foundation_v1" { emit=1 }
+            emit { print }
+          ' supabase/recovery/20261017091453_automation_runtime_scheduler_foundation_v1.sql \
+            > supabase/migrations/20261017091453_automation_runtime_scheduler_foundation_v1.sql
+          test -s supabase/migrations/20261017091453_automation_runtime_scheduler_foundation_v1.sql
 
           cp supabase/recovery/20261017125342_automation_whatsapp_template_registry_prerequisite.sql \
              supabase/migrations/20261017125342_automation_whatsapp_template_registry_v1.sql
