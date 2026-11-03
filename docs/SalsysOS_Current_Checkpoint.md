@@ -1,24 +1,25 @@
 # SalsysOS Current Checkpoint
 
-**Checkpoint date:** 2026-11-02  
+**Checkpoint date:** 2026-11-03  
 **Canonical repository:** `yogakulamacademy/salsys-os`  
 **Production branch:** `main`  
-**Verified production runtime head:** `1846b1fc845b0325f0a8ac6b409c67744d65245e`  
+**Verified production runtime head (3 Nov):** `57c2abf8638cf4bc08773e25c2d435e4c1387de5`  
 **Fast resume file:** `docs/SalsysOS_Active_Handoff.md`
 
-### UI workstream update — 2 November 2026
+### ACTIVE PRIORITY — UI/UX (3 November 2026)
 
-**Journey/growth continuation:** the user explicitly selected Journey/growth improvements before R13, alongside shared UI consistency across the existing destinations. The isolated `codex/journey-evidence-foundation` branch builds on UI PR #437 without changing that review branch. See `docs/JOURNEY-EVIDENCE-CHECKPOINT.md` for implemented scope, counting/privacy boundaries, executable tests and remaining financial/identity integration gates. No roadmap completion percentages, production acceptance or full GT-01 financial pass are asserted. R13 commercial implementation has not started in this workstream.
+The user has **explicitly paused non-UI engineering** while UI/UX is being reviewed. The **single current source of truth for pause/resume**, exact merged commits, production Sales Asset migrations, WhatsApp acceptance, GT-01 financial provider gate, AI Knowledge/Conversation Agent, R13 and conservative planning estimates is:
 
-**Critical retained requirement — AI Knowledge:** read `docs/AI-KNOWLEDGE-AGENT-WORKFLOW.md` before the next workflow/automation implementation. The target is one Knowledge + Sales Asset Library and a shared WhatsApp/Instagram Conversation Agent: routine permitted replies/assets automatic, explicit risk/commercial approval checkpoints, canonical stage changes, verified payment authority, observability and tenant/privacy controls. This is a mandatory upcoming dependency, not a completed capability or an authorization to enable autonomous sends. Existing approved-knowledge retrieval and draft-only Co-Pilot must be extended and verified; the note's zero-item production count and readiness percentages remain unverified claims.
+**[3 Nov UI Priority & Paused Engineering Handoff](checkpoints/M-2026-11-03-UI-Priority-Paused-Work-Handoff-v1.md)**
 
-The user approved the neutral/violet reference style and requested consistent UI/UX across the product. The isolated branch `codex/unified-ui-reference-style` implements shared identity, panels, controls, illustrated empty states, an unselected Inbox without dashboard statistic cards, responsive context layout and keyboard modal behavior. See `docs/UI-CONSISTENCY.md` for screen rules and the repeatable local test setup.
+- **Start UI work now** by inspecting the specific screen and agreeing the minimalist/neutral/violet design, user behavior and responsive states before changing code. Read `docs/UI-CONSISTENCY.md` and `docs/SMART-JOURNEY-WORKSPACE.md`.
+- UI PRs **#437 and #438 are already merged**, not pending draft PRs. Do not recreate their branches or discard other contributors' work.
+- Sales Asset PRs **#448–#452 are merged**; Vercel production was **READY** at `57c2abf...`, with Smoke and CodeQL passing. Their final **two additive course-scope normalization SQL migrations are not yet in production**, and **no live WhatsApp media acceptance send has been completed**.
+- Paused backlog: production SQL/WhatsApp controlled acceptance; real payment-provider GT-01 acceptance; owner-approved AI Knowledge and controlled shared WhatsApp/Instagram agent; remaining identity/privacy/provider gates; **R13-P0–P4 SaaS commercialization**. R13 audit/design is closed but implementation is not.
+- Any future "resume backend/AI" must re-read live repo, migration ledger, deployment and that handoff, then begin at the exact outstanding checkpoint. No production data writes, provider sends, autonomous activation or unrelated merges are implied by a documentation update.
 
-This is source implementation and synthetic UI evidence, **not a production release or acceptance claim**. The production head recorded above is historical checkpoint evidence and was not updated by this work. The R13 commercial roadmap position below is preserved. The user authorized source Journey/growth improvements alongside shared UI consistency; production-role, financial and release acceptance gates still apply.
+> The older R13-P0 sections below remain the **paused commercial plan**, not today's active UI task. Historical R11 scope decisions and checkpoint files remain intact.
 
-The Master Context v1.2 strategy, vertical boundaries and roadmaps remain unchanged. The prior product review and acceptance fixture remain proposed behavior; local UI tests do not validate the full journey/payment fixture or production provider outcomes.
-
-> Historical checkpoint files under `docs/checkpoints/` are immutable evidence records. Later scope-revision checkpoints supersede product requirements without deleting historical implementation evidence.
 
 ---
 
@@ -37,7 +38,7 @@ Current state:
 - R11-P2 Generic Catalog Adapter Boundary: complete and production-accepted;
 - R11-P3 Accommodation / Residential Extension: **cancelled / retired from active product scope**;
 - **R13 Commercial SaaS Readiness audit/design: complete and locked**;
-- **current exact checkpoint: R13-P0 — Commercial State Foundation**.
+- **paused commercial implementation checkpoint: R13-P0 — Commercial State Foundation** (UI/UX is the active workstream; see linked 3 November handoff).
 
 Read first:
 
