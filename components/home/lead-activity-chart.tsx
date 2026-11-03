@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { HomeEmptyState } from "@/components/home/home-empty-state";
 import { ArrowRight } from "lucide-react";
 import {
   Area, CartesianGrid, ComposedChart, Line, ResponsiveContainer,
@@ -48,18 +49,25 @@ export function LeadActivityChart({
 }: LeadActivityChartProps) {
   if (!available) {
     return (
-      <div data-testid="home-lead-activity" className="grid min-h-[220px] place-items-center rounded-xl border border-dashed border-line bg-surface-muted p-5 text-center">
-        <p className="max-w-sm text-xs leading-5 text-copy-muted">
-          Selected-period lead evidence is unavailable. The chart is withheld rather than substituting all-time leads.
-        </p>
+      <div data-testid="home-lead-activity">
+        <HomeEmptyState
+          variant="activity"
+          unavailable
+          title="Lead activity unavailable"
+          description="Selected-period lead evidence is unavailable. The chart is withheld rather than substituting all-time leads."
+        />
       </div>
     );
   }
 
   if (!points.length) {
     return (
-      <div data-testid="home-lead-activity" className="grid min-h-[220px] place-items-center rounded-xl bg-surface-muted p-5 text-center">
-        <p className="text-xs leading-5 text-copy-muted">No comparable lead activity is available for this date range.</p>
+      <div data-testid="home-lead-activity">
+        <HomeEmptyState
+          variant="activity"
+          title="No lead activity yet"
+          description="No comparable lead activity is available for this date range."
+        />
       </div>
     );
   }
@@ -135,8 +143,14 @@ export function LeadActivityChart({
           </ResponsiveContainer>
         </div>
       ) : (
-        <div className="mt-4 grid h-[180px] place-items-center rounded-xl bg-surface-muted text-center text-xs text-copy-muted">
-          No new leads were recorded in either comparable period.
+        <div className="mt-4">
+          <HomeEmptyState
+            variant="activity"
+            compact
+            title="No new leads yet"
+            description="No new leads were recorded in either comparable period."
+            action={{ href: "/leads", label: "Open leads" }}
+          />
         </div>
       )}
       <div className="mt-3 flex flex-wrap items-center justify-between gap-3 border-t border-line pt-3">

@@ -137,7 +137,14 @@ test('Home evidence-first charts preserve empty-data and action semantics', asyn
   await expect(chart).toBeVisible();
   // Synthetic mock mode has no authorized period lead query: never manufacture a line graph.
   await expect(chart).toContainText('Selected-period lead evidence is unavailable');
-  await expect(chart.locator('svg')).toHaveCount(0);
+  // Decorative SVG is allowed, but no factual line/chart can be rendered without evidence.
+  await expect(chart.locator('svg[aria-hidden="true"]')).toHaveCount(1);
+  await expect(chart.locator('.recharts-responsive-container')).toHaveCount(0);
+  await expect(chart.getByTestId('home-empty-state')).toHaveAttribute('data-evidence-state', 'unavailable');
+
+  await expect(page.locator('[data-empty-variant="sources"]')).toHaveAttribute('data-evidence-state', 'unavailable');
+  await expect(page.locator('[data-empty-variant="batches"]')).toHaveAttribute('data-evidence-state', 'empty');
+  await expect(page.locator('[data-empty-variant="status"]')).toHaveAttribute('data-evidence-state', 'unavailable');
 
   await expect(page.getByRole('heading', { name: 'Action queue', exact: true })).toBeVisible();
   await expect(page.getByTestId('home-reply-pressure')).toHaveCount(0);
@@ -145,6 +152,7 @@ test('Home evidence-first charts preserve empty-data and action semantics', asyn
   await expect(page.getByText('Financial context', { exact: true })).toBeVisible();
   await page.getByText('Financial context', { exact: true }).click();
   await expect(page.getByText('Current snapshot revenue has not been substituted', { exact: false })).toBeVisible();
+  await expect(page.locator('[data-empty-variant="revenue"]')).toHaveAttribute('data-evidence-state', 'unavailable');
   await expect(page.getByRole('link', { name: /View system health/ })).toBeVisible();
 
   for (const width of [390, 768, 1440]) {
