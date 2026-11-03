@@ -176,6 +176,8 @@ jobs:
 
           cp supabase/recovery/20261017155803_tracking_sources_core_prerequisite.sql \
              supabase/migrations/20261017155803_tracking_sources_and_event_contracts_v1.sql
+          cp supabase/recovery/20261017161509_crm_lead_attribution_upsert_fix_v1.sql \
+             supabase/migrations/20261017161509_crm_lead_attribution_upsert_fix_v1.sql
           cp supabase/recovery/20261017162257_attribution_state_machine_v1.sql \
              supabase/migrations/20261017162257_attribution_state_machine_v1.sql
           cp supabase/recovery/20261017163029_smart_identity_confidence_engine_prerequisite.sql \
