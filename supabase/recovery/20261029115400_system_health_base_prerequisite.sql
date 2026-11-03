@@ -280,4 +280,66 @@ comment on view public.v_system_health is
 
 grant select on public.v_system_health to authenticated, service_role;
 
+-- -----------------------------------------------------------------------------
+-- Privacy compliance health read model recovered from production.
+--
+-- Production migration 20261017164301_privacy_compliance_core_v1 created this
+-- view, but that historical migration is absent from source control. The privacy
+-- tables it depends on are already reconstructed earlier in the replay, while
+-- PH-3 consumes this view when it builds v_system_health_v2.
+-- -----------------------------------------------------------------------------
+
+create or replace view public.v_privacy_compliance_health
+with (security_invoker = true)
+as
+select
+  o.id as organization_id,
+  (
+    select count(*)
+    from public.privacy_processing_purposes p
+    where p.organization_id = o.id
+      and p.enabled
+  ) as enabled_purposes,
+  (
+    select count(*)
+    from public.tracking_sources s
+    where s.organization_id = o.id
+      and s.status = 'active'::text
+      and s.privacy_mode = 'strict'::text
+  ) as strict_tracking_sources,
+  (
+    select count(*)
+    from public.tracking_sources s
+    where s.organization_id = o.id
+      and s.status = 'active'::text
+      and not s.honor_gpc
+  ) as active_sources_not_honoring_gpc,
+  (
+    select count(*)
+    from public.privacy_data_subject_requests d
+    where d.organization_id = o.id
+      and d.status <> all (array['completed'::text, 'denied'::text, 'cancelled'::text])
+      and d.due_at < now()
+  ) as overdue_subject_requests,
+  (
+    select count(*)
+    from public.privacy_retention_policies rp
+    where rp.organization_id = o.id
+      and rp.enabled
+  ) as enabled_retention_policies,
+  (
+    select count(*)
+    from public.privacy_legal_holds h
+    where h.organization_id = o.id
+      and h.active
+      and (h.ends_at is null or h.ends_at > now())
+  ) as active_legal_holds,
+  now() as checked_at
+from public.organizations o;
+
+comment on view public.v_privacy_compliance_health is
+  'Tenant-scoped privacy compliance health reconstructed from the production contract for cold replay.';
+
+grant select on public.v_privacy_compliance_health to authenticated, service_role;
+
 commit;
