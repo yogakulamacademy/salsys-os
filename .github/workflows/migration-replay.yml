@@ -147,6 +147,21 @@ jobs:
             > supabase/migrations/20261014140808_w6_semantic_processing_and_page_query_grain.sql
           echo "1bc2bfd8d73562184c352d073cbfb42c  supabase/migrations/20261014140808_w6_semantic_processing_and_page_query_grain.sql" | md5sum -c -
 
+          # The page opportunity engine is another production-ledger migration
+          # that never reached Git. Reconstruct its exact Oct 14 payload before
+          # later content-intelligence migrations consume the view.
+          cat \
+            supabase/recovery/20261014141153_w6_semantic_opportunity_engine_v1.part01.b64 \
+            supabase/recovery/20261014141153_w6_semantic_opportunity_engine_v1.part02.b64 \
+            supabase/recovery/20261014141153_w6_semantic_opportunity_engine_v1.part03.b64 \
+            supabase/recovery/20261014141153_w6_semantic_opportunity_engine_v1.part04a.b64 \
+            supabase/recovery/20261014141153_w6_semantic_opportunity_engine_v1.part04b.b64 \
+            supabase/recovery/20261014141153_w6_semantic_opportunity_engine_v1.part05.b64 \
+            supabase/recovery/20261014141153_w6_semantic_opportunity_engine_v1.part06.b64 \
+            | tr -d '\n\r ' | base64 -d \
+            > supabase/migrations/20261014141153_w6_semantic_opportunity_engine_v1.sql
+          echo "dd2634d72220a015eb0546df040630cd  supabase/migrations/20261014141153_w6_semantic_opportunity_engine_v1.sql" | md5sum -c -
+
           cp supabase/recovery/20261017155803_tracking_sources_core_prerequisite.sql \
              supabase/migrations/20261017155803_tracking_sources_and_event_contracts_v1.sql
 
