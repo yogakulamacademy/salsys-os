@@ -133,6 +133,11 @@ jobs:
           cp supabase/recovery/20261014055750_pipeline_aging_view_alignment.sql \
              supabase/migrations/20261014055750_pipeline_aging_view_alignment.sql
 
+          # The original global CRM settings authorization helpers existed
+          # out-of-band before 060716 compatibility reads began using them.
+          cp supabase/recovery/20261014060700_legacy_crm_settings_helpers_prerequisite.sql \
+             supabase/migrations/20261014060700_legacy_crm_settings_helpers_prerequisite.sql
+
           # The original global CRM mutators also existed out-of-band. Stage
           # their exact production definitions immediately before 065535 revokes
           # authenticated EXECUTE in favor of the tenant-scoped v2 RPCs.
