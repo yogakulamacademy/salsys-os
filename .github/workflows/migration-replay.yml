@@ -160,6 +160,9 @@ jobs:
           cp supabase/recovery/20261019112000_whatsapp_lineage_tables_prerequisite.sql \
              supabase/migrations/20261019112000_whatsapp_lineage_tables_prerequisite.sql
 
+          cp supabase/recovery/20261019150400_build_search_document_v1_prerequisite.sql \
+             supabase/migrations/20261019150400_build_search_document_v1_prerequisite.sql
+
       - name: Start local Supabase database
         shell: bash
         run: |
