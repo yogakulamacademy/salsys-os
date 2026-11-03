@@ -239,6 +239,17 @@ jobs:
           cp supabase/recovery/20261030155000_admissions_batch_capacity_prerequisite.sql \
              supabase/migrations/20261030155000_admissions_batch_capacity_prerequisite.sql
 
+          cat supabase/recovery/20261101095400_dashboard_snapshot_internal_v1.part*.b64 \
+            | tr -d '\n\r ' \
+            | base64 -d \
+            > supabase/migrations/20261101095400_dashboard_snapshot_internal_v1_prerequisite.sql
+          echo "966befec94e6dbf791c0067d2649bd59  supabase/migrations/20261101095400_dashboard_snapshot_internal_v1_prerequisite.sql" \
+            | md5sum -c -
+          printf ';\n' >> supabase/migrations/20261101095400_dashboard_snapshot_internal_v1_prerequisite.sql
+
+          cp supabase/recovery/20261101095410_dashboard_snapshot_authorization_prerequisite.sql \
+             supabase/migrations/20261101095410_dashboard_snapshot_authorization_prerequisite.sql
+
       - name: Start local Supabase database
         shell: bash
         run: |
