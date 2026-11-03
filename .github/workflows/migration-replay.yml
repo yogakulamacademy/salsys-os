@@ -121,6 +121,11 @@ jobs:
           cp supabase/recovery/20261014115900_remaining_organization_read_tables_prerequisite.sql \
              supabase/migrations/20261014115900_remaining_organization_read_tables_prerequisite.sql
 
+          cp supabase/recovery/20261014133200_derived_accommodation_foundation_prerequisite.sql \
+             supabase/migrations/20261014133200_derived_accommodation_foundation_prerequisite.sql
+          cp supabase/recovery/20261014133212_tenant_scope_derived_accommodation_policies.sql \
+             supabase/migrations/20261014133212_tenant_scope_derived_accommodation_policies.sql
+
           cat supabase/recovery/20261014135430_w6_website_intelligence_foundation.part*.b64 \
             | tr -d '\n\r ' | base64 -d \
             > supabase/migrations/20261014135430_w6_website_intelligence_foundation.sql
