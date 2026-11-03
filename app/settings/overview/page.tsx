@@ -6,6 +6,7 @@ import {
   BrainCircuit,
   Building2,
   Database,
+  FileImage,
   PlugZap,
   ShieldCheck,
   SlidersHorizontal,
@@ -39,7 +40,7 @@ export default async function SettingsOverviewPage() {
       <PageHeader
         eyebrow="Settings"
         title="Workspace settings"
-        description="Manage CRM rules, permissions, approved AI knowledge, integrations, tracking and operational system controls."
+        description="Manage CRM rules, permissions, approved AI knowledge, governed sales assets, integrations, tracking and operational system controls."
       />
 
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
@@ -65,6 +66,15 @@ export default async function SettingsOverviewPage() {
             icon={<BrainCircuit size={19} />}
             title="AI Knowledge"
             description="Manage approved organization facts, policies, pricing, courses and sales guidance used by the Co-Pilot."
+          />
+        ) : null}
+
+        {admin ? (
+          <SettingsCard
+            href="/settings/assets"
+            icon={<FileImage size={19} />}
+            title="Sales Asset Library"
+            description="Upload private media, record rights and scope, approve usage and revoke assets before AI delivery is enabled."
           />
         ) : null}
 
@@ -111,7 +121,7 @@ export default async function SettingsOverviewPage() {
           <div className="text-[10px] font-semibold uppercase tracking-[0.14em] text-brand-700">Manager scope</div>
           <div className="mt-1 text-sm font-semibold text-copy-strong">Operational settings stay permission-bound</div>
           <p className="mt-1 max-w-2xl text-xs leading-5 text-copy-muted">
-            Managers can review CRM rules here. Provider credentials, team access, tracking administration and system-health controls remain Owner/Admin settings.
+            Managers can review CRM rules here. Provider credentials, team access, AI knowledge, sales assets, tracking administration and system-health controls remain Owner/Admin settings.
           </p>
         </section>
       ) : null}
