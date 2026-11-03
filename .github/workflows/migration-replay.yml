@@ -156,6 +156,12 @@ jobs:
           echo "fd54c24c82385da0650cbcd2f0d1c7e7c8726415106e275d1a9e270832d152cd  supabase/migrations/20261014092250_latent_accommodation_rpcs_prerequisite.sql" \
             | sha256sum -c -
 
+          # The explicit-organization course-batch admin V2 RPCs also existed
+          # out-of-band before 092425 reduced them to service-role-only execution.
+          # Stage the definitions later captured by the Oct 30 hardening migration.
+          cp supabase/recovery/20261014092400_latent_course_v2_rpcs_prerequisite.sql \
+             supabase/migrations/20261014092400_latent_course_v2_rpcs_prerequisite.sql
+
           # The original tracking-source migration exists in production history
           # but was never committed to Git. Stage the minimal authoritative
           # prerequisite at its real production ledger version for clean replay.
