@@ -117,11 +117,16 @@ jobs:
             > supabase/migrations/20261014135430_w6_website_intelligence_foundation.sql
           echo "4bb9c6cd658eccfdae1e43e66f86f3ce  supabase/migrations/20261014135430_w6_website_intelligence_foundation.sql" | md5sum -c -
 
-          # part02a/part02b/part02c are superseded split artifacts retained for
-          # recovery archaeology. The authoritative payload is 01 -> 02 -> 03.
+          # The semantic payload's original part02 drifted. These smaller chunks
+          # were compared byte-for-byte with the production migration ledger.
           cat \
             supabase/recovery/20261014135518_w6_semantic_seo_foundation.part01.b64 \
-            supabase/recovery/20261014135518_w6_semantic_seo_foundation.part02.b64 \
+            supabase/recovery/20261014135518_w6_semantic_seo_foundation.part02a.b64 \
+            supabase/recovery/20261014135518_w6_semantic_seo_foundation.part02b.b64 \
+            supabase/recovery/20261014135518_w6_semantic_seo_foundation.part02c1.b64 \
+            supabase/recovery/20261014135518_w6_semantic_seo_foundation.part02c2.b64 \
+            supabase/recovery/20261014135518_w6_semantic_seo_foundation.part02d1.b64 \
+            supabase/recovery/20261014135518_w6_semantic_seo_foundation.part02d2.b64 \
             supabase/recovery/20261014135518_w6_semantic_seo_foundation.part03.b64 \
             | tr -d '\n\r ' | base64 -d \
             > supabase/migrations/20261014135518_w6_semantic_seo_foundation.sql
