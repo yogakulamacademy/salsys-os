@@ -19,7 +19,7 @@ type ImportResult = {
   message: string;
 };
 
-export function LeadsImportClient() {
+export function LeadsImportClient({ enabled }: { enabled: boolean }) {
   const [fileName, setFileName] = useState("");
   const [preview, setPreview] = useState<ImportCsvPreview | null>(null);
   const [parseError, setParseError] = useState("");
@@ -56,7 +56,7 @@ export function LeadsImportClient() {
   }
 
   async function startImport() {
-    if (!preview?.rows.length || running || completed) return;
+    if (!enabled || !preview?.rows.length || running || completed) return;
     setRunning(true);
     setRequestError("");
     setResults([]);
@@ -234,7 +234,7 @@ export function LeadsImportClient() {
           {!completed ? (
             <button
               type="button"
-              disabled={running || !preview.rows.length || Boolean(requestError)}
+              disabled={!enabled || running || !preview.rows.length || Boolean(requestError)}
               onClick={startImport}
               className="mt-4 inline-flex min-h-11 items-center justify-center gap-2 rounded-ui bg-brand-700 px-5 text-xs font-semibold text-white transition hover:bg-brand-800 disabled:cursor-not-allowed disabled:opacity-50"
             >
