@@ -188,7 +188,7 @@ export default async function HomePage({ searchParams }: HomePageProps) {
   ].filter((value): value is string => Boolean(value));
 
   return (
-    <div className="command-center-v2 mx-auto max-w-[1480px] space-y-4 pb-8 sm:space-y-5">
+    <div className="command-center-v2 w-full min-w-0 space-y-4 pb-8 sm:space-y-5">
       <header className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
         <div className="min-w-0">
           <h1 className="text-[28px] font-semibold tracking-[-0.04em] text-copy-strong">Command Center</h1>
