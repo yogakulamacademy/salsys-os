@@ -79,4 +79,45 @@ where current_stage <> all(array[
 ])
 group by current_stage;
 
+-- Production currently has a constraint-backed UNIQUE key on
+-- organization_members(organization_id,user_id), and the workspace membership
+-- FK depends on that constraint's backing index. No migration in the production
+-- ledger creates the constraint, while migration 007 creates only the older
+-- standalone organization_members_org_user_unique index. Reconstruct the
+-- missing dependency graph before the later duplicate-index cleanup runs.
+--
+-- Temporarily remove the FK and standalone index so PostgreSQL cannot bind the
+-- FK back to the obsolete index. Then create the constraint-backed key, recreate
+-- the FK, and finally recreate the historical duplicate index. The real Oct-27
+-- cleanup migration can then drop that duplicate normally, matching production.
+alter table public.workspace_memberships
+  drop constraint if exists workspace_memberships_org_user_fkey;
+
+drop index if exists public.organization_members_org_user_unique;
+
+do $recovery$
+begin
+  if not exists (
+    select 1
+    from pg_constraint
+    where conrelid = 'public.organization_members'::regclass
+      and conname = 'organization_members_organization_id_user_id_key'
+      and contype = 'u'
+  ) then
+    alter table public.organization_members
+      add constraint organization_members_organization_id_user_id_key
+      unique (organization_id, user_id);
+  end if;
+end;
+$recovery$;
+
+alter table public.workspace_memberships
+  add constraint workspace_memberships_org_user_fkey
+  foreign key (organization_id, user_id)
+  references public.organization_members(organization_id, user_id)
+  on delete cascade;
+
+create unique index if not exists organization_members_org_user_unique
+  on public.organization_members(organization_id, user_id);
+
 commit;
