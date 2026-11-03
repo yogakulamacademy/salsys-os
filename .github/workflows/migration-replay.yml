@@ -83,6 +83,13 @@ jobs:
             | gzip -d \
             > supabase/migrations/20261013125000_reports_rpc_prerequisite.sql
 
+          # lead_inbox_reads existed out-of-band before the Sales Conversations
+          # capability migration. Stage the recovered table/RLS contract just
+          # before that migration so later history remains responsible for its
+          # own authorization and optimization changes.
+          cp supabase/recovery/20261013183000_lead_inbox_reads_prerequisite.sql \
+             supabase/migrations/20261013183000_lead_inbox_reads_prerequisite.sql
+
           # The original tracking-source migration exists in production history
           # but was never committed to Git. Stage the minimal authoritative
           # prerequisite at its real production ledger version for clean replay.
