@@ -153,6 +153,11 @@ jobs:
             > supabase/migrations/20261014141153_w6_semantic_opportunity_engine_v1.sql
           echo "dd2634d72220a015eb0546df040630cd  supabase/migrations/20261014141153_w6_semantic_opportunity_engine_v1.sql" | md5sum -c -
 
+          cp supabase/recovery/20261017125342_automation_whatsapp_template_registry_prerequisite.sql \
+             supabase/migrations/20261017125342_automation_whatsapp_template_registry_v1.sql
+          cp supabase/recovery/20261017130525_automation_whatsapp_template_sync_prerequisite.sql \
+             supabase/migrations/20261017130525_automation_whatsapp_template_sync_v1.sql
+
           cp supabase/recovery/20261017155803_tracking_sources_core_prerequisite.sql \
              supabase/migrations/20261017155803_tracking_sources_and_event_contracts_v1.sql
 
