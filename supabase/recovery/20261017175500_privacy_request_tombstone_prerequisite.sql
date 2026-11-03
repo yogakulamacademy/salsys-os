@@ -200,6 +200,9 @@ using (
   )
 );
 
+-- Match the actual Oct-17 production shape. The surrogate id/primary key was
+-- introduced later by the Oct-27 PH-0 hardening migration and must not exist
+-- yet at this replay boundary.
 create table if not exists public.privacy_subject_restrictions (
   organization_id uuid not null references public.organizations(id) on delete cascade,
   person_id uuid references public.persons(id) on delete cascade,
@@ -216,7 +219,6 @@ create table if not exists public.privacy_subject_restrictions (
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
   metadata jsonb not null default '{}'::jsonb,
-  id uuid primary key default gen_random_uuid(),
   check (person_id is not null or lead_id is not null or anonymous_visitor_id is not null)
 );
 
