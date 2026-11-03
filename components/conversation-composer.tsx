@@ -16,6 +16,10 @@ import {
 import { useCallback, useEffect, useRef, useState, useTransition } from "react";
 
 import { markCopilotAssistedMessageAction } from "@/app/conversations/copilot-audit-actions";
+import {
+  sendWhatsAppSalesAssetMessageAction,
+  type WhatsAppSalesAssetActionResult,
+} from "@/app/conversations/whatsapp-sales-asset-send-actions";
 import { useWhatsAppConnectionStatus } from "@/components/use-whatsapp-connection-status";
 
 type WhatsAppSendResult = {
@@ -116,6 +120,22 @@ function asPreparedAsset(detail: Partial<SelectedSalesAsset> | undefined) {
   } satisfies SelectedSalesAsset;
 }
 
+function supportsControlledMediaSend(asset: SelectedSalesAsset | null) {
+  if (!asset) return true;
+  if (
+    asset.assetKind === "image" &&
+    ["image/jpeg", "image/png"].includes(asset.mimeType) &&
+    asset.sizeBytes <= 5 * 1024 * 1024
+  ) {
+    return true;
+  }
+  return (
+    ["pdf", "document"].includes(asset.assetKind) &&
+    asset.mimeType === "application/pdf" &&
+    asset.sizeBytes <= 50 * 1024 * 1024
+  );
+}
+
 export function WhatsAppComposer({
   action,
   leadId,
@@ -151,6 +171,9 @@ export function WhatsAppComposer({
   const draftKey = resolvedLeadId
     ? `salsysos:conversation-draft:v1:${resolvedLeadId}:whatsapp`
     : "";
+  const replyLimit = selectedAsset ? 1024 : 4096;
+  const mediaCaptionTooLong = Boolean(selectedAsset && body.length > 1024);
+  const mediaSendSupported = supportsControlledMediaSend(selectedAsset);
 
   useEffect(() => {
     if (leadId) {
@@ -407,12 +430,14 @@ export function WhatsAppComposer({
   const restoreFailedDraft = (
     text: string,
     wasCopilotAssisted: boolean,
+    errorMessage?: string,
   ) => {
     setBody((current) => current || text);
     persistDraft(text);
     if (wasCopilotAssisted) setCopilotAssisted(true);
     setSendError(
-      "Message was not sent. Your draft has been restored so you can retry safely.",
+      errorMessage ||
+        "Message was not sent. Your draft has been restored so you can retry safely.",
     );
   };
 
@@ -423,16 +448,30 @@ export function WhatsAppComposer({
       return;
     }
 
-    if (selectedAsset) {
+    if (selectedAsset && !resolvedLeadId) {
+      setSendError("Unable to resolve the selected lead for this attachment.");
+      return;
+    }
+
+    if (selectedAsset && !mediaSendSupported) {
       setSendError(
-        "This Sales Asset is preflighted, but controlled WhatsApp media delivery is not enabled in this slice. Remove the attachment to send a text-only reply.",
+        "This attachment format is not enabled for controlled WhatsApp delivery yet. Use an approved JPEG, PNG or PDF Sales Asset.",
       );
       return;
     }
 
+    if (selectedAsset && mediaCaptionTooLong) {
+      setSendError("WhatsApp attachment captions are limited to 1024 characters.");
+      return;
+    }
+
+    const assetForSend = selectedAsset;
     const wasCopilotAssisted = copilotAssisted;
     const formData = new FormData();
     formData.set("body", text);
+    if (assetForSend) {
+      formData.set("sales_asset_id", assetForSend.assetId);
+    }
     if (wasCopilotAssisted) {
       formData.set("ai_generated", "true");
     }
@@ -443,14 +482,47 @@ export function WhatsAppComposer({
 
     startTransition(async () => {
       try {
-        const result = await action(formData);
+        const result = assetForSend
+          ? await sendWhatsAppSalesAssetMessageAction(resolvedLeadId, formData)
+          : await action(formData);
 
-        if (!result?.ok) {
+        if (!result) {
+          restoreFailedDraft(text, wasCopilotAssisted);
+          return;
+        }
+
+        if (!result.ok) {
+          if (assetForSend && "customerMessageSent" in result) {
+            const mediaResult = result as WhatsAppSalesAssetActionResult;
+
+            if (!mediaResult.ok && mediaResult.customerMessageSent && mediaResult.message) {
+              persistDraft("");
+              setSelectedAsset(null);
+              setSendError(
+                `${mediaResult.error} The customer message was already accepted by WhatsApp. Do not resend this attachment.`,
+              );
+              window.dispatchEvent(
+                new CustomEvent("crm:whatsapp-sent", {
+                  detail: mediaResult.message,
+                }),
+              );
+              return;
+            }
+
+            restoreFailedDraft(
+              text,
+              wasCopilotAssisted,
+              `${mediaResult.error} Your draft and attachment are still selected so you can retry safely.`,
+            );
+            return;
+          }
+
           restoreFailedDraft(text, wasCopilotAssisted);
           return;
         }
 
         persistDraft("");
+        setSelectedAsset(null);
         setSendError(null);
 
         if (wasCopilotAssisted && result.message.id && resolvedLeadId) {
@@ -571,8 +643,9 @@ export function WhatsAppComposer({
                 className="mb-2 flex items-center gap-2 rounded-lg border border-[#DCE4DF] bg-[#F6F8F7] px-3 py-2 text-[10px] font-medium text-[#596E64]"
               >
                 <RefreshCw size={12} className="animate-spin" />
-                Sending through the verified WhatsApp action. Your draft remains
-                protected until the send completes.
+                {selectedAsset
+                  ? "Uploading the private Sales Asset and sending through the verified WhatsApp action."
+                  : "Sending through the verified WhatsApp action. Your draft remains protected until the send completes."}
               </div>
             ) : null}
 
@@ -584,7 +657,7 @@ export function WhatsAppComposer({
                   </span>
                   <div className="min-w-0 flex-1">
                     <div className="text-[9px] font-semibold text-sky-900 dark:text-sky-200">
-                      Attachment preflighted
+                      Attachment ready for controlled send
                     </div>
                     <div className="mt-0.5 truncate text-[10px] font-semibold text-[#18362D] dark:text-slate-100">
                       {selectedAsset.title}
@@ -593,8 +666,13 @@ export function WhatsAppComposer({
                       {selectedAsset.assetKind} · v{selectedAsset.version} · {selectedAsset.mimeType}
                     </div>
                     <div className="mt-1 text-[8px] leading-4 text-sky-800 dark:text-sky-300">
-                      Current tenant, rights, validity and lead scope were rechecked server-side. Media transport is not enabled yet, so Send stays disabled while this attachment is selected.
+                      The earlier preflight is not trusted for delivery. Pressing Send performs a fresh server re-check, keeps the source file private, uploads it directly to Meta, and records provider + CRM lineage.
                     </div>
+                    {!mediaSendSupported ? (
+                      <div className="mt-1 text-[8px] font-semibold leading-4 text-amber-700 dark:text-amber-300">
+                        This provider slice currently supports JPEG, PNG and PDF assets only.
+                      </div>
+                    ) : null}
                   </div>
                   <button
                     type="button"
@@ -602,7 +680,8 @@ export function WhatsAppComposer({
                       setSelectedAsset(null);
                       setSendError(null);
                     }}
-                    className="grid h-6 w-6 shrink-0 place-items-center rounded-md text-sky-700 transition hover:bg-sky-100 dark:text-sky-300 dark:hover:bg-sky-950/50"
+                    disabled={isPending}
+                    className="grid h-6 w-6 shrink-0 place-items-center rounded-md text-sky-700 transition hover:bg-sky-100 disabled:cursor-not-allowed disabled:opacity-50 dark:text-sky-300 dark:hover:bg-sky-950/50"
                     aria-label="Remove prepared attachment"
                   >
                     <X size={12} />
@@ -654,9 +733,15 @@ export function WhatsAppComposer({
               disabled={isPending}
               required={mode === "reply"}
               rows={2}
-              maxLength={4096}
+              maxLength={replyLimit}
               autoComplete="off"
-              placeholder={isPending ? "Sending…" : "Prepare a reply…"}
+              placeholder={
+                isPending
+                  ? "Sending…"
+                  : selectedAsset
+                    ? "Add a caption for the attachment…"
+                    : "Prepare a reply…"
+              }
               className="max-h-40 min-h-[62px] w-full resize-none rounded-lg border border-[#DCE4DF] bg-white px-3 py-2 text-[12px] leading-5 text-[#18362D] outline-none placeholder:text-[#71847A] focus:border-[#216551] focus:ring-2 focus:ring-[#216551]/10 disabled:opacity-60"
             />
 
@@ -664,7 +749,9 @@ export function WhatsAppComposer({
               <div className="flex flex-wrap items-center gap-3 text-[9px] font-medium text-[#71847A]">
                 <span>Enter adds a new line</span>
                 <span>Ctrl/⌘ + Enter saves draft</span>
-                <span>{body.length}/4096</span>
+                <span className={mediaCaptionTooLong ? "text-red-700" : undefined}>
+                  {body.length}/{replyLimit}
+                </span>
                 {copilotAssisted ? (
                   <span className="text-[#216551]">AI-assisted draft</span>
                 ) : null}
@@ -685,14 +772,19 @@ export function WhatsAppComposer({
                     !body.trim() ||
                     isPending ||
                     !connectionReady ||
-                    Boolean(selectedAsset)
+                    mediaCaptionTooLong ||
+                    !mediaSendSupported
                   }
                   title={
-                    selectedAsset
-                      ? "Media delivery is not enabled yet. Remove the prepared attachment to send text only."
-                      : connectionReady
-                        ? "Send WhatsApp message"
-                        : connectionDisabledReason(connectionState)
+                    mediaCaptionTooLong
+                      ? "WhatsApp attachment captions are limited to 1024 characters."
+                      : !mediaSendSupported
+                        ? "Controlled media delivery currently supports JPEG, PNG and PDF Sales Assets only."
+                        : connectionReady
+                          ? selectedAsset
+                            ? "Send approved Sales Asset through WhatsApp"
+                            : "Send WhatsApp message"
+                          : connectionDisabledReason(connectionState)
                   }
                   className="inline-flex h-8 items-center justify-center gap-1.5 rounded-lg bg-[#153E33] px-3.5 text-[10px] font-semibold text-white transition hover:bg-[#216551] disabled:cursor-not-allowed disabled:bg-[#EDF0EC] disabled:text-[#59685F]"
                 >
@@ -701,7 +793,11 @@ export function WhatsAppComposer({
                   ) : (
                     <Send size={13} />
                   )}
-                  {isPending ? "Sending…" : "Send"}
+                  {isPending
+                    ? "Sending…"
+                    : selectedAsset
+                      ? "Send attachment"
+                      : "Send"}
                 </button>
               </div>
             </div>
@@ -715,7 +811,11 @@ export function WhatsAppComposer({
               </span>
               <span className="text-[#71847A]">
                 {selectedAsset
-                  ? "Prepared attachment selected · text-only Send is fail-closed until media transport is added."
+                  ? mediaCaptionTooLong
+                    ? "Prepared attachment selected · shorten the caption to 1024 characters before sending."
+                    : mediaSendSupported
+                      ? "Prepared attachment selected · Send performs a fresh server re-check before provider delivery."
+                      : "Prepared attachment selected · this format is not enabled for provider delivery yet."
                   : isPending
                     ? "Sending through the verified WhatsApp action…"
                     : connectionReady
