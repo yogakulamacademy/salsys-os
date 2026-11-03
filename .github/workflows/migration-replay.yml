@@ -96,6 +96,12 @@ jobs:
           cp supabase/recovery/20261014053500_trigger_functions_prerequisite.sql \
              supabase/migrations/20261014053500_trigger_functions_prerequisite.sql
 
+          # crm_settings_audit also existed out-of-band before the service-only
+          # table grant hardening migration. Reconstruct only its pre-hardening
+          # table/index/RLS shape in the ephemeral replay database.
+          cp supabase/recovery/20261014053800_crm_settings_audit_prerequisite.sql \
+             supabase/migrations/20261014053800_crm_settings_audit_prerequisite.sql
+
           # The original tracking-source migration exists in production history
           # but was never committed to Git. Stage the minimal authoritative
           # prerequisite at its real production ledger version for clean replay.
