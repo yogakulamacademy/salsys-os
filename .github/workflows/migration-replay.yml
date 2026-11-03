@@ -166,6 +166,13 @@ jobs:
             > supabase/migrations/20261014141153_w6_semantic_opportunity_engine_v1.sql
           echo "dd2634d72220a015eb0546df040630cd  supabase/migrations/20261014141153_w6_semantic_opportunity_engine_v1.sql" | md5sum -c -
 
+          cp supabase/recovery/20261016144625_smart_triggers_scheduler_wait_foundation_v1.sql \
+             supabase/migrations/20261016144625_smart_triggers_scheduler_wait_foundation_v1.sql
+          cp supabase/recovery/20261017033628_smart_triggers_flow_graph_foundation_v1.sql \
+             supabase/migrations/20261017033628_smart_triggers_flow_graph_foundation_v1.sql
+          cp supabase/recovery/20261017044549_smart_triggers_flow_versions_v1.sql \
+             supabase/migrations/20261017044549_smart_triggers_flow_versions_v1.sql
+
           cp supabase/recovery/20261017091453_automation_runtime_scheduler_foundation_v1.sql \
              supabase/migrations/20261017091453_automation_runtime_scheduler_foundation_v1.sql
 
