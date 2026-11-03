@@ -91,7 +91,7 @@ select
     l.lead_code
   ) as lead_name,
   l.current_stage,
-  l.potential_value,
+  l.potential_value::numeric(12,2) as potential_value,
   upper(l.potential_currency) as currency,
   coalesce(pt.gross_paid, 0::numeric)::numeric(14,2) as gross_paid,
   coalesce(pt.refunds, 0::numeric)::numeric(14,2) as refunds,
