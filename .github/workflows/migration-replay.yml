@@ -72,6 +72,7 @@ jobs:
           cp supabase/recovery/040_paid_media_warehouse_baseline.sql supabase/migrations/0395_recovery_paid_media_warehouse.sql
           cp supabase/recovery/040_campaigns_read_models_baseline.sql supabase/migrations/0396_recovery_campaigns_read_models.sql
           cp supabase/recovery/042_paid_media_overview_prerequisite.sql supabase/migrations/0415_recovery_paid_media_overview.sql
+          cp supabase/recovery/047_integration_oauth_states_prerequisite.sql supabase/migrations/0465_recovery_integration_oauth_states.sql
 
           # The original tracking-source migration exists in production history
           # but was never committed to Git. Stage the minimal authoritative
