@@ -374,3 +374,34 @@ as $function$
 $function$;
 
 commit;
+
+-- -----------------------------------------------------------------------------
+-- Privacy subject-key helper
+-- -----------------------------------------------------------------------------
+-- Created by production migration 20261017164301 and hardened later at the
+-- missing 20261022165022 boundary. Restore the final hardened definition here
+-- so 20261028154800 can apply its intended PUBLIC/anon execute cleanup.
+
+begin;
+
+create or replace function public.privacy_subject_key_v1(
+  p_person_id uuid,
+  p_lead_id uuid,
+  p_anonymous_visitor_id text
+)
+returns text
+language plpgsql
+immutable
+set search_path = public, pg_temp
+as $function$
+begin
+  if p_person_id is not null then return 'person:' || p_person_id::text; end if;
+  if p_lead_id is not null then return 'lead:' || p_lead_id::text; end if;
+  if nullif(btrim(coalesce(p_anonymous_visitor_id,'')), '') is not null then
+    return 'visitor:' || btrim(p_anonymous_visitor_id);
+  end if;
+  raise exception 'privacy subject identifier required';
+end;
+$function$;
+
+commit;
