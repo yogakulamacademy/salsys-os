@@ -3,7 +3,7 @@ const assert = require('node:assert/strict');
 const { load } = require('./helpers.cjs');
 const { parsePaymentAmount } = load('lib/payment-input.ts');
 const { inspectKnowledgeMatches, knowledgeFingerprint } = load('lib/knowledge-evidence.ts');
-const row = extra => ({ chunk_id: '40000000-0000-4000-8000-000000000001', document_id: '50000000-0000-4000-8000-000000000001', title: 'Synthetic policy', category: 'faq', content: 'Synthetic approved content for tests.', rank: .5, valid_until: null, metadata: { document_version: 3, private_debug: 'must-not-leave-boundary' }, ...extra });
+const row = extra => ({ chunk_id: '40000000-0000-4000-8000-000000000001', document_id: '50000000-0000-4000-8000-000000000001', title: 'Synthetic policy', category: 'faq', content: 'Synthetic approved content for tests.', rank: .5, valid_until: null, metadata: { document_version: 3, source_id: '60000000-0000-4000-8000-000000000001', document_metadata: { source_name:'Synthetic handbook', source_type:'policy', source_uri:'https://example.test/policy', private_debug:'must-not-leave-boundary' }, private_debug: 'must-not-leave-boundary' }, ...extra });
 
 test('INR/USD inputs preserve two-decimal values and distinguish an omitted claim', () => {
   for (const [text, value] of [['30000',30000],['0.29',.29],['001.5',1.5],[' 90000.00 ',90000]]) assert.deepEqual(parsePaymentAmount(text), { state:'valid',value });
@@ -12,10 +12,19 @@ test('INR/USD inputs preserve two-decimal values and distinguish an omitted clai
 test('ambiguous, excessive-precision and lossy amounts are rejected before financial commands', () => {
   for (const text of ['0','-1','1.001','1e3','0x10','NaN','Infinity','1,000','1.','90071992547409.91','999999999999999999999999999999999999',{}]) assert.deepEqual(parsePaymentAmount(text), { state:'invalid' },String(text));
 });
-test('knowledge evidence is minimized and counted by document, not arbitrary metadata', () => {
+test('knowledge evidence is minimized, source-cited and counted by document', () => {
   const checked = inspectKnowledgeMatches([row(),row({ chunk_id:'40000000-0000-4000-8000-000000000002' })]);
   assert.equal(checked.ok,true); assert.equal(checked.matches.length,2); assert.equal(checked.evidence.length,1);
-  assert.equal(checked.evidence[0].version,3); assert.doesNotMatch(JSON.stringify(checked),/private_debug|must-not-leave/);
+  assert.equal(checked.evidence[0].version,3);
+  assert.equal(checked.evidence[0].sourceId,'60000000-0000-4000-8000-000000000001');
+  assert.equal(checked.evidence[0].sourceName,'Synthetic handbook');
+  assert.equal(checked.evidence[0].sourceType,'policy');
+  assert.equal(checked.evidence[0].sourceUri,'https://example.test/policy');
+  assert.doesNotMatch(JSON.stringify(checked),/private_debug|must-not-leave/);
+});
+test('unsafe source references are not propagated into draft evidence', () => {
+  const checked=inspectKnowledgeMatches([row({metadata:{document_version:3,source_id:'60000000-0000-4000-8000-000000000001',document_metadata:{source_name:'Synthetic handbook',source_type:'policy',source_uri:'file:\/\/\/tmp\/secret'}}})]);
+  assert.equal(checked.ok,true);assert.equal(checked.evidence[0].sourceUri,null);assert.equal(checked.evidence[0].sourceName,'Synthetic handbook');
 });
 test('empty matches differ from unavailable/malformed or expired evidence', () => {
   assert.equal(inspectKnowledgeMatches([]).ok,true);
@@ -26,11 +35,12 @@ test('duplicate retries are stable; conflicting chunks or document versions fail
   assert.equal(inspectKnowledgeMatches([row(),row({ content:'Contradictory content' })]).ok,false);
   assert.equal(inspectKnowledgeMatches([row(),row({ chunk_id:'40000000-0000-4000-8000-000000000002', metadata:{document_version:4} })]).ok,false);
 });
-test('knowledge fingerprints ignore rank ordering but detect changed factual context', () => {
+test('knowledge fingerprints ignore rank ordering but detect changed factual context or provenance', () => {
   const a=inspectKnowledgeMatches([row()]).matches;
   const b=inspectKnowledgeMatches([row({rank:.1})]).matches;
   assert.equal(knowledgeFingerprint(a),knowledgeFingerprint(b));
   assert.notEqual(knowledgeFingerprint(a),knowledgeFingerprint(inspectKnowledgeMatches([row({content:'Changed facts'})]).matches));
+  assert.notEqual(knowledgeFingerprint(a),knowledgeFingerprint(inspectKnowledgeMatches([row({metadata:{document_version:3,source_id:'60000000-0000-4000-8000-000000000001',document_metadata:{source_name:'Changed source',source_type:'policy',source_uri:'https://example.test/policy'}}})]).matches));
 });
 test('invalid nonempty claim is not silently changed into an amountless claim', async () => {
   let connections=0;
