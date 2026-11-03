@@ -126,6 +126,13 @@ jobs:
           cp supabase/recovery/20261014055700_lead_expected_close_date_prerequisite.sql \
              supabase/migrations/20261014055700_lead_expected_close_date_prerequisite.sql
 
+          # The earlier 019 recovery compatibility view exposes threshold values
+          # as unconstrained numeric, while the authoritative 055802 migration
+          # defines numeric(8,2). Drop only the CI compatibility view so the real
+          # migration can recreate the authoritative contract without a type-change error.
+          cp supabase/recovery/20261014055750_pipeline_aging_view_alignment.sql \
+             supabase/migrations/20261014055750_pipeline_aging_view_alignment.sql
+
           # The original tracking-source migration exists in production history
           # but was never committed to Git. Stage the minimal authoritative
           # prerequisite at its real production ledger version for clean replay.
