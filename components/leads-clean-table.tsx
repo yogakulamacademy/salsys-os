@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import {
   ArrowLeft,
@@ -48,15 +47,17 @@ type ColumnKey =
   | "source"
   | "stage"
   | "owner"
+  | "next"
   | "signals"
   | "created";
 
 const DEFAULT_COLUMNS: ColumnKey[] = [
   "lead",
+  "source",
   "course",
-  "contact",
-  "stage",
   "owner",
+  "stage",
+  "next",
   "signals",
   "created",
 ];
@@ -68,7 +69,8 @@ const COLUMN_LABELS: Record<ColumnKey, string> = {
   source: "Source",
   stage: "Stage",
   owner: "Owner",
-  signals: "Signals",
+  next: "Suggested next step",
+  signals: "Attention",
   created: "Created",
 };
 
@@ -134,6 +136,7 @@ export function LeadsCleanTable({
       }
 
       const nextQuery = next.toString();
+      setSelectedRows(new Set());
       startTransition(() => {
         router.replace(nextQuery ? `${pathname}?${nextQuery}` : pathname, {
           scroll: false,
@@ -230,9 +233,48 @@ export function LeadsCleanTable({
           isPending ? "opacity-80" : "opacity-100"
         }`}
       >
-        <div ref={toolbarRef} className="border-b border-line px-4 py-3">
-          <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
-            <div className="flex flex-wrap items-center gap-2">
+        <div ref={toolbarRef} className="border-b border-line px-3 py-3 sm:px-4">
+          <div className="flex flex-col gap-3 2xl:flex-row 2xl:items-center 2xl:justify-between">
+            <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
+              <label className="relative min-w-[210px] flex-[1_1_270px] 2xl:max-w-[390px]">
+                <Search size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-copy-subtle" />
+                <span className="sr-only">Search leads</span>
+                <input
+                  value={query}
+                  onChange={(event) => setQuery(event.target.value)}
+                  placeholder="Search leads"
+                  aria-label="Search leads"
+                  className="h-10 w-full rounded-ui border border-line bg-surface pl-9 pr-3 text-xs text-copy outline-none transition placeholder:text-copy-subtle focus:border-brand-500 focus:ring-2 focus:ring-brand-100"
+                />
+              </label>
+
+              <div className="hidden flex-wrap items-center gap-2 lg:flex">
+                <ToolbarSelect label="Stage" value={filters.stage || "all"} options={options.stages} onChange={(value) => updateUrl({ stage: value, page: 1 })} />
+                <ToolbarSelect label="Source" value={filters.source || "all"} options={options.sources} onChange={(value) => updateUrl({ source: value, page: 1 })} />
+                <ToolbarSelect label="Owner" value={filters.owner || "all"} options={options.owners} onChange={(value) => updateUrl({ owner: value, page: 1 })} />
+              </div>
+
+              <button
+                type="button"
+                aria-expanded={showFilters}
+                onClick={() => setShowFilters((value) => !value)}
+                className={"inline-flex h-10 items-center gap-2 rounded-ui border px-3 text-[11px] font-semibold transition " + (
+                  showFilters || filtersActive
+                    ? "border-brand-200 bg-brand-50 text-brand-700 dark:bg-brand-950/30"
+                    : "border-line bg-surface text-copy-muted hover:bg-surface-soft hover:text-copy-strong"
+                )}
+              >
+                <Filter size={14} /> More filters
+              </button>
+
+              {filtersActive ? (
+                <button type="button" onClick={resetFilters} className="inline-flex h-10 items-center gap-1 px-2 text-[11px] font-medium text-brand-700 dark:text-brand-300">
+                  <X size={13} /> Clear
+                </button>
+              ) : null}
+            </div>
+
+            <div className="flex shrink-0 flex-wrap items-center gap-2">
               <div className="relative">
                 <button
                   type="button"
@@ -240,15 +282,13 @@ export function LeadsCleanTable({
                     setShowViews((value) => !value);
                     setShowColumns(false);
                   }}
-                  className="inline-flex h-9 items-center gap-2 rounded-ui border border-line bg-surface px-3 text-[11px] font-semibold text-copy-muted shadow-sm transition hover:border-line-strong hover:bg-surface-soft hover:text-copy-strong"
+                  aria-expanded={showViews}
+                  className="inline-flex h-10 items-center gap-2 rounded-ui border border-line bg-surface px-3 text-[11px] font-semibold text-copy-muted transition hover:border-line-strong hover:bg-surface-soft"
                 >
-                  {quickViewLabel(filters.quickView)}
-                  <span className="rounded-full bg-surface-muted px-1.5 py-0.5 text-[9px] text-copy-muted">
-                    {summaryForView(summary, filters.quickView)}
-                  </span>
-                  <ChevronDown size={13} className="text-copy-subtle" />
+                  Views
+                  <span className="rounded-full bg-surface-muted px-1.5 py-0.5 text-[10px] text-copy-strong">{summaryForView(summary, filters.quickView)}</span>
+                  <ChevronDown size={13} />
                 </button>
-
                 {showViews ? (
                   <Popover className="left-0 top-11 w-64">
                     <PopoverLabel>Operational views</PopoverLabel>
@@ -276,42 +316,6 @@ export function LeadsCleanTable({
                   </Popover>
                 ) : null}
               </div>
-
-              <QuickViewButton
-                label="Needs action"
-                active={filters.quickView === "stuck" || filters.quickView === "followup_overdue"}
-                onClick={() => updateUrl({ view: "followup_overdue", page: 1 })}
-              />
-              <QuickViewButton
-                label="Payment"
-                active={filters.quickView === "payment_pending"}
-                onClick={() => updateUrl({ view: "payment_pending", page: 1 })}
-              />
-            </div>
-
-            <div className="flex flex-wrap items-center gap-2">
-              <label className="relative min-w-[220px] flex-1 xl:flex-none">
-                <Search size={14} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-copy-subtle" />
-                <input
-                  value={query}
-                  onChange={(event) => setQuery(event.target.value)}
-                  placeholder="Search leads"
-                  className="h-9 w-full rounded-ui border border-line bg-surface pl-9 pr-3 text-xs text-copy outline-none transition placeholder:text-copy-subtle focus:border-brand-500 focus:ring-2 focus:ring-brand-100"
-                />
-              </label>
-
-              <button
-                type="button"
-                onClick={() => setShowFilters((value) => !value)}
-                className={`inline-flex h-9 items-center gap-2 rounded-ui px-2.5 text-[11px] font-semibold transition ${
-                  showFilters || filtersActive
-                    ? "bg-brand-50 text-brand-700"
-                    : "text-copy-muted hover:bg-surface-soft hover:text-copy-strong"
-                }`}
-              >
-                <Filter size={14} /> Filter
-              </button>
-
               <div className="relative">
                 <button
                   type="button"
@@ -319,9 +323,10 @@ export function LeadsCleanTable({
                     setShowColumns((value) => !value);
                     setShowViews(false);
                   }}
-                  className="inline-flex h-9 items-center gap-2 rounded-ui px-2.5 text-[11px] font-semibold text-copy-muted transition hover:bg-surface-soft hover:text-copy-strong"
+                  aria-expanded={showColumns}
+                  className="inline-flex h-10 items-center gap-2 rounded-ui border border-line bg-surface px-3 text-[11px] font-semibold text-copy-muted transition hover:border-line-strong hover:bg-surface-soft"
                 >
-                  <Columns3 size={14} /> Fields
+                  <Columns3 size={14} /> Columns
                 </button>
                 {showColumns ? (
                   <Popover className="right-0 top-11 w-56">
@@ -344,12 +349,32 @@ export function LeadsCleanTable({
             </div>
           </div>
 
+          <div aria-label="Quick lead views" className="mt-3 flex min-w-0 flex-wrap items-center gap-1 border-t border-line pt-2.5">
+            <span className="mr-2 text-[10px] font-semibold uppercase tracking-[0.08em] text-copy-subtle">Quick views</span>
+            {([
+              ["all", "All leads"],
+              ["unassigned", "Unassigned"],
+              ["stuck", "Stuck"],
+              ["followup_overdue", "Overdue"],
+              ["payment_pending", "Payment"],
+            ] as const).map(([value, label]) => (
+              <QuickViewButton
+                key={value}
+                label={label}
+                active={filters.quickView === value}
+                onClick={() => updateUrl({ view: value === "all" ? null : value, page: 1 })}
+              />
+            ))}
+          </div>
+
           {showFilters ? (
             <div className="mt-3 flex flex-wrap items-end gap-2 rounded-ui bg-surface-soft p-3">
-              <FilterSelect label="Stage" value={filters.stage || "all"} options={options.stages} onChange={(value) => updateUrl({ stage: value, page: 1 })} />
-              <FilterSelect label="Source" value={filters.source || "all"} options={options.sources} onChange={(value) => updateUrl({ source: value, page: 1 })} />
+              <div className="flex flex-wrap gap-2 lg:hidden">
+                <FilterSelect label="Stage" value={filters.stage || "all"} options={options.stages} onChange={(value) => updateUrl({ stage: value, page: 1 })} />
+                <FilterSelect label="Source" value={filters.source || "all"} options={options.sources} onChange={(value) => updateUrl({ source: value, page: 1 })} />
+                <FilterSelect label="Owner" value={filters.owner || "all"} options={options.owners} onChange={(value) => updateUrl({ owner: value, page: 1 })} />
+              </div>
               <FilterSelect label="Channel" value={filters.channel || "all"} options={options.channels} onChange={(value) => updateUrl({ channel: value, page: 1 })} />
-              <FilterSelect label="Owner" value={filters.owner || "all"} options={options.owners} onChange={(value) => updateUrl({ owner: value, page: 1 })} />
               <FilterSelect label="Course" value={filters.course || "all"} options={options.courses} onChange={(value) => updateUrl({ course: value, page: 1 })} />
               <FilterSelect label="Aging" value={filters.aging || "all"} options={["healthy", "warning", "stuck", "untracked"]} onChange={(value) => updateUrl({ aging: value, page: 1 })} />
               <label className="min-w-[150px]">
@@ -381,28 +406,31 @@ export function LeadsCleanTable({
         ) : null}
 
         {selectedRows.size > 0 ? (
-          <div className="flex flex-wrap items-center gap-3 border-b border-line bg-surface-soft px-4 py-2.5 text-xs">
-            <span className="font-semibold text-copy-strong">{selectedRows.size} selected</span>
-            <Link href="/follow-ups" className="rounded-ui px-2.5 py-1.5 font-medium text-copy-muted hover:bg-surface hover:text-copy-strong">Create follow-up</Link>
-            <button type="button" onClick={() => setSelectedRows(new Set())} className="ml-auto text-copy-subtle hover:text-brand-700">Clear selection</button>
+          <div className="flex flex-wrap items-center gap-3 border-b border-line bg-brand-50/60 px-4 py-2.5 text-xs dark:bg-brand-950/20">
+            <span className="font-semibold text-copy-strong">{selectedRows.size} selected on this page</span>
+            {selectedRows.size === 1 ? (
+              <button type="button" onClick={() => setSelectedId([...selectedRows][0])} className="rounded-ui border border-line bg-surface px-2.5 py-1.5 font-semibold text-brand-700">Inspect selected lead</button>
+            ) : <span className="text-copy-muted">Review leads individually; bulk changes are not enabled.</span>}
+            <button type="button" onClick={() => setSelectedRows(new Set())} className="ml-auto font-medium text-copy-muted hover:text-brand-700">Clear selection</button>
           </div>
         ) : null}
 
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[1080px] border-collapse">
+          <table className="w-full min-w-[1190px] border-collapse">
             <thead>
               <tr className="border-b border-line bg-surface-soft text-left">
                 <th className="w-10 px-4 py-2.5">
                   <input type="checkbox" checked={allSelected} onChange={toggleAll} aria-label="Select all visible leads" className="h-3.5 w-3.5 rounded border-line" />
                 </th>
                 {visibleColumns.includes("lead") ? <HeaderCell>Lead</HeaderCell> : null}
-                {visibleColumns.includes("course") ? <HeaderCell>Course</HeaderCell> : null}
-                {visibleColumns.includes("contact") ? <HeaderCell>Contact</HeaderCell> : null}
                 {visibleColumns.includes("source") ? <HeaderCell>Source</HeaderCell> : null}
-                {visibleColumns.includes("stage") ? <HeaderCell>Stage</HeaderCell> : null}
+                {visibleColumns.includes("course") ? <HeaderCell>Course</HeaderCell> : null}
                 {visibleColumns.includes("owner") ? <HeaderCell>Owner</HeaderCell> : null}
+                {visibleColumns.includes("stage") ? <HeaderCell>Stage</HeaderCell> : null}
+                {visibleColumns.includes("next") ? <HeaderCell>Next step</HeaderCell> : null}
                 {visibleColumns.includes("signals") ? <HeaderCell>Signals</HeaderCell> : null}
                 {visibleColumns.includes("created") ? <HeaderCell>Created</HeaderCell> : null}
+                {visibleColumns.includes("contact") ? <HeaderCell>Contact</HeaderCell> : null}
                 <th className="w-10 px-2 py-2.5" />
               </tr>
             </thead>
@@ -417,6 +445,7 @@ export function LeadsCleanTable({
                       tabIndex={0}
                       onClick={() => setSelectedId(lead.id)}
                       onKeyDown={(event) => {
+                        if (event.target !== event.currentTarget) return;
                         if (event.key === "Enter" || event.key === " ") {
                           event.preventDefault();
                           setSelectedId(lead.id);
@@ -440,6 +469,13 @@ export function LeadsCleanTable({
                         </td>
                       ) : null}
 
+                      {visibleColumns.includes("source") ? (
+                        <td className="px-3 py-3">
+                          <div className="max-w-[160px] truncate text-[11px] font-medium text-copy" title={`Recorded source: ${lead.firstTouchSource || "Unknown"}`}>{sourceLabel(lead.firstTouchSource || "Unknown")}</div>
+                          <div className="mt-0.5 max-w-[160px] truncate text-[10px] text-copy-subtle">{lead.firstTouchCampaign || lead.firstTouchMedium || "—"}</div>
+                        </td>
+                      ) : null}
+
                       {visibleColumns.includes("course") ? (
                         <td className="px-3 py-3">
                           <div className="max-w-[220px] truncate text-[12px] font-medium text-copy">{lead.course || "—"}</div>
@@ -447,17 +483,9 @@ export function LeadsCleanTable({
                         </td>
                       ) : null}
 
-                      {visibleColumns.includes("contact") ? (
+                      {visibleColumns.includes("owner") ? (
                         <td className="px-3 py-3">
-                          <div className="max-w-[220px] truncate text-[12px] text-copy">{lead.email || lead.phone || (lead.contactAvailability === "unavailable" ? "Temporarily unavailable" : lead.contactAvailability === "restricted" ? "Restricted" : "Not recorded")}</div>
-                          <div className="mt-1"><ChannelBadge channel={lead.currentContactChannel} /></div>
-                        </td>
-                      ) : null}
-
-                      {visibleColumns.includes("source") ? (
-                        <td className="px-3 py-3">
-                          <div className="max-w-[160px] truncate text-[11px] font-medium text-copy" title={`Recorded source: ${lead.firstTouchSource || "Unknown"}`}>{sourceLabel(lead.firstTouchSource || "Unknown")}</div>
-                          <div className="mt-0.5 max-w-[160px] truncate text-[10px] text-copy-subtle">{lead.firstTouchCampaign || lead.firstTouchMedium || "—"}</div>
+                          <div className="text-[11px] font-medium text-copy">{intel?.owner_name || lead.owner || "Unassigned"}</div>
                         </td>
                       ) : null}
 
@@ -467,10 +495,10 @@ export function LeadsCleanTable({
                         </td>
                       ) : null}
 
-                      {visibleColumns.includes("owner") ? (
+                      {visibleColumns.includes("next") ? (
                         <td className="px-3 py-3">
-                          <div className="text-[11px] font-medium text-copy">{intel?.owner_name || lead.owner || "Unassigned"}</div>
-                          <div className="mt-0.5 text-[10px] text-copy-subtle">{nextAction(lead, intel)}</div>
+                          <div className="max-w-[165px] text-[11px] font-medium text-copy">{nextAction(lead, intel)}</div>
+                          {lead.nextFollowupAt ? <div className="mt-0.5 text-[10px] text-copy-subtle">{formatDate(lead.nextFollowupAt)}</div> : null}
                         </td>
                       ) : null}
 
@@ -489,6 +517,13 @@ export function LeadsCleanTable({
                         <td className="px-3 py-3">
                           <div className="whitespace-nowrap text-[11px] font-medium text-copy">{relativeDate(lead.createdAt)}</div>
                           <div className="mt-0.5 whitespace-nowrap text-[10px] text-copy-subtle">{formatDate(lead.createdAt)}</div>
+                        </td>
+                      ) : null}
+
+                      {visibleColumns.includes("contact") ? (
+                        <td className="px-3 py-3">
+                          <div className="max-w-[220px] truncate text-[12px] text-copy">{lead.email || lead.phone || (lead.contactAvailability === "unavailable" ? "Temporarily unavailable" : lead.contactAvailability === "restricted" ? "Restricted" : "Not recorded")}</div>
+                          <div className="mt-1"><ChannelBadge channel={lead.currentContactChannel} /></div>
                         </td>
                       ) : null}
 
@@ -553,7 +588,24 @@ function PopoverLabel({ children }: { children: ReactNode }) {
 }
 
 function QuickViewButton({ label, active, onClick }: { label: string; active: boolean; onClick: () => void }) {
-  return <button type="button" onClick={onClick} className={`h-9 rounded-ui px-3 text-[11px] font-semibold transition ${active ? "bg-brand-50 text-brand-700" : "text-copy-muted hover:bg-surface-soft hover:text-copy-strong"}`}>{label}</button>;
+  return <button type="button" aria-pressed={active} onClick={onClick} className={`h-9 rounded-ui px-3 text-[11px] font-semibold transition ${active ? "bg-brand-50 text-brand-700 dark:bg-brand-950/30" : "text-copy-muted hover:bg-surface-soft hover:text-copy-strong"}`}>{label}</button>;
+}
+
+function ToolbarSelect({ label, value, options, onChange }: { label: string; value: string; options: string[]; onChange: (value: string) => void }) {
+  return (
+    <label className="relative min-w-[105px]">
+      <span className="sr-only">{label}</span>
+      <select
+        aria-label={label}
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        className="h-10 max-w-[145px] rounded-ui border border-line bg-surface px-3 text-[11px] font-medium text-copy-muted outline-none transition hover:border-line-strong focus:border-brand-500 focus:ring-2 focus:ring-brand-100"
+      >
+        <option value="all">{label}</option>
+        {options.map((option) => <option key={option} value={option}>{pretty(option)}</option>)}
+      </select>
+    </label>
+  );
 }
 
 function FilterSelect({ label, value, options, onChange }: { label: string; value: string; options: string[]; onChange: (value: string) => void }) {
@@ -587,14 +639,6 @@ function SignalPill({ children, tone }: { children: ReactNode; tone: "attention"
             ? "bg-emerald-50 text-emerald-700"
             : "bg-slate-100 text-slate-600";
   return <span className={`rounded-full px-2 py-1 text-[9px] font-semibold ${className}`}>{children}</span>;
-}
-
-function quickViewLabel(view: LeadsWorkspaceFilters["quickView"]) {
-  if (view === "unassigned") return "Unassigned";
-  if (view === "stuck") return "Stuck";
-  if (view === "followup_overdue") return "Overdue";
-  if (view === "payment_pending") return "Payment pending";
-  return "All leads";
 }
 
 function summaryForView(summary: LeadsWorkspaceSummary, view: LeadsWorkspaceFilters["quickView"]) {
