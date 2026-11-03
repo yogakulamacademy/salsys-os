@@ -214,16 +214,16 @@ test('authenticated asset selection action rechecks lead access and never return
   );
 });
 
-test('WhatsApp composer holds a preflighted asset but blocks the current text-only send path', () => {
+test('WhatsApp composer preserves server-preflighted metadata until a human starts controlled provider delivery', () => {
   assert.match(composer, /crm:copilot-asset-selected/);
-  assert.match(composer, /Attachment preflighted/);
+  assert.match(composer, /Attachment ready for controlled send/);
   assert.match(composer, /setSelectedAsset\(asset\)/);
-  assert.match(composer, /Boolean\(selectedAsset\)/);
-  assert.match(composer, /controlled WhatsApp media delivery is not enabled in this slice/);
-  assert.match(composer, /Remove the attachment to send a text-only reply/);
+  assert.match(composer, /formData\.set\("sales_asset_id", assetForSend\.assetId\)/);
+  assert.match(composer, /fresh server re-check/i);
+  assert.match(composer, /sendWhatsAppSalesAssetMessageAction/);
   assert.doesNotMatch(
     composer,
-    /graph\.facebook\.com|createSignedUrl|createSignedUrls|getPublicUrl|executePreparedWhatsAppProviderSend/,
+    /safeReference|safe_reference|storage_bucket|storage_path|graph\.facebook\.com|createSignedUrl|createSignedUrls|getPublicUrl|executePreparedWhatsAppProviderSend/,
   );
 });
 
