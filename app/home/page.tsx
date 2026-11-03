@@ -349,7 +349,7 @@ export default async function HomePage({ searchParams }: HomePageProps) {
         <section className="min-w-0 overflow-hidden rounded-2xl border border-line bg-surface">
           <SectionHeader eyebrow="Acquisition · period" title="Lead sources" actionHref="/marketing" actionLabel="See sources" />
           <div className="space-y-1 p-3 sm:p-4">
-            {acquisitionSources.length ? acquisitionSources.slice(0, 4).map((source) => <SourceRow key={source.source} source={source} periodTotal={totalLeads} />) : <EmptyState text={periodAnalytics.available.leads ? "No acquisition data is recorded for this period yet." : "Selected-period acquisition evidence is unavailable. Current all-time source totals have not been substituted."} />}
+            {acquisitionSources.length ? acquisitionSources.slice(0, 4).map((source) => <SourceRow key={source.source} source={source} periodTotal={totalLeads} disambiguate={acquisitionSources.slice(0, 4).filter((row) => sourceLabel(row.source) === sourceLabel(source.source)).length > 1} />) : <EmptyState text={periodAnalytics.available.leads ? "No acquisition data is recorded for this period yet." : "Selected-period acquisition evidence is unavailable. Current all-time source totals have not been substituted."} />}
           </div>
         </section>
         <section className="min-w-0 overflow-hidden rounded-2xl border border-line bg-surface">
@@ -717,10 +717,10 @@ function RevenueTrend({
   );
 }
 
-function SourceRow({ source, periodTotal }: { source: DashboardPeriodSource; periodTotal: number | null }) {
+function SourceRow({ source, periodTotal, disambiguate = false }: { source: DashboardPeriodSource; periodTotal: number | null; disambiguate?: boolean }) {
   const share = periodTotal != null && periodTotal > 0 ? (source.leads / periodTotal) * 100 : null;
   const displaySource = sourceLabel(source.source);
-  const alias = displaySource.trim().toLowerCase() !== source.source.trim().toLowerCase();
+  const alias = disambiguate || displaySource.trim().toLowerCase() !== source.source.trim().toLowerCase();
   return (
     <Link href={"/marketing?source=" + encodeURIComponent(source.source)} className="group block rounded-xl px-2 py-2.5 transition hover:bg-surface-muted">
       <div className="flex items-start justify-between gap-3">
