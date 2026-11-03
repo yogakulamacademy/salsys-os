@@ -10,7 +10,7 @@ create table if not exists public.sales_asset_dispatch_audits (
   conversation_id uuid not null references public.conversations(id) on delete cascade,
   channel text not null default 'whatsapp' check (channel = 'whatsapp'),
   provider text not null default 'meta_cloud_api' check (provider = 'meta_cloud_api'),
-  actor_id uuid,
+  actor_id uuid not null,
   caption text,
   asset_version integer not null check (asset_version > 0),
   asset_kind text not null check (asset_kind in ('image','pdf','document')),
@@ -238,7 +238,6 @@ begin
 
   if v_stage = 'new' then
     insert into public.lead_stage_history (
-      organization_id,
       lead_id,
       from_stage,
       to_stage,
@@ -247,7 +246,6 @@ begin
       reason,
       changed_at
     ) values (
-      p_organization_id,
       v_audit.lead_id,
       'new',
       'contacted',
@@ -259,7 +257,6 @@ begin
   end if;
 
   insert into public.activities (
-    organization_id,
     lead_id,
     activity_type,
     channel,
@@ -270,7 +267,6 @@ begin
     metadata,
     occurred_at
   ) values (
-    p_organization_id,
     v_audit.lead_id,
     'outbound_interaction',
     'whatsapp',
@@ -279,6 +275,7 @@ begin
     'WhatsApp Sales Asset sent',
     left(coalesce(nullif(btrim(coalesce(v_audit.caption, '')), ''), 'Approved Sales Asset attachment'), 500),
     jsonb_build_object(
+      'organization_id', p_organization_id,
       'conversation_id', v_audit.conversation_id,
       'message_id', v_message.id,
       'sales_asset_id', v_audit.asset_id,
