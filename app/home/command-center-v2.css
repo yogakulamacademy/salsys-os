@@ -1,0 +1,43 @@
+/* Home-only presentation layer. Keep shared metric access/evidence controls intact. */
+.command-center-v2 .command-kpi > * {
+  min-height: 166px;
+  padding: 18px;
+  border-radius: 16px;
+  box-shadow: none;
+  transform: none;
+}
+
+.command-center-v2 .command-kpi > *:hover {
+  box-shadow: none;
+  transform: none;
+}
+
+/* The metric investigator still contains its evidence and clickable details.
+   Remove only its decorative 2px top accent inside Home. */
+.command-center-v2 .command-kpi > * > span:first-child[aria-hidden="true"] {
+  display: none;
+}
+
+.command-center-v2 a,
+.command-center-v2 button,
+.command-center-v2 summary {
+  -webkit-tap-highlight-color: transparent;
+}
+
+.command-center-v2 :is(a, button, summary):focus-visible {
+  outline: 2px solid var(--color-brand-600, #6b59d6);
+  outline-offset: 2px;
+}
+
+@media (max-width: 639px) {
+  .command-center-v2 .command-kpi > * {
+    min-height: 150px;
+    padding: 14px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .command-center-v2 .command-kpi > * {
+    transition: none;
+  }
+}
