@@ -43,6 +43,8 @@ declare
   v_language text := lower(nullif(btrim(coalesce(p_language, '')), ''));
   v_limit integer := greatest(1, least(coalesce(p_limit, 5), 8));
   v_now timestamptz := now();
+  v_query_expression text;
+  v_tsquery tsquery;
 begin
   if auth.uid() is null or not public.is_crm_user() then
     raise exception 'Authentication required';
@@ -55,6 +57,37 @@ begin
   if v_channel not in ('whatsapp','instagram','email','webchat','sms','other') then
     raise exception 'A supported conversation channel is required';
   end if;
+
+  if v_query is null then
+    return;
+  end if;
+
+  -- Build a small OR query from meaningful customer terms. Chat filler is
+  -- removed so a request like "can you send room photos" can match an asset
+  -- described as "twin room photos" without forcing every conversational word.
+  select string_agg(token, ' | ' order by token)
+  into v_query_expression
+  from (
+    select distinct token
+    from regexp_split_to_table(
+      lower(regexp_replace(v_query, '[^[:alnum:]]+', ' ', 'g')),
+      '[[:space:]]+'
+    ) as token
+    where length(token) >= 2
+      and token not in (
+        'a','an','and','any','are','about','can','could','do','for','from','has','have',
+        'i','is','me','more','my','need','of','or','please','see','send','share','show',
+        'some','that','the','this','to','want','we','would','you','your'
+      )
+    order by token
+    limit 24
+  ) terms;
+
+  if v_query_expression is null then
+    return;
+  end if;
+
+  v_tsquery := to_tsquery('simple', v_query_expression);
 
   return query
   select
@@ -72,27 +105,27 @@ begin
     asset.rights_valid_until,
     asset.accessibility_alt_text,
     asset.accessibility_caption,
-    case
-      when v_query is null then 0::numeric
-      else ts_rank_cd(
-        to_tsvector(
-          'simple',
-          concat_ws(
-            ' ',
-            coalesce(asset.title, ''),
-            coalesce(asset.description, ''),
-            coalesce(asset.accessibility_alt_text, ''),
-            coalesce(asset.accessibility_caption, ''),
-            array_to_string(asset.course_scope, ' '),
-            array_to_string(asset.location_scope, ' '),
-            array_to_string(asset.language_scope, ' '),
-            array_to_string(asset.channel_scope, ' ')
-          )
-        ),
-        plainto_tsquery('simple', v_query)
-      )::numeric
-    end as relevance
+    scored.relevance
   from public.sales_assets asset
+  cross join lateral (
+    select ts_rank_cd(
+      to_tsvector(
+        'simple',
+        concat_ws(
+          ' ',
+          coalesce(asset.title, ''),
+          coalesce(asset.description, ''),
+          coalesce(asset.accessibility_alt_text, ''),
+          coalesce(asset.accessibility_caption, ''),
+          array_to_string(asset.course_scope, ' '),
+          array_to_string(asset.location_scope, ' '),
+          array_to_string(asset.language_scope, ' '),
+          array_to_string(asset.channel_scope, ' ')
+        )
+      ),
+      v_tsquery
+    )::numeric as relevance
+  ) scored
   where asset.organization_id = p_organization_id
     and asset.state = 'approved'
     and asset.revoked_at is null
@@ -105,22 +138,20 @@ begin
       or v_channel = any(asset.channel_scope)
     )
     and (
-      v_course is null
-      or cardinality(asset.course_scope) = 0
-      or v_course = any(asset.course_scope)
+      cardinality(asset.course_scope) = 0
+      or (v_course is not null and v_course = any(asset.course_scope))
     )
     and (
-      v_location is null
-      or cardinality(asset.location_scope) = 0
-      or v_location = any(asset.location_scope)
+      cardinality(asset.location_scope) = 0
+      or (v_location is not null and v_location = any(asset.location_scope))
     )
     and (
-      v_language is null
-      or cardinality(asset.language_scope) = 0
-      or v_language = any(asset.language_scope)
+      cardinality(asset.language_scope) = 0
+      or (v_language is not null and v_language = any(asset.language_scope))
     )
+    and scored.relevance > 0
   order by
-    relevance desc,
+    scored.relevance desc,
     asset.auto_send_allowed desc,
     asset.updated_at desc,
     asset.id
@@ -134,4 +165,4 @@ grant execute on function public.search_sales_assets_for_copilot_v1(uuid,text,te
   to authenticated;
 
 comment on function public.search_sales_assets_for_copilot_v1(uuid,text,text,text,text,text,integer) is
-  'Human-review discovery for approved current sales assets. Returns safe metadata only; never Storage references. Provider delivery must use resolve_sales_asset_for_dispatch_v1 immediately before send.';
+  'Human-review discovery for approved current sales assets. Scoped assets fail closed when matching context is missing. Returns safe metadata only; never Storage references. Provider delivery must use resolve_sales_asset_for_dispatch_v1 immediately before send.';
