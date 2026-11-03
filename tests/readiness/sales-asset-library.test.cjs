@@ -207,6 +207,7 @@ test('authenticated asset selection action rechecks lead access and never return
   assert.match(copilotAssetSelectionActions, /current_contact_channel/);
   assert.match(copilotAssetSelectionActions, /interested_course_id/);
   assert.match(copilotAssetSelectionActions, /preferred_location/);
+  assert.match(copilotAssetSelectionActions, /language: stringValue\(lead\.language\) \|\| null/);
   assert.match(copilotAssetSelectionActions, /channel: 'whatsapp'/);
   assert.doesNotMatch(
     copilotAssetSelectionActions,
