@@ -3,11 +3,13 @@ import {
   ReceiptText,
   RotateCcw,
 } from 'lucide-react';
+import { randomUUID } from 'node:crypto';
 
 import { PaymentActionsClient } from '@/components/payment-actions-client';
 import { useMockData } from '@/lib/config';
 import type { LeadPayment } from '@/lib/data';
 import { getCurrentWorkspaceContext } from '@/lib/workspace';
+import { EmptyState } from '@/components/ui';
 
 type Props = {
   potentialValue?: number;
@@ -81,7 +83,7 @@ export async function PaymentCard({
         <ReceiptText size={20} className="text-copy-subtle" />
       </div>
 
-      <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+      {payments.length > 0 ? <div className="mt-5 grid grid-cols-2 gap-3 lg:grid-cols-4">
         <PaymentMetric
           label="Potential value"
           value={potential > 0 && currency ? money(potential, currency) : '—'}
@@ -91,17 +93,17 @@ export async function PaymentCard({
           value={currency ? money(netPaid, currency) : '—'}
         />
         <PaymentMetric
-          label="Balance"
+          label="Balance vs potential"
           value={potential > 0 && currency ? money(balance, currency) : '—'}
         />
         <PaymentMetric label="Payment status" value={paymentStatus} />
-      </div>
+      </div> : null}
 
       <div className="mt-6 border-t border-line pt-5">
         <div className="flex items-center justify-between gap-3">
           <div>
             <div className="text-sm font-semibold text-copy-strong">
-              Verified payment history
+              Payment history
             </div>
             <div className="mt-1 text-xs text-copy-subtle">
               {payments.length} transaction{payments.length === 1 ? '' : 's'}
@@ -111,9 +113,7 @@ export async function PaymentCard({
 
         <div className="mt-4 space-y-3">
           {payments.length === 0 ? (
-            <div className="rounded-xl bg-surface-soft px-4 py-5 text-center text-sm text-copy-subtle">
-              No verified payments recorded yet.
-            </div>
+            <EmptyState title="No payments recorded yet" description="Report a customer's payment below to request verification. Only verified transactions count toward money received." icon={<ReceiptText size={24} />} />
           ) : null}
 
           {payments.map((payment) => (
@@ -179,6 +179,8 @@ export async function PaymentCard({
       <PaymentActionsClient
         currency={formCurrency}
         canVerifyPayment={canVerifyPayment}
+        payments={payments}
+        refundRequestId={randomUUID()}
       />
     </section>
   );
@@ -204,7 +206,8 @@ function money(value: number, currency: string) {
     return new Intl.NumberFormat(currency === 'INR' ? 'en-IN' : 'en-US', {
       style: 'currency',
       currency,
-      maximumFractionDigits: 0,
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
     }).format(value);
   } catch {
     return `${currency} ${value}`;

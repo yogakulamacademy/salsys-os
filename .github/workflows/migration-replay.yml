@@ -1,0 +1,202 @@
+name: Migration Replay
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'supabase/**'
+      - 'scripts/build-migration-recovery-manifest.mjs'
+      - '.github/workflows/migration-replay.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: migration-replay-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  clean-replay:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      SUPABASE_TELEMETRY_DISABLED: '1'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+
+      - name: Build production-ledger recovery manifest
+        shell: bash
+        run: |
+          set -euo pipefail
+          node scripts/build-migration-recovery-manifest.mjs | tee migration-recovery-manifest-summary.json
+
+      - name: Setup Supabase CLI
+        uses: supabase/setup-cli@1dedf2c611547ede7232d26866dd3c56ab903bbb # v1
+        with:
+          version: 3.0.0
+
+      - name: Stage historical recovery prerequisites
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          mv supabase/migrations/029_course_capture_value_variants.sql \
+             supabase/migrations/20261025130118_029_course_capture_value_variants.sql
+          mv supabase/migrations/030_trusted_business_event_contact_resolution.sql \
+             supabase/migrations/20261025131249_trusted_business_event_contact_resolution.sql
+
+          cp supabase/recovery/007_catalog_authorization_prerequisite.sql supabase/migrations/0065_recovery_catalog_authorization.sql
+          cp supabase/recovery/016_enrollments_tenant_baseline.sql supabase/migrations/0154_recovery_enrollments_tenant.sql
+          cp supabase/recovery/016_lead_contact_logs_baseline.sql supabase/migrations/0155_recovery_lead_contact_logs.sql
+          cp supabase/recovery/016_journey_views_baseline.sql supabase/migrations/0156_recovery_journey_views.sql
+          cp supabase/recovery/017_payments_tenant_baseline.sql supabase/migrations/0165_recovery_payments_tenant.sql
+          cp supabase/recovery/018_person_journey_source_baseline.sql supabase/migrations/0175_recovery_person_journey_source.sql
+          cp supabase/recovery/019_leads_workspace_baseline.sql supabase/migrations/0185_recovery_leads_workspace.sql
+          cp supabase/recovery/020_attribution_views_baseline.sql supabase/migrations/0195_recovery_attribution_views.sql
+          cp supabase/recovery/023_integration_connections_baseline.sql supabase/migrations/0225_recovery_integration_connections.sql
+          cp supabase/recovery/030_followups_tenant_baseline.sql supabase/migrations/0295_recovery_followups_tenant.sql
+          cp supabase/recovery/030_lead_geo_baseline.sql supabase/migrations/0296_recovery_lead_geo.sql
+          cp supabase/recovery/030_sales_read_models_baseline.sql supabase/migrations/0297_recovery_sales_read_models.sql
+          cp supabase/recovery/032_integration_assets_baseline.sql supabase/migrations/0315_recovery_integration_assets.sql
+          cp supabase/recovery/039_analytics_seo_warehouse_baseline.sql supabase/migrations/0385_recovery_analytics_seo_warehouse.sql
+          cp supabase/recovery/039_leads_landing_page_baseline.sql supabase/migrations/0386_recovery_leads_landing_page.sql
+          cp supabase/recovery/040_paid_media_warehouse_baseline.sql supabase/migrations/0395_recovery_paid_media_warehouse.sql
+          cp supabase/recovery/040_campaigns_read_models_baseline.sql supabase/migrations/0396_recovery_campaigns_read_models.sql
+          cp supabase/recovery/042_paid_media_overview_prerequisite.sql supabase/migrations/0415_recovery_paid_media_overview.sql
+          cp supabase/recovery/047_integration_oauth_states_prerequisite.sql supabase/migrations/0465_recovery_integration_oauth_states.sql
+
+          base64 -d supabase/recovery/20261013125000_reports_rpc_prerequisite.sql.gz.b64 \
+            | gzip -d \
+            > supabase/migrations/20261013125000_reports_rpc_prerequisite.sql
+
+          cp supabase/recovery/20261013183000_lead_inbox_reads_prerequisite.sql \
+             supabase/migrations/20261013183000_lead_inbox_reads_prerequisite.sql
+          cp supabase/recovery/20261014053500_trigger_functions_prerequisite.sql \
+             supabase/migrations/20261014053500_trigger_functions_prerequisite.sql
+          cp supabase/recovery/20261014053800_crm_settings_audit_prerequisite.sql \
+             supabase/migrations/20261014053800_crm_settings_audit_prerequisite.sql
+          cp supabase/recovery/20261014054200_deprecated_course_batch_rpcs_prerequisite.sql \
+             supabase/migrations/20261014054200_deprecated_course_batch_rpcs_prerequisite.sql
+          cp supabase/recovery/20261014054500_course_catalog_finalize_prerequisite.sql \
+             supabase/migrations/20261014054500_course_catalog_finalize_prerequisite.sql
+          cp supabase/recovery/20261014055400_legacy_crm_settings_defaults_prerequisite.sql \
+             supabase/migrations/20261014055400_legacy_crm_settings_defaults_prerequisite.sql
+          cp supabase/recovery/20261014055700_lead_expected_close_date_prerequisite.sql \
+             supabase/migrations/20261014055700_lead_expected_close_date_prerequisite.sql
+          cp supabase/recovery/20261014055750_pipeline_aging_view_alignment.sql \
+             supabase/migrations/20261014055750_pipeline_aging_view_alignment.sql
+          cp supabase/recovery/20261014060700_legacy_crm_settings_helpers_prerequisite.sql \
+             supabase/migrations/20261014060700_legacy_crm_settings_helpers_prerequisite.sql
+          cp supabase/recovery/20261014065500_legacy_global_crm_mutators_prerequisite.sql \
+             supabase/migrations/20261014065500_legacy_global_crm_mutators_prerequisite.sql
+          cp supabase/recovery/20261014091300_course_batch_admin_events_prerequisite.sql \
+             supabase/migrations/20261014091300_course_batch_admin_events_prerequisite.sql
+
+          cat supabase/recovery/20261014092250_latent_accommodation_rpcs_prerequisite.part*.b64 \
+            | tr -d '\n\r ' \
+            | base64 -d \
+            > supabase/migrations/20261014092250_latent_accommodation_rpcs_prerequisite.sql
+          echo "fd54c24c82385da0650cbcd2f0d1c7e7c8726415106e275d1a9e270832d152cd  supabase/migrations/20261014092250_latent_accommodation_rpcs_prerequisite.sql" \
+            | sha256sum -c -
+
+          cp supabase/recovery/20261014092400_latent_course_v2_rpcs_prerequisite.sql \
+             supabase/migrations/20261014092400_latent_course_v2_rpcs_prerequisite.sql
+          cp supabase/recovery/20261014100100_can_manage_lead_assignments_prerequisite.sql \
+             supabase/migrations/20261014100100_can_manage_lead_assignments_prerequisite.sql
+          cp supabase/recovery/20261014115900_remaining_organization_read_tables_prerequisite.sql \
+             supabase/migrations/20261014115900_remaining_organization_read_tables_prerequisite.sql
+
+          cat supabase/recovery/20261014135430_w6_website_intelligence_foundation.part*.b64 \
+            | tr -d '\n\r ' | base64 -d \
+            > supabase/migrations/20261014135430_w6_website_intelligence_foundation.sql
+          echo "4bb9c6cd658eccfdae1e43e66f86f3ce  supabase/migrations/20261014135430_w6_website_intelligence_foundation.sql" | md5sum -c -
+
+          cat \
+            supabase/recovery/20261014135518_w6_semantic_seo_foundation.part01.b64 \
+            supabase/recovery/20261014135518_w6_semantic_seo_foundation.part02a.b64 \
+            supabase/recovery/20261014135518_w6_semantic_seo_foundation.part02b.b64 \
+            supabase/recovery/20261014135518_w6_semantic_seo_foundation.part02c1.b64 \
+            supabase/recovery/20261014135518_w6_semantic_seo_foundation.part02c2.b64 \
+            supabase/recovery/20261014135518_w6_semantic_seo_foundation.part02d1.b64 \
+            supabase/recovery/20261014135518_w6_semantic_seo_foundation.part02d2.b64 \
+            supabase/recovery/20261014135518_w6_semantic_seo_foundation.part03.b64 \
+            | tr -d '\n\r ' | base64 -d \
+            > supabase/migrations/20261014135518_w6_semantic_seo_foundation.sql
+          echo "3af6c107e753d2efb4fcbfeadd89f069  supabase/migrations/20261014135518_w6_semantic_seo_foundation.sql" | md5sum -c -
+
+          cat supabase/recovery/20261014140126_w6_crawl_frontier_and_performance_bridge.part*.b64 \
+            | tr -d '\n\r ' | base64 -d \
+            > supabase/migrations/20261014140126_w6_crawl_frontier_and_performance_bridge.sql
+          echo "0c688659dae4d7d52fccfcf3f326975b  supabase/migrations/20261014140126_w6_crawl_frontier_and_performance_bridge.sql" | md5sum -c -
+
+          cat supabase/recovery/20261014140326_w6_technical_and_semantic_opportunity_views.part*.b64 \
+            | tr -d '\n\r ' | base64 -d \
+            > supabase/migrations/20261014140326_w6_technical_and_semantic_opportunity_views.sql
+          echo "f67ad47406ea280607f8dd7385c62750  supabase/migrations/20261014140326_w6_technical_and_semantic_opportunity_views.sql" | md5sum -c -
+
+          cat supabase/recovery/20261014140808_w6_semantic_processing_and_page_query_grain.part*.b64 \
+            | tr -d '\n\r ' | base64 -d \
+            > supabase/migrations/20261014140808_w6_semantic_processing_and_page_query_grain.sql
+          echo "1bc2bfd8d73562184c352d073cbfb42c  supabase/migrations/20261014140808_w6_semantic_processing_and_page_query_grain.sql" | md5sum -c -
+
+          cat \
+            supabase/recovery/20261014141153_w6_semantic_opportunity_engine_v1.part01.b64 \
+            supabase/recovery/20261014141153_w6_semantic_opportunity_engine_v1.part02.b64 \
+            supabase/recovery/20261014141153_w6_semantic_opportunity_engine_v1.part03.b64 \
+            supabase/recovery/20261014141153_w6_semantic_opportunity_engine_v1.part04a.b64 \
+            supabase/recovery/20261014141153_w6_semantic_opportunity_engine_v1.part04b.b64 \
+            supabase/recovery/20261014141153_w6_semantic_opportunity_engine_v1.part05.b64 \
+            supabase/recovery/20261014141153_w6_semantic_opportunity_engine_v1.part06.b64 \
+            | tr -d '\n\r ' | base64 -d \
+            > supabase/migrations/20261014141153_w6_semantic_opportunity_engine_v1.sql
+          echo "dd2634d72220a015eb0546df040630cd  supabase/migrations/20261014141153_w6_semantic_opportunity_engine_v1.sql" | md5sum -c -
+
+          cp supabase/recovery/20261017155803_tracking_sources_core_prerequisite.sql \
+             supabase/migrations/20261017155803_tracking_sources_and_event_contracts_v1.sql
+
+          cp supabase/recovery/20261017175500_privacy_request_tombstone_prerequisite.sql \
+             supabase/migrations/20261017175500_privacy_request_tombstone_prerequisite.sql
+
+          cat supabase/recovery/20261017180156_opensearch_outbox_foundation_v1.part*.b64 \
+            | tr -d '\n\r ' | base64 -d \
+            > supabase/migrations/20261017180156_opensearch_outbox_foundation_v1.sql
+          echo "0a54a12149180365dd1a8a22811b26da  supabase/migrations/20261017180156_opensearch_outbox_foundation_v1.sql" | md5sum -c -
+
+          cp supabase/recovery/20261019112000_whatsapp_lineage_tables_prerequisite.sql \
+             supabase/migrations/20261019112000_whatsapp_lineage_tables_prerequisite.sql
+
+          cp supabase/recovery/20261019150400_build_search_document_v1_prerequisite.sql \
+             supabase/migrations/20261019150400_build_search_document_v1_prerequisite.sql
+
+      - name: Start local Supabase database
+        shell: bash
+        run: |
+          set -o pipefail
+          supabase db start 2>&1 | tee migration-replay.log
+
+      - name: Replay migrations from a clean database
+        shell: bash
+        run: |
+          set -o pipefail
+          supabase db reset --local 2>&1 | tee -a migration-replay.log
+
+      - name: Show local migration state
+        if: always()
+        shell: bash
+        run: |
+          supabase migration list --local 2>&1 | tee -a migration-replay.log || true
+
+      - name: Upload migration recovery evidence
+        if: always()
+        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
+        with:
+          name: migration-recovery-evidence
+          path: |
+            migration-recovery-manifest.md
+            migration-recovery-manifest-summary.json
+            migration-replay.log
+          if-no-files-found: ignore
+          retention-days: 3

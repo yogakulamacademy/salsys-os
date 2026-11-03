@@ -71,6 +71,8 @@ export type CourseBatchOption = {
 export type LeadPayment = {
   id: string;
 
+  originalPaymentId?: string;
+
   paymentKind: "deposit" | "balance" | "full" | "refund" | "other";
 
   status: "pending" | "paid" | "failed" | "refunded" | "partially_refunded";
@@ -1515,6 +1517,8 @@ export async function getLeadPayments(leadId: string): Promise<LeadPayment[]> {
     createdAt: row.created_at,
 
     notes: row.metadata?.notes ?? undefined,
+    originalPaymentId: typeof row.metadata?.original_payment_id === 'string'
+      ? row.metadata.original_payment_id : undefined,
   }));
 }
 
