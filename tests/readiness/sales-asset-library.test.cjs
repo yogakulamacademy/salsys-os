@@ -120,6 +120,10 @@ test('Co-Pilot discovery exposes approved metadata only and remains tenant-scope
     'asset.course_scope',
     'asset.location_scope',
     'asset.language_scope',
+    'scored.relevance > 0',
+    'v_course is not null and v_course = any(asset.course_scope)',
+    'v_location is not null and v_location = any(asset.location_scope)',
+    'v_language is not null and v_language = any(asset.language_scope)',
     'to authenticated',
   ]) {
     assert.match(discoveryMigration, new RegExp(needle.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
