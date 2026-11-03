@@ -19,6 +19,7 @@ import {
   discoverCopilotSalesAssetsAction,
   type CopilotAssetSuggestion,
 } from "@/app/conversations/copilot-asset-actions";
+import { prepareCopilotAssetSelectionAction } from "@/app/conversations/copilot-asset-selection-actions";
 import {
   generateCopilotReplyAction,
   type CopilotReplyResult,
@@ -47,14 +48,19 @@ export function ConversationCopilot({
   const [result, setResult] = useState<SuccessfulCopilotReply | null>(null);
   const [assetSuggestions, setAssetSuggestions] = useState<CopilotAssetSuggestion[]>([]);
   const [assetError, setAssetError] = useState<string | null>(null);
+  const [assetSelectionError, setAssetSelectionError] = useState<string | null>(null);
+  const [assetSelectionNotice, setAssetSelectionNotice] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
+  const [isAssetPending, startAssetTransition] = useTransition();
 
   const generate = () => {
     if (!enabled || isPending) return;
     setOpen(true);
     setError(null);
     setAssetError(null);
+    setAssetSelectionError(null);
+    setAssetSelectionNotice(null);
 
     startTransition(async () => {
       const [response, assetResponse] = await Promise.all([
@@ -92,6 +98,34 @@ export function ConversationCopilot({
         },
       }),
     );
+  };
+
+  const prepareAsset = (asset: CopilotAssetSuggestion) => {
+    if (channel !== "whatsapp" || isAssetPending) return;
+
+    setAssetSelectionError(null);
+    setAssetSelectionNotice(null);
+
+    startAssetTransition(async () => {
+      const response = await prepareCopilotAssetSelectionAction(
+        leadId,
+        asset.assetId,
+      );
+
+      if (!response.ok) {
+        setAssetSelectionError(response.error);
+        return;
+      }
+
+      window.dispatchEvent(
+        new CustomEvent("crm:copilot-asset-selected", {
+          detail: response.selection,
+        }),
+      );
+      setAssetSelectionNotice(
+        `${response.selection.title} was revalidated and prepared in the WhatsApp composer.`,
+      );
+    });
   };
 
   const riskTone =
@@ -195,7 +229,7 @@ export function ConversationCopilot({
                         <Paperclip size={11} /> Relevant approved assets
                       </div>
                       <div className="mt-1 text-[8px] leading-4 text-copy-subtle">
-                        Metadata only. Nothing is attached or sent from Co-Pilot.
+                        Suggestions are metadata only. Selecting one triggers a fresh server-side eligibility preflight.
                       </div>
                     </div>
                     <Link
@@ -209,6 +243,18 @@ export function ConversationCopilot({
                   {assetError ? (
                     <div className="mt-2 rounded-md border border-amber-100 bg-amber-50 px-2.5 py-2 text-[8px] leading-4 text-amber-700 dark:border-amber-900/40 dark:bg-amber-950/20 dark:text-amber-300">
                       {assetError} The reply draft is still available for human review.
+                    </div>
+                  ) : null}
+
+                  {assetSelectionError ? (
+                    <div className="mt-2 rounded-md border border-red-100 bg-red-50 px-2.5 py-2 text-[8px] leading-4 text-red-700 dark:border-red-900/40 dark:bg-red-950/20 dark:text-red-300">
+                      {assetSelectionError}
+                    </div>
+                  ) : null}
+
+                  {assetSelectionNotice ? (
+                    <div className="mt-2 rounded-md border border-emerald-100 bg-emerald-50 px-2.5 py-2 text-[8px] leading-4 text-emerald-700 dark:border-emerald-900/40 dark:bg-emerald-950/20 dark:text-emerald-300">
+                      {assetSelectionNotice}
                     </div>
                   ) : null}
 
@@ -248,13 +294,24 @@ export function ConversationCopilot({
                             <span>Location: {scopeLabel(asset.locationScope)}</span>
                             <span>Language: {scopeLabel(asset.languageScope)}</span>
                           </div>
+                          {channel === "whatsapp" ? (
+                            <button
+                              type="button"
+                              onClick={() => prepareAsset(asset)}
+                              disabled={isAssetPending}
+                              className="mt-2 inline-flex h-7 w-full items-center justify-center gap-1.5 rounded-md border border-sky-200 bg-sky-50 px-2 text-[8px] font-semibold text-sky-700 transition hover:bg-sky-100 disabled:cursor-not-allowed disabled:opacity-50 dark:border-sky-900/50 dark:bg-sky-950/20 dark:text-sky-300"
+                            >
+                              <Paperclip size={10} />
+                              {isAssetPending ? "Revalidating asset…" : "Prepare attachment in composer"}
+                            </button>
+                          ) : null}
                         </div>
                       ))}
                     </div>
                   ) : null}
 
                   <div className="mt-2 text-[7px] leading-4 text-copy-subtle">
-                    Any future provider send must re-check the selected asset server-side immediately before delivery.
+                    Preflight does not send media. The selected asset must be re-resolved again by the future provider transport immediately before delivery.
                   </div>
                 </div>
               ) : null}
