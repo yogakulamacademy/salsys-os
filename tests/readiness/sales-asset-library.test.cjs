@@ -13,6 +13,10 @@ const discoveryMigration = fs.readFileSync(
   path.join(root, 'supabase/migrations/20261103204500_sales_asset_copilot_discovery_v1.sql'),
   'utf8',
 );
+const humanDispatchMigration = fs.readFileSync(
+  path.join(root, 'supabase/migrations/20261103210500_sales_asset_human_dispatch_preflight_v1.sql'),
+  'utf8',
+);
 const actions = fs.readFileSync(path.join(root, 'app/settings/assets/actions.ts'), 'utf8');
 const page = fs.readFileSync(path.join(root, 'app/settings/assets/page.tsx'), 'utf8');
 const settingsOverview = fs.readFileSync(path.join(root, 'app/settings/overview/page.tsx'), 'utf8');
@@ -20,8 +24,20 @@ const copilotAssetActions = fs.readFileSync(
   path.join(root, 'app/conversations/copilot-asset-actions.ts'),
   'utf8',
 );
+const copilotAssetSelectionActions = fs.readFileSync(
+  path.join(root, 'app/conversations/copilot-asset-selection-actions.ts'),
+  'utf8',
+);
+const humanDispatchGuard = fs.readFileSync(
+  path.join(root, 'lib/sales-asset-human-dispatch.ts'),
+  'utf8',
+);
 const copilot = fs.readFileSync(
   path.join(root, 'components/conversation-copilot.tsx'),
+  'utf8',
+);
+const composer = fs.readFileSync(
+  path.join(root, 'components/conversation-composer.tsx'),
   'utf8',
 );
 
@@ -138,13 +154,77 @@ test('Co-Pilot discovery exposes approved metadata only and remains tenant-scope
   );
 });
 
-test('active Reply Co-Pilot presents asset suggestions for human review without provider delivery', () => {
+test('active Reply Co-Pilot presents approved asset suggestions and preflights human selection', () => {
   assert.match(copilot, /discoverCopilotSalesAssetsAction/);
+  assert.match(copilot, /prepareCopilotAssetSelectionAction/);
   assert.match(copilot, /Relevant approved assets/);
-  assert.match(copilot, /Metadata only\. Nothing is attached or sent from Co-Pilot\./);
-  assert.match(copilot, /Any future provider send must re-check the selected asset server-side immediately before delivery\./);
+  assert.match(copilot, /crm:copilot-asset-selected/);
+  assert.match(copilot, /Prepare attachment in composer/);
+  assert.match(copilot, /Preflight does not send media/);
   assert.match(copilot, /href="\/settings\/assets"/);
   assert.doesNotMatch(copilot, /executePreparedWhatsAppProviderSend|graph\.facebook\.com|createSignedUrl|getPublicUrl/);
+});
+
+test('human attachment preflight is service-role-only and preserves manual-use eligibility', () => {
+  for (const needle of [
+    'resolve_sales_asset_for_human_dispatch_v1',
+    "auth.role() <> 'service_role'",
+    "v_asset.state <> 'approved'",
+    'v_asset.revoked_at is not null',
+    "v_asset.rights_status <> 'cleared'",
+    'v_asset.rights_valid_until',
+    'v_asset.valid_from',
+    'v_asset.valid_until',
+    'v_asset.channel_scope',
+    'v_asset.language_scope',
+    'v_asset.course_scope',
+    'v_asset.location_scope',
+    'storage.objects',
+    "'safe_reference'",
+    'to service_role',
+  ]) {
+    assert.match(humanDispatchMigration, new RegExp(needle.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
+  }
+
+  assert.doesNotMatch(
+    humanDispatchMigration,
+    /not\s+v_asset\.auto_send_allowed|v_asset\.auto_send_allowed\s*=\s*true/i,
+  );
+  assert.doesNotMatch(
+    humanDispatchMigration,
+    /grant execute on function public\.resolve_sales_asset_for_human_dispatch_v1[\s\S]*to authenticated/,
+  );
+
+  assert.match(humanDispatchGuard, /resolve_sales_asset_for_human_dispatch_v1/);
+  assert.match(humanDispatchGuard, /sales-assets-private/);
+  assert.match(humanDispatchGuard, /tenant or asset mismatch/);
+  assert.match(humanDispatchGuard, /unsafe storage path/);
+});
+
+test('authenticated asset selection action rechecks lead access and never returns private storage coordinates', () => {
+  assert.match(copilotAssetSelectionActions, /can_work_lead/);
+  assert.match(copilotAssetSelectionActions, /resolveSalesAssetForHumanDispatch/);
+  assert.match(copilotAssetSelectionActions, /current_contact_channel/);
+  assert.match(copilotAssetSelectionActions, /interested_course_id/);
+  assert.match(copilotAssetSelectionActions, /preferred_location/);
+  assert.match(copilotAssetSelectionActions, /channel: 'whatsapp'/);
+  assert.doesNotMatch(
+    copilotAssetSelectionActions,
+    /safeReference\s*:|safe_reference|createSignedUrl|createSignedUrls|getPublicUrl|graph\.facebook\.com/,
+  );
+});
+
+test('WhatsApp composer holds a preflighted asset but blocks the current text-only send path', () => {
+  assert.match(composer, /crm:copilot-asset-selected/);
+  assert.match(composer, /Attachment preflighted/);
+  assert.match(composer, /setSelectedAsset\(asset\)/);
+  assert.match(composer, /Boolean\(selectedAsset\)/);
+  assert.match(composer, /controlled WhatsApp media delivery is not enabled in this slice/);
+  assert.match(composer, /Remove the attachment to send a text-only reply/);
+  assert.doesNotMatch(
+    composer,
+    /graph\.facebook\.com|createSignedUrl|createSignedUrls|getPublicUrl|executePreparedWhatsAppProviderSend/,
+  );
 });
 
 test('dispatch guard calls only the server-owned resolver and returns a private tenant reference', async () => {
