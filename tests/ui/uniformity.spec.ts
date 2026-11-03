@@ -111,6 +111,24 @@ for (const route of ['/home', '/leads', '/marketing', '/revenue', '/performance'
   });
 }
 
+test('Home Command Center uses full shared content width', async ({ page }) => {
+  await page.setViewportSize({ width: 1744, height: 1000 });
+  await page.goto('/home');
+
+  const geometry = await page.locator('.command-center-v2').evaluate((element) => {
+    const shell = element.closest('.page-transition');
+    if (!shell) return null;
+    const home = element.getBoundingClientRect();
+    const parent = shell.getBoundingClientRect();
+    return { leftGap: Math.abs(home.left - parent.left), widthGap: Math.abs(home.width - parent.width) };
+  });
+
+  expect(geometry).not.toBeNull();
+  expect(geometry!.leftGap).toBeLessThanOrEqual(2);
+  expect(geometry!.widthGap).toBeLessThanOrEqual(2);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(1744);
+});
+
 test('Home supports the shared dark theme', async ({ page }) => {
   await page.goto('/home');
   await page.screenshot({ animations: 'disabled', path: 'test-results/home-desktop.png' });
