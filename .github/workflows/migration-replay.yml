@@ -48,6 +48,19 @@ jobs:
           mv supabase/migrations/030_trusted_business_event_contact_resolution.sql \
              supabase/migrations/20261025131249_trusted_business_event_contact_resolution.sql
 
+          # These intelligence migrations have source-local timestamps that do not
+          # match the versions recorded in the live production migration ledger.
+          # Move only the replay working copies; the committed migration files stay untouched.
+          mv supabase/migrations/20261020101500_event_intelligence_outcome_calibration_v1.sql \
+             supabase/migrations/20261020014744_event_intelligence_outcome_calibration_v1.sql
+          mv supabase/migrations/20261020100000_event_intelligence_prediction_freshness_v1.sql \
+             supabase/migrations/20261020015455_event_intelligence_prediction_freshness_v1.sql
+
+          # WhatsApp Growth remains at its source-local dependency-safe position because
+          # this repository creates whatsapp_broadcast_campaigns in the later source-only
+          # Operations Suite. Moving Growth to its production 04:09 version without the
+          # original production broadcast foundation would manufacture a false failure.
+
           # Catalog authorization, commerce tenant ownership, and lead contact logs
           # are now captured by real versioned migrations 0065, 0155, and 0156.
           # Keep only the journey views that are still absent before migration 016.
