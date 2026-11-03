@@ -6,13 +6,19 @@ import {
   ChevronDown,
   ChevronUp,
   Database,
+  Paperclip,
   ShieldAlert,
   Sparkles,
   WandSparkles,
 } from "lucide-react";
+import Link from "next/link";
 import { useState, useTransition } from "react";
 import { KnowledgeEvidenceList } from '@/components/knowledge-evidence-list';
 
+import {
+  discoverCopilotSalesAssetsAction,
+  type CopilotAssetSuggestion,
+} from "@/app/conversations/copilot-asset-actions";
 import {
   generateCopilotReplyAction,
   type CopilotReplyResult,
@@ -20,6 +26,11 @@ import {
 
 type SupportedChannel = "instagram" | "whatsapp";
 type SuccessfulCopilotReply = Extract<CopilotReplyResult, { ok: true }>;
+
+function scopeLabel(values: string[]) {
+  if (!values.length) return "All";
+  return values.slice(0, 3).join(", ");
+}
 
 export function ConversationCopilot({
   leadId,
@@ -34,6 +45,8 @@ export function ConversationCopilot({
 }) {
   const [open, setOpen] = useState(false);
   const [result, setResult] = useState<SuccessfulCopilotReply | null>(null);
+  const [assetSuggestions, setAssetSuggestions] = useState<CopilotAssetSuggestion[]>([]);
+  const [assetError, setAssetError] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
 
@@ -41,15 +54,28 @@ export function ConversationCopilot({
     if (!enabled || isPending) return;
     setOpen(true);
     setError(null);
+    setAssetError(null);
 
     startTransition(async () => {
-      const response = await generateCopilotReplyAction(leadId);
+      const [response, assetResponse] = await Promise.all([
+        generateCopilotReplyAction(leadId),
+        discoverCopilotSalesAssetsAction(leadId),
+      ]);
+
       if (!response.ok) {
         setResult(null);
+        setAssetSuggestions([]);
         setError(response.error);
         return;
       }
+
       setResult(response);
+      if (assetResponse.ok) {
+        setAssetSuggestions(assetResponse.suggestions);
+      } else {
+        setAssetSuggestions([]);
+        setAssetError(assetResponse.error);
+      }
     });
   };
 
@@ -90,7 +116,7 @@ export function ConversationCopilot({
             Ask Salsys · Reply Copilot
           </span>
           <span className="mt-0.5 block text-[9px] leading-4 text-copy-muted">
-            Prepare a grounded reply draft for human review. Never auto-sends.
+            Prepare a grounded reply draft and relevant approved assets for human review. Never auto-sends.
           </span>
         </span>
         {open ? (
@@ -150,11 +176,88 @@ export function ConversationCopilot({
                 <span className="rounded-full bg-surface-soft px-2 py-1 text-copy-muted dark:bg-slate-900 dark:text-slate-300">
                   {result.nextAction === "handoff" ? "Escalate" : "Reply"}
                 </span>
+                {assetSuggestions.length > 0 ? (
+                  <span className="inline-flex items-center gap-1 rounded-full bg-sky-50 px-2 py-1 text-sky-700 dark:bg-sky-950/30 dark:text-sky-300">
+                    <Paperclip size={10} /> {assetSuggestions.length} approved asset{assetSuggestions.length === 1 ? "" : "s"}
+                  </span>
+                ) : null}
               </div>
 
               <div className="rounded-lg border border-line bg-surface-soft px-3 py-3 text-[11px] leading-5 text-copy-muted dark:border-slate-800 dark:bg-slate-900/50 dark:text-slate-200">
                 {result.draft}
               </div>
+
+              {assetSuggestions.length > 0 || assetError ? (
+                <div className="rounded-lg border border-sky-100 bg-sky-50/50 p-3 dark:border-sky-900/40 dark:bg-sky-950/10">
+                  <div className="flex items-center justify-between gap-2">
+                    <div>
+                      <div className="flex items-center gap-2 text-[9px] font-semibold uppercase tracking-[0.08em] text-sky-700 dark:text-sky-300">
+                        <Paperclip size={11} /> Relevant approved assets
+                      </div>
+                      <div className="mt-1 text-[8px] leading-4 text-copy-subtle">
+                        Metadata only. Nothing is attached or sent from Co-Pilot.
+                      </div>
+                    </div>
+                    <Link
+                      href="/settings/assets"
+                      className="shrink-0 text-[8px] font-semibold text-sky-700 underline-offset-2 hover:underline dark:text-sky-300"
+                    >
+                      Asset library
+                    </Link>
+                  </div>
+
+                  {assetError ? (
+                    <div className="mt-2 rounded-md border border-amber-100 bg-amber-50 px-2.5 py-2 text-[8px] leading-4 text-amber-700 dark:border-amber-900/40 dark:bg-amber-950/20 dark:text-amber-300">
+                      {assetError} The reply draft is still available for human review.
+                    </div>
+                  ) : null}
+
+                  {assetSuggestions.length > 0 ? (
+                    <div className="mt-2 space-y-2">
+                      {assetSuggestions.map((asset) => (
+                        <div
+                          key={asset.assetId}
+                          className="rounded-lg border border-sky-100 bg-white px-2.5 py-2 dark:border-sky-900/40 dark:bg-slate-950"
+                        >
+                          <div className="flex items-start justify-between gap-2">
+                            <div className="min-w-0">
+                              <div className="truncate text-[9px] font-semibold text-copy-strong">
+                                {asset.title}
+                              </div>
+                              <div className="mt-0.5 text-[8px] capitalize text-copy-muted">
+                                {asset.assetKind} · v{asset.version}
+                              </div>
+                            </div>
+                            <span
+                              className={`shrink-0 rounded-full px-1.5 py-0.5 text-[7px] font-semibold ${
+                                asset.autoSendAllowed
+                                  ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-300"
+                                  : "bg-slate-100 text-slate-600 dark:bg-slate-900 dark:text-slate-300"
+                              }`}
+                            >
+                              {asset.autoSendAllowed ? "Dispatch permitted" : "Manual use"}
+                            </span>
+                          </div>
+                          {asset.description ? (
+                            <div className="mt-1.5 line-clamp-2 text-[8px] leading-4 text-copy-muted">
+                              {asset.description}
+                            </div>
+                          ) : null}
+                          <div className="mt-1.5 flex flex-wrap gap-x-2 gap-y-1 text-[7px] text-copy-subtle">
+                            <span>Course: {scopeLabel(asset.courseScope)}</span>
+                            <span>Location: {scopeLabel(asset.locationScope)}</span>
+                            <span>Language: {scopeLabel(asset.languageScope)}</span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : null}
+
+                  <div className="mt-2 text-[7px] leading-4 text-copy-subtle">
+                    Any future provider send must re-check the selected asset server-side immediately before delivery.
+                  </div>
+                </div>
+              ) : null}
 
               <div className="rounded-lg border border-brand-100 bg-brand-50/60 p-3 dark:border-violet-900/40 dark:bg-violet-950/15">
                 <div className="flex items-center gap-2 text-[9px] font-semibold uppercase tracking-[0.08em] text-brand-700 dark:text-violet-300">

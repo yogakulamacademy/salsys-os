@@ -9,9 +9,21 @@ const migration = fs.readFileSync(
   path.join(root, 'supabase/migrations/20261103195200_sales_asset_library_foundation_v1.sql'),
   'utf8',
 );
+const discoveryMigration = fs.readFileSync(
+  path.join(root, 'supabase/migrations/20261103204500_sales_asset_copilot_discovery_v1.sql'),
+  'utf8',
+);
 const actions = fs.readFileSync(path.join(root, 'app/settings/assets/actions.ts'), 'utf8');
 const page = fs.readFileSync(path.join(root, 'app/settings/assets/page.tsx'), 'utf8');
 const settingsOverview = fs.readFileSync(path.join(root, 'app/settings/overview/page.tsx'), 'utf8');
+const copilotAssetActions = fs.readFileSync(
+  path.join(root, 'app/conversations/copilot-asset-actions.ts'),
+  'utf8',
+);
+const copilot = fs.readFileSync(
+  path.join(root, 'components/conversation-copilot.tsx'),
+  'utf8',
+);
 
 function loadGuard() {
   return load('lib/sales-asset-dispatch.ts').resolveSalesAssetForDispatch;
@@ -92,6 +104,47 @@ test('settings surface uploads to private storage and exposes separate approval 
   assert.match(page, /Revoke/);
   assert.match(page, /Private reference:/);
   assert.match(settingsOverview, /href="\/settings\/assets"/);
+});
+
+test('Co-Pilot discovery exposes approved metadata only and remains tenant-scoped', () => {
+  for (const needle of [
+    'search_sales_assets_for_copilot_v1',
+    'public.is_organization_member(p_organization_id)',
+    "asset.state = 'approved'",
+    'asset.revoked_at is null',
+    "asset.rights_status = 'cleared'",
+    'asset.rights_valid_until',
+    'asset.valid_from',
+    'asset.valid_until',
+    'asset.channel_scope',
+    'asset.course_scope',
+    'asset.location_scope',
+    'asset.language_scope',
+    'scored.relevance > 0',
+    'v_course is not null and v_course = any(asset.course_scope)',
+    'v_location is not null and v_location = any(asset.location_scope)',
+    'v_language is not null and v_language = any(asset.language_scope)',
+    'to authenticated',
+  ]) {
+    assert.match(discoveryMigration, new RegExp(needle.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
+  }
+
+  assert.match(copilotAssetActions, /search_sales_assets_for_copilot_v1/);
+  assert.match(copilotAssetActions, /can_work_lead/);
+  assert.match(copilotAssetActions, /sanitizeSuggestions/);
+  assert.doesNotMatch(
+    copilotAssetActions,
+    /safe_reference|storage_bucket|storage_path|createSignedUrl|createSignedUrls|getPublicUrl/,
+  );
+});
+
+test('active Reply Co-Pilot presents asset suggestions for human review without provider delivery', () => {
+  assert.match(copilot, /discoverCopilotSalesAssetsAction/);
+  assert.match(copilot, /Relevant approved assets/);
+  assert.match(copilot, /Metadata only\. Nothing is attached or sent from Co-Pilot\./);
+  assert.match(copilot, /Any future provider send must re-check the selected asset server-side immediately before delivery\./);
+  assert.match(copilot, /href="\/settings\/assets"/);
+  assert.doesNotMatch(copilot, /executePreparedWhatsAppProviderSend|graph\.facebook\.com|createSignedUrl|getPublicUrl/);
 });
 
 test('dispatch guard calls only the server-owned resolver and returns a private tenant reference', async () => {
