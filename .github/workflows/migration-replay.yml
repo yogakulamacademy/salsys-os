@@ -157,6 +157,9 @@ jobs:
           cp supabase/recovery/20261017155803_tracking_sources_core_prerequisite.sql \
              supabase/migrations/20261017155803_tracking_sources_and_event_contracts_v1.sql
 
+          cp supabase/recovery/20261017175500_privacy_request_tombstone_prerequisite.sql \
+             supabase/migrations/20261017175500_privacy_request_tombstone_prerequisite.sql
+
           cat supabase/recovery/20261017180156_opensearch_outbox_foundation_v1.part*.b64 \
             | tr -d '\n\r ' | base64 -d \
             > supabase/migrations/20261017180156_opensearch_outbox_foundation_v1.sql
