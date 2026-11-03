@@ -5,6 +5,7 @@ import {
   FileText,
   LockKeyhole,
   MessageSquareText,
+  Paperclip,
   RefreshCw,
   Save,
   Send,
@@ -38,6 +39,21 @@ type CopilotDraftEvent = CustomEvent<{
   body?: string;
 }>;
 
+type SelectedSalesAsset = {
+  assetId: string;
+  title: string;
+  assetKind: string;
+  version: number;
+  mimeType: string;
+  sizeBytes: number;
+  autoSendAllowed: boolean;
+  channel: "whatsapp";
+  accessibilityAltText: string | null;
+  accessibilityCaption: string | null;
+};
+
+type CopilotAssetSelectedEvent = CustomEvent<Partial<SelectedSalesAsset>>;
+
 type QuickReply = {
   id: string;
   title: string;
@@ -60,6 +76,46 @@ type NoteResponse =
 type DraftState = "idle" | "unsaved" | "saved" | "memory-only";
 type ComposeMode = "reply" | "note";
 
+function asPreparedAsset(detail: Partial<SelectedSalesAsset> | undefined) {
+  if (
+    !detail ||
+    detail.channel !== "whatsapp" ||
+    typeof detail.assetId !== "string" ||
+    !detail.assetId.trim() ||
+    typeof detail.title !== "string" ||
+    !detail.title.trim() ||
+    typeof detail.assetKind !== "string" ||
+    !detail.assetKind.trim() ||
+    !Number.isInteger(detail.version) ||
+    Number(detail.version) <= 0 ||
+    typeof detail.mimeType !== "string" ||
+    !detail.mimeType.trim() ||
+    !Number.isInteger(detail.sizeBytes) ||
+    Number(detail.sizeBytes) <= 0
+  ) {
+    return null;
+  }
+
+  return {
+    assetId: detail.assetId.trim(),
+    title: detail.title.trim().slice(0, 180),
+    assetKind: detail.assetKind.trim().slice(0, 40),
+    version: Number(detail.version),
+    mimeType: detail.mimeType.trim().slice(0, 120),
+    sizeBytes: Number(detail.sizeBytes),
+    autoSendAllowed: detail.autoSendAllowed === true,
+    channel: "whatsapp" as const,
+    accessibilityAltText:
+      typeof detail.accessibilityAltText === "string"
+        ? detail.accessibilityAltText.slice(0, 500)
+        : null,
+    accessibilityCaption:
+      typeof detail.accessibilityCaption === "string"
+        ? detail.accessibilityCaption.slice(0, 500)
+        : null,
+  } satisfies SelectedSalesAsset;
+}
+
 export function WhatsAppComposer({
   action,
   leadId,
@@ -77,6 +133,7 @@ export function WhatsAppComposer({
   const [mode, setMode] = useState<ComposeMode>("reply");
   const [body, setBody] = useState("");
   const [copilotAssisted, setCopilotAssisted] = useState(false);
+  const [selectedAsset, setSelectedAsset] = useState<SelectedSalesAsset | null>(null);
   const [availableQuickReplies, setAvailableQuickReplies] =
     useState<QuickReply[]>(quickReplies);
   const [draftState, setDraftState] = useState<DraftState>("idle");
@@ -131,6 +188,7 @@ export function WhatsAppComposer({
     if (saveTimerRef.current) window.clearTimeout(saveTimerRef.current);
     setBody("");
     setCopilotAssisted(false);
+    setSelectedAsset(null);
     setDraftState("idle");
     setNoteBody("");
     setNoteError(null);
@@ -251,9 +309,21 @@ export function WhatsAppComposer({
       });
     };
 
+    const applyCopilotAsset = (event: Event) => {
+      const asset = asPreparedAsset((event as CopilotAssetSelectedEvent).detail);
+      if (!asset) return;
+
+      setMode("reply");
+      setSelectedAsset(asset);
+      setSendError(null);
+    };
+
     window.addEventListener("crm:copilot-draft", applyCopilotDraft);
-    return () =>
+    window.addEventListener("crm:copilot-asset-selected", applyCopilotAsset);
+    return () => {
       window.removeEventListener("crm:copilot-draft", applyCopilotDraft);
+      window.removeEventListener("crm:copilot-asset-selected", applyCopilotAsset);
+    };
   }, [updateDraft]);
 
   const applyQuickReply = (reply: QuickReply) => {
@@ -350,6 +420,13 @@ export function WhatsAppComposer({
     const text = body.trim();
 
     if (!text || isPending || !connectionReady || mode !== "reply") {
+      return;
+    }
+
+    if (selectedAsset) {
+      setSendError(
+        "This Sales Asset is preflighted, but controlled WhatsApp media delivery is not enabled in this slice. Remove the attachment to send a text-only reply.",
+      );
       return;
     }
 
@@ -499,6 +576,41 @@ export function WhatsAppComposer({
               </div>
             ) : null}
 
+            {selectedAsset ? (
+              <div className="mb-2 rounded-lg border border-sky-200 bg-sky-50 px-3 py-2 dark:border-sky-900/50 dark:bg-sky-950/20">
+                <div className="flex items-start gap-2">
+                  <span className="mt-0.5 grid h-7 w-7 shrink-0 place-items-center rounded-md bg-white text-sky-700 shadow-sm dark:bg-slate-950 dark:text-sky-300">
+                    <Paperclip size={12} />
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <div className="text-[9px] font-semibold text-sky-900 dark:text-sky-200">
+                      Attachment preflighted
+                    </div>
+                    <div className="mt-0.5 truncate text-[10px] font-semibold text-[#18362D] dark:text-slate-100">
+                      {selectedAsset.title}
+                    </div>
+                    <div className="mt-0.5 text-[8px] capitalize text-[#596E64] dark:text-slate-400">
+                      {selectedAsset.assetKind} · v{selectedAsset.version} · {selectedAsset.mimeType}
+                    </div>
+                    <div className="mt-1 text-[8px] leading-4 text-sky-800 dark:text-sky-300">
+                      Current tenant, rights, validity and lead scope were rechecked server-side. Media transport is not enabled yet, so Send stays disabled while this attachment is selected.
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSelectedAsset(null);
+                      setSendError(null);
+                    }}
+                    className="grid h-6 w-6 shrink-0 place-items-center rounded-md text-sky-700 transition hover:bg-sky-100 dark:text-sky-300 dark:hover:bg-sky-950/50"
+                    aria-label="Remove prepared attachment"
+                  >
+                    <X size={12} />
+                  </button>
+                </div>
+              </div>
+            ) : null}
+
             {availableQuickReplies.length ? (
               <div className="mb-2 flex items-center gap-2 overflow-x-auto pb-1">
                 <span className="inline-flex shrink-0 items-center gap-1 text-[9px] font-bold uppercase tracking-wide text-[#71847A]">
@@ -569,11 +681,18 @@ export function WhatsAppComposer({
                 </button>
                 <button
                   type="submit"
-                  disabled={!body.trim() || isPending || !connectionReady}
+                  disabled={
+                    !body.trim() ||
+                    isPending ||
+                    !connectionReady ||
+                    Boolean(selectedAsset)
+                  }
                   title={
-                    connectionReady
-                      ? "Send WhatsApp message"
-                      : connectionDisabledReason(connectionState)
+                    selectedAsset
+                      ? "Media delivery is not enabled yet. Remove the prepared attachment to send text only."
+                      : connectionReady
+                        ? "Send WhatsApp message"
+                        : connectionDisabledReason(connectionState)
                   }
                   className="inline-flex h-8 items-center justify-center gap-1.5 rounded-lg bg-[#153E33] px-3.5 text-[10px] font-semibold text-white transition hover:bg-[#216551] disabled:cursor-not-allowed disabled:bg-[#EDF0EC] disabled:text-[#59685F]"
                 >
@@ -595,11 +714,13 @@ export function WhatsAppComposer({
                 {draftStatus(draftState)}
               </span>
               <span className="text-[#71847A]">
-                {isPending
-                  ? "Sending through the verified WhatsApp action…"
-                  : connectionReady
-                    ? `${windowLabel} · Drafting never sends automatically.`
-                    : connectionDisabledReason(connectionState)}
+                {selectedAsset
+                  ? "Prepared attachment selected · text-only Send is fail-closed until media transport is added."
+                  : isPending
+                    ? "Sending through the verified WhatsApp action…"
+                    : connectionReady
+                      ? `${windowLabel} · Drafting never sends automatically.`
+                      : connectionDisabledReason(connectionState)}
               </span>
             </div>
           </div>
