@@ -114,6 +114,12 @@ jobs:
           cp supabase/recovery/20261014054500_course_catalog_finalize_prerequisite.sql \
              supabase/migrations/20261014054500_course_catalog_finalize_prerequisite.sql
 
+          # Global lead-stage probabilities and stage-aging defaults existed
+          # before tenant-scoped CRM settings were introduced. Stage the exact
+          # legacy default rows so organization-scoped seeding stays semantic.
+          cp supabase/recovery/20261014055400_legacy_crm_settings_defaults_prerequisite.sql \
+             supabase/migrations/20261014055400_legacy_crm_settings_defaults_prerequisite.sql
+
           # The original tracking-source migration exists in production history
           # but was never committed to Git. Stage the minimal authoritative
           # prerequisite at its real production ledger version for clean replay.
