@@ -347,7 +347,7 @@ export default async function HomePage({ searchParams }: HomePageProps) {
         <section className="min-w-0 overflow-hidden rounded-2xl border border-line bg-surface">
           <SectionHeader eyebrow="Acquisition · period" title="Lead sources" actionHref="/marketing" actionLabel="See sources" />
           <div className="space-y-1 p-3 sm:p-4">
-            {acquisitionSources.length ? acquisitionSources.slice(0, 4).map((source) => <SourceRow key={source.source} source={source} />) : <EmptyState text={periodAnalytics.available.leads ? "No acquisition data is recorded for this period yet." : "Selected-period acquisition evidence is unavailable. Current all-time source totals have not been substituted."} />}
+            {acquisitionSources.length ? acquisitionSources.slice(0, 4).map((source) => <SourceRow key={source.source} source={source} periodTotal={totalLeads} />) : <EmptyState text={periodAnalytics.available.leads ? "No acquisition data is recorded for this period yet." : "Selected-period acquisition evidence is unavailable. Current all-time source totals have not been substituted."} />}
           </div>
         </section>
         <section className="min-w-0 overflow-hidden rounded-2xl border border-line bg-surface">
@@ -406,105 +406,50 @@ export default async function HomePage({ searchParams }: HomePageProps) {
 }
 
 function ChangeSignalCard({ signal }: { signal: ChangeSignal }) {
-  const tone =
-    signal.tone === "positive"
-      ? "text-emerald-700 bg-emerald-50 dark:bg-emerald-950/20 dark:text-emerald-300"
-      : signal.tone === "negative"
-        ? "text-rose-700 bg-rose-50 dark:bg-rose-950/20 dark:text-rose-300"
-        : signal.tone === "attention"
-          ? "text-amber-700 bg-amber-50 dark:bg-amber-950/20 dark:text-amber-300"
-          : "text-copy-muted bg-surface-muted";
+  const signalTone =
+    signal.tone === "attention" ? "text-amber-700 dark:text-amber-300" :
+    signal.tone === "positive" ? "text-emerald-700 dark:text-emerald-300" :
+    signal.tone === "negative" ? "text-rose-700 dark:text-rose-300" : "text-copy-strong";
 
   return (
-    <div className="flex items-center gap-3 rounded-xl border border-line px-3 py-3">
-      <span className={`rounded-lg px-2 py-1 text-[11px] font-semibold ${tone}`}>
-        {signal.value}
-      </span>
-      <span className="min-w-0">
-        <span className="block text-xs font-semibold text-copy-strong">
-          {signal.label}
-        </span>
-        <span className="mt-0.5 block truncate text-[10px] text-copy-subtle">
-          {signal.detail}
-        </span>
-      </span>
+    <div className="flex items-start justify-between gap-3 border-b border-line/70 pb-2.5 last:border-b-0">
+      <div className="min-w-0">
+        <p className="text-xs font-medium text-copy-strong">{signal.label}</p>
+        <p className="mt-0.5 text-[11px] leading-4 text-copy-muted">{signal.detail}</p>
+      </div>
+      <span className={"shrink-0 text-xs font-semibold tabular-nums " + signalTone}>{signal.value}</span>
     </div>
   );
 }
 
 function AttentionRow({ item }: { item: AttentionItem }) {
   const Icon = item.icon;
-  const tone =
-    item.tone === "critical"
-      ? "bg-rose-50 text-rose-700 dark:bg-rose-950/30 dark:text-rose-300"
-      : item.tone === "warning"
-        ? "bg-amber-50 text-amber-700 dark:bg-amber-950/30 dark:text-amber-300"
-        : "bg-brand-50 text-brand-700 dark:bg-brand-950/30 dark:text-brand-300";
-  const priorityTone =
-    item.tone === "critical"
-      ? "bg-rose-50 text-rose-700 dark:bg-rose-950/30 dark:text-rose-300"
-      : item.tone === "warning"
-        ? "bg-amber-50 text-amber-700 dark:bg-amber-950/30 dark:text-amber-300"
-        : "bg-surface-muted text-copy-muted";
-  const priorityLabel =
-    item.tone === "critical"
-      ? "Urgent"
-      : item.tone === "warning"
-        ? "Attention"
-        : "Review";
+  const tone = item.tone === "critical" ? "text-rose-600" :
+    item.tone === "warning" ? "text-amber-600" : "text-brand-700";
 
   return (
     <Link
       href={item.href}
-      className="group block rounded-xl border border-line bg-surface px-4 py-3.5 transition hover:border-line-strong hover:bg-surface-muted"
+      className="group flex items-center gap-3 rounded-xl px-2.5 py-3 transition hover:bg-surface-muted focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-700"
+      title={item.reason + " · " + item.evidence}
     >
-      <span className="flex items-start gap-3">
-        <span className={`grid h-9 w-9 shrink-0 place-items-center rounded-xl ${tone}`}>
-          <Icon size={15} />
-        </span>
-        <span className="min-w-0 flex-1">
-          <span className="flex flex-wrap items-center gap-2">
-            <span className="text-sm font-semibold text-copy-strong">
-              {recommendedActionTitle(item)}
-            </span>
-            <span className="rounded-full bg-surface-muted px-2 py-0.5 text-[10px] font-semibold tabular-nums text-copy-muted">
-              {item.value.toLocaleString("en-IN")}
-            </span>
-            <span
-              className={`rounded-full px-2 py-0.5 text-[9px] font-semibold uppercase tracking-[0.08em] ${priorityTone}`}
-            >
-              {priorityLabel}
-            </span>
-          </span>
-          <span className="mt-1 block text-xs leading-5 text-copy-muted">
-            {item.detail}
-          </span>
-          <span className="mt-2 block text-[11px] leading-5 text-copy-subtle">
-            {item.reason}
-          </span>
-        </span>
+      <span className={"grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-surface-muted " + tone}>
+        <Icon size={16} />
       </span>
-      <span className="mt-3 flex flex-wrap items-center gap-2 border-t border-line pt-2.5 text-[10px] font-semibold">
-        <span className="rounded-full bg-surface-muted px-2 py-1 text-copy-muted">
-          {item.evidence}
-        </span>
-        <span className="rounded-full bg-surface-muted px-2 py-1 text-copy-muted">
-          {item.timing}
-        </span>
-        <span className="ml-auto inline-flex items-center gap-1 text-brand-700 dark:text-brand-300">
-          {item.actionLabel}
-          <ArrowRight size={12} className="transition group-hover:translate-x-0.5" />
-        </span>
+      <span className="min-w-0 flex-1">
+        <span className="block text-xs font-semibold text-copy-strong">{recommendedActionTitle(item)}</span>
+        <span className="mt-0.5 block text-[11px] leading-4 text-copy-muted">{item.timing}</span>
       </span>
+      <span className="shrink-0 rounded-lg bg-surface-muted px-2 py-1 text-xs font-semibold tabular-nums text-copy-strong">
+        {item.value.toLocaleString("en-IN")}
+      </span>
+      <ArrowRight size={13} className="shrink-0 text-copy-subtle group-hover:text-brand-700" />
     </Link>
   );
 }
 
 function PipelineSnapshot({
-  active,
-  highIntent,
-  payment,
-  enrolled,
+  active, highIntent, payment, enrolled,
 }: {
   active: number;
   highIntent: number;
@@ -515,39 +460,24 @@ function PipelineSnapshot({
     ["Active pipeline", active],
     ["High intent", highIntent],
     ["Payment pending", payment],
-    ["Enrolled leads", enrolled],
+    ["Enrolled stage", enrolled],
   ] as const;
   const max = Math.max(1, ...rows.map(([, value]) => value));
 
   return (
-    <div className="rounded-xl border border-line bg-surface-muted p-4">
-      <div className="text-[10px] font-semibold uppercase tracking-[0.12em] text-copy-subtle">
-        Admissions snapshot
-      </div>
-      <div className="mt-4 space-y-4">
-        {rows.map(([label, value]) => (
-          <div key={label}>
-            <div className="flex items-center justify-between gap-3 text-xs">
-              <span className="font-medium text-copy-muted">{label}</span>
-              <span className="font-semibold tabular-nums text-copy-strong">
-                {value.toLocaleString("en-IN")}
-              </span>
-            </div>
-            <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-brand-50 dark:bg-brand-950/30">
-              <div
-                className="h-full rounded-full bg-brand-700"
-                style={{ width: `${Math.max(value ? 4 : 0, (value / max) * 100)}%` }}
-              />
-            </div>
+    <div className="space-y-4">
+      {rows.map(([label, value]) => (
+        <div key={label}>
+          <div className="flex items-center justify-between gap-3 text-xs">
+            <span className="text-copy-muted">{label}</span>
+            <span className="font-semibold tabular-nums text-copy-strong">{value.toLocaleString("en-IN")}</span>
           </div>
-        ))}
-      </div>
-      <Link
-        href="/admissions?view=pipeline"
-        className="mt-4 inline-flex items-center gap-1 text-[11px] font-semibold text-brand-700 hover:text-brand-800 dark:text-brand-300"
-      >
-        Work pipeline <ArrowRight size={12} />
-      </Link>
+          <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-surface-muted">
+            <div className="h-full rounded-full bg-brand-600/75" style={{ width: percentageWidth((value / max) * 100) + "%" }} />
+          </div>
+        </div>
+      ))}
+      <p className="text-[10px] leading-4 text-copy-subtle">Current CRM stage indicators; not a sequential conversion funnel.</p>
     </div>
   );
 }
@@ -614,10 +544,7 @@ function PeriodPresets({
 }
 
 function SectionHeader({
-  eyebrow,
-  title,
-  actionHref,
-  actionLabel,
+  eyebrow, title, actionHref, actionLabel,
 }: {
   eyebrow: string;
   title: string;
@@ -625,19 +552,13 @@ function SectionHeader({
   actionLabel: string;
 }) {
   return (
-    <div className="flex items-center justify-between gap-3 border-b border-line px-5 py-4">
-      <div>
-        <div className="text-[10px] font-semibold uppercase tracking-[0.13em] text-copy-subtle">
-          {eyebrow}
-        </div>
-        <div className="mt-1 text-base font-semibold text-copy-strong">{title}</div>
+    <div className="flex items-start justify-between gap-2 px-4 pb-2 pt-4 sm:px-5 sm:pt-5">
+      <div className="min-w-0">
+        <h2 className="text-sm font-semibold tracking-[-0.01em] text-copy-strong">{title}</h2>
+        <p className="mt-1 text-[11px] leading-4 text-copy-subtle">{eyebrow}</p>
       </div>
-      <Link
-        href={actionHref}
-        className="inline-flex items-center gap-1 text-[11px] font-semibold text-brand-700 hover:text-brand-800 dark:text-brand-300"
-      >
-        {actionLabel}
-        <ArrowRight size={12} />
+      <Link href={actionHref} className="inline-flex shrink-0 items-center gap-1 py-1 text-[11px] font-medium text-brand-700 hover:text-brand-800 dark:text-brand-300">
+        {actionLabel}<ArrowRight size={12} />
       </Link>
     </div>
   );
@@ -670,9 +591,7 @@ function SnapshotMetric({
 }
 
 function RevenueTrend({
-  points,
-  currency,
-  available,
+  points, currency, available,
 }: {
   points: DashboardPeriodAnalytics["revenueSeries"];
   currency: string | null;
@@ -680,94 +599,73 @@ function RevenueTrend({
 }) {
   if (!available) {
     return (
-      <div className="mt-5 grid h-36 place-items-center rounded-xl border border-dashed border-amber-200 bg-amber-50/60 px-6 text-center text-xs leading-5 text-amber-800 dark:border-amber-900/60 dark:bg-amber-950/20 dark:text-amber-200">
+      <div className="mt-4 grid h-40 place-items-center rounded-xl border border-dashed border-amber-200 bg-amber-50/50 px-5 text-center text-xs leading-5 text-amber-800 dark:border-amber-900/60 dark:bg-amber-950/20 dark:text-amber-200">
         Selected-period payment evidence is unavailable. Current snapshot revenue has not been substituted into this period trend.
       </div>
     );
   }
-
   if (!points.length || !currency) {
     return (
-      <div className="mt-5 grid h-36 place-items-center rounded-xl border border-dashed border-line bg-surface-muted px-6 text-center text-xs text-copy-muted">
-        Revenue trend will appear once paid transactions are recorded in the selected period.
+      <div className="mt-4 grid h-40 place-items-center rounded-xl border border-dashed border-line bg-surface-muted px-5 text-center text-xs leading-5 text-copy-muted">
+        Revenue trend will appear once verified paid transactions are recorded in the selected period.
       </div>
     );
   }
-
   let running = 0;
-  const cumulative = points.map((point) => ({
-    ...point,
-    cumulative: (running += point.value),
+  const cumulative = points.map(point => ({ ...point, cumulative: (running += point.value) }));
+  const min = Math.min(0, ...cumulative.map(point => point.cumulative));
+  const max = Math.max(0, ...cumulative.map(point => point.cumulative));
+  const range = Math.max(1, max - min);
+  const width = 560;
+  const height = 140;
+  const y = (value: number) => 12 + (max - value) / range * (height - 24);
+  const coords = cumulative.map((point, i) => ({
+    x: 7 + i / Math.max(1, cumulative.length - 1) * (width - 14),
+    y: y(point.cumulative),
   }));
-  const max = Math.max(1, ...cumulative.map((point) => Math.abs(point.cumulative)));
+  const path = coords.map((point, i) => (i === 0 ? "M" : "L") + " " + point.x.toFixed(2) + " " + point.y.toFixed(2)).join(" ");
 
   return (
-    <div className="mt-5">
-      <div className="flex items-end justify-between gap-4">
+    <div className="mt-3">
+      <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <div className="text-[10px] font-semibold uppercase tracking-[0.1em] text-copy-subtle">
-            Cumulative collected · {currency}
-          </div>
-          <div className="mt-1 text-lg font-semibold text-copy-strong">
-            {formatMoney(running, currency)}
-          </div>
+          <p className="text-[11px] text-copy-muted">Cumulative collected · {currency}</p>
+          <p className="mt-1 text-[22px] font-semibold tracking-[-0.03em] text-copy-strong">{formatMoney(running, currency)}</p>
         </div>
-        <div className="text-right text-[10px] text-copy-subtle">
-          Paid transactions · refunds netted
-        </div>
+        <span className="text-[11px] text-copy-subtle">Verified payments · refunds netted</span>
       </div>
-      <div
-        className="mt-4 flex h-32 items-end gap-1.5 rounded-xl bg-surface-muted px-3 pb-3 pt-4"
-        aria-label={`Cumulative ${currency} revenue collected across the selected period`}
-      >
-        {cumulative.map((point) => {
-          const height = Math.max(
-            5,
-            Math.round((Math.abs(point.cumulative) / max) * 100),
-          );
-          return (
-            <span
-              key={point.date}
-              title={`${formatShortDate(point.date)} · ${formatMoney(point.cumulative, currency)}`}
-              className="min-w-[3px] flex-1 rounded-sm bg-brand-700/70"
-              style={{ height: `${height}%` }}
-            />
-          );
-        })}
+      <svg className="mt-4 block h-[150px] w-full overflow-visible text-brand-700 dark:text-brand-300" viewBox="0 0 560 140" preserveAspectRatio="none" role="img" aria-label={"Cumulative verified net collected " + currency + " for the selected period"}>
+        <title>Cumulative verified net collected {currency} for the selected period</title>
+        {[0, 0.5, 1].map((p, index) => (
+          <line key={index} x1="7" x2="553" y1={12 + p * 116} y2={12 + p * 116} stroke="currentColor" strokeOpacity="0.09" strokeWidth="1" />
+        ))}
+        <line x1="7" x2="553" y1={y(0)} y2={y(0)} stroke="currentColor" strokeOpacity="0.18" strokeDasharray="3 4" />
+        <path d={path} fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" vectorEffect="non-scaling-stroke" />
+        {coords.length > 0 ? <circle cx={coords[coords.length - 1].x} cy={coords[coords.length - 1].y} r="4" fill="currentColor" /> : null}
+      </svg>
+      <div className="mt-1 flex justify-between gap-3 text-[11px] text-copy-subtle">
+        <span>{formatShortDate(points[0]?.date)}</span><span>{formatShortDate(points[points.length - 1]?.date)}</span>
       </div>
     </div>
   );
 }
 
-function SourceRow({ source }: { source: DashboardPeriodSource }) {
-  const width = percentageWidth(source.conversionRate);
-  const smallSample = source.leads > 0 && source.leads < 10;
-
+function SourceRow({ source, periodTotal }: { source: DashboardPeriodSource; periodTotal: number | null }) {
+  const share = periodTotal != null && periodTotal > 0 ? (source.leads / periodTotal) * 100 : null;
   return (
-    <Link
-      href={`/marketing?source=${encodeURIComponent(source.source)}`}
-      className="grid grid-cols-[minmax(0,1fr)_minmax(90px,.7fr)_64px] items-center gap-3 rounded-xl px-2 py-2.5 transition hover:bg-surface-muted"
-    >
-      <div className="min-w-0">
-        <div className="truncate text-sm font-semibold text-copy-strong">
-          {sourceLabel(source.source)}
+    <Link href={"/marketing?source=" + encodeURIComponent(source.source)} className="group block rounded-xl px-2 py-2.5 transition hover:bg-surface-muted">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <span className="block truncate text-xs font-medium text-copy-strong">{sourceLabel(source.source)}</span>
+          <span className="mt-0.5 block text-[11px] text-copy-subtle">{source.qualified.toLocaleString("en-IN")} qualified</span>
         </div>
-        <div className="mt-0.5 text-[10px] text-copy-subtle">
-          {source.leads} leads · {source.qualified} qualified
-          {smallSample ? " · small sample" : ""}
-        </div>
+        <span className="shrink-0 text-right text-xs font-semibold tabular-nums text-copy-strong">
+          {source.leads.toLocaleString("en-IN")}
+          <span className="ml-2 font-normal text-copy-subtle">{share == null ? "—" : share.toFixed(1) + "%"}</span>
+        </span>
       </div>
-      <div className="h-2 overflow-hidden rounded-full bg-brand-50 dark:bg-brand-950/30">
-        <div
-          className="h-full rounded-full bg-brand-700"
-          style={{ width: `${width}%` }}
-        />
-      </div>
-      <div className="text-right">
-        <div className="text-sm font-semibold text-copy-strong">
-          {source.conversionRate == null ? "—" : `${source.conversionRate}%`}
-        </div>
-        <div className="text-[9px] text-copy-subtle">qualified</div>
+      <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-surface-muted">
+        <div className="h-full rounded-full bg-brand-600/75" style={{ width: percentageWidth(share) + "%" }} />
       </div>
     </Link>
   );
@@ -778,33 +676,21 @@ function BatchCard({ batch }: { batch: DashboardBatchDemand }) {
   const capacityText = !capacityKnown
     ? "Capacity not set"
     : batch.seatsRemaining != null
-      ? `${batch.seatsRemaining} seats left`
-      : `${batch.capacity} capacity`;
-
+      ? String(batch.seatsRemaining) + " seats left"
+      : String(batch.capacity) + " capacity";
   return (
-    <Link
-      href="/course-management"
-      className="rounded-xl border border-line bg-surface-muted p-3 transition hover:border-line-strong hover:bg-surface"
-    >
-      <div className="flex items-start gap-3">
-        <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-brand-50 text-brand-700 dark:bg-brand-950/30 dark:text-brand-300">
-          <BookOpen size={16} />
+    <Link href="/course-management" className="group flex items-start justify-between gap-3 rounded-xl px-2 py-3 transition hover:bg-surface-muted">
+      <span className="min-w-0">
+        <span className="block line-clamp-1 text-xs font-medium text-copy-strong">{batch.courseName}</span>
+        <span className="mt-0.5 block text-[11px] text-copy-subtle">
+          {batch.startDate ? formatDate(batch.startDate) : "Date not set"} · {batch.location}
         </span>
-        <div className="min-w-0 flex-1">
-          <div className="line-clamp-2 text-xs font-semibold leading-5 text-copy-strong">
-            {batch.courseName}
-          </div>
-          <div className="mt-0.5 text-[10px] text-copy-subtle">
-            {batch.startDate ? formatDate(batch.startDate) : "Date not set"} · {batch.location}
-          </div>
-        </div>
-      </div>
-      <div className="mt-3 flex flex-wrap gap-x-3 gap-y-1 border-t border-line pt-2 text-[10px] text-copy-muted">
-        <span>{batch.activeDemand} active</span>
-        <span>{batch.enrolled} enrolled leads</span>
-        <span>{batch.paymentPending} payment</span>
-        <span>{capacityText}</span>
-      </div>
+        <span className="mt-1 block text-[10px] text-copy-subtle">{capacityText}</span>
+      </span>
+      <span className="shrink-0 text-right">
+        <span className="block text-sm font-semibold tabular-nums text-copy-strong">{batch.activeDemand.toLocaleString("en-IN")}</span>
+        <span className="block text-[10px] text-copy-subtle">active leads</span>
+      </span>
     </Link>
   );
 }
