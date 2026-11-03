@@ -269,3 +269,108 @@ end;
 $function$;
 
 commit;
+
+-- -----------------------------------------------------------------------------
+-- Re-engaged workspace v2 historical contracts
+-- -----------------------------------------------------------------------------
+-- These two aggregate views and the original v2 workspace function existed in
+-- production before 20261028050611 but have no creator in the migration ledger.
+-- Production still preserves the original function body as
+-- get_reengaged_workspace_legacy_v2(). Reconstruct those pre-v3 contracts here
+-- so the real 50611/50642 migrations can clone/promote them normally.
+
+begin;
+
+create or replace view public.v_lead_temperature_summary
+with (security_invoker = true)
+as
+select
+  behaviour_temperature,
+  count(*) as lead_count,
+  count(*) filter (where is_reengaged) as reengaged_count,
+  count(*) filter (where sessions_7d > 0) as active_7d_count,
+  round(avg(engagement_score), 1) as avg_engagement_score
+from public.v_lead_journey_intelligence j
+group by behaviour_temperature;
+
+create or replace view public.v_conversion_visit_distribution
+with (security_invoker = true)
+as
+select
+  case
+    when conversion_visit_number is null then 'unknown'::text
+    when conversion_visit_number = 1 then '1st visit'::text
+    when conversion_visit_number = 2 then '2nd visit'::text
+    when conversion_visit_number >= 3 and conversion_visit_number <= 5 then '3-5 visits'::text
+    else '6+ visits'::text
+  end as visit_bucket,
+  count(*) as lead_count,
+  round(avg(conversion_visit_number) filter (where conversion_visit_number is not null), 2) as avg_visit_number,
+  round(avg(days_first_visit_to_lead) filter (where days_first_visit_to_lead is not null), 2) as avg_days_to_lead,
+  organization_id
+from public.v_lead_journey_intelligence j
+group by
+  organization_id,
+  case
+    when conversion_visit_number is null then 'unknown'::text
+    when conversion_visit_number = 1 then '1st visit'::text
+    when conversion_visit_number = 2 then '2nd visit'::text
+    when conversion_visit_number >= 3 and conversion_visit_number <= 5 then '3-5 visits'::text
+    else '6+ visits'::text
+  end;
+
+create or replace function public.get_reengaged_workspace_v2()
+returns jsonb
+language sql
+stable
+set search_path to 'public'
+as $function$
+  with active_leads as (
+    select
+      to_jsonb(j) as row_json
+    from public.v_lead_journey_intelligence j
+    where
+      coalesce(nullif(to_jsonb(j) ->> 'sessions_7d', '')::numeric, 0) > 0
+      or coalesce(nullif(to_jsonb(j) ->> 'page_views_7d', '')::numeric, 0) > 0
+      or coalesce(nullif(to_jsonb(j) ->> 'high_intent_events_7d', '')::numeric, 0) > 0
+      or lower(coalesce(to_jsonb(j) ->> 'is_reengaged', 'false')) = 'true'
+    order by
+      nullif(to_jsonb(j) ->> 'last_visit_at', '')::timestamptz desc nulls last
+    limit 250
+  )
+  select jsonb_build_object(
+    'leads',
+    coalesce(
+      (select jsonb_agg(row_json) from active_leads),
+      '[]'::jsonb
+    ),
+    'summary',
+    coalesce(
+      (
+        select jsonb_agg(
+          to_jsonb(s)
+          order by
+            case lower(coalesce(to_jsonb(s) ->> 'behaviour_temperature', ''))
+              when 'hot' then 1
+              when 'warm' then 2
+              when 'cold' then 3
+              when 'closed' then 4
+              else 5
+            end
+        )
+        from public.v_lead_temperature_summary s
+      ),
+      '[]'::jsonb
+    ),
+    'distribution',
+    coalesce(
+      (
+        select jsonb_agg(to_jsonb(d))
+        from public.v_conversion_visit_distribution d
+      ),
+      '[]'::jsonb
+    )
+  );
+$function$;
+
+commit;
