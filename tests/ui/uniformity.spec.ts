@@ -161,6 +161,21 @@ test('Home evidence-first charts preserve empty-data and action semantics', asyn
   }
 });
 
+test('Leads overview renders real summary and responsive controls', async ({ page }) => {
+  await page.goto('/leads');
+  await expect(page.getByTestId('leads-overview')).toBeVisible();
+  await expect(page.getByRole('region', { name: 'Leads overview' }).getByRole('link')).toHaveCount(5);
+  await expect(page.getByRole('textbox', { name: 'Search leads' })).toBeVisible();
+  await expect(page.getByRole('columnheader', { name: 'Source' })).toBeVisible();
+  await expect(page.getByRole('columnheader', { name: 'Next step' })).toBeVisible();
+  await page.getByRole('button', { name: 'More filters' }).click();
+  await expect(page.getByText('Sort', { exact: true })).toBeVisible();
+  for (const width of [390, 768, 1440]) {
+    await page.setViewportSize({ width, height: 900 });
+    await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
+  }
+});
+
 test('Home supports the shared dark theme', async ({ page }) => {
   await page.goto('/home');
   await page.screenshot({ animations: 'disabled', path: 'test-results/home-desktop.png' });
