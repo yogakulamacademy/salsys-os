@@ -15,6 +15,7 @@ import {
 
 import { DecisionMetricCard } from "@/components/intelligence/decision-metric-card";
 import { LeadActivityChart } from "@/components/home/lead-activity-chart";
+import { HomeEmptyState } from "@/components/home/home-empty-state";
 import { isMockMode } from "@/lib/data";
 import { percentageWidth, sourceLabel } from "@/lib/ui-format";
 import {
@@ -335,7 +336,7 @@ export default async function HomePage({ searchParams }: HomePageProps) {
             <ReplyPressure total={metrics.needsReply} overHour={metrics.waitingOverHour} />
           ) : null}
           <div className="space-y-1 p-3 sm:p-4">
-            {activeAttention.length ? activeAttention.map((item) => <AttentionRow key={item.label} item={item} />) : <EmptyState text="No urgent reply, follow-up, first-touch or payment actions are recorded right now." />}
+            {activeAttention.length ? activeAttention.map((item) => <AttentionRow key={item.label} item={item} />) : <HomeEmptyState variant="queue" compact title="All caught up" description="No urgent reply, follow-up, first-touch or payment actions are recorded right now." />}
           </div>
           {unvaluedOpenLeads > 0 ? (
             <Link href="/revenue" className="mx-4 mb-4 flex items-center gap-2 rounded-lg bg-surface-muted px-3 py-2.5 text-xs text-copy-muted hover:text-brand-700">
@@ -349,13 +350,13 @@ export default async function HomePage({ searchParams }: HomePageProps) {
         <section className="min-w-0 overflow-hidden rounded-2xl border border-line bg-surface">
           <SectionHeader eyebrow="Acquisition · period" title="Lead sources" actionHref="/marketing" actionLabel="See sources" />
           <div className="space-y-1 p-3 sm:p-4">
-            {acquisitionSources.length ? acquisitionSources.slice(0, 4).map((source) => <SourceRow key={source.source} source={source} periodTotal={totalLeads} disambiguate={acquisitionSources.slice(0, 4).filter((row) => sourceLabel(row.source) === sourceLabel(source.source)).length > 1} />) : <EmptyState text={periodAnalytics.available.leads ? "No acquisition data is recorded for this period yet." : "Selected-period acquisition evidence is unavailable. Current all-time source totals have not been substituted."} />}
+            {acquisitionSources.length ? acquisitionSources.slice(0, 4).map((source) => <SourceRow key={source.source} source={source} periodTotal={totalLeads} disambiguate={acquisitionSources.slice(0, 4).filter((row) => sourceLabel(row.source) === sourceLabel(source.source)).length > 1} />) : <HomeEmptyState variant="sources" compact unavailable={!periodAnalytics.available.leads} title={periodAnalytics.available.leads ? "No source activity yet" : "Source data unavailable"} description={periodAnalytics.available.leads ? "No acquisition data is recorded for this period yet." : "Selected-period acquisition evidence is unavailable. Current all-time source totals have not been substituted."} />}
           </div>
         </section>
         <section className="min-w-0 overflow-hidden rounded-2xl border border-line bg-surface">
           <SectionHeader eyebrow="Operations · current" title="Upcoming batch demand" actionHref="/course-management" actionLabel="See batches" />
           <div className="space-y-1 p-3 sm:p-4">
-            {upcomingBatches.length ? upcomingBatches.slice(0, 3).map((batch) => <BatchCard key={batch.id} batch={batch} />) : <EmptyState text="No future-start batches are currently available in this workspace." />}
+            {upcomingBatches.length ? upcomingBatches.slice(0, 3).map((batch) => <BatchCard key={batch.id} batch={batch} />) : <HomeEmptyState variant="batches" compact title="No upcoming batches" description="No future-start batches are currently available in this workspace." action={{ href: "/course-management", label: "View courses" }} />}
           </div>
         </section>
         <section className="min-w-0 overflow-hidden rounded-2xl border border-line bg-surface">
@@ -394,9 +395,8 @@ export default async function HomePage({ searchParams }: HomePageProps) {
         <section className="min-w-0 rounded-2xl border border-line bg-surface p-4 sm:p-5">
           <h2 className="text-sm font-semibold text-copy-strong">System health</h2>
           <p className="mt-1 text-xs leading-5 text-copy-muted">Provider status and sync freshness are checked in the live health monitor.</p>
-          <div className="mt-4 rounded-xl border border-line bg-surface-muted p-3">
-            <span className="text-xs font-medium text-copy-strong">Status not loaded on this page</span>
-            <p className="mt-1 text-[11px] leading-5 text-copy-muted">Open System Health for verified connection conditions.</p>
+          <div className="mt-4">
+            <HomeEmptyState variant="status" compact unavailable title="Status not loaded here" description="Open System Health for verified connection conditions." />
           </div>
           <Link href="/system-health" className="mt-4 inline-flex items-center gap-1.5 text-xs font-semibold text-brand-700 dark:text-brand-300">
             View system health <ArrowRight size={13} />
@@ -666,15 +666,27 @@ function RevenueTrend({
 }) {
   if (!available) {
     return (
-      <div className="mt-4 grid h-40 place-items-center rounded-xl border border-dashed border-amber-200 bg-amber-50/50 px-5 text-center text-xs leading-5 text-amber-800 dark:border-amber-900/60 dark:bg-amber-950/20 dark:text-amber-200">
-        Selected-period payment evidence is unavailable. Current snapshot revenue has not been substituted into this period trend.
+      <div className="mt-4">
+        <HomeEmptyState
+          variant="revenue"
+          compact
+          unavailable
+          title="Revenue evidence unavailable"
+          description="Selected-period payment evidence is unavailable. Current snapshot revenue has not been substituted into this period trend."
+        />
       </div>
     );
   }
   if (!points.length || !currency) {
     return (
-      <div className="mt-4 grid h-40 place-items-center rounded-xl border border-dashed border-line bg-surface-muted px-5 text-center text-xs leading-5 text-copy-muted">
-        Revenue trend will appear once verified paid transactions are recorded in the selected period.
+      <div className="mt-4">
+        <HomeEmptyState
+          variant="revenue"
+          compact
+          title="No collected revenue yet"
+          description="Revenue trend will appear once verified paid transactions are recorded in the selected period."
+          action={{ href: "/revenue", label: "Open revenue" }}
+        />
       </div>
     );
   }
@@ -800,10 +812,6 @@ function TrendPill({
       {value.toLocaleString("en-IN", { maximumFractionDigits: 1 })}%
     </span>
   );
-}
-
-function EmptyState({ text }: { text: string }) {
-  return <div className="px-5 py-10 text-sm leading-6 text-copy-muted">{text}</div>;
 }
 
 function buildChangeSignals(
