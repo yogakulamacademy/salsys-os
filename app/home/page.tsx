@@ -116,13 +116,6 @@ export default async function HomePage({ searchParams }: HomePageProps) {
   const collectedValue = periodPrimaryRevenue
     ? formatMoney(periodPrimaryRevenue.current, periodPrimaryRevenue.currency)
     : "—";
-  const collectedTrend =
-    periodAnalytics.available.revenue &&
-    periodAnalytics.primaryCurrency &&
-    periodPrimaryRevenue?.currency === periodAnalytics.primaryCurrency
-      ? periodAnalytics.revenueSeries.map((point) => point.value)
-      : undefined;
-
   const attentionItems: AttentionItem[] = [
     {
       label: "Needs reply",
@@ -236,7 +229,7 @@ export default async function HomePage({ searchParams }: HomePageProps) {
         </section>
       ) : null}
 
-      <section aria-label="Business pulse" className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+      <section aria-label="Business pulse" className="grid grid-cols-2 gap-2 sm:gap-3 xl:grid-cols-4">
         <div className="command-kpi min-w-0">
           <DecisionMetricCard
             icon={<Users size={17} />}
@@ -285,7 +278,6 @@ export default async function HomePage({ searchParams }: HomePageProps) {
             href="/revenue"
             evidenceLabel={periodAnalytics.available.revenue ? "Verified payment evidence" : "Evidence unavailable"}
             definition="Net collected revenue from verified payment evidence in the selected period and displayed currency. Different currencies are never combined without approved FX evidence."
-            trend={collectedTrend}
           />
         </div>
       </section>
