@@ -193,6 +193,8 @@ jobs:
 
           cp supabase/recovery/20261018164546_customer360_operational_completeness_v1.sql \
              supabase/migrations/20261018164546_customer360_operational_completeness_v1.sql
+          cp supabase/recovery/20261018172343_r7_integration_feedback_health_v1.sql \
+             supabase/migrations/20261018172343_r7_integration_feedback_health_v1.sql
 
           cp supabase/recovery/20261019023002_r10_predictive_lead_scoring_foundation_prerequisite.sql \
              supabase/migrations/20261019023002_r10_predictive_lead_scoring_foundation_v1.sql
