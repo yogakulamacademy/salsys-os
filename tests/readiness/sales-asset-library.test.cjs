@@ -148,6 +148,7 @@ test('Co-Pilot discovery exposes approved metadata only and remains tenant-scope
   assert.match(copilotAssetActions, /search_sales_assets_for_copilot_v1/);
   assert.match(copilotAssetActions, /can_work_lead/);
   assert.match(copilotAssetActions, /sanitizeSuggestions/);
+  assert.match(copilotAssetActions, /p_language: stringValue\(lead\.language\) \|\| null/);
   assert.doesNotMatch(
     copilotAssetActions,
     /safe_reference|storage_bucket|storage_path|createSignedUrl|createSignedUrls|getPublicUrl/,
