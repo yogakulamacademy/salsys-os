@@ -1,10 +1,10 @@
 begin;
 
 -- CI-only historical recovery prerequisite.
--- course_batch_admin_events existed out-of-band before
--- 20261014091441_session_bound_tenant_mutation_policies.sql tightened its
--- INSERT policy. Production already contains the hardened table/policies.
--- Do not promote this file into the normal migration ledger.
+-- course_batch_admin_events and can_view_all_leads() existed out-of-band before
+-- 20261014091441_session_bound_tenant_mutation_policies.sql tightened tenant
+-- mutation policies and referenced both objects. Production already contains
+-- their hardened forms. Do not promote this file into the normal ledger.
 
 create table if not exists public.course_batch_admin_events (
   id uuid primary key default gen_random_uuid(),
@@ -70,5 +70,20 @@ create policy course_batch_admin_events_insert
 
 grant select, insert on public.course_batch_admin_events to authenticated;
 grant all on public.course_batch_admin_events to service_role;
+
+create or replace function public.can_view_all_leads()
+returns boolean
+language sql
+stable
+security definer
+set search_path to 'public', 'auth', 'pg_temp'
+as $function$
+  select
+    auth.role() = 'service_role'
+    or public.is_crm_admin();
+$function$;
+
+revoke all on function public.can_view_all_leads() from public, anon;
+grant execute on function public.can_view_all_leads() to authenticated, service_role;
 
 commit;
