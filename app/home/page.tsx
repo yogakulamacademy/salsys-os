@@ -198,341 +198,207 @@ export default async function HomePage({ searchParams }: HomePageProps) {
   ].filter((value): value is string => Boolean(value));
 
   return (
-    <div className="space-y-5 pb-8">
-      <section className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
-        <div>
-          <div className="text-[11px] font-semibold uppercase tracking-[0.13em] text-brand-700 dark:text-brand-300">
-            SalsysOS
-          </div>
-          <h1 className="mt-1 text-[30px] font-semibold tracking-[-0.04em] text-copy-strong">
-            Command Center
-          </h1>
-          <p className="mt-1 text-sm text-copy-muted">
-            One view of performance, attention, growth and operational demand.
+    <div className="command-center-v2 mx-auto max-w-[1480px] space-y-4 pb-8 sm:space-y-5">
+      <header className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
+        <div className="min-w-0">
+          <h1 className="text-[28px] font-semibold tracking-[-0.04em] text-copy-strong">Command Center</h1>
+          <p className="mt-1 text-[13px] leading-5 text-copy-muted">
+            Track performance, see what needs attention, and keep work moving.
           </p>
         </div>
-
         <div className="flex flex-wrap items-center gap-2">
           <PeriodPresets selected={periodAnalytics.period.preset} />
-          <details className="group relative">
-            <summary className="inline-flex h-10 cursor-pointer list-none items-center gap-2 rounded-ui border border-line bg-surface px-3 text-xs font-semibold text-copy-muted shadow-sm transition hover:border-line-strong hover:text-copy-strong">
-              <CalendarDays size={14} className="text-brand-700 dark:text-brand-300" />
-              {periodAnalytics.period.label}
+          <details className="relative group">
+            <summary className="inline-flex h-10 cursor-pointer list-none items-center gap-2 rounded-ui border border-line bg-surface px-3 text-xs font-medium text-copy-muted hover:border-line-strong">
+              <CalendarDays size={14} className="text-brand-700" />
+              <span className="max-w-[170px] truncate">{periodAnalytics.period.label}</span>
             </summary>
-            <div className="absolute right-0 z-30 mt-2 w-[310px] rounded-card border border-line bg-surface p-4 shadow-panel">
+            <div className="absolute right-0 z-30 mt-2 w-[min(310px,calc(100vw-40px))] rounded-card border border-line bg-surface p-4 shadow-panel">
               <form action="/home" method="get" className="space-y-3">
                 <input type="hidden" name="period" value="custom" />
-                <DateField
-                  id="dashboard-from"
-                  name="from"
-                  label="From"
-                  defaultValue={periodAnalytics.period.startDate}
-                />
-                <DateField
-                  id="dashboard-to"
-                  name="to"
-                  label="To"
-                  defaultValue={periodAnalytics.period.endDate}
-                />
-                <p className="text-[11px] leading-5 text-copy-subtle">
-                  Custom ranges are capped at 366 days. Comparisons use the immediately preceding equal-length period when a valid baseline exists.
-                </p>
-                <button
-                  type="submit"
-                  className="inline-flex h-10 w-full items-center justify-center rounded-ui bg-brand-700 px-4 text-xs font-semibold text-white transition hover:bg-brand-800"
-                >
-                  Apply date range
-                </button>
+                <DateField id="dashboard-from" name="from" label="From" defaultValue={periodAnalytics.period.startDate} />
+                <DateField id="dashboard-to" name="to" label="To" defaultValue={periodAnalytics.period.endDate} />
+                <p className="text-[11px] leading-5 text-copy-subtle">Custom ranges are capped at 366 days. Comparisons use the previous equal-length period when available.</p>
+                <button type="submit" className="h-10 w-full rounded-ui bg-brand-700 px-4 text-xs font-semibold text-white hover:bg-brand-800">Apply date range</button>
               </form>
             </div>
           </details>
-          <Link
-            href="/marketing"
-            className="inline-flex h-10 items-center gap-2 rounded-ui border border-ai-line bg-ai-soft px-3 text-xs font-semibold text-ai-text transition hover:bg-brand-50 dark:bg-brand-950/30"
-          >
+          <Link href="/marketing" className="inline-flex h-10 items-center gap-2 rounded-ui border border-line bg-surface px-3 text-xs font-semibold text-copy-strong hover:border-brand-300 hover:text-brand-700">
             <Sparkles size={14} /> Explore intelligence
           </Link>
         </div>
-      </section>
+      </header>
 
       {missingPeriodEvidence.length ? (
-        <section className="flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800 dark:border-amber-900/60 dark:bg-amber-950/20 dark:text-amber-200">
-          <AlertTriangle size={17} className="mt-0.5 shrink-0" />
-          <div>
-            <div className="font-semibold">Selected-period evidence is incomplete</div>
-            <p className="mt-1 text-xs leading-5">
-              Unavailable: {missingPeriodEvidence.join(", ")}. Period KPIs stay unknown rather than falling back to all-time snapshot totals. Current action, pipeline and operational panels remain current-state evidence.
-            </p>
-          </div>
+        <section aria-label="Reporting coverage" className="flex items-start gap-2.5 rounded-xl border border-amber-200 bg-amber-50/70 px-4 py-3 text-xs leading-5 text-amber-800 dark:border-amber-900/60 dark:bg-amber-950/20 dark:text-amber-200">
+          <AlertTriangle size={16} className="mt-0.5 shrink-0" />
+          <p>
+            <strong>Selected-period evidence is incomplete.</strong> Unavailable: {missingPeriodEvidence.join(", ")}.
+            Period KPIs stay unknown rather than falling back to all-time snapshot totals. Current attention and pipeline panels use current-state evidence.
+          </p>
         </section>
       ) : null}
 
-      <section className="overflow-hidden rounded-card border border-line bg-surface shadow-sm">
-        <div className="grid gap-6 p-5 lg:grid-cols-[minmax(0,1.25fr)_minmax(340px,.75fr)] lg:p-6">
-          <div className="flex items-start gap-4">
-            <span
-              className={`grid h-11 w-11 shrink-0 place-items-center rounded-xl ${
-                totalAttention > 0
-                  ? "bg-amber-50 text-amber-700 dark:bg-amber-950/30 dark:text-amber-300"
-                  : "bg-emerald-50 text-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-300"
-              }`}
-            >
-              <TrendingUp size={20} />
-            </span>
-            <div className="min-w-0">
-              <div className="text-[10px] font-semibold uppercase tracking-[0.13em] text-copy-subtle">
-                Salsys brief
-              </div>
-              <h2 className="mt-1 text-xl font-semibold tracking-[-0.025em] text-copy-strong">
-                {executiveBrief.title}
-              </h2>
-              <p className="mt-1 max-w-3xl text-sm leading-6 text-copy-muted">
-                {executiveBrief.summary}
-              </p>
-              <div className="mt-3 flex flex-wrap gap-2 text-[10px] font-semibold">
-                <span className="rounded-full bg-surface-muted px-2.5 py-1 text-copy-muted">
-                  Observed CRM evidence
-                </span>
-                <span className="rounded-full bg-surface-muted px-2.5 py-1 text-copy-muted">
-                  {periodAnalytics.period.label}
-                </span>
-                <span
-                  className={`rounded-full px-2.5 py-1 ${
-                    totalAttention > 0
-                      ? "bg-amber-50 text-amber-700"
-                      : "bg-emerald-50 text-emerald-700"
-                  }`}
-                >
-                  {totalAttention > 0
-                    ? `${totalAttention} actions need attention`
-                    : "No urgent actions"}
-                </span>
-              </div>
-            </div>
-          </div>
-
-          <div className="grid gap-2 sm:grid-cols-3 lg:grid-cols-1">
-            {changeSignals.map((signal) => (
-              <ChangeSignalCard key={signal.label} signal={signal} />
-            ))}
-          </div>
+      <section aria-label="Business pulse" className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        <div className="command-kpi min-w-0">
+          <DecisionMetricCard
+            icon={<Users size={17} />}
+            label="Leads"
+            value={totalLeads == null ? "—" : totalLeads.toLocaleString("en-IN")}
+            detail="Created in the selected period"
+            delta={periodAnalytics.available.leads ? periodAnalytics.leads.changePercent : undefined}
+            deltaDirection="neutral"
+            comparisonLabel="vs previous comparable period"
+            href="/leads"
+            evidenceLabel={periodAnalytics.available.leads ? "CRM lead evidence" : "Evidence unavailable"}
+            definition="Leads created in the selected period. Missing period evidence stays unknown rather than substituting current snapshot totals."
+          />
+        </div>
+        <div className="command-kpi min-w-0">
+          <DecisionMetricCard
+            icon={<Inbox size={17} />}
+            label="Needs reply"
+            value={metrics.needsReply.toLocaleString("en-IN")}
+            detail="Current conversations awaiting a team reply"
+            href="/conversations"
+            evidenceLabel="Current conversation state"
+            definition="Current active customer conversations that need a reply. Unlike the other cards, this is a current queue count, not a selected-period conversation total."
+          />
+        </div>
+        <div className="command-kpi min-w-0">
+          <DecisionMetricCard
+            icon={<UserRoundCheck size={17} />}
+            label="Qualified leads"
+            value={qualifiedLeads == null ? "—" : qualifiedLeads.toLocaleString("en-IN")}
+            detail={qualifiedRate == null ? "Selected-period stage evidence unavailable" : String(qualifiedRate) + "% of new leads in scope"}
+            href="/admissions"
+            evidenceLabel={periodAnalytics.available.leads ? "CRM stage evidence" : "Evidence unavailable"}
+            definition="Leads created in the selected period whose current CRM stage is qualified or later. This is a cohort-stage snapshot, not a sequential funnel conversion probability."
+          />
+        </div>
+        <div className="command-kpi min-w-0">
+          <DecisionMetricCard
+            icon={<CircleDollarSign size={17} />}
+            label="Collected"
+            value={collectedValue}
+            detail={!periodAnalytics.available.revenue ? "Selected-period payment evidence unavailable" : periodPrimaryRevenue ? periodPrimaryRevenue.currency + " verified net paid" : "No verified paid amount in scope"}
+            delta={periodPrimaryRevenue?.changePercent}
+            deltaDirection="higher_is_better"
+            comparisonLabel="vs previous comparable period"
+            href="/revenue"
+            evidenceLabel={periodAnalytics.available.revenue ? "Verified payment evidence" : "Evidence unavailable"}
+            definition="Net collected revenue from verified payment evidence in the selected period and displayed currency. Different currencies are never combined without approved FX evidence."
+            trend={collectedTrend}
+          />
         </div>
       </section>
 
-      <section
-        className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4"
-        aria-label="Business pulse"
-      >
-        <DecisionMetricCard
-          icon={<Users size={17} />}
-          label="Leads"
-          value={totalLeads == null ? "—" : totalLeads.toLocaleString("en-IN")}
-          detail={
-            qualifiedLeads == null
-              ? "Selected-period lead evidence unavailable"
-              : `${qualifiedLeads.toLocaleString("en-IN")} qualified in scope`
-          }
-          delta={
-            periodAnalytics.available.leads
-              ? periodAnalytics.leads.changePercent
-              : undefined
-          }
-          deltaDirection="neutral"
-          comparisonLabel="vs previous comparable period"
-          href="/leads"
-          evidenceLabel={
-            periodAnalytics.available.leads
-              ? "CRM lead evidence"
-              : "Evidence unavailable"
-          }
-          definition="Leads recorded in the selected reporting scope. If selected-period lead evidence cannot be verified, this metric stays unknown and does not substitute the current all-time snapshot."
-        />
-        <DecisionMetricCard
-          icon={<TrendingUp size={17} />}
-          label="Qualified rate"
-          value={qualifiedRate == null ? "—" : `${qualifiedRate}%`}
-          detail={
-            periodAnalytics.available.leads
-              ? "Lead-to-qualified CRM stage signal"
-              : "Selected-period lead evidence unavailable"
-          }
-          href="/admissions"
-          evidenceLabel={
-            periodAnalytics.available.leads
-              ? "CRM stage quality"
-              : "Evidence unavailable"
-          }
-          definition="Share of leads created in the selected scope whose current CRM stage is qualified or later. This is a CRM stage ratio, not a predicted conversion probability."
-        />
-        <DecisionMetricCard
-          icon={<UserRoundCheck size={17} />}
-          label="Enrolled leads"
-          value={
-            enrolledLeads == null ? "—" : enrolledLeads.toLocaleString("en-IN")
-          }
-          detail={
-            periodAnalytics.available.enrollments
-              ? "Leads entering the enrolled CRM stage"
-              : "Selected-period stage-history evidence unavailable"
-          }
-          delta={
-            periodAnalytics.available.enrollments
-              ? periodAnalytics.enrollments.changePercent
-              : undefined
-          }
-          deltaDirection="higher_is_better"
-          comparisonLabel="vs previous comparable period"
-          href="/admissions"
-          evidenceLabel={
-            periodAnalytics.available.enrollments
-              ? "CRM stage-history evidence"
-              : "Evidence unavailable"
-          }
-          definition="Unique leads recorded entering the enrolled CRM stage in the selected scope. This is a CRM outcome signal and is not the authoritative operational Enrollment-record count."
-        />
-        <DecisionMetricCard
-          icon={<CircleDollarSign size={17} />}
-          label="Collected"
-          value={collectedValue}
-          detail={
-            !periodAnalytics.available.revenue
-              ? "Selected-period payment evidence unavailable"
-              : periodPrimaryRevenue
-                ? `${periodPrimaryRevenue.currency} paid evidence`
-                : "No paid evidence in scope"
-          }
-          delta={periodPrimaryRevenue?.changePercent}
-          deltaDirection="higher_is_better"
-          comparisonLabel="vs previous comparable period"
-          href="/revenue"
-          evidenceLabel={
-            periodAnalytics.available.revenue
-              ? "Verified payment evidence"
-              : "Evidence unavailable"
-          }
-          definition="Net collected revenue from verified payment evidence in the selected scope and displayed currency. Currencies are not combined without the explicit FX layer; unavailable period evidence stays unknown."
-          trend={collectedTrend}
-        />
-      </section>
+      {activeAttention.length > 0 ? (
+        <section aria-label="Top priority" className="flex flex-col gap-3 rounded-2xl border border-line bg-surface-soft px-4 py-3.5 sm:flex-row sm:items-center sm:justify-between sm:px-5">
+          <div className="min-w-0">
+            <h2 className="text-sm font-semibold text-copy-strong">
+              {activeAttention[0].value.toLocaleString("en-IN")} · {recommendedActionTitle(activeAttention[0])}
+            </h2>
+            <p className="mt-1 text-xs leading-5 text-copy-muted">{activeAttention[0].detail}. {activeAttention[0].timing}.</p>
+          </div>
+          <Link href={activeAttention[0].href} className="inline-flex h-9 shrink-0 items-center gap-2 self-start rounded-ui bg-brand-700 px-3 text-xs font-semibold text-white hover:bg-brand-800 sm:self-auto">
+            {activeAttention[0].actionLabel} <ArrowRight size={13} />
+          </Link>
+        </section>
+      ) : null}
 
-      <section className="grid gap-4 xl:grid-cols-[minmax(0,1.35fr)_minmax(340px,.65fr)]">
-        <section className="overflow-hidden rounded-card border border-line bg-surface shadow-sm">
-          <SectionHeader
-            eyebrow="Performance"
-            title="Revenue & pipeline health"
-            actionHref="/revenue"
-            actionLabel="Open revenue"
-          />
-          <div className="grid gap-5 p-5 lg:grid-cols-[minmax(0,1.15fr)_minmax(260px,.85fr)]">
-            <div>
-              <div className="grid gap-5 sm:grid-cols-3">
-                <SnapshotMetric
-                  label="Collected in period"
-                  value={collectedValue}
-                  change={periodPrimaryRevenue?.changePercent ?? null}
-                />
-                <SnapshotMetric
-                  label="Current pipeline value"
-                  value={
-                    primaryRevenue
-                      ? formatMoney(primaryRevenue.pipeline, primaryRevenue.currency)
-                      : "—"
-                  }
-                />
-                <SnapshotMetric
-                  label="Current weighted value"
-                  value={
-                    primaryRevenue
-                      ? formatMoney(primaryRevenue.weighted, primaryRevenue.currency)
-                      : "—"
-                  }
-                />
-              </div>
-              <RevenueTrend
-                points={periodAnalytics.revenueSeries}
-                currency={periodAnalytics.primaryCurrency}
-                available={periodAnalytics.available.revenue}
-              />
+      <section aria-label="Performance and work queue" className="grid min-w-0 gap-4 xl:grid-cols-[minmax(0,1.65fr)_minmax(300px,.85fr)]">
+        <section className="min-w-0 overflow-hidden rounded-2xl border border-line bg-surface">
+          <SectionHeader eyebrow="Performance · period" title="Performance overview" actionHref="/revenue" actionLabel="Open revenue" />
+          <div className="p-4 sm:p-5">
+            <RevenueTrend points={periodAnalytics.revenueSeries} currency={periodAnalytics.primaryCurrency} available={periodAnalytics.available.revenue} />
+            <div className="mt-5 grid gap-3 border-t border-line pt-4 sm:grid-cols-3">
+              <SnapshotMetric label="Enrolled leads" value={enrolledLeads == null ? "—" : enrolledLeads.toLocaleString("en-IN")} />
+              <SnapshotMetric label="Active pipeline · now" value={metrics.activePipeline.toLocaleString("en-IN")} />
+              <SnapshotMetric label="High intent · now" value={metrics.highIntent.toLocaleString("en-IN")} />
             </div>
-            <PipelineSnapshot
-              active={metrics.activePipeline}
-              highIntent={metrics.highIntent}
-              payment={metrics.paymentPending}
-              enrolled={counts.enrolled ?? 0}
-            />
+            <p className="mt-3 text-[11px] leading-5 text-copy-subtle">
+              Enrolled leads reflect CRM stage-history entries in the period, not the authoritative operational Enrollment-record count. Pipeline and intent are current-state counts.
+            </p>
+            <details className="mt-3 border-t border-line pt-3">
+              <summary className="cursor-pointer text-xs font-medium text-brand-700 dark:text-brand-300">Financial context</summary>
+              <div className="mt-3 grid gap-4 rounded-xl bg-surface-muted p-3 sm:grid-cols-3">
+                <SnapshotMetric label="Collected in period" value={collectedValue} change={periodPrimaryRevenue?.changePercent ?? null} />
+                <SnapshotMetric label="Current pipeline value" value={primaryRevenue ? formatMoney(primaryRevenue.pipeline, primaryRevenue.currency) : "—"} />
+                <SnapshotMetric label="Current weighted value" value={primaryRevenue ? formatMoney(primaryRevenue.weighted, primaryRevenue.currency) : "—"} />
+              </div>
+            </details>
           </div>
         </section>
-
-        <section className="overflow-hidden rounded-card border border-line bg-surface shadow-sm">
-          <SectionHeader
-            eyebrow="Priority now"
-            title="Action queue"
-            actionHref="/admissions"
-            actionLabel="Open admissions"
-          />
-          <div className="space-y-2 p-3">
-            {activeAttention.length ? (
-              activeAttention.map((item) => (
-                <AttentionRow key={item.label} item={item} />
-              ))
-            ) : (
-              <EmptyState text="No urgent reply, follow-up, first-touch or payment actions are recorded right now." />
-            )}
+        <section className="min-w-0 overflow-hidden rounded-2xl border border-line bg-surface">
+          <SectionHeader eyebrow="Current work" title="Needs attention" actionHref="/admissions" actionLabel="View all" />
+          <div className="space-y-1 p-3 sm:p-4">
+            {activeAttention.length ? activeAttention.map((item) => <AttentionRow key={item.label} item={item} />) : <EmptyState text="No urgent reply, follow-up, first-touch or payment actions are recorded right now." />}
           </div>
           {unvaluedOpenLeads > 0 ? (
-            <Link
-              href="/revenue"
-              className="m-4 flex items-center gap-3 rounded-xl border border-amber-200 bg-amber-50 px-3.5 py-3 text-xs font-semibold text-amber-800 dark:border-amber-900/60 dark:bg-amber-950/20 dark:text-amber-200"
-            >
-              <CircleDollarSign size={17} />
-              {unvaluedOpenLeads} open opportunities need an estimated value
-              <ArrowRight size={13} className="ml-auto" />
+            <Link href="/revenue" className="mx-4 mb-4 flex items-center gap-2 rounded-lg bg-surface-muted px-3 py-2.5 text-xs text-copy-muted hover:text-brand-700">
+              <CircleDollarSign size={15} /> <span className="flex-1">{unvaluedOpenLeads} open opportunities have no estimated value</span><ArrowRight size={13} />
             </Link>
           ) : null}
         </section>
       </section>
 
-      <section className="grid gap-4 lg:grid-cols-2">
-        <section className="overflow-hidden rounded-card border border-line bg-surface shadow-sm">
-          <SectionHeader
-            eyebrow="Growth"
-            title="Acquisition quality"
-            actionHref="/marketing"
-            actionLabel="Open marketing"
-          />
-          <div className="space-y-1 p-4">
-            {acquisitionSources.length ? (
-              acquisitionSources
-                .slice(0, 6)
-                .map((source) => <SourceRow key={source.source} source={source} />)
-            ) : (
-              <EmptyState
-                text={
-                  periodAnalytics.available.leads
-                    ? "No acquisition data is recorded for this period yet."
-                    : "Selected-period acquisition evidence is unavailable. Current all-time source totals have not been substituted."
-                }
-              />
-            )}
+      <section aria-label="Business breakdown" className="grid min-w-0 gap-4 lg:grid-cols-3">
+        <section className="min-w-0 overflow-hidden rounded-2xl border border-line bg-surface">
+          <SectionHeader eyebrow="Acquisition · period" title="Lead sources" actionHref="/marketing" actionLabel="See sources" />
+          <div className="space-y-1 p-3 sm:p-4">
+            {acquisitionSources.length ? acquisitionSources.slice(0, 4).map((source) => <SourceRow key={source.source} source={source} />) : <EmptyState text={periodAnalytics.available.leads ? "No acquisition data is recorded for this period yet." : "Selected-period acquisition evidence is unavailable. Current all-time source totals have not been substituted."} />}
           </div>
         </section>
+        <section className="min-w-0 overflow-hidden rounded-2xl border border-line bg-surface">
+          <SectionHeader eyebrow="Operations · current" title="Upcoming batch demand" actionHref="/course-management" actionLabel="See batches" />
+          <div className="space-y-1 p-3 sm:p-4">
+            {upcomingBatches.length ? upcomingBatches.slice(0, 3).map((batch) => <BatchCard key={batch.id} batch={batch} />) : <EmptyState text="No future-start batches are currently available in this workspace." />}
+          </div>
+        </section>
+        <section className="min-w-0 overflow-hidden rounded-2xl border border-line bg-surface">
+          <SectionHeader eyebrow="Sales · current" title="Pipeline health" actionHref="/admissions?view=pipeline" actionLabel="Open pipeline" />
+          <div className="p-4">
+            <PipelineSnapshot active={metrics.activePipeline} highIntent={metrics.highIntent} payment={metrics.paymentPending} enrolled={counts.enrolled ?? 0} />
+          </div>
+        </section>
+      </section>
 
-        <section className="overflow-hidden rounded-card border border-line bg-surface shadow-sm">
-          <SectionHeader
-            eyebrow="Operations"
-            title="Upcoming demand"
-            actionHref="/course-management"
-            actionLabel="Open operations"
-          />
-          {upcomingBatches.length ? (
-            <div className="grid gap-2 p-4 sm:grid-cols-2">
-              {upcomingBatches
-                .slice(0, 6)
-                .map((batch) => <BatchCard key={batch.id} batch={batch} />)}
-            </div>
-          ) : (
-            <EmptyState text="No future-start batches are currently available in this workspace." />
-          )}
+      <section aria-label="Daily workspace" className="grid min-w-0 gap-4 lg:grid-cols-3">
+        <section className="min-w-0 rounded-2xl border border-line bg-surface p-4 sm:p-5">
+          <h2 className="text-sm font-semibold text-copy-strong">Operational insights</h2>
+          <p className="mt-1 text-xs leading-5 text-copy-muted">Evidence from your CRM, not a predicted outcome.</p>
+          <div className="mt-4 space-y-2">
+            {changeSignals.slice(0, 2).map((signal) => <ChangeSignalCard key={signal.label} signal={signal} />)}
+          </div>
+          <p className="mt-3 text-[11px] leading-5 text-copy-subtle">{executiveBrief.summary}</p>
+        </section>
+        <section className="min-w-0 rounded-2xl border border-line bg-surface p-4 sm:p-5">
+          <h2 className="text-sm font-semibold text-copy-strong">Quick actions</h2>
+          <p className="mt-1 text-xs leading-5 text-copy-muted">Open the workspace you need.</p>
+          <div className="mt-4 grid grid-cols-2 gap-2">
+            {[
+              { href: "/conversations", label: "Conversations" },
+              { href: "/leads", label: "Leads" },
+              { href: "/course-management", label: "Courses" },
+              { href: "/campaigns", label: "Campaigns" },
+            ].map((action) => (
+              <Link key={action.href} href={action.href} className="flex min-h-12 items-center justify-between gap-2 rounded-xl border border-line bg-surface-muted px-3 text-xs font-semibold text-copy-strong transition hover:border-brand-300 hover:text-brand-700">
+                <span className="truncate">{action.label}</span><ArrowRight size={13} className="shrink-0" />
+              </Link>
+            ))}
+          </div>
+        </section>
+        <section className="min-w-0 rounded-2xl border border-line bg-surface p-4 sm:p-5">
+          <h2 className="text-sm font-semibold text-copy-strong">System health</h2>
+          <p className="mt-1 text-xs leading-5 text-copy-muted">Provider status and sync freshness are checked in the live health monitor.</p>
+          <div className="mt-4 rounded-xl border border-line bg-surface-muted p-3">
+            <span className="text-xs font-medium text-copy-strong">Status not loaded on this page</span>
+            <p className="mt-1 text-[11px] leading-5 text-copy-muted">Open System Health for verified connection conditions.</p>
+          </div>
+          <Link href="/system-health" className="mt-4 inline-flex items-center gap-1.5 text-xs font-semibold text-brand-700 dark:text-brand-300">
+            View system health <ArrowRight size={13} />
+          </Link>
         </section>
       </section>
     </div>
