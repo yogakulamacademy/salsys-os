@@ -43,14 +43,8 @@ jobs:
         run: |
           set -euo pipefail
 
-          # Production records person_course_affinity as version 029. The course
-          # capture variant was applied later as version 20261025130118, even
-          # though the repository still carries the legacy 029 filename.
           mv supabase/migrations/029_course_capture_value_variants.sql \
              supabase/migrations/20261025130118_029_course_capture_value_variants.sql
-
-          # Production records numeric 030 as lead_sales_intelligence. Trusted
-          # business-event contact resolution was applied later at 20261025131249.
           mv supabase/migrations/030_trusted_business_event_contact_resolution.sql \
              supabase/migrations/20261025131249_trusted_business_event_contact_resolution.sql
 
@@ -74,48 +68,33 @@ jobs:
           cp supabase/recovery/042_paid_media_overview_prerequisite.sql supabase/migrations/0415_recovery_paid_media_overview.sql
           cp supabase/recovery/047_integration_oauth_states_prerequisite.sql supabase/migrations/0465_recovery_integration_oauth_states.sql
 
-          # The tenant-aware Team Performance and Assignment Fairness RPCs were
-          # applied out-of-band before the Reports workspace authorization
-          # migration. Decode exact historical definitions in CI only.
           base64 -d supabase/recovery/20261013125000_reports_rpc_prerequisite.sql.gz.b64 \
             | gzip -d \
             > supabase/migrations/20261013125000_reports_rpc_prerequisite.sql
 
           cp supabase/recovery/20261013183000_lead_inbox_reads_prerequisite.sql \
              supabase/migrations/20261013183000_lead_inbox_reads_prerequisite.sql
-
           cp supabase/recovery/20261014053500_trigger_functions_prerequisite.sql \
              supabase/migrations/20261014053500_trigger_functions_prerequisite.sql
-
           cp supabase/recovery/20261014053800_crm_settings_audit_prerequisite.sql \
              supabase/migrations/20261014053800_crm_settings_audit_prerequisite.sql
-
           cp supabase/recovery/20261014054200_deprecated_course_batch_rpcs_prerequisite.sql \
              supabase/migrations/20261014054200_deprecated_course_batch_rpcs_prerequisite.sql
-
           cp supabase/recovery/20261014054500_course_catalog_finalize_prerequisite.sql \
              supabase/migrations/20261014054500_course_catalog_finalize_prerequisite.sql
-
           cp supabase/recovery/20261014055400_legacy_crm_settings_defaults_prerequisite.sql \
              supabase/migrations/20261014055400_legacy_crm_settings_defaults_prerequisite.sql
-
           cp supabase/recovery/20261014055700_lead_expected_close_date_prerequisite.sql \
              supabase/migrations/20261014055700_lead_expected_close_date_prerequisite.sql
-
           cp supabase/recovery/20261014055750_pipeline_aging_view_alignment.sql \
              supabase/migrations/20261014055750_pipeline_aging_view_alignment.sql
-
           cp supabase/recovery/20261014060700_legacy_crm_settings_helpers_prerequisite.sql \
              supabase/migrations/20261014060700_legacy_crm_settings_helpers_prerequisite.sql
-
           cp supabase/recovery/20261014065500_legacy_global_crm_mutators_prerequisite.sql \
              supabase/migrations/20261014065500_legacy_global_crm_mutators_prerequisite.sql
-
           cp supabase/recovery/20261014091300_course_batch_admin_events_prerequisite.sql \
              supabase/migrations/20261014091300_course_batch_admin_events_prerequisite.sql
 
-          # Dormant accommodation RPCs are retained solely for historical replay.
-          # Accommodation management remains retired product scope.
           cat supabase/recovery/20261014092250_latent_accommodation_rpcs_prerequisite.part*.b64 \
             | tr -d '\n\r ' \
             | base64 -d \
@@ -125,15 +104,17 @@ jobs:
 
           cp supabase/recovery/20261014092400_latent_course_v2_rpcs_prerequisite.sql \
              supabase/migrations/20261014092400_latent_course_v2_rpcs_prerequisite.sql
-
           cp supabase/recovery/20261014100100_can_manage_lead_assignments_prerequisite.sql \
              supabase/migrations/20261014100100_can_manage_lead_assignments_prerequisite.sql
-
-          # Three dormant accommodation tables and course_catalog_sync_runs also
-          # existed out-of-band before 115949/120616 tightened their tenant
-          # policies. Reconstruct their pre-hardening contracts in CI only.
           cp supabase/recovery/20261014115900_remaining_organization_read_tables_prerequisite.sql \
              supabase/migrations/20261014115900_remaining_organization_read_tables_prerequisite.sql
+
+          # The page+query GSC grain was originally created by the missing
+          # 20261014140808 W6 migration. Stage the exact table contract narrowly
+          # before Oct-15 keyword intelligence; full W6 ledger parity remains a
+          # separate recovery item.
+          cp supabase/recovery/20261015064900_gsc_page_query_daily_prerequisite.sql \
+             supabase/migrations/20261015064900_gsc_page_query_daily_prerequisite.sql
 
           cp supabase/recovery/20261017155803_tracking_sources_core_prerequisite.sql \
              supabase/migrations/20261017155803_tracking_sources_and_event_contracts_v1.sql
