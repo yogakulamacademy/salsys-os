@@ -49,6 +49,11 @@ jobs:
           mv supabase/migrations/029_course_capture_value_variants.sql \
              supabase/migrations/20261025130118_029_course_capture_value_variants.sql
 
+          # Production records numeric 030 as lead_sales_intelligence. Trusted
+          # business-event contact resolution was applied later at 20261025131249.
+          mv supabase/migrations/030_trusted_business_event_contact_resolution.sql \
+             supabase/migrations/20261025131249_trusted_business_event_contact_resolution.sql
+
           cp supabase/recovery/007_catalog_authorization_prerequisite.sql supabase/migrations/0065_recovery_catalog_authorization.sql
           cp supabase/recovery/016_enrollments_tenant_baseline.sql supabase/migrations/0154_recovery_enrollments_tenant.sql
           cp supabase/recovery/016_lead_contact_logs_baseline.sql supabase/migrations/0155_recovery_lead_contact_logs.sql
@@ -66,6 +71,12 @@ jobs:
           cp supabase/recovery/039_leads_landing_page_baseline.sql supabase/migrations/0386_recovery_leads_landing_page.sql
           cp supabase/recovery/040_paid_media_warehouse_baseline.sql supabase/migrations/0395_recovery_paid_media_warehouse.sql
           cp supabase/recovery/040_campaigns_read_models_baseline.sql supabase/migrations/0396_recovery_campaigns_read_models.sql
+
+          # The original tracking-source migration exists in production history
+          # but was never committed to Git. Stage the minimal authoritative
+          # prerequisite at its real production ledger version for clean replay.
+          cp supabase/recovery/20261017155803_tracking_sources_core_prerequisite.sql \
+             supabase/migrations/20261017155803_tracking_sources_and_event_contracts_v1.sql
 
       - name: Start local Supabase database
         shell: bash
