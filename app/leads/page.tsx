@@ -3,6 +3,7 @@ import { MoreHorizontal, Plus } from "lucide-react";
 
 import { LeadsAttributionScopeBar } from "@/components/leads-attribution-scope-bar";
 import { LeadsCleanTable } from "@/components/leads-clean-table";
+import { LeadsOverview } from "@/components/leads/leads-overview";
 import { RecentBookingActivity } from "@/components/recent-booking-activity";
 import { TeamAssignmentPanel } from "@/components/team-assignment-panel";
 import { Notice, PageHeader } from "@/components/ui";
@@ -43,11 +44,11 @@ export default async function LeadsPage({ searchParams }: LeadsPageProps) {
   const error = one(params.error);
 
   return (
-    <div className={`leads-workspace-v2 ${styles.workspace} space-y-5`}>
+    <div className={`leads-workspace-v2 ${styles.workspace} min-w-0 space-y-4 pb-4`} data-testid="leads-workspace">
       <PageHeader
-        eyebrow="Sales · Opportunities"
+        eyebrow="CRM · Workspace"
         title="Leads"
-        description="Work commercial opportunities from one queue: ownership, stage, intent, acquisition source, next action and sales attention stay connected."
+        description="Manage, qualify, and move incoming leads forward from one workspace."
         actions={
           <div className="flex items-center gap-2">
             <Link
@@ -86,6 +87,8 @@ export default async function LeadsPage({ searchParams }: LeadsPageProps) {
           {workspace.warning}
         </Notice>
       ) : null}
+
+      <LeadsOverview summary={workspace.summary} />
 
       <LeadsAttributionScopeBar scope={attributionScope} />
 
