@@ -38,7 +38,13 @@ insert into public.tenant_session_bindings values
 set local role authenticated;
 select set_config('request.jwt.claims','{"role":"authenticated","sub":"20000000-0000-4000-8000-000000000001","session_id":"30000000-0000-4000-8000-000000000001"}',true);
 do $cases$
-declare doc uuid; source uuid; count_before integer; rejected boolean;
+declare
+  doc uuid;
+  source uuid;
+  provenance_doc uuid;
+  provenance_source uuid;
+  provenance_result jsonb;
+  rejected boolean;
 begin
   doc := (public.create_knowledge_document_v1('10000000-0000-4000-8000-000000000001','Cobalt testing policy','faq','Cobalt policy is synthetic test content, never a business fact.',false)->>'document_id')::uuid;
   perform pg_temp.assert_true((select count(*)=0 from public.search_organization_knowledge_v1('10000000-0000-4000-8000-000000000001','Cobalt',6)), 'draft excluded');
@@ -63,27 +69,114 @@ begin
   rejected := false;
   begin perform public.approve_knowledge_document_v1('10000000-0000-4000-8000-000000000001',doc); exception when others then rejected := sqlerrm like '%Archived or superseded%'; end;
   perform pg_temp.assert_true(rejected,'archived cannot be reapproved');
+
+  provenance_result := public.create_source_backed_knowledge_document_v2(
+    '10000000-0000-4000-8000-000000000001',
+    'Saffron provenance policy',
+    'policy',
+    'Saffron provenance evidence is synthetic test content and never a business fact.',
+    'Synthetic policy handbook',
+    'policy',
+    'https://example.test/policy',
+    now()-interval '1 hour',
+    now()+interval '1 day',
+    true
+  );
+  provenance_doc := (provenance_result->>'document_id')::uuid;
+  provenance_source := (provenance_result->>'source_id')::uuid;
+  perform pg_temp.assert_true(
+    provenance_source is not null and (select source_id=provenance_source from public.knowledge_documents where id=provenance_doc),
+    'source-backed create links source to document'
+  );
+  perform pg_temp.assert_true((
+    select organization_id='10000000-0000-4000-8000-000000000001'::uuid
+      and name='Synthetic policy handbook'
+      and source_type='policy'
+      and source_uri='https://example.test/policy'
+      and status='active'
+    from public.knowledge_sources where id=provenance_source
+  ), 'source-backed create stores exact tenant provenance');
+  perform pg_temp.assert_true((
+    select valid_from is not null and valid_until is not null and valid_until > valid_from
+    from public.knowledge_documents where id=provenance_doc
+  ), 'source-backed create stores validity window');
+  perform pg_temp.assert_true((
+    select count(*)=1 from public.search_organization_knowledge_v1('10000000-0000-4000-8000-000000000001','Saffron',6)
+  ), 'source-backed approved current knowledge retrieves');
+  perform pg_temp.assert_true((
+    select (metadata->>'source_id')::uuid=provenance_source
+      and metadata->'document_metadata'->>'source_name'='Synthetic policy handbook'
+      and metadata->'document_metadata'->>'source_type'='policy'
+      and metadata->'document_metadata'->>'source_uri'='https://example.test/policy'
+    from public.search_organization_knowledge_v1('10000000-0000-4000-8000-000000000001','Saffron',6)
+    limit 1
+  ), 'retrieval returns minimized source citation metadata');
+
+  rejected := false;
+  begin
+    perform public.create_source_backed_knowledge_document_v2(
+      '10000000-0000-4000-8000-000000000001','Invalid URL','policy','Synthetic invalid URL content for readiness.','Bad URL source','website','file:///tmp/policy',null,null,false
+    );
+  exception when others then rejected := sqlerrm like '%http or https%';
+  end;
+  perform pg_temp.assert_true(rejected,'non-http source reference rejected');
+
+  rejected := false;
+  begin
+    perform public.create_source_backed_knowledge_document_v2(
+      '10000000-0000-4000-8000-000000000001','Invalid window','policy','Synthetic invalid validity content for readiness.','Window source','manual',null,now()+interval '2 days',now()+interval '1 day',false
+    );
+  exception when others then rejected := sqlerrm like '%later than valid from%';
+  end;
+  perform pg_temp.assert_true(rejected,'invalid validity window rejected');
+
   -- Keep one approved A item so cross-tenant tests cannot pass merely because A is empty.
   perform public.create_knowledge_document_v1('10000000-0000-4000-8000-000000000001','Cobalt current policy','faq','Cobalt current synthetic evidence belongs only to tenant A.',true);
   rejected := false;
   begin perform public.create_knowledge_document_v1('10000000-0000-4000-8000-000000000002','Cross tenant attempt','faq','This must never be created in another tenant.',true); exception when others then rejected := sqlerrm like '%Only organization admins%'; end;
   perform pg_temp.assert_true(rejected,'owner A cannot mutate B');
+
+  rejected := false;
+  begin
+    perform public.create_source_backed_knowledge_document_v2(
+      '10000000-0000-4000-8000-000000000002','Cross tenant provenance','faq','This source-backed item must never be created in another tenant.','Tenant B source','manual',null,null,null,true
+    );
+  exception when others then rejected := sqlerrm like '%Only organization admins%';
+  end;
+  perform pg_temp.assert_true(rejected,'owner A cannot create source-backed knowledge in B');
 end;
 $cases$;
+
 select set_config('request.jwt.claims','{"role":"authenticated","sub":"20000000-0000-4000-8000-000000000002","session_id":"30000000-0000-4000-8000-000000000002"}',true);
 select pg_temp.assert_true((select count(*)=0 from public.knowledge_documents),'tenant B direct read cannot see A');
 select pg_temp.assert_true((select count(*)=0 from public.search_organization_knowledge_v1('10000000-0000-4000-8000-000000000001','Cobalt',6)),'tenant B RPC cannot retrieve A');
+
 select set_config('request.jwt.claims','{"role":"authenticated","sub":"20000000-0000-4000-8000-000000000003","session_id":"30000000-0000-4000-8000-000000000003"}',true);
 do $employee$
 declare rejected boolean := false;
 begin
   begin perform public.create_knowledge_document_v1('10000000-0000-4000-8000-000000000001','Employee attempt','faq','Employee must not approve tenant knowledge.',true); exception when others then rejected := sqlerrm like '%Only organization admins%'; end;
   perform pg_temp.assert_true(rejected,'employee cannot approve or create');
+
+  rejected := false;
+  begin
+    perform public.create_source_backed_knowledge_document_v2(
+      '10000000-0000-4000-8000-000000000001','Employee provenance attempt','faq','Employee must not create source-backed tenant knowledge.','Employee source','manual',null,null,null,true
+    );
+  exception when others then rejected := sqlerrm like '%Only organization admins%';
+  end;
+  perform pg_temp.assert_true(rejected,'employee cannot create source-backed knowledge');
 end;
 $employee$;
+
 reset role;
 select pg_temp.assert_true(not has_function_privilege('anon','public.search_organization_knowledge_v1(uuid,text,integer)','execute'),'anonymous retrieval execute denied');
 select pg_temp.assert_true(not has_function_privilege('anon','public.create_knowledge_document_v1(uuid,text,text,text,boolean)','execute'),'anonymous lifecycle execute denied');
+select pg_temp.assert_true(not has_function_privilege('anon','public.create_source_backed_knowledge_document_v2(uuid,text,text,text,text,text,text,timestamptz,timestamptz,boolean)','execute'),'anonymous source-backed lifecycle execute denied');
 rollback;
-select 'knowledge_readiness_v1' as suite, 17 as assertions_completed,
-  to_regclass('public.organizations') is null and to_regclass('public.knowledge_documents') is null and to_regprocedure('public.create_knowledge_document_v1(uuid,text,text,text,boolean)') is null as rollback_verified;
+select 'knowledge_readiness_v2' as suite, 27 as assertions_completed,
+  to_regclass('public.organizations') is null
+  and to_regclass('public.knowledge_documents') is null
+  and to_regprocedure('public.create_knowledge_document_v1(uuid,text,text,text,boolean)') is null
+  and to_regprocedure('public.create_source_backed_knowledge_document_v2(uuid,text,text,text,text,text,text,timestamptz,timestamptz,boolean)') is null
+  as rollback_verified;
