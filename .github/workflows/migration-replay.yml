@@ -102,6 +102,12 @@ jobs:
           cp supabase/recovery/20261014053800_crm_settings_audit_prerequisite.sql \
              supabase/migrations/20261014053800_crm_settings_audit_prerequisite.sql
 
+          # Three legacy course-batch mutation RPCs existed out-of-band before
+          # their authenticated EXECUTE hardening migration. Stage their exact
+          # historical definitions in CI only so the revoke migration can replay.
+          cp supabase/recovery/20261014054200_deprecated_course_batch_rpcs_prerequisite.sql \
+             supabase/migrations/20261014054200_deprecated_course_batch_rpcs_prerequisite.sql
+
           # The original tracking-source migration exists in production history
           # but was never committed to Git. Stage the minimal authoritative
           # prerequisite at its real production ledger version for clean replay.
