@@ -175,6 +175,8 @@ jobs:
              supabase/migrations/20261017155803_tracking_sources_and_event_contracts_v1.sql
           cp supabase/recovery/20261017162257_attribution_state_machine_v1.sql \
              supabase/migrations/20261017162257_attribution_state_machine_v1.sql
+          cp supabase/recovery/20261017163029_smart_identity_confidence_engine_prerequisite.sql \
+             supabase/migrations/20261017163029_smart_identity_confidence_engine_v1.sql
 
           cp supabase/recovery/20261017175500_privacy_request_tombstone_prerequisite.sql \
              supabase/migrations/20261017175500_privacy_request_tombstone_prerequisite.sql
