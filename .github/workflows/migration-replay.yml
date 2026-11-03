@@ -209,6 +209,9 @@ jobs:
           cp supabase/recovery/20261028040400_course_management_workspace_v2_prerequisite.sql \
              supabase/migrations/20261028040400_course_management_workspace_v2_prerequisite.sql
 
+          cp supabase/recovery/20261029115400_system_health_base_prerequisite.sql \
+             supabase/migrations/20261029115400_system_health_base_prerequisite.sql
+
       - name: Start local Supabase database
         shell: bash
         run: |
