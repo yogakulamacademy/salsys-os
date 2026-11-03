@@ -98,7 +98,7 @@ for (const marker of [
 
 fs.writeFileSync(target, assembled);
 
-console.log(JSON.stringify({
+console.error(JSON.stringify({
   staged: path.relative(root, target),
   bytes: Buffer.byteLength(assembled),
   processors: verifiedProcessors.map((processor) => ({
