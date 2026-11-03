@@ -44,7 +44,7 @@ export default async function LeadsPage({ searchParams }: LeadsPageProps) {
   const error = one(params.error);
 
   return (
-    <div className={`leads-workspace-v2 ${styles.workspace} min-w-0 space-y-4 pb-4`} data-testid="leads-workspace">
+    <div className={`leads-workspace-v2 ${styles.workspace} min-w-0 space-y-3 pb-4`} data-testid="leads-workspace">
       <PageHeader
         eyebrow="CRM · Workspace"
         title="Leads"
