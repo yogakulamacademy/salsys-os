@@ -38,7 +38,7 @@ assert.equal(invalid.rows.length, 0);
 assert.equal(invalid.issues.length, 2);
 
 assert.throws(() => parseLeadsImportCsv("first_name,email\nJane,\"oops\n"), /Unterminated/);
-assert.throws(() => parseLeadsImportCsv("name,email\nJane,j@example.com"), /first_name/);
+assert.throws(() => parseLeadsImportCsv("name,email\nJane,j@example.com"), /Unsupported column/);
 assert.throws(() => parseLeadsImportCsv("first_name,email,arbitrary\nJane,j@example.com,test"), /Unsupported/);
 
 const injection = csvRow(["=2+3", " +SUM(A1:A2)", "@evil", "-1+2"]);
