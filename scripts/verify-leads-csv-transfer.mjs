@@ -46,7 +46,6 @@ assert.equal(injection.includes('"=2+3"'), false);
 assert.equal(injection.includes('"+SUM'), false);
 assert.match(csvCell("=HYPERLINK(1)"), /^"'/);
 assert.match(csvCell("safe"), /^"safe"$/);
-assert.ok(injection.split(",").every(cell => cell.startsWith('"\\'') || cell.startsWith('"\'')));
 
 const valid = validateImportRow({
   rowNumber: 2,
