@@ -117,7 +117,12 @@ jobs:
             > supabase/migrations/20261014135430_w6_website_intelligence_foundation.sql
           echo "4bb9c6cd658eccfdae1e43e66f86f3ce  supabase/migrations/20261014135430_w6_website_intelligence_foundation.sql" | md5sum -c -
 
-          cat supabase/recovery/20261014135518_w6_semantic_seo_foundation.part*.b64 \
+          # part02a/part02b/part02c are superseded split artifacts retained for
+          # recovery archaeology. The authoritative payload is 01 -> 02 -> 03.
+          cat \
+            supabase/recovery/20261014135518_w6_semantic_seo_foundation.part01.b64 \
+            supabase/recovery/20261014135518_w6_semantic_seo_foundation.part02.b64 \
+            supabase/recovery/20261014135518_w6_semantic_seo_foundation.part03.b64 \
             | tr -d '\n\r ' | base64 -d \
             > supabase/migrations/20261014135518_w6_semantic_seo_foundation.sql
           echo "3af6c107e753d2efb4fcbfeadd89f069  supabase/migrations/20261014135518_w6_semantic_seo_foundation.sql" | md5sum -c -
