@@ -145,6 +145,17 @@ jobs:
           cp supabase/recovery/20261014091300_course_batch_admin_events_prerequisite.sql \
              supabase/migrations/20261014091300_course_batch_admin_events_prerequisite.sql
 
+          # Nine dormant accommodation mutation RPCs existed out-of-band before
+          # 092325 reduced them to service-role-only execution. Accommodation
+          # management remains retired product scope; this payload exists only to
+          # reproduce the historical hardening boundary in the ephemeral replay.
+          cat supabase/recovery/20261014092250_latent_accommodation_rpcs_prerequisite.part*.b64 \
+            | tr -d '\n\r ' \
+            | base64 -d \
+            > supabase/migrations/20261014092250_latent_accommodation_rpcs_prerequisite.sql
+          echo "fd54c24c82385da0650cbcd2f0d1c7e7c8726415106e275d1a9e270832d152cd  supabase/migrations/20261014092250_latent_accommodation_rpcs_prerequisite.sql" \
+            | sha256sum -c -
+
           # The original tracking-source migration exists in production history
           # but was never committed to Git. Stage the minimal authoritative
           # prerequisite at its real production ledger version for clean replay.
