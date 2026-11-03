@@ -107,6 +107,61 @@ create index if not exists idx_course_catalog_sync_runs_started
 create index if not exists idx_course_catalog_sync_runs_organization
   on public.course_catalog_sync_runs(organization_id);
 
+-- Production contains a course-catalog synchronization state contract that has
+-- no creator in either the production migration ledger or committed migration
+-- history. Later Oct-27 health views and course-management code depend on these
+-- fields. Reconstruct the live schema here beside the sync ledger it belongs to.
+alter table public.courses
+  add column if not exists source_updated_at timestamptz,
+  add column if not exists last_synced_at timestamptz;
+
+alter table public.course_batches
+  add column if not exists source_active boolean not null default true,
+  add column if not exists local_enabled boolean not null default true,
+  add column if not exists source_updated_at timestamptz,
+  add column if not exists last_synced_at timestamptz,
+  add column if not exists last_sync_run_id uuid;
+
+do $recovery$
+begin
+  if not exists (
+    select 1
+    from pg_constraint
+    where conrelid = 'public.course_batches'::regclass
+      and conname = 'course_batches_last_sync_run_id_fkey'
+  ) then
+    alter table public.course_batches
+      add constraint course_batches_last_sync_run_id_fkey
+      foreign key (last_sync_run_id)
+      references public.course_catalog_sync_runs(id)
+      on delete set null;
+  end if;
+end;
+$recovery$;
+
+create index if not exists idx_course_batches_sync_source_state
+  on public.course_batches(source_system, source_active, local_enabled, start_date);
+
+create or replace function public.sync_course_batch_effective_active()
+returns trigger
+language plpgsql
+set search_path = public
+as $function$
+begin
+  new.active :=
+    coalesce(new.source_active, true)
+    and
+    coalesce(new.local_enabled, true);
+
+  return new;
+end;
+$function$;
+
+drop trigger if exists trg_course_batches_effective_active on public.course_batches;
+create trigger trg_course_batches_effective_active
+before insert or update of source_active, local_enabled on public.course_batches
+for each row execute function public.sync_course_batch_effective_active();
+
 alter table public.accommodation_properties enable row level security;
 alter table public.accommodation_rooms enable row level security;
 alter table public.batch_accommodation_types enable row level security;
