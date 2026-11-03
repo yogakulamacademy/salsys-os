@@ -41,3 +41,7 @@
     transition: none;
   }
 }
+
+@media (max-width: 359px) {
+  .command-center-v2 [aria-label="Business pulse"] { grid-template-columns: minmax(0, 1fr); }
+}
