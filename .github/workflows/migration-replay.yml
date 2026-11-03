@@ -203,6 +203,9 @@ jobs:
           cp supabase/recovery/20261019150400_build_search_document_v1_prerequisite.sql \
              supabase/migrations/20261019150400_build_search_document_v1_prerequisite.sql
 
+          cp supabase/recovery/20261027203900_revenue_workspace_base_prerequisite.sql \
+             supabase/migrations/20261027203900_revenue_workspace_base_prerequisite.sql
+
       - name: Start local Supabase database
         shell: bash
         run: |
