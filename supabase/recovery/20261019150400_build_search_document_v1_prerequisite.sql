@@ -240,3 +240,149 @@ grant execute on function public.build_search_document_v1(uuid,text,uuid)
   to service_role;
 
 commit;
+
+-- -----------------------------------------------------------------------------
+-- Revenue workspace read models
+-- -----------------------------------------------------------------------------
+-- Production's canonical revenue workspace RPC existed out-of-band before the
+-- Oct-27/Oct-28 Revenue workspace promotion. Its aggregate view dependencies
+-- are likewise absent from the source migration ledger. Reconstruct the seven
+-- production-equivalent security-invoker views here only for cold replay.
+
+begin;
+
+create or replace view public.v_actual_revenue_by_currency
+with (security_invoker = true)
+as
+select
+  upper(currency) as currency,
+  coalesce(sum(case
+    when payment_kind <> 'refund'::public.payment_kind
+      and status = 'paid'::public.payment_status
+    then amount else 0::numeric end), 0::numeric)::numeric(14,2) as gross_received,
+  coalesce(sum(case
+    when payment_kind = 'refund'::public.payment_kind
+      and status = any(array['refunded'::public.payment_status,'paid'::public.payment_status])
+    then amount else 0::numeric end), 0::numeric)::numeric(14,2) as refunds,
+  coalesce(sum(case
+    when payment_kind <> 'refund'::public.payment_kind
+      and status = 'paid'::public.payment_status
+    then amount
+    when payment_kind = 'refund'::public.payment_kind
+      and status = any(array['refunded'::public.payment_status,'paid'::public.payment_status])
+    then -amount
+    else 0::numeric end), 0::numeric)::numeric(14,2) as actual_revenue,
+  count(*) filter (
+    where payment_kind <> 'refund'::public.payment_kind
+      and status = 'paid'::public.payment_status
+  ) as successful_payments,
+  count(*) filter (
+    where payment_kind = 'refund'::public.payment_kind
+      and status = any(array['refunded'::public.payment_status,'paid'::public.payment_status])
+  ) as refund_transactions,
+  organization_id
+from public.payments
+group by organization_id, upper(currency);
+
+create or replace view public.v_actual_revenue_monthly
+with (security_invoker = true)
+as
+select
+  date_trunc('month', coalesce(paid_at, created_at))::date as revenue_month,
+  upper(currency) as currency,
+  coalesce(sum(case
+    when payment_kind <> 'refund'::public.payment_kind
+      and status = 'paid'::public.payment_status
+    then amount else 0::numeric end), 0::numeric)::numeric(14,2) as gross_received,
+  coalesce(sum(case
+    when payment_kind = 'refund'::public.payment_kind
+      and status = any(array['refunded'::public.payment_status,'paid'::public.payment_status])
+    then amount else 0::numeric end), 0::numeric)::numeric(14,2) as refunds,
+  coalesce(sum(case
+    when payment_kind <> 'refund'::public.payment_kind
+      and status = 'paid'::public.payment_status
+    then amount
+    when payment_kind = 'refund'::public.payment_kind
+      and status = any(array['refunded'::public.payment_status,'paid'::public.payment_status])
+    then -amount
+    else 0::numeric end), 0::numeric)::numeric(14,2) as actual_revenue,
+  count(*) filter (
+    where payment_kind <> 'refund'::public.payment_kind
+      and status = 'paid'::public.payment_status
+  ) as successful_payments,
+  organization_id
+from public.payments
+group by organization_id,
+  date_trunc('month', coalesce(paid_at, created_at)),
+  upper(currency);
+
+create or replace view public.v_outstanding_revenue_by_currency
+with (security_invoker = true)
+as
+select
+  currency,
+  count(*) filter (where outstanding_balance > 0::numeric) as leads_with_balance,
+  coalesce(sum(outstanding_balance), 0::numeric)::numeric(14,2) as outstanding_revenue,
+  organization_id
+from public.v_lead_revenue_status
+where currency is not null
+group by organization_id, currency;
+
+create or replace view public.v_revenue_forecast_by_stage
+with (security_invoker = true)
+as
+select
+  currency,
+  current_stage,
+  count(*) as lead_count,
+  round(sum(coalesce(potential_value, 0::numeric)), 2) as pipeline_value,
+  round(sum(coalesce(weighted_value, 0::numeric)), 2) as weighted_forecast,
+  round(sum(coalesce(actual_revenue, 0::numeric)), 2) as actual_revenue,
+  organization_id
+from public.v_revenue_forecast
+group by organization_id, currency, current_stage;
+
+create or replace view public.v_revenue_forecast_monthly
+with (security_invoker = true)
+as
+select
+  forecast_month,
+  currency,
+  count(*) as lead_count,
+  round(sum(coalesce(potential_value, 0::numeric)), 2) as pipeline_value,
+  round(sum(coalesce(weighted_value, 0::numeric)), 2) as weighted_forecast,
+  round(sum(coalesce(actual_revenue, 0::numeric)), 2) as actual_revenue,
+  organization_id
+from public.v_revenue_forecast
+group by organization_id, forecast_month, currency
+order by forecast_month;
+
+create or replace view public.v_revenue_forecast_by_source
+with (security_invoker = true)
+as
+select
+  coalesce(first_touch_source, 'Unknown'::text) as source,
+  currency,
+  count(*) as lead_count,
+  round(sum(coalesce(potential_value, 0::numeric)), 2) as pipeline_value,
+  round(sum(coalesce(weighted_value, 0::numeric)), 2) as weighted_forecast,
+  round(sum(coalesce(actual_revenue, 0::numeric)), 2) as actual_revenue,
+  organization_id
+from public.v_revenue_forecast
+group by organization_id, coalesce(first_touch_source, 'Unknown'::text), currency;
+
+create or replace view public.v_revenue_forecast_by_location
+with (security_invoker = true)
+as
+select
+  coalesce(preferred_location, 'Unknown'::text) as location,
+  currency,
+  count(*) as lead_count,
+  round(sum(coalesce(potential_value, 0::numeric)), 2) as pipeline_value,
+  round(sum(coalesce(weighted_value, 0::numeric)), 2) as weighted_forecast,
+  round(sum(coalesce(actual_revenue, 0::numeric)), 2) as actual_revenue,
+  organization_id
+from public.v_revenue_forecast
+group by organization_id, coalesce(preferred_location, 'Unknown'::text), currency;
+
+commit;
