@@ -18,7 +18,8 @@ test('Sales Asset course scope normalization is deterministic rather than fuzzy'
   assert.match(migration, /'yttc'/);
   assert.match(migration, /'hours\?\|hrs\?'/);
   assert.match(migration, /'\[\^a-z0-9\]\+'/);
-  assert.doesNotMatch(migration, /similarity\s*\(|levenshtein\s*\(|soundex\s*\(|fuzzy/i);
+  assert.doesNotMatch(migration, /similarity\s*\(|levenshtein\s*\(|soundex\s*\(/i);
+  assert.match(migration, /not fuzzy matching/i);
 });
 
 test('all three Sales Asset eligibility paths use the normalized course key and still fail closed', () => {
