@@ -148,6 +148,7 @@ test('Co-Pilot discovery exposes approved metadata only and remains tenant-scope
   assert.match(copilotAssetActions, /search_sales_assets_for_copilot_v1/);
   assert.match(copilotAssetActions, /can_work_lead/);
   assert.match(copilotAssetActions, /sanitizeSuggestions/);
+  assert.match(copilotAssetActions, /p_language: stringValue\(lead\.language\) \|\| null/);
   assert.doesNotMatch(
     copilotAssetActions,
     /safe_reference|storage_bucket|storage_path|createSignedUrl|createSignedUrls|getPublicUrl/,
@@ -207,6 +208,7 @@ test('authenticated asset selection action rechecks lead access and never return
   assert.match(copilotAssetSelectionActions, /current_contact_channel/);
   assert.match(copilotAssetSelectionActions, /interested_course_id/);
   assert.match(copilotAssetSelectionActions, /preferred_location/);
+  assert.match(copilotAssetSelectionActions, /language: stringValue\(lead\.language\) \|\| null/);
   assert.match(copilotAssetSelectionActions, /channel: 'whatsapp'/);
   assert.doesNotMatch(
     copilotAssetSelectionActions,

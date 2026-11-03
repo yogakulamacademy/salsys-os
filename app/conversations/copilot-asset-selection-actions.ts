@@ -62,7 +62,7 @@ export async function prepareCopilotAssetSelectionAction(
   const { data: lead, error: leadError } = await admin
     .from('leads')
     .select(
-      'id,organization_id,interested_course_id,preferred_location,current_contact_channel',
+      'id,organization_id,interested_course_id,preferred_location,language,current_contact_channel',
     )
     .eq('id', normalizedLeadId)
     .maybeSingle();
@@ -109,7 +109,7 @@ export async function prepareCopilotAssetSelectionAction(
       organizationId,
       assetId: normalizedAssetId,
       channel: 'whatsapp',
-      language: null,
+      language: stringValue(lead.language) || null,
       course: courseScope,
       location: stringValue(lead.preferred_location) || null,
     });

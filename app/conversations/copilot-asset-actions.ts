@@ -127,7 +127,7 @@ export async function discoverCopilotSalesAssetsAction(
   const { data: lead, error: leadError } = await admin
     .from('leads')
     .select(
-      'id,organization_id,interested_course_id,preferred_location,current_contact_channel',
+      'id,organization_id,interested_course_id,preferred_location,language,current_contact_channel',
     )
     .eq('id', normalizedLeadId)
     .maybeSingle();
@@ -209,7 +209,7 @@ export async function discoverCopilotSalesAssetsAction(
       p_channel: channel,
       p_course: courseScope,
       p_location: stringValue(lead.preferred_location) || null,
-      p_language: null,
+      p_language: stringValue(lead.language) || null,
       p_limit: 5,
     },
   );
