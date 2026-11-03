@@ -157,6 +157,11 @@ jobs:
           cp supabase/recovery/20261017155803_tracking_sources_core_prerequisite.sql \
              supabase/migrations/20261017155803_tracking_sources_and_event_contracts_v1.sql
 
+          cat supabase/recovery/20261017180156_opensearch_outbox_foundation_v1.part*.b64 \
+            | tr -d '\n\r ' | base64 -d \
+            > supabase/migrations/20261017180156_opensearch_outbox_foundation_v1.sql
+          echo "0a54a12149180365dd1a8a22811b26da  supabase/migrations/20261017180156_opensearch_outbox_foundation_v1.sql" | md5sum -c -
+
           cp supabase/recovery/20261019112000_whatsapp_lineage_tables_prerequisite.sql \
              supabase/migrations/20261019112000_whatsapp_lineage_tables_prerequisite.sql
 
