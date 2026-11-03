@@ -13,6 +13,23 @@
 
 begin;
 
+-- Production migration 20261017164301_privacy_compliance_core_v1 also
+-- established the tracking-source privacy contract. Keep these columns here in
+-- the consolidated cold-recovery boundary so the later live-closeout health
+-- migration sees the same schema without replaying the missing privacy sequence
+-- as partially overlapping tables.
+alter table public.tracking_sources
+  add column if not exists privacy_mode text not null default 'strict',
+  add column if not exists honor_gpc boolean not null default true,
+  add column if not exists require_consent_for_optional boolean not null default true,
+  add column if not exists privacy_notice_version text;
+
+alter table public.tracking_sources
+  drop constraint if exists tracking_sources_privacy_mode_check;
+alter table public.tracking_sources
+  add constraint tracking_sources_privacy_mode_check
+  check (privacy_mode in ('strict','balanced','custom'));
+
 create table if not exists public.privacy_processing_purposes (
   id uuid primary key default gen_random_uuid(),
   organization_id uuid not null references public.organizations(id) on delete cascade,
