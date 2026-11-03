@@ -328,7 +328,7 @@ export default async function HomePage({ searchParams }: HomePageProps) {
           </div>
         </section>
         <section className="min-w-0 overflow-hidden rounded-2xl border border-line bg-surface">
-          <SectionHeader eyebrow="Current work" title="Needs attention" actionHref="/admissions" actionLabel="View all" />
+          <SectionHeader eyebrow="Needs attention · current" title="Action queue" actionHref="/admissions" actionLabel="View all" />
           <div className="space-y-1 p-3 sm:p-4">
             {activeAttention.length ? activeAttention.map((item) => <AttentionRow key={item.label} item={item} />) : <EmptyState text="No urgent reply, follow-up, first-touch or payment actions are recorded right now." />}
           </div>
