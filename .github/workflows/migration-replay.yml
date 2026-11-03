@@ -109,12 +109,33 @@ jobs:
           cp supabase/recovery/20261014115900_remaining_organization_read_tables_prerequisite.sql \
              supabase/migrations/20261014115900_remaining_organization_read_tables_prerequisite.sql
 
-          # The page+query GSC grain was originally created by the missing
-          # 20261014140808 W6 migration. Stage the exact table contract narrowly
-          # before Oct-15 keyword intelligence; full W6 ledger parity remains a
-          # separate recovery item.
-          cp supabase/recovery/20261015064900_gsc_page_query_daily_prerequisite.sql \
-             supabase/migrations/20261015064900_gsc_page_query_daily_prerequisite.sql
+          # Recover the exact W6 production block that was applied on Oct 14 but
+          # never committed to Git. Reconstruct byte-for-byte from ledger payloads
+          # and verify each statement before local replay can execute it.
+          cat supabase/recovery/20261014135430_w6_website_intelligence_foundation.part*.b64 \
+            | tr -d '\n\r ' | base64 -d \
+            > supabase/migrations/20261014135430_w6_website_intelligence_foundation.sql
+          echo "4bb9c6cd658eccfdae1e43e66f86f3ce  supabase/migrations/20261014135430_w6_website_intelligence_foundation.sql" | md5sum -c -
+
+          cat supabase/recovery/20261014135518_w6_semantic_seo_foundation.part*.b64 \
+            | tr -d '\n\r ' | base64 -d \
+            > supabase/migrations/20261014135518_w6_semantic_seo_foundation.sql
+          echo "3af6c107e753d2efb4fcbfeadd89f069  supabase/migrations/20261014135518_w6_semantic_seo_foundation.sql" | md5sum -c -
+
+          cat supabase/recovery/20261014140126_w6_crawl_frontier_and_performance_bridge.part*.b64 \
+            | tr -d '\n\r ' | base64 -d \
+            > supabase/migrations/20261014140126_w6_crawl_frontier_and_performance_bridge.sql
+          echo "0c688659dae4d7d52fccfcf3f326975b  supabase/migrations/20261014140126_w6_crawl_frontier_and_performance_bridge.sql" | md5sum -c -
+
+          cat supabase/recovery/20261014140326_w6_technical_and_semantic_opportunity_views.part*.b64 \
+            | tr -d '\n\r ' | base64 -d \
+            > supabase/migrations/20261014140326_w6_technical_and_semantic_opportunity_views.sql
+          echo "f67ad47406ea280607f8dd7385c62750  supabase/migrations/20261014140326_w6_technical_and_semantic_opportunity_views.sql" | md5sum -c -
+
+          cat supabase/recovery/20261014140808_w6_semantic_processing_and_page_query_grain.part*.b64 \
+            | tr -d '\n\r ' | base64 -d \
+            > supabase/migrations/20261014140808_w6_semantic_processing_and_page_query_grain.sql
+          echo "1bc2bfd8d73562184c352d073cbfb42c  supabase/migrations/20261014140808_w6_semantic_processing_and_page_query_grain.sql" | md5sum -c -
 
           cp supabase/recovery/20261017155803_tracking_sources_core_prerequisite.sql \
              supabase/migrations/20261017155803_tracking_sources_and_event_contracts_v1.sql
