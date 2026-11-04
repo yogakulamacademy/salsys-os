@@ -73,3 +73,16 @@ test("Inbox footer and composer remain inside the viewport with independently sc
   assert.ok(layout.includes("flex: 0 1 auto;"));
   assert.ok(page.includes("<ConversationWorkspaceShell"));
 });
+
+test("Hover shell aligns full-height Inbox beside the icon rail without reserving the old submenu", () => {
+  const app = read("components/app-shell.tsx");
+  const sidebar = read("components/desktop-hover-sidebar-v3.tsx");
+
+  // The fullscreen Inbox no longer has a min-h-screen class. The hover sidebar
+  // must target a stable app-shell marker, not that incidental utility class.
+  assert.ok(app.includes("salsys-app-shell-content"));
+  assert.ok(app.includes('"flex h-[100dvh] min-h-0 flex-col overflow-hidden"'));
+  assert.match(sidebar, /\.salsys-meta-sidebar-shell \.legacy-shell-host > div > \.salsys-app-shell-content\s*\{\s*padding-left: 4rem !important;/);
+  assert.ok(!sidebar.includes(".legacy-shell-host > div > div.min-h-screen"));
+  assert.match(sidebar, /\.legacy-shell-host > div > aside\s*\{\s*display: none !important;/);
+});

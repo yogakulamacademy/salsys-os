@@ -762,7 +762,7 @@ export function AppShell({ children }: { children: ReactNode }) {
       ) : null}
 
       <div
-        className={`${
+        className={`salsys-app-shell-content ${
           pathname === "/conversations"
             ? "flex h-[100dvh] min-h-0 flex-col overflow-hidden"
             : "min-h-screen"

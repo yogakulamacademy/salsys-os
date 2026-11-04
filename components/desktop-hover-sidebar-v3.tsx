@@ -490,7 +490,7 @@ export function DesktopHoverSidebarV3() {
           .salsys-meta-sidebar-shell .legacy-shell-host > div > aside {
             display: none !important;
           }
-          .salsys-meta-sidebar-shell .legacy-shell-host > div > div.min-h-screen {
+          .salsys-meta-sidebar-shell .legacy-shell-host > div > .salsys-app-shell-content {
             padding-left: 4rem !important;
           }
           .salsys-meta-sidebar-shell .legacy-shell-host button[aria-label="Open section menu"] {
