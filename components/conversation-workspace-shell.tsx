@@ -187,12 +187,12 @@ export function ConversationWorkspaceShell({
                 {wideLayout ? <button
                   type="button"
                   onClick={() => setDesktopContextOpen((value) => !value)}
-                  className="absolute right-3 top-3 z-30 inline-flex h-9 items-center gap-1.5 rounded-ui border border-line bg-surface/95 px-2.5 text-[12px] font-semibold text-copy-muted shadow-sm backdrop-blur transition hover:bg-brand-50 hover:text-brand-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-700/40"
+                  className="ibx-v2-desktop-toggle absolute right-3 top-3 z-30 inline-flex h-9 items-center gap-1.5 rounded-ui border border-line bg-surface/95 px-2.5 text-[12px] font-semibold text-copy-muted shadow-sm backdrop-blur transition hover:bg-brand-50 hover:text-brand-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-700/40"
                   aria-label={showDesktopContext ? "Hide customer context" : "Show customer context"}
                   title={`${showDesktopContext ? "Hide customer context" : "Show customer context"} · Alt+I`}
                 >
                   {showDesktopContext ? <PanelRightClose size={14} /> : <PanelRightOpen size={14} />}
-                  {showDesktopContext ? "Hide context" : "Customer context"}
+                  <span className="ibx-v2-context-button-label">{showDesktopContext ? "Hide context" : "Customer context"}</span>
                 </button> : null}
 
                 {!wideLayout ? <button

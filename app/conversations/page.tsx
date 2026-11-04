@@ -5,6 +5,7 @@ import {
   ChevronDown,
   Clock3,
   MessageCircle,
+  Phone,
   Save,
   UserRound,
 } from "lucide-react";
@@ -19,6 +20,9 @@ import { ConversationCenterView } from "@/components/conversation-center-view";
 import { ConversationCopilot } from "@/components/conversation-copilot";
 import { WhatsAppComposer } from "@/components/conversation-composer";
 import { ConversationIntelligencePanel } from "@/components/conversation-intelligence-panel";
+import { InboxQuickActions } from "@/components/inbox-quick-actions";
+import { InboxHeaderActions } from "@/components/inbox-header-actions";
+import { InboxLeadOverview } from "@/components/inbox-lead-overview";
 import { ConversationReadMarker } from "@/components/conversation-read-marker";
 import { ConversationSafeComposer } from "@/components/conversation-safe-composer";
 import { ConversationTeamControls } from "@/components/conversation-team-controls";
@@ -28,12 +32,14 @@ import { ConversationsSidebar } from "@/components/conversations-sidebar";
 import { EmptyState, Notice, StageBadge } from "@/components/ui";
 import { WhatsAppTemplateComposer } from "@/components/whatsapp-template-composer";
 import { getConversationsWorkspace } from "@/lib/conversations-data";
-import { getCourses, isMockMode } from "@/lib/data";
+import { getCourses, getLead, isMockMode } from "@/lib/data";
 import { formatDateTime } from "@/lib/format";
 import { getMessagingEligibility } from "@/lib/messaging-eligibility";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentWorkspaceContext } from "@/lib/workspace";
 import { getApprovedWhatsAppTemplates } from "@/lib/whatsapp-templates";
+import "./inbox-v2.css";
+import "./inbox-reference.css";
 
 export default async function ConversationsPage({
   searchParams,
@@ -43,13 +49,20 @@ export default async function ConversationsPage({
     notice?: string;
     error?: string;
     wamid?: string;
+    page?: string;
+    q?: string;
+    sort?: string;
+    scope?: string;
+    filter?: string;
+    channel?: string;
+    priority?: string;
   }>;
 }) {
   const query = await searchParams;
   const mock = isMockMode();
 
   const [workspace, courses, workspaceContext] = await Promise.all([
-    getConversationsWorkspace(query.lead),
+    getConversationsWorkspace(query.lead, query),
     getCourses(),
     mock ? Promise.resolve(null) : getCurrentWorkspaceContext(),
   ]);
@@ -84,6 +97,16 @@ export default async function ConversationsPage({
         ? Boolean(selected.phone)
         : await resolveTelephoneCapability(selectedId)
       : false;
+
+  const selectedAttribution = selected ? await getLead(selected.id) : null;
+  const selectedEmail = selected && !mock
+    ? await resolveConversationEmail(selected.id)
+    : null;
+  const conversationStatus = selectedSummary?.resolved ? "Done"
+    : selectedSummary?.needsReply ? "Needs reply"
+    : selectedSummary?.needsFirstContact ? "First contact"
+    : selectedSummary?.unread ? "Unread"
+    : "Active";
 
   const canStartWhatsApp = Boolean(
     selected &&
@@ -160,6 +183,7 @@ export default async function ConversationsPage({
       selectedId={selectedId}
       currentUserId={team.currentUserId}
       canManageAssignments={team.canManageAssignments}
+      pagination={workspace.pagination}
     />
   );
 
@@ -168,10 +192,10 @@ export default async function ConversationsPage({
       <EmptyState variant="conversation" title="Select a conversation" description="Choose a conversation on the left to see messages and customer details." />
     </section>
   ) : (
-    <section className="flex h-full min-h-0 min-w-0 flex-col overflow-hidden bg-surface">
+    <section className="ibx-v2-chat flex h-full min-h-0 min-w-0 flex-col overflow-hidden bg-surface">
       <ConversationReadMarker leadId={selected.id} />
 
-      <header className="shrink-0 border-b border-line bg-surface px-4 py-3.5 pr-32 sm:px-5">
+      <header className="ibx-v2-chat-header shrink-0 border-b border-line bg-surface px-4 py-3.5 pr-32 sm:px-5">
         <div className="flex min-w-0 items-center gap-3">
           <div className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-brand-100 text-[11px] font-bold text-brand-700">
             {initials(selected.name)}
@@ -182,6 +206,12 @@ export default async function ConversationsPage({
                 {selected.name}
               </h2>
               <StageBadge stage={selected.stage} />
+              <span className="ibx-v3-header-channel"><MessageCircle size={12}/>
+                {selected.currentContactChannel.replaceAll("_"," ")}
+              </span>
+              <span className="ibx-v3-header-owner"><UserRound size={12}/>
+                Owner: {selected.ownerName||"Unassigned"}
+              </span>
               {selectedSummary?.needsReply ? (
                 <span className="rounded-full bg-warning-soft px-2 py-0.5 text-[11px] font-semibold text-warning">
                   Needs reply
@@ -198,25 +228,17 @@ export default async function ConversationsPage({
                 </span>
               ) : null}
             </div>
-            <div className="mt-1 flex flex-wrap items-center gap-1.5 text-[12px] text-copy-muted">
-              <span className="capitalize">
-                {selected.leadCreationChannel.replaceAll("_", " ")} inquiry
-              </span>
+            <div className="ibx-v3-lead-meta">
+              <span>Lead · {selectedSummary?.needsReply ? "Inbound inquiry" : "Customer inquiry"}</span>
               <span aria-hidden="true">·</span>
-              <span>{selected.country || "Country not recorded"}</span>
-              <span aria-hidden="true">·</span>
-              <span className="truncate">
-                {selected.course && selected.course !== "Not selected"
-                  ? selected.course
-                  : "No course selected"}
-              </span>
-              <span aria-hidden="true">·</span>
-              <span className={`inline-flex items-center gap-1 ${selected.ownerUserId ? "text-copy-muted" : "font-semibold text-warning"}`}>
-                <UserRound size={11} /> {selected.ownerName || "Unassigned"}
-              </span>
+              <span>Created {formatDateTime(selected.createdAt)}</span>
             </div>
           </div>
         </div>
+        <InboxHeaderActions leadId={selected.id}
+          resolved={Boolean(selectedSummary?.resolved)}
+          canResolve={workspace.evidence.inboxResolutionAvailable} mock={mock}/>
+
       </header>
 
       <ConversationCenterView
@@ -233,6 +255,27 @@ export default async function ConversationsPage({
         country={selected.country}
         stage={selected.stage}
       />
+
+      {copilotChannel ? (
+        <section className="ibx-v2-ai-toolbar" aria-label="AI reply suggestions">
+          <ConversationCopilot
+            compactToolbar
+            messages={selected.lastMessages}
+            leadId={selected.id}
+            channel={copilotChannel}
+            enabled={copilotEnabled}
+            disabledReason={
+              !copilotEnabled
+                ? messagingEligibility?.userMessage ||
+                  (copilotChannel === "whatsapp"
+                    ? "The WhatsApp service window is closed. Use an approved template instead of a free-text draft."
+                    : "This channel is not currently eligible for a direct reply.")
+                : undefined
+            }
+          />
+        </section>
+      ) : null}
+
 
       <div className="shrink-0 border-t border-line bg-surface">
         {selected.currentContactChannel === "whatsapp" &&
@@ -309,87 +352,40 @@ export default async function ConversationsPage({
   );
 
   const context = selected ? (
-    <div className="conversation-context-pane min-h-full bg-surface-soft">
-      <div className="sticky top-0 z-10 flex items-center justify-between border-b border-line bg-surface-soft/95 px-4 py-3 backdrop-blur">
-        <div>
-          <div className="text-[13px] font-semibold text-copy-strong">
-            Customer context
+    <div className="ibx-v2-context conversation-context-pane min-h-full bg-surface-soft">
+
+      <section className="ibx-v2-profile-card border-b border-line px-4 py-4">
+        <div className="ibx-v2-profile-heading">
+          <div className="ibx-v2-profile-avatar">{initials(selected.name)}</div>
+          <div className="ibx-v2-profile-name">
+            <strong>{selected.name}</strong>
+            <span className="ibx-v3-profile-email">
+              {selectedEmail ? <a href={`mailto:${selectedEmail}`}>{selectedEmail}</a> : "Email not recorded / unavailable"}
+            </span>
           </div>
-          <div className="mt-0.5 text-[11px] text-copy-muted">
-            CRM, ownership and next action
-          </div>
+          <Link href={`/leads/${selected.id}`} aria-label="Open customer profile"
+            title="Open customer profile" className="ibx-v2-profile-link">
+            <ArrowUpRight size={16}/>
+          </Link>
         </div>
-        <StageBadge stage={selected.stage} />
-      </div>
-
-      <section className="border-b border-line px-4 py-4">
-        <div className="flex items-center gap-3">
-          <div className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-brand-100 text-[11px] font-bold text-brand-700">
-            {initials(selected.name)}
-          </div>
-          <div className="min-w-0">
-            <div className="truncate text-[14px] font-semibold text-copy-strong">
-              {selected.name}
-            </div>
-            <div className="mt-0.5 text-[11px] capitalize text-copy-muted">
-              {selected.leadCreationChannel.replaceAll("_", " ")} inquiry
-            </div>
-          </div>
-        </div>
+        {hasTelephoneContact && selected.phone ?
+          <a className="ibx-v2-profile-phone" href={`tel:${selected.phone.replace(/[^0-9+]/g,"")}`}>
+            <Phone size={13}/> {selected.phone}
+          </a> :
+          <span className="ibx-v2-profile-no-phone">Phone contact unavailable</span>}
       </section>
+      <InboxLeadOverview leadId={selected.id} stage={selected.stage}
+        ownerUserId={selected.ownerUserId} ownerName={selected.ownerName}
+        candidates={team.assignmentCandidates} canAssign={team.canManageAssignments}
+        mock={mock} channel={selected.currentContactChannel}
+        attributionSource={selectedAttribution?.firstTouchSource||"Not verified"} interest={selected.course}
+        country={selected.country}
+        lastContacted={selected.lastContactedAt?formatDateTime(selected.lastContactedAt):"Not contacted"}
+        state={conversationStatus}/>
 
-      <section className="border-b border-line px-4 py-4">
-        <SectionHeading>Lead details</SectionHeading>
-        <dl className="mt-3 divide-y divide-line/70">
-          <ContextLine label="Owner" value={selected.ownerName || "Unassigned"} />
-          <ContextLine label="Country" value={selected.country || "Not recorded"} />
-          <ContextLine label="Course" value={selected.course || "Not selected"} />
-          <ContextLine
-            label="Lead creation"
-            value={selected.leadCreationChannel.replaceAll("_", " ")}
-          />
-          <ContextLine
-            label="Current channel"
-            value={selected.currentContactChannel.replaceAll("_", " ")}
-          />
-          {selected.leadCreationChannel === "website" && hasTelephoneContact ? (
-            <ContextLine
-              label="WhatsApp"
-              value={
-                selected.currentContactChannel === "whatsapp"
-                  ? "Connected"
-                  : "Available via approved template"
-              }
-            />
-          ) : null}
-          {messagingEligibility ? (
-            <ContextLine
-              label="Messaging"
-              value={messagingEligibility.replyMode.replaceAll("_", " ")}
-            />
-          ) : null}
-          <ContextLine
-            label="Last contacted"
-            value={
-              selected.lastContactedAt
-                ? formatDateTime(selected.lastContactedAt)
-                : "Not contacted"
-            }
-          />
-        </dl>
-      </section>
-
-      <ConversationTeamControls
-        leadId={selected.id}
-        ownerUserId={selected.ownerUserId}
-        ownerName={selected.ownerName}
-        snoozedUntil={selected.snoozedUntil}
-        canManageAssignments={team.canManageAssignments}
-        assignmentCandidates={team.assignmentCandidates}
-      />
-
-      <section className="border-b border-line px-3.5 py-4">
+      <section id="inbox-next-steps" className="ibx-v2-next-step-card border-b border-line px-3.5 py-4">
         <ConversationIntelligencePanel
+          compact
           leadId={selected.id}
           stage={selected.stage}
           priority={selectedSummary?.priority ?? "normal"}
@@ -399,23 +395,20 @@ export default async function ConversationsPage({
         />
       </section>
 
-      {copilotChannel ? (
-        <section className="border-b border-line px-3.5 py-4">
-          <ConversationCopilot
-            leadId={selected.id}
-            channel={copilotChannel}
-            enabled={copilotEnabled}
-            disabledReason={
-              !copilotEnabled
-                ? messagingEligibility?.userMessage ||
-                  (copilotChannel === "whatsapp"
-                    ? "The WhatsApp service window is closed. Use an approved template instead of a free-text draft."
-                    : "This channel is not currently eligible for a direct reply.")
-                : undefined
-            }
-          />
-        </section>
-      ) : null}
+
+      <InboxQuickActions phone={selected.phone} canCall={Boolean(hasTelephoneContact)}
+        canAssign={team.canManageAssignments} profileHref={`/leads/${selected.id}`}/>
+      <details id="inbox-assignment" className="ibx-v2-assignment-card ibx-v2-advanced-panel">
+        <summary>Team & ownership <ChevronDown size={14}/></summary>
+        <ConversationTeamControls
+        leadId={selected.id}
+        ownerUserId={selected.ownerUserId}
+        ownerName={selected.ownerName}
+        snoozedUntil={selected.snoozedUntil}
+        canManageAssignments={team.canManageAssignments}
+        assignmentCandidates={team.assignmentCandidates}
+      />
+      </details>
 
       {leadContextAction ? (
         <section className="border-b border-line px-4 py-4">
@@ -427,6 +420,7 @@ export default async function ConversationsPage({
                 className="text-copy-subtle transition group-open:rotate-180"
               />
             </summary>
+            <div className="ibx-v3-advanced-evidence"><ContextLine label="Lead creation" value={selected.leadCreationChannel.replaceAll("_"," ")}/></div>
             <form
               action={leadContextAction}
               className="space-y-3 border-t border-line p-3"
@@ -470,31 +464,15 @@ export default async function ConversationsPage({
         </section>
       ) : null}
 
-      <section className="px-4 py-4">
-        <SectionHeading>More</SectionHeading>
-        <div className="mt-3 grid gap-2">
-          <Link
-            href={`/leads/${selected.id}`}
-            className="flex items-center justify-between rounded-ui border border-line bg-surface px-3 py-2.5 text-[12px] font-semibold text-copy-muted transition hover:bg-brand-50 hover:text-brand-700"
-          >
-            Open lead profile <ArrowUpRight size={13} />
-          </Link>
-          <Link
-            href="/follow-ups"
-            className="flex items-center justify-between rounded-ui border border-line bg-surface px-3 py-2.5 text-[12px] font-semibold text-copy-muted transition hover:bg-brand-50 hover:text-brand-700"
-          >
-            Follow-up queue <CalendarClock size={13} />
-          </Link>
-        </div>
-      </section>
+
     </div>
   ) : null;
 
   return (
-    <div className="conversations-polish space-y-4">
+    <div className="ibx-v2 conversations-polish space-y-2">
       {!mock ? <ConversationsRealtime /> : null}
 
-      <section className="inbox-page-heading flex flex-wrap items-center justify-between gap-3">
+      <section className="inbox-page-heading ibx-v2-page-heading flex flex-wrap items-center justify-between gap-3">
         <div>
           <div className="text-[11px] font-semibold uppercase tracking-[0.14em] text-brand-700">
             Customer conversations
@@ -530,6 +508,16 @@ export default async function ConversationsPage({
   );
 }
 
+async function resolveConversationEmail(leadId:string):Promise<string|null> {
+  const supabase=await createClient();
+  const {data,error}=await supabase.rpc('get_admissions_lead_contacts_secure',{
+    p_lead_ids:[leadId],
+  });
+  if(error||!Array.isArray(data)) return null;
+  const row=data.find(value=>value?.lead_id===leadId) as {email?:string|null}|undefined;
+  return row?.email||null;
+}
+
 async function resolveTelephoneCapability(leadId: string) {
   const supabase = await createClient();
   const { data, error } = await supabase.rpc("has_lead_telephone_contact", {
@@ -552,6 +540,9 @@ function noticeFor(value?: string) {
   if (value === "owner-updated") return "Conversation owner updated across CRM and open work.";
   if (value === "conversation-snoozed") return "Conversation snoozed in your inbox.";
   if (value === "conversation-unsnoozed") return "Conversation returned to your active inbox.";
+  if (value === "conversation-done") return "Conversation marked done. New inbound messages will reopen it.";
+  if (value === "conversation-reopened") return "Conversation returned to the active reply queue.";
+  if (value === "inbox-stage-updated") return "Lead stage updated and recorded in CRM history.";
   return value ? "Interaction logged." : null;
 }
 

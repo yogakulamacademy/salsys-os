@@ -6,6 +6,14 @@ import type {
 } from "@/components/conversations-sidebar";
 import { createClient } from "@/lib/supabase/server";
 import {
+  getInboxPage,
+  InboxPaginationNotDeployedError,
+  type InboxPage,
+  type InboxQuery,
+} from "@/lib/conversations-page-data";
+import { isMockMode } from "@/lib/data";
+import { requireCurrentOrganizationId } from "@/lib/workspace";
+import {
   getConversationsWorkspace as getCoreConversationsWorkspace,
   type ConversationWorkspaceResult,
 } from "@/lib/conversations-data-core";
@@ -23,10 +31,12 @@ export type ConversationWorkspaceEvidence = {
   workspaceSource: "canonical_rpc" | "legacy_compatibility";
   contactGrouping: "person" | "lead_fallback" | "not_applicable";
   warnings: string[];
+  inboxResolutionAvailable: boolean;
 };
 
 export type ConversationWorkspaceView = ConversationWorkspaceResult & {
   evidence: ConversationWorkspaceEvidence;
+  pagination?: Omit<InboxPage, "rows">;
 };
 
 type PersonLeadLink = {
@@ -47,10 +57,12 @@ function baseEvidence(workspace: ConversationWorkspaceResult): ConversationWorks
         workspaceSource: "canonical_rpc",
         contactGrouping: "not_applicable",
         warnings: [],
+        inboxResolutionAvailable: false,
       }
     : {
         workspaceSource: "legacy_compatibility",
         contactGrouping: "not_applicable",
+        inboxResolutionAvailable: false,
         warnings: [
           "The canonical Conversations read model is unavailable. This inbox is using the compatibility read path, so queue counts and assignment controls may differ until canonical evidence recovers.",
         ],
@@ -59,14 +71,54 @@ function baseEvidence(workspace: ConversationWorkspaceResult): ConversationWorks
 
 export async function getConversationsWorkspace(
   requestedLeadId?: string,
+  query: InboxQuery = {},
 ): Promise<ConversationWorkspaceView> {
-  const workspace = await getCoreConversationsWorkspace(requestedLeadId);
-  const baseRows = workspace.conversationSummary;
-  const evidence = baseEvidence(workspace);
+  const mock = isMockMode();
+  let workspace = await getCoreConversationsWorkspace(requestedLeadId, !mock);
+  let fullPage: InboxPage | null = null;
+  let pagingWarning: string | null = null;
+  if (!mock) {
+    try {
+      fullPage = await getInboxPage(
+        query,
+        workspace.team.currentUserId && !workspace.team.canManageAssignments ? "mine" : "team",
+      );
+    } catch (error) {
+      if (!(error instanceof InboxPaginationNotDeployedError)) throw error;
+      // On a Vercel main-branch deploy ahead of a reviewed SQL migration,
+      // re-read the complete legacy candidate queue. Never render its 1-row
+      // selected-thread lookup as though it were the full Inbox.
+      workspace = await getCoreConversationsWorkspace(requestedLeadId, false);
+      pagingWarning = "Full-dataset Inbox pagination is not yet available. Showing the legacy limited queue until the database migration is installed.";
+    }
+  }
+  const resolution = await loadInboxResolutionState(fullPage?.rows ?? workspace.conversationSummary);
+  const baseRows = resolution.rows;
+  const pagination = fullPage
+    ? (({ rows: _rows, ...meta }) => meta)(fullPage)
+    : undefined;
+  const pageWorkspace = {
+    ...workspace,
+    pagination,
+    metrics: {
+      ...workspace.metrics,
+      activeConversations: fullPage?.totalMatching ?? workspace.metrics.activeConversations,
+    },
+  };
+  const evidence: ConversationWorkspaceEvidence = {
+    ...baseEvidence(workspace),
+    inboxResolutionAvailable: resolution.available,
+    warnings: [
+      ...baseEvidence(workspace).warnings,
+      ...(pagingWarning ? [pagingWarning] : []),
+      ...(resolution.warning ? [resolution.warning] : []),
+    ],
+  };
 
   if (baseRows.length === 0) {
     return {
-      ...workspace,
+      ...pageWorkspace,
+      conversationSummary: baseRows,
       evidence,
     };
   }
@@ -91,11 +143,11 @@ export async function getConversationsWorkspace(
     );
 
     return {
-      ...workspace,
+      ...pageWorkspace,
       conversationSummary: groupedRows,
       metrics: {
         ...workspace.metrics,
-        activeConversations: groupedRows.length,
+        activeConversations: fullPage?.totalMatching ?? groupedRows.length,
       },
       evidence: {
         ...evidence,
@@ -108,7 +160,7 @@ export async function getConversationsWorkspace(
     });
 
     return {
-      ...workspace,
+      ...pageWorkspace,
       conversationSummary: baseRows.map(withSingleOpportunityIdentity),
       evidence: {
         ...evidence,
@@ -119,6 +171,43 @@ export async function getConversationsWorkspace(
         ],
       },
     };
+  }
+}
+
+
+async function loadInboxResolutionState(rows: ConversationLeadSummary[]):Promise<{
+  rows:ConversationLeadSummary[]; available:boolean; warning:string|null;
+}> {
+  if(isMockMode()) return {rows,available:false,warning:null};
+  if(rows.length===0) return {rows,available:true,warning:null};
+  try {
+    const supabase=await createClient();
+    const {data:{user},error:authError}=await supabase.auth.getUser();
+    if(authError||!user) throw new Error('No authenticated inbox workspace');
+    const org=await requireCurrentOrganizationId(supabase,user.id);
+    const ids=rows.map(row=>row.id);
+    const [resolutions,attention]=await Promise.all([
+      supabase.from('lead_inbox_resolutions_v1')
+        .select('lead_id,resolved_at').eq('organization_id',org).in('lead_id',ids),
+      supabase.from('v_lead_inbox_attention')
+        .select('lead_id,last_inbound_at').eq('organization_id',org).in('lead_id',ids),
+    ]);
+    if(resolutions.error||attention.error)
+      throw new Error(resolutions.error?.message||attention.error?.message||'Unavailable');
+    const byId=new Map((resolutions.data??[]).map(row=>[row.lead_id,row.resolved_at]));
+    const lastInbound=new Map((attention.data??[]).map(row=>[row.lead_id,row.last_inbound_at]));
+    return {available:true,warning:null,rows:rows.map(row=>{
+      const doneAt=byId.get(row.id);
+      const inbound=lastInbound.get(row.id);
+      const resolved=Boolean(doneAt && (!inbound ||
+        (Date.parse(inbound)<=Date.parse(doneAt))));
+      return resolved ? {...row,resolved:true,needsReply:false,needsFirstContact:false,
+        waitingSince:null} : {...row,resolved:false};
+    })};
+  } catch(error) {
+    console.warn('[inbox] resolution status unavailable',error instanceof Error?error.message:'unknown');
+    return {rows,available:false,
+      warning:'Conversation resolution state could not be verified. Mark Done is unavailable; live reply attention is unchanged.'};
   }
 }
 
@@ -207,6 +296,7 @@ function mergeContactGroup(
     lastContactedAt: newestContact ?? representative.lastContactedAt,
     unread: group.some((row) => row.unread),
     needsReply: group.some((row) => row.needsReply),
+    resolved: group.every((row) => Boolean(row.resolved)),
     needsFirstContact:
       !group.some((row) => row.needsReply) &&
       group.some((row) => row.needsFirstContact),

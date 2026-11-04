@@ -38,13 +38,18 @@ export function ConversationCopilot({
   channel,
   enabled = true,
   disabledReason,
+  compactToolbar = false,
+  messages = [],
 }: {
   leadId: string;
   channel: SupportedChannel;
   enabled?: boolean;
   disabledReason?: string;
+  compactToolbar?: boolean;
+  messages?: {id:string;direction:"inbound"|"outbound";body:string;timestamp:string}[];
 }) {
   const [open, setOpen] = useState(false);
+  const [showSummary,setShowSummary] = useState(false);
   const [result, setResult] = useState<SuccessfulCopilotReply | null>(null);
   const [assetSuggestions, setAssetSuggestions] = useState<CopilotAssetSuggestion[]>([]);
   const [assetError, setAssetError] = useState<string | null>(null);
@@ -128,6 +133,13 @@ export function ConversationCopilot({
     });
   };
 
+  const recentMessages=[...messages].sort((a,b)=>Date.parse(a.timestamp)-Date.parse(b.timestamp)).slice(-25);
+  const inboundMessages=recentMessages.filter(message=>message.direction==="inbound");
+  const outboundMessages=recentMessages.filter(message=>message.direction==="outbound");
+  const latestInbound=inboundMessages.at(-1);
+  const latestOutbound=outboundMessages.at(-1);
+  const condensed=(value:string)=>value.length>420?value.slice(0,420).trimEnd()+"…":value;
+
   const riskTone =
     result?.risk === "human_only"
       ? "border-red-200 bg-red-50 text-red-700 dark:border-red-900/40 dark:bg-red-950/20 dark:text-red-300"
@@ -137,6 +149,32 @@ export function ConversationCopilot({
 
   return (
     <section className="overflow-hidden rounded-xl border border-brand-100 bg-surface dark:border-slate-800 dark:bg-slate-950">
+      {compactToolbar ? (
+        <div className="ibx-v2-copilot-bar">
+          <span className="ibx-v2-ai-label"><Sparkles size={17}/> AI suggestions for this conversation</span>
+          <div className="ibx-v2-ai-actions">
+            <button type="button" disabled={!enabled || isPending} onClick={generate} title={disabledReason || "Prepare a grounded reply for human review"}>
+              <WandSparkles size={14}/> {isPending ? "Drafting…" : "Draft a reply"}
+            </button>
+            <button type="button" onClick={() => {setShowSummary(prev=>!prev);setOpen(false);}}
+              aria-expanded={showSummary} title="Summarize recent stored messages without inventing customer facts">
+              <Database size={14}/> Summarize
+            </button>
+            <button type="button" onClick={() => {
+              const panel=document.getElementById("inbox-next-steps");
+              if(panel){panel.scrollIntoView({block:"nearest",behavior:"smooth"});return;}
+              document.querySelector<HTMLButtonElement>('button[aria-label="Show customer context"]')?.click();
+            }} title="Review next steps in the customer panel">
+              <Sparkles size={14}/> Next best action
+            </button>
+            <button type="button" onClick={() => setOpen(value=>!value)}
+              aria-label={open?"Collapse AI suggestions":"Expand AI suggestions"}
+              aria-expanded={open} title="AI suggestion details">
+              {open?<ChevronUp size={14}/>:<ChevronDown size={14}/>}
+            </button>
+          </div>
+        </div>
+      ) : (
       <button
         type="button"
         onClick={() => setOpen((value) => !value)}
@@ -160,6 +198,21 @@ export function ConversationCopilot({
         )}
       </button>
 
+      )}
+      {compactToolbar&&showSummary ? (
+        <div className="ibx-v3-summary" role="region" aria-label="Conversation summary">
+          <div className="ibx-v3-summary-heading"><strong>Conversation summary</strong>
+            <span>Based on the latest {recentMessages.length} stored messages</span>
+            <button type="button" onClick={()=>setShowSummary(false)} aria-label="Close summary">×</button>
+          </div>
+          {recentMessages.length===0?<p>No stored messages are available to summarize.</p>:<>
+            <p><strong>{inboundMessages.length}</strong> inbound · <strong>{outboundMessages.length}</strong> outbound messages in the loaded history.</p>
+            {latestInbound?<div><strong>Latest customer message</strong><p>{condensed(latestInbound.body)}</p></div>:null}
+            {latestOutbound?<div><strong>Latest team response</strong><p>{condensed(latestOutbound.body)}</p></div>:null}
+            <p className="ibx-v3-summary-disclaimer">This is a factual recap of stored messages, not an AI-generated interpretation. Review the full thread before replying.</p>
+          </>}
+        </div>
+      ) : null}
       {open ? (
         <div className="border-t border-line p-3 dark:border-slate-900">
           {!enabled && disabledReason ? (
