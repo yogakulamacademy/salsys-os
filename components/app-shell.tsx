@@ -911,8 +911,21 @@ export function AppShell({ children }: { children: ReactNode }) {
           </div>
         </header>
 
-        <main className="min-h-[calc(100vh-4rem)] px-4 py-5 sm:px-5 lg:px-6 lg:py-6">
-          <div key={pathname} className="page-transition mx-auto w-full max-w-[1680px]">
+        <main
+          className={
+            pathname === "/conversations"
+              ? "h-[calc(100dvh-4rem)] min-h-0 overflow-hidden p-0"
+              : "min-h-[calc(100vh-4rem)] px-4 py-5 sm:px-5 lg:px-6 lg:py-6"
+          }
+        >
+          <div
+            key={pathname}
+            className={
+              pathname === "/conversations"
+                ? "page-transition h-full min-h-0 w-full max-w-none"
+                : "page-transition mx-auto w-full max-w-[1680px]"
+            }
+          >
             {children}
           </div>
         </main>
