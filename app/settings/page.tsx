@@ -252,6 +252,7 @@ export default async function SettingsPage({
         <section className="cr-panel cr-security">
           <div className="cr-panel-heading"><span className="cr-icon"><ShieldCheck size={20}/></span>
             <div><h2>Security & Governance</h2><p>Access, data protection and audited configuration.</p></div>
+             {admin ? <Link className="cr-head-link" href="/settings/ai-insights">AI pilot status <ArrowRight size={14}/></Link> : null}
           </div>
           <div className="cr-security-grid">
             <SecurityRule icon={<KeyRound size={16}/>} title="Browser-safe configuration"
