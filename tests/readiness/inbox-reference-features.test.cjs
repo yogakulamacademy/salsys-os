@@ -31,7 +31,8 @@ test('reference actions are real and do not substitute unrelated CRM task comple
 });
 test('resolutions are tenant scoped, reopen on newer inbound and leave CRM tasks untouched',()=>{
   assert.ok(migration.includes('enable row level security'));
-  assert.ok(migration.includes('public.can_work_lead(lead_id)'));
+  assert.ok(migration.includes('public.can_access_lead(lead_id)'));
+  assert.ok(migration.includes('public.can_manage_sales_workspace('));
   assert.ok(migration.includes('organization_id = (select public.current_tenant_organization_id())'));
   assert.ok(migration.includes('resolved_by = (select auth.uid())'));
   assert.ok(teamActions.includes("lead_inbox_resolutions_v1"));
