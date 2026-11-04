@@ -34,6 +34,7 @@ import { getMessagingEligibility } from "@/lib/messaging-eligibility";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentWorkspaceContext } from "@/lib/workspace";
 import { getApprovedWhatsAppTemplates } from "@/lib/whatsapp-templates";
+import "./inbox-v2.css";
 
 export default async function ConversationsPage({
   searchParams,
@@ -168,10 +169,10 @@ export default async function ConversationsPage({
       <EmptyState variant="conversation" title="Select a conversation" description="Choose a conversation on the left to see messages and customer details." />
     </section>
   ) : (
-    <section className="flex h-full min-h-0 min-w-0 flex-col overflow-hidden bg-surface">
+    <section className="ibx-v2-chat flex h-full min-h-0 min-w-0 flex-col overflow-hidden bg-surface">
       <ConversationReadMarker leadId={selected.id} />
 
-      <header className="shrink-0 border-b border-line bg-surface px-4 py-3.5 pr-32 sm:px-5">
+      <header className="ibx-v2-chat-header shrink-0 border-b border-line bg-surface px-4 py-3.5 pr-32 sm:px-5">
         <div className="flex min-w-0 items-center gap-3">
           <div className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-brand-100 text-[11px] font-bold text-brand-700">
             {initials(selected.name)}
@@ -217,6 +218,10 @@ export default async function ConversationsPage({
             </div>
           </div>
         </div>
+        <div className="ibx-v2-header-actions" aria-label="Conversation actions">
+          <Link href="/follow-ups" className="ibx-v2-header-action"><CalendarClock size={14}/> Next steps</Link>
+          <Link href={`/leads/${selected.id}`} className="ibx-v2-header-action">Open profile <ArrowUpRight size={13}/></Link>
+        </div>
       </header>
 
       <ConversationCenterView
@@ -233,6 +238,25 @@ export default async function ConversationsPage({
         country={selected.country}
         stage={selected.stage}
       />
+
+      {copilotChannel ? (
+        <section className="ibx-v2-ai-toolbar" aria-label="AI reply suggestions">
+          <ConversationCopilot
+            leadId={selected.id}
+            channel={copilotChannel}
+            enabled={copilotEnabled}
+            disabledReason={
+              !copilotEnabled
+                ? messagingEligibility?.userMessage ||
+                  (copilotChannel === "whatsapp"
+                    ? "The WhatsApp service window is closed. Use an approved template instead of a free-text draft."
+                    : "This channel is not currently eligible for a direct reply.")
+                : undefined
+            }
+          />
+        </section>
+      ) : null}
+
 
       <div className="shrink-0 border-t border-line bg-surface">
         {selected.currentContactChannel === "whatsapp" &&
@@ -309,20 +333,9 @@ export default async function ConversationsPage({
   );
 
   const context = selected ? (
-    <div className="conversation-context-pane min-h-full bg-surface-soft">
-      <div className="sticky top-0 z-10 flex items-center justify-between border-b border-line bg-surface-soft/95 px-4 py-3 backdrop-blur">
-        <div>
-          <div className="text-[13px] font-semibold text-copy-strong">
-            Customer context
-          </div>
-          <div className="mt-0.5 text-[11px] text-copy-muted">
-            CRM, ownership and next action
-          </div>
-        </div>
-        <StageBadge stage={selected.stage} />
-      </div>
+    <div className="ibx-v2-context conversation-context-pane min-h-full bg-surface-soft">
 
-      <section className="border-b border-line px-4 py-4">
+      <section className="ibx-v2-profile-card border-b border-line px-4 py-4">
         <div className="flex items-center gap-3">
           <div className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-brand-100 text-[11px] font-bold text-brand-700">
             {initials(selected.name)}
@@ -338,8 +351,8 @@ export default async function ConversationsPage({
         </div>
       </section>
 
-      <section className="border-b border-line px-4 py-4">
-        <SectionHeading>Lead details</SectionHeading>
+      <section className="ibx-v2-lead-overview border-b border-line px-4 py-4">
+        <SectionHeading>Lead overview</SectionHeading>
         <dl className="mt-3 divide-y divide-line/70">
           <ContextLine label="Owner" value={selected.ownerName || "Unassigned"} />
           <ContextLine label="Country" value={selected.country || "Not recorded"} />
@@ -379,7 +392,8 @@ export default async function ConversationsPage({
         </dl>
       </section>
 
-      <ConversationTeamControls
+      <div id="inbox-assignment" className="ibx-v2-assignment-card">
+        <ConversationTeamControls
         leadId={selected.id}
         ownerUserId={selected.ownerUserId}
         ownerName={selected.ownerName}
@@ -387,8 +401,9 @@ export default async function ConversationsPage({
         canManageAssignments={team.canManageAssignments}
         assignmentCandidates={team.assignmentCandidates}
       />
+      </div>
 
-      <section className="border-b border-line px-3.5 py-4">
+      <section id="inbox-next-steps" className="ibx-v2-next-step-card border-b border-line px-3.5 py-4">
         <ConversationIntelligencePanel
           leadId={selected.id}
           stage={selected.stage}
@@ -399,23 +414,6 @@ export default async function ConversationsPage({
         />
       </section>
 
-      {copilotChannel ? (
-        <section className="border-b border-line px-3.5 py-4">
-          <ConversationCopilot
-            leadId={selected.id}
-            channel={copilotChannel}
-            enabled={copilotEnabled}
-            disabledReason={
-              !copilotEnabled
-                ? messagingEligibility?.userMessage ||
-                  (copilotChannel === "whatsapp"
-                    ? "The WhatsApp service window is closed. Use an approved template instead of a free-text draft."
-                    : "This channel is not currently eligible for a direct reply.")
-                : undefined
-            }
-          />
-        </section>
-      ) : null}
 
       {leadContextAction ? (
         <section className="border-b border-line px-4 py-4">
@@ -471,7 +469,7 @@ export default async function ConversationsPage({
       ) : null}
 
       <section className="px-4 py-4">
-        <SectionHeading>More</SectionHeading>
+        <SectionHeading>Quick actions</SectionHeading>
         <div className="mt-3 grid gap-2">
           <Link
             href={`/leads/${selected.id}`}
@@ -491,10 +489,10 @@ export default async function ConversationsPage({
   ) : null;
 
   return (
-    <div className="conversations-polish space-y-4">
+    <div className="ibx-v2 conversations-polish space-y-2">
       {!mock ? <ConversationsRealtime /> : null}
 
-      <section className="inbox-page-heading flex flex-wrap items-center justify-between gap-3">
+      <section className="inbox-page-heading ibx-v2-page-heading flex flex-wrap items-center justify-between gap-3">
         <div>
           <div className="text-[11px] font-semibold uppercase tracking-[0.14em] text-brand-700">
             Customer conversations
