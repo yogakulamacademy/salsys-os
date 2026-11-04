@@ -350,7 +350,7 @@ export async function generateCopilotReplyAction(
   const { data: lead, error: leadError } = await admin
     .from('leads')
     .select(
-      'id, organization_id, display_name, country, current_stage, intent, interested_course_id, preferred_batch_id, preferred_location, preferred_month, preferred_mode, summary, notes, current_contact_channel, lead_creation_channel',
+      'id, organization_id, display_name, country, current_stage, intent, interested_course_id, preferred_batch_id, preferred_location, preferred_month, preferred_mode, current_contact_channel, lead_creation_channel',
     )
     .eq('id', leadId)
     .maybeSingle();
