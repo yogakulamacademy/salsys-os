@@ -39,6 +39,7 @@ import { createClient } from "@/lib/supabase/server";
 import { getCurrentWorkspaceContext } from "@/lib/workspace";
 import { getApprovedWhatsAppTemplates } from "@/lib/whatsapp-templates";
 import "./inbox-v2.css";
+import "./inbox-reference.css";
 
 export default async function ConversationsPage({
   searchParams,
