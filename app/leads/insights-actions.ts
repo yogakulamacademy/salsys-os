@@ -1,6 +1,7 @@
 'use server';
 
 import { getLeadContextV1, type LeadContextV1 } from '@/lib/ai/lead-context';
+import { reserveLeadInsightGeneration } from '@/lib/ai/lead-insight-quota';
 import { recordLeadInsightRun } from '@/lib/ai/lead-insight-feedback';
 import {
   evidenceCatalog,
@@ -154,6 +155,21 @@ export async function generateLeadInsightsAction(leadId: string): Promise<Insigh
     return { ok: false, error: 'This lead is unavailable or you do not have access.' };
   }
 
+  const apiKey = process.env.ANTHROPIC_API_KEY?.trim();
+  const model = process.env.ANTHROPIC_SONNET_MODEL?.trim() ||
+    process.env.ANTHROPIC_HAIKU_MODEL?.trim();
+  if (!apiKey || !model) {
+    return { ok: false, error: 'AI insight model is not configured.' };
+  }
+
+  // Every request, INCLUDING the deterministic "insufficient evidence" path,
+  // must pass tenant opt-in and the atomic usage gate. This prevents bypasses
+  // on empty leads, while avoiding unnecessary Claude calls for those leads.
+  const reservation = await reserveLeadInsightGeneration(
+    context.lead.organizationId, context.lead.id,
+  );
+  if (!reservation.ok) return { ok: false, error: reservation.error };
+
   if (noEvidence(context)) {
     return {
       ok: true,
@@ -168,13 +184,6 @@ export async function generateLeadInsightsAction(leadId: string): Promise<Insigh
         limitations: context.limitations,
       },
     };
-  }
-
-  const apiKey = process.env.ANTHROPIC_API_KEY?.trim();
-  const model = process.env.ANTHROPIC_SONNET_MODEL?.trim() ||
-    process.env.ANTHROPIC_HAIKU_MODEL?.trim();
-  if (!apiKey || !model) {
-    return { ok: false, error: 'AI insight model is not configured.' };
   }
 
   const input = providerContext(context);

@@ -32,6 +32,7 @@ import { Person360SummaryCard } from "@/components/person-360-summary";
 import { JourneyEvidencePanel } from "@/components/journey-evidence-panel";
 import { buildJourneyEvidence } from "@/lib/journey-evidence";
 import { PaidMediaAcquisition } from "@/components/paid-media-acquisition";
+import { AILeadInsightPanel } from "@/components/ai-lead-insight-panel";
 
 import {
   ChannelBadge,
@@ -328,6 +329,12 @@ export default async function LeadDetailPage({
           {noticeText(query.notice)}
         </Notice>
       ) : null}
+
+      {!mock && process.env.AI_LEAD_INSIGHTS_ENABLED === "true" && process.env.AI_LEAD_INSIGHTS_UI_ENABLED === "true" && (
+        <div className="mb-4">
+          <AILeadInsightPanel leadId={id} />
+        </div>
+      )}
 
       <div className="card-pad mb-4">
         <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">

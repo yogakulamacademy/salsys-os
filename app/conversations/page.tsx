@@ -20,6 +20,7 @@ import { ConversationCenterView } from "@/components/conversation-center-view";
 import { ConversationCopilot } from "@/components/conversation-copilot";
 import { WhatsAppComposer } from "@/components/conversation-composer";
 import { ConversationIntelligencePanel } from "@/components/conversation-intelligence-panel";
+import { AILeadInsightPanel } from "@/components/ai-lead-insight-panel";
 import { InboxQuickActions } from "@/components/inbox-quick-actions";
 import { InboxHeaderActions } from "@/components/inbox-header-actions";
 import { InboxLeadOverview } from "@/components/inbox-lead-overview";
@@ -395,6 +396,12 @@ export default async function ConversationsPage({
         />
       </section>
 
+
+      {!mock && process.env.AI_LEAD_INSIGHTS_ENABLED === "true" && process.env.AI_LEAD_INSIGHTS_UI_ENABLED === "true" && (
+        <div className="border-b border-line px-3.5 py-3">
+          <AILeadInsightPanel leadId={selected.id} compact />
+        </div>
+      )}
 
       <InboxQuickActions phone={selected.phone} canCall={Boolean(hasTelephoneContact)}
         canAssign={team.canManageAssignments} profileHref={`/leads/${selected.id}`}/>

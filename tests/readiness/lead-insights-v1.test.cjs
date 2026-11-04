@@ -136,6 +136,16 @@ function setupAction(options = {}) {
         calls.context.push([id, audience]);
         if (options.denied) return null;
         if (options.contextThrows) throw Error('Synthetic private database details');
+        if (options.emptyEvidence) return {
+          ...ctx,
+          lead: { ...ctx.lead, courseId: null, preferredLocation: null, preferredMode: null, preferredMonth: null },
+          conversation: { ...ctx.conversation, messages: [] },
+          staffOnly: {
+            ...ctx.staffOnly,
+            existingSummary: null, privateNotes: null,
+            activities: [], tasks: [], stageChanges: [], paymentRecords: [],
+          },
+        };
         if (options.changed && calls.context.length > 1) return {
           ...ctx, lead: { ...ctx.lead, stage: 'lost' },
         };
@@ -147,6 +157,7 @@ function setupAction(options = {}) {
     },
     '@/lib/ai/lead-insight-validation': validator,
     '@/lib/ai/lead-insight-feedback': { recordLeadInsightRun: async () => null },
+    '@/lib/ai/lead-insight-quota': { reserveLeadInsightGeneration: async () => options.quotaDenied ? { ok: false, error: 'AI quota reached.' } : { ok: true } },
   }).generateLeadInsightsAction;
 
   return {
@@ -220,4 +231,32 @@ test('C2 has no direct CRM mutations or automatic send; C3 can record review met
   assert.doesNotMatch(source, /\.insert\(|\.update\(|\.upsert\(|\.delete\(|sendWhatsApp|sendInstagram|scheduleFollowup/i);
   assert.match(source, /getLeadContextV1\(leadId, 'staff_insight'\)/);
   assert.match(source, /AI_LEAD_INSIGHTS_ENABLED/);
+});
+
+test('quota rejection prevents provider invocation', async () => {
+  const f = setupAction({ quotaDenied: true });
+  try {
+    const result = await f.action(lead);
+    assert.equal(result.ok, false);
+    assert.match(result.error, /quota reached/i);
+    assert.equal(f.calls.fetch.length, 0);
+  } finally { f.restore(); }
+});
+
+test('empty-evidence results require tenant quota opt-in but avoid Claude calls', async () => {
+  const denied = setupAction({ emptyEvidence: true, quotaDenied: true });
+  try {
+    const result = await denied.action(lead);
+    assert.equal(result.ok, false);
+    assert.match(result.error, /quota reached/i);
+    assert.equal(denied.calls.fetch.length, 0);
+  } finally { denied.restore(); }
+
+  const allowed = setupAction({ emptyEvidence: true });
+  try {
+    const result = await allowed.action(lead);
+    assert.equal(result.ok, true);
+    assert.equal(result.data.insight.status, 'insufficient_evidence');
+    assert.equal(allowed.calls.fetch.length, 0);
+  } finally { allowed.restore(); }
 });
