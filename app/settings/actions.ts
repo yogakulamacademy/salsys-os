@@ -139,6 +139,104 @@ export async function updatePipelineAgingRuleAction(formData: FormData) {
   settingsRedirect('notice', `${pretty(stage)} pipeline aging thresholds updated.`);
 }
 
+
+type ForecastBulkChange = {
+  stage: string;
+  old_percent: number;
+  new_percent: number;
+};
+type AgingBulkChange = {
+  stage: string;
+  old_warning_hours: number;
+  old_stuck_hours: number;
+  warning_hours: number;
+  stuck_hours: number;
+};
+
+function validBulkNumber(value: unknown): value is number {
+  return typeof value === 'number' && Number.isFinite(value);
+}
+function validStage(value: unknown): value is string {
+  return typeof value === 'string' && /^[a-z_]{2,40}$/.test(value);
+}
+
+export async function saveCrmSettingsBulkAction(formData: FormData) {
+  if (useMockData) {
+    settingsRedirect('error', 'Mock mode is active. Settings were not changed.');
+  }
+
+  const raw = formData.get('changes_json');
+  if (typeof raw !== 'string' || raw.length === 0 || raw.length > 20000) {
+    settingsRedirect('error', 'Changes payload is missing or too large.');
+  }
+
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    settingsRedirect('error', 'Changes payload is not valid JSON.');
+  }
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+    settingsRedirect('error', 'Changes payload must be a settings object.');
+  }
+
+  const changeSet = parsed as Record<string, unknown>;
+  if (!Array.isArray(changeSet.probabilities) || !Array.isArray(changeSet.aging) ||
+      changeSet.probabilities.length > 24 || changeSet.aging.length > 24) {
+    settingsRedirect('error', 'Invalid CRM settings change list.');
+  }
+
+  const probabilities = changeSet.probabilities as ForecastBulkChange[];
+  const aging = changeSet.aging as AgingBulkChange[];
+  if (probabilities.length + aging.length === 0) {
+    settingsRedirect('notice', 'No CRM rule changes to save.');
+  }
+  const seenProbabilities = new Set<string>();
+  const seenAging = new Set<string>();
+  for (const item of probabilities) {
+    if (!item || !validStage(item.stage) || seenProbabilities.has(item.stage) ||
+        !validBulkNumber(item.old_percent) || !validBulkNumber(item.new_percent) ||
+        item.old_percent < 0 || item.old_percent > 100 ||
+        item.new_percent < 0 || item.new_percent > 100) {
+      settingsRedirect('error', 'Invalid forecast stage or probability.');
+    }
+    seenProbabilities.add(item.stage);
+  }
+  for (const item of aging) {
+    if (!item || !validStage(item.stage) || seenAging.has(item.stage) ||
+        !validBulkNumber(item.old_warning_hours) || !validBulkNumber(item.old_stuck_hours) ||
+        !validBulkNumber(item.warning_hours) || !validBulkNumber(item.stuck_hours) ||
+        item.old_warning_hours < 0 || item.old_stuck_hours <= item.old_warning_hours ||
+        item.warning_hours < 0 || item.stuck_hours <= item.warning_hours) {
+      settingsRedirect('error', 'Aging thresholds must be valid; stuck must exceed warning.');
+    }
+    seenAging.add(item.stage);
+  }
+
+  const supabase = await createClient();
+  const organizationId = await getCurrentOrganizationId(supabase);
+  const { data, error } = await supabase.rpc('update_crm_settings_bulk_v1', {
+    p_organization_id: organizationId,
+    p_changes: { probabilities, aging },
+  });
+  if (error) {
+    settingsRedirect('error', error.message);
+  }
+  const saved = data && typeof data === 'object' && !Array.isArray(data)
+    ? data as { forecast_saved?: number; aging_saved?: number } : {};
+  revalidatePath('/settings');
+  revalidatePath('/settings/overview');
+  revalidatePath('/pipeline');
+  revalidatePath('/leads');
+  revalidatePath('/admissions');
+  revalidatePath('/revenue');
+  revalidatePath('/dashboard');
+
+  settingsRedirect('notice', 'Saved ' +
+    String(Number(saved.forecast_saved ?? probabilities.length) + Number(saved.aging_saved ?? aging.length)) +
+    ' CRM rule changes. Audit history updated.');
+}
+
 function pretty(value: string) {
   return value
     .replaceAll('_', ' ')
