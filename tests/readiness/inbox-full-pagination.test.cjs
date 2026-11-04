@@ -104,3 +104,41 @@ test("PostgreSQL statement_timeout recovers without disguising other RPC errors"
   assert.ok(workspace.includes("search and counts may be incomplete"));
   assert.ok(!workspace.includes("Full-dataset Inbox migration is not yet installed"));
 });
+
+test("Inbox v2 page engine preserves explicit tenant and lead authorization without repeated message RLS", () => {
+  const sql = read("supabase/migrations/20261104185000_inbox_paged_read_performance_v2.sql");
+  for(const guard of [
+    "app_private.get_current_conversations_page_engine_v1",
+    "security definer",
+    "auth.role() <> 'authenticated'",
+    "auth.uid() is null",
+    "public.get_current_workspace_context_v1()",
+    "v_organization_id is distinct from public.current_tenant_organization_id()",
+    "coalesce(v_context->'workspace_codes', '[]'::jsonb) ? 'sales'",
+    "public.can_access_lead(o.id)",
+    "o.organization_id = v_organization_id",
+    "and m.lead_id = o.id",
+    "reads.user_id = auth.uid()",
+    "snooze.user_id = auth.uid()",
+    "from public, anon",
+    "to authenticated;",
+    "security invoker",
+  ]) assert.ok(sql.includes(guard), "Required security/behavior guard: " + guard);
+
+  // The public PostgREST procedure stays SECURITY INVOKER and delegates to
+  // the helper in the non-API app_private schema.
+  assert.match(sql, /create or replace function public\.get_current_conversations_page_v1\([\s\S]*?returns jsonb\s+language sql\s+volatile\s+security invoker/i);
+  assert.match(sql, /create or replace function app_private\.get_current_conversations_page_engine_v1\([\s\S]*?returns jsonb\s+language plpgsql\s+volatile\s+security definer/i);
+  assert.ok(sql.includes("return v_result"));
+  assert.ok(sql.includes("'totalMatching', (select count(*) from matched)"));
+});
+
+test("resolution state avoids expensive view for unresolved leads and reuses canonical full-page evidence", () => {
+  const data = read("lib/conversations-data.ts");
+  assert.ok(data.includes("? { rows: fullPage.rows, available: true, warning: null }"));
+  assert.ok(data.includes("if(!resolutions?.length)"));
+  assert.ok(data.includes("const completedIds=resolutions.map(row=>row.lead_id)"));
+  assert.ok(data.includes(".in('lead_id',completedIds)"));
+  assert.ok(data.includes("v_lead_inbox_attention"));
+  assert.ok(!data.includes("const [resolutions,attention]=await Promise.all"));
+});
