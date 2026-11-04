@@ -12,6 +12,7 @@ import {
   Home,
   Megaphone,
   Menu,
+  MessageSquareText,
   Settings,
   Sparkles,
   UsersRound,
@@ -164,15 +165,20 @@ export function DesktopHoverSidebarV3() {
           items: [{ label: "My work", href: "/dashboard" }],
         },
         {
+          id: "inbox",
+          label: "Inbox",
+          icon: MessageSquareText,
+          href: "/conversations",
+        },
+        {
           id: "crm",
           label: "CRM",
           icon: UsersRound,
           href: "/leads",
-          activeHrefs: ["/pipeline", "/conversations", "/follow-ups", "/customer-360"],
+          activeHrefs: ["/pipeline", "/follow-ups", "/customer-360"],
           items: [
             { label: "My Leads", href: "/leads" },
             { label: "My Pipeline", href: "/pipeline" },
-            { label: "Inbox", href: "/conversations" },
             { label: "Tasks & Follow-ups", href: "/follow-ups" },
           ],
         },
@@ -190,6 +196,12 @@ export function DesktopHoverSidebarV3() {
         items: [{ label: "Command Center", href: "/home" }],
       },
       {
+        id: "inbox",
+        label: "Inbox",
+        icon: MessageSquareText,
+        href: "/conversations",
+      },
+      {
         id: "crm",
         label: "CRM",
         icon: UsersRound,
@@ -197,7 +209,6 @@ export function DesktopHoverSidebarV3() {
         activeHrefs: [
           "/admissions",
           "/pipeline",
-          "/conversations",
           "/follow-ups",
           "/customer-360",
           "/data-quality",
@@ -206,7 +217,6 @@ export function DesktopHoverSidebarV3() {
         items: [
           { label: "Leads", href: "/leads" },
           { label: "Admissions", href: "/admissions" },
-          { label: "Inbox", href: "/conversations" },
           { label: "Tasks & Follow-ups", href: "/follow-ups" },
           { label: "Re-engaged", href: "/re-engaged" },
         ],
