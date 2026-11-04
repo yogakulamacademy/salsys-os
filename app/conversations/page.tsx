@@ -530,6 +530,9 @@ function noticeFor(value?: string) {
   if (value === "owner-updated") return "Conversation owner updated across CRM and open work.";
   if (value === "conversation-snoozed") return "Conversation snoozed in your inbox.";
   if (value === "conversation-unsnoozed") return "Conversation returned to your active inbox.";
+  if (value === "conversation-done") return "Conversation marked done. New inbound messages will reopen it.";
+  if (value === "conversation-reopened") return "Conversation returned to the active reply queue.";
+  if (value === "inbox-stage-updated") return "Lead stage updated and recorded in CRM history.";
   return value ? "Interaction logged." : null;
 }
 
