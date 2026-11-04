@@ -20,7 +20,7 @@ only for a fresh, active organization owner.
 - Any of the four fields may be empty. Saving an all-empty snapshot is
   an intentional reset of the *latest draft*, not deletion of history.
 - Each save appends one immutable snapshot with organization and actor ID.
-- No update/delete grants on the table; historical snapshots are preserved.
+- A second hardening migration removes inherited Supabase default grants on the service role. Verified effective privileges are SELECT/INSERT only; UPDATE/DELETE/TRUNCATE are denied.
 - No mutation to `ai_lead_insight_pilot_approvals`, tenant policy, quota
   counters, feature flags, CRM data, or provider requests.
 
