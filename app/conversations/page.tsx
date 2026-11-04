@@ -196,6 +196,12 @@ export default async function ConversationsPage({
                 {selected.name}
               </h2>
               <StageBadge stage={selected.stage} />
+              <span className="ibx-v3-header-channel"><MessageCircle size={12}/>
+                {selected.currentContactChannel.replaceAll("_"," ")}
+              </span>
+              <span className="ibx-v3-header-owner"><UserRound size={12}/>
+                Owner: {selected.ownerName||"Unassigned"}
+              </span>
               {selectedSummary?.needsReply ? (
                 <span className="rounded-full bg-warning-soft px-2 py-0.5 text-[11px] font-semibold text-warning">
                   Needs reply
@@ -212,32 +218,10 @@ export default async function ConversationsPage({
                 </span>
               ) : null}
             </div>
-            <div className="ibx-v3-channel-owner">
-              <span className="capitalize">{selected.currentContactChannel.replaceAll("_"," ")}</span>
-              <span aria-hidden="true">·</span>
-              <span><UserRound size={12}/> Owner: {selected.ownerName || "Unassigned"}</span>
-            </div>
             <div className="ibx-v3-lead-meta">
               <span>Lead · {selectedSummary?.needsReply ? "Inbound inquiry" : "Customer inquiry"}</span>
               <span aria-hidden="true">·</span>
               <span>Created {formatDateTime(selected.createdAt)}</span>
-            </div>
-            <div className="ibx-v3-header-secondary">
-              <span className="capitalize">
-                {selected.leadCreationChannel.replaceAll("_", " ")} inquiry
-              </span>
-              <span aria-hidden="true">·</span>
-              <span>{selected.country || "Country not recorded"}</span>
-              <span aria-hidden="true">·</span>
-              <span className="truncate">
-                {selected.course && selected.course !== "Not selected"
-                  ? selected.course
-                  : "No course selected"}
-              </span>
-              <span aria-hidden="true">·</span>
-              <span className={`inline-flex items-center gap-1 ${selected.ownerUserId ? "text-copy-muted" : "font-semibold text-warning"}`}>
-                <UserRound size={11} /> {selected.ownerName || "Unassigned"}
-              </span>
             </div>
           </div>
         </div>
