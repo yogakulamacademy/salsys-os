@@ -20,6 +20,7 @@ export type InboxQuery = {
 };
 
 export type InboxPageCounts = {
+  scope: number;
   team: number;
   mine: number;
   unassigned: number;
@@ -97,6 +98,7 @@ export async function getInboxPage(
     totalMatching: numberOrZero(data.totalMatching),
     owners: Array.isArray(data.owners) ? data.owners.filter((owner: unknown) => Boolean(owner && typeof owner === "object" && typeof (owner as {id?: unknown}).id === "string" && typeof (owner as {name?: unknown}).name === "string")) : [],
     counts: {
+      scope: numberOrZero(counts.scope),
       team: numberOrZero(counts.team),
       mine: numberOrZero(counts.mine),
       unassigned: numberOrZero(counts.unassigned),
