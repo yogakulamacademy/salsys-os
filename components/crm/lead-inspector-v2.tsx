@@ -28,7 +28,7 @@ import {
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useModalFocus } from "@/components/use-modal-focus";
 import "./lead-inspector-v3.css";
-import { JourneyEvidencePanel } from "@/components/journey-evidence-panel";
+import { JourneyEvidencePanel } from "@/components/crm/lead-journey-timeline";
 import type { JourneyEvidence } from "@/lib/journey-evidence";
 import { createLatestReadGuard } from "@/lib/latest-read";
 
