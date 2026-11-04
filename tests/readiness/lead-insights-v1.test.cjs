@@ -118,13 +118,15 @@ function setupAction(options = {}) {
   process.env.ANTHROPIC_API_KEY = 'synthetic-key-not-sent';
   process.env.ANTHROPIC_SONNET_MODEL = 'synthetic-sonnet-model';
   delete process.env.AI_LEAD_INSIGHTS_INCLUDE_PRIVATE_NOTES;
-  const calls = { fetch: [], context: [] };
+  const calls = { fetch: [], context: [], usageStarted: [], usageCompleted: [] };
   global.fetch = async (url, request) => {
     const body = JSON.parse(request.body);
     calls.fetch.push({ url, body });
     return {
       ok: !options.providerFails,
+      status: options.providerFails ? 503 : 200,
       json: async () => ({
+        usage: { input_tokens: 200, output_tokens: 90, cache_creation_input_tokens: 0, cache_read_input_tokens: 0 },
         stop_reason: options.truncated ? 'max_tokens' : 'end_turn',
         content: [{ type: 'text', text: JSON.stringify(options.output ?? good()) }],
       }),
@@ -157,6 +159,17 @@ function setupAction(options = {}) {
     },
     '@/lib/ai/lead-insight-validation': validator,
     '@/lib/ai/lead-insight-feedback': { recordLeadInsightRun: async () => null },
+    '@/lib/ai/lead-insight-provider-usage': {
+      startLeadInsightProviderCall: async (org, id, model) => {
+        calls.usageStarted.push({ org, id, model });
+        if (options.usageStartFails) throw Error('Synthetic usage insert failure');
+        return { id: 'synthetic-usage-id', organizationId: org, leadId: id, startedAtMs: Date.now() };
+      },
+      completeLeadInsightProviderCall: async (_handle, outcome, values) => {
+        calls.usageCompleted.push({ outcome, values });
+        if (options.usageFinishFails) throw Error('Synthetic usage update failure');
+      },
+    },
     '@/lib/ai/lead-insight-quota': { reserveLeadInsightGeneration: async () => options.quotaDenied ? { ok: false, error: 'AI quota reached.' } : { ok: true } },
   }).generateLeadInsightsAction;
 
@@ -259,4 +272,55 @@ test('empty-evidence results require tenant quota opt-in but avoid Claude calls'
     assert.equal(result.data.insight.status, 'insufficient_evidence');
     assert.equal(allowed.calls.fetch.length, 0);
   } finally { allowed.restore(); }
+});
+
+test('usage insert failure stops Claude before sending any customer context', async () => {
+  const f = setupAction({ usageStartFails: true });
+  try {
+    const result = await f.action(lead);
+    assert.equal(result.ok, false);
+    assert.match(result.error, /usage monitoring is unavailable/);
+    assert.equal(f.calls.fetch.length, 0);
+    assert.equal(f.calls.usageCompleted.length, 0);
+  } finally { f.restore(); }
+});
+
+test('usage completion failure suppresses model output even after a valid provider response', async () => {
+  const f = setupAction({ usageFinishFails: true });
+  try {
+    const result = await f.action(lead);
+    assert.equal(result.ok, false);
+    assert.match(result.error, /logging could not be verified/);
+    assert.equal(f.calls.fetch.length, 1);
+    assert.equal(f.calls.usageCompleted.length, 1);
+  } finally { f.restore(); }
+});
+
+test('provider token counts and failed provider response are captured without raw messages', async () => {
+  const success = setupAction();
+  try {
+    assert.equal((await success.action(lead)).ok, true);
+    assert.equal(success.calls.usageStarted.length, 1);
+    assert.equal(success.calls.usageCompleted.length, 1);
+    assert.equal(success.calls.usageCompleted[0].outcome, 'provider_completed');
+    assert.equal(success.calls.usageCompleted[0].values.usage.input_tokens, 200);
+    assert.equal(success.calls.usageCompleted[0].values.usage.output_tokens, 90);
+  } finally { success.restore(); }
+
+  const failure = setupAction({ providerFails: true });
+  try {
+    assert.equal((await failure.action(lead)).ok, false);
+    assert.equal(failure.calls.usageCompleted[0].outcome, 'http_error');
+    assert.equal(failure.calls.usageCompleted[0].values.httpStatus, 503);
+    assert.doesNotMatch(JSON.stringify(failure.calls.usageCompleted), /private staff|Can I have the course fee/);
+  } finally { failure.restore(); }
+});
+
+test('empty evidence never writes a provider-call ledger row', async () => {
+  const f = setupAction({ emptyEvidence: true });
+  try {
+    assert.equal((await f.action(lead)).ok, true);
+    assert.equal(f.calls.usageStarted.length, 0);
+    assert.equal(f.calls.usageCompleted.length, 0);
+  } finally { f.restore(); }
 });
