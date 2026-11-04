@@ -38,11 +38,13 @@ export function ConversationCopilot({
   channel,
   enabled = true,
   disabledReason,
+  compactToolbar = false,
 }: {
   leadId: string;
   channel: SupportedChannel;
   enabled?: boolean;
   disabledReason?: string;
+  compactToolbar?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const [result, setResult] = useState<SuccessfulCopilotReply | null>(null);
@@ -137,6 +139,34 @@ export function ConversationCopilot({
 
   return (
     <section className="overflow-hidden rounded-xl border border-brand-100 bg-surface dark:border-slate-800 dark:bg-slate-950">
+      {compactToolbar ? (
+        <div className="ibx-v2-copilot-bar">
+          <span className="ibx-v2-ai-label"><Sparkles size={17}/> AI suggestions for this conversation</span>
+          <div className="ibx-v2-ai-actions">
+            <button type="button" disabled={!enabled || isPending} onClick={generate} title={disabledReason || "Prepare a grounded reply for human review"}>
+              <WandSparkles size={14}/> {isPending ? "Drafting…" : "Draft a reply"}
+            </button>
+            <button type="button" onClick={() => {
+              const tabs=Array.from(document.querySelectorAll<HTMLButtonElement>('.ibx-v2-center-tabs [role="tab"]'));
+              tabs.find(tab=>tab.textContent?.includes("Activity"))?.click();
+            }} title="Review actual conversation and CRM activity">
+              <Database size={14}/> Review activity
+            </button>
+            <button type="button" onClick={() => {
+              const panel=document.getElementById("inbox-next-steps");
+              if(panel){panel.scrollIntoView({block:"nearest",behavior:"smooth"});return;}
+              document.querySelector<HTMLButtonElement>('button[aria-label="Show customer context"]')?.click();
+            }} title="Review next steps in the customer panel">
+              <Sparkles size={14}/> Next best action
+            </button>
+            <button type="button" onClick={() => setOpen(value=>!value)}
+              aria-label={open?"Collapse AI suggestions":"Expand AI suggestions"}
+              aria-expanded={open} title="AI suggestion details">
+              {open?<ChevronUp size={14}/>:<ChevronDown size={14}/>}
+            </button>
+          </div>
+        </div>
+      ) : (
       <button
         type="button"
         onClick={() => setOpen((value) => !value)}
@@ -160,6 +190,7 @@ export function ConversationCopilot({
         )}
       </button>
 
+      )}
       {open ? (
         <div className="border-t border-line p-3 dark:border-slate-900">
           {!enabled && disabledReason ? (
