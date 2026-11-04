@@ -243,6 +243,7 @@ export default async function ConversationsPage({
       {copilotChannel ? (
         <section className="ibx-v2-ai-toolbar" aria-label="AI reply suggestions">
           <ConversationCopilot
+            compactToolbar
             leadId={selected.id}
             channel={copilotChannel}
             enabled={copilotEnabled}
