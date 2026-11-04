@@ -44,6 +44,15 @@ export type InboxPage = {
   search: string;
 };
 
+// Missing-migration compatibility is the only condition permitted to use the
+// bounded legacy reader. Other RPC failures must fail closed instead.
+export class InboxPaginationNotDeployedError extends Error {
+  constructor() {
+    super("Full-dataset Inbox migration is not yet installed");
+    this.name = "InboxPaginationNotDeployedError";
+  }
+}
+
 function choice<T extends string>(value: unknown, choices: readonly T[], fallback: T): T {
   return typeof value === "string" && choices.includes(value as T)
     ? (value as T)
@@ -85,7 +94,12 @@ export async function getInboxPage(
     p_priority: priority,
   });
 
-  if (error) throw new Error(`Unable to load full Inbox page: ${error.message}`);
+  if (error) {
+    if (error.code === "PGRST202" || error.code === "42883") {
+      throw new InboxPaginationNotDeployedError();
+    }
+    throw new Error(`Unable to load full Inbox page: ${error.message}`);
+  }
   if (!data || typeof data !== "object" || !Array.isArray(data.inbox)) {
     throw new Error("Inbox page returned an invalid payload");
   }
