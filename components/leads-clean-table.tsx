@@ -443,7 +443,7 @@ export function LeadsCleanTable({
                 </th>
                 {visibleColumns.includes("lead") ? <HeaderCell>Lead</HeaderCell> : null}
                 {visibleColumns.includes("source") ? <HeaderCell>Source</HeaderCell> : null}
-                {visibleColumns.includes("course") ? <HeaderCell>Course</HeaderCell> : null}
+                {visibleColumns.includes("course") ? <HeaderCell>Interest</HeaderCell> : null}
                 {visibleColumns.includes("owner") ? <HeaderCell>Owner</HeaderCell> : null}
                 {visibleColumns.includes("stage") ? <HeaderCell>Stage</HeaderCell> : null}
                 {visibleColumns.includes("score") ? <HeaderCell>Score</HeaderCell> : null}
