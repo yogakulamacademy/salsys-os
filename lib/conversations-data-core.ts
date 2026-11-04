@@ -166,6 +166,7 @@ type ConversationPriority = "urgent" | "high" | "normal" | "waiting";
 
 export async function getConversationsWorkspace(
   requestedLeadId?: string,
+  paginatedInbox = false,
 ): Promise<ConversationWorkspaceResult> {
   if (isMockMode()) {
     return getLegacyWorkspace(requestedLeadId, true);
@@ -176,7 +177,7 @@ export async function getConversationsWorkspace(
     "get_current_conversations_workspace_v1",
     {
       p_selected_lead_id: isUuid(requestedLeadId) ? requestedLeadId : null,
-      p_limit: 300,
+      p_limit: paginatedInbox ? 1 : 300,
     },
   );
 
