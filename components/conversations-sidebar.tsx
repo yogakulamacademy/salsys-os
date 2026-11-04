@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { Clock3, Flag, MessageCircle, Search, UsersRound, X } from "lucide-react";
+import { Clock3, Flag, MessageCircle, Search, SlidersHorizontal, UsersRound, X } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { EmptyState } from "@/components/ui";
 import { personInitials } from "@/lib/ui-format";
@@ -33,7 +33,7 @@ export type ConversationLeadSummary = {
 };
 
 type InboxFilter = "all" | "reply" | "unread" | "snoozed";
-type ScopeFilter = "mine" | "team" | "unassigned";
+type ScopeFilter = "mine" | "team" | "unassigned" | `owner:${string}`;
 type PriorityFilter = "all" | ConversationPriority;
 type ChannelFilter = "all" | "website" | "instagram" | "whatsapp";
 
@@ -211,6 +211,7 @@ export function ConversationsSidebar({
             Snoozed
           </InboxTab>
         </div>
+        <div className="ibx-v2-search-line">
         <label className="ibx-v2-search relative block">
           <span className="sr-only">Search conversations</span>
           <Search
@@ -239,25 +240,24 @@ export function ConversationsSidebar({
             </button>
           )}
         </label>
-        <div className="ibx-v2-scope grid grid-cols-3 rounded-ui bg-surface-soft p-1" aria-label="Inbox ownership scope">
-          <ScopeButton
-            active={scope === "mine"}
-            onClick={() => setScope("mine")}
-            count={mineCount}
-            disabled={!currentUserId}
-          >
-            My inbox
-          </ScopeButton>
-          <ScopeButton active={scope === "team"} onClick={() => setScope("team")} count={teamCount}>
-            Team
-          </ScopeButton>
-          <ScopeButton
-            active={scope === "unassigned"}
-            onClick={() => setScope("unassigned")}
-            count={unassignedCount}
-          >
-            Unassigned
-          </ScopeButton>
+          <details className="ibx-v2-advanced-filter">
+            <summary aria-label="More inbox filters" title="More filters">
+              <SlidersHorizontal size={16}/>
+            </summary>
+            <div className="ibx-v2-advanced-popover">
+              <label>
+                <span>Priority</span>
+                <select aria-label="Priority" value={priorityFilter}
+                  onChange={(event) => setPriorityFilter(event.target.value as PriorityFilter)}>
+                  <option value="all">All priorities</option>
+                  <option value="urgent">Urgent only</option>
+                  <option value="high">High priority</option>
+                  <option value="normal">Normal priority</option>
+                  <option value="waiting">Waiting</option>
+                </select>
+              </label>
+            </div>
+          </details>
         </div>
       </div>
 
@@ -276,17 +276,16 @@ export function ConversationsSidebar({
           </select>
         </label>
         <label className="min-w-0">
-          <span className="mb-1 block text-xs font-medium text-copy-muted">Priority</span>
-          <select
-            value={priorityFilter}
-            onChange={(event) => setPriorityFilter(event.target.value as PriorityFilter)}
-            className="h-8 w-full rounded-md border border-line bg-surface-soft px-2 text-[11px] font-medium text-copy-muted outline-none focus:border-brand-600 focus:text-brand-700"
-          >
-            <option value="all">All priorities</option>
-            <option value="urgent">Urgent only</option>
-            <option value="high">High priority</option>
-            <option value="normal">Normal priority</option>
-            <option value="waiting">Waiting</option>
+          <span className="mb-1 block text-xs font-medium text-copy-muted">Owner</span>
+          <select aria-label="Owner" value={scope} onChange={(event) => setScope(event.target.value as ScopeFilter)}
+            className="h-8 w-full rounded-md border border-line bg-surface-soft px-2 text-[11px] font-medium text-copy-muted outline-none focus:border-brand-600 focus:text-brand-700">
+            <option value="team">All owners</option>
+            {currentUserId ? <option value="mine">My conversations</option> : null}
+            <option value="unassigned">Unassigned</option>
+            {Array.from(new Map(leads.filter(lead => lead.ownerUserId && lead.ownerName)
+              .map(lead => [lead.ownerUserId!,lead.ownerName!])).entries()).map(([id,name]) => (
+              <option key={id} value={`owner:${id}`}>{name}</option>
+            ))}
           </select>
         </label>
         <span className="col-span-2 text-right text-[10.5px] text-copy-subtle" aria-live="polite">
@@ -350,7 +349,7 @@ function ConversationRow({
   const sourceLabel = lead.currentContactChannel.replaceAll("_", " ");
   const contextPreview =
     lead.course && lead.course !== "Not selected"
-      ? lead.course
+      ? `Interested in ${lead.course}`
       : `${sourceLabel} inquiry · Course not selected`;
   const snoozed = isSnoozed(lead, now);
   const waiting = lead.waitingSince && (lead.needsReply || lead.needsFirstContact)
@@ -521,6 +520,7 @@ function matchesScope(
   currentUserId: string | null,
 ) {
   if (scope === "unassigned") return !lead.ownerUserId;
+  if (scope.startsWith("owner:")) return lead.ownerUserId === scope.slice(6);
   if (scope === "mine") return Boolean(currentUserId) && lead.ownerUserId === currentUserId;
   return true;
 }
