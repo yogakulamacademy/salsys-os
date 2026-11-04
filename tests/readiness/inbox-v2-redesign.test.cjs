@@ -23,7 +23,7 @@ test('Inbox redesign preserves explicit selection and read-marker safety',()=>{
   assert.ok(shell.includes('hasExplicitLeadSelection'));
 });
 test('Sidebar retains working real filters and real lead status counts',()=>{
-  for(const value of ['ibx-v2-tabs','ibx-v2-search','ibx-v2-scope','ibx-v2-secondary-filters','Needs reply','Unread','Snoozed','setChannelFilter','setPriorityFilter','setScope','setFilter','setSearch'])assert.ok(sidebar.includes(value),value);
+  for(const value of ['ibx-v2-tabs','ibx-v2-search','ibx-v2-search-line','ibx-v2-secondary-filters','Needs reply','Unread','Snoozed','setChannelFilter','setPriorityFilter','setScope','setFilter','setSearch'])assert.ok(sidebar.includes(value),value);
   assert.ok(sidebar.includes('activeScopedLeads.filter('));
   assert.ok(sidebar.includes('leads.filter('));
   assert.ok(!sidebar.includes('300 conversations'));
