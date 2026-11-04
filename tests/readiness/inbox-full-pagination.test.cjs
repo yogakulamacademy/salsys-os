@@ -9,7 +9,7 @@ test("Inbox full-dataset RPC stays tenant and lead scoped", () => {
   for (const phrase of [
     "security invoker",
     "public.get_current_workspace_context_v1()",
-    "public.has_workspace_access(v_organization_id, 'sales')",
+    "coalesce(v_context->'workspace_codes', '[]'::jsonb) ? 'sales'",
     "public.can_access_lead(o.id)",
     "o.organization_id = v_organization_id",
     "p_page_size integer default 50",
@@ -67,4 +67,12 @@ test("reference inbox integrates completed conversations, owner scope and live a
   assert.ok(data.includes("loadInboxResolutionState(fullPage?.rows ?? workspace.conversationSummary)"));
   assert.ok(realtime.includes("event: 'INSERT', schema: 'public', table: 'leads'"));
   assert.ok(realtime.includes("Outbound messages also change latest-conversation-activity sorting."));
+});
+
+test("provider message timestamps drive latest activity order", () => {
+  const sql = read("supabase/migrations/20261104160000_inbox_full_dataset_page_v1.sql");
+  assert.ok(sql.includes("coalesce(m.sent_at, m.created_at)"));
+  assert.ok(sql.includes("coalesce(m.received_at, m.created_at)"));
+  assert.ok(!sql.includes("public.has_workspace_access(v_organization_id, 'sales')"),
+    "Private helper is revoked from authenticated users");
 });
