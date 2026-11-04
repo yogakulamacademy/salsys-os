@@ -19,6 +19,7 @@ import { ConversationCenterView } from "@/components/conversation-center-view";
 import { ConversationCopilot } from "@/components/conversation-copilot";
 import { WhatsAppComposer } from "@/components/conversation-composer";
 import { ConversationIntelligencePanel } from "@/components/conversation-intelligence-panel";
+import { InboxQuickActions } from "@/components/inbox-quick-actions";
 import { ConversationReadMarker } from "@/components/conversation-read-marker";
 import { ConversationSafeComposer } from "@/components/conversation-safe-composer";
 import { ConversationTeamControls } from "@/components/conversation-team-controls";
@@ -336,24 +337,25 @@ export default async function ConversationsPage({
     <div className="ibx-v2-context conversation-context-pane min-h-full bg-surface-soft">
 
       <section className="ibx-v2-profile-card border-b border-line px-4 py-4">
-        <div className="flex items-center gap-3">
-          <div className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-brand-100 text-[11px] font-bold text-brand-700">
-            {initials(selected.name)}
+        <div className="ibx-v2-profile-heading">
+          <div className="ibx-v2-profile-avatar">{initials(selected.name)}</div>
+          <div className="ibx-v2-profile-name">
+            <strong>{selected.name}</strong>
+            <span>{selected.leadCreationChannel.replaceAll("_", " ")} enquiry</span>
           </div>
-          <div className="min-w-0">
-            <div className="truncate text-[14px] font-semibold text-copy-strong">
-              {selected.name}
-            </div>
-            <div className="mt-0.5 text-[11px] capitalize text-copy-muted">
-              {selected.leadCreationChannel.replaceAll("_", " ")} inquiry
-            </div>
-          </div>
+          <Link href={`/leads/${selected.id}`} aria-label="Open customer profile" title="Open customer profile" className="ibx-v2-profile-link">
+            <ArrowUpRight size={16}/>
+          </Link>
         </div>
+        {hasTelephoneContact && selected.phone ? <a className="ibx-v2-profile-phone" href={`tel:${selected.phone.replace(/[^\\d+]/g, "")}`}>
+          <UserRound size={13}/> {selected.phone}
+        </a> : <span className="ibx-v2-profile-no-phone">Phone contact unavailable</span>}
       </section>
 
       <section className="ibx-v2-lead-overview border-b border-line px-4 py-4">
         <SectionHeading>Lead overview</SectionHeading>
         <dl className="mt-3 divide-y divide-line/70">
+          <ContextLine label="Stage" value={selected.stage.replaceAll("_", " ")} />
           <ContextLine label="Owner" value={selected.ownerName || "Unassigned"} />
           <ContextLine label="Country" value={selected.country || "Not recorded"} />
           <ContextLine label="Course" value={selected.course || "Not selected"} />
@@ -395,6 +397,7 @@ export default async function ConversationsPage({
 
       <section id="inbox-next-steps" className="ibx-v2-next-step-card border-b border-line px-3.5 py-4">
         <ConversationIntelligencePanel
+          compact
           leadId={selected.id}
           stage={selected.stage}
           priority={selectedSummary?.priority ?? "normal"}
@@ -405,7 +408,10 @@ export default async function ConversationsPage({
       </section>
 
 
-      <div id="inbox-assignment" className="ibx-v2-assignment-card">
+      <InboxQuickActions phone={selected.phone} canCall={Boolean(hasTelephoneContact)}
+        canAssign={team.canManageAssignments} profileHref={`/leads/${selected.id}`}/>
+      <details id="inbox-assignment" className="ibx-v2-assignment-card ibx-v2-advanced-panel">
+        <summary>Team & ownership <ChevronDown size={14}/></summary>
         <ConversationTeamControls
         leadId={selected.id}
         ownerUserId={selected.ownerUserId}
@@ -414,7 +420,7 @@ export default async function ConversationsPage({
         canManageAssignments={team.canManageAssignments}
         assignmentCandidates={team.assignmentCandidates}
       />
-      </div>
+      </details>
 
       {leadContextAction ? (
         <section className="border-b border-line px-4 py-4">
@@ -469,23 +475,7 @@ export default async function ConversationsPage({
         </section>
       ) : null}
 
-      <section className="px-4 py-4">
-        <SectionHeading>Quick actions</SectionHeading>
-        <div className="mt-3 grid gap-2">
-          <Link
-            href={`/leads/${selected.id}`}
-            className="flex items-center justify-between rounded-ui border border-line bg-surface px-3 py-2.5 text-[12px] font-semibold text-copy-muted transition hover:bg-brand-50 hover:text-brand-700"
-          >
-            Open lead profile <ArrowUpRight size={13} />
-          </Link>
-          <Link
-            href="/follow-ups"
-            className="flex items-center justify-between rounded-ui border border-line bg-surface px-3 py-2.5 text-[12px] font-semibold text-copy-muted transition hover:bg-brand-50 hover:text-brand-700"
-          >
-            Follow-up queue <CalendarClock size={13} />
-          </Link>
-        </div>
-      </section>
+
     </div>
   ) : null;
 
