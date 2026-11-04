@@ -76,24 +76,60 @@ const valid = validateImportRow({
 assert.equal(valid.error, null);
 assert.deepEqual(Array.from(importIdentityKeys(valid.row)), ["email:ana@example.com", "phone:+15552345678"]);
 
+// Regression: the internal can_manage_sales_workspace RPC was intentionally
+// revoked for authenticated sessions. UI / routes must never call it directly.
+const policyExports = {};
+const compiledPolicy = ts.transpileModule(
+  readFileSync("lib/leads-transfer-policy.ts", "utf8"),
+  { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } },
+).outputText;
+runInContext(compiledPolicy, createContext({ exports: policyExports }));
+const { canManageLeadsTransferForWorkspace } = policyExports;
+const base = {
+  expectedOrganizationId: "org-a",
+  activeOrganizationId: "org-a",
+  organizationRole: "admin",
+  workspaceCodes: ["sales", "education"],
+  salesMembershipRole: null,
+};
+assert.equal(canManageLeadsTransferForWorkspace(base), true);
+assert.equal(canManageLeadsTransferForWorkspace({ ...base, organizationRole: "owner" }), true);
+assert.equal(canManageLeadsTransferForWorkspace({ ...base, organizationRole: "member", salesMembershipRole: "manager" }), true);
+assert.equal(canManageLeadsTransferForWorkspace({ ...base, activeOrganizationId: "org-b" }), false);
+assert.equal(canManageLeadsTransferForWorkspace({ ...base, workspaceCodes: ["education"] }), false);
+assert.equal(canManageLeadsTransferForWorkspace({ ...base, organizationRole: "member", salesMembershipRole: "member" }), false);
+assert.equal(canManageLeadsTransferForWorkspace({ ...base, organizationRole: "member", salesMembershipRole: null }), false);
+assert.equal(canManageLeadsTransferForWorkspace({ ...base, organizationRole: "viewer", salesMembershipRole: "manager", workspaceCodes: [] }), false);
+
 const route = readFileSync("app/api/leads/import/route.ts", "utf8");
 const exportRoute = readFileSync("app/api/leads/export/route.ts", "utf8");
+const importPage = readFileSync("app/leads/import/page.tsx", "utf8");
+const leadsPage = readFileSync("app/leads/page.tsx", "utf8");
+const helper = readFileSync("lib/leads-transfer-permissions.ts", "utf8");
 const header = readFileSync("components/leads/leads-header-actions.tsx", "utf8");
-assert.ok(route.includes("can_manage_sales_workspace"));
+for (const code of [route, exportRoute, importPage, leadsPage]) {
+  assert.ok(code.includes("getLeadsTransferPermissions"));
+  assert.ok(!code.includes('rpc("can_manage_sales_workspace"'));
+  assert.ok(!code.includes("createAdminClient"));
+}
+assert.ok(helper.includes('rpc("get_current_workspace_context_v1")'));
+assert.ok(helper.includes('.from("workspace_memberships")'));
+assert.ok(helper.includes('.eq("user_id", userId)'));
+assert.ok(helper.includes('.eq("organization_id", expectedOrganizationId)'));
+assert.ok(helper.includes('rpc("can_view_lead_pii")'));
+assert.ok(!helper.includes('rpc("can_manage_sales_workspace"'));
 assert.ok(route.includes("requireCurrentOrganizationId"));
 assert.ok(route.includes("create_crm_lead"));
-assert.ok(!route.includes("createAdminClient"));
+assert.ok(route.includes("!permissions.canImport"));
 assert.ok(exportRoute.includes("getLeadsWorkspacePageWithAttributionScope"));
-assert.ok(exportRoute.includes("can_manage_sales_workspace"));
+assert.ok(exportRoute.includes("permissions.canExportContacts"));
 assert.ok(exportRoute.includes("private, no-store"));
 assert.ok(exportRoute.includes("exportContactCells(lead, canViewContacts)"));
-assert.ok(exportRoute.includes("!contactAccessError && contactGrant === true"));
 assert.ok(!exportRoute.includes("Contact-data permission is required to export leads."));
-assert.ok(!exportRoute.includes("createAdminClient"));
 assert.ok(header.includes('href="/leads/import"'));
 assert.ok(header.includes("const exportEnabled = canExport && !mock"));
 assert.ok(header.includes("const importEnabled = canImport && !mock"));
-assert.ok(readFileSync("app/leads/page.tsx", "utf8").includes("canImport = canExport && canExportContacts"));
+assert.ok(leadsPage.includes("canImport = permissions.canImport"));
 assert.ok(header.indexOf("Export leads") < header.indexOf("Add lead"));
 
-console.log("PASS: CSV parsing, duplicate detection, formula neutralization, role-gated import and redacted Sales export");
+console.log("PASS: scoped Sales owner/admin/manager role transfer, CSV parser, import gating, safe redacted export and no revoked helper calls");

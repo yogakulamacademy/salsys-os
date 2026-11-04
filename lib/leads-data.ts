@@ -35,6 +35,7 @@ export type LeadsQuickView =
   | "payment_pending";
 
 export type LeadsSortMode =
+  | "created_desc"
   | "name"
   | "stage_age_desc"
   | "followup_asc";
@@ -108,6 +109,7 @@ const QUICK_VIEWS =
 
 const SORT_MODES =
   new Set<LeadsSortMode>([
+    "created_desc",
     "name",
     "stage_age_desc",
     "followup_asc",
@@ -120,7 +122,7 @@ export function parseLeadsWorkspaceParams(
     one(params.view) || "all";
 
   const sortRaw =
-    one(params.sort) || "stage_age_desc";
+    one(params.sort) || "created_desc";
 
   const pageRaw =
     Number(one(params.page) || 1);
@@ -144,7 +146,7 @@ export function parseLeadsWorkspaceParams(
         sortRaw as LeadsSortMode,
       )
         ? (sortRaw as LeadsSortMode)
-        : "stage_age_desc",
+        : "created_desc",
     page:
       Number.isFinite(pageRaw) &&
       pageRaw > 0
@@ -655,6 +657,17 @@ function buildWorkspacePageFromRows(
             b.lead.nextFollowupAt,
           )
         );
+      }
+
+      if (
+        filters.sort ===
+        "created_desc"
+      ) {
+        const aTime = Date.parse(a.lead.createdAt);
+        const bTime = Date.parse(b.lead.createdAt);
+        if (!Number.isFinite(aTime)) return 1;
+        if (!Number.isFinite(bTime)) return -1;
+        return bTime - aTime || b.lead.id.localeCompare(a.lead.id);
       }
 
       return (

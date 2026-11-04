@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 
 import { createClient } from "@/lib/supabase/server";
 import { requireCurrentOrganizationId } from "@/lib/workspace";
+import { getLeadsTransferPermissions } from "@/lib/leads-transfer-permissions";
 import { useMockData } from "@/lib/config";
 import {
   importIdentityKeys,
@@ -97,15 +98,11 @@ export async function POST(request: NextRequest) {
     return json({ error: "Active workspace is not available." }, 403);
   }
 
-  const { data: canManage, error: accessError } = await supabase.rpc(
-    "can_manage_sales_workspace",
-    { p_organization_id: organizationId },
-  );
-  if (accessError || canManage !== true) {
+  const permissions = await getLeadsTransferPermissions(supabase, user.id, organizationId);
+  if (!permissions.canExport) {
     return json({ error: "Sales management access is required to import leads." }, 403);
   }
-  const { data: canViewContacts, error: contactAccessError } = await supabase.rpc("can_view_lead_pii");
-  if (contactAccessError || canViewContacts !== true) {
+  if (!permissions.canImport) {
     return json({ error: "Contact-data permission is required to import leads safely." }, 403);
   }
 

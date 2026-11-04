@@ -175,8 +175,17 @@ test('Leads overview renders real summary and responsive controls', async ({ pag
   await expect(page.getByRole('columnheader', { name: 'Course' })).toHaveCount(0);
   await expect(page.getByTestId('lead-source-icon').first()).toBeVisible();
   await expect(page.getByRole('columnheader', { name: 'Attention' })).toHaveCount(0);
+  await expect(page.getByText('newest leads first')).toBeVisible();
   await page.getByRole('button', { name: 'More filters' }).click();
   await expect(page.getByText('Sort', { exact: true })).toBeVisible();
+  const sort = page.getByRole('combobox', { name: 'Sort' });
+  await expect(sort).toHaveValue('created_desc');
+  await sort.selectOption('stage_age_desc');
+  await expect(page).toHaveURL(/sort=stage_age_desc/);
+  await expect(page.getByText('highest stage age first')).toBeVisible();
+  await sort.selectOption('created_desc');
+  await expect(page).not.toHaveURL(/sort=stage_age_desc/);
+  await expect(page.getByText('newest leads first')).toBeVisible();
   for (const width of [390, 768, 1440]) {
     await page.setViewportSize({ width, height: 900 });
     await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);

@@ -14,6 +14,7 @@ import { getLeadsTableEvidence } from "@/lib/leads-table-evidence";
 import { isMockMode } from "@/lib/data";
 import { createClient } from "@/lib/supabase/server";
 import { requireCurrentOrganizationId } from "@/lib/workspace";
+import { getLeadsTransferPermissions } from "@/lib/leads-transfer-permissions";
 import styles from "./leads.module.css";
 
 type LeadsPageProps = {
@@ -54,15 +55,10 @@ export default async function LeadsPage({ searchParams }: LeadsPageProps) {
       const { data: { user }, error: authError } = await supabase.auth.getUser();
       if (!authError && user) {
         const orgId = await requireCurrentOrganizationId(supabase, user.id);
-        const [permission, contactPermission] = await Promise.all([
-          supabase.rpc("can_manage_sales_workspace", { p_organization_id: orgId }),
-          supabase.rpc("can_view_lead_pii"),
-        ]);
-        // A Sales manager may export their authorized CRM view even when the
-        // separate global PII grant is missing. Import still needs both.
-        canExport = !permission.error && permission.data === true;
-        canExportContacts = !contactPermission.error && contactPermission.data === true;
-        canImport = canExport && canExportContacts;
+        const permissions = await getLeadsTransferPermissions(supabase, user.id, orgId);
+        canExport = permissions.canExport;
+        canExportContacts = permissions.canExportContacts;
+        canImport = permissions.canImport;
       }
     } catch {
       // Fail closed: existing Leads browsing remains available.
