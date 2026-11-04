@@ -45,7 +45,8 @@ export function hasUnverifiedCommercialClaim(value: string): boolean {
       // "Payment not received" and "No confirmed booking" are not positive
       // settlement assertions. This limited lexical exception does not
       // establish that a negative claim is factually true.
-      const prefix = value.slice(Math.max(0, match.index - 12), match.index);
+      const matchStart = match.index ?? 0;
+      const prefix = value.slice(Math.max(0, matchStart - 12), matchStart);
       if (NEGATED_STATEMENT.test(prefix + match[0])) continue;
       return true;
     }
