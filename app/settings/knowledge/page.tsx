@@ -10,6 +10,7 @@ import {
   createKnowledgeDocumentAction,
 } from '@/app/settings/knowledge/actions';
 import { PageHeader } from '@/components/ui';
+import type { ReactNode } from 'react';
 import './knowledge-workspace.css';
 import { KnowledgeRetrievalPreview } from '@/components/knowledge-retrieval-preview';
 import { getSupabasePublicConfig, useMockData } from '@/lib/config';
@@ -76,18 +77,6 @@ function pretty(value: string) {
   return value
     .replaceAll('_', ' ')
     .replace(/\b\w/g, (letter) => letter.toUpperCase());
-}
-
-function statusClass(status: KnowledgeDocument['status']) {
-  if (status === 'approved') {
-    return 'bg-emerald-50 text-emerald-700 ring-emerald-200';
-  }
-
-  if (status === 'draft' || status === 'review') {
-    return 'bg-amber-50 text-amber-700 ring-amber-200';
-  }
-
-  return 'bg-slate-100 text-slate-600 ring-slate-200';
 }
 
 function validityLabel(document: KnowledgeDocument) {
@@ -186,11 +175,6 @@ export default async function KnowledgeSettingsPage({
   const approved = documents.filter((document) => document.status === 'approved').length;
   const drafts = documents.filter(
     (document) => document.status === 'draft' || document.status === 'review',
-  ).length;
-  const archived = documents.filter((document) => document.status === 'archived').length;
-  const sourceBacked = documents.filter((document) => Boolean(document.source_id)).length;
-  const approvedNeedingSourceReview = documents.filter(
-    (document) => document.status === 'approved' && !document.source_id,
   ).length;
 
 
@@ -425,7 +409,7 @@ export default async function KnowledgeSettingsPage({
 }
 
 function Metric({ icon, value, title, hint }: {
-  icon: React.ReactNode; value: string; title: string; hint: string;
+  icon: ReactNode; value: string; title: string; hint: string;
 }) {
   return <div className="kn-metric">
     <span className="kn-metric-icon">{icon}</span>
