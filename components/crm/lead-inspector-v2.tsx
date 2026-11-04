@@ -667,27 +667,77 @@ function OverviewTab({
     .filter(Boolean)
     .join(", ");
 
+  const lastInbound = latestMessage(lead.lastMessages ?? []);
+  const potential = lead.potentialValue ?? lead.value;
+  const potentialCurrency = lead.potentialCurrency ?? lead.currency;
+  const pendingTasks = payload.availability.openTasks === "unavailable" ? "Unavailable" : String(openTasks.length);
+
   return (
     <>
-      <DecisionStrip payload={payload} />
+      <section className="si3-ai-card" aria-label="AI reply assistant">
+        <span className="si3-icon si3-icon-large"><Sparkles size={19} /></span>
+        <div className="si3-ai-copy">
+          <h3>AI reply assistant</h3>
+          <p>{lastInbound?.direction === "inbound"
+            ? "The latest recorded message is from this lead. Open the conversation to review context and prepare a reply."
+            : "Open the conversation to review the latest context and prepare an AI-assisted reply."}</p>
+          <span className="si3-ai-note">Review before sending · No automatic message</span>
+        </div>
+        <Link className="si3-primary" href={`/conversations?lead=${encodeURIComponent(lead.id)}`}>Draft reply <ArrowRight size={13} /></Link>
+      </section>
+
       <FocusCard payload={payload} focus={focus} onSchedule={onToggleFollowup} />
+      <InspectorStageTracker stage={lead.stage} />
 
-      <SmartFollowupComposer
-        payload={payload}
-        presets={presets}
-        open={followupOpen}
-        title={followupTitle}
-        dueAt={followupDueAt}
-        description={followupDescription}
-        loading={actionLoading}
-        onPreset={onPreset}
-        onToggle={onToggleFollowup}
-        onTitleChange={onTitleChange}
-        onDueChange={onDueChange}
-        onDescriptionChange={onDescriptionChange}
-        onSubmit={onSubmit}
-      />
+      <div className="si3-card-grid">
+        <InspectorSummaryCard icon={<Target size={16}/>} title="Lead summary">
+          <InspectorField label="Course" value={lead.course || "Not selected"} />
+          <InspectorField label="Location" value={lead.preferredLocation || lead.location || "Not selected"} />
+          <InspectorField label="Preferred month" value={lead.preferredMonth || "Not recorded"} />
+          <InspectorField label="Owner" value={lead.owner || "Unassigned"} />
+          <InspectorField label="Intent" value={salesIntelligence?.derived_intent ? pretty(salesIntelligence.derived_intent) : pretty(lead.intent || "Unknown")} />
+        </InspectorSummaryCard>
+        <InspectorSummaryCard icon={<Phone size={16}/>} title="Reachability">
+          <InspectorField label="Email" value={lead.email || "Not recorded / restricted"} />
+          <InspectorField label="Phone" value={lead.phone || "Not recorded / restricted"} />
+          <InspectorField label="Channel" value={pretty(lead.currentContactChannel || "Unknown")} />
+          <InspectorField label="Last contacted" value={formatDateTime(lead.lastContactedAt)} />
+        </InspectorSummaryCard>
+        <InspectorSummaryCard icon={<Activity size={16}/>} title="Engagement">
+          <InspectorField label="Page views" value={payload.availability.person360 === "unavailable" ? "Unavailable" : numberText(person?.page_view_count)} />
+          <InspectorField label="Sessions" value={payload.availability.person360 === "unavailable" ? "Unavailable" : numberText(person?.session_count)} />
+          <InspectorField label="Touchpoints" value={payload.availability.person360 === "unavailable" ? "Unavailable" : numberText(person?.touchpoint_count)} />
+          <InspectorField label="Open follow-ups" value={pendingTasks} />
+        </InspectorSummaryCard>
+        <InspectorSummaryCard icon={<Wallet size={16}/>} title="Revenue & payments">
+          <InspectorField label="Potential value" value={potential != null && potentialCurrency ? formatMoney(potential, potentialCurrency) : "Not recorded"} />
+          <InspectorField label="Recorded paid" value={payload.availability.payments === "unavailable" ? "Unavailable" : formatCurrencyMap(recordedPaid)} />
+          <InspectorField label="Payment records" value={payload.availability.payments === "unavailable" ? "Unavailable" : String(payments.length)} />
+          <InspectorField label="Payment stage" value={pretty(salesIntelligence?.payment_status || (lead.stage === "payment_pending" ? "Payment pending" : "Not recorded"))} />
+        </InspectorSummaryCard>
+      </div>
 
+      {followupOpen ? (
+        <SmartFollowupComposer
+          payload={payload}
+          presets={presets}
+          open={followupOpen}
+          title={followupTitle}
+          dueAt={followupDueAt}
+          description={followupDescription}
+          loading={actionLoading}
+          onPreset={onPreset}
+          onToggle={onToggleFollowup}
+          onTitleChange={onTitleChange}
+          onDueChange={onDueChange}
+          onDescriptionChange={onDescriptionChange}
+          onSubmit={onSubmit}
+        />
+      ) : null}
+
+      <details className="si3-more">
+        <summary>More details <span>Follow-ups, intelligence, attribution and notes</span></summary>
+        <div className="si3-more-content">
       <Section title="Open follow-ups" eyebrow="Committed next actions">
         <AvailabilityNote
           availability={payload.availability.openTasks}
@@ -854,8 +904,43 @@ function OverviewTab({
           {lead.notes ? <TextBlock label="Internal notes" value={lead.notes} /> : null}
         </Section>
       ) : null}
+        </div>
+      </details>
     </>
   );
+}
+
+function InspectorSummaryCard({ icon, title, children }: { icon: ReactNode; title: string; children: ReactNode }) {
+  return <section className="si3-summary-card">
+    <div className="si3-card-heading"><span className="si3-icon">{icon}</span><h3>{title}</h3></div>
+    <div className="si3-card-rows">{children}</div>
+  </section>;
+}
+
+function InspectorField({ label, value }: { label: string; value: string }) {
+  return <div className="si3-field"><span>{label}</span><strong title={value}>{value}</strong></div>;
+}
+
+function InspectorStageTracker({ stage }: { stage: string }) {
+  const steps = [
+    { id: "new", title: "New" },
+    { id: "engaged", title: "Engaged" },
+    { id: "qualified", title: "Qualified" },
+    { id: "payment_pending", title: "Payment" },
+    { id: "enrolled", title: "Enrolled" },
+  ];
+  const current = stage === "contacted" ? "new" : stage === "high_intent" ? "qualified" : stage;
+  const known = steps.some(step => step.id === current);
+  return <section className="si3-stage-card" aria-label="Current lead stage">
+    <div className="si3-stage-head"><strong>Lead progress</strong><span>Current: {pretty(stage)}</span></div>
+    <ol className="si3-stage-list">
+      {steps.map(step => <li key={step.id} data-current={known && step.id === current ? "true" : undefined}>
+        <span className="si3-stage-dot" aria-hidden="true" />
+        <span>{step.title}</span>
+      </li>)}
+    </ol>
+    <p>Stages show the current CRM state, not an assumed history of completed steps.</p>
+  </section>;
 }
 
 function DecisionStrip({ payload }: { payload: InspectorPayload }) {
@@ -878,55 +963,25 @@ function DecisionStrip({ payload }: { payload: InspectorPayload }) {
   );
 }
 
-function FocusCard({
-  payload,
-  focus,
-  onSchedule,
-}: {
+function FocusCard({ payload, focus, onSchedule }: {
   payload: InspectorPayload;
   focus: LeadFocus;
   onSchedule: () => void;
 }) {
-  const toneClass =
-    focus.tone === "attention"
-      ? "border-amber-200 bg-amber-50/80"
-      : focus.tone === "opportunity"
-        ? "border-emerald-200 bg-emerald-50/70"
-        : "border-[#D9E6DD] bg-[#F4F9F5]";
-  const iconClass = focus.tone === "attention" ? "bg-amber-100 text-amber-700" : "bg-[#DDEFE3] text-[#216551]";
   const needsOwner = focus.action.toLowerCase().includes("assign") && !payload.lead.owner;
-
-  return (
-    <section className={`rounded-xl border p-4 ${toneClass}`}>
-      <div className="flex items-start gap-3">
-        <span className={`grid h-9 w-9 shrink-0 place-items-center rounded-lg ${iconClass}`}><Sparkles size={16} /></span>
-        <div className="min-w-0 flex-1">
-          <div className="text-[9px] font-bold uppercase tracking-[0.13em] text-[#74837A]">
-            {focus.source === "canonical" ? "Canonical next best action" : "Suggested focus · current evidence"}
-          </div>
-          <div className="mt-1 text-[14px] font-semibold text-[#203B31]">{focus.action}</div>
-          <div className="mt-1 text-[10px] leading-5 text-[#63756B]">{focus.detail}</div>
-        </div>
-      </div>
-      <div className="mt-3 flex flex-wrap gap-1.5">
-        {focus.reasons.map((reason) => <SmallTag key={reason}>{reason}</SmallTag>)}
-      </div>
-      <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-black/5 pt-3">
-        <Link
-          href={needsOwner ? `/leads/${payload.lead.id}/edit` : `/conversations?lead=${payload.lead.id}`}
-          className="inline-flex h-8 items-center gap-1.5 rounded-md bg-[#216551] px-3 text-[10px] font-semibold text-white hover:bg-[#174D3B]"
-        >
-          <Zap size={12} /> {needsOwner ? "Assign owner" : "Act now"}
-        </Link>
-        <button type="button" onClick={onSchedule} className="inline-flex h-8 items-center gap-1.5 rounded-md border border-[#CADBCF] bg-white px-3 text-[10px] font-semibold text-[#456158] hover:bg-[#F8FBF9]">
-          <CalendarClock size={12} /> Schedule next step
-        </button>
-        <span className="ml-auto text-[9px] text-[#849188]">
-          {focus.source === "canonical" ? "Existing intelligence · human action required" : "Presentation guidance · no automatic write"}
-        </span>
-      </div>
-    </section>
-  );
+  return <section className="si3-focus-card">
+    <div className="si3-card-heading"><span className="si3-icon"><Target size={17} /></span><h3>Next best action</h3>
+      <span className="si3-evidence-label">{focus.source === "canonical" ? "Canonical" : "CRM evidence"}</span>
+    </div>
+    <p className="si3-focus-title">{focus.action}</p>
+    <p className="si3-focus-detail">{focus.detail}</p>
+    <div className="si3-focus-actions">
+      <Link className="si3-secondary" href={needsOwner ? `/leads/${encodeURIComponent(payload.lead.id)}/edit` : `/conversations?lead=${encodeURIComponent(payload.lead.id)}`}>
+        {needsOwner ? "Review assignment" : "Open conversation"} <ArrowRight size={13}/>
+      </Link>
+      <button type="button" className="si3-secondary" onClick={onSchedule}><CalendarClock size={13}/> Schedule follow-up</button>
+    </div>
+  </section>;
 }
 
 function SmartFollowupComposer({
