@@ -2,6 +2,7 @@ import { NextRequest } from "next/server";
 
 import { createClient } from "@/lib/supabase/server";
 import { requireCurrentOrganizationId } from "@/lib/workspace";
+import { getLeadsTransferPermissions } from "@/lib/leads-transfer-permissions";
 import { useMockData } from "@/lib/config";
 import { csvRow, exportContactCells } from "@/lib/leads-transfer-csv";
 import {
@@ -44,17 +45,12 @@ export async function GET(request: NextRequest) {
     return errorResponse("Active workspace is not available.", 403);
   }
 
-  const { data: canManage, error: permissionError } = await supabase.rpc(
-    "can_manage_sales_workspace",
-    { p_organization_id: organizationId },
-  );
-  if (permissionError || canManage !== true) {
+  const permissions = await getLeadsTransferPermissions(supabase, user.id, organizationId);
+  if (!permissions.canExport) {
     return errorResponse("Sales management access is required to export leads.", 403);
   }
-  const { data: contactGrant, error: contactAccessError } = await supabase.rpc("can_view_lead_pii");
-  // Failure to verify private-data permission never blocks a safe redacted CSV,
-  // but it must prevent any contact field from being included.
-  const canViewContacts = !contactAccessError && contactGrant === true;
+  // Private contact columns remain redacted unless separately authorized.
+  const canViewContacts = permissions.canExportContacts;
 
   const params = Object.fromEntries(
     request.nextUrl.searchParams.entries(),
