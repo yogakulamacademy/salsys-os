@@ -256,7 +256,7 @@ export function ConversationCenterView({
             onClick={() => setView("activity")}
             icon={<Activity size={14} />}
           >
-            CRM activity
+            Activity
             <span className="ml-1 rounded bg-surface-muted px-1.5 py-0.5 text-[10px] font-medium text-copy-muted">
               {activityLoading ? "…" : activity.length}
             </span>
