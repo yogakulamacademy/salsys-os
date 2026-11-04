@@ -5,8 +5,8 @@
 - Reusable `components/ai-lead-insight-panel.tsx` with compact/no-brand styling.
 - Inbox lead context panel integration and a link to an authenticated
   full-page lead review at `/leads/[id]/intelligence`.
-- Insertion directly into the existing lead-profile overview is still
-  pending; do not claim that the main profile layout already contains C4.
+- The same panel is also integrated into the primary lead-profile page,
+  with the identical server-only feature-flag guards and staff permissions.
 - User-triggered Generate and Regenerate, review-required state, source
   references, uncertainty, empty/loading/error states and staff rating.
 - Source links open the permitted lead's conversation/profile. The current
@@ -42,8 +42,8 @@ Do not activate until limits have been reviewed for the target tenant.
    the standard migration promotion workflow.
 3. Verify tenant isolation using authorized and denied real sessions (no
    customer data in general logs).
-4. Finish the lead-profile UI placement and implement audit-friendly usage
-   monitoring, a documented retention schedule and spend alerts.
+4. Verify lead-profile placement in the responsive UI and implement
+   audit-friendly usage monitoring, a retention schedule and spend alerts.
 5. Perform a controlled live Claude test with permitted consent-compatible
    records; inspect factual claims and citation relevance (the validator
    checks citation authorization, not semantic truth).
@@ -76,7 +76,7 @@ Do not activate until limits have been reviewed for the target tenant.
 
 ## Remaining before Phase C closeout
 
-- Direct lead-profile layout integration (the separate full review exists), plus mobile layout checks.
+- Responsive/mobile layout and real-session UI checks on the Inbox, lead profile and separate full-review page.
 - Full CI, migration replay, browser tests, security review and controlled
   production acceptance.
 - Staff feedback operational QA, usage monitoring, budget alarms, retention
