@@ -4,7 +4,7 @@ import type { ConversationLeadSummary } from "@/components/conversations-sidebar
 import { createClient } from "@/lib/supabase/server";
 
 export type InboxSort = "created_desc" | "activity_desc";
-export type InboxScope = "team" | "mine" | "unassigned";
+export type InboxScope = "team" | "mine" | "unassigned" | `owner:${string}`;
 export type InboxFilter = "all" | "reply" | "unread" | "snoozed";
 export type InboxChannel = "all" | "website" | "instagram" | "whatsapp";
 export type InboxPriority = "all" | "urgent" | "high" | "normal" | "waiting";
@@ -34,6 +34,7 @@ export type InboxPage = {
   pageSize: number;
   totalMatching: number;
   counts: InboxPageCounts;
+  owners: Array<{id: string; name: string}>;
   sort: InboxSort;
   scope: InboxScope;
   filter: InboxFilter;
@@ -62,7 +63,10 @@ export async function getInboxPage(
     ? Math.min(Math.max(1, requestedPage), 100000)
     : 1;
   const sort = choice(query.sort, ["created_desc", "activity_desc"] as const, "created_desc");
-  const scope = choice(query.scope, ["team", "mine", "unassigned"] as const, defaultScope);
+  const scope = query.scope?.startsWith("owner:") &&
+    /^owner:[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i.test(query.scope)
+    ? query.scope.toLowerCase() as InboxScope
+    : choice(query.scope, ["team", "mine", "unassigned"] as const, defaultScope);
   const filter = choice(query.filter, ["all", "reply", "unread", "snoozed"] as const, "all");
   const channel = choice(query.channel, ["all", "website", "instagram", "whatsapp"] as const, "all");
   const priority = choice(query.priority, ["all", "urgent", "high", "normal", "waiting"] as const, "all");
@@ -91,6 +95,7 @@ export async function getInboxPage(
     page: numberOrZero(data.page) || page,
     pageSize: numberOrZero(data.pageSize) || 50,
     totalMatching: numberOrZero(data.totalMatching),
+    owners: Array.isArray(data.owners) ? data.owners.filter((owner: unknown) => Boolean(owner && typeof owner === "object" && typeof (owner as {id?: unknown}).id === "string" && typeof (owner as {name?: unknown}).name === "string")) : [],
     counts: {
       team: numberOrZero(counts.team),
       mine: numberOrZero(counts.mine),
