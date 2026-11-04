@@ -59,6 +59,23 @@ export default async function AiInsightsOperationsPage() {
         </div>
       </header>
 
+      <section aria-label="Recorded pilot approval" className="rounded-xl border border-line bg-surface p-4 sm:p-5">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <h2 className="text-sm font-semibold text-copy">Pilot release approval</h2>
+          <span className="rounded-md border border-line px-2 py-1 text-xs font-semibold capitalize text-copy-muted">
+            {status.governance.status.replaceAll('_', ' ')}
+          </span>
+        </div>
+        <p className="mt-2 text-xs leading-5 text-copy-muted">
+          {status.governance.approved
+            ? 'A current sign-off record exists for privacy, retention, provider budget and quality review. AI still requires all other activation gates.'
+            : 'Generation remains blocked by the server-side quota function until a documented, current approval is recorded by an authorized administrator.'}
+        </p>
+        <p className="mt-2 text-[11px] text-copy-muted">
+          This page is read-only and cannot create, extend, or revoke release approvals.
+        </p>
+      </section>
+
       <section aria-label="Usage statistics" className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <Stat label="Attempts today" value={String(status.usage.attemptsToday)}
           note="Counts reserved model requests, including failures."/>
