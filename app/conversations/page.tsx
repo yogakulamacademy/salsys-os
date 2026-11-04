@@ -5,6 +5,7 @@ import {
   ChevronDown,
   Clock3,
   MessageCircle,
+  Phone,
   Save,
   UserRound,
 } from "lucide-react";
@@ -20,6 +21,8 @@ import { ConversationCopilot } from "@/components/conversation-copilot";
 import { WhatsAppComposer } from "@/components/conversation-composer";
 import { ConversationIntelligencePanel } from "@/components/conversation-intelligence-panel";
 import { InboxQuickActions } from "@/components/inbox-quick-actions";
+import { InboxHeaderActions } from "@/components/inbox-header-actions";
+import { InboxLeadOverview } from "@/components/inbox-lead-overview";
 import { ConversationReadMarker } from "@/components/conversation-read-marker";
 import { ConversationSafeComposer } from "@/components/conversation-safe-composer";
 import { ConversationTeamControls } from "@/components/conversation-team-controls";
@@ -86,6 +89,15 @@ export default async function ConversationsPage({
         ? Boolean(selected.phone)
         : await resolveTelephoneCapability(selectedId)
       : false;
+
+  const selectedEmail = selected && !mock
+    ? await resolveConversationEmail(selected.id)
+    : null;
+  const conversationStatus = selectedSummary?.resolved ? "Done"
+    : selectedSummary?.needsReply ? "Needs reply"
+    : selectedSummary?.needsFirstContact ? "First contact"
+    : selectedSummary?.unread ? "Unread"
+    : "Active";
 
   const canStartWhatsApp = Boolean(
     selected &&
@@ -200,7 +212,17 @@ export default async function ConversationsPage({
                 </span>
               ) : null}
             </div>
-            <div className="mt-1 flex flex-wrap items-center gap-1.5 text-[12px] text-copy-muted">
+            <div className="ibx-v3-channel-owner">
+              <span className="capitalize">{selected.currentContactChannel.replaceAll("_"," ")}</span>
+              <span aria-hidden="true">·</span>
+              <span><UserRound size={12}/> Owner: {selected.ownerName || "Unassigned"}</span>
+            </div>
+            <div className="ibx-v3-lead-meta">
+              <span>Lead · {selectedSummary?.needsReply ? "Inbound inquiry" : "Customer inquiry"}</span>
+              <span aria-hidden="true">·</span>
+              <span>Created {formatDateTime(selected.createdAt)}</span>
+            </div>
+            <div className="ibx-v3-header-secondary">
               <span className="capitalize">
                 {selected.leadCreationChannel.replaceAll("_", " ")} inquiry
               </span>
@@ -219,10 +241,10 @@ export default async function ConversationsPage({
             </div>
           </div>
         </div>
-        <div className="ibx-v2-header-actions" aria-label="Conversation actions">
-          <Link href="/follow-ups" className="ibx-v2-header-action"><CalendarClock size={14}/> Next steps</Link>
-          <Link href={`/leads/${selected.id}`} className="ibx-v2-header-action">Open profile <ArrowUpRight size={13}/></Link>
-        </div>
+        <InboxHeaderActions leadId={selected.id}
+          resolved={Boolean(selectedSummary?.resolved)}
+          canResolve={workspace.evidence.inboxResolutionAvailable} mock={mock}/>
+
       </header>
 
       <ConversationCenterView
@@ -342,59 +364,29 @@ export default async function ConversationsPage({
           <div className="ibx-v2-profile-avatar">{initials(selected.name)}</div>
           <div className="ibx-v2-profile-name">
             <strong>{selected.name}</strong>
-            <span>{selected.leadCreationChannel.replaceAll("_", " ")} enquiry</span>
+            <span className="ibx-v3-profile-email">
+              {selectedEmail ? <a href={`mailto:${selectedEmail}`}>{selectedEmail}</a> : "Email not recorded / unavailable"}
+            </span>
           </div>
-          <Link href={`/leads/${selected.id}`} aria-label="Open customer profile" title="Open customer profile" className="ibx-v2-profile-link">
+          <Link href={`/leads/${selected.id}`} aria-label="Open customer profile"
+            title="Open customer profile" className="ibx-v2-profile-link">
             <ArrowUpRight size={16}/>
           </Link>
         </div>
-        {hasTelephoneContact && selected.phone ? <a className="ibx-v2-profile-phone" href={`tel:${selected.phone.replace(/[^0-9+]/g, "")}`}>
-          <UserRound size={13}/> {selected.phone}
-        </a> : <span className="ibx-v2-profile-no-phone">Phone contact unavailable</span>}
+        {hasTelephoneContact && selected.phone ?
+          <a className="ibx-v2-profile-phone" href={`tel:${selected.phone.replace(/[^0-9+]/g,"")}`}>
+            <Phone size={13}/> {selected.phone}
+          </a> :
+          <span className="ibx-v2-profile-no-phone">Phone contact unavailable</span>}
       </section>
-
-      <section className="ibx-v2-lead-overview border-b border-line px-4 py-4">
-        <SectionHeading>Lead overview</SectionHeading>
-        <dl className="mt-3 divide-y divide-line/70">
-          <ContextLine label="Stage" value={selected.stage.replaceAll("_", " ")} />
-          <ContextLine label="Owner" value={selected.ownerName || "Unassigned"} />
-          <ContextLine label="Country" value={selected.country || "Not recorded"} />
-          <ContextLine label="Course" value={selected.course || "Not selected"} />
-          <ContextLine
-            label="Lead creation"
-            value={selected.leadCreationChannel.replaceAll("_", " ")}
-          />
-          <ContextLine
-            label="Current channel"
-            value={selected.currentContactChannel.replaceAll("_", " ")}
-          />
-          {selected.leadCreationChannel === "website" && hasTelephoneContact ? (
-            <ContextLine
-              label="WhatsApp"
-              value={
-                selected.currentContactChannel === "whatsapp"
-                  ? "Connected"
-                  : "Available via approved template"
-              }
-            />
-          ) : null}
-          {messagingEligibility ? (
-            <ContextLine
-              label="Messaging"
-              value={messagingEligibility.replyMode.replaceAll("_", " ")}
-            />
-          ) : null}
-          <ContextLine
-            label="Last contacted"
-            value={
-              selected.lastContactedAt
-                ? formatDateTime(selected.lastContactedAt)
-                : "Not contacted"
-            }
-          />
-        </dl>
-      </section>
-
+      <InboxLeadOverview leadId={selected.id} stage={selected.stage}
+        ownerUserId={selected.ownerUserId} ownerName={selected.ownerName}
+        candidates={team.assignmentCandidates} canAssign={team.canManageAssignments}
+        mock={mock} channel={selected.currentContactChannel}
+        source={selected.leadCreationChannel} interest={selected.course}
+        country={selected.country}
+        lastContacted={selected.lastContactedAt?formatDateTime(selected.lastContactedAt):"Not contacted"}
+        state={conversationStatus}/>
 
       <section id="inbox-next-steps" className="ibx-v2-next-step-card border-b border-line px-3.5 py-4">
         <ConversationIntelligencePanel
@@ -518,6 +510,16 @@ export default async function ConversationsPage({
       />
     </div>
   );
+}
+
+async function resolveConversationEmail(leadId:string):Promise<string|null> {
+  const supabase=await createClient();
+  const {data,error}=await supabase.rpc('get_admissions_lead_contacts_secure',{
+    p_lead_ids:[leadId],
+  });
+  if(error||!Array.isArray(data)) return null;
+  const row=data.find(value=>value?.lead_id===leadId) as {email?:string|null}|undefined;
+  return row?.email||null;
 }
 
 async function resolveTelephoneCapability(leadId: string) {
