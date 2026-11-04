@@ -44,6 +44,10 @@
       "schedule": "*/10 * * * *"
     },
     {
+      "path": "/api/instagram/history-sync",
+      "schedule": "*/15 * * * *"
+    },
+    {
       "path": "/api/ad-activation/meta/runner",
       "schedule": "*/5 * * * *"
     },
