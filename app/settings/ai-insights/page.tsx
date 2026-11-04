@@ -74,6 +74,12 @@ export default async function AiInsightsOperationsPage() {
         <p className="mt-2 text-[11px] text-copy-muted">
           This page is read-only and cannot create, extend, or revoke release approvals.
         </p>
+        {status.canPrepareEvidence ? (
+          <Link href="/settings/ai-insights/evidence"
+            className="mt-3 inline-flex text-xs font-semibold text-copy underline underline-offset-2">
+            Prepare evidence references (draft only)
+          </Link>
+        ) : null}
       </section>
 
       <section aria-label="Usage statistics" className="grid grid-cols-2 gap-3 lg:grid-cols-4">
