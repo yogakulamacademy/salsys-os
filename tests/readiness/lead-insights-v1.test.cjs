@@ -146,6 +146,7 @@ function setupAction(options = {}) {
       },
     },
     '@/lib/ai/lead-insight-validation': validator,
+    '@/lib/ai/lead-insight-feedback': { recordLeadInsightRun: async () => null },
   }).generateLeadInsightsAction;
 
   return {
@@ -214,7 +215,7 @@ test('invalid model citation and incomplete API response never produce an insigh
   }
 });
 
-test('C2 remains strictly read-only with no send or CRM mutation surface', () => {
+test('C2 has no direct CRM mutations or automatic send; C3 can record review metadata only', () => {
   const source = readFileSync('app/leads/insights-actions.ts', 'utf8');
   assert.doesNotMatch(source, /\.insert\(|\.update\(|\.upsert\(|\.delete\(|sendWhatsApp|sendInstagram|scheduleFollowup/i);
   assert.match(source, /getLeadContextV1\(leadId, 'staff_insight'\)/);
