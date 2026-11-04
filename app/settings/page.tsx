@@ -1,29 +1,13 @@
+import Link from 'next/link';
 import {
-  Activity,
-  AlertTriangle,
-  BarChart3,
-  CheckCircle2,
-  CircleDashed,
-  Clock3,
-  Database,
-  History,
-  Instagram,
-  KeyRound,
-  MessageCircle,
-  Save,
-  Settings2,
-  ShieldCheck,
-  Tags,
-  UserCog,
-  Webhook,
+  Activity, AlertTriangle, ArrowRight, BarChart3, CheckCircle2, CircleDashed,
+  Clock3, Database, History, Instagram, KeyRound, Layers3, MessageCircle,
+  Settings2, ShieldCheck, Sparkles, Tags, UserCog, Webhook,
 } from 'lucide-react';
 import type { ReactNode } from 'react';
-
-import {
-  updateForecastProbabilityAction,
-  updatePipelineAgingRuleAction,
-} from '@/app/settings/actions';
-import { PageHeader, StatCard } from '@/components/ui';
+import { CrmRuleEditor } from './crm-rule-editor';
+import './crm-rules.css';
+import { PageHeader } from '@/components/ui';
 import { getSupabasePublicConfig, useMockData } from '@/lib/config';
 import { getWhatsAppRuntimeForOrganization } from '@/lib/integrations/whatsapp-connection';
 import { createClient } from '@/lib/supabase/server';
@@ -160,274 +144,195 @@ export default async function SettingsPage({
   const instagramReady =
     live && providerVisibility.available && providerVisibility.instagramConnected;
 
+  const workspace = await getCurrentWorkspaceContext();
+  const role = workspace.activeWorkspace?.role ?? null;
+  const admin = role === 'owner' || role === 'admin';
+  const alerts: { text:string; description:string; href:string }[] = [];
+  if (source === 'unavailable') {
+    alerts.push({
+      text:'Review CRM settings read',
+      description:'Forecast and aging rules could not be verified.',
+      href:'/system-health',
+    });
+  } else if (source === 'database' && !agingReady) {
+    alerts.push({text:'Review aging schema',description:'Aging rule storage could not be verified.',href:'/settings'});
+  } else if (source === 'database' && agingReady && agingRows.length === 0) {
+    alerts.push({text:'Review aging rules',description:'No aging thresholds are recorded for this workspace.',href:'/settings'});
+  }
+  if (providerVisibility.error && live) {
+    alerts.push({text:'Review provider status',description:'Messaging connection visibility is unavailable.',href:'/settings/integrations'});
+  } else if (live && whatsappConnection.status.includes('runtime unavailable')) {
+    alerts.push({text:'Review WhatsApp runtime',description:'Provider connection exists but the runtime is not verified.',href:'/settings/integrations'});
+  }
+  const suggestions = source === 'unavailable' ? [
+    'Review tenant settings read availability',
+    'Confirm workspace selection and access',
+  ] : [
+    ...(source === 'database' && (!agingReady || agingRows.length === 0) ? ['Verify pipeline aging thresholds'] : []),
+    ...(providerVisibility.error && live ? ['Investigate messaging provider visibility'] : []),
+    ...(!canManage ? ['Request settings access from an administrator'] : []),
+  ];
+  const showAudit = !auditError && audit.length > 0;
+  const savedKey = query.notice || 'loaded';
+
   return (
-    <>
-      <PageHeader
-        eyebrow="Configuration"
-        title="Settings & integrations"
-        description="Manage the CRM rules that directly affect forecasting and pipeline operations, while keeping environment and integration configuration visible without exposing secrets."
+    <section className="cr space-y-4" aria-label="CRM Rules configuration">
+      <PageHeader eyebrow="Configuration" title="CRM Rules"
+        description="Manage your pipeline, forecast weights, aging thresholds and operational configuration."
       />
 
-      {query.notice ? (
-        <Notice tone="success" text={query.notice} />
-      ) : null}
-      {query.error ? <Notice tone="error" text={query.error} /> : null}
-      {settingsError ? (
-        <Notice
-          tone="warning"
-          text={`Live Settings data could not be verified: ${settingsError}. Tenant forecast and aging values are hidden rather than replaced with defaults.`}
-        />
-      ) : null}
-      {providerVisibility.error && live ? (
-        <Notice
-          tone="warning"
-          text={`Provider visibility could not be verified: ${providerVisibility.error}. Messaging connection state is shown as unavailable rather than guessed.`}
-        />
-      ) : null}
+      {query.notice ? <Notice tone="success" text={query.notice}/> : null}
+      {query.error ? <Notice tone="error" text={query.error}/> : null}
+      {settingsError ? <Notice tone="warning"
+        text={'Live Settings data could not be verified: '+settingsError+'. Tenant forecast and aging values are hidden rather than replaced with defaults. Live forecast probabilities could not be verified, so no fallback values are presented as tenant configuration. Live pipeline-aging rules could not be verified. No thresholds are inferred from fallback defaults.'}/> : null}
+      {providerVisibility.error && live ? <Notice tone="warning"
+        text={'Provider visibility could not be verified: '+providerVisibility.error+'. Messaging connection state is shown as unavailable rather than guessed.'}/> : null}
 
-      <div className="settings-stat-grid grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-        <StatCard
-          label="CRM environment"
-          value={live ? 'Live' : configured ? 'Mock' : 'Setup'}
-          note={
-            live
-              ? 'Supabase persistence active'
-              : useMockData
-                ? 'Mock dataset is active'
-                : 'Environment values required'
-          }
-          icon={<Database size={18} />}
-        />
-        <StatCard
-          label="Forecast stages"
-          value={settingsAvailable ? forecastRows.length.toLocaleString() : '—'}
-          note={
-            source === 'database'
-              ? 'Database-backed stage probabilities'
-              : source === 'reference'
-                ? 'Reference defaults only · not tenant data'
-                : 'Live stage settings unavailable'
-          }
-          icon={<BarChart3 size={18} />}
-        />
-        <StatCard
-          label="Aging rules"
-          value={settingsAvailable ? agingRows.length.toLocaleString() : '—'}
-          note={
-            source === 'unavailable'
-              ? 'Live aging settings unavailable'
-              : agingReady
-                ? 'Pipeline thresholds detected'
-                : source === 'reference'
-                  ? 'Not available in reference mode'
-                  : 'Schema needs review'
-          }
-          icon={<Clock3 size={18} />}
-        />
-        <StatCard
-          label="Settings access"
-          value={canManage ? 'Manage' : 'Read only'}
-          note={canManage ? 'Owner / Admin / Manager permissions' : 'Changes are restricted'}
-          icon={<UserCog size={18} />}
-        />
-      </div>
-
-      <div className="mt-4 grid gap-4 xl:grid-cols-[1.08fr_.92fr]">
-        <section className="settings-config-card settings-forecast-card card overflow-hidden">
-          <div className="border-b border-slate-100 p-5">
-            <div className="flex items-start justify-between gap-4">
-              <div>
-                <div className="eyebrow">Revenue forecast</div>
-                <div className="section-title mt-1">Stage probabilities</div>
-                <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-500">
-                  These probabilities are configuration values used by the weighted Revenue Forecast. They are not historical conversion-rate claims.
-                </p>
-                {source === 'reference' ? (
-                  <p className="mt-2 text-xs font-semibold text-amber-700">
-                    Reference defaults are shown because mock/setup mode is active. They are not saved tenant settings.
-                  </p>
-                ) : null}
-              </div>
-              <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-brand/10 text-brand">
-                <BarChart3 size={18} />
-              </span>
-            </div>
-          </div>
-
-          {source === 'unavailable' ? (
-            <UnavailableBlock text="Live forecast probabilities could not be verified, so no fallback values are presented as tenant configuration." />
-          ) : (
-            <div className="divide-y divide-slate-100">
-              {forecastRows.length ? (
-                forecastRows.map((row) => (
-                  <form
-                    key={row.stage}
-                    action={updateForecastProbabilityAction}
-                    className="settings-forecast-row grid gap-3 px-5 py-4 md:grid-cols-[minmax(0,1fr)_150px_auto] md:items-center"
-                  >
-                    <input type="hidden" name="stage" value={row.stage} />
-                    <div>
-                      <div className="text-sm font-semibold text-slate-800">{pretty(row.stage)}</div>
-                      <div className="mt-1 text-xs text-slate-400">
-                        {source === 'database'
-                          ? 'Weighted pipeline value uses this configured probability.'
-                          : 'Reference default only; saving is disabled.'}
-                      </div>
-                    </div>
-                    <label className="relative">
-                      <input
-                        name="probability_percent"
-                        type="number"
-                        min="0"
-                        max="100"
-                        step="0.5"
-                        defaultValue={cleanNumber(row.probability_percent)}
-                        disabled={!canManage}
-                        className="input w-full pr-9 disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-400"
-                      />
-                      <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-xs font-semibold text-slate-400">%</span>
-                    </label>
-                    <button type="submit" disabled={!canManage} className="btn-secondary justify-center disabled:cursor-not-allowed disabled:opacity-40">
-                      <Save size={14} /> Save
-                    </button>
-                  </form>
-                ))
-              ) : (
-                <UnavailableBlock text="No forecast-stage configuration is recorded for this workspace." />
-              )}
-            </div>
-          )}
-        </section>
-
-        <section className="settings-config-card settings-aging-card card overflow-hidden">
-          <div className="border-b border-slate-100 p-5">
-            <div className="flex items-start justify-between gap-4">
-              <div>
-                <div className="eyebrow">Pipeline</div>
-                <div className="section-title mt-1">Aging thresholds</div>
-                <p className="mt-2 text-sm leading-6 text-slate-500">
-                  Set when a lead should become a warning and when it should be considered stuck in its current stage.
-                </p>
-              </div>
-              <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-amber-50 text-amber-700">
-                <Clock3 size={18} />
-              </span>
-            </div>
-            {agingReady ? (
-              <div className="settings-schema-note mt-4 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-[10px] leading-5 text-slate-500">
-                UI unit: hours · Database warning unit: {settings.pipeline_aging_schema.warning_unit ?? 'detected automatically'} · Database stuck unit: {settings.pipeline_aging_schema.stuck_unit ?? 'detected automatically'}
-              </div>
-            ) : null}
-          </div>
-
-          {source === 'unavailable' ? (
-            <UnavailableBlock text="Live pipeline-aging rules could not be verified. No thresholds are inferred from fallback defaults." />
-          ) : !agingReady ? (
-            <div className="p-5">
-              <div className="settings-aging-warning rounded-xl border border-amber-100 bg-amber-50 p-4">
-                <div className="flex items-center gap-2 text-sm font-semibold text-amber-800"><AlertTriangle size={16} /> Aging schema not detected</div>
-                <p className="mt-2 text-xs leading-5 text-amber-700">
-                  Pipeline data has not been changed. Aging controls remain unavailable until the working schema can be verified.
-                </p>
-              </div>
-            </div>
-          ) : (
-            <div className="divide-y divide-slate-100">
-              {agingRows.map((row) => (
-                <form key={row.stage} action={updatePipelineAgingRuleAction} className="settings-aging-row px-5 py-4">
-                  <input type="hidden" name="stage" value={row.stage} />
-                  <div className="mb-3 flex items-center justify-between gap-3">
-                    <div>
-                      <div className="text-sm font-semibold text-slate-800">{pretty(row.stage)}</div>
-                      <div className="mt-0.5 text-[10px] text-slate-400">{formatHours(row.warning_hours)} warning · {formatHours(row.stuck_hours)} stuck</div>
-                    </div>
-                    <button type="submit" disabled={!canManage} className="btn-secondary disabled:cursor-not-allowed disabled:opacity-40"><Save size={14} /> Save</button>
-                  </div>
-                  <div className="grid gap-3 sm:grid-cols-2">
-                    <NumberField label="Warning after" name="warning_hours" value={row.warning_hours} disabled={!canManage} />
-                    <NumberField label="Stuck after" name="stuck_hours" value={row.stuck_hours} disabled={!canManage} />
-                  </div>
-                </form>
-              ))}
-            </div>
-          )}
-        </section>
-      </div>
-
-      <div className="mt-4 grid gap-4 xl:grid-cols-2">
-        <section className="settings-integration-card card-pad">
-          <div className="eyebrow">Core</div>
-          <div className="section-title mt-1">Environment</div>
-          <div className="mt-5 space-y-3">
-            <Integration icon={<Database size={18} />} name="Supabase" status={live ? 'Live' : configured ? 'Configured · mock mode' : 'Needs environment values'} ready={live} detail="PostgreSQL CRM, RLS and persistent mutations" />
-            <Integration icon={<KeyRound size={18} />} name="Supabase Auth" status={live ? 'Login enforced' : 'Bypassed in mock mode'} ready={live} detail="Cookie-based server-side sessions" />
-            <Integration icon={<Tags size={18} />} name="Mock dataset" status={useMockData ? 'Active' : 'Disabled'} ready={!useMockData} detail="Fictional records are isolated from live CRM operations" />
-            <Integration icon={<Webhook size={18} />} name="Website tracking API" status="Implemented" ready detail="UTMs, click IDs, sessions, CTA events and lead linking" />
-          </div>
-        </section>
-
-        <section className="settings-integration-card card-pad">
-          <div className="eyebrow">Channels</div>
-          <div className="section-title mt-1">Messaging</div>
-          <div className="mt-5 space-y-3">
-            <Integration icon={<MessageCircle size={18} />} name="WhatsApp Cloud API" status={whatsappConnection.status} ready={whatsappConnection.ready} detail="Workspace-scoped inbound messages, outbound replies, templates and delivery/read status" />
-            <Integration icon={<Instagram size={18} />} name="Instagram Messaging API" status={instagramStatus} ready={instagramReady} detail="Workspace-scoped Instagram Direct messaging and automation eligibility" />
-          </div>
-        </section>
-      </div>
-
-      <section className="settings-audit-card card-pad mt-4">
-        <div className="flex items-start justify-between gap-4">
-          <div>
-            <div className="eyebrow">Change history</div>
-            <div className="section-title mt-1">Settings audit</div>
-            <p className="mt-2 text-sm leading-6 text-slate-500">Forecast and pipeline-rule changes are recorded so operational changes can be traced later.</p>
-          </div>
-          <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-slate-100 text-slate-600"><History size={18} /></span>
+      {alerts.length ? <section className="cr-attention cr-panel" aria-label="Settings needing attention">
+        <span className="cr-attention-icon"><Sparkles size={22}/></span>
+        <div className="cr-attention-summary">
+          <strong>{alerts.length} setting{alerts.length === 1 ? '' : 's'} need attention</strong>
+          <p>Review verified configuration gaps to keep your CRM reliable.</p>
         </div>
-
-        {auditError ? (
-          <div className="mt-5 rounded-xl border border-amber-200 bg-amber-50 px-4 py-4 text-sm text-amber-800">
-            Settings audit could not be verified: {auditError}. This is not presented as an empty change history.
+        <div className="cr-alert-list">{alerts.slice(0,2).map((alert,index)=>
+          <div className="cr-alert-item" key={index}>
+            <span className="cr-alert-mark"><AlertTriangle size={16}/></span>
+            <div><strong>{alert.text}</strong><p>{alert.description}</p></div>
+            {(admin || alert.href==='/settings')?<Link className="cr-btn cr-btn-muted" href={alert.href}>Review</Link>:null}
           </div>
-        ) : (
-          <div className="settings-table-wrap mt-5 overflow-x-auto rounded-xl border border-slate-200">
-            <table className="settings-audit-table min-w-[760px] w-full text-left">
-              <thead>
-                <tr className="border-b border-slate-200 bg-slate-50/80 text-[10px] uppercase tracking-[.1em] text-slate-400">
-                  <th className="px-4 py-3">Setting</th><th className="px-4 py-3">Stage</th><th className="px-4 py-3">Change</th><th className="px-4 py-3">Changed by</th><th className="px-4 py-3">Time</th>
-                </tr>
-              </thead>
-              <tbody>
-                {audit.length ? audit.map((row) => (
-                  <tr key={row.id} className="border-b border-slate-100 last:border-0">
-                    <td className="px-4 py-3 text-sm font-semibold text-slate-700">{row.setting_group === 'revenue_forecast' ? 'Forecast probability' : row.setting_group === 'pipeline_aging' ? 'Pipeline aging' : pretty(row.setting_group)}</td>
-                    <td className="px-4 py-3 text-sm text-slate-600">{pretty(row.setting_key)}</td>
-                    <td className="px-4 py-3 text-xs text-slate-500">{auditChange(row)}</td>
-                    <td className="px-4 py-3 text-sm text-slate-600">{row.changed_by_name ?? 'System / SQL'}</td>
-                    <td className="px-4 py-3 text-xs text-slate-400">{formatDateTime(row.changed_at)}</td>
-                  </tr>
-                )) : (
-                  <tr><td colSpan={5} className="px-4 py-10 text-center text-sm text-slate-500">No Settings changes recorded yet.</td></tr>
-                )}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </section>
+        )}</div>
+      </section> : null}
 
-      <section className="settings-security-card card-pad mt-4">
-        <div className="eyebrow">Security</div>
-        <div className="section-title mt-1">Implementation rules</div>
-        <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-          <Rule icon={<ShieldCheck size={16} />} title="No privileged key in browser" text="Only browser-safe Supabase configuration is exposed. Service-role credentials and integration secrets stay server-side." />
-          <Rule icon={<Database size={16} />} title="RLS + explicit grants" text="CRM tables remain protected by database policies and authenticated access rules." />
-          <Rule icon={<Settings2 size={16} />} title="Privileged settings" text="Settings routes require Owner, Admin or Manager access; higher-risk team and provider administration remains Owner/Admin only." />
-          <Rule icon={<Activity size={16} />} title="Audited configuration" text="Forecast and aging mutations record previous value, new value, user and timestamp." />
+      <div className="cr-stats">
+        <SummaryStat icon={<Database size={20}/>} label="CRM environment" value={live?'Production':useMockData?'Mock mode':'Setup required'}
+          tone={live?'ok':'neutral'} detail={live?'Supabase persistence configured, not a live health check.':useMockData?'Reference records only. No live writes.':'Environment configuration unavailable.'}/>
+        <SummaryStat icon={<BarChart3 size={20}/>} label="Pipeline stages"
+          value={settingsAvailable?String(forecastRows.length):'—'} tone={source==='database'?'ok':'neutral'}
+          detail={source==='database'?'Database-backed stage probabilities.':source==='reference'?'Reference defaults only · not tenant data':'Live stage settings unavailable.'}/>
+        <SummaryStat icon={<Clock3 size={20}/>} label="Aging rules"
+          value={settingsAvailable && agingReady?String(agingRows.length):'—'} tone={source==='database'&&agingReady?'ok':'neutral'}
+          detail={source==='unavailable'?'Live aging settings unavailable.':agingReady?'Configured tenant thresholds.':'Aging schema needs review.'}/>
+        <SummaryStat icon={<UserCog size={20}/>} label="Access model" value={canManage?'Can manage':'Read only'}
+          tone={canManage?'ok':'neutral'} detail={canManage?'Owner / Admin / Manager permissions':'Settings writes require authorized tenant access.'}/>
+      </div>
+
+      <div className="cr-main">
+        <CrmRuleEditor key={savedKey} forecasts={forecastRows}
+          aging={agingRows} source={source} agingReady={agingReady} canManage={canManage}/>
+        <section className="cr-panel cr-connections" aria-labelledby="cr-connections-heading">
+          <div className="cr-panel-heading">
+            <span className="cr-icon"><Webhook size={20}/></span>
+            <div><h2 id="cr-connections-heading">Operational Connections</h2>
+              <p>Environment, tracking and messaging capabilities.</p></div>
+            {admin?<Link className="cr-head-link" href="/settings/integrations">Manage <ArrowRight size={14}/></Link>:null}
+          </div>
+          <div className="cr-connections-list">
+            <OperationalConnection icon={<Database size={17}/>} title="Supabase"
+              status={live?'Configured':configured?'Mock mode':'Setup required'} good={live}
+              description="PostgreSQL CRM, RLS and persistent mutations."/>
+            <OperationalConnection icon={<KeyRound size={17}/>} title="Supabase Auth"
+              status={live?'Login enforced':'Not verified live'} good={live}
+              description="Cookie-based server-side sessions."/>
+            <OperationalConnection icon={<Webhook size={17}/>} title="Website Tracking API"
+              status="Implemented · runtime unverified" good={false}
+              description="UTMs, click IDs, sessions, CTA events and lead linking."/>
+            <OperationalConnection icon={<MessageCircle size={17}/>} title="WhatsApp Cloud API"
+              status={whatsappConnection.status} good={whatsappConnection.ready}
+              href={admin?'/settings/integrations/whatsapp':undefined}
+              description="Workspace-scoped inbound/outbound messages and templates."/>
+            <OperationalConnection icon={<Instagram size={17}/>} title="Instagram Messaging API"
+              status={instagramStatus} good={instagramReady}
+              href={admin?'/settings/integrations':undefined}
+              description="Workspace-scoped Instagram Direct messaging and automation eligibility"/>
+          </div>
+        </section>
+      </div>
+
+      <div className="cr-secondary">
+        <section className="cr-panel cr-security">
+          <div className="cr-panel-heading"><span className="cr-icon"><ShieldCheck size={20}/></span>
+            <div><h2>Security & Governance</h2><p>Access, data protection and audited configuration.</p></div>
+          </div>
+          <div className="cr-security-grid">
+            <SecurityRule icon={<KeyRound size={16}/>} title="Browser-safe configuration"
+              detail="Only public Supabase configuration is exposed."/>
+            <SecurityRule icon={<Database size={16}/>} title="Explicit grants (RLS)"
+              detail="Protected CRM tables and authenticated access."/>
+            <SecurityRule icon={<UserCog size={16}/>} title="Privileged settings"
+              detail="Owner / Admin / Manager permissions; higher-risk administration is restricted."/>
+            <SecurityRule icon={<History size={16}/>} title="Audited configuration"
+              detail="Previous and new rule values are recorded with timestamps."/>
+          </div>
+        </section>
+        <section className="cr-panel cr-suggestions">
+          <div className="cr-panel-heading"><span className="cr-icon"><Sparkles size={20}/></span>
+            <div><h2>Suggested next steps</h2><p>Based on verified workspace configuration.</p></div>
+          </div>
+          {suggestions.length ? <ul className="cr-checklist">
+            {suggestions.map(item=><li key={item}><CircleDashed size={15}/>{item}</li>)}
+          </ul> : <p className="cr-recommend-empty"><CheckCircle2 size={16}/> No verified configuration gaps are currently flagged. Continue periodic checks.</p>}
+          {admin&&alerts.length?<Link className="cr-suggestions-link" href={alerts[0].href}>Review first issue <ArrowRight size={13}/></Link>:null}
+        </section>
+      </div>
+
+      <section className="cr-panel cr-audit" id="audit-history">
+        <div className="cr-panel-heading">
+          <span className="cr-icon"><History size={20}/></span>
+          <div><h2>Recent Changes / Audit</h2>
+            <p>Previous values, new values, responsible users and timestamps.</p></div>
+          {showAudit?<span className="cr-audit-count">Latest {audit.length} records</span>:null}
         </div>
+        {auditError?<div className="cr-audit-error" role="alert">
+          Settings audit could not be verified: {auditError}. This is not presented as an empty change history.
+        </div>:showAudit?<div className="cr-audit-table-wrap">
+          <table className="cr-audit-table">
+            <thead><tr><th scope="col">Change</th><th scope="col">Area</th><th scope="col">Changed by</th><th scope="col">Time</th></tr></thead>
+            <tbody>{audit.slice(0,5).map(row=><AuditEntry key={row.id} row={row}/>)}</tbody>
+          </table>
+          {audit.length > 5?<details className="cr-audit-more">
+            <summary>View remaining {audit.length-5} audited changes <ArrowRight size={13}/></summary>
+            <table className="cr-audit-table"><tbody>{audit.slice(5).map(row=><AuditEntry key={row.id} row={row}/>)}</tbody></table>
+          </details>:null}
+        </div>:<div className="cr-audit-empty">No Settings changes recorded yet.</div>}
       </section>
-    </>
+    </section>
   );
+}
+
+function SummaryStat({icon,label,value,detail,tone}:{
+  icon:ReactNode;label:string;value:string;detail:string;tone:'ok'|'neutral';
+}) {
+  return <section className="cr-stat">
+    <span className="cr-icon">{icon}</span>
+    <div className="cr-stat-content">
+      <div className="cr-stat-label">{label}<span className="cr-status-tag" data-tone={tone}>{tone==='ok'?'Configured':'Check status'}</span></div>
+      <strong>{value}</strong><p>{detail}</p>
+    </div>
+  </section>;
+}
+function OperationalConnection({icon,title,description,status,good,href}:{
+  icon:ReactNode;title:string;description:string;status:string;good:boolean;href?:string;
+}) {
+  const content=<>
+    <span className="cr-icon">{icon}</span>
+    <span className="cr-connection-body"><strong>{title}</strong><small>{description}</small></span>
+    <span className="cr-connection-status" data-good={good?'true':'false'}>
+      {good?<CheckCircle2 size={13}/>:<CircleDashed size={13}/>} {status}
+    </span>
+    {href?<ArrowRight size={15}/>:null}
+  </>;
+  return href?<Link href={href} className="cr-connection-row">{content}</Link>
+    :<div className="cr-connection-row">{content}</div>;
+}
+function SecurityRule({icon,title,detail}:{icon:ReactNode;title:string;detail:string}) {
+  return <div className="cr-security-rule"><span className="cr-icon">{icon}</span>
+    <div><strong>{title}</strong><p>{detail}</p></div></div>;
+}
+function AuditEntry({row}:{row:AuditRow}) {
+  return <tr><td><strong>{pretty(row.setting_key)}</strong><small>{auditChange(row)}</small></td>
+    <td><span className="cr-group">{row.setting_group==='revenue_forecast'?'Forecast':row.setting_group==='pipeline_aging'?'Pipeline aging':pretty(row.setting_group)}</span></td>
+    <td>{row.changed_by_name??'System / SQL'}</td>
+    <td><time dateTime={row.changed_at}>{formatDateTime(row.changed_at)}</time></td></tr>;
 }
 
 async function loadSettings(live: boolean): Promise<LoadedSettings> {
