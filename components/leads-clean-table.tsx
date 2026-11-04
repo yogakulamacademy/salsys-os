@@ -394,7 +394,7 @@ export function LeadsCleanTable({
                 <FilterSelect label="Owner" value={filters.owner || "all"} options={options.owners} onChange={(value) => updateUrl({ owner: value, page: 1 })} />
               </div>
               <FilterSelect label="Channel" value={filters.channel || "all"} options={options.channels} onChange={(value) => updateUrl({ channel: value, page: 1 })} />
-              <FilterSelect label="Course" value={filters.course || "all"} options={options.courses} onChange={(value) => updateUrl({ course: value, page: 1 })} />
+              <FilterSelect label="Interest" value={filters.course || "all"} options={options.courses} onChange={(value) => updateUrl({ course: value, page: 1 })} />
               <FilterSelect label="Aging" value={filters.aging || "all"} options={["healthy", "warning", "stuck", "untracked"]} onChange={(value) => updateUrl({ aging: value, page: 1 })} />
               <label className="min-w-[150px]">
                 <span className="mb-1 block text-[9px] font-semibold uppercase tracking-[0.08em] text-copy-subtle">Sort</span>
