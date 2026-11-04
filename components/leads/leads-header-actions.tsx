@@ -47,11 +47,10 @@ export function LeadsHeaderActions({ canManage, mock, exportHref }: Props) {
           <summary
             className="grid h-full w-9 cursor-pointer list-none place-items-center rounded-r-ui transition hover:bg-brand-800 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-700 [&::-webkit-details-marker]:hidden"
             aria-label="More add lead options"
-            title="More add lead options"
           >
             <ChevronDown size={15} className="transition group-open:rotate-180" aria-hidden />
           </summary>
-          <div className="absolute right-0 z-30 mt-2 w-[208px] rounded-xl border border-line bg-surface p-1.5 text-copy-strong shadow-panel">
+          <div data-testid="lead-add-options-menu" className="absolute right-0 top-full z-50 mt-2 w-[208px] rounded-xl border border-line bg-surface p-1.5 text-copy-strong shadow-panel">
             <Link
               href="/leads/new"
               className="flex items-center gap-2 rounded-lg px-3 py-2.5 text-xs font-medium transition hover:bg-surface-muted"
