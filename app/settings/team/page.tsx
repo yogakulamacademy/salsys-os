@@ -1,18 +1,18 @@
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import {
-  ArrowLeft,
-  BadgeCheck,
-  ShieldCheck,
-  UserPlus,
-  Users,
+  ArrowLeft, ArrowRight, BadgeCheck, CircleCheck, KeyRound,
+  Layers3, ShieldCheck, Sparkles, UserCheck, UserPlus,
+  UserRoundX, Users, UsersRound, Zap,
 } from 'lucide-react';
 
 import { PageHeader } from '@/components/ui';
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { requireCurrentOrganizationId } from '@/lib/workspace';
-import { createEmployeeAction, setEmployeeActiveAction } from './actions';
+import { createEmployeeAction } from './actions';
+import { TeamDirectory, type DirectoryMember } from './team-directory';
+import './team-access.css';
 
 type TenantMembership = {
   user_id: string;
@@ -144,253 +144,165 @@ export default async function TeamAccessPage({
   const employees = teamMembers.filter(
     (member) => member.organizationRole === 'admissions',
   );
-  const activeEmployees = employees.filter(
-    (employee) => employee.membershipActive && employee.profileActive,
+  const totalMembers = teamMembers.length;
+  const activeMembers = teamMembers.filter(
+    member => member.membershipActive && member.profileActive,
   ).length;
+  const inactiveMembers = totalMembers - activeMembers;
+  const inactiveEmployees = employees.filter(
+    member => !member.membershipActive || !member.profileActive,
+  ).length;
+  const rolesInUse = new Set(teamMembers.map(member => member.organizationRole)).size;
+  const directoryMembers: DirectoryMember[] = teamMembers.map(member => ({
+    id: member.id,
+    fullName: member.fullName,
+    email: emailById.get(member.id) ?? '—',
+    organizationRole: member.organizationRole,
+    active: member.membershipActive && member.profileActive,
+  }));
+  const ownerCount = teamMembers.filter(member => member.organizationRole === 'owner').length;
+  const adminCount = teamMembers.filter(member => member.organizationRole === 'admin').length;
 
   return (
-    <>
+    <div className="tac space-y-5">
       <PageHeader
         eyebrow="Settings"
         title="Team & Access"
-        description={`Manage employee access for ${organizationName}. Team records shown here are scoped only to the active tenant.`}
-        actions={
-          <Link href="/settings" className="btn-secondary">
-            <ArrowLeft size={16} /> Settings
-          </Link>
-        }
+        description={`Manage members, roles and secure workspace access for ${organizationName}.`}
+        actions={<Link href="/settings/overview" className="tac-back">
+          <ArrowLeft size={15}/> Back to Settings
+        </Link>}
       />
 
-      {query.notice ? (
-        <div className="team-notice mb-5 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-800">
-          {query.notice}
-        </div>
-      ) : null}
+      {query.notice ? <div className="team-notice rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-800" role="status">
+        {query.notice}
+      </div> : null}
+      {query.error ? <div className="team-error rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-semibold text-rose-800" role="alert">
+        {query.error}
+      </div> : null}
 
-      {query.error ? (
-        <div className="team-error mb-5 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-semibold text-rose-800">
-          {query.error}
+      <div className="tac-stats" aria-label="Tenant team statistics">
+        <Stat icon={<UsersRound size={22}/>} value={totalMembers} label="Total members"/>
+        <Stat icon={<UserCheck size={21}/>} value={activeMembers} label="Active" tone="success"/>
+        <Stat icon={<UserRoundX size={21}/>} value={inactiveMembers} label="Inactive" tone="neutral"/>
+        <Stat icon={<Layers3 size={21}/>} value={rolesInUse} label="Roles in use"/>
+        <div className="tac-insight">
+          <Sparkles size={24} aria-hidden="true"/>
+          <div className="tac-insight-body">
+            <h2>{totalMembers === 0 ? 'Get started' : inactiveEmployees > 0 ? 'Review employee access' : employees.length === 0 ? 'Add your first employee' : 'Access overview'}</h2>
+            <p>{totalMembers === 0
+              ? 'Add a colleague to start working together securely.'
+              : inactiveEmployees > 0
+                ? `${inactiveEmployees} employee account${inactiveEmployees === 1 ? '' : 's'} currently inactive. Review whether access should be restored.`
+                : employees.length === 0
+                  ? 'Your administrator account is listed. Add an employee to grant Sales workspace access.'
+                  : 'Employee access is active in the current tenant. Review permissions when responsibilities change.'}</p>
+          </div>
+          <a href={employees.length === 0 ? '#tac-create-member' : '#tac-members-heading'}>
+            {employees.length === 0 ? 'Add Member' : 'Review Members'} <ArrowRight size={14}/>
+          </a>
         </div>
-      ) : null}
-
-      <div className="team-summary-grid grid gap-4 md:grid-cols-3">
-        <SummaryCard
-          icon={<Users size={18} />}
-          label="Employees"
-          value={employees.length}
-          detail={`Employee accounts assigned to ${organizationName}.`}
-        />
-        <SummaryCard
-          icon={<BadgeCheck size={18} />}
-          label="Active employees"
-          value={activeEmployees}
-          detail="Only active tenant employees are eligible for Sales workspace access."
-        />
-        <SummaryCard
-          icon={<ShieldCheck size={18} />}
-          label="Access model"
-          value="Tenant isolated"
-          detail="Creation, activation and deactivation are bound to the current organization."
-        />
       </div>
 
-      <div className="team-layout mt-6 grid gap-6 xl:grid-cols-[minmax(0,1fr)_380px]">
-        <section className="team-table-card card overflow-hidden">
-          <div className="border-b border-slate-100 px-5 py-4">
-            <div className="text-sm font-semibold text-slate-900">Team members</div>
-            <div className="mt-1 text-xs leading-5 text-slate-500">
-              Only members of {organizationName} are shown. Employee accounts use the
-              admissions role internally and receive Sales workspace membership.
-            </div>
+      <div className="tac-layout">
+        <TeamDirectory members={directoryMembers} organizationName={organizationName}/>
+
+        <section className="tac-card tac-create" id="tac-create-member" aria-labelledby="tac-create-heading">
+          <div className="tac-section-heading tac-create-heading">
+            <span className="tac-icon"><UserPlus size={19}/></span>
+            <div><h2 id="tac-create-heading">Add Team Member</h2>
+              <p>Create an Employee account for the Sales workspace.</p></div>
           </div>
-
-          <div className="team-table-wrap overflow-x-auto">
-            <table className="team-table w-full min-w-[760px]">
-              <thead>
-                <tr className="border-b border-slate-100 bg-slate-50/70">
-                  <th className="px-5 py-3 text-left text-[11px] font-semibold uppercase tracking-[.1em] text-slate-400">
-                    Team member
-                  </th>
-                  <th className="px-5 py-3 text-left text-[11px] font-semibold uppercase tracking-[.1em] text-slate-400">
-                    Role
-                  </th>
-                  <th className="px-5 py-3 text-left text-[11px] font-semibold uppercase tracking-[.1em] text-slate-400">
-                    Status
-                  </th>
-                  <th className="px-5 py-3 text-right text-[11px] font-semibold uppercase tracking-[.1em] text-slate-400">
-                    Access
-                  </th>
-                </tr>
-              </thead>
-
-              <tbody className="divide-y divide-slate-100">
-                {teamMembers.map((member) => {
-                  const isEmployee = member.organizationRole === 'admissions';
-                  const isActive = member.membershipActive && member.profileActive;
-                  const roleLabel =
-                    member.organizationRole === 'owner'
-                      ? 'Owner'
-                      : member.organizationRole === 'admin'
-                        ? 'Admin'
-                        : 'Employee';
-
-                  return (
-                    <tr key={member.id} className="hover:bg-slate-50/70">
-                      <td className="px-5 py-4">
-                        <div className="font-semibold text-slate-900">
-                          {member.fullName ?? 'CRM User'}
-                        </div>
-                        <div className="mt-0.5 text-xs text-slate-500">
-                          {emailById.get(member.id) ?? '—'}
-                        </div>
-                      </td>
-
-                      <td className="px-5 py-4">
-                        <span
-                          className={
-                            isEmployee
-                              ? 'inline-flex rounded-full bg-orange-50 px-2.5 py-1 text-xs font-semibold text-orange-700'
-                              : 'inline-flex rounded-full bg-sky-50 px-2.5 py-1 text-xs font-semibold text-sky-700'
-                          }
-                        >
-                          {roleLabel}
-                        </span>
-                      </td>
-
-                      <td className="px-5 py-4">
-                        <span
-                          className={
-                            isActive
-                              ? 'inline-flex rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-700'
-                              : 'inline-flex rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-500'
-                          }
-                        >
-                          {isActive ? 'Active' : 'Inactive'}
-                        </span>
-                      </td>
-
-                      <td className="px-5 py-4 text-right">
-                        {!isEmployee ? (
-                          <span className="text-xs font-semibold text-slate-400">
-                            Full tenant access
-                          </span>
-                        ) : (
-                          <form action={setEmployeeActiveAction} className="inline-flex">
-                            <input type="hidden" name="employee_id" value={member.id} />
-                            <input
-                              type="hidden"
-                              name="active"
-                              value={isActive ? 'false' : 'true'}
-                            />
-                            <button type="submit" className="btn-secondary">
-                              {isActive ? 'Deactivate' : 'Activate'}
-                            </button>
-                          </form>
-                        )}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        </section>
-
-        <section className="team-create-card card-pad self-start">
-          <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-brand/10 text-brand">
-              <UserPlus size={19} />
-            </div>
-            <div>
-              <div className="font-semibold text-slate-900">Add Employee</div>
-              <div className="text-xs text-slate-500">
-                Creates login + {organizationName} membership + Sales access.
+          <form action={createEmployeeAction}>
+            <label className="tac-create-field">
+              <span className="tac-create-label">Full name</span>
+              <input className="tac-create-input" required name="full_name" type="text"
+                autoComplete="name" placeholder="Enter full name" minLength={2}/>
+            </label>
+            <label className="tac-create-field">
+              <span className="tac-create-label">Email address</span>
+              <input className="tac-create-input" required name="email" type="email"
+                autoComplete="off" placeholder="Enter email address"/>
+            </label>
+            <label className="tac-create-field">
+              <span className="tac-create-label">Temporary password</span>
+              <input className="tac-create-input" required name="password" type="password"
+                autoComplete="new-password" minLength={10} placeholder="At least 10 characters"/>
+            </label>
+            <div className="tac-create-field">
+              <span className="tac-create-label">Role</span>
+              <div className="tac-role-fixed" aria-label="New member role: Employee">
+                <span>Employee</span><KeyRound size={16} aria-hidden="true"/>
               </div>
             </div>
-          </div>
-
-          <form action={createEmployeeAction} className="mt-5 space-y-4">
-            <label className="block">
-              <span className="mb-1.5 block text-xs font-semibold text-slate-600">
-                Full name
-              </span>
-              <input
-                required
-                name="full_name"
-                type="text"
-                autoComplete="off"
-                placeholder="Employee name"
-                className="team-input w-full rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm outline-none transition focus:border-brand"
-              />
-            </label>
-
-            <label className="block">
-              <span className="mb-1.5 block text-xs font-semibold text-slate-600">
-                Login email
-              </span>
-              <input
-                required
-                name="email"
-                type="email"
-                autoComplete="off"
-                placeholder="employee@example.com"
-                className="team-input w-full rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm outline-none transition focus:border-brand"
-              />
-            </label>
-
-            <label className="block">
-              <span className="mb-1.5 block text-xs font-semibold text-slate-600">
-                Temporary password
-              </span>
-              <input
-                required
-                name="password"
-                type="password"
-                minLength={10}
-                autoComplete="new-password"
-                placeholder="Minimum 10 characters"
-                className="team-input w-full rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm outline-none transition focus:border-brand"
-              />
-            </label>
-
-            <div className="team-role-note rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-3 text-xs leading-5 text-slate-500">
-              The new user will be an <strong>Employee</strong> in {organizationName}
-              and a member of its <strong>Sales</strong> workspace only.
-            </div>
-
-            <button type="submit" className="btn-primary w-full justify-center">
-              <UserPlus size={16} /> Create employee
-            </button>
+            <p className="tac-form-note">New members receive the fixed Employee role in {organizationName} and access to its Sales workspace. Owner/Admin creation and arbitrary role changes are not available here.</p>
+            <button type="submit" className="tac-primary-action"><UserPlus size={16}/> Create employee</button>
           </form>
         </section>
       </div>
-    </>
+
+      <div className="tac-bottom">
+        <section className="tac-card tac-role-summary" aria-labelledby="tac-role-heading">
+          <div className="tac-section-heading">
+            <span className="tac-icon"><Layers3 size={20}/></span>
+            <div><h2 id="tac-role-heading">Role Access Overview</h2>
+              <p>Membership roles currently supported by this workspace.</p></div>
+          </div>
+          {totalMembers === 0 ? <div className="tac-empty-actions">
+            <Layers3 size={38}/>
+            <strong>No assigned roles yet</strong>
+            <p>Role counts will reflect the members assigned to this organization.</p>
+          </div> : <div className="tac-role-cards">
+            <RoleCard icon={<ShieldCheck size={22}/>} title="Owner" count={ownerCount}
+              description="Tenant ownership and privileged configuration access."/>
+            <RoleCard icon={<BadgeCheck size={22}/>} title="Admin" count={adminCount}
+              description="Tenant administration, members and workspace settings."/>
+            <RoleCard icon={<Users size={22}/>} title="Employee" count={employees.length}
+              description="Sales workspace membership and operational access."/>
+          </div>}
+        </section>
+
+        <section className="tac-card tac-actions-summary" aria-labelledby="tac-actions-heading">
+          <div className="tac-section-heading">
+            <span className="tac-icon"><Zap size={20}/></span>
+            <div><h2 id="tac-actions-heading">Smart Actions</h2>
+              <p>Useful access checks based on recorded membership status.</p></div>
+          </div>
+          {totalMembers === 0 ? <div className="tac-empty-actions">
+            <CircleCheck size={36}/>
+            <strong>No actions needed yet</strong>
+            <p>After a member is created, relevant access checks will appear here.</p>
+          </div> : <div className="tac-action-list">
+            {inactiveEmployees > 0 ? <a href="#tac-members-heading">
+              <UserCheck size={17}/><span>Review {inactiveEmployees} inactive employee{inactiveEmployees === 1 ? '' : 's'}</span><ArrowRight size={15}/>
+            </a> : <div className="tac-action-info"><CircleCheck size={17}/>
+              {employees.length ? 'All listed employee accounts are active.' : 'No employee accounts have been added yet.'}
+            </div>}
+            <div className="tac-action-info"><ShieldCheck size={17}/>
+              Only Owner/Admin users can create or change employee access.
+            </div>
+            {employees.length === 0 ? <a href="#tac-create-member">
+              <UserPlus size={17}/><span>Add a Sales workspace employee</span><ArrowRight size={15}/>
+            </a> : null}
+          </div>}
+        </section>
+      </div>
+    </div>
   );
 }
 
-function SummaryCard({
-  icon,
-  label,
-  value,
-  detail,
-}: {
-  icon: React.ReactNode;
-  label: string;
-  value: React.ReactNode;
-  detail: string;
+function Stat({ icon, value, label, tone }: { icon: React.ReactNode; value: number; label: string; tone?: 'success' | 'neutral' }) {
+  return <section className="tac-stat" data-tone={tone}>
+    <span className="tac-stat-icon">{icon}</span>
+    <div><strong className="tac-stat-value">{value}</strong><span className="tac-stat-name">{label}</span></div>
+  </section>;
+}
+
+function RoleCard({ icon, title, count, description }: {
+  icon: React.ReactNode; title: string; count: number; description: string;
 }) {
-  return (
-    <section className="team-summary-card card-pad">
-      <div className="flex items-center gap-2 text-brand">
-        {icon}
-        <span className="text-xs font-semibold uppercase tracking-[.08em] text-slate-400">
-          {label}
-        </span>
-      </div>
-      <div className="mt-3 text-2xl font-semibold tracking-tight text-slate-900">
-        {value}
-      </div>
-      <div className="mt-2 text-xs leading-5 text-slate-500">{detail}</div>
-    </section>
-  );
+  return <div className="tac-role-card" data-present={count > 0 ? 'true' : undefined}>
+    {icon}<strong>{title}</strong><p>{description}</p>
+    <small>{count} member{count === 1 ? '' : 's'} assigned</small>
+  </div>;
 }
