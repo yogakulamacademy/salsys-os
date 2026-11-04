@@ -310,26 +310,19 @@ export function ConversationSafeComposer({
                 {draftStatus(draftState)} · {replyDraft.length}/{replyLimit} · Ctrl/⌘ + Enter {isInstagram && instagramSendAllowed ? "sends" : "saves"}
                 {copilotAssisted && isInstagram ? " · AI-assisted draft reviewed by human" : ""}
               </div>
-              {isInstagram ? (
-                <button
-                  type="button"
-                  onClick={sendInstagramReply}
-                  disabled={!instagramSendAllowed || !replyDraft.trim() || isPending}
-                  className="inline-flex h-8 items-center justify-center gap-1.5 rounded-lg bg-[#153E33] px-3 text-[9px] font-semibold text-white transition hover:bg-[#216551] disabled:cursor-not-allowed disabled:bg-[#EDF0EC] disabled:text-[#59685F]"
-                >
-                  {isPending ? <RefreshCw size={10} className="animate-spin" /> : <Send size={11} />}
-                  {isPending ? "Sending…" : instagramSendAllowed ? "Send" : "Blocked"}
-                </button>
-              ) : (
-                <button
-                  type="button"
-                  onClick={() => persistDraft(replyDraft)}
+              <div className="ibx-v3-composer-actions">
+                <button type="button" onClick={() => persistDraft(replyDraft)}
                   disabled={!replyDraft.trim()}
-                  className="inline-flex h-8 items-center justify-center gap-1.5 rounded-lg border border-[#DCE4DF] bg-white px-3 text-[9px] font-semibold text-[#596E64] transition hover:bg-[#EDF3E6] hover:text-[#216551] disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  <Save size={11} /> Save draft
+                  className="ibx-v3-save-draft inline-flex h-8 items-center justify-center gap-1.5 rounded-lg border border-[#DCE4DF] bg-white px-3 text-[9px] font-semibold text-[#596E64] disabled:opacity-50">
+                  <Save size={11}/> Save draft
                 </button>
-              )}
+                {isInstagram ? <button type="button" onClick={sendInstagramReply}
+                  disabled={!instagramSendAllowed || !replyDraft.trim() || isPending}
+                  className="ibx-v3-send inline-flex h-8 items-center justify-center gap-1.5 rounded-lg bg-[#153E33] px-3 text-[9px] font-semibold text-white disabled:opacity-50">
+                  {isPending?<RefreshCw size={10} className="animate-spin"/>:<Send size={11}/>}
+                  {isPending?"Sending…":instagramSendAllowed?"Send":"Blocked"}
+                </button>:null}
+              </div>
             </div>
           </div>
         ) : (
