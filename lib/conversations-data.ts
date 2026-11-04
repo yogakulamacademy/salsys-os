@@ -100,7 +100,11 @@ export async function getConversationsWorkspace(
         : "Full-dataset Inbox query timed out. Showing a limited compatibility queue while performance is being addressed; search and counts may be incomplete.";
     }
   }
-  const resolution = await loadInboxResolutionState(fullPage?.rows ?? workspace.conversationSummary);
+  // Paged RPC rows already include the message-verified resolve/reopen state.
+  // Do not re-run the expensive attention view on a successful full page.
+  const resolution = fullPage
+    ? { rows: fullPage.rows, available: true, warning: null }
+    : await loadInboxResolutionState(workspace.conversationSummary);
   const baseRows = resolution.rows;
   const pagination = fullPage
     ? (({ rows: _rows, ...meta }) => meta)(fullPage)
@@ -194,21 +198,36 @@ async function loadInboxResolutionState(rows: ConversationLeadSummary[]):Promise
     if(authError||!user) throw new Error('No authenticated inbox workspace');
     const org=await requireCurrentOrganizationId(supabase,user.id);
     const ids=rows.map(row=>row.id);
-    const [resolutions,attention]=await Promise.all([
-      supabase.from('lead_inbox_resolutions_v1')
-        .select('lead_id,resolved_at').eq('organization_id',org).in('lead_id',ids),
-      supabase.from('v_lead_inbox_attention')
-        .select('lead_id,last_inbound_at').eq('organization_id',org).in('lead_id',ids),
-    ]);
-    if(resolutions.error||attention.error)
-      throw new Error(resolutions.error?.message||attention.error?.message||'Unavailable');
-    const byId=new Map((resolutions.data??[]).map(row=>[row.lead_id,row.resolved_at]));
-    const lastInbound=new Map((attention.data??[]).map(row=>[row.lead_id,row.last_inbound_at]));
+    const {data:resolutions,error:resolutionError}=await supabase
+      .from('lead_inbox_resolutions_v1')
+      .select('lead_id,resolved_at')
+      .eq('organization_id',org)
+      .in('lead_id',ids);
+    if(resolutionError) throw new Error(resolutionError.message);
+
+    // No completed conversations means there is no last-inbound timestamp to
+    // recheck. The old implementation queried every lead through an expensive
+    // lateral-message view, even when this table was empty.
+    if(!resolutions?.length){
+      return {available:true,warning:null,rows:rows.map(row=>({...row,resolved:false}))};
+    }
+
+    const byId=new Map(resolutions.map(row=>[row.lead_id,row.resolved_at]));
+    const completedIds=resolutions.map(row=>row.lead_id);
+    // Only completed leads need fresh inbound evidence. Preserve canonical
+    // message-based reopening logic rather than using a stale lead summary.
+    const {data:attention,error:attentionError}=await supabase
+      .from('v_lead_inbox_attention')
+      .select('lead_id,last_inbound_at')
+      .eq('organization_id',org)
+      .in('lead_id',completedIds);
+    if(attentionError) throw new Error(attentionError.message);
+    const lastInbound=new Map((attention??[]).map(row=>[row.lead_id,row.last_inbound_at]));
     return {available:true,warning:null,rows:rows.map(row=>{
       const doneAt=byId.get(row.id);
       const inbound=lastInbound.get(row.id);
       const resolved=Boolean(doneAt && (!inbound ||
-        (Date.parse(inbound)<=Date.parse(doneAt))));
+        Date.parse(inbound)<=Date.parse(doneAt)));
       return resolved ? {...row,resolved:true,needsReply:false,needsFirstContact:false,
         waitingSince:null} : {...row,resolved:false};
     })};
