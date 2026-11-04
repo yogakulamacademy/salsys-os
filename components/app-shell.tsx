@@ -161,13 +161,18 @@ export function AppShell({ children }: { children: ReactNode }) {
           items: [{ href: "/dashboard", label: "Today", icon: Gauge }],
         },
         {
+          id: "inbox",
+          label: "Inbox",
+          icon: MessageSquareText,
+          items: [{ href: "/conversations", label: "Inbox", icon: MessageSquareText }],
+        },
+        {
           id: "crm",
           label: "CRM",
           icon: UsersRound,
           items: [
             { href: "/leads", label: "My leads", icon: ContactRound },
             { href: "/pipeline", label: "My pipeline", icon: Boxes },
-            { href: "/conversations", label: "Inbox", icon: MessageSquareText },
             { href: "/follow-ups", label: "Follow-ups", icon: ListTodo },
           ],
         },
@@ -184,13 +189,18 @@ export function AppShell({ children }: { children: ReactNode }) {
         items: [{ href: "/dashboard", label: "Today", icon: Gauge }],
       },
       {
+        id: "inbox",
+        label: "Inbox",
+        icon: MessageSquareText,
+        items: [{ href: "/conversations", label: "Inbox", icon: MessageSquareText }],
+      },
+      {
         id: "crm",
         label: "CRM",
         icon: UsersRound,
         items: [
           { href: "/leads", label: "Leads", icon: ContactRound },
           { href: "/pipeline", label: "Pipeline", icon: Boxes },
-          { href: "/conversations", label: "Inbox", icon: MessageSquareText },
           { href: "/admissions", label: "Admissions", icon: ClipboardCheck },
           {
             href: "/contact-intelligence",
