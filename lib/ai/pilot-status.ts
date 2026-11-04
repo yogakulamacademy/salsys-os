@@ -50,8 +50,9 @@ export async function getAiInsightPilotStatus(): Promise<AiInsightPilotStatus | 
 
   const workspace = await getCurrentWorkspaceContext(session);
   const organizationId = workspace.activeOrganizationId;
-  if (!organizationId || workspace.activeWorkspace?.organizationId !== organizationId) return null;
-  if (!['owner', 'admin'].includes(workspace.activeWorkspace.role)) return null;
+  const activeWorkspace = workspace.activeWorkspace;
+  if (!organizationId || !activeWorkspace || activeWorkspace.organizationId !== organizationId) return null;
+  if (!['owner', 'admin'].includes(activeWorkspace.role)) return null;
 
   // Read the current, session-authorized membership again to avoid trusting
   // a stale role from the workspace display resolver.
@@ -63,7 +64,7 @@ export async function getAiInsightPilotStatus(): Promise<AiInsightPilotStatus | 
     .eq('active', true)
     .maybeSingle();
 
-  if (membershipError || !membership || !['owner', 'admin'].includes(String(membership.role))) {
+  if (membershipError || !membership || membership.active !== true || !['owner', 'admin'].includes(String(membership.role))) {
     return null;
   }
 
@@ -150,7 +151,7 @@ export async function getAiInsightPilotStatus(): Promise<AiInsightPilotStatus | 
 
   return {
     observedAt: now.toISOString(),
-    organizationName: workspace.activeWorkspace.organizationName,
+    organizationName: activeWorkspace.organizationName,
     readiness: observedPilotState(prerequisites),
     prerequisites,
     tenantPolicy: {
