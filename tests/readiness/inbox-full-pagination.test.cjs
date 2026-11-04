@@ -33,7 +33,7 @@ test("UI uses the paged result and retains URL query context", () => {
   for (const phrase of [
     "getInboxPage(",
     "pagination,",
-    "fullPage?.rows",
+    "rows: fullPage.rows",
   ]) assert.ok(data.includes(phrase), phrase);
   assert.ok(core.includes("p_limit: paginatedInbox ? 1 : 300"));
   assert.ok(page.includes("getConversationsWorkspace(query.lead, query)"));
@@ -67,7 +67,8 @@ test("reference inbox integrates completed conversations, owner scope and live a
   ]) assert.ok(sql.includes(fragment), "Missing resolved / owner query behavior: " + fragment);
   assert.ok(sidebar.includes("pagination?.owners"));
   assert.ok(sidebar.includes('Latest conversation activity'));
-  assert.ok(data.includes("loadInboxResolutionState(fullPage?.rows ?? workspace.conversationSummary)"));
+  assert.ok(data.includes("loadInboxResolutionState(workspace.conversationSummary)"));
+  assert.ok(data.includes("? { rows: fullPage.rows, available: true, warning: null }"));
   assert.ok(realtime.includes("event: 'INSERT', schema: 'public', table: 'leads'"));
   assert.ok(realtime.includes("Outbound messages also change latest-conversation-activity sorting."));
 });
