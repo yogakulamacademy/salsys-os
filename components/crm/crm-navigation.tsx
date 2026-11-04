@@ -8,7 +8,6 @@ import {
   ChevronDown,
   CircleDollarSign,
   DatabaseZap,
-  Inbox,
   LayoutDashboard,
   ListTodo,
   Rows3,
@@ -42,7 +41,6 @@ const groups: NavigationGroup[] = [
     items: [
       { href: '/leads', label: 'Leads', icon: UserRoundSearch },
       { href: '/pipeline', label: 'Pipeline', icon: Rows3 },
-      { href: '/conversations', label: 'Inbox', icon: Inbox },
       { href: '/follow-ups', label: 'Tasks & Follow-ups', icon: ListTodo },
     ],
   },
@@ -145,7 +143,7 @@ export function CrmNavigation() {
           <div className="mb-4 rounded-ui bg-surface-soft px-3 py-3">
             <div className="text-sm font-semibold text-copy-strong">CRM</div>
             <div className="mt-1 text-[13px] leading-5 text-copy-muted">
-              Manage leads, admissions, conversations and customer context in one workspace.
+              Manage leads, admissions, follow-ups and customer context in one workspace.
             </div>
           </div>
           <NavigationLinks mobile />
@@ -162,7 +160,7 @@ export function CrmNavigation() {
               CRM
             </div>
             <p className="mt-1.5 max-w-[195px] text-[13px] leading-5 text-copy-muted">
-              Manage leads, admissions, conversations and customer context in one workspace.
+              Manage leads, admissions, follow-ups and customer context in one workspace.
             </p>
           </div>
           <NavigationLinks />
