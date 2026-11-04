@@ -1,6 +1,8 @@
 -- Inbox Phase A: accessible full-dataset search, sorting and bounded server pagination.
 -- Uses the caller's RLS and existing workspace/lead authorization; never trusts a
 -- client-supplied tenant id. This deliberately does not change the legacy reader.
+-- VOLATILE is necessary: get_current_workspace_context_v1() updates tenant-session
+-- last_seen_at and cannot be called from a STABLE read-only function context.
 create or replace function public.get_current_conversations_page_v1(
   p_page integer default 1,
   p_page_size integer default 50,
@@ -13,7 +15,7 @@ create or replace function public.get_current_conversations_page_v1(
 )
 returns jsonb
 language plpgsql
-stable
+volatile
 security invoker
 set search_path = public, auth, pg_temp
 as $fn$
