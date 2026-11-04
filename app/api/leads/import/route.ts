@@ -102,7 +102,11 @@ export async function POST(request: NextRequest) {
     { p_organization_id: organizationId },
   );
   if (accessError || canManage !== true) {
-    return json({ error: "Only Sales managers and administrators can import leads." }, 403);
+    return json({ error: "Sales management access is required to import leads." }, 403);
+  }
+  const { data: canViewContacts, error: contactAccessError } = await supabase.rpc("can_view_lead_pii");
+  if (contactAccessError || canViewContacts !== true) {
+    return json({ error: "Contact-data permission is required to import leads safely." }, 403);
   }
 
   // Preflight existing contacts before writing. Read under the same authenticated
