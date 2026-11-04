@@ -13,6 +13,7 @@ test('pilot is never automatically approved even when all deployment flags are o
     uiEnabled: true,
     quotasEnabled: true,
     feedbackEnabled: true,
+    usageLedgerEnabled: true,
     modelConfigured: true,
     signingKeyConfigured: true,
     tenantOptedIn: true,
@@ -30,6 +31,7 @@ test('pilot is blocked when disabled and ratio never implies accuracy without da
     uiEnabled: false,
     quotasEnabled: false,
     feedbackEnabled: false,
+    usageLedgerEnabled: false,
     modelConfigured: false,
     signingKeyConfigured: false,
     tenantOptedIn: false,
@@ -216,6 +218,8 @@ test('UI has no activation, payment mutation, secret display or client-side quot
   assert.match(page, /getAiInsightPilotStatus/);
   assert.match(page, /notFound\(\)/);
   assert.match(page, /Read only/);
+  assert.match(page, /Claude request usage/);
+  assert.doesNotMatch(page, /AI_LEAD_INSIGHTS_USAGE_LEDGER_ENABLED\s*=\s*['\"]true/);
   assert.match(settings, /settings\/ai-insights/);
   assert.match(server, /\['owner', 'admin'\]/);
   assert.match(server, /\.eq\('organization_id', organizationId\)/);
