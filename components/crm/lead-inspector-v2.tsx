@@ -27,6 +27,7 @@ import {
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useModalFocus } from "@/components/use-modal-focus";
+import "./lead-inspector-v3.css";
 import { JourneyEvidencePanel } from "@/components/journey-evidence-panel";
 import type { JourneyEvidence } from "@/lib/journey-evidence";
 import { createLatestReadGuard } from "@/lib/latest-read";
@@ -434,21 +435,21 @@ export function LeadInspector({
         className="absolute inset-0 bg-slate-950/25 backdrop-blur-[1px]"
       />
 
-      <aside className="relative flex h-full w-full flex-col border-l border-[#DDE7DF] bg-[#F8FAF8] shadow-[-20px_0_60px_rgba(19,46,38,0.16)] sm:max-w-[680px]">
-        <header className="border-b border-[#E4EAE6] bg-white px-5 pb-0 pt-5 sm:px-6">
+      <aside className="si3-shell relative flex h-full w-full flex-col shadow-[-20px_0_60px_rgba(24,17,60,0.16)] sm:max-w-[590px]">
+        <header className="si3-header px-4 pb-0 pt-4 sm:px-5">
           <div className="flex items-start gap-3">
-            <span className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-[#E4F2E8] text-xs font-bold text-[#216551]">
+            <span className="si3-avatar grid h-11 w-11 shrink-0 place-items-center rounded-full text-xs font-bold">
               {payload ? initials(payload.lead.name || payload.lead.leadCode) : "…"}
             </span>
 
             <div className="min-w-0 flex-1">
               <div className="flex flex-wrap items-center gap-2">
-                <h2 className="truncate text-[18px] font-semibold tracking-[-0.025em] text-[#192E29]">
+                <h2 className="si3-lead-name truncate text-[18px] font-semibold tracking-[-0.025em]">
                   {payload?.lead.name || (loading ? "Loading lead…" : "Lead Inspector")}
                 </h2>
                 {payload ? <StatePill value={payload.lead.stage} /> : null}
               </div>
-              <div className="mt-1 truncate text-[11px] text-[#7A8981]">
+              <div className="si3-lead-meta mt-1 truncate text-[11px]">
                 {payload
                   ? [payload.lead.leadCode, payload.lead.course, payload.lead.country]
                       .filter(Boolean)
@@ -478,10 +479,10 @@ export function LeadInspector({
           </div>
 
           {payload ? (
-            <div className="mt-4 flex flex-wrap items-center gap-2">
+            <div className="si3-actions mt-4 flex flex-wrap items-center gap-2">
               <Link
                 href={`/conversations?lead=${payload.lead.id}`}
-                className="btn-primary inline-flex h-8 items-center gap-1.5 px-3 text-[11px]"
+                className="si3-primary inline-flex h-9 items-center gap-1.5 px-3 text-[11px]"
               >
                 <MessageCircle size={12} /> Conversation
               </Link>
@@ -518,7 +519,7 @@ export function LeadInspector({
             </div>
           ) : null}
 
-          <nav className="mt-4 flex gap-5" aria-label="Lead Inspector sections">
+          <nav className="si3-tab-nav mt-4 flex gap-5" aria-label="Lead Inspector sections">
             <InspectorTabButton
               active={tab === "overview"}
               icon={<UserRound size={13} />}
@@ -542,7 +543,7 @@ export function LeadInspector({
           </nav>
         </header>
 
-        <div className="min-h-0 flex-1 overflow-y-auto px-5 py-5 sm:px-6">
+        <div className="si3-body min-h-0 flex-1 overflow-y-auto px-4 py-4 sm:px-5">
           {loading ? <InspectorLoading /> : null}
           {error && !payload ? <InspectorError message={error} /> : null}
 
@@ -550,7 +551,10 @@ export function LeadInspector({
             <div className="space-y-4">
               {error ? <InspectorInlineWarning>{error}</InspectorInlineWarning> : null}
               {payload.warnings.length ? (
-                <InspectorInlineWarning>{payload.warnings.join(" ")}</InspectorInlineWarning>
+                <details className="si3-warning">
+                  <summary><AlertCircle size={13} /> Some lead data is temporarily unavailable <span>Details</span></summary>
+                  <ul>{payload.warnings.map((warning) => <li key={warning}>{warning}</li>)}</ul>
+                </details>
               ) : null}
               {actionSuccess ? (
                 <div className="flex items-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2.5 text-[10px] font-medium text-emerald-700">
@@ -668,8 +672,6 @@ function OverviewTab({
     .join(", ");
 
   const lastInbound = latestMessage(lead.lastMessages ?? []);
-  const potential = lead.potentialValue ?? lead.value;
-  const potentialCurrency = lead.potentialCurrency ?? lead.currency;
   const pendingTasks = payload.availability.openTasks === "unavailable" ? "Unavailable" : String(openTasks.length);
 
   return (
@@ -1014,7 +1016,7 @@ function SmartFollowupComposer({
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
 }) {
   return (
-    <section className="rounded-xl border border-[#DCE8DF] bg-white">
+    <section className="si3-followup rounded-xl border">
       <div className="flex items-start justify-between gap-3 px-4 py-3.5">
         <div>
           <div className="text-[9px] font-bold uppercase tracking-[0.12em] text-[#216551]">Smart follow-up</div>
@@ -1160,10 +1162,10 @@ function ActivityTab({ payload }: { payload: InspectorPayload }) {
 
 function InspectorTabButton({ active, icon, label, count, onClick }: { active: boolean; icon: ReactNode; label: string; count?: number; onClick: () => void }) {
   return (
-    <button type="button" onClick={onClick} className={`relative inline-flex h-10 items-center gap-1.5 text-[11px] font-semibold transition ${active ? "text-[#216551]" : "text-[#7A8981] hover:text-[#40594F]"}`}>
+    <button type="button" onClick={onClick} className={`si3-tab relative inline-flex h-10 items-center gap-1.5 text-[11px] font-semibold transition ${active ? "si3-tab-active" : ""}`}>
       {icon} {label}
-      {typeof count === "number" && count > 0 ? <span className="rounded-full bg-[#EDF4EF] px-1.5 py-0.5 text-[8px] text-[#5D7568]">{count > 99 ? "99+" : count}</span> : null}
-      {active ? <span className="absolute inset-x-0 bottom-0 h-0.5 rounded-full bg-[#216551]" /> : null}
+      {typeof count === "number" && count > 0 ? <span className="si3-count rounded-full px-1.5 py-0.5 text-[8px]">{count > 99 ? "99+" : count}</span> : null}
+      {active ? <span className="si3-tab-underline absolute inset-x-0 bottom-0 h-0.5 rounded-full" /> : null}
     </button>
   );
 }
@@ -1239,7 +1241,7 @@ function InspectorError({ message }: { message: string }) {
 }
 
 function StatePill({ value }: { value: string }) {
-  return <span className="rounded-full bg-[#E9F4EC] px-2.5 py-1 text-[9px] font-semibold text-[#216551]">{pretty(value)}</span>;
+  return <span className="si3-stage-pill rounded-full px-2.5 py-1 text-[9px] font-semibold">{pretty(value)}</span>;
 }
 
 function SmallTag({ children }: { children: ReactNode }) {
