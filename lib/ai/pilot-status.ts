@@ -141,6 +141,7 @@ export async function getAiInsightPilotStatus(): Promise<AiInsightPilotStatus | 
     uiEnabled: process.env.AI_LEAD_INSIGHTS_UI_ENABLED === 'true',
     quotasEnabled: process.env.AI_LEAD_INSIGHTS_QUOTAS_ENABLED === 'true',
     feedbackEnabled: process.env.AI_LEAD_INSIGHTS_FEEDBACK_ENABLED === 'true',
+    usageLedgerEnabled: process.env.AI_LEAD_INSIGHTS_USAGE_LEDGER_ENABLED === 'true',
     modelConfigured: Boolean(process.env.ANTHROPIC_API_KEY?.trim() &&
       (process.env.ANTHROPIC_SONNET_MODEL?.trim() || process.env.ANTHROPIC_HAIKU_MODEL?.trim())),
     signingKeyConfigured: Boolean(process.env.AI_LEAD_INSIGHTS_CONTEXT_HMAC_KEY?.trim() &&
