@@ -62,10 +62,22 @@ html.dark .si3-shell {
 }
 .si3-primary:hover { background: #4935c3; }
 /* Keep the label readable even when the Leads workspace has stronger link-color rules. */
+/* The legacy Lead Inspector globally colors all /conversations links violet.
+   Outrank that exact attribute selector for the filled Conversation CTA. */
+[aria-label="Lead Inspector"] aside.si3-shell a.si3-primary[href^="/conversations"],
+html.dark [aria-label="Lead Inspector"] aside.si3-shell a.si3-primary[href^="/conversations"] {
+  color: #ffffff !important;
+  -webkit-text-fill-color: #ffffff !important;
+}
 html body .si3-shell a.si3-primary,
 html.dark body .si3-shell a.si3-primary {
   color: #ffffff !important;
   -webkit-text-fill-color: #ffffff !important;
+}
+@media (min-width: 768px) {
+  [aria-label="Lead Inspector"] > aside.si3-shell {
+    max-width: 590px !important;
+  }
 }
 .si3-journey-search label { display:block; font-size:11px; color:var(--li-muted); }
 .si3-page-quick-filters { display:flex; align-items:center; flex-wrap:wrap; gap:7px; }
