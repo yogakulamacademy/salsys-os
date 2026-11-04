@@ -64,7 +64,7 @@ function setup(options = {}) {
         select() { return this; },
         eq() { return this; },
         maybeSingle: async () => ({ data: {
-          role: options.memberRole ?? 'admin', active: true,
+          role: options.memberRole ?? 'admin', active: options.inactive !== true,
         }, error: null }),
       };
     },
@@ -146,7 +146,7 @@ function setup(options = {}) {
 test('unauthenticated, non-admin, stale-role, and mock users cannot access admin data', async () => {
   for (const options of [
     { noUser: true }, { workspaceRole: 'viewer' },
-    { workspaceRole: 'admissions' }, { memberRole: 'viewer' },
+    { workspaceRole: 'admissions' }, { memberRole: 'viewer' }, { inactive: true },
     { otherWorkspace: true }, { mock: true },
   ]) {
     const f = setup(options);
