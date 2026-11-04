@@ -1,6 +1,6 @@
 "use client";
 
-import { Activity, MessageCircle, RefreshCw, Sparkles } from "lucide-react";
+import { Activity, FileText, MessageCircle, RefreshCw, Sparkles } from "lucide-react";
 import { useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
@@ -48,7 +48,7 @@ type TimelineItem = {
   meta: string;
 };
 
-type ViewMode = "conversation" | "activity";
+type ViewMode = "conversation" | "activity" | "notes";
 
 export function ConversationCenterView({
   messages,
@@ -139,7 +139,7 @@ export function ConversationCenterView({
   }, [resolvedLeadId]);
 
   useEffect(() => {
-    if (view !== "activity" || activityLoaded || activityLoading) return;
+    if ((view !== "activity" && view !== "notes") || activityLoaded || activityLoading) return;
     void loadActivity();
   }, [activityLoaded, activityLoading, loadActivity, view]);
 
@@ -200,6 +200,19 @@ export function ConversationCenterView({
       .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
   }, [crmActivity, messages, originChannel, originCourse, originDetail, originTimestamp]);
 
+  const notes = useMemo(
+    () => crmActivity
+      .filter(item => item.activity_type === "internal_note" || item.activity_type === "note")
+      .map(item => ({
+        id: item.id,
+        body: item.details || activityDetail(item),
+        timestamp: item.occurred_at || item.created_at,
+        author: item.actor_type || "Internal",
+      }))
+      .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()),
+    [crmActivity],
+  );
+
   const courseSelected = Boolean(course && course !== "Not selected");
 
   function handleViewKeyDown(event: React.KeyboardEvent<HTMLDivElement>) {
@@ -226,7 +239,7 @@ export function ConversationCenterView({
     <div className="flex min-h-0 flex-1 flex-col">
       <div className="shrink-0 border-b border-line bg-surface px-3 sm:px-5">
         <div
-          className="grid h-11 grid-cols-2 items-center sm:flex sm:gap-6"
+          className="ibx-v2-center-tabs grid h-11 grid-cols-3 items-center sm:flex sm:gap-6"
           role="tablist"
           aria-label="Conversation view"
           onKeyDown={handleViewKeyDown}
@@ -248,6 +261,16 @@ export function ConversationCenterView({
               {activityLoading ? "…" : activity.length}
             </span>
           </TabButton>
+          <TabButton
+            active={view === "notes"}
+            onClick={() => setView("notes")}
+            icon={<FileText size={14} />}
+          >
+            Notes
+            {notes.length > 0 ? (
+              <span className="ml-1 rounded bg-surface-muted px-1.5 py-0.5 text-[10px] font-medium text-copy-muted">{notes.length}</span>
+            ) : null}
+          </TabButton>
         </div>
       </div>
 
@@ -260,6 +283,37 @@ export function ConversationCenterView({
             originCourse={originCourse}
             originDetail={originDetail}
           />
+        ) : view === "notes" ? (
+          <div className="ibx-v2-notes mx-auto max-w-3xl">
+            <div className="mb-4 flex items-start gap-3 rounded-lg border border-line bg-surface px-4 py-3">
+              <FileText size={17} className="mt-0.5 shrink-0 text-brand-700"/>
+              <div>
+                <h3 className="text-[13px] font-semibold text-copy-strong">Private team notes</h3>
+                <p className="mt-1 text-[11px] leading-5 text-copy-muted">Notes are CRM-only and are never sent to the customer. To add one, switch the reply composer to Internal note.</p>
+              </div>
+            </div>
+            {activityLoading ? <p role="status" className="text-[12px] text-copy-muted">Loading internal notes…</p> : null}
+            {activityError ? <div role="alert" className="mb-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-[11px] text-amber-800">
+              Notes could not be loaded: {activityError}
+              <button type="button" onClick={() => { setActivityLoaded(false); void loadActivity(); }} className="ml-3 font-semibold underline">Retry</button>
+            </div> : null}
+            {!activityLoading && !activityError && notes.length === 0 ? (
+              <div className="grid min-h-[190px] place-items-center text-center">
+                <div><FileText size={24} className="mx-auto text-brand-700"/>
+                  <p className="mt-3 text-[13px] font-semibold text-copy-strong">No internal notes recorded</p>
+                  <p className="mt-1 text-[11px] text-copy-muted">Team notes will appear here after they are saved.</p>
+                </div>
+              </div>
+            ) : notes.map(item => (
+              <article key={item.id} className="mb-3 rounded-lg border border-line bg-surface px-4 py-3">
+                <div className="flex flex-wrap items-center justify-between gap-2 text-[10px] text-copy-muted">
+                  <span className="font-semibold capitalize">{item.author.replaceAll("_"," ")}</span>
+                  <time dateTime={item.timestamp}>{formatDateTime(item.timestamp)}</time>
+                </div>
+                <p className="mt-2 whitespace-pre-wrap break-words text-[12px] leading-5 text-copy-strong">{item.body}</p>
+              </article>
+            ))}
+          </div>
         ) : (
           <div className="mx-auto max-w-2xl">
             {activityLoading ? (
@@ -322,7 +376,7 @@ export function ConversationCenterView({
                     No activity recorded
                   </div>
                   <p className="mt-1 text-[12px] text-copy-muted">
-                    CRM activity will appear here when authoritative events exist.
+                    Activity will appear here when authoritative events exist.
                   </p>
                 </div>
               </div>
@@ -331,7 +385,7 @@ export function ConversationCenterView({
         )}
       </div>
 
-      <div className="mx-3 mb-2 shrink-0 rounded-ui border border-line bg-brand-50/50 px-2.5 py-2 sm:mx-5 sm:mb-3 sm:px-3 sm:py-2.5">
+      <div className="ibx-v2-interest-note mx-3 mb-2 shrink-0 rounded-ui border border-line bg-brand-50/50 px-2.5 py-2 sm:mx-5 sm:mb-3 sm:px-3 sm:py-2.5">
         <div className="flex items-start gap-2 text-[11.5px] leading-[18px] text-copy-muted sm:text-[12px] sm:leading-5">
           <Sparkles size={13} className="mt-0.5 shrink-0 text-brand-700 sm:h-[14px] sm:w-[14px]" />
           <div className="min-w-0">
