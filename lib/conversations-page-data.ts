@@ -53,6 +53,16 @@ export class InboxPaginationNotDeployedError extends Error {
   }
 }
 
+// A statement timeout is a transient database performance failure, not
+// evidence of a missing RPC. It gets an explicit, user-visible compatibility
+// fallback so that staff can still open and answer existing conversations.
+export class InboxPaginationTimedOutError extends Error {
+  constructor() {
+    super("Full-dataset Inbox query exceeded the database statement timeout");
+    this.name = "InboxPaginationTimedOutError";
+  }
+}
+
 function choice<T extends string>(value: unknown, choices: readonly T[], fallback: T): T {
   return typeof value === "string" && choices.includes(value as T)
     ? (value as T)
@@ -97,6 +107,11 @@ export async function getInboxPage(
   if (error) {
     if (error.code === "PGRST202" || error.code === "42883") {
       throw new InboxPaginationNotDeployedError();
+    }
+    // PostgreSQL 57014 can also mean a manually canceled query. Only recover
+    // the known statement_timeout case; do not suppress authorization failures.
+    if (error.code === "57014" && /canceling statement due to statement timeout/i.test(error.message ?? "")) {
+      throw new InboxPaginationTimedOutError();
     }
     throw new Error(`Unable to load full Inbox page: ${error.message}`);
   }
