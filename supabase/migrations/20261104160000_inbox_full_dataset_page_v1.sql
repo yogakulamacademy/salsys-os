@@ -19,6 +19,7 @@ set search_path = public, auth, pg_temp
 as $fn$
 declare
   v_organization_id uuid;
+  v_context jsonb;
   v_page integer := greatest(coalesce(p_page, 1), 1);
   v_page_size integer := least(greatest(coalesce(p_page_size, 50), 1), 100);
   v_query text := left(lower(btrim(coalesce(p_search, ''))), 120);
@@ -33,11 +34,15 @@ begin
     raise exception 'Authenticated user session required';
   end if;
 
-  v_organization_id := nullif(public.get_current_workspace_context_v1()->>'organization_id', '')::uuid;
+  -- The authenticated workspace-context RPC exposes enabled workspace codes
+  -- with session/tenant validation. The private has_workspace_access helper
+  -- intentionally cannot be executed by an authenticated SECURITY INVOKER RPC.
+  v_context := public.get_current_workspace_context_v1();
+  v_organization_id := nullif(v_context->>'organization_id', '')::uuid;
   if v_organization_id is null then
     raise exception 'Active organization could not be resolved';
   end if;
-  if not public.has_workspace_access(v_organization_id, 'sales') then
+  if not (coalesce(v_context->'workspace_codes', '[]'::jsonb) ? 'sales') then
     raise exception 'Sales workspace access required';
   end if;
 
