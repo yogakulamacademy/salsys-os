@@ -1,9 +1,7 @@
-import Link from "next/link";
-import { MoreHorizontal, Plus } from "lucide-react";
-
 import { LeadsAttributionScopeBar } from "@/components/leads-attribution-scope-bar";
 import { LeadsCleanTable } from "@/components/leads-clean-table";
 import { LeadsOverview } from "@/components/leads/leads-overview";
+import { LeadsHeaderActions } from "@/components/leads/leads-header-actions";
 import { RecentBookingActivity } from "@/components/recent-booking-activity";
 import { TeamAssignmentPanel } from "@/components/team-assignment-panel";
 import { Notice, PageHeader } from "@/components/ui";
@@ -12,7 +10,10 @@ import {
   parseLeadsAttributionScope,
 } from "@/lib/leads-attribution-scope";
 import { parseLeadsWorkspaceParams } from "@/lib/leads-data";
+import { getLeadsTableEvidence } from "@/lib/leads-table-evidence";
 import { isMockMode } from "@/lib/data";
+import { createClient } from "@/lib/supabase/server";
+import { requireCurrentOrganizationId } from "@/lib/workspace";
 import styles from "./leads.module.css";
 
 type LeadsPageProps = {
@@ -39,9 +40,42 @@ export default async function LeadsPage({ searchParams }: LeadsPageProps) {
   const filters = parseLeadsWorkspaceParams(params);
   const attributionScope = parseLeadsAttributionScope(params);
   const workspace = await getLeadsWorkspacePageWithAttributionScope(filters, attributionScope);
+  const tableEvidence = await getLeadsTableEvidence(workspace.leads);
   const mock = isMockMode();
   const notice = one(params.notice);
   const error = one(params.error);
+
+  let canManage = false;
+  if (!mock) {
+    try {
+      const supabase = await createClient();
+      const { data: { user }, error: authError } = await supabase.auth.getUser();
+      if (!authError && user) {
+        const orgId = await requireCurrentOrganizationId(supabase, user.id);
+        const [permission, contactPermission] = await Promise.all([
+          supabase.rpc("can_manage_sales_workspace", { p_organization_id: orgId }),
+          supabase.rpc("can_view_lead_pii"),
+        ]);
+        canManage =
+          !permission.error && permission.data === true &&
+          !contactPermission.error && contactPermission.data === true;
+      }
+    } catch {
+      // Fail closed: existing Leads browsing remains available, import/export do not.
+      canManage = false;
+    }
+  }
+
+  // Keep the user's current server-side Leads filter scope in their download.
+  const exportQuery = new URLSearchParams();
+  for (const key of [
+    "q", "stage", "source", "channel", "creation_channel",
+    "last_touch_source", "owner", "course", "aging", "view", "sort",
+  ] as const) {
+    const raw = one(params[key]);
+    if (raw) exportQuery.set(key, raw);
+  }
+  const exportHref = "/api/leads/export" + (exportQuery.size ? "?" + exportQuery : "");
 
   return (
     <div className={`leads-workspace-v2 ${styles.workspace} min-w-0 space-y-3 pb-4`} data-testid="leads-workspace">
@@ -49,23 +83,7 @@ export default async function LeadsPage({ searchParams }: LeadsPageProps) {
         eyebrow="CRM · Workspace"
         title="Leads"
         description="Manage, qualify, and move incoming leads forward from one workspace."
-        actions={
-          <div className="flex items-center gap-2">
-            <Link
-              href="/leads/new"
-              className="inline-flex h-10 items-center gap-2 rounded-ui bg-brand-700 px-3.5 text-[13px] font-semibold text-white shadow-sm transition hover:bg-brand-800"
-            >
-              <Plus size={15} /> Add lead
-            </Link>
-            <Link
-              href="/team"
-              aria-label="Open team workspace"
-              className="grid h-10 w-10 place-items-center rounded-ui border border-line bg-surface text-copy-muted transition hover:border-line-strong hover:bg-surface-soft hover:text-brand-700"
-            >
-              <MoreHorizontal size={17} />
-            </Link>
-          </div>
-        }
+        actions={<LeadsHeaderActions canManage={canManage} mock={mock} exportHref={exportHref} />}
       />
 
       {notice === "mock-create" ? (
@@ -95,6 +113,7 @@ export default async function LeadsPage({ searchParams }: LeadsPageProps) {
       <LeadsCleanTable
         leads={workspace.leads}
         intelligence={workspace.intelligence}
+        tableEvidence={tableEvidence}
         mock={mock}
         filters={filters}
         options={workspace.options}

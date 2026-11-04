@@ -167,13 +167,47 @@ test('Leads overview renders real summary and responsive controls', async ({ pag
   await expect(page.getByRole('region', { name: 'Leads overview' }).getByRole('link')).toHaveCount(5);
   await expect(page.getByRole('textbox', { name: 'Search leads' })).toBeVisible();
   await expect(page.getByRole('columnheader', { name: 'Source' })).toBeVisible();
+  await expect(page.getByRole('columnheader', { name: 'Interest' })).toBeVisible();
+  await expect(page.getByRole('columnheader', { name: 'Score' })).toBeVisible();
+  await expect(page.getByRole('columnheader', { name: 'Last activity' })).toBeVisible();
   await expect(page.getByRole('columnheader', { name: 'Next step' })).toBeVisible();
+  await expect(page.getByRole('columnheader', { name: 'Aging' })).toBeVisible();
+  await expect(page.getByRole('columnheader', { name: 'Course' })).toHaveCount(0);
+  await expect(page.getByTestId('lead-source-icon').first()).toBeVisible();
+  await expect(page.getByRole('columnheader', { name: 'Attention' })).toHaveCount(0);
   await page.getByRole('button', { name: 'More filters' }).click();
   await expect(page.getByText('Sort', { exact: true })).toBeVisible();
   for (const width of [390, 768, 1440]) {
     await page.setViewportSize({ width, height: 900 });
     await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
   }
+});
+
+test('Lead import/export actions appear in the intended layout and mock imports cannot write', async ({ page }) => {
+  await page.goto('/leads');
+
+  const actions = page.getByTestId('leads-import-export-actions');
+  await expect(actions).toBeVisible();
+  await expect(actions.getByRole('link', { name: 'Add lead', exact: true })).toBeVisible();
+  await expect(actions.getByRole('note', { name: /Export leads unavailable/ })).toBeVisible();
+
+  await actions.locator('summary[aria-label="More add lead options"]').click();
+  await expect(actions.getByText('Import leads (CSV)')).toBeVisible();
+  await expect(actions.getByText('Import leads (CSV)')).toHaveAttribute('aria-disabled', 'true');
+
+  await page.goto('/leads/import');
+  await expect(page.getByRole('heading', { name: 'Import leads' })).toBeVisible();
+  await expect(page.getByRole('link', { name: 'Download CSV template' })).toBeVisible();
+
+  await page.getByLabel('Choose CSV file').setInputFiles({
+    name: 'valid-leads.csv',
+    mimeType: 'text/csv',
+    buffer: Buffer.from('first_name,email,phone\nSample,sample@example.com,\n'),
+  });
+  await expect(page.getByTestId('leads-import-preview')).toBeVisible();
+  await expect(page.getByText('1', { exact: true }).first()).toBeVisible();
+  await expect(page.getByRole('button', { name: /Confirm import/ })).toBeDisabled();
+  await expect(page.getByText(/Demo mode is active/)).toBeVisible();
 });
 
 test('Home supports the shared dark theme', async ({ page }) => {

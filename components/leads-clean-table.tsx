@@ -7,7 +7,16 @@ import {
   Check,
   ChevronDown,
   Columns3,
+  Facebook,
   Filter,
+  Globe2,
+  Instagram,
+  Linkedin,
+  Mail,
+  MessageCircle,
+  Phone,
+  SearchCheck,
+  UsersRound,
   Loader2,
   MoreHorizontal,
   Search,
@@ -33,6 +42,7 @@ import type {
   LeadsWorkspaceSummary,
 } from "@/lib/leads-data";
 import type { LeadOverview } from "@/types/crm";
+import type { LeadsTableEvidence } from "@/lib/leads-table-evidence";
 import { personInitials, sourceLabel } from "@/lib/ui-format";
 
 type EnrichedLead = {
@@ -47,6 +57,9 @@ type ColumnKey =
   | "source"
   | "stage"
   | "owner"
+  | "score"
+  | "activity"
+  | "aging"
   | "next"
   | "signals"
   | "created";
@@ -57,19 +70,23 @@ const DEFAULT_COLUMNS: ColumnKey[] = [
   "course",
   "owner",
   "stage",
+  "score",
+  "activity",
   "next",
-  "signals",
-  "created",
+  "aging",
 ];
 
 const COLUMN_LABELS: Record<ColumnKey, string> = {
   lead: "Lead",
-  course: "Course",
+  course: "Interest",
   contact: "Contact",
   source: "Source",
   stage: "Stage",
   owner: "Owner",
-  next: "Suggested next step",
+  score: "Score",
+  activity: "Last activity",
+  aging: "Aging",
+  next: "Next step",
   signals: "Attention",
   created: "Created",
 };
@@ -77,6 +94,7 @@ const COLUMN_LABELS: Record<ColumnKey, string> = {
 export function LeadsCleanTable({
   leads,
   intelligence,
+  tableEvidence,
   mock,
   filters,
   options,
@@ -85,6 +103,7 @@ export function LeadsCleanTable({
 }: {
   leads: LeadOverview[];
   intelligence: LeadListIntelligence[];
+  tableEvidence: Record<string, LeadsTableEvidence>;
   mock: boolean;
   filters: LeadsWorkspaceFilters;
   options: LeadsWorkspaceOptions;
@@ -375,7 +394,7 @@ export function LeadsCleanTable({
                 <FilterSelect label="Owner" value={filters.owner || "all"} options={options.owners} onChange={(value) => updateUrl({ owner: value, page: 1 })} />
               </div>
               <FilterSelect label="Channel" value={filters.channel || "all"} options={options.channels} onChange={(value) => updateUrl({ channel: value, page: 1 })} />
-              <FilterSelect label="Course" value={filters.course || "all"} options={options.courses} onChange={(value) => updateUrl({ course: value, page: 1 })} />
+              <FilterSelect label="Interest" value={filters.course || "all"} options={options.courses} onChange={(value) => updateUrl({ course: value, page: 1 })} />
               <FilterSelect label="Aging" value={filters.aging || "all"} options={["healthy", "warning", "stuck", "untracked"]} onChange={(value) => updateUrl({ aging: value, page: 1 })} />
               <label className="min-w-[150px]">
                 <span className="mb-1 block text-[9px] font-semibold uppercase tracking-[0.08em] text-copy-subtle">Sort</span>
@@ -416,7 +435,7 @@ export function LeadsCleanTable({
         ) : null}
 
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[1190px] border-collapse">
+          <table className="w-full min-w-[1290px] border-collapse">
             <thead>
               <tr className="border-b border-line bg-surface-soft text-left">
                 <th className="w-10 px-4 py-2.5">
@@ -424,11 +443,14 @@ export function LeadsCleanTable({
                 </th>
                 {visibleColumns.includes("lead") ? <HeaderCell>Lead</HeaderCell> : null}
                 {visibleColumns.includes("source") ? <HeaderCell>Source</HeaderCell> : null}
-                {visibleColumns.includes("course") ? <HeaderCell>Course</HeaderCell> : null}
+                {visibleColumns.includes("course") ? <HeaderCell>Interest</HeaderCell> : null}
                 {visibleColumns.includes("owner") ? <HeaderCell>Owner</HeaderCell> : null}
                 {visibleColumns.includes("stage") ? <HeaderCell>Stage</HeaderCell> : null}
+                {visibleColumns.includes("score") ? <HeaderCell>Score</HeaderCell> : null}
+                {visibleColumns.includes("activity") ? <HeaderCell><span title="Most recent recorded contact (not every CRM activity)">Last activity</span></HeaderCell> : null}
                 {visibleColumns.includes("next") ? <HeaderCell>Next step</HeaderCell> : null}
-                {visibleColumns.includes("signals") ? <HeaderCell>Signals</HeaderCell> : null}
+                {visibleColumns.includes("aging") ? <HeaderCell>Aging</HeaderCell> : null}
+                {visibleColumns.includes("signals") ? <HeaderCell>Attention</HeaderCell> : null}
                 {visibleColumns.includes("created") ? <HeaderCell>Created</HeaderCell> : null}
                 {visibleColumns.includes("contact") ? <HeaderCell>Contact</HeaderCell> : null}
                 <th className="w-10 px-2 py-2.5" />
@@ -471,7 +493,10 @@ export function LeadsCleanTable({
 
                       {visibleColumns.includes("source") ? (
                         <td className="px-3 py-3">
-                          <div className="max-w-[160px] truncate text-[11px] font-medium text-copy" title={`Recorded source: ${lead.firstTouchSource || "Unknown"}`}>{sourceLabel(lead.firstTouchSource || "Unknown")}</div>
+                          <div className="flex max-w-[160px] min-w-0 items-center gap-2" title={`Recorded source: ${lead.firstTouchSource || "Unknown"}`}>
+                            <SourceIcon source={lead.firstTouchSource} />
+                            <span className="truncate text-[11px] font-medium text-copy">{sourceLabel(lead.firstTouchSource || "Unknown")}</span>
+                          </div>
                           <div className="mt-0.5 max-w-[160px] truncate text-[10px] text-copy-subtle">{lead.firstTouchCampaign || lead.firstTouchMedium || "—"}</div>
                         </td>
                       ) : null}
@@ -495,6 +520,29 @@ export function LeadsCleanTable({
                         </td>
                       ) : null}
 
+                      {visibleColumns.includes("score") ? (
+                        <td className="px-3 py-3">
+                          <PriorityScore evidence={tableEvidence[lead.id]} />
+                        </td>
+                      ) : null}
+
+                      {visibleColumns.includes("activity") ? (
+                        <td className="px-3 py-3" title="Latest verified contact time; this does not include every CRM activity.">
+                          {tableEvidence[lead.id]?.lastContactAt || (mock && lead.lastContactedAt) ? (
+                            <>
+                              <div className="whitespace-nowrap text-[11px] font-semibold text-copy">
+                                {relativeDate(tableEvidence[lead.id]?.lastContactAt || lead.lastContactedAt || "")}
+                              </div>
+                              <div className="mt-0.5 whitespace-nowrap text-[10px] text-copy-subtle">
+                                {tableEvidence[lead.id]?.lastContactKind || "Contact"} · {formatDate(tableEvidence[lead.id]?.lastContactAt || lead.lastContactedAt || "")}
+                              </div>
+                            </>
+                          ) : (
+                            <span className="text-[11px] text-copy-subtle" title="No verified contact event available">—</span>
+                          )}
+                        </td>
+                      ) : null}
+
                       {visibleColumns.includes("next") ? (
                         <td className="px-3 py-3">
                           <div className="max-w-[165px] text-[11px] font-medium text-copy">{nextAction(lead, intel)}</div>
@@ -502,10 +550,20 @@ export function LeadsCleanTable({
                         </td>
                       ) : null}
 
+                      {visibleColumns.includes("aging") ? (
+                        <td className="px-3 py-3">
+                          <div className="flex min-w-[96px] flex-col items-start gap-1">
+                            <AgingPill status={intel?.aging_status} />
+                            <span className="text-[10px] tabular-nums text-copy-subtle">
+                              {formatStageAge(intel)}
+                            </span>
+                          </div>
+                        </td>
+                      ) : null}
+
                       {visibleColumns.includes("signals") ? (
                         <td className="px-3 py-3">
                           <div className="flex flex-wrap items-center gap-1.5">
-                            <AgingPill status={intel?.aging_status} />
                             {isOverdue(lead.nextFollowupAt) ? <SignalPill tone="attention">Follow-up overdue</SignalPill> : null}
                             {lead.stage === "payment_pending" ? <SignalPill tone="money">Payment</SignalPill> : null}
                             {!intel?.owner_name && !lead.owner ? <SignalPill tone="neutral">Unassigned</SignalPill> : null}
@@ -618,6 +676,51 @@ function FilterSelect({ label, value, options, onChange }: { label: string; valu
       </select>
     </label>
   );
+}
+
+function SourceIcon({ source }: { source: string }) {
+  const value = (source || "").toLowerCase();
+  const icon = /instagram|(^|\W)ig(\W|$)/.test(value) ? <Instagram size={13} aria-hidden /> :
+    /whatsapp|wa\.me/.test(value) ? <MessageCircle size={13} aria-hidden /> :
+    /facebook|meta/.test(value) ? <Facebook size={13} aria-hidden /> :
+    /linkedin/.test(value) ? <Linkedin size={13} aria-hidden /> :
+    /google|search/.test(value) ? <SearchCheck size={13} aria-hidden /> :
+    /email|newsletter/.test(value) ? <Mail size={13} aria-hidden /> :
+    /phone|call/.test(value) ? <Phone size={13} aria-hidden /> :
+    /referral|referred/.test(value) ? <UsersRound size={13} aria-hidden /> :
+    <Globe2 size={13} aria-hidden />;
+  const tone = /instagram/.test(value) ? "bg-fuchsia-50 text-fuchsia-700 dark:bg-fuchsia-950/30 dark:text-fuchsia-300" :
+    /whatsapp/.test(value) ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-300" :
+    /facebook|meta/.test(value) ? "bg-blue-50 text-blue-700 dark:bg-blue-950/30 dark:text-blue-300" :
+    "bg-surface-muted text-copy-muted";
+  return <span aria-hidden="true" data-testid="lead-source-icon" className={"grid h-6 w-6 shrink-0 place-items-center rounded-lg " + tone}>{icon}</span>;
+}
+
+function PriorityScore({ evidence }: { evidence?: LeadsTableEvidence }) {
+  if (evidence?.priorityScore == null) {
+    return <span className="text-[11px] text-copy-subtle" title="No authorized canonical priority score available">—</span>;
+  }
+  return (
+    <span
+      title={"Sales priority score" + (evidence.priorityBand ? " · " + evidence.priorityBand + " priority" : "") + " (not a conversion probability)"}
+      className="inline-flex min-w-9 items-center justify-center rounded-full bg-brand-50 px-2 py-1 text-[11px] font-semibold tabular-nums text-brand-700 dark:bg-brand-950/30 dark:text-brand-300"
+    >
+      {new Intl.NumberFormat("en-IN", { maximumFractionDigits: 1 }).format(evidence.priorityScore)}
+    </span>
+  );
+}
+
+function formatStageAge(intel: LeadListIntelligence | null): string {
+  if (!intel) return "Not tracked";
+  const rawDays = intel.stage_age_days;
+  const days = rawDays == null || rawDays === "" ? NaN : Number(rawDays);
+  if (!Number.isFinite(days) || days < 0) return "Not tracked";
+  if (days < 1) {
+    const rawHours = intel.stage_age_hours;
+    const hours = rawHours == null || rawHours === "" ? days * 24 : Number(rawHours);
+    return Number.isFinite(hours) && hours >= 0 ? Math.floor(hours) + "h in stage" : "Not tracked";
+  }
+  return Math.floor(days) + "d in stage";
 }
 
 function AgingPill({ status }: { status: LeadListIntelligence["aging_status"] | undefined }) {
