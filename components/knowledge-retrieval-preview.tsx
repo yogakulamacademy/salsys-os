@@ -18,8 +18,8 @@ export function KnowledgeRetrievalPreview({ enabled }: { enabled: boolean }) {
     });
   }
   return <section aria-label="Test approved knowledge" className="card-pad">
-    <h2 className="text-base font-semibold text-copy-strong">Test an answer before using it</h2>
-    <p className="mt-1 text-sm leading-6 text-copy-muted">See which approved knowledge matches a customer question. This checks retrieval, not an AI-generated answer or every future reply.</p>
+    <h2 className="text-base font-semibold text-copy-strong">Test your knowledge</h2>
+    <p className="mt-1 text-sm leading-6 text-copy-muted">Ask a customer question and verify which approved, currently eligible records match. This is retrieval testing, not an AI-generated reply.</p>
     <form onSubmit={submit} className="mt-4 flex flex-col gap-3 sm:flex-row">
       <label className="min-w-0 flex-1"><span className="field-label">Customer question</span><input className="input w-full" name="query" required maxLength={500} disabled={!enabled} placeholder="For example: How do I request a transfer?" onChange={() => { guard.current.invalidate(); setResult({ state: 'idle', message: '' }); }} /></label>
       <button className="btn-secondary self-start sm:self-end" type="submit" disabled={!enabled || pending}>{pending ? 'Checking…' : 'Check approved knowledge'}</button>

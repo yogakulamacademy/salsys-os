@@ -1,11 +1,7 @@
 import {
-  Archive,
-  BrainCircuit,
-  CheckCircle2,
-  FileText,
-  Link2,
-  Plus,
-  ShieldCheck,
+  Archive, BookOpen, BrainCircuit, CheckCircle2, Clock3, Database,
+  FileText, Layers3, Link2, Plus, Search, ShieldAlert, ShieldCheck,
+  Sparkles,
 } from 'lucide-react';
 
 import {
@@ -13,7 +9,9 @@ import {
   archiveKnowledgeDocumentAction,
   createKnowledgeDocumentAction,
 } from '@/app/settings/knowledge/actions';
-import { EmptyState, PageHeader } from '@/components/ui';
+import { PageHeader } from '@/components/ui';
+import type { ReactNode } from 'react';
+import './knowledge-workspace.css';
 import { KnowledgeRetrievalPreview } from '@/components/knowledge-retrieval-preview';
 import { getSupabasePublicConfig, useMockData } from '@/lib/config';
 import { createClient } from '@/lib/supabase/server';
@@ -81,18 +79,6 @@ function pretty(value: string) {
     .replace(/\b\w/g, (letter) => letter.toUpperCase());
 }
 
-function statusClass(status: KnowledgeDocument['status']) {
-  if (status === 'approved') {
-    return 'bg-emerald-50 text-emerald-700 ring-emerald-200';
-  }
-
-  if (status === 'draft' || status === 'review') {
-    return 'bg-amber-50 text-amber-700 ring-amber-200';
-  }
-
-  return 'bg-slate-100 text-slate-600 ring-slate-200';
-}
-
 function validityLabel(document: KnowledgeDocument) {
   const now = Date.now();
   const validFrom = document.valid_from ? Date.parse(document.valid_from) : null;
@@ -116,7 +102,7 @@ function validityLabel(document: KnowledgeDocument) {
 export default async function KnowledgeSettingsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ notice?: string; error?: string }>;
+  searchParams: Promise<{ notice?: string; error?: string; q?: string; category?: string; status?: string; template?: string }>;
 }) {
   const query = await searchParams;
   const { configured } = getSupabasePublicConfig();
@@ -190,282 +176,243 @@ export default async function KnowledgeSettingsPage({
   const drafts = documents.filter(
     (document) => document.status === 'draft' || document.status === 'review',
   ).length;
-  const archived = documents.filter((document) => document.status === 'archived').length;
-  const sourceBacked = documents.filter((document) => Boolean(document.source_id)).length;
-  const approvedNeedingSourceReview = documents.filter(
-    (document) => document.status === 'approved' && !document.source_id,
-  ).length;
 
+
+  const currentTime = Date.now();
+  const needsReview = documents.filter((doc) =>
+    ['review', 'expired', 'superseded'].includes(doc.status) ||
+    (doc.status === 'approved' && (!doc.source_id || sourceById.get(doc.source_id)?.status !== 'active')) ||
+    (doc.status === 'approved' && (
+      (doc.valid_from !== null && Date.parse(doc.valid_from) > currentTime) ||
+      (doc.valid_until !== null && Date.parse(doc.valid_until) <= currentTime)
+    ))
+  ).length;
+  const usableApproved = documents.filter((doc) => {
+    if (doc.status !== 'approved' || !doc.source_id) return false;
+    const source = sourceById.get(doc.source_id);
+    if (source?.status !== 'active') return false;
+    const from = doc.valid_from ? Date.parse(doc.valid_from) : null;
+    const until = doc.valid_until ? Date.parse(doc.valid_until) : null;
+    return (from === null || (Number.isFinite(from) && from <= currentTime)) &&
+      (until === null || (Number.isFinite(until) && until > currentTime));
+  }).length;
+  const total = documents.length;
+  const coverage = total > 0 ? Math.round(100 * approved / total) : null;
+  const statusChoices = ['all', 'approved', 'draft', 'review', 'expired', 'superseded', 'archived'];
+  const statusFilter = statusChoices.includes(query.status || '') ? query.status || 'all' : 'all';
+  const categoryFilter = categories.includes(query.category || '') ? query.category || 'all' : 'all';
+  const search = (query.q || '').trim().slice(0, 120).toLocaleLowerCase();
+  const filteredDocuments = documents.filter((doc) =>
+    (statusFilter === 'all' || doc.status === statusFilter) &&
+    (categoryFilter === 'all' || doc.category === categoryFilter) &&
+    (!search || doc.title.toLocaleLowerCase().includes(search) ||
+      doc.content.toLocaleLowerCase().includes(search))
+  );
+  const filterActive = Boolean(search || statusFilter !== 'all' || categoryFilter !== 'all');
+  const templateName = ['policy', 'faq', 'process'].includes(query.template || '')
+    ? query.template || '' : '';
+  const template = templateName === 'policy'
+    ? { title:'Refund policy', category:'policy', placeholder:'Enter the verified refund eligibility, payment rules and exceptions approved by your organization.' }
+    : templateName === 'faq'
+      ? { title:'Payment FAQ', category:'faq', placeholder:'Enter the approved answer to a real customer payment question. Include any conditions or limitations.' }
+      : templateName === 'process'
+        ? { title:'Admissions process', category:'general', placeholder:'Document the exact approved steps, responsible people and escalation path.' }
+        : null;
+  const canRead = !loadError;
+  const knowledgeReadiness = !canRead ? 'Unavailable'
+    : usableApproved > 0 ? 'Eligible knowledge found'
+      : partial ? 'Needs verification' : 'Not ready';
+  const knowledgeReadinessDescription = !canRead
+    ? 'Current library status could not be verified.'
+    : usableApproved > 0
+      ? 'Eligible, source-backed items exist in this view. Test retrieval before relying on an answer.'
+      : partial
+        ? 'The loaded view is limited. Check retrieval and older records before assessing readiness.'
+        : 'Add currently valid, source-backed, approved knowledge to support Co-Pilot retrieval.';
   return (
-    <div className="space-y-6">
-      <PageHeader
-        eyebrow="AI Intelligence"
-        title="Organization Knowledge"
-        description={`Approved facts for ${organizationName}. The Co-Pilot can use only approved, currently valid knowledge; drafts, archived items and ineligible validity windows are excluded from retrieval.`}
+    <div className="kn space-y-5" aria-label="Organization Knowledge workspace">
+      <PageHeader eyebrow="AI Intelligence" title="Organization Knowledge"
+        description={'Create and manage approved policies, FAQs, processes and sales guidance for ' + organizationName + '. The Co-Pilot can use only approved, currently valid knowledge with eligible retrieval evidence.'}
       />
 
-      {query.notice ? (
-        <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-800">
-          {query.notice}
+      {query.notice ? <div className="kn-flash kn-success" role="status">{query.notice}</div> : null}
+      {query.error || loadError ? <div className="kn-flash kn-error" role="alert">{query.error || loadError}</div> : null}
+
+      <section className="kn-overview" aria-label="Knowledge overview">
+        <div className="kn-stats">
+          <Metric icon={<Database size={22}/>} value={canRead && total > 0 ? String(approved) : '—'} title="Approved items" hint={partial ? 'Loaded view only' : 'Approved status'}/>
+          <Metric icon={<CheckCircle2 size={22}/>} value={canRead && coverage !== null ? String(coverage) + '%' : '—'}
+            title="Approval coverage" hint="Approved / loaded items"/>
+          <Metric icon={<Sparkles size={22}/>} value={canRead && total > 0 ? String(drafts) : '—'} title="Drafts" hint="Draft or in review"/>
+          <Metric icon={<Clock3 size={22}/>} value={canRead && total > 0 ? String(needsReview) : '—'} title="Needs review" hint="Unique items in view"/>
         </div>
-      ) : null}
-
-      {query.error || loadError ? (
-        <div className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-medium text-rose-800">
-          {query.error || loadError}
+        <div className="kn-readiness">
+          <Sparkles size={26} aria-hidden="true"/>
+          <div><h2>Co-Pilot Readiness</h2><p>{knowledgeReadinessDescription}</p></div>
+          <span className="kn-readiness-state" data-ready={usableApproved > 0 && canRead ? 'true' : 'false'}>{knowledgeReadiness}</span>
         </div>
-      ) : null}
+      </section>
+      {partial ? <p className="kn-scope-note" role="status">Showing the 200 most recently updated items; all summary counts describe this view. The retrieval test can search all eligible knowledge.</p> : null}
 
-      {!loadError && documents.length > 0 ? <section aria-label="Knowledge library summary" className="rounded-xl border border-line bg-surface px-4 py-3">
-        <div className="flex flex-wrap gap-x-5 gap-y-2 text-sm text-copy">
-          <span><strong className="text-copy-strong">{documents.length}</strong> knowledge items in this view</span>
-          {approved > 0 ? <span><strong className="text-copy-strong">{approved}</strong> approved status</span> : null}
-          {drafts > 0 ? <span><strong className="text-copy-strong">{drafts}</strong> draft / review</span> : null}
-          {archived > 0 ? <span><strong className="text-copy-strong">{archived}</strong> archived</span> : null}
-          {sourceBacked > 0 ? <span><strong className="text-copy-strong">{sourceBacked}</strong> source-backed</span> : null}
-          {approvedNeedingSourceReview > 0 ? <span className="text-amber-700"><strong>{approvedNeedingSourceReview}</strong> approved items need source review</span> : null}
-        </div>
-        <p className="mt-1 text-xs text-copy-muted">Approval, provenance, validity and question matching are separate controls. Legacy approved items without a linked source remain visible for review.</p>
-      </section> : null}
+      <div className="kn-test">
+        <KnowledgeRetrievalPreview key={activeOrganizationId ?? 'unavailable'} enabled={live && canManage && !loadError}/>
+      </div>
 
-      {partial ? <p className="text-sm text-copy-muted">Showing the 200 most recently updated items; counts describe this view. The retrieval preview searches all eligible knowledge.</p> : null}
-
-      <KnowledgeRetrievalPreview key={activeOrganizationId ?? 'unavailable'} enabled={live && canManage && !loadError} />
-
-      <div className="grid gap-6 xl:grid-cols-[minmax(0,0.9fr)_minmax(0,1.6fr)]">
-        <section className="card-pad" id="knowledge-create">
-          <div className="flex items-start gap-3">
-            <div className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-violet-50 text-violet-700">
-              <Plus size={18} />
-            </div>
-            <div>
-              <h2 className="text-base font-bold text-slate-950">Add source-backed organization knowledge</h2>
-              <p className="mt-1 text-sm leading-6 text-slate-500">
-                Record the business source behind each fact. Live CRM remains authoritative for current prices, dates and availability.
-              </p>
-            </div>
+      <div className="kn-workspace">
+        <section className="kn-panel kn-create" id="knowledge-create" aria-labelledby="kn-create-heading">
+          <div className="kn-heading">
+            <span className="kn-heading-icon"><Plus size={22}/></span>
+            <div><h2 id="kn-create-heading">Add Knowledge</h2>
+              <p>Add organization-approved information with a documented source.</p></div>
           </div>
-
-          {canManage ? (
-            <form action={createKnowledgeDocumentAction} className="mt-5 space-y-4">
-              <label className="block">
-                <span className="mb-1.5 block text-xs font-bold uppercase tracking-wide text-slate-500">Title</span>
-                <input
-                  name="title"
-                  required
-                  maxLength={180}
-                  placeholder="Example: Online course recording access"
-                  className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-900 outline-none transition focus:border-violet-400 focus:ring-2 focus:ring-violet-100"
-                />
-              </label>
-
-              <label className="block">
-                <span className="mb-1.5 block text-xs font-bold uppercase tracking-wide text-slate-500">Category</span>
-                <select
-                  name="category"
-                  defaultValue="general"
-                  className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-900 outline-none transition focus:border-violet-400 focus:ring-2 focus:ring-violet-100"
-                >
-                  {categories.map((category) => (
-                    <option key={category} value={category}>
-                      {pretty(category)}
-                    </option>
-                  ))}
-                </select>
-              </label>
-
-              <div className="grid gap-4 sm:grid-cols-2">
-                <label className="block">
-                  <span className="mb-1.5 block text-xs font-bold uppercase tracking-wide text-slate-500">Source name</span>
-                  <input
-                    name="source_name"
-                    required
-                    maxLength={240}
-                    placeholder="Example: Admissions policy approved 3 Nov"
-                    className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-900 outline-none transition focus:border-violet-400 focus:ring-2 focus:ring-violet-100"
-                  />
-                </label>
-
-                <label className="block">
-                  <span className="mb-1.5 block text-xs font-bold uppercase tracking-wide text-slate-500">Source type</span>
-                  <select
-                    name="source_type"
-                    defaultValue="manual"
-                    className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-900 outline-none transition focus:border-violet-400 focus:ring-2 focus:ring-violet-100"
-                  >
-                    {sourceTypes.map((sourceType) => (
-                      <option key={sourceType} value={sourceType}>{pretty(sourceType)}</option>
-                    ))}
+          {template ? <div className="kn-template-note">
+            {pretty(templateName)} template selected. Add the approved answer and a real source before saving.
+          </div> : null}
+          {canManage ? <form action={createKnowledgeDocumentAction} className="kn-create-form">
+            <label className="kn-field"><span>Title</span>
+              <input name="title" required maxLength={180}
+                defaultValue={template?.title || ''}
+                placeholder="e.g., Refund policy, Course access process"/>
+            </label>
+            <label className="kn-field"><span>Category</span>
+              <select name="category" defaultValue={template?.category || 'general'}>
+                {categories.map((category) => <option key={category} value={category}>{pretty(category)}</option>)}
+              </select>
+            </label>
+            <label className="kn-field"><span>Approved answer / policy</span>
+              <textarea name="content" required rows={6} minLength={10}
+                placeholder={template?.placeholder || 'Write the exact organization-approved answer the Co-Pilot is allowed to retrieve...'}/>
+            </label>
+            <label className="kn-field"><span>Source name <small>Required for provenance</small></span>
+              <input name="source_name" required maxLength={240} placeholder="e.g., Admissions policy approved this month"/>
+            </label>
+            <details className="kn-advanced">
+              <summary><Layers3 size={16}/> Source details & validity <span>Optional settings</span></summary>
+              <div className="kn-advanced-fields">
+                <label className="kn-field"><span>Source type</span>
+                  <select name="source_type" defaultValue="manual">
+                    {sourceTypes.map((type) => <option key={type} value={type}>{pretty(type)}</option>)}
                   </select>
                 </label>
-              </div>
-
-              <label className="block">
-                <span className="mb-1.5 block text-xs font-bold uppercase tracking-wide text-slate-500">Source reference URL <span className="font-medium normal-case tracking-normal">(optional)</span></span>
-                <input
-                  name="source_uri"
-                  type="url"
-                  maxLength={2048}
-                  placeholder="https://..."
-                  className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-900 outline-none transition focus:border-violet-400 focus:ring-2 focus:ring-violet-100"
-                />
-                <span className="mt-1 block text-xs leading-5 text-slate-400">Stored as provenance only. SalsysOS does not fetch this URL when you save the knowledge item.</span>
-              </label>
-
-              <div className="grid gap-4 sm:grid-cols-2">
-                <label className="block">
-                  <span className="mb-1.5 block text-xs font-bold uppercase tracking-wide text-slate-500">Valid from <span className="font-medium normal-case tracking-normal">(UTC, optional)</span></span>
-                  <input
-                    name="valid_from"
-                    type="datetime-local"
-                    step="60"
-                    className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-900 outline-none transition focus:border-violet-400 focus:ring-2 focus:ring-violet-100"
-                  />
+                <label className="kn-field"><span>Source reference URL <small>Optional</small></span>
+                  <input name="source_uri" type="url" maxLength={2048} placeholder="https://..."/>
+                  <small>SalsysOS does not fetch this URL when saving; it is stored as passive provenance.</small>
                 </label>
-
-                <label className="block">
-                  <span className="mb-1.5 block text-xs font-bold uppercase tracking-wide text-slate-500">Valid until <span className="font-medium normal-case tracking-normal">(UTC, optional)</span></span>
-                  <input
-                    name="valid_until"
-                    type="datetime-local"
-                    step="60"
-                    className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-900 outline-none transition focus:border-violet-400 focus:ring-2 focus:ring-violet-100"
-                  />
-                </label>
+                <div className="kn-validity">
+                  <label className="kn-field"><span>Valid from <small>UTC, optional</small></span>
+                    <input name="valid_from" type="datetime-local" step="60"/>
+                  </label>
+                  <label className="kn-field"><span>Valid until <small>UTC, optional</small></span>
+                    <input name="valid_until" type="datetime-local" step="60"/>
+                  </label>
+                </div>
               </div>
-
-              <label className="block">
-                <span className="mb-1.5 block text-xs font-bold uppercase tracking-wide text-slate-500">Approved answer / policy</span>
-                <textarea
-                  name="content"
-                  required
-                  rows={9}
-                  placeholder="Write the exact organization-approved fact or answer the AI is allowed to use..."
-                  className="w-full resize-y rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm leading-6 text-slate-900 outline-none transition focus:border-violet-400 focus:ring-2 focus:ring-violet-100"
-                />
-              </label>
-
-              <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-3 text-xs leading-5 text-amber-800">
-                <strong>Authority rule:</strong> approval does not override validity. Only approved, currently valid knowledge with an eligible source can be retrieved. Save uncertain information as a draft.
-              </div>
-
-              <div className="flex flex-wrap gap-2">
-                <button
-                  type="submit"
-                  name="intent"
-                  value="draft"
-                  className="btn-secondary"
-                >
-                  Save draft
-                </button>
-                <button
-                  type="submit"
-                  name="intent"
-                  value="approve"
-                  className="btn-primary"
-                >
-                  <ShieldCheck size={15} />
-                  Save & approve
-                </button>
-              </div>
-            </form>
-          ) : (
-            <div className="mt-5 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600">
-              Organization admin access is required to create or approve knowledge.
+            </details>
+            <div className="kn-authority"><ShieldCheck size={18}/>
+              <span><strong>Keep it accurate and clear.</strong> Approval does not override source or validity requirements. Save uncertain information as a draft.</span>
             </div>
-          )}
+            <div className="kn-create-actions">
+              <button type="submit" name="intent" value="draft" className="kn-secondary">Save as Draft</button>
+              <button type="submit" name="intent" value="approve" className="kn-primary"><CheckCircle2 size={16}/> Save & Approve</button>
+            </div>
+          </form> : <div className="kn-readonly">Organization admin access is required to create or approve knowledge.</div>}
         </section>
 
-        <section className="card-pad">
-          <div className="flex items-start justify-between gap-4">
-            <div className="flex items-start gap-3">
-              <div className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-slate-100 text-slate-700">
-                <BrainCircuit size={18} />
-              </div>
-              <div>
-                <h2 className="text-base font-bold text-slate-950">Knowledge library</h2>
-                <p className="mt-1 text-sm text-slate-500">Approved answers, drafts, provenance and validity for this organization.</p>
-              </div>
-            </div>
-            <div className="rounded-full bg-violet-50 px-3 py-1 text-xs font-bold text-violet-700">
-              Approved-only search
-            </div>
+        <section className="kn-panel kn-library" aria-labelledby="kn-library-heading">
+          <div className="kn-heading kn-library-heading">
+            <span className="kn-heading-icon"><BookOpen size={21}/></span>
+            <div><h2 id="kn-library-heading">Knowledge Library</h2>
+              <p>Approved answers, drafts, policies and their provenance.</p></div>
           </div>
-
-          {documents.length === 0 ? (
-            <EmptyState title={loadError ? 'Knowledge could not be loaded' : 'Build your approved business knowledge'} description={loadError ? 'Readiness is unknown until the workspace can be read. An unavailable library is not an empty library.' : 'Start with a source-backed draft, have an organization admin approve it, then test retrieval with a real customer question.'} action={!loadError && canManage ? <a className="btn-primary" href="#knowledge-create">Add the first draft</a> : undefined} />
-          ) : (
-            <div className="mt-5 space-y-3">
-              {documents.map((document) => {
+          {documents.length > 0 && canRead ? <form className="kn-library-filters" method="GET" action="/settings/knowledge">
+            <label className="kn-filter-search"><Search size={16}/><span className="sr-only">Search knowledge</span>
+              <input name="q" type="search" maxLength={120} defaultValue={query.q || ''} placeholder="Search knowledge..."/>
+            </label>
+            <label><span className="sr-only">Knowledge category</span>
+              <select name="category" defaultValue={categoryFilter}>
+                <option value="all">All categories</option>
+                {categories.map((category) => <option key={category} value={category}>{pretty(category)}</option>)}
+              </select>
+            </label>
+            <label><span className="sr-only">Knowledge status</span>
+              <select name="status" defaultValue={statusFilter}>
+                <option value="all">All statuses</option>
+                {statusChoices.slice(1).map((status) => <option key={status} value={status}>{pretty(status)}</option>)}
+              </select>
+            </label>
+            <button type="submit" className="kn-secondary">Apply</button>
+            {filterActive ? <a className="kn-clear-filters" href="/settings/knowledge">Clear</a> : null}
+          </form> : null}
+          {canRead && documents.length > 0 ? (
+            <div className="kn-library-records">
+              <div className="kn-library-record-count">{filteredDocuments.length} of {documents.length} items in loaded view</div>
+              {filteredDocuments.length === 0 ? (
+                <div className="kn-library-empty kn-filter-empty"><Search size={34}/>
+                  <h3>No matching knowledge</h3><p>Try another search, status or category.</p>
+                  <a className="kn-secondary" href="/settings/knowledge">Clear filters</a></div>
+              ) : filteredDocuments.map((document) => {
                 const source = document.source_id ? sourceById.get(document.source_id) : null;
-                return (
-                  <article key={document.id} className="rounded-2xl border border-slate-200 bg-white p-4">
-                    <div className="flex flex-wrap items-start justify-between gap-3">
-                      <div className="min-w-0">
-                        <div className="flex flex-wrap items-center gap-2">
-                          <FileText size={15} className="text-slate-400" />
-                          <h3 className="font-bold text-slate-900">{document.title}</h3>
-                          <span className={`inline-flex rounded-full px-2 py-1 text-[10px] font-bold ring-1 ring-inset ${statusClass(document.status)}`}>
-                            {pretty(document.status)}
-                          </span>
-                          <span className="rounded-full bg-slate-100 px-2 py-1 text-[10px] font-semibold text-slate-600">
-                            {pretty(document.category)}
-                          </span>
-                        </div>
-                        <p className="mt-2 line-clamp-4 whitespace-pre-wrap text-sm leading-6 text-slate-600">
-                          {document.content}
-                        </p>
-
-                        <div className="mt-3 flex flex-wrap gap-2 text-[11px] font-medium text-slate-500">
-                          {source ? (
-                            <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2 py-1">
-                              <Link2 size={11} />
-                              Source: {source.name} · {pretty(source.source_type)}{source.status !== 'active' ? ` · ${pretty(source.status)}` : ''}
-                            </span>
-                          ) : (
-                            <span className="rounded-full bg-amber-50 px-2 py-1 text-amber-700">Legacy item · source review needed</span>
-                          )}
-                          <span className="rounded-full bg-slate-100 px-2 py-1">{validityLabel(document)}</span>
-                        </div>
-
-                        {source?.source_uri ? (
-                          <p className="mt-2 truncate text-[11px] text-slate-400">Reference: {source.source_uri}</p>
-                        ) : null}
-
-                        <div className="mt-3 text-[11px] font-medium text-slate-400">
-                          Version {document.version} · Updated {new Date(document.updated_at).toLocaleString('en-IN')}
-                        </div>
-                      </div>
-                    </div>
-
-                    {canManage && document.status !== 'archived' ? (
-                      <div className="mt-4 flex flex-wrap gap-2 border-t border-slate-100 pt-3">
-                        {document.status !== 'approved' ? (
-                          <form action={approveKnowledgeDocumentAction}>
-                            <input type="hidden" name="document_id" value={document.id} />
-                            <button type="submit" className="btn-primary !px-3 !py-2 text-xs">
-                              <CheckCircle2 size={14} />
-                              Approve
-                            </button>
-                          </form>
-                        ) : null}
-
-                        <form action={archiveKnowledgeDocumentAction}>
-                          <input type="hidden" name="document_id" value={document.id} />
-                          <button type="submit" className="btn-secondary !px-3 !py-2 text-xs">
-                            <Archive size={14} />
-                            Archive
-                          </button>
-                        </form>
-                      </div>
-                    ) : null}
-                  </article>
-                );
+                return <article key={document.id} className="kn-document">
+                  <div className="kn-document-title"><FileText size={17}/>
+                    <h3>{document.title}</h3>
+                    <span className="kn-status" data-status={document.status}>{pretty(document.status)}</span>
+                    <span className="kn-category">{pretty(document.category)}</span>
+                  </div>
+                  <p className="kn-document-content">{document.content}</p>
+                  <div className="kn-document-meta">
+                    {source ? <span><Link2 size={12}/> Source: {source.name} · {pretty(source.source_type)}{source.status !== 'active' ? ' · ' + pretty(source.status) : ''}</span>
+                      : <span className="kn-missing-source">Legacy item · source review needed</span>}
+                    <span>{validityLabel(document)}</span>
+                    <span>Version {document.version}</span>
+                  </div>
+                  {source?.source_uri ? <p className="kn-reference">Reference: {source.source_uri}</p> : null}
+                  <p className="kn-updated">Updated {new Date(document.updated_at).toLocaleString('en-IN')}</p>
+                  {canManage && document.status !== 'archived' ? <div className="kn-document-actions">
+                    {document.status !== 'approved' ? <form action={approveKnowledgeDocumentAction}>
+                      <input type="hidden" name="document_id" value={document.id}/>
+                      <button type="submit" className="kn-primary kn-small"><CheckCircle2 size={14}/> Approve</button>
+                    </form> : null}
+                    <form action={archiveKnowledgeDocumentAction}>
+                      <input type="hidden" name="document_id" value={document.id}/>
+                      <button type="submit" className="kn-secondary kn-small"><Archive size={14}/> Archive</button>
+                    </form>
+                  </div> : null}
+                </article>;
               })}
             </div>
-          )}
+          ) : <div className="kn-library-empty" aria-label="Knowledge library empty state">
+            {loadError ? <>
+              <ShieldAlert size={42}/>
+              <h3>Knowledge could not be loaded</h3>
+              <p>Readiness is unknown until the workspace can be read. An unavailable library is not an empty library.</p>
+            </> : <>
+              <span className="kn-empty-illustration" aria-hidden="true"><FileText size={58}/><Sparkles size={27}/></span>
+              <h3>No knowledge added yet</h3>
+              <p className="kn-empty-emphasis">Build your approved business knowledge</p>
+              <p>Add approved policies, FAQs, processes and sales guidance so your Co-Pilot can retrieve organization-specific answers.</p>
+              {canManage ? <>
+                <a href="#knowledge-create" className="kn-primary"><Plus size={16}/> Add the first draft</a>
+                <div className="kn-template-divider">Or get started with a template</div>
+                <div className="kn-template-links">
+                  <a href="/settings/knowledge?template=policy#knowledge-create"><ShieldCheck size={15}/> Policy</a>
+                  <a href="/settings/knowledge?template=faq#knowledge-create"><BrainCircuit size={15}/> FAQ</a>
+                  <a href="/settings/knowledge?template=process#knowledge-create"><Layers3 size={15}/> Process</a>
+                </div>
+              </> : null}
+            </>}
+          </div>}
         </section>
       </div>
+      <p className="kn-governance-note">Only organization-approved, currently eligible source-backed records should inform Co-Pilot responses. Live CRM data remains authoritative for current prices, dates and availability.</p>
     </div>
   );
+}
+
+function Metric({ icon, value, title, hint }: {
+  icon: ReactNode; value: string; title: string; hint: string;
+}) {
+  return <div className="kn-metric">
+    <span className="kn-metric-icon">{icon}</span>
+    <div><strong>{value}</strong><span>{title}</span><small>{hint}</small></div>
+  </div>;
 }
