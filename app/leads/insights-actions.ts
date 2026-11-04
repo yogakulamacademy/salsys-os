@@ -1,6 +1,7 @@
 'use server';
 
 import { getLeadContextV1, type LeadContextV1 } from '@/lib/ai/lead-context';
+import { reserveLeadInsightGeneration } from '@/lib/ai/lead-insight-quota';
 import { recordLeadInsightRun } from '@/lib/ai/lead-insight-feedback';
 import {
   evidenceCatalog,
@@ -176,6 +177,13 @@ export async function generateLeadInsightsAction(leadId: string): Promise<Insigh
   if (!apiKey || !model) {
     return { ok: false, error: 'AI insight model is not configured.' };
   }
+
+  // Tenant opt-in and atomic usage reservation must succeed BEFORE any
+  // provider request. A failed reservation does not call Claude.
+  const reservation = await reserveLeadInsightGeneration(
+    context.lead.organizationId, context.lead.id,
+  );
+  if (!reservation.ok) return { ok: false, error: reservation.error };
 
   const input = providerContext(context);
   const system = [
