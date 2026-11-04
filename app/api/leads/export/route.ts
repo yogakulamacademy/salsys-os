@@ -48,7 +48,11 @@ export async function GET(request: NextRequest) {
     { p_organization_id: organizationId },
   );
   if (permissionError || canManage !== true) {
-    return errorResponse("Only Sales managers and administrators can export leads.", 403);
+    return errorResponse("Sales management access is required to export leads.", 403);
+  }
+  const { data: canViewContacts, error: contactAccessError } = await supabase.rpc("can_view_lead_pii");
+  if (contactAccessError || canViewContacts !== true) {
+    return errorResponse("Contact-data permission is required to export leads.", 403);
   }
 
   const params = Object.fromEntries(
