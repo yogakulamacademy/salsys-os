@@ -16,7 +16,7 @@ test.beforeEach(async({context})=>{
 
 test('Inbox V2 retains an unselected opening with live filters and empty results',async({page})=>{
   await page.goto('/conversations');
-  await expect(page.getByRole('heading',{name:'Inbox',exact:true})).toBeVisible();
+  await expect(page.getByRole('heading',{name:'Inbox',exact:true,hidden:true})).toBeAttached();
   await expect(page.getByText('Select a conversation',{exact:true})).toBeVisible();
   const tabs=page.getByRole('tablist',{name:'Conversation filters'});
   await expect(tabs.getByRole('tab',{name:/Needs reply/})).toBeVisible();
@@ -44,7 +44,10 @@ test('Selected Inbox thread exposes real Notes, Activity and customer context',a
   await expect(page.getByRole('tab',{name:/Activity/})).toBeVisible();
   await page.getByRole('tab',{name:/Notes/}).click();
   await expect(page.getByRole('heading',{name:'Private team notes'})).toBeVisible();
-  await expect(page.getByRole('link',{name:'Next steps'})).toHaveAttribute('href','/follow-ups');
+  await expect(page.getByRole('button',{name:/Next step/})).toBeVisible();
+  await expect(page.getByRole('button',{name:'Mark done'})).toBeDisabled();
+  await expect(page.getByRole('heading',{name:'Lead overview'})).toBeVisible();
+  await expect(page.getByRole('combobox',{name:'Lead stage'})).toBeDisabled();
   await expect(page.getByRole('link',{name:/Open profile/}).first()).toBeVisible();
   await expect(page.locator('.ibx-v2-context')).toBeVisible();
   await page.getByRole('button',{name:'Hide customer context'}).click();
