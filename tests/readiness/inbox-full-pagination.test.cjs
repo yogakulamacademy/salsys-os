@@ -8,6 +8,7 @@ test("Inbox full-dataset RPC stays tenant and lead scoped", () => {
   const sql = read("supabase/migrations/20261104160000_inbox_full_dataset_page_v1.sql");
   for (const phrase of [
     "security invoker",
+    "volatile",
     "public.get_current_workspace_context_v1()",
     "coalesce(v_context->'workspace_codes', '[]'::jsonb) ? 'sales'",
     "public.can_access_lead(o.id)",
@@ -20,6 +21,8 @@ test("Inbox full-dataset RPC stays tenant and lead scoped", () => {
     "to authenticated;",
   ]) assert.ok(sql.includes(phrase), `Missing pagination/security guarantee: ${phrase}`);
   assert.doesNotMatch(sql, /security definer/i, "The new query must not bypass RLS");
+  assert.match(sql, /language plpgsql\s+volatile\s+security invoker/i,
+    "Workspace session binding writes must not run inside a STABLE read-only function");
 });
 
 test("UI uses the paged result and retains URL query context", () => {
