@@ -8,6 +8,7 @@ import { createClient } from "@/lib/supabase/server";
 import {
   getInboxPage,
   InboxPaginationNotDeployedError,
+  InboxPaginationTimedOutError,
   type InboxPage,
   type InboxQuery,
 } from "@/lib/conversations-page-data";
@@ -84,12 +85,19 @@ export async function getConversationsWorkspace(
         workspace.team.currentUserId && !workspace.team.canManageAssignments ? "mine" : "team",
       );
     } catch (error) {
-      if (!(error instanceof InboxPaginationNotDeployedError)) throw error;
-      // On a Vercel main-branch deploy ahead of a reviewed SQL migration,
-      // re-read the complete legacy candidate queue. Never render its 1-row
-      // selected-thread lookup as though it were the full Inbox.
+      const migrationMissing = error instanceof InboxPaginationNotDeployedError;
+      const queryTimedOut = error instanceof InboxPaginationTimedOutError;
+      if (!migrationMissing && !queryTimedOut) throw error;
+      // A missing migration or *confirmed statement timeout* can recover via
+      // the previously working bounded reader. Never show a selected-thread
+      // 1-row lookup as if it were the full Inbox.
       workspace = await getCoreConversationsWorkspace(requestedLeadId, false);
-      pagingWarning = "Full-dataset Inbox pagination is not yet available. Showing the legacy limited queue until the database migration is installed.";
+      if (queryTimedOut) {
+        console.warn("[inbox] Full-dataset query timed out; using bounded compatibility inbox");
+      }
+      pagingWarning = migrationMissing
+        ? "Full-dataset Inbox pagination is not yet available. Showing the legacy limited queue until the database migration is installed."
+        : "Full-dataset Inbox query timed out. Showing a limited compatibility queue while performance is being addressed; search and counts may be incomplete.";
     }
   }
   const resolution = await loadInboxResolutionState(fullPage?.rows ?? workspace.conversationSummary);
