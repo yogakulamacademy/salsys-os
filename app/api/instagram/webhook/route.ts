@@ -31,6 +31,15 @@ type InstagramInboundEvent = {
   raw: JsonObject;
 };
 
+type InstagramOutboundEchoEvent = {
+  accountId: string;
+  recipientId: string;
+  messageId: string;
+  messageType: string;
+  occurredAt: string | null;
+  raw: JsonObject;
+};
+
 type InstagramCommentEvent = {
   accountId: string;
   commentId: string;
@@ -158,9 +167,10 @@ export async function POST(request: NextRequest) {
     }
 
     const messages = extractInstagramInboundEvents(payload);
+    const echoes = extractInstagramOutboundEchoEvents(payload);
     const comments = extractInstagramCommentEvents(payload);
 
-    if (!messages.length && !comments.length) {
+    if (!messages.length && !echoes.length && !comments.length) {
       return NextResponse.json(
         {
           ok: true,
@@ -177,6 +187,9 @@ export async function POST(request: NextRequest) {
     const organizationCache = new Map<string, string | null>();
 
     let processed = 0;
+    let echoesProcessed = 0;
+    let echoesDeferred = 0;
+    let echoesDuplicated = 0;
     let commentsProcessed = 0;
     let alreadyProcessed = 0;
     let duplicateMessages = 0;
@@ -333,6 +346,55 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    for (const echo of echoes) {
+      const organizationId = await resolveOrganization(echo.accountId);
+      if (!organizationId) {
+        unknownAccounts += 1;
+        continue;
+      }
+
+      // Keep the signed evidence, but nest the echo envelope so the existing
+      // inbound-only raw-event retry worker cannot reinterpret it as a customer DM.
+      const sourceEventId = `echo:${echo.messageId}`;
+      const { data: rawIngestData, error: rawIngestError } = await supabase.rpc(
+        'ingest_raw_event',
+        {
+          p_organization_id: organizationId,
+          p_source_system: 'instagram',
+          p_source_event_id: sourceEventId,
+          p_source_event_type: `outbound_echo:${echo.messageType}`,
+          p_ingestion_method: 'instagram_webhook',
+          p_occurred_at: echo.occurredAt,
+          p_source_account_id: echo.accountId,
+          p_source_subject_id: echo.recipientId,
+          p_anonymous_visitor_id: null,
+          p_session_key: null,
+          p_external_message_id: echo.messageId,
+          p_site: null,
+          p_payload: { outbound_echo: echo.raw },
+          p_context: { object_type: 'instagram', direction: 'outbound', signature_valid: true },
+          p_metadata: { adapter: 'app/api/instagram/webhook', origin: 'outbound_echo' },
+          p_schema_version: 1,
+        },
+      );
+      if (rawIngestError) throw rawIngestError;
+      const rawResult = objectValue(rawIngestData);
+      const rawEventId = stringValue(rawResult.event_id);
+      if (!rawEventId) throw new Error('Instagram echo raw event could not be resolved');
+      if (rawResult.created === true) rawEventsCreated += 1;
+
+      const { data: resultData, error: projectionError } = await supabase.rpc(
+        'ingest_instagram_outbound_echo_v1',
+        { p_raw_event_id: rawEventId },
+      );
+      if (projectionError) throw projectionError;
+      const result = objectValue(resultData);
+      if (result.ok !== true) throw new Error('Instagram echo CRM ingestion failed');
+      if (result.processed === true) echoesProcessed += 1;
+      else if (result.duplicate_message === true) echoesDuplicated += 1;
+      else if (result.deferred === true) echoesDeferred += 1;
+    }
+
     for (const event of comments) {
       const organizationId = await resolveOrganization(event.accountId);
       if (!organizationId) {
@@ -416,9 +478,13 @@ export async function POST(request: NextRequest) {
       {
         ok: true,
         received_messages: messages.length,
+        received_echoes: echoes.length,
         received_comments: comments.length,
         raw_events_created: rawEventsCreated,
         processed,
+        echoes_processed: echoesProcessed,
+        echoes_deferred: echoesDeferred,
+        echoes_duplicated: echoesDuplicated,
         comments_processed: commentsProcessed,
         already_processed: alreadyProcessed,
         duplicate_messages: duplicateMessages,
@@ -498,6 +564,38 @@ function extractInstagramInboundEvents(payload: JsonObject) {
         body: text || null,
         occurredAt: instagramTimestamp(messagingEvent.timestamp),
         raw: messagingEvent,
+      });
+    }
+  }
+
+  return result;
+}
+
+function extractInstagramOutboundEchoEvents(payload: JsonObject): InstagramOutboundEchoEvent[] {
+  const result: InstagramOutboundEchoEvent[] = [];
+
+  for (const rawEntry of arrayValue(payload.entry)) {
+    const entry = objectValue(rawEntry);
+    const accountId = stringValue(entry.id);
+    if (!accountId) continue;
+
+    for (const rawMessagingEvent of arrayValue(entry.messaging)) {
+      const event = objectValue(rawMessagingEvent);
+      const senderId = stringValue(objectValue(event.sender).id);
+      const recipientId = stringValue(objectValue(event.recipient).id);
+      const message = objectValue(event.message);
+      if (message.is_echo !== true || message.is_deleted === true ||
+        senderId !== accountId || !recipientId || recipientId === accountId) continue;
+
+      // Only real Meta message IDs can be used as outbound idempotency keys.
+      const messageId = stringValue(message.mid);
+      if (!messageId) continue;
+      const text = stringValue(message.text);
+      result.push({
+        accountId, recipientId, messageId,
+        messageType: instagramMessageType(message, text),
+        occurredAt: instagramTimestamp(event.timestamp),
+        raw: event,
       });
     }
   }
