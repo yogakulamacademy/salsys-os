@@ -334,6 +334,16 @@ export function ConversationsSidebar({
                   <option value="waiting">Waiting</option>
                 </select>
               </label>
+              {pagination ? (
+                <label>
+                  <span>Sort</span>
+                  <select aria-label="Inbox sort" value={pagination.sort}
+                    onChange={(event) => setInboxParam("sort", event.target.value)}>
+                    <option value="created_desc">Newest created first</option>
+                    <option value="activity_desc">Latest conversation activity</option>
+                  </select>
+                </label>
+              ) : null}
             </div>
           </details>
         </div>
@@ -387,21 +397,36 @@ export function ConversationsSidebar({
               ) : undefined}
           />
         ) : (
-          filteredLeads.slice(0, visibleCount).map((lead) => {
+          (serverMode ? filteredLeads : filteredLeads.slice(0, visibleCount)).map((lead) => {
             const selected =
               (lead.id === selectedId || Boolean(selectedId && lead.relatedLeadIds?.includes(selectedId))) &&
               (!mobileViewport || explicitLeadId === lead.id || Boolean(explicitLeadId && lead.relatedLeadIds?.includes(explicitLeadId)));
 
-            return <ConversationRow key={lead.personId || lead.id} lead={lead} selected={selected} now={now} />;
+            return <ConversationRow key={lead.personId || lead.id} lead={lead} selected={selected} now={now} href={leadHref(lead.id)} />;
           })
         )}
-        {filteredLeads.length > visibleCount ? <div className="p-3 text-center"><button type="button" className="btn-secondary w-full" onClick={() => setVisibleCount(count => count + 50)}>Show more conversations</button></div> : null}
+        {!serverMode && filteredLeads.length > visibleCount ? <div className="p-3 text-center"><button type="button" className="btn-secondary w-full" onClick={() => setVisibleCount(count => count + 50)}>Show more conversations</button></div> : null}
       </div>
 
       <div className="shrink-0 border-t border-line px-4 py-2.5 text-[11px] text-copy-subtle">
-        <span className="inline-flex items-center gap-1.5">
-          <UsersRound size={12} /> {Math.min(visibleCount, filteredLeads.length)} of {filteredLeads.length} conversations loaded
-        </span>
+        {pagination ? (
+          <div className="flex items-center justify-between gap-2">
+            <span><UsersRound size={12} className="inline" /> {pageStart}–{pageEnd} of {pagination.totalMatching} matching leads</span>
+            <div className="flex items-center gap-2">
+              <button type="button" aria-label="Previous inbox page" disabled={pagination.page <= 1}
+                className="rounded border border-line px-2 py-1 disabled:opacity-40"
+                onClick={() => setInboxParam("page", String(pagination.page - 1), true)}>Prev</button>
+              <span>{pagination.page} / {pageCount}</span>
+              <button type="button" aria-label="Next inbox page" disabled={pagination.page >= pageCount}
+                className="rounded border border-line px-2 py-1 disabled:opacity-40"
+                onClick={() => setInboxParam("page", String(pagination.page + 1), true)}>Next</button>
+            </div>
+          </div>
+        ) : (
+          <span className="inline-flex items-center gap-1.5">
+            <UsersRound size={12} /> {Math.min(visibleCount, filteredLeads.length)} of {filteredLeads.length} conversations loaded
+          </span>
+        )}
       </div>
     </aside>
   );
@@ -411,10 +436,12 @@ function ConversationRow({
   lead,
   selected,
   now,
+  href,
 }: {
   lead: ConversationLeadSummary;
   selected: boolean;
   now: number;
+  href: string;
 }) {
   const highPriority = lead.priority === "urgent" || lead.priority === "high";
   const stage = lead.stage.replaceAll("_", " ");
@@ -431,7 +458,7 @@ function ConversationRow({
 
   return (
     <Link
-      href={`/conversations?lead=${lead.id}`}
+      href={href}
       aria-current={selected ? "page" : undefined}
       data-channel={lead.currentContactChannel}
       className={`ibx-v2-row group relative block border-b border-line/70 px-4 py-3.5 transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand-700/40 ${
