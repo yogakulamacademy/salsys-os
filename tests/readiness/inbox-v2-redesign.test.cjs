@@ -19,7 +19,11 @@ test('Inbox redesign preserves explicit selection and read-marker safety',()=>{
   assert.ok(page.includes('<ConversationReadMarker leadId={selected.id}'));
   assert.ok(page.includes('<ConversationsSidebar'));
   assert.ok(page.includes('<ConversationWorkspaceShell'));
-  assert.ok(sidebar.includes('href={\`/conversations?lead=\${lead.id}\`}'));
+  // The new server-paginated Inbox preserves search, sort and page when opening a lead.
+  assert.ok(sidebar.includes('href={href}'));
+  assert.ok(sidebar.includes('params.set("lead", id)'));
+  assert.ok(sidebar.includes('return \`/conversations?lead=\\${id}\\`;') ||
+    sidebar.includes('return \`/conversations?lead=\\${id}\\`'));
   assert.ok(shell.includes('hasExplicitLeadSelection'));
 });
 test('Sidebar retains working real filters and real lead status counts',()=>{
