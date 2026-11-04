@@ -22,10 +22,13 @@ create policy "inbox resolutions readable by authorized lead workers"
   on public.lead_inbox_resolutions_v1 for select to authenticated
   using (
     organization_id = (select public.current_tenant_organization_id())
-    and public.can_work_lead(lead_id)
+    and public.can_access_lead(lead_id)
     and exists (
       select 1 from public.leads l
-      where l.id = lead_id and l.organization_id = lead_inbox_resolutions_v1.organization_id
+      where l.id = lead_id
+        and l.organization_id = lead_inbox_resolutions_v1.organization_id
+        and (l.owner_user_id = (select auth.uid())
+          or public.can_manage_sales_workspace(lead_inbox_resolutions_v1.organization_id))
     )
   );
 
@@ -34,10 +37,13 @@ create policy "inbox resolution insert limited to authorized lead workers"
   with check (
     resolved_by = (select auth.uid())
     and organization_id = (select public.current_tenant_organization_id())
-    and public.can_work_lead(lead_id)
+    and public.can_access_lead(lead_id)
     and exists (
       select 1 from public.leads l
-      where l.id = lead_id and l.organization_id = lead_inbox_resolutions_v1.organization_id
+      where l.id = lead_id
+        and l.organization_id = lead_inbox_resolutions_v1.organization_id
+        and (l.owner_user_id = (select auth.uid())
+          or public.can_manage_sales_workspace(lead_inbox_resolutions_v1.organization_id))
     )
   );
 
@@ -45,15 +51,24 @@ create policy "inbox resolution update limited to authorized lead workers"
   on public.lead_inbox_resolutions_v1 for update to authenticated
   using (
     organization_id = (select public.current_tenant_organization_id())
-    and public.can_work_lead(lead_id)
+    and public.can_access_lead(lead_id)
+    and exists (
+      select 1 from public.leads l
+      where l.id = lead_id and l.organization_id = lead_inbox_resolutions_v1.organization_id
+        and (l.owner_user_id = (select auth.uid())
+          or public.can_manage_sales_workspace(lead_inbox_resolutions_v1.organization_id))
+    )
   )
   with check (
     resolved_by = (select auth.uid())
     and organization_id = (select public.current_tenant_organization_id())
-    and public.can_work_lead(lead_id)
+    and public.can_access_lead(lead_id)
     and exists (
       select 1 from public.leads l
-      where l.id = lead_id and l.organization_id = lead_inbox_resolutions_v1.organization_id
+      where l.id = lead_id
+        and l.organization_id = lead_inbox_resolutions_v1.organization_id
+        and (l.owner_user_id = (select auth.uid())
+          or public.can_manage_sales_workspace(lead_inbox_resolutions_v1.organization_id))
     )
   );
 
@@ -61,7 +76,13 @@ create policy "inbox resolutions reopenable by authorized lead workers"
   on public.lead_inbox_resolutions_v1 for delete to authenticated
   using (
     organization_id = (select public.current_tenant_organization_id())
-    and public.can_work_lead(lead_id)
+    and public.can_access_lead(lead_id)
+    and exists (
+      select 1 from public.leads l
+      where l.id = lead_id and l.organization_id = lead_inbox_resolutions_v1.organization_id
+        and (l.owner_user_id = (select auth.uid())
+          or public.can_manage_sales_workspace(lead_inbox_resolutions_v1.organization_id))
+    )
   );
 
 comment on table public.lead_inbox_resolutions_v1 is
