@@ -90,3 +90,17 @@ test("Main deployments without the new RPC retain the legacy Inbox", () => {
     "Fallback must fetch the legacy queue, not the single selected-detail row");
   assert.ok(workspace.includes("pagingWarning"));
 });
+
+test("PostgreSQL statement_timeout recovers without disguising other RPC errors", () => {
+  const reader = read("lib/conversations-page-data.ts");
+  const workspace = read("lib/conversations-data.ts");
+  assert.ok(reader.includes('error.code === "57014"'));
+  assert.ok(reader.includes("canceling statement due to statement timeout"));
+  assert.ok(reader.includes("InboxPaginationTimedOutError"));
+  assert.ok(reader.includes("throw new Error(`Unable to load full Inbox page:"));
+  assert.ok(workspace.includes("error instanceof InboxPaginationTimedOutError"));
+  assert.ok(workspace.includes("if (!migrationMissing && !queryTimedOut) throw error"));
+  assert.ok(workspace.includes("getCoreConversationsWorkspace(requestedLeadId, false)"));
+  assert.ok(workspace.includes("search and counts may be incomplete"));
+  assert.ok(!workspace.includes("Full-dataset Inbox migration is not yet installed"));
+});
