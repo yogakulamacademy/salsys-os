@@ -147,6 +147,7 @@ function setupAction(options = {}) {
     },
     '@/lib/ai/lead-insight-validation': validator,
     '@/lib/ai/lead-insight-feedback': { recordLeadInsightRun: async () => null },
+    '@/lib/ai/lead-insight-quota': { reserveLeadInsightGeneration: async () => options.quotaDenied ? { ok: false, error: 'AI quota reached.' } : { ok: true } },
   }).generateLeadInsightsAction;
 
   return {
@@ -220,4 +221,14 @@ test('C2 has no direct CRM mutations or automatic send; C3 can record review met
   assert.doesNotMatch(source, /\.insert\(|\.update\(|\.upsert\(|\.delete\(|sendWhatsApp|sendInstagram|scheduleFollowup/i);
   assert.match(source, /getLeadContextV1\(leadId, 'staff_insight'\)/);
   assert.match(source, /AI_LEAD_INSIGHTS_ENABLED/);
+});
+
+test('quota rejection prevents provider invocation', async () => {
+  const f = setupAction({ quotaDenied: true });
+  try {
+    const result = await f.action(lead);
+    assert.equal(result.ok, false);
+    assert.match(result.error, /quota reached/i);
+    assert.equal(f.calls.fetch.length, 0);
+  } finally { f.restore(); }
 });
