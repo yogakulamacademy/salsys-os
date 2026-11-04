@@ -43,7 +43,7 @@ export function InboxHeaderActions({ leadId, resolved, canResolve, mock }:{
       <div className="ibx-v3-head-menu">
         <button type="button" onClick={openNotes}><FileText size={14}/> View notes</button>
         <button type="button" onClick={nextStep}><CalendarClock size={14}/> Schedule follow-up</button>
-        <Link href={\`/leads/\${leadId}\`}><ExternalLink size={14}/> Open full profile</Link>
+        <Link href={`/leads/${leadId}`}><ExternalLink size={14}/> Open full profile</Link>
         <form action={snoozeAction}>
           <input type="hidden" name="snooze_for" value="1h"/>
           <button type="submit" disabled={mock}><Clock3 size={14}/> Snooze for 1 hour</button>
