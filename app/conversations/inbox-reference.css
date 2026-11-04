@@ -31,7 +31,7 @@
   background:#f3f0ff!important;color:#5837dd!important;border-radius:9px 9px 0 0!important;
 }
 .ibx-v2 .ibx-v2-tabs button span{background:#f1f1fa;border-radius:6px;padding:2px 4px;}
-.ibx-v2 .ibx-v2-search-wrapper{display:flex;gap:8px;align-items:center;}
+.ibx-v2 .ibx-v2-search-line{display:flex;gap:8px;align-items:center;}
 .ibx-v2 .ibx-v2-search{flex:1;min-width:0;}
 .ibx-v2 .ibx-v2-search input{height:40px!important;border:1px solid #e2e4ee!important;
   background:white!important;border-radius:10px!important;font-size:12px!important;}
