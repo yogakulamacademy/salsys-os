@@ -12,7 +12,7 @@ export type DirectoryMember = {
   active: boolean;
 };
 
-type Filter = 'all' | 'active' | 'inactive';
+type MemberStatusFilter = 'all' | 'active' | 'inactive';
 
 function nameFor(member: DirectoryMember) {
   return member.fullName?.trim() || 'CRM User';
@@ -33,7 +33,7 @@ export function TeamDirectory({ members, organizationName }: {
   organizationName: string;
 }) {
   const [search, setSearch] = useState('');
-  const [filter, setFilter] = useState<Filter>('all');
+  const [filter, setFilter] = useState<MemberStatusFilter>('all');
   const activeCount = members.filter(member => member.active).length;
   const inactiveCount = members.length - activeCount;
   const employees = members.filter(member => member.organizationRole === 'admissions');
@@ -100,7 +100,7 @@ export function TeamDirectory({ members, organizationName }: {
                       {member.active ? 'Deactivate' : 'Activate'}
                     </button>
                   </form>
-                : <span className="tac-admin-access">Managed by tenant administrators</span>}</td>
+                : <span className="tac-admin-access">Full tenant access</span>}</td>
             </tr>;
           })}</tbody>
         </table>
