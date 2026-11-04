@@ -45,6 +45,21 @@ export function csvRow(values: unknown[]): string {
   return values.map(csvCell).join(",");
 }
 
+/** Only the separately-authorized PII role may export contact values.
+ * Protected fields are blank (not masked or inferred) for other Sales managers.
+ * The companion availability field tells recipients why contacts are absent. */
+export function exportContactCells(
+  lead: { email?: string; phone?: string; contactAvailability?: string },
+  canViewContacts: boolean,
+): [string, string, string] {
+  if (!canViewContacts) return ["", "", "restricted"];
+  return [
+    lead.email ?? "",
+    lead.phone ?? "",
+    lead.contactAvailability ?? "missing",
+  ];
+}
+
 function parseMatrix(text: string): string[][] {
   const source = text.replace(/^\uFEFF/, "");
   const rows: string[][] = [];
