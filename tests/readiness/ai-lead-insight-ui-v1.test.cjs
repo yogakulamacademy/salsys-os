@@ -117,8 +117,12 @@ test('SQL quota gate enforces atomic dual counters and denies browser permission
   assert.doesNotMatch(source, /create\s+policy\b/i);
 });
 
-test('C4 is opt-in on Inbox and has no automatic send path', () => {
+test('C4 is opt-in on Inbox and lead profile with no automatic send path', () => {
   const inbox = readFileSync('app/conversations/page.tsx', 'utf8');
+  const profile = readFileSync('app/leads/[id]/page.tsx', 'utf8');
+  assert.match(profile, /AI_LEAD_INSIGHTS_UI_ENABLED/);
+  assert.match(profile, /AI_LEAD_INSIGHTS_ENABLED/);
+  assert.match(profile, /<AILeadInsightPanel leadId=\{id\}/);
   const component = readFileSync('components/ai-lead-insight-panel.tsx', 'utf8');
   const action = readFileSync('app/leads/insights-actions.ts', 'utf8');
   const fullReview = readFileSync('app/leads/[id]/intelligence/page.tsx', 'utf8');
