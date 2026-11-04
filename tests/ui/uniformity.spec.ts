@@ -184,7 +184,7 @@ test('Lead import/export actions appear in the intended layout and mock imports 
   await expect(actions.getByRole('link', { name: 'Add lead', exact: true })).toBeVisible();
   await expect(actions.getByRole('note', { name: /Export leads unavailable/ })).toBeVisible();
 
-  await actions.getByRole('button', { name: 'More add lead options' }).click();
+  await actions.locator('summary[aria-label="More add lead options"]').click();
   await expect(actions.getByText('Import leads (CSV)')).toBeVisible();
   await expect(actions.getByText('Import leads (CSV)')).toHaveAttribute('aria-disabled', 'true');
 
