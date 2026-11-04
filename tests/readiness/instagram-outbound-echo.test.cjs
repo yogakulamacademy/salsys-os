@@ -41,3 +41,8 @@ test('Manual Instagram send checks for a matching echo before logging', () => {
   assert.ok(manual.includes('echoLogged.conversation_id !== conversation.id'));
   assert.ok(manual.includes('if (!crmMessageId) {'));
 });
+
+test('Outgoing echo feature remains opt-in until migration and Meta webhook QA', () => {
+  assert.ok(webhook.includes("process.env.INSTAGRAM_OUTBOUND_ECHO_ENABLED === 'true'"));
+  assert.ok(webhook.includes(": [];"));
+});
