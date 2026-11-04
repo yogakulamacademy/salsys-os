@@ -261,6 +261,13 @@ export function AILeadInsightPanel({
         </button>
       </div>
 
+      {compact && (
+        <Link href={`/leads/${encodeURIComponent(leadId)}/intelligence`}
+          className="mt-2 inline-flex text-[11px] font-medium text-copy-muted underline-offset-2 hover:text-copy hover:underline">
+          Open full review
+        </Link>
+      )}
+
       {error && <p role="alert" className="mt-3 flex gap-2 rounded-lg border border-line p-2 text-xs text-copy">
         <AlertCircle size={14} className="shrink-0"/>{error}
       </p>}
