@@ -540,6 +540,13 @@ function extractInstagramInboundEvents(payload: JsonObject) {
         continue;
       }
 
+      // Read receipts and other non-message webhook envelopes still carry
+      // sender/recipient/timestamp. Without this guard they receive synthetic
+      // message IDs and become false "message:unknown" inbound raw events.
+      if (!Object.keys(message).length &&
+          !Object.keys(postback).length &&
+          !Object.keys(referral).length) continue;
+
       if (message.is_echo === true || message.is_deleted === true) continue;
 
       const messageId =
