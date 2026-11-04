@@ -42,9 +42,16 @@ export function InboxQuickActions({
           disabled={!canAssign} title={canAssign?"Assign or reassign lead":"Assignment requires permission"}>
           <UserRoundPlus size={18}/><span>Assign</span>
         </button>
-        <Link href={profileHref} className="ibx-v2-quick-tile">
-          <ArrowUpRight size={18}/><span>Profile</span>
-        </Link>
+        <details className="ibx-v3-quick-more">
+          <summary className="ibx-v2-quick-tile" aria-label="More quick actions">
+            <MoreHorizontal size={18}/><span>More</span>
+          </summary>
+          <div className="ibx-v3-quick-menu">
+            <Link href={profileHref}><ArrowUpRight size={14}/> Open profile</Link>
+            <button type="button" onClick={()=>{document.querySelector<HTMLButtonElement>(
+              '.ibx-v2-center-tabs [role="tab"]:last-child')?.click();}}>View notes</button>
+          </div>
+        </details>
       </div>
     </section>
   );
