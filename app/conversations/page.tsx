@@ -347,7 +347,7 @@ export default async function ConversationsPage({
             <ArrowUpRight size={16}/>
           </Link>
         </div>
-        {hasTelephoneContact && selected.phone ? <a className="ibx-v2-profile-phone" href={`tel:${selected.phone.replace(/[^\\d+]/g, "")}`}>
+        {hasTelephoneContact && selected.phone ? <a className="ibx-v2-profile-phone" href={`tel:${selected.phone.replace(/[^0-9+]/g, "")}`}>
           <UserRound size={13}/> {selected.phone}
         </a> : <span className="ibx-v2-profile-no-phone">Phone contact unavailable</span>}
       </section>
