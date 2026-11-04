@@ -693,7 +693,7 @@ function SourceIcon({ source }: { source: string }) {
     /whatsapp/.test(value) ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-300" :
     /facebook|meta/.test(value) ? "bg-blue-50 text-blue-700 dark:bg-blue-950/30 dark:text-blue-300" :
     "bg-surface-muted text-copy-muted";
-  return <span aria-hidden="true" className={"grid h-6 w-6 shrink-0 place-items-center rounded-lg " + tone}>{icon}</span>;
+  return <span aria-hidden="true" data-testid="lead-source-icon" className={"grid h-6 w-6 shrink-0 place-items-center rounded-lg " + tone}>{icon}</span>;
 }
 
 function PriorityScore({ evidence }: { evidence?: LeadsTableEvidence }) {
