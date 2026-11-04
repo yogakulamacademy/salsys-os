@@ -5,6 +5,8 @@ import type {
   ConversationPriority,
 } from "@/components/conversations-sidebar";
 import { createClient } from "@/lib/supabase/server";
+import { isMockMode } from "@/lib/data";
+import { requireCurrentOrganizationId } from "@/lib/workspace";
 import {
   getConversationsWorkspace as getCoreConversationsWorkspace,
   type ConversationWorkspaceResult,
@@ -23,6 +25,7 @@ export type ConversationWorkspaceEvidence = {
   workspaceSource: "canonical_rpc" | "legacy_compatibility";
   contactGrouping: "person" | "lead_fallback" | "not_applicable";
   warnings: string[];
+  inboxResolutionAvailable: boolean;
 };
 
 export type ConversationWorkspaceView = ConversationWorkspaceResult & {
@@ -47,10 +50,12 @@ function baseEvidence(workspace: ConversationWorkspaceResult): ConversationWorks
         workspaceSource: "canonical_rpc",
         contactGrouping: "not_applicable",
         warnings: [],
+        inboxResolutionAvailable: false,
       }
     : {
         workspaceSource: "legacy_compatibility",
         contactGrouping: "not_applicable",
+        inboxResolutionAvailable: false,
         warnings: [
           "The canonical Conversations read model is unavailable. This inbox is using the compatibility read path, so queue counts and assignment controls may differ until canonical evidence recovers.",
         ],
@@ -61,12 +66,21 @@ export async function getConversationsWorkspace(
   requestedLeadId?: string,
 ): Promise<ConversationWorkspaceView> {
   const workspace = await getCoreConversationsWorkspace(requestedLeadId);
-  const baseRows = workspace.conversationSummary;
-  const evidence = baseEvidence(workspace);
+  const resolution = await loadInboxResolutionState(workspace.conversationSummary);
+  const baseRows = resolution.rows;
+  const evidence: ConversationWorkspaceEvidence = {
+    ...baseEvidence(workspace),
+    inboxResolutionAvailable: resolution.available,
+    warnings: [
+      ...baseEvidence(workspace).warnings,
+      ...(resolution.warning ? [resolution.warning] : []),
+    ],
+  };
 
   if (baseRows.length === 0) {
     return {
       ...workspace,
+      conversationSummary: baseRows,
       evidence,
     };
   }
@@ -119,6 +133,43 @@ export async function getConversationsWorkspace(
         ],
       },
     };
+  }
+}
+
+
+async function loadInboxResolutionState(rows: ConversationLeadSummary[]):Promise<{
+  rows:ConversationLeadSummary[]; available:boolean; warning:string|null;
+}> {
+  if(isMockMode()) return {rows,available:false,warning:null};
+  if(rows.length===0) return {rows,available:true,warning:null};
+  try {
+    const supabase=await createClient();
+    const {data:{user},error:authError}=await supabase.auth.getUser();
+    if(authError||!user) throw new Error('No authenticated inbox workspace');
+    const org=await requireCurrentOrganizationId(supabase,user.id);
+    const ids=rows.map(row=>row.id);
+    const [resolutions,attention]=await Promise.all([
+      supabase.from('lead_inbox_resolutions_v1')
+        .select('lead_id,resolved_at').eq('organization_id',org).in('lead_id',ids),
+      supabase.from('v_lead_inbox_attention')
+        .select('lead_id,last_inbound_at').eq('organization_id',org).in('lead_id',ids),
+    ]);
+    if(resolutions.error||attention.error)
+      throw new Error(resolutions.error?.message||attention.error?.message||'Unavailable');
+    const byId=new Map((resolutions.data??[]).map(row=>[row.lead_id,row.resolved_at]));
+    const lastInbound=new Map((attention.data??[]).map(row=>[row.lead_id,row.last_inbound_at]));
+    return {available:true,warning:null,rows:rows.map(row=>{
+      const doneAt=byId.get(row.id);
+      const inbound=lastInbound.get(row.id);
+      const resolved=Boolean(doneAt && (!inbound ||
+        (Date.parse(inbound)<=Date.parse(doneAt))));
+      return resolved ? {...row,resolved:true,needsReply:false,needsFirstContact:false,
+        waitingSince:null} : {...row,resolved:false};
+    })};
+  } catch(error) {
+    console.warn('[inbox] resolution status unavailable',error instanceof Error?error.message:'unknown');
+    return {rows,available:false,
+      warning:'Conversation resolution state could not be verified. Mark Done is unavailable; live reply attention is unchanged.'};
   }
 }
 
@@ -207,6 +258,7 @@ function mergeContactGroup(
     lastContactedAt: newestContact ?? representative.lastContactedAt,
     unread: group.some((row) => row.unread),
     needsReply: group.some((row) => row.needsReply),
+    resolved: group.every((row) => Boolean(row.resolved)),
     needsFirstContact:
       !group.some((row) => row.needsReply) &&
       group.some((row) => row.needsFirstContact),
