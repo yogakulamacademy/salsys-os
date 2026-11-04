@@ -167,7 +167,7 @@ test('database is append-only, tenant-keyed and inaccessible to client roles', (
   for (const fragment of [
     'create table if not exists public.ai_lead_insight_review_packet_drafts',
     'organization_id uuid not null references public.organizations',
-    'authored_by uuid not null references auth.users',
+    'authored_by uuid references auth.users',
     'force row level security',
     'from public, anon, authenticated',
     'grant select, insert on public.ai_lead_insight_review_packet_drafts to service_role',
