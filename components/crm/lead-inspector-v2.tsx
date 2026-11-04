@@ -22,6 +22,7 @@ import {
   Sparkles,
   Target,
   UserRound,
+  Wallet,
   X,
   Zap,
 } from "lucide-react";
