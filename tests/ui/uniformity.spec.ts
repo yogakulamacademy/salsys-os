@@ -191,7 +191,23 @@ test('Lead import/export actions appear in the intended layout and mock imports 
   await expect(actions.getByRole('link', { name: 'Add lead', exact: true })).toBeVisible();
   await expect(actions.getByRole('note', { name: /Export leads unavailable/ })).toBeVisible();
 
-  await actions.locator('summary[aria-label="More add lead options"]').click();
+  const toggle = actions.locator('summary[aria-label="More add lead options"]');
+  await toggle.click();
+  const menu = actions.getByTestId('lead-add-options-menu');
+  await expect(menu).toBeVisible();
+  await expect(menu).toContainText('Import leads (CSV)');
+  const [toggleBox, menuBox] = await Promise.all([toggle.boundingBox(), menu.boundingBox()]);
+  expect(toggleBox).not.toBeNull();
+  expect(menuBox).not.toBeNull();
+  expect(menuBox!.y).toBeGreaterThanOrEqual(toggleBox!.y + toggleBox!.height - 1);
+  // Regression for the reported bug: the open menu must be the top hit target,
+  // not hidden behind a Leads KPI card.
+  const menuOnTop = await menu.evaluate(element => {
+    const box = element.getBoundingClientRect();
+    const atPoint = document.elementFromPoint(box.left + box.width / 2, box.top + box.height / 2);
+    return atPoint != null && element.contains(atPoint);
+  });
+  expect(menuOnTop).toBe(true);
   await expect(actions.getByText('Import leads (CSV)')).toBeVisible();
   await expect(actions.getByText('Import leads (CSV)')).toHaveAttribute('aria-disabled', 'true');
 
