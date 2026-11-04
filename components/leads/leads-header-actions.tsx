@@ -11,7 +11,7 @@ export function LeadsHeaderActions({ canManage, mock, exportHref }: Props) {
   const enabled = canManage && !mock;
   const unavailableReason = mock
     ? "Import and export are disabled in demo mode."
-    : "Only Sales managers and administrators can import or export leads.";
+    : "Import and export require Sales management and CRM contact-data access.";
 
   return (
     <div className="flex flex-wrap items-center gap-2" data-testid="leads-import-export-actions">
