@@ -663,10 +663,11 @@ function buildWorkspacePageFromRows(
         filters.sort ===
         "created_desc"
       ) {
-        const difference =
-          sortableDate(b.lead.createdAt) -
-          sortableDate(a.lead.createdAt);
-        return difference || b.lead.id.localeCompare(a.lead.id);
+        const aTime = Date.parse(a.lead.createdAt);
+        const bTime = Date.parse(b.lead.createdAt);
+        if (!Number.isFinite(aTime)) return 1;
+        if (!Number.isFinite(bTime)) return -1;
+        return bTime - aTime || b.lead.id.localeCompare(a.lead.id);
       }
 
       return (
