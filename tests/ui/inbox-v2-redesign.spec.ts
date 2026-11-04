@@ -16,7 +16,7 @@ test.beforeEach(async({context})=>{
 
 test('Inbox V2 retains an unselected opening with live filters and empty results',async({page})=>{
   await page.goto('/conversations');
-  await expect(page.getByRole('heading',{name:'Inbox',exact:true,hidden:true})).toBeAttached();
+  await expect(page.getByRole('heading',{name:'Inbox',exact:true,includeHidden:true})).toBeAttached();
   await expect(page.getByText('Select a conversation',{exact:true})).toBeVisible();
   const tabs=page.getByRole('tablist',{name:'Conversation filters'});
   await expect(tabs.getByRole('tab',{name:/Needs reply/})).toBeVisible();
