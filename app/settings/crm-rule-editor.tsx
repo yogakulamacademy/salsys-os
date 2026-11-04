@@ -51,7 +51,7 @@ export function CrmRuleEditor({ forecasts, aging, source, agingReady, canManage 
       const raw = probValues[row.stage] ?? '';
       const next = Number(raw);
       if (!raw.trim() || !Number.isFinite(next) || next < 0 || next > 100 ||
-          Math.round(next * 100) !== next * 100) {
+          Math.abs(Math.round(next * 100) - next * 100) > 0.000001) {
         invalid = true;
       } else if (next !== row.probability_percent) {
         probabilities.push({stage:row.stage,old_percent:row.probability_percent,new_percent:next});
@@ -66,8 +66,8 @@ export function CrmRuleEditor({ forecasts, aging, source, agingReady, canManage 
         if (!draft.warning.trim() || !draft.stuck.trim() ||
             !Number.isFinite(warning) || !Number.isFinite(stuck) ||
             warning < 0 || stuck <= warning ||
-            Math.round(warning * 100) !== warning * 100 ||
-            Math.round(stuck * 100) !== stuck * 100) {
+            Math.abs(Math.round(warning * 100) - warning * 100) > 0.000001 ||
+            Math.abs(Math.round(stuck * 100) - stuck * 100) > 0.000001) {
           invalid = true;
         } else if (warning !== row.warning_hours || stuck !== row.stuck_hours) {
           agingChanges.push({
