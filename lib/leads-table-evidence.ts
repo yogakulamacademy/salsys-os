@@ -35,7 +35,7 @@ function contactEvent(row: ScoreRow, lead: LeadOverview): Pick<LeadsTableEvidenc
     .filter(item => item.value && Number.isFinite(item.timestamp))
     .sort((a, b) => b.timestamp - a.timestamp);
   if (!candidates.length) return { lastContactAt: null, lastContactKind: null };
-  return { lastContactAt: candidates[0].value, lastContactKind: candidates[0].kind };
+  return { lastContactAt: String(candidates[0].value), lastContactKind: candidates[0].kind };
 }
 
 /**
