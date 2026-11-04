@@ -74,7 +74,7 @@ export async function getAiInsightPilotStatus(): Promise<AiInsightPilotStatus | 
   const admin = createAdminClient();
 
   // Every privileged query is scoped to the already-verified organization.
-  const [policy, today, runs, reviews, sample, oldRuns, oldQuotas] = await Promise.all([
+  const [policy, today, runs, reviews, sample, oldRuns, oldQuotas, runSample] = await Promise.all([
     admin.from('ai_lead_insight_tenant_policies')
       .select('enabled,org_daily_limit,user_hourly_limit')
       .eq('organization_id', organizationId).maybeSingle(),
@@ -102,10 +102,16 @@ export async function getAiInsightPilotStatus(): Promise<AiInsightPilotStatus | 
     admin.from('ai_lead_insight_quota_counters')
       .select('organization_id', { count: 'exact', head: true })
       .eq('organization_id', organizationId).lt('period_start', ninetyDays),
+    admin.from('ai_lead_insight_runs')
+      .select('id')
+      .eq('organization_id', organizationId)
+      .gte('created_at', sevenDays)
+      .order('created_at', { ascending: false })
+      .limit(500),
   ]);
 
   if (policy.error || today.error || runs.error || reviews.error ||
-      sample.error || oldRuns.error || oldQuotas.error) {
+      sample.error || oldRuns.error || oldQuotas.error || runSample.error) {
     // Never convert a failed database read to a misleading zero.
     throw new Error('AI pilot operations status is temporarily unavailable.');
   }
@@ -130,7 +136,12 @@ export async function getAiInsightPilotStatus(): Promise<AiInsightPilotStatus | 
 
   const prerequisites = pilotPrerequisites(flags);
   const sampleRows = sample.data ?? [];
-  const reviewsSampleTruncated = sampleRows.length === 500;
+  const reviewsSampleTruncated = reviews7d > 500;
+  const runSampleTruncated = runs7d > 500;
+  const eligibleRunIds = new Set((runSample.data ?? []).map(row => row.id));
+  const reviewedCohortRunIds = new Set(sampleRows
+    .filter(row => eligibleRunIds.has(row.run_id))
+    .map(row => row.run_id));
   const quality = summarizeInsightReviews(sampleRows.map(row => ({
     rating: row.rating,
     issue_codes: Array.isArray(row.issue_codes) ? row.issue_codes : [],
@@ -153,9 +164,10 @@ export async function getAiInsightPilotStatus(): Promise<AiInsightPilotStatus | 
       remainingToday: dailyLimit === null ? null : Math.max(0, dailyLimit - attempts),
       runReceipts7d: runs7d,
       reviews7d,
-      // Multiple reviewers can assess one run. Coverage uses unique run IDs
-      // and stays unknown when the sample is truncated.
-      reviewCoveragePercent: reviewsSampleTruncated ? null : pilotRate(quality.distinctRunsReviewed, runs7d),
+      // Cohort-matched coverage: count unique runs generated in the last 7
+      // days that were reviewed in that same window. Truncated data is unknown.
+      reviewCoveragePercent: reviewsSampleTruncated || runSampleTruncated
+        ? null : pilotRate(reviewedCohortRunIds.size, runs7d),
       reviewsSampleTruncated,
       quality,
     },
