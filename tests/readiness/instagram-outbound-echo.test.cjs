@@ -46,3 +46,20 @@ test('Outgoing echo feature remains opt-in until migration and Meta webhook QA',
   assert.ok(webhook.includes("process.env.INSTAGRAM_OUTBOUND_ECHO_ENABLED === 'true'"));
   assert.ok(webhook.includes(": [];"));
 });
+
+test('Instagram read receipts never become synthetic inbound messages', () => {
+  const start = webhook.indexOf('function extractInstagramInboundEvents(');
+  const end = webhook.indexOf('function extractInstagramOutboundEchoEvents(', start);
+  assert.ok(start >= 0 && end > start, 'Inbound webhook parser must exist');
+  const inbound = webhook.slice(start, end);
+  const guard = inbound.indexOf('!Object.keys(message).length &&');
+  const postback = inbound.indexOf('!Object.keys(postback).length &&', guard);
+  const referral = inbound.indexOf('!Object.keys(referral).length)', postback);
+  const syntheticId = inbound.indexOf('deterministicSyntheticEventId(accountId, senderId, messagingEvent)');
+  assert.ok(guard > 0 && postback > guard && referral > postback);
+  assert.ok(syntheticId > referral, 'Non-message events must be filtered before synthetic IDs');
+  assert.ok(inbound.includes('if (message.is_echo === true || message.is_deleted === true) continue;'));
+  assert.ok(inbound.includes('stringValue(message.mid)'));
+  assert.ok(inbound.includes('stringValue(postback.mid)'));
+  assert.ok(inbound.includes('stringValue(referral.ref)'));
+});
