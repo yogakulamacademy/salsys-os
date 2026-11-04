@@ -5,7 +5,12 @@ import type {
   ConversationPriority,
 } from "@/components/conversations-sidebar";
 import { createClient } from "@/lib/supabase/server";
-import { getInboxPage, type InboxPage, type InboxQuery } from "@/lib/conversations-page-data";
+import {
+  getInboxPage,
+  InboxPaginationNotDeployedError,
+  type InboxPage,
+  type InboxQuery,
+} from "@/lib/conversations-page-data";
 import { isMockMode } from "@/lib/data";
 import { requireCurrentOrganizationId } from "@/lib/workspace";
 import {
@@ -69,11 +74,24 @@ export async function getConversationsWorkspace(
   query: InboxQuery = {},
 ): Promise<ConversationWorkspaceView> {
   const mock = isMockMode();
-  const workspace = await getCoreConversationsWorkspace(requestedLeadId, !mock);
-  const fullPage = mock ? null : await getInboxPage(
-    query,
-    workspace.team.currentUserId && !workspace.team.canManageAssignments ? "mine" : "team",
-  );
+  let workspace = await getCoreConversationsWorkspace(requestedLeadId, !mock);
+  let fullPage: InboxPage | null = null;
+  let pagingWarning: string | null = null;
+  if (!mock) {
+    try {
+      fullPage = await getInboxPage(
+        query,
+        workspace.team.currentUserId && !workspace.team.canManageAssignments ? "mine" : "team",
+      );
+    } catch (error) {
+      if (!(error instanceof InboxPaginationNotDeployedError)) throw error;
+      // On a Vercel main-branch deploy ahead of a reviewed SQL migration,
+      // re-read the complete legacy candidate queue. Never render its 1-row
+      // selected-thread lookup as though it were the full Inbox.
+      workspace = await getCoreConversationsWorkspace(requestedLeadId, false);
+      pagingWarning = "Full-dataset Inbox pagination is not yet available. Showing the legacy limited queue until the database migration is installed.";
+    }
+  }
   const resolution = await loadInboxResolutionState(fullPage?.rows ?? workspace.conversationSummary);
   const baseRows = resolution.rows;
   const pagination = fullPage
@@ -92,6 +110,7 @@ export async function getConversationsWorkspace(
     inboxResolutionAvailable: resolution.available,
     warnings: [
       ...baseEvidence(workspace).warnings,
+      ...(pagingWarning ? [pagingWarning] : []),
       ...(resolution.warning ? [resolution.warning] : []),
     ],
   };
