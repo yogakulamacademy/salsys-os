@@ -13,19 +13,20 @@ import { MetaIntegrationAssets } from '@/components/meta-integration-assets';
 import { WhatsAppRemoveButton } from '@/components/whatsapp-remove-button';
 import type { IntegrationConnection, IntegrationAsset, IntegrationProvider, IntegrationStatus } from '@/lib/integrations/types';
 import { disconnectIntegrationAction } from './actions';
+import { ProviderBrand } from './provider-brand';
 
 export type SafeIntegrationConnection = Pick<IntegrationConnection,
   'id' | 'provider' | 'status' | 'account_name' | 'account_email' |
   'last_verified_at' | 'last_error' | 'connected_at' | 'updated_at' | 'scopes'>;
 
 export const INTEGRATION_PROVIDERS: { id: IntegrationProvider; name: string; description: string; icon: ReactNode; features: string[] }[] = [
-  { id:'google', name:'Google', description:'Analytics · Search Console · Google Ads', icon:<Globe2 size={27}/>,
+  { id:'google', name:'Google', description:'Analytics · Search Console · Google Ads', icon:<ProviderBrand provider="google"/>,
     features:['Google Analytics 4','Search Console','Google Ads'] },
-  { id:'meta', name:'Meta', description:'Business Portfolio · Pages · Meta Ads', icon:<Facebook size={27}/>,
+  { id:'meta', name:'Meta', description:'Business Portfolio · Pages · Meta Ads', icon:<ProviderBrand provider="meta"/>,
     features:['Business assets','Ad accounts','Facebook Pages'] },
-  { id:'instagram', name:'Instagram', description:'Professional account · Direct messages', icon:<Instagram size={27}/>,
+  { id:'instagram', name:'Instagram', description:'Professional account · Direct messages', icon:<ProviderBrand provider="instagram"/>,
     features:['Instagram authorization','Messaging permissions','Lead conversations'] },
-  { id:'whatsapp', name:'WhatsApp Business', description:'Cloud API · business messaging', icon:<MessageCircle size={27}/>,
+  { id:'whatsapp', name:'WhatsApp Business', description:'Cloud API · business messaging', icon:<ProviderBrand provider="whatsapp"/>,
     features:['Business Account','Phone number','Messaging setup'] },
 ];
 
