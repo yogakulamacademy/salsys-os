@@ -16,6 +16,7 @@ export type PilotGateInputs = {
   uiEnabled: boolean;
   quotasEnabled: boolean;
   feedbackEnabled: boolean;
+  usageLedgerEnabled: boolean;
   modelConfigured: boolean;
   signingKeyConfigured: boolean;
   tenantOptedIn: boolean;
@@ -53,6 +54,14 @@ export function pilotPrerequisites(input: PilotGateInputs): PilotPrerequisite[] 
       title: 'Organization opt-in',
       state: input.tenantOptedIn && input.quotaPolicyPresent ? 'ready' : 'disabled',
       detail: input.tenantOptedIn ? 'Tenant has an enabled policy.' : 'No enabled tenant policy. AI requests are denied.',
+    },
+    {
+      key: 'provider-usage',
+      title: 'Provider request monitoring',
+      state: input.usageLedgerEnabled ? 'ready' : 'disabled',
+      detail: input.usageLedgerEnabled
+        ? 'Request receipts and provider token measurements are configured.'
+        : 'Request-level usage tracking is disabled; Claude calls must fail closed.',
     },
     {
       key: 'feedback',
