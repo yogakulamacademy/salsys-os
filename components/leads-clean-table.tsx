@@ -149,7 +149,7 @@ export function LeadsCleanTable({
           !value ||
           value === "all" ||
           (key === "page" && value === "1") ||
-          (key === "sort" && value === "stage_age_desc");
+          (key === "sort" && value === "created_desc");
         if (remove) next.delete(key);
         else next.set(key, value);
       }
@@ -403,7 +403,8 @@ export function LeadsCleanTable({
                   onChange={(event) => updateUrl({ sort: event.target.value, page: 1 })}
                   className="h-9 w-full rounded-ui border border-line bg-surface px-2.5 text-[11px] font-medium text-copy outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100"
                 >
-                  <option value="stage_age_desc">Stage age</option>
+                  <option value="created_desc">Newest first</option>
+                  <option value="stage_age_desc">Stage age (oldest in stage)</option>
                   <option value="followup_asc">Next follow-up</option>
                   <option value="name">Name</option>
                 </select>
@@ -753,6 +754,7 @@ function summaryForView(summary: LeadsWorkspaceSummary, view: LeadsWorkspaceFilt
 }
 
 function sortLabel(sort: LeadsWorkspaceFilters["sort"]) {
+  if (sort === "created_desc") return "newest leads first";
   if (sort === "followup_asc") return "next follow-up first";
   if (sort === "name") return "name order";
   return "highest stage age first";
