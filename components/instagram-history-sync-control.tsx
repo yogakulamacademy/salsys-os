@@ -19,8 +19,9 @@ export function InstagramHistorySyncControl({
 }: { connectionId: string; enabled: boolean }) {
   const [busy, setBusy] = useState(false);
   const [summary, setSummary] = useState<HistorySummary | null>(null);
+  const [echoStatus, setEchoStatus] = useState<{ subscribed: boolean; fields: string[] } | null>(null);
 
-  async function sync(apply: boolean) {
+  async function sync(apply: boolean, echoCheck = false) {
     if (busy) return;
     setBusy(true);
     try {
@@ -28,12 +29,21 @@ export function InstagramHistorySyncControl({
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'same-origin',
-        body: JSON.stringify({ connectionId, apply }),
+        body: JSON.stringify({ connectionId, apply, mode: echoCheck ? 'echo_status' : 'history' }),
       });
       const result = await response.json().catch(() => ({})) as HistorySummary;
-      setSummary(response.ok ? result : {
-        ok: false, error: result.error || 'History synchronization is unavailable.',
-      });
+      if (echoCheck && response.ok && result.ok && typeof (result as { subscribed?: unknown }).subscribed === 'boolean') {
+        setEchoStatus({
+          subscribed: (result as { subscribed: boolean }).subscribed,
+          fields: Array.isArray((result as { fields?: unknown }).fields) ?
+            (result as { fields: string[] }).fields : [],
+        });
+        setSummary(null);
+      } else {
+        setSummary(response.ok ? result : {
+          ok: false, error: result.error || 'Instagram synchronization verification failed.',
+        });
+      }
     } catch {
       setSummary({ ok: false, error: 'Could not reach Instagram history sync.' });
     } finally {
@@ -43,6 +53,9 @@ export function InstagramHistorySyncControl({
 
   return <div className="aiu-historical" aria-live="polite">
     <div className="flex flex-wrap items-center gap-2">
+      <button type="button" className="aiu-secondary" disabled={busy} onClick={() => sync(false, true)}>
+        Check outgoing-message sync
+      </button>
       <button type="button" className="aiu-secondary" disabled={busy} onClick={() => sync(false)}>
         {busy ? 'Checking…' : 'Preview message history'}
       </button>
@@ -51,6 +64,10 @@ export function InstagramHistorySyncControl({
       </button>}
     </div>
     {!enabled && <p>History import is awaiting Meta access verification. Preview is read-only.</p>}
+    {echoStatus && <p>{echoStatus.subscribed ?
+      'Meta confirms outgoing-message webhook subscription. A live echo test and server feature flag are still required.' :
+      'Meta does not report the message_echoes subscription. App-sent messages cannot yet be confirmed as live-synced.'}
+    </p>}
     {summary?.error && <p role="alert">{summary.error}</p>}
     {summary?.ok && <p>
       Conversations checked: {summary.conversationsScanned ?? 0}
