@@ -11,7 +11,7 @@ const exports = {};
 runInContext(compiled, createContext({ exports, TextEncoder }));
 const {
   parseLeadsImportCsv, LEADS_IMPORT_TEMPLATE, csvCell, csvRow,
-  validateImportRow, importIdentityKeys,
+  validateImportRow, importIdentityKeys, exportContactCells,
 } = exports;
 
 const template = parseLeadsImportCsv(LEADS_IMPORT_TEMPLATE);
@@ -47,6 +47,26 @@ assert.equal(injection.includes('"+SUM'), false);
 assert.match(csvCell("=HYPERLINK(1)"), /^"'/);
 assert.match(csvCell("safe"), /^"safe"$/);
 
+const leadWithContacts = {
+  email: "private@example.com",
+  phone: "+15551234567",
+  contactAvailability: "available",
+};
+assert.deepEqual(
+  Array.from(exportContactCells(leadWithContacts, false)),
+  ["", "", "restricted"],
+  "Export without PII grant must omit private contact fields, not export masked hints",
+);
+assert.deepEqual(
+  Array.from(exportContactCells(leadWithContacts, true)),
+  ["private@example.com", "+15551234567", "available"],
+);
+assert.deepEqual(
+  Array.from(exportContactCells({ email: "m***@example.com", phone: "***4567" }, false)),
+  ["", "", "restricted"],
+  "Even masked contact projections must not leak into unauthorized CSV",
+);
+
 const valid = validateImportRow({
   rowNumber: 2,
   first_name: "Ana",
@@ -66,8 +86,14 @@ assert.ok(!route.includes("createAdminClient"));
 assert.ok(exportRoute.includes("getLeadsWorkspacePageWithAttributionScope"));
 assert.ok(exportRoute.includes("can_manage_sales_workspace"));
 assert.ok(exportRoute.includes("private, no-store"));
+assert.ok(exportRoute.includes("exportContactCells(lead, canViewContacts)"));
+assert.ok(exportRoute.includes("!contactAccessError && contactGrant === true"));
+assert.ok(!exportRoute.includes("Contact-data permission is required to export leads."));
 assert.ok(!exportRoute.includes("createAdminClient"));
 assert.ok(header.includes('href="/leads/import"'));
+assert.ok(header.includes("const exportEnabled = canExport && !mock"));
+assert.ok(header.includes("const importEnabled = canImport && !mock"));
+assert.ok(readFileSync("app/leads/page.tsx", "utf8").includes("canImport = canExport && canExportContacts"));
 assert.ok(header.indexOf("Export leads") < header.indexOf("Add lead"));
 
-console.log("PASS: CSV parser, duplicate detection, formula neutralization and protected lead-transfer boundaries");
+console.log("PASS: CSV parsing, duplicate detection, formula neutralization, role-gated import and redacted Sales export");
