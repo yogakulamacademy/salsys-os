@@ -169,7 +169,7 @@ export async function submitLeadInsightFeedback(
     .maybeSingle();
 
   // Uniform denial: do not disclose whether another tenant's run exists.
-  if (readError || !run?.lead_id ||
+  if (readError || !run?.lead_id || run.organization_id !== reviewer.organizationId ||
       !(await canReviewLead(reviewer, String(run.lead_id)))) {
     return { ok: false, error: 'This AI review is unavailable or you do not have access.' };
   }
