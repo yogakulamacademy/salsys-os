@@ -28,7 +28,7 @@ test('CRM Rules shows real configuration categories and evidence-safe mock state
   await expect(page.getByRole('heading',{name:'Operational Connections'})).toBeVisible();
   await expect(page.getByRole('heading',{name:'Security & Governance'})).toBeVisible();
   await expect(page.getByRole('heading',{name:'Recent Changes / Audit'})).toBeVisible();
-  await expect(page.getByText('Reference defaults only · not tenant data')).toBeVisible();
+  await expect(page.getByText('Reference defaults only · not tenant data',{exact:true})).toBeVisible();
   await expect(page.getByRole('button',{name:'Save Changes'})).toBeDisabled();
   await expect(page.getByRole('button',{name:'Reset unsaved pipeline changes'})).toBeDisabled();
   await expect(page.getByText('92%',{exact:true})).toHaveCount(0);
