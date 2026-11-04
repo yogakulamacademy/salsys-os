@@ -762,11 +762,15 @@ export function AppShell({ children }: { children: ReactNode }) {
       ) : null}
 
       <div
-        className={`min-h-screen transition-[padding] duration-200 ${
+        className={`${
+          pathname === "/conversations"
+            ? "flex h-[100dvh] min-h-0 flex-col overflow-hidden"
+            : "min-h-screen"
+        } transition-[padding] duration-200 ${
           secondaryCollapsed ? "lg:pl-16" : "lg:pl-[304px]"
         }`}
       >
-        <header className="sticky top-0 z-30 flex h-16 items-center gap-3 border-b border-slate-200/80 bg-white/95 px-4 backdrop-blur lg:px-6 dark:border-slate-800 dark:bg-slate-950/95">
+        <header className="sticky top-0 z-30 flex h-16 shrink-0 items-center gap-3 border-b border-slate-200/80 bg-white/95 px-4 backdrop-blur lg:px-6 dark:border-slate-800 dark:bg-slate-950/95">
           <button
             type="button"
             className="grid h-9 w-9 place-items-center rounded-lg border border-slate-200 text-slate-500 lg:hidden dark:border-slate-800"
@@ -914,7 +918,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         <main
           className={
             pathname === "/conversations"
-              ? "h-[calc(100dvh-4rem)] min-h-0 overflow-hidden p-0"
+              ? "min-h-0 flex-1 overflow-hidden p-0"
               : "min-h-[calc(100vh-4rem)] px-4 py-5 sm:px-5 lg:px-6 lg:py-6"
           }
         >
