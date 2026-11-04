@@ -7,6 +7,15 @@
   color: var(--app-text);
 }
 
+/* Keep the Add Lead dropdown above the KPI cards immediately below the page
+   header. Scope the stacking layer to Leads; leave the shared shell untouched. */
+.workspace :global(.ui-page-header) {
+  position: relative;
+  z-index: 40;
+  overflow: visible;
+}
+
+
 /* Normalize legacy dense controls inside the leads workspace without changing behavior. */
 .workspace :global(.text-\[9px\]) {
   font-size: 10px !important;

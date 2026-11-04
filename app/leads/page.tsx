@@ -45,7 +45,9 @@ export default async function LeadsPage({ searchParams }: LeadsPageProps) {
   const notice = one(params.notice);
   const error = one(params.error);
 
-  let canManage = false;
+  let canExport = false;
+  let canImport = false;
+  let canExportContacts = false;
   if (!mock) {
     try {
       const supabase = await createClient();
@@ -56,13 +58,17 @@ export default async function LeadsPage({ searchParams }: LeadsPageProps) {
           supabase.rpc("can_manage_sales_workspace", { p_organization_id: orgId }),
           supabase.rpc("can_view_lead_pii"),
         ]);
-        canManage =
-          !permission.error && permission.data === true &&
-          !contactPermission.error && contactPermission.data === true;
+        // A Sales manager may export their authorized CRM view even when the
+        // separate global PII grant is missing. Import still needs both.
+        canExport = !permission.error && permission.data === true;
+        canExportContacts = !contactPermission.error && contactPermission.data === true;
+        canImport = canExport && canExportContacts;
       }
     } catch {
-      // Fail closed: existing Leads browsing remains available, import/export do not.
-      canManage = false;
+      // Fail closed: existing Leads browsing remains available.
+      canExport = false;
+      canExportContacts = false;
+      canImport = false;
     }
   }
 
@@ -83,7 +89,7 @@ export default async function LeadsPage({ searchParams }: LeadsPageProps) {
         eyebrow="CRM · Workspace"
         title="Leads"
         description="Manage, qualify, and move incoming leads forward from one workspace."
-        actions={<LeadsHeaderActions canManage={canManage} mock={mock} exportHref={exportHref} />}
+        actions={<LeadsHeaderActions canExport={canExport} canImport={canImport} canExportContacts={canExportContacts} mock={mock} exportHref={exportHref} />}
       />
 
       {notice === "mock-create" ? (

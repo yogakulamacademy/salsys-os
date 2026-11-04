@@ -3,7 +3,7 @@ import { NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { requireCurrentOrganizationId } from "@/lib/workspace";
 import { useMockData } from "@/lib/config";
-import { csvRow } from "@/lib/leads-transfer-csv";
+import { csvRow, exportContactCells } from "@/lib/leads-transfer-csv";
 import {
   getLeadsWorkspacePageWithAttributionScope,
   parseLeadsAttributionScope,
@@ -25,9 +25,10 @@ function errorResponse(text: string, status: number) {
 }
 
 /**
- * Exports exactly the Leads workspace filters and rows a manager can read.
- * The existing view read model performs tenant/lead access checks and secure
- * contact hydration; this route never queries a raw unfiltered lead table.
+ * Exports the authorized filtered Leads workspace for Sales managers.
+ * Uses the existing lead-access read model and additionally blanks contact
+ * fields unless the caller has the separate CRM PII permission. Never query
+ * raw lead tables or expose even masked contact strings to unapproved roles.
  */
 export async function GET(request: NextRequest) {
   if (useMockData) return errorResponse("CSV export is disabled in demo mode.", 403);
@@ -50,10 +51,10 @@ export async function GET(request: NextRequest) {
   if (permissionError || canManage !== true) {
     return errorResponse("Sales management access is required to export leads.", 403);
   }
-  const { data: canViewContacts, error: contactAccessError } = await supabase.rpc("can_view_lead_pii");
-  if (contactAccessError || canViewContacts !== true) {
-    return errorResponse("Contact-data permission is required to export leads.", 403);
-  }
+  const { data: contactGrant, error: contactAccessError } = await supabase.rpc("can_view_lead_pii");
+  // Failure to verify private-data permission never blocks a safe redacted CSV,
+  // but it must prevent any contact field from being included.
+  const canViewContacts = !contactAccessError && contactGrant === true;
 
   const params = Object.fromEntries(
     request.nextUrl.searchParams.entries(),
@@ -83,9 +84,10 @@ export async function GET(request: NextRequest) {
 
     function append(leads: typeof first.leads) {
       for (const lead of leads) {
+        const [email, phone, availability] = exportContactCells(lead, canViewContacts);
         lines.push(csvRow([
-          lead.id, lead.leadCode, lead.name, lead.email, lead.phone,
-          lead.contactAvailability, lead.country, lead.course, lead.location,
+          lead.id, lead.leadCode, lead.name, email, phone,
+          availability, lead.country, lead.course, lead.location,
           lead.leadCreationChannel, lead.firstTouchSource, lead.owner,
           lead.stage, lead.intent, lead.createdAt, lead.nextFollowupAt,
         ]));
