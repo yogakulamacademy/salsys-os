@@ -5,7 +5,7 @@
 create table if not exists public.ai_lead_insight_review_packet_drafts (
   id uuid primary key default gen_random_uuid(),
   organization_id uuid not null references public.organizations(id) on delete cascade,
-  authored_by uuid not null references auth.users(id) on delete restrict,
+  authored_by uuid references auth.users(id) on delete set null,
   policy_version text not null default 'lead_insight_pilot_v1'
     check (policy_version = 'lead_insight_pilot_v1'),
   privacy_ref text,
