@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { LeadsImportClient } from "@/components/leads/leads-import-client";
 import { createClient } from "@/lib/supabase/server";
 import { requireCurrentOrganizationId } from "@/lib/workspace";
+import { getLeadsTransferPermissions } from "@/lib/leads-transfer-permissions";
 import { isMockMode } from "@/lib/data";
 
 export const dynamic = "force-dynamic";
@@ -22,12 +23,8 @@ export default async function ImportLeadsPage() {
       notFound();
     }
 
-    const { data: canManage, error } = await supabase.rpc("can_manage_sales_workspace", {
-      p_organization_id: organizationId,
-    });
-    if (error || canManage !== true) notFound();
-    const { data: canViewContacts, error: contactAccessError } = await supabase.rpc("can_view_lead_pii");
-    if (contactAccessError || canViewContacts !== true) notFound();
+    const permissions = await getLeadsTransferPermissions(supabase, user.id, organizationId);
+    if (!permissions.canImport) notFound();
   }
 
   return (
