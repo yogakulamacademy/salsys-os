@@ -1,0 +1,218 @@
+/* Lead Inspector visual redesign v3 — scoped to this drawer only. */
+.si3-shell {
+  --li-bg: #f7f5fc;
+  --li-panel: #fff;
+  --li-subtle: #f4f1ff;
+  --li-border: #e7e3f1;
+  --li-ink: #25243a;
+  --li-muted: #77748a;
+  --li-purple: #5944db;
+  --li-purple-strong: #4d39ce;
+  --li-purple-soft: #f1edff;
+  --li-shadow: 0 2px 9px rgba(37, 29, 80, .035);
+  background: var(--li-bg);
+  color: var(--li-ink);
+  border-left: 1px solid var(--li-border);
+}
+html.dark .si3-shell {
+  --li-bg: #141422;
+  --li-panel: #1e1d2d;
+  --li-subtle: #28223c;
+  --li-border: #363247;
+  --li-ink: #f1effb;
+  --li-muted: #b6afcb;
+  --li-purple: #a999ff;
+  --li-purple-strong: #bcaeff;
+  --li-purple-soft: #2b2442;
+  --li-shadow: 0 2px 10px rgba(0,0,0,.16);
+}
+.si3-shell a, .si3-shell button { transition: background-color .16s ease, border-color .16s ease, color .16s ease; }
+.si3-header { background: var(--li-panel); border-bottom: 1px solid var(--li-border); flex: none; }
+.si3-avatar { background: var(--li-purple-soft); color: var(--li-purple-strong); }
+.si3-lead-name { color: var(--li-ink); }
+.si3-lead-meta { color: var(--li-muted); }
+.si3-stage-pill, .si3-count { background: var(--li-purple-soft); color: var(--li-purple); }
+.si3-actions > button, .si3-actions > a:not(.si3-primary) {
+  display: inline-flex;
+  align-items: center;
+  min-height: 36px;
+  gap: 6px;
+  border-radius: 9px;
+  background: var(--li-subtle);
+  color: var(--li-ink);
+  border: 1px solid var(--li-border);
+  padding: 0 11px;
+  font-size: 11px;
+  font-weight: 600;
+}
+.si3-primary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  background: #5944db;
+  border: 1px solid #5944db;
+  border-radius: 9px;
+  color: #fff !important;
+  padding: 9px 13px;
+  text-decoration: none;
+  font-size: 11px;
+  font-weight: 650;
+  white-space: nowrap;
+}
+.si3-primary:hover { background: #4935c3; }
+/* Keep the label readable even when the Leads workspace has stronger link-color rules. */
+/* The legacy Lead Inspector globally colors all /conversations links violet.
+   Outrank that exact attribute selector for the filled Conversation CTA. */
+[aria-label="Lead Inspector"] aside.si3-shell a.si3-primary[href^="/conversations"],
+html.dark [aria-label="Lead Inspector"] aside.si3-shell a.si3-primary[href^="/conversations"] {
+  color: #ffffff !important;
+  -webkit-text-fill-color: #ffffff !important;
+}
+html body .si3-shell a.si3-primary,
+html.dark body .si3-shell a.si3-primary {
+  color: #ffffff !important;
+  -webkit-text-fill-color: #ffffff !important;
+}
+@media (min-width: 768px) {
+  [aria-label="Lead Inspector"] > aside.si3-shell {
+    max-width: 590px !important;
+  }
+}
+.si3-journey-search label { display:block; font-size:11px; color:var(--li-muted); }
+.si3-page-quick-filters { display:flex; align-items:center; flex-wrap:wrap; gap:7px; }
+.si3-page-quick-filters > span { font-size:10px; color:var(--li-muted); font-weight:600; }
+.si3-secondary {
+  border: 1px solid var(--li-border);
+  background: var(--li-panel);
+  border-radius: 9px;
+  color: var(--li-purple);
+  display: inline-flex;
+  gap: 7px;
+  align-items: center;
+  justify-content: center;
+  min-height: 34px;
+  padding: 8px 11px;
+  font-size: 11px;
+  font-weight: 650;
+  text-decoration: none;
+  white-space: nowrap;
+}
+.si3-secondary:hover, .si3-actions > button:hover, .si3-actions > a:not(.si3-primary):hover { background: var(--li-purple-soft); }
+.si3-tab-nav { border-bottom: 0; }
+.si3-tab { color: var(--li-muted); }
+.si3-tab:hover { color: var(--li-ink); }
+.si3-tab.si3-tab-active { color: var(--li-purple); }
+.si3-tab-underline { background: var(--li-purple); }
+.si3-body { background: var(--li-bg); scrollbar-gutter: stable; overscroll-behavior: contain; }
+.si3-card-heading { display:flex; align-items:center; gap:8px; margin-bottom: 11px; }
+.si3-card-heading h3 { color: var(--li-ink); font-size: 12px; line-height: 1.35; font-weight: 700; }
+.si3-icon {
+  display: inline-grid;
+  width: 28px; height: 28px;
+  flex: none;
+  place-items: center;
+  border-radius: 9px;
+  background: var(--li-purple-soft);
+  color: var(--li-purple);
+}
+.si3-icon-large { width: 38px; height: 38px; border-radius: 11px; }
+.si3-ai-card, .si3-focus-card, .si3-stage-card, .si3-summary-card, .si3-more,
+.si3-activity-card, .si3-journey-card {
+  background: var(--li-panel);
+  border: 1px solid var(--li-border);
+  border-radius: 14px;
+  box-shadow: var(--li-shadow);
+}
+.si3-ai-card {
+  display:flex; align-items:center; gap:12px;
+  padding:15px; background: var(--li-purple-soft);
+}
+.si3-ai-copy { flex:1; min-width:0; }
+.si3-ai-copy h3 { color: var(--li-ink); font-size: 12px; font-weight: 700; }
+.si3-ai-copy p { margin-top:5px; color: var(--li-muted); font-size: 11px; line-height:1.55; }
+.si3-ai-note { display:block; margin-top:6px; color: var(--li-muted); font-size:10px; }
+.si3-focus-card { padding: 14px 15px; }
+.si3-evidence-label { margin-left:auto; color:var(--li-muted); font-size:10px; }
+.si3-focus-title { font-size: 13px; line-height:1.4; font-weight:700; color:var(--li-ink); }
+.si3-focus-detail { margin-top: 4px; font-size: 11px; line-height:1.6; color:var(--li-muted); }
+.si3-focus-actions { display:flex; flex-wrap:wrap; gap:8px; margin-top:12px; }
+.si3-stage-card { padding:13px 14px; }
+.si3-stage-head { display:flex; justify-content:space-between; align-items:center; gap:8px; margin-bottom:12px; }
+.si3-stage-head strong { font-size:12px; }
+.si3-stage-head span { font-size:10px; color:var(--li-muted); }
+.si3-stage-list { display:grid; grid-template-columns:repeat(5,minmax(0,1fr)); gap:2px; list-style:none; padding:0; margin:0; }
+.si3-stage-list li { display:flex; flex-direction:column; align-items:center; position:relative; gap:6px; font-size:10px; color:var(--li-muted); text-align:center; }
+.si3-stage-list li:not(:last-child)::after { content:""; position:absolute; left:calc(50% + 11px); top:6px; width:calc(100% - 22px); border-top:1px solid var(--li-border); }
+.si3-stage-dot { width:13px; height:13px; border:2px solid var(--li-border); border-radius:50%; background:var(--li-panel); z-index:1; }
+.si3-stage-list li[data-current="true"] { color:var(--li-purple); font-weight:700; }
+.si3-stage-list li[data-current="true"] .si3-stage-dot { border:4px solid var(--li-purple); background:var(--li-panel); box-shadow:0 0 0 3px var(--li-purple-soft); }
+.si3-stage-card p { margin-top:9px; font-size:9px; line-height:1.5; color:var(--li-muted); }
+.si3-card-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:11px; }
+.si3-summary-card { padding:14px; min-width:0; }
+.si3-card-rows { display:grid; gap:0; }
+.si3-field { display:flex; justify-content:space-between; align-items:baseline; gap:9px; padding:7px 0; border-top:1px solid var(--li-border); font-size:10px; }
+.si3-field > span { color:var(--li-muted); flex-shrink:0; }
+.si3-field > strong { color:var(--li-ink); text-align:right; overflow-wrap:anywhere; font-size:10px; font-weight:600; min-width:0; }
+.si3-more { overflow:hidden; }
+.si3-more > summary { cursor:pointer; padding:13px 15px; font-size:12px; font-weight:700; color:var(--li-ink); }
+.si3-more > summary span { display:block; margin-top:3px; color:var(--li-muted); font-size:10px; font-weight:400; }
+.si3-more-content { display:grid; gap:12px; padding:0 13px 14px; }
+.si3-warning { border:1px solid #edd8a1; background:#fff9eb; color:#795514; border-radius:9px; padding:9px 11px; font-size:11px; }
+.si3-warning > summary { cursor:pointer; display:flex; align-items:center; gap:7px; font-weight:650; }
+.si3-warning > summary span { margin-left:auto; text-decoration:underline; }
+.si3-warning ul { padding:8px 0 0 20px; list-style:disc; line-height:1.65; }
+html.dark .si3-warning { background:#342b21; border-color:#6d5435; color:#f3d8a0; }
+.si3-followup { background:var(--li-panel); border-color:var(--li-border); color:var(--li-ink); }
+.si3-followup button[type="submit"] { background:#5944db; }
+.si3-followup button[type="submit"]:hover { background:#4935c3; }
+.si3-filter-row { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:8px; }
+.si3-filter-row label, .si3-filter-more label { display:block; min-width:0; font-size:10px; color:var(--li-muted); }
+.si3-select, .si3-search {
+  display:block; width:100%; min-width:0; min-height:35px; margin-top:4px;
+  padding:7px 8px; font-size:11px; color:var(--li-ink);
+  border:1px solid var(--li-border); background:var(--li-panel); border-radius:9px;
+}
+.si3-filter-more { margin-top:8px; }
+.si3-filter-more > summary, .si3-evidence-more > summary { cursor:pointer; font-size:11px; color:var(--li-purple); font-weight:650; }
+.si3-filter-more-fields { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:8px; padding-top:9px; }
+.si3-evidence-more { color:var(--li-muted); font-size:11px; line-height:1.7; }
+.si3-evidence-more[open] { padding:12px; border:1px solid var(--li-border); border-radius:12px; background:var(--li-panel); }
+.si3-evidence-more p { margin-top:8px; }
+.si3-journey-card { padding:13px 15px; }
+.si3-journey-insight { background:var(--li-purple-soft); border-color:var(--li-border); }
+.si3-journey-insight h3 { display:flex; gap:8px; align-items:center; color:var(--li-ink); font-size:12px; font-weight:700; }
+.si3-journey-insight p { margin-top:7px; font-size:11px; line-height:1.6; color:var(--li-muted); }
+.si3-evidence-meta { display:flex; align-items:center; justify-content:space-between; gap:8px; flex-wrap:wrap; color:var(--li-muted); font-size:10px; }
+.si3-timeline { position:relative; display:grid; gap:11px; margin:0; padding:0 0 0 25px; list-style:none; }
+.si3-timeline::before { content:""; position:absolute; top:15px; bottom:15px; left:8px; width:2px; background:var(--li-purple-soft); }
+.si3-timeline > li { position:relative; min-width:0; }
+.si3-timeline > li::before { content:""; position:absolute; left:-22px; top:20px; width:11px; height:11px; border-radius:50%; background:var(--li-purple); border:3px solid var(--li-panel); box-shadow:0 0 0 2px var(--li-purple-soft); }
+.si3-timeline-entry { display:flex; gap:11px; padding:12px; background:var(--li-panel); border:1px solid var(--li-border); border-radius:12px; }
+.si3-timeline-copy { flex:1; min-width:0; }
+.si3-timeline-copy h3 { font-size:12px; line-height:1.4; color:var(--li-ink); font-weight:700; }
+.si3-timeline-copy p { font-size:10px; margin-top:3px; line-height:1.5; color:var(--li-muted); overflow-wrap:anywhere; }
+.si3-timeline-entry time { flex:none; max-width:105px; color:var(--li-muted); font-size:9px; text-align:right; line-height:1.6; }
+.si3-activity-date { background:var(--li-purple-soft); color:var(--li-ink); border-radius:9px; padding:8px 11px; font-size:11px; font-weight:700; }
+.si3-activity-item { display:flex; gap:10px; align-items:center; background:var(--li-panel); border:1px solid var(--li-border); border-radius:11px; padding:11px; min-width:0; }
+.si3-activity-item > div:nth-child(2) { flex:1; min-width:0; }
+.si3-activity-item h4 { font-size:12px; font-weight:700; color:var(--li-ink); }
+.si3-activity-item p { margin-top:3px; font-size:10px; line-height:1.5; color:var(--li-muted); overflow-wrap:anywhere; }
+.si3-activity-item time { flex:none; max-width:94px; color:var(--li-muted); font-size:10px; }
+.si3-empty { text-align:center; padding:26px 16px; border:1px dashed var(--li-border); background:var(--li-panel); border-radius:13px; color:var(--li-muted); font-size:12px; }
+.si3-empty strong { display:block; margin-bottom:5px; color:var(--li-ink); font-size:13px; }
+@media (max-width: 520px) {
+  .si3-ai-card { flex-wrap:wrap; }
+  .si3-ai-card > .si3-primary { width:100%; }
+  .si3-card-grid { gap:8px; }
+  .si3-summary-card { padding:11px; }
+  .si3-field { display:block; }
+  .si3-field > strong { display:block; text-align:left; margin-top:3px; }
+  .si3-filter-row { grid-template-columns:repeat(2,minmax(0,1fr)); }
+  .si3-filter-more-fields { grid-template-columns:repeat(2,minmax(0,1fr)); }
+  .si3-timeline-entry { flex-wrap:wrap; }
+  .si3-timeline-entry time { width:100%; max-width:none; text-align:left; padding-left:40px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .si3-shell a, .si3-shell button { transition:none; }
+}

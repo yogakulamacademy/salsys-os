@@ -22,12 +22,14 @@ import {
   Sparkles,
   Target,
   UserRound,
+  Wallet,
   X,
   Zap,
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useModalFocus } from "@/components/use-modal-focus";
-import { JourneyEvidencePanel } from "@/components/journey-evidence-panel";
+import "./lead-inspector-v3.css";
+import { JourneyEvidencePanel } from "@/components/crm/lead-journey-timeline";
 import type { JourneyEvidence } from "@/lib/journey-evidence";
 import { createLatestReadGuard } from "@/lib/latest-read";
 
@@ -434,21 +436,21 @@ export function LeadInspector({
         className="absolute inset-0 bg-slate-950/25 backdrop-blur-[1px]"
       />
 
-      <aside className="relative flex h-full w-full flex-col border-l border-[#DDE7DF] bg-[#F8FAF8] shadow-[-20px_0_60px_rgba(19,46,38,0.16)] sm:max-w-[680px]">
-        <header className="border-b border-[#E4EAE6] bg-white px-5 pb-0 pt-5 sm:px-6">
+      <aside className="si3-shell relative flex h-full w-full flex-col shadow-[-20px_0_60px_rgba(24,17,60,0.16)] sm:max-w-[590px]">
+        <header className="si3-header px-4 pb-0 pt-4 sm:px-5">
           <div className="flex items-start gap-3">
-            <span className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-[#E4F2E8] text-xs font-bold text-[#216551]">
+            <span className="si3-avatar grid h-11 w-11 shrink-0 place-items-center rounded-full text-xs font-bold">
               {payload ? initials(payload.lead.name || payload.lead.leadCode) : "…"}
             </span>
 
             <div className="min-w-0 flex-1">
               <div className="flex flex-wrap items-center gap-2">
-                <h2 className="truncate text-[18px] font-semibold tracking-[-0.025em] text-[#192E29]">
+                <h2 className="si3-lead-name truncate text-[18px] font-semibold tracking-[-0.025em]">
                   {payload?.lead.name || (loading ? "Loading lead…" : "Lead Inspector")}
                 </h2>
                 {payload ? <StatePill value={payload.lead.stage} /> : null}
               </div>
-              <div className="mt-1 truncate text-[11px] text-[#7A8981]">
+              <div className="si3-lead-meta mt-1 truncate text-[11px]">
                 {payload
                   ? [payload.lead.leadCode, payload.lead.course, payload.lead.country]
                       .filter(Boolean)
@@ -478,10 +480,10 @@ export function LeadInspector({
           </div>
 
           {payload ? (
-            <div className="mt-4 flex flex-wrap items-center gap-2">
+            <div className="si3-actions mt-4 flex flex-wrap items-center gap-2">
               <Link
                 href={`/conversations?lead=${payload.lead.id}`}
-                className="btn-primary inline-flex h-8 items-center gap-1.5 px-3 text-[11px]"
+                className="si3-primary inline-flex h-9 items-center gap-1.5 px-3 text-[11px]"
               >
                 <MessageCircle size={12} /> Conversation
               </Link>
@@ -518,7 +520,7 @@ export function LeadInspector({
             </div>
           ) : null}
 
-          <nav className="mt-4 flex gap-5" aria-label="Lead Inspector sections">
+          <nav className="si3-tab-nav mt-4 flex gap-5" aria-label="Lead Inspector sections">
             <InspectorTabButton
               active={tab === "overview"}
               icon={<UserRound size={13} />}
@@ -542,7 +544,7 @@ export function LeadInspector({
           </nav>
         </header>
 
-        <div className="min-h-0 flex-1 overflow-y-auto px-5 py-5 sm:px-6">
+        <div className="si3-body min-h-0 flex-1 overflow-y-auto px-4 py-4 sm:px-5">
           {loading ? <InspectorLoading /> : null}
           {error && !payload ? <InspectorError message={error} /> : null}
 
@@ -550,7 +552,10 @@ export function LeadInspector({
             <div className="space-y-4">
               {error ? <InspectorInlineWarning>{error}</InspectorInlineWarning> : null}
               {payload.warnings.length ? (
-                <InspectorInlineWarning>{payload.warnings.join(" ")}</InspectorInlineWarning>
+                <details className="si3-warning">
+                  <summary><AlertCircle size={13} /> Some lead data is temporarily unavailable <span>Details</span></summary>
+                  <ul>{payload.warnings.map((warning) => <li key={warning}>{warning}</li>)}</ul>
+                </details>
               ) : null}
               {actionSuccess ? (
                 <div className="flex items-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2.5 text-[10px] font-medium text-emerald-700">
@@ -667,27 +672,77 @@ function OverviewTab({
     .filter(Boolean)
     .join(", ");
 
+  const lastInbound = latestMessage(lead.lastMessages ?? []);
+  const pendingTasks = payload.availability.openTasks === "unavailable" ? "Unavailable" : String(openTasks.length);
+
   return (
     <>
-      <DecisionStrip payload={payload} />
+      <section className="si3-ai-card" aria-label="AI reply assistant">
+        <span className="si3-icon si3-icon-large"><Sparkles size={19} /></span>
+        <div className="si3-ai-copy">
+          <h3>AI reply assistant</h3>
+          <p>{lastInbound?.direction === "inbound"
+            ? "The latest recorded message is from this lead. Open the conversation to review context and prepare a reply."
+            : "Open the conversation to review the latest context and prepare an AI-assisted reply."}</p>
+          <span className="si3-ai-note">Review before sending · No automatic message</span>
+        </div>
+        <Link className="si3-primary" href={`/conversations?lead=${encodeURIComponent(lead.id)}`}>Draft reply <ArrowRight size={13} /></Link>
+      </section>
+
       <FocusCard payload={payload} focus={focus} onSchedule={onToggleFollowup} />
 
-      <SmartFollowupComposer
-        payload={payload}
-        presets={presets}
-        open={followupOpen}
-        title={followupTitle}
-        dueAt={followupDueAt}
-        description={followupDescription}
-        loading={actionLoading}
-        onPreset={onPreset}
-        onToggle={onToggleFollowup}
-        onTitleChange={onTitleChange}
-        onDueChange={onDueChange}
-        onDescriptionChange={onDescriptionChange}
-        onSubmit={onSubmit}
-      />
+      {followupOpen ? (
+        <SmartFollowupComposer
+          payload={payload}
+          presets={presets}
+          open={followupOpen}
+          title={followupTitle}
+          dueAt={followupDueAt}
+          description={followupDescription}
+          loading={actionLoading}
+          onPreset={onPreset}
+          onToggle={onToggleFollowup}
+          onTitleChange={onTitleChange}
+          onDueChange={onDueChange}
+          onDescriptionChange={onDescriptionChange}
+          onSubmit={onSubmit}
+        />
+      ) : null}
 
+      <InspectorStageTracker stage={lead.stage} />
+
+      <div className="si3-card-grid">
+        <InspectorSummaryCard icon={<Target size={16}/>} title="Lead summary">
+          <InspectorField label="Course" value={lead.course || "Not selected"} />
+          <InspectorField label="Location" value={lead.preferredLocation || lead.location || "Not selected"} />
+          <InspectorField label="Preferred month" value={lead.preferredMonth || "Not recorded"} />
+          <InspectorField label="Owner" value={lead.owner || "Unassigned"} />
+          <InspectorField label="Intent" value={salesIntelligence?.derived_intent ? pretty(salesIntelligence.derived_intent) : pretty(lead.intent || "Unknown")} />
+        </InspectorSummaryCard>
+        <InspectorSummaryCard icon={<Phone size={16}/>} title="Reachability">
+          <InspectorField label="Email" value={lead.email || "Not recorded / restricted"} />
+          <InspectorField label="Phone" value={lead.phone || "Not recorded / restricted"} />
+          <InspectorField label="Channel" value={pretty(lead.currentContactChannel || "Unknown")} />
+          <InspectorField label="Last contacted" value={formatDateTime(lead.lastContactedAt)} />
+        </InspectorSummaryCard>
+        <InspectorSummaryCard icon={<Activity size={16}/>} title="Engagement">
+          <InspectorField label="Page views" value={payload.availability.person360 === "unavailable" ? "Unavailable" : numberText(person?.page_view_count)} />
+          <InspectorField label="Sessions" value={payload.availability.person360 === "unavailable" ? "Unavailable" : numberText(person?.session_count)} />
+          <InspectorField label="Touchpoints" value={payload.availability.person360 === "unavailable" ? "Unavailable" : numberText(person?.touchpoint_count)} />
+          <InspectorField label="Open follow-ups" value={pendingTasks} />
+        </InspectorSummaryCard>
+        <InspectorSummaryCard icon={<Wallet size={16}/>} title="Revenue & payments">
+          <InspectorField label="Potential value" value={potential != null && potentialCurrency ? formatMoney(potential, potentialCurrency) : "Not recorded"} />
+          <InspectorField label="Recorded paid" value={payload.availability.payments === "unavailable" ? "Unavailable" : formatCurrencyMap(recordedPaid)} />
+          <InspectorField label="Payment records" value={payload.availability.payments === "unavailable" ? "Unavailable" : String(payments.length)} />
+          <InspectorField label="Payment stage" value={pretty(salesIntelligence?.payment_status || (lead.stage === "payment_pending" ? "Payment pending" : "Not recorded"))} />
+        </InspectorSummaryCard>
+      </div>
+
+
+      <details className="si3-more">
+        <summary>More details <span>Follow-ups, intelligence, attribution and notes</span></summary>
+        <div className="si3-more-content">
       <Section title="Open follow-ups" eyebrow="Committed next actions">
         <AvailabilityNote
           availability={payload.availability.openTasks}
@@ -854,8 +909,43 @@ function OverviewTab({
           {lead.notes ? <TextBlock label="Internal notes" value={lead.notes} /> : null}
         </Section>
       ) : null}
+        </div>
+      </details>
     </>
   );
+}
+
+function InspectorSummaryCard({ icon, title, children }: { icon: ReactNode; title: string; children: ReactNode }) {
+  return <section className="si3-summary-card">
+    <div className="si3-card-heading"><span className="si3-icon">{icon}</span><h3>{title}</h3></div>
+    <div className="si3-card-rows">{children}</div>
+  </section>;
+}
+
+function InspectorField({ label, value }: { label: string; value: string }) {
+  return <div className="si3-field"><span>{label}</span><strong title={value}>{value}</strong></div>;
+}
+
+function InspectorStageTracker({ stage }: { stage: string }) {
+  const steps = [
+    { id: "new", title: "New" },
+    { id: "engaged", title: "Engaged" },
+    { id: "qualified", title: "Qualified" },
+    { id: "payment_pending", title: "Payment" },
+    { id: "enrolled", title: "Enrolled" },
+  ];
+  const current = stage === "contacted" ? "new" : stage === "high_intent" ? "qualified" : stage;
+  const known = steps.some(step => step.id === current);
+  return <section className="si3-stage-card" aria-label="Current lead stage">
+    <div className="si3-stage-head"><strong>Lead progress</strong><span>Current: {pretty(stage)}</span></div>
+    <ol className="si3-stage-list">
+      {steps.map(step => <li key={step.id} data-current={known && step.id === current ? "true" : undefined}>
+        <span className="si3-stage-dot" aria-hidden="true" />
+        <span>{step.title}</span>
+      </li>)}
+    </ol>
+    <p>Stages show the current CRM state, not an assumed history of completed steps.</p>
+  </section>;
 }
 
 function DecisionStrip({ payload }: { payload: InspectorPayload }) {
@@ -878,55 +968,25 @@ function DecisionStrip({ payload }: { payload: InspectorPayload }) {
   );
 }
 
-function FocusCard({
-  payload,
-  focus,
-  onSchedule,
-}: {
+function FocusCard({ payload, focus, onSchedule }: {
   payload: InspectorPayload;
   focus: LeadFocus;
   onSchedule: () => void;
 }) {
-  const toneClass =
-    focus.tone === "attention"
-      ? "border-amber-200 bg-amber-50/80"
-      : focus.tone === "opportunity"
-        ? "border-emerald-200 bg-emerald-50/70"
-        : "border-[#D9E6DD] bg-[#F4F9F5]";
-  const iconClass = focus.tone === "attention" ? "bg-amber-100 text-amber-700" : "bg-[#DDEFE3] text-[#216551]";
   const needsOwner = focus.action.toLowerCase().includes("assign") && !payload.lead.owner;
-
-  return (
-    <section className={`rounded-xl border p-4 ${toneClass}`}>
-      <div className="flex items-start gap-3">
-        <span className={`grid h-9 w-9 shrink-0 place-items-center rounded-lg ${iconClass}`}><Sparkles size={16} /></span>
-        <div className="min-w-0 flex-1">
-          <div className="text-[9px] font-bold uppercase tracking-[0.13em] text-[#74837A]">
-            {focus.source === "canonical" ? "Canonical next best action" : "Suggested focus · current evidence"}
-          </div>
-          <div className="mt-1 text-[14px] font-semibold text-[#203B31]">{focus.action}</div>
-          <div className="mt-1 text-[10px] leading-5 text-[#63756B]">{focus.detail}</div>
-        </div>
-      </div>
-      <div className="mt-3 flex flex-wrap gap-1.5">
-        {focus.reasons.map((reason) => <SmallTag key={reason}>{reason}</SmallTag>)}
-      </div>
-      <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-black/5 pt-3">
-        <Link
-          href={needsOwner ? `/leads/${payload.lead.id}/edit` : `/conversations?lead=${payload.lead.id}`}
-          className="inline-flex h-8 items-center gap-1.5 rounded-md bg-[#216551] px-3 text-[10px] font-semibold text-white hover:bg-[#174D3B]"
-        >
-          <Zap size={12} /> {needsOwner ? "Assign owner" : "Act now"}
-        </Link>
-        <button type="button" onClick={onSchedule} className="inline-flex h-8 items-center gap-1.5 rounded-md border border-[#CADBCF] bg-white px-3 text-[10px] font-semibold text-[#456158] hover:bg-[#F8FBF9]">
-          <CalendarClock size={12} /> Schedule next step
-        </button>
-        <span className="ml-auto text-[9px] text-[#849188]">
-          {focus.source === "canonical" ? "Existing intelligence · human action required" : "Presentation guidance · no automatic write"}
-        </span>
-      </div>
-    </section>
-  );
+  return <section className="si3-focus-card">
+    <div className="si3-card-heading"><span className="si3-icon"><Target size={17} /></span><h3>Next best action</h3>
+      <span className="si3-evidence-label">{focus.source === "canonical" ? "Canonical" : "CRM evidence"}</span>
+    </div>
+    <p className="si3-focus-title">{focus.action}</p>
+    <p className="si3-focus-detail">{focus.detail}</p>
+    <div className="si3-focus-actions">
+      <Link className="si3-secondary" href={needsOwner ? `/leads/${encodeURIComponent(payload.lead.id)}/edit` : `/conversations?lead=${encodeURIComponent(payload.lead.id)}`}>
+        {needsOwner ? "Review assignment" : "Open conversation"} <ArrowRight size={13}/>
+      </Link>
+      <button type="button" className="si3-secondary" onClick={onSchedule}><CalendarClock size={13}/> Schedule follow-up</button>
+    </div>
+  </section>;
 }
 
 function SmartFollowupComposer({
@@ -959,7 +1019,7 @@ function SmartFollowupComposer({
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
 }) {
   return (
-    <section className="rounded-xl border border-[#DCE8DF] bg-white">
+    <section className="si3-followup rounded-xl border">
       <div className="flex items-start justify-between gap-3 px-4 py-3.5">
         <div>
           <div className="text-[9px] font-bold uppercase tracking-[0.12em] text-[#216551]">Smart follow-up</div>
@@ -1054,61 +1114,166 @@ function JourneyTab({ payload, onRefresh, refreshing, readFailed, onFollowup }: 
   );
 }
 
+type InspectorActivityRow = {
+  key: string;
+  at: string;
+  title: string;
+  detail: string;
+  source: string;
+  kind: "message" | "contact" | "website" | "stage";
+};
+
 function ActivityTab({ payload }: { payload: InspectorPayload }) {
-  const messages = payload.lead.lastMessages ?? [];
+  const [kind, setKind] = useState("all");
+  const [source, setSource] = useState("all");
+  const [range, setRange] = useState("30d");
+  const [query, setQuery] = useState("");
+  const records = useMemo<InspectorActivityRow[]>(() => {
+    const rows: InspectorActivityRow[] = [];
+    for (const message of payload.lead.lastMessages ?? []) {
+      if (!Number.isFinite(Date.parse(message.timestamp))) continue;
+      rows.push({
+        key: `message:${message.id}`,
+        at: message.timestamp,
+        title: message.direction === "inbound" ? "Message received" : "Message sent",
+        detail: message.body || `Message via ${pretty(message.channel)}`,
+        source: pretty(message.channel || "Conversation"),
+        kind: "message",
+      });
+    }
+    for (const log of payload.contactLogs) {
+      if (!Number.isFinite(Date.parse(log.contacted_at))) continue;
+      rows.push({
+        key: `contact:${log.id}`,
+        at: log.contacted_at,
+        title: `${pretty(log.method || "Contact")} · ${pretty(log.outcome || "Recorded")}`,
+        detail: log.comment || `Logged by ${log.employee_name || "System"}`,
+        source: pretty(log.method || "CRM"),
+        kind: "contact",
+      });
+    }
+    if (payload.journeyEvidence?.state === "available") {
+      for (const event of payload.journeyEvidence.events) {
+        if (event.kind !== "website" || !Number.isFinite(Date.parse(event.at))) continue;
+        rows.push({
+          key: `website:${event.key}`,
+          at: event.at,
+          title: event.type === "page_view" ? "Page viewed" : pretty(event.title),
+          detail: event.page || `${event.evidence} website event`,
+          source: event.source || "Website",
+          kind: "website",
+        });
+      }
+    }
+    if (payload.availability.journey === "available") {
+      for (const event of payload.journey) {
+        if (!/stage/i.test(event.event_type) || !Number.isFinite(Date.parse(event.event_at))) continue;
+        rows.push({
+          key: `stage:${event.journey_event_key}`,
+          at: event.event_at,
+          title: event.title || "Stage updated",
+          detail: event.summary || "Recorded CRM stage change",
+          source: "CRM",
+          kind: "stage",
+        });
+      }
+    }
+    return [...new Map(rows.map(row => [row.key, row])).values()].sort((x, y) =>
+      Date.parse(y.at) - Date.parse(x.at) || x.key.localeCompare(y.key));
+  }, [payload]);
 
-  return (
-    <>
-      <Section title="Contact history" eyebrow="Structured admissions activity">
-        {payload.contactSummary ? (
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-            <MetricBox label="Total" value={numberText(payload.contactSummary.total_contacts)} />
-            <MetricBox label="Connected" value={numberText(payload.contactSummary.successful_contacts)} />
-            <MetricBox label="No answer" value={numberText(payload.contactSummary.no_answer_contacts)} />
-            <MetricBox label="Follow-up" value={numberText(payload.contactSummary.follow_up_needed_contacts)} />
-          </div>
-        ) : null}
-        <AvailabilityNote availability={payload.availability.contactHistory} empty="No structured contact logs are stored yet." unavailable="Contact history could not be loaded. No empty-state assumption is being made." />
-        {payload.contactLogs.length ? (
-          <div className="mt-3 space-y-2.5">
-            {payload.contactLogs.map((log) => (
-              <div key={log.id} className="rounded-lg border border-[#E4EAE6] bg-white p-3.5">
-                <div className="flex flex-wrap items-center gap-1.5">
-                  <SmallTag>{pretty(log.method)}</SmallTag><SmallTag>{pretty(log.direction)}</SmallTag><SmallTag>{pretty(log.outcome)}</SmallTag>
-                  <span className="ml-auto text-[10px] text-[#89968F]">{formatDateTime(log.contacted_at)}</span>
-                </div>
-                <div className="mt-2 text-[11px] leading-5 text-[#52665C]">{log.comment}</div>
-                <div className="mt-2 text-[10px] text-[#89968F]">Logged by {log.employee_name || "System"}{log.call_duration_seconds ? ` · ${formatDuration(log.call_duration_seconds)}` : ""}</div>
-              </div>
-            ))}
-          </div>
-        ) : null}
-      </Section>
+  const sources = [...new Set(records.map(row => row.source))].sort();
+  const filtered = records.filter(row => {
+    const age = Date.now() - Date.parse(row.at);
+    const inRange = range === "all" || (age >= 0 && age <= (range === "7d" ? 7 : 30) * 86_400_000);
+    const matchesSearch = !query.trim() || [row.title, row.detail, row.source].join(" ").toLocaleLowerCase().includes(query.toLocaleLowerCase().slice(0,120));
+    return (kind === "all" || row.kind === kind) && (source === "all" || row.source === source) && inRange && matchesSearch;
+  });
+  const grouped = new Map<string, InspectorActivityRow[]>();
+  for (const row of filtered) {
+    const day = new Intl.DateTimeFormat("en-IN", { day:"numeric", month:"short", year:"numeric" }).format(new Date(row.at));
+    const group = grouped.get(day) ?? [];
+    group.push(row);
+    grouped.set(day,group);
+  }
+  const newest = latestMessage(payload.lead.lastMessages ?? []);
+  return <div className="space-y-3">
+    <section className="si3-ai-card" aria-label="AI reply assistant">
+      <span className="si3-icon si3-icon-large"><Sparkles size={19}/></span>
+      <div className="si3-ai-copy">
+        <h3>AI reply assistant</h3>
+        <p>{newest?.direction === "inbound"
+          ? "A lead message is awaiting review. Generate or edit a response in Conversations."
+          : "Prepare a contextual response using the available conversation history."}</p>
+        <span className="si3-ai-note">No message will be sent without your action.</span>
+      </div>
+      <Link className="si3-primary" href={`/conversations?lead=${encodeURIComponent(payload.lead.id)}`}>Open reply <ArrowRight size={13}/></Link>
+    </section>
 
-      <Section title="Recent messages" eyebrow="Conversation activity">
-        {!messages.length ? <div className="text-[11px] leading-5 text-[#7D8C84]">No recent CRM messages are stored for this lead.</div> : null}
-        <div className="space-y-2.5">
-          {messages.map((message) => (
-            <div key={message.id} className={`flex ${message.direction === "outbound" ? "justify-end" : "justify-start"}`}>
-              <div className={`max-w-[88%] rounded-xl px-3.5 py-3 text-[11px] leading-5 ${message.direction === "outbound" ? "bg-[#216551] text-white" : "border border-[#E4EAE6] bg-white text-[#52665C]"}`}>
-                <div className={`mb-1 text-[9px] font-semibold uppercase tracking-[0.08em] ${message.direction === "outbound" ? "text-white/65" : "text-[#8B988F]"}`}>{message.sender} · {pretty(message.channel)}</div>
-                <div>{message.body}</div>
-                <div className={`mt-1 text-right text-[9px] ${message.direction === "outbound" ? "text-white/60" : "text-[#8B988F]"}`}>{formatDateTime(message.timestamp)}</div>
-              </div>
-            </div>
-          ))}
-        </div>
-      </Section>
-    </>
-  );
+    <div className="si3-filter-row" role="group" aria-label="Filter lead activity">
+      <label>Activity
+        <select className="si3-select" aria-label="Activity type" value={kind} onChange={e => setKind(e.target.value)}>
+          <option value="all">All activity</option>
+          <option value="message">Messages</option>
+          <option value="contact">Contact logs</option>
+          <option value="website">Website</option>
+          <option value="stage">Stage changes</option>
+        </select>
+      </label>
+      <label>Source
+        <select className="si3-select" aria-label="Activity source" value={source} onChange={e => setSource(e.target.value)}>
+          <option value="all">All sources</option>
+          {sources.map(name => <option key={name} value={name}>{name}</option>)}
+        </select>
+      </label>
+      <label>Period
+        <select className="si3-select" aria-label="Activity period" value={range} onChange={e => setRange(e.target.value)}>
+          <option value="30d">Last 30 days</option><option value="7d">Last 7 days</option><option value="all">Loaded history</option>
+        </select>
+      </label>
+    </div>
+    <input className="si3-search" aria-label="Search activity evidence" type="search" maxLength={120} placeholder="Search recorded activity…" value={query} onChange={e => setQuery(e.target.value)} />
+
+    {payload.availability.contactHistory === "unavailable"
+      ? <div className="si3-warning">Contact logs could not be loaded. Other available evidence is shown below.</div>
+      : null}
+    <div className="si3-evidence-meta" role="status" aria-live="polite">
+      <span>{filtered.length} of {records.length} loaded events · Newest first</span>
+      {(kind !== "all" || source !== "all" || range !== "30d" || query) ?
+        <button type="button" className="si3-secondary" onClick={() => {setKind("all");setSource("all");setRange("30d");setQuery("");}}>Reset filters</button> : null}
+    </div>
+
+    {filtered.length ? [...grouped.entries()].map(([day, events]) => <section key={day} className="space-y-2" aria-label={`Activity on ${day}`}>
+      <h3 className="si3-activity-date">{day}</h3>
+      {events.map(event => <article className="si3-activity-item" key={event.key}>
+        <span className="si3-icon" aria-hidden="true">
+          {event.kind === "message" ? <MessageCircle size={15}/> :
+            event.kind === "website" ? <ExternalLink size={15}/> :
+            event.kind === "stage" ? <Route size={15}/> : <Phone size={15}/>}
+        </span>
+        <div><h4>{event.title}</h4><p>{event.detail}</p><p>{event.source}</p></div>
+        <time dateTime={event.at}>{new Intl.DateTimeFormat("en-IN",{hour:"2-digit",minute:"2-digit"}).format(new Date(event.at))}</time>
+      </article>)}
+    </section>) :
+      <div className="si3-empty"><strong>{records.length ? "No activity matches these filters" : "No recorded activity yet"}</strong>
+        {records.length ? "Adjust the filters or date range to see loaded evidence." : "Messages, contact logs, website events and stage changes appear here when accessible."}
+      </div>}
+
+    <details className="si3-evidence-more">
+      <summary>Activity evidence and contact history</summary>
+      <p>Only the loaded, authorized CRM messages, contact logs and linked website or stage events are included. This is not an exhaustive lifetime history.</p>
+      <p>Website clicks are observed interactions, not proof of intent, payment or enrollment. Financial outcomes must be verified in payment records.</p>
+      {payload.contactSummary ? <p>{numberText(payload.contactSummary.total_contacts)} structured contacts · {numberText(payload.contactSummary.successful_contacts)} connected · {numberText(payload.contactSummary.no_answer_contacts)} no answer · {numberText(payload.contactSummary.follow_up_needed_contacts)} follow-up needed.</p> : null}
+    </details>
+  </div>;
 }
 
 function InspectorTabButton({ active, icon, label, count, onClick }: { active: boolean; icon: ReactNode; label: string; count?: number; onClick: () => void }) {
   return (
-    <button type="button" onClick={onClick} className={`relative inline-flex h-10 items-center gap-1.5 text-[11px] font-semibold transition ${active ? "text-[#216551]" : "text-[#7A8981] hover:text-[#40594F]"}`}>
+    <button type="button" onClick={onClick} className={`si3-tab relative inline-flex h-10 items-center gap-1.5 text-[11px] font-semibold transition ${active ? "si3-tab-active" : ""}`}>
       {icon} {label}
-      {typeof count === "number" && count > 0 ? <span className="rounded-full bg-[#EDF4EF] px-1.5 py-0.5 text-[8px] text-[#5D7568]">{count > 99 ? "99+" : count}</span> : null}
-      {active ? <span className="absolute inset-x-0 bottom-0 h-0.5 rounded-full bg-[#216551]" /> : null}
+      {typeof count === "number" && count > 0 ? <span className="si3-count rounded-full px-1.5 py-0.5 text-[8px]">{count > 99 ? "99+" : count}</span> : null}
+      {active ? <span className="si3-tab-underline absolute inset-x-0 bottom-0 h-0.5 rounded-full" /> : null}
     </button>
   );
 }
@@ -1184,7 +1349,7 @@ function InspectorError({ message }: { message: string }) {
 }
 
 function StatePill({ value }: { value: string }) {
-  return <span className="rounded-full bg-[#E9F4EC] px-2.5 py-1 text-[9px] font-semibold text-[#216551]">{pretty(value)}</span>;
+  return <span className="si3-stage-pill rounded-full px-2.5 py-1 text-[9px] font-semibold">{pretty(value)}</span>;
 }
 
 function SmallTag({ children }: { children: ReactNode }) {
