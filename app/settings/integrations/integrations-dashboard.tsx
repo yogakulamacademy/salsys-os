@@ -11,6 +11,7 @@ import { IntegrationConnectButton } from '@/components/integration-connect-butto
 import { GoogleIntegrationAssets } from '@/components/google-integration-assets';
 import { MetaIntegrationAssets } from '@/components/meta-integration-assets';
 import { WhatsAppRemoveButton } from '@/components/whatsapp-remove-button';
+import { InstagramHistorySyncControl } from '@/components/instagram-history-sync-control';
 import type { IntegrationConnection, IntegrationAsset, IntegrationProvider, IntegrationStatus } from '@/lib/integrations/types';
 import { disconnectIntegrationAction } from './actions';
 import { ProviderBrand } from './provider-brand';
@@ -64,9 +65,10 @@ function safeModuleState(provider: IntegrationProvider, assets: IntegrationAsset
   return assets.some(asset=>matching.includes(asset.asset_type) && asset.is_selected) ? 'Selected' : 'Not selected';
 }
 
-export async function IntegrationsDashboard({ connections, assets, installed, error, encryptionConfigured, notice, actionError }:{
+export async function IntegrationsDashboard({ connections, assets, installed, error, encryptionConfigured, notice, actionError, instagramHistorySyncEnabled }:{
   connections:SafeIntegrationConnection[]; assets:IntegrationAsset[]; installed:boolean;
   error:string|null; encryptionConfigured:boolean; notice?:string; actionError?:string;
+  instagramHistorySyncEnabled: boolean;
 }) {
   const readable = installed && !error;
   const current = INTEGRATION_PROVIDERS.map(item=>({ ...item, connection:activeProviderConnection(connections,item.id) }));
@@ -169,6 +171,8 @@ export async function IntegrationsDashboard({ connections, assets, installed, er
                     <IntegrationConnectButton provider={definition.id as 'google'|'meta'|'instagram'} mode="reconnect"/>}
                 </> : <Link className="aiu-primary" href={'/settings/integrations/connect?provider='+definition.id}>Connect {definition.name} <ArrowRight size={13}/></Link>}
               </div>
+              {connected && definition.id==='instagram' && connection ?
+                <InstagramHistorySyncControl connectionId={connection.id} enabled={instagramHistorySyncEnabled}/> : null}
               {connection && definition.id!=='whatsapp' ? <details className="aiu-remove-area">
                 <summary>Connection options</summary>
                 <p>Removing credentials keeps historical CRM data. This must be done before changing to a different account.</p>
