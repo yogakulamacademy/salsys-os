@@ -29,7 +29,7 @@ create table if not exists public.ai_lead_insight_runs (
   constraint ai_lead_insight_runs_action_check
     check (next_action_kind in ('none','human_review','reply','follow_up','verify_payment')),
   constraint ai_lead_insight_runs_refs_check
-    check (cardinality(evidence_refs) <= 30),
+    check (cardinality(evidence_refs) <= 60),
   constraint ai_lead_insight_runs_tenant_lead_id_uniq
     unique (organization_id, lead_id, id)
 );
