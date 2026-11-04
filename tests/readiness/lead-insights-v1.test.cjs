@@ -146,6 +146,7 @@ function setupAction(options = {}) {
       },
     },
     '@/lib/ai/lead-insight-validation': validator,
+    '@/lib/ai/lead-insight-feedback': { recordLeadInsightRun: async () => null },
   }).generateLeadInsightsAction;
 
   return {
