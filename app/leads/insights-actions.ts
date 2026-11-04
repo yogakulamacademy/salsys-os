@@ -117,13 +117,13 @@ function citedEvidence(insight: LeadInsightV1, context: LeadContextV1) {
 
 function noEvidence(context: LeadContextV1): boolean {
   const staff = context.staffOnly;
+  const includePrivateNotes = process.env.AI_LEAD_INSIGHTS_INCLUDE_PRIVATE_NOTES === 'true';
   return !context.conversation.messages.some(m => m.body?.trim()) &&
     !staff?.activities.length &&
     !staff?.tasks.length &&
     !staff?.stageChanges.length &&
     !staff?.paymentRecords.length &&
-    !staff?.existingSummary?.trim() &&
-    !staff?.privateNotes?.trim() &&
+    (!includePrivateNotes || (!staff?.existingSummary?.trim() && !staff?.privateNotes?.trim())) &&
     !context.lead.courseId &&
     !context.lead.preferredLocation &&
     !context.lead.preferredMode &&
