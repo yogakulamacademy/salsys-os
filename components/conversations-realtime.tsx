@@ -59,15 +59,22 @@ export function ConversationsRealtime() {
         (payload: unknown) => {
           const event = payload as { new?: RealtimeMessage };
           const message = event.new;
-          if (!message || message.direction === 'outbound') return;
-
-          window.dispatchEvent(
-            new CustomEvent('crm:conversation-inbound', {
-              detail: { leadId: message.lead_id ?? null },
-            }),
-          );
+          if (!message) return;
+          if (message.direction === 'inbound') {
+            window.dispatchEvent(
+              new CustomEvent('crm:conversation-inbound', {
+                detail: { leadId: message.lead_id ?? null },
+              }),
+            );
+          }
+          // Outbound messages also change latest-conversation-activity sorting.
           refreshInbox();
         },
+      )
+      .on(
+        'postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'leads' },
+        () => refreshInbox(),
       )
       .subscribe((status: string) => {
         if (disposed) return;
