@@ -167,7 +167,14 @@ test('Leads overview renders real summary and responsive controls', async ({ pag
   await expect(page.getByRole('region', { name: 'Leads overview' }).getByRole('link')).toHaveCount(5);
   await expect(page.getByRole('textbox', { name: 'Search leads' })).toBeVisible();
   await expect(page.getByRole('columnheader', { name: 'Source' })).toBeVisible();
+  await expect(page.getByRole('columnheader', { name: 'Interest' })).toBeVisible();
+  await expect(page.getByRole('columnheader', { name: 'Score' })).toBeVisible();
+  await expect(page.getByRole('columnheader', { name: 'Last activity' })).toBeVisible();
   await expect(page.getByRole('columnheader', { name: 'Next step' })).toBeVisible();
+  await expect(page.getByRole('columnheader', { name: 'Aging' })).toBeVisible();
+  await expect(page.getByRole('columnheader', { name: 'Course' })).toHaveCount(0);
+  await expect(page.getByTestId('lead-source-icon').first()).toBeVisible();
+  await expect(page.getByRole('columnheader', { name: 'Attention' })).toHaveCount(0);
   await page.getByRole('button', { name: 'More filters' }).click();
   await expect(page.getByText('Sort', { exact: true })).toBeVisible();
   for (const width of [390, 768, 1440]) {
