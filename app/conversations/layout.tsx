@@ -66,6 +66,22 @@ export default async function ConversationsLayout({ children }: { children: Reac
         .inbox-standalone-scope .ibx-v2 .conversation-sidebar {
           border-radius: 0 !important;
         }
+        /* The chat header and reply composer must stay visible at the bottom.
+           Compact/short viewports should scroll the optional AI toolbar, not
+           force the composer outside the clipped main-shell viewport. */
+        .inbox-standalone-scope .ibx-v2 .ibx-v2-chat {
+          min-height: 0;
+        }
+        .inbox-standalone-scope .ibx-v2 .ibx-v2-chat .ibx-v2-ai-toolbar {
+          flex: 0 1 auto;
+          min-height: 0;
+          overflow-y: auto;
+        }
+        @media (max-height: 780px) {
+          .inbox-standalone-scope .ibx-v2 .ibx-v2-chat .ibx-v2-ai-toolbar {
+            max-height: min(24dvh, 160px);
+          }
+        }
         /* The full-height Inbox must not be clipped by a transformed route
            animation and must remain aligned with the main SalsysOS shell. */
         .page-transition:has(.inbox-standalone-scope) {
