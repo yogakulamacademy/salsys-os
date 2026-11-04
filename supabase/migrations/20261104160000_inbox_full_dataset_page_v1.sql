@@ -54,24 +54,35 @@ begin
       resolution.resolved_at,
       o.created_at,
       o.last_contacted_at,
-      latest.created_at as latest_message_at,
+      latest.occurred_at as latest_message_at,
       latest.direction as latest_direction,
-      inbound.created_at as last_inbound_at,
+      inbound.occurred_at as last_inbound_at,
       reads.last_read_at,
       snooze.snoozed_until
     from public.v_leads_overview o
     left join lateral (
-      select m.created_at, m.direction::text as direction
+      select
+        case when m.direction::text = 'outbound'
+          then coalesce(m.sent_at, m.created_at)
+          else coalesce(m.received_at, m.created_at)
+        end as occurred_at,
+        m.direction::text as direction
       from public.messages m
       where m.organization_id = v_organization_id and m.lead_id = o.id
-      order by m.created_at desc, m.id desc limit 1
+      order by
+        case when m.direction::text = 'outbound'
+          then coalesce(m.sent_at, m.created_at)
+          else coalesce(m.received_at, m.created_at)
+        end desc, m.id desc
+      limit 1
     ) latest on true
     left join lateral (
-      select m.created_at
+      select coalesce(m.received_at, m.created_at) as occurred_at
       from public.messages m
       where m.organization_id = v_organization_id
         and m.lead_id = o.id and m.direction::text = 'inbound'
-      order by m.created_at desc, m.id desc limit 1
+      order by coalesce(m.received_at, m.created_at) desc, m.id desc
+      limit 1
     ) inbound on true
     left join public.lead_inbox_resolutions_v1 resolution on resolution.lead_id = o.id and resolution.organization_id = v_organization_id
     left join public.lead_inbox_reads reads
