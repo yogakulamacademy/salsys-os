@@ -1,23 +1,9 @@
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import {
-  Activity,
-  ArrowLeft,
-  ArrowRight,
-  BadgeCheck,
-  ChevronDown,
-  CircleCheck,
-  Clock3,
-  KeyRound,
-  Layers3,
-  ShieldCheck,
-  Sparkles,
-  UserCheck,
-  UserPlus,
-  UserRoundX,
-  Users,
-  UsersRound,
-  Zap,
+  ArrowLeft, ArrowRight, BadgeCheck, CircleCheck, KeyRound,
+  Layers3, ShieldCheck, Sparkles, UserCheck, UserPlus,
+  UserRoundX, Users, UsersRound, Zap,
 } from 'lucide-react';
 
 import { PageHeader } from '@/components/ui';
@@ -158,10 +144,6 @@ export default async function TeamAccessPage({
   const employees = teamMembers.filter(
     (member) => member.organizationRole === 'admissions',
   );
-  const activeEmployees = employees.filter(
-    (employee) => employee.membershipActive && employee.profileActive,
-  ).length;
-
   const totalMembers = teamMembers.length;
   const activeMembers = teamMembers.filter(
     member => member.membershipActive && member.profileActive,
@@ -186,7 +168,7 @@ export default async function TeamAccessPage({
       <PageHeader
         eyebrow="Settings"
         title="Team & Access"
-        description={\`Manage members, roles and secure workspace access for \${organizationName}.\`}
+        description={`Manage members, roles and secure workspace access for ${organizationName}.`}
         actions={<Link href="/settings/overview" className="tac-back">
           <ArrowLeft size={15}/> Back to Settings
         </Link>}
@@ -211,7 +193,7 @@ export default async function TeamAccessPage({
             <p>{totalMembers === 0
               ? 'Add a colleague to start working together securely.'
               : inactiveEmployees > 0
-                ? \`\${inactiveEmployees} employee account\${inactiveEmployees === 1 ? '' : 's'} currently inactive. Review whether access should be restored.\`
+                ? `${inactiveEmployees} employee account${inactiveEmployees === 1 ? '' : 's'} currently inactive. Review whether access should be restored.`
                 : employees.length === 0
                   ? 'Your administrator account is listed. Add an employee to grant Sales workspace access.'
                   : 'Employee access is active in the current tenant. Review permissions when responsibilities change.'}</p>
