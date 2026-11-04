@@ -67,6 +67,34 @@ async function graphPage<T>(path: string, token: string, params: Record<string, 
   return payload;
 }
 
+/** Provider read-only check; does not subscribe, publish or send messages. */
+export async function inspectInstagramEchoSubscription(
+  organizationId: string,
+  accountId: string,
+): Promise<{ subscribed: boolean; fields: string[]; customerMessageSent: false }> {
+  const runtime = await getInstagramRuntimeForOrganization(organizationId, accountId);
+  const response = await fetch('https://graph.instagram.com/' + META_GRAPH_VERSION + '/me/subscribed_apps', {
+    method: 'GET',
+    headers: { Authorization: 'Bearer ' + runtime.accessToken },
+    cache: 'no-store',
+    signal: AbortSignal.timeout(GRAPH_TIMEOUT_MS),
+  });
+  if (!response.ok) {
+    // Non-success is UNKNOWN, never imply an unsubscribed account.
+    throw new Error('Meta did not provide Instagram webhook subscription status.');
+  }
+  const payload = await response.json().catch(() => ({})) as { data?: unknown[] };
+  if (!Array.isArray(payload.data)) {
+    throw new Error('Meta returned an invalid Instagram webhook subscription response.');
+  }
+  const fields = Array.from(new Set(payload.data.flatMap(item => {
+    const values = object(item).subscribed_fields;
+    return Array.isArray(values) ? values.filter((value): value is string =>
+      typeof value === 'string' && /^[a-z_]{2,50}$/.test(value)) : [];
+  }))).sort();
+  return { subscribed: fields.includes('message_echoes'), fields, customerMessageSent: false };
+}
+
 /**
  * Bounded and resumable per connected account.
  * Preview is read-only. The apply path imports only into EXISTING
@@ -94,7 +122,6 @@ export async function reconcileInstagramMessageHistory({
   if (stateError) throw new Error('Instagram history sync state is unavailable.');
 
   const params: Record<string, string> = {
-    platform: 'instagram',
     fields: 'id,participants,updated_time',
     limit: String(apply ? MAX_CONVERSATIONS_PER_PASS : 1),
   };
