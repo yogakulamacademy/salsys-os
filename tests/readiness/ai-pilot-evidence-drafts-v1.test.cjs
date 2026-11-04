@@ -194,5 +194,5 @@ test('the second migration removes inherited service-role write privileges', () 
   const sql = readFileSync('supabase/migrations/20261105002000_ai_lead_insight_review_packet_append_only_grants_v1.sql', 'utf8');
   assert.ok(sql.includes('revoke all on table public.ai_lead_insight_review_packet_drafts from service_role'));
   assert.ok(sql.includes('grant select, insert on table public.ai_lead_insight_review_packet_drafts to service_role'));
-  assert.doesNotMatch(sql, /grant\\s+(?:update|delete|all)\\b/i);
+  assert.doesNotMatch(sql, /grant\s+(?:update|delete|all)\b/i);
 });
