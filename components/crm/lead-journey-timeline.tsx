@@ -3,7 +3,7 @@
 import { useEffect, useId, useState, useTransition } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { Activity, ArrowRight, CalendarClock, Globe2, Layers3, RefreshCw, Route, Sparkles } from 'lucide-react';
+import { ArrowRight, CalendarClock, Globe2, Layers3, RefreshCw, Route, Sparkles } from 'lucide-react';
 import { EmptyState } from '@/components/ui';
 import type { JourneyEvidence } from '@/lib/journey-evidence';
 import { defaultJourneyFilters, journeyReadAge, nextJourneyAction, selectJourneyView, type JourneyAction, type JourneyContext, type JourneyFilters } from '@/lib/journey-workspace';
