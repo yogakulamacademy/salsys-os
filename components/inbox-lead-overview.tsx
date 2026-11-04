@@ -9,7 +9,7 @@ type Candidate={id:string;name:string;role:string};
 type Props={
   leadId:string; stage:LeadStage; ownerUserId:string|null; ownerName:string|null;
   candidates:Candidate[]; canAssign:boolean; mock:boolean;
-  channel:Channel; source:Channel; interest:string; country:string;
+  channel:Channel; attributionSource:string; interest:string; country:string;
   lastContacted:string; state:string;
 };
 const stageOptions:LeadStage[]=[
@@ -19,7 +19,7 @@ const stageOptions:LeadStage[]=[
 const pretty=(text:string)=>text.replaceAll("_"," ").replace(/\b\w/g, c=>c.toUpperCase());
 function SavingIndicator(){const {pending}=useFormStatus();return pending?<span className="ibx-v3-field-saving" role="status">Saving…</span>:null;}
 export function InboxLeadOverview({
-  leadId,stage,ownerUserId,ownerName,candidates,canAssign,mock,channel,source,
+  leadId,stage,ownerUserId,ownerName,candidates,canAssign,mock,channel,attributionSource,
   interest,country,lastContacted,state,
 }:Props){
   const stageAction=changeInboxLeadStageAction.bind(null,leadId);
@@ -58,7 +58,7 @@ export function InboxLeadOverview({
         </dd>
       </div>
       <div className="ibx-v3-overview-line"><dt>Channel</dt><dd>{pretty(channel)}</dd></div>
-      <div className="ibx-v3-overview-line"><dt>Source</dt><dd>{pretty(source)}</dd></div>
+      <div className="ibx-v3-overview-line"><dt>Source</dt><dd>{attributionSource || "Not verified"}</dd></div>
       <div className="ibx-v3-overview-line"><dt>Status</dt><dd>{state}</dd></div>
       <div className="ibx-v3-overview-line"><dt>Interest</dt><dd>{interest||"Not selected"}</dd></div>
       <div className="ibx-v3-overview-line"><dt>Country</dt><dd>{country||"Not recorded"}</dd></div>
