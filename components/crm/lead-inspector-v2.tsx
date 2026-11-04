@@ -689,6 +689,25 @@ function OverviewTab({
       </section>
 
       <FocusCard payload={payload} focus={focus} onSchedule={onToggleFollowup} />
+
+      {followupOpen ? (
+        <SmartFollowupComposer
+          payload={payload}
+          presets={presets}
+          open={followupOpen}
+          title={followupTitle}
+          dueAt={followupDueAt}
+          description={followupDescription}
+          loading={actionLoading}
+          onPreset={onPreset}
+          onToggle={onToggleFollowup}
+          onTitleChange={onTitleChange}
+          onDueChange={onDueChange}
+          onDescriptionChange={onDescriptionChange}
+          onSubmit={onSubmit}
+        />
+      ) : null}
+
       <InspectorStageTracker stage={lead.stage} />
 
       <div className="si3-card-grid">
@@ -719,23 +738,6 @@ function OverviewTab({
         </InspectorSummaryCard>
       </div>
 
-      {followupOpen ? (
-        <SmartFollowupComposer
-          payload={payload}
-          presets={presets}
-          open={followupOpen}
-          title={followupTitle}
-          dueAt={followupDueAt}
-          description={followupDescription}
-          loading={actionLoading}
-          onPreset={onPreset}
-          onToggle={onToggleFollowup}
-          onTitleChange={onTitleChange}
-          onDueChange={onDueChange}
-          onDescriptionChange={onDescriptionChange}
-          onSubmit={onSubmit}
-        />
-      ) : null}
 
       <details className="si3-more">
         <summary>More details <span>Follow-ups, intelligence, attribution and notes</span></summary>
