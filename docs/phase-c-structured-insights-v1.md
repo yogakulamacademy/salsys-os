@@ -87,3 +87,10 @@ human-labeled real examples.
 
 C4: add reviewed UX to Customer 360 / Inbox, per-lead request throttling,
 status/evidence navigation, review UX and tenant-level opt-in controls.
+
+## Operational launch gate
+
+Before enabling the generation flag for any tenant, ship per-user request throttling,
+spending limits, monitored failure rates, staff-only UI access, an explicit
+organization-level data-processing opt-in and human quality review.
+The C2 action is intentionally dormant until those gates are reviewed.
