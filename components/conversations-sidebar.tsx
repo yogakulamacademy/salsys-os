@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
+import type { InboxPage } from "@/lib/conversations-page-data";
 import { Clock3, Flag, MessageCircle, Search, UsersRound, X } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { EmptyState } from "@/components/ui";
@@ -42,25 +43,109 @@ export function ConversationsSidebar({
   selectedId,
   currentUserId,
   canManageAssignments,
+  pagination,
 }: {
   leads: ConversationLeadSummary[];
   selectedId?: string;
   currentUserId: string | null;
   canManageAssignments: boolean;
+  pagination?: Omit<InboxPage, "rows">;
 }) {
+  const router = useRouter();
   const searchParams = useSearchParams();
+  const serverMode = Boolean(pagination);
   const explicitLeadId = searchParams.get("lead");
-  const [search, setSearch] = useState("");
+  const [search, setSearch] = useState(pagination?.search ?? "");
   const [scope, setScope] = useState<ScopeFilter>(
-    currentUserId && !canManageAssignments ? "mine" : "team",
+    pagination?.scope ?? (currentUserId && !canManageAssignments ? "mine" : "team"),
   );
-  const [filter, setFilter] = useState<InboxFilter>("all");
-  const [priorityFilter, setPriorityFilter] = useState<PriorityFilter>("all");
-  const [channelFilter, setChannelFilter] = useState<ChannelFilter>("all");
+  const [filter, setFilter] = useState<InboxFilter>(pagination?.filter ?? "all");
+  const [priorityFilter, setPriorityFilter] = useState<PriorityFilter>(pagination?.priority ?? "all");
+  const [channelFilter, setChannelFilter] = useState<ChannelFilter>(pagination?.channel ?? "all");
   const [now, setNow] = useState(0);
   const [mobileViewport, setMobileViewport] = useState(false);
   const searchRef = useRef<HTMLInputElement | null>(null);
   const [visibleCount, setVisibleCount] = useState(50);
+
+  // Server mode is URL-driven; every search/filter/sort runs before pagination.
+  function setInboxParam(key: string, value: string, keepPage = false) {
+    const params = new URLSearchParams(searchParams.toString());
+    if (!value || (key === "sort" && value === "created_desc") ||
+        (key === "filter" && value === "all") ||
+        (key === "channel" && value === "all") ||
+        (key === "priority" && value === "all") ||
+        (key === "page" && value === "1")) {
+      params.delete(key);
+    } else {
+      params.set(key, value);
+    }
+    if (!keepPage) params.delete("page");
+    router.replace(`/conversations?${params.toString()}`, { scroll: false });
+  }
+
+  function updateScope(value: ScopeFilter) {
+    setScope(value);
+    if (serverMode) setInboxParam("scope", value);
+  }
+  function updateFilter(value: InboxFilter) {
+    setFilter(value);
+    if (serverMode) setInboxParam("filter", value);
+  }
+  function updateChannel(value: ChannelFilter) {
+    setChannelFilter(value);
+    if (serverMode) setInboxParam("channel", value);
+  }
+  function updatePriority(value: PriorityFilter) {
+    setPriorityFilter(value);
+    if (serverMode) setInboxParam("priority", value);
+  }
+  function resetFilters() {
+    setSearch("");
+    setScope(currentUserId && !canManageAssignments ? "mine" : "team");
+    setFilter("all");
+    setPriorityFilter("all");
+    setChannelFilter("all");
+    if (serverMode) {
+      const params = new URLSearchParams(searchParams.toString());
+      for (const key of ["q", "page", "sort", "scope", "filter", "channel", "priority"]) {
+        params.delete(key);
+      }
+      router.replace(`/conversations?${params.toString()}`, { scroll: false });
+    }
+  }
+
+  useEffect(() => {
+    if (!pagination) return;
+    setSearch(pagination.search);
+  }, [pagination?.search]);
+
+  useEffect(() => {
+    if (!pagination) return;
+    setScope(pagination.scope);
+    setFilter(pagination.filter);
+    setPriorityFilter(pagination.priority);
+    setChannelFilter(pagination.channel);
+  }, [pagination?.scope, pagination?.filter, pagination?.priority, pagination?.channel]);
+
+  useEffect(() => {
+    if (!pagination || search.trim() === pagination.search) return;
+    const timeout = window.setTimeout(() => setInboxParam("q", search.trim()), 350);
+    return () => window.clearTimeout(timeout);
+    // Search is intentionally debounced; URL state is the source of truth after navigation.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [search, pagination?.search]);
+
+  const fullCount = pagination?.totalMatching;
+  const pageCount = pagination ? Math.max(1, Math.ceil(pagination.totalMatching / pagination.pageSize)) : 1;
+  const pageStart = pagination && pagination.totalMatching > 0 ? (pagination.page - 1) * pagination.pageSize + 1 : 0;
+  const pageEnd = pagination ? Math.min(pagination.page * pagination.pageSize, pagination.totalMatching) : 0;
+
+  function leadHref(id: string) {
+    if (!pagination) return `/conversations?lead=${id}`;
+    const params = new URLSearchParams(searchParams.toString());
+    params.set("lead", id);
+    return `/conversations?${params.toString()}`;
+  }
 
   useEffect(() => {
     const update = () => setNow(Date.now());
@@ -104,26 +189,27 @@ export function ConversationsSidebar({
   }, []);
 
   const scopedLeads = useMemo(
-    () => leads.filter((lead) => matchesScope(lead, scope, currentUserId)),
-    [currentUserId, leads, scope],
+    () => serverMode ? leads : leads.filter((lead) => matchesScope(lead, scope, currentUserId)),
+    [currentUserId, leads, scope, serverMode],
   );
 
   const activeScopedLeads = scopedLeads.filter((lead) => !isSnoozed(lead, now));
-  const unreadCount = activeScopedLeads.filter((lead) => lead.unread).length;
-  const replyCount = activeScopedLeads.filter(
+  const unreadCount = pagination?.counts.unread ?? activeScopedLeads.filter((lead) => lead.unread).length;
+  const replyCount = pagination?.counts.reply ?? activeScopedLeads.filter(
     (lead) => lead.needsReply || lead.needsFirstContact,
   ).length;
-  const snoozedCount = scopedLeads.filter((lead) => isSnoozed(lead, now)).length;
+  const snoozedCount = pagination?.counts.snoozed ?? scopedLeads.filter((lead) => isSnoozed(lead, now)).length;
 
-  const mineCount = leads.filter(
+  const mineCount = pagination?.counts.mine ?? leads.filter(
     (lead) => !isSnoozed(lead, now) && Boolean(currentUserId) && lead.ownerUserId === currentUserId,
   ).length;
-  const teamCount = leads.filter((lead) => !isSnoozed(lead, now)).length;
-  const unassignedCount = leads.filter(
+  const teamCount = pagination?.counts.team ?? leads.filter((lead) => !isSnoozed(lead, now)).length;
+  const unassignedCount = pagination?.counts.unassigned ?? leads.filter(
     (lead) => !isSnoozed(lead, now) && !lead.ownerUserId,
   ).length;
 
   const filteredLeads = useMemo(() => {
+    if (serverMode) return leads;
     const query = search.trim().toLowerCase();
 
     return leads.filter((lead) => {
@@ -156,7 +242,7 @@ export function ConversationsSidebar({
         .toLowerCase()
         .includes(query);
     });
-  }, [channelFilter, currentUserId, filter, leads, now, priorityFilter, scope, search, selectedId]);
+  }, [channelFilter, currentUserId, filter, leads, now, priorityFilter, scope, search, selectedId, serverMode]);
 
   useEffect(() => { setVisibleCount(50); }, [search, scope, filter, priorityFilter, channelFilter]);
 
@@ -185,7 +271,8 @@ export function ConversationsSidebar({
       scope !== (currentUserId && !canManageAssignments ? "mine" : "team") ||
       filter !== "all" ||
       priorityFilter !== "all" ||
-      channelFilter !== "all",
+      channelFilter !== "all" ||
+      Boolean(pagination && (pagination.page > 1 || pagination.sort !== "created_desc")),
   );
 
   return (
@@ -201,25 +288,25 @@ export function ConversationsSidebar({
             </div>
           </div>
           <span className="rounded-md bg-brand-50 px-2 py-1 text-[11px] font-semibold text-brand-700">
-            {activeScopedLeads.length}
+            {pagination ? pagination.counts[scope] : activeScopedLeads.length}
           </span>
         </div>
 
         <div className="mt-3 grid grid-cols-3 rounded-ui bg-surface-soft p-1" aria-label="Inbox ownership scope">
           <ScopeButton
             active={scope === "mine"}
-            onClick={() => setScope("mine")}
+            onClick={() => updateScope("mine")}
             count={mineCount}
             disabled={!currentUserId}
           >
             My inbox
           </ScopeButton>
-          <ScopeButton active={scope === "team"} onClick={() => setScope("team")} count={teamCount}>
+          <ScopeButton active={scope === "team"} onClick={() => updateScope("team")} count={teamCount}>
             Team
           </ScopeButton>
           <ScopeButton
             active={scope === "unassigned"}
-            onClick={() => setScope("unassigned")}
+            onClick={() => updateScope("unassigned")}
             count={unassignedCount}
           >
             Unassigned
@@ -261,16 +348,16 @@ export function ConversationsSidebar({
           aria-label="Conversation filters"
           onKeyDown={handleFilterKeyDown}
         >
-          <InboxTab active={filter === "all"} onClick={() => setFilter("all")} count={activeScopedLeads.length}>
+          <InboxTab active={filter === "all"} onClick={() => updateFilter("all")} count={pagination ? pagination.counts[scope] : activeScopedLeads.length}>
             All
           </InboxTab>
-          <InboxTab active={filter === "reply"} onClick={() => setFilter("reply")} count={replyCount}>
+          <InboxTab active={filter === "reply"} onClick={() => updateFilter("reply")} count={replyCount}>
             Reply
           </InboxTab>
-          <InboxTab active={filter === "unread"} onClick={() => setFilter("unread")} count={unreadCount}>
+          <InboxTab active={filter === "unread"} onClick={() => updateFilter("unread")} count={unreadCount}>
             Unread
           </InboxTab>
-          <InboxTab active={filter === "snoozed"} onClick={() => setFilter("snoozed")} count={snoozedCount}>
+          <InboxTab active={filter === "snoozed"} onClick={() => updateFilter("snoozed")} count={snoozedCount}>
             Snoozed
           </InboxTab>
         </div>
@@ -281,7 +368,7 @@ export function ConversationsSidebar({
           <span className="mb-1 block text-xs font-medium text-copy-muted">Channel</span>
           <select
             value={channelFilter}
-            onChange={(event) => setChannelFilter(event.target.value as ChannelFilter)}
+            onChange={(event) => updateChannel(event.target.value as ChannelFilter)}
             className="h-8 w-full rounded-md border border-line bg-surface-soft px-2 text-[11px] font-medium text-copy-muted outline-none focus:border-brand-600 focus:text-brand-700"
           >
             <option value="all">All channels</option>
@@ -294,7 +381,7 @@ export function ConversationsSidebar({
           <span className="mb-1 block text-xs font-medium text-copy-muted">Priority</span>
           <select
             value={priorityFilter}
-            onChange={(event) => setPriorityFilter(event.target.value as PriorityFilter)}
+            onChange={(event) => updatePriority(event.target.value as PriorityFilter)}
             className="h-8 w-full rounded-md border border-line bg-surface-soft px-2 text-[11px] font-medium text-copy-muted outline-none focus:border-brand-600 focus:text-brand-700"
           >
             <option value="all">All priorities</option>
@@ -304,8 +391,19 @@ export function ConversationsSidebar({
             <option value="waiting">Waiting</option>
           </select>
         </label>
+        {pagination ? (
+          <label className="col-span-2 flex items-center justify-between gap-2">
+            <span className="text-xs font-medium text-copy-muted">Sort leads</span>
+            <select aria-label="Inbox sort" value={pagination.sort}
+              onChange={(event) => setInboxParam("sort", event.target.value)}
+              className="h-8 rounded-md border border-line bg-surface-soft px-2 text-[11px] font-medium text-copy-muted">
+              <option value="created_desc">Newest created first</option>
+              <option value="activity_desc">Latest conversation activity</option>
+            </select>
+          </label>
+        ) : null}
         <span className="col-span-2 text-right text-[10.5px] text-copy-subtle" aria-live="polite">
-          {filteredLeads.length} {filteredLeads.length === 1 ? "conversation" : "conversations"} in this view
+          {fullCount ?? filteredLeads.length} {(fullCount ?? filteredLeads.length) === 1 ? "lead" : "leads"} match
         </span>
       </div>
 
@@ -317,13 +415,7 @@ export function ConversationsSidebar({
             action={hasFilters ? (
                 <button
                   type="button"
-                  onClick={() => {
-                    setSearch("");
-                    setScope(currentUserId && !canManageAssignments ? "mine" : "team");
-                    setFilter("all");
-                    setPriorityFilter("all");
-                    setChannelFilter("all");
-                  }}
+                  onClick={resetFilters}
                   className="mt-3 rounded-ui border border-line bg-surface px-3 py-2 text-[12px] font-semibold text-brand-700 transition hover:bg-brand-50"
                 >
                   Reset inbox filters
@@ -331,21 +423,36 @@ export function ConversationsSidebar({
               ) : undefined}
           />
         ) : (
-          filteredLeads.slice(0, visibleCount).map((lead) => {
+          (serverMode ? filteredLeads : filteredLeads.slice(0, visibleCount)).map((lead) => {
             const selected =
               (lead.id === selectedId || Boolean(selectedId && lead.relatedLeadIds?.includes(selectedId))) &&
               (!mobileViewport || explicitLeadId === lead.id || Boolean(explicitLeadId && lead.relatedLeadIds?.includes(explicitLeadId)));
 
-            return <ConversationRow key={lead.personId || lead.id} lead={lead} selected={selected} now={now} />;
+            return <ConversationRow key={lead.personId || lead.id} lead={lead} selected={selected} now={now} href={leadHref(lead.id)} />;
           })
         )}
-        {filteredLeads.length > visibleCount ? <div className="p-3 text-center"><button type="button" className="btn-secondary w-full" onClick={() => setVisibleCount(count => count + 50)}>Show more conversations</button></div> : null}
+        {!serverMode && filteredLeads.length > visibleCount ? <div className="p-3 text-center"><button type="button" className="btn-secondary w-full" onClick={() => setVisibleCount(count => count + 50)}>Show more conversations</button></div> : null}
       </div>
 
       <div className="shrink-0 border-t border-line px-4 py-2.5 text-[11px] text-copy-subtle">
-        <span className="inline-flex items-center gap-1.5">
-          <UsersRound size={12} /> {Math.min(visibleCount, filteredLeads.length)} of {filteredLeads.length} conversations loaded
-        </span>
+        {pagination ? (
+          <div className="flex items-center justify-between gap-2">
+            <span><UsersRound size={12} className="inline" /> {pageStart}–{pageEnd} of {pagination.totalMatching} matching leads</span>
+            <div className="flex items-center gap-2">
+              <button type="button" aria-label="Previous inbox page" disabled={pagination.page <= 1}
+                className="rounded border border-line px-2 py-1 disabled:opacity-40"
+                onClick={() => setInboxParam("page", String(pagination.page - 1), true)}>Prev</button>
+              <span>{pagination.page} / {pageCount}</span>
+              <button type="button" aria-label="Next inbox page" disabled={pagination.page >= pageCount}
+                className="rounded border border-line px-2 py-1 disabled:opacity-40"
+                onClick={() => setInboxParam("page", String(pagination.page + 1), true)}>Next</button>
+            </div>
+          </div>
+        ) : (
+          <span className="inline-flex items-center gap-1.5">
+            <UsersRound size={12} /> {Math.min(visibleCount, filteredLeads.length)} of {filteredLeads.length} conversations loaded
+          </span>
+        )}
       </div>
     </aside>
   );
@@ -355,10 +462,12 @@ function ConversationRow({
   lead,
   selected,
   now,
+  href,
 }: {
   lead: ConversationLeadSummary;
   selected: boolean;
   now: number;
+  href: string;
 }) {
   const highPriority = lead.priority === "urgent" || lead.priority === "high";
   const stage = lead.stage.replaceAll("_", " ");
@@ -375,7 +484,7 @@ function ConversationRow({
 
   return (
     <Link
-      href={`/conversations?lead=${lead.id}`}
+      href={href}
       aria-current={selected ? "page" : undefined}
       className={`group relative block border-b border-line/70 px-4 py-3.5 transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand-700/40 ${
         selected ? "bg-brand-50" : "bg-surface hover:bg-surface-soft"
