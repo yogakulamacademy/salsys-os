@@ -26,13 +26,16 @@ test('reference actions are real and do not substitute unrelated CRM task comple
   assert.ok(quick.includes('showSchedule'));
   assert.ok(quick.includes('showAssignment'));
   assert.ok(quick.includes('More quick actions'));
-  assert.ok(teamActions.includes("supabase.rpc('can_work_lead'"));
+  assert.ok(teamActions.includes("supabase.rpc('can_resolve_inbox_lead_v1'"));
   assert.ok(teamActions.includes("supabase.rpc('set_lead_stage'"));
 });
 test('resolutions are tenant scoped, reopen on newer inbound and leave CRM tasks untouched',()=>{
   assert.ok(migration.includes('enable row level security'));
-  assert.ok(migration.includes('public.can_access_lead(lead_id)'));
-  assert.ok(migration.includes('public.can_manage_sales_workspace('));
+  assert.ok(migration.includes('public.can_access_lead(p_lead_id)'));
+  assert.ok(migration.includes('public.can_manage_sales_workspace(v_org)'));
+  assert.ok(migration.includes('public.can_resolve_inbox_lead_v1(lead_id)'));
+  assert.ok(migration.includes('grant execute on function public.can_resolve_inbox_lead_v1(uuid) to authenticated'));
+  assert.ok(!migration.includes('public.can_manage_sales_workspace(lead_inbox_resolutions_v1.organization_id)'));
   assert.ok(migration.includes('organization_id = (select public.current_tenant_organization_id())'));
   assert.ok(migration.includes('resolved_by = (select auth.uid())'));
   assert.ok(teamActions.includes("lead_inbox_resolutions_v1"));
