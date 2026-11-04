@@ -108,7 +108,7 @@ export function JourneyEvidencePanel({ evidence, context, onRefresh, refreshing 
           <label htmlFor={`${label}-source`}>Source
             <select id={`${label}-source`} className="si3-select" value={filters.source} onChange={e => update('source', e.target.value)}>
               <option value="all">All sources</option>
-              {filters.source !== 'all' && !view.sources.includes(filters.source) ? <option value={filters.source}>{filters.source} (not in read)</option> : null}
+              {filters.source !== 'all' && !view.sources.includes(filters.source) ? <option value={filters.source}>{filters.source} (not in this read)</option> : null}
               {view.sources.map(source => <option key={source} value={source}>{source}</option>)}
             </select>
           </label>
