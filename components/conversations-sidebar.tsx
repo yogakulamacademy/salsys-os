@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
+import type { InboxPage } from "@/lib/conversations-page-data";
 import { Clock3, Flag, MessageCircle, Search, SlidersHorizontal, UsersRound, X } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { EmptyState } from "@/components/ui";
@@ -43,25 +44,99 @@ export function ConversationsSidebar({
   selectedId,
   currentUserId,
   canManageAssignments,
+  pagination,
 }: {
   leads: ConversationLeadSummary[];
   selectedId?: string;
   currentUserId: string | null;
   canManageAssignments: boolean;
+  pagination?: Omit<InboxPage, "rows">;
 }) {
+  const router = useRouter();
   const searchParams = useSearchParams();
+  const serverMode = Boolean(pagination);
   const explicitLeadId = searchParams.get("lead");
-  const [search, setSearch] = useState("");
+  const [search, setSearch] = useState(pagination?.search ?? "");
   const [scope, setScope] = useState<ScopeFilter>(
-    currentUserId && !canManageAssignments ? "mine" : "team",
+    pagination?.scope ?? (currentUserId && !canManageAssignments ? "mine" : "team"),
   );
-  const [filter, setFilter] = useState<InboxFilter>("all");
-  const [priorityFilter, setPriorityFilter] = useState<PriorityFilter>("all");
-  const [channelFilter, setChannelFilter] = useState<ChannelFilter>("all");
+  const [filter, setFilter] = useState<InboxFilter>(pagination?.filter ?? "all");
+  const [priorityFilter, setPriorityFilter] = useState<PriorityFilter>(pagination?.priority ?? "all");
+  const [channelFilter, setChannelFilter] = useState<ChannelFilter>(pagination?.channel ?? "all");
   const [now, setNow] = useState(0);
   const [mobileViewport, setMobileViewport] = useState(false);
   const searchRef = useRef<HTMLInputElement | null>(null);
   const [visibleCount, setVisibleCount] = useState(50);
+
+  function setInboxParam(key: string, value: string, preservePage = false) {
+    const params = new URLSearchParams(searchParams.toString());
+    if (!value || (key === "page" && value === "1") ||
+        (key === "sort" && value === "created_desc") ||
+        (key !== "scope" && ["filter","priority","channel"].includes(key) && value === "all")) {
+      params.delete(key);
+    } else params.set(key, value);
+    if (!preservePage) params.delete("page");
+    router.replace(`/conversations?${params.toString()}`, { scroll: false });
+  }
+  function updateScope(value: ScopeFilter) {
+    setScope(value);
+    if (serverMode) setInboxParam("scope", value);
+  }
+  function updateFilter(value: InboxFilter) {
+    setFilter(value);
+    if (serverMode) setInboxParam("filter", value);
+  }
+  function updateChannel(value: ChannelFilter) {
+    setChannelFilter(value);
+    if (serverMode) setInboxParam("channel", value);
+  }
+  function updatePriority(value: PriorityFilter) {
+    setPriorityFilter(value);
+    if (serverMode) setInboxParam("priority", value);
+  }
+  function resetFilters() {
+    setSearch("");
+    setScope(currentUserId && !canManageAssignments ? "mine" : "team");
+    setFilter("all");
+    setPriorityFilter("all");
+    setChannelFilter("all");
+    if (serverMode) {
+      const params = new URLSearchParams(searchParams.toString());
+      for (const key of ["q","page","sort","scope","filter","priority","channel"]) params.delete(key);
+      router.replace(`/conversations?${params.toString()}`, { scroll: false });
+    }
+  }
+  function leadHref(id: string) {
+    if (!serverMode) return `/conversations?lead=${id}`;
+    const params = new URLSearchParams(searchParams.toString());
+    params.set("lead", id);
+    return `/conversations?${params.toString()}`;
+  }
+  useEffect(() => {
+    if (pagination) setSearch(pagination.search);
+  }, [pagination?.search]);
+  useEffect(() => {
+    if (!pagination) return;
+    setScope(pagination.scope);
+    setFilter(pagination.filter);
+    setPriorityFilter(pagination.priority);
+    setChannelFilter(pagination.channel);
+  }, [pagination?.scope,pagination?.filter,pagination?.priority,pagination?.channel]);
+  useEffect(() => {
+    if (!pagination || search.trim() === pagination.search) return;
+    const timeout = window.setTimeout(() => setInboxParam("q", search.trim()), 350);
+    return () => window.clearTimeout(timeout);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [search, pagination?.search]);
+  const pageCount = pagination ? Math.max(1, Math.ceil(pagination.totalMatching / pagination.pageSize)) : 1;
+  const pageStart = pagination && pagination.totalMatching > 0 ? (pagination.page - 1) * pagination.pageSize + 1 : 0;
+  const pageEnd = pagination ? Math.min(pagination.page * pagination.pageSize, pagination.totalMatching) : 0;
+  const allScopeCount = pagination
+    ? (scope === "mine" ? pagination.counts.mine :
+       scope === "unassigned" ? pagination.counts.unassigned :
+       scope.startsWith("owner:") ? pagination.totalMatching : pagination.counts.team)
+    : undefined;
+
 
   useEffect(() => {
     const update = () => setNow(Date.now());
