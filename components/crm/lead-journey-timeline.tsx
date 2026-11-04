@@ -63,7 +63,7 @@ export function JourneyEvidencePanel({ evidence, context, onRefresh, refreshing 
 
   return <section aria-label="Enquiry journey evidence" aria-busy={busy} className="space-y-3">
     <div className="si3-evidence-meta">
-      <span>{evidence.events.length} linked records · Times shown in UTC</span>
+      <div><h2 className="text-[13px] font-semibold">Journey for this enquiry</h2><p>{evidence.events.length} linked records · Times shown in UTC</p></div>
       <button type="button" className="si3-secondary" onClick={refresh} disabled={busy} aria-label="Refresh Journey">
         <RefreshCw size={13} className={busy ? 'animate-spin' : ''} /> {busy ? 'Refreshing…' : 'Refresh'}
       </button>
@@ -74,15 +74,20 @@ export function JourneyEvidencePanel({ evidence, context, onRefresh, refreshing 
         <div className="si3-journey-card si3-journey-insight">
           <h3><Sparkles size={16} /> Journey insight · recorded evidence</h3>
           <p>{evidence.policy === 'unknown' || evidence.policy === 'restricted'
-            ? 'Behaviour-based recommendations are unavailable until usage permission is confirmed. The recorded CRM timeline remains visible.'
+            ? 'Behavioural recommendations remain unavailable until usage permission is confirmed. The recorded CRM timeline remains visible.'
             : evidence.counts.pageViews > 0
               ? `${evidence.counts.pageViews} observed page view(s) across ${evidence.counts.sessions} linked session(s) in the loaded window. Visits are not proof of purchase intent.`
               : 'The available record shows a CRM journey, but no explicitly linked website page views in the loaded window.'}</p>
         </div>
 
+        <div className="si3-evidence-meta" aria-label="Observed journey counts">
+          <span>{evidence.counts.before.sessions} observed sessions · {evidence.counts.before.pageViews} page views</span>
+          <span>{evidence.counts.after.sessions} observed sessions · {evidence.counts.after.pageViews} page views</span>
+        </div>
+
         {action ? <div className="si3-journey-card">
           <div className="si3-card-heading"><span className="si3-icon"><CalendarClock size={16}/></span><h3>Next service step</h3></div>
-          <p className="si3-focus-title">{action.title}</p>
+          <h3 className="si3-focus-title">{action.title}</h3>
           <p className="si3-focus-detail">{action.reason}</p>
           {action.dueAt ? <p className="si3-focus-detail">Due: {date(action.dueAt, true)} UTC</p> : null}
           <div className="si3-focus-actions">{actionControl}</div>
@@ -108,6 +113,10 @@ export function JourneyEvidencePanel({ evidence, context, onRefresh, refreshing 
             </select>
           </label>
         </fieldset>
+        <div className="si3-journey-search"><label htmlFor={`${label}-search`}>Search evidence
+          <input className="si3-search" id={`${label}-search`} type="search" placeholder="Page, event or source" maxLength={120} value={filters.search} onChange={e => update('search', e.target.value)}/>
+        </label></div>
+
         <details className="si3-filter-more">
           <summary>More filters</summary>
           <div className="si3-filter-more-fields">
@@ -121,9 +130,7 @@ export function JourneyEvidencePanel({ evidence, context, onRefresh, refreshing 
                 <option value="oldest">Oldest first</option><option value="newest">Newest first</option>
               </select>
             </label>
-            <label htmlFor={`${label}-search`}>Search
-              <input className="si3-search" id={`${label}-search`} type="search" placeholder="Page, event, source" maxLength={120} value={filters.search} onChange={e => update('search', e.target.value)}/>
-            </label>
+ 
           </div>
         </details>
 
@@ -132,9 +139,21 @@ export function JourneyEvidencePanel({ evidence, context, onRefresh, refreshing 
           {changed ? <button className="si3-secondary" type="button" onClick={() => setFilters({ ...inspectorJourneyDefaults })}>Reset filters</button> : null}
         </div>
 
+        {view.pages.length > 0 ? <div className="si3-page-quick-filters">
+          <span>Top pages</span>
+          {view.pages.map(page => <button type="button" className="si3-secondary" key={page.path} onClick={() => update('page', filters.page === page.path ? '' : page.path)}
+            aria-label={`Filter to ${page.path}`} aria-pressed={filters.page === page.path}
+            title={`${page.views} views in the loaded evidence`}>
+              {page.path} · {page.views} views
+            </button>)}
+        </div> : null}
+
         {view.events.length === 0
-          ? <EmptyState compact title={changed ? 'No journey events match these filters' : 'No observed activity for this enquiry'} description={changed ? 'Reset filters to see the available records.' : 'The loaded window contains no explicitly linked activity; this does not establish a lack of interest.'}/>
-          : <ol aria-label="Journey timeline" className="si3-timeline">
+          ? <div className="si3-empty"><strong>{changed ? 'No activity matches these filters' : 'No observed activity for this enquiry'}</strong>
+              <p>{changed ? 'Reset filters to see the available records.' : 'No explicitly linked activity is in the loaded window; this does not establish a lack of interest.'}</p>
+              {changed ? <button type="button" className="si3-secondary mt-3" onClick={() => setFilters({ ...inspectorJourneyDefaults })}>Show all activity</button> : null}
+            </div>
+          : <ol aria-label="Journey events" className="si3-timeline">
               {view.events.map(event => <li key={event.key}>
                 <div className="si3-timeline-entry">
                   <span className="si3-icon" aria-hidden="true">{event.kind === 'website' ? <Globe2 size={15}/> : <Layers3 size={15}/>}</span>
@@ -153,22 +172,16 @@ export function JourneyEvidencePanel({ evidence, context, onRefresh, refreshing 
           <p>{journeyReadAge(context?.readAt ?? evidence.through, now ?? Date.now())} · Source freshness unconfirmed · Enquiry created {date(evidence.enquiryAt)}.</p>
           <p>{evidence.counts.sessions} distinct linked sessions; {evidence.counts.pageViews} observed page views in the loaded window. Sessions spanning the enquiry boundary count only once in the total.</p>
           <p>Only explicitly assigned records are included. Unassigned devices and history may be missing. Website activity does not verify a payment or enrollment; see Payments for financial outcomes.</p>
-          <p>{evidence.policy === 'unknown' ? 'Usage permission is unconfirmed; do not infer behavioural intent.' : 'Recorded usage permission is separate from marketing or ad-export consent.'}</p>
+          <p>{evidence.policy === 'unknown' ? 'Behavioural recommendations remain unavailable until usage permission is confirmed.' : 'Recorded usage permission is separate from marketing or ad-export consent.'}</p>
           {evidence.diagnostics.conflicts + evidence.diagnostics.invalidTimes + evidence.diagnostics.invalidRecords > 0
             ? <p>Conflicting, malformed or invalid-time evidence has been excluded. Review source records before drawing conclusions.</p> : null}
-          {view.pages.length > 0 ? <div>
-            <p className="font-semibold">Most viewed pages in this loaded window</p>
-            {view.pages.map(page => <button type="button" className="si3-secondary mr-2 mt-2" key={page.path} onClick={() => update('page', filters.page === page.path ? '' : page.path)} aria-pressed={filters.page === page.path} title={page.path}>
-              {page.path} · {page.views} views
-            </button>)}
-            {filters.page ? <button type="button" className="si3-secondary mt-2" onClick={() => update('page','')}>Clear page filter</button> : null}
-          </div> : null}
+
         </details>
       </>
     ) : <>
       {action ? <div className="si3-journey-card">
         <div className="si3-card-heading"><span className="si3-icon"><Route size={15}/></span><h3>CRM next service step</h3></div>
-        <p className="si3-focus-title">{action.title}</p>
+        <h3 className="si3-focus-title">{action.title}</h3>
         <p className="si3-focus-detail">{action.reason}</p>
         <div className="si3-focus-actions">{actionControl}</div>
       </div> : null}
