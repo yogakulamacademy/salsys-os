@@ -50,8 +50,13 @@ export default async function LeadsPage({ searchParams }: LeadsPageProps) {
       const { data: { user }, error: authError } = await supabase.auth.getUser();
       if (!authError && user) {
         const orgId = await requireCurrentOrganizationId(supabase, user.id);
-        const permission = await supabase.rpc("can_manage_sales_workspace", { p_organization_id: orgId });
-        canManage = !permission.error && permission.data === true;
+        const [permission, contactPermission] = await Promise.all([
+          supabase.rpc("can_manage_sales_workspace", { p_organization_id: orgId }),
+          supabase.rpc("can_view_lead_pii"),
+        ]);
+        canManage =
+          !permission.error && permission.data === true &&
+          !contactPermission.error && contactPermission.data === true;
       }
     } catch {
       // Fail closed: existing Leads browsing remains available, import/export do not.
