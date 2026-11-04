@@ -392,16 +392,6 @@ export default async function ConversationsPage({
         </dl>
       </section>
 
-      <div id="inbox-assignment" className="ibx-v2-assignment-card">
-        <ConversationTeamControls
-        leadId={selected.id}
-        ownerUserId={selected.ownerUserId}
-        ownerName={selected.ownerName}
-        snoozedUntil={selected.snoozedUntil}
-        canManageAssignments={team.canManageAssignments}
-        assignmentCandidates={team.assignmentCandidates}
-      />
-      </div>
 
       <section id="inbox-next-steps" className="ibx-v2-next-step-card border-b border-line px-3.5 py-4">
         <ConversationIntelligencePanel
@@ -414,6 +404,17 @@ export default async function ConversationsPage({
         />
       </section>
 
+
+      <div id="inbox-assignment" className="ibx-v2-assignment-card">
+        <ConversationTeamControls
+        leadId={selected.id}
+        ownerUserId={selected.ownerUserId}
+        ownerName={selected.ownerName}
+        snoozedUntil={selected.snoozedUntil}
+        canManageAssignments={team.canManageAssignments}
+        assignmentCandidates={team.assignmentCandidates}
+      />
+      </div>
 
       {leadContextAction ? (
         <section className="border-b border-line px-4 py-4">
