@@ -505,8 +505,8 @@ export async function generateCopilotReplyAction(
       preferredLocation: lead.preferred_location,
       preferredMonth: lead.preferred_month,
       preferredMode: lead.preferred_mode,
-      summary: cleanText(String(lead.summary ?? ''), 1400),
-      notes: cleanText(String(lead.notes ?? ''), 1400),
+      // Internal lead summaries and private staff notes are deliberately excluded
+      // from customer-facing model prompts. The Phase C staff context is separate.
     },
     selectedCourse,
     upcomingBatches,
