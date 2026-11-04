@@ -1111,53 +1111,158 @@ function JourneyTab({ payload, onRefresh, refreshing, readFailed, onFollowup }: 
   );
 }
 
+type InspectorActivityRow = {
+  key: string;
+  at: string;
+  title: string;
+  detail: string;
+  source: string;
+  kind: "message" | "contact" | "website" | "stage";
+};
+
 function ActivityTab({ payload }: { payload: InspectorPayload }) {
-  const messages = payload.lead.lastMessages ?? [];
+  const [kind, setKind] = useState("all");
+  const [source, setSource] = useState("all");
+  const [range, setRange] = useState("30d");
+  const [query, setQuery] = useState("");
+  const records = useMemo<InspectorActivityRow[]>(() => {
+    const rows: InspectorActivityRow[] = [];
+    for (const message of payload.lead.lastMessages ?? []) {
+      if (!Number.isFinite(Date.parse(message.timestamp))) continue;
+      rows.push({
+        key: `message:${message.id}`,
+        at: message.timestamp,
+        title: message.direction === "inbound" ? "Message received" : "Message sent",
+        detail: message.body || `Message via ${pretty(message.channel)}`,
+        source: pretty(message.channel || "Conversation"),
+        kind: "message",
+      });
+    }
+    for (const log of payload.contactLogs) {
+      if (!Number.isFinite(Date.parse(log.contacted_at))) continue;
+      rows.push({
+        key: `contact:${log.id}`,
+        at: log.contacted_at,
+        title: `${pretty(log.method || "Contact")} · ${pretty(log.outcome || "Recorded")}`,
+        detail: log.comment || `Logged by ${log.employee_name || "System"}`,
+        source: pretty(log.method || "CRM"),
+        kind: "contact",
+      });
+    }
+    if (payload.journeyEvidence?.state === "available") {
+      for (const event of payload.journeyEvidence.events) {
+        if (event.kind !== "website" || !Number.isFinite(Date.parse(event.at))) continue;
+        rows.push({
+          key: `website:${event.key}`,
+          at: event.at,
+          title: event.type === "page_view" ? "Page viewed" : pretty(event.title),
+          detail: event.page || `${event.evidence} website event`,
+          source: event.source || "Website",
+          kind: "website",
+        });
+      }
+    }
+    if (payload.availability.journey === "available") {
+      for (const event of payload.journey) {
+        if (!/stage/i.test(event.event_type) || !Number.isFinite(Date.parse(event.event_at))) continue;
+        rows.push({
+          key: `stage:${event.journey_event_key}`,
+          at: event.event_at,
+          title: event.title || "Stage updated",
+          detail: event.summary || "Recorded CRM stage change",
+          source: "CRM",
+          kind: "stage",
+        });
+      }
+    }
+    return [...new Map(rows.map(row => [row.key, row])).values()].sort((x, y) =>
+      Date.parse(y.at) - Date.parse(x.at) || x.key.localeCompare(y.key));
+  }, [payload]);
 
-  return (
-    <>
-      <Section title="Contact history" eyebrow="Structured admissions activity">
-        {payload.contactSummary ? (
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-            <MetricBox label="Total" value={numberText(payload.contactSummary.total_contacts)} />
-            <MetricBox label="Connected" value={numberText(payload.contactSummary.successful_contacts)} />
-            <MetricBox label="No answer" value={numberText(payload.contactSummary.no_answer_contacts)} />
-            <MetricBox label="Follow-up" value={numberText(payload.contactSummary.follow_up_needed_contacts)} />
-          </div>
-        ) : null}
-        <AvailabilityNote availability={payload.availability.contactHistory} empty="No structured contact logs are stored yet." unavailable="Contact history could not be loaded. No empty-state assumption is being made." />
-        {payload.contactLogs.length ? (
-          <div className="mt-3 space-y-2.5">
-            {payload.contactLogs.map((log) => (
-              <div key={log.id} className="rounded-lg border border-[#E4EAE6] bg-white p-3.5">
-                <div className="flex flex-wrap items-center gap-1.5">
-                  <SmallTag>{pretty(log.method)}</SmallTag><SmallTag>{pretty(log.direction)}</SmallTag><SmallTag>{pretty(log.outcome)}</SmallTag>
-                  <span className="ml-auto text-[10px] text-[#89968F]">{formatDateTime(log.contacted_at)}</span>
-                </div>
-                <div className="mt-2 text-[11px] leading-5 text-[#52665C]">{log.comment}</div>
-                <div className="mt-2 text-[10px] text-[#89968F]">Logged by {log.employee_name || "System"}{log.call_duration_seconds ? ` · ${formatDuration(log.call_duration_seconds)}` : ""}</div>
-              </div>
-            ))}
-          </div>
-        ) : null}
-      </Section>
+  const sources = [...new Set(records.map(row => row.source))].sort();
+  const filtered = records.filter(row => {
+    const age = Date.now() - Date.parse(row.at);
+    const inRange = range === "all" || (age >= 0 && age <= (range === "7d" ? 7 : 30) * 86_400_000);
+    const matchesSearch = !query.trim() || [row.title, row.detail, row.source].join(" ").toLocaleLowerCase().includes(query.toLocaleLowerCase().slice(0,120));
+    return (kind === "all" || row.kind === kind) && (source === "all" || row.source === source) && inRange && matchesSearch;
+  });
+  const grouped = new Map<string, InspectorActivityRow[]>();
+  for (const row of filtered) {
+    const day = new Intl.DateTimeFormat("en-IN", { day:"numeric", month:"short", year:"numeric" }).format(new Date(row.at));
+    const group = grouped.get(day) ?? [];
+    group.push(row);
+    grouped.set(day,group);
+  }
+  const newest = latestMessage(payload.lead.lastMessages ?? []);
+  return <div className="space-y-3">
+    <section className="si3-ai-card" aria-label="AI reply assistant">
+      <span className="si3-icon si3-icon-large"><Sparkles size={19}/></span>
+      <div className="si3-ai-copy">
+        <h3>AI reply assistant</h3>
+        <p>{newest?.direction === "inbound"
+          ? "A lead message is awaiting review. Generate or edit a response in Conversations."
+          : "Prepare a contextual response using the available conversation history."}</p>
+        <span className="si3-ai-note">No message will be sent without your action.</span>
+      </div>
+      <Link className="si3-primary" href={`/conversations?lead=${encodeURIComponent(payload.lead.id)}`}>Open reply <ArrowRight size={13}/></Link>
+    </section>
 
-      <Section title="Recent messages" eyebrow="Conversation activity">
-        {!messages.length ? <div className="text-[11px] leading-5 text-[#7D8C84]">No recent CRM messages are stored for this lead.</div> : null}
-        <div className="space-y-2.5">
-          {messages.map((message) => (
-            <div key={message.id} className={`flex ${message.direction === "outbound" ? "justify-end" : "justify-start"}`}>
-              <div className={`max-w-[88%] rounded-xl px-3.5 py-3 text-[11px] leading-5 ${message.direction === "outbound" ? "bg-[#216551] text-white" : "border border-[#E4EAE6] bg-white text-[#52665C]"}`}>
-                <div className={`mb-1 text-[9px] font-semibold uppercase tracking-[0.08em] ${message.direction === "outbound" ? "text-white/65" : "text-[#8B988F]"}`}>{message.sender} · {pretty(message.channel)}</div>
-                <div>{message.body}</div>
-                <div className={`mt-1 text-right text-[9px] ${message.direction === "outbound" ? "text-white/60" : "text-[#8B988F]"}`}>{formatDateTime(message.timestamp)}</div>
-              </div>
-            </div>
-          ))}
-        </div>
-      </Section>
-    </>
-  );
+    <div className="si3-filter-row" role="group" aria-label="Filter lead activity">
+      <label>Activity
+        <select className="si3-select" aria-label="Activity type" value={kind} onChange={e => setKind(e.target.value)}>
+          <option value="all">All activity</option>
+          <option value="message">Messages</option>
+          <option value="contact">Contact logs</option>
+          <option value="website">Website</option>
+          <option value="stage">Stage changes</option>
+        </select>
+      </label>
+      <label>Source
+        <select className="si3-select" aria-label="Activity source" value={source} onChange={e => setSource(e.target.value)}>
+          <option value="all">All sources</option>
+          {sources.map(name => <option key={name} value={name}>{name}</option>)}
+        </select>
+      </label>
+      <label>Period
+        <select className="si3-select" aria-label="Activity period" value={range} onChange={e => setRange(e.target.value)}>
+          <option value="30d">Last 30 days</option><option value="7d">Last 7 days</option><option value="all">Loaded history</option>
+        </select>
+      </label>
+    </div>
+    <input className="si3-search" aria-label="Search activity evidence" type="search" maxLength={120} placeholder="Search recorded activity…" value={query} onChange={e => setQuery(e.target.value)} />
+
+    {payload.availability.contactHistory === "unavailable"
+      ? <div className="si3-warning">Contact logs could not be loaded. Other available evidence is shown below.</div>
+      : null}
+    <div className="si3-evidence-meta" role="status" aria-live="polite">
+      <span>{filtered.length} of {records.length} loaded events · Newest first</span>
+      {(kind !== "all" || source !== "all" || range !== "30d" || query) ?
+        <button type="button" className="si3-secondary" onClick={() => {setKind("all");setSource("all");setRange("30d");setQuery("");}}>Reset filters</button> : null}
+    </div>
+
+    {filtered.length ? [...grouped.entries()].map(([day, events]) => <section key={day} className="space-y-2" aria-label={`Activity on ${day}`}>
+      <h3 className="si3-activity-date">{day}</h3>
+      {events.map(event => <article className="si3-activity-item" key={event.key}>
+        <span className="si3-icon" aria-hidden="true">
+          {event.kind === "message" ? <MessageCircle size={15}/> :
+            event.kind === "website" ? <ExternalLink size={15}/> :
+            event.kind === "stage" ? <Route size={15}/> : <Phone size={15}/>}
+        </span>
+        <div><h4>{event.title}</h4><p>{event.detail}</p><p>{event.source}</p></div>
+        <time dateTime={event.at}>{new Intl.DateTimeFormat("en-IN",{hour:"2-digit",minute:"2-digit"}).format(new Date(event.at))}</time>
+      </article>)}
+    </section>) :
+      <div className="si3-empty"><strong>{records.length ? "No activity matches these filters" : "No recorded activity yet"}</strong>
+        {records.length ? "Adjust the filters or date range to see loaded evidence." : "Messages, contact logs, website events and stage changes appear here when accessible."}
+      </div>}
+
+    <details className="si3-evidence-more">
+      <summary>Activity evidence and contact history</summary>
+      <p>Only the loaded, authorized CRM messages, contact logs and linked website or stage events are included. This is not an exhaustive lifetime history.</p>
+      <p>Website clicks are observed interactions, not proof of intent, payment or enrollment. Financial outcomes must be verified in payment records.</p>
+      {payload.contactSummary ? <p>{numberText(payload.contactSummary.total_contacts)} structured contacts · {numberText(payload.contactSummary.successful_contacts)} connected · {numberText(payload.contactSummary.no_answer_contacts)} no answer · {numberText(payload.contactSummary.follow_up_needed_contacts)} follow-up needed.</p> : null}
+    </details>
+  </div>;
 }
 
 function InspectorTabButton({ active, icon, label, count, onClick }: { active: boolean; icon: ReactNode; label: string; count?: number; onClick: () => void }) {
