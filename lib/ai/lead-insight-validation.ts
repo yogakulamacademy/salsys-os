@@ -165,7 +165,7 @@ export function validateLeadInsight(value: unknown, context: LeadContextV1): Lea
   if (context.audience !== 'staff_insight' || !context.staffOnly) {
     throw Error('AI staff insight requires authorized staff-only context.');
   }
-  const evidence = new Map(evidenceCatalog(context).map(x => [x.ref, x]));
+  const evidence = new Map(evidenceCatalog(context).map(x => [x.ref, x] as const));
   const o = record(value);
   if (o.status !== 'supported' && o.status !== 'insufficient_evidence') throw Error('Invalid insight status.');
 
