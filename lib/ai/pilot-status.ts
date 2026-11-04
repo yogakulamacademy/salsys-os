@@ -130,6 +130,12 @@ export async function getAiInsightPilotStatus(): Promise<AiInsightPilotStatus | 
 
   const prerequisites = pilotPrerequisites(flags);
   const sampleRows = sample.data ?? [];
+  const reviewsSampleTruncated = sampleRows.length === 500;
+  const quality = summarizeInsightReviews(sampleRows.map(row => ({
+    rating: row.rating,
+    issue_codes: Array.isArray(row.issue_codes) ? row.issue_codes : [],
+    run_id: row.run_id,
+  })));
 
   return {
     observedAt: now.toISOString(),
@@ -147,13 +153,11 @@ export async function getAiInsightPilotStatus(): Promise<AiInsightPilotStatus | 
       remainingToday: dailyLimit === null ? null : Math.max(0, dailyLimit - attempts),
       runReceipts7d: runs7d,
       reviews7d,
-      reviewCoveragePercent: pilotRate(reviews7d, runs7d),
-      reviewsSampleTruncated: sampleRows.length === 500,
-      quality: summarizeInsightReviews(sampleRows.map(row => ({
-        rating: row.rating,
-        issue_codes: Array.isArray(row.issue_codes) ? row.issue_codes : [],
-        run_id: row.run_id,
-      }))),
+      // Multiple reviewers can assess one run. Coverage uses unique run IDs
+      // and stays unknown when the sample is truncated.
+      reviewCoveragePercent: reviewsSampleTruncated ? null : pilotRate(quality.distinctRunsReviewed, runs7d),
+      reviewsSampleTruncated,
+      quality,
     },
     retentionReview: {
       proposedThresholdDays: 90,
