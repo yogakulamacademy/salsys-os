@@ -469,7 +469,7 @@ export default async function ConversationsPage({
   ) : null;
 
   return (
-    <div className="ibx-v2 conversations-polish space-y-2">
+    <div className="ibx-v2 conversations-polish gap-2">
       {!mock ? <ConversationsRealtime /> : null}
 
       <section className="inbox-page-heading ibx-v2-page-heading flex flex-wrap items-center justify-between gap-3">

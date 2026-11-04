@@ -29,3 +29,21 @@ test("Inbox stretches flush to edges without modifying its three-column contents
   assert.ok(page.includes("chat={chat}"));
   assert.ok(page.includes("context={context}"));
 });
+
+test("Inbox starts immediately below app header without a live-status strip", () => {
+  const page = read("app/conversations/page.tsx");
+  const realtime = read("components/conversations-realtime.tsx");
+  assert.ok(page.includes('className="ibx-v2 conversations-polish gap-2"'));
+  assert.ok(!page.includes('className="ibx-v2 conversations-polish space-y-2"'));
+  assert.ok(page.includes("<ConversationsRealtime />"));
+
+  // Removing the status indicator must not disable message refresh or the
+  // Instagram outbound composer bridge.
+  assert.ok(realtime.includes(".channel('crm-conversations-live')"));
+  assert.ok(realtime.includes("crm:conversation-inbound"));
+  assert.ok(realtime.includes(".subscribe()"));
+  assert.ok(realtime.includes("router.refresh()"));
+  assert.ok(realtime.includes("return <InstagramOutboundBridge />;"));
+  assert.ok(!realtime.includes("Live updates"));
+  assert.ok(!realtime.includes("min-h-7"));
+});
