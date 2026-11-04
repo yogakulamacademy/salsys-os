@@ -12,6 +12,7 @@ import { daysAgoIso, observedPilotState, pilotPrerequisites, pilotRate, type Pil
 export type AiInsightPilotStatus = {
   observedAt: string;
   organizationName: string;
+  canPrepareEvidence: boolean;
   readiness: 'blocked' | 'review_required';
   prerequisites: PilotPrerequisite[];
   governance: { status: PilotApprovalStatus; approved: boolean };
@@ -174,6 +175,7 @@ export async function getAiInsightPilotStatus(): Promise<AiInsightPilotStatus | 
   return {
     observedAt: now.toISOString(),
     organizationName: activeWorkspace.organizationName,
+    canPrepareEvidence: activeWorkspace.role === 'owner' && membership.role === 'owner',
     readiness: observedPilotState(prerequisites),
     prerequisites,
     governance,
