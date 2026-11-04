@@ -355,57 +355,81 @@ export async function sendInstagramMessageAction(
     );
   }
 
-  const { data: loggedMessage, error: logError } = await supabase.rpc(
-    "log_lead_interaction",
-    {
-      p_lead_id: leadId,
-      p_channel: "instagram",
-      p_direction: "outbound",
-      p_body: body,
-      p_conversation_id: conversation.id,
-    },
-  );
+  // A provider echo can reach our webhook before this Send API response.
+  // Reuse its canonical outbound row when Meta returned the same message ID.
+  let crmMessageId: string | null = null;
+  if (externalMessageId) {
+    const { data: echoLogged, error: echoLookupError } = await admin
+      .from("messages")
+      .select("id,lead_id,conversation_id,direction")
+      .eq("organization_id", organizationId)
+      .eq("external_message_id", externalMessageId)
+      .maybeSingle();
 
-  if (logError) {
-    redirect(
-      conversationUrl(leadId, {
-        error: `Instagram was sent, but CRM logging failed: ${logError.message}. Do not resend this message until the CRM record is checked.`,
-      }),
-    );
+    if (echoLookupError) {
+      redirect(conversationUrl(leadId, {
+        error: "Instagram sent the message, but CRM deduplication could not be verified. Do not resend.",
+      }));
+    }
+    if (echoLogged) {
+      if (echoLogged.lead_id !== leadId ||
+          echoLogged.conversation_id !== conversation.id ||
+          echoLogged.direction !== "outbound") {
+        redirect(conversationUrl(leadId, {
+          error: "Instagram sent the message, but its provider ID belongs to another CRM thread. Do not resend.",
+        }));
+      }
+      crmMessageId = echoLogged.id;
+    }
   }
 
-  const loggedRow = Array.isArray(loggedMessage)
-    ? loggedMessage[0]
-    : loggedMessage;
-  const crmMessageId = stringValue(
-    objectValue(loggedRow).id,
-  );
+  if (!crmMessageId) {
+    const { data: loggedMessage, error: logError } = await supabase.rpc(
+      "log_lead_interaction",
+      {
+        p_lead_id: leadId,
+        p_channel: "instagram",
+        p_direction: "outbound",
+        p_body: body,
+        p_conversation_id: conversation.id,
+      },
+    );
 
-  if (externalMessageId && crmMessageId) {
-    const { error: attachError } = await admin
-      .from("messages")
-      .update({
-        external_message_id: externalMessageId,
-        status: "sent",
-        sent_at: new Date().toISOString(),
-        human_approved: true,
-        metadata: {
-          provider: "instagram",
-          send_mode: "human_manual",
-          policy_checked: true,
-        },
-      })
-      .eq("id", crmMessageId)
-      .eq("organization_id", organizationId)
-      .eq("lead_id", leadId)
-      .eq("conversation_id", conversation.id);
+    if (logError) {
+      redirect(conversationUrl(leadId, {
+        error: `Instagram was sent, but CRM logging failed: ${logError.message}. Do not resend this message until the CRM record is checked.`,
+      }));
+    }
 
-    if (attachError) {
-      redirect(
-        conversationUrl(leadId, {
+    const loggedRow = Array.isArray(loggedMessage)
+      ? loggedMessage[0]
+      : loggedMessage;
+    crmMessageId = stringValue(objectValue(loggedRow).id) || null;
+
+    if (externalMessageId && crmMessageId) {
+      const { error: attachError } = await admin
+        .from("messages")
+        .update({
+          external_message_id: externalMessageId,
+          status: "sent",
+          sent_at: new Date().toISOString(),
+          human_approved: true,
+          metadata: {
+            provider: "instagram",
+            send_mode: "human_manual",
+            policy_checked: true,
+          },
+        })
+        .eq("id", crmMessageId)
+        .eq("organization_id", organizationId)
+        .eq("lead_id", leadId)
+        .eq("conversation_id", conversation.id);
+
+      if (attachError) {
+        redirect(conversationUrl(leadId, {
           error: `Instagram was sent and logged, but its provider message ID could not be attached: ${attachError.message}. Do not resend this message.`,
-        }),
-      );
+        }));
+      }
     }
   }
 
