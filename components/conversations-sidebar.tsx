@@ -131,11 +131,7 @@ export function ConversationsSidebar({
   const pageCount = pagination ? Math.max(1, Math.ceil(pagination.totalMatching / pagination.pageSize)) : 1;
   const pageStart = pagination && pagination.totalMatching > 0 ? (pagination.page - 1) * pagination.pageSize + 1 : 0;
   const pageEnd = pagination ? Math.min(pagination.page * pagination.pageSize, pagination.totalMatching) : 0;
-  const allScopeCount = pagination
-    ? (scope === "mine" ? pagination.counts.mine :
-       scope === "unassigned" ? pagination.counts.unassigned :
-       scope.startsWith("owner:") ? pagination.totalMatching : pagination.counts.team)
-    : undefined;
+  const allScopeCount = pagination?.counts.scope;
 
 
   useEffect(() => {
