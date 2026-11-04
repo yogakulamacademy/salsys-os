@@ -1,6 +1,7 @@
 'use server';
 
 import { getLeadContextV1, type LeadContextV1 } from '@/lib/ai/lead-context';
+import { recordLeadInsightRun } from '@/lib/ai/lead-insight-feedback';
 import {
   evidenceCatalog,
   LEAD_INSIGHT_JSON_SCHEMA,
@@ -18,6 +19,7 @@ type InsightResponse =
         leadId: string;
         model: string | null;
         reviewRequired: true;
+        runId?: string | null;
         insight: LeadInsightV1;
         evidence: Array<{ ref: string; kind: string; occurredAt: string | null }>;
         limitations: string[];
@@ -246,6 +248,16 @@ export async function generateLeadInsightsAction(leadId: string): Promise<Insigh
     return { ok: false, error: 'Lead access could not be reverified. Refresh and generate again.' };
   }
 
+  // C3: Optional metadata-only provenance receipt, created only when
+  // feedback recording is enabled. Failure must not produce an orphaned
+  // unreviewable insight. This never changes any lead/payment/message row.
+  let runId: string | null = null;
+  try {
+    runId = await recordLeadInsightRun(context, insight, model);
+  } catch {
+    return { ok: false, error: 'AI insight receipt could not be recorded. No CRM changes were made.' };
+  }
+
   return {
     ok: true,
     data: {
@@ -254,6 +266,7 @@ export async function generateLeadInsightsAction(leadId: string): Promise<Insigh
       leadId: context.lead.id,
       model,
       reviewRequired: true,
+      runId,
       insight,
       evidence: citedEvidence(insight, context),
       limitations: context.limitations,
