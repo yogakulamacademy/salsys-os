@@ -31,6 +31,8 @@ const insight={
 function setup(options={}) {
   const calls={admin:0, reads:[], inserts:[], rpc:[], auth:0};
   const env=process.env.AI_LEAD_INSIGHTS_FEEDBACK_ENABLED;
+  const oldKey=process.env.AI_LEAD_INSIGHTS_CONTEXT_HMAC_KEY;
+  process.env.AI_LEAD_INSIGHTS_CONTEXT_HMAC_KEY='synthetic-test-signing-key-64-character-no-real-secret';
   process.env.AI_LEAD_INSIGHTS_FEEDBACK_ENABLED=options.disabled ? 'false' : 'true';
   const session={
     auth:{getUser:async()=>{calls.auth++;return{data:{user:options.unauthenticated?null:{id:'test-reviewer'}},error:null}}},
@@ -68,7 +70,9 @@ function setup(options={}) {
   return{
     ...module,calls,
     restore(){if(env===undefined)delete process.env.AI_LEAD_INSIGHTS_FEEDBACK_ENABLED;
-      else process.env.AI_LEAD_INSIGHTS_FEEDBACK_ENABLED=env},
+      else process.env.AI_LEAD_INSIGHTS_FEEDBACK_ENABLED=env;
+      if(oldKey===undefined)delete process.env.AI_LEAD_INSIGHTS_CONTEXT_HMAC_KEY;
+      else process.env.AI_LEAD_INSIGHTS_CONTEXT_HMAC_KEY=oldKey;},
   };
 }
 
