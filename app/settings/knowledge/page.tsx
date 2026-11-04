@@ -240,11 +240,11 @@ export default async function KnowledgeSettingsPage({
 
       <section className="kn-overview" aria-label="Knowledge overview">
         <div className="kn-stats">
-          <Metric icon={<Database size={22}/>} value={canRead ? String(approved) : '—'} title="Approved items" hint={partial ? 'Loaded view only' : 'Approved status'}/>
+          <Metric icon={<Database size={22}/>} value={canRead && total > 0 ? String(approved) : '—'} title="Approved items" hint={partial ? 'Loaded view only' : 'Approved status'}/>
           <Metric icon={<CheckCircle2 size={22}/>} value={canRead && coverage !== null ? String(coverage) + '%' : '—'}
             title="Approval coverage" hint="Approved / loaded items"/>
-          <Metric icon={<Sparkles size={22}/>} value={canRead ? String(drafts) : '—'} title="Drafts" hint="Draft or in review"/>
-          <Metric icon={<Clock3 size={22}/>} value={canRead ? String(needsReview) : '—'} title="Needs review" hint="Unique items in view"/>
+          <Metric icon={<Sparkles size={22}/>} value={canRead && total > 0 ? String(drafts) : '—'} title="Drafts" hint="Draft or in review"/>
+          <Metric icon={<Clock3 size={22}/>} value={canRead && total > 0 ? String(needsReview) : '—'} title="Needs review" hint="Unique items in view"/>
         </div>
         <div className="kn-readiness">
           <Sparkles size={26} aria-hidden="true"/>
