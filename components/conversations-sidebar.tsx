@@ -362,6 +362,7 @@ function ConversationRow({
     <Link
       href={`/conversations?lead=${lead.id}`}
       aria-current={selected ? "page" : undefined}
+      data-channel={lead.currentContactChannel}
       className={`ibx-v2-row group relative block border-b border-line/70 px-4 py-3.5 transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand-700/40 ${
         selected ? "bg-brand-50" : "bg-surface hover:bg-surface-soft"
       }`}
@@ -428,6 +429,9 @@ function ConversationRow({
               <span className="text-[10.5px] text-copy-subtle">Reviewed</span>
             )}
 
+            {highPriority && !snoozed ? <span className="ibx-v3-priority-chip">
+              <Flag size={10}/> {lead.priority === "urgent" ? "Urgent" : "High"}
+            </span> : null}
             {waiting && !snoozed ? (
               <span className={`text-[10px] font-medium ${lead.priority === "urgent" ? "text-danger" : lead.priority === "high" ? "text-warning" : "text-copy-subtle"}`}>
                 Waiting {waiting}
@@ -442,8 +446,8 @@ function ConversationRow({
             <span className={`truncate text-[10.5px] font-medium ${lead.ownerUserId ? "text-copy-muted" : "text-warning"}`}>
               {lead.ownerName || "Unassigned"}
             </span>
-            <span className="ml-auto truncate text-[10px] capitalize text-copy-subtle">
-              {sourceLabel}
+            <span className="ibx-v3-row-channel ml-auto truncate text-[10px] capitalize text-copy-subtle">
+              <MessageCircle size={12}/> {sourceLabel}
             </span>
           </div>
         </div>
