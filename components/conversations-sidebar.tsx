@@ -190,22 +190,56 @@ export function ConversationsSidebar({
 
   return (
     <aside className="conversation-sidebar flex h-full min-h-0 flex-col overflow-hidden bg-surface">
-      <div className="shrink-0 border-b border-line px-4 pb-0 pt-4">
-        <div className="flex items-center justify-between gap-3">
-          <div>
-            <div className="text-[15px] font-semibold tracking-[-0.02em] text-copy-strong">
-              Conversations
-            </div>
-            <div className="mt-1 text-[11.5px] leading-5 text-copy-muted">
-              All your customer conversations
-            </div>
-          </div>
-          <span className="rounded-md bg-brand-50 px-2 py-1 text-[11px] font-semibold text-brand-700">
-            {activeScopedLeads.length}
-          </span>
+      <div className="ibx-v2-sidebar-header shrink-0 border-b border-line px-4 pt-3">
+        <h2 className="sr-only">Conversations</h2>
+        <div
+          className="ibx-v2-tabs grid grid-cols-4"
+          role="tablist"
+          aria-label="Conversation filters"
+          onKeyDown={handleFilterKeyDown}
+        >
+          <InboxTab active={filter === "all"} onClick={() => setFilter("all")} count={activeScopedLeads.length}>
+            All
+          </InboxTab>
+          <InboxTab active={filter === "reply"} onClick={() => setFilter("reply")} count={replyCount}>
+            Reply
+          </InboxTab>
+          <InboxTab active={filter === "unread"} onClick={() => setFilter("unread")} count={unreadCount}>
+            Unread
+          </InboxTab>
+          <InboxTab active={filter === "snoozed"} onClick={() => setFilter("snoozed")} count={snoozedCount}>
+            Snoozed
+          </InboxTab>
         </div>
-
-        <div className="mt-3 grid grid-cols-3 rounded-ui bg-surface-soft p-1" aria-label="Inbox ownership scope">
+        <label className="ibx-v2-search relative block">
+          <span className="sr-only">Search conversations</span>
+          <Search
+            size={15}
+            className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-copy-subtle"
+          />
+          <input
+            ref={searchRef}
+            value={search}
+            onChange={(event) => setSearch(event.target.value)}
+            placeholder="Search conversations…"
+            className="h-10 w-full rounded-ui border border-line bg-surface-soft pl-9 pr-14 text-[13px] text-copy-strong outline-none transition placeholder:text-copy-subtle focus:border-brand-600 focus:bg-surface focus:ring-2 focus:ring-brand-700/10"
+          />
+          {!search ? (
+            <kbd className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 rounded border border-line bg-surface px-1.5 py-0.5 text-[10px] font-medium text-copy-subtle">
+              /
+            </kbd>
+          ) : (
+            <button
+              type="button"
+              onClick={() => setSearch("")}
+              className="absolute right-2 top-1/2 grid h-7 w-7 -translate-y-1/2 place-items-center rounded-md text-copy-subtle transition hover:bg-brand-50 hover:text-brand-700"
+              aria-label="Clear conversation search"
+            >
+              <X size={13} />
+            </button>
+          )}
+        </label>
+        <div className="ibx-v2-scope grid grid-cols-3 rounded-ui bg-surface-soft p-1" aria-label="Inbox ownership scope">
           <ScopeButton
             active={scope === "mine"}
             onClick={() => setScope("mine")}
@@ -225,58 +259,9 @@ export function ConversationsSidebar({
             Unassigned
           </ScopeButton>
         </div>
-
-        <label className="relative mt-3 block">
-          <span className="sr-only">Search conversations</span>
-          <Search
-            size={15}
-            className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-copy-subtle"
-          />
-          <input
-            ref={searchRef}
-            value={search}
-            onChange={(event) => setSearch(event.target.value)}
-            placeholder="Search contacts, course, owner…"
-            className="h-10 w-full rounded-ui border border-line bg-surface-soft pl-9 pr-14 text-[13px] text-copy-strong outline-none transition placeholder:text-copy-subtle focus:border-brand-600 focus:bg-surface focus:ring-2 focus:ring-brand-700/10"
-          />
-          {!search ? (
-            <kbd className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 rounded border border-line bg-surface px-1.5 py-0.5 text-[10px] font-medium text-copy-subtle">
-              /
-            </kbd>
-          ) : (
-            <button
-              type="button"
-              onClick={() => setSearch("")}
-              className="absolute right-2 top-1/2 grid h-7 w-7 -translate-y-1/2 place-items-center rounded-md text-copy-subtle transition hover:bg-brand-50 hover:text-brand-700"
-              aria-label="Clear conversation search"
-            >
-              <X size={13} />
-            </button>
-          )}
-        </label>
-
-        <div
-          className="mt-3 grid grid-cols-4"
-          role="tablist"
-          aria-label="Conversation filters"
-          onKeyDown={handleFilterKeyDown}
-        >
-          <InboxTab active={filter === "all"} onClick={() => setFilter("all")} count={activeScopedLeads.length}>
-            All
-          </InboxTab>
-          <InboxTab active={filter === "reply"} onClick={() => setFilter("reply")} count={replyCount}>
-            Reply
-          </InboxTab>
-          <InboxTab active={filter === "unread"} onClick={() => setFilter("unread")} count={unreadCount}>
-            Unread
-          </InboxTab>
-          <InboxTab active={filter === "snoozed"} onClick={() => setFilter("snoozed")} count={snoozedCount}>
-            Snoozed
-          </InboxTab>
-        </div>
       </div>
 
-      <div className="grid shrink-0 grid-cols-2 gap-2 border-b border-line bg-surface px-4 py-2.5">
+      <div className="ibx-v2-secondary-filters grid shrink-0 grid-cols-2 gap-2 border-b border-line bg-surface px-4 py-2.5">
         <label className="min-w-0">
           <span className="mb-1 block text-xs font-medium text-copy-muted">Channel</span>
           <select
@@ -377,7 +362,7 @@ function ConversationRow({
     <Link
       href={`/conversations?lead=${lead.id}`}
       aria-current={selected ? "page" : undefined}
-      className={`group relative block border-b border-line/70 px-4 py-3.5 transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand-700/40 ${
+      className={`ibx-v2-row group relative block border-b border-line/70 px-4 py-3.5 transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand-700/40 ${
         selected ? "bg-brand-50" : "bg-surface hover:bg-surface-soft"
       }`}
     >
