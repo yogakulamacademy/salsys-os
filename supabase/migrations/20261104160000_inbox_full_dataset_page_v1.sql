@@ -170,10 +170,18 @@ begin
       'unassigned', (select count(*) from scored
         where snoozed_until is null and owner_user_id is null),
       'reply', (select count(*) from scored
-        where snoozed_until is null and (coalesce(needs_reply, false) or needs_first_contact)),
+        where snoozed_until is null and (v_scope = 'team' or
+          (v_scope = 'mine' and owner_user_id = auth.uid()) or
+          (v_scope = 'unassigned' and owner_user_id is null))
+          and (coalesce(needs_reply, false) or needs_first_contact)),
       'unread', (select count(*) from scored
-        where snoozed_until is null and coalesce(unread, false)),
-      'snoozed', (select count(*) from scored where snoozed_until is not null)
+        where snoozed_until is null and (v_scope = 'team' or
+          (v_scope = 'mine' and owner_user_id = auth.uid()) or
+          (v_scope = 'unassigned' and owner_user_id is null))
+          and coalesce(unread, false)),
+      'snoozed', (select count(*) from scored where snoozed_until is not null and (v_scope = 'team' or
+          (v_scope = 'mine' and owner_user_id = auth.uid()) or
+          (v_scope = 'unassigned' and owner_user_id is null)))
     )
   )
   into v_result;
