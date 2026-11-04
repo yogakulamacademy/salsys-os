@@ -202,7 +202,7 @@ export function ConversationsSidebar({
             All
           </InboxTab>
           <InboxTab active={filter === "reply"} onClick={() => setFilter("reply")} count={replyCount}>
-            Reply
+            Needs reply
           </InboxTab>
           <InboxTab active={filter === "unread"} onClick={() => setFilter("unread")} count={unreadCount}>
             Unread
