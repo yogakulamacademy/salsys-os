@@ -32,7 +32,7 @@ import { ConversationsSidebar } from "@/components/conversations-sidebar";
 import { EmptyState, Notice, StageBadge } from "@/components/ui";
 import { WhatsAppTemplateComposer } from "@/components/whatsapp-template-composer";
 import { getConversationsWorkspace } from "@/lib/conversations-data";
-import { getCourses, isMockMode } from "@/lib/data";
+import { getCourses, getLead, isMockMode } from "@/lib/data";
 import { formatDateTime } from "@/lib/format";
 import { getMessagingEligibility } from "@/lib/messaging-eligibility";
 import { createClient } from "@/lib/supabase/server";
@@ -91,6 +91,7 @@ export default async function ConversationsPage({
         : await resolveTelephoneCapability(selectedId)
       : false;
 
+  const selectedAttribution = selected ? await getLead(selected.id) : null;
   const selectedEmail = selected && !mock
     ? await resolveConversationEmail(selected.id)
     : null;
@@ -369,7 +370,7 @@ export default async function ConversationsPage({
         ownerUserId={selected.ownerUserId} ownerName={selected.ownerName}
         candidates={team.assignmentCandidates} canAssign={team.canManageAssignments}
         mock={mock} channel={selected.currentContactChannel}
-        source={selected.leadCreationChannel} interest={selected.course}
+        attributionSource={selectedAttribution?.firstTouchSource||"Not verified"} interest={selected.course}
         country={selected.country}
         lastContacted={selected.lastContactedAt?formatDateTime(selected.lastContactedAt):"Not contacted"}
         state={conversationStatus}/>
@@ -411,6 +412,7 @@ export default async function ConversationsPage({
                 className="text-copy-subtle transition group-open:rotate-180"
               />
             </summary>
+            <div className="ibx-v3-advanced-evidence"><ContextLine label="Lead creation" value={selected.leadCreationChannel.replaceAll("_"," ")}/></div>
             <form
               action={leadContextAction}
               className="space-y-3 border-t border-line p-3"
