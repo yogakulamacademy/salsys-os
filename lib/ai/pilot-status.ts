@@ -6,6 +6,7 @@ import { getCurrentWorkspaceContext } from '@/lib/workspace';
 import { useMockData } from '@/lib/config';
 import { summarizeInsightReviews, type InsightQualitySummary } from '@/lib/ai/lead-insight-quality';
 import { summarizeProviderUsage, type ProviderUsageSummary } from '@/lib/ai/lead-insight-provider-usage-summary';
+import { evaluatePilotApproval, type PilotApprovalStatus } from '@/lib/ai/pilot-approval-status';
 import { daysAgoIso, observedPilotState, pilotPrerequisites, pilotRate, type PilotPrerequisite } from '@/lib/ai/pilot-readiness';
 
 export type AiInsightPilotStatus = {
@@ -13,6 +14,7 @@ export type AiInsightPilotStatus = {
   organizationName: string;
   readiness: 'blocked' | 'review_required';
   prerequisites: PilotPrerequisite[];
+  governance: { status: PilotApprovalStatus; approved: boolean };
   tenantPolicy: {
     configured: boolean;
     enabled: boolean;
@@ -78,7 +80,7 @@ export async function getAiInsightPilotStatus(): Promise<AiInsightPilotStatus | 
   const admin = createAdminClient();
 
   // Every privileged query is scoped to the already-verified organization.
-  const [policy, today, runs, reviews, sample, oldRuns, oldQuotas, runSample, providerCalls, oldProviderCalls] = await Promise.all([
+  const [policy, today, runs, reviews, sample, oldRuns, oldQuotas, runSample, providerCalls, oldProviderCalls, approval] = await Promise.all([
     admin.from('ai_lead_insight_tenant_policies')
       .select('enabled,org_daily_limit,user_hourly_limit')
       .eq('organization_id', organizationId).maybeSingle(),
@@ -122,15 +124,19 @@ export async function getAiInsightPilotStatus(): Promise<AiInsightPilotStatus | 
       .select('id', { count: 'exact', head: true })
       .eq('organization_id', organizationId)
       .lt('started_at', ninetyDays),
+    admin.from('ai_lead_insight_pilot_approvals')
+      .select('policy_version,privacy_approved_at,retention_approved_at,provider_budget_verified_at,quality_review_approved_at,approved_by,approval_reference,expires_at,revoked_at')
+      .eq('organization_id', organizationId).maybeSingle(),
   ]);
 
   if (policy.error || today.error || runs.error || reviews.error ||
       sample.error || oldRuns.error || oldQuotas.error || runSample.error ||
-      providerCalls.error || oldProviderCalls.error) {
+      providerCalls.error || oldProviderCalls.error || approval.error) {
     // Never convert a failed database read to a misleading zero.
     throw new Error('AI pilot operations status is temporarily unavailable.');
   }
 
+  const governance = evaluatePilotApproval(approval.data, now);
   const config = policy.data;
   const attempts = Number(today.data?.attempt_count ?? 0);
   const dailyLimit = config ? Number(config.org_daily_limit) : null;
@@ -148,6 +154,7 @@ export async function getAiInsightPilotStatus(): Promise<AiInsightPilotStatus | 
       (process.env.AI_LEAD_INSIGHTS_CONTEXT_HMAC_KEY?.trim().length ?? 0) >= 32),
     tenantOptedIn: config?.enabled === true,
     quotaPolicyPresent: config !== null,
+    governanceApprovalPresent: governance.approved,
   };
 
   const prerequisites = pilotPrerequisites(flags);
@@ -169,6 +176,7 @@ export async function getAiInsightPilotStatus(): Promise<AiInsightPilotStatus | 
     organizationName: activeWorkspace.organizationName,
     readiness: observedPilotState(prerequisites),
     prerequisites,
+    governance,
     tenantPolicy: {
       configured: config !== null,
       enabled: config?.enabled === true,
