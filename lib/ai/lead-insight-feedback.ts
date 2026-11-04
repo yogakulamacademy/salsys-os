@@ -1,6 +1,6 @@
 import 'server-only';
 
-import { createHash } from 'node:crypto';
+import { createHmac } from 'node:crypto';
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { requireCurrentOrganizationId } from '@/lib/workspace';
@@ -57,8 +57,12 @@ async function canReviewLead(
 }
 
 function digestContext(context: LeadContextV1): string {
+  // A keyed digest prevents offline guessing of common short private notes.
+  // Never store the secret or raw context alongside the review receipt.
+  const key = process.env.AI_LEAD_INSIGHTS_CONTEXT_HMAC_KEY?.trim();
+  if (!key || key.length < 32) throw new Error('AI insight receipt signing is unavailable.');
   const { generatedAt: _generatedAt, ...input } = context;
-  return createHash('sha256').update(JSON.stringify(input)).digest('hex');
+  return createHmac('sha256', key).update(JSON.stringify(input)).digest('hex');
 }
 
 function citedRefs(insight: LeadInsightV1): string[] {
