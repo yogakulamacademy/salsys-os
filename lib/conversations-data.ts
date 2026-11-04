@@ -5,6 +5,7 @@ import type {
   ConversationPriority,
 } from "@/components/conversations-sidebar";
 import { createClient } from "@/lib/supabase/server";
+import { getInboxPage, type InboxPage, type InboxQuery } from "@/lib/conversations-page-data";
 import { isMockMode } from "@/lib/data";
 import { requireCurrentOrganizationId } from "@/lib/workspace";
 import {
@@ -30,6 +31,7 @@ export type ConversationWorkspaceEvidence = {
 
 export type ConversationWorkspaceView = ConversationWorkspaceResult & {
   evidence: ConversationWorkspaceEvidence;
+  pagination?: Omit<InboxPage, "rows">;
 };
 
 type PersonLeadLink = {
@@ -64,10 +66,27 @@ function baseEvidence(workspace: ConversationWorkspaceResult): ConversationWorks
 
 export async function getConversationsWorkspace(
   requestedLeadId?: string,
+  query: InboxQuery = {},
 ): Promise<ConversationWorkspaceView> {
-  const workspace = await getCoreConversationsWorkspace(requestedLeadId);
-  const resolution = await loadInboxResolutionState(workspace.conversationSummary);
+  const mock = isMockMode();
+  const workspace = await getCoreConversationsWorkspace(requestedLeadId, !mock);
+  const fullPage = mock ? null : await getInboxPage(
+    query,
+    workspace.team.currentUserId && !workspace.team.canManageAssignments ? "mine" : "team",
+  );
+  const resolution = await loadInboxResolutionState(fullPage?.rows ?? workspace.conversationSummary);
   const baseRows = resolution.rows;
+  const pagination = fullPage
+    ? (({ rows: _rows, ...meta }) => meta)(fullPage)
+    : undefined;
+  const pageWorkspace = {
+    ...workspace,
+    pagination,
+    metrics: {
+      ...workspace.metrics,
+      activeConversations: fullPage?.totalMatching ?? workspace.metrics.activeConversations,
+    },
+  };
   const evidence: ConversationWorkspaceEvidence = {
     ...baseEvidence(workspace),
     inboxResolutionAvailable: resolution.available,
@@ -79,7 +98,7 @@ export async function getConversationsWorkspace(
 
   if (baseRows.length === 0) {
     return {
-      ...workspace,
+      ...pageWorkspace,
       conversationSummary: baseRows,
       evidence,
     };
@@ -105,11 +124,11 @@ export async function getConversationsWorkspace(
     );
 
     return {
-      ...workspace,
+      ...pageWorkspace,
       conversationSummary: groupedRows,
       metrics: {
         ...workspace.metrics,
-        activeConversations: groupedRows.length,
+        activeConversations: fullPage?.totalMatching ?? groupedRows.length,
       },
       evidence: {
         ...evidence,
@@ -122,7 +141,7 @@ export async function getConversationsWorkspace(
     });
 
     return {
-      ...workspace,
+      ...pageWorkspace,
       conversationSummary: baseRows.map(withSingleOpportunityIdentity),
       evidence: {
         ...evidence,
