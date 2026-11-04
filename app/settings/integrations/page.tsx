@@ -66,6 +66,7 @@ export default async function IntegrationsPage({
     connections={connections} assets={assets}
     installed={!foundationMissing} error={loadError}
     encryptionConfigured={Boolean(process.env.INTEGRATION_ENCRYPTION_KEY)}
+    instagramHistorySyncEnabled={process.env.INSTAGRAM_HISTORY_SYNC_ENABLED === 'true'}
     notice={query.notice} actionError={query.error}
   />;
 }
