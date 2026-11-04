@@ -26,6 +26,8 @@ export default async function ImportLeadsPage() {
       p_organization_id: organizationId,
     });
     if (error || canManage !== true) notFound();
+    const { data: canViewContacts, error: contactAccessError } = await supabase.rpc("can_view_lead_pii");
+    if (contactAccessError || canViewContacts !== true) notFound();
   }
 
   return (
