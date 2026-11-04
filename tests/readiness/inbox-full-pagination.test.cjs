@@ -76,3 +76,14 @@ test("provider message timestamps drive latest activity order", () => {
   assert.ok(!sql.includes("public.has_workspace_access(v_organization_id, 'sales')"),
     "Private helper is revoked from authenticated users");
 });
+
+test("Main deployments without the new RPC retain the legacy Inbox", () => {
+  const reader = read("lib/conversations-page-data.ts");
+  const workspace = read("lib/conversations-data.ts");
+  assert.ok(reader.includes('error.code === "PGRST202" || error.code === "42883"'));
+  assert.ok(reader.includes("InboxPaginationNotDeployedError"));
+  assert.ok(workspace.includes("error instanceof InboxPaginationNotDeployedError"));
+  assert.ok(workspace.includes("getCoreConversationsWorkspace(requestedLeadId, false)"),
+    "Fallback must fetch the legacy queue, not the single selected-detail row");
+  assert.ok(workspace.includes("pagingWarning"));
+});
