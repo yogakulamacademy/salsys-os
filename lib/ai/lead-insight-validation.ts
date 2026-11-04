@@ -1,4 +1,5 @@
 import type { LeadContextV1 } from './lead-context';
+import { assertSafeInsightProse } from './lead-insight-output-guard';
 
 /** C2 is observational, never a payment prediction, score or CRM command. */
 export const LEAD_INSIGHT_JSON_SCHEMA = {
@@ -100,7 +101,7 @@ type EvidenceRecord = {
 const INTENTS = new Set(['unknown', 'low', 'medium', 'high']);
 const ACTIONS = new Set(['none', 'human_review', 'reply', 'follow_up', 'verify_payment']);
 const OBJECTIONS = new Set(['price', 'dates', 'location', 'trust', 'readiness', 'other']);
-const PAYMENT_CERTAINTY = /\b(?:payment|deposit|balance|enroll(?:ment|ed)?|book(?:ing|ed)?)\b.{0,45}\b(?:confirmed|verified|settled|received|completed|guaranteed)\b/i;
+
 
 export function evidenceCatalog(context: LeadContextV1): EvidenceRecord[] {
   const staff = context.staffOnly;
@@ -137,7 +138,7 @@ function text(value: unknown, max: number, allowEmpty = false): string {
     throw Error('AI insight text failed validation.');
   }
   const trimmed = value.trim();
-  if (PAYMENT_CERTAINTY.test(trimmed)) throw Error('Unverified financial or enrollment claim in AI output.');
+  assertSafeInsightProse(trimmed);
   return trimmed;
 }
 function refs(value: unknown, allowed: Map<string, EvidenceRecord>, kind: 'any' | 'customer' | 'interest', mandatory = true): string[] {

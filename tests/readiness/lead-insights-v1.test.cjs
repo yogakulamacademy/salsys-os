@@ -41,7 +41,8 @@ const ctx = {
   limitations: ['Recent history only'],
 };
 
-const validator = load('lib/ai/lead-insight-validation.ts');
+const outputGuard = load('lib/ai/lead-insight-output-guard.ts');
+const validator = load('lib/ai/lead-insight-validation.ts', { './lead-insight-output-guard': outputGuard });
 const good = () => ({
   status: 'supported',
   summary: { text: 'Asked about tuition and needs a response.', evidenceRefs: [inbound] },
