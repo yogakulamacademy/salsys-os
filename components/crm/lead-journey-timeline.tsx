@@ -172,7 +172,7 @@ export function JourneyEvidencePanel({ evidence, context, onRefresh, refreshing 
           <p>{journeyReadAge(context?.readAt ?? evidence.through, now ?? Date.now())} · Source freshness unconfirmed · Enquiry created {date(evidence.enquiryAt)}.</p>
           <p>{evidence.counts.sessions} distinct linked sessions; {evidence.counts.pageViews} observed page views in the loaded window. Sessions spanning the enquiry boundary count only once in the total.</p>
           <p>Only explicitly assigned records are included. Unassigned devices and history may be missing. Website activity does not verify a payment or enrollment; see Payments for financial outcomes.</p>
-          <p>{evidence.policy === 'unknown' ? 'Behavioural recommendations remain unavailable until usage permission is confirmed.' : 'Recorded usage permission is separate from marketing or ad-export consent.'}</p>
+          <p>{evidence.policy === 'unknown' ? 'Usage permission remains unconfirmed; do not infer interest or marketing consent.' : 'Recorded usage permission is separate from marketing or ad-export consent.'}</p>
           {evidence.diagnostics.conflicts + evidence.diagnostics.invalidTimes + evidence.diagnostics.invalidRecords > 0
             ? <p>Conflicting, malformed or invalid-time evidence has been excluded. Review source records before drawing conclusions.</p> : null}
 
