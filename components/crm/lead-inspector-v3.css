@@ -61,6 +61,15 @@ html.dark .si3-shell {
   white-space: nowrap;
 }
 .si3-primary:hover { background: #4935c3; }
+/* Keep the label readable even when the Leads workspace has stronger link-color rules. */
+html body .si3-shell a.si3-primary,
+html.dark body .si3-shell a.si3-primary {
+  color: #ffffff !important;
+  -webkit-text-fill-color: #ffffff !important;
+}
+.si3-journey-search label { display:block; font-size:11px; color:var(--li-muted); }
+.si3-page-quick-filters { display:flex; align-items:center; flex-wrap:wrap; gap:7px; }
+.si3-page-quick-filters > span { font-size:10px; color:var(--li-muted); font-weight:600; }
 .si3-secondary {
   border: 1px solid var(--li-border);
   background: var(--li-panel);
