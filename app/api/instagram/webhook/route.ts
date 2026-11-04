@@ -167,7 +167,12 @@ export async function POST(request: NextRequest) {
     }
 
     const messages = extractInstagramInboundEvents(payload);
-    const echoes = extractInstagramOutboundEchoEvents(payload);
+    // Keep outbound echo processing opt-in until its reviewed SQL migration,
+    // Meta message_echoes subscription, and tenant QA are complete. A main
+    // branch deploy must not introduce an uninstalled RPC dependency.
+    const echoes = process.env.INSTAGRAM_OUTBOUND_ECHO_ENABLED === 'true'
+      ? extractInstagramOutboundEchoEvents(payload)
+      : [];
     const comments = extractInstagramCommentEvents(payload);
 
     if (!messages.length && !echoes.length && !comments.length) {
