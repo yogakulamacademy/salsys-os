@@ -58,3 +58,13 @@ test('Admin-only history preview and explicit deployment flag for writes', () =>
   assert.ok(control.includes("Sync next batch"));
   assert.ok(cron.crons.some(c => c.path === '/api/instagram/history-sync'));
 });
+
+test('Outgoing native-app echoes have a read-only provider subscription check', () => {
+  assert.ok(worker.includes('inspectInstagramEchoSubscription'));
+  assert.ok(worker.includes("'/me/subscribed_apps'"));
+  assert.ok(worker.includes("method: 'GET'"));
+  assert.ok(worker.includes("fields.includes('message_echoes')"));
+  assert.ok(route.includes("body.mode === 'echo_status'"));
+  assert.ok(control.includes('Check outgoing-message sync'));
+  assert.doesNotMatch(worker, /method:\s*'POST'/);
+});
