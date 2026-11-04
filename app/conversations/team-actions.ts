@@ -107,7 +107,7 @@ export async function setConversationDoneAction(leadId: string, formData: FormDa
   const {data:{user},error:authError}=await supabase.auth.getUser();
   if(authError || !user) redirect(conversationHref(leadId,'error','Please sign in to update inbox status.'));
   const organizationId = await requireCurrentOrganizationId(supabase,user.id);
-  const {data:canWork,error:workError} = await supabase.rpc('can_work_lead',{p_lead_id:leadId});
+  const {data:canWork,error:workError} = await supabase.rpc('can_resolve_inbox_lead_v1',{p_lead_id:leadId});
   if(workError || canWork !== true) redirect(conversationHref(leadId,'error','You do not have permission to resolve this conversation.'));
   if(operation==='reopen'){
     const {error}=await supabase.from('lead_inbox_resolutions_v1').delete()
