@@ -67,5 +67,9 @@ test("Inbox footer and composer remain inside the viewport with independently sc
   assert.ok(sidebar.includes('min-h-0 flex-1 overflow-y-auto'));
   assert.ok(sidebar.includes('shrink-0 border-t border-line'));
   assert.ok(page.includes('ibx-v2-chat flex h-full min-h-0 min-w-0 flex-col overflow-hidden'));
+  const layout = read("app/conversations/layout.tsx");
+  assert.ok(layout.includes("overflow-y: auto;"));
+  assert.ok(layout.includes("max-height: min(24dvh, 160px)"));
+  assert.ok(layout.includes("flex: 0 1 auto;"));
   assert.ok(page.includes("<ConversationWorkspaceShell"));
 });
