@@ -5,6 +5,7 @@ import { createAdminClient } from '@/lib/supabase/admin';
 import { getCurrentWorkspaceContext } from '@/lib/workspace';
 import { useMockData } from '@/lib/config';
 import { summarizeInsightReviews, type InsightQualitySummary } from '@/lib/ai/lead-insight-quality';
+import { summarizeProviderUsage, type ProviderUsageSummary } from '@/lib/ai/lead-insight-provider-usage-summary';
 import { daysAgoIso, observedPilotState, pilotPrerequisites, pilotRate, type PilotPrerequisite } from '@/lib/ai/pilot-readiness';
 
 export type AiInsightPilotStatus = {
@@ -26,11 +27,13 @@ export type AiInsightPilotStatus = {
     reviewCoveragePercent: number | null;
     reviewsSampleTruncated: boolean;
     quality: InsightQualitySummary;
+    provider: ProviderUsageSummary;
   };
   retentionReview: {
     proposedThresholdDays: 90;
     receiptsOlderThanThreshold: number;
     quotaCountersOlderThanThreshold: number;
+    providerCallsOlderThanThreshold: number;
     cleanupEnabled: false;
   };
 };
@@ -75,7 +78,7 @@ export async function getAiInsightPilotStatus(): Promise<AiInsightPilotStatus | 
   const admin = createAdminClient();
 
   // Every privileged query is scoped to the already-verified organization.
-  const [policy, today, runs, reviews, sample, oldRuns, oldQuotas, runSample] = await Promise.all([
+  const [policy, today, runs, reviews, sample, oldRuns, oldQuotas, runSample, providerCalls, oldProviderCalls] = await Promise.all([
     admin.from('ai_lead_insight_tenant_policies')
       .select('enabled,org_daily_limit,user_hourly_limit')
       .eq('organization_id', organizationId).maybeSingle(),
@@ -109,10 +112,21 @@ export async function getAiInsightPilotStatus(): Promise<AiInsightPilotStatus | 
       .gte('created_at', sevenDays)
       .order('created_at', { ascending: false })
       .limit(500),
+    admin.from('ai_lead_insight_provider_calls')
+      .select('outcome,input_tokens,output_tokens,cache_creation_input_tokens,cache_read_input_tokens', { count: 'exact' })
+      .eq('organization_id', organizationId)
+      .gte('started_at', sevenDays)
+      .order('started_at', { ascending: false })
+      .limit(500),
+    admin.from('ai_lead_insight_provider_calls')
+      .select('id', { count: 'exact', head: true })
+      .eq('organization_id', organizationId)
+      .lt('started_at', ninetyDays),
   ]);
 
   if (policy.error || today.error || runs.error || reviews.error ||
-      sample.error || oldRuns.error || oldQuotas.error || runSample.error) {
+      sample.error || oldRuns.error || oldQuotas.error || runSample.error ||
+      providerCalls.error || oldProviderCalls.error) {
     // Never convert a failed database read to a misleading zero.
     throw new Error('AI pilot operations status is temporarily unavailable.');
   }
@@ -127,6 +141,7 @@ export async function getAiInsightPilotStatus(): Promise<AiInsightPilotStatus | 
     uiEnabled: process.env.AI_LEAD_INSIGHTS_UI_ENABLED === 'true',
     quotasEnabled: process.env.AI_LEAD_INSIGHTS_QUOTAS_ENABLED === 'true',
     feedbackEnabled: process.env.AI_LEAD_INSIGHTS_FEEDBACK_ENABLED === 'true',
+    usageLedgerEnabled: process.env.AI_LEAD_INSIGHTS_USAGE_LEDGER_ENABLED === 'true',
     modelConfigured: Boolean(process.env.ANTHROPIC_API_KEY?.trim() &&
       (process.env.ANTHROPIC_SONNET_MODEL?.trim() || process.env.ANTHROPIC_HAIKU_MODEL?.trim())),
     signingKeyConfigured: Boolean(process.env.AI_LEAD_INSIGHTS_CONTEXT_HMAC_KEY?.trim() &&
@@ -171,11 +186,13 @@ export async function getAiInsightPilotStatus(): Promise<AiInsightPilotStatus | 
         ? null : pilotRate(reviewedCohortRunIds.size, runs7d),
       reviewsSampleTruncated,
       quality,
+      provider: summarizeProviderUsage(providerCalls.data ?? [], Number(providerCalls.count ?? 0)),
     },
     retentionReview: {
       proposedThresholdDays: 90,
       receiptsOlderThanThreshold: Number(oldRuns.count ?? 0),
       quotaCountersOlderThanThreshold: Number(oldQuotas.count ?? 0),
+      providerCallsOlderThanThreshold: Number(oldProviderCalls.count ?? 0),
       cleanupEnabled: false,
     },
   };

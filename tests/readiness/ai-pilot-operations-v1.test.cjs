@@ -5,6 +5,7 @@ const { load } = require('./helpers.cjs');
 
 const pure = load('lib/ai/pilot-readiness.ts');
 const quality = load('lib/ai/lead-insight-quality.ts');
+const providerUsage = load('lib/ai/lead-insight-provider-usage-summary.ts');
 
 test('pilot is never automatically approved even when all deployment flags are on', () => {
   const prerequisites = pure.pilotPrerequisites({
@@ -12,6 +13,7 @@ test('pilot is never automatically approved even when all deployment flags are o
     uiEnabled: true,
     quotasEnabled: true,
     feedbackEnabled: true,
+    usageLedgerEnabled: true,
     modelConfigured: true,
     signingKeyConfigured: true,
     tenantOptedIn: true,
@@ -29,6 +31,7 @@ test('pilot is blocked when disabled and ratio never implies accuracy without da
     uiEnabled: false,
     quotasEnabled: false,
     feedbackEnabled: false,
+    usageLedgerEnabled: false,
     modelConfigured: false,
     signingKeyConfigured: false,
     tenantOptedIn: false,
@@ -107,6 +110,10 @@ function setup(options = {}) {
       if (table === 'ai_lead_insight_quota_counters' && head) {
         return { data: null, count: options.oldQuotas ?? 0, error: null };
       }
+      if (table === 'ai_lead_insight_provider_calls') {
+        if (head) return { data: null, count: options.oldProviderCalls ?? 0, error: null };
+        return { data: options.providerRows ?? [], count: options.providerCalls ?? 0, error: null };
+      }
       throw Error('Unexpected table');
     }
     return query;
@@ -128,6 +135,7 @@ function setup(options = {}) {
     }) },
     '@/lib/config': { useMockData: Boolean(options.mock) },
     '@/lib/ai/lead-insight-quality': quality,
+    '@/lib/ai/lead-insight-provider-usage-summary': providerUsage,
     '@/lib/ai/pilot-readiness': pure,
   });
 
@@ -165,6 +173,8 @@ test('owner/admin reads are active-tenant scoped and empty results are not guess
     assert.equal(result.tenantPolicy.configured, false);
     assert.equal(result.usage.attemptsToday, 0);
     assert.equal(result.usage.reviewCoveragePercent, null);
+    assert.equal(result.usage.provider.calls, 0);
+    assert.equal(result.retentionReview.providerCallsOlderThanThreshold, 0);
     assert.equal(result.retentionReview.cleanupEnabled, false);
     assert.equal(f.calls.admin, 1);
     assert.ok(f.calls.tables.length >= 7);
@@ -208,9 +218,30 @@ test('UI has no activation, payment mutation, secret display or client-side quot
   assert.match(page, /getAiInsightPilotStatus/);
   assert.match(page, /notFound\(\)/);
   assert.match(page, /Read only/);
+  assert.match(page, /Claude request usage/);
+  assert.doesNotMatch(page, /AI_LEAD_INSIGHTS_USAGE_LEDGER_ENABLED\s*=\s*['\"]true/);
   assert.match(settings, /settings\/ai-insights/);
   assert.match(server, /\['owner', 'admin'\]/);
   assert.match(server, /\.eq\('organization_id', organizationId\)/);
   assert.doesNotMatch(page, /'use client'|activate|toggle|setEnabled|enableTenant/);
   assert.doesNotMatch(server, /\.insert\(|\.update\(|\.delete\(|\.upsert\(/);
+});
+
+test('provider usage monitoring shows completed tokens but never invents USD cost', async () => {
+  const f = setup({
+    providerCalls: 2,
+    providerRows: [
+      { outcome:'provider_completed',input_tokens:321,output_tokens:80,cache_creation_input_tokens:0,cache_read_input_tokens:12 },
+      { outcome:'http_error',input_tokens:null,output_tokens:null,cache_creation_input_tokens:null,cache_read_input_tokens:null },
+    ],
+  });
+  try {
+    const result = await f.status();
+    assert.equal(result.usage.provider.calls, 2);
+    assert.equal(result.usage.provider.providerCompleted, 1);
+    assert.equal(result.usage.provider.nonCompleted, 1);
+    assert.equal(result.usage.provider.reportedInputTokens, 321);
+    assert.equal(result.usage.provider.tokenReadingsComplete, false);
+    assert.doesNotMatch(JSON.stringify(result.usage.provider), /estimatedCostUSD|pricePerToken|billedUSD/);
+  } finally { f.restore(); }
 });

@@ -70,6 +70,42 @@ export default async function AiInsightsOperationsPage() {
           note="Voluntary feedback, not validated model accuracy."/>
       </section>
 
+      <section aria-labelledby="provider-usage-heading" className="rounded-xl border border-line bg-surface p-4 sm:p-5">
+        <h2 id="provider-usage-heading" className="text-base font-semibold text-copy">Claude request usage · Last 7 days</h2>
+        <p className="mt-1 text-xs leading-5 text-copy-muted">
+          Server-verified request metadata only. Counts and token readings are not provider invoices or a spending cap.
+        </p>
+        <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
+          <div>
+            <p className="text-[11px] text-copy-muted">Requests attempted</p>
+            <p className="mt-1 text-xl font-semibold tabular-nums text-copy">{status.usage.provider.calls}</p>
+          </div>
+          <div>
+            <p className="text-[11px] text-copy-muted">Provider completed</p>
+            <p className="mt-1 text-xl font-semibold tabular-nums text-copy">{status.usage.provider.providerCompleted ?? '—'}</p>
+          </div>
+          <div>
+            <p className="text-[11px] text-copy-muted">Other outcomes</p>
+            <p className="mt-1 text-xl font-semibold tabular-nums text-copy">{status.usage.provider.nonCompleted ?? '—'}</p>
+          </div>
+          <div>
+            <p className="text-[11px] text-copy-muted">Reported token readings</p>
+            <p className="mt-1 text-xl font-semibold tabular-nums text-copy">{status.usage.provider.usageReported ?? '—'}</p>
+          </div>
+        </div>
+        <p className="mt-3 text-xs leading-5 text-copy-muted">
+          Reported non-cached input tokens: {status.usage.provider.reportedInputTokens?.toLocaleString() ?? 'Unavailable'} ·
+          Output tokens: {status.usage.provider.reportedOutputTokens?.toLocaleString() ?? 'Unavailable'} ·
+          Cache creation: {status.usage.provider.reportedCacheCreationTokens?.toLocaleString() ?? 'Unavailable'} ·
+          Cache reads: {status.usage.provider.reportedCacheReadTokens?.toLocaleString() ?? 'Unavailable'}.
+        </p>
+        {status.usage.provider.sampleTruncated || !status.usage.provider.tokenReadingsComplete ? (
+          <p className="mt-2 text-xs text-copy-muted">
+            Partial or unknown usage is possible. Never infer total billing from these readings.
+          </p>
+        ) : null}
+      </section>
+
       <section aria-labelledby="pilot-gates" className="rounded-xl border border-line bg-surface p-4 sm:p-5">
         <div className="flex items-center gap-2">
           <Activity size={17} className="text-copy-muted" aria-hidden/>
@@ -119,7 +155,8 @@ export default async function AiInsightsOperationsPage() {
           </p>
           <p className="mt-1 text-xs leading-5 text-copy-muted">
             Proposed {status.retentionReview.proposedThresholdDays}-day review threshold;
-            {status.retentionReview.quotaCountersOlderThanThreshold} older quota counter(s).
+            {status.retentionReview.quotaCountersOlderThanThreshold} older quota counter(s);
+            Provider usage records older than the threshold: {status.retentionReview.providerCallsOlderThanThreshold}.
           </p>
           <p className="mt-3 text-xs leading-5 text-copy-muted">
             No deletion or cleanup automation is enabled. Retention needs policy approval before activation.

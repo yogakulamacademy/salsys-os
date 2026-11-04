@@ -3,6 +3,7 @@
 import { getLeadContextV1, type LeadContextV1 } from '@/lib/ai/lead-context';
 import { reserveLeadInsightGeneration } from '@/lib/ai/lead-insight-quota';
 import { recordLeadInsightRun } from '@/lib/ai/lead-insight-feedback';
+import { startLeadInsightProviderCall, completeLeadInsightProviderCall, type ProviderCallOutcome, type ProviderUsageCounts } from '@/lib/ai/lead-insight-provider-usage';
 import {
   evidenceCatalog,
   LEAD_INSIGHT_JSON_SCHEMA,
@@ -31,6 +32,7 @@ type InsightResponse =
 type ClaudeMessage = {
   stop_reason?: string;
   content?: Array<{ type?: string; text?: string }>;
+  usage?: ProviderUsageCounts;
 };
 
 /** Redact direct contact details before sending a minimized staff-only context to the provider. */
@@ -202,7 +204,20 @@ export async function generateLeadInsightsAction(leadId: string): Promise<Insigh
     'Output must conform exactly to the requested JSON schema without markdown.',
   ].join(' ');
 
+  // Fail closed BEFORE contacting Claude if request-level monitoring is
+  // disabled or cannot insert its scoped pending event.
+  let call: Awaited<ReturnType<typeof startLeadInsightProviderCall>>;
+  try {
+    call = await startLeadInsightProviderCall(context.lead.organizationId, context.lead.id, model);
+  } catch {
+    return { ok: false, error: 'AI usage monitoring is unavailable. No model request was sent.' };
+  }
+
   let parsed: unknown;
+  let providerOutcome: ProviderCallOutcome = 'transport_error';
+  let providerHttpStatus: number | null = null;
+  let providerUsage: ProviderUsageCounts | null = null;
+  let providerCompleted = false;
   try {
     const response = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
@@ -229,13 +244,35 @@ export async function generateLeadInsightsAction(leadId: string): Promise<Insigh
       signal: AbortSignal.timeout(20000),
     });
 
-    if (!response.ok) throw Error('Provider unavailable.');
+    providerHttpStatus = typeof response.status === 'number' ? response.status : null;
+    if (!response.ok) {
+      providerOutcome = 'http_error';
+      throw Error('Provider unavailable.');
+    }
+    providerOutcome = 'invalid_response';
     const payload = await response.json() as ClaudeMessage;
+    providerUsage = payload.usage ?? null;
     if (payload.stop_reason !== 'end_turn') throw Error('Model response incomplete.');
     const result = payload.content?.find(c => c.type === 'text' && typeof c.text === 'string');
     if (!result?.text || result.text.length > 16000) throw Error('Model response was invalid.');
     parsed = JSON.parse(result.text);
+    providerOutcome = 'provider_completed';
+    providerCompleted = true;
   } catch {
+    // No raw upstream errors or source text are ever logged or returned.
+  }
+
+  // This must be completed even when the model call failed. If the ledger
+  // cannot confirm completion, suppress any generated content.
+  try {
+    await completeLeadInsightProviderCall(call, providerOutcome, {
+      httpStatus: providerHttpStatus,
+      usage: providerUsage,
+    });
+  } catch {
+    return { ok: false, error: 'AI usage logging could not be verified. No CRM changes were made.' };
+  }
+  if (!providerCompleted) {
     return { ok: false, error: 'AI insight generation is temporarily unavailable. No CRM changes were made.' };
   }
 
