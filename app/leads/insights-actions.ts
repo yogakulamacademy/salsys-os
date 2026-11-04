@@ -155,6 +155,21 @@ export async function generateLeadInsightsAction(leadId: string): Promise<Insigh
     return { ok: false, error: 'This lead is unavailable or you do not have access.' };
   }
 
+  const apiKey = process.env.ANTHROPIC_API_KEY?.trim();
+  const model = process.env.ANTHROPIC_SONNET_MODEL?.trim() ||
+    process.env.ANTHROPIC_HAIKU_MODEL?.trim();
+  if (!apiKey || !model) {
+    return { ok: false, error: 'AI insight model is not configured.' };
+  }
+
+  // Every request, INCLUDING the deterministic "insufficient evidence" path,
+  // must pass tenant opt-in and the atomic usage gate. This prevents bypasses
+  // on empty leads, while avoiding unnecessary Claude calls for those leads.
+  const reservation = await reserveLeadInsightGeneration(
+    context.lead.organizationId, context.lead.id,
+  );
+  if (!reservation.ok) return { ok: false, error: reservation.error };
+
   if (noEvidence(context)) {
     return {
       ok: true,
@@ -170,20 +185,6 @@ export async function generateLeadInsightsAction(leadId: string): Promise<Insigh
       },
     };
   }
-
-  const apiKey = process.env.ANTHROPIC_API_KEY?.trim();
-  const model = process.env.ANTHROPIC_SONNET_MODEL?.trim() ||
-    process.env.ANTHROPIC_HAIKU_MODEL?.trim();
-  if (!apiKey || !model) {
-    return { ok: false, error: 'AI insight model is not configured.' };
-  }
-
-  // Tenant opt-in and atomic usage reservation must succeed BEFORE any
-  // provider request. A failed reservation does not call Claude.
-  const reservation = await reserveLeadInsightGeneration(
-    context.lead.organizationId, context.lead.id,
-  );
-  if (!reservation.ok) return { ok: false, error: reservation.error };
 
   const input = providerContext(context);
   const system = [
