@@ -3,8 +3,10 @@
 ## Delivered in this branch
 
 - Reusable `components/ai-lead-insight-panel.tsx` with compact/no-brand styling.
-- Inbox lead context panel integration. A separate lead-profile integration
-  is still pending; it is **not** claimed as complete.
+- Inbox lead context panel integration and a link to an authenticated
+  full-page lead review at `/leads/[id]/intelligence`.
+- Insertion directly into the existing lead-profile overview is still
+  pending; do not claim that the main profile layout already contains C4.
 - User-triggered Generate and Regenerate, review-required state, source
   references, uncertainty, empty/loading/error states and staff rating.
 - Source links open the permitted lead's conversation/profile. The current
@@ -74,7 +76,7 @@ Do not activate until limits have been reviewed for the target tenant.
 
 ## Remaining before Phase C closeout
 
-- Lead-profile UI integration (and mobile layout checks).
+- Direct lead-profile layout integration (the separate full review exists), plus mobile layout checks.
 - Full CI, migration replay, browser tests, security review and controlled
   production acceptance.
 - Staff feedback operational QA, usage monitoring, budget alarms, retention
