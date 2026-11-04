@@ -21,6 +21,7 @@ export type PilotGateInputs = {
   signingKeyConfigured: boolean;
   tenantOptedIn: boolean;
   quotaPolicyPresent: boolean;
+  governanceApprovalPresent: boolean;
 };
 
 export function pilotPrerequisites(input: PilotGateInputs): PilotPrerequisite[] {
@@ -54,6 +55,14 @@ export function pilotPrerequisites(input: PilotGateInputs): PilotPrerequisite[] 
       title: 'Organization opt-in',
       state: input.tenantOptedIn && input.quotaPolicyPresent ? 'ready' : 'disabled',
       detail: input.tenantOptedIn ? 'Tenant has an enabled policy.' : 'No enabled tenant policy. AI requests are denied.',
+    },
+    {
+      key: 'governance-approval',
+      title: 'Documented pilot release approval',
+      state: input.governanceApprovalPresent ? 'ready' : 'disabled',
+      detail: input.governanceApprovalPresent
+        ? 'An unexpired, nonrevoked privacy/retention/budget/quality approval record is present.'
+        : 'No complete and current governance approval is recorded. Generation is denied in the database.',
     },
     {
       key: 'provider-usage',

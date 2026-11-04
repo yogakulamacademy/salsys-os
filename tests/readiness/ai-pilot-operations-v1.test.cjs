@@ -6,6 +6,7 @@ const { load } = require('./helpers.cjs');
 const pure = load('lib/ai/pilot-readiness.ts');
 const quality = load('lib/ai/lead-insight-quality.ts');
 const providerUsage = load('lib/ai/lead-insight-provider-usage-summary.ts');
+const governance = load('lib/ai/pilot-approval-status.ts');
 
 test('pilot is never automatically approved even when all deployment flags are on', () => {
   const prerequisites = pure.pilotPrerequisites({
@@ -18,6 +19,7 @@ test('pilot is never automatically approved even when all deployment flags are o
     signingKeyConfigured: true,
     tenantOptedIn: true,
     quotaPolicyPresent: true,
+    governanceApprovalPresent: true,
   });
   assert.equal(pure.observedPilotState(prerequisites), 'review_required');
   for (const key of ['privacy', 'quality', 'cost']) {
@@ -36,6 +38,7 @@ test('pilot is blocked when disabled and ratio never implies accuracy without da
     signingKeyConfigured: false,
     tenantOptedIn: false,
     quotaPolicyPresent: false,
+    governanceApprovalPresent: false,
   });
   assert.equal(pure.observedPilotState(state), 'blocked');
   assert.equal(pure.pilotRate(0, 0), null);
@@ -93,6 +96,9 @@ function setup(options = {}) {
         throw Error('Unscoped privileged table read: ' + table);
       }
       if (options.failedTable === table) return { data: null, error: { message: 'Secret data error' }, count: null };
+      if (table === 'ai_lead_insight_pilot_approvals') {
+        return { data: options.approval ?? null, error: null };
+      }
       if (table === 'ai_lead_insight_tenant_policies') {
         return { data: options.policy ?? null, error: null };
       }
@@ -136,6 +142,7 @@ function setup(options = {}) {
     '@/lib/config': { useMockData: Boolean(options.mock) },
     '@/lib/ai/lead-insight-quality': quality,
     '@/lib/ai/lead-insight-provider-usage-summary': providerUsage,
+    '@/lib/ai/pilot-approval-status': governance,
     '@/lib/ai/pilot-readiness': pure,
   });
 
@@ -171,6 +178,8 @@ test('owner/admin reads are active-tenant scoped and empty results are not guess
     const result = await f.status();
     assert.equal(result.readiness, 'blocked');
     assert.equal(result.tenantPolicy.configured, false);
+    assert.equal(result.governance.status, 'missing');
+    assert.equal(result.governance.approved, false);
     assert.equal(result.usage.attemptsToday, 0);
     assert.equal(result.usage.reviewCoveragePercent, null);
     assert.equal(result.usage.provider.calls, 0);
@@ -218,6 +227,8 @@ test('UI has no activation, payment mutation, secret display or client-side quot
   assert.match(page, /getAiInsightPilotStatus/);
   assert.match(page, /notFound\(\)/);
   assert.match(page, /Read only/);
+  assert.match(page, /Pilot release approval/);
+  assert.match(server, /ai_lead_insight_pilot_approvals/);
   assert.match(page, /Claude request usage/);
   assert.doesNotMatch(page, /AI_LEAD_INSIGHTS_USAGE_LEDGER_ENABLED\s*=\s*['\"]true/);
   assert.match(settings, /settings\/ai-insights/);
