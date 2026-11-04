@@ -48,7 +48,7 @@ test('Selected Inbox thread exposes real Notes, Activity and customer context',a
   await expect(page.getByRole('button',{name:'Mark done'})).toBeDisabled();
   await expect(page.getByRole('heading',{name:'Lead overview'})).toBeVisible();
   await expect(page.getByRole('combobox',{name:'Lead stage'})).toBeDisabled();
-  await expect(page.getByRole('link',{name:/Open profile/}).first()).toBeVisible();
+  await expect(page.getByRole('link',{name:'Open customer profile'})).toBeVisible();
   await expect(page.locator('.ibx-v2-context')).toBeVisible();
   await page.getByRole('button',{name:'Hide customer context'}).click();
   await expect(page.locator('.inbox-desktop-context')).toHaveCount(0);
