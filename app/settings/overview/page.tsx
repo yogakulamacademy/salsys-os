@@ -172,7 +172,7 @@ export default async function SettingsOverviewPage() {
   };
 
   return (
-    <main className="wso space-y-5" aria-label="Workspace settings">
+    <section className="wso space-y-5" aria-label="Workspace settings overview">
       <PageHeader
         eyebrow="Settings"
         title="Workspace settings"
@@ -320,7 +320,7 @@ export default async function SettingsOverviewPage() {
         {platformAdmin ? <Link href="/settings/organizations"><Building2 size={15}/> Customer Organizations <ArrowRight size={13}/></Link> : null}
         {manager ? <span><ShieldCheck size={15}/> Manager scope: CRM rules only. Administrative settings remain Owner/Admin restricted.</span> : null}
       </div>
-    </main>
+    </section>
   );
 }
 
