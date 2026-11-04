@@ -49,13 +49,20 @@ export default async function ConversationsPage({
     notice?: string;
     error?: string;
     wamid?: string;
+    page?: string;
+    q?: string;
+    sort?: string;
+    scope?: string;
+    filter?: string;
+    channel?: string;
+    priority?: string;
   }>;
 }) {
   const query = await searchParams;
   const mock = isMockMode();
 
   const [workspace, courses, workspaceContext] = await Promise.all([
-    getConversationsWorkspace(query.lead),
+    getConversationsWorkspace(query.lead, query),
     getCourses(),
     mock ? Promise.resolve(null) : getCurrentWorkspaceContext(),
   ]);
@@ -176,6 +183,7 @@ export default async function ConversationsPage({
       selectedId={selectedId}
       currentUserId={team.currentUserId}
       canManageAssignments={team.canManageAssignments}
+      pagination={workspace.pagination}
     />
   );
 
