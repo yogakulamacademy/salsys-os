@@ -74,6 +74,7 @@ export function ConversationIntelligencePanel({
   needsReply,
   needsFirstContact,
   waitingSince,
+  compact = false,
 }: {
   leadId: string;
   stage: LeadStage;
@@ -81,6 +82,7 @@ export function ConversationIntelligencePanel({
   needsReply: boolean;
   needsFirstContact: boolean;
   waitingSince: string | null;
+  compact?: boolean;
 }) {
   const router = useRouter();
   const [data, setData] = useState<Extract<InspectorResponse, { ok: true }>["data"] | null>(null);
@@ -94,6 +96,7 @@ export function ConversationIntelligencePanel({
   const [actionError, setActionError] = useState<string | null>(null);
   const [actionSuccess, setActionSuccess] = useState<string | null>(null);
   const [loadedAt, setLoadedAt] = useState(0);
+  const [expanded, setExpanded] = useState(false);
   const customFollowupTriggerRef = useRef<HTMLButtonElement | null>(null);
   const customFollowupDialogRef = useRef<HTMLDivElement | null>(null);
 
@@ -329,9 +332,47 @@ export function ConversationIntelligencePanel({
     );
   }
 
+  if (compact && !expanded) {
+    const tasksAvailable = data?.availability?.openTasks !== "unavailable";
+    const tasks = tasksAvailable ? (data?.openTasks || []).slice(0,3) : [];
+    return (
+      <section className="ibx-v2-compact-tasks" aria-label="Next steps">
+        <div className="ibx-v2-context-card-head">
+          <Target size={17} aria-hidden="true"/>
+          <h3>Next steps</h3>
+        </div>
+        {error ? <p role="alert" className="ibx-v2-tasks-info">
+          Follow-up tasks could not be verified. {error}
+          <button type="button" onClick={() => void load(true)}>Retry</button>
+        </p> : !tasksAvailable ?
+          <p role="status" className="ibx-v2-tasks-info">Live follow-up tasks are unavailable; no actions are inferred.</p> :
+          tasks.length ? <div className="ibx-v2-task-list">{tasks.map(task =>
+            <div className="ibx-v2-task-row" key={task.id}>
+              <button type="button" onClick={() => void completeFollowup(task.id)}
+                disabled={Boolean(completingTaskId)}
+                className="ibx-v2-task-checkbox" title="Mark follow-up complete"
+                aria-label={`Complete follow-up: ${task.title}`}>
+                {completingTaskId === task.id ? <RefreshCw size={13} className="animate-spin"/> : <CheckCircle2 size={16}/>}
+              </button>
+              <div className="ibx-v2-task-details"><strong>{task.title}</strong>
+                <span>{task.due_at ? formatDateTime(task.due_at) : "No due date"}</span>
+              </div>
+            </div>
+          )}</div> :
+            <p className="ibx-v2-tasks-info">No open follow-ups for this lead.</p>}
+        {actionError ? <p role="alert" className="ibx-v2-tasks-info">{actionError}</p> : null}
+        {actionSuccess ? <p role="status" className="ibx-v2-tasks-info">{actionSuccess}</p> : null}
+        <button type="button" className="ibx-v2-link-action" onClick={() => setExpanded(true)}>
+          <span>+ </span> Add / manage follow-up
+        </button>
+      </section>
+    );
+  }
+
   return (
     <>
       <section className="overflow-hidden rounded-xl border border-[#DDE7DF] bg-white">
+        {compact ? <button type="button" onClick={() => setExpanded(false)} className="ibx-v2-link-action px-3 py-2">← Back to next steps</button> : null}
         <div className="border-b border-[#E8EEEA] bg-[#F7FAF8] px-3.5 py-3">
           <div className="flex items-start justify-between gap-3">
             <div>
