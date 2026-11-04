@@ -128,8 +128,8 @@ begin
         or v_filter = 'unread' and s.snoozed_until is null and coalesce(s.unread, false))
       and (v_channel = 'all' or s.channel = v_channel)
       and (v_priority = 'all' or s.priority = v_priority)
-      and (v_query = '' or lower(concat_ws(' ', s.name, s.course, s.country,
-        s.stage, s.channel, s.priority, s.owner_name)) like '%' || v_query || '%')
+      and (v_query = '' or position(v_query in lower(concat_ws(' ', s.name, s.course, s.country,
+        s.stage, s.channel, s.priority, s.owner_name))) > 0)
   ),
   page_rows as (
     select *
@@ -170,6 +170,12 @@ begin
     'totalMatching', (select count(*) from matched),
     'owners', coalesce((select jsonb_agg(jsonb_build_object('id', o.owner_user_id, 'name', o.owner_name) order by lower(o.owner_name), o.owner_user_id) from (select distinct owner_user_id, owner_name from scored where owner_user_id is not null and nullif(owner_name,'') is not null) o), '[]'::jsonb),
     'counts', jsonb_build_object(
+      'scope', (select count(*) from scored
+        where snoozed_until is null and
+          (v_scope = 'team' or
+           (v_scope = 'mine' and owner_user_id = auth.uid()) or
+           (v_scope = 'unassigned' and owner_user_id is null) or
+           (v_scope like 'owner:%' and owner_user_id = substring(v_scope from 7)::uuid))),
       'team', (select count(*) from scored where snoozed_until is null),
       'mine', (select count(*) from scored
         where snoozed_until is null and owner_user_id = auth.uid()),
