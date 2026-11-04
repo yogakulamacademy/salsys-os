@@ -25,6 +25,7 @@ export type ConversationLeadSummary = {
   unread: boolean;
   needsReply: boolean;
   needsFirstContact: boolean;
+  resolved?: boolean;
   priority: ConversationPriority;
   waitingSince: string | null;
   ownerUserId: string | null;
@@ -421,6 +422,8 @@ function ConversationRow({
               <span className="rounded-md bg-sky-50 px-1.5 py-0.5 text-[10.5px] font-semibold text-sky-700">
                 First contact
               </span>
+            ) : lead.resolved ? (
+              <span className="ibx-v2-completed-label">Done</span>
             ) : (
               <span className="text-[10.5px] text-copy-subtle">Reviewed</span>
             )}
