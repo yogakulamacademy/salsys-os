@@ -172,6 +172,10 @@ const { health, summary, activity, failures, errors } =
               <Settings size={15} />
               Settings
             </Link>
+            <Link className="btn-secondary" href="/system-health/message-sync">
+              <MessageCircle size={15} />
+              Message sync audit
+            </Link>
 
             <a className="btn-primary" href="/system-health">
               <RefreshCw size={15} />
