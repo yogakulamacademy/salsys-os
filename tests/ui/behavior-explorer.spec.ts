@@ -129,7 +129,7 @@ test("Funnel builder enforces five distinct stages and never changes the origina
   await page.getByRole("button", { name: "Remove step 5" }).click();
   await expect(page.getByRole("combobox", { name: "Funnel step 5" })).toHaveCount(0);
 
-  await page.getByRole("link", { name: "Funnel", exact: true }).click();
+  await page.getByRole("navigation", { name: "Marketing workspace views" }).getByRole("link", { name: "Funnel", exact: true }).click();
   await expect(page).toHaveURL(/view=funnel/);
   await expect(page.getByRole("heading", { name: "Funnel", exact: true })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Behavior explorer" })).toHaveCount(0);
