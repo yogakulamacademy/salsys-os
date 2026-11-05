@@ -3,6 +3,7 @@ import crypto from 'crypto';
 import { NextRequest, NextResponse } from 'next/server';
 
 import { createAdminClient } from '@/lib/supabase/admin';
+import { recordInstagramConversationReadActivity } from '@/lib/integrations/message-read-activity';
 import { secretMatches } from '@/lib/security/machine-bearer-auth';
 import {
   queueInstagramCommentAutomation,
@@ -38,6 +39,12 @@ type InstagramOutboundEchoEvent = {
   messageType: string;
   occurredAt: string | null;
   raw: JsonObject;
+};
+
+type InstagramReadReceiptEvent = {
+  accountId: string;
+  customerId: string;
+  occurredAt: string;
 };
 
 type InstagramCommentEvent = {
@@ -182,8 +189,14 @@ export async function POST(request: NextRequest) {
       await observeDisabledInstagramEchoIdentity(echoCandidates);
     }
     const comments = extractInstagramCommentEvents(payload);
+    // Conversation-level read receipts are NOT inbound customer messages.
+    // This is a separate opt-in activity path: off by default while the
+    // operator verifies provider-side evidence and staff-context semantics.
+    const reads = process.env.INSTAGRAM_READ_RECEIPT_ACTIVITY_ENABLED === 'true'
+      ? extractInstagramReadReceiptEvents(payload)
+      : [];
 
-    if (!messages.length && !echoes.length && !comments.length) {
+    if (!messages.length && !echoes.length && !comments.length && !reads.length) {
       return NextResponse.json(
         {
           ok: true,
@@ -204,6 +217,7 @@ export async function POST(request: NextRequest) {
     let echoesDeferred = 0;
     let echoesDuplicated = 0;
     let commentsProcessed = 0;
+    let readActivitiesAcknowledged = 0;
     let alreadyProcessed = 0;
     let duplicateMessages = 0;
     let unknownAccounts = 0;
@@ -487,6 +501,13 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    // Reading a message is engagement evidence, never a reply or a reason
+    // to change a lead stage. Never replay old ignored read envelopes here.
+    for (const read of reads) {
+      const result = await recordInstagramConversationReadActivity(supabase, read);
+      if (result.acknowledged) readActivitiesAcknowledged += 1;
+    }
+
     return NextResponse.json(
       {
         ok: true,
@@ -499,6 +520,7 @@ export async function POST(request: NextRequest) {
         echoes_deferred: echoesDeferred,
         echoes_duplicated: echoesDuplicated,
         comments_processed: commentsProcessed,
+        read_activities_acknowledged: readActivitiesAcknowledged,
         already_processed: alreadyProcessed,
         duplicate_messages: duplicateMessages,
         unknown_accounts: unknownAccounts,
@@ -685,6 +707,38 @@ function extractInstagramInboundEvents(payload: JsonObject) {
     }
   }
 
+  return result;
+}
+
+/**
+ * Instagram read.webhook watermark is not an individual outbound MID. Require
+ * the customer->business direction and a real provider watermark; do not
+ * classify reactions, sent messages or staff-side inbox views as "seen".
+ */
+function extractInstagramReadReceiptEvents(payload: JsonObject): InstagramReadReceiptEvent[] {
+  const result: InstagramReadReceiptEvent[] = [];
+  for (const rawEntry of arrayValue(payload.entry)) {
+    const entry = objectValue(rawEntry);
+    const accountId = stringValue(entry.id);
+    if (!accountId) continue;
+
+    for (const rawMessagingEvent of arrayValue(entry.messaging)) {
+      const event = objectValue(rawMessagingEvent);
+      const sender = stringValue(objectValue(event.sender).id);
+      const recipient = stringValue(objectValue(event.recipient).id);
+      const read = objectValue(event.read);
+      if (!sender || sender === accountId || recipient !== accountId ||
+          !Object.keys(read).length ||
+          Object.keys(objectValue(event.message)).length ||
+          Object.keys(objectValue(event.postback)).length) continue;
+      const occurredAt = instagramTimestamp(read.watermark);
+      if (!occurredAt) continue;
+      const millis = Date.parse(occurredAt);
+      if (!Number.isFinite(millis) ||
+          millis < Date.UTC(2018, 0, 1) || millis > Date.now() + 300_000) continue;
+      result.push({ accountId, customerId: sender, occurredAt });
+    }
+  }
   return result;
 }
 
