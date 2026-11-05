@@ -172,6 +172,68 @@ test('disabled echo parser does not touch CRM even with a correctly signed outbo
   assert.equal(calls.rpc.length, 0);
 });
 
+test('disabled CRM processing observes signed echo counts without privileged client or customer data', async () => {
+  const priorInfo = console.info;
+  const logs = [];
+  console.info = (...args) => { logs.push(args); };
+  try {
+    const { reply, calls } = await run(payload([echoEvent(), echoEvent()]), {}, { enabled: false });
+    assert.equal(reply.status, 200);
+    assert.equal(reply.data.reason, 'no_supported_instagram_events');
+    assert.equal(calls.createAdminClient, 0);
+    assert.equal(calls.rpc.length, 0);
+    assert.deepEqual(logs, [[
+      'Signed Instagram outbound echo candidates observed (CRM processing disabled).',
+      { candidateCount: 2 },
+    ]]);
+    const serialized = JSON.stringify(logs);
+    for (const privateValue of [ACCOUNT, CUSTOMER, MID, 'Synthetic fixture only', ORG, SECRET]) {
+      assert.equal(serialized.includes(privateValue), false, 'No identifiers or contents in logs');
+    }
+  } finally {
+    console.info = priorInfo;
+  }
+});
+
+test('invalid HMAC or non-echo payload never produces an observation log', async () => {
+  const priorInfo = console.info;
+  const logs = [];
+  console.info = (...args) => { logs.push(args); };
+  try {
+    const bad = await run(payload(), { signature: 'invalid' }, { enabled: false });
+    assert.equal(bad.reply.status, 401);
+    const irrelevant = await run(payload([
+      echoEvent({ message: { is_echo: true, text: 'MID unavailable' } }),
+      echoEvent({ message: { mid: MID, is_echo: true, is_deleted: true } }),
+      echoEvent({ sender: { id: CUSTOMER } }),
+      { sender: { id: CUSTOMER }, recipient: { id: ACCOUNT }, read: { watermark: EVENT_TIME } },
+    ]), {}, { enabled: false });
+    assert.equal(irrelevant.reply.status, 200);
+    assert.equal(irrelevant.calls.createAdminClient, 0);
+    assert.equal(irrelevant.calls.rpc.length, 0);
+    assert.deepEqual(logs, []);
+  } finally {
+    console.info = priorInfo;
+  }
+});
+
+test('enabled CRM projection does not emit disabled-mode observation log', async () => {
+  const priorInfo = console.info;
+  const logs = [];
+  console.info = (...args) => { logs.push(args); };
+  try {
+    const { reply, calls } = await run(payload());
+    assert.equal(reply.status, 200);
+    assert.equal(reply.data.echoes_processed, 1);
+    assert.deepEqual(calls.rpc.map(call => call.name), [
+      'ingest_raw_event', 'ingest_instagram_outbound_echo_v1',
+    ]);
+    assert.deepEqual(logs, []);
+  } finally {
+    console.info = priorInfo;
+  }
+});
+
 test('ignores read receipts, deleted echoes, missing mids, and wrong sender direction', async () => {
   const invalid = [
     { sender: { id: CUSTOMER }, recipient: { id: ACCOUNT }, timestamp: EVENT_TIME, read: { watermark: EVENT_TIME } },
