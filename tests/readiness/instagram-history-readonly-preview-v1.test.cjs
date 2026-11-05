@@ -17,6 +17,9 @@ const sample = {
   conversationsMatched: 1,
   messagesSeen: 14,
   messagesSkipped: 2,
+  outboundMessagesSeen: 5,
+  outboundMessagesMatched: 3,
+  outboundMessagesNotInCrm: 2,
   messagesImported: 0,
   messagesAlreadyPresent: 0,
   hasMore: true,
@@ -28,16 +31,23 @@ test('bounded read-only history summary only returns numeric aggregates', () => 
     conversationsMatched: 1,
     messagesSeen: 14,
     messagesSkipped: 2,
+    outboundMessagesSeen: 5,
+    outboundMessagesMatched: 3,
+    outboundMessagesNotInCrm: 2,
     hasMore: true,
   });
   assert.deepEqual(parser.parseInstagramHistoryPreview({
     ...sample, conversationsScanned: 0, conversationsMatched: 0,
-    messagesSeen: 0, messagesSkipped: 0, hasMore: false,
+    messagesSeen: 0, messagesSkipped: 0,
+    outboundMessagesSeen: 0, outboundMessagesMatched: 0,
+    outboundMessagesNotInCrm: 0, hasMore: false,
   }), {
     conversationsScanned: 0,
     conversationsMatched: 0,
     messagesSeen: 0,
     messagesSkipped: 0,
+    outboundMessagesSeen: 0, outboundMessagesMatched: 0,
+    outboundMessagesNotInCrm: 0,
     hasMore: false,
   });
 });
@@ -56,6 +66,12 @@ test('rejects invalid provider summaries and any import/write evidence', () => {
     { ...sample, messagesSeen: '14' },
     { ...sample, hasMore: 'false' },
     { ...sample, messagesSeen: 0.5 },
+    { ...sample, outboundMessagesSeen: 15 },
+    { ...sample, outboundMessagesMatched: 6 },
+    { ...sample, outboundMessagesNotInCrm: 3 },
+    { ...sample, outboundMessagesNotInCrm: -1 },
+    { ...sample, outboundMessagesSeen: '5' },
+    { ...sample, conversationsMatched: 0, outboundMessagesSeen: 1 },
     { ...sample, providerMessage: 'sensitive customer text' },
     { ...sample, externalAccountId: ACCOUNT },
     { ...sample, accessToken: 'synthetic-secret' },
@@ -129,6 +145,9 @@ function setup(options = {}) {
           conversationsScanned: 1,
           conversationsMatched: 1,
           messagesSeen: 14,
+          outboundMessagesSeen: 5,
+          outboundMessagesMatched: 3,
+          outboundMessagesNotInCrm: 2,
           messagesImported: 0,
           messagesAlreadyPresent: 0,
           messagesSkipped: 2,
@@ -165,6 +184,8 @@ test('authorized owner/admin history preview cannot import or change CRM state',
     assert.equal(response.data.ok, true);
     assert.equal(response.data.dryRun, true);
     assert.equal(response.data.customerMessageSent, false);
+    assert.equal(response.data.outboundMessagesSeen, 5);
+    assert.equal(response.data.outboundMessagesNotInCrm, 2);
     assert.deepEqual(calls.options, [
       { organizationId: ORG, accountId: ACCOUNT, apply: false },
     ]);
@@ -239,6 +260,10 @@ test('System Health history preview uses read-only mode and displays no message 
   assert.match(ui, /credentials: 'same-origin'/);
   assert.match(ui, /parseInstagramHistoryPreview\(payload\)/);
   assert.match(ui, /No messages were imported, sent, or modified/);
+  assert.match(ui, /outboundMessagesSeen/);
+  assert.match(ui, /outboundMessagesMatched/);
+  assert.match(ui, /outboundMessagesNotInCrm/);
+  assert.match(ui, /review candidate, not proof a message is lost/);
   assert.match(page, /InstagramHistoryPreview connections={instagramConnections}/);
   assert.match(route, /workspace\.activeOrganizationId !== active\.organizationId/);
   assert.match(route, /body\.mode === 'history_preview' \|\| body\.mode === 'echo_status'/);
