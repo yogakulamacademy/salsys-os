@@ -3,6 +3,11 @@ export type WhatsAppReceiptReconciliation = {
   processedWithMessage: number;
   processedWithoutMessage: number;
   processedWithLink: number;
+  processedUnmatchedRawProcessed: number;
+  processedUnmatchedSameAccountThread: number;
+  processedUnmatchedOtherAccountThread: number;
+  processedUnmatchedMultipleAccountThreads: number;
+  processedUnmatchedNoSenderThread: number;
   failedReceipts: number;
   failedWithRawEvidence: number;
   failedWithMessage: number;
@@ -18,6 +23,11 @@ const FIELDS = [
   'processedWithMessage',
   'processedWithoutMessage',
   'processedWithLink',
+  'processedUnmatchedRawProcessed',
+  'processedUnmatchedSameAccountThread',
+  'processedUnmatchedOtherAccountThread',
+  'processedUnmatchedMultipleAccountThreads',
+  'processedUnmatchedNoSenderThread',
   'failedReceipts',
   'failedWithRawEvidence',
   'failedWithMessage',
@@ -63,6 +73,11 @@ export function parseWhatsAppReceiptReconciliation(value: unknown):
   const processedWithMessage = safeCount(source.processedWithMessage);
   const processedWithoutMessage = safeCount(source.processedWithoutMessage);
   const processedWithLink = safeCount(source.processedWithLink);
+  const processedUnmatchedRawProcessed = safeCount(source.processedUnmatchedRawProcessed);
+  const processedUnmatchedSameAccountThread = safeCount(source.processedUnmatchedSameAccountThread);
+  const processedUnmatchedOtherAccountThread = safeCount(source.processedUnmatchedOtherAccountThread);
+  const processedUnmatchedMultipleAccountThreads = safeCount(source.processedUnmatchedMultipleAccountThreads);
+  const processedUnmatchedNoSenderThread = safeCount(source.processedUnmatchedNoSenderThread);
   const failedReceipts = safeCount(source.failedReceipts);
   const failedWithRawEvidence = safeCount(source.failedWithRawEvidence);
   const failedWithMessage = safeCount(source.failedWithMessage);
@@ -76,6 +91,10 @@ export function parseWhatsAppReceiptReconciliation(value: unknown):
       failedWithMessage + failedWithoutMessage !== failedReceipts ||
       processedWithLink > processedReceipts || failedWithLink > failedReceipts ||
       failedWithRawEvidence > failedReceipts ||
+      processedUnmatchedRawProcessed > processedWithoutMessage ||
+      processedUnmatchedSameAccountThread + processedUnmatchedOtherAccountThread +
+        processedUnmatchedMultipleAccountThreads + processedUnmatchedNoSenderThread !==
+          processedWithoutMessage ||
       (processedWithoutMessage === 0) !== (oldestProcessedUnmatchedAt === null) ||
       (failedWithoutMessage === 0) !== (oldestFailedUnmatchedAt === null)) {
     throw new Error('WhatsApp receipt reconciliation counts are inconsistent.');
@@ -85,6 +104,11 @@ export function parseWhatsAppReceiptReconciliation(value: unknown):
     processedWithMessage,
     processedWithoutMessage,
     processedWithLink,
+    processedUnmatchedRawProcessed,
+    processedUnmatchedSameAccountThread,
+    processedUnmatchedOtherAccountThread,
+    processedUnmatchedMultipleAccountThreads,
+    processedUnmatchedNoSenderThread,
     failedReceipts,
     failedWithRawEvidence,
     failedWithMessage,
