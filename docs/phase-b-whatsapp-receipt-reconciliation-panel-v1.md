@@ -17,6 +17,36 @@ The service-only SQL function `get_whatsapp_receipt_reconciliation_v1(organizati
 
 Two additional provider-ID link counts and the oldest unmatched receipt timestamps are available to the server-side parser. The UI shows counts and dates only, never original receipt IDs, provider message IDs, error strings, phone numbers, lead IDs, raw payloads or message bodies.
 
+## v2: Provider account and sender identity safety
+
+The updated read-only function no longer credits a WhatsApp receipt as **matched**
+based on provider message ID alone. An exact CRM match must also resolve to an
+**inbound WhatsApp** message whose conversation belongs to the same organization,
+provider business-account ID and normalized sender conversation ID.
+
+Historical processed receipts without such an exact match are divided into
+**mutually exclusive** sender-conversation groups: same business account only;
+other/unmapped business account only; both (ambiguous); and no sender conversation
+found. The sum of these categories must equal the total processed receipts
+without exact matches, otherwise the report is unavailable. A separate
+overlapping count indicates whether canonical raw-event processing reports
+`processed`. None of these categories proves delivery or authorizes replay.
+
+A read-only production investigation on 5 November 2026 observed, **across all
+organizations**, 6 historical processed receipts with no exact CRM match:
+6 canonical raw events marked processed, 5 with a sender conversation attached
+to another/unmapped business account, and 1 with no sender conversation.
+There were 0 with a same-account sender conversation and 0 with multiple
+account threads in that historical sample. The 29 exact matches already agreed
+on inbound direction, WhatsApp channel, business account, and sender. These
+patterns are possible **historical identity-mapping drift**, not proven cause
+and not proof of missing CRM content.
+
+**Do not rewrite `external_account_id`, merge contacts, replay webhooks or
+create messages based solely on these aggregates.** Preserve the original
+provider-account and sender evidence for privately reviewed, separately
+approved case-by-case recovery.
+
 ## Privacy and safety guarantees
 
 1. SQL function is `STABLE SECURITY INVOKER` and **SELECT-only**. Execution is revoked from `PUBLIC`, `anon` and `authenticated`, granted to `service_role`.
