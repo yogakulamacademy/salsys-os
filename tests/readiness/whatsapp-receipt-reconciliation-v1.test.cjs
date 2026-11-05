@@ -95,8 +95,8 @@ test('service-only SQL reconciliation is SELECT-only, tenant-bound and projects 
   // Keep them out of JSON output even when internal matching needs them.
   const publicProjection = sql.split('select jsonb_build_object(').at(-1)?.split('from totals;')[0] ?? '';
   assert.doesNotMatch(publicProjection,
-    /\\b(?:phone_number_id|contact_wa_id|sender_digits|external_message_id|organization_id|payload|processing_error)\\b/i);
-  assert.doesNotMatch(executable, /\\b(?:email|access_token|processing_error|payload|message_body)\\b/i);
+    /\b(?:phone_number_id|contact_wa_id|sender_digits|external_message_id|organization_id|payload|processing_error)\b/i);
+  assert.doesNotMatch(executable, /\b(?:email|access_token|processing_error|payload|message_body)\b/i);
 });
 
 test('server-only authenticated UI shows no raw provider MID, delivery command or replay actions', () => {
