@@ -14,6 +14,9 @@ const reconciliationSample = {
   processedUnmatchedRawProcessed: 6,
   processedUnmatchedSameAccountThread: 0,
   processedUnmatchedOtherAccountThread: 5,
+  processedUnmatchedOtherAccountThreadPresentAtReceipt: 0,
+  processedUnmatchedOtherAccountThreadOnlyLater: 5,
+  processedUnmatchedOtherAccountThreadTimingUnknown: 0,
   processedUnmatchedMultipleAccountThreads: 0,
   processedUnmatchedNoSenderThread: 1,
   failedReceipts: 6, failedWithRawEvidence: 6,
@@ -194,6 +197,8 @@ test('owner/admin receive scoped, aggregate-only WhatsApp readiness', async () =
     assert.equal(actual.receiptReconciliation?.processedWithoutMessage, 6);
     assert.equal(actual.receiptReconciliation?.failedWithRawEvidence, 6);
     assert.equal(actual.receiptReconciliation?.processedUnmatchedOtherAccountThread, 5);
+    assert.equal(actual.receiptReconciliation?.processedUnmatchedOtherAccountThreadOnlyLater, 5);
+    assert.equal(actual.receiptReconciliation?.processedUnmatchedOtherAccountThreadPresentAtReceipt, 0);
     assert.equal(actual.receiptReconciliation?.processedUnmatchedNoSenderThread, 1);
     assert.equal(calls.rpc.length, 1);
     assert.ok(!Number.isNaN(Date.parse(actual.checkedAt)));
