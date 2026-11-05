@@ -239,6 +239,48 @@ export default async function MessageSyncAuditPage() {
             </>
           )}
         </div>
+        <div className="mt-4 rounded-lg border border-line p-3" aria-label="WhatsApp receipt reconciliation">
+          <h3 className="text-xs font-semibold text-copy">Receipt-to-CRM reconciliation</h3>
+          <p className="mt-1 text-xs leading-5 text-copy-muted">
+            Exact provider message-ID comparisons inside the database. Unmatched receipts need
+            investigation; they are not proof of missing customer messages or safe to replay.
+          </p>
+          {whatsappReadiness.receiptReconciliation ? (
+            <>
+              <dl className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3">
+                {[
+                  { label: 'Processed incoming receipts', value: whatsappReadiness.receiptReconciliation.processedReceipts },
+                  { label: 'Processed with CRM message', value: whatsappReadiness.receiptReconciliation.processedWithMessage },
+                  { label: 'Processed without exact match', value: whatsappReadiness.receiptReconciliation.processedWithoutMessage },
+                  { label: 'Failed incoming receipts', value: whatsappReadiness.receiptReconciliation.failedReceipts },
+                  { label: 'Failed with raw evidence', value: whatsappReadiness.receiptReconciliation.failedWithRawEvidence },
+                  { label: 'Failed without exact match', value: whatsappReadiness.receiptReconciliation.failedWithoutMessage },
+                ].map(item => (
+                  <div key={item.label} className="rounded-md border border-line px-3 py-2">
+                    <dt className="text-xs text-copy-muted">{item.label}</dt>
+                    <dd className="mt-1 text-base font-semibold tabular-nums text-copy">
+                      {item.value.toLocaleString()}
+                    </dd>
+                  </div>
+                ))}
+              </dl>
+              <p className="mt-3 text-xs leading-5 text-copy-muted">
+                Oldest processed receipt without an exact match:
+                {' '}{formatTime(whatsappReadiness.receiptReconciliation.oldestProcessedUnmatchedAt)}.
+                {' '}Oldest failed receipt without an exact match:
+                {' '}{formatTime(whatsappReadiness.receiptReconciliation.oldestFailedUnmatchedAt)}.
+              </p>
+              <p className="mt-2 text-xs leading-5 text-copy-muted">
+                This comparison never reads message bodies. Do not bulk retry, create leads,
+                or change receipt status based only on these counts.
+              </p>
+            </>
+          ) : (
+            <p className="mt-3 text-xs text-copy-muted">
+              Receipt reconciliation unavailable. Existing WhatsApp health counts remain available.
+            </p>
+          )}
+        </div>
         <p className="mt-2 text-xs text-copy-muted">Checked {formatTime(whatsappReadiness.checkedAt)}</p>
       </section>
 
