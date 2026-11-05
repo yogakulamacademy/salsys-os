@@ -7,8 +7,19 @@ const ORG = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
 const A = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
 const B = 'cccccccc-cccc-4ccc-8ccc-cccccccccccc';
 
+const receiptParser = load('lib/whatsapp-receipt-reconciliation-validation.ts');
+const reconciliationSample = {
+  processedReceipts: 35, processedWithMessage: 29,
+  processedWithoutMessage: 6, processedWithLink: 29,
+  failedReceipts: 6, failedWithRawEvidence: 6,
+  failedWithMessage: 0, failedWithoutMessage: 6, failedWithLink: 0,
+  oldestProcessedUnmatchedAt: '2026-09-28T08:00:00Z',
+  oldestFailedUnmatchedAt: '2026-09-28T09:00:00Z',
+  checkedAt: '2026-11-05T05:00:00Z',
+};
+
 function harness(options = {}) {
-  const calls = { admin: 0, queries: [] };
+  const calls = { admin: 0, queries: [], rpc: [] };
   const role = options.role ?? 'admin';
   const session = {
     auth: { getUser: async () => ({
@@ -40,6 +51,18 @@ function harness(options = {}) {
     }],
   };
   const admin = {
+    async rpc(name, args) {
+      calls.rpc.push({ name, args });
+      assert.equal(name, 'get_whatsapp_receipt_reconciliation_v1');
+      assert.deepEqual(args, { p_organization_id: ORG });
+      return options.reconciliationUnavailable ? {
+        data: null, error: { message: 'private database error' },
+      } : {
+        data: options.badReconciliation ? { ...reconciliationSample, accessToken: 'forbidden' }
+          : reconciliationSample,
+        error: null,
+      };
+    },
     from(table) {
       assert.ok(['integration_connections', 'whatsapp_accounts', 'whatsapp_webhook_events'].includes(table));
       const query = { table, filters: [], projected: null, head: false };
@@ -139,6 +162,7 @@ function harness(options = {}) {
     '@/lib/supabase/server': { createClient: async () => session },
     '@/lib/workspace': { getWorkspaceContextForUser: async () => workspace },
     '@/lib/data': { isMockMode: () => Boolean(options.mock) },
+    '@/lib/whatsapp-receipt-reconciliation-validation': receiptParser,
   });
   return { module, calls };
 }
@@ -162,6 +186,9 @@ test('owner/admin receive scoped, aggregate-only WhatsApp readiness', async () =
     assert.equal(actual.failedUnsupportedMessages, 2);
     assert.equal(actual.failedDeliveryStatuses, 2);
     assert.equal(actual.failedOtherTypes, 0);
+    assert.equal(actual.receiptReconciliation?.processedWithoutMessage, 6);
+    assert.equal(actual.receiptReconciliation?.failedWithRawEvidence, 6);
+    assert.equal(calls.rpc.length, 1);
     assert.ok(!Number.isNaN(Date.parse(actual.checkedAt)));
     assert.equal(calls.admin, 1);
     assert.equal(calls.queries.length, 12);
@@ -241,6 +268,16 @@ test('failed-event classification uses only count-only tenant-bound reads with n
   assert.ok(!JSON.stringify(result).includes('processing_error'));
 });
 
+test('unavailable or malformed receipt reconciliation never breaks read-only health', async () => {
+  for (const options of [{ reconciliationUnavailable: true }, { badReconciliation: true }]) {
+    const { module, calls } = harness(options);
+    const result = await module.getCurrentWhatsAppCoexistenceReadiness();
+    assert.equal(result.receiptReconciliation, null);
+    assert.equal(result.failedWebhookEvents, 8);
+    assert.equal(calls.rpc.length, 1);
+  }
+});
+
 test('System Health has no WhatsApp send, provider fetch, webhook replay or mutation path', () => {
   const source = readFileSync('lib/whatsapp-coexistence-readiness.ts', 'utf8');
   const ui = readFileSync('app/system-health/message-sync/page.tsx', 'utf8');
@@ -253,5 +290,7 @@ test('System Health has no WhatsApp send, provider fetch, webhook replay or muta
   assert.match(source, /linkedActiveSenders/);
   assert.match(source, /count: 'exact', head: true/);
   assert.match(source, /\.eq\('signature_valid', true\)/);
-  assert.doesNotMatch(source, /fetch\(|sendMessage|\.insert\(|\.update\(|\.delete\(|\.upsert\(|\.rpc\(/);
+  assert.match(source, /get_whatsapp_receipt_reconciliation_v1/);
+  assert.equal((source.match(/\\.rpc\\(/g) ?? []).length, 1);
+  assert.doesNotMatch(source, /fetch\\(|sendMessage|\\.insert\\(|\\.update\\(|\\.delete\\(|\\.upsert\\(/);
 });
