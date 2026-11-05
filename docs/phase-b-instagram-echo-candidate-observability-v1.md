@@ -14,16 +14,21 @@ candidate is present, it emits one aggregate-only Vercel runtime log entry:
 
 `Signed Instagram outbound echo candidates observed (CRM processing disabled).`
 
-The sole structured field is `candidateCount` (a number). No sender,
+The original observation (PR #509) logged only `candidateCount`. A later
+preflight extension (PR #511) adds strictly **aggregate SELECT-only identity
+classification counts** for at most ten candidate events per request. No sender,
 recipient, account ID, tenant ID, MID, raw message, timestamp, body,
-attachment, token, or webhook payload is logged.
+attachment, token, or webhook payload is logged. See
+`docs/phase-b-instagram-echo-identity-preflight-v1.md`.
 
 ## Non-mutation guarantees
 
 - No change to incoming Instagram customer DM handling or comment processing.
 - No change to the existing `INSTAGRAM_OUTBOUND_ECHO_ENABLED` gate.
 - The disabled path still returns `no_supported_instagram_events` for
-  echo-only signed webhooks, without instantiating a Supabase service client.
+  echo-only signed webhooks. A later preflight may create a service client
+  **solely for bounded, tenant-verified SELECT queries**; it cannot write
+  CRM records or change the webhook response when a lookup fails.
 - No `ingest_raw_event`, `ingest_instagram_outbound_echo_v1`,
   historical import, profile fetch, automation, CRM message write,
   Meta API call, new environment flag, or database migration is introduced.
@@ -70,6 +75,6 @@ customer names, MIDs, tokens or message bodies into shared test evidence.
 ## Automated verification
 
 `tests/readiness/instagram-signed-outbound-webhook-v1.test.cjs` executes
-synthetic signed webhook requests and asserts aggregate-only log shape, no
-privileged database calls in the disabled path, valid signature gating,
+synthetic signed webhook requests and asserts aggregate-only log shape,
+bounded read-only identity lookups with no CRM writes, valid signature gating,
 non-echo suppression, and the unchanged enabled echo projection.
