@@ -23,8 +23,6 @@ export function ConversationsRealtime() {
     const supabase = createClient();
     let refreshTimer: ReturnType<typeof setTimeout> | null = null;
     let lastRefreshAt = 0;
-    let disposed = false;
-
     const refreshInbox = () => {
       if (document.visibilityState !== 'visible' || refreshTimer) return;
 
@@ -38,6 +36,16 @@ export function ConversationsRealtime() {
         router.refresh();
       }, delay);
     };
+
+    // Webhook updates that arrive while the tab is hidden are intentionally
+    // not rendered immediately. Refresh when the operator returns, rather
+    // than leaving the inbox stale until another message arrives.
+    const refreshOnVisibility = () => {
+      if (document.visibilityState === 'visible') refreshInbox();
+    };
+    document.addEventListener('visibilitychange', refreshOnVisibility);
+    window.addEventListener('focus', refreshInbox);
+    window.addEventListener('online', refreshInbox);
 
     const channel = supabase
       .channel('crm-conversations-live')
@@ -71,8 +79,10 @@ export function ConversationsRealtime() {
       .subscribe();
 
     return () => {
-      disposed = true;
       if (refreshTimer) clearTimeout(refreshTimer);
+      document.removeEventListener('visibilitychange', refreshOnVisibility);
+      window.removeEventListener('focus', refreshInbox);
+      window.removeEventListener('online', refreshInbox);
       void supabase.removeChannel(channel);
     };
   }, [router]);
