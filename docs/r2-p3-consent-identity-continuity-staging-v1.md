@@ -55,7 +55,9 @@ Use disposable staging/site identities (never real prospects). Configure a test 
 | Offline retry resolves after regrant | No pre-withdrawal event placed into new identity's retry queue |
 | Trusted exact-session CRM identity handoff | Does not attach the new session to an earlier withdrawn visitor identifier |
 
-**Known review gap:** The current draft's synthetic harness models one browser context with shared storage on reload, not complete browser-managed cross-tab `storage` events or independent browser lifecycle rules. A multi-tab acceptance check is required and may necessitate follow-up code changes on this draft. Do **not** merge merely because CI passes.
+**Cross-tab automated coverage added:** The synthetic harness now simulates two separate tab runtimes with shared localStorage and isolated sessionStorage. It checks withdrawal blocking, identity rotation, delayed consent-grant binding, old-event retry suppression, dropped storage notifications, frozen-tab restoration and stale sessionStorage after a second tab's regrant.
+
+**Still unverified in real browsers:** The synthetic runner manually emits storage/pageshow notifications; it cannot prove native browser ordering, permissions, BFCache behavior, blocked storage or concurrent race timing. An authenticated staging acceptance check with two actual tabs and lead forms is required. Do **not** merge merely because CI passes.
 
 ## Release gates
 
