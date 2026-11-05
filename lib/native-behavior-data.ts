@@ -22,6 +22,7 @@ export type NativeBehaviorWorkspace = {
   paths: BehaviorPath[];
   pathSessions: number;
   minPathSessions: number;
+  minPathVisitors: number;
 };
 
 const placeholder = "Behavioral analytics are temporarily unavailable. Please try again.";
@@ -42,7 +43,18 @@ function empty(
     paths: [],
     pathSessions: 0,
     minPathSessions: 3,
+    minPathVisitors: 3,
   };
+}
+
+function safePublicPath(value: string): boolean {
+  const isCleanSlug = /^\/[a-zA-Z0-9/_-]{0,120}$/.test(value);
+  const isPublicPage = /^\/[a-zA-Z0-9/_-]{1,120}\.(?:php|html?)$/.test(value);
+  return (isCleanSlug || isPublicPage)
+    && value !== "/other"
+    && !/[0-9]{6,}/.test(value)
+    && !/[a-f0-9]{16,}/i.test(value)
+    && !/\/[0-9]{4,}(?:\/|\.|$)/.test(value);
 }
 
 function number(value: unknown): number {
@@ -106,8 +118,7 @@ export async function getNativeBehaviorWorkspace(
           const from = String(row.from_path || "");
           const to = String(row.to_path || "");
           // A second output guard avoids exposing unexpected raw paths if SQL changes.
-          if (!/^\/[a-zA-Z0-9/_-]{0,120}$/.test(from) ||
-              !/^\/[a-zA-Z0-9/_-]{0,120}$/.test(to)) return [];
+          if (!safePublicPath(from) || !safePublicPath(to)) return [];
           return [{
             from_path: from,
             to_path: to,
@@ -128,6 +139,7 @@ export async function getNativeBehaviorWorkspace(
       paths,
       pathSessions: number(value.path_sessions),
       minPathSessions: 3,
+      minPathVisitors: number(status.path_min_visitors) || 3,
     };
   } catch {
     return empty(days, steps);
