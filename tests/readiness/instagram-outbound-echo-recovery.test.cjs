@@ -48,7 +48,7 @@ test('Recovery function is restricted and cron scheduling idempotent', () => {
 
   // Schema deployment must NEVER turn on a live retry worker. The only
   // release path is a later, explicitly approved cron activation.
-  assert.doesNotMatch(migration, /cron\\.alter_job\\([^;]*active\\s*:?=\\s*true/si);
+  assert.doesNotMatch(migration, /cron\.alter_job\([^;]*active\s*(?::=|=>)\s*true/si);
   assert.ok(
     migration.indexOf('v_job_id := cron.schedule(') <
       migration.indexOf('perform cron.alter_job(job_id := v_job_id, active := false);'),
