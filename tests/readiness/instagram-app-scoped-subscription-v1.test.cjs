@@ -106,3 +106,14 @@ test('invalid fields or provider errors cannot produce a success status', async 
   await assert.rejects(inspect([{ id: APP, subscribed_fields: ['messages'] }], { httpError: true }), /did not provide/);
   await assert.rejects(inspect([{ id: APP, subscribed_fields: ['messages'] }], { appId: null }), /app configuration is unavailable/);
 });
+
+test('operator guidance treats messages-only echo support as unverified rather than impossible', () => {
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const component = fs.readFileSync(path.join(process.cwd(), 'components/instagram-echo-verification.tsx'), 'utf8');
+  const guide = fs.readFileSync(path.join(process.cwd(), 'docs/instagram-outbound-echo-rollout.md'), 'utf8');
+  assert.match(component, /message\.is_echo=true/);
+  assert.match(component, /missing separate message_echoes field alone cannot prove/);
+  assert.match(guide, /Do not require a separate `message_echoes` field/);
+  assert.match(guide, /signed live Meta echo test/);
+});
