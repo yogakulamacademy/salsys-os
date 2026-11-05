@@ -167,12 +167,23 @@ export async function POST(request: NextRequest) {
     }
 
     const messages = extractInstagramInboundEvents(payload);
-    // Keep outbound echo processing opt-in until its reviewed SQL migration,
-    // Meta message_echoes subscription, and tenant QA are complete. A main
-    // branch deploy must not introduce an uninstalled RPC dependency.
+    // Observe only the *count* of signed, direction-valid echo candidates
+    // before the opt-in projection gate. This does not retain any message,
+    // invoke Supabase, identify an account, or assert CRM delivery. It makes
+    // permitted native-app acceptance tests observable while writes stay OFF.
+    const echoCandidates = extractInstagramOutboundEchoEvents(payload);
+    // CRM projection remains fail-closed until app-scoped Meta acceptance,
+    // connected-account linkage, signed delivery and tenant QA are complete.
     const echoes = process.env.INSTAGRAM_OUTBOUND_ECHO_ENABLED === 'true'
-      ? extractInstagramOutboundEchoEvents(payload)
+      ? echoCandidates
       : [];
+    if (echoCandidates.length > 0 && echoes.length === 0) {
+      // Logs intentionally include no account, sender, message ID, content,
+      // timestamp or tenant. Duplicated webhook delivery can repeat this count.
+      console.info('Signed Instagram outbound echo candidates observed (CRM processing disabled).', {
+        candidateCount: echoCandidates.length,
+      });
+    }
     const comments = extractInstagramCommentEvents(payload);
 
     if (!messages.length && !echoes.length && !comments.length) {
