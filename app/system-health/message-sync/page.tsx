@@ -242,8 +242,9 @@ export default async function MessageSyncAuditPage() {
         <div className="mt-4 rounded-lg border border-line p-3" aria-label="WhatsApp receipt reconciliation">
           <h3 className="text-xs font-semibold text-copy">Receipt-to-CRM reconciliation</h3>
           <p className="mt-1 text-xs leading-5 text-copy-muted">
-            Exact provider message-ID comparisons inside the database. Unmatched receipts need
-            investigation; they are not proof of missing customer messages or safe to replay.
+            Provider message-ID matches must also agree with the incoming WhatsApp channel,
+            direction, business account and sender thread. Unmatched receipts need investigation;
+            they are not proof of missing customer messages or safe to replay.
           </p>
           {whatsappReadiness.receiptReconciliation ? (
             <>
@@ -264,6 +265,32 @@ export default async function MessageSyncAuditPage() {
                   </div>
                 ))}
               </dl>
+              <div className="mt-4 border-t border-line pt-3">
+                <h4 className="text-xs font-semibold text-copy">
+                  Processed receipts without exact matches — identity review
+                </h4>
+                <dl className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3">
+                  {[
+                    { label: 'Canonical raw marked processed', value: whatsappReadiness.receiptReconciliation.processedUnmatchedRawProcessed },
+                    { label: 'Same-account sender thread', value: whatsappReadiness.receiptReconciliation.processedUnmatchedSameAccountThread },
+                    { label: 'Other / unmapped account thread', value: whatsappReadiness.receiptReconciliation.processedUnmatchedOtherAccountThread },
+                    { label: 'Multiple account threads', value: whatsappReadiness.receiptReconciliation.processedUnmatchedMultipleAccountThreads },
+                    { label: 'No sender thread found', value: whatsappReadiness.receiptReconciliation.processedUnmatchedNoSenderThread },
+                  ].map(item => (
+                    <div key={item.label} className="rounded-md border border-line px-3 py-2">
+                      <dt className="text-xs text-copy-muted">{item.label}</dt>
+                      <dd className="mt-1 text-base font-semibold tabular-nums text-copy">
+                        {item.value.toLocaleString()}
+                      </dd>
+                    </div>
+                  ))}
+                </dl>
+                <p className="mt-3 text-xs leading-5 text-copy-muted">
+                  Other or multiple account threads indicate a potential historical identity-mapping
+                  issue, not a confirmed cause. Do not reassign contacts, move messages or replay
+                  events without privately checking the original provider-account evidence.
+                </p>
+              </div>
               <p className="mt-3 text-xs leading-5 text-copy-muted">
                 Oldest processed receipt without an exact match:
                 {' '}{formatTime(whatsappReadiness.receiptReconciliation.oldestProcessedUnmatchedAt)}.
