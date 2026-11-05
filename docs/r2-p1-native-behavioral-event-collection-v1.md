@@ -39,6 +39,7 @@ CTA and pricing impressions require IntersectionObserver and at least 50% inters
 A brochure click is not proof the PDF was successfully downloaded; the event is deliberately named web.brochure_clicked. FAQ expansions support native details and explicit aria-expanded controls.
 
 Scroll thresholds are 25%, 50%, 75% and 90%, emitted once upon crossing after consent. No pre-consent scroll events are backfilled.
+The collector observes at most 200 marked elements per page to bound work. For SPA route transitions where the UI persists, dispatch a salsys:page-change window event after navigation to reset page-scoped impressions; popstate is also supported. Hidden-page scrolls do not count.
 
 ## Form outcomes — application-emitted only
 
