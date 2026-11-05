@@ -56,6 +56,7 @@ test("Behavior tab reads tenant-scoped aggregates and filters unsafe visitor pat
     await page.setViewportSize({ width, height: 900 });
     await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width + 2);
   }
+  await page.setViewportSize({ width: 390, height: 900 });
   await page.screenshot({ animations: "disabled", path: "test-results/r2-behavior-mobile.png" });
 });
 
