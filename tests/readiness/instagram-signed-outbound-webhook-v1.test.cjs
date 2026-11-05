@@ -350,7 +350,7 @@ test('invalid, wrong-direction or message-bearing Instagram read envelope create
     { sender: { id: CUSTOMER }, recipient: { id: ACCOUNT }, read: {} },
     { sender: { id: CUSTOMER }, recipient: { id: ACCOUNT }, read: { watermark: 'invalid' } },
     { sender: { id: CUSTOMER }, recipient: { id: ACCOUNT }, read: { watermark: EVENT_TIME },
-      message: { mid: MID, text: 'Not a pure read receipt' } },
+      message: { is_echo: true, text: 'Read receipt with extra echo metadata' } },
   ];
   const result = await run(payload(invalid), {}, { enabled: false, readEnabled: true });
   assert.equal(result.reply.status, 200);
