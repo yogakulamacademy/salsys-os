@@ -24,8 +24,10 @@ Across the organizations examined, the metadata-only investigation found:
   receipts, with the stored `non_message_messaging_envelope` ignore reason
 - 25 unmatched native contact-share templates tagged ignored as duplicates
 - 0 other processed receipts without an exact CRM match in this snapshot
-- 1 ignored-tagged template also had an exact CRM match; it is **overlap**
-  requiring private review, not a reason to overwrite or delete a CRM message
+- 1 ignored-tagged template also had an exact CRM match created **after**
+  the original receipt. This is a present-day **overlap**, not evidence the
+  CRM message already existed at receipt time, and not a reason to overwrite
+  or delete a CRM message
 
 The additional matched ignored-tagged record must not be double-counted.
 The report partitions processed receipts by **exact match first**, then
