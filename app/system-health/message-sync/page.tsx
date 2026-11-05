@@ -4,6 +4,7 @@ import { ArrowLeft, RefreshCw, ShieldCheck } from 'lucide-react';
 
 import { getCurrentMessageSyncAudit } from '@/lib/message-sync-audit';
 import { InstagramEchoVerification } from '@/components/instagram-echo-verification';
+import { InstagramHistoryPreview } from '@/components/instagram-history-preview';
 
 export const dynamic = 'force-dynamic';
 
@@ -155,6 +156,8 @@ export default async function MessageSyncAuditPage() {
           </p>
           <p className="mt-2 text-xs text-copy-muted">Last scan: {formatTime(audit.instagramHistory.lastScannedAt)}</p>
           <p className="mt-2 text-xs leading-5 text-copy-muted">A missing cursor is unknown history coverage, not proof that all older conversations are present.</p>
+          <p className="mt-2 text-xs leading-5 text-copy-muted">Check up to one provider conversation and 20 messages per account without importing anything.</p>
+          <InstagramHistoryPreview connections={instagramConnections} />
         </div>
       </section>
 
