@@ -145,10 +145,19 @@
 
   function sessionVisitorCandidate() {
     var value = safeGet(window.sessionStorage, KEYS.sessionVisitor);
-    if (value) return value;
-
     if (analyticsGranted()) {
-      value = safeGet(window.localStorage, KEYS.persistentVisitor);
+      var shared = safeGet(window.localStorage, KEYS.persistentVisitor);
+      if (shared && value && shared !== value) {
+        // A restored or duplicated tab can retain an old per-tab ID after
+        // another tab withdrew and regranted consent. The acknowledged
+        // shared ID takes precedence; never overwrite it with stale data.
+        value = shared;
+        [KEYS.session, KEYS.sessionStarted, KEYS.pendingFirstTouch,
+          KEYS.sessionTouch].forEach(function (key) {
+          safeRemove(window.sessionStorage, key);
+        });
+      }
+      if (!value) value = shared;
     }
 
     if (!value) value = randomId('v');
