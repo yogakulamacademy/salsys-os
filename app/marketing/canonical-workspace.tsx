@@ -15,6 +15,7 @@ import { AttributionIntelligenceExplorer } from "@/components/attribution-intell
 import { CampaignsIntelligenceWorkspace } from "@/components/campaigns-intelligence-workspace";
 import type { CampaignWorkspaceFilters } from "@/components/campaigns-workspace";
 import { FunnelIntelligenceWorkspaceV2 } from "@/components/funnel-intelligence-workspace-v2";
+import { NativeBehaviorExplorer } from "@/components/marketing/native-behavior-explorer";
 import { ExecutiveDecisionBrief } from "@/components/marketing/executive-decision-brief";
 import { MarketingOverview } from "@/components/marketing/marketing-overview";
 import { Notice, PageHeader } from "@/components/ui";
@@ -23,12 +24,14 @@ import { getAttributionWorkspace } from "@/lib/attribution-data";
 import { getCampaignsWorkspace } from "@/lib/campaigns-data";
 import { buildAttributionIntelligence } from "@/lib/commercial-intelligence";
 import { isMockMode } from "@/lib/data";
+import { normalizeBehaviorRequest } from "@/lib/native-behavior-contract";
+import { getNativeBehaviorWorkspace } from "@/lib/native-behavior-data";
 import {
   getFunnelIntelligenceWorkspace,
   type FunnelIntelligenceWorkspace as FunnelWorkspace,
 } from "@/lib/funnel-intelligence-data";
 
-type MarketingView = "overview" | "campaigns" | "analytics" | "funnel" | "attribution";
+type MarketingView = "overview" | "campaigns" | "analytics" | "funnel" | "behavior" | "attribution";
 
 type MarketingPageProps = {
   searchParams: Promise<{
@@ -42,6 +45,8 @@ type MarketingPageProps = {
     location?: string;
     country?: string;
     stage?: string;
+    days?: string;
+    steps?: string;
   }>;
 };
 
@@ -51,6 +56,7 @@ const validViews = new Set<MarketingView>([
   "campaigns",
   "analytics",
   "funnel",
+  "behavior",
   "attribution",
 ]);
 
@@ -86,6 +92,7 @@ export default async function MarketingPage({ searchParams }: MarketingPageProps
       {view === "campaigns" ? <CampaignsView query={query} /> : null}
       {view === "analytics" ? <AnalyticsView /> : null}
       {view === "funnel" ? <FunnelView /> : null}
+      {view === "behavior" ? <BehaviorView query={query} /> : null}
       {view === "attribution" ? <AttributionView query={query} /> : null}
     </div>
   );
@@ -101,6 +108,7 @@ function MarketingTabs({ view }: { view: MarketingView }) {
     { value: "campaigns", label: "Campaigns", icon: <Target size={13} /> },
     { value: "analytics", label: "Analytics", icon: <BarChart3 size={13} /> },
     { value: "funnel", label: "Funnel", icon: <GitBranch size={13} /> },
+    { value: "behavior", label: "Behavior", icon: <Activity size={13} /> },
     { value: "attribution", label: "Attribution", icon: <Route size={13} /> },
   ];
 
@@ -267,6 +275,16 @@ async function FunnelView() {
       <FunnelIntelligenceWorkspaceV2 workspace={workspace} />
     </div>
   );
+}
+
+async function BehaviorView({
+  query,
+}: {
+  query: Awaited<MarketingPageProps["searchParams"]>;
+}) {
+  const request = normalizeBehaviorRequest(query.days, query.steps);
+  const workspace = await getNativeBehaviorWorkspace(request);
+  return <NativeBehaviorExplorer workspace={workspace} />;
 }
 
 async function AttributionView({
