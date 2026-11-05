@@ -4,6 +4,7 @@ const { readFileSync } = require('node:fs');
 const { load } = require('./helpers.cjs');
 
 const parser = load('lib/message-sync-audit-validation.ts');
+const receiptParser = load('lib/instagram-receipt-reconciliation-validation.ts');
 
 const synthetic = {
   messages: [
@@ -17,6 +18,13 @@ const synthetic = {
   ],
   instagramHistory: { accountCursors: 0, completedCycles: 0, conversationsScanned: 0, messagesImported: 0, messagesAlreadyPresent: 0, lastScannedAt: null },
   checkedAt: '2026-11-05T05:15:00Z',
+};
+
+const syntheticInstagramReceipts = {
+  totalReceipts: 3, processedReceipts: 3, exactInboundMatches: 2,
+  ignoredNonMessageEnvelopes: 1, ignoredContactShareDuplicates: 0,
+  processedWithoutExactMatchReview: 0, ignoredAlreadyMatched: 0,
+  unprocessedOrMissingStatus: 0, checkedAt: '2026-11-05T08:30:00Z',
 };
 
 function clone(value) {
@@ -90,6 +98,12 @@ function setup(options = {}) {
     },
     rpc: async (name, args) => {
       calls.rpc.push({ name, args });
+      if (name === 'get_instagram_receipt_reconciliation_v1') {
+        return options.reconciliationError
+          ? { data: null, error: { message: 'optional schema unavailable' } }
+          : { data: clone(syntheticInstagramReceipts), error: null };
+      }
+      assert.equal(name, 'get_message_sync_audit_v1');
       return options.rpcError ? { data: null, error: { message: 'private provider data' } }
         : { data: clone(synthetic), error: null };
     },
@@ -114,6 +128,7 @@ function setup(options = {}) {
     '@/lib/workspace': { getWorkspaceContextForUser: async () => workspace },
     '@/lib/data': { isMockMode: () => options.mock === true },
     '@/lib/message-sync-audit-validation': parser,
+    '@/lib/instagram-receipt-reconciliation-validation': receiptParser,
   });
   return { module, calls };
 }
@@ -141,10 +156,15 @@ test('owner/admin reads only active tenant aggregates, without provider or CRM m
       assert.equal(result.workspaceName, 'Example Workspace');
       assert.equal(result.audit.messages[0].storedCount, 9);
       assert.equal(result.instagramEchoEnabled, false);
-      assert.equal(calls.rpc.length, 1);
+      assert.equal(calls.rpc.length, 2);
       assert.deepEqual(calls.rpc[0], {
         name: 'get_message_sync_audit_v1', args: { p_organization_id: 'synthetic-org' },
       });
+      assert.deepEqual(calls.rpc[1], {
+        name: 'get_instagram_receipt_reconciliation_v1',
+        args: { p_organization_id: 'synthetic-org' },
+      });
+      assert.equal(result.instagramReceiptReconciliation.exactInboundMatches, 2);
       assert.equal(calls.serviceClient, 1);
       assert.equal(result.instagramConnections.length, 1);
       assert.equal(result.instagramConnections[0].label, 'Instagram connection 1');
@@ -161,6 +181,14 @@ test('connected Instagram inventory errors and invalid IDs fail closed', async (
   await assert.rejects(setup({ connections: [{ id: 'not-a-uuid' }] }).module.getCurrentMessageSyncAudit(), /invalid identifiers/);
   const result = await setup({ connections: [] }).module.getCurrentMessageSyncAudit();
   assert.deepEqual(result.instagramConnections, []);
+});
+
+test('missing optional Instagram reconciliation cannot block the existing audit', async () => {
+  const { module, calls } = setup({ reconciliationError: true });
+  const result = await module.getCurrentMessageSyncAudit();
+  assert.equal(result.audit.messages[0].storedCount, 9);
+  assert.equal(result.instagramReceiptReconciliation, null);
+  assert.equal(calls.rpc.length, 2);
 });
 
 test('audit RPC failures do not surface provider error details', async () => {
