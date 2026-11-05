@@ -56,7 +56,7 @@ test('fail closed on impossible, malformed or overly broad database output', () 
 });
 
 function setup(options = {}) {
-  const calls = { serviceClient: 0, rpc: [], sessionTables: [], connectionQueries: [] };
+  const calls = { serviceClient: 0, rpc: [], sessionTables: [], connectionQueries: [], readinessCalls: [] };
   const profile = {
     select() { return this; },
     eq() { return this; },
@@ -129,6 +129,21 @@ function setup(options = {}) {
     '@/lib/data': { isMockMode: () => options.mock === true },
     '@/lib/message-sync-audit-validation': parser,
     '@/lib/instagram-receipt-reconciliation-validation': receiptParser,
+    '@/lib/message-seen-activity-readiness': {
+      readMessageSeenActivityReadiness: async (_admin, organizationId) => {
+        calls.readinessCalls.push(organizationId);
+        if (options.readinessError) throw Error('synthetic optional readiness failure');
+        return {
+          checkedAt: '2026-11-05T12:00:00.000Z',
+          whatsappThreadsChecked: 2,
+          confirmedReadMessages: 4,
+          eligibleProviderReadMessages: 4,
+          activityMatchedMessages: 0,
+          eligibleWithoutActivity: 4,
+          readMessagesWithoutProviderId: 0,
+        };
+      },
+    },
   });
   return { module, calls };
 }
@@ -143,6 +158,7 @@ test('authorization rejects anonymous, inactive, missing and non-admin workspace
     assert.equal(await module.getCurrentMessageSyncAudit(), null);
     assert.equal(calls.serviceClient, 0);
     assert.equal(calls.rpc.length, 0);
+    assert.equal(calls.readinessCalls.length, 0);
   }
 });
 
@@ -165,6 +181,11 @@ test('owner/admin reads only active tenant aggregates, without provider or CRM m
         args: { p_organization_id: 'synthetic-org' },
       });
       assert.equal(result.instagramReceiptReconciliation.exactInboundMatches, 2);
+      assert.equal(result.messageSeenActivityReadiness.confirmedReadMessages, 4);
+      assert.equal(result.messageSeenActivityReadiness.eligibleWithoutActivity, 4);
+      assert.deepEqual(calls.readinessCalls, ['synthetic-org']);
+      assert.equal(result.whatsappSeenActivityEnabled, false);
+      assert.equal(result.instagramReadActivityEnabled, false);
       assert.equal(calls.serviceClient, 1);
       assert.equal(result.instagramConnections.length, 1);
       assert.equal(result.instagramConnections[0].label, 'Instagram connection 1');
@@ -188,6 +209,15 @@ test('missing optional Instagram reconciliation cannot block the existing audit'
   const result = await module.getCurrentMessageSyncAudit();
   assert.equal(result.audit.messages[0].storedCount, 9);
   assert.equal(result.instagramReceiptReconciliation, null);
+  assert.equal(calls.rpc.length, 2);
+});
+
+test('optional read-activity preview failures do not break established message-sync audit', async () => {
+  const { module, calls } = setup({ readinessError: true });
+  const result = await module.getCurrentMessageSyncAudit();
+  assert.equal(result.audit.messages[0].storedCount, 9);
+  assert.equal(result.messageSeenActivityReadiness, null);
+  assert.deepEqual(calls.readinessCalls, ['synthetic-org']);
   assert.equal(calls.rpc.length, 2);
 });
 
