@@ -172,6 +172,7 @@
   }
 
   var sessionId = getSessionId();
+  var analyticsIdentityEpoch = 0;
 
   function safeText(value, max) {
     if (typeof value !== 'string') return null;
@@ -431,6 +432,7 @@
     if (flushingQueue || !analyticsGranted()) return Promise.resolve();
     var queue = readQueue();
     if (!queue.length) return Promise.resolve();
+    var epoch = analyticsIdentityEpoch;
     flushingQueue = true;
 
     var remaining = [];
@@ -438,15 +440,16 @@
     queue.forEach(function (item) {
       chain = chain.then(function () {
         // Do not replay a previously queued analytics event after opt-out.
-        if (!analyticsGranted()) return;
+        if (epoch !== analyticsIdentityEpoch || !analyticsGranted() ||
+            !item || item.anonymous_visitor_id !== visitorId) return;
         return postJson(EVENT_ENDPOINT, item, true).catch(function () {
-          if (analyticsGranted()) remaining.push(item);
+          if (epoch === analyticsIdentityEpoch && analyticsGranted()) remaining.push(item);
         });
       });
     });
 
     return chain.then(function () {
-      saveQueue(remaining);
+      if (epoch === analyticsIdentityEpoch && analyticsGranted()) saveQueue(remaining);
       flushingQueue = false;
     }).catch(function () {
       flushingQueue = false;
@@ -471,13 +474,15 @@
 
     var body = envelope(eventName, properties, options);
     return postJson(EVENT_ENDPOINT, body, options.keepalive !== false).catch(function (error) {
-      if (options.queue !== false && analyticsGranted()) queueEnvelope(body);
+      if (options.queue !== false && analyticsGranted() &&
+          body.anonymous_visitor_id === visitorId) queueEnvelope(body);
       throw error;
     });
   }
 
   function rotateAnalyticsIdentity() {
     // A withdrawal severs the old browser identifier and attribution chain.
+    analyticsIdentityEpoch += 1;
     safeRemove(window.localStorage, KEYS.persistentVisitor);
     safeRemove(window.localStorage, KEYS.firstTouch);
     safeRemove(window.localStorage, KEYS.queue);
