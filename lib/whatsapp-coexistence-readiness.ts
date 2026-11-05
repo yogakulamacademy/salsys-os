@@ -4,6 +4,10 @@ import { createAdminClient } from '@/lib/supabase/admin';
 import { createClient } from '@/lib/supabase/server';
 import { getWorkspaceContextForUser } from '@/lib/workspace';
 import { isMockMode } from '@/lib/data';
+import {
+  parseWhatsAppReceiptReconciliation,
+  type WhatsAppReceiptReconciliation,
+} from '@/lib/whatsapp-receipt-reconciliation-validation';
 
 export type WhatsAppCoexistenceReadiness = {
   checkedAt: string;
@@ -22,6 +26,7 @@ export type WhatsAppCoexistenceReadiness = {
   failedUnsupportedMessages: number;
   failedDeliveryStatuses: number;
   failedOtherTypes: number;
+  receiptReconciliation: WhatsAppReceiptReconciliation | null;
 };
 
 type Connection = {
@@ -164,6 +169,23 @@ export async function getCurrentWhatsAppCoexistenceReadiness():
     throw new Error('WhatsApp failure category counts are inconsistent.');
   }
 
+  // Optional rollout-safe, service-only, metadata-only RPC. The new function
+  // can be deployed before or after this page: an unavailable or malformed
+  // report cannot break the existing integration health information.
+  // No provider IDs, customer messages or error descriptions reach the UI.
+  let receiptReconciliation: WhatsAppReceiptReconciliation | null = null;
+  try {
+    const { data: reconciliation, error: reconciliationError } = await (admin as any).rpc(
+      'get_whatsapp_receipt_reconciliation_v1',
+      { p_organization_id: organizationId },
+    );
+    if (!reconciliationError && reconciliation) {
+      receiptReconciliation = parseWhatsAppReceiptReconciliation(reconciliation);
+    }
+  } catch {
+    receiptReconciliation = null;
+  }
+
   const modes = connections.map(connection => onboardingMode(connection.provider_metadata));
   return {
     checkedAt: new Date().toISOString(),
@@ -182,5 +204,6 @@ export async function getCurrentWhatsAppCoexistenceReadiness():
     failedUnsupportedMessages,
     failedDeliveryStatuses,
     failedOtherTypes: failedWebhookEvents - classified,
+    receiptReconciliation,
   };
 }
