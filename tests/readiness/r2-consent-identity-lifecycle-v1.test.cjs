@@ -392,3 +392,39 @@ test("a tab must not resurrect an old visitor retry queue after cross-tab withdr
   await settle();
   assert.deepEqual(JSON.parse(shared.getItem("salsys_event_queue_v1") || "[]"), []);
 });
+
+
+test("missed storage events cannot reconnect a stale visitor on same-tab regrant", async () => {
+  const shared = storage();
+  const first = boot({ local: shared });
+  await first.sdk.consent({ analytics: "granted" });
+  const second = boot({ local: shared });
+  const revokedVisitor = second.sdk.visitorId();
+  await first.sdk.consent({ analytics: "withdrawn" });
+  // This tab was frozen, so it missed the remote privacy storage event.
+  assert.equal((await second.sdk.track("web.page_viewed", {})).privacy_blocked, true);
+  await second.sdk.consent({ analytics: "granted" });
+  assert.notEqual(second.sdk.visitorId(), revokedVisitor);
+  assert.equal(second.local.getItem("salsys_vid"), second.sdk.visitorId());
+});
+
+test("restoring a frozen tab reconciles remote opt-out and later verified regrant", async () => {
+  const shared = storage();
+  const first = boot({ local: shared });
+  await first.sdk.consent({ analytics: "granted" });
+  const second = boot({ local: shared });
+  const oldVisitor = second.sdk.visitorId();
+  await first.sdk.consent({ analytics: "withdrawn" });
+  const pageshow = second.windowListeners.pageshow?.[0];
+  assert.equal(typeof pageshow, "function");
+  pageshow({ persisted: true });
+  assert.equal(second.sdk.privacy().analytics_allowed_locally, false);
+  assert.notEqual(second.sdk.visitorId(), oldVisitor);
+  await first.sdk.consent({ analytics: "granted" });
+  // No 'storage' callback delivered while the tab was in the BFCache.
+  pageshow({ persisted: true });
+  await settle();
+  assert.equal(second.sdk.visitorId(), first.sdk.visitorId());
+  assert.notEqual(second.sdk.sessionId(), first.sdk.sessionId());
+  assert.equal(second.sdk.privacy().analytics_allowed_locally, true);
+});
