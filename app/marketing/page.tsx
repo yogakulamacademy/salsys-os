@@ -13,6 +13,8 @@ type MarketingPageProps = {
     location?: string;
     country?: string;
     stage?: string;
+    days?: string;
+    steps?: string;
   }>;
 };
 
