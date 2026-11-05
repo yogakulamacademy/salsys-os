@@ -8,6 +8,8 @@ const workspace={organization_id:organizationId,active_organization_id:organizat
 let knowledgeScenario='empty';
 let financialScenario='empty';
 let refundCalls=[];
+let behaviorScenario='ready';
+let behaviorCalls=[];
 const syntheticLeadId='80000000-0000-4000-8000-000000000001';
 const originalPaymentId='90000000-0000-4000-8000-000000000001';
 const financialPayments=()=>financialScenario==='empty'?[]:[
@@ -26,6 +28,12 @@ const server=http.createServer(async(req,res)=>{
     financialScenario=state;refundCalls=[];res.end('{}');return;
   }
   if(url.pathname==='/__refund_calls'){res.end(JSON.stringify(refundCalls));return;}
+  if(url.pathname==='/__behavior_scenario'){
+    const state=url.searchParams.get('state');
+    if(!['ready','empty','denied','error'].includes(state)){res.statusCode=400;res.end('{}');return;}
+    behaviorScenario=state;behaviorCalls=[];res.end(JSON.stringify({state}));return;
+  }
+  if(url.pathname==='/__behavior_calls'){res.end(JSON.stringify(behaviorCalls));return;}
   if(url.pathname==='/__knowledge_scenario'){
     const scenario=url.searchParams.get('state');
     if(!['empty','matched','library-error'].includes(scenario)){res.statusCode=400;res.end('{}');return;}
@@ -42,6 +50,50 @@ const server=http.createServer(async(req,res)=>{
     let raw='';for await(const chunk of req)raw+=chunk;refundCalls.push(JSON.parse(raw||'{}'));
     if(financialScenario==='error'){res.statusCode=409;res.end(JSON.stringify({code:'P0001',message:'Refund exceeds the remaining refundable amount'}));return;}
     result={ok:true,payment_id:'90000000-0000-4000-8000-000000000004',replayed:false};
+  }
+  else if(url.pathname==='/rest/v1/rpc/get_native_behavior_workspace_v1'){
+    let raw='';
+    for await(const chunk of req) raw+=chunk;
+    const body=JSON.parse(raw||'{}');
+    // Capture only safe request metadata for synthetic assertions.
+    behaviorCalls.push({
+      organization_id: body.p_organization_id,
+      days: body.p_days,
+      steps: body.p_steps,
+    });
+    if(body.p_organization_id!==organizationId || behaviorScenario==='denied'){
+      res.statusCode=403;
+      res.end(JSON.stringify({code:'42501',message:'Tenant-scoped behavior data unavailable'}));
+      return;
+    }
+    if(behaviorScenario==='error'){
+      res.statusCode=503;
+      res.end(JSON.stringify({code:'synthetic_unavailable',message:'Read-only fixture error'}));
+      return;
+    }
+    const steps=Array.isArray(body.p_steps)?body.p_steps:[];
+    if(![7,14,30].includes(body.p_days) || steps.length<2 || steps.length>5 || new Set(steps).size!==steps.length){
+      res.statusCode=400;
+      res.end(JSON.stringify({code:'22023',message:'Invalid funnel definition'}));
+      return;
+    }
+    const sessions=behaviorScenario==='empty'?[0,0,0,0,0]:[12,8,4,2,1];
+    result={
+      status:{
+        available:true,
+        window_days:body.p_days,
+        generated_at:'2026-11-05T14:00:00Z',
+        path_min_sessions:3,
+        path_min_visitors:3,
+        aggregation_unit:'source_scoped_visitor_session'
+      },
+      funnel:steps.map((event_name,i)=>({event_name,sessions:sessions[i]})),
+      path_sessions:behaviorScenario==='empty'?0:12,
+      paths:behaviorScenario==='empty'?[]:[
+        {from_path:'/courses/200-hour-ytt.php',to_path:'/enroll.php',sessions:8,transitions:11},
+        {from_path:'/private?email=student@example.test',to_path:'/enroll.php',sessions:6,transitions:6},
+      ]
+    };
   }
   else if(url.pathname==='/rest/v1/rpc/get_current_provider_visibility_v1')result={organization_id:organizationId,google_connected:false,meta_connected:false,instagram_connected:false,whatsapp_connected:false};
   else if(url.pathname==='/rest/v1/rpc/get_admissions_snapshot')result={metrics:{needs_reply:0,unread:0},priority_queue:[],batch_capacity:[]};
