@@ -67,11 +67,21 @@ async function graphPage<T>(path: string, token: string, params: Record<string, 
   return payload;
 }
 
-/** Provider read-only check; does not subscribe, publish or send messages. */
+/** Provider read-only check; does not subscribe, publish or send messages.
+ *
+ * Inspect only THIS OAuth application's subscription. A connected Instagram
+ * account may have other Meta applications registered; merging all returned
+ * subscribed_fields would falsely attribute their message_echoes to SalsysOS.
+ */
 export async function inspectInstagramEchoSubscription(
   organizationId: string,
   accountId: string,
 ): Promise<{ subscribed: boolean; fields: string[]; customerMessageSent: false }> {
+  const configuredAppId = process.env.INSTAGRAM_APP_ID?.trim() ?? '';
+  if (!/^[0-9]{4,30}$/.test(configuredAppId)) {
+    throw new Error('Instagram app configuration is unavailable.');
+  }
+
   const runtime = await getInstagramRuntimeForOrganization(organizationId, accountId);
   const response = await fetch('https://graph.instagram.com/' + META_GRAPH_VERSION + '/me/subscribed_apps', {
     method: 'GET',
@@ -83,15 +93,49 @@ export async function inspectInstagramEchoSubscription(
     // Non-success is UNKNOWN, never imply an unsubscribed account.
     throw new Error('Meta did not provide Instagram webhook subscription status.');
   }
-  const payload = await response.json().catch(() => ({})) as { data?: unknown[] };
-  if (!Array.isArray(payload.data)) {
+
+  const payload = await response.json().catch(() => ({})) as { data?: unknown };
+  if (!Array.isArray(payload.data) || payload.data.length > 50) {
     throw new Error('Meta returned an invalid Instagram webhook subscription response.');
   }
-  const fields = Array.from(new Set(payload.data.flatMap(item => {
-    const values = object(item).subscribed_fields;
-    return Array.isArray(values) ? values.filter((value): value is string =>
-      typeof value === 'string' && /^[a-z_]{2,50}$/.test(value)) : [];
-  }))).sort();
+
+  const matching: Json[] = [];
+  for (const item of payload.data) {
+    const subscription = object(item);
+    // Meta has returned application IDs both directly and as application.id.
+    const direct = subscription.id;
+    const nested = object(subscription.application).id;
+    const directId = typeof direct === 'string' || typeof direct === 'number'
+      ? String(direct).trim() : '';
+    const nestedId = typeof nested === 'string' || typeof nested === 'number'
+      ? String(nested).trim() : '';
+    if ((directId && nestedId && directId !== nestedId) ||
+        !/^[0-9]{4,30}$/.test(directId || nestedId)) {
+      // Without a trustworthy app identity, never credit another app's fields.
+      throw new Error('Meta subscription application identity is unavailable.');
+    }
+    if ((directId || nestedId) === configuredAppId) matching.push(subscription);
+  }
+
+  if (matching.length > 1) {
+    throw new Error('Meta returned ambiguous Instagram app subscriptions.');
+  }
+  if (matching.length === 0) {
+    if (payload.data.length > 0) {
+      // Product variants may return a different identifier kind. Do not treat
+      // unknown identities or another app's fields as evidence of OUR status.
+      throw new Error('Meta did not identify the configured Instagram app.');
+    }
+    // A verified empty subscription list contains no subscribed applications.
+    return { subscribed: false, fields: [], customerMessageSent: false };
+  }
+
+  const values = matching[0].subscribed_fields;
+  if (!Array.isArray(values) || values.length > 40 ||
+      !values.every(value => typeof value === 'string' && /^[a-z_]{2,50}$/.test(value))) {
+    throw new Error('Meta returned invalid Instagram webhook subscription fields.');
+  }
+  const fields = Array.from(new Set(values as string[])).sort();
   return { subscribed: fields.includes('message_echoes'), fields, customerMessageSent: false };
 }
 

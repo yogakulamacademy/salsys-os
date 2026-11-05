@@ -29,22 +29,34 @@ is added.
 
 ## Interpreting results safely
 
-- `message_echoes` present: Meta reports that webhook field as subscribed;
-  **this is not proof of actual app-message delivery**.
+- `message_echoes` present **for this app's configured Instagram OAuth app ID**:
+  Meta reports that field as subscribed to SalsysOS; **this is not proof
+  of actual app-message delivery**.
 - `messages` present but `message_echoes` absent: Meta reports incoming
   message subscription, not confirmed native-app echo capture. Depending on
   the connected Meta product/flow, echo payloads may differ; use a live test.
 - Neither present: the observed subscription list contains neither field.
   Meta app configuration, permission, login flow and account scope require review.
 - Request fails: unknown — no negative inference.
+- If Meta returns subscriptions for other applications, their fields must
+  **not** count toward this application's result. A nonempty list with no
+  confidently matching app ID, a missing identity, or conflicting identities
+  is **unknown**, not unsubscribed. A verified empty list is unsubscribed.
+- Product/login variants may return different identifier shapes. If Meta
+  does not identify the configured Instagram OAuth application, inspect the
+  response shape privately and resolve it before enabling outgoing sync;
+  do not substitute the global Meta App ID or assume other apps' fields
+  prove SalsysOS delivery.
 
 The existing parser still only processes outgoing echoes when
 `INSTAGRAM_OUTBOUND_ECHO_ENABLED=true`. This PR deliberately leaves it OFF.
 
 ## Release gate and live acceptance
 
-1. TypeScript, existing message-sync tests, new echo evidence tests, build
-   and CodeQL must pass.
+1. TypeScript, existing message-sync tests, executable app-scope subscription
+   tests, build and CodeQL must pass. The diagnostics compare the returned app
+   identity with server-side `INSTAGRAM_APP_ID` and do not send tokens or
+   Meta app IDs to the client.
 2. Verify a signed-in owner/admin sees only the active tenant's account
    check controls, while employees/viewers are denied.
 3. Click **Check Meta subscription** for each connected account. The response
