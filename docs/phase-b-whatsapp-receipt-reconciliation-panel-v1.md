@@ -47,6 +47,39 @@ create messages based solely on these aggregates.** Preserve the original
 provider-account and sender evidence for privately reviewed, separately
 approved case-by-case recovery.
 
+## v3: Timing matters — later conversations are not historical routing evidence
+
+A further metadata-only production audit on **5 November 2026** established that
+all **5** processed-but-unmatched WhatsApp receipts with a *currently existing*
+sender conversation on another business account were received **before**
+those conversations were created. Each conversation appeared more than one
+day after the corresponding receipt. There was **no** same-sender inbound
+CRM message within 24 hours of any of the 6 unmatched processed receipts.
+Only one of the six receipt account IDs had a matching WhatsApp account
+record already registered at receipt time. These are aggregate observations
+across organizations, not evidence about a named customer.
+
+The new v3 SQL report divides **other-account-only** sender threads into
+three mutually exclusive, tenant-scoped chronological categories:
+
+- **Already existed at receipt:** an alternate-account sender thread existed
+  at or before the legacy webhook arrival.
+- **Only created later:** no alternate-account thread existed at arrival,
+  but at least one was created later.
+- **Timing unknown:** no dated thread could be classified safely.
+
+The category counts must sum exactly to
+`processedUnmatchedOtherAccountThread`, or the server report fails closed.
+Multiple-account threads are tracked separately in the original identity
+partition and are not silently assigned to these other-account-only buckets.
+
+**Interpretation:** A later-created conversation does **not** establish that
+the earlier webhook was misrouted to that account; an earlier conversation
+also does not prove original routing by itself. No contact reassignment,
+automatic repair, webhook replay or message creation is authorized by this
+audit. Staff must privately verify the historical provider-account and
+onboarding timeline before considering case-specific recovery.
+
 ## Privacy and safety guarantees
 
 1. SQL function is `STABLE SECURITY INVOKER` and **SELECT-only**. Execution is revoked from `PUBLIC`, `anon` and `authenticated`, granted to `service_role`.
