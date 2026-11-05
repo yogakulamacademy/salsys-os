@@ -100,18 +100,23 @@ export function InstagramEchoVerification({ connections }: {
           <div className="mt-2 space-y-1 text-xs text-copy-muted">
             <p>
               {hasEchoes
-                ? 'Meta reports a message_echoes field subscription.'
+                ? 'Meta lists a separate message_echoes field for this application.'
                 : hasMessages
-                  ? 'Meta reports messages, but not a separate message_echoes field.'
-                  : 'Meta does not report messages or message_echoes among the returned subscription fields.'}
+                  ? 'Meta lists messages for this application; no separate message_echoes field is listed.'
+                  : 'Meta lists neither messages nor message_echoes for this application.'}
             </p>
             <p>
               {hasMessages ? 'Incoming messages field: listed.' : 'Incoming messages field: not listed.'}
-              {' '}Outgoing echo field: {hasEchoes ? 'listed' : 'not listed'}.
+              {' '}Separate message_echoes field: {hasEchoes ? 'listed' : 'not listed'}.
             </p>
             <p className="break-words">Provider fields: {result.fields.join(', ') || 'none returned'}</p>
             <p>Checked {result.checkedAt ? new Date(result.checkedAt).toLocaleString() : 'just now'}.</p>
-            <p>Field subscriptions do not prove signed webhook delivery, a matching CRM thread, or successful native-app echo capture. A controlled live message test is still required.</p>
+            <p>
+              {hasMessages || hasEchoes
+                ? 'Depending on the Instagram integration, outbound events may arrive through messages with message.is_echo=true. A missing separate message_echoes field alone cannot prove echo delivery is unavailable.'
+                : 'No relevant messaging field is listed. Check the Meta app and account configuration before attempting live acceptance.'}
+            </p>
+            <p>Subscription metadata does not prove signed webhook delivery, a matching CRM thread, or native-app echo capture. A controlled, authorized live-message test is still required before activation.</p>
           </div>
         )}
       </div>;
