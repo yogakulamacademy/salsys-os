@@ -106,3 +106,31 @@ test("Legitimate zero data shows zero stages and a privacy-safe path empty state
   await expect(page.getByText("No path has enough evidence yet. Try a longer date range.")).toBeVisible();
   await expect(page.getByRole("heading", { name: "Behavior analytics unavailable" })).toHaveCount(0);
 });
+
+
+test("Backend errors fail closed without leaking tenant or upstream error details", async ({ page, request }) => {
+  const setup = await request.get(fixtureBase + "/__behavior_scenario?state=error");
+  expect(setup.ok()).toBe(true);
+  await page.goto("/marketing?view=behavior");
+  await expect(page.getByRole("heading", { name: "Behavior analytics unavailable" })).toBeVisible();
+  await expect(page.getByText("/courses/200-hour-ytt.php", { exact: true })).toHaveCount(0);
+  await expect(page.getByText("Read-only fixture error", { exact: true })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Run funnel" })).toBeVisible();
+});
+
+test("Funnel builder enforces five distinct stages and never changes the original Funnel view", async ({ page }) => {
+  await page.goto("/marketing?view=behavior");
+  await page.getByRole("button", { name: "Add step" }).click();
+  await expect(page.getByRole("combobox", { name: "Funnel step 4" })).toBeVisible();
+  await page.getByRole("button", { name: "Add step" }).click();
+  await expect(page.getByRole("combobox", { name: "Funnel step 5" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Add step" })).toHaveCount(0);
+  await expect(page.getByRole("option", { name: "Page viewed" })).toHaveCount(1);
+  await page.getByRole("button", { name: "Remove step 5" }).click();
+  await expect(page.getByRole("combobox", { name: "Funnel step 5" })).toHaveCount(0);
+
+  await page.getByRole("link", { name: "Funnel", exact: true }).click();
+  await expect(page).toHaveURL(/view=funnel/);
+  await expect(page.getByRole("heading", { name: "Funnel", exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Behavior explorer" })).toHaveCount(0);
+});
