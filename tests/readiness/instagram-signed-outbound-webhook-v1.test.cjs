@@ -48,6 +48,7 @@ function harness(options = {}) {
     rpc: [],
     automation: 0,
     profile: 0,
+    readActivity: 0,
   };
   const seen = new Set();
 
@@ -163,6 +164,15 @@ function harness(options = {}) {
       },
     },
     '@/lib/security/machine-bearer-auth': { secretMatches: () => false },
+    '@/lib/integrations/message-read-activity': {
+      recordInstagramConversationReadActivity: async (_db, event) => {
+        calls.readActivity += 1;
+        assert.equal(event.accountId, ACCOUNT);
+        assert.equal(event.customerId, CUSTOMER);
+        assert.equal(event.occurredAt, new Date(EVENT_TIME).toISOString());
+        return { acknowledged: true };
+      },
+    },
     '@/lib/automation/instagram-operations': {
       queueInstagramCommentAutomation: async () => { calls.automation++; throw Error('must not queue'); },
       queueInstagramDmAutomation: async () => { calls.automation++; throw Error('must not queue'); },
@@ -179,10 +189,13 @@ async function run(body, options = {}, state = {}) {
   const original = {
     secret: process.env.INSTAGRAM_APP_SECRET,
     enabled: process.env.INSTAGRAM_OUTBOUND_ECHO_ENABLED,
+    readEnabled: process.env.INSTAGRAM_READ_RECEIPT_ACTIVITY_ENABLED,
   };
   process.env.INSTAGRAM_APP_SECRET = SECRET;
   if (state.enabled === false) delete process.env.INSTAGRAM_OUTBOUND_ECHO_ENABLED;
   else process.env.INSTAGRAM_OUTBOUND_ECHO_ENABLED = 'true';
+  if (state.readEnabled === true) process.env.INSTAGRAM_READ_RECEIPT_ACTIVITY_ENABLED = 'true';
+  else delete process.env.INSTAGRAM_READ_RECEIPT_ACTIVITY_ENABLED;
   const ctx = harness(state);
   try {
     const reply = await ctx.route.POST(request(body, options));
@@ -192,6 +205,8 @@ async function run(body, options = {}, state = {}) {
     else process.env.INSTAGRAM_APP_SECRET = original.secret;
     if (original.enabled === undefined) delete process.env.INSTAGRAM_OUTBOUND_ECHO_ENABLED;
     else process.env.INSTAGRAM_OUTBOUND_ECHO_ENABLED = original.enabled;
+    if (original.readEnabled === undefined) delete process.env.INSTAGRAM_READ_RECEIPT_ACTIVITY_ENABLED;
+    else process.env.INSTAGRAM_READ_RECEIPT_ACTIVITY_ENABLED = original.readEnabled;
   }
 }
 
@@ -310,6 +325,44 @@ test('identity preflight bounds signed candidates per request and avoids write c
     assert.equal(logs[0][1].checkedCount, 10);
     assert.equal(logs[0][1].uncheckedCount, 2);
   } finally { console.info = priorInfo; }
+});
+
+test('signed Instagram read watermark adds a thread-level activity only with its independent opt-in', async () => {
+  const read = { sender: { id: CUSTOMER }, recipient: { id: ACCOUNT },
+    timestamp: EVENT_TIME, read: { watermark: EVENT_TIME } };
+  const disabled = await run(payload([read]), {}, { enabled: false, readEnabled: false });
+  assert.equal(disabled.reply.status, 200);
+  assert.equal(disabled.reply.data.reason, 'no_supported_instagram_events');
+  assert.equal(disabled.calls.readActivity, 0);
+  assert.equal(disabled.calls.createAdminClient, 0);
+
+  const enabled = await run(payload([read]), {}, { enabled: false, readEnabled: true });
+  assert.equal(enabled.reply.status, 200);
+  assert.equal(enabled.calls.readActivity, 1);
+  assert.equal(enabled.reply.data.read_activities_acknowledged, 1);
+  assert.equal(enabled.calls.rpc.length, 0);
+  assert.equal(enabled.calls.automation, 0);
+});
+
+test('invalid, wrong-direction or message-bearing Instagram read envelope creates no activity', async () => {
+  const invalid = [
+    { sender: { id: ACCOUNT }, recipient: { id: CUSTOMER }, read: { watermark: EVENT_TIME } },
+    { sender: { id: CUSTOMER }, recipient: { id: ACCOUNT }, read: {} },
+    { sender: { id: CUSTOMER }, recipient: { id: ACCOUNT }, read: { watermark: 'invalid' } },
+    { sender: { id: CUSTOMER }, recipient: { id: ACCOUNT }, read: { watermark: EVENT_TIME },
+      message: { mid: MID, text: 'Not a pure read receipt' } },
+  ];
+  const result = await run(payload(invalid), {}, { enabled: false, readEnabled: true });
+  assert.equal(result.reply.status, 200);
+  assert.equal(result.reply.data.reason, 'no_supported_instagram_events');
+  assert.equal(result.calls.readActivity, 0);
+  assert.equal(result.calls.createAdminClient, 0);
+
+  const badHmac = await run(payload([{
+    sender: { id: CUSTOMER }, recipient: { id: ACCOUNT }, read: { watermark: EVENT_TIME },
+  }]), { signature: 'invalid' }, { enabled: false, readEnabled: true });
+  assert.equal(badHmac.reply.status, 401);
+  assert.equal(badHmac.calls.readActivity, 0);
 });
 
 test('invalid HMAC or non-echo payload never produces an observation log', async () => {
