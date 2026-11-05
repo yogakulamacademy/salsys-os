@@ -39,3 +39,10 @@ export function normalizeBehaviorRequest(
     steps: valid ? (steps as BehaviorEvent[]) : [...DEFAULT_BEHAVIOR_STEPS],
   };
 }
+
+/** A breakdown is a single approved event, independent of funnel sequencing. */
+export function normalizeBehaviorBreakdownEvent(value: unknown): BehaviorEvent {
+  return typeof value === "string" && allowed.has(value)
+    ? (value as BehaviorEvent)
+    : "web.page_viewed";
+}
