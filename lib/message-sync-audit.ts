@@ -5,6 +5,10 @@ import { createClient } from '@/lib/supabase/server';
 import { getWorkspaceContextForUser } from '@/lib/workspace';
 import { isMockMode } from '@/lib/data';
 import { parseMessageSyncAudit, type MessageSyncAudit } from '@/lib/message-sync-audit-validation';
+import {
+  parseInstagramReceiptReconciliation,
+  type InstagramReceiptReconciliation,
+} from '@/lib/instagram-receipt-reconciliation-validation';
 
 export type MessageSyncAuditView = {
   workspaceName: string;
@@ -12,6 +16,7 @@ export type MessageSyncAuditView = {
   instagramEchoEnabled: boolean;
   instagramHistoryEnabled: boolean;
   instagramConnections: Array<{ id: string; label: string }>;
+  instagramReceiptReconciliation: InstagramReceiptReconciliation | null;
 };
 
 /**
@@ -67,11 +72,28 @@ export async function getCurrentMessageSyncAudit(): Promise<MessageSyncAuditView
     throw new Error('Instagram subscription inventory contains invalid identifiers.');
   }
 
+  // Optional read-only service-role RPC. Strictly tenant-bound; a migration
+  // rollout gap or malformed report cannot break the established audit.
+  // No raw webhook payloads, customer IDs or provider message IDs leave SQL.
+  let instagramReceiptReconciliation: InstagramReceiptReconciliation | null = null;
+  try {
+    const { data: receiptData, error: receiptError } = await (admin as any).rpc(
+      'get_instagram_receipt_reconciliation_v1',
+      { p_organization_id: active.organizationId },
+    );
+    if (!receiptError && receiptData) {
+      instagramReceiptReconciliation = parseInstagramReceiptReconciliation(receiptData);
+    }
+  } catch {
+    instagramReceiptReconciliation = null;
+  }
+
   return {
     workspaceName: active.organizationName,
     audit: parseMessageSyncAudit(data),
     instagramEchoEnabled: process.env.INSTAGRAM_OUTBOUND_ECHO_ENABLED === 'true',
     instagramHistoryEnabled: process.env.INSTAGRAM_HISTORY_SYNC_ENABLED === 'true',
+    instagramReceiptReconciliation,
     instagramConnections: ids.map((id, index) => ({
       id,
       label: `Instagram connection ${index + 1}`,
