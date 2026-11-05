@@ -16,11 +16,12 @@ Instagram Inbox import.
 - `ingest_instagram_outbound_echo_v1` requires a connected Instagram account,
   matches an **existing** tenant-scoped conversation, deduplicates on Meta
   message ID, and stores original sent time and attachment metadata.
-- `retry_instagram_outbound_echoes_v1` (new migration) retries raw echoes
+- `retry_instagram_outbound_echoes_v1` (new migration) can retry raw echoes
   deferred because the conversation was not ready. It is separate from the
-  inbound DM retry worker; it never creates leads. It retries at least five
-  minutes apart, processes at most ten per two-minute cron run, and dead-letters
-  unmatched events after 30 days for manual investigation.
+  inbound DM retry worker; it never creates leads. It throttles retries at
+  least five minutes apart, caps batches, and dead-letters unmatched events
+  after 30 days for manual investigation. **The migration installs the
+  two-minute cron job INACTIVE.** No retries are run by the migration.
 - Human sends already look for an existing matching provider echo before
   inserting a separate outbound CRM message.
 
@@ -33,12 +34,19 @@ Instagram Inbox import.
    field. Check app mode, review/permissions and webhook callback reachability.
    Instagram account OAuth scopes do not prove webhook subscription.
 3. Verify `ingest_instagram_outbound_echo_v1(uuid)` exists in the target
-   database, and deploy the recovery migration via the normal migration
-   promotion and review workflow.
+   database, and deploy the reviewed recovery migration via the normal
+   migration promotion workflow. **Immediately read back** the job in
+   `cron.job`: it must exist with `active = false`. Refuse release if active.
 4. Confirm no cross-tenant provider message IDs or unresolved historical
    echoes are being silently attached to the wrong lead.
-5. Turn on the `INSTAGRAM_OUTBOUND_ECHO_ENABLED=true` production environment
-   setting **only after** a controlled live signed-event test and redeploy.
+5. Carry out an approved, signed live Meta echo test with the correct
+   professional account, existing thread and safe staging/test path.
+6. Only after provider, permission, identity and privacy sign-off, enable
+   `INSTAGRAM_OUTBOUND_ECHO_ENABLED=true` and redeploy under change control.
+7. Activate the database retry job **separately** using the Supabase Cron
+   dashboard (change Inactive to Active) or an approved `cron.alter_job`
+   operation; confirm the correct job name, owner, command and schedule first.
+   The job must remain inactive if any gate fails.
 
 ## Live QA matrix
 
@@ -69,7 +77,8 @@ message bodies, API tokens, or customer IDs in shared logs.
   metadata and restore via the approved replay workflow after fixing account
   linkage.
 - The retry cron job `instagram-outbound-echo-retry-v1` is separate from
-  `instagram-dm-retry-v1`. Disable the former if an unexpected reconciliation
-  issue is detected.
+  `instagram-dm-retry-v1` and defaults **inactive**. Disable it immediately
+  if reconciliation behaves unexpectedly, even if the application flag is
+  already disabled. Verify `cron.job.active = false` after rollback.
 - Do not claim full historical sync: Meta does not automatically replay older
   Instagram-app outbound messages when the webhook field is enabled.
