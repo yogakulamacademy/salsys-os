@@ -167,10 +167,9 @@ export async function POST(request: NextRequest) {
     }
 
     const messages = extractInstagramInboundEvents(payload);
-    // Observe only the *count* of signed, direction-valid echo candidates
-    // before the opt-in projection gate. This does not retain any message,
-    // invoke Supabase, identify an account, or assert CRM delivery. It makes
-    // permitted native-app acceptance tests observable while writes stay OFF.
+    // Gather outbound-shaped candidates only after verifying Meta's HMAC.
+    // With CRM processing disabled, run bounded SELECT-only identity checks
+    // that return aggregate counts, never customer/provider identifiers.
     const echoCandidates = extractInstagramOutboundEchoEvents(payload);
     // CRM projection remains fail-closed until app-scoped Meta acceptance,
     // connected-account linkage, signed delivery and tenant QA are complete.
@@ -178,11 +177,9 @@ export async function POST(request: NextRequest) {
       ? echoCandidates
       : [];
     if (echoCandidates.length > 0 && echoes.length === 0) {
-      // Logs intentionally include no account, sender, message ID, content,
-      // timestamp or tenant. Duplicated webhook delivery can repeat this count.
-      console.info('Signed Instagram outbound echo candidates observed (CRM processing disabled).', {
-        candidateCount: echoCandidates.length,
-      });
+      // A failed optional read-only preflight never blocks inbound ingestion
+      // or forces Meta to retry an otherwise valid webhook.
+      await observeDisabledInstagramEchoIdentity(echoCandidates);
     }
     const comments = extractInstagramCommentEvents(payload);
 
@@ -527,6 +524,103 @@ export async function POST(request: NextRequest) {
       { status: 500 },
     );
   }
+}
+
+const MAX_DISABLED_ECHO_IDENTITY_CHECKS = 10;
+
+/**
+ * Evidence-only readiness preflight for signed outbound-shaped Meta webhooks.
+ * No CRM records, raw events, provider credentials or automation are modified.
+ * Missing/ambiguous identities and lookup errors fail closed; counts only.
+ * Retries may repeat the same candidate, so these are NOT unique-message totals.
+ */
+async function observeDisabledInstagramEchoIdentity(
+  events: InstagramOutboundEchoEvent[],
+) {
+  const checked = events.slice(0, MAX_DISABLED_ECHO_IDENTITY_CHECKS);
+  const result = {
+    candidateCount: events.length,
+    checkedCount: checked.length,
+    connectedAccountMatches: 0,
+    existingThreadMatches: 0,
+    existingOutboundMidMatches: 0,
+    unmappedOrAmbiguousAccounts: 0,
+    missingOrAmbiguousThreads: 0,
+    lookupUnavailable: 0,
+    uncheckedCount: events.length - checked.length,
+  };
+
+  try {
+    const admin = createAdminClient();
+    for (const event of checked) {
+      try {
+        // Global account identity must be unique before choosing a tenant;
+        // never attribute one business account to an arbitrary organization.
+        const { data: connections, error: connectionError } = await admin
+          .from('integration_connections')
+          .select('organization_id')
+          .eq('provider', 'instagram')
+          .eq('status', 'connected')
+          .eq('external_account_id', event.accountId)
+          .limit(2);
+        if (connectionError || !Array.isArray(connections)) {
+          result.lookupUnavailable += 1;
+          continue;
+        }
+        if (connections.length !== 1 || !stringValue(connections[0].organization_id)) {
+          result.unmappedOrAmbiguousAccounts += 1;
+          continue;
+        }
+        const organizationId = stringValue(connections[0].organization_id);
+        result.connectedAccountMatches += 1;
+
+        const { data: threads, error: threadError } = await admin
+          .from('conversations')
+          .select('id')
+          .eq('organization_id', organizationId)
+          .eq('channel', 'instagram')
+          .eq('external_account_id', event.accountId)
+          .eq('external_conversation_id', event.accountId + ':' + event.recipientId)
+          .limit(2);
+        if (threadError || !Array.isArray(threads)) {
+          result.lookupUnavailable += 1;
+          continue;
+        }
+        if (threads.length !== 1 || !stringValue(threads[0].id)) {
+          result.missingOrAmbiguousThreads += 1;
+          continue;
+        }
+        result.existingThreadMatches += 1;
+
+        const { data: outbound, error: outboundError } = await admin
+          .from('messages')
+          .select('id')
+          .eq('organization_id', organizationId)
+          .eq('conversation_id', stringValue(threads[0].id))
+          .eq('direction', 'outbound')
+          .eq('external_message_id', event.messageId)
+          .limit(2);
+        if (outboundError || !Array.isArray(outbound)) {
+          result.lookupUnavailable += 1;
+          continue;
+        }
+        if (outbound.length === 1) result.existingOutboundMidMatches += 1;
+        // A missing provider MID in CRM is not proof of a lost message.
+        // More than one match is ambiguous; never report it as a clean match.
+      } catch {
+        result.lookupUnavailable += 1;
+      }
+    }
+  } catch {
+    // Service-client initialization failure is not a webhook failure.
+    result.lookupUnavailable += checked.length;
+  }
+
+  // No organization ID, account ID, sender, MID, text or timestamps appear.
+  console.info(
+    'Signed Instagram outbound echo candidates observed (CRM processing disabled).',
+    result,
+  );
 }
 
 function extractInstagramInboundEvents(payload: JsonObject) {
