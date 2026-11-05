@@ -9,6 +9,7 @@ const CUSTOMER = '992200001112233';
 const ORG = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
 const MID = 'mid_synthetic_001';
 const RAW_ID = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
+const CRM_THREAD = 'cccccccc-cccc-4ccc-8ccc-cccccccccccc';
 const EVENT_TIME = 1793000000000;
 
 function echoEvent(overrides = {}) {
@@ -52,19 +53,58 @@ function harness(options = {}) {
 
   const admin = {
     from(name) {
-      assert.equal(name, 'integration_connections');
       const filters = [];
       const query = {
         select(value) {
-          assert.equal(value, 'organization_id');
+          assert.equal(value, name === 'integration_connections' ? 'organization_id' : 'id');
           return query;
         },
         eq(key, value) {
           filters.push([key, value]);
           return query;
         },
+        limit: async n => {
+          assert.equal(n, 2);
+          calls.lookup.push({ table: name, filters });
+          if (options.lookupError) {
+            return { data: null, error: { message: 'synthetic private error' } };
+          }
+          if (name === 'integration_connections') {
+            assert.deepEqual(filters, [
+              ['provider', 'instagram'],
+              ['status', 'connected'],
+              ['external_account_id', ACCOUNT],
+            ]);
+            return { data: options.unknownAccount ? [] :
+              options.ambiguousAccount ? [{ organization_id: ORG }, { organization_id: ORG }] :
+                [{ organization_id: ORG }], error: null };
+          }
+          if (name === 'conversations') {
+            assert.deepEqual(filters, [
+              ['organization_id', ORG],
+              ['channel', 'instagram'],
+              ['external_account_id', ACCOUNT],
+              ['external_conversation_id', ACCOUNT + ':' + CUSTOMER],
+            ]);
+            return { data: options.missingThread ? [] :
+              options.ambiguousThread ? [{ id: CRM_THREAD }, { id: CRM_THREAD }] :
+                [{ id: CRM_THREAD }], error: null };
+          }
+          if (name === 'messages') {
+            assert.deepEqual(filters, [
+              ['organization_id', ORG],
+              ['conversation_id', CRM_THREAD],
+              ['direction', 'outbound'],
+              ['external_message_id', MID],
+            ]);
+            return { data: options.existingOutbound ? [{ id: 'message_existing' }] : [],
+              error: null };
+          }
+          throw new Error('Unexpected read table: ' + name);
+        },
         maybeSingle: async () => {
-          calls.lookup.push(filters);
+          assert.equal(name, 'integration_connections');
+          calls.lookup.push({ table: name, filters });
           assert.deepEqual(filters, [
             ['provider', 'instagram'],
             ['status', 'connected'],
@@ -168,7 +208,10 @@ test('disabled echo parser does not touch CRM even with a correctly signed outbo
   const { reply, calls } = await run(payload(), {}, { enabled: false });
   assert.equal(reply.status, 200);
   assert.equal(reply.data.reason, 'no_supported_instagram_events');
-  assert.equal(calls.createAdminClient, 0);
+  assert.equal(calls.createAdminClient, 1);
+  assert.deepEqual(calls.lookup.map(x => x.table), [
+    'integration_connections', 'conversations', 'messages',
+  ]);
   assert.equal(calls.rpc.length, 0);
 });
 
@@ -180,11 +223,21 @@ test('disabled CRM processing observes signed echo counts without privileged cli
     const { reply, calls } = await run(payload([echoEvent(), echoEvent()]), {}, { enabled: false });
     assert.equal(reply.status, 200);
     assert.equal(reply.data.reason, 'no_supported_instagram_events');
-    assert.equal(calls.createAdminClient, 0);
+    assert.equal(calls.createAdminClient, 1);
     assert.equal(calls.rpc.length, 0);
+    assert.deepEqual(calls.lookup.map(x => x.table), [
+      'integration_connections', 'conversations', 'messages',
+      'integration_connections', 'conversations', 'messages',
+    ]);
     assert.deepEqual(logs, [[
       'Signed Instagram outbound echo candidates observed (CRM processing disabled).',
-      { candidateCount: 2 },
+      {
+        candidateCount: 2, checkedCount: 2,
+        connectedAccountMatches: 2, existingThreadMatches: 2,
+        existingOutboundMidMatches: 0,
+        unmappedOrAmbiguousAccounts: 0, missingOrAmbiguousThreads: 0,
+        lookupUnavailable: 0, uncheckedCount: 0,
+      },
     ]]);
     const serialized = JSON.stringify(logs);
     for (const privateValue of [ACCOUNT, CUSTOMER, MID, 'Synthetic fixture only', ORG, SECRET]) {
@@ -193,6 +246,70 @@ test('disabled CRM processing observes signed echo counts without privileged cli
   } finally {
     console.info = priorInfo;
   }
+});
+
+test('identity preflight reports exact outbound MID matches without writes or identifiers', async () => {
+  const priorInfo = console.info;
+  const logs = [];
+  console.info = (...args) => logs.push(args);
+  try {
+    const { reply, calls } = await run(payload(), {}, { enabled: false, existingOutbound: true });
+    assert.equal(reply.status, 200);
+    assert.equal(calls.rpc.length, 0);
+    assert.equal(calls.automation, 0);
+    assert.equal(calls.profile, 0);
+    const aggregate = logs[0][1];
+    assert.equal(aggregate.existingOutboundMidMatches, 1);
+    assert.equal(aggregate.existingThreadMatches, 1);
+    assert.equal(aggregate.connectedAccountMatches, 1);
+    assert.equal(aggregate.lookupUnavailable, 0);
+    assert.equal(JSON.stringify(logs).includes(MID), false);
+  } finally { console.info = priorInfo; }
+});
+
+test('identity preflight fails closed on unknown, ambiguous or unavailable account/thread evidence', async () => {
+  for (const state of [
+    { unknownAccount: true },
+    { ambiguousAccount: true },
+    { missingThread: true },
+    { ambiguousThread: true },
+    { lookupError: true },
+  ]) {
+    const priorInfo = console.info;
+    const logs = [];
+    console.info = (...args) => logs.push(args);
+    try {
+      const { reply, calls } = await run(payload(), {}, { enabled: false, ...state });
+      assert.equal(reply.status, 200);
+      assert.equal(calls.rpc.length, 0);
+      assert.equal(calls.automation, 0);
+      assert.equal(calls.profile, 0);
+      const metric = logs[0][1];
+      assert.equal(metric.candidateCount, 1);
+      assert.equal(metric.existingOutboundMidMatches, 0);
+      assert.equal(metric.lookupUnavailable + metric.unmappedOrAmbiguousAccounts +
+        metric.missingOrAmbiguousThreads, 1);
+      assert.equal(JSON.stringify(logs).includes(MID), false);
+      assert.equal(JSON.stringify(logs).includes(ACCOUNT), false);
+    } finally { console.info = priorInfo; }
+  }
+});
+
+test('identity preflight bounds signed candidates per request and avoids write calls', async () => {
+  const priorInfo = console.info;
+  const logs = [];
+  console.info = (...args) => logs.push(args);
+  try {
+    const { reply, calls } = await run(payload(Array.from({ length: 12 }, () => echoEvent())), {},
+      { enabled: false });
+    assert.equal(reply.status, 200);
+    assert.equal(calls.createAdminClient, 1);
+    assert.equal(calls.lookup.length, 30);
+    assert.equal(calls.rpc.length, 0);
+    assert.equal(logs[0][1].candidateCount, 12);
+    assert.equal(logs[0][1].checkedCount, 10);
+    assert.equal(logs[0][1].uncheckedCount, 2);
+  } finally { console.info = priorInfo; }
 });
 
 test('invalid HMAC or non-echo payload never produces an observation log', async () => {
