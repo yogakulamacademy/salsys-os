@@ -84,7 +84,7 @@ test("No event data and small-cohort evidence have separate honest empty states"
   await request.get(fixtureBase + "/__behavior_scenario?state=small");
   await page.reload();
   await expect(page.getByText("No public page reached the minimum visitor threshold in this period.")).toBeVisible();
-  await expect(page.getByText("/courses/200-hour-ytt.php", { exact: true })).toHaveCount(0);
+  await expect(page.getByRole("region", { name: "Event page breakdown" }).getByText("/courses/200-hour-ytt.php", { exact: true })).toHaveCount(0);
 });
 
 test("Denied or failed breakdown remains isolated from live funnel and hides raw errors", async ({ page, request }) => {
