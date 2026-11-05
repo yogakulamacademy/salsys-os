@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from 'next/server';
 
 import { secretMatches } from '@/lib/security/machine-bearer-auth';
 import { createAdminClient } from '@/lib/supabase/admin';
+import { recordWhatsappMessageSeenActivity } from '@/lib/integrations/message-read-activity';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -592,6 +593,16 @@ async function processStoredWhatsAppStatusEvent(
     throw new Error(
       `WhatsApp ${statusName} status could not yet be matched to CRM message ${externalMessageId}.`,
     );
+  }
+
+  // A read receipt has already been matched by the existing provider-MID
+  // status RPC. Record its staff timeline evidence only when explicitly
+  // enabled; this does not change message status, stage or automation.
+  if (statusName === 'read' && process.env.WHATSAPP_MESSAGE_SEEN_ACTIVITY_ENABLED === 'true') {
+    await recordWhatsappMessageSeenActivity(supabase, {
+      organizationId,
+      providerMessageId: externalMessageId,
+    });
   }
 
   await markWebhookEventProcessed(supabase, eventId);
