@@ -145,7 +145,7 @@ export function NativeBehaviorExplorer({ workspace, trends }: { workspace: Nativ
             <p className="mt-4 text-xs text-slate-500">Session-level observations only. A browser form submission is not proof of a CRM lead, payment or enrollment.</p>
           </section>
 
-          <section className="rounded-2xl border border-slate-200 bg-white p-5 dark:border-slate-800 dark:bg-slate-950">
+          <section aria-label="Popular navigation paths" className="rounded-2xl border border-slate-200 bg-white p-5 dark:border-slate-800 dark:bg-slate-950">
             <div className="flex flex-wrap items-start justify-between gap-2">
               <div>
                 <div className="flex items-center gap-2"><Route size={16} className="text-slate-500"/>
