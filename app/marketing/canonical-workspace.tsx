@@ -16,6 +16,7 @@ import { CampaignsIntelligenceWorkspace } from "@/components/campaigns-intellige
 import type { CampaignWorkspaceFilters } from "@/components/campaigns-workspace";
 import { FunnelIntelligenceWorkspaceV2 } from "@/components/funnel-intelligence-workspace-v2";
 import { NativeBehaviorExplorer } from "@/components/marketing/native-behavior-explorer";
+import { NativeBehaviorBreakdownPanel } from "@/components/marketing/native-behavior-breakdown";
 import { ExecutiveDecisionBrief } from "@/components/marketing/executive-decision-brief";
 import { MarketingOverview } from "@/components/marketing/marketing-overview";
 import { Notice, PageHeader } from "@/components/ui";
@@ -24,7 +25,8 @@ import { getAttributionWorkspace } from "@/lib/attribution-data";
 import { getCampaignsWorkspace } from "@/lib/campaigns-data";
 import { buildAttributionIntelligence } from "@/lib/commercial-intelligence";
 import { isMockMode } from "@/lib/data";
-import { normalizeBehaviorRequest } from "@/lib/native-behavior-contract";
+import { normalizeBehaviorRequest, normalizeBehaviorBreakdownEvent } from "@/lib/native-behavior-contract";
+import { getNativeBehaviorPageBreakdown } from "@/lib/native-behavior-breakdown-data";
 import { getNativeBehaviorWorkspace } from "@/lib/native-behavior-data";
 import { getNativeBehaviorTrends } from "@/lib/native-behavior-trends-data";
 import {
@@ -48,6 +50,7 @@ type MarketingPageProps = {
     stage?: string;
     days?: string;
     steps?: string;
+    breakdown?: string;
   }>;
 };
 
@@ -284,11 +287,17 @@ async function BehaviorView({
   query: Awaited<MarketingPageProps["searchParams"]>;
 }) {
   const request = normalizeBehaviorRequest(query.days, query.steps);
-  const [workspace, trends] = await Promise.all([
+  const breakdownEvent = normalizeBehaviorBreakdownEvent(query.breakdown);
+  const [workspace, trends, breakdown] = await Promise.all([
     getNativeBehaviorWorkspace(request),
     getNativeBehaviorTrends({ days: request.days, events: request.steps }),
+    getNativeBehaviorPageBreakdown({ days: request.days, eventName: breakdownEvent }),
   ]);
-  return <NativeBehaviorExplorer workspace={workspace} trends={trends} />;
+  return (
+    <NativeBehaviorExplorer workspace={workspace} trends={trends}>
+      <NativeBehaviorBreakdownPanel breakdown={breakdown} appliedSteps={request.steps} />
+    </NativeBehaviorExplorer>
+  );
 }
 
 async function AttributionView({
