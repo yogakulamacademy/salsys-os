@@ -7,14 +7,14 @@ returns text
 language sql
 immutable
 set search_path = public, pg_catalog
-as $
+as $$
   select case
     when sanitized.path ~* '(^|/)(account|profile|users?|students?|private|admin|dashboard|settings|session|token|reset-password|payments?|orders?|checkout|leads?|api|auth)(/|\.|$)'
       then '/other'
     else sanitized.path
   end
   from (select public.native_safe_page_path_v2(p_path) as path) sanitized;
-$;
+$$;
 
 revoke all on function public.native_safe_behavior_breakdown_page_v1(text)
   from public,anon,authenticated;
@@ -165,7 +165,7 @@ revoke all on function public.get_native_behavior_page_breakdown_v1(uuid,integer
 grant execute on function public.get_native_behavior_page_breakdown_v1(uuid,integer,text)
   to authenticated;
 
--- No fixtures insert into production. Pure route assertions on known synthetic strings.
+-- No production fixture writes. Pure route assertions on known synthetic strings.
 do $$
 begin
   if public.native_safe_behavior_breakdown_page_v1('/courses/200-hour-ytt.php') <> '/courses/200-hour-ytt.php'
