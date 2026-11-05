@@ -15,7 +15,11 @@ It is not a historical Instagram Inbox import.
 
 - `app/api/instagram/webhook/route.ts` validates the raw Meta signature,
   validates direction and provider IDs, and requires
-  `INSTAGRAM_OUTBOUND_ECHO_ENABLED=true` before parsing outbound echoes.
+  `INSTAGRAM_OUTBOUND_ECHO_ENABLED=true` before **processing** outbound echoes.
+  With processing disabled, a signature-valid outbound-shaped candidate emits
+  only a count-only runtime log marker (no provider IDs or customer data).
+  This observation does not write CRM messages, identify the connected account
+  or prove native-app delivery.
 - `ingest_instagram_outbound_echo_v1` requires a connected Instagram account,
   matches an **existing** tenant-scoped conversation, deduplicates on Meta
   message ID, and stores original sent time and attachment metadata.
