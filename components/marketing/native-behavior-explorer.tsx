@@ -148,7 +148,7 @@ export function NativeBehaviorExplorer({ workspace }: { workspace: NativeBehavio
               <div>
                 <div className="flex items-center gap-2"><Route size={16} className="text-slate-500"/>
                   <h3 className="text-sm font-bold text-slate-900 dark:text-white">Popular navigation paths</h3></div>
-                <p className="mt-1 text-xs text-slate-500">Adjacent page transitions with at least {workspace.minPathSessions} sessions.</p>
+                <p className="mt-1 text-xs text-slate-500">Adjacent page transitions with at least {workspace.minPathVisitors} distinct anonymous visitors.</p>
               </div>
               <span className="text-xs text-slate-500">{workspace.pathSessions.toLocaleString()} page-view sessions</span>
             </div>
