@@ -39,8 +39,8 @@ test("Behavior tab reads tenant-scoped aggregates and filters unsafe visitor pat
   await expect(page.getByRole("heading", { name: "Behavior explorer" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Ordered funnel" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Popular navigation paths" })).toBeVisible();
-  await expect(page.getByText("/courses/200-hour-ytt.php", { exact: true })).toBeVisible();
-  await expect(page.getByText("/enroll.php", { exact: true })).toBeVisible();
+  await expect(page.getByRole("region", { name: "Popular navigation paths" }).getByText("/courses/200-hour-ytt.php", { exact: true })).toBeVisible();
+  await expect(page.getByRole("region", { name: "Popular navigation paths" }).getByText("/enroll.php", { exact: true })).toBeVisible();
   await expect(page.getByText("/private?email=student@example.test", { exact: true })).toHaveCount(0);
   await expect(page.getByText("Tenant-scoped aggregates")).toBeVisible();
 
