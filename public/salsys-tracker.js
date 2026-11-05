@@ -469,6 +469,9 @@
   }
 
   function track(eventName, properties, options) {
+    // Revalidate the shared consent epoch on every event, even if this tab
+    // missed a cross-tab storage notification while suspended.
+    reconcileExternalConsent();
     options = options || {};
     eventName = String(eventName || '').trim().toLowerCase();
     if (!/^web\.[a-z][a-z0-9_]*$/.test(eventName)) {
