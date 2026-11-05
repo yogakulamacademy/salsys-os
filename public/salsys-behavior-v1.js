@@ -47,6 +47,8 @@
       pageKey = next;
       seen = Object.create(null);
       lastDepth = getDepth();
+      // Shared SPA navigation controls may persist across route changes.
+      if (observer) reobserve();
     }
   }
 
@@ -86,7 +88,8 @@
     ensurePage();
     if (!observer || !document.querySelectorAll) return;
     var nodes = document.querySelectorAll(visibleSelector);
-    for (var i = 0; i < nodes.length; i++) {
+    // Bound observation work on pages with very large or hostile DOM trees.
+    for (var i = 0; i < nodes.length && watched.length < 200; i++) {
       if (watched.indexOf(nodes[i]) >= 0) continue;
       watched.push(nodes[i]);
       observer.observe(nodes[i]);
@@ -111,7 +114,7 @@
   function onScroll() {
     ensurePage();
     var next = getDepth();
-    if (allowed()) {
+    if (allowed() && document.visibilityState !== 'hidden') {
       thresholds.forEach(function (value) {
         if (lastDepth < value && next >= value) {
           emit('web.scroll_depth_reached', { threshold_percent: value }, 'scroll:' + value);
