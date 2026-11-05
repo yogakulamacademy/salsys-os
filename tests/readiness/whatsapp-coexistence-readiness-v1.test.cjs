@@ -207,7 +207,7 @@ test('provider errors and malformed counts are unavailable, never false zero', a
     { senders: Array.from({ length: 50 }, () => ({ connection_id: A })) },
   ]) {
     const { module } = harness(opts);
-    await assert.rejects(module.getCurrentWhatsAppCoexistenceReadiness(), /unavailable|invalid connections/);
+    await assert.rejects(module.getCurrentWhatsAppCoexistenceReadiness(), /unavailable|invalid connections|category counts are inconsistent/);
   }
 });
 
