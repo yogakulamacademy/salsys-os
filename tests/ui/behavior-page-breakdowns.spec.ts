@@ -40,7 +40,7 @@ test("Page breakdown shows only safe public routes with a real visitor threshold
   await expect(breakdown.getByRole("heading", { name: "Events by page" })).toBeVisible();
   await expect(breakdown.getByText("/courses/200-hour-ytt.php")).toBeVisible();
   await expect(breakdown.getByText("/enroll.php")).toBeVisible();
-  await expect(breakdown.getByText("Other or withheld events")).toBeVisible();
+  await expect(breakdown.getByText("Other or withheld events", { exact: true })).toBeVisible();
   await expect(breakdown.getByText("17", { exact: true })).toBeVisible();
   await expect(breakdown.getByText("at least 3 distinct anonymous visitors", { exact: false })).toBeVisible();
 
