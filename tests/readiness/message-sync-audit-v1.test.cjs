@@ -193,7 +193,9 @@ test('operations page is server-rendered read-only and linked from System Health
   assert.match(page,/await getCurrentMessageSyncAudit\(\)/);
   assert.match(page,/if \(!result\) redirect\('\/dashboard'\)/);
   assert.match(page,/not verified provider delivery/);
-  assert.match(page,/This flag does not prove that Meta subscribed/);
+  assert.match(page,/This application flag does not establish provider delivery/);
+  assert.match(page,/signed message\.is_echo event/);
+  assert.match(page,/exactly one CRM message/);
   assert.match(page,/InstagramEchoVerification connections={instagramConnections}/);
   assert.match(health,/href="\/system-health\/message-sync"/);
   assert.doesNotMatch(page,/use client|onClick=|fetch\(|sendMessage|replayEvents/);
