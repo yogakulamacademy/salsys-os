@@ -11,6 +11,11 @@ const receiptParser = load('lib/whatsapp-receipt-reconciliation-validation.ts');
 const reconciliationSample = {
   processedReceipts: 35, processedWithMessage: 29,
   processedWithoutMessage: 6, processedWithLink: 29,
+  processedUnmatchedRawProcessed: 6,
+  processedUnmatchedSameAccountThread: 0,
+  processedUnmatchedOtherAccountThread: 5,
+  processedUnmatchedMultipleAccountThreads: 0,
+  processedUnmatchedNoSenderThread: 1,
   failedReceipts: 6, failedWithRawEvidence: 6,
   failedWithMessage: 0, failedWithoutMessage: 6, failedWithLink: 0,
   oldestProcessedUnmatchedAt: '2026-09-28T08:00:00Z',
@@ -188,6 +193,8 @@ test('owner/admin receive scoped, aggregate-only WhatsApp readiness', async () =
     assert.equal(actual.failedOtherTypes, 0);
     assert.equal(actual.receiptReconciliation?.processedWithoutMessage, 6);
     assert.equal(actual.receiptReconciliation?.failedWithRawEvidence, 6);
+    assert.equal(actual.receiptReconciliation?.processedUnmatchedOtherAccountThread, 5);
+    assert.equal(actual.receiptReconciliation?.processedUnmatchedNoSenderThread, 1);
     assert.equal(calls.rpc.length, 1);
     assert.ok(!Number.isNaN(Date.parse(actual.checkedAt)));
     assert.equal(calls.admin, 1);
