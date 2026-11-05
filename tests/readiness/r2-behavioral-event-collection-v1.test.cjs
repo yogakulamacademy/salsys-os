@@ -191,6 +191,31 @@ test('FAQ, brochure, and form events only send bounded identifiers and categorie
   assert.ok(!JSON.stringify(ctx.events).includes('SECRET'));
 });
 
+
+test('same CTA can be observed again after an explicit SPA route change', () => {
+  const cta = node({ 'data-salsys-cta-id': 'enroll_now' });
+  const ctx = setup(true, [cta]);
+  ctx.observer().trigger(cta);
+  assert.equal(ctx.events.length, 1);
+  ctx.setPage('/different-program');
+  ctx.sendWindow('salsys:page-change', {});
+  ctx.flushTimers();
+  ctx.observer().trigger(cta);
+  assert.equal(ctx.events.length, 2);
+});
+
+test('hidden scrolls are not counted as meaningful engagement', () => {
+  const ctx = setup(true);
+  ctx.document.visibilityState = 'hidden';
+  ctx.setScroll(500);
+  ctx.sendWindow('scroll');
+  assert.equal(ctx.events.length, 0);
+  ctx.document.visibilityState = 'visible';
+  ctx.setScroll(800);
+  ctx.sendWindow('scroll');
+  assert.deepEqual(ctx.events.map(e => e.properties.threshold_percent), [75, 90]);
+});
+
 test('source never scrapes form values or installs session replay', () => {
   assert.doesNotMatch(source, /\.value\b|innerHTML|outerHTML|MutationRecord\.|recording/);
   assert.match(source, /analytics_allowed_locally === true/);
