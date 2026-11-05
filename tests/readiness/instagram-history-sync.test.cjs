@@ -63,6 +63,15 @@ test('Admin-only history preview and explicit deployment flag for writes', () =>
   assert.ok(cron.crons.some(c => c.path === '/api/instagram/history-sync'));
 });
 
+test('Settings integration preview uses supported read-only API mode and shows count-only outbound coverage', () => {
+  assert.ok(control.includes("mode: echoCheck ? 'echo_status' : apply ? undefined : 'history_preview'"));
+  assert.ok(control.includes('outboundMessagesSeen'));
+  assert.ok(control.includes('outboundMessagesMatched'));
+  assert.ok(control.includes('outboundMessagesNotInCrm'));
+  assert.ok(control.includes('summary.dryRun'));
+  assert.doesNotMatch(control, /mode:\s*echoCheck\s*\?\s*'echo_status'\s*:\s*'history'/);
+});
+
 test('Outgoing native-app echoes have a read-only provider subscription check', () => {
   assert.ok(worker.includes('inspectInstagramEchoSubscription'));
   assert.ok(worker.includes("'/me/subscribed_apps'"));
