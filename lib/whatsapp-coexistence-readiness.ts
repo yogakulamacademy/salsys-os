@@ -16,6 +16,12 @@ export type WhatsAppCoexistenceReadiness = {
   signedBusinessAppEchoChildren: number;
   failedWebhookEvents: number;
   deadLetterWebhookEvents: number;
+  failedLast7Days: number;
+  failedIncomingText: number;
+  failedIncomingImages: number;
+  failedUnsupportedMessages: number;
+  failedDeliveryStatuses: number;
+  failedOtherTypes: number;
 };
 
 type Connection = {
@@ -124,6 +130,40 @@ export async function getCurrentWhatsAppCoexistenceReadiness():
     receiptCount('processing_status', 'dead_letter'),
   ]);
 
+  // Triage only fixed, bounded provider event types with aggregate HEAD counts.
+  // Do not fetch processing_error, message payloads, customer IDs or event rows.
+  const failedTypeCount = async (eventType: string) => {
+    const { count, error } = await admin.from('whatsapp_webhook_events')
+      .select('id', { count: 'exact', head: true })
+      .eq('organization_id', organizationId)
+      .eq('processing_status', 'failed')
+      .eq('event_type', eventType);
+    return validCount(count, error);
+  };
+  const last7Days = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+  const [failedLast7Days, failedIncomingText, failedIncomingImages,
+    failedUnsupportedMessages, failedStatusSent, failedStatusDelivered] = await Promise.all([
+    (async () => {
+      const { count, error } = await admin.from('whatsapp_webhook_events')
+        .select('id', { count: 'exact', head: true })
+        .eq('organization_id', organizationId)
+        .eq('processing_status', 'failed')
+        .gte('received_at', last7Days);
+      return validCount(count, error);
+    })(),
+    failedTypeCount('message:text'),
+    failedTypeCount('message:image'),
+    failedTypeCount('message:unsupported'),
+    failedTypeCount('status:sent'),
+    failedTypeCount('status:delivered'),
+  ]);
+  const failedDeliveryStatuses = failedStatusSent + failedStatusDelivered;
+  const classified = failedIncomingText + failedIncomingImages +
+    failedUnsupportedMessages + failedDeliveryStatuses;
+  if (classified > failedWebhookEvents || failedLast7Days > failedWebhookEvents) {
+    throw new Error('WhatsApp failure category counts are inconsistent.');
+  }
+
   const modes = connections.map(connection => onboardingMode(connection.provider_metadata));
   return {
     checkedAt: new Date().toISOString(),
@@ -136,5 +176,11 @@ export async function getCurrentWhatsAppCoexistenceReadiness():
     signedBusinessAppEchoChildren,
     failedWebhookEvents,
     deadLetterWebhookEvents,
+    failedLast7Days,
+    failedIncomingText,
+    failedIncomingImages,
+    failedUnsupportedMessages,
+    failedDeliveryStatuses,
+    failedOtherTypes: failedWebhookEvents - classified,
   };
 }
