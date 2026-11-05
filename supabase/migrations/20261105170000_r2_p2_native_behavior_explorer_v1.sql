@@ -213,3 +213,30 @@ revoke all on function public.get_native_behavior_workspace_v1(uuid, integer, te
   from public, anon;
 grant execute on function public.get_native_behavior_workspace_v1(uuid, integer, text[])
   to authenticated;
+
+
+-- Deterministic helper assertions are run in the clean migration replay.
+do $$
+begin
+  if public.native_funnel_depth_v1(
+    array['web.page_viewed','web.form_started','web.form_submitted'],
+    array['web.page_viewed','web.form_started','web.form_submitted']) <> 3 then
+    raise exception 'R2-P2 ordered funnel failed complete sequence test';
+  end if;
+  if public.native_funnel_depth_v1(
+    array['web.form_started','web.page_viewed','web.form_submitted','web.form_started'],
+    array['web.page_viewed','web.form_started','web.form_submitted']) <> 2 then
+    raise exception 'R2-P2 ordered funnel incorrectly counted out-of-order events';
+  end if;
+  if public.native_funnel_depth_v1(
+    array['web.form_submitted','web.form_started'],
+    array['web.page_viewed','web.form_started']) <> 0 then
+    raise exception 'R2-P2 ordered funnel incorrectly counted missing first step';
+  end if;
+  if public.native_funnel_depth_v1(
+    array['web.page_viewed','web.page_viewed','web.form_started','web.form_submitted'],
+    array['web.page_viewed','web.form_started','web.form_submitted']) <> 3 then
+    raise exception 'R2-P2 ordered funnel failed repeated source event test';
+  end if;
+end;
+$$;
