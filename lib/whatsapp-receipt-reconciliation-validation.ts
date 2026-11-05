@@ -6,6 +6,9 @@ export type WhatsAppReceiptReconciliation = {
   processedUnmatchedRawProcessed: number;
   processedUnmatchedSameAccountThread: number;
   processedUnmatchedOtherAccountThread: number;
+  processedUnmatchedOtherAccountThreadPresentAtReceipt: number;
+  processedUnmatchedOtherAccountThreadOnlyLater: number;
+  processedUnmatchedOtherAccountThreadTimingUnknown: number;
   processedUnmatchedMultipleAccountThreads: number;
   processedUnmatchedNoSenderThread: number;
   failedReceipts: number;
@@ -26,6 +29,9 @@ const FIELDS = [
   'processedUnmatchedRawProcessed',
   'processedUnmatchedSameAccountThread',
   'processedUnmatchedOtherAccountThread',
+  'processedUnmatchedOtherAccountThreadPresentAtReceipt',
+  'processedUnmatchedOtherAccountThreadOnlyLater',
+  'processedUnmatchedOtherAccountThreadTimingUnknown',
   'processedUnmatchedMultipleAccountThreads',
   'processedUnmatchedNoSenderThread',
   'failedReceipts',
@@ -76,6 +82,9 @@ export function parseWhatsAppReceiptReconciliation(value: unknown):
   const processedUnmatchedRawProcessed = safeCount(source.processedUnmatchedRawProcessed);
   const processedUnmatchedSameAccountThread = safeCount(source.processedUnmatchedSameAccountThread);
   const processedUnmatchedOtherAccountThread = safeCount(source.processedUnmatchedOtherAccountThread);
+  const processedUnmatchedOtherAccountThreadPresentAtReceipt = safeCount(source.processedUnmatchedOtherAccountThreadPresentAtReceipt);
+  const processedUnmatchedOtherAccountThreadOnlyLater = safeCount(source.processedUnmatchedOtherAccountThreadOnlyLater);
+  const processedUnmatchedOtherAccountThreadTimingUnknown = safeCount(source.processedUnmatchedOtherAccountThreadTimingUnknown);
   const processedUnmatchedMultipleAccountThreads = safeCount(source.processedUnmatchedMultipleAccountThreads);
   const processedUnmatchedNoSenderThread = safeCount(source.processedUnmatchedNoSenderThread);
   const failedReceipts = safeCount(source.failedReceipts);
@@ -92,6 +101,10 @@ export function parseWhatsAppReceiptReconciliation(value: unknown):
       processedWithLink > processedReceipts || failedWithLink > failedReceipts ||
       failedWithRawEvidence > failedReceipts ||
       processedUnmatchedRawProcessed > processedWithoutMessage ||
+      processedUnmatchedOtherAccountThreadPresentAtReceipt +
+        processedUnmatchedOtherAccountThreadOnlyLater +
+        processedUnmatchedOtherAccountThreadTimingUnknown !==
+          processedUnmatchedOtherAccountThread ||
       processedUnmatchedSameAccountThread + processedUnmatchedOtherAccountThread +
         processedUnmatchedMultipleAccountThreads + processedUnmatchedNoSenderThread !==
           processedWithoutMessage ||
@@ -107,6 +120,9 @@ export function parseWhatsAppReceiptReconciliation(value: unknown):
     processedUnmatchedRawProcessed,
     processedUnmatchedSameAccountThread,
     processedUnmatchedOtherAccountThread,
+    processedUnmatchedOtherAccountThreadPresentAtReceipt,
+    processedUnmatchedOtherAccountThreadOnlyLater,
+    processedUnmatchedOtherAccountThreadTimingUnknown,
     processedUnmatchedMultipleAccountThreads,
     processedUnmatchedNoSenderThread,
     failedReceipts,
