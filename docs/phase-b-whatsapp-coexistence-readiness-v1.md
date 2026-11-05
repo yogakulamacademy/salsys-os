@@ -14,6 +14,8 @@ This is a read-only, **active-tenant-only** evidence summary, not a sender confi
 - Count of stored webhook receipts signed and classified as `smb_message_echoes`.
 - Count of signed, derived `echo:%` child webhook events.
 - Failed and dead-letter legacy webhook event counts.
+- A bounded breakdown of failed event types: inbound text, images, unsupported messages,
+  sent/delivered statuses and other types, plus events received in the last seven days.
 - Time when the server performed the read.
 
 Only aggregate counts and timestamps are returned, with no customer contact information, message bodies, raw webhook payloads, provider message IDs, phone numbers, access tokens or connection identifiers.
@@ -28,9 +30,27 @@ Only aggregate counts and timestamps are returned, with no customer contact info
 6. Require `signature_valid=true` for recorded parent/child echo receipts. No signed echo records is **absence of evidence**, not proof of provider malfunction.
 7. Missing counts, malformed connection inventory, permissions or query errors fail closed as unavailable.
 
+## Failed-webhook triage
+
+These numbers are **exact count-only tenant-filtered queries**; the application
+never selects `processing_error`, payloads, message IDs or event rows to build
+this breakdown. It asks PostgreSQL for counts of five fixed event types
+(`message:text`, `message:image`, `message:unsupported`, `status:sent`,
+`status:delivered`) only when `processing_status = failed`. Any remaining
+failed events appear under **Other event types**. The sum is checked against
+the total failed count and fails closed if counts disagree; a concurrent
+webhook status change may briefly require an audit refresh. The recent failure
+metric counts events with `received_at` within seven days of the query.
+
+The categorization is based on **event type**, not the cause of the processing
+failure. It cannot demonstrate whether a message was lost, an integration is
+currently broken, or a replay would be safe. Inspect older events privately
+under an authorized incident procedure; never automatically retry these
+historical records.
+
 ## Production baseline (read-only, entire database, not per-tenant)
 
-On 5 November 2026, database inspection found the Business-app echo projector and trigger installed; zero `smb_message_echoes` parent events, zero derived `echo:%` child events, and eight legacy webhook events marked `failed`. This is *not* a delivery or provider subscription test.
+On 5 November 2026, database inspection found the Business-app echo projector and trigger installed; zero `smb_message_echoes` parent events, zero derived `echo:%` child events, and eight legacy webhook events marked `failed`: three text messages, two unsupported messages, one image, and two delivery-status updates. All eight were received between 28 September and 21 October 2026; this is *not* a delivery or provider subscription test.
 
 ## Before claiming coexistence synchronized
 

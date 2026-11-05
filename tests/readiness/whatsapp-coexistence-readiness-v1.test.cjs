@@ -61,6 +61,12 @@ function harness(options = {}) {
           query.filters.push(['like:' + column, value]);
           return chain;
         },
+        gte(column, value) {
+          assert.equal(column, 'received_at');
+          assert.ok(Number.isFinite(Date.parse(value)));
+          query.filters.push(['gte:' + column, value]);
+          return chain;
+        },
         limit(value) {
           assert.equal(value, table === 'integration_connections' ? 10 : 50);
           calls.queries.push(query);
@@ -90,14 +96,31 @@ function harness(options = {}) {
           calls.queries.push(query);
           assert.deepEqual(query.filters[0], ['organization_id', ORG]);
           assert.equal(query.head, true);
+          const byEvent = query.filters.find(([key]) => key === 'event_type')?.[1];
+          const failed = query.filters.some(([key, value]) =>
+            key === 'processing_status' && value === 'failed');
           let count;
-          if (query.filters.some(([k, v]) => k === 'event_type' && v === 'smb_message_echoes')) {
+          if (failed && byEvent) {
+            const cases = {
+              'message:text': 3,
+              'message:image': 1,
+              'message:unsupported': 2,
+              'status:sent': 1,
+              'status:delivered': 1,
+            };
+            if (!Object.prototype.hasOwnProperty.call(cases, byEvent)) {
+              throw new Error('Unexpected categorized event type');
+            }
+            count = options.badCohortCount ? 99 : cases[byEvent];
+          } else if (failed && query.filters.some(([key]) => key === 'gte:received_at')) {
             count = 0;
-          } else if (query.filters.some(([k, v]) => k === 'like:event_type' && v === 'echo:%')) {
+          } else if (byEvent === 'smb_message_echoes') {
             count = 0;
-          } else if (query.filters.some(([k, v]) => k === 'processing_status' && v === 'failed')) {
+          } else if (query.filters.some(([key, value]) => key === 'like:event_type' && value === 'echo:%')) {
+            count = 0;
+          } else if (failed) {
             count = 8;
-          } else if (query.filters.some(([k, v]) => k === 'processing_status' && v === 'dead_letter')) {
+          } else if (query.filters.some(([key, value]) => key === 'processing_status' && value === 'dead_letter')) {
             count = 3;
           } else throw new Error('Unexpected status count');
           if (options.badCount) count = -1;
@@ -133,9 +156,15 @@ test('owner/admin receive scoped, aggregate-only WhatsApp readiness', async () =
     assert.equal(actual.signedBusinessAppEchoChildren, 0);
     assert.equal(actual.failedWebhookEvents, 8);
     assert.equal(actual.deadLetterWebhookEvents, 3);
+    assert.equal(actual.failedLast7Days, 0);
+    assert.equal(actual.failedIncomingText, 3);
+    assert.equal(actual.failedIncomingImages, 1);
+    assert.equal(actual.failedUnsupportedMessages, 2);
+    assert.equal(actual.failedDeliveryStatuses, 2);
+    assert.equal(actual.failedOtherTypes, 0);
     assert.ok(!Number.isNaN(Date.parse(actual.checkedAt)));
     assert.equal(calls.admin, 1);
-    assert.equal(calls.queries.length, 6);
+    assert.equal(calls.queries.length, 12);
     assert.ok(!JSON.stringify(actual).includes(A));
     assert.ok(!JSON.stringify(actual).includes(B));
     for (const query of calls.queries.filter(q => q.table === 'whatsapp_webhook_events')) {
@@ -151,7 +180,9 @@ test('signed Business-app echo counts require signature_valid', async () => {
   const { module, calls } = harness();
   await module.getCurrentWhatsAppCoexistenceReadiness();
   const echo = calls.queries.filter(q => q.table === 'whatsapp_webhook_events' &&
-    (q.filters.some(([k]) => k === 'event_type') || q.filters.some(([k]) => k === 'like:event_type')));
+    q.filters.some(([k, v]) => k === 'signature_valid' && v === true) &&
+    (q.filters.some(([k, v]) => k === 'event_type' && v === 'smb_message_echoes') ||
+     q.filters.some(([k, v]) => k === 'like:event_type' && v === 'echo:%')));
   assert.equal(echo.length, 2);
   for (const query of echo) assert.ok(query.filters.some(([k, v]) => k === 'signature_valid' && v === true));
 });
@@ -171,12 +202,12 @@ test('anonymous, inactive, disabled, mismatched role or workspace refuse admin r
 test('provider errors and malformed counts are unavailable, never false zero', async () => {
   for (const opts of [
     { connectionsError: true }, { senderError: true },
-    { countError: true }, { badCount: true },
+    { countError: true }, { badCount: true }, { badCohortCount: true },
     { connections: [{ id: 'invalid', provider_metadata: {} }] },
     { senders: Array.from({ length: 50 }, () => ({ connection_id: A })) },
   ]) {
     const { module } = harness(opts);
-    await assert.rejects(module.getCurrentWhatsAppCoexistenceReadiness(), /unavailable|invalid connections/);
+    await assert.rejects(module.getCurrentWhatsAppCoexistenceReadiness(), /unavailable|invalid connections|category counts are inconsistent/);
   }
 });
 
@@ -188,12 +219,36 @@ test('empty tenant inventory produces zero evidence, never a coexistence claim',
   assert.equal(result.linkedActiveSenders, 0);
 });
 
+test('failed-event classification uses only count-only tenant-bound reads with no error text', async () => {
+  const { module, calls } = harness();
+  const result = await module.getCurrentWhatsAppCoexistenceReadiness();
+  const categorized = calls.queries.filter(query =>
+    query.table === 'whatsapp_webhook_events' &&
+    query.filters.some(([key, value]) => key === 'processing_status' && value === 'failed') &&
+    query.filters.some(([key]) => key === 'event_type'));
+  assert.equal(categorized.length, 5);
+  for (const query of categorized) {
+    assert.equal(query.projected, 'id');
+    assert.equal(query.head, true);
+    assert.deepEqual(query.filters.slice(0, 2), [
+      ['organization_id', ORG], ['processing_status', 'failed'],
+    ]);
+  }
+  const recency = calls.queries.filter(query =>
+    query.filters.some(([key]) => key === 'gte:received_at'));
+  assert.equal(recency.length, 1);
+  assert.equal(result.failedLast7Days, 0);
+  assert.ok(!JSON.stringify(result).includes('processing_error'));
+});
+
 test('System Health has no WhatsApp send, provider fetch, webhook replay or mutation path', () => {
   const source = readFileSync('lib/whatsapp-coexistence-readiness.ts', 'utf8');
   const ui = readFileSync('app/system-health/message-sync/page.tsx', 'utf8');
   assert.match(ui, /getCurrentWhatsAppCoexistenceReadiness/);
   assert.match(ui, /WhatsApp Business-app coexistence/);
   assert.match(ui, /Zero echo records means none observed/);
+  assert.match(ui, /Failed-webhook triage/);
+  assert.match(ui, /failedLast7Days/);
   assert.match(source, /workspace.activeOrganizationId !== active.organizationId/);
   assert.match(source, /linkedActiveSenders/);
   assert.match(source, /count: 'exact', head: true/);
