@@ -126,17 +126,16 @@ test('real outbound echo projector preserves tenant scope and exactly-once retri
       (organization_id,provider,status,external_account_id)
       values ($1,'instagram','connected',$2),($3,'instagram','connected',$4)`,
       [ORG_A,ACCOUNT_A,ORG_B,ACCOUNT_B]);
-    await db.query(`insert into public.conversations
-      (id,organization_id,lead_id,channel,external_account_id,external_conversation_id)
-      values ($1,$4,$7,'instagram',$10,$11),
-        ($2,$4,$8,'instagram',$10,$12),
-        ($3,$5,$9,'instagram',$13,$14)`,
-      [
-        THREAD_A,THREAD_A2,THREAD_B,ORG_A,ORG_B,
-        'unused',LEAD_A,LEAD_A2,LEAD_B,
-        ACCOUNT_A,ACCOUNT_A+':'+RECIPIENT_A,ACCOUNT_A+':'+RECIPIENT_A2,
-        ACCOUNT_B,ACCOUNT_B+':'+RECIPIENT_B,
-      ]);
+    for (const [threadId,orgId,leadId,accountId,recipientId] of [
+      [THREAD_A,ORG_A,LEAD_A,ACCOUNT_A,RECIPIENT_A],
+      [THREAD_A2,ORG_A,LEAD_A2,ACCOUNT_A,RECIPIENT_A2],
+      [THREAD_B,ORG_B,LEAD_B,ACCOUNT_B,RECIPIENT_B],
+    ]) {
+      await db.query(`insert into public.conversations
+        (id,organization_id,lead_id,channel,external_account_id,external_conversation_id)
+        values ($1,$2,$3,'instagram',$4,$5)`,
+        [threadId,orgId,leadId,accountId,accountId+':'+recipientId]);
+    }
 
     const firstRaw = await insertRaw(db);
     const first = await project(db, firstRaw);
