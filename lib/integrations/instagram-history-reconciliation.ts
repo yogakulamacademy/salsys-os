@@ -121,7 +121,12 @@ export async function inspectInstagramEchoSubscription(
     throw new Error('Meta returned ambiguous Instagram app subscriptions.');
   }
   if (matching.length === 0) {
-    // A well-formed list contains no subscription for the connected OAuth app.
+    if (payload.data.length > 0) {
+      // Product variants may return a different identifier kind. Do not treat
+      // unknown identities or another app's fields as evidence of OUR status.
+      throw new Error('Meta did not identify the configured Instagram app.');
+    }
+    // A verified empty subscription list contains no subscribed applications.
     return { subscribed: false, fields: [], customerMessageSent: false };
   }
 
