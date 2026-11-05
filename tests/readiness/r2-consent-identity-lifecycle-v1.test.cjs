@@ -428,3 +428,25 @@ test("restoring a frozen tab reconciles remote opt-out and later verified regran
   assert.notEqual(second.sdk.sessionId(), first.sdk.sessionId());
   assert.equal(second.sdk.privacy().analytics_allowed_locally, true);
 });
+
+
+test("a restored tab reload cannot overwrite the new post-withdrawal shared visitor ID", async () => {
+  const shared = storage();
+  const first = boot({ local: shared });
+  await first.sdk.consent({ analytics: "granted" });
+  const second = boot({ local: shared });
+  const oldVisitor = second.sdk.visitorId();
+  const oldSession = second.sdk.sessionId();
+  await first.sdk.consent({ analytics: "withdrawn" });
+  await first.sdk.consent({ analytics: "granted" });
+  // Old sessionStorage survived while the tab was frozen; no storage event ran.
+  const restored = boot({ local: shared, session: second.session });
+  await settle();
+  assert.notEqual(restored.sdk.visitorId(), oldVisitor);
+  assert.equal(restored.sdk.visitorId(), first.sdk.visitorId());
+  assert.notEqual(restored.sdk.sessionId(), oldSession);
+  assert.equal(shared.getItem("salsys_vid"), first.sdk.visitorId());
+  assert.ok(restored.eventCalls("web.session_started").every(
+    (event) => event.body.anonymous_visitor_id === first.sdk.visitorId()
+  ));
+});
