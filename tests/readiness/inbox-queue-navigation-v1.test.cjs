@@ -77,3 +77,51 @@ test("Inbox sidebar actually uses pure URL guards, not its previous stale query 
   assert.match(sidebar, /setInboxParam\("page", String\(pagination\.page \+ 1\), true\)/);
   assert.doesNotMatch(sidebar, /for \(const key of \["q","page","sort","scope","filter","priority","channel"\]\) params\.delete/);
 });
+
+test("canonical workspace does not clear server unread status merely for an auto-selected lead", async () => {
+  const calls = [];
+  const reader = load("lib/conversations-data-core.ts", {
+    "@/lib/data": {
+      getLead: async () => null,
+      getLeads: async () => [],
+      isMockMode: () => false,
+    },
+    "@/lib/supabase/server": {
+      createClient: async () => ({
+        rpc: async (name, args) => {
+          calls.push({ name, args });
+          return {
+            data: {
+              inbox: [{
+                id: "synthetic-unread-lead",
+                name: "Example Enquiry",
+                stage: "new",
+                currentContactChannel: "instagram",
+                unread: true,
+                needsReply: true,
+                priority: "high",
+              }],
+              selectedId: "synthetic-unread-lead",
+              team: { currentUserId: "test-user", canManageAssignments: true },
+              metrics: { activeConversations: 1 },
+            },
+            error: null,
+          };
+        },
+      }),
+    },
+    "@/lib/workspace": { requireCurrentOrganizationId: async () => "synthetic-org" },
+  });
+
+  const result = await reader.getConversationsWorkspace();
+  assert.equal(result.optimized, true);
+  assert.equal(result.selectedId, "synthetic-unread-lead");
+  assert.equal(result.conversationSummary[0].unread, true);
+  assert.equal(result.conversationSummary[0].needsReply, true);
+  assert.equal(calls[0].name, "get_current_conversations_workspace_v1");
+
+  const core = readFileSync("lib/conversations-data-core.ts", "utf8");
+  assert.doesNotMatch(core, /unread:\s*row\.id === selectedId \? false/);
+  assert.doesNotMatch(core, /unread:\s*lead\.id === selectedId \? false/);
+  assert.match(core, /unread:\s*attention\.unread/);
+});
