@@ -42,7 +42,18 @@ test('Recovery function is restricted and cron scheduling idempotent', () => {
     'to service_role;',
     "jobname = 'instagram-outbound-echo-retry-v1'",
     "'*/2 * * * *'",
+    'v_job_id := cron.schedule(',
+    'perform cron.alter_job(job_id := v_job_id, active := false);',
   ]) assert.ok(migration.includes(needle), needle);
+
+  // Schema deployment must NEVER turn on a live retry worker. The only
+  // release path is a later, explicitly approved cron activation.
+  assert.doesNotMatch(migration, /cron\\.alter_job\\([^;]*active\\s*:?=\\s*true/si);
+  assert.ok(
+    migration.indexOf('v_job_id := cron.schedule(') <
+      migration.indexOf('perform cron.alter_job(job_id := v_job_id, active := false);'),
+    'scheduling must be followed by immediate default-deny deactivation',
+  );
 });
 
 test('Existing echo projector does not manufacture customer leads and deduplicates provider IDs', () => {
