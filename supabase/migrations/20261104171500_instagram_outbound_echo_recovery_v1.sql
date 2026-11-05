@@ -140,17 +140,28 @@ revoke all on function public.retry_instagram_outbound_echoes_v1(integer)
 grant execute on function public.retry_instagram_outbound_echoes_v1(integer)
   to service_role;
 
+-- Register the schedule for an approved future pilot, but DO NOT activate it
+-- during schema migration. Production has not yet completed Meta webhook QA.
+-- The schedule and inactive state are committed atomically in this migration.
 do $schedule$
+declare
+  v_job_id bigint;
 begin
-  if not exists (
-    select 1 from cron.job
-    where jobname = 'instagram-outbound-echo-retry-v1'
-  ) then
-    perform cron.schedule(
+  select jobid into v_job_id
+  from cron.job
+  where jobname = 'instagram-outbound-echo-retry-v1'
+  limit 1;
+
+  if v_job_id is null then
+    v_job_id := cron.schedule(
       'instagram-outbound-echo-retry-v1',
       '*/2 * * * *',
       'select public.retry_instagram_outbound_echoes_v1(10);'
     );
   end if;
+
+  -- Default-deny even when an existing job is found. The operator must
+  -- separately approve and activate the job after signed Meta event QA.
+  perform cron.alter_job(job_id := v_job_id, active := false);
 end;
 $schedule$;
