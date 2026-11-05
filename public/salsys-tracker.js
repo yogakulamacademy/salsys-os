@@ -1,4 +1,4 @@
-/* Salsys Event Intelligence Browser SDK v1.1.0 */
+/* Salsys Event Intelligence Browser SDK v1.1.1 */
 (function () {
   'use strict';
 
@@ -121,9 +121,22 @@
     return navigator.globalPrivacyControl === true;
   }
 
+  var analyticsOptOutRequested = false;
+
+  function analyticsDenied(decision) {
+    return decision === 'denied' ||
+      decision === 'withdrawn' ||
+      decision === 'opted_out' ||
+      decision === 'limited';
+  }
+
   function analyticsGranted() {
+    if (analyticsOptOutRequested) return false;
+    var decision = privacyState().analytics;
+    // An explicit visitor decision takes precedence over a default site mode.
+    if (analyticsDenied(decision)) return false;
     if (CONSENT_MODE === 'granted') return true;
-    return privacyState().analytics === 'granted';
+    return decision === 'granted';
   }
 
   function advertisingGranted() {
@@ -340,7 +353,7 @@
       properties.metadata && typeof properties.metadata === 'object' ? properties.metadata : {},
       {
         sdk: 'salsys-browser-v1',
-        sdk_version: '1.1.0'
+        sdk_version: '1.1.1'
       }
     );
 
@@ -367,7 +380,7 @@
       context: pageContext(),
       metadata: {
         sdk: 'salsys-browser-v1',
-        sdk_version: '1.1.0',
+        sdk_version: '1.1.1',
         consent_mode: CONSENT_MODE,
         consent_snapshot: privacyState(),
         local_permission: localPermission(eventName)
@@ -424,8 +437,10 @@
     var chain = Promise.resolve();
     queue.forEach(function (item) {
       chain = chain.then(function () {
+        // Do not replay a previously queued analytics event after opt-out.
+        if (!analyticsGranted()) return;
         return postJson(EVENT_ENDPOINT, item, true).catch(function () {
-          remaining.push(item);
+          if (analyticsGranted()) remaining.push(item);
         });
       });
     });
@@ -461,12 +476,41 @@
     });
   }
 
+  function rotateAnalyticsIdentity() {
+    // A withdrawal severs the old browser identifier and attribution chain.
+    safeRemove(window.localStorage, KEYS.persistentVisitor);
+    safeRemove(window.localStorage, KEYS.firstTouch);
+    safeRemove(window.localStorage, KEYS.queue);
+    [KEYS.sessionVisitor, KEYS.session, KEYS.sessionStarted,
+      KEYS.pendingFirstTouch, KEYS.sessionTouch].forEach(function (key) {
+      safeRemove(window.sessionStorage, key);
+    });
+
+    visitorId = randomId('v');
+    sessionId = randomId('s');
+    sessionTouch = currentTouch();
+    firstTouch = sessionTouch;
+    window.__salsysInitialPageSent = false;
+    // Existing forms must not keep stale hidden visitor/session identifiers.
+    decorateForms();
+  }
+
   function persistAnalyticsIdentity() {
+    // Restore session continuity only after an acknowledged analytics grant.
+    safeSet(window.sessionStorage, KEYS.sessionVisitor, visitorId);
+    safeSet(window.sessionStorage, KEYS.session, sessionId);
+    safeSet(window.sessionStorage, KEYS.sessionTouch, JSON.stringify(sessionTouch));
+    safeSet(window.sessionStorage, KEYS.pendingFirstTouch, JSON.stringify(firstTouch));
     safeSet(window.localStorage, KEYS.persistentVisitor, visitorId);
     if (meaningfulObject(firstTouch)) {
       safeSet(window.localStorage, KEYS.firstTouch, JSON.stringify(firstTouch));
     }
   }
+
+  // Queue network consent receipts in invocation order; never claim a later
+  // grant is confirmed before an earlier withdrawal request completes.
+  var consentReceiptQueue = Promise.resolve();
+  var analyticsConsentRevision = 0;
 
   function consent(decisions) {
     var normalized = {};
@@ -482,42 +526,68 @@
       return Promise.reject(new Error('At least one supported privacy decision is required.'));
     }
 
+    var changesAnalytics = Object.prototype.hasOwnProperty.call(normalized, 'analytics');
+    var revision = changesAnalytics ? ++analyticsConsentRevision : analyticsConsentRevision;
+    var optingOut = changesAnalytics && analyticsDenied(normalized.analytics);
     var body = {
       event_id: randomId('consent'),
+      // The receipt refers to the original browser identity, before rotation.
       visitor_id: visitorId,
       occurred_at: new Date().toISOString(),
       gpc: gpcEnabled(),
       decisions: normalized
     };
 
-    return postJson(CONSENT_ENDPOINT, body, true).then(function (result) {
+    if (optingOut) {
+      // The local choice is authoritative for stopping optional tracking:
+      // even if the network is offline, opt-out must never be rolled back.
+      analyticsOptOutRequested = true;
+      var immediate = privacyState();
+      immediate.analytics = normalized.analytics;
+      immediate.updated_at = new Date().toISOString();
+      immediate.gpc = gpcEnabled();
+      safeSet(window.localStorage, KEYS.privacy, JSON.stringify(immediate));
+      rotateAnalyticsIdentity();
+    }
+
+    var receipt = consentReceiptQueue.then(function () {
+      return postJson(CONSENT_ENDPOINT, body, true);
+    });
+    consentReceiptQueue = receipt.catch(function () {});
+
+    return receipt.then(function (result) {
       var effective =
         result && result.effective_decisions && typeof result.effective_decisions === 'object'
           ? result.effective_decisions
           : normalized;
+      if (optingOut && !analyticsDenied(effective.analytics)) {
+        throw new Error('Analytics opt-out was not confirmed. Local tracking remains disabled.');
+      }
+
       var state = privacyState();
-      Object.keys(effective).forEach(function (key) { state[key] = effective[key]; });
+      Object.keys(effective).forEach(function (key) {
+        if (key === 'analytics' &&
+            (!changesAnalytics || revision !== analyticsConsentRevision)) return;
+        state[key] = effective[key];
+      });
       state.updated_at = new Date().toISOString();
       state.gpc = gpcEnabled();
       safeSet(window.localStorage, KEYS.privacy, JSON.stringify(state));
 
-      if (state.analytics === 'granted') {
+      if (changesAnalytics && revision === analyticsConsentRevision) {
+        analyticsOptOutRequested = analyticsDenied(state.analytics);
+      }
+
+      if (analyticsGranted()) {
         persistAnalyticsIdentity();
         firstTouch = getFirstTouch();
+        decorateForms();
         flushQueue();
         sendSessionStarted();
         if (AUTO_PAGE && !window.__salsysInitialPageSent) {
           window.__salsysInitialPageSent = true;
           track('web.page_viewed', {}, { keepalive: true }).catch(function () {});
         }
-      } else if (
-        state.analytics === 'denied' ||
-        state.analytics === 'withdrawn' ||
-        state.analytics === 'opted_out'
-      ) {
-        safeRemove(window.localStorage, KEYS.persistentVisitor);
-        safeRemove(window.localStorage, KEYS.firstTouch);
-        safeRemove(window.localStorage, KEYS.queue);
       }
 
       return result;
@@ -634,9 +704,12 @@
   function sendSessionStarted() {
     if (!analyticsGranted()) return;
     if (safeGet(window.sessionStorage, KEYS.sessionStarted) === sessionId) return;
-    safeSet(window.sessionStorage, KEYS.sessionStarted, sessionId);
+    var emittedSession = sessionId;
+    safeSet(window.sessionStorage, KEYS.sessionStarted, emittedSession);
     track('web.session_started', {}, { keepalive: true }).catch(function () {
-      safeRemove(window.sessionStorage, KEYS.sessionStarted);
+      if (safeGet(window.sessionStorage, KEYS.sessionStarted) === emittedSession) {
+        safeRemove(window.sessionStorage, KEYS.sessionStarted);
+      }
     });
   }
 
@@ -667,7 +740,7 @@
 
   var api = {
     __eventIntelligenceV1: true,
-    version: '1.1.0',
+    version: '1.1.1',
     track: track,
     page: function (properties) {
       return track('web.page_viewed', properties || {}, { keepalive: true });
@@ -715,7 +788,7 @@
     consent({ sale_sharing: 'opted_out' }).catch(function () {});
   }
 
-  if (CONSENT_MODE === 'granted' && privacyState().analytics !== 'granted') {
+  if (CONSENT_MODE === 'granted' && !Object.prototype.hasOwnProperty.call(privacyState(), 'analytics')) {
     consent({ analytics: 'granted' }).catch(function () {});
   } else if (analyticsGranted()) {
     persistAnalyticsIdentity();
