@@ -78,6 +78,45 @@ test("Funnel controls update ordered steps and date range without website writes
   )).toBe(true);
 });
 
+test("Event activity reads tenant-scoped UTC trends alongside the existing funnel", async ({ page, request }) => {
+  await page.goto("/marketing?view=behavior");
+  await expect(page.getByRole("heading", { name: "Ordered funnel" })).toBeVisible();
+  const trends = page.getByRole("region", { name: "Event activity trends" });
+  await expect(trends.getByRole("heading", { name: "Event activity" })).toBeVisible();
+  await expect(trends.getByRole("article", { name: "Page viewed event trend" })).toBeVisible();
+  await expect(trends.getByRole("article", { name: "Form started event trend" })).toBeVisible();
+  await expect(trends.getByRole("article", { name: "Form submitted event trend" })).toBeVisible();
+  await expect(trends.getByText("The current UTC day is still incomplete.")).toBeVisible();
+
+  const calls = await (await request.get(fixtureBase + "/__behavior_trend_calls")).json();
+  expect(calls.length).toBeGreaterThan(0);
+  expect(calls.every((call: any) => call.organization_id === organizationId
+    && call.days === 14
+    && JSON.stringify(call.events) === JSON.stringify([
+      "web.page_viewed","web.form_started","web.form_submitted"
+    ]))).toBe(true);
+  for (const width of [390,768,1440]) {
+    await page.setViewportSize({ width, height: 900 });
+    await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth))
+      .toBeLessThanOrEqual(width + 2);
+  }
+});
+
+test("Changing the funnel steps updates independent trends but not the visitor path panel", async ({ page, request }) => {
+  await page.goto("/marketing?view=behavior");
+  await page.getByRole("combobox", { name: "Funnel step 3" }).selectOption("web.cta_clicked");
+  await page.getByRole("combobox", { name: "Analytics date range" }).selectOption("30");
+  await page.getByRole("button", { name: "Run funnel" }).click();
+  await expect(page).toHaveURL(/view=behavior.*days=30/);
+  await expect(page.getByRole("article", { name: "CTA clicked event trend" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Popular navigation paths" })).toBeVisible();
+  const calls = await (await request.get(fixtureBase + "/__behavior_trend_calls")).json();
+  expect(calls.some((call: any) => call.organization_id === organizationId
+    && call.days === 30
+    && Array.isArray(call.events)
+    && call.events.join(",") === "web.page_viewed,web.form_started,web.cta_clicked")).toBe(true);
+});
+
 test("Invalid URL parameters fall back to a safe approved funnel and window", async ({ page, request }) => {
   await page.goto("/marketing?view=behavior&days=999&steps=web.page_viewed,web.page_viewed");
   await expect(page.getByRole("heading", { name: "Ordered funnel" })).toBeVisible();
@@ -96,6 +135,7 @@ test("A denied read does not reveal tenant paths or stale funnel results", async
   await expect(page.getByRole("heading", { name: "Behavior analytics unavailable" })).toBeVisible();
   await expect(page.getByText("/courses/200-hour-ytt.php", { exact: true })).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Run funnel" })).toBeVisible();
+  await expect(page.getByRole("region", { name: "Event activity trends" }).getByRole("status")).toBeVisible();
 });
 
 test("Legitimate zero data shows zero stages and a privacy-safe path empty state", async ({ page, request }) => {
@@ -105,6 +145,7 @@ test("Legitimate zero data shows zero stages and a privacy-safe path empty state
   await expect(page.getByRole("heading", { name: "Ordered funnel" })).toBeVisible();
   await expect(page.getByText("No path has enough evidence yet. Try a longer date range.")).toBeVisible();
   await expect(page.getByRole("heading", { name: "Behavior analytics unavailable" })).toHaveCount(0);
+  await expect(page.getByRole("article", { name: "Page viewed event trend" })).toBeVisible();
 });
 
 
