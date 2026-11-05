@@ -57,7 +57,7 @@ function safePath(value: unknown): value is string {
     && !/[0-9]{6,}/.test(value)
     && !/[a-f0-9]{16,}/i.test(value)
     && !/\/[0-9]{4,}(?:\/|\.|$)/.test(value)
-    && !/(^|\/)(account|profile|users?|student|private|admin|dashboard|settings|session|token|reset-password|payments?|orders?|checkout|lead|api|auth)(\/|\.|$)/i.test(value);
+    && !/(^|\/)(account|profile|users?|students?|private|admin|dashboard|settings|session|token|reset-password|payments?|orders?|checkout|leads?|api|auth)(\/|\.|$)/i.test(value);
 }
 
 export async function getNativeBehaviorPageBreakdown(
