@@ -8,6 +8,9 @@ type HistorySummary = {
   conversationsScanned?: number;
   conversationsMatched?: number;
   messagesSeen?: number;
+  outboundMessagesSeen?: number;
+  outboundMessagesMatched?: number;
+  outboundMessagesNotInCrm?: number;
   messagesImported?: number;
   messagesAlreadyPresent?: number;
   hasMore?: boolean;
@@ -29,7 +32,13 @@ export function InstagramHistorySyncControl({
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'same-origin',
-        body: JSON.stringify({ connectionId, apply, mode: echoCheck ? 'echo_status' : 'history' }),
+        // The manual preview must send the explicit read-only API mode.
+        // Apply mode omits it: only the separately gated import path may write.
+        body: JSON.stringify({
+          connectionId,
+          apply,
+          mode: echoCheck ? 'echo_status' : apply ? undefined : 'history_preview',
+        }),
       });
       const result = await response.json().catch(() => ({})) as HistorySummary;
       if (echoCheck && response.ok && result.ok && typeof (result as { subscribed?: unknown }).subscribed === 'boolean') {
@@ -73,6 +82,11 @@ export function InstagramHistorySyncControl({
       Conversations checked: {summary.conversationsScanned ?? 0}
       {' · '}Matching CRM threads: {summary.conversationsMatched ?? 0}
       {' · '}Messages available: {summary.messagesSeen ?? 0}
+      {summary.dryRun && typeof summary.outboundMessagesSeen === 'number' && (
+        ' · Sampled outbound: ' + summary.outboundMessagesSeen +
+        ' · Matched in CRM: ' + (summary.outboundMessagesMatched ?? 0) +
+        ' · Without CRM match: ' + (summary.outboundMessagesNotInCrm ?? 0)
+      )}
       {!summary.dryRun && (' · Imported: ' + (summary.messagesImported ?? 0) +
         ' · Already present: ' + (summary.messagesAlreadyPresent ?? 0))}
       {summary.hasMore ? ' · More conversations available' : ''}
