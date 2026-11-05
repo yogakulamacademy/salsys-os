@@ -3,7 +3,7 @@
 ## Scope
 Add an owner/admin-only **Preview history (read-only)** control to System Health → Message Sync, for each connected Instagram account. It reuses the existing `POST /api/instagram/history-sync` route with an explicit `mode: 'history_preview'` and `apply: false`. No new external API integration or data migration is introduced.
 
-The server checks a bounded sample of **at most 1 provider conversation and 20 messages per account** from Meta's official Conversations API. It returns numeric counts only: provider conversations examined, matching existing CRM thread, provider messages examined, skipped/unmatched items, and whether more conversation pages are reported.
+The server checks a bounded sample of **at most 1 provider conversation and 20 messages per account** from Meta's official Conversations API. It returns numeric counts only: provider conversations examined, matching existing CRM thread, provider messages examined, skipped/unmatched items, and whether more conversation pages are reported. A later Phase B extension also performs one exact tenant/conversation/direction/provider-ID CRM lookup for sampled outbound provider messages, returning outbound seen, matched and missing-match counts only. See `docs/phase-b-instagram-outbound-history-preview-v1.md`.
 
 The preview **does not import**, alter CRM messages, store provider payloads, advance history cursors, send DMs, update Meta subscriptions, enable flags, or activate any scheduled worker. It is intentionally available even when the history-import flag is disabled.
 
