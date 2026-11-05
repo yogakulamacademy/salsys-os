@@ -56,7 +56,8 @@ function safePath(value: unknown): value is string {
   return (slug || page)
     && !/[0-9]{6,}/.test(value)
     && !/[a-f0-9]{16,}/i.test(value)
-    && !/\/[0-9]{4,}(?:\/|\.|$)/.test(value);
+    && !/\/[0-9]{4,}(?:\/|\.|$)/.test(value)
+    && !/(^|\/)(account|profile|users?|student|private|admin|dashboard|settings|session|token|reset-password|payments?|orders?|checkout|lead|api|auth)(\/|\.|$)/i.test(value);
 }
 
 export async function getNativeBehaviorPageBreakdown(
@@ -115,7 +116,7 @@ export async function getNativeBehaviorPageBreakdown(
       const sessions = nonnegative(item.sessions);
       if (!safePath(item.path) || paths.has(item.path)
         || events === null || visitors === null || sessions === null
-        || visitors < 3 || sessions < visitors || events < sessions
+        || visitors < 3 || events < sessions || events < visitors
       ) return fail();
       paths.add(item.path);
       sum += events;
