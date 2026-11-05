@@ -163,5 +163,18 @@ begin
   -- Default-deny even when an existing job is found. The operator must
   -- separately approve and activate the job after signed Meta event QA.
   perform cron.alter_job(job_id := v_job_id, active := false);
+
+  -- Treat a mismatched or still-active job as a failed migration. This is
+  -- checked before commit; silent partial scheduler activation is forbidden.
+  if not exists (
+    select 1 from cron.job
+    where jobid = v_job_id
+      and jobname = 'instagram-outbound-echo-retry-v1'
+      and schedule = '*/2 * * * *'
+      and command = 'select public.retry_instagram_outbound_echoes_v1(10);'
+      and active is false
+  ) then
+    raise exception 'Instagram outbound retry job must remain inactive after migration';
+  end if;
 end;
 $schedule$;
