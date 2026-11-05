@@ -204,6 +204,41 @@ export default async function MessageSyncAuditPage() {
           cannot synchronize. Failed events need authorized investigation; this page cannot display,
           replay, delete or modify them.
         </p>
+        <div className="mt-4 rounded-lg border border-line p-3">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <h3 className="text-xs font-semibold text-copy">Failed-webhook triage</h3>
+            <p className="text-xs text-copy-muted">
+              {whatsappReadiness.failedLast7Days} failed event(s) received in the last 7 days
+            </p>
+          </div>
+          {whatsappReadiness.failedWebhookEvents === 0 ? (
+            <p className="mt-2 text-xs leading-5 text-copy-muted">
+              No currently failed legacy WhatsApp webhook records were observed for this workspace.
+            </p>
+          ) : (
+            <>
+              <dl className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3">
+                {[
+                  { label: 'Incoming text', count: whatsappReadiness.failedIncomingText },
+                  { label: 'Incoming images', count: whatsappReadiness.failedIncomingImages },
+                  { label: 'Unsupported messages', count: whatsappReadiness.failedUnsupportedMessages },
+                  { label: 'Sent / delivered statuses', count: whatsappReadiness.failedDeliveryStatuses },
+                  { label: 'Other event types', count: whatsappReadiness.failedOtherTypes },
+                ].map(item => (
+                  <div key={item.label} className="rounded-md border border-line px-3 py-2">
+                    <dt className="text-xs text-copy-muted">{item.label}</dt>
+                    <dd className="mt-1 text-base font-semibold tabular-nums text-copy">{item.count.toLocaleString()}</dd>
+                  </div>
+                ))}
+              </dl>
+              <p className="mt-3 text-xs leading-5 text-copy-muted">
+                Event categories do not identify the cause of failure. These counts cannot prove
+                whether a customer message is missing from the CRM or whether a provider retry
+                would be safe. Review the failures privately before any manual recovery.
+              </p>
+            </>
+          )}
+        </div>
         <p className="mt-2 text-xs text-copy-muted">Checked {formatTime(whatsappReadiness.checkedAt)}</p>
       </section>
 
