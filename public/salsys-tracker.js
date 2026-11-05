@@ -158,6 +158,18 @@
     return value;
   }
 
+  // A tab restored after an explicit refusal must not reuse session-scoped
+  // identifiers from a previous analytics-consent epoch.
+  if (analyticsDenied(privacyState().analytics)) {
+    safeRemove(window.localStorage, KEYS.persistentVisitor);
+    safeRemove(window.localStorage, KEYS.firstTouch);
+    safeRemove(window.localStorage, KEYS.queue);
+    [KEYS.sessionVisitor, KEYS.session, KEYS.sessionStarted,
+      KEYS.pendingFirstTouch, KEYS.sessionTouch].forEach(function (key) {
+      safeRemove(window.sessionStorage, key);
+    });
+  }
+
   var visitorId = sessionVisitorCandidate();
 
   function getVisitorId() {
@@ -480,12 +492,14 @@
     });
   }
 
-  function rotateAnalyticsIdentity() {
+  function rotateAnalyticsIdentity(localOnly) {
     // A withdrawal severs the old browser identifier and attribution chain.
     analyticsIdentityEpoch += 1;
-    safeRemove(window.localStorage, KEYS.persistentVisitor);
-    safeRemove(window.localStorage, KEYS.firstTouch);
-    safeRemove(window.localStorage, KEYS.queue);
+    if (localOnly !== true) {
+      safeRemove(window.localStorage, KEYS.persistentVisitor);
+      safeRemove(window.localStorage, KEYS.firstTouch);
+      safeRemove(window.localStorage, KEYS.queue);
+    }
     [KEYS.sessionVisitor, KEYS.session, KEYS.sessionStarted,
       KEYS.pendingFirstTouch, KEYS.sessionTouch].forEach(function (key) {
       safeRemove(window.sessionStorage, key);
@@ -510,6 +524,71 @@
     if (meaningfulObject(firstTouch)) {
       safeSet(window.localStorage, KEYS.firstTouch, JSON.stringify(firstTouch));
     }
+  }
+
+  // A second tab must not resume from a saved consent grant until it has
+  // observed a fresh post-grant shared visitor ID. This storage handler runs
+  // only for changes made in OTHER tabs on the same website origin.
+  var externalGrantAwaitingIdentity = false;
+
+  function onExternalStorage(event) {
+    if (!event || event.storageArea !== window.localStorage) return;
+
+    if (event.key === KEYS.privacy || event.key === null) {
+      var incoming = parseJson(event.newValue, {});
+      var previous = parseJson(event.oldValue, {});
+      var decision = incoming && incoming.analytics;
+      var priorDecision = previous && previous.analytics;
+
+      if (event.newValue === null || analyticsDenied(decision)) {
+        if (!analyticsOptOutRequested || externalGrantAwaitingIdentity) {
+          analyticsOptOutRequested = true;
+          rotateAnalyticsIdentity(true);
+        }
+        analyticsOptOutRequested = true;
+        externalGrantAwaitingIdentity = false;
+        return;
+      }
+
+      if (decision === 'granted' && priorDecision !== 'granted') {
+        // A privacy-state event precedes the visitor-ID storage update on
+        // a successful grant. Never send events using an obsolete ID here.
+        analyticsOptOutRequested = true;
+        externalGrantAwaitingIdentity = true;
+      }
+      return;
+    }
+
+    if (event.key !== KEYS.persistentVisitor ||
+        !externalGrantAwaitingIdentity ||
+        privacyState().analytics !== 'granted') return;
+
+    var newVisitor = event.newValue;
+    if (!newVisitor || newVisitor !== safeGet(window.localStorage, KEYS.persistentVisitor) ||
+        !/^v_[A-Za-z0-9_-]{8,100}$/.test(newVisitor)) return;
+
+    analyticsIdentityEpoch += 1;
+    visitorId = newVisitor;
+    sessionId = randomId('s');
+    sessionTouch = currentTouch();
+    firstTouch = sessionTouch;
+    safeRemove(window.sessionStorage, KEYS.sessionStarted);
+    analyticsOptOutRequested = false;
+    externalGrantAwaitingIdentity = false;
+    safeSet(window.sessionStorage, KEYS.sessionVisitor, visitorId);
+    safeSet(window.sessionStorage, KEYS.session, sessionId);
+    safeSet(window.sessionStorage, KEYS.sessionTouch, JSON.stringify(sessionTouch));
+    firstTouch = getFirstTouch();
+    decorateForms();
+    sendSessionStarted();
+    if (AUTO_PAGE && !window.__salsysInitialPageSent) {
+      window.__salsysInitialPageSent = true;
+      track('web.page_viewed', {}, { keepalive: true }).catch(function () {});
+    }
+  }
+
+  if (typeof window.addEventListener === 'function') {
+    window.addEventListener('storage', onExternalStorage);
   }
 
   // Queue network consent receipts in invocation order; never claim a later
