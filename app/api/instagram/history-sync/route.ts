@@ -67,7 +67,11 @@ export async function POST(request: NextRequest) {
   if (profileError || profile?.active !== true) return reply({ ok: false, error: 'Account inactive.' }, 403);
 
   const workspace = await getWorkspaceContextForUser(supabase, user.id);
-  if (!workspace.activeWorkspace || !['owner', 'admin'].includes(workspace.activeWorkspace.role)) {
+  const active = workspace.activeWorkspace;
+  if (!active || !['owner', 'admin'].includes(active.role) ||
+      workspace.activeOrganizationId !== active.organizationId ||
+      !workspace.memberships.some(member =>
+        member.organizationId === active.organizationId && member.role === active.role)) {
     return reply({ ok: false, error: 'Admin workspace access required.' }, 403);
   }
 
@@ -75,13 +79,23 @@ export async function POST(request: NextRequest) {
   if (!Number.isFinite(length) || length > 2048) return reply({ ok: false, error: 'Invalid body.' }, 413);
   const body = await request.json().catch(() => null) as { connectionId?: unknown; apply?: unknown; mode?: unknown } | null;
   if (!body || typeof body !== 'object') return reply({ ok: false, error: 'Invalid JSON body.' }, 400);
+  // The UI inspection modes can never import history, even when a separate
+  // deployment has explicitly enabled the background import worker.
+  if (body.mode !== undefined && body.mode !== 'echo_status' &&
+      body.mode !== 'history_preview') {
+    return reply({ ok: false, error: 'Unsupported Instagram inspection mode.' }, 400);
+  }
+  if ((body.mode === 'history_preview' || body.mode === 'echo_status') &&
+      body.apply !== false) {
+    return reply({ ok: false, error: 'Inspection mode must be read-only.' }, 400);
+  }
   const apply = body.apply === true;
   if (apply && process.env.INSTAGRAM_HISTORY_SYNC_ENABLED !== 'true') {
     return reply({ ok: false, error: 'Instagram history import is not enabled for this deployment.' }, 409);
   }
 
   const admin = createAdminClient();
-  const organizationId = workspace.activeWorkspace.organizationId;
+  const organizationId = active.organizationId;
   const connectionId = typeof body.connectionId === 'string' ? body.connectionId.trim() : '';
   if (!/^[0-9a-f-]{36}$/i.test(connectionId)) {
     return reply({ ok: false, error: 'Invalid Instagram connection.' }, 400);
