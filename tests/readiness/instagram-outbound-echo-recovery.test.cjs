@@ -44,6 +44,8 @@ test('Recovery function is restricted and cron scheduling idempotent', () => {
     "'*/2 * * * *'",
     'v_job_id := cron.schedule(',
     'perform cron.alter_job(job_id := v_job_id, active := false);',
+    'and active is false',
+    'raise exception \'Instagram outbound retry job must remain inactive after migration\'',
   ]) assert.ok(migration.includes(needle), needle);
 
   // Schema deployment must NEVER turn on a live retry worker. The only
