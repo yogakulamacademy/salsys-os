@@ -5,6 +5,7 @@ import { ArrowLeft, RefreshCw, ShieldCheck } from 'lucide-react';
 import { getCurrentMessageSyncAudit } from '@/lib/message-sync-audit';
 import { InstagramEchoVerification } from '@/components/instagram-echo-verification';
 import { InstagramHistoryPreview } from '@/components/instagram-history-preview';
+import { getCurrentWhatsAppCoexistenceReadiness } from '@/lib/whatsapp-coexistence-readiness';
 
 export const dynamic = 'force-dynamic';
 
@@ -18,6 +19,9 @@ function formatTime(value: string | null): string {
 export default async function MessageSyncAuditPage() {
   const result = await getCurrentMessageSyncAudit();
   if (!result) redirect('/dashboard');
+
+  const whatsappReadiness = await getCurrentWhatsAppCoexistenceReadiness();
+  if (!whatsappReadiness) redirect('/dashboard');
 
   const { audit, workspaceName, instagramEchoEnabled, instagramHistoryEnabled, instagramConnections } = result;
   const outbound = audit.messages.filter(row => row.direction === 'outbound');
@@ -159,6 +163,48 @@ export default async function MessageSyncAuditPage() {
           <p className="mt-2 text-xs leading-5 text-copy-muted">Check up to one provider conversation and 20 messages per account without importing anything.</p>
           <InstagramHistoryPreview connections={instagramConnections} />
         </div>
+      </section>
+
+      <section aria-label="WhatsApp coexistence readiness" className="rounded-xl border border-line bg-surface p-4">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h2 className="text-sm font-semibold text-copy">WhatsApp Business-app coexistence</h2>
+            <p className="mt-1 max-w-3xl text-xs leading-5 text-copy-muted">
+              Read-only tenant evidence from linked senders, recorded onboarding metadata and signed webhook receipts.
+              This is not proof of provider delivery, phone-app coexistence or complete message history.
+            </p>
+          </div>
+          <Link href="/settings/integrations/whatsapp" className="text-xs font-semibold text-copy underline underline-offset-2">
+            WhatsApp settings
+          </Link>
+        </div>
+        <dl className="mt-4 grid grid-cols-2 gap-3 lg:grid-cols-4">
+          {[
+            { label: 'Connected integrations', value: whatsappReadiness.connectedAccounts },
+            { label: 'Linked active senders', value: whatsappReadiness.linkedActiveSenders },
+            { label: 'Signed Business-app echo webhooks', value: whatsappReadiness.signedBusinessAppEchoWebhooks },
+            { label: 'Signed echo child events', value: whatsappReadiness.signedBusinessAppEchoChildren },
+            { label: 'Webhook events marked failed', value: whatsappReadiness.failedWebhookEvents },
+            { label: 'Dead-letter webhook events', value: whatsappReadiness.deadLetterWebhookEvents },
+          ].map(item => (
+            <div key={item.label} className="rounded-lg border border-line p-3">
+              <dt className="text-xs text-copy-muted">{item.label}</dt>
+              <dd className="mt-2 text-xl font-semibold tabular-nums text-copy">{item.value.toLocaleString()}</dd>
+            </div>
+          ))}
+        </dl>
+        <p className="mt-3 text-xs leading-5 text-copy-muted">
+          Recorded onboarding: {whatsappReadiness.recordedCoexistenceAccounts} coexistence,
+          {' '}{whatsappReadiness.recordedCloudApiAccounts} Cloud API,
+          {' '}{whatsappReadiness.unknownOnboardingAccounts} unknown.
+          These are connection metadata claims, not independently checked Meta phone settings.
+        </p>
+        <p className="mt-2 text-xs leading-5 text-copy-muted">
+          Zero echo records means none observed in stored webhooks, not that the WhatsApp Business app
+          cannot synchronize. Failed events need authorized investigation; this page cannot display,
+          replay, delete or modify them.
+        </p>
+        <p className="mt-2 text-xs text-copy-muted">Checked {formatTime(whatsappReadiness.checkedAt)}</p>
       </section>
 
       <div className="flex items-start gap-2 rounded-xl border border-line p-4 text-xs leading-5 text-copy-muted">
