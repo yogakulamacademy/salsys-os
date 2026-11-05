@@ -294,9 +294,10 @@ async function BehaviorView({
     getNativeBehaviorPageBreakdown({ days: request.days, eventName: breakdownEvent }),
   ]);
   return (
-    <NativeBehaviorExplorer workspace={workspace} trends={trends}>
+    <div className="space-y-4">
+      <NativeBehaviorExplorer workspace={workspace} trends={trends} />
       <NativeBehaviorBreakdownPanel breakdown={breakdown} appliedSteps={request.steps} />
-    </NativeBehaviorExplorer>
+    </div>
   );
 }
 
