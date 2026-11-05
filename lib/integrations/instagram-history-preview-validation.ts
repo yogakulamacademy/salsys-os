@@ -8,6 +8,9 @@ export type InstagramHistoryPreview = {
   conversationsMatched: number;
   messagesSeen: number;
   messagesSkipped: number;
+  outboundMessagesSeen: number;
+  outboundMessagesMatched: number;
+  outboundMessagesNotInCrm: number;
   hasMore: boolean;
 };
 
@@ -44,8 +47,14 @@ export function parseInstagramHistoryPreview(value: unknown): InstagramHistoryPr
   const conversationsMatched = count(payload.conversationsMatched, MAX_PREVIEW_CONVERSATIONS);
   const messagesSeen = count(payload.messagesSeen, MAX_PREVIEW_MESSAGES);
   const messagesSkipped = count(payload.messagesSkipped, MAX_PREVIEW_MESSAGES + MAX_PREVIEW_CONVERSATIONS);
+  const outboundMessagesSeen = count(payload.outboundMessagesSeen, MAX_PREVIEW_MESSAGES);
+  const outboundMessagesMatched = count(payload.outboundMessagesMatched, MAX_PREVIEW_MESSAGES);
+  const outboundMessagesNotInCrm = count(payload.outboundMessagesNotInCrm, MAX_PREVIEW_MESSAGES);
   if (conversationsMatched > conversationsScanned ||
       messagesSkipped > messagesSeen + MAX_PREVIEW_CONVERSATIONS ||
+      outboundMessagesSeen > messagesSeen ||
+      outboundMessagesMatched + outboundMessagesNotInCrm !== outboundMessagesSeen ||
+      (conversationsMatched === 0 && outboundMessagesSeen > 0) ||
       count(payload.messagesImported, 0) !== 0 ||
       count(payload.messagesAlreadyPresent, 0) !== 0) {
     throw new Error('Instagram history preview contains inconsistent counts.');
@@ -53,10 +62,15 @@ export function parseInstagramHistoryPreview(value: unknown): InstagramHistoryPr
   const expected = [
     'ok', 'dryRun', 'customerMessageSent', 'conversationsScanned',
     'conversationsMatched', 'messagesSeen', 'messagesSkipped',
+    'outboundMessagesSeen', 'outboundMessagesMatched', 'outboundMessagesNotInCrm',
     'messagesImported', 'messagesAlreadyPresent', 'hasMore',
   ];
   if (Object.keys(payload).some(key => !expected.includes(key))) {
     throw new Error('Instagram history preview contains unexpected details.');
   }
-  return { conversationsScanned, conversationsMatched, messagesSeen, messagesSkipped, hasMore: payload.hasMore };
+  return {
+    conversationsScanned, conversationsMatched, messagesSeen, messagesSkipped,
+    outboundMessagesSeen, outboundMessagesMatched, outboundMessagesNotInCrm,
+    hasMore: payload.hasMore,
+  };
 }

@@ -31,6 +31,12 @@ export type InstagramHistorySyncSummary = {
   conversationsScanned: number;
   conversationsMatched: number;
   messagesSeen: number;
+  /** Distinct outgoing provider MIDs in the bounded read-only sample. */
+  outboundMessagesSeen: number;
+  /** Distinct provider outbound MIDs present in the exact existing CRM thread. */
+  outboundMessagesMatched: number;
+  /** Provider outbound MIDs not present in that one sampled CRM thread. */
+  outboundMessagesNotInCrm: number;
   messagesImported: number;
   messagesAlreadyPresent: number;
   messagesSkipped: number;
@@ -178,6 +184,9 @@ export async function reconcileInstagramMessageHistory({
     conversationsScanned: 0,
     conversationsMatched: 0,
     messagesSeen: 0,
+    outboundMessagesSeen: 0,
+    outboundMessagesMatched: 0,
+    outboundMessagesNotInCrm: 0,
     messagesImported: 0,
     messagesAlreadyPresent: 0,
     messagesSkipped: 0,
@@ -220,6 +229,12 @@ export async function reconcileInstagramMessageHistory({
       encodeURIComponent(graphConversationId) + '/messages', runtime.accessToken,
       { fields: 'id,created_time,from,to,message,attachments', limit: String(MAX_MESSAGES_PER_CONVERSATION) },
     );
+    // The read-only inspection is intentionally bounded: do not silently
+    // process or summarize more than the configured provider message page.
+    if (!apply && (providerMessages.data ?? []).length > MAX_MESSAGES_PER_CONVERSATION) {
+      throw new Error('Instagram history preview exceeded its message limit.');
+    }
+    const previewOutboundIds = new Set<string>();
     for (const providerMessage of providerMessages.data ?? []) {
       summary.messagesSeen += 1;
       const id = text(providerMessage.id);
@@ -239,6 +254,7 @@ export async function reconcileInstagramMessageHistory({
         summary.messagesSkipped += 1;
         continue;
       }
+      if (!apply && sender === accountId) previewOutboundIds.add(id);
       if (!apply) continue;
 
       const direction = sender === accountId ? 'outbound' : 'inbound';
@@ -273,6 +289,30 @@ export async function reconcileInstagramMessageHistory({
       if (result.deferred === true) summary.messagesSkipped += 1;
       else if (result.imported === true) summary.messagesImported += 1;
       else if (result.duplicate_message === true) summary.messagesAlreadyPresent += 1;
+    }
+
+    if (!apply && previewOutboundIds.size > 0) {
+      // Provider history can show an outbound native-app message even when
+      // webhook echoes have never been delivered. Compare real provider MIDs
+      // against ONLY this previously identity-verified tenant CRM thread.
+      // Return aggregate counts only: never pass provider IDs to the client.
+      const { data: existing, error: lookupError } = await admin.from('messages')
+        .select('external_message_id')
+        .eq('organization_id', organizationId)
+        .eq('conversation_id', matching[0].id)
+        .eq('direction', 'outbound')
+        .in('external_message_id', Array.from(previewOutboundIds))
+        .limit(MAX_MESSAGES_PER_CONVERSATION * MAX_MESSAGES_PER_CONVERSATION + 1);
+      if (lookupError || !Array.isArray(existing) ||
+          existing.length > MAX_MESSAGES_PER_CONVERSATION * MAX_MESSAGES_PER_CONVERSATION) {
+        throw new Error('Instagram outbound history preview CRM evidence unavailable.');
+      }
+      const matched = new Set(existing
+        .map(row => text(row.external_message_id))
+        .filter(mid => previewOutboundIds.has(mid)));
+      summary.outboundMessagesSeen += previewOutboundIds.size;
+      summary.outboundMessagesMatched += matched.size;
+      summary.outboundMessagesNotInCrm += previewOutboundIds.size - matched.size;
     }
   }
 

@@ -81,12 +81,17 @@ export function InstagramHistoryPreview({ connections }: {
               <p>Provider conversations examined: {state.report.conversationsScanned} (maximum 1).</p>
               <p>Matched to an existing CRM thread: {state.report.conversationsMatched}.</p>
               <p>Provider messages examined: {state.report.messagesSeen} (maximum 20).</p>
+              <p>Distinct outbound provider messages in this sample: {state.report.outboundMessagesSeen}.</p>
+              <p>Outbound provider IDs matched in the existing CRM thread: {state.report.outboundMessagesMatched}.</p>
+              <p>Sampled outbound provider IDs without a match in that CRM thread: {state.report.outboundMessagesNotInCrm}.</p>
               <p>Skipped or unmatched items: {state.report.messagesSkipped}.</p>
               <p>Additional provider conversation pages reported: {state.report.hasMore ? 'Yes' : 'No / not reported'}.</p>
               <p>Checked {new Date(state.checkedAt).toLocaleString()}.</p>
               <p>
-                This is a read-only sample, not a full sync. Zero matches or no additional page does
-                not prove historical completeness. No messages were imported, sent, or modified.
+                This is a read-only sample, not a full sync. An unmatched outbound sample is
+                a review candidate, not proof a message is lost; zero unmatched samples do not
+                prove complete history. Provider direction and existing CRM thread identity are
+                checked before comparison. No messages were imported, sent, or modified.
               </p>
             </div>
           )}
