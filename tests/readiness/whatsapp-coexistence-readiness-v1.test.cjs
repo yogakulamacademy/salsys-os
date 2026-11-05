@@ -180,7 +180,9 @@ test('signed Business-app echo counts require signature_valid', async () => {
   const { module, calls } = harness();
   await module.getCurrentWhatsAppCoexistenceReadiness();
   const echo = calls.queries.filter(q => q.table === 'whatsapp_webhook_events' &&
-    (q.filters.some(([k]) => k === 'event_type') || q.filters.some(([k]) => k === 'like:event_type')));
+    q.filters.some(([k, v]) => k === 'signature_valid' && v === true) &&
+    (q.filters.some(([k, v]) => k === 'event_type' && v === 'smb_message_echoes') ||
+     q.filters.some(([k, v]) => k === 'like:event_type' && v === 'echo:%')));
   assert.equal(echo.length, 2);
   for (const query of echo) assert.ok(query.filters.some(([k, v]) => k === 'signature_valid' && v === true));
 });
