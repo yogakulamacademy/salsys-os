@@ -116,7 +116,7 @@ export function InstagramEchoVerification({ connections }: {
                 ? 'Depending on the Instagram integration, outbound events may arrive through messages with message.is_echo=true. A missing separate message_echoes field alone cannot prove echo delivery is unavailable.'
                 : 'No relevant messaging field is listed. Check the Meta app and account configuration before attempting live acceptance.'}
             </p>
-            <p>Subscription metadata does not prove signed webhook delivery, a matching CRM thread, or native-app echo capture. A controlled, authorized live-message test is still required before activation.</p>
+            <p>Field subscriptions do not prove signed webhook delivery, a matching CRM thread, or successful native-app echo capture. A controlled live message test is still required.</p>
           </div>
         )}
       </div>;
