@@ -51,6 +51,9 @@ jobs:
       - name: Verify exact Instagram outbound projector SQL in isolated PostgreSQL
         run: node --test tests/database/instagram-outbound-echo-projector.test.mjs
 
+      - name: Verify concurrent Instagram echo idempotency across independent PostgreSQL transactions
+        run: node --test tests/database/instagram-outbound-echo-concurrency.test.mjs
+
   validate:
     runs-on: ubuntu-latest
     timeout-minutes: 15
