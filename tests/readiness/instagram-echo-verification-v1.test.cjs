@@ -44,5 +44,8 @@ test('active workspace ownership checks precede privileged account inventory', (
   assert.match(audit, /\.select\('id'\)/);
   assert.match(audit, /\.limit\(10\)/);
   assert.match(page, /InstagramEchoVerification connections={instagramConnections}/);
+  assert.match(page, /signed message\.is_echo event/);
+  assert.match(page, /exactly one CRM message/);
+  assert.doesNotMatch(page, /This flag does not prove that Meta subscribed the account to message_echoes/);
   assert.doesNotMatch(audit, /access_token_ciphertext|external_account_id|token_expires_at/);
 });

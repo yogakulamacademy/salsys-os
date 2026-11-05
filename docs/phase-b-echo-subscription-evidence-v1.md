@@ -67,8 +67,10 @@ The existing parser still only processes outgoing echoes when
 4. Verify actual app Webhook configuration, callback and permissions in Meta.
    Do not assume `message_echoes` is available in every login/product flow:
    record the returned field list and resolve discrepancies before activation.
-5. Confirm the dedicated outbound-echo retry migration and job are separately
-   reviewed and approved; the production audit previously found them absent.
+5. Independently confirm the target database contains the dedicated outbound-echo
+   retry function and that its cron job is **installed but inactive**. The job
+   must not be enabled as part of a subscription inspection; do not rely on
+   an older presence/absence audit instead of a fresh target read-back.
 6. Use a permitted existing Instagram conversation to send a new native-app
    reply, then verify one canonical CRM outbound message with the exact
    provider message ID and correct thread/tenant. Test dedupe, timestamps,
