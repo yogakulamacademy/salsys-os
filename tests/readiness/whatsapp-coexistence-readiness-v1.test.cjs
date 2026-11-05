@@ -291,6 +291,6 @@ test('System Health has no WhatsApp send, provider fetch, webhook replay or muta
   assert.match(source, /count: 'exact', head: true/);
   assert.match(source, /\.eq\('signature_valid', true\)/);
   assert.match(source, /get_whatsapp_receipt_reconciliation_v1/);
-  assert.equal((source.match(/\\.rpc\\(/g) ?? []).length, 1);
-  assert.doesNotMatch(source, /fetch\\(|sendMessage|\\.insert\\(|\\.update\\(|\\.delete\\(|\\.upsert\\(/);
+  assert.equal((source.match(/\.rpc\(/g) ?? []).length, 1);
+  assert.doesNotMatch(source, /fetch\(|sendMessage|\.insert\(|\.update\(|\.delete\(|\.upsert\(/);
 });
