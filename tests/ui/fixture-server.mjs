@@ -10,6 +10,7 @@ let financialScenario='empty';
 let refundCalls=[];
 let behaviorScenario='ready';
 let behaviorCalls=[];
+let behaviorTrendCalls=[];
 const syntheticLeadId='80000000-0000-4000-8000-000000000001';
 const originalPaymentId='90000000-0000-4000-8000-000000000001';
 const financialPayments=()=>financialScenario==='empty'?[]:[
@@ -31,9 +32,10 @@ const server=http.createServer(async(req,res)=>{
   if(url.pathname==='/__behavior_scenario'){
     const state=url.searchParams.get('state');
     if(!['ready','empty','denied','error'].includes(state)){res.statusCode=400;res.end('{}');return;}
-    behaviorScenario=state;behaviorCalls=[];res.end(JSON.stringify({state}));return;
+    behaviorScenario=state;behaviorCalls=[];behaviorTrendCalls=[];res.end(JSON.stringify({state}));return;
   }
   if(url.pathname==='/__behavior_calls'){res.end(JSON.stringify(behaviorCalls));return;}
+  if(url.pathname==='/__behavior_trend_calls'){res.end(JSON.stringify(behaviorTrendCalls));return;}
   if(url.pathname==='/__knowledge_scenario'){
     const scenario=url.searchParams.get('state');
     if(!['empty','matched','library-error'].includes(scenario)){res.statusCode=400;res.end('{}');return;}
@@ -93,6 +95,48 @@ const server=http.createServer(async(req,res)=>{
         {from_path:'/courses/200-hour-ytt.php',to_path:'/enroll.php',sessions:8,transitions:11},
         {from_path:'/private?email=student@example.test',to_path:'/enroll.php',sessions:6,transitions:6},
       ]
+    };
+  }
+  else if(url.pathname==='/rest/v1/rpc/get_native_behavior_event_trends_v1'){
+    let raw='';
+    for await(const chunk of req) raw+=chunk;
+    const body=JSON.parse(raw||'{}');
+    behaviorTrendCalls.push({organization_id:body.p_organization_id,days:body.p_days,events:body.p_events});
+    if(body.p_organization_id!==organizationId || behaviorScenario==='denied'){
+      res.statusCode=403;
+      res.end(JSON.stringify({code:'42501',message:'Tenant-scoped trends unavailable'}));
+      return;
+    }
+    if(behaviorScenario==='error'){
+      res.statusCode=503;
+      res.end(JSON.stringify({code:'synthetic_unavailable',message:'Synthetic trends unavailable'}));
+      return;
+    }
+    const events=Array.isArray(body.p_events)?body.p_events:[];
+    if(![7,14,30].includes(body.p_days) || events.length<1 || events.length>5 ||
+      new Set(events).size!==events.length){
+      res.statusCode=400;
+      res.end(JSON.stringify({code:'22023',message:'Invalid trend request'}));
+      return;
+    }
+    const midnight=new Date();
+    midnight.setUTCHours(0,0,0,0);
+    const dates=Array.from({length:body.p_days},(_,i)=>
+      new Date(midnight.getTime()-(body.p_days-1-i)*86400000).toISOString().slice(0,10));
+    result={
+      status:{
+        available:true,window_days:body.p_days,timezone:'UTC',generated_at:new Date().toISOString(),
+        first_day_utc:dates[0],last_day_utc:dates[dates.length-1],last_day_incomplete:true
+      },
+      series:events.map((event_name,index)=>{
+        const daily=dates.map((date_utc,i)=>{
+          const count=behaviorScenario==='empty'?0:
+            index===0?2+i%3:index===1?i%3:(i%4===0?1:0);
+          return {date_utc,events:count,sessions:Math.min(count,2)};
+        });
+        const total_events=daily.reduce((sum,day)=>sum+day.events,0);
+        return {event_name,total_events,observed_sessions:Math.min(total_events,5),daily};
+      })
     };
   }
   else if(url.pathname==='/rest/v1/rpc/get_current_provider_visibility_v1')result={organization_id:organizationId,google_connected:false,meta_connected:false,instagram_connected:false,whatsapp_connected:false};
