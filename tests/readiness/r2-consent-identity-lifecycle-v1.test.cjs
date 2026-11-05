@@ -35,6 +35,7 @@ function boot({
   session = storage(),
   mode = "required",
   consentResponse = null,
+  eventResponse = null,
   trackedForm = form(),
 } = {}) {
   const calls = [];
@@ -81,6 +82,7 @@ function boot({
         ? consentResponse(body)
         : { ok: true, json: async () => ({ effective_decisions: body.decisions }) };
     }
+    if (typeof eventResponse === "function") return eventResponse(body);
     return { ok: true, json: async () => ({ ok: true, accepted: true }) };
   }
   vm.runInNewContext(tracker, {
@@ -217,4 +219,80 @@ test("previously withdrawn identity is never reused by a same-tab reload", async
   const reloaded = boot({ local: app.local, session: app.session });
   assert.notEqual(reloaded.sdk.visitorId(), old);
   assert.equal(reloaded.local.getItem("salsys_vid"), null);
+});
+
+test("a pre-withdrawal event that fails after regrant never enters the new identity's retry queue", async () => {
+  let rejectOld;
+  const app = boot({
+    eventResponse(body) {
+      if (body.properties?.case === "pre-withdrawal-request") {
+        return new Promise((_resolve, reject) => { rejectOld = reject; });
+      }
+      return { ok: true, json: async () => ({ ok: true, accepted: true }) };
+    },
+  });
+  await app.sdk.consent({ analytics: "granted" });
+  await settle();
+  const oldVisitor = app.sdk.visitorId();
+  const old = app.sdk.track("web.page_viewed", { case: "pre-withdrawal-request" });
+  assert.equal(typeof rejectOld, "function");
+  await app.sdk.consent({ analytics: "withdrawn" });
+  await app.sdk.consent({ analytics: "granted" });
+  assert.notEqual(app.sdk.visitorId(), oldVisitor);
+  rejectOld(new Error("synthetic old network request failed"));
+  await assert.rejects(old, /synthetic old network request failed/);
+  await settle();
+  const queue = JSON.parse(app.local.getItem("salsys_event_queue_v1") || "[]");
+  assert.equal(queue.length, 0, "an old visitor event cannot be retried after new consent");
+});
+
+test("failed analytics regrant keeps the local opt-out and no persistent visitor identity", async () => {
+  const app = boot({
+    consentResponse: async (body) => {
+      if (body.decisions.analytics === "granted" &&
+          appWasWithdrawn) throw new Error("synthetic grant rejected");
+      return { ok: true, json: async () => ({ effective_decisions: body.decisions }) };
+    },
+  });
+  let appWasWithdrawn = false;
+  await app.sdk.consent({ analytics: "granted" });
+  await app.sdk.consent({ analytics: "withdrawn" });
+  appWasWithdrawn = true;
+  await assert.rejects(() => app.sdk.consent({ analytics: "granted" }), /synthetic grant rejected/);
+  assert.equal(app.sdk.privacy().analytics_allowed_locally, false);
+  assert.equal(app.local.getItem("salsys_vid"), null);
+  assert.equal((await app.sdk.track("web.page_viewed", {})).privacy_blocked, true);
+});
+
+test("an explicit analytics opt-out takes priority over a default granted site mode on reload", async () => {
+  const app = boot({ mode: "granted" });
+  await settle(); // synthetic site-mode bootstrap
+  const oldVisitor = app.sdk.visitorId();
+  await app.sdk.consent({ analytics: "denied" });
+  assert.equal(app.sdk.privacy().analytics_allowed_locally, false);
+  const reloaded = boot({ local: app.local, session: app.session, mode: "granted" });
+  await settle();
+  assert.notEqual(reloaded.sdk.visitorId(), oldVisitor);
+  assert.equal(reloaded.sdk.privacy().analytics_allowed_locally, false);
+  assert.equal(reloaded.eventCalls("web.page_viewed").length, 0);
+});
+
+test("a contradictory remote opt-out acknowledgement cannot reenable analytics locally", async () => {
+  const app = boot({
+    consentResponse: async (body) => ({
+      ok: true,
+      json: async () => ({
+        effective_decisions: body.decisions.analytics === "denied"
+          ? { analytics: "granted" }
+          : body.decisions,
+      }),
+    }),
+  });
+  await app.sdk.consent({ analytics: "granted" });
+  await assert.rejects(
+    () => app.sdk.consent({ analytics: "denied" }),
+    /Analytics opt-out was not confirmed/,
+  );
+  assert.equal(app.sdk.privacy().analytics_allowed_locally, false);
+  assert.equal(app.local.getItem("salsys_vid"), null);
 });
