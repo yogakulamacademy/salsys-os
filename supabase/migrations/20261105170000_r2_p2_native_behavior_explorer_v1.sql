@@ -86,7 +86,7 @@ begin
       and e.event_family = 'web'
       and e.received_at >= v_start - interval '1 day'
       and e.occurred_at between v_start and now() + interval '5 minutes'
-      and e.source_event_type = any(p_steps)
+      and (e.source_event_type = any(p_steps) or e.source_event_type = 'web.page_viewed')
       and e.tracking_source_id is not null
       and nullif(e.session_key, '') is not null
       and nullif(e.anonymous_visitor_id, '') is not null
