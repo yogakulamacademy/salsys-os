@@ -23,7 +23,7 @@ export default async function MessageSyncAuditPage() {
   const whatsappReadiness = await getCurrentWhatsAppCoexistenceReadiness();
   if (!whatsappReadiness) redirect('/dashboard');
 
-  const { audit, workspaceName, instagramEchoEnabled, instagramHistoryEnabled, instagramConnections } = result;
+  const { audit, workspaceName, instagramEchoEnabled, instagramHistoryEnabled, instagramConnections, instagramReceiptReconciliation } = result;
   const outbound = audit.messages.filter(row => row.direction === 'outbound');
   const stored = audit.messages.reduce((sum, row) => sum + row.storedCount, 0);
   const totalOutbound = outbound.reduce((sum, row) => sum + row.storedCount, 0);
@@ -166,6 +166,51 @@ export default async function MessageSyncAuditPage() {
           <p className="mt-2 text-xs leading-5 text-copy-muted">Check up to one provider conversation and 20 messages per account without importing anything.</p>
           <InstagramHistoryPreview connections={instagramConnections} />
         </div>
+      </section>
+
+      <section aria-label="Instagram receipt reconciliation" className="rounded-xl border border-line bg-surface p-4">
+        <h2 className="text-sm font-semibold text-copy">Instagram inbound receipt reconciliation</h2>
+        <p className="mt-1 max-w-3xl text-xs leading-5 text-copy-muted">
+          Read-only, active-workspace evidence: raw Instagram webhook receipts are not all customer
+          messages. A processed read notification or suppressed duplicate should not be treated as
+          a missing CRM conversation. These counts do not verify complete Meta delivery or history.
+        </p>
+        {instagramReceiptReconciliation ? (
+          <>
+            <p className="mt-2 text-xs text-copy-muted">
+              {instagramReceiptReconciliation.totalReceipts.toLocaleString()} message-classified raw
+              receipts examined · Checked {formatTime(instagramReceiptReconciliation.checkedAt)}
+            </p>
+            <dl className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3">
+              {[
+                { label: 'Exact inbound CRM matches', value: instagramReceiptReconciliation.exactInboundMatches },
+                { label: 'Ignored non-message envelopes', value: instagramReceiptReconciliation.ignoredNonMessageEnvelopes },
+                { label: 'Ignored contact-share duplicates', value: instagramReceiptReconciliation.ignoredContactShareDuplicates },
+                { label: 'Processed without explained match', value: instagramReceiptReconciliation.processedWithoutExactMatchReview },
+                { label: 'Not processed / status unavailable', value: instagramReceiptReconciliation.unprocessedOrMissingStatus },
+                { label: 'Ignored-tagged but already matched', value: instagramReceiptReconciliation.ignoredAlreadyMatched },
+              ].map(item => (
+                <div key={item.label} className="rounded-md border border-line px-3 py-2">
+                  <dt className="text-xs text-copy-muted">{item.label}</dt>
+                  <dd className="mt-1 text-lg font-semibold tabular-nums text-copy">
+                    {item.value.toLocaleString()}
+                  </dd>
+                </div>
+              ))}
+            </dl>
+            <p className="mt-3 text-xs leading-5 text-copy-muted">
+              Exact matches require the inbound direction, tenant, Instagram account, sender
+              conversation and provider message ID to agree. Ignored-tagged records already
+              matched to CRM messages can reflect historical classification overlap; investigate
+              privately before considering changes. No automatic replay or message creation.
+            </p>
+          </>
+        ) : (
+          <p className="mt-3 text-xs text-copy-muted">
+            Instagram receipt reconciliation unavailable. Existing message-sync reports remain
+            available; this does not imply zero review candidates.
+          </p>
+        )}
       </section>
 
       <section aria-label="WhatsApp coexistence readiness" className="rounded-xl border border-line bg-surface p-4">
