@@ -6,6 +6,8 @@ import { Activity, ArrowRight, GitBranch, Plus, Route, ShieldCheck, Trash2 } fro
 
 import { BEHAVIOR_EVENTS, type BehaviorEvent } from "@/lib/native-behavior-contract";
 import type { NativeBehaviorWorkspace } from "@/lib/native-behavior-data";
+import type { NativeBehaviorTrends } from "@/lib/native-behavior-trends-data";
+import { NativeBehaviorTrendsPanel } from "@/components/marketing/native-behavior-trends";
 
 const labels: Record<string, string> = Object.fromEntries(
   BEHAVIOR_EVENTS.map((item) => [item.name, item.label]),
@@ -15,7 +17,7 @@ function percent(n: number, d: number): string {
   return d > 0 ? (100 * n / d).toFixed(1) + "%" : "—";
 }
 
-export function NativeBehaviorExplorer({ workspace }: { workspace: NativeBehaviorWorkspace }) {
+export function NativeBehaviorExplorer({ workspace, trends }: { workspace: NativeBehaviorWorkspace; trends: NativeBehaviorTrends }) {
   const router = useRouter();
   const [days, setDays] = useState<7 | 14 | 30>(workspace.days);
   const [steps, setSteps] = useState<BehaviorEvent[]>(workspace.selectedSteps);
@@ -179,6 +181,7 @@ export function NativeBehaviorExplorer({ workspace }: { workspace: NativeBehavio
           </section>
         </>
       )}
+      <NativeBehaviorTrendsPanel trends={trends} />
     </div>
   );
 }
