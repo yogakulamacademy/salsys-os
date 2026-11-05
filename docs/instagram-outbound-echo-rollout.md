@@ -4,9 +4,12 @@
 
 Capture Meta-signed Instagram business-account outgoing message echoes in the
 same existing CRM conversation as the inbound messages. This also covers
-messages typed directly in the Instagram app, **if** the connected account
-actually receives the `message_echoes` webhook field. It is not a historical
-Instagram Inbox import.
+messages typed directly in the Instagram app, **only if** the connected account
+actually delivers a signed outgoing `message.is_echo` event. Depending on
+Meta's product and login flow, that event may arrive through the `messages`
+subscription rather than a separate `message_echoes` field. This must be
+verified on the intended connected account, not inferred from field names.
+It is not a historical Instagram Inbox import.
 
 ## Current components
 
@@ -29,10 +32,14 @@ Instagram Inbox import.
 
 1. Confirm the `instagram_business_manage_messages` permission and
    non-expired token for each intended connected professional account.
-2. **Verify live from Meta**, not from a local database flag, that the app and
-   intended Instagram account are subscribed to the `message_echoes` webhook
-   field. Check app mode, review/permissions and webhook callback reachability.
-   Instagram account OAuth scopes do not prove webhook subscription.
+2. **Verify live from Meta** that the correct OAuth application and Instagram
+   account report their app-scoped messaging subscription fields. Record
+   `messages`, and `message_echoes` only if Meta actually lists it for this
+   product/login flow. **Do not require a separate `message_echoes` field or
+   attempt to subscribe blindly to an unsupported field.** A `messages`
+   subscription may carry events with `message.is_echo=true`, but neither
+   field name proves actual outgoing delivery. Check app mode, permissions
+   and webhook callback reachability; OAuth scopes alone are insufficient.
 3. Verify `ingest_instagram_outbound_echo_v1(uuid)` exists in the target
    database, and deploy the reviewed recovery migration via the normal
    migration promotion workflow. **Immediately read back** the job in
@@ -40,7 +47,10 @@ Instagram Inbox import.
 4. Confirm no cross-tenant provider message IDs or unresolved historical
    echoes are being silently attached to the wrong lead.
 5. Carry out an approved, signed live Meta echo test with the correct
-   professional account, existing thread and safe staging/test path.
+   professional account, existing thread and safe staging/test path. Verify
+   `message.is_echo=true`, correct sender/recipient, actual provider message
+   ID and exactly one correct-tenant CRM outbound record. The test is the
+   release gate even when a subscription field appears present.
 6. Only after provider, permission, identity and privacy sign-off, enable
    `INSTAGRAM_OUTBOUND_ECHO_ENABLED=true` and redeploy under change control.
 7. Activate the database retry job **separately** using the Supabase Cron
