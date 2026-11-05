@@ -9,7 +9,7 @@ immutable
 set search_path = public, pg_catalog
 as $
   select case
-    when sanitized.path ~* '(^|/)(account|profile|users?|student|private|admin|dashboard|settings|session|token|reset-password|payments?|orders?|checkout|lead|api|auth)(/|\.|$)'
+    when sanitized.path ~* '(^|/)(account|profile|users?|students?|private|admin|dashboard|settings|session|token|reset-password|payments?|orders?|checkout|leads?|api|auth)(/|\.|$)'
       then '/other'
     else sanitized.path
   end
