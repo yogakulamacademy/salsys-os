@@ -144,8 +144,11 @@ export default async function MessageSyncAuditPage() {
           <h2 className="text-sm font-semibold text-copy">Instagram outgoing echoes</h2>
           <p className="mt-2 text-sm text-copy">{instagramEchoEnabled ? 'Application parser is enabled' : 'Application parser is disabled'}</p>
           <p className="mt-2 text-xs leading-5 text-copy-muted">
-            This flag does not prove that Meta subscribed the account to message_echoes.
-            Verify webhook subscription with the existing read-only integration check before accepting native-app replies as synchronized.
+            This application flag does not establish provider delivery. Check this app's
+            current messaging subscription fields using the read-only controls below.
+            Native-app replies are only verified after a signed message.is_echo event
+            matches the correct existing conversation and produces exactly one CRM message.
+            A field name alone cannot establish readiness.
           </p>
           <InstagramEchoVerification connections={instagramConnections} />
           <Link href="/settings/integrations" className="mt-3 inline-block text-xs font-semibold text-copy underline underline-offset-2">Integration settings</Link>
