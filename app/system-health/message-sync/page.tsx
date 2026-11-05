@@ -23,7 +23,11 @@ export default async function MessageSyncAuditPage() {
   const whatsappReadiness = await getCurrentWhatsAppCoexistenceReadiness();
   if (!whatsappReadiness) redirect('/dashboard');
 
-  const { audit, workspaceName, instagramEchoEnabled, instagramHistoryEnabled, instagramConnections, instagramReceiptReconciliation } = result;
+  const {
+    audit, workspaceName, instagramEchoEnabled, instagramHistoryEnabled,
+    instagramConnections, instagramReceiptReconciliation,
+    messageSeenActivityReadiness, whatsappSeenActivityEnabled, instagramReadActivityEnabled,
+  } = result;
   const outbound = audit.messages.filter(row => row.direction === 'outbound');
   const stored = audit.messages.reduce((sum, row) => sum + row.storedCount, 0);
   const totalOutbound = outbound.reduce((sum, row) => sum + row.storedCount, 0);
@@ -66,6 +70,55 @@ export default async function MessageSyncAuditPage() {
             <p className="mt-1 text-xs leading-5 text-copy-muted">{item.detail}</p>
           </div>
         ))}
+      </section>
+
+      <section aria-label="Message seen activity readiness" className="rounded-xl border border-line bg-surface p-4">
+        <div>
+          <h2 className="text-sm font-semibold text-copy">Message seen · Activity readiness</h2>
+          <p className="mt-1 max-w-3xl text-xs leading-5 text-copy-muted">
+            Read-only preview of WhatsApp provider-confirmed read timestamps against exact CRM
+            message-seen activities. These counts are not a customer-engagement score, reply
+            confirmation, or permission for automated follow-ups.
+          </p>
+        </div>
+        <div className="mt-3 flex flex-wrap gap-x-5 gap-y-1 text-xs text-copy-muted">
+          <p>WhatsApp capture: <strong className="font-semibold text-copy">{whatsappSeenActivityEnabled ? 'Enabled' : 'Off'}</strong></p>
+          <p>Instagram conversation-read capture: <strong className="font-semibold text-copy">{instagramReadActivityEnabled ? 'Enabled' : 'Off'}</strong></p>
+        </div>
+        {messageSeenActivityReadiness ? (
+          <>
+            <dl className="mt-4 grid grid-cols-2 gap-3 lg:grid-cols-4">
+              {[
+                { label: 'WhatsApp reads recorded', value: messageSeenActivityReadiness.confirmedReadMessages },
+                { label: 'Eligible with provider ID', value: messageSeenActivityReadiness.eligibleProviderReadMessages },
+                { label: 'Matching seen activities', value: messageSeenActivityReadiness.activityMatchedMessages },
+                { label: 'Eligible without activity', value: messageSeenActivityReadiness.eligibleWithoutActivity },
+              ].map(item => (
+                <div key={item.label} className="rounded-lg border border-line px-3 py-3">
+                  <dt className="text-xs text-copy-muted">{item.label}</dt>
+                  <dd className="mt-2 text-xl font-semibold tabular-nums text-copy">{item.value.toLocaleString()}</dd>
+                </div>
+              ))}
+            </dl>
+            <p className="mt-3 text-xs leading-5 text-copy-muted">
+              Checked {messageSeenActivityReadiness.whatsappThreadsChecked.toLocaleString()} WhatsApp
+              conversation(s) · {messageSeenActivityReadiness.readMessagesWithoutProviderId.toLocaleString()} read
+              message(s) without provider IDs · Snapshot {formatTime(messageSeenActivityReadiness.checkedAt)}.
+            </p>
+            <p className="mt-2 text-xs leading-5 text-copy-muted">
+              Older confirmed reads without an activity are expected while capture is off;
+              this page does not backfill them. Only a verified read on an existing outbound
+              WhatsApp message can create a future seen activity after an approved pilot.
+              Instagram read watermarks are conversation-level evidence and are not counted
+              as specific-message reads here.
+            </p>
+          </>
+        ) : (
+          <p className="mt-3 text-xs text-copy-muted">
+            Message-seen reconciliation unavailable or above the bounded read-only limit.
+            No zero-coverage claim is made. Existing synchronization reporting is unaffected.
+          </p>
+        )}
       </section>
 
       <section className="overflow-hidden rounded-xl border border-line bg-surface">

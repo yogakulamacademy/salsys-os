@@ -9,6 +9,10 @@ import {
   parseInstagramReceiptReconciliation,
   type InstagramReceiptReconciliation,
 } from '@/lib/instagram-receipt-reconciliation-validation';
+import {
+  readMessageSeenActivityReadiness,
+  type MessageSeenActivityReadiness,
+} from '@/lib/message-seen-activity-readiness';
 
 export type MessageSyncAuditView = {
   workspaceName: string;
@@ -17,6 +21,9 @@ export type MessageSyncAuditView = {
   instagramHistoryEnabled: boolean;
   instagramConnections: Array<{ id: string; label: string }>;
   instagramReceiptReconciliation: InstagramReceiptReconciliation | null;
+  messageSeenActivityReadiness: MessageSeenActivityReadiness | null;
+  whatsappSeenActivityEnabled: boolean;
+  instagramReadActivityEnabled: boolean;
 };
 
 /**
@@ -88,12 +95,27 @@ export async function getCurrentMessageSyncAudit(): Promise<MessageSyncAuditView
     instagramReceiptReconciliation = null;
   }
 
+  // Additional bounded SELECT-only receipt-to-Activity coverage. A broken
+  // optional preview must never turn a missing result into a false zero or
+  // break the established synchronization audit.
+  let messageSeenActivityReadiness: MessageSeenActivityReadiness | null = null;
+  try {
+    messageSeenActivityReadiness = await readMessageSeenActivityReadiness(
+      admin, active.organizationId,
+    );
+  } catch {
+    messageSeenActivityReadiness = null;
+  }
+
   return {
     workspaceName: active.organizationName,
     audit: parseMessageSyncAudit(data),
     instagramEchoEnabled: process.env.INSTAGRAM_OUTBOUND_ECHO_ENABLED === 'true',
     instagramHistoryEnabled: process.env.INSTAGRAM_HISTORY_SYNC_ENABLED === 'true',
     instagramReceiptReconciliation,
+    messageSeenActivityReadiness,
+    whatsappSeenActivityEnabled: process.env.WHATSAPP_MESSAGE_SEEN_ACTIVITY_ENABLED === 'true',
+    instagramReadActivityEnabled: process.env.INSTAGRAM_READ_RECEIPT_ACTIVITY_ENABLED === 'true',
     instagramConnections: ids.map((id, index) => ({
       id,
       label: `Instagram connection ${index + 1}`,
