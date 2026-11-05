@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { ArrowRight, ListFilter } from "lucide-react";
 import { BEHAVIOR_EVENTS, type BehaviorEvent } from "@/lib/native-behavior-contract";
 import type { NativeBehaviorPageBreakdown } from "@/lib/native-behavior-breakdown-data";
@@ -24,6 +24,8 @@ export function NativeBehaviorBreakdownPanel({
   const router = useRouter();
   const [eventName, setEventName] = useState<BehaviorEvent>(breakdown.eventName);
   const selectedLabel = labels[breakdown.eventName] || breakdown.eventName;
+
+  useEffect(() => setEventName(breakdown.eventName), [breakdown.eventName]);
 
   function apply() {
     const params = new URLSearchParams({
