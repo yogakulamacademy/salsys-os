@@ -13,6 +13,9 @@ const fixture = {
   processedUnmatchedRawProcessed: 6,
   processedUnmatchedSameAccountThread: 0,
   processedUnmatchedOtherAccountThread: 5,
+  processedUnmatchedOtherAccountThreadPresentAtReceipt: 0,
+  processedUnmatchedOtherAccountThreadOnlyLater: 5,
+  processedUnmatchedOtherAccountThreadTimingUnknown: 0,
   processedUnmatchedMultipleAccountThreads: 0,
   processedUnmatchedNoSenderThread: 1,
   failedReceipts: 6,
@@ -34,6 +37,9 @@ test('parse tenant-only WhatsApp provider receipt audit and verify arithmetic', 
     processedUnmatchedRawProcessed: 0,
     processedUnmatchedSameAccountThread: 0,
     processedUnmatchedOtherAccountThread: 0,
+    processedUnmatchedOtherAccountThreadPresentAtReceipt: 0,
+    processedUnmatchedOtherAccountThreadOnlyLater: 0,
+    processedUnmatchedOtherAccountThreadTimingUnknown: 0,
     processedUnmatchedMultipleAccountThreads: 0,
     processedUnmatchedNoSenderThread: 0,
     failedReceipts: 0, failedWithRawEvidence: 0,
@@ -54,6 +60,10 @@ test('unexpected provider identifiers, message content and mismatched counts fai
     { ...fixture, processedWithLink: 36 },
     { ...fixture, processedUnmatchedRawProcessed: 7 },
     { ...fixture, processedUnmatchedOtherAccountThread: 6 },
+    { ...fixture, processedUnmatchedOtherAccountThreadOnlyLater: 6 },
+    { ...fixture, processedUnmatchedOtherAccountThreadPresentAtReceipt: 1 },
+    { ...fixture, processedUnmatchedOtherAccountThreadTimingUnknown: 1 },
+    { ...fixture, processedUnmatchedOtherAccountThreadOnlyLater: -1 },
     { ...fixture, processedUnmatchedSameAccountThread: 1 },
     { ...fixture, processedUnmatchedNoSenderThread: -1 },
     { ...fixture, processedUnmatchedMultipleAccountThreads: 2 },
@@ -70,7 +80,7 @@ test('unexpected provider identifiers, message content and mismatched counts fai
 });
 
 test('service-only SQL reconciliation is SELECT-only, tenant-bound and projects aggregates', () => {
-  const sql = readFileSync('supabase/migrations/20261105133000_whatsapp_receipt_account_identity_v2.sql', 'utf8');
+  const sql = readFileSync('supabase/migrations/20261105150000_whatsapp_receipt_identity_timeline_v3.sql', 'utf8');
   const executable = sql.split('\n').filter(line => !line.trim().startsWith('--')).join('\n');
   for (const expected of [
     'stable', 'security invoker', 'where w.organization_id = p_organization_id',
@@ -83,6 +93,11 @@ test('service-only SQL reconciliation is SELECT-only, tenant-bound and projects 
     'c.external_account_id = r.phone_number_id',
     'c.external_conversation_id = r.sender_digits',
     "'processedUnmatchedOtherAccountThread'",
+    "'processedUnmatchedOtherAccountThreadPresentAtReceipt'",
+    "'processedUnmatchedOtherAccountThreadOnlyLater'",
+    "'processedUnmatchedOtherAccountThreadTimingUnknown'",
+    'c.created_at <= r.received_at',
+    'c.created_at > r.received_at',
     "'processedUnmatchedNoSenderThread'",
     "'processedWithoutMessage'", "'failedWithRawEvidence'",
     'from public, anon, authenticated;',
@@ -108,6 +123,9 @@ test('server-only authenticated UI shows no raw provider MID, delivery command o
   assert.match(page, /processedWithoutMessage/);
   assert.match(page, /failedWithRawEvidence/);
   assert.match(page, /processedUnmatchedOtherAccountThread/);
+  assert.match(page, /processedUnmatchedOtherAccountThreadOnlyLater/);
+  assert.match(page, /processedUnmatchedOtherAccountThreadPresentAtReceipt/);
+  assert.match(page, /A thread created after an old receipt cannot prove/);
   assert.match(page, /processedUnmatchedNoSenderThread/);
   assert.match(page, /unavailable/);
   assert.doesNotMatch(page, /sendWhatsApp|replayWebhook|apply: true|accessToken|providerMessageId/);
