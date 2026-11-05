@@ -11,6 +11,7 @@ export type MessageSyncAuditView = {
   audit: MessageSyncAudit;
   instagramEchoEnabled: boolean;
   instagramHistoryEnabled: boolean;
+  instagramConnections: Array<{ id: string; label: string }>;
 };
 
 /**
@@ -43,16 +44,37 @@ export async function getCurrentMessageSyncAudit(): Promise<MessageSyncAuditView
     return null;
   }
 
-  const { data, error } = await (createAdminClient() as any).rpc(
+  const admin = createAdminClient();
+  const { data, error } = await (admin as any).rpc(
     'get_message_sync_audit_v1',
     { p_organization_id: active.organizationId },
   );
   if (error || !data) throw new Error('Message synchronization audit is temporarily unavailable.');
+
+  // Only return opaque connection IDs after the same fresh owner/admin and
+  // workspace authorization used for the aggregate operational audit.
+  const { data: connections, error: connectionsError } = await admin.from('integration_connections')
+    .select('id')
+    .eq('organization_id', active.organizationId)
+    .eq('provider', 'instagram')
+    .eq('status', 'connected')
+    .order('connected_at', { ascending: false })
+    .limit(10);
+  if (connectionsError) throw new Error('Instagram subscription inventory is temporarily unavailable.');
+  const ids = (connections ?? []).map(row => row.id);
+  if (ids.some(id => typeof id !== 'string' ||
+      !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id))) {
+    throw new Error('Instagram subscription inventory contains invalid identifiers.');
+  }
 
   return {
     workspaceName: active.organizationName,
     audit: parseMessageSyncAudit(data),
     instagramEchoEnabled: process.env.INSTAGRAM_OUTBOUND_ECHO_ENABLED === 'true',
     instagramHistoryEnabled: process.env.INSTAGRAM_HISTORY_SYNC_ENABLED === 'true',
+    instagramConnections: ids.map((id, index) => ({
+      id,
+      label: `Instagram connection ${index + 1}`,
+    })),
   };
 }
