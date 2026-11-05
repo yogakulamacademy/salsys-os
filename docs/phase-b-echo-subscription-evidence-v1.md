@@ -32,9 +32,12 @@ is added.
 - `message_echoes` present **for this app's configured Instagram OAuth app ID**:
   Meta reports that field as subscribed to SalsysOS; **this is not proof
   of actual app-message delivery**.
-- `messages` present but `message_echoes` absent: Meta reports incoming
-  message subscription, not confirmed native-app echo capture. Depending on
-  the connected Meta product/flow, echo payloads may differ; use a live test.
+- `messages` present but `message_echoes` absent: the app has a messaging
+  field, but native-app echo delivery is **unverified**, not disproven.
+  Depending on the connected Meta product/login flow, outbound events may
+  travel through `messages` with `message.is_echo=true`. A separate
+  `message_echoes` field is not a universal requirement. Use signed live
+  provider evidence, not field labels, to decide acceptance.
 - Neither present: the observed subscription list contains neither field.
   Meta app configuration, permission, login flow and account scope require review.
 - Request fails: unknown — no negative inference.
