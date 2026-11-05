@@ -41,6 +41,11 @@ falsely reassuring zero.
 - Existing history `apply:true` path remains unmodified
 - Same-origin active owner/admin membership gate and connected-account
   lookup stay in place in the existing route
+- The older Settings → Integrations history-preview control now sends the
+  API-supported `history_preview` mode with `apply: false`, instead of the
+  unsupported `history` mode. The separately gated apply action omits the
+  inspection mode and remains unchanged in scope. Both UI entry points
+  display the numeric outbound sample, without raw provider data
 - The client validator strictly limits the extra counts to 0–20, requires
   `outboundMessagesMatched + outboundMessagesNotInCrm =
   outboundMessagesSeen`, rejects unknown fields and any import evidence
