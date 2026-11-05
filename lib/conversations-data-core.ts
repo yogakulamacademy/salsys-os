@@ -197,7 +197,7 @@ export async function getConversationsWorkspace(
   }
 
   const selectedId = textOrUndefined(payload.selectedId);
-  const conversationSummary = normalizeInbox(payload.inbox, selectedId);
+  const conversationSummary = normalizeInbox(payload.inbox);
   const selected = normalizeSelected(payload.selected);
   const team = normalizeTeam(payload.team, null);
 
@@ -252,7 +252,6 @@ function unwrapPayload(value: unknown): RpcPayload {
 
 function normalizeInbox(
   rows: RpcInboxRow[] | null | undefined,
-  selectedId?: string,
 ): ConversationLeadSummary[] {
   if (!Array.isArray(rows)) return [];
 
@@ -269,7 +268,9 @@ function normalizeInbox(
       stage: asLeadStage(row.stage),
       currentContactChannel: asChannel(row.currentContactChannel),
       lastContactedAt: row.lastContactedAt ?? null,
-      unread: row.id === selectedId ? false : Boolean(row.unread),
+      // The read marker is a separate persisted action. A selected ID alone
+      // must never erase unread state before that action succeeds.
+      unread: Boolean(row.unread),
       needsReply: Boolean(row.needsReply),
       needsFirstContact: Boolean(row.needsFirstContact),
       priority: asPriority(row.priority),
@@ -410,7 +411,7 @@ async function getLegacyWorkspace(
           lead.lastContactedAt ||
           lead.createdAt ||
           null,
-        unread: lead.id === selectedId ? false : attention.unread,
+        unread: attention.unread,
         needsReply: attention.needsReply,
         needsFirstContact: attention.needsFirstContact,
         priority: attention.priority,

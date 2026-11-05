@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import type { InboxPage } from "@/lib/conversations-page-data";
+import { nextInboxQueueHref, resetInboxQueueHref } from "@/lib/inbox-query-navigation";
 import { Clock3, Flag, MessageCircle, Search, SlidersHorizontal, UsersRound, X } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { EmptyState } from "@/components/ui";
@@ -68,15 +69,15 @@ export function ConversationsSidebar({
   const searchRef = useRef<HTMLInputElement | null>(null);
   const [visibleCount, setVisibleCount] = useState(50);
 
-  function setInboxParam(key: string, value: string, preservePage = false) {
-    const params = new URLSearchParams(searchParams.toString());
-    if (!value || (key === "page" && value === "1") ||
-        (key === "sort" && value === "created_desc") ||
-        (key !== "scope" && ["filter","priority","channel"].includes(key) && value === "all")) {
-      params.delete(key);
-    } else params.set(key, value);
-    if (!preservePage) params.delete("page");
-    router.replace(`/conversations?${params.toString()}`, { scroll: false });
+  function setInboxParam(
+    key: "q" | "page" | "sort" | "scope" | "filter" | "priority" | "channel",
+    value: string,
+    preservePage = false,
+  ) {
+    router.replace(
+      nextInboxQueueHref(searchParams.toString(), key, value, preservePage),
+      { scroll: false },
+    );
   }
   function updateScope(value: ScopeFilter) {
     setScope(value);
@@ -101,9 +102,7 @@ export function ConversationsSidebar({
     setPriorityFilter("all");
     setChannelFilter("all");
     if (serverMode) {
-      const params = new URLSearchParams(searchParams.toString());
-      for (const key of ["q","page","sort","scope","filter","priority","channel"]) params.delete(key);
-      router.replace(`/conversations?${params.toString()}`, { scroll: false });
+      router.replace(resetInboxQueueHref(searchParams.toString()), { scroll: false });
     }
   }
   function leadHref(id: string) {
