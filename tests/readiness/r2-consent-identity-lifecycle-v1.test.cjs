@@ -40,6 +40,7 @@ function boot({
 } = {}) {
   const calls = [];
   const docListeners = {};
+  const windowListeners = {};
   const script = {
     src: "https://crm.salsysos.com/salsys-tracker.js",
     dataset: {
@@ -72,7 +73,7 @@ function boot({
     innerWidth: 390,
     innerHeight: 844,
     console,
-    addEventListener() {},
+    addEventListener(name, fn) { (windowListeners[name] ||= []).push(fn); },
   };
   async function fetch(url, opts) {
     const body = JSON.parse(opts.body);
@@ -95,7 +96,13 @@ function boot({
     return calls.filter((c) => c.url.includes("/api/events/browser/")
       && (!name || c.body.event_name === name));
   }
-  return { sdk: window.Salsys, local, session, form: trackedForm, calls, eventCalls, window, docListeners };
+  function emitStorage(key, newValue, oldValue = null) {
+    for (const fn of windowListeners.storage || []) {
+      fn({ key, newValue, oldValue, storageArea: local, url: window.location.href });
+    }
+  }
+  return { sdk: window.Salsys, local, session, form: trackedForm, calls, eventCalls,
+    window, docListeners, windowListeners, emitStorage };
 }
 async function settle() { await new Promise((resolve) => setImmediate(resolve)); }
 
@@ -295,4 +302,93 @@ test("a contradictory remote opt-out acknowledgement cannot reenable analytics l
   );
   assert.equal(app.sdk.privacy().analytics_allowed_locally, false);
   assert.equal(app.local.getItem("salsys_vid"), null);
+});
+
+
+test("two tabs immediately sever old analytics IDs when one tab withdraws consent", async () => {
+  const shared = storage();
+  const first = boot({ local: shared });
+  await first.sdk.consent({ analytics: "granted" });
+  const second = boot({ local: shared });
+  await settle();
+  const oldVisitor = second.sdk.visitorId();
+  const oldSession = second.sdk.sessionId();
+  assert.equal(first.sdk.visitorId(), oldVisitor);
+
+  await first.sdk.consent({ analytics: "withdrawn" });
+  second.emitStorage("salsys_privacy_v1", shared.getItem("salsys_privacy_v1"));
+  assert.equal(second.sdk.privacy().analytics_allowed_locally, false);
+  assert.equal((await second.sdk.track("web.page_viewed", {})).privacy_blocked, true);
+  assert.notEqual(second.sdk.visitorId(), oldVisitor, "other tab must not retain prior visitor ID");
+  assert.notEqual(second.sdk.sessionId(), oldSession, "other tab must not retain prior session ID");
+  assert.equal(second.session.getItem("salsys_vid_session"), null);
+  assert.equal(second.session.getItem("salsys_sid"), null);
+  assert.equal(second.form.field("salsys_visitor_id"), second.sdk.visitorId());
+  assert.equal(second.form.field("salsys_session_id"), second.sdk.sessionId());
+});
+
+test("two tabs wait for a post-grant identity before resuming optional analytics", async () => {
+  const shared = storage();
+  const first = boot({ local: shared });
+  await first.sdk.consent({ analytics: "granted" });
+  const second = boot({ local: shared });
+  const oldVisitor = second.sdk.visitorId();
+  await first.sdk.consent({ analytics: "withdrawn" });
+  second.emitStorage("salsys_privacy_v1", shared.getItem("salsys_privacy_v1"));
+  await first.sdk.consent({ analytics: "granted" });
+  second.emitStorage("salsys_privacy_v1", shared.getItem("salsys_privacy_v1"));
+  assert.equal((await second.sdk.track("web.page_viewed", {})).privacy_blocked, true,
+    "privacy grant state alone must not resume a tab with unbound identity");
+  second.emitStorage("salsys_vid", shared.getItem("salsys_vid"));
+  await settle();
+  assert.notEqual(second.sdk.visitorId(), oldVisitor);
+  assert.equal(second.sdk.visitorId(), first.sdk.visitorId(),
+    "both tabs may share the NEW first-party visitor ID after regrant");
+  assert.notEqual(second.sdk.sessionId(), first.sdk.sessionId(),
+    "separate tabs must use different session keys");
+  assert.equal(second.sdk.privacy().analytics_allowed_locally, true);
+  assert.ok(second.eventCalls("web.session_started").some(
+    (event) => event.body.anonymous_visitor_id === first.sdk.visitorId()
+      && event.body.session_key === second.sdk.sessionId()
+  ));
+});
+
+test("cross-tab privacy storage clearing fails closed rather than resuming a default grant", async () => {
+  const shared = storage();
+  const first = boot({ local: shared, mode: "granted" });
+  await settle();
+  const second = boot({ local: shared, mode: "granted" });
+  await settle();
+  const before = second.sdk.visitorId();
+  shared.removeItem("salsys_privacy_v1");
+  second.emitStorage("salsys_privacy_v1", null);
+  assert.equal(second.sdk.privacy().analytics_allowed_locally, false);
+  assert.notEqual(second.sdk.visitorId(), before);
+  assert.equal((await second.sdk.track("web.page_viewed", {})).privacy_blocked, true);
+});
+
+test("a tab must not resurrect an old visitor retry queue after cross-tab withdrawal/regrant", async () => {
+  let rejectOld;
+  const shared = storage();
+  const first = boot({ local: shared });
+  await first.sdk.consent({ analytics: "granted" });
+  const second = boot({
+    local: shared,
+    eventResponse(body) {
+      if (body.properties?.case === "old-other-tab-request") {
+        return new Promise((_resolve, reject) => { rejectOld = reject; });
+      }
+      return { ok: true, json: async () => ({ ok: true, accepted: true }) };
+    },
+  });
+  const pending = second.sdk.track("web.page_viewed", { case: "old-other-tab-request" });
+  await first.sdk.consent({ analytics: "withdrawn" });
+  second.emitStorage("salsys_privacy_v1", shared.getItem("salsys_privacy_v1"));
+  await first.sdk.consent({ analytics: "granted" });
+  second.emitStorage("salsys_privacy_v1", shared.getItem("salsys_privacy_v1"));
+  second.emitStorage("salsys_vid", shared.getItem("salsys_vid"));
+  rejectOld(new Error("synthetic delayed old-tab request"));
+  await assert.rejects(pending, /synthetic delayed old-tab request/);
+  await settle();
+  assert.deepEqual(JSON.parse(shared.getItem("salsys_event_queue_v1") || "[]"), []);
 });
