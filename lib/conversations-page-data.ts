@@ -82,7 +82,9 @@ export async function getInboxPage(
   const page = Number.isSafeInteger(requestedPage)
     ? Math.min(Math.max(1, requestedPage), 100000)
     : 1;
-  const sort = choice(query.sort, ["created_desc", "activity_desc"] as const, "created_desc");
+  // An older conversation with a new customer message belongs at the top
+  // of the inbox. Preserve explicit created_desc as an optional user sort.
+  const sort = choice(query.sort, ["created_desc", "activity_desc"] as const, "activity_desc");
   const scope = query.scope?.startsWith("owner:") &&
     /^owner:[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i.test(query.scope)
     ? query.scope.toLowerCase() as InboxScope
