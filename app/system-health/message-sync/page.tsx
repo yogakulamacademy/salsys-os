@@ -188,7 +188,7 @@ export default async function MessageSyncAuditPage() {
                 { label: 'Ignored contact-share duplicates', value: instagramReceiptReconciliation.ignoredContactShareDuplicates },
                 { label: 'Processed without explained match', value: instagramReceiptReconciliation.processedWithoutExactMatchReview },
                 { label: 'Not processed / status unavailable', value: instagramReceiptReconciliation.unprocessedOrMissingStatus },
-                { label: 'Ignored-tagged but already matched', value: instagramReceiptReconciliation.ignoredAlreadyMatched },
+                { label: 'Ignored-tagged with CRM match', value: instagramReceiptReconciliation.ignoredAlreadyMatched }
               ].map(item => (
                 <div key={item.label} className="rounded-md border border-line px-3 py-2">
                   <dt className="text-xs text-copy-muted">{item.label}</dt>
@@ -201,8 +201,9 @@ export default async function MessageSyncAuditPage() {
             <p className="mt-3 text-xs leading-5 text-copy-muted">
               Exact matches require the inbound direction, tenant, Instagram account, sender
               conversation and provider message ID to agree. Ignored-tagged records already
-              matched to CRM messages can reflect historical classification overlap; investigate
-              privately before considering changes. No automatic replay or message creation.
+              matched to CRM messages can reflect later projection or historical classification
+              overlap. A present-day match does not prove a CRM message existed at the receipt
+              time. Investigate privately before considering changes. No automatic replay or message creation.
             </p>
           </>
         ) : (
