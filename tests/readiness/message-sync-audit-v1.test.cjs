@@ -48,7 +48,7 @@ test('fail closed on impossible, malformed or overly broad database output', () 
 });
 
 function setup(options = {}) {
-  const calls = { serviceClient: 0, rpc: [], sessionTables: [] };
+  const calls = { serviceClient: 0, rpc: [], sessionTables: [], connectionQueries: [] };
   const profile = {
     select() { return this; },
     eq() { return this; },
@@ -66,6 +66,28 @@ function setup(options = {}) {
     },
   };
   const admin = {
+    from(table) {
+      assert.equal(table, 'integration_connections');
+      const filters = [];
+      const query = {
+        select(columns) { assert.equal(columns, 'id'); return query; },
+        eq(key, value) { filters.push([key, value]); return query; },
+        order(key, direction) { assert.equal(key, 'connected_at'); assert.equal(direction.ascending, false); return query; },
+        limit(n) {
+          assert.equal(n, 10);
+          calls.connectionQueries.push(filters);
+          assert.deepEqual(filters, [
+            ['organization_id', 'synthetic-org'],
+            ['provider', 'instagram'],
+            ['status', 'connected'],
+          ]);
+          return Promise.resolve(options.connectionsError
+            ? { data: null, error: { message: 'secret provider error' } }
+            : { data: options.connections ?? [{ id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa' }], error: null });
+        },
+      };
+      return query;
+    },
     rpc: async (name, args) => {
       calls.rpc.push({ name, args });
       return options.rpcError ? { data: null, error: { message: 'private provider data' } }
@@ -124,11 +146,21 @@ test('owner/admin reads only active tenant aggregates, without provider or CRM m
         name: 'get_message_sync_audit_v1', args: { p_organization_id: 'synthetic-org' },
       });
       assert.equal(calls.serviceClient, 1);
+      assert.equal(result.instagramConnections.length, 1);
+      assert.equal(result.instagramConnections[0].label, 'Instagram connection 1');
+      assert.equal(calls.connectionQueries.length, 1);
     } finally {
       if (original === undefined) delete process.env.INSTAGRAM_OUTBOUND_ECHO_ENABLED;
       else process.env.INSTAGRAM_OUTBOUND_ECHO_ENABLED = original;
     }
   }
+});
+
+test('connected Instagram inventory errors and invalid IDs fail closed', async () => {
+  await assert.rejects(setup({ connectionsError: true }).module.getCurrentMessageSyncAudit(), /temporarily unavailable/);
+  await assert.rejects(setup({ connections: [{ id: 'not-a-uuid' }] }).module.getCurrentMessageSyncAudit(), /invalid identifiers/);
+  const result = await setup({ connections: [] }).module.getCurrentMessageSyncAudit();
+  assert.deepEqual(result.instagramConnections, []);
 });
 
 test('audit RPC failures do not surface provider error details', async () => {
@@ -162,6 +194,7 @@ test('operations page is server-rendered read-only and linked from System Health
   assert.match(page,/if \(!result\) redirect\('\/dashboard'\)/);
   assert.match(page,/not verified provider delivery/);
   assert.match(page,/This flag does not prove that Meta subscribed/);
+  assert.match(page,/InstagramEchoVerification connections={instagramConnections}/);
   assert.match(health,/href="\/system-health\/message-sync"/);
   assert.doesNotMatch(page,/use client|onClick=|fetch\(|sendMessage|replayEvents/);
 });
