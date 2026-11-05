@@ -3,6 +3,7 @@ import { redirect } from 'next/navigation';
 import { ArrowLeft, RefreshCw, ShieldCheck } from 'lucide-react';
 
 import { getCurrentMessageSyncAudit } from '@/lib/message-sync-audit';
+import { InstagramEchoVerification } from '@/components/instagram-echo-verification';
 
 export const dynamic = 'force-dynamic';
 
@@ -17,7 +18,7 @@ export default async function MessageSyncAuditPage() {
   const result = await getCurrentMessageSyncAudit();
   if (!result) redirect('/dashboard');
 
-  const { audit, workspaceName, instagramEchoEnabled, instagramHistoryEnabled } = result;
+  const { audit, workspaceName, instagramEchoEnabled, instagramHistoryEnabled, instagramConnections } = result;
   const outbound = audit.messages.filter(row => row.direction === 'outbound');
   const stored = audit.messages.reduce((sum, row) => sum + row.storedCount, 0);
   const totalOutbound = outbound.reduce((sum, row) => sum + row.storedCount, 0);
@@ -141,6 +142,7 @@ export default async function MessageSyncAuditPage() {
             This flag does not prove that Meta subscribed the account to message_echoes.
             Verify webhook subscription with the existing read-only integration check before accepting native-app replies as synchronized.
           </p>
+          <InstagramEchoVerification connections={instagramConnections} />
           <Link href="/settings/integrations" className="mt-3 inline-block text-xs font-semibold text-copy underline underline-offset-2">Integration settings</Link>
         </div>
         <div className="rounded-xl border border-line bg-surface p-4">
