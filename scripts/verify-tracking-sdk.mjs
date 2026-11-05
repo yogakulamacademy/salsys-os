@@ -6,10 +6,12 @@ import { spawnSync } from 'node:child_process';
 const root = process.cwd();
 const intelligenceLoaderPath = 'public/salsys-intelligence.js';
 const intelligenceCorePath = 'public/salsys-intelligence-core-v1.6.0.js';
+const behaviorFilePath = 'public/salsys-behavior-v1.js';
 
 const requiredFiles = [
   intelligenceLoaderPath,
   intelligenceCorePath,
+  behaviorFilePath,
   'public/salsys-tracker.js',
   'public/salsys-consent.js',
   'schemas/salsys-event-v1.schema.json',
@@ -41,6 +43,7 @@ for (const file of requiredFiles) read(file);
 for (const file of [
   intelligenceLoaderPath,
   intelligenceCorePath,
+  behaviorFilePath,
   'public/salsys-tracker.js',
   'public/salsys-consent.js',
 ]) {
@@ -70,6 +73,7 @@ const tracker = read('public/salsys-tracker.js');
 const intelligenceLoader = read(intelligenceLoaderPath);
 const intelligenceCore = read(intelligenceCorePath);
 const intelligence = `${intelligenceLoader}\n${intelligenceCore}`;
+const behavior = read(behaviorFilePath);
 const consentUi = read('public/salsys-consent.js');
 const browserRoute = read('app/api/events/browser/v1/route.ts');
 const serverRoute = read('app/api/events/v1/route.ts');
@@ -100,6 +104,21 @@ const trackerChecks = [
 ];
 for (const [needle, label] of trackerChecks) {
   if (!tracker.includes(needle)) fail(`Browser core is missing ${label} (${needle}).`);
+}
+
+for (const [needle, label] of [
+  ["dataset.salsysBehaviorTracking === 'true'", 'explicit optional collector gate'],
+  ['salsys-behavior-v1.js', 'optional collector script path'],
+]) {
+  if (!intelligenceCore.includes(needle)) fail(`Behavior opt-in gate missing ${label}.`);
+}
+for (const [needle, label] of [
+  ['analytics_allowed_locally === true', 'analytics-consent permission check'],
+  ['IntersectionObserver', 'real CTA visibility measurement'],
+  ['web.scroll_depth_reached', 'scroll-depth observation'],
+  ['salsys:form-acknowledged', 'explicit form success acknowledgement'],
+]) {
+  if (!behavior.includes(needle)) fail(`Behavior collector missing ${label}.`);
 }
 
 const intelligenceChecks = [

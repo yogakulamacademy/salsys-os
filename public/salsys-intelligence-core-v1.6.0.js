@@ -517,6 +517,18 @@
       lead_capture_mode: LEAD_CAPTURE_MODE,
       form_discovery: Boolean(SITE_ID)
     });
+
+    // R2 behavioral telemetry is disabled unless the site explicitly opts in.
+    // Load only after the Universal SDK and its privacy API are ready.
+    if (current && current.dataset &&
+        current.dataset.salsysBehaviorTracking === 'true' &&
+        !window.__salsysBehaviorV1Queued) {
+      window.__salsysBehaviorV1Queued = true;
+      var behaviorScript = document.createElement('script');
+      behaviorScript.src = base.replace(/\/$/, '') + '/salsys-behavior-v1.js';
+      behaviorScript.async = true;
+      (document.head || document.documentElement).appendChild(behaviorScript);
+    }
   }
 
   function expose() {
