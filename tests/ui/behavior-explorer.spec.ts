@@ -67,7 +67,7 @@ test("Funnel controls update ordered steps and date range without website writes
   await page.getByRole("button", { name: "Run funnel" }).click();
   await expect(page).toHaveURL(/view=behavior.*days=30/);
   await expect(page.getByRole("heading", { name: "Ordered funnel" })).toBeVisible();
-  await expect(page.getByText("CTA clicked")).toBeVisible();
+  await expect(page.getByText("3. CTA clicked", { exact: true })).toBeVisible();
 
   const reads = await (await request.get(fixtureBase + "/__behavior_calls")).json();
   expect(reads.some((call: any) =>
