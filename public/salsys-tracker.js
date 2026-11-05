@@ -573,6 +573,8 @@
     sessionTouch = currentTouch();
     firstTouch = sessionTouch;
     safeRemove(window.sessionStorage, KEYS.sessionStarted);
+    safeRemove(window.sessionStorage, KEYS.pendingFirstTouch);
+    window.__salsysInitialPageSent = false;
     analyticsOptOutRequested = false;
     externalGrantAwaitingIdentity = false;
     safeSet(window.sessionStorage, KEYS.sessionVisitor, visitorId);
@@ -587,8 +589,35 @@
     }
   }
 
+  function reconcileExternalConsent() {
+    var decision = privacyState().analytics;
+    if (analyticsDenied(decision)) {
+      if (!analyticsOptOutRequested) {
+        analyticsOptOutRequested = true;
+        rotateAnalyticsIdentity(true);
+      }
+      externalGrantAwaitingIdentity = false;
+      return;
+    }
+    if (decision !== 'granted') return;
+    var candidate = safeGet(window.localStorage, KEYS.persistentVisitor);
+    if (candidate && candidate !== visitorId) {
+      // A suspended tab may miss both storage events; its next interaction
+      // must join only the new, acknowledged visitor epoch.
+      analyticsOptOutRequested = true;
+      externalGrantAwaitingIdentity = true;
+      onExternalStorage({
+        key: KEYS.persistentVisitor,
+        newValue: candidate,
+        storageArea: window.localStorage
+      });
+    }
+  }
+
   if (typeof window.addEventListener === 'function') {
     window.addEventListener('storage', onExternalStorage);
+    window.addEventListener('pageshow', reconcileExternalConsent);
+    window.addEventListener('focus', reconcileExternalConsent);
   }
 
   // Queue network consent receipts in invocation order; never claim a later
@@ -597,6 +626,9 @@
   var analyticsConsentRevision = 0;
 
   function consent(decisions) {
+    // Also catches a tab that missed a remote withdrawal while suspended.
+    // This must run before the receipt captures its visitor ID.
+    reconcileExternalConsent();
     var normalized = {};
     Object.keys(decisions || {}).forEach(function (purpose) {
       var decision = String(decisions[purpose] || '').trim().toLowerCase();
