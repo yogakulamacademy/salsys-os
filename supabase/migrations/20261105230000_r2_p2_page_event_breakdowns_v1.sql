@@ -1,5 +1,24 @@
 -- R2-P2: native page-level web event breakdown, aggregation only.
 -- No event writes, client raw-events grant, visitor exports, or tracking activation.
+-- Add a second, stricter path guard for event-per-page reports.
+-- Public contact/enroll pages remain eligible; account/customer surfaces do not.
+create or replace function public.native_safe_behavior_breakdown_page_v1(p_path text)
+returns text
+language sql
+immutable
+set search_path = public, pg_catalog
+as $
+  select case
+    when sanitized.path ~* '(^|/)(account|profile|users?|student|private|admin|dashboard|settings|session|token|reset-password|payments?|orders?|checkout|lead|api|auth)(/|\.|$)'
+      then '/other'
+    else sanitized.path
+  end
+  from (select public.native_safe_page_path_v2(p_path) as path) sanitized;
+$;
+
+revoke all on function public.native_safe_behavior_breakdown_page_v1(text)
+  from public,anon,authenticated;
+
 create or replace function public.get_native_behavior_page_breakdown_v1(
   p_organization_id uuid,
   p_days integer default 14,
@@ -71,7 +90,7 @@ begin
       e.tracking_source_id,
       e.anonymous_visitor_id,
       e.session_key,
-      public.native_safe_page_path_v2(e.payload ->> 'pagePath') as safe_path
+      public.native_safe_behavior_breakdown_page_v1(e.payload ->> 'pagePath') as safe_path
     from public.raw_events e
     where e.organization_id = p_organization_id
       and e.event_family = 'web'
@@ -146,11 +165,19 @@ revoke all on function public.get_native_behavior_page_breakdown_v1(uuid,integer
 grant execute on function public.get_native_behavior_page_breakdown_v1(uuid,integer,text)
   to authenticated;
 
--- No fixtures insert into production. Pure regression proof on row counting.
+-- No fixtures insert into production. Pure route assertions on known synthetic strings.
 do $$
 begin
-  if (select count(*) from unnest(array['web.page_viewed','web.form_started']) e) <> 2
-    then raise exception 'R2-P2 page breakdown deterministic sanity check failed';
+  if public.native_safe_behavior_breakdown_page_v1('/courses/200-hour-ytt.php') <> '/courses/200-hour-ytt.php'
+    or public.native_safe_behavior_breakdown_page_v1('/enroll.php') <> '/enroll.php'
+    or public.native_safe_behavior_breakdown_page_v1('/contact.php') <> '/contact.php'
+    then raise exception 'R2-P2 safe public page regression';
+  end if;
+  if public.native_safe_behavior_breakdown_page_v1('/account/billing.php') <> '/other'
+    or public.native_safe_behavior_breakdown_page_v1('/students/profile.php') <> '/other'
+    or public.native_safe_behavior_breakdown_page_v1('/customer?token=abc') <> '/other'
+    or public.native_safe_behavior_breakdown_page_v1('/person/123456789.php') <> '/other'
+    then raise exception 'R2-P2 private or dynamic path escaped';
   end if;
 end;
 $$;
