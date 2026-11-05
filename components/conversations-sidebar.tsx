@@ -258,7 +258,7 @@ export function ConversationsSidebar({
       filter !== "all" ||
       priorityFilter !== "all" ||
       channelFilter !== "all" ||
-      Boolean(pagination && (pagination.page > 1 || pagination.sort !== "created_desc")),
+      Boolean(pagination && (pagination.page > 1 || pagination.sort !== "activity_desc")),
   );
 
   return (
