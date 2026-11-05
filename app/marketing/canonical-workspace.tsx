@@ -26,6 +26,7 @@ import { buildAttributionIntelligence } from "@/lib/commercial-intelligence";
 import { isMockMode } from "@/lib/data";
 import { normalizeBehaviorRequest } from "@/lib/native-behavior-contract";
 import { getNativeBehaviorWorkspace } from "@/lib/native-behavior-data";
+import { getNativeBehaviorTrends } from "@/lib/native-behavior-trends-data";
 import {
   getFunnelIntelligenceWorkspace,
   type FunnelIntelligenceWorkspace as FunnelWorkspace,
@@ -283,8 +284,11 @@ async function BehaviorView({
   query: Awaited<MarketingPageProps["searchParams"]>;
 }) {
   const request = normalizeBehaviorRequest(query.days, query.steps);
-  const workspace = await getNativeBehaviorWorkspace(request);
-  return <NativeBehaviorExplorer workspace={workspace} />;
+  const [workspace, trends] = await Promise.all([
+    getNativeBehaviorWorkspace(request),
+    getNativeBehaviorTrends({ days: request.days, events: request.steps }),
+  ]);
+  return <NativeBehaviorExplorer workspace={workspace} trends={trends} />;
 }
 
 async function AttributionView({
