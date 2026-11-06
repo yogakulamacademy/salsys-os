@@ -8,6 +8,8 @@ import type { PreparedWebsiteEvidence, SourceEvidenceBlock } from './website-evi
  * This is NOT an AI model or a semantic fact extractor. It copies exact source
  * quotes and pairs only explicitly adjacent FAQ question/answer blocks. It
  * does not fetch, store, approve, prompt a model, or publish anything.
+ * The verified hostname is supplied separately by an already-authorized
+ * caller; evidence source URLs cannot prove their own domain ownership.
  */
 
 export type SourceDraftRisk =
@@ -100,12 +102,16 @@ function risksFor(...quotes: string[]): SourceDraftRisk[] {
   return result;
 }
 
-function validSource(url: string): boolean {
-  if(typeof url!=='string'||url.length>2048)return false;
+function validSource(url: string, verifiedHostname: string): boolean {
+  if(typeof url!=='string'||url.length>2048||
+    typeof verifiedHostname!=='string'||verifiedHostname.length>253||
+    !/^[a-z0-9][a-z0-9.-]*\.[a-z]{2,}$/i.test(verifiedHostname)||
+    verifiedHostname.includes('..'))return false;
   try {
     const parsed=new URL(url);
     return parsed.protocol==='https:'&& !parsed.username && !parsed.password &&
-      !parsed.port && !isIP(parsed.hostname) && !parsed.hostname.includes('..') &&
+      !parsed.port && parsed.hostname===verifiedHostname.toLowerCase() &&
+      !isIP(parsed.hostname) && !parsed.hostname.includes('..') &&
       /^[a-z0-9][a-z0-9.-]*\.[a-z]{2,}$/i.test(parsed.hostname);
   } catch {return false;}
 }
@@ -150,8 +156,12 @@ function issue(
 }
 
 /** Never infer or paraphrase an answer; unanswered FAQ questions remain issues. */
-export function prepareSourceGroundedDrafts(evidence:PreparedWebsiteEvidence):SourceDraftResult {
-  if(!evidence||evidence.sourceType!=='website'|| !validSource(evidence.sourceUrl)||
+export function prepareSourceGroundedDrafts(
+  evidence:PreparedWebsiteEvidence,
+  verifiedHostname:string,
+):SourceDraftResult {
+  if(!evidence||evidence.sourceType!=='website'||
+    !validSource(evidence.sourceUrl,verifiedHostname)||
     !HASH.test(evidence.snapshotSha256??'')||
     typeof evidence.fetchedAt!=='string'|| !Number.isFinite(Date.parse(evidence.fetchedAt))||
     !Array.isArray(evidence.blocks)||evidence.blocks.length>MAX_BLOCKS||
