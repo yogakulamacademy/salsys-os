@@ -61,6 +61,19 @@ test('filters and reset are local to the tab and cannot silently persist',async(
   await expect(page.getByText('All evidence',{exact:true})).toBeVisible();
 });
 
+test('review preview names consent and deletion safeguards without enabling storage',async({page})=>{
+  await page.goto('/settings/knowledge/evidence-preview');
+  const readiness=page.getByRole('region',{name:'Evidence lifecycle readiness'});
+  await expect(readiness.getByText('Consent and retention readiness')).toBeVisible();
+  await expect(readiness.getByText('No storage controls have been verified here.',{exact:false})).toBeVisible();
+  await readiness.getByText('Review 9 required storage safeguards').click();
+  await expect(readiness.getByText('Explicit tenant extraction consent')).toBeVisible();
+  await expect(readiness.getByText('Approved quotation retention')).toBeVisible();
+  await expect(readiness.getByText('Deletion and consent withdrawal tested')).toBeVisible();
+  await expect(readiness.getByText('Isolated staging database acceptance')).toBeVisible();
+  await expect(page.getByRole('button',{name:'Publish knowledge (disabled)'})).toBeDisabled();
+});
+
 test('review preview remains readable without horizontal overflow on mobile',async({page})=>{
   await page.setViewportSize({width:390,height:844});
   await page.goto('/settings/knowledge/evidence-preview');
