@@ -60,7 +60,11 @@ test('revalidates each redirect and pins the verified address per hop', async ()
     if(url.pathname==='/')return {status:302,location:'/about',contentType:'text/html',body:''};
     return {status:200,location:null,contentType:'text/html; charset=utf-8',body:'<title>About</title>'};
   };
-  const result=await fetchPublicWeb(seed,seed,'html',resolver,transport);
+  const checked=[];
+  const result=await fetchPublicWeb(seed,seed,'html',resolver,transport,async next=>{
+    checked.push(next.pathname);
+  });
+  assert.deepEqual(checked,['/about']);
   assert.equal(result.url,'https://yogakulam.com/about');
   assert.equal(result.body,'<title>About</title>');
   assert.deepEqual(resolved,['yogakulam.com','yogakulam.com']);
@@ -95,4 +99,19 @@ test('unsupported content types never count as fetched HTML', async () => {
   const resolver=async()=>[{address:'8.8.8.8',family:4}];
   const transport=async()=>({status:200,location:null,contentType:'application/pdf',body:'not html'});
   await assert.rejects(fetchPublicWeb(seed,seed,'html',resolver,transport),/unsupported_content_type/);
+});
+
+
+test('redirecting HTML or sitemap without rechecking robots fails closed', async () => {
+  const seed=new URL('https://yogakulam.com/');
+  const resolver=async()=>[{address:'8.8.8.8',family:4}];
+  let attempts=0;
+  const transport=async()=>{
+    attempts++;
+    return {status:302,location:'/private',contentType:'text/html',body:''};
+  };
+  for(const kind of ['html','sitemap']){
+    await assert.rejects(fetchPublicWeb(seed,seed,kind,resolver,transport),/redirect_robots_required/);
+  }
+  assert.equal(attempts,2,'Never fetched either redirect destination');
 });
