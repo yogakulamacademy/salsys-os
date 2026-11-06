@@ -6,6 +6,7 @@ import { readBoundedJson } from '@/lib/security/bounded-json-body';
 import { isExplicitCrossSiteRequest } from '@/lib/security/fetch-metadata';
 import { parseWebsiteSeed, WebsiteScopeError } from '@/lib/knowledge-discovery/url-policy';
 import { discoveryPilotEnabled, discoveryHostAllowed } from '@/lib/knowledge-discovery/pilot-gate';
+import { discoveryDomainVerified, discoveryVerificationHost } from '@/lib/knowledge-discovery/domain-verification';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -55,6 +56,13 @@ export async function GET() {
       ok: true, configuredWebsite, discoveryEnabled: false,
       historyAvailable: false, jobs: [], pages: [],
     });
+    const website = parseWebsiteSeed(configuredWebsite!);
+    const proof = await ctx.supabase.from('knowledge_discovery_domain_verifications')
+      .select('verified_at,verified_until')
+      .eq('organization_id', ctx.organizationId)
+      .eq('hostname', discoveryVerificationHost(website.hostname)).maybeSingle();
+    if (proof.error) throw new Error('ownership_read_failed');
+    const websiteVerified = discoveryDomainVerified(proof.data);
     const jobs = await ctx.supabase.from('knowledge_discovery_jobs')
       .select('id,seed_url,status,max_pages,pages_discovered,pages_fetched,pages_blocked,pages_failed,pages_skipped,last_error_code,created_at,finished_at')
       .eq('organization_id', ctx.organizationId).order('created_at', { ascending: false }).limit(10);
@@ -69,7 +77,8 @@ export async function GET() {
       if (result.error) throw new Error('pages_failed');
       pages = result.data ?? [];
     }
-    return json({ ok: true, configuredWebsite, discoveryEnabled: true,
+    return json({ ok: true, configuredWebsite, pilotEnabled: true,
+      websiteVerified, discoveryEnabled: websiteVerified,
       historyAvailable: true, jobs: jobs.data ?? [], pages });
   } catch {
     return json({ ok: false, error: 'Discovery data unavailable' }, 503);
@@ -96,6 +105,18 @@ export async function POST(request: NextRequest) {
     const source = parseWebsiteSeed(configured.website_url);
     if (!discoveryHostAllowed(source.hostname)) {
       return json({ ok: false, error: 'This website is not approved for the discovery pilot.' }, 403);
+    }
+    if (source.protocol !== 'https:') {
+      return json({ ok: false, error: 'HTTPS is required to verify website ownership.' }, 400);
+    }
+    const { data: proof, error: proofError } = await ctx.supabase
+      .from('knowledge_discovery_domain_verifications')
+      .select('verified_at,verified_until')
+      .eq('organization_id', ctx.organizationId)
+      .eq('hostname', discoveryVerificationHost(source.hostname)).maybeSingle();
+    if (proofError) throw new Error('ownership_unavailable');
+    if (!discoveryDomainVerified(proof)) {
+      return json({ ok: false, error: 'Verify ownership of your business website before scanning.' }, 409);
     }
     const candidate = parseWebsiteSeed(typeof body.value.url === 'string' ? body.value.url : source.href);
     const canonical = (host: string) => host.replace(/^www\./i, '').toLowerCase();
