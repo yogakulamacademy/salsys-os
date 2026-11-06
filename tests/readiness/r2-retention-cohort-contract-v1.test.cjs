@@ -11,24 +11,33 @@ const isDate = (s) => typeof s === "string" && /^\d{4}-\d{2}-\d{2}$/.test(s)
   && new Date(Date.parse(s + "T00:00:00Z")).toISOString().slice(0, 10) === s;
 const dayOf = (t) => new Date(t).toISOString().slice(0, 10);
 const gatesReady = (g) => ["tenantAuthorization", "sourceCoverage", "identityContinuity",
-  "consentContinuity", "historyCompleteness", "ownerAcceptance"].every((k) => g?.[k] === true);
+  "consentContinuity", "historyCompleteness", "eventTimeQuality",
+  "botFiltering", "privacyErasureCoverage", "ownerAcceptance"].every((k) => g?.[k] === true);
 const ready = Object.freeze({
   tenantAuthorization: true, sourceCoverage: true, identityContinuity: true,
-  consentContinuity: true, historyCompleteness: true, ownerAcceptance: true,
+  consentContinuity: true, historyCompleteness: true, eventTimeQuality: true,
+  botFiltering: true, privacyErasureCoverage: true, ownerAcceptance: true,
 });
 
 // Important: identityEpoch is SYNTHETIC evidence of a checked consent-identity boundary;
 // it is NOT a column in public.raw_events. The actual system has not proved this yet.
 function syntheticCohortTrial(events, { organizationId, asOfUtc, historyStartUtc,
-  windowDays = 7, returnDay = 1, gates = {} } = {}) {
+  completeThroughUtc, windowDays = 7, returnDay = 1, gates = {} } = {}) {
   const blocked = (reason) => ({ status: "blocked", reason, rows: [] });
   if (!gatesReady(gates)) return blocked("acceptance_gates_unverified");
-  if (!isDate(asOfUtc) || !isDate(historyStartUtc) || !organizationId
-    || ![7, 14, 30].includes(windowDays) || ![1, 7, 30].includes(returnDay)) {
+  if (!isDate(asOfUtc) || !isDate(historyStartUtc) || !isDate(completeThroughUtc)
+    || !organizationId || ![7, 14, 30].includes(windowDays)
+    || ![1, 7, 30].includes(returnDay)) {
     return blocked("invalid_contract");
   }
   const today = Date.parse(asOfUtc + "T00:00:00Z");
-  const lastCohort = today - (returnDay + 1) * DAY; // Return day must have fully ended.
+  const lastVerifiedDay = Date.parse(completeThroughUtc + "T00:00:00Z");
+  // Closure alone is not proof of complete ingestion; a verified UTC day
+  // watermark must be independently supplied for this synthetic contract.
+  if (lastVerifiedDay >= today || lastVerifiedDay < Date.parse(historyStartUtc + "T00:00:00Z")) {
+    return blocked("unverified_complete_day");
+  }
+  const lastCohort = lastVerifiedDay - returnDay * DAY;
   const firstCohort = lastCohort - (windowDays - 1) * DAY;
   if (Date.parse(historyStartUtc + "T00:00:00Z") > firstCohort - 30 * DAY) {
     return blocked("insufficient_washout_history");
@@ -44,8 +53,13 @@ function syntheticCohortTrial(events, { organizationId, asOfUtc, historyStartUtc
       || typeof e.receivedAt !== "string") return blocked("unverified_source_or_consent");
     const occurred = Date.parse(e.occurredAt);
     const received = Date.parse(e.receivedAt);
-    if (!Number.isFinite(occurred) || !Number.isFinite(received)
-      || occurred > today || occurred < Date.parse(historyStartUtc + "T00:00:00Z")
+    if (!Number.isFinite(occurred) || !Number.isFinite(received) || occurred >= today + DAY) {
+      return blocked("unreliable_event_time_or_delivery");
+    }
+    // Do not use incomplete as-of-day activity, dates beyond the externally
+    // verified completeness watermark, or events received after as-of midnight.
+    if (occurred >= lastVerifiedDay + DAY || received >= today) continue;
+    if (occurred < Date.parse(historyStartUtc + "T00:00:00Z")
       || received < occurred - 300000 || received - occurred > DAY) {
       return blocked("unreliable_event_time_or_delivery");
     }
@@ -100,7 +114,8 @@ function event(visitorId, day, sessionId, options = {}) {
   };
 }
 const options = { organizationId: "tenant-a", asOfUtc: "2026-11-06",
-  historyStartUtc: "2026-09-25", windowDays: 7, returnDay: 1, gates: ready };
+  historyStartUtc: "2026-09-25", completeThroughUtc: "2026-11-05",
+  windowDays: 7, returnDay: 1, gates: ready };
 
 test("R2-P3 is blocked by default and cannot turn a short event history into a D30 KPI", () => {
   assert.equal(syntheticCohortTrial([], { ...options, gates: {} }).reason, "acceptance_gates_unverified");
@@ -192,6 +207,50 @@ test("unknown consent, stale delivery, absent identity or conflicting event IDs 
   assert.equal(syntheticCohortTrial([good, conflict], options).reason, "conflicting_duplicate_event");
   assert.equal(syntheticCohortTrial(Array.from({ length: 50001 }, () => good), options).reason,
     "unbounded_or_invalid_input");
+});
+
+
+test("eligibility requires a verified complete-day watermark, bot assessment and deletion coverage", () => {
+  for (const invalid of [
+    { completeThroughUtc: undefined },
+    { completeThroughUtc: "2026-11-06" }, // current partial day
+    { completeThroughUtc: "2026-11-07" }, // impossible future watermark
+    { gates: { ...ready, botFiltering: false } },
+    { gates: { ...ready, privacyErasureCoverage: false } },
+    { gates: { ...ready, eventTimeQuality: false } },
+  ]) {
+    const trial = syntheticCohortTrial([], { ...options, ...invalid });
+    assert.equal(trial.status, "blocked", JSON.stringify(invalid));
+    assert.deepEqual(trial.rows, []);
+  }
+});
+
+test("D30 cohort maturity follows verified completeness, not calendar closure alone", () => {
+  const events = Array.from({ length: 20 }, (_, i) => [
+    event("m" + i, "2026-10-06", "first"),
+    event("m" + i, "2026-11-05", "returned"),
+  ]).flat();
+  const base = { ...options, historyStartUtc: "2026-08-30",
+    returnDay: 30, windowDays: 7 };
+  const fullyVerified = syntheticCohortTrial(events, base);
+  assert.equal(fullyVerified.rows.find((row) => row.dateUtc === "2026-10-06").returns, 20);
+
+  const delayWarning = syntheticCohortTrial(events,
+    { ...base, completeThroughUtc: "2026-11-04" });
+  assert.equal(delayWarning.rows.some((row) => row.dateUtc === "2026-10-06"), false);
+  assert.equal(delayWarning.status, "synthetic_only");
+});
+
+test("incomplete-day events and post-cutoff receipts cannot inflate a previously mature cohort", () => {
+  const rows = Array.from({ length: 20 }, (_, i) => [
+    event("v" + i, "2026-11-01", "first"),
+    event("v" + i, "2026-11-02", "return", i < 8
+      ? {} : { receivedAt: "2026-11-06T00:10:00Z" }),
+    event("v" + i, "2026-11-06", "today"),
+  ]).flat();
+  const report = syntheticCohortTrial(rows, options);
+  assert.equal(report.status, "synthetic_only");
+  assert.equal(report.rows.find((row) => row.dateUtc === "2026-11-01").returns, 8);
 });
 
 test("research-only model is not wired to app, API or database and requires explicit external acceptance", () => {
