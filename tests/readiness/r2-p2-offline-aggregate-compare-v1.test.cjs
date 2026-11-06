@@ -109,6 +109,62 @@ test("Event Activity's UTC calendar comparison differs from rolling funnel seman
   assert.equal(compareAggregateReviews(ui,parseSqlAggregate(JSON.stringify(wrong),"trends")).status,"REVIEW_REQUIRED_NUMERIC_DIFFERENCE");
 });
 
+test("Event Activity refuses missing, duplicated, unordered or noncalendar UTC days",async()=>{
+  const {parseUiCopy,parseSqlAggregate}=await load;
+  const duplicate=structuredClone(trendSql());
+  duplicate.series[0].daily[3].date_utc=duplicate.series[0].daily[2].date_utc;
+  assert.throws(()=>parseSqlAggregate(JSON.stringify(duplicate),"trends"));
+
+  const swapped=structuredClone(trendSql());
+  [swapped.series[0].daily[2],swapped.series[0].daily[3]]=[
+    swapped.series[0].daily[3],swapped.series[0].daily[2],
+  ];
+  assert.throws(()=>parseSqlAggregate(JSON.stringify(swapped),"trends"));
+
+  const badPeriod=structuredClone(trendSql());
+  badPeriod.first_day_utc="2026-10-30";
+  badPeriod.series.forEach((row)=>{ row.daily[0].date_utc="2026-10-30"; });
+  assert.throws(()=>parseSqlAggregate(JSON.stringify(badPeriod),"trends"));
+
+  const invalidDate=structuredClone(trendSql());
+  invalidDate.series[0].daily[3].date_utc="2026-11-31";
+  assert.throws(()=>parseSqlAggregate(JSON.stringify(invalidDate),"trends"));
+
+  assert.throws(()=>parseUiCopy(trendUi().replace(
+    "2026-10-31 through 2026-11-06","2026-10-30 through 2026-11-06",
+  )));
+  assert.throws(()=>parseUiCopy(trendUi().replace(
+    "Report generated: "+ts,"Report generated: 2026-11-07T00:01:00Z",
+  )));
+});
+
+test("Event Activity requires the SQL day totals and candidate event cap count to reconcile",async()=>{
+  const {parseSqlAggregate}=await load;
+  const wrongDaily=structuredClone(trendSql());
+  wrongDaily.series[0].daily[0].events--;
+  assert.throws(()=>parseSqlAggregate(JSON.stringify(wrongDaily),"trends"));
+
+  const wrongCandidate=structuredClone(trendSql());
+  wrongCandidate.candidate_events++;
+  assert.throws(()=>parseSqlAggregate(JSON.stringify(wrongCandidate),"trends"));
+
+  const wrongTotals=structuredClone(trendSql());
+  wrongTotals.series[1].total_events++;
+  wrongTotals.candidate_events++;
+  assert.throws(()=>parseSqlAggregate(JSON.stringify(wrongTotals),"trends"));
+
+  const changedCapture=structuredClone(trendSql());
+  changedCapture.sampled_at_utc="2026-11-07T00:00:01Z";
+  assert.throws(()=>parseSqlAggregate(JSON.stringify(changedCapture),"trends"));
+
+  // One session might have starts on multiple UTC days; only EVENT counts
+  // are additive. Do not reject a valid distinct-session aggregate on this.
+  const sessionsCrossDays=structuredClone(trendSql());
+  sessionsCrossDays.series[0].daily[0].sessions=2;
+  sessionsCrossDays.series[0].daily[0].events=40;
+  assert.ok(parseSqlAggregate(JSON.stringify(sessionsCrossDays),"trends"));
+});
+
 test("Input rejects extra identifiers, malformed counts, wrong SQL status and wrong report classes",async()=>{
   const {parseUiCopy,parseSqlAggregate,compareAggregateReviews}=await load;
   const withSecret=funnelSql(); withSecret.organization_id="SECRET_TENANT";
