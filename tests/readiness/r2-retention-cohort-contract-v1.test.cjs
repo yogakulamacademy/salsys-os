@@ -48,9 +48,9 @@ function syntheticCohortTrial(events, { organizationId, asOfUtc, historyStartUtc
   const sessions = new Map();
   for (const e of events) {
     if (e.organizationId !== organizationId || e.eventName !== "web.session_started") continue;
-    if (!e.sourceId || !e.visitorId || !e.sessionId || !e.eventId || !e.identityEpoch
-      || e.analytics !== "granted" || typeof e.occurredAt !== "string"
-      || typeof e.receivedAt !== "string") return blocked("unverified_source_or_consent");
+    if (typeof e.occurredAt !== "string" || typeof e.receivedAt !== "string") {
+      return blocked("unreliable_event_time_or_delivery");
+    }
     const occurred = Date.parse(e.occurredAt);
     const received = Date.parse(e.receivedAt);
     if (!Number.isFinite(occurred) || !Number.isFinite(received) || occurred >= today + DAY) {
@@ -59,6 +59,8 @@ function syntheticCohortTrial(events, { organizationId, asOfUtc, historyStartUtc
     // Do not use incomplete as-of-day activity, dates beyond the externally
     // verified completeness watermark, or events received after as-of midnight.
     if (occurred >= lastVerifiedDay + DAY || received >= today) continue;
+    if (!e.sourceId || !e.visitorId || !e.sessionId || !e.eventId || !e.identityEpoch
+      || e.analytics !== "granted") return blocked("unverified_source_or_consent");
     if (occurred < Date.parse(historyStartUtc + "T00:00:00Z")
       || received < occurred - 300000 || received - occurred > DAY) {
       return blocked("unreliable_event_time_or_delivery");
@@ -246,7 +248,7 @@ test("incomplete-day events and post-cutoff receipts cannot inflate a previously
     event("v" + i, "2026-11-01", "first"),
     event("v" + i, "2026-11-02", "return", i < 8
       ? {} : { receivedAt: "2026-11-06T00:10:00Z" }),
-    event("v" + i, "2026-11-06", "today"),
+    event("v" + i, "2026-11-06", "today", { analytics: "unknown" }),
   ]).flat();
   const report = syntheticCohortTrial(rows, options);
   assert.equal(report.status, "synthetic_only");
