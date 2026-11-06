@@ -137,6 +137,29 @@ test('new unsupported high-impact claims in questions are held even when answers
   assert.equal(r.report.semanticsVerified,false);
 });
 
+test('unsourced discounts and pregnancy-related claims are held, not inferred from a price',()=>{
+  for(const question of [
+    'Is there an introduction workshop discount?',
+    'Is the introduction workshop suitable for pregnancy?',
+  ]){
+    const input=create({question});
+    const r=evaluate(input);
+    assert.equal(r.ok,true);
+    assert.ok(r.report.items[0].reasons.includes('high_impact_question_context'),
+      question);
+    assert.equal(r.report.items[0].disposition,'hold_for_resolution');
+  }
+});
+
+test('missing conflict report is a separate coverage gap, even when freshness threshold is set',()=>{
+  const r=evaluate(create(),{asOf:NOW,reviewAgeDays:30});
+  assert.equal(r.ok,true);
+  assert.equal(r.report.conflictCoverage,'not_supplied');
+  assert.ok(r.report.items[0].reasons.includes('source_difference_review_not_supplied'));
+  assert.ok(!r.report.items[0].reasons.includes('freshness_not_evaluated'));
+  assert.equal(r.report.items[0].disposition,'hold_for_resolution');
+});
+
 test('poorly aligned question is held even when answer is a verbatim source quote',()=>{
   const input=create({question:'Can I join this program right now?'});
   const r=evaluate(input);
