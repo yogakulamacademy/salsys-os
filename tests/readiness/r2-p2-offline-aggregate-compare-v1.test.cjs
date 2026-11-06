@@ -105,6 +105,7 @@ test("Event Activity's UTC calendar comparison differs from rolling funnel seman
   assert.equal(mismatch.status,"REVIEW_REQUIRED_NUMERIC_DIFFERENCE");
   assert.deepEqual(mismatch.mismatched,["web.form_started"]);
   wrong.series[1].observed_sessions=9; wrong.first_day_utc="2026-11-01";
+  wrong.series.forEach((row) => { row.daily[0].date_utc="2026-11-01"; });
   assert.equal(compareAggregateReviews(ui,parseSqlAggregate(JSON.stringify(wrong),"trends")).status,"REVIEW_REQUIRED_NUMERIC_DIFFERENCE");
 });
 
