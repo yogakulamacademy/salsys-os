@@ -27,3 +27,25 @@ Before closing issue #523, have an authorized owner/admin check the deployed Sal
 - The fixture is reset to the original synthetic tenant after the test so other UI tests are unaffected.
 
 **Proof boundary:** These checks verify the browser/server render and local fixture contracts only; they cannot prove production PostgreSQL RLS, user membership, real authenticated tenant switching, SQL aggregate equality or authority to view another customer's data. Issue #523 remains open for authorized owner/admin acceptance in the deployed CRM. No real user credentials, visitor IDs, customer data, website tracking, payments or provider messaging are accessed.
+
+
+## Independent-report failure rehearsal (2026-11-06)
+
+The three Behavior Explorer reports use separate read-only RPCs. The loopback
+fixture now supports `funnel-error`, `trends-error` and `breakdown-error`
+individually, in addition to the existing all-denied and all-error states.
+
+The Playwright regression checks that when just one RPC responds with a
+synthetic 503, only that report displays its generic unavailable state;
+the remaining independent reports still display synthetic authorized data.
+The failed report must display no stale page paths or fabricated zero totals,
+the server's internal error message must not be exposed in the UI, and all
+three RPC requests must remain scoped to the current synthetic tenant.
+Each run restores the ready/primary fixture state.
+
+**Scope boundary:** These are mocked, localhost-only browser responses.
+They are not evidence that production user roles, PostgreSQL tenant guards,
+live report counts, real tenant switching, or the deployed website have
+passed the owner/admin acceptance gate in Issue #523. No live customer data,
+tracking activation, production permissions, billing or application runtime
+has been changed.
