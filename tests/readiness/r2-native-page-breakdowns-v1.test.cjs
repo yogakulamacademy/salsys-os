@@ -66,7 +66,15 @@ test("Breakdown stays a sibling to the independently available funnel, paths and
   assert.match(marketing, /getNativeBehaviorTrends/);
   assert.match(marketing, /<NativeBehaviorExplorer workspace=\{workspace\} trends=\{trends\} \/>/);
   assert.match(marketing, /<NativeBehaviorBreakdownPanel breakdown=\{breakdown\}/);
-  assert.match(panel, /router\.push\("\/marketing\?" \+ params\.toString\(\)\)/);
+  assert.match(panel, /<form method="get" action="\/marketing"/);
+  assert.match(panel, /name="view" value="behavior"/);
+  assert.match(panel, /name="days" value=\{String\(breakdown\.days\)\}/);
+  assert.match(panel, /name="steps" value=\{appliedSteps\.join\(","\)\}/);
+  assert.match(panel, /name="breakdown"/);
+  assert.match(panel, /defaultValue=\{breakdown\.eventName\}/);
+  assert.match(panel, /<button type="submit"/);
+  assert.doesNotMatch(panel, /useEffect|router\.push|onClick=\{apply\}/);
+  assert.doesNotMatch(panel, /^"use client";/);
   assert.match(panel, /role="status"/);
 });
 

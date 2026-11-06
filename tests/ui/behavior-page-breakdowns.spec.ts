@@ -100,3 +100,48 @@ test("Denied or failed breakdown remains isolated from live funnel and hides raw
   await expect(breakdown.getByRole("status")).toBeVisible();
   await expect(breakdown.getByText("/enroll.php", { exact: true })).toHaveCount(0);
 });
+
+
+test.describe("Hydration-independent page breakdown navigation", () => {
+  // Next's async Server Component streaming needs inline browser scripts to reveal
+  // the report. Block only downloadable client bundles: this exercises the native
+  // HTML form before React hydration without hiding the streamed report itself.
+  test("native GET form applies selected event without client hydration bundles", async ({ page, request }) => {
+    let blockedClientScripts = 0;
+    await page.route("**/_next/static/**", async (route) => {
+      if (route.request().resourceType() === "script") {
+        blockedClientScripts += 1;
+        await route.abort();
+      } else {
+        await route.continue();
+      }
+    });
+
+    const steps = "web.page_viewed,web.form_started,web.form_submitted";
+    await page.goto("/marketing?view=behavior&days=7&steps=" + steps);
+    expect(blockedClientScripts).toBeGreaterThan(0);
+
+    const breakdown = page.getByRole("region", { name: "Event page breakdown" });
+    const form = breakdown.locator("form");
+    await expect(form).toHaveAttribute("method", "get");
+    await expect(form).toHaveAttribute("action", "/marketing");
+
+    const select = breakdown.getByRole("combobox", { name: "Page breakdown event" });
+    await select.selectOption("web.form_started");
+    await expect(select).toHaveValue("web.form_started");
+    await form.getByRole("button", { name: "View pages" }).click();
+
+    await expect(page).toHaveURL(/breakdown=web.form_started/);
+    const params = new URL(page.url()).searchParams;
+    expect(params.get("view")).toBe("behavior");
+    expect(params.get("days")).toBe("7");
+    expect(params.get("steps")).toBe(steps);
+    expect(params.get("breakdown")).toBe("web.form_started");
+
+    await expect(breakdown.getByRole("combobox", { name: "Page breakdown event" }))
+      .toHaveValue("web.form_started");
+    const calls = await (await request.get(fixtureBase + "/__behavior_breakdown_calls")).json();
+    expect(calls.some((item: any) => item.organization_id === organizationId
+      && item.days === 7 && item.event === "web.form_started")).toBe(true);
+  });
+});
