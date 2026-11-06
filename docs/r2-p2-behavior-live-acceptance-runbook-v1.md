@@ -69,3 +69,35 @@ Record date, reviewer, verified merge/deployment SHA and result only. Do **not**
 ## Safety and release constraints
 
 Issue #523 remains OPEN until owner/admin live browser, tenant-isolation and actual aggregate acceptance are witnessed and signed off. Synthetic two-tenant tests, function-text checks and metadata readbacks do not close it. R2-P1 optional collector Issue #520 remains OFF. Draft PR #530 / Issue #531 real CMP and staging acceptance is separate and blocked; production/recovery databases must not be repurposed. No billable staging project, customer message, payment, tracking registration, production migration or role change is authorized by this checklist.
+
+
+## E. Extended read-only reconciliation: default funnel and page summary
+
+**Added in R2-P2 acceptance preparation V2 (2026-11-06).** The comparisons below use a verified tenant ID supplied privately by the operator, never pasted into issues or chat. Use a separately approved read-only database connection. These tools deliberately return **aggregate counts only**; they do not authorize reading/exporting visitor IDs, session IDs, lead records, or raw event URLs.
+
+### Default ordered funnel
+
+    psql "$AUTHORIZED_DB_CONNECTION" -v ON_ERROR_STOP=1 \
+      -v organization_id='<verified-organization-uuid>' -v days=14 \
+      -f docs/sql/r2-p2-behavior-funnel-reconcile-v1.sql
+
+Repeat with days=7, 14, and 30, and compare **distinct funnel session counts** for Page viewed, Form started and Form submitted to Marketing → Behavior's ordered funnel. The comparator also reports the source-scoped path_sessions denominator. Unlike Event Trends' UTC calendar-day range, the funnel RPC uses a *rolling* interval from the current timestamp; compare in close succession and investigate any ingestion/boundary drift. The 50,000-event cap is fail-closed: volume_limit is NOT an acceptable success state.
+
+The SQL deliberately uses the **same production native_funnel_depth_v1 helper** as the RPC to calculate ordered stage depth. This supports data scope/aggregation comparison but **does not independently prove helper correctness**; retain the existing synthetic ordering tests and human event-order checks. The script does not calculate or export individual page-to-page edges. Its aggregate path_sessions value is not evidence of safe or complete route display.
+
+### Events by Page summary
+
+    psql "$AUTHORIZED_DB_CONNECTION" -v ON_ERROR_STOP=1 \
+      -v organization_id='<verified-organization-uuid>' -v days=14 \
+      -v event='web.page_viewed' \
+      -f docs/sql/r2-p2-behavior-page-reconcile-v1.sql
+
+Repeat for 7/14/30 and, where authorized, other *registered* web events. Compare the **page summary** to the corresponding Events by Page status: total_events, safe_path_events, identified_sessions, displayed_events, hidden_or_other_events, and displayed-page count. The comparator applies the same safe-path helper, >=3 distinct anonymous visitor suppression and maximum 10 displayed paths as the current RPC, but **does not output the actual path strings**. The current UTC day is incomplete. Unregistered_event, invalid_window, or volume_limit is a failed/blocked comparison, not a zero-traffic result.
+
+Because the comparator uses the live safe-path helper, it is NOT an independent proof that a path is harmless. Authorized reviewers must inspect displayed public paths directly in the CRM (with appropriate local redaction) and make sure query strings, tokens, long IDs and account/private routes never appear. The published reports may use different date-window semantics; never compare a rolling funnel count directly against an Event Trends or page-summary count.
+
+Both scripts were syntax-tested SELECT-only on SalsysOS Production using an **intentionally nonexistent synthetic tenant UUID**, which returned only zero aggregates. **That does not prove actual owner/admin permissions**, live tenant authorization, correct UI totals, or a real-tenant match. Do not report the entire Issue #523 acceptance as passed from these tests.
+
+### Updated evidence record
+
+In addition to the earlier checklist, record PASS / FAIL / BLOCKED for the following **separate** checks: (1) default funnel stage counts for 7/14/30 rolling days; (2) Events by Page summary for 7/14/30 UTC days; (3) the actual displayed path privacy review. The existing real owner/admin login, other-tenant denial, accessibility and legacy-Marketing checks are independent. No billable staging project, production role change, tracking opt-in or customer data export is authorized.
