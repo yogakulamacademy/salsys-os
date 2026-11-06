@@ -5,7 +5,13 @@ import type { NativeBehaviorTrends } from "@/lib/native-behavior-trends-data";
 export function formatNativeBehaviorReviewCopy(
   report: NativeBehaviorTrends,
 ): string | null {
-  if (!report.available || !report.generatedAt
+  // Unlike a mere timestamp prefix, an entire bounded ISO value can be
+  // safely copied without including appended URLs or newline-delimited data.
+  const generatedAt = report.generatedAt;
+  if (!report.available || typeof generatedAt !== "string"
+    || generatedAt.length > 40
+    || !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,6})?(?:Z|[+-]\d{2}:\d{2})$/.test(generatedAt)
+    || !Number.isFinite(Date.parse(generatedAt))
     || ![7, 14, 30].includes(report.windowDays)
     || report.series.length === 0 || report.series.length > 5) return null;
 
@@ -14,7 +20,7 @@ export function formatNativeBehaviorReviewCopy(
   if (!start || !end
     || !/^\d{4}-\d{2}-\d{2}$/.test(start)
     || !/^\d{4}-\d{2}-\d{2}$/.test(end)
-    || !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/.test(report.generatedAt)) return null;
+    ) return null;
 
   const rows: string[] = [];
   for (const series of report.series) {
