@@ -16,10 +16,11 @@ The synthetic test includes an identityEpoch field to represent a independently 
 - A session is unique to tenant, tracking source, browser key, verified consent epoch and session key. Replayed event IDs and repeated starts for the same session key count only once. The same session lasting across UTC midnight is NOT a return session.
 - A return must use a distinct session key inside the same verified tenant/source/browser/epoch and have its first start on exactly cohort day +1 (D1), +7 (D7), or +30 (D30), respectively. These are exact UTC calendar days, NOT a rolling or cumulative within-N-day window.
 - Cohort entry is the first observed eligible session start AFTER a verified continuous **30-day washout**. This is not reliable evidence of a person's first-ever visit. Missing historical events do not prove inactivity. The full lookback and outcome observation must be complete.
-- All dates are UTC. Today's UTC day is incomplete. For an as-of date of 2026-11-06, the latest fully matured D30 cohort day is 2026-10-06, because the October 6 cohort's November 5 outcome day has ended. October 7 would not yet be mature.
+- All dates are UTC. Today's UTC day is incomplete. **Maturity requires both a closed return day and a separately verified ingestion-completeness watermark.** For an as-of date of 2026-11-06 *and only if* November 5 is independently verified complete, the latest D30 cohort date is 2026-10-06. If the latest complete day is November 4, the latest eligible D30 cohort is October 5. An elapsed date by itself is NOT proof of data completeness.
 - A 7/14/30-day report span means the number of fully mature candidate cohort ENTRY dates ending on the latest Dn-mature date; it is not the latest 7/14/30 event activity period.
 - A minimum of **60** calendar days of sufficiently complete history is a general prerequisite for mature D30 evidence, but not always sufficient for a 7/14/30-day historical cohort span AND 30-day washout. The test checks the earliest candidate cohort's washout explicitly.
-- Invalid/missing analytics consent evidence, unverified source or identity, excessive clock skew, stale delivery, bot/automation uncertainty, privacy deletion, unbounded input or conflicts must block rather than publish a partial retention figure. The synthetic model uses a provisional 24-hour delivery-lag tolerance and a 5-minute clock tolerance; real thresholds require separate evidence.
+- The synthetic input completeThroughUtc is an **externally attested** last fully observed UTC day, not calculated by taking MAX(event_date). The test rejects a missing or present/future-day watermark. It drops incomplete as-of-day activity and events delivered after the report's start-of-day cutoff. This is a synthetic expectation; real completeness requires audited source uptime, outbox delivery, late-arrival bounds and consent/erasure evidence.
+- Invalid/missing analytics consent evidence, unverified source or identity, excessive clock skew, stale delivery, bot/automation uncertainty, privacy deletion, unbounded input or conflicts must block rather than publish a partial retention figure. The synthetic model uses provisional 24-hour delivery-lag and 5-minute clock tolerances for eligible evidence; real thresholds require separate validation. Explicit **botFiltering**, **privacyErasureCoverage**, and **eventTimeQuality** gates default to blocked. A synthetic true value is only a test assumption, not a live system verification.
 
 ## Safety and aggregation
 
@@ -38,14 +39,14 @@ The synthetic test includes an identityEpoch field to represent a independently 
 
 ## Synthetic contract cases
 
-- Missing acceptance gates or short history => blocked, no KPI.
+- Missing acceptance gates, verified complete-through date, bot/erasure assessment, or short history => blocked, no KPI.
 - Duplicate event IDs, repeated session starts, same-session reloads across days => no artificial return.
 - Independent new session on exact D1/D7/D30 calendar day => synthetic return only.
 - Returns on D2/D8/D31 do not satisfy D1/D7/D30 respectively.
 - Same browser-like string in another source/tenant or fresh consent epoch => never stitched.
 - Small cohort (fewer than 20 keys) => suppressed numerator AND denominator.
 - Missing identity/epoch/consent, uncertain timestamp/delivery, conflicting duplicate => blocked.
-- Recent cohorts without a fully closed outcome day => not included.
+- Recent cohorts without a fully closed and independently verified complete outcome day => not included. Incomplete current-day activity and post-cutoff receipts cannot inflate a prior report.
 - Serialized result => aggregate statuses/dates only, no raw IDs.
 
 **Release gate:** This is research/specification and test-only work. Issue #527 must stay open. No billable staging project, new Supabase branch, tracking source, background job, website script, payment action, deployment or provider send is required or authorized.
