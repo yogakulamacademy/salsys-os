@@ -25,8 +25,8 @@ const B = {
 };
 const baseEnv=()=>({
   SALSYS_KB_STAGING_RUN_APPROVAL:EXECUTION_PHRASE,
-  SALSYS_KB_STAGING_PROJECT_REF:'kb05dstagingfixtureab',
-  SALSYS_KB_STAGING_API_URL:'https://kb05dstagingfixtureab.supabase.co',
+  SALSYS_KB_STAGING_PROJECT_REF:'kb05dstagingfixturea',
+  SALSYS_KB_STAGING_API_URL:'https://kb05dstagingfixturea.supabase.co',
   SALSYS_KB_STAGING_ANON_KEY:'synthetic-public-api-key-for-test-only',
   SALSYS_KB_STAGING_A_EMAIL:A.email,
   SALSYS_KB_STAGING_A_PASSWORD:A.password,
@@ -50,12 +50,12 @@ test('explicit protected execution phrase and exact staging host are mandatory',
   const wrong=baseEnv();wrong.SALSYS_KB_STAGING_RUN_APPROVAL='no';
   expectBlocked(wrong,/manual_approval_missing/);
   for(const url of [
-    'http://kb05dstagingfixtureab.supabase.co',
-    'https://kb05dstagingfixtureab.supabase.co:443',
-    'https://kb05dstagingfixtureab.supabase.co/',
-    'https://kb05dstagingfixtureab.supabase.co/path',
+    'http://kb05dstagingfixturea.supabase.co',
+    'https://kb05dstagingfixturea.supabase.co:443',
+    'https://kb05dstagingfixturea.supabase.co/',
+    'https://kb05dstagingfixturea.supabase.co/path',
     'https://attacker.example.com',
-    'https://kb05dstagingfixtureab.supabase.co@evil.example',
+    'https://kb05dstagingfixturea.supabase.co@evil.example',
   ]){
     const env=baseEnv();env.SALSYS_KB_STAGING_API_URL=url;
     expectBlocked(env,/project_url_mismatch/);
@@ -97,7 +97,7 @@ function installSyntheticFetch({leak=false,missingPositive=false,badUser=false}=
   const calls=[];
   const original=globalThis.fetch;
   globalThis.fetch=async (url,init)=>{
-    assert.ok(url.startsWith('https://kb05dstagingfixtureab.supabase.co/'));
+    assert.ok(url.startsWith('https://kb05dstagingfixturea.supabase.co/'));
     assert.equal(init.redirect,'error');
     const u=new URL(url);const pathname=u.pathname;
     const method=init.method;
