@@ -103,6 +103,23 @@ $fn$;
 revoke all on function public.kb_discovery_consent_actor_v1(uuid)
 from public,anon,authenticated,service_role;
 
+-- The exact session-binding check protects SELECT as well as write RPCs.
+-- The helper returns only the caller's own UUID (or NULL), never other users.
+grant execute on function public.kb_discovery_consent_actor_v1(uuid)
+  to authenticated;
+drop policy knowledge_discovery_consent_admin_read
+  on public.knowledge_discovery_site_consents;
+create policy kb_consent_strict_session_read
+  on public.knowledge_discovery_site_consents
+  for select to authenticated
+  using(public.kb_discovery_consent_actor_v1(organization_id) is not null);
+drop policy kb_consent_audit_admin_read
+  on public.knowledge_discovery_consent_audit;
+create policy kb_consent_audit_strict_session_read
+  on public.knowledge_discovery_consent_audit
+  for select to authenticated
+  using(public.kb_discovery_consent_actor_v1(organization_id) is not null);
+
 -- Initial grant only; regrant after withdrawal needs a separately reviewed
 -- policy/version procedure. An explicit acknowledgement is NOT proof that
 -- a real owner reviewed the policy in the UI or outside the product.
