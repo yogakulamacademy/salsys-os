@@ -34,7 +34,7 @@ test('admin can plan review of source quotes but cannot approve or publish',asyn
 
   const counts=page.getByRole('region',{name:'Evidence review counts'});
   await expect(counts.getByText('For later review')).toBeVisible();
-  await expect(counts.getByText('10',{exact:true})).toBeVisible();
+  await expect(counts.getByText('10',{exact:true})).toHaveCount(2);
   const first=page.getByRole('article').filter({hasText:'Introduction workshop: 2 days.'});
   await first.getByRole('button',{name:'For later review'}).click();
   await expect(first.locator('span').filter({hasText:'For later review'})).toHaveCount(1);
