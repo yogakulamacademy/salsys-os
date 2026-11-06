@@ -42,7 +42,7 @@ test("Page breakdown shows only safe public routes with a real visitor threshold
   await expect(breakdown.getByText("/enroll.php")).toBeVisible();
   await expect(breakdown.getByText("Other or withheld events", { exact: true })).toBeVisible();
   await expect(breakdown.getByText("17", { exact: true })).toBeVisible();
-  await expect(breakdown.getByText("at least 3 distinct anonymous visitors", { exact: false })).toBeVisible();
+  await expect(breakdown.getByText("at least 3 distinct tracked visitor IDs", { exact: false })).toBeVisible();
 
   const calls = await (await request.get(fixtureBase + "/__behavior_breakdown_calls")).json();
   expect(calls.length).toBeGreaterThan(0);
@@ -144,4 +144,14 @@ test.describe("Hydration-independent page breakdown navigation", () => {
     expect(calls.some((item: any) => item.organization_id === organizationId
       && item.days === 7 && item.event === "web.form_started")).toBe(true);
   });
+});
+
+test("Behavior pages explain that tracked visitor IDs are not people or devices", async ({ page }) => {
+  await page.goto("/marketing?view=behavior");
+  const paths = page.getByRole("region", { name: "Popular navigation paths" });
+  const breakdown = page.getByRole("region", { name: "Event page breakdown" });
+  await expect(paths.getByText(/Tracked visitor IDs generally represent browser identities, not verified people or physical devices\./)).toBeVisible();
+  await expect(breakdown.getByText(/A tracked visitor ID may change with browsers or resets; it is not a verified person or device\./)).toBeVisible();
+  // Existing tenant source counts and paths still render; this is label-only.
+  await expect(breakdown.getByRole("table")).toBeVisible();
 });

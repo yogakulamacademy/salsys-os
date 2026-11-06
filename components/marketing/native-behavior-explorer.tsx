@@ -150,7 +150,7 @@ export function NativeBehaviorExplorer({ workspace, trends }: { workspace: Nativ
               <div>
                 <div className="flex items-center gap-2"><Route size={16} className="text-slate-500"/>
                   <h3 className="text-sm font-bold text-slate-900 dark:text-white">Popular navigation paths</h3></div>
-                <p className="mt-1 text-xs text-slate-500">Adjacent page transitions with at least {workspace.minPathVisitors} distinct anonymous visitors.</p>
+                <p className="mt-1 text-xs text-slate-500">Adjacent page transitions with at least {workspace.minPathVisitors} distinct tracked visitor IDs.</p>
               </div>
               <span className="text-xs text-slate-500">{workspace.pathSessions.toLocaleString()} page-view sessions</span>
             </div>
@@ -177,7 +177,7 @@ export function NativeBehaviorExplorer({ workspace, trends }: { workspace: Nativ
                 </table>
               </div>
             )}
-            <p className="mt-4 text-xs text-slate-500">Potentially sensitive URL paths are excluded and individual visitor identifiers are never returned.</p>
+            <p className="mt-4 text-xs text-slate-500">Potentially sensitive URL paths are excluded and individual visitor identifiers are never returned. Tracked visitor IDs generally represent browser identities, not verified people or physical devices.</p>
           </section>
         </>
       )}
