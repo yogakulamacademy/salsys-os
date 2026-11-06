@@ -11,6 +11,7 @@ const good = {
   SALSYS_STAGING_CRM_ORIGIN: "https://stage-crm.salsys-sandbox.net",
   SALSYS_STAGING_SUPABASE_URL: "https://stageproject.supabase.co",
   SALSYS_PRODUCTION_SUPABASE_URL: "https://productionproject.supabase.co",
+  SALSYS_RECOVERY_SUPABASE_URL: "https://recoveryproject.supabase.co",
   SALSYS_STAGING_SOURCE_HOSTNAME: "stage.academy-sandbox.net",
   SALSYS_STAGING_SOURCE_STATUS: "active",
   SALSYS_STAGING_SOURCE_ENVIRONMENT: "staging",
@@ -48,6 +49,18 @@ test("R2-P3 blocks preview deployments wired to the production Supabase project"
   });
   assert.equal(result.readyForManualTesting, false);
   assert.ok(result.errors.some((error) => error.includes("identical")));
+});
+
+test("R2-P3 refuses the recovery rehearsal database and missing recovery comparison", () => {
+  const reusedRecovery = verify({ ...good,
+    SALSYS_STAGING_SUPABASE_URL: good.SALSYS_RECOVERY_SUPABASE_URL,
+  });
+  assert.equal(reusedRecovery.readyForManualTesting, false);
+  assert.ok(reusedRecovery.errors.some((error) => error.includes("recovery rehearsal")));
+
+  const missingComparison = { ...good };
+  delete missingComparison.SALSYS_RECOVERY_SUPABASE_URL;
+  assert.equal(verify(missingComparison).readyForManualTesting, false);
 });
 
 test("R2-P3 requires authorized staging source, required-consent mode and isolated form capture", () => {
