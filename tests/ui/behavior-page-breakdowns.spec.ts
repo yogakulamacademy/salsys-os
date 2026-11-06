@@ -103,13 +103,23 @@ test("Denied or failed breakdown remains isolated from live funnel and hides raw
 
 
 test.describe("Hydration-independent page breakdown navigation", () => {
-  // Even before browser JavaScript has loaded, submitting the report filter
-  // must preserve the visitor's choice and the already-applied funnel steps.
-  test.use({ javaScriptEnabled: false });
+  // Next's async Server Component streaming needs inline browser scripts to reveal
+  // the report. Block only downloadable client bundles: this exercises the native
+  // HTML form before React hydration without hiding the streamed report itself.
+  test("native GET form applies selected event without client hydration bundles", async ({ page, request }) => {
+    let blockedClientScripts = 0;
+    await page.route("**/_next/static/**", async (route) => {
+      if (route.request().resourceType() === "script") {
+        blockedClientScripts += 1;
+        await route.abort();
+      } else {
+        await route.continue();
+      }
+    });
 
-  test("native GET form applies selected event without client-side JavaScript", async ({ page, request }) => {
     const steps = "web.page_viewed,web.form_started,web.form_submitted";
     await page.goto("/marketing?view=behavior&days=7&steps=" + steps);
+    expect(blockedClientScripts).toBeGreaterThan(0);
 
     const breakdown = page.getByRole("region", { name: "Event page breakdown" });
     const form = breakdown.locator("form");
