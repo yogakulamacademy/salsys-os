@@ -108,7 +108,7 @@ test('discovery dependency outage does not masquerade as an empty scan',async({p
       body:JSON.stringify({ok:false,error:'Discovery data unavailable'})});
   });
   await page.goto('/settings/knowledge/discovery');
-  await expect(page.getByRole('alert')).toContainText('Discovery data unavailable');
+  await expect(page.getByRole('alert').filter({ hasText: 'Discovery data unavailable' })).toHaveCount(1);
   await expect(page.getByRole('button',{name:'Start discovery'})).toBeDisabled();
   await expect(page.getByText('No scans yet.')).toHaveCount(0);
 });
