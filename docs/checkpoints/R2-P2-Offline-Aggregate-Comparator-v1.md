@@ -33,6 +33,14 @@
 5. Repeat at 7 and 30 days, with corresponding separately captured UI/SQL files. For **Event Activity** (distinct from ordered funnel), use **Copy review figures** and docs/sql/r2-p2-behavior-trends-reconcile-v1.sql with the same -X -q -A -t flags. The script recognizes and compares the correct **UTC calendar-day window** separately. Do **not** compare a rolling funnel to Event Activity.
 6. Manually investigate differences. An exact numeric match within a short sampling interval is necessary but insufficient; ingestion lag, a partial UTC day, differences in queries' time boundaries or unverified live permissions may remain. Do not adjust the copied figures to manufacture a match.
 
+## Strict UTC-grid and SQL total consistency (2026-11-06)
+
+The **local operator** Event Activity comparison now validates the full SQL daily UTC date grid, not just the first/last labels. Each row must appear once, in calendar order, cover exactly the requested 7/14/30 dates, and end on the actual UTC date of the SQL snapshot. It also requires the daily **event counts** for each default event to sum to that series' reported `total_events`, and the three event totals to sum to SQL's `candidate_events`. This matches the read-only SQL's bounded, default-event-only source query.
+
+It intentionally does **not** require daily distinct session counts to sum to `observed_sessions`: a single source-scoped session can have eligible events on multiple UTC dates, so daily session counts are not additive across a reporting window. All tests use synthetic aggregates only, including missing/duplicated/out-of-order/impossible dates, mismatching day totals, changed candidate event totals, and inconsistent UTC snapshot dates. Inputs failing integrity are `INPUT_REJECTED`, never `AGGREGATES_MATCHED_NOT_ACCEPTANCE`.
+
+The user-copied Event Activity range must also be a complete UTC window anchored to its own report timestamp; this is a check on a clipboard string, **not** proof of authentic CRM admin login, real tenant isolation, SQL role, source data quality, or owner release sign-off. Use the authorized read-only SQL on a privately verified tenant and preserve the existing real-user acceptance gate.
+
 ## Local command result
 
 - **AGGREGATES_MATCHED_NOT_ACCEPTANCE** — numeric comparison agrees; **live owner/admin role, cross-tenant authorization and acceptance remain unverified**. Exit 0.

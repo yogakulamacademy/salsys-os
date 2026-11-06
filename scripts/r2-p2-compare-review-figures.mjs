@@ -17,6 +17,24 @@ const timestamp = (s) => {
   assert(Number.isFinite(ms));
   return ms;
 };
+const UTC_DAY_MS = 86_400_000;
+const utcDayStart = (day) => {
+  assert(typeof day === "string" && /^\d{4}-\d{2}-\d{2}$/.test(day));
+  const ms = Date.parse(day + "T00:00:00Z");
+  assert(Number.isFinite(ms) && new Date(ms).toISOString().slice(0, 10) === day);
+  return ms;
+};
+const expectedUtcDays = (first, last, days, sampledAtMs) => {
+  assert(validWindow(days));
+  const firstMs = utcDayStart(first), lastMs = utcDayStart(last);
+  // The date range must be complete, contiguous and match the capture's
+  // actual UTC day. A first/last-only comparison can hide a missing middle day.
+  assert(lastMs - firstMs === (days - 1) * UTC_DAY_MS);
+  assert(new Date(sampledAtMs).toISOString().slice(0, 10) === last);
+  return Array.from({ length: days }, (_, i) =>
+    new Date(firstMs + i * UTC_DAY_MS).toISOString().slice(0, 10));
+};
+
 const noExtraKeys = (obj, fields) => {
   assert(obj !== null && typeof obj === "object" && !Array.isArray(obj));
   assert(Object.keys(obj).every((key) => fields.includes(key)));
@@ -72,8 +90,9 @@ export function parseUiCopy(text) {
     assert(lines[8] === "Semantics: independent observed event counts, not ordered funnel conversions or payments.");
     assert(lines[9] === "Reconcile with authorized tenant-scoped SQL from the same observation period.");
     assert(lines[10] === "This copy contains no tenant, visitor, source or session identifiers, or URLs.");
-    assert(range[2] <= range[3]);
-    return { kind: "trends", days: Number(range[1]), sampledAt: timestamp(sampledAt[1]), firstDay: range[2], lastDay: range[3], lastDayIncomplete: incomplete[1] === "yes", series };
+    const capture = timestamp(sampledAt[1]);
+    expectedUtcDays(range[2], range[3], Number(range[1]), capture);
+    return { kind: "trends", days: Number(range[1]), sampledAt: capture, firstDay: range[2], lastDay: range[3], lastDayIncomplete: incomplete[1] === "yes", series };
   }
   throw new Error("unrecognized report type");
 }
@@ -116,21 +135,32 @@ export function parseSqlAggregate(text, kind) {
     && /^\d{4}-\d{2}-\d{2}$/.test(data.last_day_utc)
     && data.last_day_incomplete === true
     && Array.isArray(data.series) && data.series.length === 3);
+  const capture = timestamp(data.sampled_at_utc);
+  const dates = expectedUtcDays(
+    data.first_day_utc, data.last_day_utc, data.window_days, capture,
+  );
   const series = data.series.map((row,i) => {
     noExtraKeys(row, ["event_name","total_events","observed_sessions","daily"]);
     assert(row.event_name === DEFAULT_EVENTS[i]
       && safeCount(row.total_events) && safeCount(row.observed_sessions)
       && row.observed_sessions <= row.total_events
       && Array.isArray(row.daily) && row.daily.length === data.window_days);
-    row.daily.forEach((day) => {
+    let dailyTotal = 0;
+    row.daily.forEach((day, dayIndex) => {
       noExtraKeys(day,["date_utc","events","sessions"]);
-      assert(typeof day.date_utc === "string" && /^\d{4}-\d{2}-\d{2}$/.test(day.date_utc)
-        && safeCount(day.events) && safeCount(day.sessions) && day.sessions<=day.events);
+      assert(day.date_utc === dates[dayIndex]
+        && safeCount(day.events) && safeCount(day.sessions)
+        && day.sessions <= day.events);
+      dailyTotal += day.events;
+      assert(safeCount(dailyTotal) && dailyTotal <= row.total_events);
     });
-    assert(row.daily[0].date_utc===data.first_day_utc && row.daily.at(-1).date_utc===data.last_day_utc);
+    // SQL's overall event count must be the sum of its complete UTC-day grid.
+    // Distinct observed sessions may recur across days, so do NOT add them.
+    assert(dailyTotal === row.total_events);
     return { event_name:row.event_name,total_events:row.total_events,observed_sessions:row.observed_sessions };
   });
-  return { kind, days:data.window_days, sampledAt:timestamp(data.sampled_at_utc), firstDay:data.first_day_utc,lastDay:data.last_day_utc,lastDayIncomplete:data.last_day_incomplete,series };
+  assert(series.reduce((sum, row) => sum + row.total_events, 0) === data.candidate_events);
+  return { kind, days:data.window_days, sampledAt:capture, firstDay:data.first_day_utc,lastDay:data.last_day_utc,lastDayIncomplete:data.last_day_incomplete,series };
 }
 
 export function compareAggregateReviews(ui, sql) {
