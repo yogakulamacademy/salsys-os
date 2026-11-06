@@ -78,8 +78,9 @@ VALUES
   '00000000-0000-4000-8000-0000000000b2'::uuid,
   'R2 Local B','system','r2-local-fixture','internal','active');
 
--- A has page/form-start/form-submit counts of 4/2/1; B has 5/3/2.
--- All times stay within the last hour and all identifiers are synthetic.
+-- Recent A has page/form-start/form-submit counts of 4/2/1, B 5/3/2.
+-- Additional historical cohorts are inserted below for 14/30-day tests.
+-- All identifiers are synthetic.
 WITH sources(organization_id,source_id,source_label,views,starts,submits) AS (
   VALUES
    ('00000000-0000-4000-8000-0000000000a1'::uuid,
@@ -113,6 +114,77 @@ SELECT organization_id,source_id,'r2-local-fixture',
   'synthetic-session-'||source_label||'-'||session_number,
   '{"pagePath":"/courses/r2-fixture.php"}'::jsonb
 FROM rows;
+
+-- Two older, separately scoped synthetic cohorts exercise UTC 14/30-day
+-- calendar inclusions and the independent SQL-to-RPC aggregate comparison.
+-- A: +2/1/0 at 10d and +1/0/0 at 22d. B: +1/1/1 and +2/1/0.
+-- Therefore 7d A=4/2/1, B=5/3/2; 14d A=6/3/1, B=6/4/3;
+-- 30d A=7/3/1, B=8/5/3. All records vanish with the final ROLLBACK.
+WITH cohorts(organization_id,source_id,source_label,age_days,views,starts,submits) AS (
+  VALUES
+   ('00000000-0000-4000-8000-0000000000a1'::uuid,
+    '00000000-0000-4000-8000-0000000000f6'::uuid,'a',10,2,1,0),
+   ('00000000-0000-4000-8000-0000000000a1'::uuid,
+    '00000000-0000-4000-8000-0000000000f6'::uuid,'a',22,1,0,0),
+   ('00000000-0000-4000-8000-0000000000b2'::uuid,
+    '00000000-0000-4000-8000-0000000000f7'::uuid,'b',10,1,1,1),
+   ('00000000-0000-4000-8000-0000000000b2'::uuid,
+    '00000000-0000-4000-8000-0000000000f7'::uuid,'b',22,2,1,0)
+), rows AS (
+  SELECT c.organization_id,c.source_id,c.source_label,c.age_days,
+         i.session_number, step.event_name,step.step_number
+  FROM cohorts c
+  CROSS JOIN LATERAL generate_series(1,c.views) i(session_number)
+  CROSS JOIN (VALUES
+    ('web.page_viewed',0),('web.form_started',1),('web.form_submitted',2)
+  ) step(event_name,step_number)
+  WHERE step.step_number=0
+     OR (step.step_number=1 AND i.session_number<=c.starts)
+     OR (step.step_number=2 AND i.session_number<=c.submits)
+)
+INSERT INTO public.raw_events (
+  organization_id,tracking_source_id,source_system,source_event_id,
+  source_event_type,event_family,contract_version,occurred_at,received_at,
+  anonymous_visitor_id,session_key,payload
+)
+SELECT organization_id,source_id,'r2-local-fixture',
+  'r2-historical-'||source_label||'-'||age_days||'-'||session_number||'-'||event_name,
+  event_name,'web',1,
+  now()-make_interval(days=>age_days)+make_interval(mins=>step_number),
+  now()-make_interval(days=>age_days)+interval '5 minutes',
+  'synthetic-visitor-'||source_label||'-hist-'||age_days||'-'||session_number,
+  'synthetic-session-'||source_label||'-hist-'||age_days||'-'||session_number,
+  '{"pagePath":"/courses/r2-fixture.php"}'::jsonb
+FROM rows;
+
+-- Independent, operator-style SQL ground truth: exact UTC calendar windows
+-- and receipt floor, not the Behavior RPC implementation or its funnel helper.
+-- No identifiers or payloads leave this disposable DB. Grant only SELECT to
+-- the temporary authenticated test role; the table disappears on ROLLBACK.
+CREATE TEMP TABLE r2_p2_expected_utc_aggregates ON COMMIT DROP AS
+WITH windows(days) AS (VALUES (7),(14),(30))
+SELECT e.organization_id,w.days,e.source_event_type AS event_name,
+  count(*)::bigint AS events,
+  count(distinct (e.tracking_source_id,e.anonymous_visitor_id,e.session_key))
+    filter (where e.tracking_source_id is not null
+      and nullif(e.anonymous_visitor_id,'') is not null
+      and nullif(e.session_key,'') is not null)::bigint AS sessions
+FROM windows w
+JOIN public.raw_events e
+  ON e.organization_id IN (
+     '00000000-0000-4000-8000-0000000000a1'::uuid,
+     '00000000-0000-4000-8000-0000000000b2'::uuid)
+WHERE e.event_family='web'
+  AND e.source_event_type IN (
+    'web.page_viewed','web.form_started','web.form_submitted')
+  AND e.occurred_at >=
+    (((now() AT TIME ZONE 'UTC')::date-(w.days-1))::timestamp AT TIME ZONE 'UTC')
+  AND e.occurred_at <
+    (((now() AT TIME ZONE 'UTC')::date+1)::timestamp AT TIME ZONE 'UTC')
+  AND e.received_at >=
+    (((now() AT TIME ZONE 'UTC')::date-w.days)::timestamp AT TIME ZONE 'UTC')
+GROUP BY e.organization_id,w.days,e.source_event_type;
+GRANT SELECT ON TABLE pg_temp.r2_p2_expected_utc_aggregates TO authenticated;
 
 -- Use the actual database's authenticated role and the same session_id
 -- claims shape parsed by auth.jwt(). These are NOT signed tokens.
