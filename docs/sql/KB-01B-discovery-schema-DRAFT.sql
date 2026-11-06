@@ -105,4 +105,118 @@ end;
 $function$;
 revoke all on function public.claim_knowledge_discovery_job_v1() from public, anon, authenticated;
 grant execute on function public.claim_knowledge_discovery_job_v1() to service_role;
+-- Atomic result commit: lock the job before any page or counter mutation.
+-- This prevents cancellation/lease replacement from racing with late workers.
+create or replace function public.commit_knowledge_discovery_page_v1(
+  p_organization_id uuid,
+  p_job_id uuid,
+  p_page_id uuid,
+  p_lease_token uuid,
+  p_page_status text,
+  p_http_status integer default null,
+  p_content_type text default null,
+  p_page_title text default null,
+  p_failure_code text default null,
+  p_links jsonb default '[]'::jsonb,
+  p_delay_seconds integer default 2
+)
+returns jsonb language plpgsql security definer
+set search_path = public, pg_temp as $function$
+declare
+  v_job public.knowledge_discovery_jobs%rowtype;
+  v_link text;
+  v_changed integer := 0;
+  v_total integer := 0;
+  v_fetched integer := 0;
+  v_blocked integer := 0;
+  v_failed integer := 0;
+  v_skipped integer := 0;
+  v_pending integer := 0;
+  v_result_status text;
+begin
+  if coalesce(auth.jwt()->>'role', '') <> 'service_role' then
+    raise exception 'Service role required';
+  end if;
+  if p_page_id is not null and p_page_status not in ('fetched','blocked','failed','skipped') then
+    raise exception 'Invalid discovery page status';
+  end if;
+  if jsonb_typeof(p_links) <> 'array' or jsonb_array_length(p_links) > 80 then
+    raise exception 'Discovery link batch is invalid';
+  end if;
+
+  select * into v_job from public.knowledge_discovery_jobs
+  where id = p_job_id and organization_id = p_organization_id
+  for update;
+  if not found or v_job.status <> 'running'
+     or v_job.lease_token is distinct from p_lease_token
+     or v_job.lease_until is null or v_job.lease_until <= now() then
+    return jsonb_build_object('ok',false,'reason','inactive_or_stale_lease');
+  end if;
+
+  if p_page_id is not null then
+    update public.knowledge_discovery_pages
+    set status = p_page_status,
+        http_status = p_http_status,
+        content_type = left(p_content_type,160),
+        page_title = left(p_page_title,180),
+        failure_code = left(p_failure_code,80),
+        processed_at = now()
+    where id = p_page_id and organization_id = p_organization_id
+      and job_id = p_job_id and status = 'discovered';
+    get diagnostics v_changed = row_count;
+    if v_changed <> 1 then
+      return jsonb_build_object('ok',false,'reason','page_not_pending');
+    end if;
+
+    if p_page_status = 'fetched' then
+      for v_link in
+        select distinct value from jsonb_array_elements_text(p_links) as links(value)
+      loop
+        if char_length(v_link) between 10 and 2048 then
+          select count(*) into v_total from public.knowledge_discovery_pages
+            where job_id = p_job_id and organization_id = p_organization_id;
+          exit when v_total >= v_job.max_pages;
+          insert into public.knowledge_discovery_pages(
+            organization_id,job_id,url,discovered_from,depth,status)
+          select p_organization_id,p_job_id,v_link,p_url.url,
+                 least(6,p_url.depth+1),'discovered'
+            from public.knowledge_discovery_pages as p_url
+            where p_url.id = p_page_id and p_url.job_id = p_job_id
+              and p_url.organization_id = p_organization_id
+          on conflict (job_id,url) do nothing;
+        end if;
+      end loop;
+    end if;
+  end if;
+
+  select count(*),
+    count(*) filter (where status = 'fetched'),
+    count(*) filter (where status = 'blocked'),
+    count(*) filter (where status = 'failed'),
+    count(*) filter (where status = 'skipped'),
+    count(*) filter (where status = 'discovered')
+  into v_total,v_fetched,v_blocked,v_failed,v_skipped,v_pending
+  from public.knowledge_discovery_pages
+  where organization_id = p_organization_id and job_id = p_job_id;
+
+  v_result_status := case when v_pending > 0 then 'queued'
+    when v_blocked > 0 or v_failed > 0 then 'partial'
+    else 'completed' end;
+  update public.knowledge_discovery_jobs
+  set pages_discovered = v_total, pages_fetched = v_fetched,
+      pages_blocked = v_blocked, pages_failed = v_failed,
+      pages_skipped = v_skipped, status = v_result_status,
+      attempts = 0, lease_token = null, lease_until = null,
+      next_allowed_at = now() + make_interval(secs =>
+        greatest(2,least(3600,coalesce(p_delay_seconds,2)))),
+      finished_at = case when v_pending > 0 then null else now() end
+  where id = p_job_id and organization_id = p_organization_id;
+  return jsonb_build_object('ok',true,'status',v_result_status,
+    'pages_discovered',v_total,'pages_fetched',v_fetched,
+    'pages_blocked',v_blocked,'pages_failed',v_failed);
+end;
+$function$;
+revoke all on function public.commit_knowledge_discovery_page_v1(uuid,uuid,uuid,uuid,text,integer,text,text,text,jsonb,integer) from public,anon,authenticated;
+grant execute on function public.commit_knowledge_discovery_page_v1(uuid,uuid,uuid,uuid,text,integer,text,text,text,jsonb,integer) to service_role;
+
 commit;
