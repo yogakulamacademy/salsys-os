@@ -83,7 +83,7 @@ BEGIN
       END;
       IF NOT rejected THEN
         RAISE EXCEPTION
-          'R2-P2: unbound synthetic claims unexpectedly accessed report %, tenant index',
+          'R2-P2: unbound synthetic claims unexpectedly accessed report %',
           probe;
       END IF;
     END LOOP;
