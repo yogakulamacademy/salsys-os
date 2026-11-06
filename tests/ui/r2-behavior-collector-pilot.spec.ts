@@ -121,12 +121,14 @@ test("R2-P1 Chromium: allowlisted FAQ, brochure and form outcomes never send fie
   const rows = (await events(page)).filter((event) =>
     ["web.brochure_clicked", "web.faq_expanded", "web.form_validation_failed",
       "web.form_acknowledged"].includes(event.name));
-  expect(rows).toEqual([
+  // A native <details> toggle can be delivered after synchronous CustomEvents.
+  // Check the complete event set, not incidental browser event ordering.
+  expect(rows.sort((a, b) => a.name.localeCompare(b.name))).toEqual([
     { name: "web.brochure_clicked", properties: { brochure_id: "course_guide" } },
     { name: "web.faq_expanded", properties: { faq_id: "certification" } },
+    { name: "web.form_acknowledged", properties: { form_id: "apply" } },
     { name: "web.form_validation_failed",
       properties: { form_id: "apply", error_category: "format" } },
-    { name: "web.form_acknowledged", properties: { form_id: "apply" } },
   ]);
   expect(JSON.stringify(await events(page))).not.toMatch(
     /synthetic@example\.test|SECRET_RESPONSE_BODY|never-export-website-error/,
