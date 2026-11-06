@@ -24,6 +24,8 @@ on:
       - feature/kb05d-isolated-staging-auth-acceptance
       # Temporary KB-05F fail-closed offline staging-workflow validation.
       - feature/kb05e-verified-staging-jwt-session-claims
+      # Temporary KB-05G Auth cleanup draft validation; never real staging.
+      - feature/kb05f-staging-workflow-review-gate
   push:
     branches:
       - main
@@ -47,6 +49,7 @@ on:
       - feature/kb05d-isolated-staging-auth-acceptance
       - feature/kb05e-verified-staging-jwt-session-claims
       - feature/kb05f-staging-workflow-review-gate
+      - feature/kb05g-staging-auth-session-cleanup
 
 permissions:
   contents: read
