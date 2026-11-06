@@ -202,7 +202,7 @@ function excluded(node: ElementNode): boolean {
   if ('hidden' in attrs || 'inert' in attrs ||
       attrs['aria-hidden']?.toLowerCase() === 'true') return true;
   if (['navigation','banner','contentinfo','dialog','search','form'].includes((attrs.role ?? '').toLowerCase())) return true;
-  if (/(^|;)\s*(?:display\s*:\s*none|visibility\s*:\s*hidden)\s*(?:;|$)/i.test(attrs.style ?? '')) return true;
+  if (/(?:^|;)\s*(?:display\s*:\s*none|visibility\s*:\s*hidden)\s*(?:!important)?\s*(?:;|$)/i.test(attrs.style ?? '')) return true;
   if (/(?:^|[\s_-])(?:cookie|consent|modal|popup|hidden)(?:[\s_-]|$)/i.test(
     (attrs.class ?? '')+' '+(attrs.id ?? ''))) return true;
   return false;
@@ -301,5 +301,39 @@ export function prepareWebsiteEvidenceFromHtml(input: {
     fetchedAt:input.fetchedAt,
     pageTitle:extracted.pageTitle,
     blocks:extracted.blocks,
+  });
+}
+
+
+/**
+ * Boundary between an already-authorized HTML fetch and KB-02 evidence.
+ * The caller owns crawl authorization, consent, robots, and retention.
+ * No content from a non-200 or non-HTML response becomes evidence.
+ */
+export function prepareWebsiteEvidenceFromFetch(input: {
+  verifiedSeedUrl: string;
+  fetchedAt: string;
+  response: {
+    url: string;
+    status: number;
+    contentType: string;
+    body: string;
+  };
+}): WebsiteEvidenceResult {
+  if (!input || !input.response || input.response.status !== 200) {
+    return { ok:false,error:'html_response_not_successful' };
+  }
+  if (typeof input.response.contentType !== 'string' ||
+      !/^(?:text\/html|application\/xhtml\+xml)(?:\s*;|$)/i.test(input.response.contentType)) {
+    return { ok:false,error:'html_content_type_required' };
+  }
+  if (typeof input.response.body !== 'string') {
+    return { ok:false,error:'invalid_html_body' };
+  }
+  return prepareWebsiteEvidenceFromHtml({
+    verifiedSeedUrl:input.verifiedSeedUrl,
+    sourceUrl:input.response.url,
+    fetchedAt:input.fetchedAt,
+    html:input.response.body,
   });
 }
