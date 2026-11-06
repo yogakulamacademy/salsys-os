@@ -253,3 +253,66 @@ test("R2-P1 Chromium: SPA can reclaim a full 200-element visibility observer set
     () => (window as any).__observedByPilot?.size ?? -1,
   )).toBeLessThanOrEqual(3);
 });
+
+test("R2-P1 Chromium: native details opened pre-consent cannot be backfilled by a later grant", async ({ page }) => {
+  await openHarness(page, false);
+  await page.evaluate(() => {
+    const summary = document.querySelector<HTMLElement>("#faq summary");
+    if (!summary) throw new Error("Synthetic details summary missing");
+    summary.click();
+    // Both the collector's deferred click handler and native toggle may be
+    // delivered after the simulated consent state has changed.
+    (window as any).__pilotAllowed = true;
+    window.dispatchEvent(new Event("salsys:consent-changed"));
+  });
+  await page.waitForTimeout(100);
+  expect((await events(page)).filter((row) => row.name === "web.faq_expanded")).toHaveLength(0);
+
+  // A new authorized close and re-open does count as one new interaction.
+  await page.locator("#faq summary").click();
+  await page.locator("#faq summary").click();
+  await expect.poll(async () => (await events(page))
+    .filter((row) => row.name === "web.faq_expanded").length).toBe(1);
+  expect((await events(page)).filter((row) => row.name === "web.faq_expanded")).toEqual([
+    { name: "web.faq_expanded", properties: { faq_id: "certification" } },
+  ]);
+});
+
+test("R2-P1 Chromium: queued FAQ callback is invalid after consent changes and same-path SPA replacement", async ({ page }) => {
+  await openHarness(page, true);
+  await page.evaluate(() => {
+    const old = document.createElement("button");
+    old.setAttribute("data-salsys-faq-id", "old_queued_faq");
+    old.setAttribute("aria-expanded", "true");
+    document.body.appendChild(old);
+    old.click();
+    (window as any).__pilotAllowed = false;
+    window.dispatchEvent(new Event("salsys:consent-changed"));
+    (window as any).__pilotAllowed = true;
+    window.dispatchEvent(new Event("salsys:consent-changed"));
+    old.remove();
+
+    const replaced = document.createElement("button");
+    replaced.setAttribute("data-salsys-faq-id", "stale_same_route");
+    replaced.setAttribute("aria-expanded", "true");
+    document.body.appendChild(replaced);
+    replaced.click();
+    window.dispatchEvent(new Event("salsys:page-change"));
+    replaced.remove();
+  });
+  await page.waitForTimeout(100);
+  expect((await events(page)).filter((row) => row.name === "web.faq_expanded")).toHaveLength(0);
+
+  await page.evaluate(() => {
+    const current = document.createElement("button");
+    current.setAttribute("data-salsys-faq-id", "current_route_faq");
+    current.setAttribute("aria-expanded", "true");
+    document.body.appendChild(current);
+    current.click();
+  });
+  await expect.poll(async () => (await events(page))
+    .filter((row) => row.name === "web.faq_expanded").length).toBe(1);
+  expect((await events(page)).find((row) => row.name === "web.faq_expanded")).toEqual({
+    name: "web.faq_expanded", properties: { faq_id: "current_route_faq" },
+  });
+});

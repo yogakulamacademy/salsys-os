@@ -29,11 +29,12 @@ function node(attributes = {}) {
     },
     matches(selector) {
       return selector === 'details[data-salsys-faq-id]' &&
-        Boolean(attributes['data-salsys-faq-id']);
+        Boolean(attributes['data-salsys-faq-id']) && attributes.isDetails === true;
     },
     closest(selector) {
       if (selector === '[data-salsys-brochure-id]' && attributes['data-salsys-brochure-id']) return item;
-      if (selector === '[data-salsys-faq-id][aria-expanded]' && attributes['data-salsys-faq-id']) return item;
+      if (selector === '[data-salsys-faq-id][aria-expanded]' && attributes['data-salsys-faq-id'] && attributes['aria-expanded'] != null) return item;
+      if (selector === 'details[data-salsys-faq-id]' && attributes['data-salsys-faq-id'] && attributes.isDetails) return item;
       return null;
     },
   };
@@ -192,6 +193,80 @@ test('FAQ, brochure, and form events only send bounded identifiers and categorie
   assert.ok(!JSON.stringify(ctx.events).includes('SECRET'));
 });
 
+
+test('native details FAQ requires a consented click, not an asynchronous toggle', () => {
+  const details = node({ isDetails: true, open: true, 'data-salsys-faq-id': 'native_details' });
+  const ctx = setup(false);
+  ctx.sendDocument('click', { target: details });
+  ctx.setConsent(true);
+  ctx.sendWindow('salsys:consent-changed', {});
+  ctx.sendDocument('toggle', { target: details });
+  ctx.flushTimers();
+  assert.equal(ctx.events.length, 0);
+
+  ctx.sendDocument('click', { target: details });
+  ctx.sendDocument('toggle', { target: details });
+  ctx.flushTimers();
+  assert.deepEqual(JSON.parse(JSON.stringify(ctx.events)), [
+    { name: 'web.faq_expanded', properties: { faq_id: 'native_details' } },
+  ]);
+  ctx.sendDocument('toggle', { target: details });
+  assert.equal(ctx.events.length, 1);
+});
+
+test('deferred FAQ does not replay pre-consent clicks after a grant', () => {
+  const ctx = setup(false);
+  const faq = node({ 'data-salsys-faq-id': 'course_content', 'aria-expanded': 'true' });
+  ctx.sendDocument('click', { target: faq });
+  ctx.setConsent(true);
+  ctx.sendWindow('salsys:consent-changed', {});
+  ctx.flushTimers();
+  assert.equal(ctx.events.length, 0);
+  // An entirely new authorized click is eligible.
+  ctx.sendDocument('click', { target: faq });
+  ctx.flushTimers();
+  assert.deepEqual(JSON.parse(JSON.stringify(ctx.events)), [
+    { name: 'web.faq_expanded', properties: { faq_id: 'course_content' } },
+  ]);
+});
+
+test('deferred FAQ is discarded if consent was withdrawn and regranted before it fires', () => {
+  const ctx = setup(true);
+  const faq = node({ 'data-salsys-faq-id': 'faq_consent_epoch', 'aria-expanded': 'true' });
+  ctx.sendDocument('click', { target: faq });
+  ctx.setConsent(false);
+  ctx.sendWindow('salsys:consent-changed', {});
+  ctx.setConsent(true);
+  ctx.sendWindow('salsys:consent-changed', {});
+  ctx.flushTimers();
+  assert.equal(ctx.events.length, 0);
+  ctx.sendDocument('click', { target: faq });
+  ctx.flushTimers();
+  assert.equal(ctx.events.length, 1);
+});
+
+test('deferred FAQ never leaks across a SPA route change or detached view', () => {
+  const ctx = setup(true);
+  const oldFaq = node({ 'data-salsys-faq-id': 'old_route', 'aria-expanded': 'true' });
+  ctx.sendDocument('click', { target: oldFaq });
+  ctx.setPage('/new-course');
+  ctx.sendWindow('salsys:page-change', {});
+  ctx.flushTimers();
+  assert.equal(ctx.events.length, 0);
+
+  const detached = node({ 'data-salsys-faq-id': 'removed_faq', 'aria-expanded': 'true' });
+  ctx.sendDocument('click', { target: detached });
+  detached.isConnected = false;
+  ctx.flushTimers();
+  assert.equal(ctx.events.length, 0);
+
+  const active = node({ 'data-salsys-faq-id': 'current_faq', 'aria-expanded': 'true' });
+  ctx.sendDocument('click', { target: active });
+  ctx.flushTimers();
+  assert.deepEqual(JSON.parse(JSON.stringify(ctx.events)), [
+    { name: 'web.faq_expanded', properties: { faq_id: 'current_faq' } },
+  ]);
+});
 
 test('same CTA can be observed again after an explicit SPA route change', () => {
   const cta = node({ 'data-salsys-cta-id': 'enroll_now' });

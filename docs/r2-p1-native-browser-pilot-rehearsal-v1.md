@@ -25,6 +25,34 @@ A Node VM regression reaches the full 200-element cap, disconnects all old nodes
 
 **No live pilot authorization is implied:** Actual site consent/CMP, origin-bound source, analytics acceptance, raw-event processing and customer-site opt-in still require Issue #520's approved staging/live pilot evidence. This collector-only compatibility improvement must not be mistaken for the pilot's completion.
 
+## Consent-bound deferred FAQ events (2026-11-06)
+
+FAQ accordion click handlers may defer their `aria-expanded` check until the
+browser finishes updating the state. Native `<details>` elements also dispatch
+an asynchronous `toggle` event. The older optional collector checked analytics
+permission only when that later callback/event ran, so a pre-consent click
+could be attributed after a near-synchronous consent grant. A callback
+queued before a SPA route change could likewise be counted on the new view.
+
+The optional collector now accepts FAQ telemetry only when **the initiating
+click had analytics permission** and the deferred completion remains in the
+same consent/navigation/visibility context with the same live DOM element.
+A consent-change event, SPA page-change, popstate, pathname change, or tab
+visibility change invalidates any pending FAQ click. Native `<details>` are
+tracked through user-generated clicks (including keyboard-activated clicks)
+rather than asynchronous standalone `toggle` notifications. Consequently,
+programmatically opened details without an attributable authorized click are
+conservatively **not counted**. This is intentional: a late toggle cannot prove
+that its underlying expansion began after consent. The generic FAQ event
+name and allowlisted ID remain unchanged.
+
+Synthetic VM and real Chromium tests confirm no pre-consent replay, no
+withdraw/regrant replay, no SPA or detached-element attribution, and one
+legitimate current-FAQ event from a new consented click. No real CMP, user
+data, production event ingestion or paid staging is involved. The browser's
+consent manager and client integration still require a separate authorized
+live-site pilot. Optional collector opt-in remains OFF.
+
 ## Non-claims and acceptance still required
 
 - The fixture uses a stub SDK to deliberately avoid network emission; it is not proof that a real consent manager, origin-bound API/source, browser privacy policy, or raw-event processor accepts the events.
