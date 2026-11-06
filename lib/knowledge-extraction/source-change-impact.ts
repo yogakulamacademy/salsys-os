@@ -305,7 +305,8 @@ export function assessSourceChangeImpact(
       !HASH.test(h.quoteSha256))return {
         ok:false,error:'invalid_historical_reference',
       };
-    const identity=h.documentId+':'+h.version;
+    const identity=JSON.stringify([h.documentId,h.version,h.sourceUrl,
+      h.snapshotSha256,h.blockId,h.quoteSha256]);
     if(historySeen.has(identity))return {ok:false,error:'duplicate_historical_version'};
     historySeen.add(identity);
     const key=JSON.stringify([h.sourceUrl,h.snapshotSha256,h.blockId,h.quoteSha256]);
