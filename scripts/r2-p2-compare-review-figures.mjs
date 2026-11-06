@@ -135,8 +135,9 @@ export function parseSqlAggregate(text, kind) {
 
 export function compareAggregateReviews(ui, sql) {
   assert(ui?.kind === sql?.kind && validWindow(ui.days) && ui.days===sql.days);
-  const skewSeconds = Math.round(Math.abs(ui.sampledAt-sql.sampledAt)/1000);
-  if (skewSeconds * 1000 > MAX_CAPTURE_SKEW_MS) return { status:"REVIEW_REQUIRED_CAPTURE_DRIFT",skewSeconds };
+  const samplingDeltaMs = Math.abs(ui.sampledAt-sql.sampledAt);
+  const skewSeconds = Math.round(samplingDeltaMs/1000);
+  if (samplingDeltaMs > MAX_CAPTURE_SKEW_MS) return { status:"REVIEW_REQUIRED_CAPTURE_DRIFT",skewSeconds };
   if (ui.kind==="funnel") {
     const fields = [...DEFAULT_EVENTS.map((event,i) => ({
       name:event, match:ui.counts[i]===sql.counts[i]
