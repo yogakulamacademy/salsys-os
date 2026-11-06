@@ -236,3 +236,54 @@ real owner/admin authorization, cross-tenant isolation or sign-off. The
 reviewer must perform and attest the live login, comparison and privacy tests.
 Never enter or share live credentials, organization UUIDs, session tokens,
 raw visitor data or customer screenshots in an acceptance record.
+
+
+## J. High-repeat public page-view data-quality review (2026-11-06)
+
+**Why:** Real CRM screenshots (7/14/30 days) showed unusually concentrated
+page-view counts on public routes such as `/courses/kerala/test.php`
+and `/our-courses.php`. Session-level repetition is a reason to
+**investigate**, not evidence of bot traffic, fraud, broken instrumentation,
+a customer action, or a conversion.
+
+**Read-only operator procedure:** Run
+`docs/sql/r2-p2-repeat-public-pageview-diagnostic-v1.sql` with the same
+**authorized tenant UUID** and `days=7`, `14`, or `30` in a private
+database terminal. Do not post the UUID, credentials, tracking/source IDs,
+visitor/session keys, or raw events. The diagnostic uses the same live
+UTC-calendar window, one-day receipt grace, safe-public-path helper and
+50,000-row volume limit as Events by Page.
+
+The diagnostic returns at most ten **privacy-filtered public paths**.
+Each returned path has **at least three distinct source-scoped visitors,
+five identified sessions, and fifty observed views**. It is flagged for
+*review only* when identified views per session are at least ten and at
+least 70% of identified views come from sessions recording ten or more
+views of the same path. The report includes only bounded aggregate counts
+and a review reason. It never outputs individual source/visitor/session IDs,
+private paths, raw payloads, or account identifiers.
+
+**Verified live read-only snapshot:** On November 6, 2026,
+12:17:42 UTC, the 30-day operator diagnostic flagged precisely two pages:
+`/courses/kerala/test.php` (374 views, 19 sessions, six visitors; 93%
+of identified views from high-repeat sessions) and
+`/our-courses.php` (305 views, eight sessions, three visitors; 94.8%
+of identified views from high-repeat sessions). The counters can change
+while new data arrives or old data leaves the UTC window. The SQL did
+not identify what caused the repetition. This sample is not a complete
+traffic-quality or marketing-attribution determination.
+
+**Follow-up before any filtering:** An authorized website operator
+should check whether each route is a genuine public course page, an
+internal test fixture, a deliberately refreshed preview, a third-party
+monitor, or another legitimate behavior, using lawful operational context.
+Review the existing instrumentation only if necessary and approved.
+Do **not** label sessions as bots, automatically exclude paths, disable
+collection, rewrite historical events, change consent, or adjust the
+reported customer metrics based solely on the ratio.
+
+**R2 acceptance boundary:** This closes a repeat-traffic *diagnostic
+documentation* gap, **not** Issue #523's real owner/admin session
+authentication, cross-tenant browser check, same-instant dashboard-to-SQL
+sign-off, or the separate consent/identity and retention gates.
+No paid staging, new provider calls, or production writes.
