@@ -31,6 +31,12 @@ export function NativeBehaviorBreakdownPanel({
             Find the pages generating each event. This is an observation breakdown,
             not a conversion attribution report.
           </p>
+          {breakdown.eventName === "web.page_viewed" ? (
+            <p className="mt-1 max-w-2xl text-xs text-slate-500">
+              Page-view events can include same-page SPA URL changes (such as query or hash updates)
+              without a full page reload. They are not verified full page loads.
+            </p>
+          ) : null}
         </div>
         <form method="get" action="/marketing" className="flex flex-wrap items-end gap-2">
           {/* Native GET submission preserves a visitor's selected event even when
