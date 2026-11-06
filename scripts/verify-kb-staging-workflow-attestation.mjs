@@ -53,3 +53,11 @@ export function assessKbStagingWorkflowAttestation(env){
     grantsRuntimeOrProductionPermission:false,
   });
 }
+
+
+if(process.argv[1]&&new URL('file://'+process.argv[1]).pathname===new URL(import.meta.url).pathname){
+  if(process.argv.length!==3||process.argv[2]!=='--check')
+    throw new Error('kb_staging_attestation_explicit_check_flag_required');
+  assessKbStagingWorkflowAttestation(process.env);
+  console.log('kb_staging_attestation_consistency_passed_no_proof_of_reviewers');
+}
