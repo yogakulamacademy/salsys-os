@@ -13,7 +13,7 @@ assert.ok(source.includes("from './url-policy'"), 'Source import moved; review t
 source = source.replace("from './url-policy'", "from '" + policyPath + "'");
 const tempFile = join(dir, 'public-fetch.ts');
 await writeFile(tempFile, source, 'utf8');
-const { evaluateRobots, discoverHtmlLinks, discoverSitemapLinks, readHtmlTitle } =
+const { fetchPublicWeb, evaluateRobots, discoverHtmlLinks, discoverSitemapLinks, readHtmlTitle } =
   await import(pathToFileURL(tempFile).href);
 test.after(async () => { await rm(dir, { recursive: true, force: true }); });
 
@@ -48,4 +48,51 @@ test('sitemap extracts same-site locations and ignores nested XML', () => {
     + '<url><loc>https://other.site/b</loc></url>'
     + '<loc>https://yogakulam.com/extra.xml</loc></urlset>';
   assert.deepEqual(discoverSitemapLinks(seed, seed, sitemap), ['https://yogakulam.com/a']);
+});
+
+test('revalidates each redirect and pins the verified address per hop', async () => {
+  const seed=new URL('https://yogakulam.com/');
+  const resolved=[];
+  const requested=[];
+  const resolver=async host=>{resolved.push(host);return [{address:'8.8.8.8',family:4}];};
+  const transport=async (url,address,family,limit)=> {
+    requested.push([url.href,address,family,limit]);
+    if(url.pathname==='/')return {status:302,location:'/about',contentType:'text/html',body:''};
+    return {status:200,location:null,contentType:'text/html; charset=utf-8',body:'<title>About</title>'};
+  };
+  const result=await fetchPublicWeb(seed,seed,'html',resolver,transport);
+  assert.equal(result.url,'https://yogakulam.com/about');
+  assert.equal(result.body,'<title>About</title>');
+  assert.deepEqual(resolved,['yogakulam.com','yogakulam.com']);
+  assert.equal(requested.length,2);
+  assert.ok(requested.every(item=>item[1]==='8.8.8.8' && item[2]===4 && item[3]===512*1024));
+});
+
+test('blocks off-site redirects before any unsafe network connection', async () => {
+  const seed=new URL('https://yogakulam.com/');
+  let attempts=0;
+  const resolver=async()=>[{address:'8.8.8.8',family:4}];
+  const transport=async()=>{
+    attempts++;
+    return {status:302,location:'http://169.254.169.254/latest/meta-data',
+      contentType:'text/html',body:''};
+  };
+  await assert.rejects(fetchPublicWeb(seed,seed,'html',resolver,transport),/redirect_out_of_scope/);
+  assert.equal(attempts,1);
+});
+
+test('rejects DNS rebinding-style mixed public/private records before fetch', async () => {
+  const seed=new URL('https://yogakulam.com/');
+  let attempts=0;
+  const resolver=async()=>[{address:'1.1.1.1',family:4},{address:'127.0.0.1',family:4}];
+  const transport=async()=>{attempts++;return {status:200,location:null,contentType:'text/html',body:'ok'};};
+  await assert.rejects(fetchPublicWeb(seed,seed,'html',resolver,transport),/exclusively public/);
+  assert.equal(attempts,0);
+});
+
+test('unsupported content types never count as fetched HTML', async () => {
+  const seed=new URL('https://yogakulam.com/');
+  const resolver=async()=>[{address:'8.8.8.8',family:4}];
+  const transport=async()=>({status:200,location:null,contentType:'application/pdf',body:'not html'});
+  await assert.rejects(fetchPublicWeb(seed,seed,'html',resolver,transport),/unsupported_content_type/);
 });
