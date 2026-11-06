@@ -70,9 +70,13 @@ function syntheticCohortTrial(events, { organizationId, asOfUtc, historyStartUtc
     // Delivery IDs may overlap across independent tracking sources.
     const scopedEventId = JSON.stringify([e.sourceId, e.eventId]);
     const prior = eventIds.get(scopedEventId);
-    if (prior && prior !== sessionKey) return blocked("conflicting_duplicate_event");
+    // Retries can arrive at different receipt instants, but a source event ID
+    // must not silently change its session or claimed occurrence time.
+    if (prior && (prior.sessionKey !== sessionKey || prior.occurred !== occurred)) {
+      return blocked("conflicting_duplicate_event");
+    }
     if (prior) continue;
-    eventIds.set(scopedEventId, sessionKey);
+    eventIds.set(scopedEventId, { sessionKey, occurred });
     const older = sessions.get(sessionKey);
     if (!older || occurred < older.occurred) sessions.set(sessionKey, { personKey, occurred });
   }
@@ -260,6 +264,14 @@ test("unknown consent, stale delivery, absent identity or conflicting event IDs 
   }
   const conflict = { ...good, sessionId: "other" };
   assert.equal(syntheticCohortTrial([good, conflict], options).reason, "conflicting_duplicate_event");
+  const shiftedStart = { ...good,
+    occurredAt: "2026-11-02T10:00:00Z",
+    receivedAt: "2026-11-02T10:00:02Z" };
+  assert.equal(syntheticCohortTrial([good, shiftedStart], options).reason,
+    "conflicting_duplicate_event");
+  const retryWithLaterReceipt = { ...good, receivedAt: "2026-11-01T10:00:30Z" };
+  assert.equal(syntheticCohortTrial([good, retryWithLaterReceipt], options).status,
+    "synthetic_only");
   assert.equal(syntheticCohortTrial(Array.from({ length: 50001 }, () => good), options).reason,
     "unbounded_or_invalid_input");
 });
