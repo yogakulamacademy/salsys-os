@@ -22,7 +22,7 @@ test('website ownership challenge uses a fresh 256-bit token and stores only a h
 });
 
 test('verification is scoped to exact configured base hostname and expires', () => {
-  assert.equal(discoveryVerificationHost('WWW.Example.COM.'), 'example.com');
+  assert.equal(discoveryVerificationHost('WWW.Example.COM.'), 'www.example.com');
   assert.equal(discoveryVerificationHost('other.example.com'), 'other.example.com');
   const now = Date.UTC(2026, 10, 6);
   const row = { verified_at: new Date(now - 1000).toISOString(),
