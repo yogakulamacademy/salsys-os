@@ -48,7 +48,7 @@ const named = new Map(Object.entries({
 
 function decodeHtml(input: string): string | null {
   let invalid = false;
-  const result = input.replace(/&(#(?:x[0-9a-f]+|[0-9]+)|[a-z][a-z0-9]+);/gi, (original, entity: string) => {
+  const result = input.replace(/&(#(?:x[0-9a-f]+|[0-9]+)|[a-z][a-z0-9]*);/gi, (original, entity: string) => {
     if (entity.startsWith('#')) {
       const hex = /^#x/i.test(entity);
       const value = Number.parseInt(entity.slice(hex ? 2 : 1), hex ? 16 : 10);
@@ -261,7 +261,7 @@ export function extractVisibleWebsiteBlocks(html: string): HtmlBlockResult {
       return;
     }
     const kind: VisibleBlockKind | null =
-      node.tag==='h1'||node.tag==='h2'||node.tag==='h3' ? node.tag :
+      /^h[1-6]$/.test(node.tag) ? node.tag as VisibleBlockKind :
       node.tag==='p'||node.tag==='blockquote' ? 'paragraph' :
       node.tag==='li' ? 'list_item' :
       node.tag==='dt'||node.tag==='summary' ? 'faq_question' :
