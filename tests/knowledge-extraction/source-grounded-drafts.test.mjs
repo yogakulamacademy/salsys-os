@@ -28,7 +28,7 @@ function evidence(input=seed()){
 
 test('preserves verbatim facts and tightly pairs adjacent explicit FAQ source blocks',()=>{
   const source=evidence();
-  const result=prepareSourceGroundedDrafts(source);
+  const result=prepareSourceGroundedDrafts(source,'sample.example.com');
   assert.equal(result.ok,true);
   const {bundle}=result;
   assert.equal(bundle.state,'unreviewed_source_candidates');
@@ -68,7 +68,7 @@ test('does not invent answers for orphan questions or pair across an unrelated h
     {kind:'paragraph',text:'Course details are available on request.'},
     {kind:'faq_answer',text:'Yes.'},
   ];
-  const result=prepareSourceGroundedDrafts(evidence(input));
+  const result=prepareSourceGroundedDrafts(evidence(input),'sample.example.com');
   assert.equal(result.ok,true);
   assert.equal(result.bundle.drafts.length,1);
   assert.equal(result.bundle.drafts[0].kind,'source_statement');
@@ -85,7 +85,7 @@ test('unknown or ungrammatical FAQ source questions do not become a factual answ
     {kind:'faq_question',text:'Refund terms'},
     {kind:'faq_answer',text:'Refunds require a written request.'},
   ];
-  const result=prepareSourceGroundedDrafts(evidence(input));
+  const result=prepareSourceGroundedDrafts(evidence(input),'sample.example.com');
   assert.equal(result.ok,true);
   assert.deepEqual(result.bundle.drafts,[]);
   assert.deepEqual(result.bundle.issues.map(x=>x.code),[
@@ -99,7 +99,7 @@ test('source text that looks like AI instructions is never acted on or promoted'
     {kind:'paragraph',text:'Program fee is ₹20,000 until 30 November 2026.'},
     {kind:'paragraph',text:'Medical advice is only given by a qualified doctor.'},
   ];
-  const result=prepareSourceGroundedDrafts(evidence(input));
+  const result=prepareSourceGroundedDrafts(evidence(input),'sample.example.com');
   assert.equal(result.ok,true);
   assert.equal(result.bundle.drafts.length,3);
   assert.equal(result.bundle.drafts[0].statement,input.blocks[0].text);
@@ -114,12 +114,12 @@ test('source text that looks like AI instructions is never acted on or promoted'
 
 test('identical source evidence produces stable immutable candidate identities',()=>{
   const original=evidence();
-  const a=prepareSourceGroundedDrafts(original);
-  const b=prepareSourceGroundedDrafts(original);
+  const a=prepareSourceGroundedDrafts(original,'sample.example.com');
+  const b=prepareSourceGroundedDrafts(original,'sample.example.com');
   assert.equal(a.ok,true);assert.equal(b.ok,true);
   assert.deepEqual(a,b);
   const updated=seed();updated.blocks[3].text='Introduction workshop | $175';
-  const c=prepareSourceGroundedDrafts(evidence(updated));
+  const c=prepareSourceGroundedDrafts(evidence(updated),'sample.example.com');
   assert.equal(c.ok,true);
   assert.notEqual(a.bundle.snapshotSha256,c.bundle.snapshotSha256);
   assert.notEqual(a.bundle.drafts[1].id,c.bundle.drafts[1].id);
@@ -141,7 +141,7 @@ test('tampered hashes, duplicate identities, invalid status and off-host source 
   for(const mutate of mutations){
     const instance=structuredClone(initial);
     mutate(instance);
-    const result=prepareSourceGroundedDrafts(instance);
+    const result=prepareSourceGroundedDrafts(instance,'sample.example.com');
     assert.equal(result.ok,false);
     assert.equal(result.bundle,undefined);
   }
@@ -154,7 +154,7 @@ test('oversized evidence is skipped with explicit issue, never silently truncate
     {kind:'faq_answer',text:'b'.repeat(1600)},
     {kind:'paragraph',text:'Short known statement.'},
   ];
-  const result=prepareSourceGroundedDrafts(evidence(input));
+  const result=prepareSourceGroundedDrafts(evidence(input),'sample.example.com');
   assert.equal(result.ok,true);
   assert.equal(result.bundle.drafts.length,1);
   assert.equal(result.bundle.drafts[0].statement,'Short known statement.');
@@ -167,13 +167,13 @@ test('large candidate volumes fail closed and do not partially publish',()=>{
   const input=seed();input.blocks=Array.from({length:125},(_,i)=>({
     kind:'paragraph',text:'Distinct source statement '+i,
   }));
-  const result=prepareSourceGroundedDrafts(evidence(input));
+  const result=prepareSourceGroundedDrafts(evidence(input),'sample.example.com');
   assert.deepEqual(result,{ok:false,error:'draft_candidate_limit'});
 });
 
 test('empty source creates an explicit zero-candidate review bundle',()=>{
   const input=seed();input.blocks=[];
-  const result=prepareSourceGroundedDrafts(evidence(input));
+  const result=prepareSourceGroundedDrafts(evidence(input),'sample.example.com');
   assert.equal(result.ok,true);
   assert.deepEqual(result.bundle.drafts,[]);
   assert.deepEqual(result.bundle.issues,[]);
