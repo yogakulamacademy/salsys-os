@@ -155,6 +155,37 @@ test('source and citation tampering, forged bindings, aliases, and invalid thres
   assert.deepEqual(duplicate,{ok:false,error:'duplicate_comparison_binding'});
 });
 
+test('mixed timestamps within one snapshot and future source dates fail closed',()=>{
+  const original=bundle('multi',[
+    {heading:'Fee',quote:'Fee: $500'},
+    {heading:'Date',quote:'Start date: 2026-12-07'},
+  ]);
+  const changed=structuredClone(original);
+  changed.drafts[1].citation.fetchedAt='2026-11-05T00:00:00Z';
+  assert.deepEqual(run([changed],[]),
+    {ok:false,error:'inconsistent_source_timestamp'});
+  const future=bundle('future',[{heading:'Fee',quote:'Fee: $500'}],
+    '2026-11-07T12:00:00Z');
+  assert.deepEqual(run([future],[]),{ok:false,error:'source_timestamp_in_future'});
+});
+
+test('large comparison groups fail closed rather than dropping the differing citation',()=>{
+  const entries=Array.from({length:17},(_,i)=>bundle('version-'+i,[
+    {heading:'Fee',quote:'Private fee: 
+  const report=run([],[]);
+  assert.equal(report.ok,true);
+  assert.deepEqual(report.report.signals,[]);
+  assert.deepEqual(report.report.issues,[]);
+  assert.equal(report.report.state,'needs_human_review');
+  assert.equal(report.report.canPublish,false);
+  assert.equal(report.report.canStore,false);
+});
++(i===16?'1900':'1750')},
+  ]));
+  const bindings=entries.map(b=>bound(b,'price'));
+  assert.deepEqual(run(entries,bindings),{ok:false,error:'comparison_group_over_limit'});
+});
+
 test('no model calls, storage, approval or publication for empty sources',()=>{
   const report=run([],[]);
   assert.equal(report.ok,true);
