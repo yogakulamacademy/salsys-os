@@ -13,21 +13,34 @@ const prohibitedHosts = new Set([
   "salsys-os-git-main-salsysos.vercel.app",
 ]);
 
+function publiclyNamedHost(host) {
+  // Configuration-only check: reject local, intranet and IP literals before
+  // allowing a staging origin. A real owner must separately verify DNS/TLS,
+  // domain control and that the deployment cannot reach production services.
+  if (!host || host.endsWith(".") || host.startsWith("[") ||
+      host.includes(":") || /^\\d+(?:\\.\\d+){3}$/.test(host)) return false;
+  if (host.length > 253 || host.split(".").length < 2 ||
+      host.split(".").some((part) => !/^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/.test(part))) return false;
+  var blockedSuffixes = [
+    "localhost", "local", "internal", "lan", "home", "home.arpa",
+    "test", "invalid", "example", "onion"
+  ];
+  if (blockedSuffixes.some((suffix) => host === suffix || host.endsWith("." + suffix))) return false;
+  return true;
+}
+
 function origin(input, label, problems) {
   let url;
   try { url = new URL(String(input || "")); }
   catch { problems.push(label + ": a full HTTPS origin is required"); return null; }
   if (url.protocol !== "https:" || url.username || url.password ||
-      url.search || url.hash || url.pathname !== "/") {
-    problems.push(label + ": use only a bare HTTPS origin, without credentials, path or query");
+      url.search || url.hash || url.pathname !== "/" || url.port) {
+    problems.push(label + ": use only a bare HTTPS origin, without credentials, nonstandard port, path or query");
     return null;
   }
   const host = url.hostname.toLowerCase();
-  if (prohibitedHosts.has(host) ||
-      prohibitedRoots.some((root) => host === root || host.endsWith("." + root)) ||
-      host === "localhost" ||
-      host.endsWith(".localhost") || host.endsWith(".test") ||
-      host.endsWith(".invalid") || host.endsWith(".example")) {
+  if (!publiclyNamedHost(host) || prohibitedHosts.has(host) ||
+      prohibitedRoots.some((root) => host === root || host.endsWith("." + root))) {
     problems.push(label + ": production or non-routable origin is not accepted");
   }
   return url.origin;
@@ -41,8 +54,12 @@ export function verifyR2StagingConfig(values = {}) {
   const prodDb = origin(values.SALSYS_PRODUCTION_SUPABASE_URL, "Production Supabase comparison", errors);
   const recoveryDb = origin(values.SALSYS_RECOVERY_SUPABASE_URL, "Recovery rehearsal Supabase comparison", errors);
 
-  if (site && crm && site === crm) {
-    errors.push("Website and CRM API must be separately identified staging origins");
+  if (site && crm && new URL(site).hostname === new URL(crm).hostname) {
+    errors.push("Website and CRM API must use different staging hostnames");
+  }
+  if (db && ((site && new URL(db).hostname === new URL(site).hostname) ||
+             (crm && new URL(db).hostname === new URL(crm).hostname))) {
+    errors.push("Staging Supabase must use a hostname distinct from staging website and CRM");
   }
   const stagingProject = String(values.SALSYS_STAGING_CRM_PROJECT_ID || "").trim();
   const productionProject = String(values.SALSYS_PRODUCTION_CRM_PROJECT_ID || "").trim();
