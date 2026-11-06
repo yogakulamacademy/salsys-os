@@ -161,6 +161,39 @@ test('exact KB-01B SQL passes tenant, RLS, lease and cancellation checks in disp
     assert.equal(afterCommit.rows[0].pages_discovered,3);
     assert.equal(afterCommit.rows[0].pages_fetched,1);
 
+    // Each successive page uses a new lease. Verify truthful partial coverage
+    // when a robots-blocked page and a successfully fetched page coexist.
+    for (const expectedStatus of ['blocked','fetched']) {
+      await db.query(
+        "update public.knowledge_discovery_jobs set next_allowed_at=now()-interval '1 second' where id=$1",
+        [firstId]);
+      await context(a,'service_role',USER_A);
+      const claimed=await a.query('select * from public.claim_knowledge_discovery_job_v1()');
+      assert.equal(claimed.rowCount,1);
+      assert.equal(claimed.rows[0].job_id,firstId);
+      const pending=await db.query(
+        "select id from public.knowledge_discovery_pages where job_id=$1 and status='discovered' order by url limit 1",
+        [firstId]);
+      assert.equal(pending.rowCount,1);
+      const response=await a.query(
+        'select public.commit_knowledge_discovery_page_v1($1,$2,$3,$4,$5,$6,$7,$8,$9,$10::jsonb,$11) as result',
+        [first.rows[0].organization_id,firstId,pending.rows[0].id,
+          claimed.rows[0].lease_token,expectedStatus,
+          expectedStatus==='fetched'?200:null,
+          expectedStatus==='fetched'?'text/html':null,
+          expectedStatus==='fetched'?'Synthetic course':'',
+          expectedStatus==='blocked'?'robots_disallow':null,
+          '[]',2]);
+      assert.equal(response.rows[0].result.ok,true);
+      await a.query('commit');
+    }
+    const complete=await db.query(
+      'select status,pages_discovered,pages_fetched,pages_blocked,pages_failed from public.knowledge_discovery_jobs where id=$1',
+      [firstId]);
+    assert.deepEqual(complete.rows[0],{
+      status:'partial',pages_discovered:3,pages_fetched:2,pages_blocked:1,pages_failed:0,
+    });
+
     // Cancellation obtains a row lock. A concurrent late worker waits,
     // then sees the cancelled job and cannot write its page.
     const otherId=firstId===idA?idB:idA;
