@@ -1,0 +1,88 @@
+import { isIP } from 'node:net';
+import { lookup as dnsLookup } from 'node:dns/promises';
+
+/** Conservative public-web-only boundary for proposed Knowledge Builder crawls. */
+const BLOCKED_SUFFIXES = [
+  '.localhost', '.local', '.internal', '.intranet', '.lan', '.home',
+  '.home.arpa', '.test', '.invalid', '.example', '.onion',
+];
+
+export class WebsiteScopeError extends Error {
+  constructor(message: string) { super(message); this.name = 'WebsiteScopeError'; }
+}
+
+export function parseWebsiteSeed(value: string): URL {
+  const input = value.trim();
+  if (!input || input.length > 2048 || /[\x00-\x1F\x7F]/.test(input)) {
+    throw new WebsiteScopeError('Enter a valid public website URL.');
+  }
+  const candidate = /^[a-z][a-z\d+.-]*:\/\//i.test(input) ? input : 'https://' + input;
+  let url: URL;
+  try { url = new URL(candidate); } catch { throw new WebsiteScopeError('Enter a valid website URL.'); }
+  if (!['http:', 'https:'].includes(url.protocol) || url.username || url.password || url.port) {
+    throw new WebsiteScopeError('Only public HTTP(S) websites on standard ports are supported.');
+  }
+  const host = url.hostname.toLowerCase().replace(/\.$/, '');
+  if (!host || host.length > 253 || isIP(host) || !host.includes('.') ||
+      host === 'localhost' || BLOCKED_SUFFIXES.some(suffix => host.endsWith(suffix)) ||
+      host.split('.').some(label => !label || label.length > 63 || !/^[a-z\d](?:[a-z\d-]*[a-z\d])?$/.test(label))) {
+    throw new WebsiteScopeError('The website must have a public DNS hostname.');
+  }
+  url.hostname = host;
+  url.hash = '';
+  url.search = ''; // Avoid infinite query-driven crawl spaces and tracking tokens.
+  return url;
+}
+
+export function publicIpOnly(address: string): boolean {
+  const family = isIP(address);
+  if (family === 4) {
+    const [a, b, c] = address.split('.').map(Number);
+    return !(a === 0 || a === 10 || a === 127 || a >= 224 ||
+      (a === 100 && b >= 64 && b <= 127) || (a === 169 && b === 254) ||
+      (a === 172 && b >= 16 && b <= 31) ||
+      (a === 192 && (b === 168 || b === 0 || (b === 88 && c === 99))) ||
+      (a === 198 && (b === 18 || b === 19 || (b === 51 && c === 100))) ||
+      (a === 203 && b === 0 && c === 113));
+  }
+  if (family === 6) {
+    const lower = address.toLowerCase();
+    // IPv4-mapped/compatible, transition, documentation and non-global space are refused.
+    if (lower.includes('.') || lower.includes('::ffff:') ||
+        lower.startsWith('2001:db8:') || lower.startsWith('2001:0:') ||
+        lower === '2001::' || lower.startsWith('2002:')) return false;
+    return /^[23][0-9a-f]/.test(lower);
+  }
+  return false;
+}
+
+export type PinnedPublicAddress = { address: string; family: 4 | 6 };
+export type LookupAddresses = (hostname: string) => Promise<PinnedPublicAddress[]>;
+
+export const resolveWebsiteAddresses: LookupAddresses = async hostname =>
+  dnsLookup(hostname, { all: true, verbatim: true }) as Promise<PinnedPublicAddress[]>;
+
+/** Resolve every address; reject the whole hostname if even one record is unsafe. */
+export async function pinPublicAddress(url: URL, resolver: LookupAddresses = resolveWebsiteAddresses): Promise<PinnedPublicAddress> {
+  // Revalidate after every redirect too, not just the initial user input.
+  parseWebsiteSeed(url.href);
+  const addresses = await resolver(url.hostname);
+  if (!addresses.length || addresses.length > 32 ||
+      addresses.some(a => !publicIpOnly(a.address) || a.family !== isIP(a.address))) {
+    throw new WebsiteScopeError('The hostname does not resolve exclusively to public IP addresses.');
+  }
+  return addresses[0];
+}
+
+function comparableHost(host: string): string { return host.toLowerCase().replace(/^www\./, ''); }
+
+/** Never follow a discovered link outside the supplied site's exact/www hostname pair. */
+export function scopedDiscoveredUrl(seed: URL, page: URL, rawHref: string): URL | null {
+  if (!rawHref || rawHref.length > 2048 || /^[\s\u0000-\u001f]*#/.test(rawHref)) return null;
+  let next: URL;
+  try { next = new URL(rawHref, page); } catch { return null; }
+  if (!['http:', 'https:'].includes(next.protocol) || next.username || next.password || next.port) return null;
+  if (page.protocol === 'https:' && next.protocol === 'http:') return null;
+  if (comparableHost(seed.hostname) !== comparableHost(next.hostname)) return null;
+  try { return parseWebsiteSeed(next.href); } catch { return null; }
+}
