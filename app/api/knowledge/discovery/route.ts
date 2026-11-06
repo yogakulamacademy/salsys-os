@@ -47,7 +47,10 @@ export async function GET() {
     const configuredWebsite = onboarding.data?.website_url ?? null;
     let enabled = false;
     if (configuredWebsite && discoveryPilotEnabled()) {
-      try { enabled = discoveryHostAllowed(parseWebsiteSeed(configuredWebsite).hostname); }
+      try {
+        const website = parseWebsiteSeed(configuredWebsite);
+        enabled = website.protocol === 'https:' && discoveryHostAllowed(website.hostname);
+      }
       catch { enabled = false; }
     }
     // Before isolated schema deployment or while paused, never touch the
