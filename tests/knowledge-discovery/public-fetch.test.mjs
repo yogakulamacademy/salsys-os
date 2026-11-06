@@ -31,7 +31,7 @@ test('robots rules respect longest matching allow and specific bot groups', () =
 
 test('discovered links stay on domain and remove query tracking', () => {
   const seed = new URL('https://yogakulam.com/');
-  const page = new URL('https://www.yogakulam.com/courses/');
+  const page = new URL('https://yogakulam.com/courses/');
   const html = '<title>Sample</title>'
     + '<a href="/about?utm_source=abc">About</a>'
     + '<a href="https://evil-yogakulam.com/">Bad</a>'
