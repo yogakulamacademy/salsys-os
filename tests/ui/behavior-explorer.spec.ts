@@ -347,3 +347,29 @@ test("Malformed aggregate counts do not impersonate observed zeroes in independe
     await request.get(fixtureBase + "/__behavior_scenario?state=ready&tenant=primary");
   }
 });
+
+test("Out-of-range or stale UTC trend dates fail closed without erasing the other reports", async ({ page, request }) => {
+  const publicPath = "/courses/200-hour-ytt.php";
+  const scenarios = ["trends-shifted-calendar", "trends-stale-window"] as const;
+  const trendPanel = page.getByRole("region", { name: "Event activity trends" });
+  const pathsPanel = page.getByRole("region", { name: "Popular navigation paths" });
+  const pagePanel = page.getByRole("region", { name: "Event page breakdown" });
+  try {
+    for (const state of scenarios) {
+      const setup = await request.get(fixtureBase + "/__behavior_scenario?state=" + state);
+      expect(setup.ok(), state).toBe(true);
+      await page.goto("/marketing?view=behavior");
+      await expect(trendPanel.getByRole("status")).toBeVisible();
+      await expect(trendPanel.getByRole("article", { name: "Page viewed event trend" })).toHaveCount(0);
+      await expect(page.getByRole("heading", { name: "Ordered funnel" })).toBeVisible();
+      await expect(pathsPanel.getByText(publicPath, { exact: true })).toBeVisible();
+      await expect(pagePanel.getByText(publicPath, { exact: true })).toBeVisible();
+      const trendCalls = await (await request.get(fixtureBase + "/__behavior_trend_calls")).json();
+      expect(trendCalls.length, state).toBeGreaterThan(0);
+      expect(trendCalls.every((call: { organization_id: string }) =>
+        call.organization_id === organizationId), state).toBe(true);
+    }
+  } finally {
+    await request.get(fixtureBase + "/__behavior_scenario?state=ready&tenant=primary");
+  }
+});
