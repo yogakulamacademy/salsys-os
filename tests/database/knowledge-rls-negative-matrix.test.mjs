@@ -123,7 +123,7 @@ test('real knowledge SQL denies direct cross-tenant RLS writes, forged sessions 
     assert.ok(expanded.includes('search_organization_knowledge_v1'));
     assert.ok(expanded.includes('KB05B B cannot forge A approval row'));
     assert.ok(expanded.includes('KB05B B user with A session cannot read B'));
-    assert.ok(expanded.includes('KB05C singleton'));
+    assert.ok(expanded.includes('KB05C mismatched user-bound session denies A'));
 
     const all=await db.query(expanded);
     const end=Array.isArray(all)?all.at(-1):all;
