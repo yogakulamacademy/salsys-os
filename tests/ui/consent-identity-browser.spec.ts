@@ -379,6 +379,7 @@ for (const invalidAck of [
   { name: "missing persisted receipt", variant: "missing-receipt" },
   { name: "contradictory analytics decision", variant: "contradictory" },
   { name: "unexpected effective purpose", variant: "unexpected-purpose" },
+  { name: "unrequested advertising grant with receipt", variant: "unrequested-grant" },
 ] as const) {
   test("native Chromium: 200 consent response with " + invalidAck.name +
     " cannot unlock optional tracking", async ({ context }) => {
@@ -404,6 +405,13 @@ for (const invalidAck of [
       if (invalidAck.variant === "contradictory") response.effective_decisions.analytics = "denied";
       if (invalidAck.variant === "unexpected-purpose") {
         response.effective_decisions.unrecognized = "granted";
+      }
+      if (invalidAck.variant === "unrequested-grant") {
+        response.effective_decisions.advertising = "granted";
+        response.receipts.push({
+          purpose: "advertising", decision: "granted",
+          receipt_id: "synthetic-unrequested-grant",
+        });
       }
       await route.fulfill({
         status: 200, contentType: "application/json", body: JSON.stringify(response),
@@ -450,4 +458,46 @@ test("native Chromium: malformed 200 withdrawal acknowledgement keeps local priv
       { form_id: "malformed-receipt-test" }, { queue: false }));
     await expect.poll(() => api.events.length).toBe(count + 1);
     expect(api.events.at(-1)?.anonymous_visitor_id).toBe(after.visitor);
+  });
+
+
+test("native Chromium: server-added GPC sale-sharing opt-out is accepted only with a receipt",
+  async ({ context }) => {
+    const api = await instrument(context);
+    await context.route("**/api/privacy/consent/v1", async (route) => {
+      const input = route.request().postDataJSON() as {
+        visitor_id: string; decisions: Record<string, string>;
+      };
+      await route.fulfill({
+        status: 200, contentType: "application/json",
+        body: JSON.stringify({
+          ok: true,
+          visitor_id: input.visitor_id,
+          effective_decisions: {
+            ...input.decisions,
+            sale_sharing: "opted_out",
+          },
+          receipts: [
+            ...Object.entries(input.decisions).map(([purpose, decision], index) => ({
+              purpose, decision, receipt_id: "synthetic-" + index,
+            })),
+            {
+              purpose: "sale_sharing", decision: "opted_out",
+              receipt_id: "synthetic-gpc-receipt",
+            },
+          ],
+        }),
+      });
+    });
+    const page = await openHarness(context);
+    await chooseAnalytics(page, "granted");
+    const state = await identity(page);
+    expect(state.granted).toBe(true);
+    expect(state.sharedVisitor).toBe(state.visitor);
+    expect(await page.evaluate(() => JSON.parse(
+      localStorage.getItem("salsys_privacy_v1") || "{}",
+    ).sale_sharing)).toBe("opted_out");
+    await expect.poll(() => api.events.some((event) =>
+      event.event_name === "web.session_started" &&
+      event.anonymous_visitor_id === state.visitor)).toBe(true);
   });
