@@ -40,7 +40,14 @@ async function instrument(context: BrowserContext, mode = "required") {
       return;
     }
     await route.fulfill({ status: 200, contentType: "application/json",
-      body: JSON.stringify({ effective_decisions: body.decisions }) });
+      body: JSON.stringify({
+        ok: true,
+        visitor_id: body.visitor_id,
+        effective_decisions: body.decisions,
+        receipts: Object.entries(body.decisions).map(([purpose, decision], index) => ({
+          purpose, decision, receipt_id: "synthetic-receipt-" + index,
+        })),
+      }) });
   });
   await context.route("**/api/events/browser/v1", async (route) => {
     const body = route.request().postDataJSON() as BrowserEvent;
@@ -364,3 +371,83 @@ test("native Chromium: actual form submission keeps necessary identity separate 
   expect(api.events.some((event) =>
     JSON.stringify(event.properties ?? {}).includes("synthetic@example.test"))).toBe(false);
 });
+
+
+for (const invalidAck of [
+  { name: "missing success flag", variant: "missing-ok" },
+  { name: "wrong visitor acknowledgement", variant: "wrong-visitor" },
+  { name: "missing persisted receipt", variant: "missing-receipt" },
+  { name: "contradictory analytics decision", variant: "contradictory" },
+  { name: "unexpected effective purpose", variant: "unexpected-purpose" },
+] as const) {
+  test("native Chromium: 200 consent response with " + invalidAck.name +
+    " cannot unlock optional tracking", async ({ context }) => {
+    const api = await instrument(context);
+    await context.route("**/api/privacy/consent/v1", async (route) => {
+      const request = route.request().postDataJSON() as {
+        visitor_id: string; decisions: Record<string, string>;
+      };
+      const response: {
+        ok?: boolean; visitor_id: string;
+        effective_decisions: Record<string, string>;
+        receipts: { purpose: string; decision: string; receipt_id: string }[];
+      } = {
+        ok: true, visitor_id: request.visitor_id,
+        effective_decisions: { ...request.decisions },
+        receipts: Object.entries(request.decisions).map(([purpose, decision]) => ({
+          purpose, decision, receipt_id: "synthetic-confirmed-receipt",
+        })),
+      };
+      if (invalidAck.variant === "missing-ok") delete response.ok;
+      if (invalidAck.variant === "wrong-visitor") response.visitor_id = "v_other-visitor";
+      if (invalidAck.variant === "missing-receipt") response.receipts = [];
+      if (invalidAck.variant === "contradictory") response.effective_decisions.analytics = "denied";
+      if (invalidAck.variant === "unexpected-purpose") {
+        response.effective_decisions.unrecognized = "granted";
+      }
+      await route.fulfill({
+        status: 200, contentType: "application/json", body: JSON.stringify(response),
+      });
+    });
+    const page = await openHarness(context);
+    await expect(chooseAnalytics(page, "granted")).rejects.toThrow(
+      "Privacy preference server receipt was not verified",
+    );
+    const after = await identity(page);
+    expect(after.granted).toBe(false);
+    expect(after.sharedVisitor).toBe(null);
+    expect((await blockedOptional(page)).privacy_blocked).toBe(true);
+    expect(api.events.some((event) => event.event_name === "web.page_viewed")).toBe(false);
+    expect(await page.evaluate(() => localStorage.getItem("salsys_privacy_v1"))).toBe(null);
+  });
+}
+
+test("native Chromium: malformed 200 withdrawal acknowledgement keeps local privacy block and rotated identity",
+  async ({ context }) => {
+    const api = await instrument(context);
+    const page = await openHarness(context);
+    await chooseAnalytics(page, "granted");
+    const original = await identity(page);
+    expect(original.granted).toBe(true);
+
+    await context.route("**/api/privacy/consent/v1", async (route) => {
+      await route.fulfill({
+        status: 200, contentType: "application/json",
+        body: JSON.stringify({ ok: true, effective_decisions: { analytics: "withdrawn" } }),
+      });
+    });
+    await expect(chooseAnalytics(page, "withdrawn")).rejects.toThrow(
+      "Privacy preference server receipt was not verified",
+    );
+    const after = await identity(page);
+    expect(after.visitor).not.toBe(original.visitor);
+    expect(after.session).not.toBe(original.session);
+    expect(after.sharedVisitor).toBe(null);
+    expect(after.granted).toBe(false);
+    expect((await blockedOptional(page)).privacy_blocked).toBe(true);
+    const count = api.events.length;
+    await page.evaluate(() => (window as any).Salsys.track("web.form_submitted",
+      { form_id: "malformed-receipt-test" }, { queue: false }));
+    await expect.poll(() => api.events.length).toBe(count + 1);
+    expect(api.events.at(-1)?.anonymous_visitor_id).toBe(after.visitor);
+  });
