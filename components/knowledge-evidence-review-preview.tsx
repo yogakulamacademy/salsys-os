@@ -6,6 +6,7 @@ import {
   ArrowLeft, Check, CircleHelp, RotateCcw, ShieldAlert, ShieldCheck, X,
 } from 'lucide-react';
 import type { PreparedWebsiteEvidence } from '@/lib/knowledge-extraction/website-evidence';
+import { assessEvidenceReadiness } from '@/lib/knowledge-extraction/evidence-lifecycle-readiness';
 import {
   chooseEvidenceForReview,
   reviewChoicesForDisplay,
@@ -29,6 +30,8 @@ export function KnowledgeEvidenceReviewPreview({
 }) {
   const [choices, setChoices] = useState<EvidenceReviewDecisions>({});
   const [filter, setFilter] = useState<Filter>('all');
+  // There is intentionally no live policy input or storage endpoint in this preview.
+  const lifecycle = assessEvidenceReadiness(null);
   const summary = useMemo(() => summarizeEvidenceReview(evidence, choices),
     [evidence, choices]);
   const rows = useMemo(() => reviewChoicesForDisplay(evidence, choices).filter(row =>
@@ -173,6 +176,28 @@ export function KnowledgeEvidenceReviewPreview({
             ))}
           </div>
         )}
+      </section>
+
+      <section aria-label="Evidence lifecycle readiness" className="rounded-xl border border-slate-200 bg-white p-5">
+        <h2 className="text-sm font-semibold text-slate-800">Consent and retention readiness</h2>
+        <p className="mt-2 text-xs leading-5 text-slate-600">
+          This synthetic preview does not load any organization's consent or retention
+          configuration. No storage controls have been verified here.
+          Evidence writes remain disabled regardless of the review choices above.
+        </p>
+        <details className="mt-4 rounded-lg border border-slate-200 bg-slate-50 p-3">
+          <summary className="cursor-pointer text-xs font-semibold text-slate-700">
+            Review {lifecycle.total} required storage safeguards
+          </summary>
+          <ul className="mt-3 space-y-3">
+            {lifecycle.gates.map(gate=>(
+              <li key={gate.id} className="text-xs leading-5 text-slate-600">
+                <p className="font-semibold text-slate-800">{gate.label} — not verified</p>
+                <p>{gate.description}</p>
+              </li>
+            ))}
+          </ul>
+        </details>
       </section>
 
       <div className="rounded-xl border border-slate-200 bg-slate-50 p-5">
