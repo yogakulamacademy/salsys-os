@@ -18,29 +18,55 @@ END
 $assert$;
 
 -- Every ID, email, domain and path below is synthetic. No real person or site.
+-- The real tenant security trigger permits ONE active org per normal user.
 INSERT INTO auth.users (id,instance_id,aud,role,email)
-VALUES (
-  '00000000-0000-4000-8000-0000000000c3'::uuid,
-  '00000000-0000-0000-0000-000000000000'::uuid,
-  'authenticated','authenticated','r2-p2-local-only@example.invalid'
-);
+VALUES
+  ('00000000-0000-4000-8000-0000000000c3'::uuid,
+   '00000000-0000-0000-0000-000000000000'::uuid,
+   'authenticated','authenticated','r2-p2-local-owner@example.invalid'),
+  ('00000000-0000-4000-8000-0000000000c4'::uuid,
+   '00000000-0000-0000-0000-000000000000'::uuid,
+   'authenticated','authenticated','r2-p2-local-admin@example.invalid');
 INSERT INTO public.profiles (id,role,active)
-VALUES ('00000000-0000-4000-8000-0000000000c3'::uuid,'admin',true)
+VALUES
+ ('00000000-0000-4000-8000-0000000000c3'::uuid,'admin',true),
+ ('00000000-0000-4000-8000-0000000000c4'::uuid,'admin',true)
 ON CONFLICT (id) DO UPDATE SET active=true, role='admin';
 
 INSERT INTO public.organizations (id,name,slug,status) VALUES
  ('00000000-0000-4000-8000-0000000000a1'::uuid,'R2 CI Synthetic A','r2-ci-positive-a','active'),
  ('00000000-0000-4000-8000-0000000000b2'::uuid,'R2 CI Synthetic B','r2-ci-positive-b','active');
 
--- The SAME synthetic CRM user belongs to BOTH tenants: a membership check
--- alone must NEVER allow one bound session to read the other organization's data.
+-- Two distinct synthetic CRM accounts each have a single active membership.
+-- CI must exercise both valid owner/admin access and foreign-tenant denial.
 INSERT INTO public.organization_members
   (organization_id,user_id,role,active)
 VALUES
  ('00000000-0000-4000-8000-0000000000a1'::uuid,
   '00000000-0000-4000-8000-0000000000c3'::uuid,'owner',true),
  ('00000000-0000-4000-8000-0000000000b2'::uuid,
-  '00000000-0000-4000-8000-0000000000c3'::uuid,'admin',true);
+  '00000000-0000-4000-8000-0000000000c4'::uuid,'admin',true);
+
+-- Also exercise the actual database guard: a second ACTIVE membership for
+-- user A must be rejected; the rejected write rolls back in this DO subblock.
+DO $test$
+DECLARE
+  denied boolean := false;
+BEGIN
+  BEGIN
+    INSERT INTO public.organization_members
+      (organization_id,user_id,role,active)
+    VALUES
+      ('00000000-0000-4000-8000-0000000000b2'::uuid,
+       '00000000-0000-4000-8000-0000000000c3'::uuid,'viewer',true);
+  EXCEPTION WHEN SQLSTATE '23514' THEN
+    denied := true;
+  END;
+  IF NOT denied THEN
+    RAISE EXCEPTION 'R2-P2: second active membership unexpectedly allowed';
+  END IF;
+END
+$test$;
 
 INSERT INTO public.tracking_sources
   (id,organization_id,name,source_type,source_system,auth_mode,status)
@@ -137,7 +163,7 @@ BEGIN
     RAISE EXCEPTION 'R2-P2: owner A page breakdown differs from local synthetic source';
   END IF;
 
-  -- User belongs to B too, but the A session MUST reject B across all RPCs.
+  -- Owner A does not belong to B; every foreign RPC must still reject.
   FOR n IN 1..3 LOOP
     denied := false;
     BEGIN
@@ -171,9 +197,10 @@ BEGIN
 END
 $test$;
 
--- A separate synthetic session from the SAME member can bind B safely.
+-- Switch to a separate synthetic admin user AND distinct session bound to B.
+SELECT set_config('request.jwt.claim.sub','00000000-0000-4000-8000-0000000000c4',true);
 SELECT set_config('request.jwt.claims',
-  '{"role":"authenticated","sub":"00000000-0000-4000-8000-0000000000c3","aud":"authenticated","session_id":"00000000-0000-4000-8000-0000000000e5"}',true);
+  '{"role":"authenticated","sub":"00000000-0000-4000-8000-0000000000c4","aud":"authenticated","session_id":"00000000-0000-4000-8000-0000000000e5"}',true);
 
 DO $test$
 DECLARE
