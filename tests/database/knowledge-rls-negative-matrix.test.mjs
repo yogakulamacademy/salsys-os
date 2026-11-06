@@ -54,13 +54,10 @@ function injectExactlyOnce(original,anchor,suffix){
 }
 
 function buildMatrix(sql,sections){
-  let result=injectExactlyOnce(sql,
-    '$cases$;\n\nselect set_config',
-    '$cases$;\n\n'+sections.get('OWNER_A')+'\n\nselect set_config');
-  // Restores the previous marker before the original B claims.
-  result=result.replace(
-    '$cases$;\n\n'+sections.get('OWNER_A')+'\n\nselect set_config',
-    '$cases$;\n\n'+sections.get('OWNER_A')+'\n\nselect set_config');
+  const aAnchor="select set_config('request.jwt.claims',"+
+    "'{\"role\":\"authenticated\",\"sub\":\"20000000-0000-4000-8000-000000000002\"";
+  let result=injectExactlyOnce(sql,aAnchor,
+    sections.get('OWNER_A')+'\n\n');
   const bAnchor="select set_config('request.jwt.claims',"+
     "'{\"role\":\"authenticated\",\"sub\":\"20000000-0000-4000-8000-000000000003\"";
   result=injectExactlyOnce(result,bAnchor,
