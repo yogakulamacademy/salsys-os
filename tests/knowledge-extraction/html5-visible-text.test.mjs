@@ -13,7 +13,7 @@ const tempDir=await mkdtemp(join(new URL(sourceDir).pathname,'.kb02-html5-test-'
 for(const name of ['website-evidence.ts','html-visible-text.ts','html5-visible-text.ts']){
   const original=await readFile(new URL(name,sourceDir),'utf8');
   const rewritten=original.replace("from './website-evidence'","from './website-evidence.ts'");
-  assert.notEqual(original,rewritten,name);
+  if (name !== 'website-evidence.ts') assert.notEqual(original,rewritten,name);
   await writeFile(join(tempDir,name),rewritten,'utf8');
 }
 const { extractHtml5VisibleBlocks, prepareHtml5WebsiteEvidence }=
