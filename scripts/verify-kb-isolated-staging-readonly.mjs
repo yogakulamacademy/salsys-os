@@ -116,6 +116,7 @@ export function searchPath(organizationId, marker) {
 async function request(config, path, { token = null, method = 'GET', json = null } = {}) {
   const allowed = [
     '/auth/v1/token?grant_type=password',
+    '/auth/v1/logout?scope=local',
     '/auth/v1/user',
     '/rest/v1/knowledge_documents?',
     '/rest/v1/rpc/search_organization_knowledge_v1?',
@@ -123,8 +124,12 @@ async function request(config, path, { token = null, method = 'GET', json = null
   if (!allowed.some(prefix => path.startsWith(prefix)) || path.includes('://')) {
     fail('disallowed_request_path');
   }
-  if (method !== 'GET' && (method !== 'POST' ||
-    path !== '/auth/v1/token?grant_type=password')) {
+  const signIn=path==='/auth/v1/token?grant_type=password';
+  const signOut=path==='/auth/v1/logout?scope=local';
+  if ((method==='POST' && !(signIn || (signOut && typeof token==='string' &&
+      token.length>0 && json===null))) ||
+      (method==='GET' && (signIn || signOut)) ||
+      !['GET','POST'].includes(method)) {
     fail('disallowed_http_method');
   }
   const headers = { apikey: config.anonKey, accept: 'application/json' };
@@ -155,11 +160,16 @@ function assertRows(result, { mustContain = null, forbidden = null, orgId = null
     throw new Error('kb_staging_' + label + '_missing_positive_fixture');
   }
 }
-async function login(config, actor, label) {
+async function login(config, actor, label, registerIssuedToken) {
   // Auth session creation is staging-only; no knowledge row is modified.
   const resp = await request(config, '/auth/v1/token?grant_type=password', {
     method: 'POST', json: { email: actor.email, password: actor.password },
   });
+  // Record the token IMMEDIATELY on receipt, even if identity/JWT checks
+  // later fail. Finally-cleanup must include every newly issued Auth session.
+  if (resp.status === 200 && typeof resp.data?.access_token === 'string') {
+    registerIssuedToken(resp.data.access_token);
+  }
   if (resp.status !== 200 || typeof resp.data?.access_token !== 'string' ||
     resp.data?.user?.id !== actor.userId) {
     throw new Error('kb_staging_' + label + '_authentication_or_identity_failed');
@@ -174,6 +184,15 @@ async function login(config, actor, label) {
     userId: actor.userId, apiUrl: config.apiUrl,
   });
   return { token: resp.data.access_token, sessionId: claims.sessionId };
+}
+async function revokeOnlyThisTestSession(config,token) {
+  // Explicit LOCAL scope is essential; omitting it signs out all sessions.
+  const response=await request(config,'/auth/v1/logout?scope=local',{
+    method:'POST',token,
+  });
+  if(response.status!==204) {
+    throw new Error('kb_staging_auth_local_logout_failed');
+  }
 }
 function requireNoRows(result, label) {
   if (result.status === 401 || result.status === 403) return;
@@ -219,36 +238,66 @@ export async function runKbStagingReadOnlyAcceptance(config) {
     FORBIDDEN_PROJECT_REFS.includes(config.ref)) {
     fail('unvalidated_runtime_configuration');
   }
-  const authA = await login(config, config.a, 'a');
-  const authB = await login(config, config.b, 'b');
-  if (authA.sessionId === authB.sessionId) {
-    throw new Error('kb_staging_duplicate_auth_sessions');
+  // Keep issued access tokens only in process memory for finally-cleanup.
+  // None is logged, persisted, returned or sent to a different project.
+  const issuedTokens=[];
+  let verificationError=null;
+  let passed=null;
+  try {
+    const registerIssuedToken=token=>issuedTokens.push(token);
+    const authA=await login(config,config.a,'a',registerIssuedToken);
+    const authB=await login(config,config.b,'b',registerIssuedToken);
+    if(authA.sessionId===authB.sessionId){
+      throw new Error('kb_staging_duplicate_auth_sessions');
+    }
+    const tokenA=authA.token;
+    const tokenB=authB.token;
+
+    await ownDoc(config,tokenA,config.a,'a');
+    await ownDoc(config,tokenB,config.b,'b');
+    await ownSearch(config,tokenA,config.a,'a');
+    await ownSearch(config,tokenB,config.b,'b');
+
+    await deniedDoc(config,tokenA,config.b.documentId,'a_to_b_document');
+    await deniedDoc(config,tokenB,config.a.documentId,'b_to_a_document');
+    await deniedSearch(config,tokenA,config.b.organizationId,
+      config.b.marker,config.b.documentId,'a_to_b_retrieval');
+    await deniedSearch(config,tokenB,config.a.organizationId,
+      config.a.marker,config.a.documentId,'b_to_a_retrieval');
+    await deniedDoc(config,null,config.a.documentId,'anon_to_a_document');
+    await deniedDoc(config,null,config.b.documentId,'anon_to_b_document');
+    await deniedSearch(config,null,config.a.organizationId,
+      config.a.marker,config.a.documentId,'anon_to_a_retrieval');
+    await deniedSearch(config,null,config.b.organizationId,
+      config.b.marker,config.b.documentId,'anon_to_b_retrieval');
+
+    passed={stage:'KB05G',result:'passed_read_only_staging_retrieval',
+      checks:12,authorizationScope:'two_test_actors_and_anonymous',
+      knowledgeWrites:0,stagingAuthLogins:2};
+  }catch(e){
+    verificationError=e;
   }
-  const tokenA = authA.token;
-  const tokenB = authB.token;
 
-  await ownDoc(config, tokenA, config.a, 'a');
-  await ownDoc(config, tokenB, config.b, 'b');
-  await ownSearch(config, tokenA, config.a, 'a');
-  await ownSearch(config, tokenB, config.b, 'b');
-
-  await deniedDoc(config, tokenA, config.b.documentId, 'a_to_b_document');
-  await deniedDoc(config, tokenB, config.a.documentId, 'b_to_a_document');
-  await deniedSearch(config, tokenA, config.b.organizationId,
-    config.b.marker, config.b.documentId, 'a_to_b_retrieval');
-  await deniedSearch(config, tokenB, config.a.organizationId,
-    config.a.marker, config.a.documentId, 'b_to_a_retrieval');
-  await deniedDoc(config, null, config.a.documentId, 'anon_to_a_document');
-  await deniedDoc(config, null, config.b.documentId, 'anon_to_b_document');
-  await deniedSearch(config, null, config.a.organizationId,
-    config.a.marker, config.a.documentId, 'anon_to_a_retrieval');
-  await deniedSearch(config, null, config.b.organizationId,
-    config.b.marker, config.b.documentId, 'anon_to_b_retrieval');
-
-  // Only the count is printed; no JWT, credential, customer content or body.
-  return { stage: 'KB05D', result: 'passed_read_only_staging_retrieval',
-    checks: 12, authorizationScope: 'two_test_actors_and_anonymous',
-    knowledgeWrites: 0, stagingAuthLogins: 2 };
+  let revocationAcknowledged=0;
+  let cleanupFailed=false;
+  // Attempt cleanup for EVERY newly issued token, even after test failure.
+  // Never default to global logout, never reuse a token on another project.
+  for(const token of [...new Set(issuedTokens)].reverse()){
+    try{
+      await revokeOnlyThisTestSession(config,token);
+      revocationAcknowledged++;
+    }catch{
+      cleanupFailed=true;
+    }
+  }
+  if(cleanupFailed){
+    // A failed cleanup is NOT silently ignored even when tests passed.
+    // Manual staging account/session recovery is then required.
+    throw new Error('kb_staging_auth_session_cleanup_incomplete');
+  }
+  if(verificationError)throw verificationError;
+  return {...passed,localSessionRevocationsAcknowledged:revocationAcknowledged,
+    authLogoutScope:'local',accessTokensMaySurviveUntilJwtExpiry:true};
 }
 
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
