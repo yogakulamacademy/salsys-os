@@ -109,10 +109,12 @@ function validDate(value:string):boolean {
 }
 
 function citeMatches(c:SourceDraftCitation,b:SourceDraftBundle):boolean {
-  return !!c && c.sourceUrl===b.sourceUrl&&c.fetchedAt===
-      // Snapshot timestamps must be present. The bundle does not currently
-      // carry a timestamp; it is on citations, so validate it separately.
-      c.fetchedAt &&
+  // The bundle has no timestamp of its own: every citation must carry
+  // an independently parseable timestamp. URL, snapshot and quote hashes
+  // must match the immutable source candidate contract.
+  return !!c && c.sourceUrl===b.sourceUrl&&
+    typeof c.fetchedAt==='string'&&
+    Number.isFinite(Date.parse(c.fetchedAt))&&
     c.snapshotSha256===b.snapshotSha256&&HASH.test(c.blockId)&&
     HASH.test(c.quoteSha256)&&
     Number.isSafeInteger(c.sourceBlockIndex)&&c.sourceBlockIndex>=0&&
@@ -238,6 +240,9 @@ export function analyzeSourceReviewSignals(
 
     for(const draft of bundle.drafts) {
       if(!validDraft(draft,bundle))return {ok:false,error:'invalid_source_draft'};
+      if(Date.parse(reviewCitation(draft).fetchedAt)>now+5*60_000){
+        return {ok:false,error:'source_timestamp_in_future'};
+      }
       // One identity must not resolve to two different records.
       const seen=drafts.get(draft.id);
       if(seen && JSON.stringify(seen)!==JSON.stringify(draft)){
@@ -293,6 +298,9 @@ export function analyzeSourceReviewSignals(
   const signals:ReviewSignal[]=[];
   for(const group of grouped.values()) {
     if(group.length<2)continue;
+    if(group.length>MAX_SIGNAL_SOURCES){
+      return {ok:false,error:'comparison_group_over_limit'};
+    }
     const {kind,scopeKey,fieldKey}=group[0].binding;
     if(kind==='price'){
       const byCurrency=new Map<string,Comparable[]>();
@@ -307,7 +315,7 @@ export function analyzeSourceReviewSignals(
       for(const [currency,items] of byCurrency){
         if(items.length<2||new Set(items.map(x=>x.value)).size<2)continue;
         signals.push(buildSignal('price_difference_review',scopeKey,fieldKey,
-          items.slice(0,MAX_SIGNAL_SOURCES).map(x=>signalSource(x.draft)),
+          items.map(x=>signalSource(x.draft)),
           currency as ReviewSignal['comparisonCurrency'],
           'Different monetary amounts appear for the same explicitly matched scope and currency. Verify room, location, offer, and effective dates.'));
       }
@@ -315,7 +323,7 @@ export function analyzeSourceReviewSignals(
       signals.push(buildSignal(
         kind==='date'?'date_difference_review':'policy_text_variation_review',
         scopeKey,fieldKey,
-        group.slice(0,MAX_SIGNAL_SOURCES).map(x=>signalSource(x.draft)),
+        group.map(x=>signalSource(x.draft)),
         null,
         kind==='date'
           ? 'Different ISO dates appear for the same explicitly matched scope. Verify the effective schedule.'
