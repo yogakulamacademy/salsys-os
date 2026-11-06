@@ -44,16 +44,39 @@ const client = {
   },
 };
 const proofAdmin={
+  async rpc(name,args) {
+    if(name==='issue_knowledge_discovery_domain_challenge_v1'){
+      const now=new Date();
+      if(stored?.verified_until && Date.parse(stored.verified_until)>now.getTime())
+        return {data:null,error:{code:'P0001',message:'domain_already_verified'}};
+      if(stored?.issued_at && Date.parse(stored.issued_at)>now.getTime()-5*60_000)
+        return {data:null,error:{code:'P0001',message:'domain_challenge_cooldown'}};
+      const expires=new Date(now.getTime()+24*60*60_000).toISOString();
+      stored={
+        organization_id:args.p_organization_id,hostname:args.p_hostname,
+        created_by:args.p_created_by,challenge_hash:args.p_challenge_hash,
+        issued_at:now.toISOString(),challenge_expires_at:expires,
+        verified_at:null,verified_until:null,last_check_at:null,
+      };
+      adminWrites++;
+      return {data:expires,error:null};
+    }
+    if(name==='claim_knowledge_discovery_proof_check_v1'){
+      const now=Date.now();
+      if(!stored || stored.challenge_hash!==args.p_challenge_hash
+        || Date.parse(stored.challenge_expires_at)<=now
+        || (stored.last_check_at && Date.parse(stored.last_check_at)>now-30_000)){
+        return {data:false,error:null};
+      }
+      stored.last_check_at=new Date(now).toISOString();
+      return {data:true,error:null};
+    }
+    throw new Error('Unexpected proof RPC '+name);
+  },
   from:table=>{
     assert.equal(table,'knowledge_discovery_domain_verifications');
     return {
       select:()=>({eq:()=>({eq:()=>({maybeSingle:async()=>({data:stored,error:null})})})}),
-      async upsert(value,options) {
-        assert.equal(options.onConflict,'organization_id,hostname');
-        adminWrites++;
-        stored={...value};
-        return {error:null};
-      },
       update(value) {
         return {
           eq:()=>({eq:()=>({eq:()=>({gt:()=>({select:()=>({
@@ -135,6 +158,9 @@ test('issue stores only hash; incorrect proof cannot verify and correct proof ca
   assert.equal((await api.PUT(req())).status,422);
   assert.equal(adminWrites,1);
   fileBody=issued.body.token+'\n';
+  const throttled=await api.PUT(req());
+  assert.equal(throttled.status,429,'immediate verify retry must not fetch again');
+  stored.last_check_at=new Date(Date.now()-31_000).toISOString();
   const confirmed=await api.PUT(req());
   assert.equal(confirmed.status,200);
   assert.equal(confirmed.body.status,'verified');
