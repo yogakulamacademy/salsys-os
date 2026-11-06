@@ -4,7 +4,26 @@ import { prepareWebsiteEvidence } from '../../lib/knowledge-extraction/website-e
 import { prepareSourceGroundedDrafts } from '../../lib/knowledge-extraction/source-grounded-drafts.ts';
 import { buildAIDraftingRequest,validateAIDraftingResponse } from '../../lib/knowledge-extraction/ai-draft-contract.ts';
 import { analyzeSourceReviewSignals } from '../../lib/knowledge-extraction/source-review-signals.ts';
-import { evaluateGroundedAIProposals } from '../../lib/knowledge-extraction/ai-grounding-evaluation.ts';
+import { mkdtemp, readFile, writeFile, rm } from 'node:fs/promises';
+import { join } from 'node:path';
+import { pathToFileURL } from 'node:url';
+
+// Node 22 strip-types cannot resolve extensionless relative TypeScript
+// imports. Run an exact production source copy with a test-only explicit
+// TypeScript import; do not alter the Next.js production module contract.
+const tempRoot=new URL('../../lib/knowledge-extraction/',import.meta.url);
+const tempDir=await mkdtemp(join(tempRoot.pathname,'.kb03d-grounding-test-'));
+const contractSource=await readFile(new URL('ai-draft-contract.ts',tempRoot),'utf8');
+const evaluationSource=await readFile(
+  new URL('ai-grounding-evaluation.ts',tempRoot),'utf8');
+const rewritten=evaluationSource.replace(
+  "from './ai-draft-contract'","from './ai-draft-contract.ts'");
+assert.notEqual(rewritten,evaluationSource,'Source import must be patched in temporary test copy');
+await writeFile(join(tempDir,'ai-draft-contract.ts'),contractSource,'utf8');
+await writeFile(join(tempDir,'ai-grounding-evaluation.ts'),rewritten,'utf8');
+const {evaluateGroundedAIProposals}=await import(
+  pathToFileURL(join(tempDir,'ai-grounding-evaluation.ts')).href);
+test.after(async()=>rm(tempDir,{recursive:true,force:true}));
 
 const HOST='sample.example.com';
 const NOW='2026-11-06T12:00:00Z';
