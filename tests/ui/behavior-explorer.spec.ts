@@ -175,3 +175,66 @@ test("Funnel builder enforces five distinct stages and never changes the origina
   await expect(page.getByRole("heading", { name: "Funnel", exact: true })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Behavior explorer" })).toHaveCount(0);
 });
+
+test("Switching synthetic tenants refreshes all behavior reports without retaining prior tenant evidence", async ({ page, request }) => {
+  const secondaryOrganizationId = "00000000-0000-4000-8000-000000000012";
+  const primaryPath = "/courses/200-hour-ytt.php";
+  const secondaryPath = "/courses/second-tenant.php";
+  const paths = page.getByRole("region", { name: "Popular navigation paths" });
+  const breakdown = page.getByRole("region", { name: "Event page breakdown" });
+
+  // Separate synthetic datasets are selected only on the local loopback fixture.
+  // This is not a login as, nor an impersonation of, a real second tenant.
+  try {
+    await page.goto("/marketing?view=behavior&days=7");
+    await expect(paths.getByText(primaryPath, { exact: true })).toBeVisible();
+    await expect(breakdown.getByText(primaryPath, { exact: true })).toBeVisible();
+    await expect(paths.getByText(secondaryPath, { exact: true })).toHaveCount(0);
+
+    const switched = await request.get(fixtureBase + "/__behavior_scenario?state=ready&tenant=secondary");
+    expect(switched.ok()).toBe(true);
+    await page.reload();
+
+    await expect(paths.getByText(secondaryPath, { exact: true })).toBeVisible();
+    await expect(breakdown.getByText(secondaryPath, { exact: true })).toBeVisible();
+    await expect(paths.getByText(primaryPath, { exact: true })).toHaveCount(0);
+    await expect(breakdown.getByText(primaryPath, { exact: true })).toHaveCount(0);
+
+    for (const endpoint of ["/__behavior_calls", "/__behavior_trend_calls", "/__behavior_breakdown_calls"]) {
+      const calls = await (await request.get(fixtureBase + endpoint)).json();
+      expect(calls.length, endpoint).toBeGreaterThan(0);
+      expect(calls.every((call: any) => call.organization_id === secondaryOrganizationId), endpoint).toBe(true);
+    }
+
+    // Simulated loss of authority must not leave previously rendered paths behind.
+    const denied = await request.get(fixtureBase + "/__behavior_scenario?state=denied&tenant=secondary");
+    expect(denied.ok()).toBe(true);
+    await page.reload();
+    await expect(page.getByRole("heading", { name: "Behavior analytics unavailable" })).toBeVisible();
+    await expect(paths.getByText(secondaryPath, { exact: true })).toHaveCount(0);
+    await expect(breakdown.getByText(secondaryPath, { exact: true })).toHaveCount(0);
+  } finally {
+    await request.get(fixtureBase + "/__behavior_scenario?state=ready&tenant=primary");
+  }
+});
+
+test("Synthetic behavior RPCs reject foreign tenant IDs for funnel, trends and breakdown", async ({ request }) => {
+  const secondaryOrganizationId = "00000000-0000-4000-8000-000000000012";
+  const endpoints = [
+    ["/rest/v1/rpc/get_native_behavior_workspace_v1",
+      { p_organization_id: secondaryOrganizationId, p_days: 14,
+        p_steps: ["web.page_viewed", "web.form_started", "web.form_submitted"] }],
+    ["/rest/v1/rpc/get_native_behavior_event_trends_v1",
+      { p_organization_id: secondaryOrganizationId, p_days: 14, p_events: ["web.page_viewed"] }],
+    ["/rest/v1/rpc/get_native_behavior_page_breakdown_v1",
+      { p_organization_id: secondaryOrganizationId, p_days: 14, p_event: "web.page_viewed" }],
+  ] as const;
+
+  for (const [endpoint, body] of endpoints) {
+    const response = await request.post(fixtureBase + endpoint, { data: body });
+    expect(response.status(), endpoint).toBe(403);
+    const result = await response.json();
+    expect(result.code).toBe("42501");
+    expect(JSON.stringify(result)).not.toContain("/courses/");
+  }
+});
