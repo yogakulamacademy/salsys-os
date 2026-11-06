@@ -19,6 +19,8 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-
 const PROJECT_REF = /^[a-z0-9]{20}$/;
 const MARKER = /^kbfixture[a-z0-9]{12,32}$/;
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+// Private marker: normalized authorization is required even for imported callers.
+const VALIDATED_CONFIG = Symbol('kb05d_validated_staging_configuration');
 
 function fail(code) {
   throw new Error('kb_staging_preflight_' + code);
@@ -77,7 +79,11 @@ export function validateKbStagingEnvironment(env) {
   if (a.organizationId === b.documentId || b.organizationId === a.documentId) {
     fail('fixture_crossed_identifier');
   }
-  return { ref, apiUrl, anonKey, a, b };
+  return Object.freeze({
+    ref, apiUrl, anonKey,
+    a: Object.freeze(a), b: Object.freeze(b),
+    [VALIDATED_CONFIG]: true,
+  });
 }
 
 export function documentPath(documentId) {
@@ -196,6 +202,14 @@ async function ownSearch(config, token, actor, label) {
 
 /** Network actions occur only when explicitly invoked after full preflight. */
 export async function runKbStagingReadOnlyAcceptance(config) {
+  // No network operation can start on an arbitrary or mutable caller object.
+  if (!config || config[VALIDATED_CONFIG] !== true ||
+    !Object.isFrozen(config) || !Object.isFrozen(config.a) ||
+    !Object.isFrozen(config.b) ||
+    config.apiUrl !== 'https://' + config.ref + '.supabase.co' ||
+    FORBIDDEN_PROJECT_REFS.includes(config.ref)) {
+    fail('unvalidated_runtime_configuration');
+  }
   const tokenA = await login(config, config.a, 'a');
   const tokenB = await login(config, config.b, 'b');
 
