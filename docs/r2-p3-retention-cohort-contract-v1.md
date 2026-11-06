@@ -46,7 +46,7 @@ The synthetic test includes an identityEpoch field to represent a independently 
 - Returns on D2/D8/D31 do not satisfy D1/D7/D30 respectively.
 - Same browser-like string in another source/tenant or fresh consent epoch => never stitched.
 - Small cohort (fewer than 20 keys) => suppressed numerator AND denominator.
-- Missing identity/epoch/consent, uncertain timestamp/delivery, conflicting duplicate => blocked.
+- Missing identity/epoch/consent, uncertain timestamp/delivery or conflicting duplicate => blocked. A replay with the same source-scoped event ID and identical original session/time may have a later receipt time; an event ID with a different session **or occurrence timestamp** is conflicting and must fail closed.
 - Recent cohorts without a fully closed and independently verified complete outcome day => not included. Incomplete current-day activity and post-cutoff receipts cannot inflate a prior report.
 - Serialized result => aggregate statuses/dates only, no raw IDs.
 
