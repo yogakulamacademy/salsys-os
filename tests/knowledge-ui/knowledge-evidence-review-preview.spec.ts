@@ -78,7 +78,7 @@ test('read-only source candidate preview pairs actual FAQ quotations without aut
   const writes:string[]=[];
   page.on('request',request=>{
     if(request.method()!=='GET' &&
-      /\\/(?:api\\/knowledge|rest\\/v1\\/knowledge_)/.test(request.url())) {
+      /\/(?:api\/knowledge|rest\/v1\/knowledge_)/.test(request.url())) {
       writes.push(request.method()+' '+request.url());
     }
   });
