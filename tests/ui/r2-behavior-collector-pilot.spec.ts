@@ -257,7 +257,7 @@ test("R2-P1 Chromium: SPA can reclaim a full 200-element visibility observer set
 test("R2-P1 Chromium: native details opened pre-consent cannot be backfilled by a later grant", async ({ page }) => {
   await openHarness(page, false);
   await page.evaluate(() => {
-    const summary = document.querySelector<HTMLSummaryElement>("#faq summary");
+    const summary = document.querySelector<HTMLElement>("#faq summary");
     if (!summary) throw new Error("Synthetic details summary missing");
     summary.click();
     // Both the collector's deferred click handler and native toggle may be
