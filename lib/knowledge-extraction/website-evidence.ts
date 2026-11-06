@@ -10,7 +10,7 @@ import { isIP } from 'node:net';
  */
 
 export type VisibleBlockKind =
-  | 'h1' | 'h2' | 'h3'
+  | 'h1' | 'h2' | 'h3' | 'h4' | 'h5' | 'h6'
   | 'paragraph' | 'list_item' | 'table_row'
   | 'faq_question' | 'faq_answer'
   | 'navigation' | 'footer' | 'cookie_banner' | 'form'
@@ -32,7 +32,7 @@ export type WebsiteEvidenceSnapshot = {
 export type SourceEvidenceBlock = {
   id: string;
   sourceBlockIndex: number;
-  blockKind: Exclude<VisibleBlockKind, 'navigation'|'footer'|'cookie_banner'|'form'|'script'|'style'|'hidden'|'h1'|'h2'|'h3'>;
+  blockKind: Exclude<VisibleBlockKind, 'navigation'|'footer'|'cookie_banner'|'form'|'script'|'style'|'hidden'|'h1'|'h2'|'h3'|'h4'|'h5'|'h6'>;
   quote: string;
   headingPath: string[];
   quoteSha256: string;
@@ -56,13 +56,13 @@ export type WebsiteEvidenceResult =
   | { ok: false; error: string };
 
 const kinds = new Set<VisibleBlockKind>([
-  'h1','h2','h3','paragraph','list_item','table_row','faq_question','faq_answer',
+  'h1','h2','h3','h4','h5','h6','paragraph','list_item','table_row','faq_question','faq_answer',
   'navigation','footer','cookie_banner','form','script','style','hidden',
 ]);
 const boilerplate = new Set<VisibleBlockKind>([
   'navigation','footer','cookie_banner','form','script','style','hidden',
 ]);
-const headings = new Set<VisibleBlockKind>(['h1','h2','h3']);
+const headings = new Set<VisibleBlockKind>(['h1','h2','h3','h4','h5','h6']);
 const MAX_BLOCKS = 250;
 const MAX_BLOCK_TEXT = 6000;
 const MAX_TOTAL_TEXT = 100000;
@@ -141,7 +141,7 @@ export function prepareWebsiteEvidence(input: unknown): WebsiteEvidenceResult {
   const snapshotSha256 = sha256(JSON.stringify([
     sourceUrl, pageTitle, accepted.map(block => [block.kind,block.text]),
   ]));
-  const headingStack = ['', '', ''];
+  const headingStack = ['', '', '', '', '', ''];
   const items: SourceEvidenceBlock[] = [];
   const seenInHeading = new Set<string>();
   let skippedBoilerplateBlocks = 0;
