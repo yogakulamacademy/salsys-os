@@ -195,6 +195,31 @@ test('KB-03E synthetic acceptance blocks approval despite valid citations and re
   expect(writes).toEqual([]);
 });
 
+test('same-page synthetic snapshot comparison displays exact earlier/later quotes without auto-sync',async({page})=>{
+  const writes:string[]=[];
+  page.on('request',req=>{
+    if(req.method()!=='GET' &&
+      /\/(?:api\/knowledge|rest\/v1\/knowledge_)/.test(req.url())){
+      writes.push(req.method()+' '+req.url());
+    }
+  });
+  await page.goto('/settings/knowledge/evidence-preview');
+  const section=page.getByRole('region',{name:'Website snapshot changes'});
+  await expect(section.getByRole('heading',{name:'Website snapshot changes'})).toBeVisible();
+  await expect(section.getByText('Two simulated versions of the same page.',{exact:false})).toBeVisible();
+  await expect(section.getByText('Human verification required')).toBeVisible();
+  await expect(section.getByText('Modified',{exact:true})).toBeVisible();
+  await expect(section.getByText('Added',{exact:true})).toBeVisible();
+  await expect(section.getByText('Removed',{exact:true})).toBeVisible();
+  await expect(section.getByText('Unchanged',{exact:true})).toBeVisible();
+  await expect(section.getByText('Modified source quotation')).toBeVisible();
+  await expect(section.getByText('Introduction workshop | $175',{exact:true})).toBeVisible();
+  await expect(section.getByText('Introduction workshop | $150',{exact:true})).toBeVisible();
+  await expect(section.getByText('Source authenticity, browser visibility',{exact:false})).toBeVisible();
+  await expect(page.getByRole('button',{name:'Publish knowledge (disabled)'})).toBeDisabled();
+  expect(writes).toEqual([]);
+});
+
 test('review preview remains readable without horizontal overflow on mobile',async({page})=>{
   await page.setViewportSize({width:390,height:844});
   await page.goto('/settings/knowledge/evidence-preview');

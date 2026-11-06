@@ -6,6 +6,7 @@ import { analyzeSourceReviewSignals } from '@/lib/knowledge-extraction/source-re
 import { buildAIDraftingRequest, validateAIDraftingResponse } from '@/lib/knowledge-extraction/ai-draft-contract';
 import { evaluateGroundedAIProposals } from '@/lib/knowledge-extraction/ai-grounding-evaluation';
 import { prepareSyntheticKnowledgeReviewAcceptance } from '@/lib/knowledge-extraction/knowledge-review-acceptance';
+import { compareWebsiteEvidenceSnapshots } from '@/lib/knowledge-extraction/website-snapshot-delta';
 
 export const dynamic = 'force-dynamic';
 
@@ -129,6 +130,24 @@ export default async function EvidenceReviewPreviewPage() {
     differences.report,
   );
   if(!acceptance.ok)throw new Error('Synthetic KB-03E acceptance fixture failed.');
+  // KB-04A: Same exact invented page at two synthetic fetch timestamps.
+  // Demonstrates source-only changes with no recrawl or approval mechanism.
+  const previousPage = prepareHtml5WebsiteEvidence({
+    verifiedSeedUrl:'https://sample.example.com/',
+    fetchedAt:'2026-09-01T00:00:00.000Z',
+    response:{
+      url:'https://sample.example.com/services',
+      status:200,
+      contentType:'text/html',
+      body:FIXTURE.replace('<td>$150</td>','<td>$175</td>'),
+    },
+  });
+  if(!previousPage.ok)throw new Error('Synthetic prior page fixture invalid.');
+  const snapshotDelta=compareWebsiteEvidenceSnapshots(
+    previousPage.evidence,result.evidence,'sample.example.com',
+  );
+  if(!snapshotDelta.ok)throw new Error('Synthetic source snapshot comparison failed.');
+
 
 
 
@@ -140,6 +159,7 @@ export default async function EvidenceReviewPreviewPage() {
       simulatedAIProposals={simulatedAI.result}
       groundingReview={groundingReview.report}
       acceptancePacket={acceptance.packet}
+      snapshotDelta={snapshotDelta.report}
     />
   );
 }

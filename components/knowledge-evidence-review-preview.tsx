@@ -11,6 +11,7 @@ import type { ReviewSignalReport } from '@/lib/knowledge-extraction/source-revie
 import type { ValidatedAIResponse } from '@/lib/knowledge-extraction/ai-draft-contract';
 import type { GroundingEvaluationReport } from '@/lib/knowledge-extraction/ai-grounding-evaluation';
 import type { KnowledgeReviewAcceptancePacket } from '@/lib/knowledge-extraction/knowledge-review-acceptance';
+import type { WebsiteSnapshotDeltaReport } from '@/lib/knowledge-extraction/website-snapshot-delta';
 import { assessEvidenceReadiness } from '@/lib/knowledge-extraction/evidence-lifecycle-readiness';
 import {
   chooseEvidenceForReview,
@@ -29,7 +30,7 @@ const filters: Array<{ id: Filter; label: string }> = [
 ];
 
 export function KnowledgeEvidenceReviewPreview({
-  evidence, sourceCandidates, reviewSignals, simulatedAIProposals, groundingReview, acceptancePacket,
+  evidence, sourceCandidates, reviewSignals, simulatedAIProposals, groundingReview, acceptancePacket, snapshotDelta,
 }: {
   evidence: PreparedWebsiteEvidence;
   sourceCandidates: SourceDraftBundle;
@@ -37,6 +38,7 @@ export function KnowledgeEvidenceReviewPreview({
   simulatedAIProposals: ValidatedAIResponse;
   groundingReview: GroundingEvaluationReport;
   acceptancePacket: KnowledgeReviewAcceptancePacket;
+  snapshotDelta: WebsiteSnapshotDeltaReport;
 }) {
   const [choices, setChoices] = useState<EvidenceReviewDecisions>({});
   const [filter, setFilter] = useState<Filter>('all');
@@ -512,6 +514,82 @@ export function KnowledgeEvidenceReviewPreview({
             Storage, approval, and publishing remain disabled.
           </p>
         </div>
+      </section>
+
+      <section aria-label="Website snapshot changes"
+        className="rounded-xl border border-slate-200 bg-white p-5">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h2 className="text-base font-semibold">Website snapshot changes</h2>
+            <p className="mt-1 max-w-2xl text-xs leading-5 text-slate-600">
+              Two simulated versions of the same page. Differences are source
+              text observations only, not confirmed live updates.
+            </p>
+          </div>
+          <span className="rounded-md border border-slate-200 bg-slate-50 px-2.5 py-1.5 text-xs font-semibold text-slate-700">
+            Human verification required
+          </span>
+        </div>
+        <div className="mt-4 grid grid-cols-4 gap-2 sm:gap-3">
+          {([
+            ['Modified',snapshotDelta.counts.modified],
+            ['Added',snapshotDelta.counts.added],
+            ['Removed',snapshotDelta.counts.removed],
+            ['Unchanged',snapshotDelta.counts.unchanged],
+          ] as const).map(([label,value])=>(
+            <div key={label} className="min-w-0 rounded-lg bg-slate-50 p-2.5 sm:p-3">
+              <p className="text-xs text-slate-500">{label}</p>
+              <p className="mt-1 text-lg font-semibold tabular-nums">{value}</p>
+            </div>
+          ))}
+        </div>
+        <p className="mt-3 break-all font-mono text-[11px] text-slate-500">
+          Exact page scope: {snapshotDelta.sourceUrl}
+        </p>
+        {snapshotDelta.changes.length===0 ? (
+          <p className="mt-4 text-xs text-slate-600">
+            No quotation changes detected. This does not prove the website is up to date.
+          </p>
+        ) : (
+          <ol className="mt-4 space-y-3">
+            {snapshotDelta.changes.map(delta=>(
+              <li key={delta.id} className="rounded-lg border border-slate-200 p-4">
+                <p className="text-xs font-semibold text-slate-700">
+                  {delta.kind==='modified'?'Modified source quotation':
+                    delta.kind==='added'?'Added source quotation':
+                    'Removed source quotation'}
+                </p>
+                {delta.prior ? (
+                  <div className="mt-3">
+                    <p className="text-xs text-slate-500">Earlier source quote</p>
+                    <blockquote className="mt-1 break-words border-l-2 border-slate-300 pl-3 text-sm">
+                      {delta.prior.exactQuote}
+                    </blockquote>
+                    <p className="mt-2 break-all font-mono text-[11px] text-slate-500">
+                      {delta.prior.fetchedAt} · SHA {delta.prior.quoteSha256.slice(0,12)}…
+                    </p>
+                  </div>
+                ):null}
+                {delta.current ? (
+                  <div className="mt-3">
+                    <p className="text-xs text-slate-500">Later source quote</p>
+                    <blockquote className="mt-1 break-words border-l-2 border-slate-300 pl-3 text-sm">
+                      {delta.current.exactQuote}
+                    </blockquote>
+                    <p className="mt-2 break-all font-mono text-[11px] text-slate-500">
+                      {delta.current.fetchedAt} · SHA {delta.current.quoteSha256.slice(0,12)}…
+                    </p>
+                  </div>
+                ):null}
+              </li>
+            ))}
+          </ol>
+        )}
+        <p className="mt-4 border-t border-slate-100 pt-3 text-xs leading-5 text-slate-600">
+          Source authenticity, browser visibility, and real website changes have not
+          been verified. No recrawl, database update, knowledge approval,
+          or automatic synchronization is enabled.
+        </p>
       </section>
 
       <section aria-label="Evidence lifecycle readiness" className="rounded-xl border border-slate-200 bg-white p-5">
