@@ -656,7 +656,19 @@
     var allowedPurposes = ['analytics', 'marketing', 'advertising',
       'sale_sharing', 'personalization'];
     var allowedDecisions = ['granted', 'denied', 'withdrawn', 'opted_out', 'limited'];
-    Object.keys(effective).forEach(function (purpose) {
+    // The browser can rely on a consent receipt only when it accounts for
+    // every persisted decision and there are no extra/unrequested receipts.
+    // Public consent endpoints emit exactly one receipt per effective purpose.
+    var effectivePurposes = Object.keys(effective);
+    if (result.receipts.length !== effectivePurposes.length) invalid();
+    result.receipts.forEach(function (receipt) {
+      if (!receipt || !Object.prototype.hasOwnProperty.call(effective, receipt.purpose) ||
+          receipt.decision !== effective[receipt.purpose] ||
+          typeof receipt.receipt_id !== 'string' ||
+          receipt.receipt_id.trim().length === 0 ||
+          receipt.receipt_id === 'null') invalid();
+    });
+    effectivePurposes.forEach(function (purpose) {
       if (allowedPurposes.indexOf(purpose) === -1 ||
           allowedDecisions.indexOf(effective[purpose]) === -1) invalid();
       // The only server-added purpose allowed by the public consent API is
