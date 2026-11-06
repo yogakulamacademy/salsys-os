@@ -71,7 +71,8 @@ export async function processOneDiscoveryPage(claim: Claim) {
         pageTitle = readHtmlTitle(response.body);
         links = item.depth < 4 ? discoverHtmlLinks(seed, new URL(response.url), response.body) : [];
         // A sitemap is optional. Missing or inaccessible sitemaps do not override robots.
-        if (item.depth === 0) {
+        if (item.depth === 0 && (robots.status === 404 ||
+          evaluateRobots(robots.body, '/sitemap.xml', 'salsysosknowledgebot').allowed)) {
           try {
             const sitemap = await fetchPublicWeb(seed, new URL('/sitemap.xml', page.origin), 'sitemap');
             if (sitemap.status === 200) {
