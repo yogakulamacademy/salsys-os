@@ -160,15 +160,20 @@ async function login(config, actor, label) {
   }
   return resp.data.access_token;
 }
+function requireNoRows(result, label) {
+  if (result.status === 401 || result.status === 403) return;
+  if (result.status !== 200 || !Array.isArray(result.data)) {
+    throw new Error('kb_staging_' + label + '_unexpected_status_or_body');
+  }
+  if (result.data.length !== 0) {
+    throw new Error('kb_staging_' + label + '_cross_tenant_leak');
+  }
+}
 async function deniedDoc(config, token, docId, label) {
-  const r = await request(config, documentPath(docId), { token });
-  if (r.status === 401 || r.status === 403) return;
-  assertRows(r, { forbidden: docId, label });
+  requireNoRows(await request(config, documentPath(docId), { token }), label);
 }
 async function deniedSearch(config, token, orgId, marker, docId, label) {
-  const r = await request(config, searchPath(orgId, marker), { token });
-  if (r.status === 401 || r.status === 403) return;
-  assertRows(r, { forbidden: docId, label });
+  requireNoRows(await request(config, searchPath(orgId, marker), { token }), label);
 }
 async function ownDoc(config, token, actor, label) {
   const r = await request(config, documentPath(actor.documentId), { token });
