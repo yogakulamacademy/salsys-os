@@ -111,6 +111,12 @@ Use disposable staging/site identities (never real prospects). Configure a test 
 
 **Local browser checks (native Chromium, intercepted network):** `tests/ui/consent-identity-browser.spec.ts` uses real Chromium tabs and local network interception for grant/withdraw/regrant, including additional restricted `localStorage` and `sessionStorage` method scenarios. Under blocked privacy persistence, optional analytics must remain OFF; necessary form evidence may still use freshly rotated synthetic identity. These controlled mock tests establish browser behavior only for the tested cases; they cannot establish a real CMP, actual cross-origin configuration, private browsing implementation across browsers, full BFCache coverage, production provider policies or the live website form/CRM pipeline. An authorized isolated staging acceptance check remains mandatory. **Do not merge merely because CI passes.**
 
+## Exact consent-receipt completeness regression (2026-11-06)
+
+The public consent endpoint returns **exactly one saved receipt per effective purpose decision** (including a server-enforced, receipted GPC sale-sharing opt-out). The draft SDK now fails closed if a nominal HTTP 200 response contains **extra receipt rows outside effective decisions**, including unrequested advertising grants or conflicting analytics decisions. Every receipt must map one-to-one to an effective purpose and decision; an ordinary matching analytics receipt alone is not enough to override an unexplained additional receipt.
+
+The new isolated Node VM and intercepted Chromium tests verify this while retaining the previously tested valid, receipted GPC response. This detects response-contract discrepancies and does **not** assert a real website or server compromise. There are no changes to the consent API, production release or optional behavioral event collector. **Keep the PR draft until real isolated-site CMP and form handoff acceptance.**
+
 ## Release gates
 
 - [ ] Full CI: readiness tests, TypeScript/build, loopback Playwright tests, financial tests
