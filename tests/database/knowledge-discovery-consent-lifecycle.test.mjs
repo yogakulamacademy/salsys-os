@@ -131,6 +131,15 @@ test('KB-06B exact SQL: signed session, policy switch, atomic audit and withdraw
     assert.equal(row.status,'granted');
     assert.equal(row.revision,1);
     assert.equal((await db.query('select count(*)::int as n from public.knowledge_discovery_consent_audit')).rows[0].n,1);
+    // Read RLS uses the SAME exact live tenant-session check as write RPCs.
+    const readConsent='select count(*)::int as n from public.knowledge_discovery_site_consents';
+    const readAudit='select count(*)::int as n from public.knowledge_discovery_consent_audit';
+    assert.equal((await a(readConsent)).rows[0].n,1);
+    assert.equal((await a(readAudit)).rows[0].n,1);
+    assert.equal((await b(readConsent)).rows[0].n,0);
+    assert.equal((await b(readAudit)).rows[0].n,0);
+    assert.equal((await invoke('authenticated',USER_A,SID_B,readConsent,[])).rows[0].n,0);
+    assert.equal((await invoke('authenticated',USER_A,SID_B,readAudit,[])).rows[0].n,0);
     await assert.rejects(a(grantSql,grantArgs()),e=>e.code==='23505');
     assert.equal((await db.query('select count(*)::int as n from public.knowledge_discovery_consent_audit')).rows[0].n,1);
 
@@ -189,6 +198,8 @@ test('KB-06B exact SQL: signed session, policy switch, atomic audit and withdraw
     await assert.rejects(a(grantSql,grantArgs()),e=>e.code==='42501','Policy remains OFF');
     // Strict session revocation: loss of auth.sessions row immediately denies.
     await db.query('delete from auth.sessions where id=$1',[SID_A]);
+    assert.equal((await a(readConsent)).rows[0].n,0);
+    assert.equal((await a(readAudit)).rows[0].n,0);
     await assert.rejects(a(withdrawSql,[ORG_A,HOST_A,2]),e=>e.code==='42501');
 
     // Local-only, disposable synthetic data. No real staging or production.
