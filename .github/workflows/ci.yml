@@ -12,6 +12,7 @@ on:
       - feature/kb02d-evidence-review-preview
       - feature/kb02e-evidence-lifecycle-contract
       - feature/kb03a-source-backed-drafts
+      - feature/kb03b-conflict-freshness-signals
 
 permissions:
   contents: read

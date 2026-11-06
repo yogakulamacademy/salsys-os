@@ -7,6 +7,7 @@ import {
 } from 'lucide-react';
 import type { PreparedWebsiteEvidence } from '@/lib/knowledge-extraction/website-evidence';
 import type { SourceDraftBundle } from '@/lib/knowledge-extraction/source-grounded-drafts';
+import type { ReviewSignalReport } from '@/lib/knowledge-extraction/source-review-signals';
 import { assessEvidenceReadiness } from '@/lib/knowledge-extraction/evidence-lifecycle-readiness';
 import {
   chooseEvidenceForReview,
@@ -25,10 +26,11 @@ const filters: Array<{ id: Filter; label: string }> = [
 ];
 
 export function KnowledgeEvidenceReviewPreview({
-  evidence, sourceCandidates,
+  evidence, sourceCandidates, reviewSignals,
 }: {
   evidence: PreparedWebsiteEvidence;
   sourceCandidates: SourceDraftBundle;
+  reviewSignals: ReviewSignalReport;
 }) {
   const [choices, setChoices] = useState<EvidenceReviewDecisions>({});
   const [filter, setFilter] = useState<Filter>('all');
@@ -245,6 +247,74 @@ export function KnowledgeEvidenceReviewPreview({
         ) : null}
         <p className="mt-4 border-t border-slate-100 pt-3 text-xs text-slate-600">
           No AI-generated content, storage, approval, or publishing is enabled by this preview.
+        </p>
+      </section>
+
+      <section aria-label="Source difference review"
+        className="rounded-xl border border-slate-200 bg-white p-5">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h2 className="text-base font-semibold">Potential source differences</h2>
+            <p className="mt-1 max-w-2xl text-xs leading-5 text-slate-600">
+              Compared only within explicitly matched fields and offer scope.
+              The differences below are review reminders, not confirmed contradictions.
+            </p>
+          </div>
+          <span className="rounded-md border border-amber-200 bg-amber-50 px-2.5 py-1.5 text-xs font-semibold text-amber-900">
+            {reviewSignals.signals.length} check{reviewSignals.signals.length===1?'':'s'} needed
+          </span>
+        </div>
+        {reviewSignals.signals.length===0 ? (
+          <p className="mt-4 text-sm text-slate-500">No comparable source differences were detected.</p>
+        ) : (
+          <ol className="mt-4 space-y-3">
+            {reviewSignals.signals.map(signal=>(
+              <li key={signal.id} className="rounded-lg border border-slate-200 p-4">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <p className="text-xs font-semibold text-slate-700">
+                    {signal.kind==='price_difference_review'?'Price variation to review':
+                      signal.kind==='date_difference_review'?'Date variation to review':
+                      signal.kind==='policy_text_variation_review'?'Policy wording to review':
+                      'Source age to review'}
+                  </p>
+                  <span className="text-xs text-amber-700">Not verified</span>
+                </div>
+                <p className="mt-2 text-xs leading-5 text-slate-600">{signal.message}</p>
+                {signal.scopeKey?(
+                  <p className="mt-2 break-all font-mono text-[11px] text-slate-500">
+                    Comparison scope: {signal.scopeKey} · {signal.fieldKey}
+                    {signal.comparisonCurrency?' · '+signal.comparisonCurrency:''}
+                  </p>
+                ):null}
+                <div className="mt-3 space-y-2">
+                  {signal.sources.map((source,index)=>(
+                    <div key={source.snapshotSha256+(source.blockId??index)}
+                      className="rounded-md bg-slate-50 p-3">
+                      {source.exactQuote ? (
+                        <blockquote className="break-words text-sm leading-6 text-slate-800">
+                          {source.exactQuote}
+                        </blockquote>
+                      ):null}
+                      <p className="mt-2 break-all text-xs text-slate-500">{source.sourceUrl}</p>
+                      <p className="mt-1 break-all font-mono text-[11px] text-slate-500">
+                        Retrieved: {source.fetchedAt} · Quote SHA: {source.quoteSha256?.slice(0,12)??'—'}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              </li>
+            ))}
+          </ol>
+        )}
+        {reviewSignals.issues.length>0 ? (
+          <p className="mt-3 text-xs leading-5 text-slate-600">
+            {reviewSignals.issues.length} comparison(s) were left unresolved because
+            the values or currencies were not safely comparable.
+          </p>
+        ):null}
+        <p className="mt-4 border-t border-slate-100 pt-3 text-xs text-slate-600">
+          Synthetic example only. Neither source has been verified as the current truth.
+          No AI generation, automatic approval, storage, or publication is enabled.
         </p>
       </section>
 

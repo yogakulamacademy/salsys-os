@@ -2,6 +2,7 @@ import { requireAdminWorkspaceAccess } from '@/lib/route-access';
 import { prepareHtml5WebsiteEvidence } from '@/lib/knowledge-extraction/html5-visible-text';
 import { KnowledgeEvidenceReviewPreview } from '@/components/knowledge-evidence-review-preview';
 import { prepareSourceGroundedDrafts } from '@/lib/knowledge-extraction/source-grounded-drafts';
+import { analyzeSourceReviewSignals } from '@/lib/knowledge-extraction/source-review-signals';
 
 export const dynamic = 'force-dynamic';
 
@@ -47,10 +48,48 @@ export default async function EvidenceReviewPreviewPage() {
   if (!candidates.ok) {
     throw new Error('Synthetic draft candidate fixture is invalid.');
   }
+  // A second invented page demonstrates a difference without claiming that
+  // either quotation is current or correct. No network calls or DB writes.
+  const older = prepareHtml5WebsiteEvidence({
+    verifiedSeedUrl:'https://sample.example.com/',
+    fetchedAt:'2026-09-01T00:00:00.000Z',
+    response:{
+      url:'https://sample.example.com/archived-workshop-fees',
+      status:200,
+      contentType:'text/html',
+      body:'<html><head><title>Archived example fees</title></head><body>'
+        +'<main><h1>Introduction workshop</h1><h2>Fees</h2>'
+        +'<p>Introduction workshop: $175</p></main></body></html>',
+    },
+  });
+  if(!older.ok)throw new Error('Synthetic older source fixture is invalid.');
+  const olderCandidates=prepareSourceGroundedDrafts(older.evidence,'sample.example.com');
+  if(!olderCandidates.ok)throw new Error('Synthetic older source candidates invalid.');
+  const currentFee=candidates.bundle.drafts.find(d=>d.kind==='source_statement'
+    &&d.statement==='Introduction workshop | $150');
+  const previousFee=olderCandidates.bundle.drafts.find(d=>d.kind==='source_statement'
+    &&d.statement==='Introduction workshop: $175');
+  if(!currentFee||!previousFee)throw new Error('Synthetic comparison binding missing.');
+  const scopeKey='program:introduction-workshop/session:sample';
+  const fieldKey='fee';
+  const differences=analyzeSourceReviewSignals(
+    [candidates.bundle,olderCandidates.bundle],
+    [
+      {draftId:currentFee.id,scopeKey,fieldKey,kind:'price'},
+      {draftId:previousFee.id,scopeKey,fieldKey,kind:'price'},
+    ],
+    {
+      verifiedHostname:'sample.example.com',
+      asOf:'2026-11-06T12:00:00.000Z',
+      reviewAgeDays:30,
+    },
+  );
+  if(!differences.ok)throw new Error('Synthetic source comparison failed.');
   return (
     <KnowledgeEvidenceReviewPreview
       evidence={result.evidence}
       sourceCandidates={candidates.bundle}
+      reviewSignals={differences.report}
     />
   );
 }

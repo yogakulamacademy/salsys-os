@@ -99,6 +99,27 @@ test('read-only source candidate preview pairs actual FAQ quotations without aut
   expect(writes).toEqual([]);
 });
 
+test('synthetic price and source age signals retain quotations but never declare a current truth',async({page})=>{
+  const writes:string[]=[];
+  page.on('request',request=>{
+    if(request.method()!=='GET' &&
+      /\/(?:api\/knowledge|rest\/v1\/knowledge_)/.test(request.url())){
+      writes.push(request.method()+' '+request.url());
+    }
+  });
+  await page.goto('/settings/knowledge/evidence-preview');
+  const diff=page.getByRole('region',{name:'Source difference review'});
+  await expect(diff.getByRole('heading',{name:'Potential source differences'})).toBeVisible();
+  await expect(diff.getByText('Price variation to review')).toBeVisible();
+  await expect(diff.getByText('Source age to review')).toBeVisible();
+  await expect(diff.getByText('Introduction workshop | $150',{exact:true})).toBeVisible();
+  await expect(diff.getByText('Introduction workshop: $175',{exact:true}).first()).toBeVisible();
+  await expect(diff.getByText('sample.example.com/archived-workshop-fees',{exact:false}).first()).toBeVisible();
+  await expect(diff.getByText('Neither source has been verified as the current truth.',{exact:false})).toBeVisible();
+  await expect(page.getByRole('button',{name:'Publish knowledge (disabled)'})).toBeDisabled();
+  expect(writes).toEqual([]);
+});
+
 test('review preview remains readable without horizontal overflow on mobile',async({page})=>{
   await page.setViewportSize({width:390,height:844});
   await page.goto('/settings/knowledge/evidence-preview');
