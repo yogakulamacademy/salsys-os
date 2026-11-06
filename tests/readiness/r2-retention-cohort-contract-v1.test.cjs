@@ -88,14 +88,28 @@ function syntheticCohortTrial(events, { organizationId, asOfUtc, historyStartUtc
     perDate.set(dayOf(t), { denominator: 0, returns: 0 });
   }
   for (const moments of groups.values()) {
-    moments.sort((a, b) => a - b);
-    const first = dayOf(moments[0]);
-    const bucket = perDate.get(first);
-    if (!bucket) continue;
-    bucket.denominator++;
-    const expectedReturn = Date.parse(first + "T00:00:00Z") + returnDay * DAY;
-    if (moments.slice(1).some((time) => dayOf(time) === dayOf(expectedReturn))) {
-      bucket.returns++;
+    // One key can be *new to an observation window* after a verified 30-day
+    // inactive washout, even if that key has older recorded sessions. Reusing
+    // the earliest-ever event would wrongly omit such cohorts.
+    // Sessions are already deduplicated by their source/visitor/epoch/session
+    // key, so distinct UTC session-start dates represent independent sessions.
+    const activeDays = [...new Set(moments.map(dayOf))].sort();
+    let priorActiveDayMs = null;
+    const activeSet = new Set(activeDays);
+    for (const dateUtc of activeDays) {
+      const dayMs = Date.parse(dateUtc + "T00:00:00Z");
+      const bucket = perDate.get(dateUtc);
+      // The 30 *preceding* UTC days must have no observed eligible starts.
+      // Activity exactly 30 days earlier is still inside the washout.
+      const passedWashout = priorActiveDayMs === null
+        || priorActiveDayMs < dayMs - 30 * DAY;
+      if (bucket && passedWashout) {
+        bucket.denominator++;
+        if (activeSet.has(dayOf(dayMs + returnDay * DAY))) {
+          bucket.returns++;
+        }
+      }
+      priorActiveDayMs = dayMs;
     }
   }
   return {
@@ -180,6 +194,45 @@ test("D7 and D30 are exact, fully matured UTC return days rather than eventual-r
     historyStartUtc: "2026-08-31", returnDay: 30 });
   assert.equal(thirty.rows.find((x) => x.dateUtc === "2026-10-01").returns, 8);
   assert.equal(thirty.rows.some((x) => x.dateUtc === "2026-10-07"), false);
+});
+
+test("verified 30-day washout allows old browser keys to be new-to-window without misclassifying recent returns", () => {
+  const rows = [];
+  for (let i = 0; i < 20; i++) {
+    rows.push(event("return-after-gap-" + i, "2026-10-01", "old"));
+    rows.push(event("return-after-gap-" + i, "2026-11-01", "new-entry"));
+    rows.push(event("return-after-gap-" + i, "2026-11-02", "new-return"));
+
+    // A start in the preceding 30 UTC days blocks a second cohort entry.
+    rows.push(event("recent-activity-" + i, "2026-10-15", "recent"));
+    rows.push(event("recent-activity-" + i, "2026-11-01", "not-new"));
+    rows.push(event("recent-activity-" + i, "2026-11-02", "still-not-new"));
+
+    // The earliest excluded day is inclusive: Oct 2 is exactly 30 days
+    // before Nov 1 and must still disqualify the Nov 1 entry.
+    rows.push(event("boundary-activity-" + i, "2026-10-02", "boundary"));
+    rows.push(event("boundary-activity-" + i, "2026-11-01", "not-new"));
+    rows.push(event("boundary-activity-" + i, "2026-11-02", "still-not-new"));
+  }
+  const report = syntheticCohortTrial(rows, options);
+  const cohort = report.rows.find((row) => row.dateUtc === "2026-11-01");
+  assert.equal(report.status, "synthetic_only");
+  assert.deepEqual(cohort, { dateUtc: "2026-11-01", status: "synthetic",
+    denominator: 20, returns: 20 });
+});
+
+test("D30 new-to-window eligibility also permits older history outside the washout only", () => {
+  const rows = Array.from({ length: 20 }, (_, i) => [
+    event("d30-gap-" + i, "2026-08-31", "old"),
+    event("d30-gap-" + i, "2026-10-01", "new-entry"),
+    event("d30-gap-" + i, "2026-10-31", "new-return"),
+  ]).flat();
+  const report = syntheticCohortTrial(rows, { ...options,
+    historyStartUtc: "2026-08-30", returnDay: 30 });
+  assert.equal(report.status, "synthetic_only");
+  assert.deepEqual(report.rows.find((row) => row.dateUtc === "2026-10-01"), {
+    dateUtc: "2026-10-01", status: "synthetic", denominator: 20, returns: 20,
+  });
 });
 
 test("small cohorts suppress both numerator and denominator; empty data are not published as 0 percent", () => {
