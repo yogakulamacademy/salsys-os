@@ -182,6 +182,9 @@ async function ownDoc(config, token, actor, label) {
   if (r.status !== 200 || !Array.isArray(r.data)) {
     throw new Error('kb_staging_' + label + '_own_document_unexpected_status_or_body');
   }
+  if (r.data.length === 0) {
+    throw new Error('kb_staging_' + label + '_own_document_missing_positive_fixture');
+  }
   if (r.data.length !== 1) {
     throw new Error('kb_staging_' + label + '_own_document_unexpected_row_count');
   }
