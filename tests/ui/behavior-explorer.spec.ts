@@ -415,3 +415,57 @@ test("Owner can explicitly copy aggregate Event activity review figures, never t
     await request.get(fixtureBase + "/__behavior_scenario?state=ready&tenant=primary");
   }
 });
+
+
+test("Authorized synthetic funnel copy contains only bounded aggregates, refreshes across windows and tenants, and disappears on denial", async ({ page, request, context }) => {
+  await context.grantPermissions(["clipboard-read", "clipboard-write"]);
+  const copy = page.getByRole("button", { name: "Copy ordered funnel review figures" });
+
+  try {
+    await page.goto("/marketing?view=behavior");
+    await expect(copy).toBeVisible();
+    await copy.click();
+    await expect(page.getByRole("status").getByText("Funnel figures copied")).toBeVisible();
+    const primary = await page.evaluate(() => navigator.clipboard.readText());
+    expect(primary).toContain("Status: dashboard observation, NOT owner/admin acceptance or SQL reconciliation");
+    expect(primary).toContain("Rolling observation window: 14 days (not UTC calendar-day Event Activity)");
+    expect(primary).toContain("Step 1: web.page_viewed; ordered_sessions=12");
+    expect(primary).toContain("Step 2: web.form_started; ordered_sessions=8");
+    expect(primary).toContain("Step 3: web.form_submitted; ordered_sessions=4");
+    expect(primary).toContain("Observed page-view sessions denominator: 12");
+    for (const forbidden of [
+      organizationId, "00000000-0000-4000-8000-000000000001",
+      "/courses/200-hour-ytt.php", "/enroll.php", "session_key",
+      "tracking_source_id", "anonymous_visitor_id",
+    ]) expect(primary).not.toContain(forbidden);
+
+    await page.getByRole("combobox", { name: "Analytics date range" }).selectOption("30");
+    await page.getByRole("button", { name: "Run funnel" }).click();
+    await expect(page).toHaveURL(/days=30/);
+    await expect(copy).toBeVisible();
+    await copy.click();
+    const thirty = await page.evaluate(() => navigator.clipboard.readText());
+    expect(thirty).toContain("Rolling observation window: 30 days");
+    expect(thirty).not.toContain("Rolling observation window: 14 days");
+
+    const switched = await request.get(fixtureBase + "/__behavior_scenario?state=ready&tenant=secondary");
+    expect(switched.ok()).toBe(true);
+    await page.reload();
+    await expect(copy).toBeVisible();
+    await copy.click();
+    const secondary = await page.evaluate(() => navigator.clipboard.readText());
+    expect(secondary).toContain("Step 1: web.page_viewed; ordered_sessions=7");
+    expect(secondary).toContain("Step 2: web.form_started; ordered_sessions=5");
+    expect(secondary).toContain("Step 3: web.form_submitted; ordered_sessions=3");
+    expect(secondary).not.toContain("ordered_sessions=12");
+    expect(secondary).not.toContain("/courses/second-tenant.php");
+
+    const denied = await request.get(fixtureBase + "/__behavior_scenario?state=denied&tenant=secondary");
+    expect(denied.ok()).toBe(true);
+    await page.reload();
+    await expect(copy).toHaveCount(0);
+    await expect(page.getByRole("heading", { name: "Behavior analytics unavailable" })).toBeVisible();
+  } finally {
+    await request.get(fixtureBase + "/__behavior_scenario?state=ready&tenant=primary");
+  }
+});
