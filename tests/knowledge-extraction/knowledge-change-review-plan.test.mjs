@@ -11,21 +11,21 @@ const URL='https://sample.example.com/services';
 const HOST='sample.example.com';
 const OPT={organizationId:ORG,verifiedHostname:HOST,
   asOf:'2026-11-06T12:00:00Z',reviewAgeDays:30};
-function snapshot(text,at){
+function snapshot(text,at,url=URL){
   const blocks=[{kind:'h2',text:'Pricing'}];
   if(text!==null)blocks.push({kind:'paragraph',text});
   const r=prepareWebsiteEvidence({
-    verifiedSeedUrl:'https://'+HOST+'/',sourceUrl:URL,
+    verifiedSeedUrl:'https://'+HOST+'/',sourceUrl:url,
     pageTitle:'Example page',fetchedAt:at,blocks,
   });
   assert.equal(r.ok,true);
   return r.evidence;
 }
 function evidence(oldText='Private workshop: $175',
-  newText='Private workshop: $150'){
+  newText='Private workshop: $150',url=URL){
   const r=compareWebsiteEvidenceSnapshots(
-    snapshot(oldText,'2026-10-01T00:00:00Z'),
-    snapshot(newText,'2026-11-05T00:00:00Z'),HOST);
+    snapshot(oldText,'2026-10-01T00:00:00Z',url),
+    snapshot(newText,'2026-11-05T00:00:00Z',url),HOST);
   assert.equal(r.ok,true);
   assert.equal(r.report.changes.length,1);
   return r.report;
@@ -132,7 +132,8 @@ test('source provenance, tenant history and comparison mapping are independently
 });
 test('reordering local choices leaves a stable plan identity',()=>{
   const d=evidence();
-  const other=evidence('A different workshop: $175','A different workshop: $150');
+  const other=evidence('A different workshop: $175','A different workshop: $150',
+    'https://sample.example.com/other');
   const second=prepareKnowledgeChangeReviewPlan([d,other],[],[],OPT,[
     {changeId:other.changes[0].id,intent:'defer_for_human_review',note:'check later'},
     {changeId:d.changes[0].id,intent:'inspect_updated_source',note:'check fees'},
@@ -141,9 +142,9 @@ test('reordering local choices leaves a stable plan identity',()=>{
     {changeId:d.changes[0].id,intent:'inspect_updated_source',note:'check fees'},
     {changeId:other.changes[0].id,intent:'defer_for_human_review',note:'check later'},
   ]);
-  // KB-04C forbids duplicate same-page report identity and these are two
-  // alternate versions of one exact page; ensure no partial plans are returned.
-  assert.deepEqual(second,{ok:false,error:'change_impact_rejected'});
+  assert.equal(second.ok,true);
+  assert.equal(reordered.ok,true);
+  assert.equal(second.plan.counts.localChoices,2);
   assert.deepEqual(reordered,second);
 });
 test('same inputs are deterministic and no evidence, binding or choices are mutated',()=>{
