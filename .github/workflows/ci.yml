@@ -14,6 +14,7 @@ on:
       - feature/kb03a-source-backed-drafts
       - feature/kb03b-conflict-freshness-signals
       - feature/kb03c-grounded-ai-proposals
+      - feature/kb03d-grounding-quality-evaluation
 
 permissions:
   contents: read

@@ -146,6 +146,28 @@ test('synthetic AI contract preview displays exact cited answers without AI/stor
   expect(writes).toEqual([]);
 });
 
+test('grounding evaluation holds synthetic fee answer with a conflicting older source',async({page})=>{
+  const writes:string[]=[];
+  page.on('request',request=>{
+    if(request.method()!=='GET' &&
+      /\/(?:api\/knowledge|rest\/v1\/knowledge_)/.test(request.url())){
+      writes.push(request.method()+' '+request.url());
+    }
+  });
+  await page.goto('/settings/knowledge/evidence-preview');
+  const review=page.getByRole('region',{name:'AI grounding quality review'});
+  await expect(review.getByRole('heading',{name:'Grounding and accuracy review'})).toBeVisible();
+  await expect(review.getByText('1 held for resolution')).toBeVisible();
+  await expect(review.getByText('Hold — source issue requires resolution')).toBeVisible();
+  await expect(review.getByText('Introduction workshop | $150',{exact:true})).toBeVisible();
+  await expect(review.getByText('unresolved source difference')).toBeVisible();
+  await expect(review.getByText('Human verification required')).toBeVisible();
+  await expect(review.getByText('Can I reschedule?')).toBeVisible();
+  await expect(review.getByText('Source truth and question meaning remain unverified.',{exact:false})).toBeVisible();
+  await expect(page.getByRole('button',{name:'Publish knowledge (disabled)'})).toBeDisabled();
+  expect(writes).toEqual([]);
+});
+
 test('review preview remains readable without horizontal overflow on mobile',async({page})=>{
   await page.setViewportSize({width:390,height:844});
   await page.goto('/settings/knowledge/evidence-preview');
