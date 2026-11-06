@@ -3,10 +3,12 @@
 // database writes, live tracking calls, secrets, or customer data.
 import { pathToFileURL } from "node:url";
 
+const prohibitedRoots = [
+  // Also reject descendants: subdomains of live websites or CRM can share cookies
+  // or be accidentally wired to the same customer-facing integrations.
+  "yogakulam.com", "yogakulamacademy.com", "salsysos.com",
+];
 const prohibitedHosts = new Set([
-  "yogakulam.com", "www.yogakulam.com",
-  "yogakulamacademy.com", "www.yogakulamacademy.com",
-  "salsysos.com", "www.salsysos.com", "crm.salsysos.com",
   "salsys-os.vercel.app", "salsys-os-salsysos.vercel.app",
   "salsys-os-git-main-salsysos.vercel.app",
 ]);
@@ -21,7 +23,9 @@ function origin(input, label, problems) {
     return null;
   }
   const host = url.hostname.toLowerCase();
-  if (prohibitedHosts.has(host) || host === "localhost" ||
+  if (prohibitedHosts.has(host) ||
+      prohibitedRoots.some((root) => host === root || host.endsWith("." + root)) ||
+      host === "localhost" ||
       host.endsWith(".localhost") || host.endsWith(".test") ||
       host.endsWith(".invalid") || host.endsWith(".example")) {
     problems.push(label + ": production or non-routable origin is not accepted");
@@ -39,6 +43,15 @@ export function verifyR2StagingConfig(values = {}) {
 
   if (site && crm && site === crm) {
     errors.push("Website and CRM API must be separately identified staging origins");
+  }
+  const stagingProject = String(values.SALSYS_STAGING_CRM_PROJECT_ID || "").trim();
+  const productionProject = String(values.SALSYS_PRODUCTION_CRM_PROJECT_ID || "").trim();
+  // A default Preview in the production project inherits unverified credentials.
+  // Requiring a distinct Vercel project blocks accepting that preview as staging.
+  if (!/^prj_[A-Za-z0-9]{16,}$/.test(stagingProject) ||
+      !/^prj_[A-Za-z0-9]{16,}$/.test(productionProject) ||
+      stagingProject === productionProject) {
+    errors.push("Staging CRM must use a different, explicitly identified Vercel project than production");
   }
   if (db && prodDb && db === prodDb) {
     errors.push("Staging and production Supabase URLs are identical");
@@ -61,6 +74,12 @@ export function verifyR2StagingConfig(values = {}) {
   }
   if (values.SALSYS_STAGING_FORM_CAPTURE_ISOLATED !== "yes") {
     errors.push("Staging form capture must be verified isolated from live leads/payments/messaging");
+  }
+  if (values.SALSYS_STAGING_EXTERNAL_EFFECTS_DISABLED !== "yes") {
+    errors.push("Staging must block customer email, messaging, ads and payment side effects");
+  }
+  if (values.SALSYS_STAGING_SCHEDULED_JOBS_DISABLED !== "yes") {
+    errors.push("Staging scheduler, cron and queue consumers must be disabled");
   }
   if (values.SALSYS_STAGING_OWNER_APPROVED !== "yes") {
     errors.push("Explicit staging owner authorization must be recorded");
