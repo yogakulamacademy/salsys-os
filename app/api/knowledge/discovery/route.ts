@@ -114,6 +114,10 @@ export async function POST(request: NextRequest) {
       .select('id').single();
     if (insertError) {
       if (insertError.code === '23505') return json({ ok: false, error: 'A scan is already in progress.' }, 409);
+      if (insertError.code === 'P0001' &&
+          ['discovery_daily_scan_limit', 'discovery_scan_cooldown'].includes(insertError.message ?? '')) {
+        return json({ ok: false, error: 'Website discovery scan limit reached. Try again later.' }, 429);
+      }
       throw insertError;
     }
     const { error: pageError } = await admin.from('knowledge_discovery_pages')
