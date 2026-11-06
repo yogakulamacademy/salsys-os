@@ -32,7 +32,8 @@ test("path edges require distinct visitors, no individual identifiers, and small
   assert.match(migration, /limit 12/);
   assert.match(migration, /limit 50001/);
   assert.doesNotMatch(migration, /'anonymous_visitor_id',\s*anonymous_visitor_id/);
-  assert.match(explorer, /distinct anonymous visitors/);
+  assert.match(explorer, /distinct tracked visitor IDs/);
+  assert.match(explorer, /not verified people or physical devices/);
   assert.match(server, /minPathVisitors:/);
 });
 
