@@ -373,3 +373,45 @@ test("Out-of-range or stale UTC trend dates fail closed without erasing the othe
     await request.get(fixtureBase + "/__behavior_scenario?state=ready&tenant=primary");
   }
 });
+
+test("Owner can explicitly copy aggregate Event activity review figures, never tenant or path data", async ({ page, request, context }) => {
+  await context.grantPermissions(["clipboard-read", "clipboard-write"]);
+  const copy = page.getByRole("button", { name: "Copy Event activity review figures" });
+  const trends = page.getByRole("region", { name: "Event activity trends" });
+
+  try {
+    await page.goto("/marketing?view=behavior");
+    await expect(trends.getByRole("article", { name: "Page viewed event trend" })).toBeVisible();
+    await expect(copy).toBeVisible();
+    await copy.click();
+    await expect(trends.getByRole("status").getByText("Aggregate figures copied")).toBeVisible();
+
+    const first = await page.evaluate(() => navigator.clipboard.readText());
+    expect(first).toContain("Status: dashboard observation, NOT acceptance or SQL reconciliation");
+    expect(first).toContain("UTC calendar window: 14 days");
+    expect(first).toMatch(/web\.page_viewed: events=\d+; identified_sessions=\d+/);
+    expect(first).toMatch(/web\.form_started: events=\d+; identified_sessions=\d+/);
+    expect(first).toMatch(/web\.form_submitted: events=\d+; identified_sessions=\d+/);
+    for (const secret of [organizationId, "00000000-0000-4000-8000-000000000001",
+      "/courses/200-hour-ytt.php", "/private", "session_key", "tracking_source_id"]) {
+      expect(first).not.toContain(secret);
+    }
+
+    await page.getByRole("combobox", { name: "Analytics date range" }).selectOption("30");
+    await page.getByRole("button", { name: "Run funnel" }).click();
+    await expect(page).toHaveURL(/days=30/);
+    await expect(trends.getByText("Last 30 UTC calendar days")).toBeVisible();
+    await copy.click();
+    const second = await page.evaluate(() => navigator.clipboard.readText());
+    expect(second).toContain("UTC calendar window: 30 days");
+    expect(second).not.toContain("UTC calendar window: 14 days");
+
+    const denied = await request.get(fixtureBase + "/__behavior_scenario?state=denied");
+    expect(denied.ok()).toBe(true);
+    await page.reload();
+    await expect(copy).toHaveCount(0);
+    await expect(trends.getByRole("status")).toBeVisible();
+  } finally {
+    await request.get(fixtureBase + "/__behavior_scenario?state=ready&tenant=primary");
+  }
+});

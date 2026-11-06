@@ -203,3 +203,36 @@ from the same observation interval, including late-arriving activity
 and the incomplete current UTC day. Synthetic comparisons must never
 be presented as final production acceptance or D1/D7/D30 retention evidence.
 The existing user-facing procedures in this runbook and issue #523 remain open.
+
+
+## I. Copy a privacy-safe Event Activity review snapshot (2026-11-06)
+
+In a **real, authorized owner/admin CRM session**, open `Marketing → Behavior`
+and choose the default events `Page viewed → Form started → Form submitted`.
+Apply 7, 14 and 30 days **one at a time**. In each available Event Activity
+panel, click **Copy review figures**. The button is absent if the report is
+unavailable or lacks safely validated aggregate data.
+
+The copied plain text includes only: the selected UTC day count, the first
+and last UTC dates, the SQL report's `generated_at` timestamp, whether the
+current UTC day is incomplete, and the selected event names with their
+**independent observed event counts and identified session counts**.
+
+It does **not** copy an organization or user name/ID, tracking source ID,
+visitor/session identifier, browser cookie, URL/path, event payload, lead,
+payment, or retention result. Nothing is sent to a server by the copy action.
+Clipboard use requires a direct user click; browser permission may prevent
+copying, in which case the UI shows a generic clipboard-unavailable message.
+
+Compare the snapshot against the matching *authorized tenant-scoped*
+`docs/sql/r2-p2-behavior-trends-reconcile-v1.sql` output, preferably during
+the same UTC day and close to the displayed generation time. Check the
+scope/event sequence. Account for late-arriving events and incomplete current
+UTC day, recording real differences rather than claiming arbitrary tolerance.
+
+**Evidence boundary:** This makes review safer and easier but does not
+perform SQL comparison automatically and does **not** prove who clicked,
+real owner/admin authorization, cross-tenant isolation or sign-off. The
+reviewer must perform and attest the live login, comparison and privacy tests.
+Never enter or share live credentials, organization UUIDs, session tokens,
+raw visitor data or customer screenshots in an acceptance record.
