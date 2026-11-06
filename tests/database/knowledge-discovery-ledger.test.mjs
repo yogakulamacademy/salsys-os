@@ -136,13 +136,54 @@ test('exact KB-01B SQL passes tenant, RLS, lease and cancellation checks in disp
     assert.equal(stale.rowCount,0);
     assert.equal((await db.query('select attempts from public.knowledge_discovery_jobs where id=$1',[firstId])).rows[0].attempts,1);
 
+    // Atomic commit refuses a superseded token without touching any page.
+    await context(a,'service_role',USER_A);
+    const firstPageId = (await db.query(
+      'select id from public.knowledge_discovery_pages where job_id=$1',[firstId])).rows[0].id;
+    const staleCommit = await a.query(
+      'select public.commit_knowledge_discovery_page_v1($1,$2,$3,$4,$5,$6,$7,$8,$9,$10::jsonb,$11) as result',
+      [first.rows[0].organization_id,firstId,firstPageId,firstToken,'fetched',200,
+        'text/html','Unsafe stale result',null,'[]',2]);
+    assert.equal(staleCommit.rows[0].result.ok,false,'stale lease cannot write page');
+    assert.equal((await db.query(
+      'select status from public.knowledge_discovery_pages where id=$1',[firstPageId])).rows[0].status,'discovered');
+    const validCommit = await a.query(
+      'select public.commit_knowledge_discovery_page_v1($1,$2,$3,$4,$5,$6,$7,$8,$9,$10::jsonb,$11) as result',
+      [first.rows[0].organization_id,firstId,firstPageId,renewed.rows[0].lease_token,
+        'fetched',200,'text/html','Synthetic homepage',null,
+        JSON.stringify(['https://yogakulam.com/about','https://yogakulam.com/classes']),2]);
+    assert.equal(validCommit.rows[0].result.ok,true);
+    assert.equal(validCommit.rows[0].result.status,'queued');
+    await a.query('commit');
+    const afterCommit=await db.query(
+      'select status,pages_discovered,pages_fetched from public.knowledge_discovery_jobs where id=$1',[firstId]);
+    assert.equal(afterCommit.rows[0].status,'queued');
+    assert.equal(afterCommit.rows[0].pages_discovered,3);
+    assert.equal(afterCommit.rows[0].pages_fetched,1);
+
+    // Cancellation obtains a row lock. A concurrent late worker waits,
+    // then sees the cancelled job and cannot write its page.
     const otherId=firstId===idA?idB:idA;
+    const otherOrg=firstId===idA?ORG_B:ORG_A;
     const otherToken=second.rows[0].lease_token;
-    await db.query("update public.knowledge_discovery_jobs set status='cancelled',lease_token=null,lease_until=null where id=$1",[otherId]);
-    const late=await db.query(
-      "update public.knowledge_discovery_jobs set status='completed'"+
-      " where id=$1 and status='running' and lease_token=$2 returning id",[otherId,otherToken]);
-    assert.equal(late.rowCount,0);
+    const otherPageId=(await db.query(
+      'select id from public.knowledge_discovery_pages where job_id=$1',[otherId])).rows[0].id;
+    await db.query('begin');
+    await db.query(
+      "update public.knowledge_discovery_jobs set status='cancelled',lease_token=null,lease_until=null where id=$1",
+      [otherId]);
+    await context(a,'service_role',USER_A);
+    const racing=a.query(
+      'select public.commit_knowledge_discovery_page_v1($1,$2,$3,$4,$5,$6,$7,$8,$9,$10::jsonb,$11) as result',
+      [otherOrg,otherId,otherPageId,otherToken,'fetched',200,'text/html',
+        'Should not persist',null,'[]',2]);
+    await db.query('commit');
+    const rejected=await racing;
+    assert.equal(rejected.rows[0].result.ok,false,'cancelled job rejects delayed commit');
+    await a.query('commit');
+    assert.equal((await db.query(
+      'select status from public.knowledge_discovery_pages where id=$1',[otherPageId])).rows[0].status,'discovered');
+
     await db.query(
       "update public.knowledge_discovery_jobs set attempts=5,lease_until=now()-interval '1 minute',status='running' where id=$1",[firstId]);
     await context(a,'service_role',USER_A);
