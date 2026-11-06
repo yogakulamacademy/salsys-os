@@ -233,7 +233,7 @@ test('KB-04B synthetic refresh preflight cannot schedule, fetch or store evidenc
   const writes:string[]=[];
   page.on('request',request=>{
     if(request.method()!=='GET' &&
-      /\\/(?:api\\/knowledge|rest\\/v1\\/knowledge_|api\\/website)/.test(request.url())){
+      /\/(?:api\/knowledge|rest\/v1\/knowledge_|api\/website)/.test(request.url())){
       writes.push(request.method()+' '+request.url());
     }
   });
