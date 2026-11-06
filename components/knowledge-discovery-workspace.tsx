@@ -155,8 +155,8 @@ export function KnowledgeDiscoveryWorkspace() {
           <input id="kb-website" readOnly value={state.configuredWebsite ?? ''} placeholder={loading ? 'Loading…' : 'Not configured'}
             className="mt-2 w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-3 text-sm text-slate-700" />
           {!state.configuredWebsite && !loading ? <p className="mt-2 text-xs text-amber-700">Add a website to your onboarding business profile before starting discovery.</p> : null}
-          {!state.pilotEnabled && !state.discoveryEnabled && !loading && !error ? <p className="mt-2 text-xs text-amber-700">Website discovery is paused or this domain has not been approved for the pilot.</p> : null>
-          {state.pilotEnabled && !state.websiteVerified && !loading ? <p className="mt-2 text-xs text-amber-700">Verify ownership of this website before scanning.</p> : null>
+          {!state.pilotEnabled && !state.discoveryEnabled && !loading && !error ? <p className="mt-2 text-xs text-amber-700">Website discovery is paused or this domain has not been approved for the pilot.</p> : null}
+          {state.pilotEnabled && !state.websiteVerified && !loading ? <p className="mt-2 text-xs text-amber-700">Verify ownership of this website before scanning.</p> : null}
           <div className="mt-5 flex flex-wrap items-end justify-between gap-3 border-t border-slate-100 pt-4">
             <div>
               <label htmlFor="kb-limit" className="block text-xs font-medium text-slate-600">Page limit</label>
