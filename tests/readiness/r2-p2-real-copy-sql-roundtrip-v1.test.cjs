@@ -125,7 +125,7 @@ function trendsSql(days) {
       status: "aggregate_comparison_only",
       window_days: days,
       sampled_at_utc: sampledAt,
-      candidate_events: 140,
+      candidate_events: EVENT_TOTALS.reduce((sum, n) => sum + n, 0),
       first_day_utc: dates[0],
       last_day_utc: dates.at(-1),
       last_day_incomplete: true,
