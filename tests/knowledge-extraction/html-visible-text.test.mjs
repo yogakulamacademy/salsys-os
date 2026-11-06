@@ -199,3 +199,28 @@ test('honors explicitly hidden inline CSS even with !important',()=>{
   assert.equal(result.ok,true);
   assert.deepEqual(result.blocks,[{kind:'paragraph',text:'Visible fact.'}]);
 });
+
+
+test('H4–H6 sections preserve exact heading path, never inherit stale headings',()=>{
+  const html='<h1>Academy</h1><h2>Training</h2><h3>Courses</h3>'+
+    '<h4>Residential</h4><h5>Fees</h5><p>Single room: $1750.</p>'+
+    '<h6>Discounts</h6><p>Early booking: $1500.</p>'+
+    '<h2>Online</h2><p>Online fee: $500.</p>';
+  const result=prepareWebsiteEvidenceFromHtml({...source(),html});
+  assert.equal(result.ok,true);
+  assert.deepEqual(result.evidence.blocks.map(x=>x.headingPath),[
+    ['Academy','Training','Courses','Residential','Fees'],
+    ['Academy','Training','Courses','Residential','Fees','Discounts'],
+    ['Academy','Online'],
+  ]);
+  assert.deepEqual(result.evidence.blocks.map(x=>x.quote),[
+    'Single room: $1750.',
+    'Early booking: $1500.',
+    'Online fee: $500.',
+  ]);
+});
+
+test('rejects unknown single-letter HTML entities rather than treating them as rendered text',()=>{
+  assert.deepEqual(extractVisibleWebsiteBlocks('<p>Fee &z; discount</p>'),
+    {ok:false,error:'unsupported_html_entity'});
+});
