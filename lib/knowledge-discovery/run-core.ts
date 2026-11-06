@@ -32,6 +32,7 @@ export type DiscoveryStore = {
 };
 export type DiscoveryFetcher = (
   seed: URL, page: URL, kind: 'robots' | 'html' | 'sitemap',
+  authorizeRedirect?: (next: URL) => Promise<void>,
 ) => ReturnType<typeof fetchPublicWeb>;
 
 function shortError(error: unknown): string {
@@ -50,7 +51,8 @@ function shortError(error: unknown): string {
 export async function runDiscoveryPageCore(
   claim: DiscoveryClaim,
   store: DiscoveryStore,
-  fetchPage: DiscoveryFetcher = fetchPublicWeb,
+  fetchPage: DiscoveryFetcher = (seed, page, kind, authorizeRedirect) =>
+    fetchPublicWeb(seed, page, kind, undefined, undefined, authorizeRedirect),
 ) {
   const seed = parseWebsiteSeed(claim.seed_url);
   const item = await store.pending(claim);
@@ -77,7 +79,17 @@ export async function runDiscoveryPageCore(
         pageStatus = 'blocked';
         errorCode = 'robots_disallow';
       } else {
-        const response = await fetchPage(seed, page, 'html');
+        const authorizeRedirect = async (next: URL) => {
+          const destinationRobots = await fetchPage(
+            seed, new URL('/robots.txt', next.origin), 'robots',
+          );
+          const destinationPolicy = destinationRobots.status === 404
+            ? { allowed: true, delaySeconds: 0 }
+            : evaluateRobots(destinationRobots.body, next.pathname, 'salsysosknowledgebot');
+          crawlDelay = Math.max(crawlDelay, destinationPolicy.delaySeconds);
+          if (!destinationPolicy.allowed) throw new WebsiteFetchError('robots_disallow');
+        };
+        const response = await fetchPage(seed, page, 'html', authorizeRedirect);
         statusCode = response.status;
         contentType = response.contentType;
         pageTitle = readHtmlTitle(response.body);
@@ -86,7 +98,7 @@ export async function runDiscoveryPageCore(
         if (item.depth === 0 && (robots.status === 404 ||
           evaluateRobots(robots.body, '/sitemap.xml', 'salsysosknowledgebot').allowed)) {
           try {
-            const sitemap = await fetchPage(seed, new URL('/sitemap.xml', page.origin), 'sitemap');
+            const sitemap = await fetchPage(seed, new URL('/sitemap.xml', page.origin), 'sitemap', authorizeRedirect);
             if (sitemap.status === 200) {
               links.push(...discoverSitemapLinks(seed, new URL(sitemap.url), sitemap.body));
             }
@@ -97,7 +109,7 @@ export async function runDiscoveryPageCore(
       }
     } catch (error) {
       errorCode = shortError(error);
-      pageStatus = errorCode === 'access_denied' || errorCode === 'unsafe_website'
+      pageStatus = ['access_denied', 'unsafe_website', 'robots_disallow'].includes(errorCode)
         ? 'blocked' : 'failed';
     }
   }
