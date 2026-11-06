@@ -43,7 +43,7 @@ export default async function EvidenceReviewPreviewPage() {
   if (!result.ok) {
     throw new Error('Synthetic evidence preview fixture is invalid.');
   }
-  const candidates = prepareSourceGroundedDrafts(result.evidence);
+  const candidates = prepareSourceGroundedDrafts(result.evidence, 'sample.example.com');
   if (!candidates.ok) {
     throw new Error('Synthetic draft candidate fixture is invalid.');
   }
