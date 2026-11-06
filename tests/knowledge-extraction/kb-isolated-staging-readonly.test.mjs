@@ -108,7 +108,7 @@ test('query URL construction is bounded to exact read-only knowledge paths',()=>
 function mockedResponse(status,body){
   return {status, async json(){return body;}};
 }
-function installSyntheticFetch({leak=false,missingPositive=false,badUser=false,duplicateSession=false}={}){
+function installSyntheticFetch({leak=false,missingPositive=false,badUser=false,duplicateSession=false,leakPositiveDoc=false,leakPositiveSearch=false,ungroundedMarker=false,tooManyChunks=false}={}){
   const calls=[];
   const tokenA=fakeVerifiedJwt(A,SESSION_A);
   const tokenB=fakeVerifiedJwt(B,duplicateSession?SESSION_A:SESSION_B);
@@ -138,8 +138,12 @@ function installSyntheticFetch({leak=false,missingPositive=false,badUser=false,d
     });
     if(pathname==='/rest/v1/knowledge_documents'){
       const id=u.searchParams.get('id')?.slice(3);
-      if(actor&&actor.doc===id&&!missingPositive)
-        return mockedResponse(200,[{id,organization_id:actor.org,status:'approved'}]);
+      if(actor&&actor.doc===id&&!missingPositive){
+        const rows=[{id,organization_id:actor.org,status:'approved'}];
+        if(leakPositiveDoc&&actor===A)
+          rows.push({id:B.doc,organization_id:B.org,status:'approved'});
+        return mockedResponse(200,rows);
+      }
       if(leak&&actor===A&&id===B.doc)
         return mockedResponse(200,[{id,organization_id:B.org,status:'approved'}]);
       return mockedResponse(200,[]);
@@ -147,8 +151,15 @@ function installSyntheticFetch({leak=false,missingPositive=false,badUser=false,d
     if(pathname==='/rest/v1/rpc/search_organization_knowledge_v1'){
       const org=u.searchParams.get('p_organization_id');
       const marker=u.searchParams.get('p_query');
-      if(actor && actor.org===org && actor.marker===marker && !missingPositive)
-        return mockedResponse(200,[{document_id:actor.doc}]);
+      if(actor && actor.org===org && actor.marker===marker && !missingPositive){
+        const own={document_id:actor.doc,
+          content:ungroundedMarker?'Text that does not contain the expected token':
+            'Unique synthetic knowledge '+actor.marker};
+        const rows=tooManyChunks?Array.from({length:7},()=>({...own})):[own];
+        if(leakPositiveSearch&&actor===A)
+          rows.push({document_id:B.doc,content:'Leaked knowledge '+B.marker});
+        return mockedResponse(200,rows);
+      }
       return mockedResponse(200,[]);
     }
     throw Error('unexpected_request');
@@ -237,5 +248,47 @@ test('two staging actors cannot reuse the same Auth session ID',async()=>{
       /duplicate_auth_sessions/,
     );
     assert.equal(fake.calls.filter(x=>x.path.startsWith('/rest/v1/')).length,0);
+  }finally{fake.restore();}
+});
+
+
+
+test('positive document read rejects a response mixing another tenant row',async()=>{
+  const fake=installSyntheticFetch({leakPositiveDoc:true});
+  try{
+    await assert.rejects(
+      runKbStagingReadOnlyAcceptance(validateKbStagingEnvironment(baseEnv())),
+      /own_document_unexpected_row_count/,
+    );
+  }finally{fake.restore();}
+});
+
+test('positive retrieval refuses foreign documents mixed with valid own results',async()=>{
+  const fake=installSyntheticFetch({leakPositiveSearch:true});
+  try{
+    await assert.rejects(
+      runKbStagingReadOnlyAcceptance(validateKbStagingEnvironment(baseEnv())),
+      /own_retrieval_unexpected_or_leaked_rows/,
+    );
+  }finally{fake.restore();}
+});
+
+test('positive retrieval requires the uniquely seeded marker in actual chunk content',async()=>{
+  const fake=installSyntheticFetch({ungroundedMarker:true});
+  try{
+    await assert.rejects(
+      runKbStagingReadOnlyAcceptance(validateKbStagingEnvironment(baseEnv())),
+      /own_retrieval_marker_not_grounded/,
+    );
+  }finally{fake.restore();}
+});
+
+test('positive retrieval denies over-limit result sets',async()=>{
+  const fake=installSyntheticFetch({tooManyChunks:true});
+  try{
+    await assert.rejects(
+      runKbStagingReadOnlyAcceptance(validateKbStagingEnvironment(baseEnv())),
+      /own_retrieval_unexpected_or_leaked_rows/,
+    );
   }finally{fake.restore();}
 });
