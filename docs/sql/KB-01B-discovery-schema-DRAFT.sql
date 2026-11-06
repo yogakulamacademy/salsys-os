@@ -33,6 +33,46 @@ create index if not exists knowledge_discovery_jobs_queue
   on public.knowledge_discovery_jobs(next_allowed_at, created_at)
   where status in ('queued', 'running');
 
+-- KB-01E scan frequency gate, enforced atomically for every service-side job insert.
+-- Database enforcement prevents repeat/colliding API requests bypassing UI controls.
+-- One active scan remains protected by the unique partial index above.
+create or replace function public.guard_knowledge_discovery_job_rate_v1()
+returns trigger language plpgsql security invoker
+set search_path = public, pg_temp as $function$
+declare
+  v_total_day integer;
+  v_latest timestamptz;
+begin
+  -- Serialize attempts for this organization, including concurrent API requests.
+  perform pg_advisory_xact_lock(hashtextextended(new.organization_id::text, 20261106));
+
+  -- Let the active-job unique index raise its standard 23505 error.
+  if exists (
+    select 1 from public.knowledge_discovery_jobs
+    where organization_id = new.organization_id and status in ('queued','running')
+  ) then
+    return new;
+  end if;
+
+  select count(*), max(created_at) into v_total_day, v_latest
+  from public.knowledge_discovery_jobs
+  where organization_id = new.organization_id
+    and created_at > now() - interval '24 hours';
+
+  if v_total_day >= 3 then
+    raise exception 'discovery_daily_scan_limit' using errcode = 'P0001';
+  end if;
+  if v_latest > now() - interval '15 minutes' then
+    raise exception 'discovery_scan_cooldown' using errcode = 'P0001';
+  end if;
+  return new;
+end;
+$function$;
+revoke all on function public.guard_knowledge_discovery_job_rate_v1() from public, anon, authenticated;
+create trigger knowledge_discovery_jobs_rate_limit
+before insert on public.knowledge_discovery_jobs
+for each row execute function public.guard_knowledge_discovery_job_rate_v1();
+
 create table if not exists public.knowledge_discovery_pages (
   id uuid primary key default gen_random_uuid(),
   organization_id uuid not null,
