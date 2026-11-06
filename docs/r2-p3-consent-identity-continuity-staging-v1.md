@@ -52,6 +52,8 @@ Before running any manual acceptance, the release engineer must verify the stagi
 # Do not paste secrets, credentials, cookies, customer IDs or values into GitHub.
 export SALSYS_STAGING_SITE_ORIGIN="https://<approved-staging-site>"
 export SALSYS_STAGING_CRM_ORIGIN="https://<isolated-staging-crm>"
+export SALSYS_STAGING_CRM_PROJECT_ID="prj_<independent-vercel-staging-project-id>"
+export SALSYS_PRODUCTION_CRM_PROJECT_ID="prj_<existing-production-vercel-project-id>"
 export SALSYS_STAGING_SUPABASE_URL="https://<staging-supabase-host>"
 export SALSYS_PRODUCTION_SUPABASE_URL="https://<production-supabase-host>"
 export SALSYS_RECOVERY_SUPABASE_URL="https://<recovery-rehearsal-supabase-host>"
@@ -60,12 +62,20 @@ export SALSYS_STAGING_SOURCE_STATUS="active"
 export SALSYS_STAGING_SOURCE_ENVIRONMENT="staging"
 export SALSYS_STAGING_CONSENT_MODE="required"
 export SALSYS_STAGING_FORM_CAPTURE_ISOLATED="yes"
+export SALSYS_STAGING_EXTERNAL_EFFECTS_DISABLED="yes"
+export SALSYS_STAGING_SCHEDULED_JOBS_DISABLED="yes"
 export SALSYS_STAGING_OWNER_APPROVED="yes"
 export SALSYS_STAGING_EXPECTED_COMMIT="<reviewed-PR-40-char-SHA>"
 export SALSYS_STAGING_DEPLOYED_COMMIT="<actual-preview-40-char-SHA>"
 
 node scripts/r2-consent-staging-preflight.mjs
 ```
+
+**Production preview isolation:** Stage the CRM on a *different Vercel project*, not a Preview deployment inside the production `salsys-os` project. The read-only preflight checks the two supplied project IDs are well-formed and different; this is an assertion based on provided metadata, not a Vercel API verification. Independently inspect the deployed project identity and browser/server Supabase target before acceptance. Staging website and CRM origins must not be any production host or its subdomain, including `*.yogakulam.com`, `*.yogakulamacademy.com` or `*.salsysos.com` (shared-domain cookies and integrations may leak between environments).
+
+**No-send requirement:** Set `SALSYS_STAGING_EXTERNAL_EFFECTS_DISABLED=yes` and `SALSYS_STAGING_SCHEDULED_JOBS_DISABLED=yes` *only after confirming* that the staging project cannot send real WhatsApp/Instagram/email/SMS, ad conversion or payment actions and cannot execute Vercel Cron/queue runners. Do not merely set these flags to bypass the preflight; the script never configures or disables services. Verify the absence of production provider credentials, isolate test contacts and audit network calls in the eventual staging acceptance. Because this repository's `vercel.json` includes scheduled jobs, do not auto-deploy an unreviewed staging build using inherited Preview credentials.
+
+**Non-billable preparation mode:** Until staging costs are explicitly approved, run only checked-in, loopback/mock CI, code review, the offline preflight regression suite and draft the owner acceptance evidence. A local/fixture browser test can increase confidence but **cannot** satisfy the required real customer-site CMP and lead-form acceptance. No Supabase project/branch, Vercel project/deployment, source registration, domain purchase, provider connection or live test event may be created during this mode.
 
 **Recovery isolation:** SalsysOS has an existing recovery-rehearsal project reserved for recovery testing. The preflight also requires its Supabase origin for a *comparison only*, and blocks any staging URL that matches it. The URL is a non-secret origin; do not provide service-role keys. Production and recovery databases must never be repurposed as staging just to pass acceptance.
 
