@@ -80,7 +80,8 @@ test("Breakdown stays a sibling to the independently available funnel, paths and
 
 test("Synthetic browser integration covers small cohorts, tenant metadata and mobile", () => {
   assert.match(fixture, /get_native_behavior_page_breakdown_v1/);
-  assert.match(fixture, /body\.p_organization_id!==organizationId/);
+  assert.match(fixture, /body\.p_organization_id!==activeBehaviorOrganization\(\)/);
+  assert.match(fixture, /const activeBehaviorOrganization=.*secondaryOrganizationId:organizationId/);
   assert.match(fixture, /behaviorScenario==='small'/);
   assert.match(browser, /No event data and small-cohort evidence/);
   assert.match(browser, /Invalid breakdown parameter/);
