@@ -10,6 +10,8 @@ import { compareWebsiteEvidenceSnapshots } from '@/lib/knowledge-extraction/webs
 import { KnowledgeRefreshReadinessPreview } from '@/components/knowledge-refresh-readiness-preview';
 import { assessSourceChangeImpact } from '@/lib/knowledge-extraction/source-change-impact';
 import { KnowledgeSourceChangeImpactPreview } from '@/components/knowledge-source-change-impact-preview';
+import { prepareSyntheticHumanReviewHandoff } from '@/lib/knowledge-extraction/human-review-handoff';
+import { KnowledgeHumanReviewHandoffPreview } from '@/components/knowledge-human-review-handoff-preview';
 
 export const dynamic = 'force-dynamic';
 
@@ -187,6 +189,24 @@ export default async function EvidenceReviewPreviewPage() {
     },
   );
   if(!impact.ok)throw new Error('Synthetic source change-impact fixture failed.');
+  // KB-04D: one fictional, unsaved annotation. No actual actor, audit or
+  // action invocation is implied by the claim below.
+  const annotatedRow=acceptance.packet.rows.find(row=>
+    row.sourceUrl===modified.current.sourceUrl&&
+    row.answerQuoteSha256===modified.current.quoteSha256&&
+    row.answerBlockId===modified.current.blockId);
+  const handoff=prepareSyntheticHumanReviewHandoff({
+    organizationId:testOrganization,activeOrganizationId:testOrganization,
+    reviewerId:'00000000-0000-4000-8000-000000000003',
+    reviewerRole:'admin',recordedAt:'2026-11-06T12:00:00Z',
+    acceptance:acceptance.packet,impact:impact.report,
+    annotations:annotatedRow?[{
+      proposalId:annotatedRow.proposalId,changeId:modified.id,
+      annotation:'request_manual_correction',
+      reviewerNote:'Fictional reviewer: independently check the current fee before editing.',
+    }]:[],
+  });
+  if(!handoff.ok)throw new Error('Synthetic human review handoff fixture failed.');
 
   return (
     <>
@@ -201,6 +221,7 @@ export default async function EvidenceReviewPreviewPage() {
     />
     <KnowledgeRefreshReadinessPreview />
     <KnowledgeSourceChangeImpactPreview report={impact.report} />
+    <KnowledgeHumanReviewHandoffPreview packet={handoff.packet} />
     </>
   );
 }
