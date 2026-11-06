@@ -38,7 +38,7 @@ test('discovered links stay on domain and remove query tracking', () => {
     + '<a href="javascript:alert(1)">Unsafe</a>'
     + '<a href="/about#section">Duplicate</a>'
     + '<a href="/guide.pdf">PDF</a>';
-  assert.deepEqual(discoverHtmlLinks(seed, page, html), ['https://www.yogakulam.com/about']);
+  assert.deepEqual(discoverHtmlLinks(seed, page, html), ['https://yogakulam.com/about']);
   assert.equal(readHtmlTitle('<title>  Courses  &amp;  Teachers </title>'), 'Courses &amp; Teachers');
 });
 
