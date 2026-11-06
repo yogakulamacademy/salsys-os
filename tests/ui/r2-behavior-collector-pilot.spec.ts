@@ -170,10 +170,15 @@ test("R2-P1 Chromium: no pre-consent scroll backfill; 75/90 percent cross once",
   await expect.poll(async () => (await events(page))
     .filter((event) => event.name === "web.scroll_depth_reached")
     .map((event) => event.properties.threshold_percent)).toEqual([75, 90]);
+  // Crossing 25/50 for the first time *after* consent is legitimate new
+  // activity, not retroactive collection. Earlier 75/90 crossings are not
+  // duplicated on the same page because the collector deduplicates by step.
   await moveToDepth(page, 15);
   await moveToDepth(page, 99);
   expect((await events(page)).filter((event) =>
-    event.name === "web.scroll_depth_reached")).toHaveLength(2);
+    event.name === "web.scroll_depth_reached").map(
+      (event) => event.properties.threshold_percent,
+    )).toEqual([75, 90, 25, 50]);
 });
 
 test("R2-P1 Chromium: SPA change allows a fresh page-scoped CTA impression", async ({ page }) => {
