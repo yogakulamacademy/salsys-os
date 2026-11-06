@@ -269,3 +269,50 @@ test('two staging actors cannot reuse the same Auth session ID',async()=>{
     assert.equal(fake.calls.filter(x=>x.path==='/auth/v1/logout').length,2);
   }finally{fake.restore();}
 });
+
+
+test('failed second login revokes first session and runs no knowledge queries',async()=>{
+  const fake=installSyntheticFetch({secondLoginFails:true});
+  try{
+    await assert.rejects(
+      runKbStagingReadOnlyAcceptance(validateKbStagingEnvironment(baseEnv())),
+      /authentication_or_identity_failed/,
+    );
+    assert.equal(fake.calls.filter(x=>x.path==='/auth/v1/token').length,2);
+    assert.equal(fake.calls.filter(x=>x.path==='/auth/v1/logout').length,1);
+    assert.equal(fake.calls.filter(x=>x.path.startsWith('/rest/v1/')).length,0);
+  }finally{fake.restore();}
+});
+test('failure after issuance but before JWT validation revokes the issued session',async()=>{
+  const fake=installSyntheticFetch({badAuthUser:true});
+  try{
+    await assert.rejects(
+      runKbStagingReadOnlyAcceptance(validateKbStagingEnvironment(baseEnv())),
+      /user_session_unverified/,
+    );
+    assert.equal(fake.calls.filter(x=>x.path==='/auth/v1/logout').length,1);
+    assert.equal(fake.calls.filter(x=>x.path.startsWith('/rest/v1/')).length,0);
+  }finally{fake.restore();}
+});
+test('logout errors force an overall failure even when all 12 knowledge checks passed',async()=>{
+  const fake=installSyntheticFetch({logoutFailure:true});
+  try{
+    await assert.rejects(
+      runKbStagingReadOnlyAcceptance(validateKbStagingEnvironment(baseEnv())),
+      /auth_session_cleanup_incomplete/,
+    );
+    // Continue trying to revoke the second issued token after the first fails.
+    assert.equal(fake.calls.filter(x=>x.path==='/auth/v1/logout').length,2);
+    assert.equal(fake.calls.filter(x=>x.path==='/rest/v1/knowledge_documents').length,6);
+  }finally{fake.restore();}
+});
+test('cleanup error is never suppressed even after detected tenant data leakage',async()=>{
+  const fake=installSyntheticFetch({leak:true,logoutFailure:true});
+  try{
+    await assert.rejects(
+      runKbStagingReadOnlyAcceptance(validateKbStagingEnvironment(baseEnv())),
+      /auth_session_cleanup_incomplete/,
+    );
+    assert.equal(fake.calls.filter(x=>x.path==='/auth/v1/logout').length,2);
+  }finally{fake.restore();}
+});
