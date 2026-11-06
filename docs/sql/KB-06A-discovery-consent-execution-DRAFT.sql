@@ -46,7 +46,7 @@ create policy knowledge_discovery_consent_admin_read
 -- non-HTTPS schemes and unexpected suffixes fail closed.
 create or replace function public.knowledge_discovery_consent_active_v1(
   p_organization_id uuid,p_seed_url text
-) returns boolean language sql stable security invoker
+) returns boolean language sql volatile security invoker
 set search_path=public,pg_temp as $function$
   select coalesce(
     p_seed_url ~ '^https://[a-z0-9][a-z0-9.-]*[.][a-z]{2,}(/|$)'
