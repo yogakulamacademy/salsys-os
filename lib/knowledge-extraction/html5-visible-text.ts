@@ -177,7 +177,10 @@ export function extractHtml5VisibleBlocks(input: string): ExtractedHtml5 {
     else if(tag==='dt'||tag==='summary')kind='faq_question';
     else if(tag==='dd')kind='faq_answer';
     if(kind){
-      append(kind,rawInlineText(node,true));
+      // Exclude nested block CHILDREN, not the current paragraph/heading
+      // itself. Otherwise every supported semantic block is accidentally
+      // skipped, while table rows still appear.
+      append(kind,children(node).map(child=>rawInlineText(child,true)).join(''));
       // Descend only when malformed HTML contains nested block nodes.
       for(const child of children(node)){
         if(child.tagName&&layoutBlockTags.has(child.tagName))visit(child);
