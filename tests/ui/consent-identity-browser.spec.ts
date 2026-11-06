@@ -264,3 +264,103 @@ for (const deniedStorage of ["local", "session"] as const) {
       ]);
     });
 }
+
+
+test("native Chromium: actual form submission keeps necessary identity separate across consent epochs", async ({ context }) => {
+  // Submit the real DOM form via a browser click. A tiny simulated application
+  // handler forwards the browser-generated FormData as URL-encoded POST to an
+  // intercepted loopback endpoint. No lead, email, or CRM record is created.
+  const api = await instrument(context, "required");
+  const submissions: { visitor: string | null; session: string | null }[] = [];
+  await context.route("**/local-noop", async (route) => {
+    if (route.request().method() !== "POST") {
+      await route.fulfill({ status: 405, body: "Only synthetic POST accepted" });
+      return;
+    }
+    const fields = new URLSearchParams(route.request().postData() || "");
+    submissions.push({
+      visitor: fields.get("salsys_visitor_id"),
+      session: fields.get("salsys_session_id"),
+    });
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: '{"ok":true,"synthetic":true}',
+    });
+  });
+
+  const page = await openHarness(context);
+  await page.evaluate(() => {
+    const form = document.getElementById("test-form") as HTMLFormElement;
+    form.addEventListener("submit", (event) => {
+      event.preventDefault();
+      const encoded = new URLSearchParams();
+      new FormData(form).forEach((value, key) => {
+        if (typeof value === "string") encoded.append(key, value);
+      });
+      void fetch("/local-noop", {
+        method: "POST", body: encoded, credentials: "omit",
+      });
+    });
+  });
+
+  const submit = async (expectedCount: number) => {
+    // This invokes the SDK's actual capture-phase submit listener and causes
+    // a synthetic POST of the form, not a direct SDK.track() test call.
+    await page.locator("#test-form button[type=submit]").click();
+    await expect.poll(() => submissions.length).toBe(expectedCount);
+    await expect.poll(() => api.events.filter(
+      (event) => event.event_name === "web.form_submitted").length).toBe(expectedCount);
+    return {
+      fields: submissions[expectedCount - 1],
+      evidence: api.events.filter(
+        (event) => event.event_name === "web.form_submitted")[expectedCount - 1],
+    };
+  };
+
+  await chooseAnalytics(page, "granted");
+  const original = await identity(page);
+  const first = await submit(1);
+  expect(original.granted).toBe(true);
+  expect(first.fields).toEqual({ visitor: original.visitor, session: original.session });
+  expect(first.evidence.anonymous_visitor_id).toBe(original.visitor);
+  expect(first.evidence.session_key).toBe(original.session);
+
+  await chooseAnalytics(page, "withdrawn");
+  const withdrawn = await identity(page);
+  expect(withdrawn.granted).toBe(false);
+  expect(withdrawn.visitor).not.toBe(original.visitor);
+  expect(withdrawn.session).not.toBe(original.session);
+  expect(withdrawn.sharedVisitor).toBe(null);
+  const optionalCount = api.events.filter(
+    (event) => event.event_name === "web.page_viewed").length;
+  const second = await submit(2);
+  expect(second.fields).toEqual({ visitor: withdrawn.visitor, session: withdrawn.session });
+  expect(second.evidence.anonymous_visitor_id).toBe(withdrawn.visitor);
+  expect(second.evidence.session_key).toBe(withdrawn.session);
+  expect(api.events.filter(
+    (event) => event.event_name === "web.page_viewed").length).toBe(optionalCount);
+  expect((await blockedOptional(page)).privacy_blocked).toBe(true);
+
+  await chooseAnalytics(page, "granted");
+  const afterRegrant = await identity(page);
+  expect(afterRegrant.granted).toBe(true);
+  expect(afterRegrant.visitor).toBe(withdrawn.visitor);
+  expect(afterRegrant.visitor).not.toBe(original.visitor);
+  expect(afterRegrant.session).toBe(withdrawn.session);
+  const third = await submit(3);
+  expect(third.fields).toEqual({
+    visitor: afterRegrant.visitor, session: afterRegrant.session,
+  });
+  expect(third.evidence.anonymous_visitor_id).toBe(afterRegrant.visitor);
+  expect(third.evidence.session_key).toBe(afterRegrant.session);
+  expect(submissions.slice(1).every(
+    (post) => post.visitor !== original.visitor && post.session !== original.session,
+  )).toBe(true);
+  expect(api.receipts.map((receipt) => receipt.decisions.analytics)).toEqual([
+    "granted", "withdrawn", "granted",
+  ]);
+  // Optional analytics must never contain a synthetic form email in properties.
+  expect(api.events.some((event) =>
+    JSON.stringify(event.properties ?? {}).includes("synthetic@example.test"))).toBe(false);
+});
