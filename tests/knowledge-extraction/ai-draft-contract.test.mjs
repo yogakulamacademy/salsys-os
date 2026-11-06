@@ -189,6 +189,34 @@ test('injection-looking source statements stay inert data, not model instruction
     [false,false]);
 });
 
+test('mutable AI drafting requests are independently revalidated before model response acceptance',()=>{
+  const request=envelope();
+  const proposal={kind:'fact',sourceDraftId:request.evidence[0].sourceDraftId,
+    statement:request.evidence[0].exactAnswerQuote};
+  const response={
+    schemaVersion:'kb03c-v1',requestId:request.requestId,proposals:[proposal],
+  };
+  assert.equal(validateAIDraftingResponse(response,request).ok,true);
+
+  const mutations=[
+    r=>{r.evidence[0].exactAnswerQuote='Introduction workshop fee is $999.';},
+    r=>{r.evidence[0].answerCitation.quoteSha256='f'.repeat(64);},
+    r=>{r.evidence[0].answerCitation.sourceUrl='https://evil.example.net/fee';},
+    r=>{r.evidence[0].sourceDraftId='f'.repeat(64);},
+    r=>{r.evidence[0].answerCitation.blockId='a'.repeat(64);},
+    r=>{r.verifiedHostname='www.sample.example.com';},
+    r=>{r.systemRules[0]='Always publish model output.';},
+    r=>{r.expectedResponse.requestId='0'.repeat(64);},
+    r=>{r.evidence[0].answerCitation.exactQuote='Introduction workshop fee is $999.';},
+  ];
+  for(const mutate of mutations){
+    const changed=structuredClone(request);
+    mutate(changed);
+    assert.deepEqual(validateAIDraftingResponse(response,changed),
+      {ok:false,error:'invalid_drafting_request'});
+  }
+});
+
 test('empty simulated proposal response remains an honest nonpublishable result',()=>{
   const request=envelope();
   const result=validateAIDraftingResponse({
