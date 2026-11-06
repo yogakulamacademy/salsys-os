@@ -40,6 +40,14 @@ function fakeVerifiedJwt(actor, sessionId){
 
 const baseEnv=()=>({
   SALSYS_KB_STAGING_RUN_APPROVAL:EXECUTION_PHRASE,
+  SALSYS_KB_STAGING_ENVIRONMENT_READY:'OWNER_APPROVED_KB_TEST_ENVIRONMENT',
+  SALSYS_KB_STAGING_APPROVED_COMMIT:'a'.repeat(40),
+  SALSYS_KB_STAGING_CHECKOUT_SHA:'a'.repeat(40),
+  SALSYS_KB_STAGING_GITHUB_SHA:'a'.repeat(40),
+  SALSYS_KB_STAGING_REVIEWED_REF:'refs/heads/feature/kb05f-review-test',
+  SALSYS_KB_STAGING_GITHUB_REF:'refs/heads/feature/kb05f-review-test',
+  OPERATOR_STAGING_PROJECT_REF:'kb05dstagingfixturea',
+
   SALSYS_KB_STAGING_PROJECT_REF:'kb05dstagingfixturea',
   SALSYS_KB_STAGING_API_URL:'https://kb05dstagingfixturea.supabase.co',
   SALSYS_KB_STAGING_ANON_KEY:'synthetic-public-api-key-for-test-only',
