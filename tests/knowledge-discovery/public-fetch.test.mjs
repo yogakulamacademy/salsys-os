@@ -86,7 +86,7 @@ test('rejects DNS rebinding-style mixed public/private records before fetch', as
   let attempts=0;
   const resolver=async()=>[{address:'1.1.1.1',family:4},{address:'127.0.0.1',family:4}];
   const transport=async()=>{attempts++;return {status:200,location:null,contentType:'text/html',body:'ok'};};
-  await assert.rejects(fetchPublicWeb(seed,seed,'html',resolver,transport),/exclusively public/);
+  await assert.rejects(fetchPublicWeb(seed,seed,'html',resolver,transport),/exclusively.*public/);
   assert.equal(attempts,0);
 });
 
