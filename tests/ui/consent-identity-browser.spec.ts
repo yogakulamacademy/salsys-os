@@ -380,6 +380,8 @@ for (const invalidAck of [
   { name: "contradictory analytics decision", variant: "contradictory" },
   { name: "unexpected effective purpose", variant: "unexpected-purpose" },
   { name: "unrequested advertising grant with receipt", variant: "unrequested-grant" },
+  { name: "extra unrequested advertising receipt outside effective decisions", variant: "extra-receipt" },
+  { name: "extra unrequested denied analytics receipt outside effective decisions", variant: "extra-denied-receipt" },
 ] as const) {
   test("native Chromium: 200 consent response with " + invalidAck.name +
     " cannot unlock optional tracking", async ({ context }) => {
@@ -411,6 +413,20 @@ for (const invalidAck of [
         response.receipts.push({
           purpose: "advertising", decision: "granted",
           receipt_id: "synthetic-unrequested-grant",
+        });
+      }
+      if (invalidAck.variant === "extra-receipt") {
+        // Summary says only analytics was persisted, while receipt list
+        // claims an additional unrequested advertising GRANT.
+        response.receipts.push({
+          purpose: "advertising", decision: "granted",
+          receipt_id: "synthetic-hidden-advertising-grant",
+        });
+      }
+      if (invalidAck.variant === "extra-denied-receipt") {
+        response.receipts.push({
+          purpose: "analytics", decision: "denied",
+          receipt_id: "synthetic-conflicting-denial",
         });
       }
       await route.fulfill({
