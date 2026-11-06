@@ -127,3 +127,39 @@ between two authorized accounts, or UI-to-SQL reconciliation**.
 The clean migration replay's negative checks are a *separate* evidence row:
 PASS / FAIL / BLOCKED. Issue #523's human acceptance rows above remain
 required even when this new CI check passes.
+
+
+## G. Positive local tenant-bound authorization and tenant isolation (2026-11-06)
+
+The migration-replay workflow now runs `tests/database/r2-behavior-rpc-positive-tenant-local.sql`
+**after** the existing negative RPC authorization test in disposable Supabase/PostgreSQL.
+
+The test transaction creates one entirely synthetic CRM account with **active
+membership in two synthetic organizations**. It enables local session
+enforcement, creates two local internal tracking sources, and inserts distinct
+source-scoped, timestamp-ordered synthetic events. All inserts and session
+bindings disappear under the final `ROLLBACK` and are **never run in production**.
+
+It verifies as the actual PostgreSQL `authenticated` role:
+
+- The first synthetic JWT session can bind to its authorized owner tenant A and
+  receives exactly the A-only funnel (4/2/1), Event Activity (4/2/1) and
+  public page summary (4 page views, 4 identified sessions).
+- The same session, despite membership in tenant B, is **denied** all three
+  tenant-B RPCs with `P0001`, and cannot rebind to B in place.
+- A **different synthetic session** from that same member can bind to tenant B
+  (admin role), receives only B's distinct 5/3/2 counts, and is denied all
+  three tenant-A RPCs with `P0001`.
+- Unexpected successful authorization, inaccurate aggregate totals, schema
+  regression, RLS errors or any other SQL error fail the clean-replay job.
+
+This is a deeper PostgreSQL execution-level **synthetic positive and negative
+tenant-isolation test**, not just an inspection of SQL function text or an
+unbound-session rejection. It requires no paid staging project, customer
+credentials, real visitor IDs, live customer activity or production data writes.
+
+**Still not passed by this test:** real authenticated owner/admin browser
+sessions and sign-off, tenant switching through the actual CRM login,
+user-interface-to-live-SQL reconciliation, live consent withdrawal/regrant,
+and verified retention-history completeness. Record these as BLOCKED or
+PENDING, not PASS, until independently witnessed. Issue #523 stays OPEN.
