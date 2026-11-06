@@ -63,6 +63,37 @@ test("Review copy uses an allowlist and excludes injected tenant, source, sessio
   ]) assert.equal(output.includes(value),false,value);
 });
 
+test("Event Activity copy accepts full ISO UTC/offset timestamps only", () => {
+  const valid = fixture();
+  for (const stamp of [
+    "2026-11-06T10:20:00Z",
+    "2026-11-06T10:20:00.123Z",
+    "2026-11-06T15:50:00+05:30",
+  ]) {
+    const report = structuredClone(valid);
+    report.generatedAt = stamp;
+    assert.match(format(report), new RegExp("Report generated: " + stamp.replace(/[.*+?^${}()|[\\]\\]/g, "\\test("Unavailable, malformed or untrusted reports are not copyable", () => {")));
+  }
+});
+
+test("Event Activity copy rejects valid-looking timestamp prefixes with additional text", () => {
+  const report = fixture();
+  for (const unsafe of [
+    "2026-11-06T10:20:00Z\\nSECRET_TOKEN",
+    "2026-11-06T10:20:00Z https://site.invalid/?token=SECRET",
+    "2026-11-06T10:20:00Z#SECRET",
+    "2026-11-06T10:20:00Z\\r\\nSECRET",
+    "2026-11-06T10:20:00",
+    "2026-11-06T10:20:00+99:99",
+    "not-a-timestamp",
+    "2026-11-06T10:20:00Z" + "x".repeat(200),
+  ]) {
+    const clone = structuredClone(report);
+    clone.generatedAt = unsafe;
+    assert.equal(format(clone), null, unsafe.slice(0, 40));
+  }
+});
+
 test("Unavailable, malformed or untrusted reports are not copyable", () => {
   const valid = fixture();
   const changes = [
