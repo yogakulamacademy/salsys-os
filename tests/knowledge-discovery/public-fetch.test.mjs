@@ -134,3 +134,25 @@ test('ownership proof refuses forwarding redirects or non-plaintext responses',a
   await assert.rejects(fetchPublicWeb(seed,url,'verification',resolver,html),
     /unsupported_content_type/);
 });
+
+
+test('KB-06A robots redirect rechecks supplied consent guard before another HTTP request',async()=>{
+  const seed=new URL('https://fixture.example.com/');
+  const robots=new URL('/robots.txt',seed);
+  let requests=0,guards=0;
+  const resolver=async()=>[{address:'8.8.8.8',family:4}];
+  const transport=async()=>{
+    requests++;
+    return {status:302,location:'/robots-next.txt',
+      contentType:'text/plain',body:''};
+  };
+  await assert.rejects(
+    fetchPublicWeb(seed,robots,'robots',resolver,transport,async()=>{
+      guards++;
+      throw Error('consent_withdrawn_during_redirect');
+    }),
+    /consent_withdrawn_during_redirect/,
+  );
+  assert.equal(requests,1);
+  assert.equal(guards,1);
+});

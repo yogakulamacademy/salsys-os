@@ -5,6 +5,7 @@ import { processOneDiscoveryPage } from '@/lib/knowledge-discovery/runner';
 import { parseWebsiteSeed } from '@/lib/knowledge-discovery/url-policy';
 import { discoveryPilotEnabled, discoveryHostAllowed } from '@/lib/knowledge-discovery/pilot-gate';
 import { discoveryDomainVerified, discoveryVerificationHost } from '@/lib/knowledge-discovery/domain-verification';
+import { discoverySiteConsentActive } from '@/lib/knowledge-discovery/site-consent';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -54,6 +55,19 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ ok: false, error: 'Website ownership proof is missing or expired' },
           { status: 403, headers: noStore });
       }
+      const consent = await admin.from('knowledge_discovery_site_consents')
+        .select('organization_id,hostname,purpose,status,policy_version,granted_by,granted_at,valid_until,withdrawn_at')
+        .eq('organization_id',claim.organization_id)
+        .eq('hostname',discoveryVerificationHost(site.hostname)).maybeSingle();
+      if (consent.error) throw consent.error;
+      if (!discoverySiteConsentActive(
+        consent.data,claim.organization_id,discoveryVerificationHost(site.hostname),
+      )) {
+        return NextResponse.json({ok:false,error:'Website discovery consent missing or inactive'},
+          {status:403,headers:noStore});
+      }
+      // The processing adapter repeats consent validation before each new
+      // network request. SQL commit rechecks it atomically with page writes.
       const outcome = await processOneDiscoveryPage(claim);
       return NextResponse.json({ ok: true, state: 'processed', result: outcome }, { headers: noStore });
     } catch {

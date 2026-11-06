@@ -31,6 +31,7 @@ let claim=null;
 let adminCalls=0;
 let processCalls=0;
 let proofVerified=true;
+let consentGranted=true;
 const api=transpile('app/api/knowledge/discovery/worker/route.ts',{
   'next/server':{NextResponse},
   '@/lib/supabase/admin':{createAdminClient:()=>{
@@ -39,7 +40,22 @@ const api=transpile('app/api/knowledge/discovery/worker/route.ts',{
       assert.equal(name,'claim_knowledge_discovery_job_v1');
       return {data:claim?[claim]:[],error:null};
     },from: table=>{
-      assert.equal(table,'knowledge_discovery_domain_verifications');
+      assert.ok(['knowledge_discovery_domain_verifications',
+        'knowledge_discovery_site_consents'].includes(table));
+      if(table==='knowledge_discovery_site_consents')return {
+        select:()=>({eq:()=>({eq:()=>({
+          maybeSingle:async()=>({data:consentGranted?{
+            organization_id:claim?.organization_id,
+            hostname:'fixture.example.com',
+            purpose:'website_discovery_review_only',status:'granted',
+            policy_version:'synthetic-v1',
+            granted_by:'20000000-0000-4000-8000-000000000001',
+            granted_at:new Date(Date.now()-60_000).toISOString(),
+            valid_until:new Date(Date.now()+60_000).toISOString(),
+            withdrawn_at:null,
+          }:null,error:null}),
+        })})}),
+      };
       return {select:()=>({eq:()=>({eq:()=>({
         maybeSingle:async()=>({data:proofVerified
           ? {verified_at:new Date(Date.now()-1000).toISOString(),
@@ -55,6 +71,7 @@ const api=transpile('app/api/knowledge/discovery/worker/route.ts',{
   }},
   '@/lib/knowledge-discovery/url-policy':policy,
   '@/lib/knowledge-discovery/pilot-gate':pilot,
+  '@/lib/knowledge-discovery/site-consent':transpile('lib/knowledge-discovery/site-consent.ts',{}),
   '@/lib/knowledge-discovery/domain-verification':transpile('lib/knowledge-discovery/domain-verification.ts',{
     'node:crypto':require('node:crypto'),
   }),
@@ -65,7 +82,7 @@ const before=Object.fromEntries(vars.map(k=>[k,process.env[k]]));
 test.after(()=>{for(const k of vars)before[k]===undefined?delete process.env[k]:process.env[k]=before[k];});
 function reset() {
   for(const k of vars)delete process.env[k];
-  adminCalls=0;processCalls=0;proofVerified=true;
+  adminCalls=0;processCalls=0;proofVerified=true;consentGranted=true;
   claim={job_id:'10000000-0000-4000-8000-000000000001',
     organization_id:'20000000-0000-4000-8000-000000000001',
     seed_url:'https://fixture.example.com/',max_pages:10,
@@ -127,4 +144,13 @@ test('a previously queued job is refused if website ownership verification expir
   assert.equal(result.status,403);
   assert.match(result.body.error,/ownership proof/i);
   assert.equal(processCalls,0,'No outbound worker tick may run');
+});
+
+
+test('worker refuses a leased job with revoked consent before a network tick',async()=>{
+  reset();enable();consentGranted=false;
+  const response=await api.POST(request('local-synthetic-secret'));
+  assert.equal(response.status,403);
+  assert.match(response.body.error,/consent/i);
+  assert.equal(processCalls,0);
 });

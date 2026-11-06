@@ -4,9 +4,12 @@ on:
   pull_request:
     branches:
       - main
+      # Temporary KB-06A stacked integration validation only.
+      - integration/kb-mainline-rehearsal-20261106
   push:
     branches:
       - main
+      - feature/kb06a-discovery-explicit-consent-gate
 
 permissions:
   contents: read
@@ -53,6 +56,9 @@ jobs:
 
       - name: Verify KB-01D synthetic website end-to-end against disposable PostgreSQL
         run: node --experimental-strip-types --test tests/database/knowledge-discovery-e2e.test.mjs
+
+      - name: Verify consent withdrawal rejects discovery leases and late commits in disposable PostgreSQL
+        run: node --test tests/database/knowledge-discovery-consent.test.mjs
 
       - name: Verify exact Instagram outbound projector SQL in isolated PostgreSQL
         run: node --test tests/database/instagram-outbound-echo-projector.test.mjs

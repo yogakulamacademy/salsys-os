@@ -58,6 +58,7 @@ let writes = [];
 let reads = [];
 let website = 'https://fixture.example.com/';
 let ownershipVerified = true;
+let consentGranted = true;
 let simulatedInsertError = null;
 
 function appClient() {
@@ -73,6 +74,21 @@ function appClient() {
         select: () => ({ eq: () => ({
           maybeSingle: async () => ({data:{website_url:website},error:null}),
         }) }),
+      };
+      if(table === 'knowledge_discovery_jobs')return {
+        select:()=>({eq:()=>({order:()=>({limit:async()=>({data:[],error:null})})})}),
+      };
+      if(table === 'knowledge_discovery_site_consents')return {
+        select:()=>({eq:()=>({eq:()=>({
+          maybeSingle:async()=>({data:consentGranted?{
+            organization_id:orgId,hostname:'fixture.example.com',
+            purpose:'website_discovery_review_only',status:'granted',
+            policy_version:'synthetic-v1',granted_by:userId,
+            granted_at:new Date(Date.now()-60_000).toISOString(),
+            valid_until:new Date(Date.now()+60_000).toISOString(),
+            withdrawn_at:null,
+          }:null,error:null}),
+        })})}),
       };
       if(table === 'knowledge_discovery_domain_verifications')return {
         select: () => ({ eq: () => ({ eq: () => ({
@@ -120,6 +136,7 @@ const route = loadTs('app/api/knowledge/discovery/route.ts', {
   },
   '@/lib/knowledge-discovery/url-policy':scope,
   '@/lib/knowledge-discovery/pilot-gate':gate,
+  '@/lib/knowledge-discovery/site-consent':loadTs('lib/knowledge-discovery/site-consent.ts'),
   '@/lib/knowledge-discovery/domain-verification':loadTs('lib/knowledge-discovery/domain-verification.ts',{
     'node:crypto':require('node:crypto'),
   }),
@@ -139,7 +156,7 @@ test.after(()=> {
 
 function reset() {
   authenticated = true;admin = true;adminClientCalls = 0;
-  writes = []; reads = []; website = 'https://fixture.example.com/'; simulatedInsertError = null; ownershipVerified = true;
+  writes = []; reads = []; website = 'https://fixture.example.com/'; simulatedInsertError = null; ownershipVerified = true; consentGranted = true;
   delete process.env.KNOWLEDGE_DISCOVERY_PILOT_ENABLED;
   delete process.env.KNOWLEDGE_DISCOVERY_PAUSED;
   delete process.env.KNOWLEDGE_DISCOVERY_ALLOWED_HOSTS;
@@ -232,4 +249,20 @@ test('unauthorized website ownership never allows a scan job to be created',asyn
   assert.match(response.body.error,/verify ownership/i);
   assert.equal(adminClientCalls,0);
   assert.deepEqual(writes,[]);
+});
+
+
+
+test('missing discovery consent blocks scan even after ownership verification',async()=>{
+  reset();enabled();consentGranted=false;
+  const response=await route.POST(request('POST',{url:website,maxPages:10}));
+  assert.equal(response.status,403);
+  assert.match(response.body.error,/consent/i);
+  assert.equal(adminClientCalls,0);
+  assert.deepEqual(writes,[]);
+  const status=await route.GET();
+  assert.equal(status.status,200);
+  assert.equal(status.body.websiteVerified,true);
+  assert.equal(status.body.consentActive,false);
+  assert.equal(status.body.discoveryEnabled,false);
 });

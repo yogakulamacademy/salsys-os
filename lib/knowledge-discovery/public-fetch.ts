@@ -92,7 +92,11 @@ export async function fetchPublicWeb(
       // A page or sitemap may redirect to a path with different robots rules
       // (or from apex to www). Never fetch its body before those rules are
       // checked. Direct transport callers without a guard fail closed.
-      if (kind !== 'robots') {
+      if (kind === 'robots') {
+        // KB-06A: an injected consent guard must run before a robots redirect
+        // too. Existing callers without a guard retain previous semantics.
+        if (authorizeRedirect) await authorizeRedirect(next);
+      } else {
         if (!authorizeRedirect) throw new WebsiteFetchError('redirect_robots_required');
         await authorizeRedirect(next);
       }
