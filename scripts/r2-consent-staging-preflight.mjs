@@ -35,12 +35,16 @@ export function verifyR2StagingConfig(values = {}) {
   const crm = origin(values.SALSYS_STAGING_CRM_ORIGIN, "Staging CRM API", errors);
   const db = origin(values.SALSYS_STAGING_SUPABASE_URL, "Staging Supabase", errors);
   const prodDb = origin(values.SALSYS_PRODUCTION_SUPABASE_URL, "Production Supabase comparison", errors);
+  const recoveryDb = origin(values.SALSYS_RECOVERY_SUPABASE_URL, "Recovery rehearsal Supabase comparison", errors);
 
   if (site && crm && site === crm) {
     errors.push("Website and CRM API must be separately identified staging origins");
   }
   if (db && prodDb && db === prodDb) {
     errors.push("Staging and production Supabase URLs are identical");
+  }
+  if (db && recoveryDb && db === recoveryDb) {
+    errors.push("Staging and recovery rehearsal Supabase URLs are identical");
   }
   if (String(values.SALSYS_STAGING_SOURCE_HOSTNAME || "").toLowerCase() !==
       (site ? new URL(site).hostname : "<missing>")) {
