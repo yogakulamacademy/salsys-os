@@ -19,8 +19,7 @@ export function formatNativeBehaviorReviewCopy(
   const end = report.series[0]?.days[report.windowDays - 1]?.dateUtc;
   if (!start || !end
     || !/^\d{4}-\d{2}-\d{2}$/.test(start)
-    || !/^\d{4}-\d{2}-\d{2}$/.test(end)
-    ) return null;
+    || !/^\d{4}-\d{2}-\d{2}$/.test(end)) return null;
 
   const rows: string[] = [];
   for (const series of report.series) {
