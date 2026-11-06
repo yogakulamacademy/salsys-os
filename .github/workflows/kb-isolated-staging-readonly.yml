@@ -32,6 +32,12 @@ jobs:
     environment: kb-isolated-staging-acceptance
     env:
       SALSYS_KB_STAGING_RUN_APPROVAL: ${{ inputs.approval_phrase }}
+      # Mandatory environment-scoped owner claims: missing env fails closed.
+      SALSYS_KB_STAGING_ENVIRONMENT_READY: ${{ vars.SALSYS_KB_STAGING_ENVIRONMENT_READY }}
+      SALSYS_KB_STAGING_APPROVED_COMMIT: ${{ vars.SALSYS_KB_STAGING_APPROVED_COMMIT }}
+      SALSYS_KB_STAGING_REVIEWED_REF: ${{ vars.SALSYS_KB_STAGING_REVIEWED_REF }}
+      SALSYS_KB_STAGING_GITHUB_SHA: ${{ github.sha }}
+      SALSYS_KB_STAGING_GITHUB_REF: ${{ github.ref }}
       OPERATOR_STAGING_PROJECT_REF: ${{ inputs.staging_project_ref }}
       SALSYS_KB_STAGING_PROJECT_REF: ${{ vars.SALSYS_KB_STAGING_PROJECT_REF }}
       SALSYS_KB_STAGING_API_URL: ${{ vars.SALSYS_KB_STAGING_API_URL }}
@@ -69,8 +75,19 @@ jobs:
           test "$OPERATOR_STAGING_PROJECT_REF" = "$SALSYS_KB_STAGING_PROJECT_REF" \
             || { echo "Operator's staging project ref does not match protected environment."; exit 1; }
 
+      - name: Verify reviewed commit, branch and project BEFORE login
+        shell: bash
+        run: |
+          set -euo pipefail
+          export SALSYS_KB_STAGING_CHECKOUT_SHA="$(git rev-parse HEAD)"
+          node scripts/verify-kb-staging-workflow-attestation.mjs --check
+
       - name: Run offline tamper and target-preflight regression tests
         run: node --test tests/knowledge-extraction/kb-isolated-staging-readonly.test.mjs
 
       - name: Validate two real staging Auth sessions and knowledge isolation
-        run: node scripts/verify-kb-isolated-staging-readonly.mjs --run-readonly
+        shell: bash
+        run: |
+          set -euo pipefail
+          export SALSYS_KB_STAGING_CHECKOUT_SHA="$(git rev-parse HEAD)"
+          node scripts/verify-kb-isolated-staging-readonly.mjs --run-readonly
