@@ -63,6 +63,37 @@ test("Review copy uses an allowlist and excludes injected tenant, source, sessio
   ]) assert.equal(output.includes(value),false,value);
 });
 
+test("Event Activity copy accepts full ISO UTC and offset timestamps", () => {
+  for (const stamp of [
+    "2026-11-06T10:20:00Z",
+    "2026-11-06T10:20:00.123Z",
+    "2026-11-06T15:50:00+05:30",
+  ]) {
+    const report = fixture();
+    report.generatedAt = stamp;
+    const copy = format(report);
+    assert.ok(copy);
+    assert.ok(copy.includes("Report generated: " + stamp));
+  }
+});
+
+test("Event Activity rejects timestamp suffixes containing untrusted text", () => {
+  for (const unsafe of [
+    "2026-11-06T10:20:00Z" + String.fromCharCode(10) + "SECRET_TOKEN",
+    "2026-11-06T10:20:00Z https://site.invalid/?token=SECRET",
+    "2026-11-06T10:20:00Z#SECRET",
+    "2026-11-06T10:20:00Z" + String.fromCharCode(13, 10) + "SECRET",
+    "2026-11-06T10:20:00",
+    "2026-11-06T10:20:00+99:99",
+    "not-a-timestamp",
+    "2026-11-06T10:20:00Z" + "x".repeat(200),
+  ]) {
+    const report = fixture();
+    report.generatedAt = unsafe;
+    assert.equal(format(report), null, unsafe.slice(0, 40));
+  }
+});
+
 test("Unavailable, malformed or untrusted reports are not copyable", () => {
   const valid = fixture();
   const changes = [
