@@ -166,3 +166,101 @@ test("native Chromium: failed opt-out receipt blocks optional analytics but pres
   expect(api.events.at(-1)?.event_name).toBe("web.form_submitted");
   expect(api.events.at(-1)?.anonymous_visitor_id).toBe(denied.visitor);
 });
+
+
+for (const deniedStorage of ["local", "session"] as const) {
+  test(`native Chromium: ${deniedStorage} browser storage API denied does not resurrect prior consent identity`,
+    async ({ context }) => {
+      // Real Chromium page with explicitly denied Storage methods. The SDK's
+      // safeGet/safeSet/safeRemove wrappers must fail closed and keep the
+      // necessary form evidence independent of optional analytics consent.
+      await context.addInitScript((kind) => {
+        const unavailable = () => new DOMException("Synthetic storage denied", "SecurityError");
+        const blocked = (storage: Storage) => kind === "local"
+          ? storage === window.localStorage
+          : storage === window.sessionStorage;
+        const get = Storage.prototype.getItem;
+        const set = Storage.prototype.setItem;
+        const remove = Storage.prototype.removeItem;
+        Storage.prototype.getItem = function (key: string) {
+          if (blocked(this)) throw unavailable();
+          return get.call(this, key);
+        };
+        Storage.prototype.setItem = function (key: string, value: string) {
+          if (blocked(this)) throw unavailable();
+          return set.call(this, key, value);
+        };
+        Storage.prototype.removeItem = function (key: string) {
+          if (blocked(this)) throw unavailable();
+          return remove.call(this, key);
+        };
+      }, deniedStorage);
+
+      const api = await instrument(context);
+      const page = await openHarness(context);
+      const snapshot = () => page.evaluate(() => ({
+        visitor: (window as any).Salsys.visitorId() as string,
+        session: (window as any).Salsys.sessionId() as string,
+        allowed: (window as any).Salsys.privacy().analytics_allowed_locally as boolean,
+        formVisitor: (document.querySelector('input[name="salsys_visitor_id"]') as HTMLInputElement | null)?.value,
+        formSession: (document.querySelector('input[name="salsys_session_id"]') as HTMLInputElement | null)?.value,
+        sharedVisitor: (() => {
+          try { return localStorage.getItem("salsys_vid"); } catch { return null; }
+        })(),
+      }));
+
+      await chooseAnalytics(page, "granted");
+      const initial = await snapshot();
+      expect(initial.formVisitor).toBe(initial.visitor);
+      expect(initial.formSession).toBe(initial.session);
+      if (deniedStorage === "local") {
+        // A network acknowledgement without persistent local privacy state
+        // must not accidentally unlock optional analytics.
+        expect(initial.allowed).toBe(false);
+        expect(initial.sharedVisitor).toBe(null);
+        expect((await blockedOptional(page)).privacy_blocked).toBe(true);
+      } else {
+        expect(initial.allowed).toBe(true);
+        expect(initial.sharedVisitor).toBe(initial.visitor);
+      }
+
+      await chooseAnalytics(page, "withdrawn");
+      const withdrawn = await snapshot();
+      expect(withdrawn.allowed).toBe(false);
+      expect(withdrawn.visitor).not.toBe(initial.visitor);
+      expect(withdrawn.session).not.toBe(initial.session);
+      expect(withdrawn.sharedVisitor).toBe(null);
+      expect(withdrawn.formVisitor).toBe(withdrawn.visitor);
+      expect(withdrawn.formSession).toBe(withdrawn.session);
+      expect((await blockedOptional(page)).privacy_blocked).toBe(true);
+
+      await chooseAnalytics(page, "granted");
+      const regranted = await snapshot();
+      expect(regranted.visitor).toBe(withdrawn.visitor);
+      expect(regranted.visitor).not.toBe(initial.visitor);
+      expect(regranted.session).not.toBe(initial.session);
+      expect(regranted.formVisitor).toBe(regranted.visitor);
+      expect(regranted.formSession).toBe(regranted.session);
+      if (deniedStorage === "local") {
+        expect(regranted.allowed).toBe(false);
+        expect(regranted.sharedVisitor).toBe(null);
+        expect((await blockedOptional(page)).privacy_blocked).toBe(true);
+        expect(api.events.some((entry) => entry.event_name === "web.page_viewed")).toBe(false);
+      } else {
+        expect(regranted.allowed).toBe(true);
+        expect(regranted.sharedVisitor).toBe(regranted.visitor);
+      }
+
+      // An explicitly necessary form event still works under storage denial;
+      // it must use the post-withdrawal visitor and session.
+      await page.evaluate(() => (window as any).Salsys.track("web.form_submitted",
+        { form_id: "storage-denied-synthetic" }, { queue: false }));
+      await expect.poll(() => api.events.some((entry) =>
+        entry.event_name === "web.form_submitted" &&
+        entry.anonymous_visitor_id === regranted.visitor &&
+        entry.session_key === regranted.session)).toBe(true);
+      expect(api.receipts.map((r) => r.decisions.analytics)).toEqual([
+        "granted", "withdrawn", "granted",
+      ]);
+    });
+}
