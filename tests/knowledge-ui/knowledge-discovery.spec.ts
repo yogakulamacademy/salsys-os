@@ -132,3 +132,47 @@ test('paused pilot is read-only and cannot initiate new scans',async({page})=>{
   await expect(page.getByRole('button',{name:'Start discovery'})).toBeDisabled();
   expect(mutations).toBe(0);
 });
+
+
+test('admin ownership challenge is required before discovery can start',async({page})=>{
+  let verified=false;
+  let issuedToken='';
+  const actions:string[]=[];
+  await page.route('**/api/knowledge/discovery/verification',async route=>{
+    const method=route.request().method();
+    if(method==='POST'){
+      issuedToken='salsysos-domain-verification='+ 'a'.repeat(64);
+      actions.push('issue');
+      await route.fulfill({status:201,contentType:'application/json',
+        body:JSON.stringify({ok:true,status:'pending',token:issuedToken,
+          proofPath:'/.well-known/salsysos-verification.txt'})});
+      return;
+    }
+    if(method==='PUT'){
+      actions.push('verify');
+      verified=true;
+      await route.fulfill({status:200,contentType:'application/json',
+        body:JSON.stringify({ok:true,status:'verified',
+          verifiedUntil:'2026-12-06T00:00:00Z'})});
+      return;
+    }
+    await route.fulfill({status:200,contentType:'application/json',
+      body:JSON.stringify({ok:true,status:verified?'verified':'unverified'})});
+  });
+  await page.route('**/api/knowledge/discovery',async route=>{
+    await route.fulfill({status:200,contentType:'application/json',
+      body:JSON.stringify({ok:true,pilotEnabled:true,websiteVerified:verified,
+        discoveryEnabled:verified,historyAvailable:true,
+        configuredWebsite:'https://fixture.example.com/',jobs:[],pages:[]})});
+  });
+  await page.goto('/settings/knowledge/discovery');
+  await expect(page.getByText('Verify ownership of this website before scanning.')).toBeVisible();
+  await expect(page.getByRole('button',{name:'Start discovery'})).toBeDisabled();
+  await page.getByRole('button',{name:'Generate token'}).click();
+  await expect(page.getByText(issuedToken)).toBeVisible();
+  await expect(page.getByText('/.well-known/salsysos-verification.txt')).toBeVisible();
+  await page.getByRole('button',{name:'Verify website'}).click();
+  await expect(page.getByText('Website ownership verified. Discovery can now be started.')).toBeVisible();
+  await expect(page.getByRole('button',{name:'Start discovery'})).toBeEnabled();
+  expect(actions).toEqual(['issue','verify']);
+});
