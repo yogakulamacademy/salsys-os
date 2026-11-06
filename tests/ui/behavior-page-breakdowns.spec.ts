@@ -146,6 +146,29 @@ test.describe("Hydration-independent page breakdown navigation", () => {
   });
 });
 
+test("Page-view explanations distinguish SPA URL-only events from full page loads", async ({ page }) => {
+  await page.goto("/marketing?view=behavior");
+  const breakdown = page.getByRole("region", { name: "Event page breakdown" });
+
+  await expect(page.getByText(
+    /Page-view event counts can include same-page SPA URL changes/,
+  )).toBeVisible();
+  await expect(breakdown.getByText(
+    /Page-view events can include same-page SPA URL changes/,
+  )).toBeVisible();
+  // Observed report values and public paths are unchanged by explanatory copy.
+  await expect(breakdown.getByText("/courses/200-hour-ytt.php")).toBeVisible();
+  await expect(breakdown.getByRole("table")).toBeVisible();
+
+  await breakdown.getByRole("combobox", { name: "Page breakdown event" })
+    .selectOption("web.form_started");
+  await breakdown.getByRole("button", { name: "View pages" }).click();
+  await expect(page).toHaveURL(/breakdown=web.form_started/);
+  await expect(breakdown.getByText(
+    /Page-view events can include same-page SPA URL changes/,
+  )).toHaveCount(0);
+});
+
 test("Behavior pages explain that tracked visitor IDs are not people or devices", async ({ page }) => {
   await page.goto("/marketing?view=behavior");
   const paths = page.getByRole("region", { name: "Popular navigation paths" });
