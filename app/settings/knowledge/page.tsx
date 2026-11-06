@@ -1,3 +1,4 @@
+import Link from 'next/link';
 import {
   Archive, BookOpen, BrainCircuit, CheckCircle2, Clock3, Database,
   FileText, Layers3, Link2, Plus, Search, ShieldAlert, ShieldCheck,
@@ -235,6 +236,14 @@ export default async function KnowledgeSettingsPage({
         description={'Create and manage approved policies, FAQs, processes and sales guidance for ' + organizationName + '. The Co-Pilot can use only approved, currently valid knowledge with eligible retrieval evidence.'}
       />
 
+      <div className="rounded-xl border border-slate-200 bg-white px-4 py-3">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div><div className="text-sm font-semibold">Website discovery</div>
+            <p className="mt-1 text-xs text-slate-500">Discover public site pages before reviewing or creating AI knowledge.</p></div>
+          <Link href="/settings/knowledge/discovery" className="rounded-lg border border-slate-200 px-3 py-2 text-xs font-semibold hover:bg-slate-50">Open discovery →</Link>
+        </div>
+      </div>
+      
       {query.notice ? <div className="kn-flash kn-success" role="status">{query.notice}</div> : null}
       {query.error || loadError ? <div className="kn-flash kn-error" role="alert">{query.error || loadError}</div> : null}
 
