@@ -7,6 +7,8 @@ on:
   push:
     branches:
       - main
+      # Temporary stacked-PR validation; remove before KB-02 targets main.
+      - feature/kb02-source-evidence-core
 
 permissions:
   contents: read
@@ -173,6 +175,9 @@ jobs:
 
       - name: Verify KB-01 website discovery safety tests
         run: node --experimental-strip-types --test tests/knowledge-discovery/*.test.mjs
+
+      - name: Verify KB-02A conservative website evidence contracts
+        run: node --experimental-strip-types --test tests/knowledge-extraction/*.test.mjs
 
       - name: Verify Home Command Center Final Closeout Contracts
         run: npm run verify:home-command-center-final-closeout
