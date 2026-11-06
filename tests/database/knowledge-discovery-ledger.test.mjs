@@ -50,6 +50,13 @@ test('exact KB-01B SQL passes tenant, RLS, lease and cancellation checks in disp
     await db.query(exactDraft);
     await db.query('insert into public.organizations(id) values($1),($2)',[ORG_A,ORG_B]);
     await db.query('insert into public.test_knowledge_admins(organization_id,user_id) values($1,$2),($3,$4)',[ORG_A,USER_A,ORG_B,USER_B]);
+    await db.query(
+      "insert into public.knowledge_discovery_domain_verifications"+
+      " (organization_id,hostname,challenge_hash,created_by,challenge_expires_at,verified_at,verified_until)"+
+      " values ($1,'yogakulam.com',$2,$3,now()+interval '1 day',now(),now()+interval '30 days'),"+
+      " ($4,'example.org',$5,$6,now()+interval '1 day',now(),now()+interval '30 days')",
+      [ORG_A,'a'.repeat(64),USER_A,ORG_B,'b'.repeat(64),USER_B]);
+
 
     const acl=await db.query(
       "select "+
@@ -57,12 +64,15 @@ test('exact KB-01B SQL passes tenant, RLS, lease and cancellation checks in disp
       "has_table_privilege('authenticated','public.knowledge_discovery_jobs','INSERT') as client_insert,"+
       "has_table_privilege('authenticated','public.knowledge_discovery_jobs','UPDATE') as client_update,"+
       "has_table_privilege('authenticated','public.knowledge_discovery_pages','INSERT') as client_page_insert,"+
+      "has_table_privilege('anon','public.knowledge_discovery_domain_verifications','SELECT') as anon_proof,"+
+      "has_table_privilege('authenticated','public.knowledge_discovery_domain_verifications','INSERT') as client_proof_insert,"+
       "has_function_privilege('anon','public.claim_knowledge_discovery_job_v1()','EXECUTE') as anon_claim,"+
       "has_function_privilege('authenticated','public.claim_knowledge_discovery_job_v1()','EXECUTE') as client_claim,"+
       "has_function_privilege('service_role','public.claim_knowledge_discovery_job_v1()','EXECUTE') as service_claim"
     );
     assert.deepEqual(acl.rows[0],{
       anon_jobs:false,client_insert:false,client_update:false,client_page_insert:false,
+      anon_proof:false,client_proof_insert:false,
       anon_claim:false,client_claim:false,service_claim:true,
     });
 
@@ -93,6 +103,7 @@ test('exact KB-01B SQL passes tenant, RLS, lease and cancellation checks in disp
     await context(db,'authenticated',USER_A);
     assert.deepEqual((await db.query('select organization_id from public.knowledge_discovery_jobs')).rows.map(x=>x.organization_id),[ORG_A]);
     assert.deepEqual((await db.query('select organization_id from public.knowledge_discovery_pages')).rows.map(x=>x.organization_id),[ORG_A]);
+    assert.deepEqual((await db.query('select organization_id from public.knowledge_discovery_domain_verifications')).rows.map(x=>x.organization_id),[ORG_A]);
     await db.query('savepoint prohibited_write');
     await assert.rejects(db.query(
       "insert into public.knowledge_discovery_jobs(organization_id,created_by,seed_url)"+
@@ -102,9 +113,11 @@ test('exact KB-01B SQL passes tenant, RLS, lease and cancellation checks in disp
 
     await context(db,'authenticated',USER_B);
     assert.deepEqual((await db.query('select organization_id from public.knowledge_discovery_jobs')).rows.map(x=>x.organization_id),[ORG_B]);
+    assert.deepEqual((await db.query('select organization_id from public.knowledge_discovery_domain_verifications')).rows.map(x=>x.organization_id),[ORG_B]);
     await db.query('rollback');
     await context(db,'authenticated',STRANGER);
     assert.equal((await db.query('select count(*)::int as n from public.knowledge_discovery_jobs')).rows[0].n,0);
+    assert.equal((await db.query('select count(*)::int as n from public.knowledge_discovery_domain_verifications')).rows[0].n,0);
     await db.query('rollback');
 
     const a=new Client({connectionString:target.toString()});
