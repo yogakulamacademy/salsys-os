@@ -74,6 +74,7 @@ test("Breakdown stays a sibling to the independently available funnel, paths and
   assert.match(panel, /defaultValue=\{breakdown\.eventName\}/);
   assert.match(panel, /<button type="submit"/);
   assert.doesNotMatch(panel, /useEffect|router\.push|onClick=\{apply\}/);
+  assert.doesNotMatch(panel, /^"use client";/);
   assert.match(panel, /role="status"/);
 });
 
