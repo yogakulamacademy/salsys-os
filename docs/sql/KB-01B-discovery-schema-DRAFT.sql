@@ -2,13 +2,35 @@
 -- This file has NOT been executed on production or any other environment.
 begin;
 
--- KB-01H: website owner proof is a prerequisite to starting public discovery.
--- The token itself is returned to the admin only when issued, never stored.
+-- KB-01H: website owner proof is required for discovery; store hash only.
 create table if not exists public.knowledge_discovery_domain_verifications (
   id uuid primary key default gen_random_uuid(),
   organization_id uuid not null references public.organizations(id) on delete cascade,
   hostname text not null check (char_length(hostname) between 4 and 253 and hostname = lower(hostname)),
-  challenge_hash text not null check (challenge_hash ~ '^[0-9a-f]{64}
+  challenge_hash text not null check (length(challenge_hash) = 64 and challenge_hash ~ '^[0-9a-f]+$'),
+  created_by uuid not null,
+  issued_at timestamptz not null default now(),
+  challenge_expires_at timestamptz not null,
+  verified_at timestamptz,
+  verified_until timestamptz,
+  unique (organization_id, hostname),
+  constraint knowledge_discovery_proof_dates_check check (
+    (verified_at is null and verified_until is null)
+    or (verified_at is not null and verified_until is not null and verified_until > verified_at)
+  )
+);
+create index if not exists knowledge_discovery_proof_expires
+  on public.knowledge_discovery_domain_verifications(verified_until)
+  where verified_until is not null;
+alter table public.knowledge_discovery_domain_verifications enable row level security;
+revoke all on public.knowledge_discovery_domain_verifications from public, anon, authenticated;
+grant select on public.knowledge_discovery_domain_verifications to authenticated;
+grant all on public.knowledge_discovery_domain_verifications to service_role;
+create policy knowledge_discovery_proof_admin_read
+  on public.knowledge_discovery_domain_verifications for select to authenticated
+  using (public.can_manage_organization(organization_id));
+
+create table if not exists public.knowledge_discovery_jobs (
   id uuid primary key default gen_random_uuid(),
   organization_id uuid not null references public.organizations(id) on delete cascade,
   created_by uuid not null,
