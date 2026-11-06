@@ -87,7 +87,7 @@ export async function fetchPublicWeb(
     const supported = kind === 'html'
       ? /^(text\/html|application\/xhtml\+xml)\b/.test(reply.contentType)
       : kind === 'robots'
-        ? /^(text\/plain|text\/html)\b/.test(reply.contentType)
+        ? /^text\/plain\b/.test(reply.contentType)
         : /^(application\/xml|text\/xml|text\/plain|application\/octet-stream)\b/.test(reply.contentType);
     if (reply.status !== 404 && !supported) throw new WebsiteFetchError('unsupported_content_type');
     return { url: current.href, status: reply.status, contentType: reply.contentType, body: reply.body };
