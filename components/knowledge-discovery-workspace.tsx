@@ -27,8 +27,8 @@ type Page = {
   http_status: number | null;
   failure_code: string | null;
 };
-type State = { configuredWebsite: string | null; jobs: Job[]; pages: Page[] };
-const initial: State = { configuredWebsite: null, jobs: [], pages: [] };
+type State = { configuredWebsite: string | null; discoveryEnabled: boolean; historyAvailable: boolean; jobs: Job[]; pages: Page[] };
+const initial: State = { configuredWebsite: null, discoveryEnabled: false, historyAvailable: false, jobs: [], pages: [] };
 
 const terminal = new Set(['completed', 'partial', 'failed', 'cancelled']);
 const statusText: Record<Job['status'], string> = {
@@ -52,6 +52,8 @@ export function KnowledgeDiscoveryWorkspace() {
       if (!response.ok || !payload.ok) throw new Error(payload.error || 'Could not load website discovery.');
       setState({
         configuredWebsite: payload.configuredWebsite ?? null,
+        discoveryEnabled: payload.discoveryEnabled === true,
+        historyAvailable: payload.historyAvailable === true,
         jobs: Array.isArray(payload.jobs) ? payload.jobs : [],
         pages: Array.isArray(payload.pages) ? payload.pages : [],
       });
@@ -115,6 +117,7 @@ export function KnowledgeDiscoveryWorkspace() {
           <input id="kb-website" readOnly value={state.configuredWebsite ?? ''} placeholder={loading ? 'Loading…' : 'Not configured'}
             className="mt-2 w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-3 text-sm text-slate-700" />
           {!state.configuredWebsite && !loading ? <p className="mt-2 text-xs text-amber-700">Add a website to your onboarding business profile before starting discovery.</p> : null}
+          {!state.discoveryEnabled && !loading && !error ? <p className="mt-2 text-xs text-amber-700">Website discovery is paused or this domain has not been approved for the pilot.</p> : null}
           <div className="mt-5 flex flex-wrap items-end justify-between gap-3 border-t border-slate-100 pt-4">
             <div>
               <label htmlFor="kb-limit" className="block text-xs font-medium text-slate-600">Page limit</label>
@@ -126,7 +129,7 @@ export function KnowledgeDiscoveryWorkspace() {
             <div className="flex gap-2">
               {active ? <button disabled={busy || loading} onClick={()=>void change('cancel')}
                 className="inline-flex items-center gap-2 rounded-lg border border-slate-200 px-4 py-2.5 text-xs font-semibold disabled:opacity-40"><Square size={13}/> Cancel scan</button> : null}
-              <button disabled={busy || loading || Boolean(active) || !state.configuredWebsite}
+              <button disabled={busy || loading || Boolean(active) || !state.configuredWebsite || !state.discoveryEnabled}
                 onClick={()=>void change('start')}
                 className="inline-flex items-center gap-2 rounded-lg bg-slate-800 px-4 py-2.5 text-xs font-semibold text-white disabled:opacity-40">
                 <Play size={13}/> Start discovery
@@ -151,6 +154,7 @@ export function KnowledgeDiscoveryWorkspace() {
           {latest ? <span className="rounded-md bg-slate-100 px-2 py-1 text-xs font-semibold">{statusText[latest.status]}</span> : null}
         </div>
         {loading && !latest ? <p className="mt-5 text-sm text-slate-500">Loading scan history…</p> :
+        !state.historyAvailable ? <p className="mt-5 rounded-lg bg-slate-50 p-5 text-sm text-slate-500">Scan history is unavailable while discovery is disabled.</p> :
         !latest ? <p className="mt-5 rounded-lg bg-slate-50 p-5 text-sm text-slate-500">No scans yet. Start by discovering your configured business website.</p> : <>
           <p className="mt-1 break-all text-xs text-slate-500">{latest.seed_url}</p>
           <div className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-4">
