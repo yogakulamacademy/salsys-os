@@ -48,7 +48,7 @@ test('rejects mixed DNS responses even if the first address is public', async ()
 
 test('discovery is scoped to the exact/www hostname pair', () => {
   const seed = parseWebsiteSeed('https://yogakulam.com/');
-  const page = new URL('https://www.yogakulam.com/courses/');
+  const page = new URL('https://yogakulam.com/courses/');
   assert.equal(scopedDiscoveredUrl(seed, page, '/about?ref=link')?.href,
     'https://www.yogakulam.com/about');
   for (const href of [
