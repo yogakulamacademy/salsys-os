@@ -227,3 +227,15 @@ test('imported runner cannot bypass preflight with a forged URL or mutable confi
     assert.equal(requests,0);
   }finally{globalThis.fetch=original;}
 });
+
+
+test('two staging actors cannot reuse the same Auth session ID',async()=>{
+  const fake=installSyntheticFetch({duplicateSession:true});
+  try{
+    await assert.rejects(
+      runKbStagingReadOnlyAcceptance(validateKbStagingEnvironment(baseEnv())),
+      /duplicate_auth_sessions/,
+    );
+    assert.equal(fake.calls.filter(x=>x.path.startsWith('/rest/v1/')).length,0);
+  }finally{fake.restore();}
+});
