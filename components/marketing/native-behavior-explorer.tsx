@@ -51,6 +51,7 @@ export function NativeBehaviorExplorer({ workspace, trends }: { workspace: Nativ
             </div>
             <h2 className="mt-1 text-lg font-bold text-slate-900 dark:text-white">Behavior explorer</h2>
             <p className="mt-1 text-sm text-slate-500">Build ordered funnels and examine popular page transitions without session recordings.</p>
+            <p className="mt-1 max-w-2xl text-xs text-slate-500">Page-view event counts can include same-page SPA URL changes, including query or hash updates, without a full page reload. They are not verified full page loads or distinct people.</p>
           </div>
           <span className="inline-flex items-center gap-2 rounded-xl bg-slate-50 px-3 py-2 text-xs text-slate-600 dark:bg-slate-900 dark:text-slate-300">
             <ShieldCheck size={14} /> Tenant-scoped aggregates
