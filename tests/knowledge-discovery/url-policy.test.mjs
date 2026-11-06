@@ -25,11 +25,12 @@ test('refuses private, reserved, metadata and transition IP ranges', () => {
     '100.64.2.3', '172.16.0.1', '192.168.1.1', '192.0.2.1',
     '198.51.100.25', '203.0.113.1', '224.0.0.1',
     '::1', 'fc00::1', 'fe80::1', '2001:db8::1',
-    '::ffff:127.0.0.1', '2002::1',
+    '::ffff:127.0.0.1', '2002::1', '2001::1',
+    '2001:0000:0000::1', '2001:db8::1', '2001:0db8::1', '3fff::1',
   ]) {
     assert.equal(publicIpOnly(ip), false, ip);
   }
-  for (const ip of ['1.1.1.1', '8.8.8.8', '9.9.9.9', '2606:4700::1111']) {
+  for (const ip of ['1.1.1.1', '8.8.8.8', '9.9.9.9', '2606:4700::1111', '2001:4860:4860::8888']) {
     assert.equal(publicIpOnly(ip), true, ip);
   }
 });
@@ -58,4 +59,11 @@ test('discovery is scoped to the exact/www hostname pair', () => {
   ]) {
     assert.equal(scopedDiscoveredUrl(seed, page, href), null, href);
   }
+});
+
+
+test('an HTTPS seed never permits an HTTP page even when the candidate is already HTTP', () => {
+  const seed = parseWebsiteSeed('https://yogakulam.com');
+  const hostilePage = new URL('http://yogakulam.com/private');
+  assert.equal(scopedDiscoveredUrl(seed, hostilePage, hostilePage.href), null);
 });
