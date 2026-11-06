@@ -8,6 +8,8 @@ on:
       - feature/kb04a-source-snapshot-delta-preview
       # Temporary validation of KB-04C stacked on KB-04B.
       - feature/kb04b-refresh-safety-contract
+      # Temporary KB-04D stacked PR validation.
+      - feature/kb04c-source-change-impact-review
   push:
     branches:
       - main
@@ -23,6 +25,7 @@ on:
       - feature/kb04a-source-snapshot-delta-preview
       - feature/kb04b-refresh-safety-contract
       - feature/kb04c-source-change-impact-review
+      - feature/kb04d-human-review-handoff-contract
 
 permissions:
   contents: read
