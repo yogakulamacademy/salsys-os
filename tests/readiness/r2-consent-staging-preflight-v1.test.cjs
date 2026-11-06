@@ -130,6 +130,49 @@ test("R2-P3 treats localhost, non-HTTPS, embedded credentials and missing values
   assert.equal(verify({}).readyForManualTesting,false);
 });
 
+test("R2-P3 rejects IP literals, private-network and loopback HTTPS staging endpoints", () => {
+  for (const address of [
+    "https://127.0.0.1", "https://0.0.0.0", "https://10.12.0.2",
+    "https://192.168.1.12", "https://172.16.0.3", "https://169.254.169.254",
+    "https://[::1]", "https://[::ffff:127.0.0.1]",
+    "https://localhost.", "https://test.internal", "https://dev.local",
+    "https://stage.home.arpa", "https://stage.lan", "https://stage.onion",
+  ]) {
+    const site = verify({ ...good, SALSYS_STAGING_SITE_ORIGIN: address });
+    assert.equal(site.readyForManualTesting, false, "unsafe website origin: " + address);
+    assert.ok(site.errors.some((e) => e.includes("non-routable") || e.includes("HTTPS")));
+    const db = verify({ ...good, SALSYS_STAGING_SUPABASE_URL: address });
+    assert.equal(db.readyForManualTesting, false, "unsafe DB origin: " + address);
+  }
+});
+
+test("R2-P3 rejects trailing-dot production aliases and nonstandard HTTPS ports", () => {
+  for (const address of [
+    "https://yogakulam.com.", "https://stage.yogakulam.com.",
+    "https://crm.salsysos.com.", "https://salsys-os.vercel.app.",
+    "https://stage.academy-sandbox.net.:8443",
+    "https://stage.academy-sandbox.net:8443",
+  ]) {
+    const result = verify({ ...good, SALSYS_STAGING_SITE_ORIGIN: address });
+    assert.equal(result.readyForManualTesting, false, address);
+  }
+});
+
+test("R2-P3 keeps staging website, CRM and Supabase on distinct named origins", () => {
+  const sharedWebsite = verify({
+    ...good, SALSYS_STAGING_CRM_ORIGIN: good.SALSYS_STAGING_SITE_ORIGIN,
+  });
+  assert.equal(sharedWebsite.readyForManualTesting, false);
+  assert.ok(sharedWebsite.errors.some((e) => e.includes("different staging hostnames")));
+  const sharedDb = verify({
+    ...good, SALSYS_STAGING_SUPABASE_URL: good.SALSYS_STAGING_CRM_ORIGIN,
+  });
+  assert.equal(sharedDb.readyForManualTesting, false);
+  assert.ok(sharedDb.errors.some((e) => e.includes("distinct")));
+  const healthy = verify(good);
+  assert.equal(healthy.readyForManualTesting, true);
+});
+
 test("R2-P3 preflight does not embed credentials or perform network/database actions", () => {
   const source = fs.readFileSync(file,"utf8");
   assert.doesNotMatch(source, /\b(fetch|exec|spawn|writeFile|process\.env\.(?:PASSWORD|TOKEN|KEY))\s*\(/);
