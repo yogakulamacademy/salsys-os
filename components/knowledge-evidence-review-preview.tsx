@@ -10,6 +10,7 @@ import type { SourceDraftBundle } from '@/lib/knowledge-extraction/source-ground
 import type { ReviewSignalReport } from '@/lib/knowledge-extraction/source-review-signals';
 import type { ValidatedAIResponse } from '@/lib/knowledge-extraction/ai-draft-contract';
 import type { GroundingEvaluationReport } from '@/lib/knowledge-extraction/ai-grounding-evaluation';
+import type { KnowledgeReviewAcceptancePacket } from '@/lib/knowledge-extraction/knowledge-review-acceptance';
 import { assessEvidenceReadiness } from '@/lib/knowledge-extraction/evidence-lifecycle-readiness';
 import {
   chooseEvidenceForReview,
@@ -28,13 +29,14 @@ const filters: Array<{ id: Filter; label: string }> = [
 ];
 
 export function KnowledgeEvidenceReviewPreview({
-  evidence, sourceCandidates, reviewSignals, simulatedAIProposals, groundingReview,
+  evidence, sourceCandidates, reviewSignals, simulatedAIProposals, groundingReview, acceptancePacket,
 }: {
   evidence: PreparedWebsiteEvidence;
   sourceCandidates: SourceDraftBundle;
   reviewSignals: ReviewSignalReport;
   simulatedAIProposals: ValidatedAIResponse;
   groundingReview: GroundingEvaluationReport;
+  acceptancePacket: KnowledgeReviewAcceptancePacket;
 }) {
   const [choices, setChoices] = useState<EvidenceReviewDecisions>({});
   const [filter, setFilter] = useState<Filter>('all');
@@ -451,6 +453,65 @@ export function KnowledgeEvidenceReviewPreview({
           Source truth and question meaning remain unverified. The checklist does not
           grant approval, persistence, or publishing authority.
         </p>
+      </section>
+
+      <section aria-label="End-to-end review acceptance"
+        className="rounded-xl border border-slate-200 bg-white p-5">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h2 className="text-base font-semibold">Review acceptance checkpoint</h2>
+            <p className="mt-1 max-w-2xl text-xs leading-5 text-slate-600">
+              Synthetic end-to-end validation is complete for this sample.
+              It does not establish real source accuracy or grant permission to
+              create or approve knowledge.
+            </p>
+          </div>
+          <span className="rounded-md bg-slate-100 px-2.5 py-1.5 text-xs font-semibold text-slate-700">
+            Preview only
+          </span>
+        </div>
+        <div className="mt-4 grid grid-cols-3 gap-3">
+          <div className="rounded-lg bg-slate-50 p-3">
+            <p className="text-xs text-slate-500">Proposals</p>
+            <p className="mt-1 text-lg font-semibold tabular-nums">{acceptancePacket.counts.proposals}</p>
+          </div>
+          <div className="rounded-lg bg-slate-50 p-3">
+            <p className="text-xs text-slate-500">On hold</p>
+            <p className="mt-1 text-lg font-semibold tabular-nums">{acceptancePacket.counts.held}</p>
+          </div>
+          <div className="rounded-lg bg-slate-50 p-3">
+            <p className="text-xs text-slate-500">Need human review</p>
+            <p className="mt-1 text-lg font-semibold tabular-nums">{acceptancePacket.counts.needsHumanReview}</p>
+          </div>
+        </div>
+        <p className="mt-4 break-all font-mono text-[11px] text-slate-500">
+          Acceptance packet SHA-256: {acceptancePacket.packetId.slice(0,20)}…
+        </p>
+        <details className="mt-4 rounded-lg border border-slate-200 bg-slate-50 p-3">
+          <summary className="cursor-pointer text-xs font-semibold text-slate-700">
+            Review 7 release requirements still blocked
+          </summary>
+          <ul className="mt-3 space-y-2 text-xs leading-5 text-slate-600">
+            <li>Authorized real-source ownership and browser visibility</li>
+            <li>Tenant consent, retention, and deletion approval</li>
+            <li>Independent source-conflict coverage</li>
+            <li>Human semantic accuracy review</li>
+            <li>Authenticated reviewer identity and audit records</li>
+            <li>Isolated staging, database policies, and rollback acceptance</li>
+            <li>Explicit approval to merge and deploy</li>
+          </ul>
+        </details>
+        <div className="mt-4 border-t border-slate-100 pt-3">
+          <p className="text-xs font-semibold text-slate-700">Existing knowledge approval pathway</p>
+          <p className="mt-1 text-xs leading-5 text-slate-600">
+            Not connected. Reviewed evidence is not sent to the existing create
+            or approval actions. A separate tenant-authorized, audited handoff
+            must be implemented and validated before any real content is saved.
+          </p>
+          <p className="mt-2 text-xs font-semibold text-amber-800">
+            Storage, approval, and publishing remain disabled.
+          </p>
+        </div>
       </section>
 
       <section aria-label="Evidence lifecycle readiness" className="rounded-xl border border-slate-200 bg-white p-5">
