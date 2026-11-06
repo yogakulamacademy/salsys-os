@@ -18,6 +18,8 @@ on:
       - feature/kb05a-disposable-knowledge-db-acceptance
       # Temporary KB-05C stacked PR validation.
       - feature/kb05b-knowledge-tenant-rls-negative-matrix
+      # Temporary KB-05D stacked PR validation (offline only).
+      - feature/kb05c-strict-monitoring-session-candidate
   push:
     branches:
       - main
@@ -38,6 +40,7 @@ on:
       - feature/kb05a-disposable-knowledge-db-acceptance
       - feature/kb05b-knowledge-tenant-rls-negative-matrix
       - feature/kb05c-strict-monitoring-session-candidate
+      - feature/kb05d-isolated-staging-auth-acceptance
 
 permissions:
   contents: read
