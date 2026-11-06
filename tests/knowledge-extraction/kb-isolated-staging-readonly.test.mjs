@@ -40,6 +40,14 @@ function fakeVerifiedJwt(actor, sessionId){
 
 const baseEnv=()=>({
   SALSYS_KB_STAGING_RUN_APPROVAL:EXECUTION_PHRASE,
+  SALSYS_KB_STAGING_ENVIRONMENT_READY:'OWNER_APPROVED_KB_TEST_ENVIRONMENT',
+  SALSYS_KB_STAGING_APPROVED_COMMIT:'a'.repeat(40),
+  SALSYS_KB_STAGING_CHECKOUT_SHA:'a'.repeat(40),
+  SALSYS_KB_STAGING_GITHUB_SHA:'a'.repeat(40),
+  SALSYS_KB_STAGING_REVIEWED_REF:'refs/heads/feature/kb05f-review-test',
+  SALSYS_KB_STAGING_GITHUB_REF:'refs/heads/feature/kb05f-review-test',
+  OPERATOR_STAGING_PROJECT_REF:'kb05dstagingfixturea',
+
   SALSYS_KB_STAGING_PROJECT_REF:'kb05dstagingfixturea',
   SALSYS_KB_STAGING_API_URL:'https://kb05dstagingfixturea.supabase.co',
   SALSYS_KB_STAGING_ANON_KEY:'synthetic-public-api-key-for-test-only',
@@ -77,6 +85,9 @@ test('explicit protected execution phrase and exact staging host are mandatory',
   }
   for(const ref of FORBIDDEN_PROJECT_REFS){
     const env=baseEnv();env.SALSYS_KB_STAGING_PROJECT_REF=ref;
+    // Satisfy the *new* operator-ref gate first so the denylist is tested
+    // independently; both checks must continue to deny unsafe targets.
+    env.OPERATOR_STAGING_PROJECT_REF=ref;
     env.SALSYS_KB_STAGING_API_URL='https://'+ref+'.supabase.co';
     expectBlocked(env,/project_not_dedicated_staging/);
   }

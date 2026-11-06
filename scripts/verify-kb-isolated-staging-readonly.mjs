@@ -9,6 +9,7 @@
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { inspectValidatedStagingJwtClaims } from './verify-kb-staging-jwt-claims.mjs';
+import { assessKbStagingWorkflowAttestation } from './verify-kb-staging-workflow-attestation.mjs';
 
 export const EXECUTION_PHRASE = 'I_APPROVE_READ_ONLY_KB_STAGING';
 export const FORBIDDEN_PROJECT_REFS = Object.freeze([
@@ -53,6 +54,9 @@ function identity(env, prefix) {
 /** No HTTP, login, filesystem write, or provider call occurs here. */
 export function validateKbStagingEnvironment(env) {
   if (!env || typeof env !== 'object') fail('missing_configuration');
+  // A missing GitHub environment or stale reviewed SHA blocks even a direct
+  // CLI/imported invocation before any Auth or data request.
+  assessKbStagingWorkflowAttestation(env);
   if (required(env, 'SALSYS_KB_STAGING_RUN_APPROVAL') !== EXECUTION_PHRASE) {
     fail('manual_approval_missing');
   }
