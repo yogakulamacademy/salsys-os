@@ -212,7 +212,9 @@ function visibleText(node: Node, omitBlocks = false): string {
   if (!element(node)) return node.text;
   if (excluded(node)) return '';
   if (omitBlocks && blockTags.has(node.tag)) return '';
-  return node.children.map(child=>visibleText(child,omitBlocks)).join(' ');
+  // DOM-like text concatenation preserves literal punctuation and number
+  // formatting. Layout whitespace is normalized by the evidence contract.
+  return node.children.map(child=>visibleText(child,omitBlocks)).join('');
 }
 
 function descendantsHaveBlocks(node: ElementNode): boolean {
@@ -265,7 +267,8 @@ export function extractVisibleWebsiteBlocks(html: string): HtmlBlockResult {
       node.tag==='dt'||node.tag==='summary' ? 'faq_question' :
       node.tag==='dd' ? 'faq_answer' : null;
     if (kind) {
-      append(kind,visibleText(node,true) || visibleText(node));
+      const inlineText = node.children.map(child => visibleText(child,true)).join('');
+      append(kind,inlineText);
       // Only descend into nested block structures to avoid duplication.
       for(const child of node.children) if(element(child) &&
         (blockTags.has(child.tag) || descendantsHaveBlocks(child))) visit(child,insideTable);
