@@ -42,6 +42,14 @@
 
 **Local data hygiene:** use untracked files outside the repository and remove them after the authorized review. Browser clipboard access requires the admin to click Copy. No automatic extraction, direct database connection or SSH is performed by the script. Do not upload these files or add them to CI artifacts.
 
+## Actual UI-to-CLI format compatibility regression (2026-11-06)
+
+The additional readiness test `tests/readiness/r2-p2-real-copy-sql-roundtrip-v1.test.cjs` loads and executes **both actual CRM TypeScript clipboard formatters** in isolated Node VMs and feeds their resulting full copied strings directly into **the production operator CLI parser**, with independently constructed **synthetic SQL JSON** in the exact expected output shape.
+
+The test covers **7, 14 and 30 days** for the default, ordered `web.page_viewed → web.form_started → web.form_submitted` funnel and the same three default Event Activity series. It verifies corresponding window and snapshot timestamps, aggregate matches, mismatched counts, stale SQL, wrong report class, output redaction and CLI rejection of unexpected identifier fields. This closes the compatibility-test gap left by independent formatter and comparator tests using handwritten copies.
+
+This is **not** an authorized admin session, SQL readback, real tenant isolation, verified complete event history, production web consent, or reconciliation sign-off. It deliberately performs **no network/database operations** and cannot close Issue #523. Non-default event combinations are not supported by the default SQL comparator; the operator must select the three exact default events before copying.
+
 ## Privacy and completion boundary
 
 - SQL aggregate snapshots are produced by the trusted operator's own DB role. The CLI does **not** exercise actual PostgreSQL authenticated/anonymous role guards or prove tenant isolation.
