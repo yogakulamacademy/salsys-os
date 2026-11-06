@@ -103,7 +103,8 @@ test('source text that looks like AI instructions is never acted on or promoted'
   assert.equal(result.ok,true);
   assert.equal(result.bundle.drafts.length,3);
   assert.equal(result.bundle.drafts[0].statement,input.blocks[0].text);
-  assert.deepEqual(result.bundle.drafts[0].risks,[]);
+  assert.ok(result.bundle.drafts[0].risks.includes('pricing_or_amounts'),
+    'Even instruction-like text is merely classified as untrusted source text');
   assert.ok(result.bundle.drafts[1].risks.includes('pricing_or_amounts'));
   assert.ok(result.bundle.drafts[1].risks.includes('dates_and_schedule'));
   assert.ok(result.bundle.drafts[2].risks.includes('sensitive_claim_review'));
