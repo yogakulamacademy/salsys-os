@@ -11,6 +11,7 @@
 -- The live RPC has a moving NOW() bound: compare within a short interval and
 -- investigate new/delayed events before concluding a mismatch.
 -- Never pass customer tokens or browser identifiers into this script.
+-- sampled_at_utc is an aggregate-only timestamp for offline drift checks.
 
 with params as (
   select :'organization_id'::uuid as organization_id,
@@ -91,6 +92,7 @@ select jsonb_build_object(
     else 'aggregate_comparison_only'
   end,
   'window_days',p.days,
+  'sampled_at_utc',to_char(p.captured_at at time zone 'UTC','YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'),
   'candidate_events',v.candidate_events,
   'funnel',case when p.days in (7,14,30) and v.candidate_events <= 50000
     then f.steps else '[]'::jsonb end,
