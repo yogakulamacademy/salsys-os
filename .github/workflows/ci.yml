@@ -4,6 +4,8 @@ on:
   pull_request:
     branches:
       - main
+      # Temporary stacked KB-04B PR validation.
+      - feature/kb04a-source-snapshot-delta-preview
       # Temporary validation of KB-04C stacked on KB-04B.
       - feature/kb04b-refresh-safety-contract
   push:
