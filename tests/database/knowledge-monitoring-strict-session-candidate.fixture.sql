@@ -116,6 +116,23 @@ select pg_temp.assert_true(
     '10000000-0000-4000-8000-000000000001'),
   'KB05C employee cannot authorize monitoring even with bound session');
 
+-- An actual bound admin (not just an owner) should be eligible in principle.
+-- This is a synthetic change to the rollback-only test membership table.
+reset role;
+update public.organization_members set role='admin'
+where user_id='20000000-0000-4000-8000-000000000003'
+  and organization_id='10000000-0000-4000-8000-000000000001';
+set local role authenticated;
+select pg_temp.assert_true(
+  pg_temp.kb05c_strict_monitoring_session_candidate(
+    '10000000-0000-4000-8000-000000000001'),
+  'KB05C bound active admin may enter review preflight');
+reset role;
+update public.organization_members set role='employee'
+where user_id='20000000-0000-4000-8000-000000000003'
+  and organization_id='10000000-0000-4000-8000-000000000001';
+set local role authenticated;
+
 select set_config('request.jwt.claims',
   '{"role":"anon","sub":"20000000-0000-4000-8000-000000000001","session_id":"30000000-0000-4000-8000-000000000001"}',true);
 select pg_temp.assert_true(
