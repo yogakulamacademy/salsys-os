@@ -69,10 +69,26 @@ export const resolveWebsiteAddresses: LookupAddresses = async hostname =>
   dnsLookup(hostname, { all: true, verbatim: true }) as Promise<PinnedPublicAddress[]>;
 
 /** Resolve every address; reject the whole hostname if even one record is unsafe. */
-export async function pinPublicAddress(url: URL, resolver: LookupAddresses = resolveWebsiteAddresses): Promise<PinnedPublicAddress> {
+export async function pinPublicAddress(
+  url: URL,
+  resolver: LookupAddresses = resolveWebsiteAddresses,
+  timeoutMs = 5_000,
+): Promise<PinnedPublicAddress> {
   // Revalidate after every redirect too, not just the initial user input.
   parseWebsiteSeed(url.href);
-  const addresses = await resolver(url.hostname);
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  let addresses: PinnedPublicAddress[];
+  try {
+    addresses = await Promise.race([
+      resolver(url.hostname),
+      new Promise<never>((_resolve, reject) => {
+        timer = setTimeout(() => reject(new WebsiteScopeError('Public DNS resolution timed out.')),
+          timeoutMs);
+      }),
+    ]);
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
   if (!addresses.length || addresses.length > 32 ||
       addresses.some(a => !publicIpOnly(a.address) || a.family !== isIP(a.address))) {
     throw new WebsiteScopeError('The hostname does not resolve exclusively to public IP addresses.');
