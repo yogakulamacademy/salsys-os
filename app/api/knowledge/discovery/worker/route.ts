@@ -4,6 +4,7 @@ import { bearerMatchesAnySecret } from '@/lib/security/machine-bearer-auth';
 import { processOneDiscoveryPage } from '@/lib/knowledge-discovery/runner';
 import { parseWebsiteSeed } from '@/lib/knowledge-discovery/url-policy';
 import { discoveryPilotEnabled, discoveryHostAllowed } from '@/lib/knowledge-discovery/pilot-gate';
+import { discoveryDomainVerified, discoveryVerificationHost } from '@/lib/knowledge-discovery/domain-verification';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -36,8 +37,21 @@ export async function POST(request: NextRequest) {
     try {
       // Jobs queued under older pilot configuration must still be rechecked
       // against the currently approved host list before any outbound request.
-      if (!discoveryHostAllowed(parseWebsiteSeed(claim.seed_url).hostname)) {
+      const site = parseWebsiteSeed(claim.seed_url);
+      if (site.protocol !== 'https:' || !discoveryHostAllowed(site.hostname)) {
         return NextResponse.json({ ok: false, error: 'Discovery job site is not approved' },
+          { status: 403, headers: noStore });
+      }
+      // Proof can expire or be replaced after a job was queued. Check it
+      // before the first outbound request of every worker tick.
+      const { data: proof, error: proofError } = await admin
+        .from('knowledge_discovery_domain_verifications')
+        .select('verified_at,verified_until')
+        .eq('organization_id', claim.organization_id)
+        .eq('hostname', discoveryVerificationHost(site.hostname)).maybeSingle();
+      if (proofError) throw proofError;
+      if (!discoveryDomainVerified(proof)) {
+        return NextResponse.json({ ok: false, error: 'Website ownership proof is missing or expired' },
           { status: 403, headers: noStore });
       }
       const outcome = await processOneDiscoveryPage(claim);
