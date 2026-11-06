@@ -119,6 +119,36 @@ function boot({
 }
 async function settle() { await new Promise((resolve) => setImmediate(resolve)); }
 
+test("extra consent receipts outside effective decisions fail closed, even when the claimed grant is valid", async () => {
+  for (const extraReceipt of [
+    { purpose: "advertising", decision: "granted", receipt_id: "unexpected-ads-grant" },
+    { purpose: "analytics", decision: "denied", receipt_id: "conflicting-analytics-denial" },
+    { purpose: "marketing", decision: "denied", receipt_id: "unrequested-marketing-denial" },
+  ]) {
+    const app = boot({
+      consentResponse: async (body) => {
+        const receipt = consentAck(body);
+        return {
+          ok: true,
+          json: async () => ({
+            ...(await receipt.json()),
+            receipts: [
+              ...(await receipt.json()).receipts,
+              extraReceipt,
+            ],
+          }),
+        };
+      },
+    });
+    await assert.rejects(app.sdk.consent({ analytics: "granted" }),
+      /Privacy preference server receipt was not verified/);
+    assert.equal(app.sdk.privacy().analytics_allowed_locally, false);
+    assert.equal(app.local.getItem("salsys_vid"), null);
+    assert.equal((await app.sdk.track("web.page_viewed", {})).privacy_blocked, true);
+    assert.equal(app.eventCalls("web.page_viewed").length, 0);
+  }
+});
+
 test("analytics grant retains one first-party identity across same-tab reload", async () => {
   const app = boot();
   await app.sdk.consent({ analytics: "granted" });
