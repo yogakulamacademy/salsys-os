@@ -57,6 +57,7 @@ let adminClientCalls = 0;
 let writes = [];
 let reads = [];
 let website = 'https://fixture.example.com/';
+let ownershipVerified = true;
 let simulatedInsertError = null;
 
 function appClient() {
@@ -72,6 +73,14 @@ function appClient() {
         select: () => ({ eq: () => ({
           maybeSingle: async () => ({data:{website_url:website},error:null}),
         }) }),
+      };
+      if(table === 'knowledge_discovery_domain_verifications')return {
+        select: () => ({ eq: () => ({ eq: () => ({
+          maybeSingle: async () => ({data:ownershipVerified
+            ? {verified_at:new Date(Date.now()-60_000).toISOString(),
+              verified_until:new Date(Date.now()+60_000).toISOString()}
+            : null,error:null}),
+        }) }) }),
       };
       throw new Error('Unexpected read from '+table);
     },
@@ -111,6 +120,9 @@ const route = loadTs('app/api/knowledge/discovery/route.ts', {
   },
   '@/lib/knowledge-discovery/url-policy':scope,
   '@/lib/knowledge-discovery/pilot-gate':gate,
+  '@/lib/knowledge-discovery/domain-verification':loadTs('lib/knowledge-discovery/domain-verification.ts',{
+    'node:crypto':require('node:crypto'),
+  }),
 });
 const vars = [
   'KNOWLEDGE_DISCOVERY_PILOT_ENABLED',
@@ -127,7 +139,7 @@ test.after(()=> {
 
 function reset() {
   authenticated = true;admin = true;adminClientCalls = 0;
-  writes = []; reads = []; website = 'https://fixture.example.com/'; simulatedInsertError = null;
+  writes = []; reads = []; website = 'https://fixture.example.com/'; simulatedInsertError = null; ownershipVerified = true;
   delete process.env.KNOWLEDGE_DISCOVERY_PILOT_ENABLED;
   delete process.env.KNOWLEDGE_DISCOVERY_PAUSED;
   delete process.env.KNOWLEDGE_DISCOVERY_ALLOWED_HOSTS;
@@ -210,4 +222,14 @@ test('database cooldown and daily limit surface as HTTP 429 without creating see
     assert.deepEqual(writes.map(entry=>entry.table),['knowledge_discovery_jobs'],
       'No seed page should be inserted for rejected job');
   }
+});
+
+
+test('unauthorized website ownership never allows a scan job to be created',async()=>{
+  reset(); enabled(); ownershipVerified=false;
+  const response=await route.POST(request('POST',{url:website,maxPages:10}));
+  assert.equal(response.status,409);
+  assert.match(response.body.error,/verify ownership/i);
+  assert.equal(adminClientCalls,0);
+  assert.deepEqual(writes,[]);
 });
