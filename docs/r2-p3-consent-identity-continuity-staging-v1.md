@@ -103,7 +103,7 @@ Use disposable staging/site identities (never real prospects). Configure a test 
 
 **Cross-tab automated coverage added:** The synthetic harness now simulates two separate tab runtimes with shared localStorage and isolated sessionStorage. It checks withdrawal blocking, identity rotation, delayed consent-grant binding, old-event retry suppression, dropped storage notifications, frozen-tab restoration and stale sessionStorage after a second tab's regrant.
 
-**Still unverified in real browsers:** The synthetic runner manually emits storage/pageshow notifications; it cannot prove native browser ordering, permissions, BFCache behavior, blocked storage or concurrent race timing. An authenticated staging acceptance check with two actual tabs and lead forms is required. Do **not** merge merely because CI passes.
+**Local browser checks (native Chromium, intercepted network):** `tests/ui/consent-identity-browser.spec.ts` uses real Chromium tabs and local network interception for grant/withdraw/regrant, including additional restricted `localStorage` and `sessionStorage` method scenarios. Under blocked privacy persistence, optional analytics must remain OFF; necessary form evidence may still use freshly rotated synthetic identity. These controlled mock tests establish browser behavior only for the tested cases; they cannot establish a real CMP, actual cross-origin configuration, private browsing implementation across browsers, full BFCache coverage, production provider policies or the live website form/CRM pipeline. An authorized isolated staging acceptance check remains mandatory. **Do not merge merely because CI passes.**
 
 ## Release gates
 
