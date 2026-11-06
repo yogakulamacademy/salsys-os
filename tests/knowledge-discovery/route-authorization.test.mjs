@@ -75,6 +75,9 @@ function appClient() {
           maybeSingle: async () => ({data:{website_url:website},error:null}),
         }) }),
       };
+      if(table === 'knowledge_discovery_jobs')return {
+        select:()=>({eq:()=>({order:()=>({limit:async()=>({data:[],error:null})})})}),
+      };
       if(table === 'knowledge_discovery_site_consents')return {
         select:()=>({eq:()=>({eq:()=>({
           maybeSingle:async()=>({data:consentGranted?{
