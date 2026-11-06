@@ -30,6 +30,8 @@ test("coverage observation is never treated as verified ingestion or a KPI", () 
 test("query returns aggregates only and fails closed when capped", () => {
   assert.match(active, /v\.candidate_events > 50000 then 'volume_limit'/);
   assert.match(active, /case when v\.candidate_events <= 50000/);
+  assert.match(active, /'candidate_receipt_limit_exceeded',v\.candidate_events > 50000/);
+  assert.match(active, /'candidate_session_start_receipts',case when v\.candidate_events <= 50000/);
   assert.doesNotMatch(active, /\b(e\.|b\.)?(anonymous_visitor_id|session_key|tracking_source_id|payload|email|phone|full_name)\b/i);
   assert.doesNotMatch(active, /\bretention_(?:rate|percent)|\bcohort_(?:returns|denominator)\b/i);
 });
