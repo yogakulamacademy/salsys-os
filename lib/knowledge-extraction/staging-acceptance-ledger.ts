@@ -1,4 +1,3 @@
-import { createHash } from 'node:crypto';
 import type { EvidenceReadinessResult } from './evidence-lifecycle-readiness';
 import type { RefreshPreflight } from './website-refresh-preflight';
 import type { HumanReviewHandoffPacket } from './human-review-handoff';
@@ -193,7 +192,6 @@ export type AcceptanceLedgerResult =
 const UUID=/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const SHA=/^[a-f0-9]{64}$/;
 const RUN_ID=/^[a-z0-9][a-z0-9._-]{5,95}$/;
-const hash=(v:string)=>createHash('sha256').update(v,'utf8').digest('hex');
 
 function strictTime(value:unknown):number|null{
   if(typeof value!=='string'||
@@ -263,6 +261,7 @@ export function assessStagingAcceptanceLedger(
     if(!c||!UUID.test(c.organizationId)||c.organizationId!==input.organizationId||
       !STAGING_SCENARIOS.some(g=>g.id===c.scenarioId)||
       declared.has(c.scenarioId)||!RUN_ID.test(c.runId??'')||
+      !['deny','delete','audit','reconcile'].includes(c.observedOutcome)||
       !SHA.test(c.evidenceSha256??'')||
       !UUID.test(c.reportedBy??'')||
       c.evidenceOrigin!=='self_reported_isolated_staging'){
