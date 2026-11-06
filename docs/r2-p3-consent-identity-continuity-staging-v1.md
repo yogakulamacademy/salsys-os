@@ -35,6 +35,39 @@ Three initial tests passed, including necessary form-submission evidence and unr
 
 No real tracking endpoint, customer cookie, or CRM record is used. These synthetic checks do not prove how every browser implements storage or cross-tab events.
 
+## Environment inventory and isolation gate (2026-11-06)
+
+Read-only account/database verification found **no authorized staging website**:
+- `organization_sites`: only the two active production hostnames (`yogakulam.com`, `yogakulamacademy.com`) and revoked/inactive `www` variants. No `environment=staging` site.
+- `tracking_sources`: the matching two production sources are active under strict consent; both `www` sources are revoked. No active staging source.
+- Vercel project `salsys-os`: latest production release is READY, but **no deployment for `test/r2-p3-consent-id-continuity-v1`** was found. There is no preview/staging custom domain on that project.
+- Vercel preview configuration includes `SUPABASE_SECRET_KEY`, `SUPABASE_URL`, `TRACKING_INGEST_SECRET` and a publishable Supabase URL. Values were **not decrypted**, and isolation from the production Supabase project has **not been established**. Do not assume that a default PR preview is safe for test writes.
+
+**Environment blocker:** no live customer-site experiment, production website changes, synthetic lead submission against production services, or guessed staging-domain registration is approved. An authorized owner must provision or identify an isolated HTTPS website, separate test CRM/backend and Supabase data project, register a `staging` site/source with strict consent, and verify that form/lead delivery is isolated (no customer emails/WhatsApp or payment actions).
+
+Before running any manual acceptance, the release engineer must verify the staging source is active, the expected PR commit exactly matches the deployed commit and the staging Supabase endpoint is distinct from production. Use:
+
+```bash
+# Set the following in your own protected testing shell/CI environment.
+# Do not paste secrets, credentials, cookies, customer IDs or values into GitHub.
+export SALSYS_STAGING_SITE_ORIGIN="https://<approved-staging-site>"
+export SALSYS_STAGING_CRM_ORIGIN="https://<isolated-staging-crm>"
+export SALSYS_STAGING_SUPABASE_URL="https://<staging-supabase-host>"
+export SALSYS_PRODUCTION_SUPABASE_URL="https://<production-supabase-host>"
+export SALSYS_STAGING_SOURCE_HOSTNAME="<exact-staging-site-hostname>"
+export SALSYS_STAGING_SOURCE_STATUS="active"
+export SALSYS_STAGING_SOURCE_ENVIRONMENT="staging"
+export SALSYS_STAGING_CONSENT_MODE="required"
+export SALSYS_STAGING_FORM_CAPTURE_ISOLATED="yes"
+export SALSYS_STAGING_OWNER_APPROVED="yes"
+export SALSYS_STAGING_EXPECTED_COMMIT="<reviewed-PR-40-char-SHA>"
+export SALSYS_STAGING_DEPLOYED_COMMIT="<actual-preview-40-char-SHA>"
+
+node scripts/r2-consent-staging-preflight.mjs
+```
+
+This preflight makes **read-only assertions about operator-supplied staging configuration** and returns a nonzero exit on missing requirements. It performs no API calls, writes, or secret reads and does not certify that the operator supplied true information. Independently verify the source/site record and deployment metadata. A preflight PASS does **not** replace actual two-tab/CMP and exact-session lead-form acceptance.
+
 ## Controlled staging acceptance — REQUIRED BEFORE MERGE
 
 Use disposable staging/site identities (never real prospects). Configure a test site's tracking source with `data-consent-mode="required"` and an authorized staging domain. Record aggregate result/status only; do not paste raw visitor IDs or credentials into GitHub issues.
