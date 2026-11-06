@@ -7,14 +7,14 @@ const HARNESS = "/__r2_behavior_pilot_local_harness";
 type PilotEvent = { name: string; properties: Record<string, unknown> };
 
 function harnessHtml(initialConsent: boolean) {
-  return \`<!doctype html><html lang="en"><head><meta charset="utf-8">
+  return `<!doctype html><html lang="en"><head><meta charset="utf-8">
     <title>Synthetic optional behavior pilot</title>
     <style>body{margin:0;font-family:sans-serif}main{padding:16px}
       #cta{display:block;width:240px;height:80px}
       #pricing{display:block;width:240px;height:100px}
       #spacer{height:4200px}</style>
     <script>
-      window.__pilotAllowed = \${initialConsent ? "true" : "false"};
+      window.__pilotAllowed = ${initialConsent ? "true" : "false"};
       window.__pilotEvents = [];
       window.SalsysIntelligence = {
         __universalTrackingIntelligenceV1: true,
@@ -34,7 +34,7 @@ function harnessHtml(initialConsent: boolean) {
     <details id="faq" data-salsys-faq-id="certification"><summary>FAQ</summary>Answer</details>
     <form><input type="email" name="email" value="synthetic@example.test"></form>
     <div id="spacer" aria-hidden="true"></div>
-    </main><script src="/salsys-behavior-v1.js"></script></body></html>\`;
+    </main><script src="/salsys-behavior-v1.js"></script></body></html>`;
 }
 
 async function openHarness(page: Page, initialConsent = false) {
