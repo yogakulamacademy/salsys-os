@@ -690,6 +690,9 @@
     consentReceiptQueue = receipt.catch(function () {});
 
     return receipt.then(function (result) {
+      if (changesAnalytics && revision !== analyticsConsentRevision) {
+        throw new Error('Consent request superseded by a newer browser privacy decision.');
+      }
       var effective =
         result && result.effective_decisions && typeof result.effective_decisions === 'object'
           ? result.effective_decisions
