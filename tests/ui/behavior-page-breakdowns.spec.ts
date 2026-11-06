@@ -42,7 +42,7 @@ test("Page breakdown shows only safe public routes with a real visitor threshold
   await expect(breakdown.getByText("/enroll.php")).toBeVisible();
   await expect(breakdown.getByText("Other or withheld events", { exact: true })).toBeVisible();
   await expect(breakdown.getByText("17", { exact: true })).toBeVisible();
-  await expect(breakdown.getByText("at least 3 distinct anonymous visitors", { exact: false })).toBeVisible();
+  await expect(breakdown.getByText("at least 3 distinct tracked visitor IDs", { exact: false })).toBeVisible();
 
   const calls = await (await request.get(fixtureBase + "/__behavior_breakdown_calls")).json();
   expect(calls.length).toBeGreaterThan(0);
