@@ -11,6 +11,7 @@ on:
       - feature/kb02-source-evidence-core
       - feature/kb02d-evidence-review-preview
       - feature/kb02e-evidence-lifecycle-contract
+      - feature/kb03a-source-backed-drafts
 
 permissions:
   contents: read

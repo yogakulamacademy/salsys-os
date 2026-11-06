@@ -28,9 +28,12 @@ test('admin can plan review of source quotes but cannot approve or publish',asyn
   await page.goto('/settings/knowledge/evidence-preview');
   await expect(page.getByRole('heading',{name:'Evidence review'})).toBeVisible();
   await expect(page.getByText('Preview only — no evidence is saved')).toBeVisible();
-  await expect(page.getByText('Introduction workshop: 2 days.')).toBeVisible();
-  await expect(page.getByText('Introduction workshop | $150')).toBeVisible();
-  await expect(page.getByText('Can I reschedule?')).toBeVisible();
+  // The exact quote also appears in the read-only candidate section;
+  // scope assertions to the original evidence list to avoid ambiguity.
+  const evidenceList=page.getByRole('region',{name:'Evidence entries'});
+  await expect(evidenceList.getByText('Introduction workshop: 2 days.')).toBeVisible();
+  await expect(evidenceList.getByText('Introduction workshop | $150')).toBeVisible();
+  await expect(evidenceList.getByText('Can I reschedule?')).toBeVisible();
 
   const counts=page.getByRole('region',{name:'Evidence review counts'});
   await expect(counts.getByText('For later review')).toBeVisible();
@@ -72,6 +75,28 @@ test('review preview names consent and deletion safeguards without enabling stor
   await expect(readiness.getByText('Deletion and consent withdrawal tested')).toBeVisible();
   await expect(readiness.getByText('Isolated staging database acceptance')).toBeVisible();
   await expect(page.getByRole('button',{name:'Publish knowledge (disabled)'})).toBeDisabled();
+});
+
+test('read-only source candidate preview pairs actual FAQ quotations without auto-approval',async({page})=>{
+  const writes:string[]=[];
+  page.on('request',request=>{
+    if(request.method()!=='GET' &&
+      /\/(?:api\/knowledge|rest\/v1\/knowledge_)/.test(request.url())) {
+      writes.push(request.method()+' '+request.url());
+    }
+  });
+  await page.goto('/settings/knowledge/evidence-preview');
+  const candidates=page.getByRole('region',{name:'Source-backed draft candidates'});
+  await expect(candidates.getByText('Exact quotations and adjacent FAQ pairs',{exact:false})).toBeVisible();
+  await expect(candidates.getByText('Can I reschedule?',{exact:true})).toBeVisible();
+  await expect(candidates.getByText(
+    'Rescheduling requests must be submitted before the event.',{exact:true})).toBeVisible();
+  await expect(candidates.getByText('Introduction workshop | $150',{exact:true})).toBeVisible();
+  await expect(candidates.getByText('Human review required').first()).toBeVisible();
+  await expect(candidates.getByText(
+    'No AI-generated content, storage, approval, or publishing is enabled by this preview.')).toBeVisible();
+  await expect(page.getByRole('button',{name:'Publish knowledge (disabled)'})).toBeDisabled();
+  expect(writes).toEqual([]);
 });
 
 test('review preview remains readable without horizontal overflow on mobile',async({page})=>{

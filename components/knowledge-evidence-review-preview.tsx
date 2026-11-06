@@ -6,6 +6,7 @@ import {
   ArrowLeft, Check, CircleHelp, RotateCcw, ShieldAlert, ShieldCheck, X,
 } from 'lucide-react';
 import type { PreparedWebsiteEvidence } from '@/lib/knowledge-extraction/website-evidence';
+import type { SourceDraftBundle } from '@/lib/knowledge-extraction/source-grounded-drafts';
 import { assessEvidenceReadiness } from '@/lib/knowledge-extraction/evidence-lifecycle-readiness';
 import {
   chooseEvidenceForReview,
@@ -24,9 +25,10 @@ const filters: Array<{ id: Filter; label: string }> = [
 ];
 
 export function KnowledgeEvidenceReviewPreview({
-  evidence,
+  evidence, sourceCandidates,
 }: {
   evidence: PreparedWebsiteEvidence;
+  sourceCandidates: SourceDraftBundle;
 }) {
   const [choices, setChoices] = useState<EvidenceReviewDecisions>({});
   const [filter, setFilter] = useState<Filter>('all');
@@ -176,6 +178,74 @@ export function KnowledgeEvidenceReviewPreview({
             ))}
           </div>
         )}
+      </section>
+
+      <section aria-label="Source-backed draft candidates" className="rounded-xl border border-slate-200 bg-white p-5">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h2 className="text-base font-semibold">Source-backed draft candidates</h2>
+            <p className="mt-1 max-w-2xl text-xs leading-5 text-slate-600">
+              Exact quotations and adjacent FAQ pairs, without paraphrasing or AI generation.
+              Every item needs human verification; none is an approved answer.
+            </p>
+          </div>
+          <span className="rounded-md border border-slate-200 bg-slate-50 px-2.5 py-1.5 text-xs font-semibold text-slate-600">
+            {sourceCandidates.drafts.length} unreviewed
+          </span>
+        </div>
+        {sourceCandidates.drafts.length===0 ? (
+          <p className="mt-4 text-sm text-slate-500">No source-backed candidates are available.</p>
+        ) : (
+          <ol className="mt-5 space-y-3">
+            {sourceCandidates.drafts.map(draft=>{
+              const citations=draft.kind==='faq_pair'
+                ? [draft.questionCitation,draft.answerCitation]
+                : [draft.citation];
+              return (
+                <li key={draft.id} className="rounded-lg border border-slate-200 p-4">
+                  <div className="flex flex-wrap justify-between gap-2">
+                    <p className="text-xs font-semibold text-slate-600">
+                      {draft.kind==='faq_pair'?'FAQ pair':'Source statement'}
+                    </p>
+                    <span className="text-xs font-medium text-amber-700">
+                      Human review required
+                    </span>
+                  </div>
+                  {draft.kind==='faq_pair' ? (
+                    <div className="mt-3 space-y-2">
+                      <p className="break-words text-sm font-semibold">{draft.question}</p>
+                      <blockquote className="break-words border-l-2 border-slate-300 pl-3 text-sm leading-6">
+                        {draft.answer}
+                      </blockquote>
+                    </div>
+                  ) : (
+                    <blockquote className="mt-3 break-words border-l-2 border-slate-300 pl-3 text-sm leading-6">
+                      {draft.statement}
+                    </blockquote>
+                  )}
+                  <p className="mt-3 break-all font-mono text-[11px] leading-5 text-slate-500">
+                    Source block{citations.length>1?'s':''} {citations.map(c=>c.sourceBlockIndex+1).join(', ')}
+                    {' · '}Quote hash{citations.length>1?'es':''} {citations.map(c=>c.quoteSha256.slice(0,12)).join(' / ')}…
+                  </p>
+                  {draft.risks.length>0 ? (
+                    <p className="mt-2 text-xs text-amber-800">
+                      Check carefully: {draft.risks.map(x=>x.replaceAll('_',' ')).join(', ')}
+                    </p>
+                  ) : null}
+                </li>
+              );
+            })}
+          </ol>
+        )}
+        {sourceCandidates.issues.length>0 ? (
+          <p className="mt-4 text-xs text-slate-600">
+            {sourceCandidates.issues.length} source fragment(s) could not be paired or were too long.
+            No missing answers were invented.
+          </p>
+        ) : null}
+        <p className="mt-4 border-t border-slate-100 pt-3 text-xs text-slate-600">
+          No AI-generated content, storage, approval, or publishing is enabled by this preview.
+        </p>
       </section>
 
       <section aria-label="Evidence lifecycle readiness" className="rounded-xl border border-slate-200 bg-white p-5">

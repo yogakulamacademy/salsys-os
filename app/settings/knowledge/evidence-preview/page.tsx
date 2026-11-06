@@ -1,6 +1,7 @@
 import { requireAdminWorkspaceAccess } from '@/lib/route-access';
 import { prepareHtml5WebsiteEvidence } from '@/lib/knowledge-extraction/html5-visible-text';
 import { KnowledgeEvidenceReviewPreview } from '@/components/knowledge-evidence-review-preview';
+import { prepareSourceGroundedDrafts } from '@/lib/knowledge-extraction/source-grounded-drafts';
 
 export const dynamic = 'force-dynamic';
 
@@ -42,5 +43,14 @@ export default async function EvidenceReviewPreviewPage() {
   if (!result.ok) {
     throw new Error('Synthetic evidence preview fixture is invalid.');
   }
-  return <KnowledgeEvidenceReviewPreview evidence={result.evidence}/>;
+  const candidates = prepareSourceGroundedDrafts(result.evidence, 'sample.example.com');
+  if (!candidates.ok) {
+    throw new Error('Synthetic draft candidate fixture is invalid.');
+  }
+  return (
+    <KnowledgeEvidenceReviewPreview
+      evidence={result.evidence}
+      sourceCandidates={candidates.bundle}
+    />
+  );
 }
