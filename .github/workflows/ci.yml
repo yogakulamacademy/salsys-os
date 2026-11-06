@@ -10,6 +10,8 @@ on:
       - feature/kb04b-refresh-safety-contract
       # Temporary KB-04D stacked PR validation.
       - feature/kb04c-source-change-impact-review
+      # Temporary KB-04E stacked PR validation.
+      - feature/kb04d-human-review-handoff-contract
   push:
     branches:
       - main
@@ -26,6 +28,7 @@ on:
       - feature/kb04b-refresh-safety-contract
       - feature/kb04c-source-change-impact-review
       - feature/kb04d-human-review-handoff-contract
+      - feature/kb04e-isolated-acceptance-ledger
 
 permissions:
   contents: read
