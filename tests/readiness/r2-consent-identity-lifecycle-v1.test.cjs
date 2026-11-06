@@ -336,10 +336,16 @@ test("two tabs wait for a post-grant identity before resuming optional analytics
   await first.sdk.consent({ analytics: "withdrawn" });
   second.emitStorage("salsys_privacy_v1", shared.getItem("salsys_privacy_v1"));
   await first.sdk.consent({ analytics: "granted" });
+  const acknowledgedVisitor = shared.getItem("salsys_vid");
+  assert.ok(acknowledgedVisitor);
+  // Simulate browser delivery of the grant decision BEFORE the later
+  // persistent-visitor storage write from the other tab is observed.
+  shared.removeItem("salsys_vid");
   second.emitStorage("salsys_privacy_v1", shared.getItem("salsys_privacy_v1"));
   assert.equal((await second.sdk.track("web.page_viewed", {})).privacy_blocked, true,
     "privacy grant state alone must not resume a tab with unbound identity");
-  second.emitStorage("salsys_vid", shared.getItem("salsys_vid"));
+  shared.setItem("salsys_vid", acknowledgedVisitor);
+  second.emitStorage("salsys_vid", acknowledgedVisitor);
   await settle();
   assert.notEqual(second.sdk.visitorId(), oldVisitor);
   assert.equal(second.sdk.visitorId(), first.sdk.visitorId(),
