@@ -30,6 +30,19 @@ function form() {
     field(name) { return inputs.get(name)?.value || null; },
   };
 }
+function consentAck(body, effective = body.decisions) {
+  return {
+    ok: true,
+    json: async () => ({
+      ok: true,
+      visitor_id: body.visitor_id,
+      effective_decisions: effective,
+      receipts: Object.entries(body.decisions).map(([purpose, decision], index) => ({
+        purpose, decision, receipt_id: "synthetic-receipt-" + index,
+      })),
+    }),
+  };
+}
 function boot({
   local = storage(),
   session = storage(),
@@ -81,7 +94,7 @@ function boot({
     if (String(url).includes("/privacy/consent/")) {
       return typeof consentResponse === "function"
         ? consentResponse(body)
-        : { ok: true, json: async () => ({ effective_decisions: body.decisions }) };
+        : consentAck(body);
     }
     if (typeof eventResponse === "function") return eventResponse(body);
     return { ok: true, json: async () => ({ ok: true, accepted: true }) };
@@ -163,12 +176,14 @@ test("regrant in one tab uses a new visitor and sends a new session-start/page-v
 
 test("a withdrawal request blocks optional analytics immediately while remote consent is pending", async () => {
   let completeWithdrawal;
+  let withdrawalBody;
   const app = boot({
     consentResponse: (body) => {
       if (body.decisions.analytics === "withdrawn") {
+        withdrawalBody = body;
         return new Promise((resolve) => { completeWithdrawal = resolve; });
       }
-      return { ok: true, json: async () => ({ effective_decisions: body.decisions }) };
+      return consentAck(body);
     },
   });
   await app.sdk.consent({ analytics: "granted" });
@@ -178,7 +193,7 @@ test("a withdrawal request blocks optional analytics immediately while remote co
   assert.equal(event.privacy_blocked, true);
   assert.notEqual(app.sdk.visitorId(), preWithdrawal);
   assert.equal(app.local.getItem("salsys_vid"), null);
-  completeWithdrawal({ ok: true, json: async () => ({ effective_decisions: { analytics: "withdrawn" } }) });
+  completeWithdrawal(consentAck(withdrawalBody));
   await pending;
 });
 
@@ -186,7 +201,7 @@ test("failed withdrawal records a local opt-out and never resumes optional analy
   const app = boot({
     consentResponse: async (body) => {
       if (body.decisions.analytics === "denied") throw new Error("synthetic network failure");
-      return { ok: true, json: async () => ({ effective_decisions: body.decisions }) };
+      return consentAck(body);
     },
   });
   await app.sdk.consent({ analytics: "granted" });
@@ -258,7 +273,7 @@ test("failed analytics regrant keeps the local opt-out and no persistent visitor
     consentResponse: async (body) => {
       if (body.decisions.analytics === "granted" &&
           appWasWithdrawn) throw new Error("synthetic grant rejected");
-      return { ok: true, json: async () => ({ effective_decisions: body.decisions }) };
+      return consentAck(body);
     },
   });
   let appWasWithdrawn = false;
@@ -286,19 +301,17 @@ test("an explicit analytics opt-out takes priority over a default granted site m
 
 test("a contradictory remote opt-out acknowledgement cannot reenable analytics locally", async () => {
   const app = boot({
-    consentResponse: async (body) => ({
-      ok: true,
-      json: async () => ({
-        effective_decisions: body.decisions.analytics === "denied"
-          ? { analytics: "granted" }
-          : body.decisions,
-      }),
-    }),
+    consentResponse: async (body) => consentAck(
+      body,
+      body.decisions.analytics === "denied"
+        ? { analytics: "granted" }
+        : body.decisions,
+    ),
   });
   await app.sdk.consent({ analytics: "granted" });
   await assert.rejects(
     () => app.sdk.consent({ analytics: "denied" }),
-    /Analytics opt-out was not confirmed/,
+    /Privacy preference server receipt was not verified/,
   );
   assert.equal(app.sdk.privacy().analytics_allowed_locally, false);
   assert.equal(app.local.getItem("salsys_vid"), null);
@@ -461,13 +474,15 @@ test("a restored tab reload cannot overwrite the new post-withdrawal shared visi
 test("a stale pending grant cannot override another tab's later withdrawal", async () => {
   const shared = storage();
   let finishGrant;
+  let grantBody;
   const first = boot({
     local: shared,
     consentResponse(body) {
       if (body.decisions.analytics === "granted") {
+        grantBody = body;
         return new Promise((resolve) => { finishGrant = resolve; });
       }
-      return { ok: true, json: async () => ({ effective_decisions: body.decisions }) };
+      return consentAck(body);
     },
   });
   const oldGrant = first.sdk.consent({ analytics: "granted" });
@@ -477,7 +492,7 @@ test("a stale pending grant cannot override another tab's later withdrawal", asy
   await second.sdk.consent({ analytics: "withdrawn" });
   first.emitStorage("salsys_privacy_v1", shared.getItem("salsys_privacy_v1"),
     JSON.stringify({ analytics: "granted" }));
-  finishGrant({ ok: true, json: async () => ({ effective_decisions: { analytics: "granted" } }) });
+  finishGrant(consentAck(grantBody));
   await assert.rejects(oldGrant, /Consent request superseded/);
   assert.equal(first.sdk.privacy().analytics_allowed_locally, false);
   assert.equal(shared.getItem("salsys_vid"), null);
