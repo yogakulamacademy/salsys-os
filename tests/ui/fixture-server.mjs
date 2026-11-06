@@ -36,7 +36,7 @@ const server=http.createServer(async(req,res)=>{
   if(url.pathname==='/__behavior_scenario'){
     const state=url.searchParams.get('state');
     const tenant=url.searchParams.get('tenant')||'primary';
-    if(!['ready','empty','small','denied','error'].includes(state) ||
+    if(!['ready','empty','small','denied','error','funnel-error','trends-error','breakdown-error'].includes(state) ||
        !['primary','secondary'].includes(tenant)){res.statusCode=400;res.end('{}');return;}
     behaviorScenario=state;behaviorTenant=tenant;
     behaviorCalls=[];behaviorTrendCalls=[];behaviorBreakdownCalls=[];
@@ -83,7 +83,7 @@ const server=http.createServer(async(req,res)=>{
       res.end(JSON.stringify({code:'42501',message:'Tenant-scoped behavior data unavailable'}));
       return;
     }
-    if(behaviorScenario==='error'){
+    if(behaviorScenario==='error' || behaviorScenario==='funnel-error'){
       res.statusCode=503;
       res.end(JSON.stringify({code:'synthetic_unavailable',message:'Read-only fixture error'}));
       return;
@@ -125,7 +125,7 @@ const server=http.createServer(async(req,res)=>{
       res.end(JSON.stringify({code:'42501',message:'Tenant-scoped trends unavailable'}));
       return;
     }
-    if(behaviorScenario==='error'){
+    if(behaviorScenario==='error' || behaviorScenario==='trends-error'){
       res.statusCode=503;
       res.end(JSON.stringify({code:'synthetic_unavailable',message:'Synthetic trends unavailable'}));
       return;
@@ -171,7 +171,7 @@ const server=http.createServer(async(req,res)=>{
       res.end(JSON.stringify({code:'42501',message:'Tenant breakdown unavailable'}));
       return;
     }
-    if(behaviorScenario==='error'){
+    if(behaviorScenario==='error' || behaviorScenario==='breakdown-error'){
       res.statusCode=503;
       res.end(JSON.stringify({code:'synthetic_unavailable',message:'Synthetic sensitive error'}));
       return;
