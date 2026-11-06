@@ -119,7 +119,7 @@ export async function POST(request: NextRequest) {
       return json({ ok: false, error: 'Verify ownership of your business website before scanning.' }, 409);
     }
     const candidate = parseWebsiteSeed(typeof body.value.url === 'string' ? body.value.url : source.href);
-    const canonical = (host: string) => host.replace(/^www\./i, '').toLowerCase();
+    const canonical = (host: string) => host.toLowerCase().replace(/\.$/, '');
     if (canonical(source.hostname) !== canonical(candidate.hostname)) {
       return json({ ok: false, error: 'Website must match the configured business domain.' }, 400);
     }
