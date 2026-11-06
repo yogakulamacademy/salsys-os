@@ -43,7 +43,7 @@ test('unknown evidence or invalid decisions cannot forge a source-backed review'
   assert.equal(chooseEvidenceForReview(evidence,empty,'f'.repeat(64),'candidate'),empty);
   assert.equal(chooseEvidenceForReview(evidence,empty,'b'.repeat(64),'approved'),empty);
   assert.equal(chooseEvidenceForReview(evidence,empty,'b'.repeat(64),'publish'),empty);
-  const forged={'f'.repeat(64):'candidate','b'.repeat(64):'excluded'};
+  const forged={['f'.repeat(64)]:'candidate',['b'.repeat(64)]:'excluded'};
   const state=summarizeEvidenceReview(evidence,forged);
   assert.deepEqual(state,{total:2,pending:1,candidate:0,excluded:1,publishable:false,canPersist:false});
 });
