@@ -6,8 +6,8 @@
 --   -v organization_id='<authorized-tenant-uuid>' -v days=14 \
 --   -f docs/sql/r2-p2-behavior-funnel-reconcile-v1.sql
 --
--- Uses the same ordered-session helper as the live RPC; it independently checks
--- grouping/counts, but cannot independently establish helper correctness.
+-- Uses independent three-step WITH ORDINALITY position checks, rather than the
+-- live funnel-depth helper. Comparison still requires an authorized UI session.
 -- The live RPC has a moving NOW() bound: compare within a short interval and
 -- investigate new/delayed events before concluding a mismatch.
 -- Never pass customer tokens or browser identifiers into this script.
@@ -41,8 +41,30 @@ with params as (
   join params p on b.source_event_type = any(p.steps)
   group by b.tracking_source_id,b.anonymous_visitor_id,b.session_key
 ), depths as (
-  select public.native_funnel_depth_v1(s.ordered_events,p.steps) as depth
-  from session_events s cross join params p
+  -- Independent ordering contract: first page view, then first form start
+  -- strictly after it, then first form submit strictly after the form start.
+  -- Repeated earlier events do not incorrectly advance the funnel.
+  select case
+    when third_step.ord is not null then 3
+    when second_step.ord is not null then 2
+    when first_step.ord is not null then 1
+    else 0 end as depth
+  from session_events s
+  left join lateral (
+    select min(e.ord) as ord
+    from unnest(s.ordered_events) with ordinality e(event_name,ord)
+    where e.event_name = 'web.page_viewed'
+  ) first_step on true
+  left join lateral (
+    select min(e.ord) as ord
+    from unnest(s.ordered_events) with ordinality e(event_name,ord)
+    where e.event_name = 'web.form_started' and e.ord > first_step.ord
+  ) second_step on true
+  left join lateral (
+    select min(e.ord) as ord
+    from unnest(s.ordered_events) with ordinality e(event_name,ord)
+    where e.event_name = 'web.form_submitted' and e.ord > second_step.ord
+  ) third_step on true
 ), funnel as (
   select coalesce(jsonb_agg(
     jsonb_build_object('event_name',p.steps[s.i],
@@ -74,7 +96,7 @@ select jsonb_build_object(
     then f.steps else '[]'::jsonb end,
   'path_sessions',case when p.days in (7,14,30) and v.candidate_events <= 50000
     then x.path_sessions else null end,
-  'uses_live_funnel_depth_helper',true,
+  'uses_independent_ordering_check',true,
   'is_authenticated_role_test',false,
   'is_path_edge_reconciliation',false
 ) as default_funnel_aggregates_only
