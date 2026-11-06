@@ -1,5 +1,6 @@
 import { createAdminClient } from '@/lib/supabase/admin';
 import { fetchPublicWeb, WebsiteFetchError } from '@/lib/knowledge-discovery/public-fetch';
+import { withDiscoveryConsent } from '@/lib/knowledge-discovery/consent-fetch';
 import { discoverySiteConsentActive } from '@/lib/knowledge-discovery/site-consent';
 import {
   runDiscoveryPageCore,
@@ -44,11 +45,15 @@ export async function processOneDiscoveryPage(claim: DiscoveryClaim) {
       if (error) throw error;
       return data;
     },
-  }, async(seed,page,kind,authorizeRedirect)=>{
-    await assertActiveConsent(seed.hostname);
-    return fetchPublicWeb(seed,page,kind,undefined,undefined,async next=>{
-      await assertActiveConsent(seed.hostname);
-      if(authorizeRedirect)await authorizeRedirect(next);
-    });
-  });
+  }, withDiscoveryConsent(
+    (seed,page,kind,authorizeRedirect)=>fetchPublicWeb(
+      seed,page,kind,undefined,undefined,authorizeRedirect,
+    ),
+    async hostname=>{
+      try {
+        await assertActiveConsent(hostname);
+        return true;
+      }catch {return false;}
+    },
+  ));
 }
