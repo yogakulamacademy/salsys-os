@@ -8,7 +8,7 @@ create table public.knowledge_discovery_site_consents (
   id uuid primary key default gen_random_uuid(),
   organization_id uuid not null references public.organizations(id) on delete cascade,
   hostname text not null
-    check (hostname ~ '^[a-z0-9][a-z0-9.-]*\\.[a-z]{2,}$'
+    check (hostname ~ '^[a-z0-9][a-z0-9.-]*[.][a-z]{2,}$'
       and length(hostname) <= 253 and hostname=lower(hostname)),
   purpose text not null default 'website_discovery_review_only'
     check (purpose='website_discovery_review_only'),
@@ -49,11 +49,11 @@ create or replace function public.knowledge_discovery_consent_active_v1(
 ) returns boolean language sql stable security invoker
 set search_path=public,pg_temp as $function$
   select coalesce(
-    p_seed_url ~ '^https://[a-z0-9][a-z0-9.-]*\\.[a-z]{2,}(?:/|$)'
+    p_seed_url ~ '^https://[a-z0-9][a-z0-9.-]*[.][a-z]{2,}(/|$)'
     and exists(
       select 1 from public.knowledge_discovery_site_consents c
       where c.organization_id=p_organization_id
-        and c.hostname=substring(p_seed_url from '^https://([a-z0-9.-]+)(?:/|$)')
+        and c.hostname=substring(p_seed_url from '^https://([a-z0-9.-]+)(/|$)')
         and c.purpose='website_discovery_review_only'
         and c.status='granted'
         and c.granted_at <= clock_timestamp()
@@ -170,7 +170,7 @@ begin
   select c.id into v_consent_id
     from public.knowledge_discovery_site_consents c
     where c.organization_id=v_job.organization_id
-      and c.hostname=substring(v_job.seed_url from '^https://([a-z0-9.-]+)(?:/|$)')
+      and c.hostname=substring(v_job.seed_url from '^https://([a-z0-9.-]+)(/|$)')
       and c.purpose='website_discovery_review_only'
       and c.status='granted'
       and c.granted_at <= clock_timestamp()
