@@ -13,13 +13,14 @@ The test `tests/database/knowledge-rls-negative-matrix.test.mjs` generates the c
 ## Added adversarial cases
 
 - Positive proof that tenant A has sources, chunks, approval history and an approved document before any isolation claims.
-- Owner A with a **tenant B session ID** cannot read or retrieve tenant A knowledge.
+- **Legacy singleton-member behavior documented:** owner A with only tenant A membership can still read their own A rows even while presenting a mismatched B session ID, because the current authorization helper falls back to the sole active membership. This does **not** grant access to tenant B, but it also does **not** prove strict binding for singleton members.
+- **Stronger multi-membership scenario:** after synthetic test-only setup grants both A and B memberships to the two owners, mismatched session/user identities must deny direct knowledge reads and security-definer search of the wrong active tenant.
 - Owner B cannot read tenant A sources, chunks or approval records.
 - Owner B cannot call tenant A's privileged approval/archive RPCs.
 - Owner B cannot insert tenant A sources, chunks or approval records by direct Data API-compatible table access.
 - Owner B's direct tenant A document/source update and document deletion affect zero rows.
 - Positive proof that owner B can create and retrieve **their own** approved document.
-- Owner B with a mismatched tenant A session cannot read tenant B knowledge.
+- Multi-tenant owner B with a mismatched tenant A session cannot read tenant B knowledge.
 - Tenant A employee can read own tenant but cannot see tenant B's approved document, approve via RPC, insert own tenant sources or modify own tenant documents.
 - Anonymous role has no direct knowledge table reads. Authenticated role lacks UPDATE/DELETE on append-only knowledge approval history.
 - Verify attempted cross-tenant edits did not change tenant A content or authorized tenant B's new document.
@@ -31,7 +32,7 @@ Tests use only invented tenants, identifiers, documents and claims on a new rand
 
 CI uses the pre-existing disposable PostgreSQL service and the `test:financial:db` wildcard, plus source/unit tests, TypeScript, full build and synthetic Chromium. **The exact-head result must be independently checked; do not infer a pass from an earlier draft.**
 
-A failed assertion is a potential authorization regression that should be investigated, **not** weakened just to reach green CI.
+A failed assertion is a potential authorization regression that should be investigated, **not** weakened just to reach green CI. The first exact-head run failed on the singleton-membership compatibility fallback, exposing the distinction between membership-based access and strict session-bound access; the revised matrix tests both transparently. This fallback needs an explicit product/security decision before claiming strict session binding for single-tenant accounts.
 
 ## Safety / remaining acceptance
 
