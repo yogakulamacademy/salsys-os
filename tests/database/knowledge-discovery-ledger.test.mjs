@@ -279,6 +279,61 @@ test('exact KB-01B SQL passes tenant, RLS, lease and cancellation checks in disp
       'select count(*)::int as n from public.knowledge_discovery_jobs where organization_id=$1',[ORG_C]
     )).rows[0].n,1);
 
+
+    // Website proof tokens cannot be reissued by parallel admins within
+    // the five-minute cooldown. The second request waits on the same
+    // transaction-scoped advisory lock and gets a deterministic rejection.
+    const issueSql = 'select public.issue_knowledge_discovery_domain_challenge_v1('
+      + '$1,$2,$3,$4) as expiry';
+    const proofHost = 'fixture.example.com';
+    const hashFirst='c'.repeat(64), hashSecond='d'.repeat(64);
+    await Promise.all([context(a,'service_role',USER_A),context(b,'service_role',USER_B)]);
+    const issued=await a.query(issueSql,[ORG_C,proofHost,USER_A,hashFirst]);
+    assert.ok(Date.parse(issued.rows[0].expiry)>Date.now());
+    const secondIssue=b.query(issueSql,[ORG_C,proofHost,USER_B,hashSecond])
+      .then(value=>({ok:true,value}),error=>({ok:false,error}));
+    await a.query('commit');
+    const doubleIssue=await secondIssue;
+    assert.equal(doubleIssue.ok,false);
+    assert.equal(doubleIssue.error?.code,'P0001');
+    assert.equal(doubleIssue.error?.message,'domain_challenge_cooldown');
+    await b.query('rollback');
+    const proofRow=await db.query(
+      'select challenge_hash,issued_at,last_check_at from public.knowledge_discovery_domain_verifications'
+      +' where organization_id=$1 and hostname=$2',[ORG_C,proofHost]);
+    assert.equal(proofRow.rows[0].challenge_hash,hashFirst);
+    assert.equal(proofRow.rows[0].last_check_at,null);
+
+    // Proof reads are likewise budgeted before any outbound request.
+    // The locking UPDATE permits exactly one concurrent verification fetch.
+    const claimCheckSql = 'select public.claim_knowledge_discovery_proof_check_v1('
+      + '$1,$2,$3) as allowed';
+    await Promise.all([context(a,'service_role',USER_A),context(b,'service_role',USER_B)]);
+    const firstCheck=await a.query(claimCheckSql,[ORG_C,proofHost,hashFirst]);
+    assert.equal(firstCheck.rows[0].allowed,true);
+    const duplicateCheck=b.query(claimCheckSql,[ORG_C,proofHost,hashFirst]);
+    await a.query('commit');
+    const duplicate=await duplicateCheck;
+    assert.equal(duplicate.rows[0].allowed,false);
+    await b.query('commit');
+
+    await db.query(
+      "update public.knowledge_discovery_domain_verifications"
+      +" set last_check_at=now()-interval '31 seconds'"
+      +" where organization_id=$1 and hostname=$2",[ORG_C,proofHost]);
+    await context(a,'service_role',USER_A);
+    assert.equal((await a.query(claimCheckSql,[ORG_C,proofHost,hashFirst])).rows[0].allowed,true);
+    await a.query('commit');
+
+    // A stale token or an unprivileged caller never obtains a fetch claim.
+    await context(a,'service_role',USER_A);
+    assert.equal((await a.query(claimCheckSql,[ORG_C,proofHost,hashSecond])).rows[0].allowed,false);
+    await a.query('commit');
+    await context(a,'authenticated',USER_A);
+    await assert.rejects(a.query(issueSql,[ORG_C,proofHost,USER_A,hashSecond]),
+      error=>error.code==='42501');
+    await a.query('rollback');
+
   } finally {
     await Promise.allSettled(sessions.map(s=>s.end()));
     try{if(created)await admin.query('drop database '+dbName+' with (force)');}
