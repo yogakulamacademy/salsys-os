@@ -101,3 +101,29 @@ Both scripts were syntax-tested SELECT-only on SalsysOS Production using an **in
 ### Updated evidence record
 
 In addition to the earlier checklist, record PASS / FAIL / BLOCKED for the following **separate** checks: (1) default funnel stage counts for 7/14/30 rolling days; (2) Events by Page summary for 7/14/30 UTC days; (3) the actual displayed path privacy review. The existing real owner/admin login, other-tenant denial, accessibility and legacy-Marketing checks are independent. No billable staging project, production role change, tracking opt-in or customer data export is authorized.
+
+
+## F. Negative PostgreSQL role acceptance on a disposable local database
+
+**Added 2026-11-06.** The clean Supabase migration-replay workflow now runs
+`tests/database/r2-behavior-rpc-negative-auth-local.sql` against its **local
+Postgres Docker container**, after all migrations have been replayed. It uses
+only two deliberately nonexistent synthetic organization IDs.
+
+The SQL tests all three reporting RPCs twice: (1) as the actual PostgreSQL
+`anon` role, which must be denied function execution (`42501`), and (2)
+as the `authenticated` role with transaction-local synthetic JWT claims
+but **without CRM/session membership**, which must be denied by the
+function's authorization guard (`P0001`). Unexpected successful calls,
+missing RPCs, unexpected SQL errors or incorrect privileges fail CI.
+
+The assertions execute inside rolled-back transactions. They perform no
+fixture inserts, customer record reads, tracking sends or production role
+switches. They require no paid cloud project or production secret. They
+test actual migrated PostgreSQL authorization behavior—not merely source
+text—but **still do not certify live owner/admin sessions, tenant isolation
+between two authorized accounts, or UI-to-SQL reconciliation**.
+
+The clean migration replay's negative checks are a *separate* evidence row:
+PASS / FAIL / BLOCKED. Issue #523's human acceptance rows above remain
+required even when this new CI check passes.
