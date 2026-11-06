@@ -1,4 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
+import path from "node:path";
 
 // R2-P1: browser-only pilot rehearsal. The page and tracking SDK are disposable
 // loopback fixtures; nothing reaches customer sites, event APIs or Supabase.
@@ -39,6 +40,16 @@ function harnessHtml(initialConsent: boolean) {
 
 async function openHarness(page: Page, initialConsent = false) {
   await page.setViewportSize({ width: 900, height: 700 });
+  // Serve the real collector bytes directly from the checked-out repository,
+  // rather than assuming the app's public-asset route is available on a
+  // synthetic document outside the application router.
+  await page.route("**/salsys-behavior-v1.js", (route) =>
+    route.fulfill({
+      path: path.resolve(process.cwd(), "public/salsys-behavior-v1.js"),
+      contentType: "application/javascript",
+      status: 200,
+    }),
+  );
   await page.route("**" + HARNESS, (route) =>
     route.fulfill({
       status: 200,
@@ -48,7 +59,20 @@ async function openHarness(page: Page, initialConsent = false) {
     }),
   );
   await page.goto(HARNESS);
-  await page.waitForFunction(() => (window as any).__salsysBehaviorV1Installed === true);
+  try {
+    await page.waitForFunction(
+      () => (window as any).__salsysBehaviorV1Installed === true,
+      null, { timeout: 8_000 },
+    );
+  } catch {
+    const diagnostics = await page.evaluate(() => ({
+      sdkPresent: Boolean((window as any).SalsysIntelligence),
+      sdkVersionOk: (window as any).SalsysIntelligence?.__universalTrackingIntelligenceV1,
+      scriptLoaded: Boolean(document.querySelector('script[src="/salsys-behavior-v1.js"]')),
+      collectorInstalled: Boolean((window as any).__salsysBehaviorV1Installed),
+    }));
+    throw new Error("Local collector did not initialize: " + JSON.stringify(diagnostics));
+  }
   // Let the collector's bounded initial IntersectionObserver scan run.
   await page.waitForTimeout(130);
 }
