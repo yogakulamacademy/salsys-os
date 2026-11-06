@@ -4,6 +4,7 @@ import { KnowledgeEvidenceReviewPreview } from '@/components/knowledge-evidence-
 import { prepareSourceGroundedDrafts } from '@/lib/knowledge-extraction/source-grounded-drafts';
 import { analyzeSourceReviewSignals } from '@/lib/knowledge-extraction/source-review-signals';
 import { buildAIDraftingRequest, validateAIDraftingResponse } from '@/lib/knowledge-extraction/ai-draft-contract';
+import { evaluateGroundedAIProposals } from '@/lib/knowledge-extraction/ai-grounding-evaluation';
 
 export const dynamic = 'force-dynamic';
 
@@ -112,6 +113,14 @@ export default async function EvidenceReviewPreviewPage() {
     ],
   },aiEnvelope.request);
   if(!simulatedAI.ok)throw new Error('Synthetic AI response fixture failed validation.');
+  const groundingReview=evaluateGroundedAIProposals(
+    aiEnvelope.request,
+    simulatedAI.result,
+    {asOf:'2026-11-06T12:00:00Z',reviewAgeDays:30},
+    differences.report,
+  );
+  if(!groundingReview.ok)throw new Error('Synthetic grounding evaluation failed.');
+
 
   return (
     <KnowledgeEvidenceReviewPreview
@@ -119,6 +128,7 @@ export default async function EvidenceReviewPreviewPage() {
       sourceCandidates={candidates.bundle}
       reviewSignals={differences.report}
       simulatedAIProposals={simulatedAI.result}
+      groundingReview={groundingReview.report}
     />
   );
 }
