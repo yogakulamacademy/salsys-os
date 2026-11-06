@@ -238,9 +238,19 @@ export function analyzeSourceReviewSignals(
       !Array.isArray(bundle.drafts)||bundle.drafts.length>120||
       !Array.isArray(bundle.issues))return {ok:false,error:'invalid_source_bundle'};
 
+    let bundleFetchedAt:string|null=null;
     for(const draft of bundle.drafts) {
       if(!validDraft(draft,bundle))return {ok:false,error:'invalid_source_draft'};
-      if(Date.parse(reviewCitation(draft).fetchedAt)>now+5*60_000){
+      const citation=reviewCitation(draft);
+      if(bundleFetchedAt!==null && bundleFetchedAt!==citation.fetchedAt){
+        return {ok:false,error:'inconsistent_source_timestamp'};
+      }
+      if(draft.kind==='faq_pair'&&
+        draft.questionCitation.fetchedAt!==draft.answerCitation.fetchedAt){
+        return {ok:false,error:'inconsistent_source_timestamp'};
+      }
+      bundleFetchedAt=citation.fetchedAt;
+      if(Date.parse(citation.fetchedAt)>now+5*60_000){
         return {ok:false,error:'source_timestamp_in_future'};
       }
       // One identity must not resolve to two different records.
