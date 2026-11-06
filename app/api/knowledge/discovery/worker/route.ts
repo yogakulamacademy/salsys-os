@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { bearerMatchesAnySecret } from '@/lib/security/machine-bearer-auth';
 import { processOneDiscoveryPage } from '@/lib/knowledge-discovery/runner';
+import { parseWebsiteSeed } from '@/lib/knowledge-discovery/url-policy';
+import { discoveryPilotEnabled, discoveryHostAllowed } from '@/lib/knowledge-discovery/pilot-gate';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -11,6 +13,10 @@ const noStore = { 'Cache-Control': 'no-store' };
 
 /** Service-only runner. Configure a scheduler separately after deployment review. */
 export async function POST(request: NextRequest) {
+  // Emergency stop: refuse to claim any job before touching the database.
+  if (!discoveryPilotEnabled()) return NextResponse.json(
+    { ok: false, error: 'Discovery pilot disabled' }, { status: 503, headers: noStore },
+  );
   const secrets = [
     process.env.KNOWLEDGE_DISCOVERY_RUNNER_SECRET?.trim(),
     process.env.CRON_SECRET?.trim(),
@@ -28,6 +34,12 @@ export async function POST(request: NextRequest) {
     const claim = Array.isArray(data) ? data[0] : null;
     if (!claim) return NextResponse.json({ ok: true, state: 'idle' }, { headers: noStore });
     try {
+      // Jobs queued under older pilot configuration must still be rechecked
+      // against the currently approved host list before any outbound request.
+      if (!discoveryHostAllowed(parseWebsiteSeed(claim.seed_url).hostname)) {
+        return NextResponse.json({ ok: false, error: 'Discovery job site is not approved' },
+          { status: 403, headers: noStore });
+      }
       const outcome = await processOneDiscoveryPage(claim);
       return NextResponse.json({ ok: true, state: 'processed', result: outcome }, { headers: noStore });
     } catch {
