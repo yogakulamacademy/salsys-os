@@ -57,6 +57,7 @@ let adminClientCalls = 0;
 let writes = [];
 let reads = [];
 let website = 'https://fixture.example.com/';
+let simulatedInsertError = null;
 
 function appClient() {
   return {
@@ -86,7 +87,9 @@ function privilegedClient() {
           writes.push({ table, value });
           return {
             select: () => ({
-              single: async () => ({data:{id:'30000000-0000-4000-8000-000000000001'},error:null}),
+              single: async () => simulatedInsertError
+                ? {data:null,error:simulatedInsertError}
+                : {data:{id:'30000000-0000-4000-8000-000000000001'},error:null},
             }),
             then(resolve) { return Promise.resolve({error:null}).then(resolve); },
           };
@@ -124,7 +127,7 @@ test.after(()=> {
 
 function reset() {
   authenticated = true;admin = true;adminClientCalls = 0;
-  writes = []; reads = []; website = 'https://fixture.example.com/';
+  writes = []; reads = []; website = 'https://fixture.example.com/'; simulatedInsertError = null;
   delete process.env.KNOWLEDGE_DISCOVERY_PILOT_ENABLED;
   delete process.env.KNOWLEDGE_DISCOVERY_PAUSED;
   delete process.env.KNOWLEDGE_DISCOVERY_ALLOWED_HOSTS;
@@ -194,4 +197,17 @@ test('approved pilot creates exactly one job and seed page within the authorized
   assert.equal(writes[1].value.organization_id,orgId);
   assert.equal(writes[1].value.job_id,result.body.jobId);
   assert.equal(writes[1].value.url,website);
+});
+
+
+test('database cooldown and daily limit surface as HTTP 429 without creating seed pages',async()=>{
+  for(const errorText of ['discovery_scan_cooldown','discovery_daily_scan_limit']){
+    reset();enabled();
+    simulatedInsertError={code:'P0001',message:errorText};
+    const response=await route.POST(request('POST',{url:website,maxPages:10}));
+    assert.equal(response.status,429);
+    assert.match(response.body.error,/scan limit reached/i);
+    assert.deepEqual(writes.map(entry=>entry.table),['knowledge_discovery_jobs'],
+      'No seed page should be inserted for rejected job');
+  }
 });
