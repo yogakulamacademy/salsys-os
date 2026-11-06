@@ -88,7 +88,7 @@ function isUuid(s: unknown): s is string {
 }
 function timestamp(value: unknown): number | null {
   if (typeof value !== 'string' ||
-    !/^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d{1,3})?Z$/.test(value)) return null;
+    !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,3})?Z$/.test(value)) return null;
   const time = Date.parse(value);
   if (!Number.isFinite(time)) return null;
   // Date.parse normalizes impossible dates on some runtimes. Round-trip the
@@ -104,7 +104,7 @@ function exactHttpsPage(url: unknown, hostname: unknown): boolean {
   if (typeof url !== 'string' || url.length > 2048 ||
     typeof hostname !== 'string' || hostname.length > 253 ||
     hostname !== hostname.toLowerCase() ||
-    !/^[a-z0-9](?:[a-z0-9.-]*[a-z0-9])?\\.[a-z]{2,}$/.test(hostname) ||
+    !/^[a-z0-9](?:[a-z0-9.-]*[a-z0-9])?\.[a-z]{2,}$/.test(hostname) ||
     hostname.includes('..') || isIP(hostname)) return false;
   try {
     const parsed = new URL(url);
