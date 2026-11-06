@@ -12,6 +12,8 @@ on:
       - feature/kb04c-source-change-impact-review
       # Temporary KB-04E stacked PR validation.
       - feature/kb04d-human-review-handoff-contract
+      # Temporary KB-05A stacked PR validation.
+      - feature/kb04e-isolated-acceptance-ledger
   push:
     branches:
       - main
@@ -29,6 +31,7 @@ on:
       - feature/kb04c-source-change-impact-review
       - feature/kb04d-human-review-handoff-contract
       - feature/kb04e-isolated-acceptance-ledger
+      - feature/kb05a-disposable-knowledge-db-acceptance
 
 permissions:
   contents: read
