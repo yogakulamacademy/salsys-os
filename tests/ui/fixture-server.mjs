@@ -36,7 +36,7 @@ const server=http.createServer(async(req,res)=>{
   if(url.pathname==='/__behavior_scenario'){
     const state=url.searchParams.get('state');
     const tenant=url.searchParams.get('tenant')||'primary';
-    if(!['ready','empty','small','denied','error','funnel-error','trends-error','breakdown-error'].includes(state) ||
+    if(!['ready','empty','small','denied','error','funnel-error','trends-error','breakdown-error','malformed-funnel-count','malformed-trends-count','malformed-breakdown-count'].includes(state) ||
        !['primary','secondary'].includes(tenant)){res.statusCode=400;res.end('{}');return;}
     behaviorScenario=state;behaviorTenant=tenant;
     behaviorCalls=[];behaviorTrendCalls=[];behaviorBreakdownCalls=[];
@@ -118,6 +118,7 @@ const server=http.createServer(async(req,res)=>{
         {from_path:'/courses/200-hour-ytt.php',to_path:'/students/dashboard',sessions:6,transitions:6},
       ]
     };
+    if(behaviorScenario==='malformed-funnel-count') result.funnel[0].sessions=null;
   }
   else if(url.pathname==='/rest/v1/rpc/get_native_behavior_event_trends_v1'){
     let raw='';
@@ -162,6 +163,7 @@ const server=http.createServer(async(req,res)=>{
         return {event_name,total_events,observed_sessions:Math.min(total_events,5),daily};
       })
     };
+    if(behaviorScenario==='malformed-trends-count') result.series[0].daily[0].sessions=null;
   }
   else if(url.pathname==='/rest/v1/rpc/get_native_behavior_page_breakdown_v1'){
     let raw='';
@@ -208,6 +210,7 @@ const server=http.createServer(async(req,res)=>{
         {path:'/enroll.php',events:13,sessions:9,visitors:5}
       ]
     };
+    if(behaviorScenario==='malformed-breakdown-count') result.status.identified_sessions=null;
   }
   else if(url.pathname==='/rest/v1/rpc/get_current_provider_visibility_v1')result={organization_id:organizationId,google_connected:false,meta_connected:false,instagram_connected:false,whatsapp_connected:false};
   else if(url.pathname==='/rest/v1/rpc/get_admissions_snapshot')result={metrics:{needs_reply:0,unread:0},priority_queue:[],batch_capacity:[]};

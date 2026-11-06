@@ -3,6 +3,7 @@ import "server-only";
 import { createClient } from "@/lib/supabase/server";
 import { requireCurrentOrganizationId } from "@/lib/workspace";
 import type { BehaviorEvent } from "@/lib/native-behavior-contract";
+import { safeBehaviorCount as count } from "@/lib/native-behavior-safe-count";
 
 export type BehaviorTrendDay = {
   dateUtc: string;
@@ -40,11 +41,6 @@ function unavailable(request: BehaviorTrendRequest, message: string): NativeBeha
     series: [],
     lastDayIncomplete: true,
   };
-}
-
-function count(value: unknown): number | null {
-  const n = Number(value);
-  return Number.isSafeInteger(n) && n >= 0 ? n : null;
 }
 
 const unavailableMessage = "Event trends are not available right now. Funnels and paths remain usable.";
