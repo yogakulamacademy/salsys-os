@@ -110,7 +110,7 @@ test('real knowledge SQL denies direct cross-tenant RLS writes, forged sessions 
     ]);
     assert.ok(canonical.length>25_000,'Missing canonical SQL');
     assert.ok(candidate.includes('create function pg_temp.kb05c_strict_monitoring_session_candidate'));
-    assert.ok(!/^\\s*(?:begin|commit|rollback)\\s*;/im.test(candidate),
+    assert.ok(!/^\s*(?:begin|commit|rollback)\s*;/im.test(candidate),
       'Candidate must not control the outer rollback transaction');
     assert.ok(!candidate.includes('create or replace function public.'),
       'Candidate cannot modify deployed authorization functions');
