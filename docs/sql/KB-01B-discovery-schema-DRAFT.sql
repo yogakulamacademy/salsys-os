@@ -10,6 +10,7 @@ create table if not exists public.knowledge_discovery_domain_verifications (
   challenge_hash text not null check (length(challenge_hash) = 64 and challenge_hash ~ '^[0-9a-f]+$'),
   created_by uuid not null,
   issued_at timestamptz not null default now(),
+  last_check_at timestamptz,
   challenge_expires_at timestamptz not null,
   verified_at timestamptz,
   verified_until timestamptz,
@@ -29,6 +30,102 @@ grant all on public.knowledge_discovery_domain_verifications to service_role;
 create policy knowledge_discovery_proof_admin_read
   on public.knowledge_discovery_domain_verifications for select to authenticated
   using (public.can_manage_organization(organization_id));
+
+-- KB-01I: both ownership rate limits are transactional, not racy read/then-write API checks.
+-- Only the service role can invoke these functions. RLS remains enabled and
+-- no public/anonymous/authenticated write grants are added.
+create or replace function public.issue_knowledge_discovery_domain_challenge_v1(
+  p_organization_id uuid,
+  p_hostname text,
+  p_created_by uuid,
+  p_challenge_hash text
+)
+returns timestamptz
+language plpgsql security invoker
+set search_path = public, pg_temp as $function$
+declare
+  v_issued timestamptz;
+  v_verified_until timestamptz;
+  v_now timestamptz := clock_timestamp();
+  v_expiry timestamptz := v_now + interval '24 hours';
+begin
+  if coalesce(auth.jwt()->>'role','') <> 'service_role' then
+    raise exception 'service_role_required' using errcode = '42501';
+  end if;
+
+  -- Serialize even when there is no existing row to lock.
+  perform pg_advisory_xact_lock(hashtextextended(
+    p_organization_id::text || ':' || p_hostname, 20261106));
+
+  select issued_at, verified_until into v_issued, v_verified_until
+  from public.knowledge_discovery_domain_verifications
+  where organization_id = p_organization_id and hostname = p_hostname
+  for update;
+
+  if v_verified_until > v_now then
+    raise exception 'domain_already_verified' using errcode = 'P0001';
+  end if;
+  if v_issued > v_now - interval '5 minutes' then
+    raise exception 'domain_challenge_cooldown' using errcode = 'P0001';
+  end if;
+
+  insert into public.knowledge_discovery_domain_verifications (
+    organization_id, hostname, created_by, challenge_hash,
+    issued_at, challenge_expires_at, verified_at, verified_until, last_check_at
+  ) values (
+    p_organization_id, p_hostname, p_created_by, p_challenge_hash,
+    v_now, v_expiry, null, null, null
+  )
+  on conflict (organization_id, hostname) do update set
+    created_by = excluded.created_by,
+    challenge_hash = excluded.challenge_hash,
+    issued_at = excluded.issued_at,
+    challenge_expires_at = excluded.challenge_expires_at,
+    verified_at = null,
+    verified_until = null,
+    last_check_at = null;
+
+  return v_expiry;
+end;
+$function$;
+revoke all on function public.issue_knowledge_discovery_domain_challenge_v1(uuid,text,uuid,text)
+  from public, anon, authenticated;
+grant execute on function public.issue_knowledge_discovery_domain_challenge_v1(uuid,text,uuid,text)
+  to service_role;
+
+create or replace function public.claim_knowledge_discovery_proof_check_v1(
+  p_organization_id uuid,
+  p_hostname text,
+  p_challenge_hash text
+)
+returns boolean
+language plpgsql security invoker
+set search_path = public, pg_temp as $function$
+declare
+  v_updated uuid;
+begin
+  if coalesce(auth.jwt()->>'role','') <> 'service_role' then
+    raise exception 'service_role_required' using errcode = '42501';
+  end if;
+
+  -- UPDATE row locking serializes simultaneous verify requests. A rejected
+  -- request causes no network call and cannot consume additional fetch budget.
+  update public.knowledge_discovery_domain_verifications
+  set last_check_at = clock_timestamp()
+  where organization_id = p_organization_id
+    and hostname = p_hostname
+    and challenge_hash = p_challenge_hash
+    and challenge_expires_at > clock_timestamp()
+    and (last_check_at is null or last_check_at <= clock_timestamp() - interval '30 seconds')
+  returning id into v_updated;
+
+  return v_updated is not null;
+end;
+$function$;
+revoke all on function public.claim_knowledge_discovery_proof_check_v1(uuid,text,text)
+  from public, anon, authenticated;
+grant execute on function public.claim_knowledge_discovery_proof_check_v1(uuid,text,text)
+  to service_role;
 
 create table if not exists public.knowledge_discovery_jobs (
   id uuid primary key default gen_random_uuid(),
