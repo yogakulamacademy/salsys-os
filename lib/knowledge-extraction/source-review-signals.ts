@@ -168,7 +168,7 @@ function extractPrice(text:string):{currency:'USD'|'EUR'|'GBP'|'INR';value:strin
   const [whole,decimal=''] = amount.split('.');
   if(whole.length>11)return null;
   // No floating-point conversion; compare exact minor-unit representations.
-  const value=(BigInt(whole)*100n+BigInt((decimal+'00').slice(0,2))).toString();
+  const value=(BigInt(whole)*BigInt(100)+BigInt((decimal+'00').slice(0,2))).toString();
   return {currency,value};
 }
 
