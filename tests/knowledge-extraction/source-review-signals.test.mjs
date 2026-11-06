@@ -171,21 +171,11 @@ test('mixed timestamps within one snapshot and future source dates fail closed',
 
 test('large comparison groups fail closed rather than dropping the differing citation',()=>{
   const entries=Array.from({length:17},(_,i)=>bundle('version-'+i,[
-    {heading:'Fee',quote:'Private fee: 
-  const report=run([],[]);
-  assert.equal(report.ok,true);
-  assert.deepEqual(report.report.signals,[]);
-  assert.deepEqual(report.report.issues,[]);
-  assert.equal(report.report.state,'needs_human_review');
-  assert.equal(report.report.canPublish,false);
-  assert.equal(report.report.canStore,false);
-});
-+(i===16?'1900':'1750')},
+    {heading:'Fee',quote:'Private fee: '+String.fromCharCode(36)+(i===16?'1900':'1750')},
   ]));
-  const bindings=entries.map(b=>bound(b,'price'));
+  const bindings=entries.map(x=>bound(x,'price'));
   assert.deepEqual(run(entries,bindings),{ok:false,error:'comparison_group_over_limit'});
 });
-
 test('no model calls, storage, approval or publication for empty sources',()=>{
   const report=run([],[]);
   assert.equal(report.ok,true);
