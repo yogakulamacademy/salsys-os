@@ -175,7 +175,11 @@
       }
     }
 
-    var faq = target.closest('[data-salsys-faq-id][aria-expanded]');
+    // Native <details> also generates an asynchronous toggle event. Attribute
+    // its FAQ impression to the original user click (including keyboard-
+    // generated clicks), not to a delayed programmatic state notification.
+    var faq = target.closest('[data-salsys-faq-id][aria-expanded]') ||
+              target.closest('details[data-salsys-faq-id]');
     if (faq && allowed() && document.visibilityState !== 'hidden') {
       // Accordion state is checked after the click handler, but permission
       // belongs to the initiating interaction, not just the deferred callback.
@@ -186,18 +190,13 @@
             window.location.pathname !== clickedPath ||
             faq.isConnected === false ||
             !allowed() || document.visibilityState === 'hidden' ||
-            faq.getAttribute('aria-expanded') !== 'true') return;
+            !(faq.matches && faq.matches('details[data-salsys-faq-id]')
+              ? faq.open === true
+              : faq.getAttribute('aria-expanded') === 'true')) return;
         var faqId = safeId(faq.getAttribute('data-salsys-faq-id'));
         if (faqId) emit('web.faq_expanded', { faq_id: faqId }, 'faq:' + faqId);
       }, 0);
     }
-  }, true);
-
-  document.addEventListener('toggle', function (event) {
-    var faq = event.target;
-    if (!faq || !faq.matches || !faq.matches('details[data-salsys-faq-id]') || !faq.open) return;
-    var faqId = safeId(faq.getAttribute('data-salsys-faq-id'));
-    if (faqId) emit('web.faq_expanded', { faq_id: faqId }, 'faq:' + faqId);
   }, true);
 
   // Applications must dispatch these events only after the relevant form outcome.
