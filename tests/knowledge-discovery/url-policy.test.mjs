@@ -46,13 +46,14 @@ test('rejects mixed DNS responses even if the first address is public', async ()
   ]), { address: '8.8.8.8', family: 4 });
 });
 
-test('discovery is scoped to the exact/www hostname pair', () => {
+test('discovery is scoped to the exact verified hostname', () => {
   const seed = parseWebsiteSeed('https://yogakulam.com/');
   const page = new URL('https://yogakulam.com/courses/');
   assert.equal(scopedDiscoveredUrl(seed, page, '/about?ref=link')?.href,
-    'https://www.yogakulam.com/about');
+    'https://yogakulam.com/about');
   for (const href of [
     'https://evil-yogakulam.com/path', 'https://foo.yogakulam.com/x',
+    'https://www.yogakulam.com/x',
     'http://yogakulam.com/x', 'mailto:hello@yogakulam.com',
     'javascript:alert(1)', 'https://127.0.0.1',
     'https://yogakulam.com:444/x', '#section',
