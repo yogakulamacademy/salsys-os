@@ -13,6 +13,8 @@
   var seen = Object.create(null);
   var watched = [];
   var scheduledScan = false;
+  // Invalidate deferred interactions after navigation, consent, or tab state changes.
+  var interactionEpoch = 0;
   var lastDepth = getDepth();
   var thresholds = [25, 50, 75, 90];
   var observer = null;
@@ -44,6 +46,7 @@
   function ensurePage() {
     var next = window.location.pathname;
     if (next !== pageKey) {
+      interactionEpoch++;
       pageKey = next;
       seen = Object.create(null);
       lastDepth = getDepth();
@@ -141,13 +144,21 @@
   }
 
   window.addEventListener('scroll', onScroll, { passive: true });
-  window.addEventListener('popstate', scheduleScan);
-  window.addEventListener('salsys:page-change', scheduleScan);
+  function onNavigationChange() {
+    // SPA replacements may occur without a pathname change.
+    interactionEpoch++;
+    scheduleScan();
+  }
+  window.addEventListener('popstate', onNavigationChange);
+  window.addEventListener('salsys:page-change', onNavigationChange);
   document.addEventListener('visibilitychange', function () {
+    interactionEpoch++;
     if (document.visibilityState === 'visible') reobserve();
   });
   window.addEventListener('salsys:consent-changed', function () {
-    // No replay of earlier scroll events or impressions before permission.
+    // Deferred clicks initiated before a grant or withdrawal must never
+    // become eligible just because consent changes before their timer fires.
+    interactionEpoch++;
     lastDepth = getDepth();
     reobserve();
   });
@@ -165,9 +176,17 @@
     }
 
     var faq = target.closest('[data-salsys-faq-id][aria-expanded]');
-    if (faq) {
+    if (faq && allowed() && document.visibilityState !== 'hidden') {
+      // Accordion state is checked after the click handler, but permission
+      // belongs to the initiating interaction, not just the deferred callback.
+      var clickedEpoch = interactionEpoch;
+      var clickedPath = window.location.pathname;
       window.setTimeout(function () {
-        if (faq.getAttribute('aria-expanded') !== 'true') return;
+        if (interactionEpoch !== clickedEpoch ||
+            window.location.pathname !== clickedPath ||
+            faq.isConnected === false ||
+            !allowed() || document.visibilityState === 'hidden' ||
+            faq.getAttribute('aria-expanded') !== 'true') return;
         var faqId = safeId(faq.getAttribute('data-salsys-faq-id'));
         if (faqId) emit('web.faq_expanded', { faq_id: faqId }, 'faq:' + faqId);
       }, 0);
