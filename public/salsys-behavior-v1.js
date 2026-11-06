@@ -66,7 +66,8 @@
   }
 
   function recordVisibility(element) {
-    if (!element || document.visibilityState === 'hidden' || !allowed()) return false;
+    if (!element || element.isConnected === false ||
+        document.visibilityState === 'hidden' || !allowed()) return false;
     var cta = safeId(element.getAttribute('data-salsys-cta-id'));
     var pricing = safeId(element.getAttribute('data-salsys-pricing-id'));
     if (cta) return emit('web.cta_viewed', { cta_id: cta }, 'cta:' + cta);
@@ -83,10 +84,24 @@
     }, { threshold: [0.5] });
   }
 
+  function dropDisconnected() {
+    if (!observer) return;
+    // SPA views can replace hundreds of nodes without a full reload. Keep
+    // the 200 *live* observer cap, rather than exhausting it permanently on
+    // elements which are no longer connected to the current document.
+    for (var i = watched.length - 1; i >= 0; i--) {
+      if (watched[i].isConnected === false) {
+        observer.unobserve(watched[i]);
+        watched.splice(i, 1);
+      }
+    }
+  }
+
   function scan() {
     scheduledScan = false;
     ensurePage();
     if (!observer || !document.querySelectorAll) return;
+    dropDisconnected();
     var nodes = document.querySelectorAll(visibleSelector);
     // Bound observation work on pages with very large or hostile DOM trees.
     for (var i = 0; i < nodes.length && watched.length < 200; i++) {
@@ -104,6 +119,7 @@
 
   function reobserve() {
     if (!observer) return;
+    dropDisconnected();
     for (var i = 0; i < watched.length; i++) {
       observer.unobserve(watched[i]);
       observer.observe(watched[i]);

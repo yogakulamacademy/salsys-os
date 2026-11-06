@@ -23,6 +23,7 @@ const names = [
 function node(attributes = {}) {
   const item = {
     open: Boolean(attributes.open),
+    isConnected: attributes.isConnected !== false,
     getAttribute(name) {
       return Object.prototype.hasOwnProperty.call(attributes, name) ? attributes[name] : null;
     },
@@ -202,6 +203,37 @@ test('same CTA can be observed again after an explicit SPA route change', () => 
   ctx.flushTimers();
   ctx.observer().trigger(cta);
   assert.equal(ctx.events.length, 2);
+});
+
+test('long-lived SPA reclaims removed visibility markers at the 200-element observation cap', () => {
+  const old = Array.from({ length: 200 }, (_, i) =>
+    node({ 'data-salsys-cta-id': 'old-' + i }));
+  const ctx = setup(true, old);
+  assert.equal(ctx.observer().observed.size, 200);
+
+  // A real SPA may replace an entire product/grid view without a hard reload.
+  // New CTA controls must not be starved by 200 detached DOM nodes.
+  for (const item of old) item.isConnected = false;
+  old.splice(0, old.length);
+  const fresh = node({ 'data-salsys-cta-id': 'new-cta' });
+  old.push(fresh);
+  ctx.sendWindow('salsys:page-change', {});
+  ctx.flushTimers();
+
+  assert.equal(ctx.observer().observed.size, 1);
+  assert.equal(ctx.observer().observed.has(fresh), true);
+  ctx.observer().trigger(fresh, 0.8);
+  assert.deepEqual(JSON.parse(JSON.stringify(ctx.events)), [
+    { name: 'web.cta_viewed', properties: { cta_id: 'new-cta' } },
+  ]);
+});
+
+test('detached markers cannot emit stale visibility impressions', () => {
+  const stale = node({ 'data-salsys-pricing-id': 'removed-pricing' });
+  const ctx = setup(true, [stale]);
+  stale.isConnected = false;
+  ctx.observer().trigger(stale, 0.9);
+  assert.equal(ctx.events.length, 0);
 });
 
 test('hidden scrolls are not counted as meaningful engagement', () => {

@@ -197,3 +197,59 @@ test("R2-P1 Chromium: SPA change allows a fresh page-scoped CTA impression", asy
   expect((await events(page)).filter((event) =>
     event.name === "web.cta_viewed")).toHaveLength(2);
 });
+
+test("R2-P1 Chromium: SPA can reclaim a full 200-element visibility observer set after replacing a view", async ({ page }) => {
+  await openHarness(page, true);
+  // Spy on the browser's real IntersectionObserver to prove the initial
+  // observation cap was reached before the SPA replaces its marker grid.
+  await page.evaluate(() => {
+    const proto = IntersectionObserver.prototype;
+    const observe = proto.observe;
+    const unobserve = proto.unobserve;
+    const currentlyObserved = new Set<Element>();
+    (window as any).__observedByPilot = currentlyObserved;
+    proto.observe = function (element: Element) {
+      currentlyObserved.add(element);
+      return observe.call(this, element);
+    };
+    proto.unobserve = function (element: Element) {
+      currentlyObserved.delete(element);
+      return unobserve.call(this, element);
+    };
+  });
+
+  await page.evaluate(() => {
+    const holder = document.createElement("section");
+    holder.id = "spa-old-controls";
+    // Append after the long spacer so these controls are initially offscreen.
+    for (let i = 0; i < 210; i++) {
+      const item = document.createElement("button");
+      item.setAttribute("data-salsys-cta-id", "old_marker_" + i);
+      item.textContent = "Old marker";
+      holder.appendChild(item);
+    }
+    document.body.appendChild(holder);
+  });
+
+  await expect.poll(async () => page.evaluate(
+    () => (window as any).__observedByPilot?.size ?? -1,
+  )).toBe(198); // Plus two controls observed before the test spy was installed.
+
+  await page.evaluate(() => {
+    document.getElementById("spa-old-controls")?.remove();
+    const current = document.createElement("button");
+    current.id = "spa-new-control";
+    current.textContent = "Current view CTA";
+    current.setAttribute("data-salsys-cta-id", "fresh_view_cta");
+    document.querySelector("#pricing")?.before(current);
+    window.dispatchEvent(new Event("salsys:page-change"));
+  });
+  await page.locator("#spa-new-control").scrollIntoViewIfNeeded();
+
+  await expect.poll(async () => (await events(page))
+    .filter((event) => event.name === "web.cta_viewed" &&
+      event.properties.cta_id === "fresh_view_cta").length).toBe(1);
+  await expect.poll(async () => page.evaluate(
+    () => (window as any).__observedByPilot?.size ?? -1,
+  )).toBeLessThanOrEqual(3);
+});
