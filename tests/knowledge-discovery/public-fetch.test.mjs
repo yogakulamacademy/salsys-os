@@ -115,3 +115,22 @@ test('redirecting HTML or sitemap without rechecking robots fails closed', async
   }
   assert.equal(attempts,2,'Never fetched either redirect destination');
 });
+
+
+test('ownership proof refuses forwarding redirects or non-plaintext responses',async()=>{
+  const seed=new URL('https://yogakulam.com/');
+  const url=new URL('/.well-known/salsysos-verification.txt',seed);
+  const resolver=async()=>[{address:'8.8.8.8',family:4}];
+  let requests=0;
+  const redirect=async()=>{
+    requests++;
+    return {status:302,location:'https://www.yogakulam.com/proof',
+      contentType:'text/plain',body:''};
+  };
+  await assert.rejects(fetchPublicWeb(seed,url,'verification',resolver,redirect),
+    /verification_redirect_not_allowed/);
+  assert.equal(requests,1);
+  const html=async()=>({status:200,location:null,contentType:'text/html',body:'<html>bad</html>'});
+  await assert.rejects(fetchPublicWeb(seed,url,'verification',resolver,html),
+    /unsupported_content_type/);
+});
