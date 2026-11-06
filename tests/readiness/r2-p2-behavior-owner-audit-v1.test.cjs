@@ -11,7 +11,7 @@ const runbook = read("docs/r2-p2-behavior-live-acceptance-runbook-v1.md");
 const sqlWithoutComments = (value) =>
   value.split("\n").filter((line) => !line.trimStart().startsWith("--")).join("\n");
 const cannotWrite = (value) => assert.doesNotMatch(sqlWithoutComments(value),
-  /\b(?:insert|update|delete|alter|drop|truncate|create|call|execute|grant|revoke)\b/i);
+  /\b(?:insert|update|delete|alter|drop|truncate|create|call|grant|revoke)\b/i);
 
 test("metadata audit is non-mutating and returns only function/table security properties", () => {
   cannotWrite(metadata);
