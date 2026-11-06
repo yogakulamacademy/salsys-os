@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { prepareWebsiteEvidence } from '../../lib/knowledge-extraction/website-evidence.ts';
@@ -125,7 +126,6 @@ test('a removed quote is highlighted even with no semantic scope',()=>{
   change.kind='removed';
   change.current=null;
   d.counts.modified=0;d.counts.removed=1;
-  const {createHash}=await import('node:crypto');
   change.id=createHash('sha256').update(JSON.stringify([
     'removed',change.prior.snapshotSha256,change.prior.blockId,undefined,undefined,
   ])).digest('hex');
