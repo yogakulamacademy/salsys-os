@@ -5,6 +5,7 @@ import { prepareSourceGroundedDrafts } from '@/lib/knowledge-extraction/source-g
 import { analyzeSourceReviewSignals } from '@/lib/knowledge-extraction/source-review-signals';
 import { buildAIDraftingRequest, validateAIDraftingResponse } from '@/lib/knowledge-extraction/ai-draft-contract';
 import { evaluateGroundedAIProposals } from '@/lib/knowledge-extraction/ai-grounding-evaluation';
+import { prepareSyntheticKnowledgeReviewAcceptance } from '@/lib/knowledge-extraction/knowledge-review-acceptance';
 
 export const dynamic = 'force-dynamic';
 
@@ -96,7 +97,7 @@ export default async function EvidenceReviewPreviewPage() {
   const faqEvidence=aiEnvelope.request.evidence.find(item=>
     item.originalQuestion==='Can I reschedule?');
   if(!feeEvidence||!faqEvidence)throw new Error('Synthetic AI evidence fixture incomplete.');
-  const simulatedAI=validateAIDraftingResponse({
+  const syntheticModelJson = {
     schemaVersion:'kb03c-v1',
     requestId:aiEnvelope.request.requestId,
     proposals:[
@@ -111,7 +112,8 @@ export default async function EvidenceReviewPreviewPage() {
         answer:faqEvidence.exactAnswerQuote,
       },
     ],
-  },aiEnvelope.request);
+  };
+  const simulatedAI=validateAIDraftingResponse(syntheticModelJson,aiEnvelope.request);
   if(!simulatedAI.ok)throw new Error('Synthetic AI response fixture failed validation.');
   const groundingReview=evaluateGroundedAIProposals(
     aiEnvelope.request,
@@ -120,6 +122,14 @@ export default async function EvidenceReviewPreviewPage() {
     differences.report,
   );
   if(!groundingReview.ok)throw new Error('Synthetic grounding evaluation failed.');
+  const acceptance=prepareSyntheticKnowledgeReviewAcceptance(
+    aiEnvelope.request,
+    syntheticModelJson,
+    {asOf:'2026-11-06T12:00:00Z',reviewAgeDays:30},
+    differences.report,
+  );
+  if(!acceptance.ok)throw new Error('Synthetic KB-03E acceptance fixture failed.');
+
 
 
   return (
@@ -129,6 +139,7 @@ export default async function EvidenceReviewPreviewPage() {
       reviewSignals={differences.report}
       simulatedAIProposals={simulatedAI.result}
       groundingReview={groundingReview.report}
+      acceptancePacket={acceptance.packet}
     />
   );
 }
