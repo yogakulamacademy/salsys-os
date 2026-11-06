@@ -25,16 +25,35 @@ select pg_temp.assert_true(
   current_setting('kb05b.a_doc',true) is not null,
   'KB05B positive A document is bound');
 
--- Claimed user A with an actual tenant B session ID must have no A authority.
+-- Capture the EXISTING single-organization compatibility fallback.
+-- It is NOT evidence of strict session binding and needs separate policy review.
 select set_config('request.jwt.claims',
   '{"role":"authenticated","sub":"20000000-0000-4000-8000-000000000001","session_id":"30000000-0000-4000-8000-000000000002"}',true);
 select pg_temp.assert_true(
+  (select count(*)>0 from public.knowledge_documents
+   where organization_id='10000000-0000-4000-8000-000000000001'),
+  'KB05B singleton-member session mismatch retains legacy own-tenant fallback');
+
+-- Enforce the important MULTI-TENANT boundary with positive membership in
+-- both organizations. Test superuser mutates only synthetic foundation rows.
+reset role;
+insert into public.organization_members(organization_id,user_id,role)
+values
+('10000000-0000-4000-8000-000000000002',
+ '20000000-0000-4000-8000-000000000001','employee'),
+('10000000-0000-4000-8000-000000000001',
+ '20000000-0000-4000-8000-000000000002','employee');
+set local role authenticated;
+
+-- User A is a legitimate member of both tenants, but the presented session
+-- belongs to user B: deny all rows and the security-definer retrieval RPC.
+select pg_temp.assert_true(
   (select count(*)=0 from public.knowledge_documents),
-  'KB05B A user with B session cannot read A directly');
+  'KB05B multitenant A user with B session cannot read A directly');
 select pg_temp.assert_true(
   (select count(*)=0 from public.search_organization_knowledge_v1(
    '10000000-0000-4000-8000-000000000001','Cobalt',6)),
-  'KB05B A user with B session cannot search A');
+  'KB05B multitenant A user with B session cannot search A');
 
 -- @@OWNER_B@@
 -- Existing fixture already establishes A has real rows and B cannot see them.
