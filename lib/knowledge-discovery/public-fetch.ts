@@ -74,6 +74,7 @@ export async function fetchPublicWeb(
   seed: URL, candidate: URL, kind: 'html' | 'robots' | 'sitemap',
   resolver?: LookupAddresses,
   transport: typeof requestPinned = requestPinned,
+  authorizeRedirect?: (next: URL) => Promise<void>,
 ): Promise<PublicWebResponse> {
   let current = candidate;
   const byteLimit = kind === 'html' ? 512 * 1024 : 256 * 1024;
@@ -85,6 +86,13 @@ export async function fetchPublicWeb(
       if (!reply.location || redirect === 3) throw new WebsiteFetchError('redirect_limit');
       const next = scopedDiscoveredUrl(seed, current, reply.location);
       if (!next) throw new WebsiteFetchError('redirect_out_of_scope');
+      // A page or sitemap may redirect to a path with different robots rules
+      // (or from apex to www). Never fetch its body before those rules are
+      // checked. Direct transport callers without a guard fail closed.
+      if (kind !== 'robots') {
+        if (!authorizeRedirect) throw new WebsiteFetchError('redirect_robots_required');
+        await authorizeRedirect(next);
+      }
       current = next;
       continue;
     }
