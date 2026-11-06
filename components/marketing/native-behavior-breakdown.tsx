@@ -108,9 +108,9 @@ export function NativeBehaviorBreakdownPanel({
             </div>
           )}
           <p className="mt-4 text-xs text-slate-500">
-            Only safe public page paths observed from at least {breakdown.minVisitors} distinct anonymous visitors
+            Only safe public page paths observed from at least {breakdown.minVisitors} distinct tracked visitor IDs
             are listed (maximum 10). Other or withheld events include unclassified paths,
-            small visitor groups and pages beyond the top 10. Reporting uses the selected {breakdown.days}-day UTC window.
+            small visitor groups and pages beyond the top 10. Reporting uses the selected {breakdown.days}-day UTC window. A tracked visitor ID may change with browsers or resets; it is not a verified person or device.
           </p>
         </>
       )}
