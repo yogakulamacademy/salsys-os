@@ -450,3 +450,30 @@ test("a restored tab reload cannot overwrite the new post-withdrawal shared visi
     (event) => event.body.anonymous_visitor_id === first.sdk.visitorId()
   ));
 });
+
+
+test("a stale pending grant cannot override another tab's later withdrawal", async () => {
+  const shared = storage();
+  let finishGrant;
+  const first = boot({
+    local: shared,
+    consentResponse(body) {
+      if (body.decisions.analytics === "granted") {
+        return new Promise((resolve) => { finishGrant = resolve; });
+      }
+      return { ok: true, json: async () => ({ effective_decisions: body.decisions }) };
+    },
+  });
+  const oldGrant = first.sdk.consent({ analytics: "granted" });
+  await settle();
+  assert.equal(typeof finishGrant, "function");
+  const second = boot({ local: shared });
+  await second.sdk.consent({ analytics: "withdrawn" });
+  first.emitStorage("salsys_privacy_v1", shared.getItem("salsys_privacy_v1"),
+    JSON.stringify({ analytics: "granted" }));
+  finishGrant({ ok: true, json: async () => ({ effective_decisions: { analytics: "granted" } }) });
+  await oldGrant;
+  assert.equal(first.sdk.privacy().analytics_allowed_locally, false);
+  assert.equal(shared.getItem("salsys_vid"), null);
+  assert.equal((await first.sdk.track("web.page_viewed", {})).privacy_blocked, true);
+});
