@@ -8,6 +8,7 @@ const foundation=readFileSync(new URL('./knowledge-discovery.foundation.sql',imp
 const discovery=readFileSync(new URL('../../docs/sql/KB-01B-discovery-schema-DRAFT.sql',import.meta.url),'utf8');
 const consentA=readFileSync(new URL('../../docs/sql/KB-06A-discovery-consent-execution-DRAFT.sql',import.meta.url),'utf8');
 const consentB=readFileSync(new URL('../../docs/sql/KB-06B-audited-discovery-consent-lifecycle-DRAFT.sql',import.meta.url),'utf8');
+const erasureC=readFileSync(new URL('../../docs/sql/KB-06C-revoked-discovery-metadata-erasure-DRAFT.sql',import.meta.url),'utf8');
 const ORG_A='10000000-0000-4000-8000-000000000001';
 const ORG_B='10000000-0000-4000-8000-000000000002';
 const USER_A='20000000-0000-4000-8000-000000000001';
@@ -54,6 +55,7 @@ test('KB-06B exact SQL: signed session, policy switch, atomic audit and withdraw
     [org,host,policy,sha,expiry,ack];
   const grantSql='select public.grant_knowledge_discovery_consent_v1($1,$2,$3,$4,$5,$6) as outcome';
   const withdrawSql='select public.withdraw_knowledge_discovery_consent_v1($1,$2,$3) as outcome';
+  const eraseSql='select public.erase_knowledge_discovery_metadata_v1($1,$2,$3) as outcome';
   const a=(query,args)=>invoke('authenticated',USER_A,SID_A,query,args);
   const b=(query,args)=>invoke('authenticated',USER_B,SID_B,query,args);
   try{
@@ -76,6 +78,7 @@ test('KB-06B exact SQL: signed session, policy switch, atomic audit and withdraw
       "grant usage on schema auth to authenticated",
     ].join(';\n')+';');
     await db.query(consentB);
+    await db.query(erasureC);
     await db.query('insert into public.organizations(id) values($1),($2)',[ORG_A,ORG_B]);
     await db.query('insert into public.test_knowledge_admins(organization_id,user_id) values($1,$2),($3,$4)',[ORG_A,USER_A,ORG_B,USER_B]);
     await db.query(
@@ -130,6 +133,10 @@ test('KB-06B exact SQL: signed session, policy switch, atomic audit and withdraw
     assert.equal(row.hostname,HOST_A);
     assert.equal(row.status,'granted');
     assert.equal(row.revision,1);
+    // No erasure is allowed while consent remains granted.
+    await assert.rejects(a(eraseSql,[ORG_A,HOST_A,1]),e=>e.code==='22023');
+    assert.deepEqual((await a(eraseSql,[ORG_A,HOST_A,2])).rows[0].outcome,
+      {ok:false,reason:'stale_revision'});
     assert.equal((await db.query('select count(*)::int as n from public.knowledge_discovery_consent_audit')).rows[0].n,1);
     // Read RLS uses the SAME exact live tenant-session check as write RPCs.
     const readConsent='select count(*)::int as n from public.knowledge_discovery_site_consents';
@@ -196,11 +203,68 @@ test('KB-06B exact SQL: signed session, policy switch, atomic audit and withdraw
     assert.deepEqual(duplicate,{ok:false,reason:'stale_revision'});
     assert.equal((await db.query('select count(*)::int as n from public.knowledge_discovery_consent_audit')).rows[0].n,2);
     await assert.rejects(a(grantSql,grantArgs()),e=>e.code==='42501','Policy remains OFF');
+    // KB-06C: even a fully authorized owner must specify a withdrawn consent
+    // revision, exact host and the same authenticated tenant-bound session.
+    await assert.rejects(b(eraseSql,[ORG_A,HOST_A,2]),e=>e.code==='42501');
+    await assert.rejects(invoke('authenticated',EMPLOYEE,SID_E,eraseSql,
+      [ORG_A,HOST_A,2]),e=>e.code==='42501');
+    await assert.rejects(invoke('authenticated',USER_A,SID_B,eraseSql,
+      [ORG_A,HOST_A,2]),e=>e.code==='42501');
+    await assert.rejects(invoke('anon',USER_A,SID_A,eraseSql,
+      [ORG_A,HOST_A,2]),e=>e.code==='42501');
+    await assert.rejects(a(eraseSql,[ORG_A,HOST_A,1]),e=>e.code==='22023');
+    assert.deepEqual((await a(eraseSql,[ORG_A,'wrong.example.com',2])).rows[0].outcome,
+      {ok:false,reason:'consent_missing'});
+
+    // A second tenant's metadata survives the exact-host erasure.
+    const otherJob=(await db.query(
+      "insert into public.knowledge_discovery_jobs(organization_id,created_by,seed_url,status) values($1,$2,$3,'completed') returning id",
+      [ORG_B,USER_B,'https://'+HOST_B+'/'])).rows[0].id;
+    const otherPage=(await db.query(
+      "insert into public.knowledge_discovery_pages(organization_id,job_id,url) values($1,$2,$3) returning id",
+      [ORG_B,otherJob,'https://'+HOST_B+'/'])).rows[0].id;
+    const erased=(await a(eraseSql,[ORG_A,HOST_A,2])).rows[0].outcome;
+    assert.deepEqual(erased,{
+      ok:true,status:'discovery_metadata_erased',jobsDeleted:1,pagesDeleted:1,
+    });
+    assert.equal((await db.query(
+      'select count(*)::int as n from public.knowledge_discovery_jobs where id=$1',
+      [j])).rows[0].n,0);
+    assert.equal((await db.query(
+      'select count(*)::int as n from public.knowledge_discovery_pages where id=$1',
+      [page])).rows[0].n,0);
+    assert.equal((await db.query(
+      'select count(*)::int as n from public.knowledge_discovery_jobs where id=$1',
+      [otherJob])).rows[0].n,1);
+    assert.equal((await db.query(
+      'select count(*)::int as n from public.knowledge_discovery_pages where id=$1',
+      [otherPage])).rows[0].n,1);
+    assert.equal((await db.query('select count(*)::int as n from public.knowledge_discovery_consent_audit')).rows[0].n,2);
+    assert.equal((await db.query('select status from public.knowledge_discovery_site_consents where id=$1',[row.id])).rows[0].status,'withdrawn');
+
+    const metadataAudit='select count(*)::int as n from public.knowledge_discovery_metadata_erasure_audit';
+    assert.equal((await a(metadataAudit)).rows[0].n,1);
+    assert.equal((await b(metadataAudit)).rows[0].n,0);
+    assert.deepEqual((await a(eraseSql,[ORG_A,HOST_A,2])).rows[0].outcome,
+      {ok:false,reason:'already_erased'});
+    const erasureEntry=(await db.query(
+      'select actor_id,session_id,consent_revision,jobs_deleted,pages_deleted from public.knowledge_discovery_metadata_erasure_audit where consent_id=$1',
+      [row.id])).rows[0];
+    assert.deepEqual(erasureEntry,{
+      actor_id:USER_A,session_id:SID_A,consent_revision:2,
+      jobs_deleted:1,pages_deleted:1,
+    });
+    await assert.rejects(db.query(
+      "update public.knowledge_discovery_metadata_erasure_audit set pages_deleted=10 where consent_id=$1",
+      [row.id]),e=>e.code==='42501'&&/append_only/.test(e.message));
+
     // Strict session revocation: loss of auth.sessions row immediately denies.
     await db.query('delete from auth.sessions where id=$1',[SID_A]);
     assert.equal((await a(readConsent)).rows[0].n,0);
     assert.equal((await a(readAudit)).rows[0].n,0);
     await assert.rejects(a(withdrawSql,[ORG_A,HOST_A,2]),e=>e.code==='42501');
+    assert.equal((await a(metadataAudit)).rows[0].n,0);
+    await assert.rejects(a(eraseSql,[ORG_A,HOST_A,2]),e=>e.code==='42501');
 
     // Local-only, disposable synthetic data. No real staging or production.
   }finally{

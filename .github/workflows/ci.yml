@@ -4,9 +4,10 @@ on:
   pull_request:
     branches:
       - main
-      # Temporary KB-06B stacked draft validation only.
+      # Temporary Knowledge Builder stacked draft validation only.
       - feature/kb06a-discovery-explicit-consent-gate
       - feature/kb06b-audited-consent-lifecycle
+      - feature/kb06c-revoked-metadata-erasure
   push:
     branches:
       - main
@@ -61,7 +62,7 @@ jobs:
       - name: Verify consent withdrawal rejects discovery leases and late commits in disposable PostgreSQL
         run: node --test tests/database/knowledge-discovery-consent.test.mjs
 
-      - name: Verify signed-session consent grant, audit and withdrawal on disposable PostgreSQL
+      - name: Verify signed-session consent, withdrawal and metadata erasure on disposable PostgreSQL
         run: node --test tests/database/knowledge-discovery-consent-lifecycle.test.mjs
 
       - name: Verify exact Instagram outbound projector SQL in isolated PostgreSQL
