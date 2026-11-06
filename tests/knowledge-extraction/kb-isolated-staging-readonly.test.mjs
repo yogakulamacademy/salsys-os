@@ -184,3 +184,29 @@ test('wrong authenticated staging account fails before knowledge reads',async()=
     assert.equal(fake.calls.filter(x=>x.path.startsWith('/rest/v1/')).length,0);
   }finally{fake.restore();}
 });
+
+
+test('imported runner cannot bypass preflight with a forged URL or mutable config',async()=>{
+  const approved=validateKbStagingEnvironment(baseEnv());
+  assert.equal(Object.isFrozen(approved),true);
+  assert.equal(Object.isFrozen(approved.a),true);
+  assert.equal(Object.isFrozen(approved.b),true);
+  let requests=0;
+  const original=globalThis.fetch;
+  globalThis.fetch=async()=>{requests++;throw Error('never_call_external_network');};
+  try{
+    await assert.rejects(
+      runKbStagingReadOnlyAcceptance({
+        ...approved,apiUrl:'https://unapproved.example.com',
+      }),
+      /unvalidated_runtime_configuration/,
+    );
+    await assert.rejects(
+      runKbStagingReadOnlyAcceptance({
+        ...approved,a:{...approved.a},
+      }),
+      /unvalidated_runtime_configuration/,
+    );
+    assert.equal(requests,0);
+  }finally{globalThis.fetch=original;}
+});
