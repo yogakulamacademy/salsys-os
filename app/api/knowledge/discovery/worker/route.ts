@@ -41,3 +41,6 @@ export async function POST(request: NextRequest) {
       { status: 503, headers: noStore });
   }
 }
+
+// Vercel Cron performs GET; the same bearer-secret boundary applies.
+export const GET = POST;
