@@ -8,6 +8,7 @@ import {
 import type { PreparedWebsiteEvidence } from '@/lib/knowledge-extraction/website-evidence';
 import type { SourceDraftBundle } from '@/lib/knowledge-extraction/source-grounded-drafts';
 import type { ReviewSignalReport } from '@/lib/knowledge-extraction/source-review-signals';
+import type { ValidatedAIResponse } from '@/lib/knowledge-extraction/ai-draft-contract';
 import { assessEvidenceReadiness } from '@/lib/knowledge-extraction/evidence-lifecycle-readiness';
 import {
   chooseEvidenceForReview,
@@ -26,11 +27,12 @@ const filters: Array<{ id: Filter; label: string }> = [
 ];
 
 export function KnowledgeEvidenceReviewPreview({
-  evidence, sourceCandidates, reviewSignals,
+  evidence, sourceCandidates, reviewSignals, simulatedAIProposals,
 }: {
   evidence: PreparedWebsiteEvidence;
   sourceCandidates: SourceDraftBundle;
   reviewSignals: ReviewSignalReport;
+  simulatedAIProposals: ValidatedAIResponse;
 }) {
   const [choices, setChoices] = useState<EvidenceReviewDecisions>({});
   const [filter, setFilter] = useState<Filter>('all');
@@ -315,6 +317,71 @@ export function KnowledgeEvidenceReviewPreview({
         <p className="mt-4 border-t border-slate-100 pt-3 text-xs text-slate-600">
           Synthetic example only. Neither source has been verified as the current truth.
           No AI generation, automatic approval, storage, or publication is enabled.
+        </p>
+      </section>
+
+      <section aria-label="Synthetic AI proposal review"
+        className="rounded-xl border border-slate-200 bg-white p-5">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h2 className="text-base font-semibold">AI drafting contract preview</h2>
+            <p className="mt-1 max-w-2xl text-xs leading-5 text-slate-600">
+              Simulated model output only — no AI service was contacted.
+              Answers are verbatim source quotations. Generated questions still
+              require a person to check accuracy and meaning.
+            </p>
+          </div>
+          <span className="rounded-md border border-slate-200 bg-slate-50 px-2.5 py-1.5 text-xs font-semibold text-slate-600">
+            {simulatedAIProposals.proposals.length} simulated proposals
+          </span>
+        </div>
+        {simulatedAIProposals.proposals.length===0 ? (
+          <p className="mt-4 text-sm text-slate-500">No simulated proposals were accepted.</p>
+        ) : (
+          <ol className="mt-4 space-y-3">
+            {simulatedAIProposals.proposals.map(proposal=>(
+              <li key={proposal.id} className="rounded-lg border border-slate-200 p-4">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <p className="text-xs font-semibold text-slate-700">
+                    {proposal.kind==='faq'?'FAQ suggestion':'Verbatim fact suggestion'}
+                  </p>
+                  <span className="text-xs font-semibold text-amber-800">
+                    Not approved
+                  </span>
+                </div>
+                {proposal.question ? (
+                  <p className="mt-3 break-words text-sm font-semibold">
+                    {proposal.question}
+                  </p>
+                ):null}
+                <blockquote className="mt-2 break-words border-l-2 border-slate-300 pl-3 text-sm leading-6">
+                  {proposal.answerOrStatement}
+                </blockquote>
+                <p className="mt-2 break-all text-xs text-slate-500">
+                  Citation: {proposal.answerCitation.sourceUrl}
+                </p>
+                <p className="mt-1 break-all font-mono text-[11px] text-slate-500">
+                  Source block {proposal.answerCitation.sourceBlockIndex+1}
+                  {' · '}SHA-256 {proposal.answerCitation.quoteSha256.slice(0,16)}…
+                </p>
+                {proposal.modelGeneratedQuestion ? (
+                  <p className="mt-2 text-xs text-amber-800">
+                    Question wording was simulated; semantic grounding was not verified.
+                  </p>
+                ):null}
+                {proposal.riskReminders.length>0 ? (
+                  <p className="mt-2 text-xs text-amber-800">
+                    Review: {proposal.riskReminders.map(r=>r.replaceAll('_',' ')).join(', ')}
+                  </p>
+                ):null}
+              </li>
+            ))}
+          </ol>
+        )}
+        <p className="mt-4 border-t border-slate-100 pt-3 text-xs leading-5 text-slate-600">
+          This validator only enforces schema, citation identity and exact source
+          wording. It cannot establish whether a source is accurate, current or
+          contextually sufficient. Nothing can be stored, approved or published.
         </p>
       </section>
 

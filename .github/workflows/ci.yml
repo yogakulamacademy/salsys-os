@@ -13,6 +13,7 @@ on:
       - feature/kb02e-evidence-lifecycle-contract
       - feature/kb03a-source-backed-drafts
       - feature/kb03b-conflict-freshness-signals
+      - feature/kb03c-grounded-ai-proposals
 
 permissions:
   contents: read

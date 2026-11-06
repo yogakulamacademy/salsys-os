@@ -120,6 +120,32 @@ test('synthetic price and source age signals retain quotations but never declare
   expect(writes).toEqual([]);
 });
 
+test('synthetic AI contract preview displays exact cited answers without AI/storage/publishing actions',async({page})=>{
+  const writes:string[]=[];
+  page.on('request',request=>{
+    if(request.method()!=='GET' &&
+      /\/(?:api\/knowledge|rest\/v1\/knowledge_)/.test(request.url())){
+      writes.push(request.method()+' '+request.url());
+    }
+  });
+  await page.goto('/settings/knowledge/evidence-preview');
+  const ai=page.getByRole('region',{name:'Synthetic AI proposal review'});
+  await expect(ai.getByRole('heading',{name:'AI drafting contract preview'})).toBeVisible();
+  await expect(ai.getByText('Simulated model output only',{exact:false})).toBeVisible();
+  await expect(ai.getByText('2 simulated proposals')).toBeVisible();
+  await expect(ai.getByText('What is the fee for the introduction workshop?')).toBeVisible();
+  await expect(ai.getByText('Introduction workshop | $150',{exact:true})).toBeVisible();
+  await expect(ai.getByText('Can I reschedule?',{exact:true})).toBeVisible();
+  await expect(ai.getByText(
+    'Rescheduling requests must be submitted before the event.',{exact:true})).toBeVisible();
+  await expect(ai.getByText('Not approved',{exact:true})).toHaveCount(2);
+  await expect(ai.getByText('Question wording was simulated',{exact:false})).toBeVisible();
+  await expect(ai.getByText('semantic grounding was not verified',{exact:false})).toBeVisible();
+  await expect(ai.getByText('Citation:',{exact:false}).first()).toBeVisible();
+  await expect(page.getByRole('button',{name:'Publish knowledge (disabled)'})).toBeDisabled();
+  expect(writes).toEqual([]);
+});
+
 test('review preview remains readable without horizontal overflow on mobile',async({page})=>{
   await page.setViewportSize({width:390,height:844});
   await page.goto('/settings/knowledge/evidence-preview');
