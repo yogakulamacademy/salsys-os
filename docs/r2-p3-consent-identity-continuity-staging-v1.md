@@ -54,6 +54,7 @@ export SALSYS_STAGING_SITE_ORIGIN="https://<approved-staging-site>"
 export SALSYS_STAGING_CRM_ORIGIN="https://<isolated-staging-crm>"
 export SALSYS_STAGING_SUPABASE_URL="https://<staging-supabase-host>"
 export SALSYS_PRODUCTION_SUPABASE_URL="https://<production-supabase-host>"
+export SALSYS_RECOVERY_SUPABASE_URL="https://<recovery-rehearsal-supabase-host>"
 export SALSYS_STAGING_SOURCE_HOSTNAME="<exact-staging-site-hostname>"
 export SALSYS_STAGING_SOURCE_STATUS="active"
 export SALSYS_STAGING_SOURCE_ENVIRONMENT="staging"
@@ -65,6 +66,8 @@ export SALSYS_STAGING_DEPLOYED_COMMIT="<actual-preview-40-char-SHA>"
 
 node scripts/r2-consent-staging-preflight.mjs
 ```
+
+**Recovery isolation:** SalsysOS has an existing recovery-rehearsal project reserved for recovery testing. The preflight also requires its Supabase origin for a *comparison only*, and blocks any staging URL that matches it. The URL is a non-secret origin; do not provide service-role keys. Production and recovery databases must never be repurposed as staging just to pass acceptance.
 
 This preflight makes **read-only assertions about operator-supplied staging configuration** and returns a nonzero exit on missing requirements. It performs no API calls, writes, or secret reads and does not certify that the operator supplied true information. Independently verify the source/site record and deployment metadata. A preflight PASS does **not** replace actual two-tab/CMP and exact-session lead-form acceptance.
 
