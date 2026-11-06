@@ -18,9 +18,11 @@ async function requestPinned(url: URL, address: string, family: 4 | 6, limitByte
   const request = url.protocol === 'https:' ? httpsRequest : httpRequest;
   return new Promise((resolve, reject) => {
     let ended = false;
+    let timer: ReturnType<typeof setTimeout> | undefined;
     const finish = (err?: Error, value?: RawReply) => {
       if (ended) return;
       ended = true;
+      if (timer) clearTimeout(timer);
       if (err) reject(err);
       else if (value) resolve(value);
     };
@@ -59,6 +61,9 @@ async function requestPinned(url: URL, address: string, family: 4 | 6, limitByte
       }));
       response.on('error', error => finish(error));
     });
+    // Total wall-clock deadline, not just an idle-socket timeout. A remote
+    // host cannot keep this worker busy indefinitely by dripping small chunks.
+    timer = setTimeout(() => req.destroy(new WebsiteFetchError('fetch_timeout')), 8_000);
     req.setTimeout(8_000, () => req.destroy(new WebsiteFetchError('fetch_timeout')));
     req.on('error', error => finish(error));
     req.end();
