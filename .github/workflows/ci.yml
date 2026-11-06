@@ -4,6 +4,8 @@ on:
   pull_request:
     branches:
       - main
+      # Temporary stacked KB-04B PR validation.
+      - feature/kb04a-source-snapshot-delta-preview
   push:
     branches:
       - main
@@ -17,6 +19,7 @@ on:
       - feature/kb03d-grounding-quality-evaluation
       - feature/kb03e-review-acceptance-contract
       - feature/kb04a-source-snapshot-delta-preview
+      - feature/kb04b-refresh-safety-contract
 
 permissions:
   contents: read

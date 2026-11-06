@@ -227,3 +227,25 @@ test('review preview remains readable without horizontal overflow on mobile',asy
   await expect.poll(()=>page.evaluate(()=>document.documentElement.scrollWidth))
     .toBeLessThanOrEqual(390);
 });
+
+
+test('KB-04B synthetic refresh preflight cannot schedule, fetch or store evidence',async({page})=>{
+  const writes:string[]=[];
+  page.on('request',request=>{
+    if(request.method()!=='GET' &&
+      /\/(?:api\/knowledge|rest\/v1\/knowledge_|api\/website)/.test(request.url())){
+      writes.push(request.method()+' '+request.url());
+    }
+  });
+  await page.goto('/settings/knowledge/evidence-preview');
+  const safety=page.getByRole('region',{name:'Website refresh safety preview'});
+  await expect(safety.getByRole('heading',{name:'Website refresh safeguards'})).toBeVisible();
+  await expect(safety.getByText('Refresh blocked')).toBeVisible();
+  await expect(safety.getByText('No automated crawling is authorized')).toBeVisible();
+  await safety.getByText('Inspect 7 refresh safety requirements').click();
+  await expect(safety.getByText('Any kill switch',{exact:false})).toBeVisible();
+  await expect(safety.getByText('Explicit unexpired monitoring-purpose consent',{exact:false})).toBeVisible();
+  await expect(safety.getByText('No schedule or storage endpoint',{exact:false})).toBeVisible();
+  await expect(page.getByRole('button',{name:'Publish knowledge (disabled)'})).toBeDisabled();
+  expect(writes).toEqual([]);
+});
