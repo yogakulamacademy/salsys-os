@@ -223,6 +223,49 @@ test('exact KB-01B SQL passes tenant, RLS, lease and cancellation checks in disp
     assert.equal((await a.query('select count(*)::int as n from public.claim_knowledge_discovery_job_v1()')).rows[0].n,0);
     await a.query('commit');
     assert.equal((await db.query('select status from public.knowledge_discovery_jobs where id=$1',[firstId])).rows[0].status,'failed');
+
+    // Database—not the browser—enforces a per-organization cooldown
+    // and rolling 24-hour job limit after earlier scans finish.
+    await assert.rejects(db.query(
+      "insert into public.knowledge_discovery_jobs(organization_id,created_by,seed_url)"+
+      " values($1,$2,'https://yogakulam.com/rate')",[ORG_A,USER_A]),
+      e=>e.code==='P0001' && e.message==='discovery_scan_cooldown');
+
+    await db.query(
+      "update public.knowledge_discovery_jobs"+
+      " set created_at=now()-interval '20 minutes' where organization_id=$1",[ORG_A]);
+    const secondA=await db.query(
+      "insert into public.knowledge_discovery_jobs(organization_id,created_by,seed_url)"+
+      " values($1,$2,'https://yogakulam.com/second') returning id",[ORG_A,USER_A]);
+    await db.query(
+      "update public.knowledge_discovery_jobs set status='completed',"+
+      " created_at=now()-interval '20 minutes' where id=$1",[secondA.rows[0].id]);
+    const thirdA=await db.query(
+      "insert into public.knowledge_discovery_jobs(organization_id,created_by,seed_url)"+
+      " values($1,$2,'https://yogakulam.com/third') returning id",[ORG_A,USER_A]);
+    await db.query(
+      "update public.knowledge_discovery_jobs set status='completed' where id=$1",
+      [thirdA.rows[0].id]);
+    await assert.rejects(db.query(
+      "insert into public.knowledge_discovery_jobs(organization_id,created_by,seed_url)"+
+      " values($1,$2,'https://yogakulam.com/fourth')",[ORG_A,USER_A]),
+      e=>e.code==='P0001' && e.message==='discovery_daily_scan_limit');
+
+    // Concurrent first scans for a new tenant cannot both enter the queue.
+    const ORG_C='10000000-0000-4000-8000-000000000003';
+    await db.query('insert into public.organizations(id) values($1)',[ORG_C]);
+    const insertC=()=>(
+      "insert into public.knowledge_discovery_jobs(organization_id,created_by,seed_url)"+
+      " values('"+ORG_C+"','"+USER_A+"','https://fixture.example.com/') returning id");
+    const simultaneous=await Promise.allSettled([a.query(insertC()),b.query(insertC())]);
+    assert.equal(simultaneous.filter(x=>x.status==='fulfilled').length,1,
+      'Only one concurrent organization scan is accepted');
+    assert.equal(simultaneous.filter(x=>x.status==='rejected' && x.reason.code==='23505').length,1,
+      'Duplicate active-job invariant survives concurrent INSERTs');
+    assert.equal((await db.query(
+      'select count(*)::int as n from public.knowledge_discovery_jobs where organization_id=$1',[ORG_C]
+    )).rows[0].n,1);
+
   } finally {
     await Promise.allSettled(sessions.map(s=>s.end()));
     try{if(created)await admin.query('drop database '+dbName+' with (force)');}
