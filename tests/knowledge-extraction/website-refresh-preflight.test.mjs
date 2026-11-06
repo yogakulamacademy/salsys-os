@@ -51,6 +51,7 @@ test('even an all-green synthetic review never schedules, crawls, stores or publ
 test('missing and malformed inputs fail closed',()=>{
   assert.equal(assessWebsiteRefreshPreflight(null,NOW).status,'blocked');
   assert.equal(report(proposal(),'not-a-timestamp').status,'blocked');
+  assert.equal(report(proposal(),'2026-02-30T12:00:00Z').status,'blocked');
   assert.equal(report({...proposal(),evidenceLifecycleState:'blocked'}).status,'blocked');
   const missing=proposal();missing.consent=null;
   assert.equal(report(missing).status,'blocked');
