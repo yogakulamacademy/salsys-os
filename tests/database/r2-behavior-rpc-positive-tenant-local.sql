@@ -269,6 +269,91 @@ BEGIN
 END
 $test$;
 
+-- Independent 7/14/30-day SQL-versus-RPC acceptance for the bound owner-A account.
+-- These SQL counts were computed from raw_events before switching roles; only
+-- aggregated synthetic totals are exposed through the ephemeral temp table.
+DO $r2_window_reconcile$
+DECLARE
+  tenant_id uuid := '00000000-0000-4000-8000-0000000000a1'::uuid;
+  default_events text[] := ARRAY['web.page_viewed','web.form_started','web.form_submitted']::text[];
+  w integer;
+  idx integer;
+  expected_events bigint;
+  expected_sessions bigint;
+  observed_daily_sum bigint;
+  expected_pages bigint;
+  funnel_result jsonb;
+  trends_result jsonb;
+  pages_result jsonb;
+BEGIN
+  IF public.current_tenant_organization_id() IS DISTINCT FROM tenant_id THEN
+    RAISE EXCEPTION 'R2-P2: owner-A lost its authenticated bound tenant';
+  END IF;
+  FOREACH w IN ARRAY ARRAY[7,14,30] LOOP
+    expected_pages := CASE w
+      WHEN 7 THEN 4
+      WHEN 14 THEN 6
+      ELSE 7 END;
+
+    funnel_result := public.get_native_behavior_workspace_v1(tenant_id,w,default_events);
+    trends_result := public.get_native_behavior_event_trends_v1(tenant_id,w,default_events);
+    pages_result := public.get_native_behavior_page_breakdown_v1(tenant_id,w,'web.page_viewed');
+
+    IF funnel_result #>> '{status,available}' IS DISTINCT FROM 'true'
+      OR trends_result #>> '{status,available}' IS DISTINCT FROM 'true'
+      OR pages_result #>> '{status,available}' IS DISTINCT FROM 'true'
+      OR (funnel_result #>> '{status,window_days}')::integer IS DISTINCT FROM w
+      OR (trends_result #>> '{status,window_days}')::integer IS DISTINCT FROM w
+      OR (pages_result #>> '{status,window_days}')::integer IS DISTINCT FROM w
+      OR (trends_result #>> '{status,first_day_utc}') IS DISTINCT FROM
+        to_char((now() at time zone 'UTC')::date-(w-1),'YYYY-MM-DD')
+      OR (trends_result #>> '{status,last_day_utc}') IS DISTINCT FROM
+        to_char((now() at time zone 'UTC')::date,'YYYY-MM-DD')
+    THEN
+      RAISE EXCEPTION 'R2-P2: owner-A %d-day report availability/date boundary mismatch',w;
+    END IF;
+
+    FOR idx IN 0..2 LOOP
+      SELECT t.events,t.sessions INTO expected_events,expected_sessions
+      FROM pg_temp.r2_p2_expected_utc_aggregates t
+      WHERE t.organization_id=tenant_id AND t.days=w AND t.event_name=default_events[idx+1];
+      IF NOT FOUND THEN
+        RAISE EXCEPTION 'R2-P2: owner-A missing independent SQL event truth';
+      END IF;
+      IF (trends_result #>> ARRAY['series',idx::text,'event_name'])
+          IS DISTINCT FROM default_events[idx+1]
+        OR (trends_result #>> ARRAY['series',idx::text,'total_events'])::bigint
+          IS DISTINCT FROM expected_events
+        OR (trends_result #>> ARRAY['series',idx::text,'observed_sessions'])::bigint
+          IS DISTINCT FROM expected_sessions
+        OR (funnel_result #>> ARRAY['funnel',idx::text,'sessions'])::bigint
+          IS DISTINCT FROM expected_sessions
+        OR jsonb_array_length(trends_result #> ARRAY['series',idx::text,'daily'])
+          IS DISTINCT FROM w
+      THEN
+        RAISE EXCEPTION 'R2-P2: owner-A %d-day SQL-versus-RPC mismatch at step %',w,idx+1;
+      END IF;
+
+      SELECT coalesce(sum((entry.value->>'events')::bigint),0)
+      INTO observed_daily_sum
+      FROM jsonb_array_elements(trends_result #> ARRAY['series',idx::text,'daily']) entry(value);
+      IF observed_daily_sum IS DISTINCT FROM expected_events THEN
+        RAISE EXCEPTION 'R2-P2: owner-A %d-day daily sum does not equal independent SQL totals',w;
+      END IF;
+    END LOOP;
+
+    IF (pages_result #>> '{status,total_events}')::bigint IS DISTINCT FROM expected_pages
+       OR (pages_result #>> '{status,identified_sessions}')::bigint IS DISTINCT FROM expected_pages
+       OR (pages_result #>> '{pages,0,events}')::bigint IS DISTINCT FROM expected_pages
+       OR (pages_result #>> '{pages,0,path}') IS DISTINCT FROM '/courses/r2-fixture.php'
+       OR (funnel_result ->> 'path_sessions')::bigint IS DISTINCT FROM expected_pages
+    THEN
+      RAISE EXCEPTION 'R2-P2: owner-A %d-day page/path totals differ from synthetic SQL',w;
+    END IF;
+  END LOOP;
+END
+$r2_window_reconcile$;
+
 -- Switch to a separate synthetic admin user AND distinct session bound to B.
 SELECT set_config('request.jwt.claim.sub','00000000-0000-4000-8000-0000000000c4',true);
 SELECT set_config('request.jwt.claims',
@@ -336,6 +421,91 @@ BEGIN
   END LOOP;
 END
 $test$;
+
+-- Independent 7/14/30-day SQL-versus-RPC acceptance for the bound admin-B account.
+-- These SQL counts were computed from raw_events before switching roles; only
+-- aggregated synthetic totals are exposed through the ephemeral temp table.
+DO $r2_window_reconcile$
+DECLARE
+  tenant_id uuid := '00000000-0000-4000-8000-0000000000b2'::uuid;
+  default_events text[] := ARRAY['web.page_viewed','web.form_started','web.form_submitted']::text[];
+  w integer;
+  idx integer;
+  expected_events bigint;
+  expected_sessions bigint;
+  observed_daily_sum bigint;
+  expected_pages bigint;
+  funnel_result jsonb;
+  trends_result jsonb;
+  pages_result jsonb;
+BEGIN
+  IF public.current_tenant_organization_id() IS DISTINCT FROM tenant_id THEN
+    RAISE EXCEPTION 'R2-P2: admin-B lost its authenticated bound tenant';
+  END IF;
+  FOREACH w IN ARRAY ARRAY[7,14,30] LOOP
+    expected_pages := CASE w
+      WHEN 7 THEN 5
+      WHEN 14 THEN 6
+      ELSE 8 END;
+
+    funnel_result := public.get_native_behavior_workspace_v1(tenant_id,w,default_events);
+    trends_result := public.get_native_behavior_event_trends_v1(tenant_id,w,default_events);
+    pages_result := public.get_native_behavior_page_breakdown_v1(tenant_id,w,'web.page_viewed');
+
+    IF funnel_result #>> '{status,available}' IS DISTINCT FROM 'true'
+      OR trends_result #>> '{status,available}' IS DISTINCT FROM 'true'
+      OR pages_result #>> '{status,available}' IS DISTINCT FROM 'true'
+      OR (funnel_result #>> '{status,window_days}')::integer IS DISTINCT FROM w
+      OR (trends_result #>> '{status,window_days}')::integer IS DISTINCT FROM w
+      OR (pages_result #>> '{status,window_days}')::integer IS DISTINCT FROM w
+      OR (trends_result #>> '{status,first_day_utc}') IS DISTINCT FROM
+        to_char((now() at time zone 'UTC')::date-(w-1),'YYYY-MM-DD')
+      OR (trends_result #>> '{status,last_day_utc}') IS DISTINCT FROM
+        to_char((now() at time zone 'UTC')::date,'YYYY-MM-DD')
+    THEN
+      RAISE EXCEPTION 'R2-P2: admin-B %d-day report availability/date boundary mismatch',w;
+    END IF;
+
+    FOR idx IN 0..2 LOOP
+      SELECT t.events,t.sessions INTO expected_events,expected_sessions
+      FROM pg_temp.r2_p2_expected_utc_aggregates t
+      WHERE t.organization_id=tenant_id AND t.days=w AND t.event_name=default_events[idx+1];
+      IF NOT FOUND THEN
+        RAISE EXCEPTION 'R2-P2: admin-B missing independent SQL event truth';
+      END IF;
+      IF (trends_result #>> ARRAY['series',idx::text,'event_name'])
+          IS DISTINCT FROM default_events[idx+1]
+        OR (trends_result #>> ARRAY['series',idx::text,'total_events'])::bigint
+          IS DISTINCT FROM expected_events
+        OR (trends_result #>> ARRAY['series',idx::text,'observed_sessions'])::bigint
+          IS DISTINCT FROM expected_sessions
+        OR (funnel_result #>> ARRAY['funnel',idx::text,'sessions'])::bigint
+          IS DISTINCT FROM expected_sessions
+        OR jsonb_array_length(trends_result #> ARRAY['series',idx::text,'daily'])
+          IS DISTINCT FROM w
+      THEN
+        RAISE EXCEPTION 'R2-P2: admin-B %d-day SQL-versus-RPC mismatch at step %',w,idx+1;
+      END IF;
+
+      SELECT coalesce(sum((entry.value->>'events')::bigint),0)
+      INTO observed_daily_sum
+      FROM jsonb_array_elements(trends_result #> ARRAY['series',idx::text,'daily']) entry(value);
+      IF observed_daily_sum IS DISTINCT FROM expected_events THEN
+        RAISE EXCEPTION 'R2-P2: admin-B %d-day daily sum does not equal independent SQL totals',w;
+      END IF;
+    END LOOP;
+
+    IF (pages_result #>> '{status,total_events}')::bigint IS DISTINCT FROM expected_pages
+       OR (pages_result #>> '{status,identified_sessions}')::bigint IS DISTINCT FROM expected_pages
+       OR (pages_result #>> '{pages,0,events}')::bigint IS DISTINCT FROM expected_pages
+       OR (pages_result #>> '{pages,0,path}') IS DISTINCT FROM '/courses/r2-fixture.php'
+       OR (funnel_result ->> 'path_sessions')::bigint IS DISTINCT FROM expected_pages
+    THEN
+      RAISE EXCEPTION 'R2-P2: admin-B %d-day page/path totals differ from synthetic SQL',w;
+    END IF;
+  END LOOP;
+END
+$r2_window_reconcile$;
 
 -- The entire fixture including raw_events, users and tenant bindings disappears.
 ROLLBACK;
