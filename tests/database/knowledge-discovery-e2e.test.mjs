@@ -180,6 +180,41 @@ test('full synthetic discovery tick loop produces truthful partial coverage with
       'The worker has no AI knowledge publication tables or side effects');
     assert.equal((await db.query(
       "select count(*)::int as n from public.knowledge_discovery_pages where job_id=$1",[jobId])).rows[0].n,7);
+
+    // A separate synthetic scan with a two-page cap may discover more links,
+    // but cannot enqueue or fetch an unbounded number of pages.
+    const capRow=await db.query(
+      'insert into public.knowledge_discovery_jobs(organization_id,created_by,seed_url,max_pages) values($1,$2,$3,2) returning id',
+      [ORG,USER,ROOT]);
+    const capId=capRow.rows[0].id;
+    await db.query(
+      'insert into public.knowledge_discovery_pages(organization_id,job_id,url,depth) values($1,$2,$3,0)',
+      [ORG,capId,ROOT]);
+    const capStatuses=[];
+    for(let tick=0;tick<4;tick++){
+      await db.query(
+        "update public.knowledge_discovery_jobs set next_allowed_at=now()-interval '1 second'"+
+        " where id=$1 and status='queued'",[capId]);
+      await serviceContext(db);
+      const taken=await db.query('select * from public.claim_knowledge_discovery_job_v1()');
+      await db.query('commit');
+      if(taken.rowCount===0)break;
+      assert.equal(taken.rowCount,1);
+      assert.equal(taken.rows[0].job_id,capId);
+      const outcome=await modules.runDiscoveryPageCore(taken.rows[0],store,fetchSite);
+      assert.equal(outcome.ok,true);
+      capStatuses.push(outcome.job.status);
+    }
+    assert.equal(capStatuses.length,2,'Strict two-page crawl cap');
+    const capped=await db.query(
+      'select status,pages_discovered,max_pages from public.knowledge_discovery_jobs where id=$1',[capId]);
+    assert.equal(capped.rows[0].pages_discovered,2);
+    assert.equal(capped.rows[0].max_pages,2);
+    assert.ok(['completed','partial'].includes(capped.rows[0].status));
+    assert.equal((await db.query(
+      'select count(*)::int as n from public.knowledge_discovery_pages where job_id=$1',
+      [capId])).rows[0].n,2);
+
   }finally{
     await Promise.allSettled(sessions.map(s=>s.end()));
     try{if(created)await admin.query('drop database "'+name+'" with (force)');}
