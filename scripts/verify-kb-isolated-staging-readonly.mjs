@@ -8,6 +8,7 @@
  */
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { inspectValidatedStagingJwtClaims } from './verify-kb-staging-jwt-claims.mjs';
 
 export const EXECUTION_PHRASE = 'I_APPROVE_READ_ONLY_KB_STAGING';
 export const FORBIDDEN_PROJECT_REFS = Object.freeze([
@@ -165,7 +166,10 @@ async function login(config, actor, label) {
   if (userResp.status !== 200 || userResp.data?.id !== actor.userId) {
     throw new Error('kb_staging_' + label + '_user_session_unverified');
   }
-  return resp.data.access_token;
+  const claims = inspectValidatedStagingJwtClaims(resp.data.access_token, {
+    userId: actor.userId, apiUrl: config.apiUrl,
+  });
+  return { token: resp.data.access_token, sessionId: claims.sessionId };
 }
 function requireNoRows(result, label) {
   if (result.status === 401 || result.status === 403) return;
@@ -211,8 +215,13 @@ export async function runKbStagingReadOnlyAcceptance(config) {
     FORBIDDEN_PROJECT_REFS.includes(config.ref)) {
     fail('unvalidated_runtime_configuration');
   }
-  const tokenA = await login(config, config.a, 'a');
-  const tokenB = await login(config, config.b, 'b');
+  const authA = await login(config, config.a, 'a');
+  const authB = await login(config, config.b, 'b');
+  if (authA.sessionId === authB.sessionId) {
+    throw new Error('kb_staging_duplicate_auth_sessions');
+  }
+  const tokenA = authA.token;
+  const tokenB = authB.token;
 
   await ownDoc(config, tokenA, config.a, 'a');
   await ownDoc(config, tokenB, config.b, 'b');

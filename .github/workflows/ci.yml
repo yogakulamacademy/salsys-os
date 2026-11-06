@@ -20,6 +20,8 @@ on:
       - feature/kb05b-knowledge-tenant-rls-negative-matrix
       # Temporary KB-05D stacked PR validation (offline only).
       - feature/kb05c-strict-monitoring-session-candidate
+      # Temporary KB-05E offline-only stacked validation.
+      - feature/kb05d-isolated-staging-auth-acceptance
   push:
     branches:
       - main
@@ -41,6 +43,7 @@ on:
       - feature/kb05b-knowledge-tenant-rls-negative-matrix
       - feature/kb05c-strict-monitoring-session-candidate
       - feature/kb05d-isolated-staging-auth-acceptance
+      - feature/kb05e-verified-staging-jwt-session-claims
 
 permissions:
   contents: read
