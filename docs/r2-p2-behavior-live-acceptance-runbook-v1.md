@@ -83,7 +83,7 @@ Issue #523 remains OPEN until owner/admin live browser, tenant-isolation and act
 
 Repeat with days=7, 14, and 30, and compare **distinct funnel session counts** for Page viewed, Form started and Form submitted to Marketing → Behavior's ordered funnel. The comparator also reports the source-scoped path_sessions denominator. Unlike Event Trends' UTC calendar-day range, the funnel RPC uses a *rolling* interval from the current timestamp; compare in close succession and investigate any ingestion/boundary drift. The 50,000-event cap is fail-closed: volume_limit is NOT an acceptable success state.
 
-The SQL deliberately uses the **same production native_funnel_depth_v1 helper** as the RPC to calculate ordered stage depth. This supports data scope/aggregation comparison but **does not independently prove helper correctness**; retain the existing synthetic ordering tests and human event-order checks. The script does not calculate or export individual page-to-page edges. Its aggregate path_sessions value is not evidence of safe or complete route display.
+The SQL uses an **independent three-step ordering check with PostgreSQL array ordinality**, rather than calling the live native_funnel_depth_v1 helper. Six synthetic, SELECT-only PostgreSQL ordering fixtures passed (complete, out-of-order, missing first, repeated, partial, later-completed). This provides a stronger comparison of ordering behavior but **does not replace user-level authorization or live UI reconciliation**; retain existing browser tests and human event-order checks. The script does not calculate or export individual page-to-page edges. Its aggregate path_sessions value is not evidence of safe or complete route display.
 
 ### Events by Page summary
 
