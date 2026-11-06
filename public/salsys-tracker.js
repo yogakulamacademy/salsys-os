@@ -552,6 +552,12 @@
       var decision = incoming && incoming.analytics;
       var priorDecision = previous && previous.analytics;
 
+      if (decision !== priorDecision || event.newValue === null) {
+        // Invalidate any older in-flight consent reply from this tab.
+        // It may not undo another tab's later privacy decision.
+        analyticsConsentRevision += 1;
+      }
+
       if (event.newValue === null || analyticsDenied(decision)) {
         if (!analyticsOptOutRequested || externalGrantAwaitingIdentity) {
           analyticsOptOutRequested = true;
