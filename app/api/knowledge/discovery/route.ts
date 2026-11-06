@@ -7,6 +7,7 @@ import { isExplicitCrossSiteRequest } from '@/lib/security/fetch-metadata';
 import { parseWebsiteSeed, WebsiteScopeError } from '@/lib/knowledge-discovery/url-policy';
 import { discoveryPilotEnabled, discoveryHostAllowed } from '@/lib/knowledge-discovery/pilot-gate';
 import { discoveryDomainVerified, discoveryVerificationHost } from '@/lib/knowledge-discovery/domain-verification';
+import { discoverySiteConsentActive } from '@/lib/knowledge-discovery/site-consent';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -66,6 +67,16 @@ export async function GET() {
       .eq('hostname', discoveryVerificationHost(website.hostname)).maybeSingle();
     if (proof.error) throw new Error('ownership_read_failed');
     const websiteVerified = discoveryDomainVerified(proof.data);
+    // A verified domain is not permission to crawl it. Explicit, active,
+    // purpose-limited tenant consent is a separate requirement.
+    const consent = await ctx.supabase.from('knowledge_discovery_site_consents')
+      .select('organization_id,hostname,purpose,status,policy_version,granted_by,granted_at,valid_until,withdrawn_at')
+      .eq('organization_id',ctx.organizationId)
+      .eq('hostname',discoveryVerificationHost(website.hostname)).maybeSingle();
+    if (consent.error) throw new Error('consent_read_failed');
+    const consentActive=discoverySiteConsentActive(
+      consent.data,ctx.organizationId,discoveryVerificationHost(website.hostname),
+    );
     const jobs = await ctx.supabase.from('knowledge_discovery_jobs')
       .select('id,seed_url,status,max_pages,pages_discovered,pages_fetched,pages_blocked,pages_failed,pages_skipped,last_error_code,created_at,finished_at')
       .eq('organization_id', ctx.organizationId).order('created_at', { ascending: false }).limit(10);
@@ -81,7 +92,7 @@ export async function GET() {
       pages = result.data ?? [];
     }
     return json({ ok: true, configuredWebsite, pilotEnabled: true,
-      websiteVerified, discoveryEnabled: websiteVerified,
+      websiteVerified,consentActive,discoveryEnabled:websiteVerified && consentActive,
       historyAvailable: true, jobs: jobs.data ?? [], pages });
   } catch {
     return json({ ok: false, error: 'Discovery data unavailable' }, 503);
@@ -120,6 +131,18 @@ export async function POST(request: NextRequest) {
     if (proofError) throw new Error('ownership_unavailable');
     if (!discoveryDomainVerified(proof)) {
       return json({ ok: false, error: 'Verify ownership of your business website before scanning.' }, 409);
+    }
+    // No consent grant endpoint is exposed in this draft. An absent, wrong
+    // purpose, revoked or expired consent fails before any job is queued.
+    const consent = await ctx.supabase.from('knowledge_discovery_site_consents')
+      .select('organization_id,hostname,purpose,status,policy_version,granted_by,granted_at,valid_until,withdrawn_at')
+      .eq('organization_id',ctx.organizationId)
+      .eq('hostname',discoveryVerificationHost(source.hostname)).maybeSingle();
+    if (consent.error) throw new Error('consent_read_failed');
+    if (!discoverySiteConsentActive(
+      consent.data,ctx.organizationId,discoveryVerificationHost(source.hostname),
+    )) {
+      return json({ok:false,error:'Explicit website discovery consent is missing or inactive.'},403);
     }
     const candidate = parseWebsiteSeed(typeof body.value.url === 'string' ? body.value.url : source.href);
     const canonical = (host: string) => host.toLowerCase().replace(/\.$/, '');
