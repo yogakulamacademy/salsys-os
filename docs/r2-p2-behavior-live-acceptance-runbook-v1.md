@@ -164,3 +164,42 @@ sessions and sign-off, tenant switching through the actual CRM login,
 user-interface-to-live-SQL reconciliation, live consent withdrawal/regrant,
 and verified retention-history completeness. Record these as BLOCKED or
 PENDING, not PASS, until independently witnessed. Issue #523 stays OPEN.
+
+
+## H. Exact 7/14/30-day SQL-to-RPC reconciliation in disposable PostgreSQL (2026-11-06)
+
+The existing positive two-tenant local test now includes **three synthetic
+UTC activity age bands** (recent, 10 days ago, and 22 days ago) for
+each isolated source and user. A local PostgreSQL-only independent SQL
+`SELECT` calculates event counts and distinct source-scoped session counts
+using each reporting RPC's UTC event/receipt window rules. Those expected
+aggregates are stored in a **transaction-local temporary table**, readable
+only for the duration of the test and dropped on final `ROLLBACK`.
+
+Under actual `authenticated` PostgreSQL roles and bound synthetic sessions,
+the test checks all **7-, 14-, and 30-day** results against the independently
+aggregated synthetic event rows, for each tenant:
+
+| Local synthetic tenant | 7-day page/start/submit | 14-day page/start/submit | 30-day page/start/submit |
+| --- | --- | --- | --- |
+| Owner A | 4 / 2 / 1 | 6 / 3 / 1 | 7 / 3 / 1 |
+| Admin B | 5 / 3 / 2 | 6 / 4 / 3 | 8 / 5 / 3 |
+
+For each window, the checks cover the ordered funnel step sessions,
+Event Activity per-event receipts/sessions, the sum of each returned
+daily series, exact UTC range metadata and row count, and Events by Page
+totals / identified sessions / privacy-safe public path totals.
+Existing bidirectional tenant denial and the single-active-membership
+guard must also keep passing.
+
+**Scope of proof:** This tests query window semantics and role/tenant
+boundaries for fabricated event histories under a clean migrated database,
+with zero new cloud resources, no real customer data, no service-role
+impersonation, no privacy/collector changes and no persisted fixtures.
+
+**Still required:** A verified owner/admin **real CRM browser session**
+and real tenant-specific `7/14/30` dashboard-to-operator-SQL comparison
+from the same observation interval, including late-arriving activity
+and the incomplete current UTC day. Synthetic comparisons must never
+be presented as final production acceptance or D1/D7/D30 retention evidence.
+The existing user-facing procedures in this runbook and issue #523 remain open.
