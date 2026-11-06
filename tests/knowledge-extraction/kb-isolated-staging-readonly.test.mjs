@@ -119,7 +119,7 @@ test('query URL construction is bounded to exact read-only knowledge paths',()=>
 function mockedResponse(status,body){
   return {status, async json(){return body;}};
 }
-function installSyntheticFetch({leak=false,missingPositive=false,badUser=false,duplicateSession=false}={}){
+function installSyntheticFetch({leak=false,missingPositive=false,badUser=false,duplicateSession=false,logoutFailure=false,secondLoginFails=false,badAuthUser=false}={}){
   const calls=[];
   const tokenA=fakeVerifiedJwt(A,SESSION_A);
   const tokenB=fakeVerifiedJwt(B,duplicateSession?SESSION_A:SESSION_B);
@@ -136,16 +136,24 @@ function installSyntheticFetch({leak=false,missingPositive=false,badUser=false,d
       const actor=body.email===A.email?A:B;
       assert.ok([A.email,B.email].includes(body.email));
       assert.equal(body.password,actor.password);
+      if(secondLoginFails&&actor===B)return mockedResponse(401,{error:'unauthorized'});
       return mockedResponse(200,{
         access_token:body.email===A.email?tokenA:tokenB,
         user:{id:badUser?'90000000-0000-4000-8000-000000000001':actor.userId},
       });
     }
+    if(pathname==='/auth/v1/logout'){
+      assert.equal(method,'POST');
+      assert.equal(u.searchParams.get('scope'),'local');
+      assert.equal(init.headers.Authorization?.startsWith('Bearer '),true);
+      assert.equal(init.body,undefined);
+      return mockedResponse(logoutFailure?503:204,null);
+    }
     assert.equal(method,'GET');
     const token=init.headers.Authorization?.replace('Bearer ','')??'anon';
     const actor=token===tokenA?A:token===tokenB?B:null;
     if(pathname==='/auth/v1/user')return mockedResponse(200,{
-      id:actor?.userId,
+      id:badAuthUser?'90000000-0000-4000-8000-000000000001':actor?.userId,
     });
     if(pathname==='/rest/v1/knowledge_documents'){
       const id=u.searchParams.get('id')?.slice(3);
@@ -175,9 +183,16 @@ test('mocked two-tenant acceptance uses ONLY auth session POSTs and data GETs',a
     assert.equal(result.result,'passed_read_only_staging_retrieval');
     assert.equal(result.checks,12);
     assert.equal(result.knowledgeWrites,0);
-    assert.equal(fake.calls.filter(x=>x.method==='POST').length,2);
-    assert.ok(fake.calls.filter(x=>x.method==='POST').every(
-      x=>x.path==='/auth/v1/token'));
+    assert.equal(result.localSessionRevocationsAcknowledged,2);
+    assert.equal(result.authLogoutScope,'local');
+    assert.equal(result.accessTokensMaySurviveUntilJwtExpiry,true);
+    assert.equal(fake.calls.filter(x=>x.method==='POST').length,4);
+    assert.equal(fake.calls.filter(x=>x.path==='/auth/v1/token').length,2);
+    assert.equal(fake.calls.filter(x=>x.path==='/auth/v1/logout').length,2);
+    assert.ok(fake.calls.filter(x=>x.method==='POST').every(x=>
+      ['/auth/v1/token','/auth/v1/logout'].includes(x.path)));
+    assert.ok(fake.calls.filter(x=>x.path==='/auth/v1/logout').every(x=>
+      new URL(x.url).searchParams.get('scope')==='local'));
     assert.ok(fake.calls.filter(x=>x.method==='GET').every(x=>
       ['/auth/v1/user','/rest/v1/knowledge_documents',
         '/rest/v1/rpc/search_organization_knowledge_v1'].includes(x.path)));
@@ -191,6 +206,7 @@ test('mocked cross-tenant data leakage fails rather than being counted as denial
       runKbStagingReadOnlyAcceptance(validateKbStagingEnvironment(baseEnv())),
       /cross_tenant_leak/,
     );
+    assert.equal(fake.calls.filter(x=>x.path==='/auth/v1/logout').length,2);
   }finally{fake.restore();}
 });
 test('missing positive fixture fails, preventing vacuous isolation success',async()=>{
@@ -200,6 +216,7 @@ test('missing positive fixture fails, preventing vacuous isolation success',asyn
       runKbStagingReadOnlyAcceptance(validateKbStagingEnvironment(baseEnv())),
       /missing_positive_fixture/,
     );
+    assert.equal(fake.calls.filter(x=>x.path==='/auth/v1/logout').length,2);
   }finally{fake.restore();}
 });
 test('wrong authenticated staging account fails before knowledge reads',async()=>{
@@ -210,6 +227,7 @@ test('wrong authenticated staging account fails before knowledge reads',async()=
       /authentication_or_identity_failed/,
     );
     assert.equal(fake.calls.filter(x=>x.path.startsWith('/rest/v1/')).length,0);
+    assert.equal(fake.calls.filter(x=>x.path==='/auth/v1/logout').length,1);
   }finally{fake.restore();}
 });
 
@@ -248,5 +266,6 @@ test('two staging actors cannot reuse the same Auth session ID',async()=>{
       /duplicate_auth_sessions/,
     );
     assert.equal(fake.calls.filter(x=>x.path.startsWith('/rest/v1/')).length,0);
+    assert.equal(fake.calls.filter(x=>x.path==='/auth/v1/logout').length,2);
   }finally{fake.restore();}
 });
