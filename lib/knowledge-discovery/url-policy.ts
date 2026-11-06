@@ -96,9 +96,9 @@ export async function pinPublicAddress(
   return addresses[0];
 }
 
-function comparableHost(host: string): string { return host.toLowerCase().replace(/^www\./, ''); }
+function comparableHost(host: string): string { return host.toLowerCase().replace(/\.$/, ''); }
 
-/** Never follow a discovered link outside the supplied site's exact/www hostname pair. */
+/** Never follow a discovered link outside the EXACT verified hostname. */
 export function scopedDiscoveredUrl(seed: URL, page: URL, rawHref: string): URL | null {
   if (!rawHref || rawHref.length > 2048 || /^[\s\u0000-\u001f]*#/.test(rawHref)) return null;
   let next: URL;
