@@ -79,24 +79,26 @@ export async function POST(request: NextRequest) {
   try {
     const ctx = await context();
     if (!ctx) return json({ ok: false, error: 'Not authorized or pilot not enabled' }, 403);
-    const existing = await readVerification(ctx.org, ctx.hostname);
-    if (discoveryDomainVerified(existing)) {
+    // The database owns the cooldown check and the upsert in one transaction.
+    // Two simultaneous admin requests cannot issue conflicting valid tokens.
+    const challenge = newDomainChallenge();
+    const { data: expiry, error } = await createAdminClient().rpc(
+      'issue_knowledge_discovery_domain_challenge_v1',
+      {
+        p_organization_id: ctx.org,
+        p_hostname: ctx.hostname,
+        p_created_by: ctx.userId,
+        p_challenge_hash: challenge.tokenHash,
+      },
+    );
+    if (error?.code === 'P0001' && error.message === 'domain_already_verified') {
       return json({ ok: false, error: 'Website ownership is already verified.' }, 409);
     }
-    if (existing && Date.parse(existing.issued_at) + 5 * 60_000 > Date.now()) {
-      return json({ ok: false, error: 'An ownership challenge was recently issued. Try again later.' }, 429);
+    if (error?.code === 'P0001' && error.message === 'domain_challenge_cooldown') {
+      return json({ ok: false,
+        error: 'An ownership challenge was recently issued. Try again later.' }, 429);
     }
-
-    const challenge = newDomainChallenge();
-    const expiry = new Date(Date.now() + 24 * 60 * 60_000).toISOString();
-    const { error } = await createAdminClient().from('knowledge_discovery_domain_verifications')
-      .upsert({
-        organization_id: ctx.org, hostname: ctx.hostname, created_by: ctx.userId,
-        challenge_hash: challenge.tokenHash,
-        issued_at: new Date().toISOString(), challenge_expires_at: expiry,
-        verified_at: null, verified_until: null,
-      }, { onConflict: 'organization_id,hostname' });
-    if (error) throw error;
+    if (error || !expiry) throw error ?? new Error('Challenge issue failed');
     return json({ ok: true, hostname: ctx.seed.hostname, proofPath: DOMAIN_PROOF_PATH,
       token: challenge.token, challengeExpiresAt: expiry, status: 'pending' }, 201);
   } catch {
@@ -113,6 +115,18 @@ export async function PUT(request: NextRequest) {
     if (!existing || Date.parse(existing.challenge_expires_at) <= Date.now()) {
       return json({ ok: false, error: 'Ownership challenge missing or expired.' }, 409);
     }
+    const { data: canCheck, error: checkError } = await createAdminClient().rpc(
+      'claim_knowledge_discovery_proof_check_v1',
+      {
+        p_organization_id: ctx.org,
+        p_hostname: ctx.hostname,
+        p_challenge_hash: existing.challenge_hash,
+      },
+    );
+    if (checkError) throw checkError;
+    if (canCheck !== true) return json({
+      ok: false, error: 'Website verification was checked recently. Try again shortly.',
+    }, 429);
     const verificationUrl = new URL(DOMAIN_PROOF_PATH, ctx.seed.origin);
     // Respect robots before accessing even the well-known ownership proof.
     const robots = await fetchPublicWeb(ctx.seed, new URL('/robots.txt', ctx.seed.origin), 'robots');
