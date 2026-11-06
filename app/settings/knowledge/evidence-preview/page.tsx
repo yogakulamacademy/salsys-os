@@ -3,6 +3,7 @@ import { prepareHtml5WebsiteEvidence } from '@/lib/knowledge-extraction/html5-vi
 import { KnowledgeEvidenceReviewPreview } from '@/components/knowledge-evidence-review-preview';
 import { prepareSourceGroundedDrafts } from '@/lib/knowledge-extraction/source-grounded-drafts';
 import { analyzeSourceReviewSignals } from '@/lib/knowledge-extraction/source-review-signals';
+import { buildAIDraftingRequest, validateAIDraftingResponse } from '@/lib/knowledge-extraction/ai-draft-contract';
 
 export const dynamic = 'force-dynamic';
 
@@ -85,11 +86,39 @@ export default async function EvidenceReviewPreviewPage() {
     },
   );
   if(!differences.ok)throw new Error('Synthetic source comparison failed.');
+  // KB-03C: Simulated model JSON demonstrates the output gate only. There
+  // is no LLM provider, network call, evidence write or approval action.
+  const aiEnvelope=buildAIDraftingRequest([candidates.bundle],'sample.example.com');
+  if(!aiEnvelope.ok)throw new Error('Synthetic AI request fixture failed validation.');
+  const feeEvidence=aiEnvelope.request.evidence.find(item=>
+    item.exactAnswerQuote==='Introduction workshop | $150');
+  const faqEvidence=aiEnvelope.request.evidence.find(item=>
+    item.originalQuestion==='Can I reschedule?');
+  if(!feeEvidence||!faqEvidence)throw new Error('Synthetic AI evidence fixture incomplete.');
+  const simulatedAI=validateAIDraftingResponse({
+    schemaVersion:'kb03c-v1',
+    requestId:aiEnvelope.request.requestId,
+    proposals:[
+      {
+        kind:'faq',sourceDraftId:feeEvidence.sourceDraftId,
+        question:'What is the fee for the introduction workshop?',
+        answer:feeEvidence.exactAnswerQuote,
+      },
+      {
+        kind:'faq',sourceDraftId:faqEvidence.sourceDraftId,
+        question:'Can I reschedule?',
+        answer:faqEvidence.exactAnswerQuote,
+      },
+    ],
+  },aiEnvelope.request);
+  if(!simulatedAI.ok)throw new Error('Synthetic AI response fixture failed validation.');
+
   return (
     <KnowledgeEvidenceReviewPreview
       evidence={result.evidence}
       sourceCandidates={candidates.bundle}
       reviewSignals={differences.report}
+      simulatedAIProposals={simulatedAI.result}
     />
   );
 }
