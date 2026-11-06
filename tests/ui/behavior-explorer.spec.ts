@@ -297,3 +297,53 @@ test("Partial behavior reporting failures keep independent panels usable without
     await request.get(fixtureBase + "/__behavior_scenario?state=ready&tenant=primary");
   }
 });
+
+test("Malformed aggregate counts do not impersonate observed zeroes in independent reports", async ({ page, request }) => {
+  const publicPath = "/courses/200-hour-ytt.php";
+  const scenarios = ["malformed-funnel-count", "malformed-trends-count", "malformed-breakdown-count"] as const;
+  const paths = page.getByRole("region", { name: "Popular navigation paths" });
+  const trends = page.getByRole("region", { name: "Event activity trends" });
+  const breakdown = page.getByRole("region", { name: "Event page breakdown" });
+
+  try {
+    for (const state of scenarios) {
+      const setup = await request.get(fixtureBase + "/__behavior_scenario?state=" + state);
+      expect(setup.ok(), state).toBe(true);
+      await page.goto("/marketing?view=behavior");
+
+      if (state === "malformed-funnel-count") {
+        await expect(page.getByRole("heading", { name: "Behavior analytics unavailable" })).toBeVisible();
+        await expect(paths.getByText(publicPath, { exact: true })).toHaveCount(0);
+        await expect(page.getByRole("heading", { name: "Ordered funnel" })).toHaveCount(0);
+      } else {
+        await expect(page.getByRole("heading", { name: "Ordered funnel" })).toBeVisible();
+        await expect(paths.getByText(publicPath, { exact: true })).toBeVisible();
+      }
+
+      if (state === "malformed-trends-count") {
+        await expect(trends.getByRole("status")).toBeVisible();
+        await expect(trends.getByRole("article", { name: "Page viewed event trend" })).toHaveCount(0);
+      } else {
+        await expect(trends.getByRole("article", { name: "Page viewed event trend" })).toBeVisible();
+      }
+
+      if (state === "malformed-breakdown-count") {
+        await expect(breakdown.getByRole("status")).toBeVisible();
+        await expect(breakdown.getByText(publicPath, { exact: true })).toHaveCount(0);
+      } else {
+        await expect(breakdown.getByText(publicPath, { exact: true })).toBeVisible();
+      }
+
+      for (const endpoint of [
+        "/__behavior_calls", "/__behavior_trend_calls", "/__behavior_breakdown_calls",
+      ]) {
+        const calls = await (await request.get(fixtureBase + endpoint)).json();
+        expect(calls.length, state + endpoint).toBeGreaterThan(0);
+        expect(calls.every((call: { organization_id: string }) =>
+          call.organization_id === organizationId), state + endpoint).toBe(true);
+      }
+    }
+  } finally {
+    await request.get(fixtureBase + "/__behavior_scenario?state=ready&tenant=primary");
+  }
+});
