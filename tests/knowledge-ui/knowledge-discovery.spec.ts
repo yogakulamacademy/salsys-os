@@ -50,6 +50,7 @@ test('discovery operator can queue and cancel a simulated scan without API or da
     }
     await route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({
       ok:true,configuredWebsite:'https://fixture.example.com/',
+      discoveryEnabled:true,historyAvailable:true,
       jobs:latest?[latest]:[],pages:[],
     })});
   });
@@ -75,6 +76,7 @@ test('partial scan inventory is truthful and has no mobile overflow',async({page
     await route.fulfill({status:200,contentType:'application/json',
       body:JSON.stringify({
         ok:true,configuredWebsite:'https://fixture.example.com/',
+      discoveryEnabled:true,historyAvailable:true,
         jobs:[{
           id:'11111111-1111-4111-8111-111111111111',
           seed_url:'https://fixture.example.com/',status:'partial',
@@ -111,4 +113,22 @@ test('discovery dependency outage does not masquerade as an empty scan',async({p
   await expect(page.getByRole('alert').filter({ hasText: 'Discovery data unavailable' })).toHaveCount(1);
   await expect(page.getByRole('button',{name:'Start discovery'})).toBeDisabled();
   await expect(page.getByText('No scans yet.')).toHaveCount(0);
+});
+
+
+test('paused pilot is read-only and cannot initiate new scans',async({page})=>{
+  let mutations=0;
+  await page.route('**/api/knowledge/discovery',async route=>{
+    if(route.request().method()!=='GET')mutations++;
+    await route.fulfill({status:200,contentType:'application/json',
+      body:JSON.stringify({
+        ok:true,configuredWebsite:'https://fixture.example.com/',
+        discoveryEnabled:false,historyAvailable:false,jobs:[],pages:[],
+      })});
+  });
+  await page.goto('/settings/knowledge/discovery');
+  await expect(page.getByText('Website discovery is paused or this domain has not been approved for the pilot.')).toBeVisible();
+  await expect(page.getByText('Scan history is unavailable while discovery is disabled.')).toBeVisible();
+  await expect(page.getByRole('button',{name:'Start discovery'})).toBeDisabled();
+  expect(mutations).toBe(0);
 });
