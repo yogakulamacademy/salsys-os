@@ -7,6 +7,8 @@ on:
   push:
     branches:
       - main
+      # Temporary stacked-PR validation; remove before KB-02 targets main.
+      - feature/kb02-source-evidence-core
 
 permissions:
   contents: read
