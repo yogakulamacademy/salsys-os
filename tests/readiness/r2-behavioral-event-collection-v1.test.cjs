@@ -29,7 +29,7 @@ function node(attributes = {}) {
     },
     matches(selector) {
       return selector === 'details[data-salsys-faq-id]' &&
-        Boolean(attributes['data-salsys-faq-id']);
+        Boolean(attributes['data-salsys-faq-id']) && attributes.isDetails === true;
     },
     closest(selector) {
       if (selector === '[data-salsys-brochure-id]' && attributes['data-salsys-brochure-id']) return item;
