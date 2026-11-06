@@ -71,18 +71,21 @@ async function requestPinned(url: URL, address: string, family: 4 | 6, limitByte
 }
 
 export async function fetchPublicWeb(
-  seed: URL, candidate: URL, kind: 'html' | 'robots' | 'sitemap',
+  seed: URL, candidate: URL, kind: 'html' | 'robots' | 'sitemap' | 'verification',
   resolver?: LookupAddresses,
   transport: typeof requestPinned = requestPinned,
   authorizeRedirect?: (next: URL) => Promise<void>,
 ): Promise<PublicWebResponse> {
   let current = candidate;
-  const byteLimit = kind === 'html' ? 512 * 1024 : 256 * 1024;
+  const byteLimit = kind === 'html' ? 512 * 1024 : kind === 'verification' ? 4 * 1024 : 256 * 1024;
   for (let redirect = 0; redirect <= 3; redirect++) {
     if (!scopedDiscoveredUrl(seed, current, current.href)) throw new WebsiteFetchError('offsite_or_unsafe_url');
     const pinned = await pinPublicAddress(current, resolver);
     const reply = await transport(current, pinned.address, pinned.family, byteLimit);
     if ([301, 302, 303, 307, 308].includes(reply.status)) {
+      // Ownership proof must come from the configured host itself, not a
+      // different www/alias or forwarding endpoint.
+      if (kind === 'verification') throw new WebsiteFetchError('verification_redirect_not_allowed');
       if (!reply.location || redirect === 3) throw new WebsiteFetchError('redirect_limit');
       const next = scopedDiscoveredUrl(seed, current, reply.location);
       if (!next) throw new WebsiteFetchError('redirect_out_of_scope');
@@ -104,7 +107,9 @@ export async function fetchPublicWeb(
       ? /^(text\/html|application\/xhtml\+xml)\b/.test(reply.contentType)
       : kind === 'robots'
         ? /^text\/plain\b/.test(reply.contentType)
-        : /^(application\/xml|text\/xml|text\/plain|application\/octet-stream)\b/.test(reply.contentType);
+        : kind === 'verification'
+          ? /^text\/plain\b/.test(reply.contentType)
+          : /^(application\/xml|text\/xml|text\/plain|application\/octet-stream)\b/.test(reply.contentType);
     if (reply.status !== 404 && !supported) throw new WebsiteFetchError('unsupported_content_type');
     return { url: current.href, status: reply.status, contentType: reply.contentType, body: reply.body };
   }
