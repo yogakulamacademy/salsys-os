@@ -36,6 +36,7 @@ export type AIDraftingRequest = {
   schemaVersion:'kb03c-v1';
   requestId:string;
   mode:'synthetic_proposal_contract';
+  verifiedHostname:string;
   systemRules:readonly string[];
   evidence:AIRequestEvidence[];
   expectedResponse:{
@@ -206,6 +207,7 @@ export function buildAIDraftingRequest(
   return {ok:true,request:{
     schemaVersion:'kb03c-v1',requestId,
     mode:'synthetic_proposal_contract',
+    verifiedHostname,
     systemRules:[...SYSTEM_RULES],
     evidence,
     expectedResponse:{schemaVersion:'kb03c-v1',requestId,proposals:[]},
@@ -229,6 +231,58 @@ function validQuestion(q:string,source:AIRequestEvidence):boolean {
   return numericalTokens(q).every(token=>tokens.includes(token));
 }
 
+/**
+ * Do not trust a mutable request object after construction. Recompute the
+ * draft identity, source hash, exact quotation, URL scope and request ID
+ * before validating *any* untrusted model output.
+ */
+function validRequestEvidence(item:AIRequestEvidence,host:string):boolean {
+  if(!item||!HASH.test(item.sourceDraftId)||
+    !['faq_pair','source_statement'].includes(item.sourceKind)||
+    typeof item.exactAnswerQuote!=='string'||!item.exactAnswerQuote.trim()||
+    item.exactAnswerQuote.length>MAX_QUOTE||!Array.isArray(item.riskReminders)||
+    item.riskReminders.length>4||
+    item.riskReminders.some(r=>![
+      'pricing_or_amounts','dates_and_schedule','policy_or_eligibility',
+      'sensitive_claim_review',
+    ].includes(r)))return false;
+
+  const answer=item.answerCitation;
+  if(!answer||!allowedHost(answer.sourceUrl,host)||
+    !HASH.test(answer.snapshotSha256)||!HASH.test(answer.blockId)||
+    !HASH.test(answer.quoteSha256)||answer.exactQuote!==item.exactAnswerQuote||
+    hash(answer.exactQuote)!==answer.quoteSha256||
+    !Number.isSafeInteger(answer.sourceBlockIndex)||
+    answer.sourceBlockIndex<0||answer.sourceBlockIndex>250||
+    typeof answer.fetchedAt!=='string'||
+    !Number.isFinite(Date.parse(answer.fetchedAt))||
+    !Array.isArray(answer.headingPath)||answer.headingPath.length>6||
+    answer.headingPath.some(h=>typeof h!=='string'||!h||h.length>300)){
+    return false;
+  }
+  if(item.sourceKind==='source_statement') {
+    return item.originalQuestion===null&&item.questionCitation===null&&
+      hash(JSON.stringify([answer.snapshotSha256,'source_statement',
+        answer.blockId]))===item.sourceDraftId;
+  }
+  const q=item.questionCitation;
+  return typeof item.originalQuestion==='string'&&
+    item.originalQuestion.length<=MAX_QUESTION&&
+    item.originalQuestion.endsWith('?')&&
+    !!q&&allowedHost(q.sourceUrl,host)&&
+    q.sourceUrl===answer.sourceUrl&&q.snapshotSha256===answer.snapshotSha256&&
+    q.fetchedAt===answer.fetchedAt&&
+    HASH.test(q.blockId)&&HASH.test(q.quoteSha256)&&
+    typeof q.exactQuote==='string'&&q.exactQuote===item.originalQuestion&&
+    hash(q.exactQuote)===q.quoteSha256&&
+    q.sourceBlockIndex+1===answer.sourceBlockIndex&&
+    Array.isArray(q.headingPath)&&
+    q.headingPath.length===answer.headingPath.length&&
+    q.headingPath.every((h,i)=>h===answer.headingPath[i])&&
+    hash(JSON.stringify([answer.snapshotSha256,'faq_pair',
+      q.blockId,answer.blockId]))===item.sourceDraftId;
+}
+
 export function validateAIDraftingResponse(
   raw:unknown, request:AIDraftingRequest,
 ):AIResponseValidation {
@@ -237,7 +291,17 @@ export function validateAIDraftingResponse(
     request.canCallModel!==false||request.canStore!==false||
     request.canPublish!==false||!HASH.test(request.requestId)||
     !Array.isArray(request.evidence)||request.evidence.length>MAX_SOURCES||
-    !Array.isArray(request.systemRules)||!Array.isArray(request.expectedResponse?.proposals)){
+    !Array.isArray(request.systemRules)||
+    request.systemRules.length!==SYSTEM_RULES.length||
+    request.systemRules.some((rule,i)=>rule!==SYSTEM_RULES[i])||
+    request.expectedResponse?.schemaVersion!=='kb03c-v1'||
+    request.expectedResponse?.requestId!==request.requestId||
+    !Array.isArray(request.expectedResponse?.proposals)||
+    request.expectedResponse.proposals.length!==0||
+    request.evidence.some(e=>!validRequestEvidence(e,request.verifiedHostname))||
+    hash(JSON.stringify(request.evidence.map(x=>[
+      x.sourceDraftId,x.answerCitation.snapshotSha256,x.answerCitation.quoteSha256,
+    ])))!==request.requestId){
     return {ok:false,error:'invalid_drafting_request'};
   }
   if(!plainObject(raw)||!exactKeys(raw,['schemaVersion','requestId','proposals'])||
