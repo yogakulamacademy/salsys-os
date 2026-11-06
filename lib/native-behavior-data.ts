@@ -3,6 +3,7 @@ import "server-only";
 import { createClient } from "@/lib/supabase/server";
 import { requireCurrentOrganizationId } from "@/lib/workspace";
 import type { BehaviorEvent } from "@/lib/native-behavior-contract";
+import { safeBehaviorCount } from "@/lib/native-behavior-safe-count";
 
 export type BehaviorStep = { event_name: string; sessions: number };
 export type BehaviorPath = {
@@ -59,11 +60,6 @@ function safePublicPath(value: string): boolean {
     && !/(^|\/)(account|profile|users?|students?|private|admin|dashboard|settings|session|token|reset-password|payments?|orders?|checkout|leads?|api|auth)(\/|\.|$)/i.test(value);
 }
 
-function number(value: unknown): number {
-  const numeric = Number(value);
-  return Number.isSafeInteger(numeric) && numeric >= 0 ? numeric : 0;
-}
-
 export async function getNativeBehaviorWorkspace(
   request: { days: 7 | 14 | 30; steps: BehaviorEvent[] },
 ): Promise<NativeBehaviorWorkspace> {
@@ -100,35 +96,42 @@ export async function getNativeBehaviorWorkspace(
       );
     }
 
-    const funnel = Array.isArray(value.funnel)
-      ? value.funnel.slice(0, 5).map((entry: unknown) => {
-          const row = entry && typeof entry === "object"
-            ? entry as Record<string, unknown>
-            : {};
-          return { event_name: String(row.event_name || ""), sessions: number(row.sessions) };
-        })
-      : [];
-    if (funnel.length !== steps.length || funnel.some((item, index) =>
-      item.event_name !== steps[index])) {
+    // A failed/partial RPC must not present missing counts as observed zeroes.
+    if (status.window_days !== days
+      || status.aggregation_unit !== "source_scoped_visitor_session"
+      || status.path_min_visitors !== 3
+      || !Array.isArray(value.funnel) || value.funnel.length !== steps.length
+      || !Array.isArray(value.paths) || value.paths.length > 12) {
       return empty(days, steps);
     }
 
-    const paths = Array.isArray(value.paths)
-      ? value.paths.slice(0, 12).flatMap((entry: unknown): BehaviorPath[] => {
-          if (!entry || typeof entry !== "object") return [];
-          const row = entry as Record<string, unknown>;
-          const from = String(row.from_path || "");
-          const to = String(row.to_path || "");
-          // A second output guard avoids exposing unexpected raw paths if SQL changes.
-          if (!safePublicPath(from) || !safePublicPath(to)) return [];
-          return [{
-            from_path: from,
-            to_path: to,
-            sessions: number(row.sessions),
-            transitions: number(row.transitions),
-          }];
-        })
-      : [];
+    const funnel: BehaviorStep[] = [];
+    for (let index = 0; index < steps.length; index++) {
+      const entry = value.funnel[index];
+      if (!entry || typeof entry !== "object" || Array.isArray(entry)) return empty(days, steps);
+      const row = entry as Record<string, unknown>;
+      const sessions = safeBehaviorCount(row.sessions);
+      if (row.event_name !== steps[index] || sessions === null
+        || (index > 0 && sessions > funnel[index - 1].sessions)) return empty(days, steps);
+      funnel.push({ event_name: steps[index], sessions });
+    }
+
+    const pathSessions = safeBehaviorCount(value.path_sessions);
+    if (pathSessions === null) return empty(days, steps);
+    const paths: BehaviorPath[] = [];
+    for (const entry of value.paths) {
+      if (!entry || typeof entry !== "object" || Array.isArray(entry)) return empty(days, steps);
+      const row = entry as Record<string, unknown>;
+      const from = typeof row.from_path === "string" ? row.from_path : "";
+      const to = typeof row.to_path === "string" ? row.to_path : "";
+      // Keep filtering unexpected private routes rather than echoing them.
+      if (!safePublicPath(from) || !safePublicPath(to)) continue;
+      const sessions = safeBehaviorCount(row.sessions);
+      const transitions = safeBehaviorCount(row.transitions);
+      if (sessions === null || transitions === null || transitions < sessions
+        || sessions > pathSessions) return empty(days, steps);
+      paths.push({ from_path: from, to_path: to, sessions, transitions });
+    }
 
     return {
       available: true,
@@ -139,9 +142,9 @@ export async function getNativeBehaviorWorkspace(
       aggregationUnit: "source_scoped_visitor_session",
       funnel,
       paths,
-      pathSessions: number(value.path_sessions),
+      pathSessions,
       minPathSessions: 3,
-      minPathVisitors: number(status.path_min_visitors) || 3,
+      minPathVisitors: 3,
     };
   } catch {
     return empty(days, steps);
