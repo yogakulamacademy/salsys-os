@@ -101,20 +101,21 @@ test('full synthetic discovery tick loop produces truthful partial coverage with
         case '/':
           return bodyResponse('<title>Synthetic home</title>'
           +'<a href="/about">About</a><a href="/private">Private</a>'
-          +'<a href="/broken">Bad</a><a href="/redirect">Redirect</a>'
+          +'<a href="/broken">Bad</a><a href="/redirect">Redirect</a><a href="/redirect-private">Private redirect</a>'
           +'<a href="/not-html">PDF</a>'
           +'<a href="http://169.254.169.254/latest/meta-data">Invalid</a>');
         case '/about':return bodyResponse('<title>Synthetic about</title>');
         case '/sitemap-only':return bodyResponse('<title>Via sitemap</title>');
         case '/redirect':return {status:302,location:'/about',contentType:'text/html',body:''};
+        case '/redirect-private':return {status:302,location:'/private',contentType:'text/html',body:''};
         case '/broken':return {status:503,location:null,contentType:'text/html',body:'Bad gateway'};
         case '/not-html':return bodyResponse('%PDF-1.7','application/pdf');
         case '/private':throw new Error('Robots blocked page was requested');
         default:throw new Error('Unexpected synthetic URL: '+url.href);
       }
     };
-    const fetchSite=(seed,url,kind)=>modules.fetchPublicWeb(
-      seed,url,kind,resolveFixture,fixtureTransport);
+    const fetchSite=(seed,url,kind,authorizeRedirect)=>modules.fetchPublicWeb(
+      seed,url,kind,resolveFixture,fixtureTransport,authorizeRedirect);
 
     const store={
       async pending(claim){
@@ -155,12 +156,12 @@ test('full synthetic discovery tick loop produces truthful partial coverage with
       results.push(progress);
       assert.equal(progress.ok,true);
     }
-    assert.equal(results.length,7);
+    assert.equal(results.length,8);
     const state=(await db.query(
       'select status,pages_discovered,pages_fetched,pages_blocked,pages_failed,pages_skipped from public.knowledge_discovery_jobs where id=$1',[jobId])).rows[0];
     assert.deepEqual(state,{
-      status:'partial',pages_discovered:7,pages_fetched:4,
-      pages_blocked:1,pages_failed:2,pages_skipped:0,
+      status:'partial',pages_discovered:8,pages_fetched:4,
+      pages_blocked:2,pages_failed:2,pages_skipped:0,
     });
     const pages=(await db.query(
       'select url,status,page_title,failure_code from public.knowledge_discovery_pages where job_id=$1',[jobId])).rows;
@@ -168,6 +169,8 @@ test('full synthetic discovery tick loop produces truthful partial coverage with
     assert.equal(byPath['/'].page_title,'Synthetic home');
     assert.equal(byPath['/private'].status,'blocked');
     assert.equal(byPath['/private'].failure_code,'robots_disallow');
+    assert.equal(byPath['/redirect-private'].status,'blocked');
+    assert.equal(byPath['/redirect-private'].failure_code,'robots_disallow');
     assert.equal(byPath['/broken'].status,'failed');
     assert.equal(byPath['/broken'].failure_code,'remote_temporarily_unavailable');
     assert.equal(byPath['/not-html'].status,'failed');
@@ -179,7 +182,7 @@ test('full synthetic discovery tick loop produces truthful partial coverage with
     assert.equal((await db.query("select to_regclass('public.knowledge_documents') as relation")).rows[0].relation,null,
       'The worker has no AI knowledge publication tables or side effects');
     assert.equal((await db.query(
-      "select count(*)::int as n from public.knowledge_discovery_pages where job_id=$1",[jobId])).rows[0].n,7);
+      "select count(*)::int as n from public.knowledge_discovery_pages where job_id=$1",[jobId])).rows[0].n,8);
 
     // A separate synthetic scan with a two-page cap may discover more links,
     // but cannot enqueue or fetch an unbounded number of pages.
