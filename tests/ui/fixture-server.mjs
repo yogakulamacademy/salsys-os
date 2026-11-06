@@ -36,7 +36,7 @@ const server=http.createServer(async(req,res)=>{
   if(url.pathname==='/__behavior_scenario'){
     const state=url.searchParams.get('state');
     const tenant=url.searchParams.get('tenant')||'primary';
-    if(!['ready','empty','small','denied','error','funnel-error','trends-error','breakdown-error','malformed-funnel-count','malformed-trends-count','malformed-breakdown-count'].includes(state) ||
+    if(!['ready','empty','small','denied','error','funnel-error','trends-error','breakdown-error','malformed-funnel-count','malformed-trends-count','malformed-breakdown-count','trends-shifted-calendar','trends-stale-window'].includes(state) ||
        !['primary','secondary'].includes(tenant)){res.statusCode=400;res.end('{}');return;}
     behaviorScenario=state;behaviorTenant=tenant;
     behaviorCalls=[];behaviorTrendCalls=[];behaviorBreakdownCalls=[];
@@ -164,6 +164,20 @@ const server=http.createServer(async(req,res)=>{
       })
     };
     if(behaviorScenario==='malformed-trends-count') result.series[0].daily[0].sessions=null;
+    if(behaviorScenario==='trends-shifted-calendar'){
+      // Still valid and sorted, yet one date is outside the claimed calendar domain.
+      result.series[0].daily[0].date_utc=
+        new Date(midnight.getTime()-body.p_days*86400000).toISOString().slice(0,10);
+    }
+    if(behaviorScenario==='trends-stale-window'){
+      // Consistent historical days/status are not the report's current UTC day.
+      const shift=(day)=>new Date(Date.parse(day+'T00:00:00Z')-86400000).toISOString().slice(0,10);
+      result.status.first_day_utc=shift(result.status.first_day_utc);
+      result.status.last_day_utc=shift(result.status.last_day_utc);
+      for(const series of result.series){
+        for(const day of series.daily) day.date_utc=shift(day.date_utc);
+      }
+    }
   }
   else if(url.pathname==='/rest/v1/rpc/get_native_behavior_page_breakdown_v1'){
     let raw='';
