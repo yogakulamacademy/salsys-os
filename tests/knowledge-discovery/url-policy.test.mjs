@@ -67,3 +67,10 @@ test('an HTTPS seed never permits an HTTP page even when the candidate is alread
   const hostilePage = new URL('http://yogakulam.com/private');
   assert.equal(scopedDiscoveredUrl(seed, hostilePage, hostilePage.href), null);
 });
+
+
+test('unresponsive DNS cannot hold a worker indefinitely', async () => {
+  const seed = parseWebsiteSeed('https://yogakulam.com/');
+  await assert.rejects(pinPublicAddress(seed, () => new Promise(() => {}), 10),
+    /DNS resolution timed out/);
+});
