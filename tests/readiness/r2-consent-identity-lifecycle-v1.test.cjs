@@ -472,7 +472,7 @@ test("a stale pending grant cannot override another tab's later withdrawal", asy
   first.emitStorage("salsys_privacy_v1", shared.getItem("salsys_privacy_v1"),
     JSON.stringify({ analytics: "granted" }));
   finishGrant({ ok: true, json: async () => ({ effective_decisions: { analytics: "granted" } }) });
-  await oldGrant;
+  await assert.rejects(oldGrant, /Consent request superseded/);
   assert.equal(first.sdk.privacy().analytics_allowed_locally, false);
   assert.equal(shared.getItem("salsys_vid"), null);
   assert.equal((await first.sdk.track("web.page_viewed", {})).privacy_blocked, true);
