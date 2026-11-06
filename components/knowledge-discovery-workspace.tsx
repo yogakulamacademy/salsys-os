@@ -179,7 +179,7 @@ export function KnowledgeDiscoveryWorkspace() {
         <div className="rounded-xl border border-slate-200 bg-white p-5">
           <div className="mb-3 flex items-center gap-2 text-sm font-semibold"><ShieldCheck size={17}/> Scan boundaries</div>
           <div className="space-y-3 text-xs leading-5 text-slate-600">
-            <p>Only the configured public website and its www equivalent are included.</p>
+            <p>Only the exact configured and verified website hostname is included. Other hostnames require separate verification.</p>
             <p>Public IP, redirects, robots rules, response sizes, page limits, and crawl delays are checked.</p>
             <p>Discovery saves page metadata only. No unreviewed knowledge or customer messages are generated.</p>
             <p className="rounded-lg bg-slate-50 p-3">For large sites, the initial page cap limits coverage. A completed scan does not mean the entire website was analyzed.</p>
