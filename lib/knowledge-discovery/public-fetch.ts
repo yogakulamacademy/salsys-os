@@ -68,13 +68,14 @@ async function requestPinned(url: URL, address: string, family: 4 | 6, limitByte
 export async function fetchPublicWeb(
   seed: URL, candidate: URL, kind: 'html' | 'robots' | 'sitemap',
   resolver?: LookupAddresses,
+  transport: typeof requestPinned = requestPinned,
 ): Promise<PublicWebResponse> {
   let current = candidate;
   const byteLimit = kind === 'html' ? 512 * 1024 : 256 * 1024;
   for (let redirect = 0; redirect <= 3; redirect++) {
     if (!scopedDiscoveredUrl(seed, current, current.href)) throw new WebsiteFetchError('offsite_or_unsafe_url');
     const pinned = await pinPublicAddress(current, resolver);
-    const reply = await requestPinned(current, pinned.address, pinned.family, byteLimit);
+    const reply = await transport(current, pinned.address, pinned.family, byteLimit);
     if ([301, 302, 303, 307, 308].includes(reply.status)) {
       if (!reply.location || redirect === 3) throw new WebsiteFetchError('redirect_limit');
       const next = scopedDiscoveredUrl(seed, current, reply.location);
