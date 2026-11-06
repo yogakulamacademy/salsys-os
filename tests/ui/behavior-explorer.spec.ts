@@ -42,6 +42,8 @@ test("Behavior tab reads tenant-scoped aggregates and filters unsafe visitor pat
   await expect(page.getByRole("region", { name: "Popular navigation paths" }).getByText("/courses/200-hour-ytt.php", { exact: true })).toBeVisible();
   await expect(page.getByRole("region", { name: "Popular navigation paths" }).getByText("/enroll.php", { exact: true })).toBeVisible();
   await expect(page.getByText("/private?email=student@example.test", { exact: true })).toHaveCount(0);
+  await expect(page.getByText("/account/billing.php", { exact: true })).toHaveCount(0);
+  await expect(page.getByText("/students/dashboard", { exact: true })).toHaveCount(0);
   await expect(page.getByText("Tenant-scoped aggregates")).toBeVisible();
 
   const reads = await (await request.get(fixtureBase + "/__behavior_calls")).json();
