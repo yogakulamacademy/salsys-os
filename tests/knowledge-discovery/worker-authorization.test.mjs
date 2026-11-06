@@ -30,6 +30,7 @@ const NextResponse={json:(body,init={})=>({body,status:init.status??200,headers:
 let claim=null;
 let adminCalls=0;
 let processCalls=0;
+let proofVerified=true;
 const api=transpile('app/api/knowledge/discovery/worker/route.ts',{
   'next/server':{NextResponse},
   '@/lib/supabase/admin':{createAdminClient:()=>{
@@ -37,6 +38,14 @@ const api=transpile('app/api/knowledge/discovery/worker/route.ts',{
     return {rpc:async name=>{
       assert.equal(name,'claim_knowledge_discovery_job_v1');
       return {data:claim?[claim]:[],error:null};
+    },from: table=>{
+      assert.equal(table,'knowledge_discovery_domain_verifications');
+      return {select:()=>({eq:()=>({eq:()=>({
+        maybeSingle:async()=>({data:proofVerified
+          ? {verified_at:new Date(Date.now()-1000).toISOString(),
+             verified_until:new Date(Date.now()+60_000).toISOString()}
+          : null,error:null}),
+      })})})};
     }};
   }},
   '@/lib/security/machine-bearer-auth':bearer,
@@ -46,6 +55,9 @@ const api=transpile('app/api/knowledge/discovery/worker/route.ts',{
   }},
   '@/lib/knowledge-discovery/url-policy':policy,
   '@/lib/knowledge-discovery/pilot-gate':pilot,
+  '@/lib/knowledge-discovery/domain-verification':transpile('lib/knowledge-discovery/domain-verification.ts',{
+    'node:crypto':require('node:crypto'),
+  }),
 });
 const vars=['KNOWLEDGE_DISCOVERY_PILOT_ENABLED','KNOWLEDGE_DISCOVERY_PAUSED',
   'KNOWLEDGE_DISCOVERY_ALLOWED_HOSTS','KNOWLEDGE_DISCOVERY_RUNNER_SECRET','CRON_SECRET'];
@@ -53,7 +65,7 @@ const before=Object.fromEntries(vars.map(k=>[k,process.env[k]]));
 test.after(()=>{for(const k of vars)before[k]===undefined?delete process.env[k]:process.env[k]=before[k];});
 function reset() {
   for(const k of vars)delete process.env[k];
-  adminCalls=0;processCalls=0;
+  adminCalls=0;processCalls=0;proofVerified=true;
   claim={job_id:'10000000-0000-4000-8000-000000000001',
     organization_id:'20000000-0000-4000-8000-000000000001',
     seed_url:'https://fixture.example.com/',max_pages:10,
@@ -106,4 +118,13 @@ test('allowed queued job invokes one worker tick and idle queue does not process
   assert.equal(result.status,200);
   assert.equal(result.body.state,'idle');
   assert.equal(processCalls,1);
+});
+
+
+test('a previously queued job is refused if website ownership verification expires',async()=>{
+  reset();enable();proofVerified=false;
+  const result=await api.POST(request('local-synthetic-secret'));
+  assert.equal(result.status,403);
+  assert.match(result.body.error,/ownership proof/i);
+  assert.equal(processCalls,0,'No outbound worker tick may run');
 });
