@@ -12,10 +12,12 @@
 -- This does not prove real login permissions, access to another tenant, RLS
 -- behavior under a user JWT, path safety or funnel ordered-step semantics.
 -- SQL runs under the operator's DB role; it MUST NOT be made a public RPC.
+-- sampled_at_utc records the DB query snapshot time without disclosing identifiers.
 
 with params as (
   select :'organization_id'::uuid as organization_id, :'days'::int as days,
-    (now() at time zone 'UTC')::date as today_utc
+    (now() at time zone 'UTC')::date as today_utc,
+    now() as sampled_at
 ), event_names(event_name, ord) as (
   values ('web.page_viewed'::text,1),
          ('web.form_started'::text,2),
@@ -83,6 +85,7 @@ select jsonb_build_object(
     else 'aggregate_comparison_only'
   end,
   'window_days',p.days,
+  'sampled_at_utc',to_char(p.sampled_at at time zone 'UTC','YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'),
   'first_day_utc',to_char(p.today_utc - (p.days - 1),'YYYY-MM-DD'),
   'last_day_utc',to_char(p.today_utc,'YYYY-MM-DD'),
   'last_day_incomplete',true,
