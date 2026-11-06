@@ -5,6 +5,7 @@ import { requireCurrentOrganizationId } from '@/lib/workspace';
 import { readBoundedJson } from '@/lib/security/bounded-json-body';
 import { isExplicitCrossSiteRequest } from '@/lib/security/fetch-metadata';
 import { parseWebsiteSeed, WebsiteScopeError } from '@/lib/knowledge-discovery/url-policy';
+import { discoveryPilotEnabled, discoveryHostAllowed } from '@/lib/knowledge-discovery/pilot-gate';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -39,14 +40,25 @@ export async function GET() {
   try {
     const ctx = await adminContext();
     if (!ctx) return json({ ok: false, error: 'Unauthorized' }, 403);
-    const [onboarding, jobs] = await Promise.all([
-      ctx.supabase.from('organization_onboarding').select('website_url')
-        .eq('organization_id', ctx.organizationId).maybeSingle(),
-      ctx.supabase.from('knowledge_discovery_jobs')
-        .select('id,seed_url,status,max_pages,pages_discovered,pages_fetched,pages_blocked,pages_failed,pages_skipped,last_error_code,created_at,finished_at')
-        .eq('organization_id', ctx.organizationId).order('created_at', { ascending: false }).limit(10),
-    ]);
-    if (onboarding.error || jobs.error) throw new Error('read_failed');
+    const onboarding = await ctx.supabase.from('organization_onboarding').select('website_url')
+      .eq('organization_id', ctx.organizationId).maybeSingle();
+    if (onboarding.error) throw new Error('website_read_failed');
+    const configuredWebsite = onboarding.data?.website_url ?? null;
+    let enabled = false;
+    if (configuredWebsite && discoveryPilotEnabled()) {
+      try { enabled = discoveryHostAllowed(parseWebsiteSeed(configuredWebsite).hostname); }
+      catch { enabled = false; }
+    }
+    // Before isolated schema deployment or while paused, never touch the
+    // still-unavailable discovery tables or pretend empty history is verified.
+    if (!enabled) return json({
+      ok: true, configuredWebsite, discoveryEnabled: false,
+      historyAvailable: false, jobs: [], pages: [],
+    });
+    const jobs = await ctx.supabase.from('knowledge_discovery_jobs')
+      .select('id,seed_url,status,max_pages,pages_discovered,pages_fetched,pages_blocked,pages_failed,pages_skipped,last_error_code,created_at,finished_at')
+      .eq('organization_id', ctx.organizationId).order('created_at', { ascending: false }).limit(10);
+    if (jobs.error) throw new Error('read_failed');
     const latest = jobs.data?.[0];
     let pages: unknown[] = [];
     if (latest) {
@@ -57,8 +69,8 @@ export async function GET() {
       if (result.error) throw new Error('pages_failed');
       pages = result.data ?? [];
     }
-    return json({ ok: true, configuredWebsite: onboarding.data?.website_url ?? null,
-      jobs: jobs.data ?? [], pages });
+    return json({ ok: true, configuredWebsite, discoveryEnabled: true,
+      historyAvailable: true, jobs: jobs.data ?? [], pages });
   } catch {
     return json({ ok: false, error: 'Discovery data unavailable' }, 503);
   }
@@ -75,10 +87,16 @@ export async function POST(request: NextRequest) {
       .from('organization_onboarding').select('website_url')
       .eq('organization_id', ctx.organizationId).maybeSingle();
     if (configuredError) throw new Error('configuration_unavailable');
+    if (!discoveryPilotEnabled()) return json({
+      ok: false, error: 'Website discovery is not enabled for this environment.',
+    }, 503);
     if (!configured?.website_url) {
       return json({ ok: false, error: 'Add the business website to the organization profile first.' }, 409);
     }
     const source = parseWebsiteSeed(configured.website_url);
+    if (!discoveryHostAllowed(source.hostname)) {
+      return json({ ok: false, error: 'This website is not approved for the discovery pilot.' }, 403);
+    }
     const candidate = parseWebsiteSeed(typeof body.value.url === 'string' ? body.value.url : source.href);
     const canonical = (host: string) => host.replace(/^www\./i, '').toLowerCase();
     if (canonical(source.hostname) !== canonical(candidate.hostname)) {
