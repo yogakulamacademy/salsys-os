@@ -137,20 +137,6 @@ async function request(config, path, { token = null, method = 'GET', json = null
   return { status: response.status, data };
 }
 
-function assertRows(result, { mustContain = null, forbidden = null, orgId = null, label }) {
-  if (result.status !== 200 || !Array.isArray(result.data)) {
-    throw new Error('kb_staging_' + label + '_unexpected_status_or_body');
-  }
-  if (forbidden !== null && result.data.some(row => row?.id === forbidden ||
-    row?.document_id === forbidden)) {
-    throw new Error('kb_staging_' + label + '_cross_tenant_leak');
-  }
-  if (mustContain !== null && !result.data.some(row =>
-    (row?.id === mustContain || row?.document_id === mustContain) &&
-    (orgId === null || row.organization_id === orgId || row.document_id === mustContain))) {
-    throw new Error('kb_staging_' + label + '_missing_positive_fixture');
-  }
-}
 async function login(config, actor, label) {
   // Auth session creation is staging-only; no knowledge row is modified.
   const resp = await request(config, '/auth/v1/token?grant_type=password', {
@@ -186,23 +172,47 @@ async function deniedDoc(config, token, docId, label) {
 async function deniedSearch(config, token, orgId, marker, docId, label) {
   requireNoRows(await request(config, searchPath(orgId, marker), { token }), label);
 }
+/**
+ * Verify the entire positive response, not merely the presence of one
+ * permitted row. An own-tenant result mixed with an unauthorized result
+ * is a data-isolation failure, even when the expected row is present.
+ */
 async function ownDoc(config, token, actor, label) {
   const r = await request(config, documentPath(actor.documentId), { token });
-  assertRows(r, {
-    mustContain: actor.documentId, orgId: actor.organizationId,
-    label: label + '_own_document',
-  });
-  const row = r.data.find(x => x?.id === actor.documentId);
-  if (row?.organization_id !== actor.organizationId || row?.status !== 'approved') {
-    throw new Error('kb_staging_' + label + '_document_not_approved_in_tenant');
+  if (r.status !== 200 || !Array.isArray(r.data)) {
+    throw new Error('kb_staging_' + label + '_own_document_unexpected_status_or_body');
+  }
+  if (r.data.length !== 1) {
+    throw new Error('kb_staging_' + label + '_own_document_unexpected_row_count');
+  }
+  const row = r.data[0];
+  if (!row || row.id !== actor.documentId ||
+    row.organization_id !== actor.organizationId ||
+    row.status !== 'approved') {
+    throw new Error('kb_staging_' + label + '_own_document_wrong_scope_or_status');
   }
 }
 async function ownSearch(config, token, actor, label) {
   const r = await request(config,
     searchPath(actor.organizationId, actor.marker), { token });
-  assertRows(r, {
-    mustContain: actor.documentId, label: label + '_own_retrieval',
-  });
+  if (r.status !== 200 || !Array.isArray(r.data)) {
+    throw new Error('kb_staging_' + label + '_own_retrieval_unexpected_status_or_body');
+  }
+  // The actual STABLE search RPC returns document_id and content but no
+  // organization_id; these uniquely seeded marker fixtures must only
+  // match the approved document for that tenant.
+  if (r.data.length === 0) {
+    throw new Error('kb_staging_' + label + '_own_retrieval_missing_positive_fixture');
+  }
+  if (r.data.length > 6 || r.data.some(row =>
+    !row || row.document_id !== actor.documentId ||
+    typeof row.content !== 'string' || !row.content.trim())) {
+    throw new Error('kb_staging_' + label + '_own_retrieval_unexpected_or_leaked_rows');
+  }
+  if (!r.data.some(row =>
+    row.content.toLowerCase().includes(actor.marker.toLowerCase()))) {
+    throw new Error('kb_staging_' + label + '_own_retrieval_marker_not_grounded');
+  }
 }
 
 /** Network actions occur only when explicitly invoked after full preflight. */
