@@ -147,6 +147,14 @@ test('tampered hashes, duplicate identities, invalid status and off-host source 
   }
 });
 
+test('verified hostname cannot be inferred or self-attested by untrusted evidence',()=>{
+  const prepared=evidence();
+  for(const host of ['www.sample.example.com','sample.example.com.evil.net','',null]){
+    const result=prepareSourceGroundedDrafts(prepared,host);
+    assert.deepEqual(result,{ok:false,error:'invalid_source_evidence'});
+  }
+});
+
 test('oversized evidence is skipped with explicit issue, never silently truncated',()=>{
   const input=seed();input.blocks=[
     {kind:'paragraph',text:'a'.repeat(1500)},
