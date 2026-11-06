@@ -48,10 +48,16 @@ export function publicIpOnly(address: string): boolean {
   if (family === 6) {
     const lower = address.toLowerCase();
     // IPv4-mapped/compatible, transition, documentation and non-global space are refused.
-    if (lower.includes('.') || lower.includes('::ffff:') ||
-        lower.startsWith('2001:db8:') || lower.startsWith('2001:0:') ||
-        lower === '2001::' || lower.startsWith('2002:')) return false;
-    return /^[23][0-9a-f]/.test(lower);
+    if (lower.includes('.') || lower.includes('::ffff:')) return false;
+    // Compare numeric prefixes, not only literal spelling: compressed
+    // 2001::1 and zero-padded 2001:0000::1 are the same reserved block.
+    const sections = lower.split(':');
+    const first = Number.parseInt(sections[0], 16);
+    const second = sections[1] ? Number.parseInt(sections[1], 16) : 0;
+    if (!Number.isInteger(first) || !Number.isInteger(second)) return false;
+    if (first === 0x2001 && (second <= 0x01ff || second === 0x0db8)) return false;
+    if (first === 0x2002 || first === 0x3fff) return false;
+    return first >= 0x2000 && first < 0x4000;
   }
   return false;
 }
@@ -82,7 +88,8 @@ export function scopedDiscoveredUrl(seed: URL, page: URL, rawHref: string): URL 
   let next: URL;
   try { next = new URL(rawHref, page); } catch { return null; }
   if (!['http:', 'https:'].includes(next.protocol) || next.username || next.password || next.port) return null;
-  if (page.protocol === 'https:' && next.protocol === 'http:') return null;
+  if ((seed.protocol === 'https:' || page.protocol === 'https:') &&
+      next.protocol !== 'https:') return null;
   if (comparableHost(seed.hostname) !== comparableHost(next.hostname)) return null;
   try { return parseWebsiteSeed(next.href); } catch { return null; }
 }
