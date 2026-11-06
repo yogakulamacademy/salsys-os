@@ -86,7 +86,9 @@ select jsonb_build_object(
     then s.days_without_observed_session_starts else null end,
   'first_observed_utc_day',case when v.candidate_events <= 50000 then s.first_observed_utc_day else null end,
   'last_observed_utc_day',case when v.candidate_events <= 50000 then s.last_observed_utc_day else null end,
-  'candidate_session_start_receipts',v.candidate_events,
+  'candidate_session_start_receipts',case when v.candidate_events <= 50000
+    then v.candidate_events else null end,
+  'candidate_receipt_limit_exceeded',v.candidate_events > 50000,
   'granted_metadata_snapshot_receipts',case when v.candidate_events <= 50000
     then s.granted_snapshot_receipts else null end,
   'missing_or_not_granted_snapshot_receipts',case when v.candidate_events <= 50000
