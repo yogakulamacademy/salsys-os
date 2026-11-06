@@ -271,7 +271,7 @@ export async function runKbStagingReadOnlyAcceptance(config) {
     await deniedSearch(config,null,config.b.organizationId,
       config.b.marker,config.b.documentId,'anon_to_b_retrieval');
 
-    passed={stage:'KB05G',result:'passed_read_only_staging_retrieval',
+    passed={stage:'KB05D',result:'passed_read_only_staging_retrieval',
       checks:12,authorizationScope:'two_test_actors_and_anonymous',
       knowledgeWrites:0,stagingAuthLogins:2};
   }catch(e){
