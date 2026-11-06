@@ -95,7 +95,7 @@ begin
   )
   update public.knowledge_discovery_jobs j set
     status = 'running',
-    attempts = j.attempts + 1,
+    attempts = case when j.status = 'running' then j.attempts + 1 else j.attempts end,
     lease_token = gen_random_uuid(),
     lease_until = now() + interval '2 minutes',
     started_at = coalesce(j.started_at, now())
