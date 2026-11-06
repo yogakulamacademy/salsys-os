@@ -9,6 +9,7 @@ import type { PreparedWebsiteEvidence } from '@/lib/knowledge-extraction/website
 import type { SourceDraftBundle } from '@/lib/knowledge-extraction/source-grounded-drafts';
 import type { ReviewSignalReport } from '@/lib/knowledge-extraction/source-review-signals';
 import type { ValidatedAIResponse } from '@/lib/knowledge-extraction/ai-draft-contract';
+import type { GroundingEvaluationReport } from '@/lib/knowledge-extraction/ai-grounding-evaluation';
 import { assessEvidenceReadiness } from '@/lib/knowledge-extraction/evidence-lifecycle-readiness';
 import {
   chooseEvidenceForReview,
@@ -27,12 +28,13 @@ const filters: Array<{ id: Filter; label: string }> = [
 ];
 
 export function KnowledgeEvidenceReviewPreview({
-  evidence, sourceCandidates, reviewSignals, simulatedAIProposals,
+  evidence, sourceCandidates, reviewSignals, simulatedAIProposals, groundingReview,
 }: {
   evidence: PreparedWebsiteEvidence;
   sourceCandidates: SourceDraftBundle;
   reviewSignals: ReviewSignalReport;
   simulatedAIProposals: ValidatedAIResponse;
+  groundingReview: GroundingEvaluationReport;
 }) {
   const [choices, setChoices] = useState<EvidenceReviewDecisions>({});
   const [filter, setFilter] = useState<Filter>('all');
@@ -382,6 +384,72 @@ export function KnowledgeEvidenceReviewPreview({
           This validator only enforces schema, citation identity and exact source
           wording. It cannot establish whether a source is accurate, current or
           contextually sufficient. Nothing can be stored, approved or published.
+        </p>
+      </section>
+
+      <section aria-label="AI grounding quality review"
+        className="rounded-xl border border-slate-200 bg-white p-5">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h2 className="text-base font-semibold">Grounding and accuracy review</h2>
+            <p className="mt-1 max-w-2xl text-xs leading-5 text-slate-600">
+              A deterministic review checklist, not semantic verification.
+              Every simulated AI suggestion requires human confirmation
+              before it can be considered reliable.
+            </p>
+          </div>
+          <span className="rounded-md border border-amber-200 bg-amber-50 px-2.5 py-1.5 text-xs font-semibold text-amber-900">
+            {groundingReview.held} held for resolution
+          </span>
+        </div>
+        {groundingReview.items.length===0 ? (
+          <p className="mt-4 text-sm text-slate-500">No simulated AI suggestions to assess.</p>
+        ) : (
+          <div className="mt-4 space-y-3">
+            {groundingReview.items.map(item=>{
+              const matched=simulatedAIProposals.proposals.find(x=>x.id===item.proposalId);
+              return (
+                <div key={item.id} className="rounded-lg border border-slate-200 p-4">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <p className="text-xs font-semibold text-slate-700">
+                      {item.disposition==='hold_for_resolution'
+                        ? 'Hold — source issue requires resolution'
+                        : 'Human verification required'}
+                    </p>
+                    <span className="text-xs font-semibold text-slate-500">
+                      Not approved
+                    </span>
+                  </div>
+                  {matched?.question ? (
+                    <p className="mt-3 text-sm font-medium">{matched.question}</p>
+                  ):null}
+                  <p className="mt-2 break-words text-sm leading-6 text-slate-700">
+                    {matched?.answerOrStatement ?? 'Citation unavailable'}
+                  </p>
+                  <p className="mt-2 break-all font-mono text-[11px] text-slate-500">
+                    Evidence SHA-256: {item.evidenceQuoteSha256.slice(0,16)}…
+                  </p>
+                  {item.reasons.length>0 ? (
+                    <ul className="mt-3 list-disc space-y-1 pl-5 text-xs text-amber-800">
+                      {item.reasons.map(reason=>(
+                        <li key={reason}>
+                          {reason.replaceAll('_',' ')}
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <p className="mt-2 text-xs text-slate-600">
+                      No deterministic warning found. Semantic correctness is still unverified.
+                    </p>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
+        <p className="mt-4 border-t border-slate-100 pt-3 text-xs leading-5 text-slate-600">
+          Source truth and question meaning remain unverified. The checklist does not
+          grant approval, persistence, or publishing authority.
         </p>
       </section>
 
