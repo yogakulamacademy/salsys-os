@@ -27,8 +27,8 @@ type Page = {
   http_status: number | null;
   failure_code: string | null;
 };
-type State = { configuredWebsite: string | null; discoveryEnabled: boolean; historyAvailable: boolean; jobs: Job[]; pages: Page[] };
-const initial: State = { configuredWebsite: null, discoveryEnabled: false, historyAvailable: false, jobs: [], pages: [] };
+type State = { configuredWebsite: string | null; pilotEnabled: boolean; websiteVerified: boolean; discoveryEnabled: boolean; historyAvailable: boolean; jobs: Job[]; pages: Page[] };
+const initial: State = { configuredWebsite: null, pilotEnabled: false, websiteVerified: false, discoveryEnabled: false, historyAvailable: false, jobs: [], pages: [] };
 
 const terminal = new Set(['completed', 'partial', 'failed', 'cancelled']);
 const statusText: Record<Job['status'], string> = {
@@ -43,6 +43,9 @@ export function KnowledgeDiscoveryWorkspace() {
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
   const [pageLimit, setPageLimit] = useState(30);
+  const [ownershipToken, setOwnershipToken] = useState('');
+  const [verificationStatus, setVerificationStatus] = useState('unverified');
+  const [verificationBusy, setVerificationBusy] = useState(false);
 
   const load = useCallback(async (silent = false) => {
     if (!silent) setLoading(true);
@@ -52,11 +55,22 @@ export function KnowledgeDiscoveryWorkspace() {
       if (!response.ok || !payload.ok) throw new Error(payload.error || 'Could not load website discovery.');
       setState({
         configuredWebsite: payload.configuredWebsite ?? null,
+        pilotEnabled: payload.pilotEnabled === true,
+        websiteVerified: payload.websiteVerified === true,
         discoveryEnabled: payload.discoveryEnabled === true,
         historyAvailable: payload.historyAvailable === true,
         jobs: Array.isArray(payload.jobs) ? payload.jobs : [],
         pages: Array.isArray(payload.pages) ? payload.pages : [],
       });
+      if (payload.pilotEnabled === true && payload.configuredWebsite) {
+        const verificationResponse = await fetch('/api/knowledge/discovery/verification', {
+          cache: 'no-store', credentials: 'same-origin',
+        });
+        if (verificationResponse.ok) {
+          const proof = await verificationResponse.json();
+          setVerificationStatus(proof.status ?? 'unverified');
+        }
+      }
       setError('');
     } catch (e) {
       if (!silent) setError(e instanceof Error ? e.message : 'Could not load discovery.');
@@ -71,6 +85,30 @@ export function KnowledgeDiscoveryWorkspace() {
 
   const latest = state.jobs[0] ?? null;
   const active = latest && !terminal.has(latest.status);
+
+  async function ownershipAction(action: 'issue' | 'verify') {
+    setVerificationBusy(true); setError(''); setMessage('');
+    try {
+      const response = await fetch('/api/knowledge/discovery/verification', {
+        method: action === 'issue' ? 'POST' : 'PUT',
+        headers: { 'content-type': 'application/json' },
+        body: '{}', credentials: 'same-origin', cache: 'no-store',
+      });
+      const result = await response.json();
+      if (!response.ok || !result.ok) throw new Error(result.error ?? 'Ownership verification failed.');
+      if (action === 'issue') {
+        setOwnershipToken(result.token);
+        setVerificationStatus('pending');
+        setMessage('Challenge issued. Publish the token at the specified website path.');
+      } else {
+        setOwnershipToken('');
+        setVerificationStatus('verified');
+        setMessage('Website ownership verified. Discovery can now be started.');
+        await load(true);
+      }
+    } catch (e) { setError(e instanceof Error ? e.message : 'Ownership verification failed.'); }
+    finally { setVerificationBusy(false); }
+  }
 
   async function change(action: 'start' | 'cancel') {
     setBusy(true); setError(''); setMessage('');
@@ -117,7 +155,8 @@ export function KnowledgeDiscoveryWorkspace() {
           <input id="kb-website" readOnly value={state.configuredWebsite ?? ''} placeholder={loading ? 'Loading…' : 'Not configured'}
             className="mt-2 w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-3 text-sm text-slate-700" />
           {!state.configuredWebsite && !loading ? <p className="mt-2 text-xs text-amber-700">Add a website to your onboarding business profile before starting discovery.</p> : null}
-          {!state.discoveryEnabled && !loading && !error ? <p className="mt-2 text-xs text-amber-700">Website discovery is paused or this domain has not been approved for the pilot.</p> : null}
+          {!state.pilotEnabled && !state.discoveryEnabled && !loading && !error ? <p className="mt-2 text-xs text-amber-700">Website discovery is paused or this domain has not been approved for the pilot.</p> : null>
+          {state.pilotEnabled && !state.websiteVerified && !loading ? <p className="mt-2 text-xs text-amber-700">Verify ownership of this website before scanning.</p> : null>
           <div className="mt-5 flex flex-wrap items-end justify-between gap-3 border-t border-slate-100 pt-4">
             <div>
               <label htmlFor="kb-limit" className="block text-xs font-medium text-slate-600">Page limit</label>
@@ -147,6 +186,41 @@ export function KnowledgeDiscoveryWorkspace() {
           </div>
         </div>
       </section>
+
+      {state.pilotEnabled && state.configuredWebsite && !state.websiteVerified ? (
+        <section className="rounded-xl border border-slate-200 bg-white p-5">
+          <h2 className="text-sm font-semibold">Verify website ownership</h2>
+          <p className="mt-2 text-xs leading-5 text-slate-600">
+            Publish a one-line verification token as a public text file on your configured HTTPS website.
+            SalsysOS only checks this file and will not scan the website during verification.
+          </p>
+          <div className="mt-4 space-y-2">
+            <p className="text-xs font-medium">Required file path</p>
+            <code className="block break-all rounded-lg bg-slate-50 p-3 text-xs">/.well-known/salsysos-verification.txt</code>
+            {ownershipToken ? (
+              <>
+                <p className="text-xs font-medium">File contents — copy this one-time token now</p>
+                <code className="block break-all rounded-lg bg-slate-50 p-3 text-xs">{ownershipToken}</code>
+                <p className="text-xs text-slate-500">The challenge expires after 24 hours. You can reissue a challenge after the cooldown.</p>
+              </>
+            ) : (
+              <p className="text-xs text-slate-500">Challenge status: {verificationStatus}. A token is displayed only when issued.</p>
+            )}
+          </div>
+          <div className="mt-4 flex flex-wrap gap-2">
+            <button type="button" disabled={verificationBusy || busy}
+              onClick={() => void ownershipAction('issue')}
+              className="rounded-lg border border-slate-200 px-4 py-2.5 text-xs font-semibold disabled:opacity-40">
+              Generate token
+            </button>
+            <button type="button" disabled={verificationBusy || busy}
+              onClick={() => void ownershipAction('verify')}
+              className="rounded-lg bg-slate-800 px-4 py-2.5 text-xs font-semibold text-white disabled:opacity-40">
+              Verify website
+            </button>
+          </div>
+        </section>
+      ) : null}
 
       <section className="rounded-xl border border-slate-200 bg-white p-5">
         <div className="flex flex-wrap items-center justify-between gap-2">
