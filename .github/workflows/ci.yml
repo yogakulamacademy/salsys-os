@@ -16,6 +16,7 @@ on:
       - feature/kb03c-grounded-ai-proposals
       - feature/kb03d-grounding-quality-evaluation
       - feature/kb03e-review-acceptance-contract
+      - feature/kb04a-source-snapshot-delta-preview
 
 permissions:
   contents: read
