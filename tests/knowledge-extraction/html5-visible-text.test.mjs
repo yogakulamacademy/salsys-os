@@ -1,11 +1,26 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { parse } from 'parse5';
-import {
-  extractHtml5VisibleBlocks,
-  prepareHtml5WebsiteEvidence,
-} from '../../lib/knowledge-extraction/html5-visible-text.ts';
-import { extractVisibleWebsiteBlocks } from '../../lib/knowledge-extraction/html-visible-text.ts';
+import { mkdtemp, readFile, writeFile, rm } from 'node:fs/promises';
+import { join } from 'node:path';
+import { pathToFileURL } from 'node:url';
+
+// Node 22 strip-types doesn't resolve relative extensionless TS modules.
+// Copy the real modules into a temporary directory under the repository,
+// preserving parse5's resolution from node_modules and production sources.
+const sourceDir=new URL('../../lib/knowledge-extraction/',import.meta.url);
+const tempDir=await mkdtemp(join(new URL(sourceDir).pathname,'.kb02-html5-test-'));
+for(const name of ['website-evidence.ts','html-visible-text.ts','html5-visible-text.ts']){
+  const original=await readFile(new URL(name,sourceDir),'utf8');
+  const rewritten=original.replace("from './website-evidence'","from './website-evidence.ts'");
+  assert.notEqual(original,rewritten,name);
+  await writeFile(join(tempDir,name),rewritten,'utf8');
+}
+const { extractHtml5VisibleBlocks, prepareHtml5WebsiteEvidence }=
+  await import(pathToFileURL(join(tempDir,'html5-visible-text.ts')).href);
+const { extractVisibleWebsiteBlocks }=
+  await import(pathToFileURL(join(tempDir,'html-visible-text.ts')).href);
+test.after(async()=>rm(tempDir,{recursive:true,force:true}));
 
 const basis = {
   verifiedSeedUrl:'https://academy.example.com/',
