@@ -1,5 +1,3 @@
-"use client";
-
 import { ArrowRight, ListFilter } from "lucide-react";
 import { BEHAVIOR_EVENTS, type BehaviorEvent } from "@/lib/native-behavior-contract";
 import type { NativeBehaviorPageBreakdown } from "@/lib/native-behavior-breakdown-data";
