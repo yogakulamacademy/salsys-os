@@ -85,6 +85,9 @@ test('explicit protected execution phrase and exact staging host are mandatory',
   }
   for(const ref of FORBIDDEN_PROJECT_REFS){
     const env=baseEnv();env.SALSYS_KB_STAGING_PROJECT_REF=ref;
+    // Satisfy the *new* operator-ref gate first so the denylist is tested
+    // independently; both checks must continue to deny unsafe targets.
+    env.OPERATOR_STAGING_PROJECT_REF=ref;
     env.SALSYS_KB_STAGING_API_URL='https://'+ref+'.supabase.co';
     expectBlocked(env,/project_not_dedicated_staging/);
   }
