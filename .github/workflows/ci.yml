@@ -16,6 +16,8 @@ on:
       - feature/kb04e-isolated-acceptance-ledger
       # Temporary KB-05B stacked PR validation.
       - feature/kb05a-disposable-knowledge-db-acceptance
+      # Temporary KB-05C stacked PR validation.
+      - feature/kb05b-knowledge-tenant-rls-negative-matrix
   push:
     branches:
       - main
@@ -35,6 +37,7 @@ on:
       - feature/kb04e-isolated-acceptance-ledger
       - feature/kb05a-disposable-knowledge-db-acceptance
       - feature/kb05b-knowledge-tenant-rls-negative-matrix
+      - feature/kb05c-strict-monitoring-session-candidate
 
 permissions:
   contents: read

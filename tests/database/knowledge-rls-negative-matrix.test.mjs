@@ -9,6 +9,7 @@ import pg from 'pg';
 
 const { Client } = pg;
 const matrixPath = new URL('./knowledge-rls-negative-matrix.fixture.sql',import.meta.url);
+const strictCandidatePath = new URL('./knowledge-monitoring-strict-session-candidate.fixture.sql',import.meta.url);
 const originalBuilder = resolve('scripts/build-knowledge-readiness-sandbox.mjs');
 const SCENARIOS = ['OWNER_A','OWNER_B','EMPLOYEE','DB_ROLES'];
 
@@ -103,15 +104,26 @@ test('real knowledge SQL denies direct cross-tenant RLS writes, forged sessions 
     execFileSync(process.execPath,[originalBuilder,file],{
       cwd:process.cwd(),stdio:['ignore','pipe','pipe'],timeout:20_000,
     });
-    const [canonical,extra]=await Promise.all([
+    const [canonical,extra,candidate]=await Promise.all([
       readFile(file,'utf8'),readFile(matrixPath,'utf8'),
+      readFile(strictCandidatePath,'utf8'),
     ]);
     assert.ok(canonical.length>25_000,'Missing canonical SQL');
-    const expanded=buildMatrix(canonical,readSections(extra));
+    assert.ok(candidate.includes('create function pg_temp.kb05c_strict_monitoring_session_candidate'));
+    assert.ok(!/^\s*(?:begin|commit|rollback)\s*;/im.test(candidate),
+      'Candidate must not control the outer rollback transaction');
+    assert.ok(!candidate.includes('create or replace function public.'),
+      'Candidate cannot modify deployed authorization functions');
+    const expanded=injectExactlyOnce(
+      buildMatrix(canonical,readSections(extra)),
+      "rollback;\nselect 'knowledge_readiness_v2'",
+      candidate+'\n\n',
+    );
     assert.ok(expanded.includes('create_source_backed_knowledge_document_v2'));
     assert.ok(expanded.includes('search_organization_knowledge_v1'));
     assert.ok(expanded.includes('KB05B B cannot forge A approval row'));
     assert.ok(expanded.includes('KB05B B user with A session cannot read B'));
+    assert.ok(expanded.includes('KB05C mismatched user-bound session denies A'));
 
     const all=await db.query(expanded);
     const end=Array.isArray(all)?all.at(-1):all;
