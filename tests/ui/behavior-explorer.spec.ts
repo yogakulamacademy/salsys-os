@@ -400,6 +400,7 @@ test("Owner can explicitly copy aggregate Event activity review figures, never t
     await page.getByRole("combobox", { name: "Analytics date range" }).selectOption("30");
     await page.getByRole("button", { name: "Run funnel" }).click();
     await expect(page).toHaveURL(/days=30/);
+    await expect(trends.getByText("Last 30 UTC calendar days")).toBeVisible();
     await copy.click();
     const second = await page.evaluate(() => navigator.clipboard.readText());
     expect(second).toContain("UTC calendar window: 30 days");
