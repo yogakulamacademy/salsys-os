@@ -51,10 +51,12 @@ function syntheticCohortTrial(events, { organizationId, asOfUtc, historyStartUtc
     }
     const personKey = JSON.stringify([organizationId, e.sourceId, e.visitorId, e.identityEpoch]);
     const sessionKey = JSON.stringify([personKey, e.sessionId]);
-    const prior = eventIds.get(e.eventId);
+    // Delivery IDs may overlap across independent tracking sources.
+    const scopedEventId = JSON.stringify([e.sourceId, e.eventId]);
+    const prior = eventIds.get(scopedEventId);
     if (prior && prior !== sessionKey) return blocked("conflicting_duplicate_event");
     if (prior) continue;
-    eventIds.set(e.eventId, sessionKey);
+    eventIds.set(scopedEventId, sessionKey);
     const older = sessions.get(sessionKey);
     if (!older || occurred < older.occurred) sessions.set(sessionKey, { personKey, occurred });
   }
@@ -135,6 +137,13 @@ test("different tenant, tracking source or consent epoch never extends a browser
   const cohort = syntheticCohortTrial(rows, options).rows.find((x) => x.dateUtc === "2026-11-01");
   assert.equal(cohort.denominator, 20);
   assert.equal(cohort.returns, 0);
+});
+
+test("the same delivery event ID is independent across two tracking sources", () => {
+  const first = event("source-collision", "2026-11-01", "one");
+  const second = { ...event("source-collision", "2026-11-01", "two"),
+    sourceId: "site-b", eventId: first.eventId };
+  assert.equal(syntheticCohortTrial([first, second], options).status, "synthetic_only");
 });
 
 test("D7 and D30 are exact, fully matured UTC return days rather than eventual-return or cumulative windows", () => {
