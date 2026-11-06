@@ -183,6 +183,10 @@ test('full synthetic discovery tick loop produces truthful partial coverage with
 
     // A separate synthetic scan with a two-page cap may discover more links,
     // but cannot enqueue or fetch an unbounded number of pages.
+    // Simulate cooldown elapsed before creating the second synthetic job.
+    await db.query(
+      "update public.knowledge_discovery_jobs set created_at=now()-interval '16 minutes' where id=$1",
+      [jobId]);
     const capRow=await db.query(
       'insert into public.knowledge_discovery_jobs(organization_id,created_by,seed_url,max_pages) values($1,$2,$3,2) returning id',
       [ORG,USER,ROOT]);
