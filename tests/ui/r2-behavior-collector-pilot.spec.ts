@@ -233,7 +233,7 @@ test("R2-P1 Chromium: SPA can reclaim a full 200-element visibility observer set
 
   await expect.poll(async () => page.evaluate(
     () => (window as any).__observedByPilot?.size ?? -1,
-  )).toBe(200);
+  )).toBe(198); // Plus two controls observed before the test spy was installed.
 
   await page.evaluate(() => {
     document.getElementById("spa-old-controls")?.remove();
