@@ -90,8 +90,12 @@ function timestamp(value: unknown): number | null {
   if (typeof value !== 'string' ||
     !/^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d{1,3})?Z$/.test(value)) return null;
   const time = Date.parse(value);
-  return Number.isFinite(time) && new Date(time).toISOString() ===
-    new Date(value).toISOString() ? time : null;
+  if (!Number.isFinite(time)) return null;
+  // Date.parse normalizes impossible dates on some runtimes. Round-trip the
+  // original UTC components so 2026-02-30 never passes as a fresh timestamp.
+  const [prefix, milliseconds = ''] = value.slice(0, -1).split('.');
+  const canonical = prefix + '.' + milliseconds.padEnd(3, '0') + 'Z';
+  return new Date(time).toISOString() === canonical ? time : null;
 }
 function version(value: unknown): boolean {
   return typeof value === 'string' && value.trim() !== '' && value.length <= 100;
