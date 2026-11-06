@@ -9,6 +9,8 @@ const reviewedSha = "c".repeat(40);
 const good = {
   SALSYS_STAGING_SITE_ORIGIN: "https://stage.academy-sandbox.net",
   SALSYS_STAGING_CRM_ORIGIN: "https://stage-crm.salsys-sandbox.net",
+  SALSYS_STAGING_CRM_PROJECT_ID: "prj_AAAAAAAAAAAAAAAAAAAAAAAA",
+  SALSYS_PRODUCTION_CRM_PROJECT_ID: "prj_BBBBBBBBBBBBBBBBBBBBBBBB",
   SALSYS_STAGING_SUPABASE_URL: "https://stageproject.supabase.co",
   SALSYS_PRODUCTION_SUPABASE_URL: "https://productionproject.supabase.co",
   SALSYS_RECOVERY_SUPABASE_URL: "https://recoveryproject.supabase.co",
@@ -17,6 +19,8 @@ const good = {
   SALSYS_STAGING_SOURCE_ENVIRONMENT: "staging",
   SALSYS_STAGING_CONSENT_MODE: "required",
   SALSYS_STAGING_FORM_CAPTURE_ISOLATED: "yes",
+  SALSYS_STAGING_EXTERNAL_EFFECTS_DISABLED: "yes",
+  SALSYS_STAGING_SCHEDULED_JOBS_DISABLED: "yes",
   SALSYS_STAGING_OWNER_APPROVED: "yes",
   SALSYS_STAGING_EXPECTED_COMMIT: reviewedSha,
   SALSYS_STAGING_DEPLOYED_COMMIT: reviewedSha,
@@ -34,13 +38,21 @@ test("R2-P3 staging preflight permits only fully specified isolated test environ
 });
 
 test("R2-P3 rejects live academy and CRM origins", () => {
-  for (const website of ["https://yogakulam.com","https://www.yogakulamacademy.com"]) {
+  for (const website of [
+    "https://yogakulam.com",
+    "https://www.yogakulamacademy.com",
+    "https://stage.yogakulam.com",
+    "https://test.yogakulamacademy.com",
+  ]) {
     const result = verify({ ...good, SALSYS_STAGING_SITE_ORIGIN: website });
     assert.equal(result.readyForManualTesting, false);
     assert.ok(result.errors.some((error) => error.includes("production")));
   }
-  const crm = verify({ ...good, SALSYS_STAGING_CRM_ORIGIN: "https://crm.salsysos.com" });
-  assert.equal(crm.readyForManualTesting, false);
+  for (const crmOrigin of ["https://crm.salsysos.com", "https://stage.salsysos.com"]) {
+    const crm = verify({ ...good, SALSYS_STAGING_CRM_ORIGIN: crmOrigin });
+    assert.equal(crm.readyForManualTesting, false);
+    assert.ok(crm.errors.some((error) => error.includes("production")));
+  }
 });
 
 test("R2-P3 blocks preview deployments wired to the production Supabase project", () => {
@@ -73,6 +85,30 @@ test("R2-P3 requires authorized staging source, required-consent mode and isolat
     ["SALSYS_STAGING_SOURCE_HOSTNAME","yogakulam.com"],
   ]) {
     assert.equal(verify({ ...good, [key]:value }).readyForManualTesting,false,key);
+  }
+});
+
+test("R2-P3 refuses production CRM preview reuse and missing project identity", () => {
+  const reused = verify({ ...good,
+    SALSYS_STAGING_CRM_PROJECT_ID: good.SALSYS_PRODUCTION_CRM_PROJECT_ID,
+  });
+  assert.equal(reused.readyForManualTesting, false);
+  assert.ok(reused.errors.some((error) => error.includes("different")));
+
+  for (const field of ["SALSYS_STAGING_CRM_PROJECT_ID", "SALSYS_PRODUCTION_CRM_PROJECT_ID"]) {
+    const missing = { ...good };
+    delete missing[field];
+    assert.equal(verify(missing).readyForManualTesting, false, field);
+  }
+});
+
+test("R2-P3 requires affirmative no-send and no-scheduler attestations", () => {
+  for (const field of ["SALSYS_STAGING_EXTERNAL_EFFECTS_DISABLED",
+                       "SALSYS_STAGING_SCHEDULED_JOBS_DISABLED"]) {
+    for (const value of ["no", "", undefined]) {
+      const result = verify({ ...good, [field]: value });
+      assert.equal(result.readyForManualTesting, false, field + ":" + value);
+    }
   }
 });
 
