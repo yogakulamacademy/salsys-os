@@ -638,6 +638,42 @@
     window.addEventListener('focus', reconcileExternalConsent);
   }
 
+  // A 2xx transport status is NOT consent persistence proof. Both public
+  // consent endpoints return this structured receipt contract after writing.
+  // Fail closed if a proxy or unexpected response omits that evidence.
+  function verifiedConsentDecisions(result, request) {
+    var invalid = function () {
+      throw new Error('Privacy preference server receipt was not verified.');
+    };
+    if (!result || result.ok !== true ||
+        result.visitor_id !== request.visitor_id ||
+        !result.effective_decisions ||
+        typeof result.effective_decisions !== 'object' ||
+        Array.isArray(result.effective_decisions) ||
+        !Array.isArray(result.receipts)) invalid();
+
+    var effective = result.effective_decisions;
+    var allowedPurposes = ['analytics', 'marketing', 'advertising',
+      'sale_sharing', 'personalization'];
+    var allowedDecisions = ['granted', 'denied', 'withdrawn', 'opted_out', 'limited'];
+    Object.keys(effective).forEach(function (purpose) {
+      if (allowedPurposes.indexOf(purpose) === -1 ||
+          allowedDecisions.indexOf(effective[purpose]) === -1) invalid();
+    });
+    Object.keys(request.decisions).forEach(function (purpose) {
+      if (effective[purpose] !== request.decisions[purpose]) invalid();
+      var matches = result.receipts.filter(function (receipt) {
+        return receipt && receipt.purpose === purpose &&
+          receipt.decision === effective[purpose] &&
+          typeof receipt.receipt_id === 'string' &&
+          receipt.receipt_id.trim().length > 0 &&
+          receipt.receipt_id !== 'null';
+      });
+      if (matches.length !== 1) invalid();
+    });
+    return effective;
+  }
+
   // Queue network consent receipts in invocation order; never claim a later
   // grant is confirmed before an earlier withdrawal request completes.
   var consentReceiptQueue = Promise.resolve();
@@ -693,10 +729,7 @@
       if (changesAnalytics && revision !== analyticsConsentRevision) {
         throw new Error('Consent request superseded by a newer browser privacy decision.');
       }
-      var effective =
-        result && result.effective_decisions && typeof result.effective_decisions === 'object'
-          ? result.effective_decisions
-          : normalized;
+      var effective = verifiedConsentDecisions(result, body);
       if (optingOut && !analyticsDenied(effective.analytics)) {
         throw new Error('Analytics opt-out was not confirmed. Local tracking remains disabled.');
       }
