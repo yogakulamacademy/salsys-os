@@ -18,7 +18,7 @@ function publiclyNamedHost(host) {
   // allowing a staging origin. A real owner must separately verify DNS/TLS,
   // domain control and that the deployment cannot reach production services.
   if (!host || host.endsWith(".") || host.startsWith("[") ||
-      host.includes(":") || /^\\d+(?:\\.\\d+){3}$/.test(host)) return false;
+      host.includes(":") || /^\d+(?:\.\d+){3}$/.test(host)) return false;
   if (host.length > 253 || host.split(".").length < 2 ||
       host.split(".").some((part) => !/^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/.test(part))) return false;
   var blockedSuffixes = [
