@@ -310,7 +310,7 @@ BEGIN
       OR (trends_result #>> '{status,last_day_utc}') IS DISTINCT FROM
         to_char((now() at time zone 'UTC')::date,'YYYY-MM-DD')
     THEN
-      RAISE EXCEPTION 'R2-P2: owner-A %d-day report availability/date boundary mismatch',w;
+      RAISE EXCEPTION 'R2-P2: owner-A %-day report availability/date boundary mismatch',w;
     END IF;
 
     FOR idx IN 0..2 LOOP
@@ -331,14 +331,14 @@ BEGIN
         OR jsonb_array_length(trends_result #> ARRAY['series',idx::text,'daily'])
           IS DISTINCT FROM w
       THEN
-        RAISE EXCEPTION 'R2-P2: owner-A %d-day SQL-versus-RPC mismatch at step %',w,idx+1;
+        RAISE EXCEPTION 'R2-P2: owner-A %-day SQL-versus-RPC mismatch at step %',w,idx+1;
       END IF;
 
       SELECT coalesce(sum((entry.value->>'events')::bigint),0)
       INTO observed_daily_sum
       FROM jsonb_array_elements(trends_result #> ARRAY['series',idx::text,'daily']) entry(value);
       IF observed_daily_sum IS DISTINCT FROM expected_events THEN
-        RAISE EXCEPTION 'R2-P2: owner-A %d-day daily sum does not equal independent SQL totals',w;
+        RAISE EXCEPTION 'R2-P2: owner-A %-day daily sum does not equal independent SQL totals',w;
       END IF;
     END LOOP;
 
@@ -348,7 +348,7 @@ BEGIN
        OR (pages_result #>> '{pages,0,path}') IS DISTINCT FROM '/courses/r2-fixture.php'
        OR (funnel_result ->> 'path_sessions')::bigint IS DISTINCT FROM expected_pages
     THEN
-      RAISE EXCEPTION 'R2-P2: owner-A %d-day page/path totals differ from synthetic SQL',w;
+      RAISE EXCEPTION 'R2-P2: owner-A %-day page/path totals differ from synthetic SQL',w;
     END IF;
   END LOOP;
 END
@@ -463,7 +463,7 @@ BEGIN
       OR (trends_result #>> '{status,last_day_utc}') IS DISTINCT FROM
         to_char((now() at time zone 'UTC')::date,'YYYY-MM-DD')
     THEN
-      RAISE EXCEPTION 'R2-P2: admin-B %d-day report availability/date boundary mismatch',w;
+      RAISE EXCEPTION 'R2-P2: admin-B %-day report availability/date boundary mismatch',w;
     END IF;
 
     FOR idx IN 0..2 LOOP
@@ -484,14 +484,14 @@ BEGIN
         OR jsonb_array_length(trends_result #> ARRAY['series',idx::text,'daily'])
           IS DISTINCT FROM w
       THEN
-        RAISE EXCEPTION 'R2-P2: admin-B %d-day SQL-versus-RPC mismatch at step %',w,idx+1;
+        RAISE EXCEPTION 'R2-P2: admin-B %-day SQL-versus-RPC mismatch at step %',w,idx+1;
       END IF;
 
       SELECT coalesce(sum((entry.value->>'events')::bigint),0)
       INTO observed_daily_sum
       FROM jsonb_array_elements(trends_result #> ARRAY['series',idx::text,'daily']) entry(value);
       IF observed_daily_sum IS DISTINCT FROM expected_events THEN
-        RAISE EXCEPTION 'R2-P2: admin-B %d-day daily sum does not equal independent SQL totals',w;
+        RAISE EXCEPTION 'R2-P2: admin-B %-day daily sum does not equal independent SQL totals',w;
       END IF;
     END LOOP;
 
@@ -501,7 +501,7 @@ BEGIN
        OR (pages_result #>> '{pages,0,path}') IS DISTINCT FROM '/courses/r2-fixture.php'
        OR (funnel_result ->> 'path_sessions')::bigint IS DISTINCT FROM expected_pages
     THEN
-      RAISE EXCEPTION 'R2-P2: admin-B %d-day page/path totals differ from synthetic SQL',w;
+      RAISE EXCEPTION 'R2-P2: admin-B %-day page/path totals differ from synthetic SQL',w;
     END IF;
   END LOOP;
 END
