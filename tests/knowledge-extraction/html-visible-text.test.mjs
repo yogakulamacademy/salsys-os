@@ -1,9 +1,25 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {
-  extractVisibleWebsiteBlocks,
-  prepareWebsiteEvidenceFromHtml,
-} from '../../lib/knowledge-extraction/html-visible-text.ts';
+import { mkdtemp, readFile, writeFile, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { pathToFileURL } from 'node:url';
+
+// Node 22's TypeScript strip-types does not resolve extensionless relative
+// TS imports. Keep the production bundler import unchanged; use a disposable
+// test copy that points to the explicit .ts file.
+const tempDir=await mkdtemp(join(tmpdir(),'salsys-kb02-html-'));
+const evidenceSource=await readFile(
+  new URL('../../lib/knowledge-extraction/website-evidence.ts',import.meta.url),'utf8');
+await writeFile(join(tempDir,'website-evidence.ts'),evidenceSource,'utf8');
+const parserSource=await readFile(
+  new URL('../../lib/knowledge-extraction/html-visible-text.ts',import.meta.url),'utf8');
+const rewritten=parserSource.replace("from './website-evidence'","from './website-evidence.ts'");
+assert.notEqual(rewritten,parserSource,'Test must exercise the real TS source import');
+await writeFile(join(tempDir,'html-visible-text.ts'),rewritten,'utf8');
+const { extractVisibleWebsiteBlocks, prepareWebsiteEvidenceFromHtml }=
+  await import(pathToFileURL(join(tempDir,'html-visible-text.ts')).href);
+test.after(async()=>rm(tempDir,{recursive:true,force:true}));
 
 const source = () => ({
   verifiedSeedUrl:'https://academy.example.com/',
