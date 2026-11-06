@@ -165,6 +165,9 @@ jobs:
       - name: Verify AI Knowledge Final Closeout Contracts
         run: npm run verify:ai-knowledge-final-closeout
 
+      - name: Verify KB-01 website discovery safety tests
+        run: node --experimental-strip-types --test tests/knowledge-discovery/*.test.mjs
+
       - name: Verify Home Command Center Final Closeout Contracts
         run: npm run verify:home-command-center-final-closeout
 
