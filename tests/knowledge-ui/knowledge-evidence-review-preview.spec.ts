@@ -294,3 +294,31 @@ test('KB-04D synthetic reviewer notes never invoke the real knowledge approval f
   await expect(page.getByRole('button',{name:'Publish knowledge (disabled)'})).toBeDisabled();
   expect(writes).toEqual([]);
 });
+
+
+test('KB-04E release acceptance remains blocked without independent staging proof',async({page})=>{
+  const writes:string[]=[];
+  page.on('request',request=>{
+    if(request.method()!=='GET'&&
+      /\/(?:api\/knowledge|rest\/v1\/knowledge_|api\/website)/.test(request.url())){
+      writes.push(request.method()+' '+request.url());
+    }
+  });
+  await page.goto('/settings/knowledge/evidence-preview');
+  const ledger=page.getByRole('region',{name:'Isolated staging acceptance preview'});
+  await expect(ledger.getByRole('heading',{name:'Isolated staging acceptance'})).toBeVisible();
+  await expect(ledger.getByText('Release blocked')).toBeVisible();
+  await expect(ledger.getByText('Required scenarios')).toBeVisible();
+  await expect(ledger.getByText('Missing evidence')).toBeVisible();
+  await ledger.getByText('Inspect 16 acceptance scenarios').click();
+  await expect(ledger.getByText(
+    'Tenant A cannot read tenant B source or knowledge evidence')).toBeVisible();
+  await expect(ledger.getByText(
+    'Consent withdrawal prevents queued and in-flight follow-on jobs')).toBeVisible();
+  await expect(ledger.getByText(
+    'Real-provider unsupported or hallucinated claims are not approved')).toBeVisible();
+  await expect(ledger.getByText('Not evidenced',{exact:true})).toHaveCount(16);
+  await expect(ledger.getByText('A fully populated checklist still cannot grant permissions.',{exact:false})).toBeVisible();
+  await expect(page.getByRole('button',{name:'Publish knowledge (disabled)'})).toBeDisabled();
+  expect(writes).toEqual([]);
+});
