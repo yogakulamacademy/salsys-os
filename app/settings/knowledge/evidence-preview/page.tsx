@@ -191,10 +191,11 @@ export default async function EvidenceReviewPreviewPage() {
   if(!impact.ok)throw new Error('Synthetic source change-impact fixture failed.');
   // KB-04D: one fictional, unsaved annotation. No actual actor, audit or
   // action invocation is implied by the claim below.
+  const currentModifiedSource=modified.current;
   const annotatedRow=acceptance.packet.rows.find(row=>
-    row.sourceUrl===modified.current.sourceUrl&&
-    row.answerQuoteSha256===modified.current.quoteSha256&&
-    row.answerBlockId===modified.current.blockId);
+    row.sourceUrl===currentModifiedSource.sourceUrl&&
+    row.answerQuoteSha256===currentModifiedSource.quoteSha256&&
+    row.answerBlockId===currentModifiedSource.blockId);
   const handoff=prepareSyntheticHumanReviewHandoff({
     organizationId:testOrganization,activeOrganizationId:testOrganization,
     reviewerId:'00000000-0000-4000-8000-000000000003',
