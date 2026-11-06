@@ -7,6 +7,7 @@ import { buildAIDraftingRequest, validateAIDraftingResponse } from '@/lib/knowle
 import { evaluateGroundedAIProposals } from '@/lib/knowledge-extraction/ai-grounding-evaluation';
 import { prepareSyntheticKnowledgeReviewAcceptance } from '@/lib/knowledge-extraction/knowledge-review-acceptance';
 import { compareWebsiteEvidenceSnapshots } from '@/lib/knowledge-extraction/website-snapshot-delta';
+import { KnowledgeRefreshReadinessPreview } from '@/components/knowledge-refresh-readiness-preview';
 
 export const dynamic = 'force-dynamic';
 
@@ -152,6 +153,7 @@ export default async function EvidenceReviewPreviewPage() {
 
 
   return (
+    <>
     <KnowledgeEvidenceReviewPreview
       evidence={result.evidence}
       sourceCandidates={candidates.bundle}
@@ -161,5 +163,7 @@ export default async function EvidenceReviewPreviewPage() {
       acceptancePacket={acceptance.packet}
       snapshotDelta={snapshotDelta.report}
     />
+    <KnowledgeRefreshReadinessPreview />
+    </>
   );
 }
