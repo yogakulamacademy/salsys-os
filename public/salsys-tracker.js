@@ -659,9 +659,10 @@
     Object.keys(effective).forEach(function (purpose) {
       if (allowedPurposes.indexOf(purpose) === -1 ||
           allowedDecisions.indexOf(effective[purpose]) === -1) invalid();
-    });
-    Object.keys(request.decisions).forEach(function (purpose) {
-      if (effective[purpose] !== request.decisions[purpose]) invalid();
+      // The only server-added purpose allowed by the public consent API is
+      // GPC sale-sharing opt-out. Never grant an unrequested optional purpose.
+      if (!Object.prototype.hasOwnProperty.call(request.decisions, purpose) &&
+          !(purpose === 'sale_sharing' && effective[purpose] === 'opted_out')) invalid();
       var matches = result.receipts.filter(function (receipt) {
         return receipt && receipt.purpose === purpose &&
           receipt.decision === effective[purpose] &&
@@ -670,6 +671,9 @@
           receipt.receipt_id !== 'null';
       });
       if (matches.length !== 1) invalid();
+    });
+    Object.keys(request.decisions).forEach(function (purpose) {
+      if (effective[purpose] !== request.decisions[purpose]) invalid();
     });
     return effective;
   }
