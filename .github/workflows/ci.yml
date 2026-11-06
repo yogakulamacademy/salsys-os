@@ -9,6 +9,7 @@ on:
       - main
       # Temporary stacked-PR validation; remove before KB-02 targets main.
       - feature/kb02-source-evidence-core
+      - feature/kb02d-evidence-review-preview
 
 permissions:
   contents: read

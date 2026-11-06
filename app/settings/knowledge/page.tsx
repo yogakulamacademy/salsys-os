@@ -244,6 +244,23 @@ export default async function KnowledgeSettingsPage({
         </div>
       </div>
       
+      {canManage ? (
+        <div className="rounded-xl border border-slate-200 bg-white px-4 py-3">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <div className="text-sm font-semibold">Evidence review preview</div>
+              <p className="mt-1 text-xs text-slate-500">
+                Explore source quotations and review controls using synthetic data. No decisions are saved or published.
+              </p>
+            </div>
+            <Link href="/settings/knowledge/evidence-preview"
+              className="rounded-lg border border-slate-200 px-3 py-2 text-xs font-semibold hover:bg-slate-50">
+              Open preview
+            </Link>
+          </div>
+        </div>
+      ) : null}
+
       {query.notice ? <div className="kn-flash kn-success" role="status">{query.notice}</div> : null}
       {query.error || loadError ? <div className="kn-flash kn-error" role="alert">{query.error || loadError}</div> : null}
 
