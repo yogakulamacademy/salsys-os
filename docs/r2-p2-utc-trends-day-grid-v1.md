@@ -1,0 +1,9 @@
+# R2-P2 — UTC Event Activity date-domain validation
+
+**Finding.** The deployed Event Activity loader previously accepted any count of 7, 14 or 30 distinct, strictly ascending `YYYY-MM-DD` dates. It did not verify that the dates form the **entire UTC day grid** promised by the database RPC, nor that the returned window is anchored to the RPC's UTC generation timestamp. A missing or shifted UTC day could therefore appear as valid period activity even if its totals were well formed.
+
+**Change.** The pure `validBehaviorUtcDayGrid` helper verifies valid ISO calendar dates (including leap days), consecutiveness, the exact requested 7/14/30-day span, agreement with `status.first_day_utc` / `status.last_day_utc`, and that `status.generated_at` resolves to that ending UTC day. The server loader uses this check for every selected series. Malformed, stale or inconsistent metadata fails closed to the existing generic *Event trends unavailable* state; the funnel and Events by Page remain independently accessible.
+
+**Regression proof.** A Node unit test executes the actual TypeScript helper against correct windows, timezone offsets, leap years, gaps, duplicates, bad dates, stale metadata and malformed timestamps. The loopback-only browser fixture returns two wrong-but-otherwise-successful Event Activity responses: an off-grid first day and a coherent stale whole-window payload. Playwright verifies that Event Activity is unavailable while synthetic current-tenant funnel and page breakdown still render.
+
+**Scope.** No database schema, source events, billing, identity, consent, collector activation or production data writes. Full exact-head CI and CodeQL must pass before merging. This does not replace actual owner/admin R2-P2 login, tenant isolation, UTC report reconciliation or the separate privacy/retention acceptance requirements. Issues #520/#523/#527/#528/#531 remain governed by their existing release gates; PRs #530 and #535 remain draft.
