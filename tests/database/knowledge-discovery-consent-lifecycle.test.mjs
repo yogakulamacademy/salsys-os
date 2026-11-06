@@ -134,8 +134,7 @@ test('KB-06B exact SQL: signed session, policy switch, atomic audit and withdraw
     assert.equal(row.status,'granted');
     assert.equal(row.revision,1);
     // No erasure is allowed while consent remains granted.
-    assert.deepEqual((await a(eraseSql,[ORG_A,HOST_A,1])).rows[0].outcome,
-      {ok:false,reason:'stale_revision'});
+    await assert.rejects(a(eraseSql,[ORG_A,HOST_A,1]),e=>e.code==='22023');
     assert.deepEqual((await a(eraseSql,[ORG_A,HOST_A,2])).rows[0].outcome,
       {ok:false,reason:'stale_revision'});
     assert.equal((await db.query('select count(*)::int as n from public.knowledge_discovery_consent_audit')).rows[0].n,1);
@@ -213,8 +212,7 @@ test('KB-06B exact SQL: signed session, policy switch, atomic audit and withdraw
       [ORG_A,HOST_A,2]),e=>e.code==='42501');
     await assert.rejects(invoke('anon',USER_A,SID_A,eraseSql,
       [ORG_A,HOST_A,2]),e=>e.code==='42501');
-    assert.deepEqual((await a(eraseSql,[ORG_A,HOST_A,1])).rows[0].outcome,
-      {ok:false,reason:'stale_revision'});
+    await assert.rejects(a(eraseSql,[ORG_A,HOST_A,1]),e=>e.code==='22023');
     assert.deepEqual((await a(eraseSql,[ORG_A,'wrong.example.com',2])).rows[0].outcome,
       {ok:false,reason:'consent_missing'});
 
