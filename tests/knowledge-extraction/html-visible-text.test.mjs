@@ -17,8 +17,10 @@ const parserSource=await readFile(
 const rewritten=parserSource.replace("from './website-evidence'","from './website-evidence.ts'");
 assert.notEqual(rewritten,parserSource,'Test must exercise the real TS source import');
 await writeFile(join(tempDir,'html-visible-text.ts'),rewritten,'utf8');
-const { extractVisibleWebsiteBlocks, prepareWebsiteEvidenceFromHtml }=
-  await import(pathToFileURL(join(tempDir,'html-visible-text.ts')).href);
+const {
+  extractVisibleWebsiteBlocks, prepareWebsiteEvidenceFromHtml,
+  prepareWebsiteEvidenceFromFetch,
+}=await import(pathToFileURL(join(tempDir,'html-visible-text.ts')).href);
 test.after(async()=>rm(tempDir,{recursive:true,force:true}));
 
 const source = () => ({
@@ -157,4 +159,43 @@ test('never crosses verified HTTPS hostname and has deterministic source hashes'
   const out=prepareWebsiteEvidenceFromHtml({...source(),
     sourceUrl:'https://www.academy.example.com/courses',html});
   assert.deepEqual(out,{ok:false,error:'source_not_within_verified_https_host'});
+});
+
+
+test('fetched-response boundary only accepts HTTP 200 HTML from exact verified host',()=>{
+  const payload={
+    verifiedSeedUrl:'https://academy.example.com/',
+    fetchedAt:'2026-11-06T10:00:00Z',
+    response:{
+      url:'https://academy.example.com/courses?ref=ads',
+      status:200,contentType:'text/html; charset=utf-8',
+      body:'<main><h1>Course</h1><p>Registration opens December 7.</p></main>',
+    },
+  };
+  const accepted=prepareWebsiteEvidenceFromFetch(payload);
+  assert.equal(accepted.ok,true);
+  assert.equal(accepted.evidence.sourceUrl,'https://academy.example.com/courses');
+  assert.equal(accepted.evidence.blocks[0].quote,'Registration opens December 7.');
+  for(const [status,contentType] of [
+    [204,'text/html'],[404,'text/html'],[503,'text/html'],
+    [200,'application/pdf'],[200,'application/json'],[200,'text/plain'],
+  ]){
+    const rejected=prepareWebsiteEvidenceFromFetch({
+      ...payload,response:{...payload.response,status,contentType},
+    });
+    assert.equal(rejected.ok,false);
+  }
+  const offsite=prepareWebsiteEvidenceFromFetch({
+    ...payload,response:{...payload.response,url:'https://another.example.com/courses'},
+  });
+  assert.deepEqual(offsite,{ok:false,error:'source_not_within_verified_https_host'});
+});
+
+test('honors explicitly hidden inline CSS even with !important',()=>{
+  const result=extractVisibleWebsiteBlocks(
+    '<main><p>Visible fact.</p>'+
+    '<div style="display:none !important"><p>Hidden price.</p></div>'+
+    '<div style="color:red;visibility:hidden !important"><p>Hidden date.</p></div></main>');
+  assert.equal(result.ok,true);
+  assert.deepEqual(result.blocks,[{kind:'paragraph',text:'Visible fact.'}]);
 });
