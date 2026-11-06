@@ -33,7 +33,8 @@ function node(attributes = {}) {
     },
     closest(selector) {
       if (selector === '[data-salsys-brochure-id]' && attributes['data-salsys-brochure-id']) return item;
-      if (selector === '[data-salsys-faq-id][aria-expanded]' && attributes['data-salsys-faq-id']) return item;
+      if (selector === '[data-salsys-faq-id][aria-expanded]' && attributes['data-salsys-faq-id'] && attributes['aria-expanded'] != null) return item;
+      if (selector === 'details[data-salsys-faq-id]' && attributes['data-salsys-faq-id'] && attributes.isDetails) return item;
       return null;
     },
   };
@@ -192,6 +193,26 @@ test('FAQ, brochure, and form events only send bounded identifiers and categorie
   assert.ok(!JSON.stringify(ctx.events).includes('SECRET'));
 });
 
+
+test('native details FAQ requires a consented click, not an asynchronous toggle', () => {
+  const details = node({ isDetails: true, open: true, 'data-salsys-faq-id': 'native_details' });
+  const ctx = setup(false);
+  ctx.sendDocument('click', { target: details });
+  ctx.setConsent(true);
+  ctx.sendWindow('salsys:consent-changed', {});
+  ctx.sendDocument('toggle', { target: details });
+  ctx.flushTimers();
+  assert.equal(ctx.events.length, 0);
+
+  ctx.sendDocument('click', { target: details });
+  ctx.sendDocument('toggle', { target: details });
+  ctx.flushTimers();
+  assert.deepEqual(JSON.parse(JSON.stringify(ctx.events)), [
+    { name: 'web.faq_expanded', properties: { faq_id: 'native_details' } },
+  ]);
+  ctx.sendDocument('toggle', { target: details });
+  assert.equal(ctx.events.length, 1);
+});
 
 test('deferred FAQ does not replay pre-consent clicks after a grant', () => {
   const ctx = setup(false);
