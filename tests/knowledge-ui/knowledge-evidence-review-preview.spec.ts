@@ -249,3 +249,27 @@ test('KB-04B synthetic refresh preflight cannot schedule, fetch or store evidenc
   await expect(page.getByRole('button',{name:'Publish knowledge (disabled)'})).toBeDisabled();
   expect(writes).toEqual([]);
 });
+
+
+test('KB-04C change-impact review reports at-risk citations without changing knowledge',async({page})=>{
+  const writes:string[]=[];
+  page.on('request',request=>{
+    if(request.method()!=='GET' &&
+      /\\/(?:api\\/knowledge|rest\\/v1\\/knowledge_|api\\/website)/.test(request.url())){
+      writes.push(request.method()+' '+request.url());
+    }
+  });
+  await page.goto('/settings/knowledge/evidence-preview');
+  const impact=page.getByRole('region',{name:'Knowledge change impact preview'});
+  await expect(impact.getByRole('heading',{name:'Knowledge change impact'})).toBeVisible();
+  await expect(impact.getByText('Human review required')).toBeVisible();
+  await expect(impact.getByText('Published citations at risk')).toBeVisible();
+  await expect(impact.getByText('Possible quotation modification')).toBeVisible();
+  await expect(impact.getByText('Introduction workshop | $175',{exact:true})).toBeVisible();
+  await expect(impact.getByText('Introduction workshop | $150',{exact:true})).toBeVisible();
+  await expect(impact.getByText('simulated published knowledge version',{exact:false})).toBeVisible();
+  await expect(impact.getByText('possible overlapping periods',{exact:false})).toBeVisible();
+  await expect(impact.getByText('No automatic source replacement',{exact:false})).toBeVisible();
+  await expect(page.getByRole('button',{name:'Publish knowledge (disabled)'})).toBeDisabled();
+  expect(writes).toEqual([]);
+});
