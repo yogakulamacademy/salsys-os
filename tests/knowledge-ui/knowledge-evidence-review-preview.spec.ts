@@ -74,6 +74,28 @@ test('review preview names consent and deletion safeguards without enabling stor
   await expect(page.getByRole('button',{name:'Publish knowledge (disabled)'})).toBeDisabled();
 });
 
+test('read-only source candidate preview pairs actual FAQ quotations without auto-approval',async({page})=>{
+  const writes:string[]=[];
+  page.on('request',request=>{
+    if(request.method()!=='GET' &&
+      /\\/(?:api\\/knowledge|rest\\/v1\\/knowledge_)/.test(request.url())) {
+      writes.push(request.method()+' '+request.url());
+    }
+  });
+  await page.goto('/settings/knowledge/evidence-preview');
+  const candidates=page.getByRole('region',{name:'Source-backed draft candidates'});
+  await expect(candidates.getByText('Exact quotations and adjacent FAQ pairs',{exact:false})).toBeVisible();
+  await expect(candidates.getByText('Can I reschedule?',{exact:true})).toBeVisible();
+  await expect(candidates.getByText(
+    'Rescheduling requests must be submitted before the event.',{exact:true})).toBeVisible();
+  await expect(candidates.getByText('Introduction workshop | $150',{exact:true})).toBeVisible();
+  await expect(candidates.getByText('Human review required').first()).toBeVisible();
+  await expect(candidates.getByText(
+    'No AI-generated content, storage, approval, or publishing is enabled by this preview.')).toBeVisible();
+  await expect(page.getByRole('button',{name:'Publish knowledge (disabled)'})).toBeDisabled();
+  expect(writes).toEqual([]);
+});
+
 test('review preview remains readable without horizontal overflow on mobile',async({page})=>{
   await page.setViewportSize({width:390,height:844});
   await page.goto('/settings/knowledge/evidence-preview');
