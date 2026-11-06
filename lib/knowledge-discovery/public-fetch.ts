@@ -3,8 +3,10 @@ import { request as httpsRequest } from 'node:https';
 import { pinPublicAddress, scopedDiscoveredUrl, type LookupAddresses } from './url-policy';
 
 export class WebsiteFetchError extends Error {
-  constructor(public readonly code: string) {
+  readonly code: string;
+  constructor(code: string) {
     super(code);
+    this.code = code;
     this.name = 'WebsiteFetchError';
   }
 }
