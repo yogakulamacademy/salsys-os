@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { requireCurrentOrganizationId } from "@/lib/workspace";
 import type { BehaviorEvent } from "@/lib/native-behavior-contract";
 import { safeBehaviorCount as count } from "@/lib/native-behavior-safe-count";
+import { validBehaviorUtcDayGrid } from "@/lib/native-behavior-utc-day-grid";
 
 export type BehaviorTrendDay = {
   dateUtc: string;
@@ -103,8 +104,15 @@ export async function getNativeBehaviorTrends(request: BehaviorTrendRequest): Pr
         dates.add(dateUtc);
         days.push({ dateUtc, events, sessions });
       }
-      if (days.some((day, j) => j > 0 && days[j - 1].dateUtc >= day.dateUtc)
-        || days.reduce((total, day) => total + day.events, 0) !== totalEvents) return fail();
+      // A complete UTC domain must be consecutive and anchored to the RPC's
+      // server-side UTC day, not just a sorted array of the requested length.
+      if (!validBehaviorUtcDayGrid(
+        days.map((day) => day.dateUtc),
+        status.first_day_utc,
+        status.last_day_utc,
+        status.generated_at,
+        request.days,
+      ) || days.reduce((total, day) => total + day.events, 0) !== totalEvents) return fail();
       parsed.push({ eventName: request.events[i], totalEvents, observedSessions, days });
     }
 
