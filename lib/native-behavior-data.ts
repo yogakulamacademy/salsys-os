@@ -54,7 +54,9 @@ function safePublicPath(value: string): boolean {
     && value !== "/other"
     && !/[0-9]{6,}/.test(value)
     && !/[a-f0-9]{16,}/i.test(value)
-    && !/\/[0-9]{4,}(?:\/|\.|$)/.test(value);
+    && !/\/[0-9]{4,}(?:\/|\.|$)/.test(value)
+    // Defense in depth: the RPC path normalizer also rejects these private routes.
+    && !/(^|\/)(account|profile|users?|students?|private|admin|dashboard|settings|session|token|reset-password|payments?|orders?|checkout|leads?|api|auth)(\/|\.|$)/i.test(value);
 }
 
 function number(value: unknown): number {

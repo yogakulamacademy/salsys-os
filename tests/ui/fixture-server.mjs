@@ -112,6 +112,10 @@ const server=http.createServer(async(req,res)=>{
       ]:[
         {from_path:'/courses/200-hour-ytt.php',to_path:'/enroll.php',sessions:8,transitions:11},
         {from_path:'/private?email=student@example.test',to_path:'/enroll.php',sessions:6,transitions:6},
+        // Deliberately malformed RPC output simulates a SQL privacy regression;
+        // the server layer must still suppress these otherwise clean-looking routes.
+        {from_path:'/account/billing.php',to_path:'/enroll.php',sessions:6,transitions:6},
+        {from_path:'/courses/200-hour-ytt.php',to_path:'/students/dashboard',sessions:6,transitions:6},
       ]
     };
   }
