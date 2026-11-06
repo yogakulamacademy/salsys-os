@@ -12,6 +12,9 @@ import { assessSourceChangeImpact } from '@/lib/knowledge-extraction/source-chan
 import { KnowledgeSourceChangeImpactPreview } from '@/components/knowledge-source-change-impact-preview';
 import { prepareSyntheticHumanReviewHandoff } from '@/lib/knowledge-extraction/human-review-handoff';
 import { KnowledgeHumanReviewHandoffPreview } from '@/components/knowledge-human-review-handoff-preview';
+import { assessEvidenceReadiness } from '@/lib/knowledge-extraction/evidence-lifecycle-readiness';
+import { assessStagingAcceptanceLedger } from '@/lib/knowledge-extraction/staging-acceptance-ledger';
+import { KnowledgeStagingAcceptancePreview } from '@/components/knowledge-staging-acceptance-preview';
 
 export const dynamic = 'force-dynamic';
 
@@ -208,6 +211,17 @@ export default async function EvidenceReviewPreviewPage() {
     }]:[],
   });
   if(!handoff.ok)throw new Error('Synthetic human review handoff fixture failed.');
+  // KB-04E: empty independent evidence ledger. No live tenant access,
+  // verified staging environment, or release authorization is supplied.
+  const stagingLedger=assessStagingAcceptanceLedger({
+    organizationId:testOrganization,
+    asOf:'2026-11-06T12:00:00Z',
+    claims:[],
+    evidenceReadiness:assessEvidenceReadiness(null),
+    refreshPreflight:null,
+    humanReview:handoff.packet,
+  });
+  if(!stagingLedger.ok)throw new Error('Synthetic staging acceptance ledger failed.');
 
   return (
     <>
@@ -223,6 +237,7 @@ export default async function EvidenceReviewPreviewPage() {
     <KnowledgeRefreshReadinessPreview />
     <KnowledgeSourceChangeImpactPreview report={impact.report} />
     <KnowledgeHumanReviewHandoffPreview packet={handoff.packet} />
+    <KnowledgeStagingAcceptancePreview report={stagingLedger.report} />
     </>
   );
 }
