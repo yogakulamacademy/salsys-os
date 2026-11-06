@@ -287,8 +287,8 @@ test('KB-04D synthetic reviewer notes never invoke the real knowledge approval f
   const handoff=page.getByRole('region',{name:'Human review handoff preview'});
   await expect(handoff.getByRole('heading',{name:'Human review handoff'})).toBeVisible();
   await expect(handoff.getByText('Handoff not connected')).toBeVisible();
-  await expect(handoff.getByText('Not approved')).toBeVisible();
-  await expect(handoff.getByText('Simulated annotation:',{exact:false})).toBeVisible();
+  await expect(handoff.getByText('Not approved',{exact:true})).toHaveCount(2);
+  await expect(handoff.getByText('Simulated annotation: request manual correction',{exact:false})).toBeVisible();
   await expect(handoff.getByText('No reviewer decision recorded.',{exact:false})).toBeVisible();
   await expect(handoff.getByText('Existing workflows remain createKnowledgeDocumentAction',{exact:false})).toBeVisible();
   await expect(page.getByRole('button',{name:'Publish knowledge (disabled)'})).toBeDisabled();
