@@ -117,6 +117,14 @@ The public consent endpoint returns **exactly one saved receipt per effective pu
 
 The new isolated Node VM and intercepted Chromium tests verify this while retaining the previously tested valid, receipted GPC response. This detects response-contract discrepancies and does **not** assert a real website or server compromise. There are no changes to the consent API, production release or optional behavioral event collector. **Keep the PR draft until real isolated-site CMP and form handoff acceptance.**
 
+## Additional configuration-only staging origin checks (2026-11-06)
+
+The **draft-only** `scripts/r2-consent-staging-preflight.mjs` now rejects IP-literal endpoints (including IPv4, IPv6 loopback and IPv4-mapped IPv6), local/internal/reserved hostnames, trailing-dot variants of live production hostnames, nonstandard HTTPS ports and staging website/CRM/Supabase origins that share a hostname. These tests cover site, CRM and database origin declarations, not just the website. The input-only preflight remains **no network/no database writes**.
+
+**Limits:** A plausible publicly named HTTPS origin can still resolve to a private address, belong to an unauthorized party, use the wrong SSL certificate, proxy production endpoints or share uninspected production credentials. The preflight does not verify DNS, TLS, origin control, project ownership, actual Supabase/Vercel runtime settings, source registration, outbound side-effect isolation, or owner sign-off. Its affirmative environment variables are **operator declarations**, not automatically validated facts. No manual or real-CMP staging acceptance is authorized merely by a PASS.
+
+**Cost/release guard:** No extra Vercel/Supabase project, domain, preview deployment or staging source was provisioned, no paid plan approved, and no production tracking or test leads sent. Keep Issues #531 and #528 open, PR #530 draft, and optional collector #520 OFF.
+
 ## Release gates
 
 - [ ] Full CI: readiness tests, TypeScript/build, loopback Playwright tests, financial tests
