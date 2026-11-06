@@ -19,6 +19,7 @@ export type GroundingReviewReason =
   | 'unresolved_source_difference'
   | 'outdated_source_recheck'
   | 'freshness_not_evaluated'
+  | 'source_difference_review_not_supplied'
   | 'unsupported_question_context'
   | 'high_impact_question_context'
   | 'possible_prompt_injection_in_source'
@@ -148,13 +149,12 @@ function questionReasons(proposal:ValidatedAIProposal,
   const query=words(proposal.question);
   const known=words(context);
   const shared=[...query].filter(word=>known.has(word));
-  const suspicious=[...query].filter(word=>
-    MATERIAL_TERMS.has(word)&&!known.has(word));
-  // A price-question term is allowed for quoted price evidence, but cannot
-  // justify inventing a different price or a new certification guarantee.
-  const unsupported=suspicious.filter(word=>
-    !(source.riskReminders.includes('pricing_or_amounts')&&
-      (word==='discount')));
+  // High-impact claims such as pregnancy, certification or discounts
+  // require explicit source wording. A price quotation does not establish
+  // that a discount, refund, accreditation or safety guarantee exists.
+  const unsupported=[...query].filter(word=>
+    [...MATERIAL_TERMS].some(term=>word.startsWith(term))&&
+    ![...known].some(existing=>existing.startsWith(word)||word.startsWith(existing)));
   const reasons:GroundingReviewReason[]=[];
   if(shared.length<2) reasons.push('unsupported_question_context');
   if(unsupported.length) reasons.push('high_impact_question_context');
@@ -212,9 +212,9 @@ export function evaluateGroundedAIProposals(
     const age=now-Date.parse(c.fetchedAt);
     if(age < -5*60_000)return {ok:false,error:'source_timestamp_in_future'};
     const reasons:GroundingReviewReason[]=[];
-    if(signals===undefined)reasons.push('freshness_not_evaluated');
+    if(signals===undefined)reasons.push('source_difference_review_not_supplied');
     if(options.reviewAgeDays===undefined){
-      if(!reasons.includes('freshness_not_evaluated'))reasons.push('freshness_not_evaluated');
+      reasons.push('freshness_not_evaluated');
     }else if(age>=options.reviewAgeDays*86400000){
       reasons.push('outdated_source_recheck');
     }
@@ -236,7 +236,8 @@ export function evaluateGroundedAIProposals(
     const unique=[...new Set(reasons)];
     const hold=unique.some(x=>[
       'unresolved_source_difference','outdated_source_recheck',
-      'freshness_not_evaluated','unsupported_question_context',
+      'freshness_not_evaluated','source_difference_review_not_supplied',
+      'unsupported_question_context',
       'high_impact_question_context','possible_prompt_injection_in_source',
     ].includes(x));
     items.push({
