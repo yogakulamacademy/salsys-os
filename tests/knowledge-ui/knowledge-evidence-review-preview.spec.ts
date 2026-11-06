@@ -38,29 +38,29 @@ test('admin can plan review of source quotes but cannot approve or publish',asyn
   const counts=page.getByRole('region',{name:'Evidence review counts'});
   await expect(counts.getByText('For later review')).toBeVisible();
   await expect(counts.getByText('10',{exact:true})).toHaveCount(2);
-  const first=page.getByRole('article').filter({hasText:'Introduction workshop: 2 days.'});
+  const first=page.getByRole('region',{name:'Evidence entries'}).getByRole('article').filter({hasText:'Introduction workshop: 2 days.'});
   await first.getByRole('button',{name:'For later review'}).click();
   await expect(first.locator('span').filter({hasText:'For later review'})).toHaveCount(1);
-  const fee=page.getByRole('article').filter({hasText:'Introduction workshop | $150'});
+  const fee=page.getByRole('region',{name:'Evidence entries'}).getByRole('article').filter({hasText:'Introduction workshop | $150'});
   await fee.getByRole('button',{name:'Exclude'}).click();
   await expect(fee.locator('span').filter({hasText:'Excluded'})).toHaveCount(1);
 
   await page.getByRole('group',{name:'Filter evidence'}).getByRole('button',{name:'For later review'}).click();
-  await expect(page.getByRole('article')).toHaveCount(1);
+  await expect(page.getByRole('region',{name:'Evidence entries'}).getByRole('article')).toHaveCount(1);
   await expect(page.getByRole('button',{name:'Publish knowledge (disabled)'})).toBeDisabled();
   expect(writes).toEqual([]);
 });
 
 test('filters and reset are local to the tab and cannot silently persist',async({page})=>{
   await page.goto('/settings/knowledge/evidence-preview');
-  const article=page.getByRole('article').filter({hasText:'Advanced workshop: 5 days.'});
+  const article=page.getByRole('region',{name:'Evidence entries'}).getByRole('article').filter({hasText:'Advanced workshop: 5 days.'});
   await article.getByRole('button',{name:'For later review'}).click();
   await page.getByRole('group',{name:'Filter evidence'}).getByRole('button',{name:'For later review'}).click();
-  await expect(page.getByRole('article')).toHaveCount(1);
+  await expect(page.getByRole('region',{name:'Evidence entries'}).getByRole('article')).toHaveCount(1);
   await page.getByRole('button',{name:'Reset preview'}).click();
-  await expect(page.getByRole('article')).toHaveCount(10);
+  await expect(page.getByRole('region',{name:'Evidence entries'}).getByRole('article')).toHaveCount(10);
   await page.reload();
-  await expect(page.getByRole('article')).toHaveCount(10);
+  await expect(page.getByRole('region',{name:'Evidence entries'}).getByRole('article')).toHaveCount(10);
   await expect(page.getByText('All evidence',{exact:true})).toBeVisible();
 });
 
@@ -246,6 +246,30 @@ test('KB-04B synthetic refresh preflight cannot schedule, fetch or store evidenc
   await expect(safety.getByText('Any kill switch',{exact:false})).toBeVisible();
   await expect(safety.getByText('Explicit unexpired monitoring-purpose consent',{exact:false})).toBeVisible();
   await expect(safety.getByText('No schedule or storage endpoint',{exact:false})).toBeVisible();
+  await expect(page.getByRole('button',{name:'Publish knowledge (disabled)'})).toBeDisabled();
+  expect(writes).toEqual([]);
+});
+
+
+test('KB-04C change-impact review reports at-risk citations without changing knowledge',async({page})=>{
+  const writes:string[]=[];
+  page.on('request',request=>{
+    if(request.method()!=='GET' &&
+      /\/(?:api\/knowledge|rest\/v1\/knowledge_|api\/website)/.test(request.url())){
+      writes.push(request.method()+' '+request.url());
+    }
+  });
+  await page.goto('/settings/knowledge/evidence-preview');
+  const impact=page.getByRole('region',{name:'Knowledge change impact preview'});
+  await expect(impact.getByRole('heading',{name:'Knowledge change impact'})).toBeVisible();
+  await expect(impact.getByText('Human review required')).toBeVisible();
+  await expect(impact.getByText('Published citations at risk')).toBeVisible();
+  await expect(impact.getByText('Possible quotation modification')).toBeVisible();
+  await expect(impact.getByText('Introduction workshop | $175',{exact:true})).toBeVisible();
+  await expect(impact.getByText('Introduction workshop | $150',{exact:true})).toBeVisible();
+  await expect(impact.getByText('simulated published knowledge version',{exact:false})).toBeVisible();
+  await expect(impact.getByText('possible overlapping periods',{exact:false})).toBeVisible();
+  await expect(impact.getByText('No automatic source replacement',{exact:false})).toBeVisible();
   await expect(page.getByRole('button',{name:'Publish knowledge (disabled)'})).toBeDisabled();
   expect(writes).toEqual([]);
 });

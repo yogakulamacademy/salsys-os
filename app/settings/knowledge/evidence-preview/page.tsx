@@ -8,6 +8,8 @@ import { evaluateGroundedAIProposals } from '@/lib/knowledge-extraction/ai-groun
 import { prepareSyntheticKnowledgeReviewAcceptance } from '@/lib/knowledge-extraction/knowledge-review-acceptance';
 import { compareWebsiteEvidenceSnapshots } from '@/lib/knowledge-extraction/website-snapshot-delta';
 import { KnowledgeRefreshReadinessPreview } from '@/components/knowledge-refresh-readiness-preview';
+import { assessSourceChangeImpact } from '@/lib/knowledge-extraction/source-change-impact';
+import { KnowledgeSourceChangeImpactPreview } from '@/components/knowledge-source-change-impact-preview';
 
 export const dynamic = 'force-dynamic';
 
@@ -148,9 +150,43 @@ export default async function EvidenceReviewPreviewPage() {
     previousPage.evidence,result.evidence,'sample.example.com',
   );
   if(!snapshotDelta.ok)throw new Error('Synthetic source snapshot comparison failed.');
-
-
-
+  // KB-04C: MANUALLY SCOPED, invented effective windows and knowledge citation.
+  // None of this is loaded from a customer, published corpus or live website.
+  const modified=snapshotDelta.report.changes.find(change=>
+    change.kind==='modified'&&change.prior&&change.current);
+  if(!modified||!modified.prior||!modified.current){
+    throw new Error('Synthetic knowledge change-impact fixture invalid.');
+  }
+  const testOrganization='00000000-0000-4000-8000-000000000001';
+  const impact=assessSourceChangeImpact(
+    [snapshotDelta.report],
+    [
+      {
+        organizationId:testOrganization,changeId:modified.id,side:'prior',
+        scopeKey:'program:introduction-workshop/session:sample',
+        fieldKey:'fee',kind:'price',
+        effectiveFrom:'2026-09-01',effectiveUntil:'2026-11-01',
+      },
+      {
+        organizationId:testOrganization,changeId:modified.id,side:'current',
+        scopeKey:'program:introduction-workshop/session:sample',
+        fieldKey:'fee',kind:'price',
+        effectiveFrom:'2026-10-15',effectiveUntil:'2026-12-01',
+      },
+    ],
+    [{
+      organizationId:testOrganization,
+      documentId:'00000000-0000-4000-8000-000000000002',
+      version:1,state:'published',sourceUrl:modified.prior.sourceUrl,
+      snapshotSha256:modified.prior.snapshotSha256,
+      blockId:modified.prior.blockId,quoteSha256:modified.prior.quoteSha256,
+    }],
+    {
+      organizationId:testOrganization,verifiedHostname:'sample.example.com',
+      asOf:'2026-11-06T12:00:00Z',reviewAgeDays:30,
+    },
+  );
+  if(!impact.ok)throw new Error('Synthetic source change-impact fixture failed.');
 
   return (
     <>
@@ -164,6 +200,7 @@ export default async function EvidenceReviewPreviewPage() {
       snapshotDelta={snapshotDelta.report}
     />
     <KnowledgeRefreshReadinessPreview />
+    <KnowledgeSourceChangeImpactPreview report={impact.report} />
     </>
   );
 }
