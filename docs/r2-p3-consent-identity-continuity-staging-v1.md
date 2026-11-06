@@ -81,6 +81,12 @@ node scripts/r2-consent-staging-preflight.mjs
 
 This preflight makes **read-only assertions about operator-supplied staging configuration** and returns a nonzero exit on missing requirements. It performs no API calls, writes, or secret reads and does not certify that the operator supplied true information. Independently verify the source/site record and deployment metadata. A preflight PASS does **not** replace actual two-tab/CMP and exact-session lead-form acceptance.
 
+## Verified receipt requirement (additional fail-closed control)
+
+The browser must NOT treat a 2xx HTTP status alone as proof that analytics consent was saved. The first-party server contract in `app/api/privacy/consent/v1/route.ts` returns `ok: true`, the same `visitor_id` as the submitted receipt, `effective_decisions`, and a unique nonempty `receipt_id` for every requested purpose. The draft SDK now validates that evidence and refuses malformed or contradictory acknowledgements. A missing/mismatched receipt must **not** save a new analytics grant or initialize optional tracking. A locally requested withdrawal must remain blocked and rotate identity even when its server acknowledgment is malformed.
+
+New loopback Chromium cases use valid HTTP 200 with missing success, wrong visitor, absent receipt, contradictory analytics decision or unexpected purpose, plus a malformed withdrawal response. These checks do not prove live provider/CMP behavior; the isolated authorized staging acceptance remains mandatory.
+
 ## Controlled staging acceptance — REQUIRED BEFORE MERGE
 
 Use disposable staging/site identities (never real prospects). Configure a test site's tracking source with `data-consent-mode="required"` and an authorized staging domain. Record aggregate result/status only; do not paste raw visitor IDs or credentials into GitHub issues.
