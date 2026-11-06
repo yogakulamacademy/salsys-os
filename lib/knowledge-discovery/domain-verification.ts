@@ -9,7 +9,7 @@ export const DOMAIN_PROOF_PATH = '/.well-known/salsysos-verification.txt';
 const TOKEN_RE = /^salsysos-domain-verification=[0-9a-f]{64}$/;
 
 export function discoveryVerificationHost(hostname: string): string {
-  return hostname.toLowerCase().replace(/\.$/, '').replace(/^www\./, '');
+  return hostname.toLowerCase().replace(/\.$/, '');
 }
 
 export function newDomainChallenge(): { token: string; tokenHash: string } {
