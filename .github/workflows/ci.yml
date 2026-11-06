@@ -22,6 +22,8 @@ on:
       - feature/kb05c-strict-monitoring-session-candidate
       # Temporary KB-05E offline-only stacked validation.
       - feature/kb05d-isolated-staging-auth-acceptance
+      # Temporary KB-05F stacked PR validation; offline tests only.
+      - feature/kb05e-verified-staging-jwt-session-claims
   push:
     branches:
       - main
@@ -44,6 +46,7 @@ on:
       - feature/kb05c-strict-monitoring-session-candidate
       - feature/kb05d-isolated-staging-auth-acceptance
       - feature/kb05e-verified-staging-jwt-session-claims
+      - feature/kb05f-complete-staging-response-isolation
 
 permissions:
   contents: read
