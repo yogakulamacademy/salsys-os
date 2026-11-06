@@ -41,9 +41,12 @@ test("funnel comparator is source-scoped, ordered, tenant-bound and never writes
   assert.match(funnel, /nullif\(e\.session_key,''\) is not null/);
   assert.match(funnel, /nullif\(e\.anonymous_visitor_id,''\) is not null/);
   assert.match(funnel, /array_agg\(b\.source_event_type order by b\.occurred_at,b\.id\)/);
-  assert.match(funnel, /public\.native_funnel_depth_v1\(s\.ordered_events,p\.steps\)/);
+  assert.doesNotMatch(funnel, /public\.native_funnel_depth_v1\(/);
+  assert.match(funnel, /unnest\(s\.ordered_events\) with ordinality/);
+  assert.match(funnel, /e\.event_name = 'web\.form_started' and e\.ord > first_step\.ord/);
+  assert.match(funnel, /e\.event_name = 'web\.form_submitted' and e\.ord > second_step\.ord/);
   assert.match(funnel, /generate_subscripts\(p\.steps,1\)/);
-  assert.match(funnel, /'uses_live_funnel_depth_helper',true/);
+  assert.match(funnel, /'uses_independent_ordering_check',true/);
   assert.match(funnel, /'is_path_edge_reconciliation',false/);
 });
 
