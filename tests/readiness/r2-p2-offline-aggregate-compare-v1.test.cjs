@@ -106,7 +106,9 @@ test("Event Activity's UTC calendar comparison differs from rolling funnel seman
   assert.deepEqual(mismatch.mismatched,["web.form_started"]);
   wrong.series[1].observed_sessions=9; wrong.first_day_utc="2026-11-01";
   wrong.series.forEach((row) => { row.daily[0].date_utc="2026-11-01"; });
-  assert.equal(compareAggregateReviews(ui,parseSqlAggregate(JSON.stringify(wrong),"trends")).status,"REVIEW_REQUIRED_NUMERIC_DIFFERENCE");
+  // SQL snapshots with an impossible UTC period must now be rejected
+  // before reaching the numeric comparison, even if headline numbers match.
+  assert.throws(()=>parseSqlAggregate(JSON.stringify(wrong),"trends"));
 });
 
 test("Event Activity refuses missing, duplicated, unordered or noncalendar UTC days",async()=>{
@@ -160,8 +162,10 @@ test("Event Activity requires the SQL day totals and candidate event cap count t
   // One session might have starts on multiple UTC days; only EVENT counts
   // are additive. Do not reject a valid distinct-session aggregate on this.
   const sessionsCrossDays=structuredClone(trendSql());
-  sessionsCrossDays.series[0].daily[0].sessions=2;
-  sessionsCrossDays.series[0].daily[0].events=40;
+  sessionsCrossDays.series[0].daily[0].events=39;
+  sessionsCrossDays.series[0].daily[0].sessions=20;
+  sessionsCrossDays.series[0].daily[1].events=1;
+  sessionsCrossDays.series[0].daily[1].sessions=1;
   assert.ok(parseSqlAggregate(JSON.stringify(sessionsCrossDays),"trends"));
 });
 
