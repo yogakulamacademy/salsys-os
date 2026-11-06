@@ -23,6 +23,21 @@ const B = {
   doc:'30000000-0000-4000-8000-000000000002',
   marker:'kbfixturebbetatoken0002',
 };
+
+const SESSION_A='40000000-0000-4000-8000-000000000001';
+const SESSION_B='40000000-0000-4000-8000-000000000002';
+const ISSUER='https://kb05dstagingfixturea.supabase.co/auth/v1';
+function fakeVerifiedJwt(actor, sessionId){
+  const now=Math.floor(Date.now()/1000);
+  const encoded=part=>Buffer.from(JSON.stringify(part)).toString('base64url');
+  return [
+    encoded({alg:'HS256',typ:'JWT'}),
+    encoded({sub:actor.userId,role:'authenticated',aud:'authenticated',
+      iss:ISSUER,session_id:sessionId,iat:now,exp:now+3600}),
+    Buffer.from('synthetic-test-signature').toString('base64url'),
+  ].join('.');
+}
+
 const baseEnv=()=>({
   SALSYS_KB_STAGING_RUN_APPROVAL:EXECUTION_PHRASE,
   SALSYS_KB_STAGING_PROJECT_REF:'kb05dstagingfixturea',
@@ -93,8 +108,10 @@ test('query URL construction is bounded to exact read-only knowledge paths',()=>
 function mockedResponse(status,body){
   return {status, async json(){return body;}};
 }
-function installSyntheticFetch({leak=false,missingPositive=false,badUser=false}={}){
+function installSyntheticFetch({leak=false,missingPositive=false,badUser=false,duplicateSession=false}={}){
   const calls=[];
+  const tokenA=fakeVerifiedJwt(A,SESSION_A);
+  const tokenB=fakeVerifiedJwt(B,duplicateSession?SESSION_A:SESSION_B);
   const original=globalThis.fetch;
   globalThis.fetch=async (url,init)=>{
     assert.ok(url.startsWith('https://kb05dstagingfixturea.supabase.co/'));
@@ -109,13 +126,13 @@ function installSyntheticFetch({leak=false,missingPositive=false,badUser=false}=
       assert.ok([A.email,B.email].includes(body.email));
       assert.equal(body.password,actor.password);
       return mockedResponse(200,{
-        access_token:body.email===A.email?'synthetic-a-token':'synthetic-b-token',
+        access_token:body.email===A.email?tokenA:tokenB,
         user:{id:badUser?'90000000-0000-4000-8000-000000000001':actor.userId},
       });
     }
     assert.equal(method,'GET');
     const token=init.headers.Authorization?.replace('Bearer ','')??'anon';
-    const actor=token==='synthetic-a-token'?A:token==='synthetic-b-token'?B:null;
+    const actor=token===tokenA?A:token===tokenB?B:null;
     if(pathname==='/auth/v1/user')return mockedResponse(200,{
       id:actor?.userId,
     });
