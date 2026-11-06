@@ -168,6 +168,33 @@ test('grounding evaluation holds synthetic fee answer with a conflicting older s
   expect(writes).toEqual([]);
 });
 
+test('KB-03E synthetic acceptance blocks approval despite valid citations and review counts',async({page})=>{
+  const writes:string[]=[];
+  page.on('request',request=>{
+    if(request.method()!=='GET' &&
+      /\/(?:api\/knowledge|rest\/v1\/knowledge_)/.test(request.url())){
+      writes.push(request.method()+' '+request.url());
+    }
+  });
+  await page.goto('/settings/knowledge/evidence-preview');
+  const acceptance=page.getByRole('region',{name:'End-to-end review acceptance'});
+  await expect(acceptance.getByRole('heading',{name:'Review acceptance checkpoint'})).toBeVisible();
+  await expect(acceptance.getByText('Preview only',{exact:true})).toBeVisible();
+  await expect(acceptance.getByText('Proposals',{exact:true})).toBeVisible();
+  await expect(acceptance.getByText('On hold',{exact:true})).toBeVisible();
+  await expect(acceptance.getByText('Need human review',{exact:true})).toBeVisible();
+  await expect(acceptance.getByText('2',{exact:true})).toHaveCount(2);
+  await expect(acceptance.getByText('1',{exact:true})).toHaveCount(1);
+  await acceptance.getByText('Review 7 release requirements still blocked').click();
+  await expect(acceptance.getByText('Tenant consent, retention, and deletion approval')).toBeVisible();
+  await expect(acceptance.getByText('Human semantic accuracy review')).toBeVisible();
+  await expect(acceptance.getByText('Explicit approval to merge and deploy')).toBeVisible();
+  await expect(acceptance.getByText('Existing knowledge approval pathway')).toBeVisible();
+  await expect(acceptance.getByText('Storage, approval, and publishing remain disabled.')).toBeVisible();
+  await expect(page.getByRole('button',{name:'Publish knowledge (disabled)'})).toBeDisabled();
+  expect(writes).toEqual([]);
+});
+
 test('review preview remains readable without horizontal overflow on mobile',async({page})=>{
   await page.setViewportSize({width:390,height:844});
   await page.goto('/settings/knowledge/evidence-preview');
