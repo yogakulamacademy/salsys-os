@@ -273,3 +273,24 @@ test('KB-04C change-impact review reports at-risk citations without changing kno
   await expect(page.getByRole('button',{name:'Publish knowledge (disabled)'})).toBeDisabled();
   expect(writes).toEqual([]);
 });
+
+
+test('KB-04D synthetic reviewer notes never invoke the real knowledge approval flow',async({page})=>{
+  const writes:string[]=[];
+  page.on('request',request=>{
+    if(request.method()!=='GET'&&
+      /\/(?:api\/knowledge|rest\/v1\/knowledge_|api\/website)/.test(request.url())){
+      writes.push(request.method()+' '+request.url());
+    }
+  });
+  await page.goto('/settings/knowledge/evidence-preview');
+  const handoff=page.getByRole('region',{name:'Human review handoff preview'});
+  await expect(handoff.getByRole('heading',{name:'Human review handoff'})).toBeVisible();
+  await expect(handoff.getByText('Handoff not connected')).toBeVisible();
+  await expect(handoff.getByText('Not approved')).toBeVisible();
+  await expect(handoff.getByText('Simulated annotation:',{exact:false})).toBeVisible();
+  await expect(handoff.getByText('No reviewer decision recorded.',{exact:false})).toBeVisible();
+  await expect(handoff.getByText('Existing workflows remain createKnowledgeDocumentAction',{exact:false})).toBeVisible();
+  await expect(page.getByRole('button',{name:'Publish knowledge (disabled)'})).toBeDisabled();
+  expect(writes).toEqual([]);
+});
