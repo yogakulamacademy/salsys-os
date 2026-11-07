@@ -282,6 +282,16 @@ test("provisional delivery-lag boundary blocks cohorts once 24 hours is exceeded
     "unreliable_event_time_or_delivery");
 });
 
+test("provisional clock-skew boundary accepts five minutes but blocks longer future claims", () => {
+  const start = event("clock-boundary", "2026-11-01", "s");
+  const atBoundary = { ...start, receivedAt: "2026-11-01T09:55:00Z" };
+  const beyondBoundary = { ...start, receivedAt: "2026-11-01T09:54:59Z" };
+  assert.equal(syntheticCohortTrial([atBoundary], options).status, "synthetic_only");
+  const blocked = syntheticCohortTrial([beyondBoundary], options);
+  assert.equal(blocked.reason, "unreliable_event_time_or_delivery");
+  assert.deepEqual(blocked.rows, []);
+});
+
 test("unknown consent, stale delivery, absent identity or conflicting event IDs fail closed", () => {
   const good = event("v", "2026-11-01", "s");
   for (const changed of [
