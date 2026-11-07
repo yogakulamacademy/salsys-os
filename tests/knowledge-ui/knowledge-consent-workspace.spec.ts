@@ -63,8 +63,8 @@ test('disabled read state never implies consent is absent and never attempts a g
 });
 
 test('exact-host typed confirmation withdraws once and audits refresh without erasure or grant', async ({ page }) => {
-  let consent = recorded();
-  let changes = [audit()];
+  let consent: Record<string, unknown> = recorded();
+  let changes: Array<Record<string, unknown>> = [audit()];
   const actions: Array<{ method: string; body: Record<string, unknown> }> = [];
   await page.route('**/api/knowledge/discovery/consent', async route => {
     const req = route.request();
