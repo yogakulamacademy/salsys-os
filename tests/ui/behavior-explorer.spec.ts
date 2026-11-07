@@ -34,6 +34,50 @@ test.beforeEach(async ({ context, request }) => {
   expect(setup.ok()).toBe(true);
 });
 
+test("Keyboard navigation marks the active Marketing view and preserves existing Funnel and Analytics", async ({ page }) => {
+  const nav = page.getByRole("navigation", { name: "Marketing workspace views" });
+  const behavior = nav.getByRole("link", { name: "Behavior", exact: true });
+  const funnel = nav.getByRole("link", { name: "Funnel", exact: true });
+  const analytics = nav.getByRole("link", { name: "Analytics", exact: true });
+
+  await page.goto("/marketing?view=behavior");
+  await expect(behavior).toHaveAttribute("aria-current", "page");
+  await expect(analytics).not.toHaveAttribute("aria-current", "page");
+  await analytics.focus();
+  await expect(analytics).toBeFocused();
+  await page.keyboard.press("Enter");
+  await expect(page).toHaveURL(/view=analytics/);
+  await expect(analytics).toHaveAttribute("aria-current", "page");
+  await expect(page.getByRole("heading", { name: "Behavior explorer" })).toHaveCount(0);
+
+  await funnel.focus();
+  await expect(funnel).toBeFocused();
+  await page.keyboard.press("Enter");
+  await expect(page).toHaveURL(/view=funnel/);
+  await expect(funnel).toHaveAttribute("aria-current", "page");
+  await expect(page.getByRole("heading", { name: "Funnel", exact: true })).toBeVisible();
+
+  await behavior.focus();
+  await expect(behavior).toBeFocused();
+  await page.keyboard.press("Enter");
+  await expect(page).toHaveURL(/view=behavior/);
+  await expect(behavior).toHaveAttribute("aria-current", "page");
+  await expect(page.getByRole("heading", { name: "Ordered funnel" })).toBeVisible();
+
+  // Native controls must be usable from the keyboard, without a mouse.
+  const range = page.getByRole("combobox", { name: "Analytics date range" });
+  await range.focus();
+  await range.press("End");
+  await expect(range).toHaveValue("30");
+  const run = page.getByRole("button", { name: "Run funnel" });
+  await run.focus();
+  await expect(run).toBeFocused();
+  await page.keyboard.press("Enter");
+  await expect(page).toHaveURL(/view=behavior.*days=30/);
+  await expect(behavior).toHaveAttribute("aria-current", "page");
+  await expect(page.getByRole("heading", { name: "Ordered funnel" })).toBeVisible();
+});
+
 test("Behavior tab reads tenant-scoped aggregates and filters unsafe visitor paths", async ({ page, request }) => {
   await page.goto("/marketing?view=behavior");
   await expect(page.getByRole("heading", { name: "Behavior explorer" })).toBeVisible();
@@ -60,6 +104,43 @@ test("Behavior tab reads tenant-scoped aggregates and filters unsafe visitor pat
   }
   await page.setViewportSize({ width: 390, height: 900 });
   await page.screenshot({ animations: "disabled", path: "test-results/r2-behavior-mobile.png" });
+});
+
+test("Browser Back and Forward restore the controls that match the applied Behavior report", async ({ page }) => {
+  await page.goto("/marketing?view=behavior");
+  const range = page.getByRole("combobox", { name: "Analytics date range" });
+  const third = page.getByRole("combobox", { name: "Funnel step 3" });
+  const apply = page.getByRole("button", { name: "Run funnel" });
+
+  await expect(range).toHaveValue("14");
+  await expect(third).toHaveValue("web.form_submitted");
+  await expect(page.getByText("3. Form submitted", { exact: true })).toBeVisible();
+
+  // Applying a new ordered funnel pushes a client-side history entry.
+  await page.evaluate(() => { (window as any).__r2HistoryDocumentProbe = "same-document"; });
+  await range.selectOption("30");
+  await third.selectOption("web.cta_clicked");
+  await apply.click();
+  await expect(page).toHaveURL(/view=behavior.*days=30/);
+  await expect(page.getByText("3. CTA clicked", { exact: true })).toBeVisible();
+  await expect(range).toHaveValue("30");
+  await expect(third).toHaveValue("web.cta_clicked");
+
+  await page.goBack();
+  await expect(page).toHaveURL(/\/marketing\?view=behavior$/);
+  await expect(page.getByText("3. Form submitted", { exact: true })).toBeVisible();
+  await expect(range).toHaveValue("14");
+  await expect(third).toHaveValue("web.form_submitted");
+  expect(await page.evaluate(() => (window as any).__r2HistoryDocumentProbe))
+    .toBe("same-document");
+
+  await page.goForward();
+  await expect(page).toHaveURL(/view=behavior.*days=30/);
+  await expect(page.getByText("3. CTA clicked", { exact: true })).toBeVisible();
+  await expect(range).toHaveValue("30");
+  await expect(third).toHaveValue("web.cta_clicked");
+  expect(await page.evaluate(() => (window as any).__r2HistoryDocumentProbe))
+    .toBe("same-document");
 });
 
 test("Funnel controls update ordered steps and date range without website writes", async ({ page, request }) => {
@@ -220,6 +301,67 @@ test("Switching synthetic tenants refreshes all behavior reports without retaini
   }
 });
 
+test("Soft Marketing navigation after synthetic tenant switch never reuses prior Behavior paths or counts", async ({ page, request }) => {
+  const nav = page.getByRole("navigation", { name: "Marketing workspace views" });
+  const behavior = nav.getByRole("link", { name: "Behavior", exact: true });
+  const funnel = nav.getByRole("link", { name: "Funnel", exact: true });
+  const analytics = nav.getByRole("link", { name: "Analytics", exact: true });
+  const paths = page.getByRole("region", { name: "Popular navigation paths" });
+  const pages = page.getByRole("region", { name: "Event page breakdown" });
+  const primaryPath = "/courses/200-hour-ytt.php";
+  const secondaryPath = "/courses/second-tenant.php";
+  const secondaryOrganizationId = "00000000-0000-4000-8000-000000000012";
+
+  // Simulate an already-authorized context change in the localhost fixture.
+  // No real tenant membership, cookie, JWT, database record or role is altered.
+  try {
+    await page.goto("/marketing?view=behavior&days=7");
+    await expect(paths.getByText(primaryPath, { exact: true })).toBeVisible();
+    await expect(pages.getByText(primaryPath, { exact: true })).toBeVisible();
+    await expect(page.getByText("1. Page viewed", { exact: true })).toBeVisible();
+    await page.evaluate(() => { (window as any).__r2SoftNavigationProbe = "preserve-document"; });
+
+    const switchTenant = await request.get(fixtureBase +
+      "/__behavior_scenario?state=ready&tenant=secondary");
+    expect(switchTenant.ok()).toBe(true);
+    await funnel.click();
+    await expect(page).toHaveURL(/view=funnel/);
+    await behavior.click();
+    await expect(page).toHaveURL(/view=behavior/);
+
+    // A client route transition must not resurrect cached prior-tenant rows.
+    expect(await page.evaluate(() => (window as any).__r2SoftNavigationProbe))
+      .toBe("preserve-document");
+    await expect(paths.getByText(secondaryPath, { exact: true })).toBeVisible();
+    await expect(pages.getByText(secondaryPath, { exact: true })).toBeVisible();
+    await expect(paths.getByText(primaryPath, { exact: true })).toHaveCount(0);
+    await expect(pages.getByText(primaryPath, { exact: true })).toHaveCount(0);
+    const afterSwitchCalls = await (await request.get(fixtureBase + "/__behavior_calls")).json();
+    expect(afterSwitchCalls.length).toBeGreaterThan(0);
+    expect(afterSwitchCalls.every((call: { organization_id: string }) =>
+      call.organization_id === secondaryOrganizationId)).toBe(true);
+
+    const denyTenant = await request.get(fixtureBase +
+      "/__behavior_scenario?state=denied&tenant=secondary");
+    expect(denyTenant.ok()).toBe(true);
+    await analytics.click();
+    await expect(page).toHaveURL(/view=analytics/);
+    await behavior.click();
+    await expect(page).toHaveURL(/view=behavior/);
+
+    expect(await page.evaluate(() => (window as any).__r2SoftNavigationProbe))
+      .toBe("preserve-document");
+    await expect(page.getByRole("heading", { name: "Behavior analytics unavailable" })).toBeVisible();
+    await expect(paths).toHaveCount(0);
+    await expect(pages.getByText(secondaryPath, { exact: true })).toHaveCount(0);
+    await expect(pages.getByText(primaryPath, { exact: true })).toHaveCount(0);
+    await expect(page.getByRole("heading", { name: "Ordered funnel" })).toHaveCount(0);
+    await expect(page.getByRole("region", { name: "Event activity trends" }).getByRole("status")).toBeVisible();
+  } finally {
+    await request.get(fixtureBase + "/__behavior_scenario?state=ready&tenant=primary");
+  }
+});
+
 test("Synthetic behavior RPCs reject foreign tenant IDs for funnel, trends and breakdown", async ({ request }) => {
   const secondaryOrganizationId = "00000000-0000-4000-8000-000000000012";
   const endpoints = [
@@ -333,6 +475,43 @@ test("Malformed aggregate counts do not impersonate observed zeroes in independe
       } else {
         await expect(breakdown.getByText(publicPath, { exact: true })).toBeVisible();
       }
+
+      for (const endpoint of [
+        "/__behavior_calls", "/__behavior_trend_calls", "/__behavior_breakdown_calls",
+      ]) {
+        const calls = await (await request.get(fixtureBase + endpoint)).json();
+        expect(calls.length, state + endpoint).toBeGreaterThan(0);
+        expect(calls.every((call: { organization_id: string }) =>
+          call.organization_id === organizationId), state + endpoint).toBe(true);
+      }
+    }
+  } finally {
+    await request.get(fixtureBase + "/__behavior_scenario?state=ready&tenant=primary");
+  }
+});
+
+test("Impossible path cohort or weakened minimum suppresses navigation reports without hiding independent panels", async ({ page, request }) => {
+  const scenarios = ["malformed-path-low-session", "malformed-path-minimum"] as const;
+  const publicPath = "/courses/200-hour-ytt.php";
+  const trends = page.getByRole("region", { name: "Event activity trends" });
+  const breakdown = page.getByRole("region", { name: "Event page breakdown" });
+
+  try {
+    for (const state of scenarios) {
+      const setup = await request.get(fixtureBase + "/__behavior_scenario?state=" + state);
+      expect(setup.ok(), state).toBe(true);
+      await page.goto("/marketing?view=behavior");
+
+      // These are inconsistent *successful* RPC bodies, not ordinary zero traffic.
+      await expect(page.getByRole("heading", { name: "Behavior analytics unavailable" })).toBeVisible();
+      await expect(page.getByRole("region", { name: "Popular navigation paths" })).toHaveCount(0);
+      await expect(page.getByRole("heading", { name: "Ordered funnel" })).toHaveCount(0);
+      await expect(page.getByText("No path has enough evidence yet. Try a longer date range.")).toHaveCount(0);
+
+      // Failure in the path-bearing RPC cannot erase the independently
+      // authorized read-only trends or Events by Page reports.
+      await expect(trends.getByRole("article", { name: "Page viewed event trend" })).toBeVisible();
+      await expect(breakdown.getByText(publicPath, { exact: true })).toBeVisible();
 
       for (const endpoint of [
         "/__behavior_calls", "/__behavior_trend_calls", "/__behavior_breakdown_calls",
