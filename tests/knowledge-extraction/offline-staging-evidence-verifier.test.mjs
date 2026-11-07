@@ -124,7 +124,8 @@ test('KB-07E rejects forged scope, unknown scenario, duplicate rows and paths',t
     {extraApproval:true},
   ];
   for(const patch of variations){
-    f.manifest=Object.assign(structuredClone(good),patch);
+    for(const key of Object.keys(f.manifest))delete f.manifest[key];
+    Object.assign(f.manifest,structuredClone(good),patch);
     f.save();
     const r=reconcileOfflineStagingEvidence({directory:f.dir});
     assert.equal(r.ok,false,JSON.stringify(patch));
