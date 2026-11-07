@@ -137,6 +137,10 @@ export function KnowledgeDiscoveryWorkspace() {
             <ArrowLeft size={13} /> Organization Knowledge
           </Link>
           <h1 className="mt-3 text-2xl font-semibold tracking-tight">Website discovery</h1>
+          <Link href="/settings/knowledge/discovery/consent"
+            className="mt-2 inline-flex items-center gap-1 rounded-md border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-600 hover:text-slate-900">
+            <ShieldCheck size={14} aria-hidden="true"/> Review discovery consent
+          </Link>
           <p className="mt-1 text-sm text-slate-500">Find public pages for review before extracting or generating knowledge.</p>
         </div>
         <button onClick={() => void load()} disabled={loading || busy}
