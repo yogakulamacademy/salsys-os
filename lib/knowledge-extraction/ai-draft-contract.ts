@@ -32,6 +32,22 @@ export type AIRequestEvidence = {
   questionCitation:SourceDraftCitation|null;
 };
 
+/**
+ * Complete evidence-context fingerprint, including exact host, citation metadata
+ * and risk reminders. It catches mutations of an already-built request; this
+ * is NOT a signed attestation of source truth, ownership or model correctness.
+ */
+function requestEvidenceId(host:string,items:readonly AIRequestEvidence[]):string {
+  const citation=(c:SourceDraftCitation|null)=>c===null?null:[
+    c.sourceUrl,c.fetchedAt,c.snapshotSha256,c.blockId,c.sourceBlockIndex,
+    c.quoteSha256,c.headingPath,c.exactQuote,
+  ];
+  return hash(JSON.stringify([host,items.map(e=>[
+    e.sourceDraftId,e.sourceKind,e.originalQuestion,e.exactAnswerQuote,
+    e.riskReminders,citation(e.answerCitation),citation(e.questionCitation),
+  ])]));
+}
+
 export type AIDraftingRequest = {
   schemaVersion:'kb03c-v1';
   requestId:string;
@@ -201,9 +217,7 @@ export function buildAIDraftingRequest(
       if(evidence.length>MAX_SOURCES)return {ok:false,error:'source_candidate_limit'};
     }
   }
-  const requestId=hash(JSON.stringify(evidence.map(x=>[
-    x.sourceDraftId,x.answerCitation.snapshotSha256,x.answerCitation.quoteSha256,
-  ])));
+  const requestId=requestEvidenceId(verifiedHostname,evidence);
   return {ok:true,request:{
     schemaVersion:'kb03c-v1',requestId,
     mode:'synthetic_proposal_contract',
@@ -299,9 +313,7 @@ export function validateAIDraftingResponse(
     !Array.isArray(request.expectedResponse?.proposals)||
     request.expectedResponse.proposals.length!==0||
     request.evidence.some(e=>!validRequestEvidence(e,request.verifiedHostname))||
-    hash(JSON.stringify(request.evidence.map(x=>[
-      x.sourceDraftId,x.answerCitation.snapshotSha256,x.answerCitation.quoteSha256,
-    ])))!==request.requestId){
+    requestEvidenceId(request.verifiedHostname,request.evidence)!==request.requestId){
     return {ok:false,error:'invalid_drafting_request'};
   }
   if(!plainObject(raw)||!exactKeys(raw,['schemaVersion','requestId','proposals'])||
