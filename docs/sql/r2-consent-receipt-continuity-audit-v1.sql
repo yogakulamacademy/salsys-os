@@ -10,8 +10,9 @@
 --
 -- All identifiers are used only inside the DB joins, never returned.
 -- The receipt table is scoped to organization + anonymous visitor, not
--- necessarily tracking source. Shared visitor keys across registered sources
--- cannot be ruled out solely by this audit.
+-- necessarily tracking source. The audit separately checks the server-side
+-- receipt metadata tracking_source_id against the event's tracking source.
+-- This checks recorded source consistency, not original CMP choice provenance.
 -- Event received_at and SDK occurred_at are distinct timestamps; potential
 -- clock skew, retries and out-of-order arrival require separate review.
 -- An existing receipt does NOT establish that original visitor choice was
@@ -34,7 +35,7 @@ with params as (
 ), source_count as (
   select count(*)::integer as n from sources
 ), bounded as materialized (
-  select e.organization_id,e.anonymous_visitor_id,
+  select e.organization_id,e.tracking_source_id,e.anonymous_visitor_id,
     e.occurred_at,e.received_at,
     e.metadata->>'consent_mode' as consent_mode,
     e.metadata->'consent_snapshot'->>'analytics' as analytics_claim
@@ -53,12 +54,13 @@ with params as (
 ), volume as (
   select count(*)::integer as candidate_events from bounded
 ), latest_prior as (
-  select s.consent_mode,s.analytics_claim,s.anonymous_visitor_id,
+  select s.consent_mode,s.analytics_claim,s.anonymous_visitor_id,s.tracking_source_id,
     r.decision as prior_decision,r.source as prior_source,
-    r.notice_version as prior_notice_version
+    r.notice_version as prior_notice_version,
+    r.metadata->>'tracking_source_id' as prior_receipt_tracking_source_id
   from bounded s
   left join lateral (
-    select r.decision,r.source,r.notice_version
+    select r.decision,r.source,r.notice_version,r.metadata
     from public.privacy_consent_receipts r
     where r.organization_id=s.organization_id
       and r.anonymous_visitor_id=s.anonymous_visitor_id
@@ -77,6 +79,14 @@ with params as (
     count(*) filter(where analytics_claim='granted' and prior_decision='granted')::bigint as client_grant_with_prior_server_grant,
     count(*) filter(where analytics_claim='granted' and prior_decision='granted' and prior_source='browser_sdk_v1'
       and nullif(btrim(prior_notice_version),'') is not null)::bigint as grant_with_browser_sdk_receipt_and_notice,
+    count(*) filter(where analytics_claim='granted' and prior_decision='granted'
+      and prior_source='browser_sdk_v1'
+      and prior_receipt_tracking_source_id=tracking_source_id::text
+      and nullif(btrim(prior_notice_version),'') is not null)::bigint
+        as source_matched_browser_sdk_notice_grants,
+    count(*) filter(where prior_decision='granted'
+      and prior_receipt_tracking_source_id is distinct from tracking_source_id::text)::bigint
+        as prior_grants_with_missing_or_other_source,
     count(*) filter(where prior_decision='denied')::bigint as latest_prior_analytics_denied,
     count(*) filter(where prior_decision is null)::bigint as no_prior_analytics_receipt,
     count(*) filter(where analytics_claim='granted' and prior_decision is distinct from 'granted')::bigint
@@ -108,6 +118,8 @@ select jsonb_build_object(
         'client_claims_analytics_granted',a.client_claims_analytics_granted,
         'client_grant_with_prior_server_grant',a.client_grant_with_prior_server_grant,
         'grant_with_browser_sdk_receipt_and_notice',a.grant_with_browser_sdk_receipt_and_notice,
+        'source_matched_browser_sdk_notice_grants',a.source_matched_browser_sdk_notice_grants,
+        'prior_grants_with_missing_or_other_source',a.prior_grants_with_missing_or_other_source,
         'latest_prior_analytics_denied',a.latest_prior_analytics_denied,
         'no_prior_analytics_receipt',a.no_prior_analytics_receipt,
         'client_grant_without_prior_grant',a.client_grant_without_prior_grant,
