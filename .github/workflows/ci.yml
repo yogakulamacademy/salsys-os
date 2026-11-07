@@ -57,6 +57,9 @@ jobs:
       - name: Verify R2 website lead retry with a real disposable PostgreSQL deadlock
         run: node --test tests/database/r2-browser-lead-deadlock-concurrency.test.mjs
 
+      - name: Verify exact identity-link trigger lock inversion in disposable PostgreSQL
+        run: node --test tests/database/r2-identity-trigger-deadlock-concurrency.test.mjs
+
   validate:
     # Pin the tested runner image: ubuntu-latest resolved to resolute and
     # apt font downloads stalled the browser setup until the job was cancelled.
