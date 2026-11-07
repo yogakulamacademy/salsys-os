@@ -35,6 +35,7 @@ let consentGranted=true;
 let claimResponseOverride;
 let claimError=null;
 let verificationReads=0;
+let processOutcome={ok:true,status:'processed'};
 const api=transpile('app/api/knowledge/discovery/worker/route.ts',{
   'next/server':{NextResponse},
   '@/lib/supabase/admin':{createAdminClient:()=>{
@@ -74,7 +75,7 @@ const api=transpile('app/api/knowledge/discovery/worker/route.ts',{
   '@/lib/security/machine-bearer-auth':bearer,
   '@/lib/knowledge-discovery/runner':{processOneDiscoveryPage:async()=>{
     processCalls++;
-    return {ok:true,status:'processed'};
+    return processOutcome;
   }},
   '@/lib/knowledge-discovery/url-policy':policy,
   '@/lib/knowledge-discovery/pilot-gate':pilot,
@@ -91,6 +92,7 @@ function reset() {
   for(const k of vars)delete process.env[k];
   adminCalls=0;processCalls=0;proofVerified=true;consentGranted=true;
   claimResponseOverride=undefined;claimError=null;verificationReads=0;
+  processOutcome={ok:true,status:'processed'};
   claim={job_id:'10000000-0000-4000-8000-000000000001',
     organization_id:'20000000-0000-4000-8000-000000000001',
     seed_url:'https://fixture.example.com/',max_pages:10,
@@ -247,6 +249,31 @@ test('a previously queued job is refused if website ownership verification expir
   assert.equal(processCalls,0,'No outbound worker tick may run');
 });
 
+
+test('SQL-denied or malformed processing outcome never looks successfully processed',async()=>{
+  const rejected=[
+    {ok:false,reason:'inactive_or_stale_lease'},
+    {ok:false,reason:'consent_not_active'},
+    {ok:false,reason:'page_not_pending'},
+    {ok:false,reason:'private-source-token'},
+    null,
+    undefined,
+    {},
+  ];
+  for(const outcome of rejected){
+    reset();enable();
+    processOutcome=outcome;
+    const response=await api.POST(request('local-synthetic-secret'));
+    assert.equal(response.status,503,JSON.stringify(outcome));
+    assert.equal(response.body.ok,false);
+    assert.equal(response.body.error,'Discovery page commit was not acknowledged');
+    assert.equal(response.headers['Cache-Control'],'no-store');
+    assert.equal(adminCalls,1);
+    assert.equal(processCalls,1,'The tick was already claimed and attempted');
+    assert.ok(!JSON.stringify(response.body).includes(claim.lease_token));
+    assert.ok(!JSON.stringify(response.body).includes('private-source-token'));
+  }
+});
 
 test('worker refuses a leased job with revoked consent before a network tick',async()=>{
   reset();enable();consentGranted=false;
