@@ -39,8 +39,14 @@ export async function GET(){
   try{
     const ctx=await verifiedAdmin();
     if(!ctx)return json({ok:false,error:'Unauthorized'},403);
-    if(process.env.KNOWLEDGE_DISCOVERY_CONSENT_MANAGEMENT_ENABLED!=='true')
-      return json({ok:true,managementEnabled:false,records:[],audit:[]});
+    // KB-06D: read-only review is separately gated from grant writes.
+    // Do not query unapplied consent tables on Production by default.
+    const managementEnabled=
+      process.env.KNOWLEDGE_DISCOVERY_CONSENT_MANAGEMENT_ENABLED==='true';
+    const readEnabled=
+      process.env.KNOWLEDGE_DISCOVERY_CONSENT_READ_ENABLED==='true';
+    if(!managementEnabled&&!readEnabled)
+      return json({ok:true,managementEnabled:false,readEnabled:false,records:[],audit:[]});
     const records=await ctx.supabase.from('knowledge_discovery_site_consents')
       .select('hostname,purpose,status,policy_version,granted_at,valid_until,withdrawn_at,revision')
       .eq('organization_id',ctx.organizationId).limit(30);
@@ -50,7 +56,7 @@ export async function GET(){
       .eq('organization_id',ctx.organizationId)
       .order('occurred_at',{ascending:false}).limit(50);
     if(audit.error)throw audit.error;
-    return json({ok:true,managementEnabled:true,records:records.data??[],audit:audit.data??[]});
+    return json({ok:true,managementEnabled,readEnabled:true,records:records.data??[],audit:audit.data??[]});
   }catch{return json({ok:false,error:'Consent state unavailable'},503);}
 }
 
