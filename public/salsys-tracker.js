@@ -887,12 +887,37 @@
     }, { capture: true });
   }
 
+  function queuedSessionStartFor(sessionKey, browserVisitor) {
+    // A failed original envelope retains the event ID for idempotent retry.
+    // Both identity parts must match the current consent/browser epoch.
+    var queued = readQueue();
+    for (var i = 0; i < queued.length; i++) {
+      var item = queued[i];
+      if (item && item.event_name === 'web.session_started' &&
+          item.session_key === sessionKey &&
+          item.anonymous_visitor_id === browserVisitor &&
+          typeof item.event_id === 'string' && item.event_id.length > 0) {
+        return true;
+      }
+    }
+    return false;
+  }
+
   function sendSessionStarted() {
     if (!analyticsGranted()) return;
-    if (safeGet(window.sessionStorage, KEYS.sessionStarted) === sessionId) return;
     var emittedSession = sessionId;
+    var emittedVisitor = visitorId;
+    if (safeGet(window.sessionStorage, KEYS.sessionStarted) === emittedSession) return;
+    if (queuedSessionStartFor(emittedSession, emittedVisitor)) {
+      // The consent-epoch-aware flushQueue() handles the original envelope.
+      safeSet(window.sessionStorage, KEYS.sessionStarted, emittedSession);
+      return;
+    }
     safeSet(window.sessionStorage, KEYS.sessionStarted, emittedSession);
     track('web.session_started', {}, { keepalive: true }).catch(function () {
+      // Withdrawal clears the old queue and rotates session and visitor IDs.
+      // A late POST failure must never touch a newer session's marker.
+      if (queuedSessionStartFor(emittedSession, emittedVisitor)) return;
       if (safeGet(window.sessionStorage, KEYS.sessionStarted) === emittedSession) {
         safeRemove(window.sessionStorage, KEYS.sessionStarted);
       }
