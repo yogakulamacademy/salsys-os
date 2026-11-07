@@ -101,10 +101,12 @@ test("Event Activity's UTC calendar comparison differs from rolling funnel seman
   const sql=parseSqlAggregate(JSON.stringify({tenant_aggregate_only:trendSql()}),"trends");
   assert.equal(compareAggregateReviews(ui,sql).status,"AGGREGATES_MATCHED_NOT_ACCEPTANCE");
   const wrong=trendSql();wrong.series[1].observed_sessions=8;
+  wrong.series[1].daily[0].sessions=8;
   const mismatch=compareAggregateReviews(ui,parseSqlAggregate(JSON.stringify(wrong),"trends"));
   assert.equal(mismatch.status,"REVIEW_REQUIRED_NUMERIC_DIFFERENCE");
   assert.deepEqual(mismatch.mismatched,["web.form_started"]);
-  wrong.series[1].observed_sessions=9; wrong.first_day_utc="2026-11-01";
+  wrong.series[1].observed_sessions=9; wrong.series[1].daily[0].sessions=9;
+  wrong.first_day_utc="2026-11-01";
   wrong.series.forEach((row) => { row.daily[0].date_utc="2026-11-01"; });
   // SQL snapshots with an impossible UTC period must now be rejected
   // before reaching the numeric comparison, even if headline numbers match.
