@@ -169,6 +169,44 @@ test("Event Activity requires the SQL day totals and candidate event cap count t
   assert.ok(parseSqlAggregate(JSON.stringify(sessionsCrossDays),"trends"));
 });
 
+test("Event Activity rejects impossible distinct-session cardinality without summing away cross-day reuse",async()=>{
+  const {parseSqlAggregate}=await load;
+  const fewerDailySessions=structuredClone(trendSql());
+  fewerDailySessions.series[0].daily[0].sessions=19;
+  // Twenty distinct source-scoped sessions cannot appear in the overall
+  // report when the complete UTC day grid contains only nineteen in total.
+  assert.throws(()=>parseSqlAggregate(JSON.stringify(fewerDailySessions),"trends"));
+
+  const moreOnOneDay=structuredClone(trendSql());
+  moreOnOneDay.series[0].daily[0].sessions=21;
+  // Each day's distinct sessions must be a subset of the window-wide set.
+  assert.throws(()=>parseSqlAggregate(JSON.stringify(moreOnOneDay),"trends"));
+
+  const impossibleOtherEvent=structuredClone(trendSql());
+  impossibleOtherEvent.series[1].daily[0].sessions=0;
+  assert.throws(()=>parseSqlAggregate(JSON.stringify(impossibleOtherEvent),"trends"));
+
+  const legitimateCrossDayReuse=structuredClone(trendSql());
+  legitimateCrossDayReuse.series[0].daily[0].events=39;
+  legitimateCrossDayReuse.series[0].daily[1].events=1;
+  legitimateCrossDayReuse.series[0].daily[1].sessions=1;
+  // Daily sessions sum to 21 while window distinct sessions stay at 20;
+  // this remains valid because a session can span two UTC calendar days.
+  assert.ok(parseSqlAggregate(JSON.stringify(legitimateCrossDayReuse),"trends"));
+});
+
+test("Ordered funnel rejects a path-session denominator larger than all candidate events",async()=>{
+  const {parseSqlAggregate}=await load;
+  const bad=structuredClone(funnelSql());
+  bad.candidate_events=14;
+  // Fifteen distinct page-view sessions require at least fifteen events.
+  assert.throws(()=>parseSqlAggregate(JSON.stringify(bad),"funnel"));
+  const zero=structuredClone(funnelSql());
+  zero.candidate_events=0;
+  assert.throws(()=>parseSqlAggregate(JSON.stringify(zero),"funnel"));
+  assert.ok(parseSqlAggregate(JSON.stringify(funnelSql()),"funnel"));
+});
+
 test("Input rejects extra identifiers, malformed counts, wrong SQL status and wrong report classes",async()=>{
   const {parseUiCopy,parseSqlAggregate,compareAggregateReviews}=await load;
   const withSecret=funnelSql(); withSecret.organization_id="SECRET_TENANT";
