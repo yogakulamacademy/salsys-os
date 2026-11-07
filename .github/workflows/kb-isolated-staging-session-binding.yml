@@ -1,0 +1,35 @@
+name: KB Isolated Staging Auth-Bound Consent Acceptance
+
+# KB-07A DEFAULT-BRANCH REGISTRATION STUB ONLY.
+# This file exists exclusively to register the workflow_dispatch event.
+# It intentionally CANNOT touch protected environments, credentials, Auth,
+# tenant bindings, consent, knowledge, or any deployment target.
+# In a later independently approved operation, the operator must explicitly
+# choose a reviewed feature ref with the full guarded KB-06H workflow.
+# Never substitute this stub's failure for external staging acceptance.
+on:
+  workflow_dispatch:
+    inputs:
+      staging_project_ref:
+        description: "Isolated staging project ref; placeholder never uses it"
+        required: true
+        type: string
+      approval_phrase:
+        description: "Manual staging approval; placeholder never uses it"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  default-branch-blocked:
+    name: Default-branch placeholder — always blocked
+    runs-on: ubuntu-24.04
+    timeout-minutes: 1
+    steps:
+      - name: Never execute any staging operation from the registration stub
+        shell: bash
+        run: |
+          echo "::error::KB staging dispatch is BLOCKED from this placeholder. No staging action was performed."
+          exit 1
