@@ -49,6 +49,24 @@ The diagnostic accepts only 7/14/30 **UTC calendar-day** windows (current UTC da
 
 On 2026-11-07 at ~07:03 UTC, a SELECT-only syntax/execution check of the diagnostic, with the target production organization resolved *internally in SQL* from the active `yogakulam.com` website source (without emitting IDs), returned `observational_only`, **2,639** bounded session-start observations, **4** arrivals 24–48h after the claimed event time, **171** negative-lag observations within five minutes, and **2** SDK versions. No tenant IDs, browser keys, event payloads or raw rows were returned. These counts change as new events arrive, and they still leave the proposed 24-hour and five-minute limits **unapproved**.
 
+## Source-scoped repeat-session-start diagnostic (2026-11-07, research)
+
+The new trusted-operator **SELECT-only** file `docs/sql/r2-p3-session-start-repeat-diagnostic-v1.sql` makes session-start repeat quality independently visible **without returning source IDs, anonymous browser keys, session keys, event IDs, individual timestamps or raw rows**. It compares repeat counts on the source-scoped tuple `(tracking_source_id, anonymous_visitor_id, session_key)`, then separates keys whose repeat starts use one original `source_event_id` from those with **multiple distinct source event IDs**. A transport retry and a fresh SDK initialization can be different phenomena; neither is automatically established by this classification. No re-identification or person-level retention is inferred.
+
+Run it only with an independently authorized read-only DB connection and privately verified tenant membership, using `days=7`, `14` or `30`:
+
+```bash
+psql "$AUTHORIZED_DB_CONNECTION" -X -q -A -t -P pager=off -v ON_ERROR_STOP=1 \
+  -v organization_id='<verified-authorized-tenant-uuid>' -v days=30 \
+  -f docs/sql/r2-p3-session-start-repeat-diagnostic-v1.sql
+```
+
+The query uses UTC calendar windows, source-scoped nonblank session identifiers, a one-day receipt grace filter, and a 50,000-event limit. An invalid window, excessive volume or missing events returns empty quality metrics with an explicit non-success status. Counts include the incomplete current UTC day. It remains operator-only and is **not** a CRM retention report, approved deduplication algorithm, bot classifier, ingestion SLA, or evidence of historical completeness.
+
+**Read-only production research snapshot, November 7, 2026, 15:53:16 UTC:** For the one authorized organization privately resolved by its active `yogakulam.com` site, the 30-day window contained **2,664** session-start receipts and **2,643** complete source-scoped session keys. **16 keys** had more than one start, contributing **21 extra start events**. All 16 repeat keys used **multiple distinct source event IDs**; none reused one identical ID across all starts. None crossed a UTC day and none shared an identical reported occurrence or receipt timestamp; the maximum starts observed for one key was **five**, and the longest first-to-last receipt span among repeat keys was **7.7 minutes**. Zero session starts lacked a complete identity tuple or source event ID. These aggregates **do not establish whether the repeats were retries, multiple SDK initializations, browser restores, another implementation issue, or legitimate behavior**.
+
+The session-start lifecycle and corresponding SDK instrumentation should be reviewed in a disposable browser environment before cohort deduplication is specified. Never delete or rewrite production observations, tag keys as bots, or count additional starts as new people from these diagnostics. Keep the retention contract research-only and Issue #527 OPEN until source/identity/consent/erasure acceptance and mature history exist. The structural readiness regression is `tests/readiness/r2-p3-session-start-repeat-diagnostic-v1.test.cjs`.
+
 ## Safety and aggregation
 
 - Use a provisional cohort-day privacy threshold of at least **20** distinct eligible source-scoped browser keys. For 1–19 keys, suppress BOTH numerator and denominator; never display a calculated 0% or an identifiable row.
