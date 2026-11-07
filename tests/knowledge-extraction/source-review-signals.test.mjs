@@ -169,6 +169,34 @@ test('mixed timestamps within one snapshot and future source dates fail closed',
   assert.deepEqual(run([future],[]),{ok:false,error:'source_timestamp_in_future'});
 });
 
+test('source review refuses noncanonical timestamps that could corrupt age signals',()=>{
+  const original=bundle('timestamp',[{heading:'Fee',quote:'Private: $500.'}]);
+  for(const asOf of [
+    '2026-02-30T12:00:00Z',
+    '2026-11-06T12:00:00',
+    '2026-11-06T12:00:00+00:00',
+    '2026-11-06T12:00:00.1234Z',
+  ]){
+    assert.deepEqual(run([original],[],{asOf,reviewAgeDays:30}),
+      {ok:false,error:'invalid_comparison_configuration'},asOf);
+  }
+  for(const fetchedAt of [
+    '2026-02-30T10:00:00Z',
+    '2026-11-05T10:00:00',
+    '2026-11-05T10:00:00+02:00',
+  ]){
+    const changed=structuredClone(original);
+    changed.drafts[0].citation.fetchedAt=fetchedAt;
+    assert.deepEqual(run([changed],[],{reviewAgeDays:30}),
+      {ok:false,error:'invalid_source_draft'},fetchedAt);
+  }
+  const acceptable=run([original],[],{
+    asOf:'2026-11-06T12:00:00.100Z',reviewAgeDays:30,
+  });
+  assert.equal(acceptable.ok,true);
+  assert.equal(acceptable.report.canPublish,false);
+});
+
 test('large comparison groups fail closed rather than dropping the differing citation',()=>{
   const entries=Array.from({length:17},(_,i)=>bundle('version-'+i,[
     {heading:'Fee',quote:'Private fee: '+String.fromCharCode(36)+(i===16?'1900':'1750')},
