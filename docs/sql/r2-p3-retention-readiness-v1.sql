@@ -12,7 +12,18 @@ params as (
 history as (
   select min((e.occurred_at at time zone 'UTC')::date) as earliest_utc_date,
     max((e.occurred_at at time zone 'UTC')::date) as last_utc_date,
-    count(*)::bigint as web_events_in_history
+    count(*)::bigint as web_events_in_history,
+    -- Observation is NOT ingestion completeness: a zero-event day could be
+    -- legitimate inactivity, missing instrumentation, or delayed delivery.
+    -- Never treat the earliest/latest event span as a verified 60-day history.
+    count(distinct (e.occurred_at at time zone 'UTC')::date)
+      filter (where (e.occurred_at at time zone 'UTC')::date >= p.today_utc - 30
+        and (e.occurred_at at time zone 'UTC')::date < p.today_utc)::integer
+      as observed_closed_utc_days_last_30,
+    count(distinct (e.occurred_at at time zone 'UTC')::date)
+      filter (where (e.occurred_at at time zone 'UTC')::date >= p.today_utc - 60
+        and (e.occurred_at at time zone 'UTC')::date < p.today_utc)::integer
+      as observed_closed_utc_days_last_60
   from public.raw_events e
   join params p on e.organization_id = p.organization_id
   where e.event_family = 'web'
@@ -96,6 +107,12 @@ select jsonb_build_object(
     then 0 else p.today_utc - h.earliest_utc_date + 1 end,
   'history_at_least_60_calendar_days',
     coalesce(p.today_utc - h.earliest_utc_date + 1 >= 60,false),
+  'observed_closed_utc_days_last_30', h.observed_closed_utc_days_last_30,
+  'observed_closed_utc_days_last_60', h.observed_closed_utc_days_last_60,
+  'closed_utc_days_without_web_observations_last_60',
+    60 - h.observed_closed_utc_days_last_60,
+  'current_utc_day_incomplete', true,
+  'history_completeness_verified', false,
   'candidate_session_start_events',v.candidate_events,
   'report_volume_limit_exceeded',v.candidate_events > 50000,
   'analytics_granted_session_starts',q.granted_start_events,
