@@ -81,10 +81,15 @@ const routes=load('app/api/knowledge/discovery/consent/route.ts',{
   '@/lib/knowledge-discovery/domain-verification':domain,
 });
 const key='KNOWLEDGE_DISCOVERY_CONSENT_MANAGEMENT_ENABLED';
+const readKey='KNOWLEDGE_DISCOVERY_CONSENT_READ_ENABLED';
 const was=process.env[key];
-test.after(()=>{was===undefined?delete process.env[key]:process.env[key]=was;});
+const wasRead=process.env[readKey];
+test.after(()=>{
+  was===undefined?delete process.env[key]:process.env[key]=was;
+  wasRead===undefined?delete process.env[readKey]:process.env[readKey]=wasRead;
+});
 function reset(){
-  delete process.env[key];authenticated=true;admin=true;site='https://fixture.example.com/';
+  delete process.env[key];delete process.env[readKey];authenticated=true;admin=true;site='https://fixture.example.com/';
   rpcError=null;rpcReturn=null;rpcCalls=[];reads=[];authCalls=0;
 }
 function req(method,body,headers={}){
@@ -118,15 +123,38 @@ test('GET is tenant-authenticated and avoids uninstalled tables when disabled',a
   const result=await routes.GET();
   assert.equal(result.status,200);
   assert.equal(result.body.managementEnabled,false);
+  assert.equal(result.body.readEnabled,false);
   assert.deepEqual(reads,[]);
   authenticated=false;
   assert.equal((await routes.GET()).status,403);
   process.env[key]='true';authenticated=true;
   const active=await routes.GET();
   assert.equal(active.status,200);
+  assert.equal(active.body.readEnabled,true);
   assert.deepEqual(reads,[
     'knowledge_discovery_site_consents','knowledge_discovery_consent_audit',
   ]);
+});
+test('KB-06D read-only review requires separate flag and does not enable grant writes',async()=>{
+  reset();
+  process.env[readKey]='true';
+  const visible=await routes.GET();
+  assert.equal(visible.status,200);
+  assert.equal(visible.body.managementEnabled,false);
+  assert.equal(visible.body.readEnabled,true);
+  assert.deepEqual(reads,[
+    'knowledge_discovery_site_consents','knowledge_discovery_consent_audit',
+  ]);
+  const baseline=reads.length;
+  assert.equal((await routes.POST(req('POST',grantBody()))).status,503);
+  assert.equal(authCalls,1,'grant disabled before extra auth calls');
+  assert.deepEqual(rpcCalls.filter(x=>x.name==='grant_knowledge_discovery_consent_v1'),[]);
+  assert.equal(reads.length,baseline);
+  authenticated=false;
+  assert.equal((await routes.GET()).status,403);
+  admin=false;authenticated=true;
+  assert.equal((await routes.GET()).status,403);
+  assert.equal(reads.length,baseline);
 });
 test('CSRF and unauthenticated/non-admin denial precede write RPC',async()=>{
   reset();process.env[key]='true';
