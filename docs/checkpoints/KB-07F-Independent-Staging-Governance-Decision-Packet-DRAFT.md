@@ -60,6 +60,32 @@ Issue #601 records a **read-only, account-linked quote** for an owner-selected S
 
 **Current result:** `S3=UNAPPROVED`. This action sheet creates **no GitHub ruleset, protected environment, deployment, project, signed approval, permission to merge, or production acceptance**.
 
+## P1 purpose-specific consent notice review — discovery ONLY, NOT an approved notice
+
+**Not a published legal notice, consent grant, or policy-registration candidate until independently approved.** The earlier [KB-06A draft #584](https://github.com/yogakulamacademy/salsys-os/pull/584) defines the **exact** purpose identifier `website_discovery_review_only` and makes verified domain ownership, allowlisting and tenant/host consent separate gates. The [KB-06B draft #586](https://github.com/yogakulamacademy/salsys-os/pull/586) requires a real signed-in tenant owner/admin with exact session binding, purpose, policy version/digest and explicit acknowledgement, with a **one-to-seven-day consent grant validity limit** (an operational permission lifetime, **not a legal data-retention period**). The [KB-06E draft #593](https://github.com/yogakulamacademy/salsys-os/pull/593) can only show digest-matched, operator-registered policy text for read-only inspection; it contains **no approved text** and grants stay OFF. None of these drafts is merged or applied.
+
+### Candidate owner/admin disclosure for independent privacy/legal redrafting
+
+> **Permission to review public website discovery (DRAFT — DO NOT DISPLAY OR REGISTER AS APPROVED).**
+>
+> If an authorized owner or administrator grants permission for the **specific verified website hostname** shown in the workspace, the Knowledge Builder discovery tool may make limited automated requests to publicly accessible URLs on that hostname, including applicable robots.txt and sitemaps, to discover and review page URLs and related scan metadata. Results of this narrowly scoped review may include discovered URLs, page titles/status, discovery job records and timestamps. The tool is designed to respect host ownership, crawl restrictions, rate limits and the permission's expiry. The proposed grant is short-lived and must not be silently renewed.
+>
+> You can withdraw permission using the designated owner/admin control. The system is designed to prevent **new** requests and subsequent scan commits after withdrawal, while a network request already in progress cannot be undone. Existing metadata and audit history require a separately approved deletion/retention process; withdrawal must **not** be represented as immediate deletion of every historical or external copy.
+>
+> **This discovery permission does not authorize** retaining extracted source quotations or raw page HTML, sending page content to an AI provider, generating/publishing knowledge, browsing private or logged-in pages, or collecting visitors' analytics/cookies. Those are distinct processing purposes requiring their own reviewed controls, owner disclosures, retention and erasure decisions, and independent acceptance.
+
+**Unresolved legal fields — do not approve based on this candidate:** actual controller/processor identity and contact, selected jurisdiction and lawful basis, exact tenant and hostname, legal notice version, exact source reference and SHA-256, any permitted tracking/monitoring schedule, the categories of stored metadata, all affected processors/subprocessors, per-class retention duration and trigger, data-subject deletion procedure, audit/legal exceptions, withdrawal implications and complaint/contact instructions. Do not substitute the public website's visitor-cookie banner for authorization from the authenticated Knowledge Builder domain owner.
+
+### P1 independent acceptance questions (all unanswered)
+
+1. Does the wording reflect precisely the **review-only discovery** purpose without implicitly authorizing source quotations, AI-provider processing or publishing? If later scopes are desired, approve them **separately**, not by silently widening `website_discovery_review_only`.
+2. Can a real independently authenticated owner/admin see the **exact** approved version and digest, select the verified hostname, understand the operational one-to-seven-day expiry, and positively acknowledge the approved purpose before any grant? No checkbox or mock policy proves informed consent.
+3. On withdrawal, are new fetch/redirect/commit boundaries denied with the real database/session while already-started network requests and existing metadata receive truthful explanations? This must be witnessed in isolated staging.
+4. Has a legal/privacy reviewer independently approved the notice, lawful basis and disclosures, plus the P2/P3/P4 retention/deletion matrix **outside the repository** before any registry `grants_enabled` setting changes?
+5. Are the registry/grant/default-off states, exact host/tenant, session binding, regrant restrictions and audit provenance still fail-closed in the exact reviewed commit, with no permission inferred from a valid cookie banner or from a hash match alone?
+
+**Current decision:** `P1=UNAPPROVED`, `grants_enabled=false` in unmerged draft defaults, `canGrantConsent=false`, `canCrawl=false`, `canApproveKnowledge=false`, `canPublish=false`. No production policy text has been registered, and no legal review is claimed. The candidate must not be used verbatim as a live policy without independent legal review and owner authorization.
+
 ## P2–P4 retention and erasure decision worksheet — owner/legal/DBA input required
 
 **Status: ALL UNAPPROVED.** This worksheet converts the 12 schema surfaces in `docs/checkpoints/KB-06G-Retention-Deletion-Dependency-Coverage-DRAFT.md` into a concrete signing checklist. Those 12 declarations span an existing Knowledge V1 migration **and unapplied draft KB migrations**: they are **not** a claim that all 12 tables or a deletion service are currently deployed. The only scoped metadata erasure proposed so far is the **unapplied KB-06C draft** for discovery jobs/pages after withdrawal. Neither an existing website cookie choice nor a source table's presence establishes Knowledge Builder legal consent or an approved retention period.
