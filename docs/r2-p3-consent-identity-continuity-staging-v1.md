@@ -131,6 +131,14 @@ The **draft-only** `scripts/r2-consent-staging-preflight.mjs` now rejects IP-lit
 
 **Cost/release guard:** No extra Vercel/Supabase project, domain, preview deployment or staging source was provisioned, no paid plan approved, and no production tracking or test leads sent. Keep Issues #531 and #528 open, PR #530 draft, and optional collector #520 OFF.
 
+## Additional production deployment-alias guard (2026-11-07)
+
+The isolated-staging configuration preflight now also refuses known **generated host families** of the current production SalsysOS CRM Vercel project: `salsys-<deployment-id>-salsysos.vercel.app` deployment URLs and `salsys-os-git-<branch>-salsysos.vercel.app` branch-preview aliases. Previously the check covered only stable production CRM hostnames and the `main` branch alias. Reusing an unverified production-project Preview URL must not pass merely because the operator declares a different Vercel project ID. The guard checks every declared staging endpoint (website, CRM and Supabase).
+
+The preflight also rejects the reserved documentation domain families `example.com`, `example.net` and `example.org`, including subdomains. The synthetic acceptance fixture still uses a fictitious but publicly shaped hostname; its PASS is **only a test of input format checks**, not proof of actual DNS hosting, domain control, TLS, project/credential separation or a safe staging environment.
+
+**Limits:** Regex-based known-hostname denial cannot identify every custom production alias, future renamed Vercel project, DNS CNAME, proxy, alternate deployment URL or shared database secret. A human operator must independently verify the **real deployed Vercel project ID and deployment SHA**, HTTPS website origin, Supabase project identity, origin-bound tracking source, no customer messaging/payment side effects, and zero ability for test leads/events to reach production. No real staging deployment, DNS lookup, Supabase write, test customer or external service call is performed by the preflight. Issue #531 stays blocked until that evidence exists; this code remains **draft and unmerged**.
+
 ## Release gates
 
 - [ ] Full CI: readiness tests, TypeScript/build, loopback Playwright tests, financial tests
