@@ -103,6 +103,49 @@ test('synthetic handoff stays non-authorizing, even with an admin annotation',()
   assert.equal(r.packet.rows[0].approved,false);
   assert.equal(r.packet.rows[0].canWrite,false);
 });
+test('superseded prior quotation stays on hold even when an admin annotates it',()=>{
+  const f=fixture();
+  const prior=f.impact.changes[0].prior;
+  assert.ok(prior,'fixture must contain a real prior source snapshot');
+  const row=f.acceptance.rows[0];
+  Object.assign(row,{
+    exactSourceAnswer:prior.exactQuote,
+    sourceUrl:prior.sourceUrl,
+    sourceFetchedAt:prior.fetchedAt,
+    snapshotSha256:prior.snapshotSha256,
+    answerBlockId:prior.blockId,
+    answerBlockIndex:prior.sourceBlockIndex,
+    answerQuoteSha256:prior.quoteSha256,
+    // Expose the risk: the earlier handoff used this lighter status unchanged.
+    reviewOutcome:'manual_review_required',
+  });
+  f.acceptance.counts.held=0;
+  f.annotations=[annotation(f)];
+  const result=prepareSyntheticHumanReviewHandoff(f);
+  assert.equal(result.ok,true);
+  assert.equal(result.packet.rows[0].sourceChangeRelation,'superseded_or_removed_quote');
+  assert.equal(result.packet.rows[0].disposition,'hold_for_resolution');
+  assert.equal(result.packet.rows[0].annotation,'request_manual_correction');
+  assert.deepEqual(result.packet.unresolvedChangeIds,[f.impact.changes[0].changeId],
+    'A note cannot turn a superseded source into current evidence');
+  assert.equal(result.packet.rows[0].approved,false);
+  assert.equal(result.packet.canApprove,false);
+  assert.equal(result.packet.canPublish,false);
+  assert.equal(result.packet.intendedExistingWorkflow.invoked,false);
+});
+
+test('current changed quotation remains classified current but still unapproved',()=>{
+  const f=fixture();
+  f.annotations=[annotation(f)];
+  const result=prepareSyntheticHumanReviewHandoff(f);
+  assert.equal(result.ok,true);
+  assert.equal(result.packet.rows[0].sourceChangeRelation,'current_changed_quote');
+  assert.deepEqual(result.packet.unresolvedChangeIds,[]);
+  assert.equal(result.packet.rows[0].disposition,'hold_for_resolution');
+  assert.equal(result.packet.rows[0].approved,false);
+  assert.equal(result.packet.canApprove,false);
+});
+
 test('missing annotations remain unresolved and cannot be mistaken for approvals',()=>{
   const r=prepareSyntheticHumanReviewHandoff(fixture());
   assert.equal(r.ok,true);
