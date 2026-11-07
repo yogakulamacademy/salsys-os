@@ -9,7 +9,12 @@ const EVENTS = "/__r2_consent_ui_events_sink_local";
 const RECEIPTS = "/__r2_consent_ui_receipts_sink_local";
 
 type DecisionSet = Record<string, string>;
-type ObservedEvent = { name: string; consentMode: string | undefined };
+type ObservedEvent = {
+  name: string;
+  consentMode: string | undefined;
+  visitorId: string | undefined;
+  sessionKey: string | undefined;
+};
 type PersistedPurposeReceipt = { purpose: string; decision: string; receipt_id: string };
 type ObservedReceipt = {
   decisions: DecisionSet;
@@ -77,11 +82,15 @@ async function openFixture(page: Page) {
     if (url.pathname === EVENTS && request.method() === "POST") {
       const body = request.postDataJSON() as {
         event_name?: string;
+        anonymous_visitor_id?: string;
+        session_key?: string;
         metadata?: { consent_mode?: string };
       };
       captured.events.push({
         name: String(body.event_name || ""),
         consentMode: body.metadata?.consent_mode,
+        visitorId: body.anonymous_visitor_id,
+        sessionKey: body.session_key,
       });
       await route.fulfill({
         status: 200,
@@ -272,4 +281,64 @@ test("R2 consent integration: Accept then customize Analytics off blocks future 
   await page.waitForTimeout(120);
   expect(captured.events).toHaveLength(before);
   expect(captured.receipts).toHaveLength(2);
+});
+
+test("R2 combined UI + identity SDK: withdraw then regrant creates a fresh consented epoch", async ({ page }) => {
+  const captured = await openFixture(page);
+  await page.getByRole("dialog", { name: "Privacy choices" })
+    .getByRole("button", { name: "Accept all" }).click();
+  await expect.poll(() => allowed(page)).toBe(true);
+  await expect.poll(() => captured.events.filter((event) =>
+    event.name === "web.session_started" || event.name === "web.page_viewed").length).toBe(2);
+  const initial = await page.evaluate(() => ({
+    visitor: (window as any).Salsys.visitorId() as string,
+    session: (window as any).Salsys.sessionId() as string,
+  }));
+  assertStructuredConsentReceipt(captured.receipts[0]);
+
+  await page.getByRole("button", { name: "Open privacy settings" }).click();
+  await page.getByRole("switch", { name: "Analytics" }).uncheck();
+  await page.getByRole("dialog", { name: "Privacy settings" })
+    .getByRole("button", { name: "Save choices" }).click();
+  await expect.poll(() => allowed(page)).toBe(false);
+  await expect.poll(() => captured.receipts.length).toBe(2);
+  assertStructuredConsentReceipt(captured.receipts[1]);
+
+  const withdrawn = await page.evaluate(() => ({
+    visitor: (window as any).Salsys.visitorId() as string,
+    session: (window as any).Salsys.sessionId() as string,
+    persisted: localStorage.getItem("salsys_vid"),
+  }));
+  expect(withdrawn.visitor).not.toBe(initial.visitor);
+  expect(withdrawn.session).not.toBe(initial.session);
+  expect(withdrawn.persisted).toBe(null);
+  const priorEventCount = captured.events.length;
+  await page.evaluate(() => history.pushState({}, "", "?while_denied=1"));
+  await page.waitForTimeout(150);
+  expect(captured.events).toHaveLength(priorEventCount);
+
+  await page.getByRole("button", { name: "Open privacy settings" }).click();
+  await page.getByRole("switch", { name: "Analytics" }).check();
+  await page.getByRole("dialog", { name: "Privacy settings" })
+    .getByRole("button", { name: "Save choices" }).click();
+  await expect.poll(() => allowed(page)).toBe(true);
+  await expect.poll(() => captured.receipts.length).toBe(3);
+  assertStructuredConsentReceipt(captured.receipts[2]);
+  await expect.poll(() => captured.events.filter((event) =>
+    (event.name === "web.session_started" || event.name === "web.page_viewed")
+    && event.visitorId === withdrawn.visitor
+    && event.sessionKey === withdrawn.session).length).toBe(2);
+
+  const regranted = await page.evaluate(() => ({
+    visitor: (window as any).Salsys.visitorId() as string,
+    session: (window as any).Salsys.sessionId() as string,
+    persisted: localStorage.getItem("salsys_vid"),
+  }));
+  expect(regranted.visitor).toBe(withdrawn.visitor);
+  expect(regranted.session).toBe(withdrawn.session);
+  expect(regranted.visitor).not.toBe(initial.visitor);
+  expect(regranted.persisted).toBe(regranted.visitor);
+  // No previously withdrawn browser identity may appear in fresh events.
+  expect(captured.events.slice(priorEventCount).every((event) =>
+    event.visitorId !== initial.visitor && event.sessionKey !== initial.session)).toBe(true);
 });
