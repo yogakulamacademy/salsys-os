@@ -18,6 +18,14 @@ Then the fixture denies B's reports. The browser navigates Marketing → Analyti
 
 This tests a **synthetic client-side stale-data regression only**. It is not proof that an authenticated human can switch real organizations, that a different JWT/tenant binding is authorized, or that no stale content appears in every real browser environment. The actual owner/admin tenant isolation and denial acceptance in #523 remains blocked.
 
+## Browser history and applied funnel state (2026-11-07)
+
+A targeted UI bug-risk existed because the client Behavior Explorer initialized its date-range and ordered-step draft controls from server props only on its initial mount. After an App Router **Back / Forward** transition, the server report could switch to a previous applied URL while the local controls continued showing more recent selections.
+
+The parent now gives `NativeBehaviorExplorer` a React key derived solely from the **normalized, applied** `days` and ordered `steps`. This remounts the local draft controls only when the applied funnel request changes, keeping them consistent with the server report. Switching only the independent Events by Page breakdown does not change this key.
+
+`tests/ui/behavior-explorer.spec.ts` adds a localhost-only browser regression that starts with 14-day Page viewed → Form started → Form submitted, applies 30-day Page viewed → Form started → CTA clicked, then uses **Back** and **Forward**. After each history transition the selected controls, observed ordered stage, and URL must match. A document marker asserts the route transitions occurred without full browser reload. This is synthetic router/UI acceptance, not proof of live tenant authorization, real analytics accuracy, or deployed acceptance.
+
 ## Acceptance boundary
 
 The test is a targeted **keyboard/semantics and legacy Marketing regression**, not a full WCAG audit or real mobile/owner acceptance. Existing 390/768/1440 synthetic responsive checks and privacy denial tests remain separate. Require exact-head CI and CodeQL success, explicit review, and approval before any merge. Real deployed owner/admin browser and tenant-isolation acceptance in Issue #523 stays OPEN. PR #611 path response safeguards and draft consent PRs are independent and unmerged. Optional R2-P1 tracking stays OFF.
