@@ -108,13 +108,23 @@ function validDate(value:string):boolean {
   return Number.isFinite(date.getTime())&&date.toISOString().startsWith(value+'T');
 }
 
+/** Strict UTC evidence timing: Date.parse alone normalizes impossible days. */
+function strictUtcTimestamp(value:unknown):number|null {
+  if(typeof value!=='string'||
+    !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,3})?Z$/.test(value))return null;
+  const time=Date.parse(value);
+  if(!Number.isFinite(time))return null;
+  const [prefix,fraction='']=value.slice(0,-1).split('.');
+  return new Date(time).toISOString()===prefix+'.'+fraction.padEnd(3,'0')+'Z'
+    ? time:null;
+}
+
 function citeMatches(c:SourceDraftCitation,b:SourceDraftBundle):boolean {
   // The bundle has no timestamp of its own: every citation must carry
   // an independently parseable timestamp. URL, snapshot and quote hashes
   // must match the immutable source candidate contract.
   return !!c && c.sourceUrl===b.sourceUrl&&
-    typeof c.fetchedAt==='string'&&
-    Number.isFinite(Date.parse(c.fetchedAt))&&
+    strictUtcTimestamp(c.fetchedAt)!==null&&
     c.snapshotSha256===b.snapshotSha256&&HASH.test(c.blockId)&&
     HASH.test(c.quoteSha256)&&
     Number.isSafeInteger(c.sourceBlockIndex)&&c.sourceBlockIndex>=0&&
@@ -122,8 +132,7 @@ function citeMatches(c:SourceDraftCitation,b:SourceDraftBundle):boolean {
     c.exactQuote.length>0&&c.exactQuote.length<=1400&&
     hash(c.exactQuote)===c.quoteSha256&&
     Array.isArray(c.headingPath)&&c.headingPath.length<=6&&
-    c.headingPath.every(x=>typeof x==='string'&&x.length<=300)&&
-    Number.isFinite(Date.parse(c.fetchedAt));
+    c.headingPath.every(x=>typeof x==='string'&&x.length<=300);
 }
 
 function validDraft(d:SourceGroundedDraft,b:SourceDraftBundle):boolean {
@@ -219,13 +228,13 @@ export function analyzeSourceReviewSignals(
   if(!Array.isArray(bundles)||!Array.isArray(bindings)||
     bundles.length>MAX_BUNDLES||bindings.length>MAX_BINDINGS||
     !options||typeof options.asOf!=='string'||
-    !Number.isFinite(Date.parse(options.asOf))||
+    strictUtcTimestamp(options.asOf)===null||
     typeof options.verifiedHostname!=='string'||
     (options.reviewAgeDays!==undefined&&
       (!Number.isSafeInteger(options.reviewAgeDays)||options.reviewAgeDays<1||
        options.reviewAgeDays>3650)))return {ok:false,error:'invalid_comparison_configuration'};
 
-  const now=Date.parse(options.asOf);
+  const now=strictUtcTimestamp(options.asOf)!;
   const drafts=new Map<string,SourceGroundedDraft>();
   const sources=new Map<string,SourceDraftBundle>();
   const observations=new Map<string,Set<string>>();
