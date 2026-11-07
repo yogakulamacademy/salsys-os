@@ -169,7 +169,7 @@ test('read outage is an error, never an empty or implicitly granted state', asyn
 test('consent review has no mobile overflow and no grant or erasure endpoint', async ({ page }) => {
   let mutationCount = 0;
   page.on('request', req => {
-    if (req.method() !== 'GET' && /\\/api\\/knowledge\\/discovery/.test(req.url())) mutationCount++;
+    if (req.method() !== 'GET' && req.url().includes('/api/knowledge/discovery')) mutationCount++;
   });
   await page.route('**/api/knowledge/discovery/consent', async route => {
     await route.fulfill({
