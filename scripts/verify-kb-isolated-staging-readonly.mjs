@@ -100,6 +100,12 @@ export function documentPath(documentId) {
   });
   return '/rest/v1/knowledge_documents?' + params;
 }
+/** STABLE KB-06B RPC: safe GET only. No grant or consent data is fetched. */
+export function consentActorPath(organizationId) {
+  if (!UUID.test(organizationId)) fail('invalid_consent_actor_organization_id');
+  const params=new URLSearchParams({p_org:organizationId.toLowerCase()});
+  return '/rest/v1/rpc/kb_discovery_consent_actor_v1?' + params;
+}
 export function searchPath(organizationId, marker) {
   if (!UUID.test(organizationId) || !MARKER.test(marker)) {
     fail('invalid_retrieval_arguments');
@@ -120,6 +126,7 @@ async function request(config, path, { token = null, method = 'GET', json = null
     '/auth/v1/user',
     '/rest/v1/knowledge_documents?',
     '/rest/v1/rpc/search_organization_knowledge_v1?',
+    '/rest/v1/rpc/kb_discovery_consent_actor_v1?',
   ];
   if (!allowed.some(prefix => path.startsWith(prefix)) || path.includes('://')) {
     fail('disallowed_request_path');
@@ -228,8 +235,36 @@ async function ownSearch(config, token, actor, label) {
   });
 }
 
-/** Network actions occur only when explicitly invoked after full preflight. */
-export async function runKbStagingReadOnlyAcceptance(config) {
+/** Fail closed if the strict live Auth session is not bound to its own tenant.
+ * A missing KB-06B RPC, policy denial, or absent session binding is NOT a pass.
+ * Cross-tenant and revoked-session access must return null or a 401/403.
+ */
+async function ownConsentActor(config,token,actor,label) {
+  const r=await request(config,consentActorPath(actor.organizationId),{token});
+  if(r.status!==200||r.data!==actor.userId)
+    throw new Error('kb_staging_'+label+'_consent_actor_own_session_unverified');
+}
+async function deniedConsentActor(config,token,organizationId,label) {
+  const r=await request(config,consentActorPath(organizationId),{token});
+  if(r.status===401||r.status===403||(r.status===200&&r.data===null))return;
+  throw new Error('kb_staging_'+label+'_consent_actor_cross_tenant_or_revocation_leak');
+}
+async function anonymousConsentActor(config,organizationId,label) {
+  const r=await request(config,consentActorPath(organizationId));
+  // KB-06B explicitly REVOKES function EXECUTE from anon.
+  // Missing SQL is a 404, NOT proof of denied access.
+  if(r.status!==401&&r.status!==403)
+    throw new Error('kb_staging_'+label+'_consent_actor_anon_permission_not_denied');
+}
+
+/** Network actions occur only when explicitly invoked after full preflight.
+ * An optional, explicitly selected KB-06F extension checks the signed-session
+ * actor RPC with two genuine owner/admin staging accounts. No consent grant,
+ * source content, evidence or mutation is requested.
+ */
+export async function runKbStagingReadOnlyAcceptance(config,{checkConsentActor=false}={}) {
+  if(typeof checkConsentActor!=='boolean')
+    fail('invalid_consent_actor_option');
   // No network operation can start on an arbitrary or mutable caller object.
   if (!config || !VALIDATED_CONFIGS.has(config) ||
     !Object.isFrozen(config) || !Object.isFrozen(config.a) ||
@@ -243,6 +278,7 @@ export async function runKbStagingReadOnlyAcceptance(config) {
   const issuedTokens=[];
   let verificationError=null;
   let passed=null;
+  let actorTokens=null;
   try {
     const registerIssuedToken=token=>issuedTokens.push(token);
     const authA=await login(config,config.a,'a',registerIssuedToken);
@@ -258,6 +294,18 @@ export async function runKbStagingReadOnlyAcceptance(config) {
     await ownSearch(config,tokenA,config.a,'a');
     await ownSearch(config,tokenB,config.b,'b');
 
+    // Positive own-session results prevent vacuous success on an uninstalled
+    // RPC or a staging tenant without a correctly bound owner/admin session.
+    if(checkConsentActor){
+      await ownConsentActor(config,tokenA,config.a,'a');
+      await ownConsentActor(config,tokenB,config.b,'b');
+      await deniedConsentActor(config,tokenA,config.b.organizationId,'a_to_b');
+      await deniedConsentActor(config,tokenB,config.a.organizationId,'b_to_a');
+      await anonymousConsentActor(config,config.a.organizationId,'anon_to_a');
+      await anonymousConsentActor(config,config.b.organizationId,'anon_to_b');
+      actorTokens={a:tokenA,b:tokenB};
+    }
+
     await deniedDoc(config,tokenA,config.b.documentId,'a_to_b_document');
     await deniedDoc(config,tokenB,config.a.documentId,'b_to_a_document');
     await deniedSearch(config,tokenA,config.b.organizationId,
@@ -271,9 +319,18 @@ export async function runKbStagingReadOnlyAcceptance(config) {
     await deniedSearch(config,null,config.b.organizationId,
       config.b.marker,config.b.documentId,'anon_to_b_retrieval');
 
-    passed={stage:'KB05D',result:'passed_read_only_staging_retrieval',
-      checks:12,authorizationScope:'two_test_actors_and_anonymous',
-      knowledgeWrites:0,stagingAuthLogins:2};
+    passed={
+      stage:checkConsentActor?'KB06F':'KB05D',
+      result:checkConsentActor
+        ?'passed_read_only_knowledge_and_consent_actor_checks'
+        :'passed_read_only_staging_retrieval',
+      checks:checkConsentActor?20:12,
+      consentActorChecks:checkConsentActor?8:0,
+      authorizationScope:'two_test_actors_and_anonymous',
+      knowledgeWrites:0,consentWrites:0,stagingAuthLogins:2,
+      independentStagingAcceptanceVerified:false,
+      authorizesCrawlOrRelease:false,
+    };
   }catch(e){
     verificationError=e;
   }
@@ -296,17 +353,28 @@ export async function runKbStagingReadOnlyAcceptance(config) {
     throw new Error('kb_staging_auth_session_cleanup_incomplete');
   }
   if(verificationError)throw verificationError;
+  if(checkConsentActor){
+    if(!actorTokens||revocationAcknowledged!==2)
+      throw new Error('kb_staging_consent_actor_missing_revoke_receipts');
+    // Stale bearer tokens remain cryptographically valid until expiry.
+    // The KB-06B helper must ALSO refuse them after session-local logout.
+    await deniedConsentActor(config,actorTokens.a,config.a.organizationId,'a_after_logout');
+    await deniedConsentActor(config,actorTokens.b,config.b.organizationId,'b_after_logout');
+  }
   return {...passed,localSessionRevocationsAcknowledged:revocationAcknowledged,
     authLogoutScope:'local',accessTokensMaySurviveUntilJwtExpiry:true};
 }
 
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
-  if (process.argv.length !== 3 || process.argv[2] !== '--run-readonly') {
+  if (process.argv.length !== 3 ||
+      !['--run-readonly','--run-readonly-consent-actor'].includes(process.argv[2])) {
     throw new Error('kb_staging_explicit_run_readonly_flag_required');
   }
   const config = validateKbStagingEnvironment(process.env);
   try {
-    const result = await runKbStagingReadOnlyAcceptance(config);
+    const result = await runKbStagingReadOnlyAcceptance(config,{
+      checkConsentActor:process.argv[2]==='--run-readonly-consent-actor',
+    });
     console.log(JSON.stringify(result));
   } catch (err) {
     // Never print raw API responses, tokens, emails, source quotes or URLs.

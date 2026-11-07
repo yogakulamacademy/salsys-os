@@ -6,6 +6,7 @@ import {
   validateKbStagingEnvironment,
   documentPath,
   searchPath,
+  consentActorPath,
   runKbStagingReadOnlyAcceptance,
 } from '../../scripts/verify-kb-isolated-staging-readonly.mjs';
 
@@ -115,12 +116,23 @@ test('query URL construction is bounded to exact read-only knowledge paths',()=>
   assert.equal(new URLSearchParams(search.split('?')[1]).get('p_limit'),'6');
   assert.throws(()=>documentPath('bad'),/invalid_document_id/);
   assert.throws(()=>searchPath(A.org,'bad input'),/invalid_retrieval_arguments/);
+  assert.equal(consentActorPath(A.org),
+    '/rest/v1/rpc/kb_discovery_consent_actor_v1?p_org='+A.org);
+  assert.throws(()=>consentActorPath('https://production.example.com/'),
+    /invalid_consent_actor_organization_id/);
 });
 function mockedResponse(status,body){
   return {status, async json(){return body;}};
 }
-function installSyntheticFetch({leak=false,missingPositive=false,badUser=false,duplicateSession=false,logoutFailure=false,secondLoginFails=false,badAuthUser=false}={}){
+function installSyntheticFetch({
+  leak=false,missingPositive=false,badUser=false,duplicateSession=false,
+  logoutFailure=false,secondLoginFails=false,badAuthUser=false,
+  consentActorCrossTenantLeak=false,consentActorMissingPositive=false,
+  consentActorRevokedStillAllowed=false,consentActorAnonAllowed=false,
+  consentActorMalformed=false,
+}={}){
   const calls=[];
+  const revokedTokens=new Set();
   const tokenA=fakeVerifiedJwt(A,SESSION_A);
   const tokenB=fakeVerifiedJwt(B,duplicateSession?SESSION_A:SESSION_B);
   const original=globalThis.fetch;
@@ -147,6 +159,7 @@ function installSyntheticFetch({leak=false,missingPositive=false,badUser=false,d
       assert.equal(u.searchParams.get('scope'),'local');
       assert.equal(init.headers.Authorization?.startsWith('Bearer '),true);
       assert.equal(init.body,undefined);
+      if(!logoutFailure)revokedTokens.add(init.headers.Authorization?.slice(7));
       return mockedResponse(logoutFailure?503:204,null);
     }
     assert.equal(method,'GET');
@@ -155,6 +168,21 @@ function installSyntheticFetch({leak=false,missingPositive=false,badUser=false,d
     if(pathname==='/auth/v1/user')return mockedResponse(200,{
       id:badAuthUser?'90000000-0000-4000-8000-000000000001':actor?.userId,
     });
+    if(pathname==='/rest/v1/rpc/kb_discovery_consent_actor_v1'){
+      assert.equal(method,'GET');
+      const targetOrg=u.searchParams.get('p_org');
+      assert.ok(targetOrg===A.org||targetOrg===B.org);
+      if(!actor) return consentActorAnonAllowed
+        ?mockedResponse(200,A.userId):mockedResponse(403,{message:'No execute privilege'});
+      if(consentActorMalformed)return mockedResponse(200,{userId:actor.userId});
+      if(revokedTokens.has(token)&&!consentActorRevokedStillAllowed)
+        return mockedResponse(200,null);
+      if(actor.org===targetOrg&&!consentActorMissingPositive)
+        return mockedResponse(200,actor.userId);
+      if(actor===A&&consentActorCrossTenantLeak)
+        return mockedResponse(200,A.userId);
+      return mockedResponse(200,null);
+    }
     if(pathname==='/rest/v1/knowledge_documents'){
       const id=u.searchParams.get('id')?.slice(3);
       if(actor&&actor.doc===id&&!missingPositive)
@@ -315,4 +343,89 @@ test('cleanup error is never suppressed even after detected tenant data leakage'
     );
     assert.equal(fake.calls.filter(x=>x.path==='/auth/v1/logout').length,2);
   }finally{fake.restore();}
+});
+
+test('KB-06F live-actor mode requires own tenant, denies other/anonymous/revoked, and never writes knowledge or consent',async()=>{
+  const fake=installSyntheticFetch();
+  try{
+    const result=await runKbStagingReadOnlyAcceptance(
+      validateKbStagingEnvironment(baseEnv()),{checkConsentActor:true});
+    assert.equal(result.stage,'KB06F');
+    assert.equal(result.result,'passed_read_only_knowledge_and_consent_actor_checks');
+    assert.equal(result.checks,20);
+    assert.equal(result.consentActorChecks,8);
+    assert.equal(result.knowledgeWrites,0);
+    assert.equal(result.consentWrites,0);
+    assert.equal(result.independentStagingAcceptanceVerified,false);
+    assert.equal(result.authorizesCrawlOrRelease,false);
+    assert.equal(result.localSessionRevocationsAcknowledged,2);
+    const calls=fake.calls.filter(x=>x.path==='/rest/v1/rpc/kb_discovery_consent_actor_v1');
+    assert.equal(calls.length,8);
+    assert.ok(calls.every(x=>x.method==='GET'));
+    const writes=fake.calls.filter(x=>x.method==='POST');
+    assert.equal(writes.length,4);
+    assert.ok(writes.every(x=>['/auth/v1/token','/auth/v1/logout'].includes(x.path)));
+    assert.equal(writes.filter(x=>x.path==='/auth/v1/logout').length,2);
+    assert.ok(fake.calls.every(x=>!x.url.includes('doaozrkrtgeslddwhclj')));
+  }finally{fake.restore();}
+});
+test('KB-06F rejects cross-tenant consent actor authority and still revokes both sessions',async()=>{
+  const fake=installSyntheticFetch({consentActorCrossTenantLeak:true});
+  try{
+    await assert.rejects(
+      runKbStagingReadOnlyAcceptance(validateKbStagingEnvironment(baseEnv()),
+        {checkConsentActor:true}),/consent_actor_cross_tenant_or_revocation_leak/);
+    assert.equal(fake.calls.filter(x=>x.path==='/auth/v1/logout').length,2);
+  }finally{fake.restore();}
+});
+test('KB-06F missing own session or RPC cannot become an isolation pass',async()=>{
+  for(const configuration of [
+    {consentActorMissingPositive:true},
+    {consentActorMalformed:true},
+  ]){
+    const fake=installSyntheticFetch(configuration);
+    try{
+      await assert.rejects(
+        runKbStagingReadOnlyAcceptance(validateKbStagingEnvironment(baseEnv()),
+          {checkConsentActor:true}),/consent_actor_own_session_unverified/);
+      assert.equal(fake.calls.filter(x=>x.path==='/auth/v1/logout').length,2);
+    }finally{fake.restore();}
+  }
+});
+test('KB-06F detects a still-active stale bearer after local logout',async()=>{
+  const fake=installSyntheticFetch({consentActorRevokedStillAllowed:true});
+  try{
+    await assert.rejects(
+      runKbStagingReadOnlyAcceptance(validateKbStagingEnvironment(baseEnv()),
+        {checkConsentActor:true}),/consent_actor_cross_tenant_or_revocation_leak/);
+    assert.equal(fake.calls.filter(x=>x.path==='/auth/v1/logout').length,2);
+    assert.equal(fake.calls.filter(x=>x.path==='/rest/v1/rpc/kb_discovery_consent_actor_v1').length,7);
+  }finally{fake.restore();}
+});
+test('KB-06F requires anonymous execute denial, not an empty successful response',async()=>{
+  const fake=installSyntheticFetch({consentActorAnonAllowed:true});
+  try{
+    await assert.rejects(
+      runKbStagingReadOnlyAcceptance(validateKbStagingEnvironment(baseEnv()),
+        {checkConsentActor:true}),/consent_actor_anon_permission_not_denied/);
+    assert.equal(fake.calls.filter(x=>x.path==='/auth/v1/logout').length,2);
+  }finally{fake.restore();}
+});
+test('KB-06F rejected projects and forged preflight never cause network requests',async()=>{
+  const genuine=validateKbStagingEnvironment(baseEnv());
+  let requests=0;
+  const original=globalThis.fetch;
+  globalThis.fetch=async()=>{requests++;throw Error('unreachable');};
+  try{
+    await assert.rejects(
+      runKbStagingReadOnlyAcceptance({...genuine},{checkConsentActor:true}),
+      /unvalidated_runtime_configuration/);
+    assert.equal(requests,0);
+    const forbidden=baseEnv();
+    forbidden.SALSYS_KB_STAGING_PROJECT_REF=FORBIDDEN_PROJECT_REFS[0];
+    forbidden.OPERATOR_STAGING_PROJECT_REF=FORBIDDEN_PROJECT_REFS[0];
+    forbidden.SALSYS_KB_STAGING_API_URL='https://'+FORBIDDEN_PROJECT_REFS[0]+'.supabase.co';
+    expectBlocked(forbidden,/project_not_dedicated_staging/);
+    assert.equal(requests,0);
+  }finally{globalThis.fetch=original;}
 });

@@ -10,6 +10,7 @@ on:
       - feature/kb06c-revoked-metadata-erasure
       - feature/kb06d-owner-consent-review-ui
       - feature/kb06e-verified-policy-document-preview
+      - feature/kb06f-staging-consent-actor-readonly
   push:
     branches:
       - main
