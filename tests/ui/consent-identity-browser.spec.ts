@@ -517,3 +517,77 @@ test("native Chromium: server-added GPC sale-sharing opt-out is accepted only wi
       event.event_name === "web.session_started" &&
       event.anonymous_visitor_id === state.visitor)).toBe(true);
   });
+
+
+test("native Chromium: remote-tab withdrawal purges a failed queued event before regrant", async ({ context }) => {
+  // Intercepts the actual SDK's synthetic event POST for one optional event.
+  // No real consent provider, site, analytics server or customer data is used.
+  const api = await instrument(context);
+  const first = await openHarness(context);
+  await chooseAnalytics(first, "granted");
+  const second = await openHarness(context);
+  const original = await identity(second);
+  expect(original.granted).toBe(true);
+  const failed: (BrowserEvent & { event_id: string })[] = [];
+  await context.route("**/api/events/browser/v1", async (route) => {
+    const body = route.request().postDataJSON() as BrowserEvent & { event_id: string };
+    if (body.event_name === "web.page_viewed" &&
+        body.properties?.test_id === "cross_tab_pending_before_withdraw") {
+      failed.push(body);
+      await route.fulfill({
+        status: 503, contentType: "application/json",
+        body: '{"ok":false,"synthetic":true,"error":"transient"}',
+      });
+      return;
+    }
+    await route.fallback();
+  });
+
+  const failedResult = await second.evaluate(() =>
+    (window as any).Salsys.page({
+      test_id: "cross_tab_pending_before_withdraw",
+    }).then(() => "accepted", () => "failed"));
+  expect(failedResult).toBe("failed");
+  expect(failed).toHaveLength(1);
+  expect(failed[0].anonymous_visitor_id).toBe(original.visitor);
+  expect(failed[0].session_key).toBe(original.session);
+  const originalId = failed[0].event_id;
+  await expect.poll(async () => second.evaluate((eventId) => {
+    const q = JSON.parse(localStorage.getItem("salsys_event_queue_v1") || "[]") as
+      { event_id: string; event_name: string }[];
+    return q.some((entry) =>
+      entry.event_id === eventId && entry.event_name === "web.page_viewed");
+  }, originalId)).toBe(true);
+
+  await chooseAnalytics(first, "withdrawn");
+  await expect.poll(async () => (await identity(second)).granted).toBe(false);
+  expect(await second.evaluate(() => localStorage.getItem("salsys_event_queue_v1"))).toBe(null);
+  const denied = await identity(second);
+  expect(denied.visitor).not.toBe(original.visitor);
+  expect(denied.session).not.toBe(original.session);
+  expect((await blockedOptional(second)).privacy_blocked).toBe(true);
+
+  const receivedAtWithdrawal = api.events.length;
+  await second.reload();
+  await second.waitForFunction(() => Boolean((window as any).Salsys?.__eventIntelligenceV1));
+  expect((await identity(second)).granted).toBe(false);
+  expect(api.events).toHaveLength(receivedAtWithdrawal);
+  expect(failed).toHaveLength(1);
+
+  await chooseAnalytics(first, "granted");
+  await expect.poll(async () => (await identity(second)).granted).toBe(true);
+  const newEpoch = await identity(second);
+  expect(newEpoch.visitor).not.toBe(original.visitor);
+  expect(newEpoch.session).not.toBe(original.session);
+  await second.reload();
+  await second.waitForFunction(() => Boolean((window as any).Salsys?.__eventIntelligenceV1));
+  await second.waitForTimeout(120);
+  expect(failed).toHaveLength(1); // No old retry POST after regrant/reload.
+  expect(api.events.slice(receivedAtWithdrawal).every((event) =>
+    event.anonymous_visitor_id !== original.visitor)).toBe(true);
+  expect(await second.evaluate((eventId) => {
+    const q = JSON.parse(localStorage.getItem("salsys_event_queue_v1") || "[]") as
+      { event_id: string }[];
+    return q.some((entry) => entry.event_id === eventId);
+  }, originalId)).toBe(false);
+});
