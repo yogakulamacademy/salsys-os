@@ -66,8 +66,8 @@ test("Breakdown stays a sibling to the independently available funnel, paths and
   assert.match(marketing, /getNativeBehaviorTrends/);
   // Applied funnel request must remount only when its date/ordered steps change
   // so Back/Forward cannot leave draft controls inconsistent with the report.
-  assert.match(marketing, /<NativeBehaviorExplorer\\s+key=\\{request\\.days \\+ ":" \\+ request\\.steps\\.join\\(","\\)\\}/);
-  assert.match(marketing, /<NativeBehaviorExplorer[\\s\\S]*?workspace=\\{workspace\\}[\\s\\S]*?trends=\\{trends\\}[\\s\\S]*?\\/>/);
+  assert.match(marketing, /<NativeBehaviorExplorer\s+key=\{request\.days \+ ":" \+ request\.steps\.join\(","\)\}/);
+  assert.match(marketing, /<NativeBehaviorExplorer[\s\S]*?workspace=\{workspace\}[\s\S]*?trends=\{trends\}[\s\S]*?\/>/);
   assert.match(marketing, /<NativeBehaviorBreakdownPanel breakdown=\{breakdown\}/);
   assert.match(panel, /<form method="get" action="\/marketing"/);
   assert.match(panel, /name="view" value="behavior"/);
