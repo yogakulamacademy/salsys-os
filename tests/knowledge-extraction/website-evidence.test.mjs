@@ -88,6 +88,31 @@ test('rejects oversized source text rather than silently clipping a fee, date or
     {ok:false,error:'source_text_over_limit'});
 });
 
+test('rejects impossible and timezone-ambiguous fetchedAt instead of inventing source freshness',()=>{
+  for(const fetchedAt of [
+    '2026-02-30T09:00:00Z', // JS Date.parse normalizes this to March 2
+    '2026-11-06T09:00:00', // no declared timezone
+    '2026-11-06T09:00:00+05:30', // offset coercion is not a source UTC timestamp
+    '2026-11-06T09:00:00.1234Z', // silent precision truncation
+    '2026-13-06T09:00:00Z',
+    'Fri, 06 Nov 2026 09:00:00 GMT',
+  ]){
+    const invalid=sample();invalid.fetchedAt=fetchedAt;
+    assert.deepEqual(prepareWebsiteEvidence(invalid),
+      {ok:false,error:'invalid_fetched_at'},fetchedAt);
+  }
+  for(const [fetchedAt,expected] of [
+    ['2026-11-06T09:00:00Z','2026-11-06T09:00:00.000Z'],
+    ['2026-11-06T09:00:00.1Z','2026-11-06T09:00:00.100Z'],
+    ['2026-11-06T09:00:00.123Z','2026-11-06T09:00:00.123Z'],
+  ]){
+    const valid=sample();valid.fetchedAt=fetchedAt;
+    const result=prepareWebsiteEvidence(valid);
+    assert.equal(result.ok,true,fetchedAt);
+    assert.equal(result.evidence.fetchedAt,expected);
+  }
+});
+
 test('boilerplate-only input is an honest empty snapshot',()=>{
   const input=sample();
   input.blocks=[
