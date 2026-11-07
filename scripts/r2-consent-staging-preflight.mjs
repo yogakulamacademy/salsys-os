@@ -13,6 +13,17 @@ const prohibitedHosts = new Set([
   "salsys-os-git-main-salsysos.vercel.app",
 ]);
 
+function knownProductionCrmDeploymentHost(host) {
+  // Vercel's immutable deployment and branch-preview URLs are not the fixed
+  // production aliases above. In this installation these named host families
+  // belong to the production CRM project, and its Preview environment has
+  // unverified access to live Supabase/ingest credentials. A *different*
+  // asserted project ID must not make its URL acceptable as isolated staging.
+  // This is a conservative local guard, not proof of Vercel domain ownership.
+  return /^salsys-[a-z0-9]+-salsysos\\.vercel\\.app$/.test(host) ||
+    /^salsys-os-git-[a-z0-9-]+-salsysos\\.vercel\\.app$/.test(host);
+}
+
 function publiclyNamedHost(host) {
   // Configuration-only check: reject local, intranet and IP literals before
   // allowing a staging origin. A real owner must separately verify DNS/TLS,
@@ -23,7 +34,8 @@ function publiclyNamedHost(host) {
       host.split(".").some((part) => !/^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/.test(part))) return false;
   var blockedSuffixes = [
     "localhost", "local", "internal", "lan", "home", "home.arpa",
-    "test", "invalid", "example", "onion"
+    "test", "invalid", "example", "example.com", "example.net",
+    "example.org", "onion"
   ];
   if (blockedSuffixes.some((suffix) => host === suffix || host.endsWith("." + suffix))) return false;
   return true;
@@ -40,6 +52,7 @@ function origin(input, label, problems) {
   }
   const host = url.hostname.toLowerCase();
   if (!publiclyNamedHost(host) || prohibitedHosts.has(host) ||
+      knownProductionCrmDeploymentHost(host) ||
       prohibitedRoots.some((root) => host === root || host.endsWith("." + root))) {
     problems.push(label + ": production or non-routable origin is not accepted");
   }
