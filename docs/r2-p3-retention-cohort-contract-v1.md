@@ -25,6 +25,22 @@ The synthetic test includes an identityEpoch field to represent a independently 
 
 - **Additional timestamp-quality evidence (2026-11-07, 06:52–06:53 UTC):** Of **2,637** observed source-scoped session-start receipts, **171** had `received_at < occurred_at` (the client event time was later than server receipt); **165** were within 5 seconds, **5** were 5–30 seconds, **1** was 30 seconds–5 minutes, and **none** exceeded 5 minutes (largest observed negative lag approximately **94.6 seconds**). Positive receipt lag exceeded 24 hours in **4** events (all 24–48 hours, maximum approximately **34.3 hours**). These are aggregate timestamp comparisons only: a negative lag does **not** by itself prove tampering or a backend bug; client clock differences and asynchronous transport are possible explanations. The synthetic regression accepts exactly five minutes of negative lag but blocks anything beyond five minutes; both this limit and the 24-hour delivery limit remain **unapproved research assumptions**, not production acceptance thresholds. No automatic correction, timestamp rewriting, event deletion, or retention computation is permitted from these findings.
 
+## Reproducible operator-only timestamp-quality diagnostic (research)
+
+The SELECT-only file `docs/sql/r2-p3-event-time-quality-diagnostic-v1.sql` returns a **single privacy-bounded aggregate JSON object** for a separately verified authorized tenant. It is not deployed as a function/API/report, does not change production data, and never returns browser, session, tracking-source or organization identifiers.
+
+Run it only with an independently authorized **read-only** database connection. Pass the tenant UUID privately to `psql`, never via an issue or copied public record:
+
+```bash
+psql "$AUTHORIZED_DB_CONNECTION" -X -q -A -t -P pager=off -v ON_ERROR_STOP=1 \
+  -v organization_id='<verified-authorized-tenant-uuid>' -v days=30 \
+  -f docs/sql/r2-p3-event-time-quality-diagnostic-v1.sql
+```
+
+The diagnostic accepts only 7/14/30 **UTC calendar-day** windows (current UTC day incomplete), caps observations at 50,000, and suppresses all quality counters if the cap is exceeded or the window is invalid. It reports mutually exclusive **negative/positive arrival-delay buckets**, a client-observed analytics snapshot breakdown, count of observed SDK versions, and maximum/minimum event-to-receipt lag. Its `observational_only` status explicitly does **not** establish cohort eligibility, full source/consent history, an ingestion SLA, owner/admin session authorization, or retention. A `no_observations` status is not proof that no traffic occurred. These aggregate receipt-time comparisons do not distinguish client clock skew from queue/retry behavior.
+
+On 2026-11-07 at ~07:03 UTC, a SELECT-only syntax/execution check of the diagnostic, with the target production organization resolved *internally in SQL* from the active `yogakulam.com` website source (without emitting IDs), returned `observational_only`, **2,639** bounded session-start observations, **4** arrivals 24–48h after the claimed event time, **171** negative-lag observations within five minutes, and **2** SDK versions. No tenant IDs, browser keys, event payloads or raw rows were returned. These counts change as new events arrive, and they still leave the proposed 24-hour and five-minute limits **unapproved**.
+
 ## Safety and aggregation
 
 - Use a provisional cohort-day privacy threshold of at least **20** distinct eligible source-scoped browser keys. For 1–19 keys, suppress BOTH numerator and denominator; never display a calculated 0% or an identifiable row.
