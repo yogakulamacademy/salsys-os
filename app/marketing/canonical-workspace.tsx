@@ -126,7 +126,8 @@ function MarketingTabs({ view }: { view: MarketingView }) {
           <Link
             key={tab.value}
             href={tab.value === "overview" ? "/marketing" : `/marketing?view=${tab.value}`}
-            className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-semibold transition ${
+            aria-current={view === tab.value ? "page" : undefined}
+            className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-semibold transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-700 dark:focus-visible:outline-slate-200 ${
               view === tab.value
                 ? "bg-slate-950 text-white dark:bg-white dark:text-slate-950"
                 : "text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-900"
