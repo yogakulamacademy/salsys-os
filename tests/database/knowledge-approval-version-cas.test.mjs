@@ -15,7 +15,7 @@ const ADMIN_B='20000000-0000-4000-8000-000000000002';
 const MEMBER_A='20000000-0000-4000-8000-000000000003';
 const SNAPSHOT='a'.repeat(64),BLOCK='b'.repeat(64);
 const QUOTE='c'.repeat(64),PACKET='d'.repeat(64);
-const URL='https://sample.example.com/course';
+const SOURCE_URL='https://sample.example.com/course';
 const RPC='select kb08e_fixture.approve_knowledge_cas_rehearsal_v1($1,$2,$3,$4,$5,$6,$7,$8,$9) as result';
 const SIGNATURE='kb08e_fixture.approve_knowledge_cas_rehearsal_v1(uuid,uuid,integer,text,text,text,text,timestamptz,text)';
 
@@ -52,7 +52,7 @@ async function call(db,actor,args){
   }
 }
 const args=(org,doc,when,version=1)=>[
-  org,doc,version,URL,SNAPSHOT,BLOCK,QUOTE,when,PACKET,
+  org,doc,version,SOURCE_URL,SNAPSHOT,BLOCK,QUOTE,when,PACKET,
 ];
 const rejectsWith=(code,message)=>error=>error.code===code&&error.message===message;
 
@@ -117,8 +117,8 @@ test('KB-08E exact draft SQL passes version/source CAS, authorization, audit rol
       "insert into kb08e_fixture.source_versions values "+
       "($1,$2,$3,$4,$5,$6,$7,'active'),"+
       "($8,$9,$10,$11,$12,$13,$14,'active')",
-      [ORG_A,sourceA,URL,SNAPSHOT,BLOCK,QUOTE,fetched,
-       ORG_B,sourceB,URL,SNAPSHOT,BLOCK,QUOTE,fetched],
+      [ORG_A,sourceA,SOURCE_URL,SNAPSHOT,BLOCK,QUOTE,fetched,
+       ORG_B,sourceB,SOURCE_URL,SNAPSHOT,BLOCK,QUOTE,fetched],
     );
     async function addDoc(org,source,opts={}){
       const id=randomUUID();
