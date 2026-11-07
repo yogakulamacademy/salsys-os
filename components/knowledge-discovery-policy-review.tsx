@@ -117,7 +117,7 @@ export function KnowledgeDiscoveryPolicyReview() {
             <div className="sm:col-span-2"><dt className="text-slate-500">Verified UTF-8 SHA-256</dt>
               <dd className="mt-1 break-all font-mono text-[11px]">{policy.policySha256}</dd></div>
           </dl>
-          <div aria-label="Exact registered policy text"
+          <div role="region" aria-label="Exact registered policy text"
             className="max-h-[480px] overflow-auto whitespace-pre-wrap break-words rounded-lg border border-slate-200 p-4 text-sm leading-6 text-slate-800">
             {policy.policyText}
           </div>
