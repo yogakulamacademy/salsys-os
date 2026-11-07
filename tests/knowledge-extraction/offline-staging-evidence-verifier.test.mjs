@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import {syncBuiltinESMExports} from 'node:module';
 import assert from 'node:assert/strict';
 import {createHash} from 'node:crypto';
-import {mkdtempSync,writeFileSync,rmSync,symlinkSync,renameSync} from 'node:fs';
+import {mkdtempSync,writeFileSync,rmSync,symlinkSync,renameSync,appendFileSync,truncateSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {spawnSync} from 'node:child_process';
@@ -212,6 +212,55 @@ test('KB-07E no-follow blocks swapped symlink and digest detects same-length ino
     assert.equal(inodeSwap.canMerge,false);
     assert.equal(inodeSwap.canDeploy,false);
     assert.equal(interceptions,2);
+  }finally{
+    t.mock.restoreAll();
+    syncBuiltinESMExports();
+  }
+});
+
+test('KB-07E bounded descriptor reader rejects post-stat growth and short reads',t=>{
+  const f=fixture(t);
+  const scenario=STAGING_SCENARIOS[0];
+  const original='safe-one';
+  const name=f.add(scenario,{bytes:original});
+  const target=join(f.dir,name);
+  const nativeOpen=fs.openSync;
+  const nativeRead=fs.readSync;
+  let targetFd=null,mode='grow',mutated=false,bytesRead=0;
+  // Simulate malicious changes after successful fstat, on the very first
+  // read of the already opened evidence descriptor. No network or DB.
+  t.mock.method(fs,'openSync',(path,flags,...rest)=>{
+    const fd=nativeOpen(path,flags,...rest);
+    targetFd=path===target?fd:null;
+    return fd;
+  });
+  t.mock.method(fs,'readSync',(fd,buffer,offset,length,position)=>{
+    if(fd===targetFd){
+      if(!mutated){
+        mutated=true;
+        if(mode==='grow')appendFileSync(target,'DO_NOT_READ_THIS_EXTRA_DATA'.repeat(25000));
+        else truncateSync(target,3);
+      }
+      const received=nativeRead(fd,buffer,offset,length,position);
+      bytesRead+=received;
+      return received;
+    }
+    return nativeRead(fd,buffer,offset,length,position);
+  });
+  syncBuiltinESMExports();
+  try{
+    const grown=reconcileOfflineStagingEvidence({directory:f.dir});
+    assert.deepEqual(grown,{ok:false,error:'evidence_bundle_unreadable'});
+    assert.equal(mutated,true);
+    assert.ok(bytesRead<=original.length+1,'read never consumes appended bytes');
+    assert.ok(!JSON.stringify(grown).includes('DO_NOT_READ_THIS_EXTRA_DATA'));
+
+    writeFileSync(target,original);
+    mode='shrink';mutated=false;bytesRead=0;
+    const shrunk=reconcileOfflineStagingEvidence({directory:f.dir});
+    assert.deepEqual(shrunk,{ok:false,error:'evidence_bundle_unreadable'});
+    assert.equal(mutated,true);
+    assert.ok(bytesRead<=3,'short file never reads beyond available bytes');
   }finally{
     t.mock.restoreAll();
     syncBuiltinESMExports();
