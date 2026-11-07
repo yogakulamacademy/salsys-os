@@ -87,6 +87,12 @@ The browser must NOT treat a 2xx HTTP status alone as proof that analytics conse
 
 New loopback Chromium cases use valid HTTP 200 with missing success, wrong visitor, absent receipt, contradictory analytics decision or unexpected purpose, plus a malformed withdrawal response. These checks do not prove live provider/CMP behavior; the isolated authorized staging acceptance remains mandatory.
 
+## Synthetic full-stack consent UI + identity SDK integration (2026-11-07)
+
+A focused cross-draft compatibility regression is now included in **this draft PR #530** as `tests/ui/r2-consent-ui-fullstack-loopback.spec.ts`, copied from the updated synthetic consent UI draft PR #608. It runs the **actual** `public/salsys-intelligence.js` and current `public/salsys-consent.js` together with **this PR's stricter `public/salsys-tracker.js`**, not the older production tracker. Every browser request is intercepted on a disposable loopback page; the in-memory consent endpoint mimics the full real response shape (visitor ID echo, effective decisions, one synthetic receipt per purpose), not merely HTTP 200. The three checks cover no-choice, Reject All across reload, and Accept All then Analytics withdrawal and reload, with the fixture checking matching receipts.
+
+This exercises **runtime compatibility of the UI, stricter receipt validation and identity-rotation SDK** while retaining separate detailed multi-tab/form/storage tests already in this PR. It **does not deploy or merge PR #608**, and does not prove a real site's PHP/CMP, third-party GA/Meta/Clarity/PostHog consent gating, browser privacy diversity, authoritative server persistence, or CRM production lead/form identity handoff. Both drafts remain unmerged and real-site acceptance is blocked pending isolated infrastructure (#531). Require exact-head CI + CodeQL before describing this combined regression as passing.
+
 ## Controlled staging acceptance — REQUIRED BEFORE MERGE
 
 Use disposable staging/site identities (never real prospects). Configure a test site's tracking source with `data-consent-mode="required"` and an authorized staging domain. Record aggregate result/status only; do not paste raw visitor IDs or credentials into GitHub issues.
