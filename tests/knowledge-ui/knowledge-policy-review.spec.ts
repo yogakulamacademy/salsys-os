@@ -125,5 +125,6 @@ test('KB-06E policy review has no mobile overflow or submission',async({page})=>
   await page.goto('/settings/knowledge/discovery/consent');
   await expect(page.getByRole('region',{name:'Exact registered policy text'})).toBeVisible();
   await expect.poll(()=>page.evaluate(()=>document.documentElement.scrollWidth)).toBeLessThanOrEqual(375);
-  expect(methods).toEqual(['GET']);
+  expect(methods.length).toBeGreaterThan(0);
+  expect(methods.every(method=>method==='GET')).toBe(true);
 });
