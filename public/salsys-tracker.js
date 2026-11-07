@@ -631,12 +631,42 @@
     }, { capture: true });
   }
 
+  function queuedSessionStartFor(sessionKey, browserVisitor) {
+    // Reuse the original event envelope when an earlier send is awaiting
+    // idempotent replay. Source-scoped session IDs alone are not event IDs.
+    var queued = readQueue();
+    for (var i = 0; i < queued.length; i++) {
+      var item = queued[i];
+      if (item && item.event_name === 'web.session_started' &&
+          item.session_key === sessionKey &&
+          item.anonymous_visitor_id === browserVisitor &&
+          typeof item.event_id === 'string' && item.event_id.length > 0) {
+        return true;
+      }
+    }
+    return false;
+  }
+
   function sendSessionStarted() {
     if (!analyticsGranted()) return;
-    if (safeGet(window.sessionStorage, KEYS.sessionStarted) === sessionId) return;
-    safeSet(window.sessionStorage, KEYS.sessionStarted, sessionId);
+    var emittedSession = sessionId;
+    var emittedVisitor = visitorId;
+    if (safeGet(window.sessionStorage, KEYS.sessionStarted) === emittedSession) return;
+    if (queuedSessionStartFor(emittedSession, emittedVisitor)) {
+      // flushQueue() will deliver the ORIGINAL event ID; do not invent another.
+      safeSet(window.sessionStorage, KEYS.sessionStarted, emittedSession);
+      return;
+    }
+    safeSet(window.sessionStorage, KEYS.sessionStarted, emittedSession);
     track('web.session_started', {}, { keepalive: true }).catch(function () {
-      safeRemove(window.sessionStorage, KEYS.sessionStarted);
+      // track() queues its original envelope before this rejection handler.
+      // Preserve the marker while that envelope remains available for retry.
+      // If storage is blocked and no replay exists, allow a later fresh start.
+      if (queuedSessionStartFor(emittedSession, emittedVisitor)) return;
+      // Never clear a newly rotated identity's session-start marker.
+      if (safeGet(window.sessionStorage, KEYS.sessionStarted) === emittedSession) {
+        safeRemove(window.sessionStorage, KEYS.sessionStarted);
+      }
     });
   }
 
