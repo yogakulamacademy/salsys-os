@@ -43,6 +43,11 @@ test('an ungated worker or a broader discovery host allowlist blocks review',()=
   const worker='app/api/knowledge/discovery/worker/route.ts';
   assert.ok(tamper(worker,s=>s.replace('bearerMatchesAnySecret(','removedBearerGate('))
     .includes('worker_pilot_auth_or_consent_boundary_changed'));
+  assert.ok(tamper(worker,s=>s.replace(
+    'process.env.KNOWLEDGE_DISCOVERY_RUNNER_SECRET?.trim()',
+    'process.env.CRON_SECRET?.trim()',
+  )).includes('worker_pilot_auth_or_consent_boundary_changed'),
+  'A shared cross-service cron credential must never replace the dedicated worker token');
   const gate='lib/knowledge-discovery/pilot-gate.ts';
   assert.ok(tamper(gate,s=>s.replace('allowed.includes(host)','allowed.some(value => host.endsWith(value))'))
     .includes('pilot_default_off_or_exact_host_gate_changed'));
