@@ -217,6 +217,48 @@ test('mutable AI drafting requests are independently revalidated before model re
   }
 });
 
+test('request fingerprint rejects risk flags, citation paths, timestamps and headings edited after construction',()=>{
+  const request=envelope();
+  const response={
+    schemaVersion:'kb03c-v1',requestId:request.requestId,
+    proposals:[{kind:'fact',
+      sourceDraftId:request.evidence[0].sourceDraftId,
+      statement:request.evidence[0].exactAnswerQuote}],
+  };
+  assert.equal(validateAIDraftingResponse(response,request).ok,true);
+
+  // These fields previously passed structural validation and did not affect
+  // the request ID, leaving a review-risk or citation-metadata tampering gap.
+  const mutations=[
+    ['removed price review reminder',r=>{r.evidence[0].riskReminders=[];}],
+    ['changed citation URL path',r=>{
+      r.evidence[0].answerCitation.sourceUrl='https://sample.example.com/other';
+    }],
+    ['changed citation fetch time',r=>{
+      r.evidence[0].answerCitation.fetchedAt='2026-11-05T11:00:00.000Z';
+    }],
+    ['changed source heading',r=>{
+      r.evidence[0].answerCitation.headingPath=['Rewritten heading'];
+    }],
+    ['changed original source block position',r=>{
+      r.evidence[0].answerCitation.sourceBlockIndex=99;
+    }],
+    ['altered paired FAQ headings consistently',r=>{
+      r.evidence[1].questionCitation.headingPath=['Different section'];
+      r.evidence[1].answerCitation.headingPath=['Different section'];
+    }],
+    ['changed claimed exact host casing',r=>{
+      r.verifiedHostname='SAMPLE.EXAMPLE.COM';
+    }],
+  ];
+  for(const [label,mutate] of mutations){
+    const tampered=structuredClone(request);
+    mutate(tampered);
+    assert.deepEqual(validateAIDraftingResponse(response,tampered),
+      {ok:false,error:'invalid_drafting_request'},label);
+  }
+});
+
 test('empty simulated proposal response remains an honest nonpublishable result',()=>{
   const request=envelope();
   const result=validateAIDraftingResponse({
