@@ -60,6 +60,41 @@ Issue #601 records a **read-only, account-linked quote** for an owner-selected S
 
 **Current result:** `S3=UNAPPROVED`. This action sheet creates **no GitHub ruleset, protected environment, deployment, project, signed approval, permission to merge, or production acceptance**.
 
+## P2–P4 retention and erasure decision worksheet — owner/legal/DBA input required
+
+**Status: ALL UNAPPROVED.** This worksheet converts the 12 schema surfaces in `docs/checkpoints/KB-06G-Retention-Deletion-Dependency-Coverage-DRAFT.md` into a concrete signing checklist. Those 12 declarations span an existing Knowledge V1 migration **and unapplied draft KB migrations**: they are **not** a claim that all 12 tables or a deletion service are currently deployed. The only scoped metadata erasure proposed so far is the **unapplied KB-06C draft** for discovery jobs/pages after withdrawal. Neither an existing website cookie choice nor a source table's presence establishes Knowledge Builder legal consent or an approved retention period.
+
+For each entry, the independently designated **privacy/legal owner** must specify purpose and legal basis, a retention start event, an exact retention limit or independently justified legal exception, the correct outcome on consent withdrawal, retention expiry, valid deletion request and tenant offboarding, the deletion executor/authority, a due-time and how completion is verified. The DBA/security reviewer must independently inspect its **actual** FK, triggers, RLS, privileged delete/TRUNCATE and rollback behavior. Leave all values unresolved until signed elsewhere; this document **must not** be parsed as execution authorization.
+
+| P2 item | Schema surface declared in KB-06G | Source-verified deletion dependency / open question | Decision state |
+| --- | --- | --- | --- |
+| P2-01 | `knowledge_sources` | Source URI/metadata may be referenced by documents; deletion can be restricted | **UNAPPROVED** |
+| P2-02 | `knowledge_documents` | Versioned text, supersession restrictions; document deletion currently cascades to chunks **and reviewer approvals** | **UNAPPROVED** |
+| P2-03 | `knowledge_chunks` | Derived text/search copies cascade with document, but indexes/external replicas still need a disposition | **UNAPPROVED** |
+| P2-04 | `knowledge_approvals` | Human reviewer notes/decision history: choose minimizable contents versus independently justified audit proof; reconcile KB-07C `RESTRICT` proposal | **UNAPPROVED** |
+| P2-05 | `knowledge_discovery_domain_verifications` | Exact-host ownership proofs and timestamps: expiration, withdrawal, transfer and offboarding not covered by KB-06C | **UNAPPROVED** |
+| P2-06 | `knowledge_discovery_jobs` | **KB-06C draft-only** metadata deletion after audited withdrawal; no approved other expiry/deletion basis | **UNAPPROVED** |
+| P2-07 | `knowledge_discovery_pages` | **KB-06C draft-only** metadata deletion with job; URLs/titles/statuses need independent data classification | **UNAPPROVED** |
+| P2-08 | `knowledge_discovery_site_consents` | Purpose-specific consent: retained by KB-06C; audit FK/immutability needs review before deletion | **UNAPPROVED** |
+| P2-09 | `knowledge_discovery_consent_control` | Global operator policy/notice registry: retention, revocation and version-history owner unclear | **UNAPPROVED** |
+| P2-10 | `knowledge_discovery_consent_audit` | Grant/withdrawal audit: append-only trigger, consent FK cascade conflict, minimization and justified retention to decide | **UNAPPROVED** |
+| P2-11 | `knowledge_discovery_metadata_erasure_audit` | Append-only erasure proof: preserve non-identifying verification while deciding scope of sensitive fields | **UNAPPROVED** |
+| P2-12 | `knowledge_discovery_policy_documents` | Immutable policy text/version: define retention and change/withdrawal history independently | **UNAPPROVED** |
+
+**P4 external/dependent copy register (deployment NOT verified):** do not imply any of these stores is currently used or subject to successful erasure. Independently inventory and name the actual service/vendor, region, data subject/content held, responsible operator, subprocessors, erasure capability, permitted hold, restoration behavior and signed evidence before selecting a disposition.
+
+| P4 item | Risk category identified in KB-06G | Independent owner decision | Decision state |
+| --- | --- | --- | --- |
+| P4-01 | Database backups, replicas and point-in-time recovery (PITR) | Restoration-window expiry; isolate/restage erased copies; documented restore-and-reerase test | **UNAPPROVED** |
+| P4-02 | Application logs, traces and operational diagnostics | Minimize tenant/source/actor text, redact access tokens, set log expiration and controlled access | **UNAPPROVED** |
+| P4-03 | AI provider prompts, responses and processing records | Identify approved processors and contractual retention/deletion guarantees; prohibit unapproved live calls | **UNAPPROVED** |
+| P4-04 | Caches, full-text/search indexes and exports | Identify all downstream duplicates, invalidation/expiry mechanism and verification owner | **UNAPPROVED** |
+| P4-05 | Sent/published knowledge and other external destinations | Define retractability, correction notice, delivery irreversibility and evidence for each destination | **UNAPPROVED** |
+
+**Mandatory decision-record fields (retain outside this public repository):** case/table ID; purpose/processor; applicable jurisdiction and owner-approved legal basis; exact policy notice/version/digest; retention duration and start trigger; withdrawal, valid request, expiry and tenant-offboarding action; applicable legal hold/exception and justification; executing role and time deadline; authorization/RLS/FK/trigger/restore implications; audited completion and failed-deletion escalation; required contractor/provider evidence; legal/privacy approver and date; DBA/security approver and date; policy revision identifier. Do **not** place sensitive personal records, bearer tokens, provider secrets or signed approvals inside a public GitHub issue.
+
+**P3 conflict resolution is mandatory before executing any deletion:** the current document-to-approval cascade can silently remove reviewer history, while KB-07C's proposed `ON DELETE RESTRICT` can block legitimate source erasure. KB-07D `BEFORE TRUNCATE` guards are defense-in-depth and not immune to privileged DDL or disabled triggers. Choose an independently approved redaction/pseudonymization-versus-deletion architecture for audit data and test it in **cost-approved isolated staging** only. Until the entire matrix is signed, retention limits remain **undefined**, no worker may schedule erasure, consent/crawl/publish remain blocked and actual witnessed acceptance stays **0/16**.
+
 ## Retention/deletion questions that must be resolved before any KB SQL application
 
 The source catalog `docs/checkpoints/KB-06G-Retention-Deletion-Dependency-Coverage-DRAFT.md` enumerates **12** knowledge/discovery data surfaces; its limited metadata erasure proposal covers **only** discovery jobs/pages after consent withdrawal. A separate reviewed policy must state what happens to:
