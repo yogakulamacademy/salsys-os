@@ -53,6 +53,17 @@ test('an ungated worker or a broader discovery host allowlist blocks review',()=
     .includes('pilot_default_off_or_exact_host_gate_changed'));
 });
 
+test('reintroducing GET job claims or skipping the claimed-lease check blocks review',()=>{
+  const path='app/api/knowledge/discovery/worker/route.ts';
+  assert.ok(tamper(path,s=>s.replace(
+    'export function GET()',
+    'export const GET = POST;\nfunction unusedGet()',
+  )).includes('worker_get_mutation_boundary_changed'));
+  assert.ok(tamper(path,s=>s.replace(
+    'validDiscoveryClaim(claim)', 'Boolean(claim)',
+  )).includes('worker_claim_validation_boundary_changed'));
+});
+
 test('removing a disposable DB guard or copying a fixture into app runtime blocks review',()=>{
   const file='docs/sql/KB-08G-source-verification-alert-gate-REHEARSAL-DRAFT.sql';
   assert.ok(tamper(file,s=>s.replace('KB08G_DISPOSABLE_PARENT_FIXTURE_REQUIRED',
