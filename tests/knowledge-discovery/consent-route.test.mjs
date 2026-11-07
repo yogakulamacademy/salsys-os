@@ -23,7 +23,7 @@ const host='fixture.example.com';
 const policySha='a'.repeat(64);
 const policyVersion='synthetic-reviewed-test-v1';
 const acknowledgement='I authorize read-only website discovery for this domain';
-let authenticated=true,admin=true,site='https://fixture.example.com/';
+let authenticated=true,admin=true,strictSession=true,site='https://fixture.example.com/';
 let rpcError=null,rpcReturn=null,rpcCalls=[],reads=[],authCalls=0;
 const scope=load('lib/knowledge-discovery/url-policy.ts',{
   'node:net':require('node:net'),
@@ -41,6 +41,8 @@ function client(){
     rpc:async(name,args)=>{
       rpcCalls.push({name,args});
       if(name==='can_manage_organization')return {data:admin,error:null};
+      if(name==='kb_discovery_consent_actor_v1')
+        return {data:strictSession?ownerId:null,error:null};
       if(rpcError)return {data:null,error:rpcError};
       if(name==='grant_knowledge_discovery_consent_v1')
         return {data:rpcReturn??{ok:true,revision:1},error:null};
@@ -89,7 +91,7 @@ test.after(()=>{
   wasRead===undefined?delete process.env[readKey]:process.env[readKey]=wasRead;
 });
 function reset(){
-  delete process.env[key];delete process.env[readKey];authenticated=true;admin=true;site='https://fixture.example.com/';
+  delete process.env[key];delete process.env[readKey];authenticated=true;admin=true;strictSession=true;site='https://fixture.example.com/';
   rpcError=null;rpcReturn=null;rpcCalls=[];reads=[];authCalls=0;
 }
 function req(method,body,headers={}){
@@ -155,6 +157,9 @@ test('KB-06D read-only review requires separate flag and does not enable grant w
   admin=false;authenticated=true;
   assert.equal((await routes.GET()).status,403);
   assert.equal(reads.length,baseline);
+  authenticated=true;admin=true;strictSession=false;
+  assert.equal((await routes.GET()).status,403);
+  assert.equal(reads.length,baseline,'Revoked session cannot read any consent or audit rows');
 });
 test('CSRF and unauthenticated/non-admin denial precede write RPC',async()=>{
   reset();process.env[key]='true';
