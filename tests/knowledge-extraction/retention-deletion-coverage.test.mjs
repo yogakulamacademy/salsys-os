@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { readFileSync, readdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { resolve, dirname } from 'node:path';
 import {
@@ -25,6 +25,19 @@ function listSchemaTables(sources = contents) {
     declaredTables(ddl).map(name => ({ source, name })));
 }
 const all = listSchemaTables(contents);
+// Detect newly introduced knowledge_* database tables anywhere in migrations or
+// draft SQL, not only files manually declared in the original catalog.
+const allSqlInRepository=[
+  ...readdirSync(resolve(root,'supabase/migrations'))
+    .filter(name=>name.endsWith('.sql'))
+    .map(name=>'supabase/migrations/'+name),
+  ...readdirSync(resolve(root,'docs/sql'))
+    .filter(name=>name.endsWith('.sql'))
+    .map(name=>'docs/sql/'+name),
+];
+const discoveredAcrossRepository=listSchemaTables(Object.fromEntries(
+  allSqlInRepository.map(path=>[path,readFileSync(resolve(root,path),'utf8')]),
+));
 
 test('KB-06G table inventory matches every exact knowledge CREATE TABLE across current and draft DDL', () => {
   const catalog = KNOWLEDGE_DATA_SURFACES.map(item => item.name);
@@ -32,6 +45,11 @@ test('KB-06G table inventory matches every exact knowledge CREATE TABLE across c
   assert.equal(new Set(all.map(row => row.name)).size, all.length,
     'Duplicate CREATE TABLE across source DDL inputs');
   assert.deepEqual([...catalog].sort(), all.map(row => row.name).sort());
+  assert.deepEqual(
+    [...new Set(discoveredAcrossRepository.map(row=>row.name))].sort(),
+    [...catalog].sort(),
+    'New or omitted knowledge CREATE TABLE anywhere in migrations/docs/sql requires inventory review',
+  );
   assert.equal(catalog.length, 12);
   assert.equal(KNOWLEDGE_DATA_SURFACES.filter(x =>
     x.disposition === 'draft_exact_host_after_withdrawal_only').length, 2);
