@@ -81,6 +81,9 @@ jobs:
       - name: Verify KB-08E version-aware knowledge approval CAS only in disposable PostgreSQL
         run: node --test tests/database/knowledge-approval-version-cas.test.mjs
 
+      - name: Verify KB-08F postapproval source invalidation and synthetic retrieval guard in disposable PostgreSQL
+        run: node --test tests/database/knowledge-postapproval-source-invalidation.test.mjs
+
 
       - name: Verify exact Instagram outbound projector SQL in isolated PostgreSQL
         run: node --test tests/database/instagram-outbound-echo-projector.test.mjs
