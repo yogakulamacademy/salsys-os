@@ -11,10 +11,10 @@ export function discoveryPilotEnabled(): boolean {
 }
 
 function canonicalHost(value: string): string {
-  return value.toLowerCase().trim().replace(/\.$/, '').replace(/^www\./, '');
+  return value.toLowerCase().trim().replace(/\.$/, '');
 }
 
-/** Avoid suffix, wildcard or substring matching (evil-example.com != example.com). */
+/** Exact host authorization: apex and www are separate. Never allow suffix, alias or substring matches. */
 export function discoveryHostAllowed(hostname: string): boolean {
   if (!discoveryPilotEnabled()) return false;
   const host = canonicalHost(hostname);
