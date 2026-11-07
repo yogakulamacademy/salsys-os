@@ -19,14 +19,14 @@ export async function POST(request: NextRequest) {
   if (!discoveryPilotEnabled()) return NextResponse.json(
     { ok: false, error: 'Discovery pilot disabled' }, { status: 503, headers: noStore },
   );
-  const secrets = [
-    process.env.KNOWLEDGE_DISCOVERY_RUNNER_SECRET?.trim(),
-    process.env.CRON_SECRET?.trim(),
-  ].filter((value): value is string => Boolean(value));
-  if (!secrets.length) return NextResponse.json(
+  // Isolate this privileged crawler from the shared CRON_SECRET used by
+  // unrelated jobs. A future scheduler MUST supply the dedicated runner
+  // credential after an independent operational review, not a generic token.
+  const runnerSecret = process.env.KNOWLEDGE_DISCOVERY_RUNNER_SECRET?.trim();
+  if (!runnerSecret) return NextResponse.json(
     { ok: false, error: 'Runner not configured' }, { status: 503, headers: noStore },
   );
-  if (!bearerMatchesAnySecret(request.headers.get('authorization'), secrets)) {
+  if (!bearerMatchesAnySecret(request.headers.get('authorization'), [runnerSecret])) {
     return NextResponse.json({ ok: false, error: 'Unauthorized' }, { status: 401, headers: noStore });
   }
   try {
