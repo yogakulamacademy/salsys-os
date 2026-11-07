@@ -2,6 +2,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   EXECUTION_PHRASE,
+  SESSION_BINDING_APPROVAL_PHRASE,
+  SESSION_BINDING_ENVIRONMENT_READY,
   FORBIDDEN_PROJECT_REFS,
   validateKbStagingEnvironment,
   documentPath,
@@ -130,9 +132,11 @@ function installSyntheticFetch({
   consentActorCrossTenantLeak=false,consentActorMissingPositive=false,
   consentActorRevokedStillAllowed=false,consentActorAnonAllowed=false,
   consentActorMalformed=false,
+  enforceSessionBinding=false,bindFailure=false,badBindingResult=false,
 }={}){
   const calls=[];
   const revokedTokens=new Set();
+  const boundTokens=new Map();
   const tokenA=fakeVerifiedJwt(A,SESSION_A);
   const tokenB=fakeVerifiedJwt(B,duplicateSession?SESSION_A:SESSION_B);
   const original=globalThis.fetch;
@@ -162,12 +166,24 @@ function installSyntheticFetch({
       if(!logoutFailure)revokedTokens.add(init.headers.Authorization?.slice(7));
       return mockedResponse(logoutFailure?503:204,null);
     }
-    assert.equal(method,'GET');
+    if(pathname!=='/rest/v1/rpc/bind_current_tenant_session')
+      assert.equal(method,'GET');
     const token=init.headers.Authorization?.replace('Bearer ','')??'anon';
     const actor=token===tokenA?A:token===tokenB?B:null;
     if(pathname==='/auth/v1/user')return mockedResponse(200,{
       id:badAuthUser?'90000000-0000-4000-8000-000000000001':actor?.userId,
     });
+    if(pathname==='/rest/v1/rpc/bind_current_tenant_session'){
+      assert.equal(method,'POST');
+      assert.ok(actor,'Auth token must belong to one of the two staging fixtures');
+      assert.equal(init.headers.Authorization,'Bearer '+token);
+      const body=JSON.parse(init.body);
+      assert.deepEqual(Object.keys(body),['p_organization_id']);
+      assert.equal(body.p_organization_id,actor.org);
+      if(bindFailure&&actor===B)return mockedResponse(403,{message:'Membership binding refused'});
+      boundTokens.set(token,actor.org);
+      return mockedResponse(200,badBindingResult?'wrong organization':actor.org);
+    }
     if(pathname==='/rest/v1/rpc/kb_discovery_consent_actor_v1'){
       assert.equal(method,'GET');
       const targetOrg=u.searchParams.get('p_org');
@@ -176,6 +192,8 @@ function installSyntheticFetch({
         ?mockedResponse(200,A.userId):mockedResponse(403,{message:'No execute privilege'});
       if(consentActorMalformed)return mockedResponse(200,{userId:actor.userId});
       if(revokedTokens.has(token)&&!consentActorRevokedStillAllowed)
+        return mockedResponse(200,null);
+      if(enforceSessionBinding&&boundTokens.get(token)!==targetOrg)
         return mockedResponse(200,null);
       if(actor.org===targetOrg&&!consentActorMissingPositive)
         return mockedResponse(200,actor.userId);
@@ -428,4 +446,150 @@ test('KB-06F rejected projects and forged preflight never cause network requests
     expectBlocked(forbidden,/project_not_dedicated_staging/);
     assert.equal(requests,0);
   }finally{globalThis.fetch=original;}
+});
+
+const bindingEnv=()=>{
+  const env=baseEnv();
+  env.SALSYS_KB_STAGING_BINDING_APPROVAL_PHRASE=SESSION_BINDING_APPROVAL_PHRASE;
+  env.SALSYS_KB_STAGING_BINDING_WRITES_READY=SESSION_BINDING_ENVIRONMENT_READY;
+  return env;
+};
+
+test('KB-06H requires independent operator phrase and environment approval BEFORE network',async()=>{
+  for(const variation of [
+    Object.assign(baseEnv(),{SALSYS_KB_STAGING_BINDING_APPROVAL_PHRASE:SESSION_BINDING_APPROVAL_PHRASE}),
+    Object.assign(baseEnv(),{SALSYS_KB_STAGING_BINDING_WRITES_READY:SESSION_BINDING_ENVIRONMENT_READY}),
+    Object.assign(bindingEnv(),{SALSYS_KB_STAGING_BINDING_APPROVAL_PHRASE:'unapproved'}),
+    Object.assign(bindingEnv(),{SALSYS_KB_STAGING_BINDING_WRITES_READY:'unapproved'}),
+  ]){
+    expectBlocked(variation,/independent_session_binding_approval_missing/);
+  }
+  assert.equal(validateKbStagingEnvironment(baseEnv()).allowSessionBinding,false);
+  assert.equal(validateKbStagingEnvironment(bindingEnv()).allowSessionBinding,true);
+  let requests=0;
+  const original=globalThis.fetch;
+  globalThis.fetch=()=>{requests++;throw Error('network prohibited');};
+  try{
+    await assert.rejects(
+      runKbStagingReadOnlyAcceptance(validateKbStagingEnvironment(baseEnv()),
+        {checkConsentActor:true,bindTestSessions:true}),
+      /independent_session_binding_approval_missing/);
+    await assert.rejects(
+      runKbStagingReadOnlyAcceptance(validateKbStagingEnvironment(bindingEnv()),
+        {checkConsentActor:false,bindTestSessions:true}),
+      /independent_session_binding_approval_missing/);
+    await assert.rejects(
+      runKbStagingReadOnlyAcceptance({...validateKbStagingEnvironment(bindingEnv())},
+        {checkConsentActor:true,bindTestSessions:true}),
+      /unvalidated_runtime_configuration/);
+    assert.equal(requests,0);
+  }finally{globalThis.fetch=original;}
+});
+
+test('KB-06H bound mode uses only two authenticated membership-checked staging RPC writes',async()=>{
+  const fake=installSyntheticFetch({enforceSessionBinding:true});
+  try{
+    const result=await runKbStagingReadOnlyAcceptance(
+      validateKbStagingEnvironment(bindingEnv()),
+      {checkConsentActor:true,bindTestSessions:true});
+    assert.equal(result.stage,'KB06H');
+    assert.equal(result.result,
+      'passed_staging_session_binding_and_read_only_knowledge_consent_checks');
+    assert.equal(result.checks,22);
+    assert.equal(result.consentActorChecks,10);
+    assert.equal(result.stagingSessionBindingWrites,2);
+    assert.equal(result.knowledgeWrites,0);
+    assert.equal(result.consentWrites,0);
+    assert.equal(result.independentStagingAcceptanceVerified,false);
+    assert.equal(result.authorizesCrawlOrRelease,false);
+    assert.equal(result.localSessionRevocationsAcknowledged,2);
+    const binds=fake.calls.filter(x=>x.path==='/rest/v1/rpc/bind_current_tenant_session');
+    assert.equal(binds.length,2);
+    assert.ok(binds.every(x=>x.method==='POST'));
+    assert.ok(fake.calls.filter(x=>x.method==='POST').every(x=>[
+      '/auth/v1/token','/auth/v1/logout','/rest/v1/rpc/bind_current_tenant_session',
+    ].includes(x.path)));
+    assert.equal(fake.calls.filter(x=>x.path==='/auth/v1/logout').length,2);
+    assert.equal(fake.calls.filter(x=>
+      x.path==='/rest/v1/rpc/kb_discovery_consent_actor_v1').length,10);
+  }finally{fake.restore();}
+});
+
+test('KB-06H denies unbound-actor authority BEFORE any binding writes',async()=>{
+  // Unexpected authority on a fresh session must fail before we mutate its
+  // binding, rather than allowing an inherited or cross-tenant session.
+  const fake=installSyntheticFetch({enforceSessionBinding:false});
+  try{
+    await assert.rejects(
+      runKbStagingReadOnlyAcceptance(validateKbStagingEnvironment(bindingEnv()),
+        {checkConsentActor:true,bindTestSessions:true}),
+      /consent_actor_cross_tenant_or_revocation_leak/);
+    assert.equal(fake.calls.filter(x=>
+      x.path==='/rest/v1/rpc/bind_current_tenant_session').length,0);
+    assert.equal(fake.calls.filter(x=>x.path==='/auth/v1/logout').length,2);
+  }finally{fake.restore();}
+});
+
+test('KB-06H strict actor really fails without binding, even with fresh valid JWT',async()=>{
+  const fake=installSyntheticFetch({enforceSessionBinding:true});
+  try{
+    await assert.rejects(
+      runKbStagingReadOnlyAcceptance(validateKbStagingEnvironment(baseEnv()),
+        {checkConsentActor:true}),
+      /consent_actor_own_session_unverified/);
+    assert.equal(fake.calls.filter(x=>
+      x.path==='/rest/v1/rpc/bind_current_tenant_session').length,0);
+    assert.equal(fake.calls.filter(x=>x.path==='/auth/v1/logout').length,2);
+  }finally{fake.restore();}
+});
+
+test('KB-06H failure during second tenant binding revokes both test Auth sessions',async()=>{
+  const fake=installSyntheticFetch({enforceSessionBinding:true,bindFailure:true});
+  try{
+    await assert.rejects(
+      runKbStagingReadOnlyAcceptance(validateKbStagingEnvironment(bindingEnv()),
+        {checkConsentActor:true,bindTestSessions:true}),
+      /session_binding_unverified/);
+    assert.equal(fake.calls.filter(x=>
+      x.path==='/rest/v1/rpc/bind_current_tenant_session').length,2);
+    assert.equal(fake.calls.filter(x=>x.path==='/auth/v1/logout').length,2);
+    assert.equal(fake.calls.filter(x=>x.path==='/rest/v1/knowledge_documents').length,0);
+  }finally{fake.restore();}
+});
+
+test('KB-06H refuses malformed session bind receipt and still signs out',async()=>{
+  const fake=installSyntheticFetch({enforceSessionBinding:true,badBindingResult:true});
+  try{
+    await assert.rejects(
+      runKbStagingReadOnlyAcceptance(validateKbStagingEnvironment(bindingEnv()),
+        {checkConsentActor:true,bindTestSessions:true}),
+      /session_binding_unverified/);
+    assert.equal(fake.calls.filter(x=>x.path==='/auth/v1/logout').length,2);
+  }finally{fake.restore();}
+});
+
+test('KB-06H revocation leak fails after successful session binds',async()=>{
+  const fake=installSyntheticFetch({
+    enforceSessionBinding:true,consentActorRevokedStillAllowed:true,
+  });
+  try{
+    await assert.rejects(
+      runKbStagingReadOnlyAcceptance(validateKbStagingEnvironment(bindingEnv()),
+        {checkConsentActor:true,bindTestSessions:true}),
+      /consent_actor_cross_tenant_or_revocation_leak/);
+    assert.equal(fake.calls.filter(x=>x.path==='/auth/v1/logout').length,2);
+  }finally{fake.restore();}
+});
+
+test('KB-06H original read-only mode remains free of any session binding writes',async()=>{
+  const fake=installSyntheticFetch();
+  try{
+    const result=await runKbStagingReadOnlyAcceptance(
+      validateKbStagingEnvironment(bindingEnv()),
+      {checkConsentActor:false,bindTestSessions:false});
+    assert.equal(result.stage,'KB05D');
+    assert.equal(result.stagingSessionBindingWrites,0);
+    assert.equal(fake.calls.some(x=>
+      x.path==='/rest/v1/rpc/bind_current_tenant_session'),false);
+  }finally{fake.restore();}
 });

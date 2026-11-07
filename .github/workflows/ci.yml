@@ -12,6 +12,7 @@ on:
       - feature/kb06e-verified-policy-document-preview
       - feature/kb06f-staging-consent-actor-readonly
       - feature/kb06g-retention-deletion-dependency-inventory
+      - feature/kb06h-isolated-staging-session-bind-handshake
   push:
     branches:
       - main
