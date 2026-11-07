@@ -127,6 +127,18 @@ export function auditKBMainlineIntegration({
     !worker.includes('discoverySiteConsentActive(')){
     violations.push('worker_pilot_auth_or_consent_boundary_changed');
   }
+  // KB-09C: a GET request must NEVER invoke the side-effectful worker,
+  // including by future handler aliasing, cron defaults or prefetch requests.
+  if(!worker.includes('export function GET()')||
+    !worker.includes('status: 405')||
+    /export const GET\s*=\s*POST/.test(worker)){
+    violations.push('worker_get_mutation_boundary_changed');
+  }
+  if(!worker.includes('validDiscoveryClaim(claim)')||
+    !worker.includes('Array.isArray(data)')||
+    !worker.includes('data.length > 1')){
+    violations.push('worker_claim_validation_boundary_changed');
+  }
 
   for(const [path,environment] of STAGING_WORKFLOWS){
     const source=text(path);
