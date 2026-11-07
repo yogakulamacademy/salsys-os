@@ -72,9 +72,14 @@ const MAX_SIGNAL_ENTRIES=150;
 const MAX_SIGNAL_SOURCES=16;
 const hash=(s:string)=>createHash('sha256').update(s,'utf8').digest('hex');
 
+/** Reject dates normalized by Date.parse; source freshness needs real UTC dates. */
 function validDate(value:unknown):value is string {
-  return typeof value==='string'&&/^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d(?:\.\d+)?Z$/.test(value)&&
-    Number.isFinite(Date.parse(value));
+  if(typeof value!=='string'||
+    !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,3})?Z$/.test(value))return false;
+  const time=Date.parse(value);
+  if(!Number.isFinite(time))return false;
+  const [prefix,fraction='']=value.slice(0,-1).split('.');
+  return new Date(time).toISOString()===prefix+'.'+fraction.padEnd(3,'0')+'Z';
 }
 
 function validSourceOnHost(url:unknown,host:string):boolean {
