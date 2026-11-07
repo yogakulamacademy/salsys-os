@@ -36,7 +36,7 @@ const server=http.createServer(async(req,res)=>{
   if(url.pathname==='/__behavior_scenario'){
     const state=url.searchParams.get('state');
     const tenant=url.searchParams.get('tenant')||'primary';
-    if(!['ready','empty','small','denied','error','funnel-error','trends-error','breakdown-error','malformed-funnel-count','malformed-trends-count','malformed-breakdown-count','trends-shifted-calendar','trends-stale-window'].includes(state) ||
+    if(!['ready','empty','small','denied','error','funnel-error','trends-error','breakdown-error','malformed-funnel-count','malformed-trends-count','malformed-breakdown-count','malformed-path-low-session','malformed-path-minimum','trends-shifted-calendar','trends-stale-window'].includes(state) ||
        !['primary','secondary'].includes(tenant)){res.statusCode=400;res.end('{}');return;}
     behaviorScenario=state;behaviorTenant=tenant;
     behaviorCalls=[];behaviorTrendCalls=[];behaviorBreakdownCalls=[];
@@ -119,6 +119,15 @@ const server=http.createServer(async(req,res)=>{
       ]
     };
     if(behaviorScenario==='malformed-funnel-count') result.funnel[0].sessions=null;
+    if(behaviorScenario==='malformed-path-low-session') {
+      // 2 distinct sessions cannot possibly represent 3 distinct visitors.
+      // Keep the public path syntactically clean to test the actual k guard.
+      result.paths[0].sessions=2;
+    }
+    if(behaviorScenario==='malformed-path-minimum') {
+      // Metadata claiming only one session is sufficient must fail closed.
+      result.status.path_min_sessions=1;
+    }
   }
   else if(url.pathname==='/rest/v1/rpc/get_native_behavior_event_trends_v1'){
     let raw='';
