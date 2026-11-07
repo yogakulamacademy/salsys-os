@@ -100,6 +100,7 @@ export async function getNativeBehaviorWorkspace(
     if (status.window_days !== days
       || status.aggregation_unit !== "source_scoped_visitor_session"
       || status.path_min_visitors !== 3
+      || status.path_min_sessions !== 3
       || !Array.isArray(value.funnel) || value.funnel.length !== steps.length
       || !Array.isArray(value.paths) || value.paths.length > 12) {
       return empty(days, steps);
@@ -128,8 +129,12 @@ export async function getNativeBehaviorWorkspace(
       if (!safePublicPath(from) || !safePublicPath(to)) continue;
       const sessions = safeBehaviorCount(row.sessions);
       const transitions = safeBehaviorCount(row.transitions);
-      if (sessions === null || transitions === null || transitions < sessions
-        || sessions > pathSessions) return empty(days, steps);
+      // Three *different visitors* necessarily imply at least three distinct
+      // visitor-session keys. This is a necessary, not sufficient, k-anonymity
+      // assertion: PostgreSQL still owns the actual distinct-visitor check.
+      // Never render an impossible subthreshold edge after an RPC regression.
+      if (sessions === null || transitions === null || sessions < 3
+        || transitions < sessions || sessions > pathSessions) return empty(days, steps);
       paths.push({ from_path: from, to_path: to, sessions, transitions });
     }
 
