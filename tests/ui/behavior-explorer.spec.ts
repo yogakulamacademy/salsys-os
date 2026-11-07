@@ -34,6 +34,50 @@ test.beforeEach(async ({ context, request }) => {
   expect(setup.ok()).toBe(true);
 });
 
+test("Keyboard navigation marks the active Marketing view and preserves existing Funnel and Analytics", async ({ page }) => {
+  const nav = page.getByRole("navigation", { name: "Marketing workspace views" });
+  const behavior = nav.getByRole("link", { name: "Behavior", exact: true });
+  const funnel = nav.getByRole("link", { name: "Funnel", exact: true });
+  const analytics = nav.getByRole("link", { name: "Analytics", exact: true });
+
+  await page.goto("/marketing?view=behavior");
+  await expect(behavior).toHaveAttribute("aria-current", "page");
+  await expect(analytics).not.toHaveAttribute("aria-current", "page");
+  await analytics.focus();
+  await expect(analytics).toBeFocused();
+  await page.keyboard.press("Enter");
+  await expect(page).toHaveURL(/view=analytics/);
+  await expect(analytics).toHaveAttribute("aria-current", "page");
+  await expect(page.getByRole("heading", { name: "Behavior explorer" })).toHaveCount(0);
+
+  await funnel.focus();
+  await expect(funnel).toBeFocused();
+  await page.keyboard.press("Enter");
+  await expect(page).toHaveURL(/view=funnel/);
+  await expect(funnel).toHaveAttribute("aria-current", "page");
+  await expect(page.getByRole("heading", { name: "Funnel", exact: true })).toBeVisible();
+
+  await behavior.focus();
+  await expect(behavior).toBeFocused();
+  await page.keyboard.press("Enter");
+  await expect(page).toHaveURL(/view=behavior/);
+  await expect(behavior).toHaveAttribute("aria-current", "page");
+  await expect(page.getByRole("heading", { name: "Ordered funnel" })).toBeVisible();
+
+  // Native controls must be usable from the keyboard, without a mouse.
+  const range = page.getByRole("combobox", { name: "Analytics date range" });
+  await range.focus();
+  await range.press("End");
+  await expect(range).toHaveValue("30");
+  const run = page.getByRole("button", { name: "Run funnel" });
+  await run.focus();
+  await expect(run).toBeFocused();
+  await page.keyboard.press("Enter");
+  await expect(page).toHaveURL(/view=behavior.*days=30/);
+  await expect(behavior).toHaveAttribute("aria-current", "page");
+  await expect(page.getByRole("heading", { name: "Ordered funnel" })).toBeVisible();
+});
+
 test("Behavior tab reads tenant-scoped aggregates and filters unsafe visitor paths", async ({ page, request }) => {
   await page.goto("/marketing?view=behavior");
   await expect(page.getByRole("heading", { name: "Behavior explorer" })).toBeVisible();
