@@ -251,6 +251,37 @@ test("small cohorts suppress both numerator and denominator; empty data are not 
   assert.equal(trial.rows.length, 7);
 });
 
+test("provisional delivery-lag boundary blocks cohorts once 24 hours is exceeded", () => {
+  const first = event("delivery-boundary", "2026-11-01", "initial");
+  const justWithin = {
+    ...first,
+    receivedAt: "2026-11-02T10:00:00Z", // Exactly 24h is an unapproved synthetic assumption.
+  };
+  const justOutside = {
+    ...first,
+    receivedAt: "2026-11-02T10:00:01Z", // No silent dropping of a delayed cohort event.
+  };
+  assert.equal(syntheticCohortTrial([justWithin], options).status, "synthetic_only");
+  const stale = syntheticCohortTrial([justOutside], options);
+  assert.equal(stale.status, "blocked");
+  assert.equal(stale.reason, "unreliable_event_time_or_delivery");
+  assert.deepEqual(stale.rows, []);
+
+  // A previously verified mature cohort must not be published if a delayed
+  // same-source return arrives outside the provisional receipt-lag boundary.
+  const prior = Array.from({ length: 20 }, (_, i) => [
+    event("lag-v" + i, "2026-11-01", "first"),
+    event("lag-v" + i, "2026-11-02", "new-session"),
+  ]).flat();
+  const returnIndex = prior.findIndex((row) => row.sessionId === "new-session");
+  prior[returnIndex] = {
+    ...prior[returnIndex],
+    receivedAt: "2026-11-03T10:00:01Z",
+  };
+  assert.equal(syntheticCohortTrial(prior, options).reason,
+    "unreliable_event_time_or_delivery");
+});
+
 test("unknown consent, stale delivery, absent identity or conflicting event IDs fail closed", () => {
   const good = event("v", "2026-11-01", "s");
   for (const changed of [
