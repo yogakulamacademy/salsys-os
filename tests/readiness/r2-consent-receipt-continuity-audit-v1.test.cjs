@@ -46,6 +46,11 @@ test('prior consent decision is same tenant/browser and predates both event cloc
   assert.match(active, /count\(\*\) filter\(where prior_decision='denied'\)/);
   assert.match(active, /count\(\*\) filter\(where prior_decision is null\)/);
   assert.match(active, /prior_source='browser_sdk_v1'/);
+  assert.ok(active.includes("r.metadata->>'tracking_source_id' as prior_receipt_tracking_source_id"));
+  assert.ok(active.includes('prior_receipt_tracking_source_id=tracking_source_id::text'));
+  assert.ok(active.includes('prior_receipt_tracking_source_id is distinct from tracking_source_id::text'));
+  assert.ok(output.includes("'source_matched_browser_sdk_notice_grants'"));
+  assert.ok(output.includes("'prior_grants_with_missing_or_other_source'"));
   assert.ok(active.includes("nullif(btrim(prior_notice_version),'')"));
 });
 
