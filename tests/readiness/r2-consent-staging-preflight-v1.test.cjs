@@ -158,6 +158,43 @@ test("R2-P3 rejects trailing-dot production aliases and nonstandard HTTPS ports"
   }
 });
 
+test("R2-P3 rejects dynamic production CRM Vercel deployment and preview aliases", () => {
+  // A production Vercel project has many generated URLs, not just its stable
+  // crm.salsysos.com domain. Distinct *declared* project IDs alone do not
+  // establish that the supplied hostname belongs to the staging project.
+  for (const alias of [
+    "https://salsys-bwrit5cap-salsysos.vercel.app",
+    "https://salsys-e6z2z0hba-salsysos.vercel.app",
+    "https://salsys-os-git-feature-x-salsysos.vercel.app",
+    "https://salsys-os-git-main-salsysos.vercel.app",
+  ]) {
+    for (const field of ["SALSYS_STAGING_SITE_ORIGIN", "SALSYS_STAGING_CRM_ORIGIN",
+      "SALSYS_STAGING_SUPABASE_URL"]) {
+      const result = verify({ ...good, [field]: alias });
+      assert.equal(result.readyForManualTesting, false, field + ": " + alias);
+      assert.ok(result.errors.some((error) =>
+        error.includes("production or non-routable")), field);
+    }
+  }
+});
+
+test("R2-P3 rejects reserved example domains, including their subdomains", () => {
+  for (const reserved of [
+    "https://example.com", "https://demo.example.com",
+    "https://example.net", "https://preview.example.net",
+    "https://example.org", "https://a.example.org",
+  ]) {
+    for (const field of ["SALSYS_STAGING_SITE_ORIGIN", "SALSYS_STAGING_CRM_ORIGIN",
+      "SALSYS_STAGING_SUPABASE_URL"]) {
+      const result = verify({ ...good, [field]: reserved });
+      assert.equal(result.readyForManualTesting, false, field + ": " + reserved);
+    }
+  }
+  // The fully fake fixture proves only that declaration-format checks work.
+  // It is not evidence that a real staging domain is owned or isolated.
+  assert.equal(verify(good).readyForManualTesting, true);
+});
+
 test("R2-P3 keeps staging website, CRM and Supabase on distinct named origins", () => {
   const sharedWebsite = verify({
     ...good, SALSYS_STAGING_CRM_ORIGIN: good.SALSYS_STAGING_SITE_ORIGIN,
