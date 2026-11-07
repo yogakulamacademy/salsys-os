@@ -149,6 +149,10 @@ test("R2 consent integration: Reject all persists across reload and never enable
   });
   expect(await allowed(page)).toBe(false);
   expect(captured.events).toEqual([]);
+  // The sink captures the HTTP request before the SDK stores the response.
+  // Wait for the actual UI's saved-choice state before navigating away.
+  await expect(page.getByRole("button", { name: "Open privacy settings" }))
+    .toBeVisible();
 
   await page.reload();
   await expect(page.getByRole("button", { name: "Open privacy settings" }))
