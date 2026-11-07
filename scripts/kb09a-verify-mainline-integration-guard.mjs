@@ -139,6 +139,16 @@ export function auditKBMainlineIntegration({
     !worker.includes('data.length > 1')){
     violations.push('worker_claim_validation_boundary_changed');
   }
+  // KB-09D: a rejected SQL commit must propagate failure from the page core
+  // through the HTTP response, never be acknowledged as processed.
+  const core=text('lib/knowledge-discovery/run-core.ts');
+  if(!core.includes('if (!result || result.ok !== true)')||
+     !core.includes('ok: false')||
+     /return\s*\{\s*ok:\s*true,\s*status:\s*result\.reason/.test(core)||
+     !worker.includes('if (!outcome || outcome.ok !== true)')||
+     !worker.includes('Discovery page commit was not acknowledged')){
+    violations.push('worker_commit_acknowledgment_boundary_changed');
+  }
 
   for(const [path,environment] of STAGING_WORKFLOWS){
     const source=text(path);
