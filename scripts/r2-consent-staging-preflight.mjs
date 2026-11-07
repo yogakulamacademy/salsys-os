@@ -20,8 +20,8 @@ function knownProductionCrmDeploymentHost(host) {
   // unverified access to live Supabase/ingest credentials. A *different*
   // asserted project ID must not make its URL acceptable as isolated staging.
   // This is a conservative local guard, not proof of Vercel domain ownership.
-  return /^salsys-[a-z0-9]+-salsysos\\.vercel\\.app$/.test(host) ||
-    /^salsys-os-git-[a-z0-9-]+-salsysos\\.vercel\\.app$/.test(host);
+  return /^salsys-[a-z0-9]+-salsysos\.vercel\.app$/.test(host) ||
+    /^salsys-os-git-[a-z0-9-]+-salsysos\.vercel\.app$/.test(host);
 }
 
 function publiclyNamedHost(host) {
