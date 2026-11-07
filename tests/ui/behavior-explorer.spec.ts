@@ -106,6 +106,43 @@ test("Behavior tab reads tenant-scoped aggregates and filters unsafe visitor pat
   await page.screenshot({ animations: "disabled", path: "test-results/r2-behavior-mobile.png" });
 });
 
+test("Browser Back and Forward restore the controls that match the applied Behavior report", async ({ page }) => {
+  await page.goto("/marketing?view=behavior");
+  const range = page.getByRole("combobox", { name: "Analytics date range" });
+  const third = page.getByRole("combobox", { name: "Funnel step 3" });
+  const apply = page.getByRole("button", { name: "Run funnel" });
+
+  await expect(range).toHaveValue("14");
+  await expect(third).toHaveValue("web.form_submitted");
+  await expect(page.getByText("3. Form submitted", { exact: true })).toBeVisible();
+
+  // Applying a new ordered funnel pushes a client-side history entry.
+  await page.evaluate(() => { (window as any).__r2HistoryDocumentProbe = "same-document"; });
+  await range.selectOption("30");
+  await third.selectOption("web.cta_clicked");
+  await apply.click();
+  await expect(page).toHaveURL(/view=behavior.*days=30/);
+  await expect(page.getByText("3. CTA clicked", { exact: true })).toBeVisible();
+  await expect(range).toHaveValue("30");
+  await expect(third).toHaveValue("web.cta_clicked");
+
+  await page.goBack();
+  await expect(page).toHaveURL(/\/marketing\?view=behavior$/);
+  await expect(page.getByText("3. Form submitted", { exact: true })).toBeVisible();
+  await expect(range).toHaveValue("14");
+  await expect(third).toHaveValue("web.form_submitted");
+  expect(await page.evaluate(() => (window as any).__r2HistoryDocumentProbe))
+    .toBe("same-document");
+
+  await page.goForward();
+  await expect(page).toHaveURL(/view=behavior.*days=30/);
+  await expect(page.getByText("3. CTA clicked", { exact: true })).toBeVisible();
+  await expect(range).toHaveValue("30");
+  await expect(third).toHaveValue("web.cta_clicked");
+  expect(await page.evaluate(() => (window as any).__r2HistoryDocumentProbe))
+    .toBe("same-document");
+});
+
 test("Funnel controls update ordered steps and date range without website writes", async ({ page, request }) => {
   await page.goto("/marketing?view=behavior");
   await page.getByRole("combobox", { name: "Funnel step 3" }).selectOption("web.cta_clicked");
