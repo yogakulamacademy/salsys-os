@@ -64,6 +64,19 @@ test('reintroducing GET job claims or skipping the claimed-lease check blocks re
   )).includes('worker_claim_validation_boundary_changed'));
 });
 
+test('rejected SQL commits cannot be silently reclassified as successful worker ticks',()=>{
+  const core='lib/knowledge-discovery/run-core.ts';
+  assert.ok(tamper(core,s=>s.replace(
+    'if (!result || result.ok !== true)',
+    'if (false)',
+  )).includes('worker_commit_acknowledgment_boundary_changed'));
+  const worker='app/api/knowledge/discovery/worker/route.ts';
+  assert.ok(tamper(worker,s=>s.replace(
+    'if (!outcome || outcome.ok !== true)',
+    'if (false)',
+  )).includes('worker_commit_acknowledgment_boundary_changed'));
+});
+
 test('removing a disposable DB guard or copying a fixture into app runtime blocks review',()=>{
   const file='docs/sql/KB-08G-source-verification-alert-gate-REHEARSAL-DRAFT.sql';
   assert.ok(tamper(file,s=>s.replace('KB08G_DISPOSABLE_PARENT_FIXTURE_REQUIRED',
