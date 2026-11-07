@@ -10,7 +10,17 @@ const RECEIPTS = "/__r2_consent_ui_receipts_sink_local";
 
 type DecisionSet = Record<string, string>;
 type ObservedEvent = { name: string; consentMode: string | undefined };
-type ObservedReceipt = { decisions: DecisionSet };
+type PersistedPurposeReceipt = { purpose: string; decision: string; receipt_id: string };
+type ObservedReceipt = {
+  decisions: DecisionSet;
+  requestVisitor: string;
+  response: {
+    ok: true;
+    visitor_id: string;
+    effective_decisions: DecisionSet;
+    receipts: PersistedPurposeReceipt[];
+  };
+};
 type Capture = { events: ObservedEvent[]; receipts: ObservedReceipt[] };
 
 const JS_FILES = new Set([
@@ -81,16 +91,48 @@ async function openFixture(page: Page) {
       return;
     }
     if (url.pathname === RECEIPTS && request.method() === "POST") {
-      const body = request.postDataJSON() as { decisions?: DecisionSet };
-      captured.receipts.push({ decisions: body.decisions || {} });
+      const body = request.postDataJSON() as {
+        visitor_id?: string;
+        decisions?: DecisionSet;
+        gpc?: boolean;
+      };
+      if (!body.visitor_id || !body.decisions || Object.keys(body.decisions).length === 0) {
+        await route.fulfill({
+          status: 400,
+          contentType: "application/json",
+          body: JSON.stringify({ ok: false, error: "Invalid synthetic consent request" }),
+        });
+        return;
+      }
+      // Mirror the shape of app/api/privacy/consent/v1/route.ts, including
+      // receipt evidence required by draft PR #530. This is NOT a real receipt.
+      const effective_decisions = { ...body.decisions };
+      if (body.gpc === true) effective_decisions.sale_sharing = "opted_out";
+      const receipts = Object.entries(effective_decisions).map(([purpose, decision], index) => ({
+        purpose,
+        decision,
+        receipt_id: "synthetic-local-receipt-" + captured.receipts.length + "-" + index,
+      }));
+      const response = {
+        ok: true as const,
+        visitor_id: body.visitor_id,
+        site_id: "synthetic-local",
+        site_id_verified: true,
+        gpc: body.gpc === true,
+        notice_version: "synthetic-local",
+        receipts,
+        effective_decisions,
+        received_at: new Date().toISOString(),
+      };
+      captured.receipts.push({
+        decisions: { ...body.decisions },
+        requestVisitor: body.visitor_id,
+        response,
+      });
       await route.fulfill({
         status: 200,
         contentType: "application/json",
-        body: JSON.stringify({
-          ok: true,
-          effective_decisions: body.decisions || {},
-          notice_version: "synthetic-local",
-        }),
+        body: JSON.stringify(response),
       });
       return;
     }
@@ -111,6 +153,24 @@ async function allowed(page: Page) {
   return page.evaluate(() =>
     (window as any).SalsysIntelligence.privacy().analytics_allowed_locally as boolean,
   );
+}
+
+// Keep the loopback sink compatible with the real consent endpoint and the
+// stricter receipt validation being separately reviewed in draft PR #530.
+function assertStructuredConsentReceipt(row: ObservedReceipt) {
+  expect(row.response.ok).toBe(true);
+  expect(row.response.visitor_id).toBe(row.requestVisitor);
+  for (const [purpose, decision] of Object.entries(row.decisions)) {
+    expect(row.response.effective_decisions[purpose]).toBe(decision);
+  }
+  const effective = Object.entries(row.response.effective_decisions);
+  expect(row.response.receipts).toHaveLength(effective.length);
+  for (const [purpose, decision] of effective) {
+    const matching = row.response.receipts.filter((receipt) =>
+      receipt.purpose === purpose && receipt.decision === decision &&
+      typeof receipt.receipt_id === "string" && receipt.receipt_id.length > 0);
+    expect(matching).toHaveLength(1);
+  }
 }
 
 test("R2 consent integration: first visit and reload without a choice emit no optional events or consent grants", async ({ page }) => {
@@ -140,6 +200,7 @@ test("R2 consent integration: Reject all persists across reload and never enable
     .getByRole("button", { name: "Reject all" }).click();
 
   await expect.poll(() => captured.receipts.length).toBe(1);
+  assertStructuredConsentReceipt(captured.receipts[0]);
   expect(captured.receipts[0].decisions).toMatchObject({
     analytics: "denied",
     marketing: "denied",
@@ -173,6 +234,7 @@ test("R2 consent integration: Accept then customize Analytics off blocks future 
     .getByRole("button", { name: "Accept all" }).click();
 
   await expect.poll(() => captured.receipts.length).toBe(1);
+  assertStructuredConsentReceipt(captured.receipts[0]);
   expect(captured.receipts[0].decisions.analytics).toBe("granted");
   await expect.poll(() => captured.events
     .filter((event) => event.name === "web.session_started" ||
@@ -186,6 +248,7 @@ test("R2 consent integration: Accept then customize Analytics off blocks future 
     .getByRole("button", { name: "Save choices" }).click();
 
   await expect.poll(() => captured.receipts.length).toBe(2);
+  assertStructuredConsentReceipt(captured.receipts[1]);
   expect(captured.receipts[1].decisions.analytics).toBe("denied");
   // The intercepted request is captured before the browser applies the
   // successful consent response; wait for the real SDK state transition.
