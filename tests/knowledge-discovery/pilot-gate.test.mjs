@@ -20,11 +20,23 @@ test('discovery pilot defaults OFF, requires exact host opt-in, and emergency pa
 
     process.env.KNOWLEDGE_DISCOVERY_ALLOWED_HOSTS='fixture.example.com, partner.example.net';
     assert.equal(discoveryHostAllowed('fixture.example.com'),true);
-    assert.equal(discoveryHostAllowed('www.fixture.example.com'),true);
+    assert.equal(discoveryHostAllowed('www.fixture.example.com'),false,
+      'www must be explicitly allowlisted, not inherited from apex');
     assert.equal(discoveryHostAllowed('PARTNER.example.net'),true);
     assert.equal(discoveryHostAllowed('evil-fixture.example.com'),false);
     assert.equal(discoveryHostAllowed('fixture.example.com.attacker.org'),false);
     assert.equal(discoveryHostAllowed('private.fixture.example.com'),false);
+
+    // A www hostname is a distinct host. Including only www must not grant apex.
+    process.env.KNOWLEDGE_DISCOVERY_ALLOWED_HOSTS='www.fixture.example.com';
+    assert.equal(discoveryHostAllowed('www.fixture.example.com'),true);
+    assert.equal(discoveryHostAllowed('fixture.example.com'),false);
+    assert.equal(discoveryHostAllowed('www.fixture.example.com.attacker.org'),false);
+
+    // Explicitly listing BOTH is permitted without alias-based privilege expansion.
+    process.env.KNOWLEDGE_DISCOVERY_ALLOWED_HOSTS='fixture.example.com,www.fixture.example.com';
+    assert.equal(discoveryHostAllowed('fixture.example.com'),true);
+    assert.equal(discoveryHostAllowed('www.fixture.example.com'),true);
 
     process.env.KNOWLEDGE_DISCOVERY_PAUSED='true';
     assert.equal(discoveryPilotEnabled(),false);
