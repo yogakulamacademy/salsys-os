@@ -126,7 +126,8 @@ function MarketingTabs({ view }: { view: MarketingView }) {
           <Link
             key={tab.value}
             href={tab.value === "overview" ? "/marketing" : `/marketing?view=${tab.value}`}
-            className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-semibold transition ${
+            aria-current={view === tab.value ? "page" : undefined}
+            className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-semibold transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-700 dark:focus-visible:outline-slate-200 ${
               view === tab.value
                 ? "bg-slate-950 text-white dark:bg-white dark:text-slate-950"
                 : "text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-900"
@@ -295,7 +296,14 @@ async function BehaviorView({
   ]);
   return (
     <div className="space-y-4">
-      <NativeBehaviorExplorer workspace={workspace} trends={trends} />
+      {/* Remount draft controls only when the applied funnel request changes.
+          Browser Back/Forward must restore the controls matching the displayed
+          server report, without resetting unsaved edits on breakdown-only changes. */}
+      <NativeBehaviorExplorer
+        key={request.days + ":" + request.steps.join(",")}
+        workspace={workspace}
+        trends={trends}
+      />
       <NativeBehaviorBreakdownPanel breakdown={breakdown} appliedSteps={request.steps} />
     </div>
   );

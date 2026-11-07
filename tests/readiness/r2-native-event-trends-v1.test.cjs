@@ -59,7 +59,8 @@ test("Trends remain a parallel read-only module; missing trends cannot erase fun
 
 test("Synthetic browser scenarios validate tenant request and privacy-safe failure/empty states", () => {
   assert.match(fixture, /get_native_behavior_event_trends_v1/);
-  assert.match(fixture, /body\.p_organization_id!==organizationId/);
+  assert.match(fixture, /body\.p_organization_id!==activeBehaviorOrganization\(\)/);
+  assert.match(fixture, /const activeBehaviorOrganization=.*secondaryOrganizationId:organizationId/);
   assert.match(fixture, /behaviorScenario==='denied'/);
   assert.match(fixture, /behaviorScenario==='empty'/);
   assert.match(browser, /Event activity reads tenant-scoped UTC trends/);

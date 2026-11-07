@@ -1,7 +1,3 @@
-"use client";
-
-import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
 import { ArrowRight, ListFilter } from "lucide-react";
 import { BEHAVIOR_EVENTS, type BehaviorEvent } from "@/lib/native-behavior-contract";
 import type { NativeBehaviorPageBreakdown } from "@/lib/native-behavior-breakdown-data";
@@ -21,21 +17,7 @@ export function NativeBehaviorBreakdownPanel({
   breakdown: NativeBehaviorPageBreakdown;
   appliedSteps: BehaviorEvent[];
 }) {
-  const router = useRouter();
-  const [eventName, setEventName] = useState<BehaviorEvent>(breakdown.eventName);
   const selectedLabel = labels[breakdown.eventName] || breakdown.eventName;
-
-  useEffect(() => setEventName(breakdown.eventName), [breakdown.eventName]);
-
-  function apply() {
-    const params = new URLSearchParams({
-      view: "behavior",
-      days: String(breakdown.days),
-      steps: appliedSteps.join(","),
-      breakdown: eventName,
-    });
-    router.push("/marketing?" + params.toString());
-  }
 
   return (
     <section aria-label="Event page breakdown" className="rounded-2xl border border-slate-200 bg-white p-5 dark:border-slate-800 dark:bg-slate-950">
@@ -49,23 +31,34 @@ export function NativeBehaviorBreakdownPanel({
             Find the pages generating each event. This is an observation breakdown,
             not a conversion attribution report.
           </p>
+          {breakdown.eventName === "web.page_viewed" ? (
+            <p className="mt-1 max-w-2xl text-xs text-slate-500">
+              Page-view events can include same-page SPA URL changes (such as query or hash updates)
+              without a full page reload. They are not verified full page loads.
+            </p>
+          ) : null}
         </div>
-        <div className="flex flex-wrap items-end gap-2">
+        <form method="get" action="/marketing" className="flex flex-wrap items-end gap-2">
+          {/* Native GET submission preserves a visitor's selected event even when
+              they interact before client hydration or during an RSC refresh. */}
+          <input type="hidden" name="view" value="behavior" />
+          <input type="hidden" name="days" value={String(breakdown.days)} />
+          <input type="hidden" name="steps" value={appliedSteps.join(",")} />
           <label className="flex flex-col gap-1 text-xs font-medium text-slate-600 dark:text-slate-300">
             Tracked event
-            <select aria-label="Page breakdown event" value={eventName}
-              onChange={(event) => setEventName(event.target.value as BehaviorEvent)}
+            <select aria-label="Page breakdown event" name="breakdown"
+              defaultValue={breakdown.eventName}
               className="min-w-44 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs dark:border-slate-700 dark:bg-slate-900">
               {BEHAVIOR_EVENTS.map((entry) => (
                 <option key={entry.name} value={entry.name}>{entry.label}</option>
               ))}
             </select>
           </label>
-          <button type="button" onClick={apply}
+          <button type="submit"
             className="inline-flex items-center gap-2 rounded-xl bg-slate-900 px-4 py-2 text-xs font-semibold text-white hover:bg-slate-700 dark:bg-white dark:text-slate-950">
             View pages <ArrowRight size={14} />
           </button>
-        </div>
+        </form>
       </div>
 
       {!breakdown.available ? (
@@ -121,9 +114,9 @@ export function NativeBehaviorBreakdownPanel({
             </div>
           )}
           <p className="mt-4 text-xs text-slate-500">
-            Only safe public page paths observed from at least {breakdown.minVisitors} distinct anonymous visitors
+            Only safe public page paths observed from at least {breakdown.minVisitors} distinct tracked visitor IDs
             are listed (maximum 10). Other or withheld events include unclassified paths,
-            small visitor groups and pages beyond the top 10. Reporting uses the selected {breakdown.days}-day UTC window.
+            small visitor groups and pages beyond the top 10. Reporting uses the selected {breakdown.days}-day UTC window. A tracked visitor ID may change with browsers or resets; it is not a verified person or device.
           </p>
         </>
       )}

@@ -3,6 +3,7 @@ import "server-only";
 import { createClient } from "@/lib/supabase/server";
 import { requireCurrentOrganizationId } from "@/lib/workspace";
 import type { BehaviorEvent } from "@/lib/native-behavior-contract";
+import { safeBehaviorCount as nonnegative } from "@/lib/native-behavior-safe-count";
 
 export type BehaviorPageRow = {
   path: string;
@@ -40,11 +41,6 @@ function empty(request: BreakdownRequest, message: string = generic): NativeBeha
     minVisitors: 3,
     pages: [],
   };
-}
-
-function nonnegative(value: unknown): number | null {
-  const n = Number(value);
-  return Number.isSafeInteger(n) && n >= 0 ? n : null;
 }
 
 // Mirror the existing native_safe_page_path_v2 allowlist at the server boundary.

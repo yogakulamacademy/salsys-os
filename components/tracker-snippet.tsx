@@ -35,7 +35,6 @@ function sourceFromRow(row: Record<string, unknown>): WebsiteSource | null {
 
 function installSnippet(
   siteId: string,
-  consentMode: 'required' | 'granted',
   leadCapture: boolean,
 ) {
   const encoded = encodeURIComponent(siteId);
@@ -44,16 +43,16 @@ function installSnippet(
   data-salsys-site="${siteId}"
   data-endpoint="https://salsysos.com/api/events/browser/v1?site_id=${encoded}"
   data-consent-endpoint="https://salsysos.com/api/privacy/consent/v1?site_id=${encoded}"
-  data-consent-mode="${consentMode}"
-  data-form-mode="lead-only"${leadCapture ? '\n  data-salsys-lead-capture="auto"' : ''}${consentMode === 'granted' ? '\n  data-debug="true"' : ''}
+  data-consent-mode="required"
+  data-form-mode="lead-only"${leadCapture ? '\n  data-salsys-lead-capture="auto"' : ''}
   defer>
-</script>${consentMode === 'required' ? `
+</script>
 <script
   src="https://salsysos.com/salsys-consent.js"
   data-consent-banner="auto"
   data-consent-settings="floating"
   defer>
-</script>` : ''}`;
+</script>`;
 }
 
 export function TrackerSnippet() {
@@ -93,14 +92,10 @@ export function TrackerSnippet() {
   );
 
   const snippet = useMemo(
-    () => (selected ? installSnippet(selected.siteId, 'required', leadCapture) : ''),
+    () => (selected ? installSnippet(selected.siteId, leadCapture) : ''),
     [leadCapture, selected],
   );
 
-  const testSnippet = useMemo(
-    () => (selected ? installSnippet(selected.siteId, 'granted', leadCapture) : ''),
-    [leadCapture, selected],
-  );
 
   async function copy(text: string) {
     if (!text) return;
@@ -213,15 +208,6 @@ export function TrackerSnippet() {
         </pre>
       </div>
 
-      <div className="tracking-snippet-block">
-        <div className="mb-2 text-xs font-medium text-amber-600">
-          Temporary controlled test snippet — do not use for normal production traffic
-        </div>
-
-        <pre className="tracking-code-block overflow-x-auto rounded-2xl bg-slate-950 p-4 text-xs leading-6 text-slate-100">
-          <code>{testSnippet}</code>
-        </pre>
-      </div>
     </div>
   );
 }

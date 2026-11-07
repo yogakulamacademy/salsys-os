@@ -13,6 +13,8 @@
   var seen = Object.create(null);
   var watched = [];
   var scheduledScan = false;
+  // Invalidate deferred interactions after navigation, consent, or tab state changes.
+  var interactionEpoch = 0;
   var lastDepth = getDepth();
   var thresholds = [25, 50, 75, 90];
   var observer = null;
@@ -44,6 +46,7 @@
   function ensurePage() {
     var next = window.location.pathname;
     if (next !== pageKey) {
+      interactionEpoch++;
       pageKey = next;
       seen = Object.create(null);
       lastDepth = getDepth();
@@ -66,7 +69,8 @@
   }
 
   function recordVisibility(element) {
-    if (!element || document.visibilityState === 'hidden' || !allowed()) return false;
+    if (!element || element.isConnected === false ||
+        document.visibilityState === 'hidden' || !allowed()) return false;
     var cta = safeId(element.getAttribute('data-salsys-cta-id'));
     var pricing = safeId(element.getAttribute('data-salsys-pricing-id'));
     if (cta) return emit('web.cta_viewed', { cta_id: cta }, 'cta:' + cta);
@@ -83,10 +87,24 @@
     }, { threshold: [0.5] });
   }
 
+  function dropDisconnected() {
+    if (!observer) return;
+    // SPA views can replace hundreds of nodes without a full reload. Keep
+    // the 200 *live* observer cap, rather than exhausting it permanently on
+    // elements which are no longer connected to the current document.
+    for (var i = watched.length - 1; i >= 0; i--) {
+      if (watched[i].isConnected === false) {
+        observer.unobserve(watched[i]);
+        watched.splice(i, 1);
+      }
+    }
+  }
+
   function scan() {
     scheduledScan = false;
     ensurePage();
     if (!observer || !document.querySelectorAll) return;
+    dropDisconnected();
     var nodes = document.querySelectorAll(visibleSelector);
     // Bound observation work on pages with very large or hostile DOM trees.
     for (var i = 0; i < nodes.length && watched.length < 200; i++) {
@@ -104,6 +122,7 @@
 
   function reobserve() {
     if (!observer) return;
+    dropDisconnected();
     for (var i = 0; i < watched.length; i++) {
       observer.unobserve(watched[i]);
       observer.observe(watched[i]);
@@ -125,13 +144,21 @@
   }
 
   window.addEventListener('scroll', onScroll, { passive: true });
-  window.addEventListener('popstate', scheduleScan);
-  window.addEventListener('salsys:page-change', scheduleScan);
+  function onNavigationChange() {
+    // SPA replacements may occur without a pathname change.
+    interactionEpoch++;
+    scheduleScan();
+  }
+  window.addEventListener('popstate', onNavigationChange);
+  window.addEventListener('salsys:page-change', onNavigationChange);
   document.addEventListener('visibilitychange', function () {
+    interactionEpoch++;
     if (document.visibilityState === 'visible') reobserve();
   });
   window.addEventListener('salsys:consent-changed', function () {
-    // No replay of earlier scroll events or impressions before permission.
+    // Deferred clicks initiated before a grant or withdrawal must never
+    // become eligible just because consent changes before their timer fires.
+    interactionEpoch++;
     lastDepth = getDepth();
     reobserve();
   });
@@ -148,21 +175,28 @@
       }
     }
 
-    var faq = target.closest('[data-salsys-faq-id][aria-expanded]');
-    if (faq) {
+    // Native <details> also generates an asynchronous toggle event. Attribute
+    // its FAQ impression to the original user click (including keyboard-
+    // generated clicks), not to a delayed programmatic state notification.
+    var faq = target.closest('[data-salsys-faq-id][aria-expanded]') ||
+              target.closest('details[data-salsys-faq-id]');
+    if (faq && allowed() && document.visibilityState !== 'hidden') {
+      // Accordion state is checked after the click handler, but permission
+      // belongs to the initiating interaction, not just the deferred callback.
+      var clickedEpoch = interactionEpoch;
+      var clickedPath = window.location.pathname;
       window.setTimeout(function () {
-        if (faq.getAttribute('aria-expanded') !== 'true') return;
+        if (interactionEpoch !== clickedEpoch ||
+            window.location.pathname !== clickedPath ||
+            faq.isConnected === false ||
+            !allowed() || document.visibilityState === 'hidden' ||
+            !(faq.matches && faq.matches('details[data-salsys-faq-id]')
+              ? faq.open === true
+              : faq.getAttribute('aria-expanded') === 'true')) return;
         var faqId = safeId(faq.getAttribute('data-salsys-faq-id'));
         if (faqId) emit('web.faq_expanded', { faq_id: faqId }, 'faq:' + faqId);
       }, 0);
     }
-  }, true);
-
-  document.addEventListener('toggle', function (event) {
-    var faq = event.target;
-    if (!faq || !faq.matches || !faq.matches('details[data-salsys-faq-id]') || !faq.open) return;
-    var faqId = safeId(faq.getAttribute('data-salsys-faq-id'));
-    if (faqId) emit('web.faq_expanded', { faq_id: faqId }, 'faq:' + faqId);
   }, true);
 
   // Applications must dispatch these events only after the relevant form outcome.

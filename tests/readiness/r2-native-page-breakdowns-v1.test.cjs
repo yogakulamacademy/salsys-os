@@ -64,15 +64,27 @@ test("Breakdown stays a sibling to the independently available funnel, paths and
   assert.match(marketing, /getNativeBehaviorPageBreakdown/);
   assert.match(marketing, /getNativeBehaviorWorkspace\(request\)/);
   assert.match(marketing, /getNativeBehaviorTrends/);
-  assert.match(marketing, /<NativeBehaviorExplorer workspace=\{workspace\} trends=\{trends\} \/>/);
+  // Applied funnel request must remount only when its date/ordered steps change
+  // so Back/Forward cannot leave draft controls inconsistent with the report.
+  assert.match(marketing, /<NativeBehaviorExplorer\s+key=\{request\.days \+ ":" \+ request\.steps\.join\(","\)\}/);
+  assert.match(marketing, /<NativeBehaviorExplorer[\s\S]*?workspace=\{workspace\}[\s\S]*?trends=\{trends\}[\s\S]*?\/>/);
   assert.match(marketing, /<NativeBehaviorBreakdownPanel breakdown=\{breakdown\}/);
-  assert.match(panel, /router\.push\("\/marketing\?" \+ params\.toString\(\)\)/);
+  assert.match(panel, /<form method="get" action="\/marketing"/);
+  assert.match(panel, /name="view" value="behavior"/);
+  assert.match(panel, /name="days" value=\{String\(breakdown\.days\)\}/);
+  assert.match(panel, /name="steps" value=\{appliedSteps\.join\(","\)\}/);
+  assert.match(panel, /name="breakdown"/);
+  assert.match(panel, /defaultValue=\{breakdown\.eventName\}/);
+  assert.match(panel, /<button type="submit"/);
+  assert.doesNotMatch(panel, /useEffect|router\.push|onClick=\{apply\}/);
+  assert.doesNotMatch(panel, /^"use client";/);
   assert.match(panel, /role="status"/);
 });
 
 test("Synthetic browser integration covers small cohorts, tenant metadata and mobile", () => {
   assert.match(fixture, /get_native_behavior_page_breakdown_v1/);
-  assert.match(fixture, /body\.p_organization_id!==organizationId/);
+  assert.match(fixture, /body\.p_organization_id!==activeBehaviorOrganization\(\)/);
+  assert.match(fixture, /const activeBehaviorOrganization=.*secondaryOrganizationId:organizationId/);
   assert.match(fixture, /behaviorScenario==='small'/);
   assert.match(browser, /No event data and small-cohort evidence/);
   assert.match(browser, /Invalid breakdown parameter/);

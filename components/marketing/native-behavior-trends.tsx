@@ -1,13 +1,34 @@
-import { Activity } from "lucide-react";
+"use client";
+
+import { useEffect, useMemo, useState } from "react";
+import { Activity, Copy } from "lucide-react";
 
 import { BEHAVIOR_EVENTS } from "@/lib/native-behavior-contract";
 import type { NativeBehaviorTrends } from "@/lib/native-behavior-trends-data";
+import { formatNativeBehaviorReviewCopy } from "@/lib/native-behavior-trends-review-copy";
 
 const eventLabels: Record<string,string> = Object.fromEntries(
   BEHAVIOR_EVENTS.map((item) => [item.name, item.label]),
 );
 
 export function NativeBehaviorTrendsPanel({ trends }: { trends: NativeBehaviorTrends }) {
+  const [copyState, setCopyState] = useState<"idle" | "copied" | "failed">("idle");
+  const reviewCopy = useMemo(() => formatNativeBehaviorReviewCopy(trends), [trends]);
+
+  useEffect(() => {
+    setCopyState("idle");
+  }, [reviewCopy]);
+
+  async function copyReviewFigures() {
+    if (!reviewCopy) return;
+    try {
+      await navigator.clipboard.writeText(reviewCopy);
+      setCopyState("copied");
+    } catch {
+      setCopyState("failed");
+    }
+  }
+
   return (
     <section aria-label="Event activity trends"
       className="rounded-2xl border border-slate-200 bg-white p-5 dark:border-slate-800 dark:bg-slate-950">
@@ -22,7 +43,22 @@ export function NativeBehaviorTrendsPanel({ trends }: { trends: NativeBehaviorTr
             These are not funnel conversions.
           </p>
         </div>
-        <span className="text-xs text-slate-500">Last {trends.windowDays} UTC calendar days</span>
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-xs text-slate-500">Last {trends.windowDays} UTC calendar days</span>
+          {reviewCopy ? (
+            <button type="button" onClick={copyReviewFigures}
+              aria-label="Copy Event activity review figures"
+              className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 px-2.5 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-900">
+              <Copy size={13} aria-hidden="true" />
+              Copy review figures
+            </button>
+          ) : null}
+          {copyState !== "idle" && reviewCopy ? (
+            <span role="status" aria-live="polite" className="text-xs text-slate-500">
+              {copyState === "copied" ? "Aggregate figures copied" : "Clipboard unavailable; no data copied"}
+            </span>
+          ) : null}
+        </div>
       </div>
 
       {!trends.available ? (

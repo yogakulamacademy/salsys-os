@@ -7,6 +7,8 @@ on:
     paths:
       - 'supabase/**'
       - 'scripts/build-migration-recovery-manifest.mjs'
+      - 'tests/database/r2-behavior-rpc-negative-auth-local.sql'
+      - 'tests/database/r2-behavior-rpc-positive-tenant-local.sql'
       - '.github/workflows/migration-replay.yml'
   workflow_dispatch:
 
@@ -269,6 +271,31 @@ jobs:
         run: |
           set -o pipefail
           supabase db reset --local 2>&1 | tee -a migration-replay.log
+
+      - name: Verify R2-P2 negative RPC authorization in clean local Postgres
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Only the disposable Supabase Postgres container started above.
+          # Do not use production DB URLs, service keys or real JWTs.
+          db_containers="$(docker ps --format '{{.Names}}' | grep '^supabase_db_' || true)"
+          test "$(printf '%s\n' "$db_containers" | grep -c .)" -eq 1
+          db_container="$db_containers"
+          docker exec -i "$db_container" psql -X -v ON_ERROR_STOP=1 \
+            -U postgres -d postgres \
+            < tests/database/r2-behavior-rpc-negative-auth-local.sql
+
+      - name: Verify R2-P2 positive tenant-bound RPC isolation in local Postgres
+        shell: bash
+        run: |
+          set -euo pipefail
+          # No production/test-cloud credentials. The same disposable DB used
+          # by the successful negative authorization check just above.
+          db_containers="$(docker ps --format '{{.Names}}' | grep '^supabase_db_' || true)"
+          test "$(printf '%s\n' "$db_containers" | grep -c .)" -eq 1
+          docker exec -i "$db_containers" psql -X -v ON_ERROR_STOP=1 \
+            -U postgres -d postgres \
+            < tests/database/r2-behavior-rpc-positive-tenant-local.sql
 
       - name: Show local migration state
         if: always()

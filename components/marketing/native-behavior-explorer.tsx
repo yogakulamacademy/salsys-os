@@ -1,12 +1,13 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState } from "react";
-import { Activity, ArrowRight, GitBranch, Plus, Route, ShieldCheck, Trash2 } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { Activity, ArrowRight, Copy, GitBranch, Plus, Route, ShieldCheck, Trash2 } from "lucide-react";
 
 import { BEHAVIOR_EVENTS, type BehaviorEvent } from "@/lib/native-behavior-contract";
 import type { NativeBehaviorWorkspace } from "@/lib/native-behavior-data";
 import type { NativeBehaviorTrends } from "@/lib/native-behavior-trends-data";
+import { formatNativeFunnelReviewCopy } from "@/lib/native-behavior-funnel-review-copy";
 import { NativeBehaviorTrendsPanel } from "@/components/marketing/native-behavior-trends";
 
 const labels: Record<string, string> = Object.fromEntries(
@@ -21,6 +22,22 @@ export function NativeBehaviorExplorer({ workspace, trends }: { workspace: Nativ
   const router = useRouter();
   const [days, setDays] = useState<7 | 14 | 30>(workspace.days);
   const [steps, setSteps] = useState<BehaviorEvent[]>(workspace.selectedSteps);
+  const [funnelCopyState, setFunnelCopyState] = useState<"idle" | "copied" | "failed">("idle");
+  const funnelReviewCopy = useMemo(() => formatNativeFunnelReviewCopy(workspace), [workspace]);
+
+  useEffect(() => {
+    setFunnelCopyState("idle");
+  }, [funnelReviewCopy]);
+
+  async function copyFunnelReviewFigures() {
+    if (!funnelReviewCopy) return;
+    try {
+      await navigator.clipboard.writeText(funnelReviewCopy);
+      setFunnelCopyState("copied");
+    } catch {
+      setFunnelCopyState("failed");
+    }
+  }
 
   function updateStep(index: number, next: BehaviorEvent) {
     if (steps.some((value, i) => value === next && i !== index)) return;
@@ -51,6 +68,7 @@ export function NativeBehaviorExplorer({ workspace, trends }: { workspace: Nativ
             </div>
             <h2 className="mt-1 text-lg font-bold text-slate-900 dark:text-white">Behavior explorer</h2>
             <p className="mt-1 text-sm text-slate-500">Build ordered funnels and examine popular page transitions without session recordings.</p>
+            <p className="mt-1 max-w-2xl text-xs text-slate-500">Page-view event counts can include same-page SPA URL changes, including query or hash updates, without a full page reload. They are not verified full page loads or distinct people.</p>
           </div>
           <span className="inline-flex items-center gap-2 rounded-xl bg-slate-50 px-3 py-2 text-xs text-slate-600 dark:bg-slate-900 dark:text-slate-300">
             <ShieldCheck size={14} /> Tenant-scoped aggregates
@@ -121,7 +139,21 @@ export function NativeBehaviorExplorer({ workspace, trends }: { workspace: Nativ
           <section className="rounded-2xl border border-slate-200 bg-white p-5 dark:border-slate-800 dark:bg-slate-950">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <h3 className="text-sm font-bold text-slate-900 dark:text-white">Ordered funnel</h3>
-              <span className="text-xs text-slate-500">{workspace.days}-day window</span>
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="text-xs text-slate-500">{workspace.days}-day window</span>
+                {funnelReviewCopy ? (
+                  <button type="button" onClick={copyFunnelReviewFigures}
+                    aria-label="Copy ordered funnel review figures"
+                    className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 px-2.5 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-900">
+                    <Copy size={13} aria-hidden="true" /> Copy funnel figures
+                  </button>
+                ) : null}
+                {funnelCopyState !== "idle" && funnelReviewCopy ? (
+                  <span role="status" aria-live="polite" className="text-xs text-slate-500">
+                    {funnelCopyState === "copied" ? "Funnel figures copied" : "Clipboard unavailable; no data copied"}
+                  </span>
+                ) : null}
+              </div>
             </div>
             <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
               {workspace.funnel.map((step, index) => {
@@ -150,7 +182,7 @@ export function NativeBehaviorExplorer({ workspace, trends }: { workspace: Nativ
               <div>
                 <div className="flex items-center gap-2"><Route size={16} className="text-slate-500"/>
                   <h3 className="text-sm font-bold text-slate-900 dark:text-white">Popular navigation paths</h3></div>
-                <p className="mt-1 text-xs text-slate-500">Adjacent page transitions with at least {workspace.minPathVisitors} distinct anonymous visitors.</p>
+                <p className="mt-1 text-xs text-slate-500">Adjacent page transitions with at least {workspace.minPathVisitors} distinct tracked visitor IDs.</p>
               </div>
               <span className="text-xs text-slate-500">{workspace.pathSessions.toLocaleString()} page-view sessions</span>
             </div>
@@ -177,7 +209,7 @@ export function NativeBehaviorExplorer({ workspace, trends }: { workspace: Nativ
                 </table>
               </div>
             )}
-            <p className="mt-4 text-xs text-slate-500">Potentially sensitive URL paths are excluded and individual visitor identifiers are never returned.</p>
+            <p className="mt-4 text-xs text-slate-500">Potentially sensitive URL paths are excluded and individual visitor identifiers are never returned. Tracked visitor IDs generally represent browser identities, not verified people or physical devices.</p>
           </section>
         </>
       )}

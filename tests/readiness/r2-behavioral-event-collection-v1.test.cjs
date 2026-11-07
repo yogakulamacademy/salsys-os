@@ -23,16 +23,18 @@ const names = [
 function node(attributes = {}) {
   const item = {
     open: Boolean(attributes.open),
+    isConnected: attributes.isConnected !== false,
     getAttribute(name) {
       return Object.prototype.hasOwnProperty.call(attributes, name) ? attributes[name] : null;
     },
     matches(selector) {
       return selector === 'details[data-salsys-faq-id]' &&
-        Boolean(attributes['data-salsys-faq-id']);
+        Boolean(attributes['data-salsys-faq-id']) && attributes.isDetails === true;
     },
     closest(selector) {
       if (selector === '[data-salsys-brochure-id]' && attributes['data-salsys-brochure-id']) return item;
-      if (selector === '[data-salsys-faq-id][aria-expanded]' && attributes['data-salsys-faq-id']) return item;
+      if (selector === '[data-salsys-faq-id][aria-expanded]' && attributes['data-salsys-faq-id'] && attributes['aria-expanded'] != null) return item;
+      if (selector === 'details[data-salsys-faq-id]' && attributes['data-salsys-faq-id'] && attributes.isDetails) return item;
       return null;
     },
   };
@@ -192,6 +194,80 @@ test('FAQ, brochure, and form events only send bounded identifiers and categorie
 });
 
 
+test('native details FAQ requires a consented click, not an asynchronous toggle', () => {
+  const details = node({ isDetails: true, open: true, 'data-salsys-faq-id': 'native_details' });
+  const ctx = setup(false);
+  ctx.sendDocument('click', { target: details });
+  ctx.setConsent(true);
+  ctx.sendWindow('salsys:consent-changed', {});
+  ctx.sendDocument('toggle', { target: details });
+  ctx.flushTimers();
+  assert.equal(ctx.events.length, 0);
+
+  ctx.sendDocument('click', { target: details });
+  ctx.sendDocument('toggle', { target: details });
+  ctx.flushTimers();
+  assert.deepEqual(JSON.parse(JSON.stringify(ctx.events)), [
+    { name: 'web.faq_expanded', properties: { faq_id: 'native_details' } },
+  ]);
+  ctx.sendDocument('toggle', { target: details });
+  assert.equal(ctx.events.length, 1);
+});
+
+test('deferred FAQ does not replay pre-consent clicks after a grant', () => {
+  const ctx = setup(false);
+  const faq = node({ 'data-salsys-faq-id': 'course_content', 'aria-expanded': 'true' });
+  ctx.sendDocument('click', { target: faq });
+  ctx.setConsent(true);
+  ctx.sendWindow('salsys:consent-changed', {});
+  ctx.flushTimers();
+  assert.equal(ctx.events.length, 0);
+  // An entirely new authorized click is eligible.
+  ctx.sendDocument('click', { target: faq });
+  ctx.flushTimers();
+  assert.deepEqual(JSON.parse(JSON.stringify(ctx.events)), [
+    { name: 'web.faq_expanded', properties: { faq_id: 'course_content' } },
+  ]);
+});
+
+test('deferred FAQ is discarded if consent was withdrawn and regranted before it fires', () => {
+  const ctx = setup(true);
+  const faq = node({ 'data-salsys-faq-id': 'faq_consent_epoch', 'aria-expanded': 'true' });
+  ctx.sendDocument('click', { target: faq });
+  ctx.setConsent(false);
+  ctx.sendWindow('salsys:consent-changed', {});
+  ctx.setConsent(true);
+  ctx.sendWindow('salsys:consent-changed', {});
+  ctx.flushTimers();
+  assert.equal(ctx.events.length, 0);
+  ctx.sendDocument('click', { target: faq });
+  ctx.flushTimers();
+  assert.equal(ctx.events.length, 1);
+});
+
+test('deferred FAQ never leaks across a SPA route change or detached view', () => {
+  const ctx = setup(true);
+  const oldFaq = node({ 'data-salsys-faq-id': 'old_route', 'aria-expanded': 'true' });
+  ctx.sendDocument('click', { target: oldFaq });
+  ctx.setPage('/new-course');
+  ctx.sendWindow('salsys:page-change', {});
+  ctx.flushTimers();
+  assert.equal(ctx.events.length, 0);
+
+  const detached = node({ 'data-salsys-faq-id': 'removed_faq', 'aria-expanded': 'true' });
+  ctx.sendDocument('click', { target: detached });
+  detached.isConnected = false;
+  ctx.flushTimers();
+  assert.equal(ctx.events.length, 0);
+
+  const active = node({ 'data-salsys-faq-id': 'current_faq', 'aria-expanded': 'true' });
+  ctx.sendDocument('click', { target: active });
+  ctx.flushTimers();
+  assert.deepEqual(JSON.parse(JSON.stringify(ctx.events)), [
+    { name: 'web.faq_expanded', properties: { faq_id: 'current_faq' } },
+  ]);
+});
+
 test('same CTA can be observed again after an explicit SPA route change', () => {
   const cta = node({ 'data-salsys-cta-id': 'enroll_now' });
   const ctx = setup(true, [cta]);
@@ -202,6 +278,37 @@ test('same CTA can be observed again after an explicit SPA route change', () => 
   ctx.flushTimers();
   ctx.observer().trigger(cta);
   assert.equal(ctx.events.length, 2);
+});
+
+test('long-lived SPA reclaims removed visibility markers at the 200-element observation cap', () => {
+  const old = Array.from({ length: 200 }, (_, i) =>
+    node({ 'data-salsys-cta-id': 'old-' + i }));
+  const ctx = setup(true, old);
+  assert.equal(ctx.observer().observed.size, 200);
+
+  // A real SPA may replace an entire product/grid view without a hard reload.
+  // New CTA controls must not be starved by 200 detached DOM nodes.
+  for (const item of old) item.isConnected = false;
+  old.splice(0, old.length);
+  const fresh = node({ 'data-salsys-cta-id': 'new-cta' });
+  old.push(fresh);
+  ctx.sendWindow('salsys:page-change', {});
+  ctx.flushTimers();
+
+  assert.equal(ctx.observer().observed.size, 1);
+  assert.equal(ctx.observer().observed.has(fresh), true);
+  ctx.observer().trigger(fresh, 0.8);
+  assert.deepEqual(JSON.parse(JSON.stringify(ctx.events)), [
+    { name: 'web.cta_viewed', properties: { cta_id: 'new-cta' } },
+  ]);
+});
+
+test('detached markers cannot emit stale visibility impressions', () => {
+  const stale = node({ 'data-salsys-pricing-id': 'removed-pricing' });
+  const ctx = setup(true, [stale]);
+  stale.isConnected = false;
+  ctx.observer().trigger(stale, 0.9);
+  assert.equal(ctx.events.length, 0);
 });
 
 test('hidden scrolls are not counted as meaningful engagement', () => {
