@@ -264,6 +264,67 @@ test("Switching synthetic tenants refreshes all behavior reports without retaini
   }
 });
 
+test("Soft Marketing navigation after synthetic tenant switch never reuses prior Behavior paths or counts", async ({ page, request }) => {
+  const nav = page.getByRole("navigation", { name: "Marketing workspace views" });
+  const behavior = nav.getByRole("link", { name: "Behavior", exact: true });
+  const funnel = nav.getByRole("link", { name: "Funnel", exact: true });
+  const analytics = nav.getByRole("link", { name: "Analytics", exact: true });
+  const paths = page.getByRole("region", { name: "Popular navigation paths" });
+  const pages = page.getByRole("region", { name: "Event page breakdown" });
+  const primaryPath = "/courses/200-hour-ytt.php";
+  const secondaryPath = "/courses/second-tenant.php";
+  const secondaryOrganizationId = "00000000-0000-4000-8000-000000000012";
+
+  // Simulate an already-authorized context change in the localhost fixture.
+  // No real tenant membership, cookie, JWT, database record or role is altered.
+  try {
+    await page.goto("/marketing?view=behavior&days=7");
+    await expect(paths.getByText(primaryPath, { exact: true })).toBeVisible();
+    await expect(pages.getByText(primaryPath, { exact: true })).toBeVisible();
+    await expect(page.getByText("1. Page viewed", { exact: true })).toBeVisible();
+    await page.evaluate(() => { (window as any).__r2SoftNavigationProbe = "preserve-document"; });
+
+    const switchTenant = await request.get(fixtureBase +
+      "/__behavior_scenario?state=ready&tenant=secondary");
+    expect(switchTenant.ok()).toBe(true);
+    await funnel.click();
+    await expect(page).toHaveURL(/view=funnel/);
+    await behavior.click();
+    await expect(page).toHaveURL(/view=behavior/);
+
+    // A client route transition must not resurrect cached prior-tenant rows.
+    expect(await page.evaluate(() => (window as any).__r2SoftNavigationProbe))
+      .toBe("preserve-document");
+    await expect(paths.getByText(secondaryPath, { exact: true })).toBeVisible();
+    await expect(pages.getByText(secondaryPath, { exact: true })).toBeVisible();
+    await expect(paths.getByText(primaryPath, { exact: true })).toHaveCount(0);
+    await expect(pages.getByText(primaryPath, { exact: true })).toHaveCount(0);
+    const afterSwitchCalls = await (await request.get(fixtureBase + "/__behavior_calls")).json();
+    expect(afterSwitchCalls.length).toBeGreaterThan(0);
+    expect(afterSwitchCalls.every((call: { organization_id: string }) =>
+      call.organization_id === secondaryOrganizationId)).toBe(true);
+
+    const denyTenant = await request.get(fixtureBase +
+      "/__behavior_scenario?state=denied&tenant=secondary");
+    expect(denyTenant.ok()).toBe(true);
+    await analytics.click();
+    await expect(page).toHaveURL(/view=analytics/);
+    await behavior.click();
+    await expect(page).toHaveURL(/view=behavior/);
+
+    expect(await page.evaluate(() => (window as any).__r2SoftNavigationProbe))
+      .toBe("preserve-document");
+    await expect(page.getByRole("heading", { name: "Behavior analytics unavailable" })).toBeVisible();
+    await expect(paths).toHaveCount(0);
+    await expect(pages.getByText(secondaryPath, { exact: true })).toHaveCount(0);
+    await expect(pages.getByText(primaryPath, { exact: true })).toHaveCount(0);
+    await expect(page.getByRole("heading", { name: "Ordered funnel" })).toHaveCount(0);
+    await expect(page.getByRole("region", { name: "Event activity trends" }).getByRole("status")).toBeVisible();
+  } finally {
+    await request.get(fixtureBase + "/__behavior_scenario?state=ready&tenant=primary");
+  }
+});
+
 test("Synthetic behavior RPCs reject foreign tenant IDs for funnel, trends and breakdown", async ({ request }) => {
   const secondaryOrganizationId = "00000000-0000-4000-8000-000000000012";
   const endpoints = [
