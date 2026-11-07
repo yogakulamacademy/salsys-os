@@ -139,6 +139,17 @@ The preflight also rejects the reserved documentation domain families `example.c
 
 **Limits:** Regex-based known-hostname denial cannot identify every custom production alias, future renamed Vercel project, DNS CNAME, proxy, alternate deployment URL or shared database secret. A human operator must independently verify the **real deployed Vercel project ID and deployment SHA**, HTTPS website origin, Supabase project identity, origin-bound tracking source, no customer messaging/payment side effects, and zero ability for test leads/events to reach production. No real staging deployment, DNS lookup, Supabase write, test customer or external service call is performed by the preflight. Issue #531 stays blocked until that evidence exists; this code remains **draft and unmerged**.
 
+## Production server-receipt chronology research (2026-11-07)
+
+A separate **SELECT-only operator audit** is now checked into this draft:
+`docs/sql/r2-consent-receipt-continuity-audit-v1.sql`. It requires an independently verified authorized organization UUID, exact registered hostname, and 1–72 hour lookback. The source selector must resolve to **exactly one active tracking source**; multiple/absent sources or over 50,000 candidate events fail closed. Only aggregate counts and a sampling timestamp leave the query. Synthetic static safety checks are in `tests/readiness/r2-consent-receipt-continuity-audit-v1.test.cjs`.
+
+The audit matches each `web.session_started` to the **latest prior server-side analytics consent decision** using the same tenant and anonymous browser key. Both SDK event occurrence and database receipt timestamps must follow the consent receipt's corresponding timestamps; later decisions cannot justify earlier events. It separately reports `consent_mode`, client-declared consent snapshot, denied/missing prior decisions and matching browser SDK grant receipts with a notice version. No browser keys, event rows, person IDs, tenant IDs or paths are returned. Receipts are tenant- and browser-key-scoped, **not necessarily source-scoped**: shared keys across sources are a residual ambiguity.
+
+A source-scoped production **read-only** check on 2026-11-07 at **15:18:26 UTC** for the primary `yogakulam.com` source and a **16-hour received-at lookback** returned **67 session starts** (39 SDK `required`, 28 historical SDK `granted`), all 67 with a matching **earlier analytics-grant receipt recorded by `browser_sdk_v1` with nonempty notice version**; zero lacked a prior analytics receipt or had a latest prior denial. This is a time-bound event-receipt consistency observation, **not evidence that any visitor actually saw a lawful CMP choice**. It does not prove source-specific receipt attribution, GPC, blocked requests before consent, third-party destination suppression, cross-tab withdrawal/regrant, exact CRM form identity handoff, or independent tenant/browser authorization. There is no live UI acceptance and no permission to enable optional tracking.
+
+Do not close #588/#528/#531, merge this draft or activate collector #520 from the audit alone. An operator must separately witness and approve isolated-site CMP and network acceptance.
+
 ## Release gates
 
 - [ ] Full CI: readiness tests, TypeScript/build, loopback Playwright tests, financial tests
