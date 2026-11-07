@@ -127,6 +127,16 @@ export async function runDiscoveryPageCore(
     p_links: item && pageStatus === 'fetched' ? [...new Set(links)].slice(0, 80) : [],
     p_delay_seconds: Math.max(2, Math.ceil(crawlDelay)),
   });
-  if (result.ok !== true) return { ok: true, status: result.reason ?? 'inactive_or_stale_lease' };
+  // A stale lease, withdrawn consent, or rejected page mutation is NOT a
+  // processed job. Never turn a declined transaction into an HTTP success.
+  // Keep the reason internal to the trusted worker; do not expose it in the
+  // public route response or log the lease token / source content.
+  if (!result || result.ok !== true) {
+    return {
+      ok: false,
+      reason: typeof result?.reason === 'string' && result.reason
+        ? result.reason : 'commit_not_acknowledged',
+    };
+  }
   return { ok: true, job: result };
 }
