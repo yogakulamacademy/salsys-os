@@ -296,7 +296,14 @@ async function BehaviorView({
   ]);
   return (
     <div className="space-y-4">
-      <NativeBehaviorExplorer workspace={workspace} trends={trends} />
+      {/* Remount draft controls only when the applied funnel request changes.
+          Browser Back/Forward must restore the controls matching the displayed
+          server report, without resetting unsaved edits on breakdown-only changes. */}
+      <NativeBehaviorExplorer
+        key={request.days + ":" + request.steps.join(",")}
+        workspace={workspace}
+        trends={trends}
+      />
       <NativeBehaviorBreakdownPanel breakdown={breakdown} appliedSteps={request.steps} />
     </div>
   );
