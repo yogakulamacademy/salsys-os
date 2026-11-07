@@ -110,6 +110,31 @@ test('enabled worker requires configured secret and correct bearer',async()=>{
   assert.equal((await api.POST(request('incorrect'))).status,401);
   assert.equal(adminCalls,0);
 });
+test('shared CRON_SECRET alone cannot authorize or configure the Knowledge discovery worker',async()=>{
+  reset();enable();
+  process.env.CRON_SECRET='shared-cron-secret';
+  delete process.env.KNOWLEDGE_DISCOVERY_RUNNER_SECRET;
+  const response=await api.POST(request('shared-cron-secret'));
+  assert.equal(response.status,503);
+  assert.match(response.body.error,/not configured/i);
+  assert.equal(adminCalls,0);
+  assert.equal(processCalls,0);
+});
+
+test('shared CRON_SECRET cannot substitute for dedicated discovery runner token',async()=>{
+  reset();enable();
+  process.env.CRON_SECRET='shared-cron-secret';
+  const result=await api.GET(request('shared-cron-secret'));
+  assert.equal(result.status,401);
+  assert.equal(adminCalls,0);
+  assert.equal(processCalls,0);
+  const allowed=await api.POST(request('local-synthetic-secret'));
+  assert.equal(allowed.status,200);
+  assert.equal(allowed.body.state,'processed');
+  assert.equal(adminCalls,1);
+  assert.equal(processCalls,1);
+});
+
 test('pilot pause prohibits claims even with valid bearer',async()=>{
   reset();enable();
   process.env.KNOWLEDGE_DISCOVERY_PAUSED='true';
