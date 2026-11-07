@@ -57,6 +57,10 @@ export type ApprovalVersionPreflight = {
     rpc:'approve_knowledge_document_v1';
     rpcHasExpectedVersionArgument:false;
     rpcHasSourceEvidenceFingerprintArgument:false;
+    createAction:'createKnowledgeDocumentAction';
+    createRpc:'create_source_backed_knowledge_document_v2';
+    createRpcCanApproveAtCreation:true;
+    createRpcHasSourceEvidenceFingerprintArgument:false;
     connected:false;
     invoked:false;
   };
@@ -98,7 +102,8 @@ function validSourceUrl(value:unknown):boolean {
   }catch{return false;}
 }
 function validDocumentClaim(c:SyntheticDocumentClaim|null):boolean {
-  return c===null||(
+  if(c===null)return true;
+  return !!c&&typeof c==='object'&&!Array.isArray(c)&&(
     UUID.test(c.organizationId)&&UUID.test(c.documentId)&&
     Number.isSafeInteger(c.version)&&c.version>=1&&
     ['draft','review','approved','superseded','archived','expired'].includes(c.status)&&
@@ -106,7 +111,8 @@ function validDocumentClaim(c:SyntheticDocumentClaim|null):boolean {
   );
 }
 function validSourceClaim(c:SyntheticSourceClaim|null):boolean {
-  return c===null||(
+  if(c===null)return true;
+  return !!c&&typeof c==='object'&&!Array.isArray(c)&&(
     validSourceUrl(c.sourceUrl)&&HASH.test(c.snapshotSha256)&&
     HASH.test(c.blockId)&&HASH.test(c.quoteSha256)&&utcMillis(c.observedAt)!==null
   );
@@ -141,6 +147,20 @@ export function inspectSyntheticApprovalVersionBoundary(
   const doc=input.documentClaim;
   const latest=input.latestSourceClaim;
   const time=utcMillis(p.recordedAt)!;
+  const requiredGateNames=[
+    'sourceAuthenticityAndRenderedVisibilityVerified',
+    'tenantAndReviewerAuthenticatedInWriteTransaction',
+    'verifiedConsentRetentionAndDeletion',
+    'semanticAndTemporalConflictsResolved',
+    'sourceEvidenceAuditAndRlsValidated',
+    'publishedDocumentVersionRevalidated',
+    'explicitExistingWorkflowHumanApproval',
+  ];
+  const requirementsSafe=!!p.requirements&&
+    typeof p.requirements==='object'&&!Array.isArray(p.requirements)&&
+    Object.keys(p.requirements).length===requiredGateNames.length&&
+    requiredGateNames.every(k=>Object.hasOwn(p.requirements,k)&&
+      p.requirements[k as keyof typeof p.requirements]===false);
   const approvalFlagsSafe=p.canStore===false&&p.canCreate===false&&
     p.canApprove===false&&p.canPublish===false&&
     p.annotationsStored===false&&p.existingKnowledgeModified===false&&
@@ -148,7 +168,7 @@ export function inspectSyntheticApprovalVersionBoundary(
     p.intendedExistingWorkflow?.approve==='approveKnowledgeDocumentAction'&&
     p.intendedExistingWorkflow.connected===false&&
     p.intendedExistingWorkflow.invoked===false&&
-    !!p.requirements&&Object.values(p.requirements).every(v=>v===false)&&
+    requirementsSafe&&
     p.rows.every(r=>r?.approved===false&&r?.canWrite===false&&
       r?.needsRealHumanApproval===true&&r?.reviewState==='unverified_advisory_only');
   const checks:Array<[ApprovalVersionPreflightCheck['id'],boolean]>=[
@@ -193,6 +213,10 @@ export function inspectSyntheticApprovalVersionBoundary(
       action:'approveKnowledgeDocumentAction',rpc:'approve_knowledge_document_v1',
       rpcHasExpectedVersionArgument:false,
       rpcHasSourceEvidenceFingerprintArgument:false,
+      createAction:'createKnowledgeDocumentAction',
+      createRpc:'create_source_backed_knowledge_document_v2',
+      createRpcCanApproveAtCreation:true,
+      createRpcHasSourceEvidenceFingerprintArgument:false,
       connected:false,invoked:false,
     },
     requiredRealGates:{
