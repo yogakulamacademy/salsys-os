@@ -99,6 +99,16 @@ export async function POST(request: NextRequest) {
       // The processing adapter repeats consent validation before each new
       // network request. SQL commit rechecks it atomically with page writes.
       const outcome = await processOneDiscoveryPage(claim);
+      // A declined SQL commit (cancelled consent, stale lease, concurrent
+      // page update) must never look like a successful worker tick. The
+      // existing SQL owns retry/lease expiration; don't claim success or
+      // expose private lease data while that transaction is unresolved.
+      if (!outcome || outcome.ok !== true) {
+        return NextResponse.json(
+          { ok: false, error: 'Discovery page commit was not acknowledged' },
+          { status: 503, headers: noStore },
+        );
+      }
       return NextResponse.json({ ok: true, state: 'processed', result: outcome }, { headers: noStore });
     } catch {
       // A lease expiry makes the job retryable. Do not set completed on error.
