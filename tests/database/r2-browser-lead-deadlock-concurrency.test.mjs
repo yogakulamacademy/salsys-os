@@ -80,7 +80,7 @@ test('disposable two-session 40P01 abort is retried once with one committed rece
     const a = await connect(), b = await connect(), observer = await connect();
     const aPid = (await a.query('select pg_backend_pid() as pid')).rows[0].pid;
     const bPid = (await b.query('select pg_backend_pid() as pid')).rows[0].pid;
-    await a.query("begin; set local statement_timeout = '10s';");
+    await a.query("begin; set local statement_timeout = '10s'; set local deadlock_timeout = '5s';");
     await a.query([
       "insert into public.synthetic_lead_ingest_events values ('event_a','visitor_a');",
       "update public.synthetic_visitor_identity_links set last_event_id='event_a'",
@@ -93,7 +93,7 @@ test('disposable two-session 40P01 abort is retried once with one committed rece
     const invoke = async () => {
       attempts++;
       await b.query('begin');
-      await b.query("set local statement_timeout = '10s'");
+      await b.query("set local statement_timeout = '10s'; set local deadlock_timeout = '100ms';");
       try {
         const inserted = await b.query(
           "insert into public.synthetic_lead_ingest_events (external_event_id,visitor_key) values ($1,'visitor_b') on conflict (external_event_id) do nothing returning external_event_id",
@@ -121,11 +121,13 @@ test('disposable two-session 40P01 abort is retried once with one committed rece
     const resultPromise = retryWebsiteLeadIngestDeadlock(invoke, async ms => {
       assert.equal(ms, 35);
       pauseCount++;
-      await aFinished; // The first transaction must commit before retry.
+      const firstFinished = await aFinished; // The first transaction must commit before retry.
+      assert.equal(firstFinished?.error, undefined, 'Original writer must not be the deadlock victim');
     });
     await firstBReady.promise;
     aFinished = a.query("update public.synthetic_visitor_identity_links set last_event_id='event_a' where visitor_key='visitor_b'")
-      .then(() => a.query('commit'));
+      .then(() => a.query('commit'))
+      .then(() => ({ committed: true }), error => ({ error }));
     const blocked = await blockedBy(observer, aPid, bPid);
     permitSecondLock.resolve();
     const outcome = await resultPromise;
