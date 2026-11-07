@@ -48,7 +48,11 @@ test("R2-P3 docs describe browser and consent caveats instead of claiming human 
   assert.match(browser, /safeGet\(window\.sessionStorage, KEYS\.session\)/);
   assert.match(browser, /safeRemove\(window\.localStorage, KEYS\.persistentVisitor\)/);
   assert.match(browser, /function sendSessionStarted\(\)/);
-  assert.match(browser, /safeGet\(window\.sessionStorage, KEYS\.sessionStarted\) === sessionId/);
+  assert.match(browser, /safeGet\(window\.sessionStorage, KEYS\.sessionStarted\) === emittedSession/);
+  assert.match(browser, /queuedSessionStartFor\(emittedSession, emittedVisitor\)/);
+  assert.match(browser, /item\.event_name === 'web\.session_started'/);
+  assert.match(browser, /item\.session_key === sessionKey/);
+  assert.match(browser, /item\.anonymous_visitor_id === browserVisitor/);
   assert.match(contract, /Browser events may include/);
   for (const text of ["approximately 15 calendar days", "same UTC day only", "deny → grant again", "not necessarily a visitor's first-ever visit", "sessionStorage", "minimum of 60 calendar days", "R2-P1 website collection remains OFF"]) {
     assert.ok(evidence.includes(text), "Missing limitation in evidence: " + text);
