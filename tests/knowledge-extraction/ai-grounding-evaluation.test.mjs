@@ -245,6 +245,39 @@ test('invalid time settings and future-dated source cannot create a reviewed res
   assert.deepEqual(result,{ok:false,error:'source_timestamp_in_future'});
 });
 
+test('grounding freshness triage rejects normalized dates and spoofed signal timestamps',()=>{
+  const input=create();
+  for(const asOf of [
+    '2026-02-30T12:00:00Z',
+    '2026-11-06T12:00:00',
+    '2026-11-06T12:00:00+00:00',
+    '2026-11-06T12:00:00.1234Z',
+  ]){
+    assert.deepEqual(evaluate(input,{asOf,reviewAgeDays:30}),
+      {ok:false,error:'invalid_evaluation_settings'},asOf);
+  }
+  const old=bundle({date:'2026-09-01T00:00:00Z'});
+  const signals=analyzeSourceReviewSignals([old],[],{
+    verifiedHostname:HOST,asOf:NOW,reviewAgeDays:30,
+  });
+  assert.equal(signals.ok,true);
+  assert.equal(signals.report.signals.length,1);
+  for(const fetchedAt of [
+    '2026-02-30T12:00:00Z',
+    '2026-11-05T10:00:00',
+    '2026-11-05T10:00:00+05:30',
+  ]){
+    const forged=structuredClone(signals.report);
+    forged.signals[0].sources[0].fetchedAt=fetchedAt;
+    assert.deepEqual(evaluate(input,{asOf:NOW,reviewAgeDays:30},forged),
+      {ok:false,error:'invalid_review_signal_report'},fetchedAt);
+  }
+  const valid=evaluate(input,{asOf:'2026-11-06T12:00:00.100Z',reviewAgeDays:30});
+  assert.equal(valid.ok,true);
+  assert.equal(valid.report.canApprove,false);
+  assert.equal(valid.report.canPublish,false);
+});
+
 test('empty response stays unapproved and cannot be treated as semantic evaluation',()=>{
   const input=create();
   const empty=validateAIDraftingResponse({
