@@ -73,11 +73,12 @@ test('new automated triggers or removed protected environment block staging work
   )).includes('staging_workflow_dispatch_or_env_changed:'+readonly));
 });
 
-test('the offline KB09A guard has no network or database clients',()=>{
+test('offline KB09A guard imports only local read-only Node utilities',()=>{
   const code=readFileSync('scripts/kb09a-verify-mainline-integration-guard.mjs','utf8');
-  assert.ok(!code.includes('createAdminClient('));
-  assert.ok(!code.includes('createClient('));
-  assert.ok(!code.includes('fetch('));
-  assert.ok(!code.includes('child_process'));
-  assert.ok(!code.includes('.rpc('));
+  const imports=[...code.matchAll(/^import .*? from '([^']+)'/gm)].map(x=>x[1]).sort();
+  assert.deepEqual(imports,['node:crypto','node:fs','node:path','node:url'].sort());
+  // The guard must quote its source-code contract snippets; string matching
+  // "createAdminClient()" itself would falsely flag a non-executing literal.
+  assert.ok(!/^\s*(?:await\s+)?(?:fetch|createAdminClient|createClient)\(/m.test(code));
+  assert.ok(!/from ['"](?:node:child_process|child_process|@supabase\/)/m.test(code));
 });
