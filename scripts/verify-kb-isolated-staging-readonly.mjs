@@ -12,6 +12,10 @@ import { inspectValidatedStagingJwtClaims } from './verify-kb-staging-jwt-claims
 import { assessKbStagingWorkflowAttestation } from './verify-kb-staging-workflow-attestation.mjs';
 
 export const EXECUTION_PHRASE = 'I_APPROVE_READ_ONLY_KB_STAGING';
+export const SESSION_BINDING_APPROVAL_PHRASE =
+  'I_APPROVE_TWO_STAGING_TEST_SESSION_BINDINGS_ONLY';
+export const SESSION_BINDING_ENVIRONMENT_READY =
+  'OWNER_APPROVED_ISOLATED_STAGING_SESSION_BINDING_WRITES';
 export const FORBIDDEN_PROJECT_REFS = Object.freeze([
   'doaozrkrtgeslddwhclj', // known SalsysOS Production
   'wunnbqjvfzmawubglyhe', // known SalsysOS Recovery Rehearsal
@@ -84,8 +88,21 @@ export function validateKbStagingEnvironment(env) {
   if (a.organizationId === b.documentId || b.organizationId === a.documentId) {
     fail('fixture_crossed_identifier');
   }
+  // A session-binding POST changes only the test actor's staging tenant-session
+  // binding; require separate operator signoff AND protected environment claim.
+  // Existing read-only execution has no additional permissions.
+  const bindingClaim = env.SALSYS_KB_STAGING_BINDING_WRITES_READY;
+  const bindingApproval = env.SALSYS_KB_STAGING_BINDING_APPROVAL_PHRASE;
+  const requestedBinding = Boolean(bindingClaim || bindingApproval);
+  const bindingApproved =
+    bindingClaim === SESSION_BINDING_ENVIRONMENT_READY &&
+    bindingApproval === SESSION_BINDING_APPROVAL_PHRASE;
+  if (requestedBinding && !bindingApproved) {
+    fail('independent_session_binding_approval_missing');
+  }
   const config = Object.freeze({
     ref, apiUrl, anonKey,
+    allowSessionBinding: bindingApproved,
     a: Object.freeze(a), b: Object.freeze(b),
   });
   VALIDATED_CONFIGS.add(config);
@@ -127,15 +144,23 @@ async function request(config, path, { token = null, method = 'GET', json = null
     '/rest/v1/knowledge_documents?',
     '/rest/v1/rpc/search_organization_knowledge_v1?',
     '/rest/v1/rpc/kb_discovery_consent_actor_v1?',
+    '/rest/v1/rpc/bind_current_tenant_session',
   ];
   if (!allowed.some(prefix => path.startsWith(prefix)) || path.includes('://')) {
     fail('disallowed_request_path');
   }
   const signIn=path==='/auth/v1/token?grant_type=password';
   const signOut=path==='/auth/v1/logout?scope=local';
-  if ((method==='POST' && !(signIn || (signOut && typeof token==='string' &&
-      token.length>0 && json===null))) ||
-      (method==='GET' && (signIn || signOut)) ||
+  const sessionBind=path==='/rest/v1/rpc/bind_current_tenant_session';
+  if ((path.startsWith('/rest/v1/rpc/bind_current_tenant_session') && !sessionBind) ||
+      (method==='POST' && !(signIn || (signOut && typeof token==='string' &&
+        token.length>0 && json===null) ||
+        (sessionBind && config.allowSessionBinding===true &&
+          typeof token==='string' && token.length>0 &&
+          json && typeof json==='object' && !Array.isArray(json) &&
+          Object.keys(json).length===1 &&
+          [config.a.organizationId,config.b.organizationId].includes(json.p_organization_id)))) ||
+      (method==='GET' && (signIn || signOut || sessionBind)) ||
       !['GET','POST'].includes(method)) {
     fail('disallowed_http_method');
   }
@@ -235,6 +260,19 @@ async function ownSearch(config, token, actor, label) {
   });
 }
 
+/** Isolated-staging-only, explicitly human-authorized workspace session bind.
+ * Uses the existing production-reviewed membership/active-org RPC with the
+ * caller's exact fresh Auth token. NEVER service_role, anon or another tenant.
+ * This is a real binding-table write; do not call it in read-only mode.
+ */
+async function bindTestSession(config, token, actor, label) {
+  const r=await request(config,'/rest/v1/rpc/bind_current_tenant_session',{
+    method:'POST',token,json:{p_organization_id:actor.organizationId},
+  });
+  if(r.status!==200||r.data!==actor.organizationId)
+    throw new Error('kb_staging_'+label+'_session_binding_unverified');
+}
+
 /** Fail closed if the strict live Auth session is not bound to its own tenant.
  * A missing KB-06B RPC, policy denial, or absent session binding is NOT a pass.
  * Cross-tenant and revoked-session access must return null or a 401/403.
@@ -262,9 +300,14 @@ async function anonymousConsentActor(config,organizationId,label) {
  * actor RPC with two genuine owner/admin staging accounts. No consent grant,
  * source content, evidence or mutation is requested.
  */
-export async function runKbStagingReadOnlyAcceptance(config,{checkConsentActor=false}={}) {
-  if(typeof checkConsentActor!=='boolean')
+export async function runKbStagingReadOnlyAcceptance(
+  config,{checkConsentActor=false,bindTestSessions=false}={}
+) {
+  if(typeof checkConsentActor!=='boolean' || typeof bindTestSessions!=='boolean')
     fail('invalid_consent_actor_option');
+  if(bindTestSessions && (!checkConsentActor ||
+      !config || config.allowSessionBinding!==true))
+    fail('independent_session_binding_approval_missing');
   // No network operation can start on an arbitrary or mutable caller object.
   if (!config || !VALIDATED_CONFIGS.has(config) ||
     !Object.isFrozen(config) || !Object.isFrozen(config.a) ||
@@ -288,6 +331,13 @@ export async function runKbStagingReadOnlyAcceptance(config,{checkConsentActor=f
     }
     const tokenA=authA.token;
     const tokenB=authB.token;
+
+    if(bindTestSessions){
+      // EXACT newly minted Auth sessions. Binding to any other org fails via
+      // the database membership/active org check. Never weaken strict actor.
+      await bindTestSession(config,tokenA,config.a,'a');
+      await bindTestSession(config,tokenB,config.b,'b');
+    }
 
     await ownDoc(config,tokenA,config.a,'a');
     await ownDoc(config,tokenB,config.b,'b');
@@ -320,14 +370,17 @@ export async function runKbStagingReadOnlyAcceptance(config,{checkConsentActor=f
       config.b.marker,config.b.documentId,'anon_to_b_retrieval');
 
     passed={
-      stage:checkConsentActor?'KB06F':'KB05D',
-      result:checkConsentActor
-        ?'passed_read_only_knowledge_and_consent_actor_checks'
+      stage:bindTestSessions?'KB06H':checkConsentActor?'KB06F':'KB05D',
+      result:bindTestSessions
+        ?'passed_staging_session_binding_and_read_only_knowledge_consent_checks'
+        :checkConsentActor?'passed_read_only_knowledge_and_consent_actor_checks'
         :'passed_read_only_staging_retrieval',
       checks:checkConsentActor?20:12,
       consentActorChecks:checkConsentActor?8:0,
       authorizationScope:'two_test_actors_and_anonymous',
-      knowledgeWrites:0,consentWrites:0,stagingAuthLogins:2,
+      knowledgeWrites:0,consentWrites:0,
+      stagingSessionBindingWrites:bindTestSessions?2:0,
+      stagingAuthLogins:2,
       independentStagingAcceptanceVerified:false,
       authorizesCrawlOrRelease:false,
     };
@@ -367,13 +420,15 @@ export async function runKbStagingReadOnlyAcceptance(config,{checkConsentActor=f
 
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   if (process.argv.length !== 3 ||
-      !['--run-readonly','--run-readonly-consent-actor'].includes(process.argv[2])) {
+      !['--run-readonly','--run-readonly-consent-actor',
+        '--run-bound-consent-actor'].includes(process.argv[2])) {
     throw new Error('kb_staging_explicit_run_readonly_flag_required');
   }
   const config = validateKbStagingEnvironment(process.env);
   try {
     const result = await runKbStagingReadOnlyAcceptance(config,{
-      checkConsentActor:process.argv[2]==='--run-readonly-consent-actor',
+      checkConsentActor:process.argv[2]!== '--run-readonly',
+      bindTestSessions:process.argv[2]==='--run-bound-consent-actor',
     });
     console.log(JSON.stringify(result));
   } catch (err) {
