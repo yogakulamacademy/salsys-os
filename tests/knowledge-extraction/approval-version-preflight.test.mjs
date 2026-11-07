@@ -75,6 +75,10 @@ function cannotApprove(report){
   assert.equal(report.existingApprovalWorkflow.connected,false);
   assert.equal(report.existingApprovalWorkflow.rpcHasExpectedVersionArgument,false);
   assert.equal(report.existingApprovalWorkflow.rpcHasSourceEvidenceFingerprintArgument,false);
+  assert.equal(report.existingApprovalWorkflow.createAction,'createKnowledgeDocumentAction');
+  assert.equal(report.existingApprovalWorkflow.createRpc,'create_source_backed_knowledge_document_v2');
+  assert.equal(report.existingApprovalWorkflow.createRpcCanApproveAtCreation,true);
+  assert.equal(report.existingApprovalWorkflow.createRpcHasSourceEvidenceFingerprintArgument,false);
   assert.ok(Object.values(report.requiredRealGates).every(x=>x===false));
 }
 test('exactly matching synthetic claims are still NOT permission to use the existing approval RPC',()=>{
@@ -149,6 +153,8 @@ test('forged approval annotations and untrusted handoff flags fail closed',()=>{
     ['auth claim',v=>v.handoff.requirements.tenantAndReviewerAuthenticatedInWriteTransaction=true],
     ['connected',v=>v.handoff.intendedExistingWorkflow.connected=true],
     ['invoked',v=>v.handoff.intendedExistingWorkflow.invoked=true],
+    ['missing requirements',v=>v.handoff.requirements={}],
+    ['partial requirements',v=>delete v.handoff.requirements.publishedDocumentVersionRevalidated],
   ]){
     const result=evaluate(modify);
     assert.equal(result.ok,true,label);
@@ -167,6 +173,18 @@ test('malformed, impossible or precision-truncated timestamps are rejected',()=>
     assert.deepEqual(result,{ok:false,error:'invalid_synthetic_preflight_input'},invalid);
   }
 });
+test('missing and malformed untrusted observations cannot crash or grant preflight',()=>{
+  for(const mutate of [
+    x=>{x.documentClaim=undefined;},
+    x=>{x.latestSourceClaim=undefined;},
+    x=>{x.documentClaim=[];},
+    x=>{x.latestSourceClaim={};},
+  ]){
+    const result=evaluate(mutate);
+    assert.deepEqual(result,{ok:false,error:'invalid_synthetic_preflight_input'});
+  }
+});
+
 test('the offline preflight cannot call or replace existing knowledge actions',()=>{
   const source=readFileSync('lib/knowledge-extraction/approval-version-preflight.ts','utf8');
   assert.ok(!source.includes("from '@/app/settings/knowledge/actions'"));
