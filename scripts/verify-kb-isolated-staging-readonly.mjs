@@ -333,6 +333,10 @@ export async function runKbStagingReadOnlyAcceptance(
     const tokenB=authB.token;
 
     if(bindTestSessions){
+      // A new Auth session must have no pre-existing tenant authority. This
+      // negative pre-bind check guards against inherited or spoofed bindings.
+      await deniedConsentActor(config,tokenA,config.a.organizationId,'a_before_binding');
+      await deniedConsentActor(config,tokenB,config.b.organizationId,'b_before_binding');
       // EXACT newly minted Auth sessions. Binding to any other org fails via
       // the database membership/active org check. Never weaken strict actor.
       await bindTestSession(config,tokenA,config.a,'a');
@@ -375,8 +379,8 @@ export async function runKbStagingReadOnlyAcceptance(
         ?'passed_staging_session_binding_and_read_only_knowledge_consent_checks'
         :checkConsentActor?'passed_read_only_knowledge_and_consent_actor_checks'
         :'passed_read_only_staging_retrieval',
-      checks:checkConsentActor?20:12,
-      consentActorChecks:checkConsentActor?8:0,
+      checks:bindTestSessions?22:checkConsentActor?20:12,
+      consentActorChecks:bindTestSessions?10:checkConsentActor?8:0,
       authorizationScope:'two_test_actors_and_anonymous',
       knowledgeWrites:0,consentWrites:0,
       stagingSessionBindingWrites:bindTestSessions?2:0,
