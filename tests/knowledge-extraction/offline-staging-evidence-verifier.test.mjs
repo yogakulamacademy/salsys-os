@@ -162,7 +162,6 @@ test('KB-07E rejects symbolic links, missing and oversized local evidence',t=>{
 
 test('KB-07E CLI requires explicit human ack and prints only sanitized non-authorizing counts',t=>{
   const f=fixture(t);
-  f.add(STAGING_SCENARIOS[0],{bytes:'NEVER_PRINT_PRIVATE_SYNTHETIC_PAYLOAD'});
   const executable=fileURLToPath(new URL(
     '../../scripts/kb07e-review-offline-evidence.mjs',import.meta.url));
   const cmd=(ack)=>spawnSync(process.execPath,
@@ -170,11 +169,15 @@ test('KB-07E CLI requires explicit human ack and prints only sanitized non-autho
       env:{...process.env,SALSYS_KB_EVIDENCE_REVIEW_ONLY:ack},
       encoding:'utf8',timeout:10000,
     });
+  const empty=cmd('I_ACKNOWLEDGE_DIGESTS_ARE_NOT_ACCEPTANCE');
+  assert.equal(empty.status,1,empty.stderr);
+  assert.equal(JSON.parse(empty.stdout).counts.missing,16);
+  f.add(STAGING_SCENARIOS[0],{bytes:'NEVER_PRINT_PRIVATE_SYNTHETIC_PAYLOAD'});
   const denied=cmd('');
   assert.equal(denied.status,2);
   assert.match(denied.stderr,/explicit read-only acknowledgement/);
   const permitted=cmd('I_ACKNOWLEDGE_DIGESTS_ARE_NOT_ACCEPTANCE');
-  assert.equal(permitted.status,0,permitted.stderr);
+  assert.equal(permitted.status,1,permitted.stderr);
   const report=JSON.parse(permitted.stdout);
   assert.equal(report.counts.digestMatches,1);
   assert.equal(report.counts.independentlyVerified,0);
@@ -183,4 +186,16 @@ test('KB-07E CLI requires explicit human ack and prints only sanitized non-autho
   for(const privateValue of [
     'NEVER_PRINT_PRIVATE_SYNTHETIC_PAYLOAD',f.dir,A,B,PROJECT,
   ])assert.ok(!permitted.stdout.includes(privateValue),'CLI leaked context');
+
+  for(const s of STAGING_SCENARIOS.slice(1))
+    f.add(s,{bytes:'synthetic-evidence-'+s.id});
+  const full=cmd('I_ACKNOWLEDGE_DIGESTS_ARE_NOT_ACCEPTANCE');
+  assert.equal(full.status,0,full.stderr);
+  const fullReport=JSON.parse(full.stdout);
+  assert.equal(fullReport.counts.digestMatches,16);
+  assert.equal(fullReport.counts.missing,0);
+  assert.equal(fullReport.counts.independentlyVerified,0);
+  assert.equal(fullReport.independentAcceptanceVerified,false);
+  assert.equal(fullReport.canMerge,false);
+  assert.equal(fullReport.canDeploy,false);
 });
