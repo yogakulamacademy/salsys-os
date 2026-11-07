@@ -31,7 +31,7 @@ The schema inventory `lib/knowledge-extraction/retention-deletion-coverage.mjs` 
 2. **Deleting `knowledge_documents` also cascades to `knowledge_approvals`**. That can erase human reviewer notes and approval history, conflicting with potential audit requirements; an independent policy/architecture decision is required before authorizing deletion.
 3. `knowledge_sources` deletions are restricted when referenced by documents. Version `supersedes_document_id` relationships likewise restrict some document deletions.
 4. Deleting a discovery job cascades to associated pages. KB-06C explicitly deletes only scoped page/job metadata, preserving consent and audits.
-5. `knowledge_discovery_site_consents` deletion can cascade to grant/withdrawal audit; a different **RESTRICT** relationship from `knowledge_discovery_metadata_erasure_audit` can prevent that delete. A coherent immutable audit/data rights policy is not optional.
+5. `knowledge_discovery_site_consents` declares `ON DELETE CASCADE` into consent audit, but KB-06B also defines a **BEFORE DELETE immutable row trigger**: PostgreSQL fires that trigger on cascades, so a normal consent delete with audit rows is rejected when the trigger is enabled. `TRUNCATE` does **not** invoke DELETE triggers and `TRUNCATE ... CASCADE` can bypass FK `RESTRICT`; disabled triggers/privileged maintenance are additional risk. KB-07D proposes a DRAFT-only TRUNCATE guard. Independently approved audit/data rights policy remains mandatory.
 
 ### External data retention is NOT inventoried as deployed behavior
 
