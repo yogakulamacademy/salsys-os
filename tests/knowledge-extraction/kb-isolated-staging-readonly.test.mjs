@@ -494,8 +494,8 @@ test('KB-06H bound mode uses only two authenticated membership-checked staging R
     assert.equal(result.stage,'KB06H');
     assert.equal(result.result,
       'passed_staging_session_binding_and_read_only_knowledge_consent_checks');
-    assert.equal(result.checks,20);
-    assert.equal(result.consentActorChecks,8);
+    assert.equal(result.checks,22);
+    assert.equal(result.consentActorChecks,10);
     assert.equal(result.stagingSessionBindingWrites,2);
     assert.equal(result.knowledgeWrites,0);
     assert.equal(result.consentWrites,0);
@@ -510,7 +510,22 @@ test('KB-06H bound mode uses only two authenticated membership-checked staging R
     ].includes(x.path)));
     assert.equal(fake.calls.filter(x=>x.path==='/auth/v1/logout').length,2);
     assert.equal(fake.calls.filter(x=>
-      x.path==='/rest/v1/rpc/kb_discovery_consent_actor_v1').length,8);
+      x.path==='/rest/v1/rpc/kb_discovery_consent_actor_v1').length,10);
+  }finally{fake.restore();}
+});
+
+test('KB-06H denies unbound-actor authority BEFORE any binding writes',async()=>{
+  // Unexpected authority on a fresh session must fail before we mutate its
+  // binding, rather than allowing an inherited or cross-tenant session.
+  const fake=installSyntheticFetch({enforceSessionBinding:false});
+  try{
+    await assert.rejects(
+      runKbStagingReadOnlyAcceptance(validateKbStagingEnvironment(bindingEnv()),
+        {checkConsentActor:true,bindTestSessions:true}),
+      /consent_actor_cross_tenant_or_revocation_leak/);
+    assert.equal(fake.calls.filter(x=>
+      x.path==='/rest/v1/rpc/bind_current_tenant_session').length,0);
+    assert.equal(fake.calls.filter(x=>x.path==='/auth/v1/logout').length,2);
   }finally{fake.restore();}
 });
 
