@@ -100,6 +100,17 @@ function canonicalSourceUrl(seedInput: string, pageInput: string): string | null
   }
 }
 
+/** Reject calendar-normalized or timezone-ambiguous evidence fetch times. */
+function strictUtcTimestamp(value: unknown): number | null {
+  if (typeof value !== 'string' ||
+      !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,3})?Z$/.test(value)) return null;
+  const time = Date.parse(value);
+  if (!Number.isFinite(time)) return null;
+  const [prefix, fraction = ''] = value.slice(0, -1).split('.');
+  return new Date(time).toISOString() === prefix + '.' + fraction.padEnd(3, '0') + 'Z'
+    ? time : null;
+}
+
 export function prepareWebsiteEvidence(input: unknown): WebsiteEvidenceResult {
   if (!input || typeof input !== 'object' || Array.isArray(input)) {
     return { ok:false, error:'invalid_snapshot' };
@@ -113,10 +124,11 @@ export function prepareWebsiteEvidence(input: unknown): WebsiteEvidenceResult {
   if (typeof row.pageTitle !== 'string' || row.pageTitle.length > 300) {
     return { ok:false, error:'invalid_page_title' };
   }
-  if (typeof row.fetchedAt !== 'string' || !Number.isFinite(Date.parse(row.fetchedAt))) {
+  const fetchedTime = strictUtcTimestamp(row.fetchedAt);
+  if (fetchedTime === null) {
     return { ok:false, error:'invalid_fetched_at' };
   }
-  const fetchedAt = new Date(row.fetchedAt).toISOString();
+  const fetchedAt = new Date(fetchedTime).toISOString();
   if (!Array.isArray(row.blocks) || row.blocks.length > MAX_BLOCKS) {
     return { ok:false, error:'invalid_block_count' };
   }
