@@ -20,6 +20,13 @@ The three checks exercise the real SDK and real privacy UI together:
 
 This verifies synthetic runtime behavior, **not production server receipt signature validation or real visitor compliance**.
 
+## Structured consent acknowledgment compatibility (2026-11-07)
+
+The loopback response now mirrors the shape of the **actual** `app/api/privacy/consent/v1/route.ts` response: `ok: true`, exact request `visitor_id`, a full `effective_decisions` map, and one nonempty `receipt_id` for each saved purpose; the synthetic server also applies a GPC sale-sharing opt-out when requested. Reject All, Accept All and subsequent Analytics-off flows assert the response/request purpose alignment, matching visitor and one-to-one receipt correspondence. Malformed requests are rejected by the in-memory fixture instead of receiving an automatic success.
+
+This is a **fixture correctness and future combined-branch compatibility improvement**, not a claim of actual consent persistence, acceptance of the stricter #530 SDK, third-party tracker behavior, or real-site integration. PR #530 separately implements and tests client-side receipt validation; these two draft branches have **not** been combined or deployed. The fixture uses fabricated receipt IDs; it cannot authenticate real server receipts. The developer/test branch stays **draft and unmerged** until exact-head CI/CodeQL pass and isolated website/CMP acceptance is authorized.
+
+
 Run in the checked-out application with existing test infrastructure:
 
 ```bash
