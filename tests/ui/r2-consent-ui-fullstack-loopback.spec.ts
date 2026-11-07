@@ -183,7 +183,9 @@ test("R2 consent integration: Accept then customize Analytics off blocks future 
 
   await expect.poll(() => captured.receipts.length).toBe(2);
   expect(captured.receipts[1].decisions.analytics).toBe("denied");
-  expect(await allowed(page)).toBe(false);
+  // The intercepted request is captured before the browser applies the
+  // successful consent response; wait for the real SDK state transition.
+  await expect.poll(() => allowed(page)).toBe(false);
 
   const before = captured.events.length;
   const result = await page.evaluate(() =>
