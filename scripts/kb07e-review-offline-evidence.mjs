@@ -30,8 +30,14 @@ if(args.length!==1||process.env.SALSYS_KB_EVIDENCE_REVIEW_ONLY!==PHRASE){
     // The command is an integrity preflight, NOT an acceptance decision.
     // Integrity failure is a nonzero exit; even complete hash matches are
     // still explicitly blocked from production or release.
-    process.exitCode=(
-      result.counts.digestMismatches>0||result.counts.contradictions>0
-    )?1:0;
+    // A partial or empty bundle must never report a passing integrity preflight.
+    // A full set of matching digests is still NOT independent acceptance.
+    const completeDigestSet=(
+      result.counts.digestMatches===result.counts.required &&
+      result.counts.digestMismatches===0 &&
+      result.counts.contradictions===0 &&
+      result.counts.missing===0
+    );
+    process.exitCode=completeDigestSet?0:1;
   }
 }
