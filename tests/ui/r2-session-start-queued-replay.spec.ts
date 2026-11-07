@@ -25,7 +25,11 @@ async function setup(page: Page, { failFirst = false, granted = true, blockQueue
   const captured: Captured[] = [];
   if (granted) {
     await page.addInitScript(({ blockQueue }) => {
-      localStorage.setItem("salsys_privacy_v1", JSON.stringify({ analytics: "granted" }));
+      // Preseed only the first navigation. A reload must preserve a real
+      // withdrawal; reseeding "granted" would manufacture a privacy failure.
+      if (localStorage.getItem("salsys_privacy_v1") === null) {
+        localStorage.setItem("salsys_privacy_v1", JSON.stringify({ analytics: "granted" }));
+      }
       if (blockQueue) {
         const originalSet = Storage.prototype.setItem;
         Storage.prototype.setItem = function (key: string, value: string) {
