@@ -9,6 +9,7 @@ on:
       - feature/kb06b-audited-consent-lifecycle
       - feature/kb06c-revoked-metadata-erasure
       - feature/kb06d-owner-consent-review-ui
+      - feature/kb06e-verified-policy-document-preview
   push:
     branches:
       - main
