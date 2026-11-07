@@ -453,6 +453,43 @@ test("Malformed aggregate counts do not impersonate observed zeroes in independe
   }
 });
 
+test("Impossible path cohort or weakened minimum suppresses navigation reports without hiding independent panels", async ({ page, request }) => {
+  const scenarios = ["malformed-path-low-session", "malformed-path-minimum"] as const;
+  const publicPath = "/courses/200-hour-ytt.php";
+  const trends = page.getByRole("region", { name: "Event activity trends" });
+  const breakdown = page.getByRole("region", { name: "Event page breakdown" });
+
+  try {
+    for (const state of scenarios) {
+      const setup = await request.get(fixtureBase + "/__behavior_scenario?state=" + state);
+      expect(setup.ok(), state).toBe(true);
+      await page.goto("/marketing?view=behavior");
+
+      // These are inconsistent *successful* RPC bodies, not ordinary zero traffic.
+      await expect(page.getByRole("heading", { name: "Behavior analytics unavailable" })).toBeVisible();
+      await expect(page.getByRole("region", { name: "Popular navigation paths" })).toHaveCount(0);
+      await expect(page.getByRole("heading", { name: "Ordered funnel" })).toHaveCount(0);
+      await expect(page.getByText("No path has enough evidence yet. Try a longer date range.")).toHaveCount(0);
+
+      // Failure in the path-bearing RPC cannot erase the independently
+      // authorized read-only trends or Events by Page reports.
+      await expect(trends.getByRole("article", { name: "Page viewed event trend" })).toBeVisible();
+      await expect(breakdown.getByText(publicPath, { exact: true })).toBeVisible();
+
+      for (const endpoint of [
+        "/__behavior_calls", "/__behavior_trend_calls", "/__behavior_breakdown_calls",
+      ]) {
+        const calls = await (await request.get(fixtureBase + endpoint)).json();
+        expect(calls.length, state + endpoint).toBeGreaterThan(0);
+        expect(calls.every((call: { organization_id: string }) =>
+          call.organization_id === organizationId), state + endpoint).toBe(true);
+      }
+    }
+  } finally {
+    await request.get(fixtureBase + "/__behavior_scenario?state=ready&tenant=primary");
+  }
+});
+
 test("Out-of-range or stale UTC trend dates fail closed without erasing the other reports", async ({ page, request }) => {
   const publicPath = "/courses/200-hour-ytt.php";
   const scenarios = ["trends-shifted-calendar", "trends-stale-window"] as const;
