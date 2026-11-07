@@ -47,6 +47,13 @@ export async function GET(){
       process.env.KNOWLEDGE_DISCOVERY_CONSENT_READ_ENABLED==='true';
     if(!managementEnabled&&!readEnabled)
       return json({ok:true,managementEnabled:false,readEnabled:false,records:[],audit:[]});
+    // A legacy admin-membership check alone is insufficient: prevent an
+    // unbound or revoked Auth session from seeing a misleading empty history.
+    const actor=await ctx.supabase.rpc('kb_discovery_consent_actor_v1',{
+      p_org:ctx.organizationId,
+    });
+    if(actor.error||actor.data!==ctx.userId)
+      return json({ok:false,error:'Unauthorized'},403);
     const records=await ctx.supabase.from('knowledge_discovery_site_consents')
       .select('hostname,purpose,status,policy_version,granted_at,valid_until,withdrawn_at,revision')
       .eq('organization_id',ctx.organizationId).limit(30);
