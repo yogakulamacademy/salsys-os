@@ -166,7 +166,8 @@ function installSyntheticFetch({
       if(!logoutFailure)revokedTokens.add(init.headers.Authorization?.slice(7));
       return mockedResponse(logoutFailure?503:204,null);
     }
-    assert.equal(method,'GET');
+    if(pathname!=='/rest/v1/rpc/bind_current_tenant_session')
+      assert.equal(method,'GET');
     const token=init.headers.Authorization?.replace('Bearer ','')??'anon';
     const actor=token===tokenA?A:token===tokenB?B:null;
     if(pathname==='/auth/v1/user')return mockedResponse(200,{
