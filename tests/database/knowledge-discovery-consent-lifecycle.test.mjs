@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {randomUUID} from 'node:crypto';
+import {randomUUID,createHash} from 'node:crypto';
 import {readFileSync} from 'node:fs';
 import pg from 'pg';
 const {Client}=pg;
@@ -9,6 +9,7 @@ const discovery=readFileSync(new URL('../../docs/sql/KB-01B-discovery-schema-DRA
 const consentA=readFileSync(new URL('../../docs/sql/KB-06A-discovery-consent-execution-DRAFT.sql',import.meta.url),'utf8');
 const consentB=readFileSync(new URL('../../docs/sql/KB-06B-audited-discovery-consent-lifecycle-DRAFT.sql',import.meta.url),'utf8');
 const erasureC=readFileSync(new URL('../../docs/sql/KB-06C-revoked-discovery-metadata-erasure-DRAFT.sql',import.meta.url),'utf8');
+const policyE=readFileSync(new URL('../../docs/sql/KB-06E-reviewed-policy-document-preview-DRAFT.sql',import.meta.url),'utf8');
 const ORG_A='10000000-0000-4000-8000-000000000001';
 const ORG_B='10000000-0000-4000-8000-000000000002';
 const USER_A='20000000-0000-4000-8000-000000000001';
@@ -79,6 +80,7 @@ test('KB-06B exact SQL: signed session, policy switch, atomic audit and withdraw
     ].join(';\n')+';');
     await db.query(consentB);
     await db.query(erasureC);
+    await db.query(policyE);
     await db.query('insert into public.organizations(id) values($1),($2)',[ORG_A,ORG_B]);
     await db.query('insert into public.test_knowledge_admins(organization_id,user_id) values($1,$2),($3,$4)',[ORG_A,USER_A,ORG_B,USER_B]);
     await db.query(
@@ -88,6 +90,64 @@ test('KB-06B exact SQL: signed session, policy switch, atomic audit and withdraw
       [SID_A,USER_A,SID_B,USER_B,SID_E,EMPLOYEE]);
     await db.query('insert into public.tenant_session_bindings(session_id,user_id,organization_id) values($1,$2,$3),($4,$5,$6),($7,$8,$9)',
       [SID_A,USER_A,ORG_A,SID_B,USER_B,ORG_B,SID_E,EMPLOYEE,ORG_A]);
+
+    // KB-06E: exact SQL operator-only policy text is separately registered
+    // under an existing registry digest. Everything below is synthetic.
+    const previewSql='select public.get_knowledge_discovery_policy_preview_v1($1) as outcome';
+    const fixtureText='SYNTHETIC TEST ONLY. No legal policy has been approved; no website scan, AI call or consent grant is authorized.';
+    const fixtureSha=createHash('sha256').update(fixtureText,'utf8').digest('hex');
+    const fixtureVersion='synthetic-kb06e-policy-review-v1';
+    const fixtureSource='fixture:kb06e-nonlegal-document';
+    assert.deepEqual((await a(previewSql,[ORG_A])).rows[0].outcome,
+      {ok:false,reason:'policy_not_registered_or_mismatch'});
+    await assert.rejects(a('select policy_text from public.knowledge_discovery_policy_documents',[]),
+      e=>e.code==='42501','Authenticated cannot read raw operator documents');
+    await assert.rejects(db.query(
+      'insert into public.knowledge_discovery_policy_documents(policy_version,policy_text,policy_sha256,source_reference) values($1,$2,$3,$4)',
+      [fixtureVersion,fixtureText,'a'.repeat(64),fixtureSource]),e=>e.code==='23514');
+    await db.query(
+      'insert into public.knowledge_discovery_policy_documents(policy_version,policy_text,policy_sha256,source_reference) values($1,$2,$3,$4)',
+      [fixtureVersion,fixtureText,fixtureSha,fixtureSource]);
+    assert.deepEqual((await a(previewSql,[ORG_A])).rows[0].outcome,
+      {ok:false,reason:'policy_not_registered_or_mismatch'},
+      'Document alone is not approval');
+    await db.query(
+      'update public.knowledge_discovery_consent_control set approved_policy_version=$1,approved_policy_sha256=$2,approved_at=now() where singleton=true',
+      [fixtureVersion,'a'.repeat(64)]);
+    assert.deepEqual((await a(previewSql,[ORG_A])).rows[0].outcome,
+      {ok:false,reason:'policy_not_registered_or_mismatch'},
+      'Registry digest mismatch blocks reading document');
+    await db.query(
+      'update public.knowledge_discovery_consent_control set approved_policy_sha256=$1 where singleton=true',
+      [fixtureSha]);
+    const preview=(await a(previewSql,[ORG_A])).rows[0].outcome;
+    assert.equal(preview.ok,true);
+    assert.equal(preview.policyText,fixtureText);
+    assert.equal(preview.policyVersion,fixtureVersion);
+    assert.equal(preview.policySha256,fixtureSha);
+    assert.equal(preview.sourceReference,fixtureSource);
+    assert.ok(preview.recordedAt.endsWith('Z'));
+    assert.ok(preview.registryRecordedAt.endsWith('Z'));
+    await assert.rejects(b(previewSql,[ORG_A]),e=>e.code==='42501');
+    await assert.rejects(invoke('authenticated',USER_A,SID_B,previewSql,[ORG_A]),
+      e=>e.code==='42501');
+    await assert.rejects(invoke('authenticated',EMPLOYEE,SID_E,previewSql,[ORG_A]),
+      e=>e.code==='42501');
+    await assert.rejects(invoke('anon',USER_A,SID_A,previewSql,[ORG_A]),
+      e=>e.code==='42501');
+    await assert.rejects(invoke('service_role',USER_A,SID_A,previewSql,[ORG_A]),
+      e=>e.code==='42501');
+    await assert.rejects(db.query(
+      "update public.knowledge_discovery_policy_documents set source_reference='rewritten' where policy_version=$1",
+      [fixtureVersion]),e=>e.code==='42501'&&/append_only/.test(e.message));
+    await assert.rejects(db.query(
+      'delete from public.knowledge_discovery_policy_documents where policy_version=$1',
+      [fixtureVersion]),e=>e.code==='42501'&&/append_only/.test(e.message));
+    await db.query(
+      'update public.knowledge_discovery_consent_control set approved_policy_version=null,approved_policy_sha256=null,approved_at=null where singleton=true');
+    assert.deepEqual((await a(previewSql,[ORG_A])).rows[0].outcome,
+      {ok:false,reason:'policy_not_registered_or_mismatch'},
+      'Clearing registry must immediately block even an immutable stored document');
 
     // Explicit policy switch is OFF. Even the actual owner must be blocked.
     await assert.rejects(a(grantSql,grantArgs()),e=>e.code==='42501'&&/policy_unapproved/.test(e.message));

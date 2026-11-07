@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import { KnowledgeDiscoveryPolicyReview } from '@/components/knowledge-discovery-policy-review';
 import { useCallback, useEffect, useState } from 'react';
 import {
   AlertCircle, ArrowLeft, Ban, Clock3, LockKeyhole,
@@ -208,6 +209,8 @@ export function KnowledgeDiscoveryConsentWorkspace() {
           </div>
         </div>
       </section>
+
+      <KnowledgeDiscoveryPolicyReview />
 
       {notice ? <p role="status" className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900">{notice}</p> : null}
       {actionError ? <p role="alert" className="rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-900">{actionError}</p> : null}
