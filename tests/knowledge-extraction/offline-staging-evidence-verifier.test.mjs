@@ -163,7 +163,7 @@ test('KB-07E rejects symbolic links, missing and oversized local evidence',t=>{
 });
 
 
-test('KB-07E rejects symlink and same-length inode swaps between lstat and fd open',t=>{
+test('KB-07E no-follow blocks swapped symlink and digest detects same-length inode substitution',t=>{
   if(!Number.isInteger(fs.constants.O_NOFOLLOW)||
      !Number.isInteger(fs.constants.O_NONBLOCK)){
     t.skip('secure local evidence opening unavailable on this platform');
@@ -201,13 +201,16 @@ test('KB-07E rejects symlink and same-length inode swaps between lstat and fd op
   try{
     const linkSwap=reconcileOfflineStagingEvidence({directory:f.dir});
     assert.equal(linkSwap.ok,false);
-    assert.equal(linkSwap.error,'evidence_bundle_unreadable');
+    assert.equal(linkSwap.error,'nonregular_or_linked_evidence_file');
     rmSync(target);
     renameSync(firstBackup,target);
     mode='regular';
     const inodeSwap=reconcileOfflineStagingEvidence({directory:f.dir});
-    assert.equal(inodeSwap.ok,false);
-    assert.equal(inodeSwap.error,'evidence_bundle_unreadable');
+    assert.equal(inodeSwap.ok,true);
+    assert.equal(inodeSwap.counts.digestMismatches,1);
+    assert.equal(inodeSwap.rows[0].result,'digest_mismatch');
+    assert.equal(inodeSwap.canMerge,false);
+    assert.equal(inodeSwap.canDeploy,false);
     assert.equal(interceptions,2);
   }finally{
     t.mock.restoreAll();
