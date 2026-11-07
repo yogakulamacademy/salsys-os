@@ -20,6 +20,7 @@
 ## Verification / release gate
 
 - New actual-source Node synthetic tests cover first-attempt success, one `40P01` recovery, exhausted retry, other SQL/network errors, stable closure event key and narrow route integration.
+- `tests/database/r2-browser-lead-deadlock-concurrency.test.mjs` now runs with two independent connections against a **random disposable local PostgreSQL database** in the financial-database CI service. It deliberately constructs an opposing row-lock cycle, checks actual PostgreSQL `40P01`/rollback, then exercises the *actual retry helper* to commit one event receipt and suppress a duplicate retry. This is a simplified lock model, **not an exact reproduction** of the production ingestion SQL/triggers, and does not establish the root cause of the observed deadlock.
 - Require exact-head `npm run test:readiness`, TypeScript, Next.js build, full CI, CodeQL and financial/database regressions **before** any release decision.
 - The mitigation is not a substitute for a disposable Postgres dual-transaction reproduction of the actual lock cycle, a controlled real site form acceptance, idempotency verification or production failure-rate review.
 - If merged after explicit code review, monitor `40P01` and browser lead capture errors without exposing event or contact payloads. Roll back the isolated route/helper if retries introduce any duplicate effects or unexpected latency.
