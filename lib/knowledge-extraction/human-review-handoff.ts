@@ -38,6 +38,8 @@ export type HumanReviewHandoffInput = {
 export type HumanReviewHandoffRow = {
   proposalId: string;
   relatedChangeId: string | null;
+  /** A prior quote is not current evidence, even after a reviewer note. */
+  sourceChangeRelation: 'current_changed_quote' | 'superseded_or_removed_quote' | 'not_in_change_report';
   sourceUrl: string;
   sourceAnswer: string;
   sourceSnapshotSha256: string;
@@ -235,11 +237,18 @@ export function prepareSyntheticHumanReviewHandoff(
   const byChange=new Map(input.impact.changes.map(c=>[c.changeId,c]));
   const byRow=new Map(input.acceptance.rows.map(r=>[r.proposalId,r]));
   const related=new Map<string,string[]>();
+  const sourceRelation=new Map<string,HumanReviewHandoffRow['sourceChangeRelation']>();
   for(const row of input.acceptance.rows){
     const matches=input.impact.changes.filter(change=>
       (change.current&&matchingQuote(row,change.current))||
       (change.prior&&matchingQuote(row,change.prior)));
     related.set(row.proposalId,matches.map(c=>c.changeId));
+    // Keep a prior snapshot distinct from the current one. Annotation
+    // alone must not imply that a replaced or removed quote is resolved.
+    sourceRelation.set(row.proposalId,matches.length!==1
+      ? 'not_in_change_report'
+      : matches[0].current&&matchingQuote(row,matches[0].current)
+        ? 'current_changed_quote':'superseded_or_removed_quote');
   }
   const annotated=new Map<string,HumanReviewAnnotation>();
   for(const a of input.annotations){
@@ -260,14 +269,17 @@ export function prepareSyntheticHumanReviewHandoff(
     const annotation=annotated.get(row.proposalId);
     // Multiple matching changed quotes cannot be arbitrarily reduced to one.
     if(matches.length>1)return {ok:false,error:'ambiguous_changed_quote_mapping'};
+    const relation=sourceRelation.get(row.proposalId)!;
     rows.push({
       proposalId:row.proposalId,relatedChangeId:matches[0]??null,
+      sourceChangeRelation:relation,
       sourceUrl:row.sourceUrl,sourceAnswer:row.exactSourceAnswer,
       sourceSnapshotSha256:row.snapshotSha256,
       sourceBlockId:row.answerBlockId,
       annotation:annotation?.annotation??'awaiting_annotation',
       reviewerNote:annotation?.reviewerNote??null,
-      disposition:row.reviewOutcome,
+      disposition:relation==='superseded_or_removed_quote'
+        ? 'hold_for_resolution':row.reviewOutcome,
       reviewState:'unverified_advisory_only',
       needsRealHumanApproval:true,approved:false,canWrite:false,
     });
@@ -277,12 +289,14 @@ export function prepareSyntheticHumanReviewHandoff(
   const unresolvedChangeIds=[...byChange.keys()].filter(id=>
     !referenced.has(id)||
     !rows.some(r=>r.relatedChangeId===id&&
+      r.sourceChangeRelation==='current_changed_quote'&&
       r.annotation!=='awaiting_annotation')).sort();
   const packetId=hash(JSON.stringify([
     'kb04d-v1',input.organizationId,input.acceptance.packetId,
     input.recordedAt,input.impact.asOf,
     rows.map(r=>[r.proposalId,r.relatedChangeId,r.annotation,
-      r.reviewerNote,r.sourceSnapshotSha256,r.sourceBlockId]),
+      r.reviewerNote,r.sourceSnapshotSha256,r.sourceBlockId,
+      r.sourceChangeRelation,r.disposition]),
     unresolvedChangeIds,
   ]));
   return {ok:true,packet:{
