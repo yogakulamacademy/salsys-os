@@ -83,6 +83,8 @@ jobs:
 
       - name: Verify KB-08F postapproval source invalidation and synthetic retrieval guard in disposable PostgreSQL
         run: node --test tests/database/knowledge-postapproval-source-invalidation.test.mjs
+      - name: Verify KB-08G synthetic dual-observer source alerts and stale-retrieval gating in disposable PostgreSQL
+        run: node --test tests/database/knowledge-source-verification-alert-gate.test.mjs
 
 
       - name: Verify exact Instagram outbound projector SQL in isolated PostgreSQL
