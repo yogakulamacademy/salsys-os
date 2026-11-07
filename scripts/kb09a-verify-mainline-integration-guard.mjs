@@ -120,6 +120,8 @@ export function auditKBMainlineIntegration({
   const adminIndex=worker.indexOf('createAdminClient()');
   if(pilotIndex<0||bearerIndex<0||adminIndex<0||
     pilotIndex>adminIndex||bearerIndex>adminIndex||
+    !worker.includes('process.env.KNOWLEDGE_DISCOVERY_RUNNER_SECRET')||
+    /process\\.env\\.CRON_SECRET\\b/.test(worker)||
     !worker.includes('discoveryHostAllowed(')||
     !worker.includes('discoveryDomainVerified(')||
     !worker.includes('discoverySiteConsentActive(')){
