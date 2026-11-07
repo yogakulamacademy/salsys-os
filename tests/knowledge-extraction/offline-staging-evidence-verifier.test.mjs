@@ -1,7 +1,9 @@
 import test from 'node:test';
+import fs from 'node:fs';
+import {syncBuiltinESMExports} from 'node:module';
 import assert from 'node:assert/strict';
 import {createHash} from 'node:crypto';
-import {mkdtempSync,writeFileSync,rmSync,symlinkSync} from 'node:fs';
+import {mkdtempSync,writeFileSync,rmSync,symlinkSync,renameSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {spawnSync} from 'node:child_process';
@@ -158,6 +160,59 @@ test('KB-07E rejects symbolic links, missing and oversized local evidence',t=>{
   symlinkSync(join(f.dir,name),join(f.dir,'manifest.json'));
   assert.equal(reconcileOfflineStagingEvidence({directory:f.dir}).error,
     'manifest_path_not_regular');
+});
+
+
+test('KB-07E rejects symlink and same-length inode swaps between lstat and fd open',t=>{
+  if(!Number.isInteger(fs.constants.O_NOFOLLOW)||
+     !Number.isInteger(fs.constants.O_NONBLOCK)){
+    t.skip('secure local evidence opening unavailable on this platform');
+    return;
+  }
+  const f=fixture(t);
+  const scenario=STAGING_SCENARIOS[0];
+  const name=f.add(scenario,{bytes:'safe-one'});
+  const target=join(f.dir,name);
+  const externalDir=mkdtempSync(join(tmpdir(),'salsys-kb07e-external-'));
+  t.after(()=>rmSync(externalDir,{recursive:true,force:true}));
+  const external=join(externalDir,'outside.txt');
+  writeFileSync(external,'bad-file'); // same byte length as the original
+  const firstBackup=join(f.dir,'prior-evidence-1.txt');
+  const secondBackup=join(f.dir,'prior-evidence-2.txt');
+  const nativeOpen=fs.openSync;
+  let mode='symlink';
+  let interceptions=0;
+  t.mock.method(fs,'openSync',(path,flags,...rest)=>{
+    if(path===target){
+      interceptions++;
+      assert.equal(flags&fs.constants.O_NOFOLLOW,fs.constants.O_NOFOLLOW);
+      assert.equal(flags&fs.constants.O_NONBLOCK,fs.constants.O_NONBLOCK);
+      if(mode==='symlink'){
+        renameSync(target,firstBackup);
+        symlinkSync(external,target);
+      }else{
+        renameSync(target,secondBackup);
+        writeFileSync(target,'bad-file'); // different inode, same byte length
+      }
+    }
+    return nativeOpen(path,flags,...rest);
+  });
+  syncBuiltinESMExports(); // imported node:fs named openSync observes the test hook
+  try{
+    const linkSwap=reconcileOfflineStagingEvidence({directory:f.dir});
+    assert.equal(linkSwap.ok,false);
+    assert.equal(linkSwap.error,'evidence_bundle_unreadable');
+    rmSync(target);
+    renameSync(firstBackup,target);
+    mode='regular';
+    const inodeSwap=reconcileOfflineStagingEvidence({directory:f.dir});
+    assert.equal(inodeSwap.ok,false);
+    assert.equal(inodeSwap.error,'evidence_bundle_unreadable');
+    assert.equal(interceptions,2);
+  }finally{
+    t.mock.restoreAll();
+    syncBuiltinESMExports();
+  }
 });
 
 test('KB-07E CLI requires explicit human ack and prints only sanitized non-authorizing counts',t=>{
