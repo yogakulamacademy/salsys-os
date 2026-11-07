@@ -44,7 +44,7 @@ SALSYS_KB_EVIDENCE_REVIEW_ONLY=I_ACKNOWLEDGE_DIGESTS_ARE_NOT_ACCEPTANCE \
 
 CLI stdout contains only the 16 scenario IDs, non-authorizing digest statuses and totals, **not** file names, project refs, tenant IDs, evidence bodies or tokens. It never connects to Supabase, a website, GitHub or an AI provider. The tool blocks relative directory paths, forbidden Production/Recovery project refs, malformed records, unknown/repeated IDs, traversals, symlinks, missing/oversized files and unexpected manifest fields. File limits: 96 KiB manifest, 1 MiB per evidence file, at most 16 files.
 
-A digest mismatch or a claim contradicting KB-04E's expected outcome produces a nonzero CLI exit code. Correct hashes alone produce a zero **integrity preflight** exit code, **not** a release PASS. A truthful report ALWAYS says `independentlyVerified:0`, `liveStagingAccepted:false`, `canMerge:false`, and `canDeploy:false`.
+An empty/partial bundle, a digest mismatch, or a claim contradicting KB-04E's expected outcome produces a **nonzero CLI exit code**. Exit code 0 requires all 16 expected evidence files with matching digests and expected outcomes. Even then, code 0 means only **local byte-integrity preflight**, **not** independent acceptance or a release PASS. A truthful report ALWAYS says `independentlyVerified:0`, `liveStagingAccepted:false`, `canMerge:false`, and `canDeploy:false`.
 
 **Critical limitation:** a malicious local actor can forge both an evidence file *and* its digest. Hash matching does **not** prove source authenticity, timing, authorship, witness independence, consent validity or legal sufficiency. Independent witness verification must happen outside this utility, with separately protected reviewer evidence and explicit owner sign-off.
 
