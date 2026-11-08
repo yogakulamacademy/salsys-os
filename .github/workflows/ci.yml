@@ -95,6 +95,9 @@ jobs:
       - name: Verify Universal Tracking Intelligence SDK
         run: npm run verify:tracking-sdk
 
+      - name: Verify combined R2 40P01/23505 retry and consent release boundaries
+        run: node --test tests/readiness/r2-combined-release-guard-v1.test.cjs
+
       - name: Verify Tracking Live Closeout Contracts
         run: npm run verify:tracking-live-closeout
 
