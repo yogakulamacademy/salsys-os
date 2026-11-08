@@ -218,6 +218,10 @@ jobs:
       - name: Verify KB-09O release remains BLOCKED (not approval)
         run: node scripts/kb09o-release-preflight.mjs
 
+      # No production, no staging, no independent signoff: green means HOLD.
+      - name: Verify KB-10 integrated release and staging remain ON HOLD
+        run: node scripts/kb10-integrated-review-hold-preflight.mjs
+
       - name: Verify KB-02+ website evidence and Knowledge Builder safety tests
         run: node --experimental-strip-types --test tests/knowledge-extraction/*.test.mjs
 
