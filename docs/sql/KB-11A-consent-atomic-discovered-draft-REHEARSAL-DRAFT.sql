@@ -158,12 +158,19 @@ begin
 
   select * into v_consent from public.knowledge_discovery_site_consents c
     where c.organization_id=p_organization_id and c.hostname=v_host for share;
+  -- KB-13B: only the original explicit grant is supported. A future
+  -- regrant/revision must introduce a reviewed, provenance-bound contract;
+  -- old fetched pages cannot be laundered into knowledge by new consent.
   if not found or v_consent.purpose <> 'website_discovery_review_only'
      or v_consent.status <> 'granted' or v_consent.withdrawn_at is not null
+     or v_consent.revision is distinct from 1
      or v_consent.granted_at > v_now or v_consent.valid_until <= v_now
      or v_consent.policy_version is distinct from
         v_approved_policy.approved_policy_version then
     raise exception 'kb_discovery_draft_consent_denied' using errcode='42501';
+  end if;
+  if v_job.created_at is null or v_job.created_at < v_consent.granted_at then
+    raise exception 'kb_discovery_draft_predates_consent' using errcode='42501';
   end if;
   select a.policy_sha256 into v_grant_hash
     from public.knowledge_discovery_consent_audit a
