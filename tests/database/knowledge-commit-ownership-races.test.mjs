@@ -19,8 +19,9 @@ const sqlFiles=[
   '../../docs/sql/KB-09L-proof-preimage-operator-hold-REHEARSAL-DRAFT.sql',
   '../../docs/sql/KB-09M-proof-checked-worker-commit-bridge-REHEARSAL-DRAFT.sql',
   '../../docs/sql/KB-09N-retired-seed-rpc-and-acl-preflight-REHEARSAL-DRAFT.sql',
+  '../../docs/sql/KB-09S-atomic-website-evidence-REHEARSAL-DRAFT.sql',
 ].map(path=>readFileSync(new URL(path,import.meta.url),'utf8'));
-const [foundation,discovery,consentA,consentB,guard,writeGuard,jobFinalization,rpcBridge,atomicEnqueue,proofBoundary,preimageAndPolicyHold,checkedCommitBridge,retiredSeedAudit]=sqlFiles;
+const [foundation,discovery,consentA,consentB,guard,writeGuard,jobFinalization,rpcBridge,atomicEnqueue,proofBoundary,preimageAndPolicyHold,checkedCommitBridge,retiredSeedAudit,atomicEvidenceRehearsal]=sqlFiles;
 
 const ORG_A='10000000-0000-4000-8000-000000000001';
 const ORG_B='10000000-0000-4000-8000-000000000002';
@@ -1654,6 +1655,166 @@ test('KB-09F/G/H proof, BYPASSRLS, tenant-finalization, consent and commit races
     assert.equal((await root.query(
       "select grants_enabled from public.knowledge_discovery_consent_control"
     )).rows[0].grants_enabled,false);
+
+    // KB-09S: The local-only evidence write is atomically attached to the
+    // same checked page-commit function. Never use real website/customer
+    // content; all values below belong to the auto-dropped synthetic DB.
+    await root.query(atomicEvidenceRehearsal);
+    assert.match(atomicEvidenceRehearsal,/KB09S_DISPOSABLE_PARENT_FIXTURE_REQUIRED/);
+    const evidenceSignature='public.commit_discovery_evidence_kb09s_rehearsal_v1('+
+      'uuid,uuid,uuid,uuid,text,integer,text,text,text,jsonb,integer,jsonb)';
+    const evidenceAcl=(await root.query(
+      "select has_function_privilege('anon',$1,'execute') as anonymous,"+
+      "has_function_privilege('authenticated',$1,'execute') as user_role,"+
+      "has_function_privilege('service_role',$1,'execute') as service",
+      [evidenceSignature]
+    )).rows[0];
+    assert.deepEqual(evidenceAcl,{anonymous:false,user_role:false,service:true});
+    assert.equal((await root.query(
+      "select has_table_privilege('service_role',"+
+      "'kb09s_fixture.page_evidence','insert') as direct_write"
+    )).rows[0].direct_write,false,'No direct service INSERT into evidence');
+
+    const candidatePage=(await root.query(
+      "select id from public.knowledge_discovery_pages where job_id=$1 "+
+      "and organization_id=$2 order by discovered_at limit 1",
+      [acceptedC.job_id,ORG_C]
+    )).rows[0].id;
+    const syntheticLease=randomUUID();
+    const syntheticQuote='Synthetic fixture answer: training lasts five days.';
+    const syntheticEnvelope={
+      source_url:SITE_URL,
+      snapshot_sha256:'c'.repeat(64),
+      fetched_at:new Date().toISOString(),
+      quotes:[{
+        block_id:'d'.repeat(64),
+        exact_quote:syntheticQuote,
+        quote_sha256:createHash('sha256').update(syntheticQuote).digest('hex'),
+      }],
+    };
+    const evidenceCommit="select public.commit_discovery_evidence_kb09s_rehearsal_v1("+
+      "$1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) as result";
+    const evidenceArgs=[
+      ORG_C,acceptedC.job_id,candidatePage,syntheticLease,
+      'fetched',200,'text/html','Synthetic fixture page',null,'[]',2,
+      JSON.stringify(syntheticEnvelope),
+    ];
+    await root.query(
+      "update public.knowledge_discovery_jobs set status='running',"+
+      "lease_token=$2,lease_until=clock_timestamp()+interval '1 hour',"+
+      "finished_at=null where id=$1",
+      [acceptedC.job_id,syntheticLease]
+    );
+    const evidenceCount=async()=>(await root.query(
+      'select count(*)::int as n from kb09s_fixture.page_evidence'
+    )).rows[0].n;
+    const pageAfter=async()=>(await root.query(
+      'select status from public.knowledge_discovery_pages where id=$1',
+      [candidatePage]
+    )).rows[0].status;
+
+    await assert.rejects(
+      callAs(b,'authenticated',evidenceCommit,evidenceArgs,ADMIN_C,SID_C),
+      isCode('42501'),'Authenticated member cannot call private evidence RPC'
+    );
+    await assert.rejects(
+      callAs(b,'anon',evidenceCommit,evidenceArgs,ADMIN_C,SID_C),
+      isCode('42501'),'Anonymous role cannot call evidence RPC'
+    );
+    assert.equal((await callAs(b,'service_role',evidenceCommit,
+      [ORG_D,...evidenceArgs.slice(1)])).rows[0].result.ok,false,
+      'Service cannot write another tenant or wrong claim');
+    assert.equal(await evidenceCount(),0);
+    assert.equal(await pageAfter(),'discovered');
+
+    const alteredHash={...syntheticEnvelope,quotes:[{
+      ...syntheticEnvelope.quotes[0],quote_sha256:'f'.repeat(64),
+    }]};
+    await assert.rejects(callAs(b,'service_role',evidenceCommit,[
+      ...evidenceArgs.slice(0,-1),JSON.stringify(alteredHash),
+    ]),isCode('22023'),'Quote hash does not match quoted source bytes');
+    await assert.rejects(callAs(b,'service_role',evidenceCommit,[
+      ...evidenceArgs.slice(0,-1),JSON.stringify({
+        ...syntheticEnvelope,unexpected:'forged source authorization',
+      }),
+    ]),isCode('22023'),'Unexpected evidence metadata cannot be smuggled in');
+    const wrongSource=(await callAs(b,'service_role',evidenceCommit,[
+      ...evidenceArgs.slice(0,-1),JSON.stringify({
+        ...syntheticEnvelope,source_url:'https://attacker.example.com/',
+      }),
+    ])).rows[0].result;
+    assert.deepEqual(wrongSource,{
+      ok:false,reason:'source_outside_current_tenant_page',
+    });
+    // The off-host claim is refused by the explicit stored-page check.
+    assert.equal(await evidenceCount(),0);
+    assert.equal(await pageAfter(),'discovered');
+
+    // SQL atomicity negative: when the synthetic evidence table fails its
+    // INSERT, the earlier proof-/consent-checked PAGE+JOB COMMIT must roll
+    // back completely (no fetched page without its evidence).
+    await root.query(
+      "create function kb09s_fixture.reject_evidence_insert() returns trigger "+
+      "language plpgsql as $reject$ begin "+
+      "raise exception 'kb09s_forced_evidence_failure' using errcode='23514'; "+
+      "end; $reject$"
+    );
+    await root.query(
+      "create trigger kb09s_reject_evidence before insert on "+
+      "kb09s_fixture.page_evidence for each row "+
+      "execute function kb09s_fixture.reject_evidence_insert()"
+    );
+    await assert.rejects(
+      callAs(b,'service_role',evidenceCommit,evidenceArgs),
+      isCode('23514'),'Evidence insert failure must roll back page commit'
+    );
+    assert.equal(await pageAfter(),'discovered');
+    assert.equal(await evidenceCount(),0);
+    assert.equal((await root.query(
+      'select status from public.knowledge_discovery_jobs where id=$1',
+      [acceptedC.job_id]
+    )).rows[0].status,'running','Job state also rolled back');
+    await root.query('drop trigger kb09s_reject_evidence on kb09s_fixture.page_evidence');
+
+    await root.query(
+      "update public.knowledge_discovery_domain_verifications "+
+      "set verified_until=clock_timestamp()-interval '1 second' "+
+      "where organization_id=$1",[ORG_C]
+    );
+    const expiredEvidence=(await callAs(b,'service_role',evidenceCommit,
+      evidenceArgs)).rows[0].result;
+    assert.deepEqual(expiredEvidence,{ok:false,reason:'ownership_proof_not_current'});
+    assert.equal(await evidenceCount(),0);
+    assert.equal(await pageAfter(),'discovered');
+    await root.query(
+      "update public.knowledge_discovery_domain_verifications "+
+      "set verified_until=clock_timestamp()+interval '1 hour' "+
+      "where organization_id=$1",[ORG_C]
+    );
+
+    const recorded=(await callAs(b,'service_role',evidenceCommit,
+      evidenceArgs)).rows[0].result;
+    assert.deepEqual(recorded,{
+      ok:true,status:'fetched_with_unreviewed_evidence',
+      evidence_recorded:true,snapshot_sha256:'c'.repeat(64),
+    });
+    assert.equal(await pageAfter(),'fetched');
+    assert.equal(await evidenceCount(),1);
+    const stored=(await root.query(
+      "select organization_id,job_id,page_id,source_url,snapshot_sha256,"+
+      "review_state,publish_eligible,quotes "+
+      "from kb09s_fixture.page_evidence where page_id=$1",[candidatePage]
+    )).rows[0];
+    assert.deepEqual(stored,{
+      organization_id:ORG_C,job_id:acceptedC.job_id,page_id:candidatePage,
+      source_url:SITE_URL,snapshot_sha256:'c'.repeat(64),
+      review_state:'unreviewed',publish_eligible:false,
+      quotes:syntheticEnvelope.quotes,
+    });
+    const replay=(await callAs(b,'service_role',evidenceCommit,
+      evidenceArgs)).rows[0].result;
+    assert.equal(replay.ok,false,'Consumed/stale lease cannot duplicate evidence');
+    assert.equal(await evidenceCount(),1);
   }finally{
     await Promise.allSettled(connections.map(db=>db.end()));
     try{if(created)await admin.query('drop database "'+name+'" with (force)');}
