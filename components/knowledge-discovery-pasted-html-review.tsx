@@ -14,6 +14,7 @@ const INITIAL_PREVIEW: ManuallyPastedHtmlPreviewState = {
   pastedHtmlSha256: null,
   excerpts: [],
   warnings: [],
+  provisionalCandidates: [],
 };
 
 /**
@@ -109,6 +110,39 @@ export function KnowledgeDiscoveryPastedHtmlReview({
                 </li>
               ))}
             </ol>
+          ) : null}
+          {result.provisionalCandidates.length ? (
+            <section className="space-y-2" aria-label="Unverified draft suggestions">
+              <h4 className="text-xs font-semibold text-slate-800">
+                Suggested quote-only draft text — not AI-generated
+              </h4>
+              <p className="text-xs text-amber-800">
+                Generated deterministically from the HTML you pasted, NOT verified
+                against the live website. Suggestions may omit important context,
+                and pricing, schedules and policies need independent confirmation.
+              </p>
+              <ul className="space-y-2">
+                {result.provisionalCandidates.map((candidate, index) => (
+                  <li key={index} className="rounded-md border border-amber-200 bg-white p-3">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <span className="text-xs font-medium text-slate-700">
+                        {candidate.kind === 'faq_pair' ? 'FAQ suggestion' : 'Source statement'}
+                      </span>
+                      <button type="button" onClick={()=>void copyExcerpt(candidate.text)}
+                        className="rounded border border-slate-200 px-2 py-1 text-xs font-medium text-slate-700">
+                        Copy for human review
+                      </button>
+                    </div>
+                    <p className="mt-2 whitespace-pre-wrap break-words text-xs text-slate-800">
+                      {candidate.text}
+                    </p>
+                    {candidate.risks.length ? <p className="mt-1 text-xs text-amber-800">
+                      Check: {candidate.risks.join(', ')}
+                    </p> : null}
+                  </li>
+                ))}
+              </ul>
+            </section>
           ) : null}
           {copyMessage ? <p className="text-xs text-slate-600" role="status">{copyMessage}</p> : null}
           <p className="text-xs leading-5 text-slate-600">
