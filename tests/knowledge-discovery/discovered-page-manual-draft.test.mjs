@@ -75,6 +75,7 @@ function reset(){
     },
     knowledge_discovery_jobs:{
       id:jobId,organization_id:org,seed_url:website,status:'completed',
+      created_at:new Date(now-5_000).toISOString(),
     },
     knowledge_discovery_domain_verifications:{
       organization_id:org,hostname:host,
@@ -83,7 +84,7 @@ function reset(){
     },
     knowledge_discovery_site_consents:{
       organization_id:org,hostname:host,purpose:'website_discovery_review_only',
-      status:'granted',policy_version:'reviewed-test-v1',granted_by:actor,
+      status:'granted',policy_version:'reviewed-test-v1',revision:1,granted_by:actor,
       granted_at:new Date(now-20_000).toISOString(),
       valid_until:new Date(now+20_000).toISOString(),withdrawn_at:null,
     },
@@ -202,8 +203,11 @@ test('KB-09Q a forged URL, wrong tenant, stale job or unfetched page cannot beco
     ()=>{rows.knowledge_discovery_jobs.seed_url='https://fixture.example.com/off-path';},
     ()=>{rows.knowledge_discovery_jobs.seed_url='https://fixture.example.com/?tag=untrusted';},
     ()=>{rows.knowledge_discovery_jobs.seed_url='https://fixture.example.com:443/';},
+    ()=>{rows.knowledge_discovery_jobs.created_at=new Date(Date.now()-60_000).toISOString();},
+    ()=>{rows.knowledge_discovery_jobs.created_at='bad-timestamp';},
     ()=>{rows.knowledge_discovery_domain_verifications.verified_until=new Date(Date.now()-1000).toISOString();},
     ()=>{rows.knowledge_discovery_site_consents.status='withdrawn';},
+    ()=>{rows.knowledge_discovery_site_consents.revision=3;},
     ()=>{rows.knowledge_discovery_site_consents.purpose='analytics';},
     ()=>{rows.knowledge_discovery_site_consents.organization_id=otherOrg;},
     ()=>{rows.organization_onboarding.website_url='https://new.example.com/';},
