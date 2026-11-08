@@ -211,9 +211,27 @@ test('KB-11A: local-only consent-atomic discovered-page draft SQL and negative i
     await assert.rejects(callAs(a,'authenticated',DRAFT,args(first.id)),e=>e.code==='42501');
     await root.query("update public.knowledge_discovery_domain_verifications set verified_until=now()+interval '1 hour'");
 
-    // A committed withdrawal blocks even a previously eligible page.
-    const withdrawn=(await callAs(a,'authenticated',WITHDRAW,[ORG_A,HOST,1])).rows[0].result;
+    // Race control: withdrawal acquires the consent-row UPDATE lock first,
+    // but has not yet committed. A new draft must wait and then DENY, not
+    // create a source/document/chunk from a stale preflight.
+    await beginAs(b,'authenticated',USER_A,SID_A);
+    const withdrawn=(await b.query(WITHDRAW,[ORG_A,HOST,1])).rows[0].result;
     assert.equal(withdrawn.status,'withdrawn');
+    assert.equal((await root.query(
+      'select status from public.knowledge_discovery_site_consents where id=$1',
+      [consentId])).rows[0].status,'granted',
+      'Concurrent withdrawal is not committed yet');
+    let draftFinished=false;
+    const racingDraft=callAs(a,'authenticated',DRAFT,args(first.id))
+      .then(result=>({ok:true,result}),error=>({ok:false,error}))
+      .finally(()=>{draftFinished=true;});
+    await new Promise(resolve=>setTimeout(resolve,120));
+    assert.equal(draftFinished,false,
+      'Competing draft cannot pass the locked consent row');
+    await b.query('commit');
+    const raceResult=await racingDraft;
+    assert.equal(raceResult.ok,false,'Withdrawal wins, so draft must fail');
+    assert.equal(raceResult.error.code,'42501');
     await assert.rejects(callAs(a,'authenticated',DRAFT,args(first.id)),e=>e.code==='42501');
     assert.deepEqual((await root.query(
       "select (select count(*)::int from public.knowledge_sources) as sources,"+
