@@ -104,6 +104,9 @@ jobs:
       - name: Validate R2 local-only RPC restore and rollback SQL generator
         run: node --test tests/readiness/r2-local-contact-rollback-generator-v1.test.cjs
 
+      - name: Verify R2 release preflight SQL is read-only and cannot self-approve
+        run: node --test tests/readiness/r2-reliability-pre-release-guard-v1.test.cjs
+
       - name: Verify R2 optional-consent audit is read-only and privacy-safe
         run: node --test tests/readiness/r2-optional-consent-metadata-audit-v1.test.cjs
 
