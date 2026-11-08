@@ -1,5 +1,5 @@
 {
-  "name": "KB-09M strict draft-only cutover inventory",
+  "name": "KB-09N draft-only cutover inventory with retired seed-repair entrypoint",
   "status": "blocked_unapproved_no_migration",
   "parentDraftPr": 650,
   "foundationSqlReviewOrder": [
@@ -18,7 +18,8 @@
     "docs/sql/KB-09J-atomic-session-authorized-enqueue-REHEARSAL-DRAFT.sql",
     "docs/sql/KB-09K-proof-consent-direct-DML-boundary-REHEARSAL-DRAFT.sql",
     "docs/sql/KB-09L-proof-preimage-operator-hold-REHEARSAL-DRAFT.sql",
-    "docs/sql/KB-09M-proof-checked-worker-commit-bridge-REHEARSAL-DRAFT.sql"
+    "docs/sql/KB-09M-proof-checked-worker-commit-bridge-REHEARSAL-DRAFT.sql",
+    "docs/sql/KB-09N-retired-seed-rpc-and-acl-preflight-REHEARSAL-DRAFT.sql"
   ],
   "runtimeContracts": [
     {
@@ -80,7 +81,8 @@
     "commit_knowledge_discovery_page_v1",
     "confirm_checked_knowledge_discovery_proof_v1",
     "issue_knowledge_discovery_domain_challenge_v1",
-    "claim_knowledge_discovery_proof_check_v1"
+    "claim_knowledge_discovery_proof_check_v1",
+    "fail_knowledge_discovery_seed_v1"
   ],
   "lockedFlags": [
     "KNOWLEDGE_DISCOVERY_PILOT_ENABLED",
