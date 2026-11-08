@@ -203,6 +203,7 @@ begin
 
   v_now:=pg_catalog.clock_timestamp();
   if v_proof.id is null or v_proof.verified_at is null
+     or v_proof.verified_until is null
      or v_proof.verified_at>v_now or v_proof.verified_until<=v_now
      or v_consent.id is null
      or v_consent.status is distinct from 'granted'
