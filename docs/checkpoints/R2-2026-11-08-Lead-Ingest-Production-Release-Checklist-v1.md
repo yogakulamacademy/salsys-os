@@ -3,7 +3,7 @@
 Date: 2026-11-08  
 Status: **AWAITING INDEPENDENT REVIEW AND ISOLATED E2E ACCEPTANCE — NOT DEPLOYED**  
 Release scope: **ONLY** R2 #620 `40P01` bounded retry and #643 `23505` contact-primary repair.  
-Baseline: `main` / `crm.salsysos.com` READY at `da5d53623eb4518b7fcf8e6f33adabb06963def9` (includes already merged low-risk R2 #663 and #665). This branch is the refreshed reliability candidate from that SHA; earlier draft #659 was based on `691dc441...` and must not be merged in parallel.
+Current merged baseline: `main` / `crm.salsysos.com` READY at `8a2bc7100ec1ee3df728577e459be09c9dff454f` (includes #663, #665 and the research/documentation-only merges #535 and #669). PR #667 was refreshed by a non-forced, fast-forward two-parent merge commit `ba61b8d68779b5033f2ca6f3037739b4115dc935` that preserves all original 15 candidate file blobs. New CI, security and clean migration replay must pass on the final exact head. The earlier draft #659 was based on `691dc441...` and must not be merged in parallel.
 
 The product owner asked to proceed with the R2 production release, but also explicitly postponed creating/approving dedicated staging infrastructure until revenue. This document records the safe parts of a **production release preflight**. Approval to pursue a release does not prove independent privacy, tenant, ingestion, or rollback acceptance. Do not force a merge, directly change live SQL, or use production lead forms as test fixtures while the gates below remain unmet.
 
