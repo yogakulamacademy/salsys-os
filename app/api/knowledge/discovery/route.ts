@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
-import { createAdminClient } from '@/lib/supabase/admin';
 import { requireCurrentOrganizationId } from '@/lib/workspace';
 import { readBoundedJson } from '@/lib/security/bounded-json-body';
 import { isExplicitCrossSiteRequest } from '@/lib/security/fetch-metadata';
@@ -153,38 +152,45 @@ export async function POST(request: NextRequest) {
     if (!Number.isInteger(maxPages) || maxPages < 1 || maxPages > 50) {
       return json({ ok: false, error: 'Page limit must be 1–50.' }, 400);
     }
-    const admin = createAdminClient();
-    const { data: created, error: insertError } = await admin
-      .from('knowledge_discovery_jobs')
-      .insert({ organization_id: ctx.organizationId, created_by: ctx.userId,
-        seed_url: source.origin + '/', max_pages: maxPages, status: 'queued' })
-      .select('id').single();
+    // KB-09J draft: the signed-in user's session invokes a single atomic,
+    // tenant-bound enqueue-and-seed RPC. It revalidates current ownership,
+    // configured website, consent and scan limits INSIDE the transaction.
+    // Never fall back to service-role INSERT if this RPC is unavailable.
+    const { data: created, error: insertError } = await ctx.supabase
+      .rpc('enqueue_knowledge_discovery_job_v1', {
+        p_organization_id: ctx.organizationId,
+        p_seed_url: source.origin + '/',
+        p_max_pages: maxPages,
+      });
     if (insertError) {
-      if (insertError.code === '23505') return json({ ok: false, error: 'A scan is already in progress.' }, 409);
+      if (insertError.code === '23505') {
+        return json({ ok: false, error: 'A scan is already in progress.' }, 409);
+      }
       if (insertError.code === 'P0001' &&
           ['discovery_daily_scan_limit', 'discovery_scan_cooldown'].includes(insertError.message ?? '')) {
         return json({ ok: false, error: 'Website discovery scan limit reached. Try again later.' }, 429);
       }
       throw insertError;
     }
-    const { error: pageError } = await admin.from('knowledge_discovery_pages')
-      .insert({ organization_id: ctx.organizationId, job_id: created.id,
-        url: source.origin + '/', depth: 0, status: 'discovered' });
-    if (pageError) {
-      // KB-09I draft: one service-only, exact-job, unseeded CAS with atomic audit.
-      // Do not fall back to a privileged table UPDATE if the RPC is missing.
-      const { data: repair, error: repairError } = await admin
-        .rpc('fail_knowledge_discovery_seed_v1', {
-          p_organization_id: ctx.organizationId,
-          p_job_id: created.id,
-          p_expected_creator: ctx.userId,
-        });
-      if (repairError || repair?.ok !== true || repair?.audit_recorded !== true) {
-        throw new Error('seed_failure_repair_not_confirmed');
+    if (created?.ok !== true || created?.status !== 'queued' ||
+        created?.seed_inserted !== true ||
+        typeof created?.job_id !== 'string' ||
+        !/^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/i.test(created.job_id)) {
+      if (created?.reason === 'ownership_proof_not_current') {
+        return json({ ok: false, error: 'Verify ownership of your business website before scanning.' }, 409);
       }
-      throw pageError;
+      if (created?.reason === 'consent_not_active') {
+        return json({ ok: false, error: 'Explicit website discovery consent is missing or inactive.' }, 403);
+      }
+      if (created?.reason === 'configured_domain_mismatch') {
+        return json({ ok: false, error: 'Configured business website changed. Refresh before scanning.' }, 409);
+      }
+      if (created?.reason === 'invalid_scan_request') {
+        return json({ ok: false, error: 'Invalid website scan request.' }, 400);
+      }
+      throw new Error('atomic_enqueue_not_confirmed');
     }
-    return json({ ok: true, jobId: created.id, status: 'queued' }, 202);
+    return json({ ok: true, jobId: created.job_id, status: 'queued' }, 202);
   } catch (error) {
     if (error instanceof WebsiteScopeError) return json({ ok: false, error: error.message }, 400);
     return json({ ok: false, error: 'Unable to queue website scan.' }, 503);
