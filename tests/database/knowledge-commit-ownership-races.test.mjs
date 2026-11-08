@@ -21,8 +21,10 @@ const sqlFiles=[
   '../../docs/sql/KB-09N-retired-seed-rpc-and-acl-preflight-REHEARSAL-DRAFT.sql',
   '../../docs/sql/KB-09S-atomic-website-evidence-REHEARSAL-DRAFT.sql',
   '../../docs/sql/KB-09T-evidence-withdrawal-expiry-REHEARSAL-DRAFT.sql',
+  '../../docs/sql/KB-11-atomic-discovery-review-draft-REHEARSAL-DRAFT.sql',
+  '../../supabase/migrations/20261103190000_ai_knowledge_provenance_readiness_v2.sql',
 ].map(path=>readFileSync(new URL(path,import.meta.url),'utf8'));
-const [foundation,discovery,consentA,consentB,guard,writeGuard,jobFinalization,rpcBridge,atomicEnqueue,proofBoundary,preimageAndPolicyHold,checkedCommitBridge,retiredSeedAudit,atomicEvidenceRehearsal,evidenceErasureRehearsal]=sqlFiles;
+const [foundation,discovery,consentA,consentB,guard,writeGuard,jobFinalization,rpcBridge,atomicEnqueue,proofBoundary,preimageAndPolicyHold,checkedCommitBridge,retiredSeedAudit,atomicEvidenceRehearsal,evidenceErasureRehearsal,atomicDraftRehearsal,realSourceBackedV2Sql]=sqlFiles;
 
 const ORG_A='10000000-0000-4000-8000-000000000001';
 const ORG_B='10000000-0000-4000-8000-000000000002';
@@ -1818,6 +1820,232 @@ test('KB-09F/G/H proof, BYPASSRLS, tenant-finalization, consent and commit races
     assert.equal(replay.ok,false,'Consumed/stale lease cannot duplicate evidence');
     assert.equal(await evidenceCount(),1);
     } // end isolated KB-09S test scope
+
+    { // KB-11: synthetic, consent-ATOMIC draft proof; after KB-09S, BEFORE KB-09T
+      // Add only the LOCAL fixture tables, then load the EXACT existing V2
+      // source-backed function from the repo's production migration. This
+      // does NOT apply new schema or SQL to any hosted environment.
+      await root.query(atomicDraftRehearsal);
+      await root.query(realSourceBackedV2Sql);
+      assert.match(atomicDraftRehearsal,/KB11_DISPOSABLE_PARENT_FIXTURE_REQUIRED/);
+      assert.doesNotMatch(atomicDraftRehearsal,/cron\.schedule|net\.http|http_get/i);
+      const draftSig='public.create_discovery_review_draft_with_current_consent_v1(uuid,uuid,text,text,text)';
+      const draftAcl=(await root.query(
+        "select has_function_privilege('anon',$1,'execute') as anonymous,"+
+        "has_function_privilege('authenticated',$1,'execute') as admin,"+
+        "has_function_privilege('service_role',$1,'execute') as service",
+        [draftSig]
+      )).rows[0];
+      assert.deepEqual(draftAcl,{anonymous:false,admin:true,service:false});
+      const manualDraft="select public.create_discovery_review_draft_with_current_consent_v1("+
+        "$1,$2,$3,$4,$5) as result";
+      const sourceRows=async()=>(await root.query(
+        "select organization_id,source_type,source_uri,name,status "+
+        "from public.knowledge_sources order by organization_id"
+      )).rows;
+      const docs=async()=>(await root.query(
+        "select organization_id,source_id,title,status,approved_by,approved_at "+
+        "from public.knowledge_documents order by organization_id"
+      )).rows;
+      const chunkCount=async()=>(await root.query(
+        "select count(*)::integer as n from public.knowledge_chunks"
+      )).rows[0].n;
+      const auditCount=async()=>(await root.query(
+        "select count(*)::integer as n from public.knowledge_approvals"
+      )).rows[0].n;
+      const pageC=(await root.query(
+        "select id from public.knowledge_discovery_pages "+
+        "where organization_id=$1 and job_id=$2 and status='fetched' limit 1",
+        [ORG_C,acceptedC.job_id]
+      )).rows[0].id;
+      const inputsC=[
+        ORG_C,pageC,'Manually verified details','faq',
+        'Human reviewed: synthetic training includes course materials.',
+      ];
+      const inputsD=[
+        ORG_D,seedD.id,'Tenant D verified details','courses',
+        'Human reviewed: synthetic instructor details for testing.',
+      ];
+
+      // The local fixture simulates an *approved* operator policy to prove
+      // the positive SQL contract, then resets it to OFF. Not legal approval.
+      await root.query(
+        "update public.knowledge_discovery_consent_control "+
+        "set grants_enabled=true,approved_policy_version='synthetic-policy',"+
+        "approved_policy_sha256=$1,approved_at=clock_timestamp()-interval '1 hour' "+
+        "where singleton=true",[POLICY_SHA]
+      );
+      await root.query(
+        "update public.knowledge_discovery_jobs set status='completed',"+
+        "finished_at=clock_timestamp(),lease_token=null,lease_until=null "+
+        "where id=$1",[acceptedC.job_id]
+      );
+      await root.query(
+        "update public.knowledge_discovery_pages "+
+        "set status='fetched',http_status=200,content_type='text/html',"+
+        "page_title='Synthetic tenant D page' where id=$1",
+        [seedD.id]
+      );
+      assert.equal((await root.query(
+        "select status from public.knowledge_discovery_jobs where id=$1",
+        [acceptedD.job_id]
+      )).rows[0].status,'completed');
+
+      await assert.rejects(callAs(b,'anon',manualDraft,inputsC),
+        isCode('42501'),'No anonymous discovery drafts');
+      await assert.rejects(callAs(b,'service_role',manualDraft,inputsC),
+        isCode('42501'),'Service role cannot use authenticated draft RPC');
+      await assert.rejects(callAs(
+        b,'authenticated',manualDraft,inputsC,ADMIN_D,SID_D),
+      isCode('42501'),'Wrong tenant actor/session denied');
+      await assert.rejects(callAs(
+        b,'authenticated',manualDraft,inputsC,ADMIN_C,randomUUID()),
+      isCode('42501'),'Unbound session cannot create a draft');
+      assert.deepEqual(await docs(),[]);
+
+      const pageReassigned=(await callAs(
+        b,'authenticated',manualDraft,
+        [ORG_D,pageC,...inputsC.slice(2)],ADMIN_D,SID_D
+      )).rows[0].result;
+      assert.equal(pageReassigned.ok,false,'Other tenant page cannot be claimed');
+      assert.equal((await sourceRows()).length,0);
+
+      // Even administrator permissions do not authorize unsafe text or
+      // arbitrary organization/citation inputs at the new RPC boundary.
+      await assert.rejects(callAs(
+        b,'authenticated',manualDraft,[...inputsC.slice(0,2),'X','faq','short'],
+        ADMIN_C,SID_C
+      ),isCode('22023'));
+      assert.equal((await docs()).length,0);
+      await assert.rejects(callAs(
+        b,'authenticated',"insert into public.knowledge_documents("+
+        "organization_id,source_id,title,category,content,status) "+
+        "values($1,$2,'forged','faq','forged','approved')",
+        [ORG_C,randomUUID()],ADMIN_C,SID_C
+      ),isCode('42501'),'Authenticated user cannot bypass draft-only DML');
+
+      // All inserts via existing source-backed V2 are in ONE transaction.
+      // An injected CHUNK exception must roll back source and document too.
+      await root.query(
+        "create function kb11_fixture.fail_chunk_insert() returns trigger "+
+        "language plpgsql as $fail$ begin "+
+        "raise exception 'kb11_forced_chunk_failure' using errcode='23514'; "+
+        "end; $fail$"
+      );
+      await root.query(
+        "create trigger kb11_reject_chunk before insert on "+
+        "public.knowledge_chunks for each row "+
+        "execute function kb11_fixture.fail_chunk_insert()"
+      );
+      await assert.rejects(callAs(
+        b,'authenticated',manualDraft,inputsC,ADMIN_C,SID_C
+      ),isCode('23514'),'Atomic rollback when linked knowledge chunk fails');
+      assert.deepEqual(await sourceRows(),[]);
+      assert.deepEqual(await docs(),[]);
+      assert.equal(await chunkCount(),0);
+      assert.equal(await auditCount(),0);
+      await root.query('drop trigger kb11_reject_chunk on public.knowledge_chunks');
+
+      // Current proof/consent, approved policy and grant audit must all be
+      // valid INSIDE the SQL call; app-side previous reads are not authority.
+      await root.query(
+        "update public.knowledge_discovery_domain_verifications "+
+        "set verified_until=clock_timestamp()-interval '1 second' "+
+        "where organization_id=$1",[ORG_C]
+      );
+      const staleProof=(await callAs(
+        b,'authenticated',manualDraft,inputsC,ADMIN_C,SID_C
+      )).rows[0].result;
+      assert.deepEqual(staleProof,{ok:false,reason:'proof_consent_or_policy_not_current'});
+      assert.equal((await sourceRows()).length,0);
+      await root.query(
+        "update public.knowledge_discovery_domain_verifications "+
+        "set verified_until=clock_timestamp()+interval '1 hour' "+
+        "where organization_id=$1",[ORG_C]
+      );
+      await root.query(
+        "update public.knowledge_discovery_consent_control "+
+        "set grants_enabled=false where singleton=true"
+      );
+      const pausedPolicy=(await callAs(
+        b,'authenticated',manualDraft,inputsC,ADMIN_C,SID_C
+      )).rows[0].result;
+      assert.deepEqual(pausedPolicy,{ok:false,reason:'proof_consent_or_policy_not_current'});
+      await root.query(
+        "update public.knowledge_discovery_consent_control "+
+        "set grants_enabled=true where singleton=true"
+      );
+      await root.query(
+        "update public.knowledge_discovery_consent_control "+
+        "set approved_policy_sha256=$1 where singleton=true",
+        ['f'.repeat(64)]
+      );
+      const wrongPolicy=(await callAs(
+        b,'authenticated',manualDraft,inputsC,ADMIN_C,SID_C
+      )).rows[0].result;
+      assert.deepEqual(wrongPolicy,{ok:false,reason:'consent_policy_audit_not_approved'});
+      await root.query(
+        "update public.knowledge_discovery_consent_control "+
+        "set approved_policy_sha256=$1 where singleton=true",
+        [POLICY_SHA]
+      );
+
+      const created=(await callAs(
+        b,'authenticated',manualDraft,inputsC,ADMIN_C,SID_C
+      )).rows[0].result;
+      assert.equal(created.ok,true);
+      assert.equal(created.status,'draft');
+      assert.equal(created.organization_id,ORG_C);
+      assert.equal(created.page_id,pageC);
+      assert.match(created.document_id,/^[a-f0-9-]{36}$/i);
+      assert.match(created.source_id,/^[a-f0-9-]{36}$/i);
+      assert.equal((await docs()).length,1);
+      assert.equal((await chunkCount()),1);
+      assert.equal((await auditCount()),0,
+        'Generic source-backed V2 must never record approval for this RPC');
+      assert.deepEqual((await sourceRows()).map(x=>({
+        organization_id:x.organization_id,source_uri:x.source_uri,
+        source_type:x.source_type,status:x.status,
+      })),[{
+        organization_id:ORG_C,source_uri:SITE_URL,
+        source_type:'website',status:'active',
+      }]);
+
+      // Simulate consent withdrawal racing with an OPEN caller transaction.
+      // The approved draft SQL acquires a SHARE lock on the consent row
+      // before creating the draft; withdrawal must wait on its UPDATE.
+      const liveTxn=await open();
+      const withdrawTxn=await open();
+      await beginAs(liveTxn,'authenticated',ADMIN_D,SID_D);
+      const createdWhileLocked=(await liveTxn.query(manualDraft,inputsD)).rows[0].result;
+      assert.equal(createdWhileLocked.ok,true);
+      let withdrawalCompleted=false;
+      const withdrawalPending=callAs(
+        withdrawTxn,'authenticated',WITHDRAW,[ORG_D,HOST,1],ADMIN_D,SID_D
+      ).then(result=>{withdrawalCompleted=true;return result;});
+      await pauseForLock();
+      assert.equal(withdrawalCompleted,false,
+        'Withdrawal cannot complete while draft transaction holds consent lock');
+      await liveTxn.query('commit');
+      const withdrawn=(await withdrawalPending).rows[0].result;
+      assert.equal(withdrawn.ok,true);
+      assert.equal(withdrawn.status,'withdrawn');
+      const tooLate=(await callAs(
+        b,'authenticated',manualDraft,inputsD,ADMIN_D,SID_D
+      )).rows[0].result;
+      assert.equal(tooLate.ok,false,'No new draft may follow completed withdrawal');
+      assert.equal((await docs()).length,2,
+        'Successful pre-withdrawal draft persists pending separate derived-data policy');
+      assert.equal(await auditCount(),0);
+
+      // Leave the operator policy registry disabled; no real approval,
+      // grants, or staging setup is being created by this test.
+      await root.query(
+        "update public.knowledge_discovery_consent_control "+
+        "set grants_enabled=false,approved_policy_version=null,"+
+        "approved_policy_sha256=null,approved_at=null where singleton=true"
+      );
+    } // end KB-11 auto-dropped consent-atomic draft contract rehearsal
 
     { // KB-09T: SAME auto-dropped random local DB, no hosted SQL or evidence
     await root.query(evidenceErasureRehearsal);
