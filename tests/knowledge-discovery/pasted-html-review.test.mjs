@@ -261,6 +261,8 @@ test('KB-09R HTML parsing preview is separate from the unchanged draft/approval 
   assert.match(library,/KnowledgeDiscoveryPastedHtmlReview/);
   assert.match(library,/action=\{createManualDraftFromDiscoveredPageAction\}/);
   assert.match(library,/Only <strong>Save as Draft<\/strong>/);
-  assert.match(draft,/p_approve: false/);
+  assert.match(draft,/create_discovery_review_draft_with_current_consent_v1/);
+  assert.doesNotMatch(draft,/create_source_backed_knowledge_document_v2/);
   assert.doesNotMatch(draft,/p_approve: true/);
+  assert.match(library,/Draft saving on hold/);
 });
