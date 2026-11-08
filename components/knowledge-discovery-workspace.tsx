@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import { saveKnowledgeWebsiteAction } from '@/app/settings/knowledge/discovery/actions';
 import { useCallback, useEffect, useState } from 'react';
 import { ArrowLeft, Globe2, RefreshCcw, ShieldCheck, Square, Play, AlertCircle } from 'lucide-react';
 
@@ -36,7 +37,15 @@ const statusText: Record<Job['status'], string> = {
   partial: 'Partial coverage', failed: 'Failed', cancelled: 'Cancelled',
 };
 
-export function KnowledgeDiscoveryWorkspace() {
+export function KnowledgeDiscoveryWorkspace({
+  canEditWebsite,
+  websiteNotice = '',
+  websiteError = '',
+}: {
+  canEditWebsite: boolean;
+  websiteNotice?: string;
+  websiteError?: string;
+}) {
   const [state, setState] = useState<State>(initial);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
@@ -149,6 +158,8 @@ export function KnowledgeDiscoveryWorkspace() {
         </button>
       </div>
 
+      {websiteError ? <div role="alert" className="flex items-start gap-2 rounded-lg border border-rose-200 bg-rose-50 p-3 text-xs text-rose-800"><AlertCircle size={15}/>{websiteError}</div> : null}
+      {websiteNotice ? <div role="status" className="rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-xs text-emerald-800">{websiteNotice}</div> : null}
       {error ? <div role="alert" className="flex items-start gap-2 rounded-lg border border-rose-200 bg-rose-50 p-3 text-xs text-rose-800"><AlertCircle size={15}/>{error}</div> : null}
       {message ? <div role="status" className="rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-xs text-emerald-800">{message}</div> : null}
 
@@ -158,7 +169,37 @@ export function KnowledgeDiscoveryWorkspace() {
           <label htmlFor="kb-website" className="text-xs font-medium text-slate-600">Configured organization website</label>
           <input id="kb-website" readOnly value={state.configuredWebsite ?? ''} placeholder={loading ? 'Loading…' : 'Not configured'}
             className="mt-2 w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-3 text-sm text-slate-700" />
-          {!state.configuredWebsite && !loading ? <p className="mt-2 text-xs text-amber-700">Add a website to your onboarding business profile before starting discovery.</p> : null}
+          {!state.configuredWebsite && !loading ? <p className="mt-2 text-xs text-amber-700">A public HTTPS website is required before discovery can be reviewed or started.</p> : null}
+          {canEditWebsite && !loading && !error ? (
+            <form action={saveKnowledgeWebsiteAction} className="mt-4 rounded-lg border border-slate-200 bg-slate-50 p-3">
+              <label htmlFor="kb-website-update" className="block text-xs font-semibold text-slate-700">
+                {state.configuredWebsite ? 'Change website after onboarding' : 'Add website after onboarding'}
+              </label>
+              <p className="mt-1 text-xs leading-5 text-slate-500">
+                Only owners and admins can save the configured HTTPS root domain. Saving never runs a scan or changes existing knowledge, approval, proof or consent records.
+              </p>
+              <div className="mt-3 flex flex-col gap-2 sm:flex-row">
+                <input key={state.configuredWebsite ?? 'unconfigured'} id="kb-website-update"
+                  name="website" type="url" required maxLength={240}
+                  defaultValue={state.configuredWebsite ?? ''}
+                  placeholder="https://yourbusiness.com/"
+                  className="min-w-0 flex-1 rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-xs text-slate-800"/>
+                <button type="submit" disabled={busy || verificationBusy}
+                  className="rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-xs font-semibold text-slate-800 disabled:opacity-40">
+                  Save website
+                </button>
+              </div>
+              <p className="mt-2 text-xs text-amber-700">
+                Changing the hostname requires new ownership verification and separate, approved discovery consent. Previously approved knowledge is not automatically replaced.
+              </p>
+            </form>
+          ) : null}
+          {!canEditWebsite && !loading && !error ? (
+            <p className="mt-2 text-xs text-slate-500">
+              Website edits are locked while the discovery or consent pilot is configured.
+              Your existing website and knowledge remain available for review.
+            </p>
+          ) : null}
           {!state.pilotEnabled && !state.discoveryEnabled && !loading && !error ? <p className="mt-2 text-xs text-amber-700">Website discovery is paused or this domain has not been approved for the pilot.</p> : null}
           {state.pilotEnabled && !state.websiteVerified && !loading ? <p className="mt-2 text-xs text-amber-700">Verify ownership of this website before scanning.</p> : null}
           <div className="mt-5 flex flex-wrap items-end justify-between gap-3 border-t border-slate-100 pt-4">
