@@ -1534,9 +1534,9 @@ test('KB-09F/G/H proof, BYPASSRLS, tenant-finalization, consent and commit races
       "set verified_until=clock_timestamp()-interval '1 second' "+
       "where organization_id=$1",[ORG_D]
     );
-    const expired=(await callAs(b,'service_role',PUBLIC_SAFE_COMMIT,workerArgs))
+    const workerProofDenied=(await callAs(b,'service_role',PUBLIC_SAFE_COMMIT,workerArgs))
       .rows[0].result;
-    assert.deepEqual(expired,{ok:false,reason:'ownership_proof_not_current'});
+    assert.deepEqual(workerProofDenied,{ok:false,reason:'ownership_proof_not_current'});
     assert.equal((await root.query(
       "select status from public.knowledge_discovery_pages where id=$1",
       [seedD.id]
