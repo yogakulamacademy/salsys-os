@@ -73,6 +73,11 @@ test('migration checks source body and existing security boundary before replace
   assert.match(migration, /md5\(btrim\(replace\(/);
   assert.match(migration, /309f9d3ea4929e26f6c44f77099559ed/);
   assert.match(migration, /to_regprocedure\(/);
+  const signatures = [...migration.matchAll(/to_regprocedure\(\s*'([^']+)'\s*\)/g)].map(m => m[1]);
+  const exactSignature =
+    'public.ingest_website_lead(text,text,text,text,text,text,text,text,text,date,text,text,text,text,text,text,jsonb,jsonb,jsonb)';
+  assert.deepEqual(signatures, [exactSignature, exactSignature],
+    'Pre-check and post-check must both address the exact existing 19-argument RPC');
   assert.match(migration, /p\.prosecdef = true/);
   assert.match(migration, /p\.proowner::regrole::text = 'postgres'/);
   assert.match(migration, /p\.proacl::text = '\{postgres=X\/postgres,service_role=X\/postgres\}'/);
