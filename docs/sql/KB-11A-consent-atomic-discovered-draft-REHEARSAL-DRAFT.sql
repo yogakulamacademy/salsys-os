@@ -34,6 +34,8 @@ set search_path = ''
 as $kb11_atomic$
 declare
   v_actor uuid;
+  v_session uuid;
+  v_locked_actor uuid;
   v_configured text;
   v_host text;
   v_job_id uuid;
@@ -55,6 +57,28 @@ begin
   if v_actor is null or p_page_id is null then
     raise exception 'kb_discovery_draft_denied' using errcode='42501';
   end if;
+
+  -- KB-11B: the actor helper's plain SELECT is only an initial check.
+  -- Prevent an Auth session, tenant binding, membership, or organization
+  -- revocation from committing between that check and our draft write.
+  -- The helper validates the JWT session-id format before this cast.
+  v_session := (auth.jwt()->>'session_id')::uuid;
+  select b.user_id into v_locked_actor
+    from public.tenant_session_bindings b
+    join auth.sessions s
+      on s.id=b.session_id and s.user_id=b.user_id
+    join public.organizations o
+      on o.id=b.organization_id and o.status='active'
+    join public.organization_members m
+      on m.organization_id=b.organization_id and m.user_id=b.user_id
+    where b.organization_id=p_organization_id
+      and b.session_id=v_session and b.user_id=v_actor
+      and m.active=true and m.role in ('owner','admin')
+    for share of b,s,o,m;
+  if not found or v_locked_actor is distinct from v_actor then
+    raise exception 'kb_discovery_draft_session_revoked' using errcode='42501';
+  end if;
+
   if length(v_title) not between 2 and 180
      or length(v_content) not between 10 and 20000
      or p_category is null or p_category not in (
