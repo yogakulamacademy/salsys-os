@@ -7,7 +7,6 @@ import { useMockData } from '@/lib/config';
 import { createClient } from '@/lib/supabase/server';
 import { requireCurrentOrganizationId } from '@/lib/workspace';
 import { inspectKnowledgeMatches } from '@/lib/knowledge-evidence';
-import { discoveryApprovalPreflight } from '@/lib/knowledge-discovery/discovery-approval-preflight';
 
 export type KnowledgePreviewResult = { state: 'idle' | 'error' | 'empty' | 'matched'; message: string; matches?: Array<{ documentId: string; title: string; version: number | null; validUntil: string | null; excerpt: string }> };
 
@@ -192,18 +191,6 @@ export async function approveKnowledgeDocumentAction(formData: FormData) {
   }
 
   const { supabase, organizationId } = await currentContext();
-  // KB-14B: read-only, tenant-scoped discovery publication preflight in a
-  // separate helper. Keep every write in the existing atomic Knowledge RPC.
-  // The helper is NOT a safe replacement for the uninstalled DB-level guard:
-  // the legacy RPC can be called directly, and a SELECT is not a lock.
-  const publication = await discoveryApprovalPreflight(supabase, organizationId, documentId);
-  if (publication === 'unreadable') {
-    knowledgeRedirect('error', 'Knowledge cannot be verified for approval. No approval was attempted.');
-  }
-  if (publication === 'held') {
-    knowledgeRedirect('error', 'Discovered-page drafts are held for independent evidence review and cannot be approved yet.');
-  }
-
   const { data, error } = await supabase.rpc('approve_knowledge_document_v1', {
     p_organization_id: organizationId,
     p_document_id: documentId,
