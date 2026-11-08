@@ -12,8 +12,9 @@ const sqlFiles=[
   '../../docs/sql/KB-06B-audited-discovery-consent-lifecycle-DRAFT.sql',
   '../../docs/sql/KB-09F-commit-side-ownership-guard-REHEARSAL-DRAFT.sql',
   '../../docs/sql/KB-09G-direct-write-boundary-REHEARSAL-DRAFT.sql',
+  '../../docs/sql/KB-09H-tenant-cancel-and-seed-failure-CAS-REHEARSAL-DRAFT.sql',
 ].map(path=>readFileSync(new URL(path,import.meta.url),'utf8'));
-const [foundation,discovery,consentA,consentB,guard,writeGuard]=sqlFiles;
+const [foundation,discovery,consentA,consentB,guard,writeGuard,jobFinalization]=sqlFiles;
 
 const ORG_A='10000000-0000-4000-8000-000000000001';
 const ORG_B='10000000-0000-4000-8000-000000000002';
@@ -29,6 +30,10 @@ const CLAIM='select * from public.claim_knowledge_discovery_job_v1()';
 const OLD_COMMIT='select public.commit_knowledge_discovery_page_v1($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) as result';
 const SAFE_COMMIT='select kb09f_fixture.commit_page_with_current_proof_v1($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) as result';
 const WITHDRAW='select public.withdraw_knowledge_discovery_consent_v1($1,$2,$3) as result';
+const CANCEL_JOB='select kb09h_fixture.cancel_job_for_current_admin_v1($1,$2) as result';
+const SEED_FAILURE='select kb09h_fixture.fail_unseeded_queued_job_v1($1,$2,$3) as result';
+const CANCEL_SIG='kb09h_fixture.cancel_job_for_current_admin_v1(uuid,uuid)';
+const FAILURE_SIG='kb09h_fixture.fail_unseeded_queued_job_v1(uuid,uuid,uuid)';
 const SAFE_SIG='kb09f_fixture.commit_page_with_current_proof_v1(uuid,uuid,uuid,uuid,text,integer,text,text,text,jsonb,integer)';
 const OLD_SIG='public.commit_knowledge_discovery_page_v1(uuid,uuid,uuid,uuid,text,integer,text,text,text,jsonb,integer)';
 
@@ -68,7 +73,7 @@ async function pauseForLock(){
   await new Promise(resolve=>setTimeout(resolve,100));
 }
 
-test('KB-09F/G commit proof, audited consent races and privileged direct-write bypass rehearsal only in disposable DB',async()=>{
+test('KB-09F/G/H proof, BYPASSRLS, tenant-finalization, consent and commit races in disposable DB',async()=>{
   const base=requireLocalPostgres();
   const name='salsys_kb09f_'+randomUUID().replaceAll('-','').slice(0,18);
   assert.match(name,/^salsys_kb09f_[a-f0-9]{18}$/);
@@ -296,6 +301,23 @@ test('KB-09F/G commit proof, audited consent races and privileged direct-write b
     // KB-09G is explicitly NOT a migration: only alter grants and add
     // insert-state triggers in this already-guarded random local DB.
     await root.query(writeGuard);
+    await root.query(jobFinalization);
+    assert.match(jobFinalization,/KB09H_DISPOSABLE_PARENT_FIXTURE_REQUIRED/);
+    assert.doesNotMatch(jobFinalization,/create or replace function public\./i);
+    assert.doesNotMatch(jobFinalization,/cron\.schedule|net\.http|http_get/i);
+    const finalizationPrivileges=(await root.query(
+      "select has_function_privilege('authenticated',$1,'execute') as user_cancel,"+
+      "has_function_privilege('service_role',$1,'execute') as svc_cancel,"+
+      "has_function_privilege('authenticated',$2,'execute') as user_seed,"+
+      "has_function_privilege('service_role',$2,'execute') as svc_seed,"+
+      "has_table_privilege('authenticated','kb09h_fixture.job_finalization_audit','insert') as user_audit,"+
+      "has_table_privilege('service_role','kb09h_fixture.job_finalization_audit','insert') as svc_audit",
+      [CANCEL_SIG,FAILURE_SIG]
+    )).rows[0];
+    assert.deepEqual(finalizationPrivileges,{
+      user_cancel:true,svc_cancel:false,user_seed:false,svc_seed:true,
+      user_audit:false,svc_audit:false,
+    });
     assert.match(writeGuard,/KB09G_DISPOSABLE_PARENT_FIXTURE_REQUIRED/);
     assert.doesNotMatch(writeGuard,/create or replace function public\./i);
     for(const table of ['knowledge_discovery_pages','knowledge_discovery_jobs']){
@@ -460,6 +482,220 @@ test('KB-09F/G commit proof, audited consent races and privileged direct-write b
     assert.equal((await page(commitFirst)).status,'fetched');
     assert.equal((await state(commitFirst)).status,'completed');
     await renew(ORG_A);
+
+    // KB-09H: private, session-scoped cancellation and exact seed-failure
+    // state transitions. These are NOT connected to the draft HTTP API.
+    const cancelJob=(db,org,id,actor=ADMIN_A,session=SID_A)=>
+      callAs(db,'authenticated',CANCEL_JOB,[org,id],actor,session);
+    const seedFailed=(db,org,id,creator)=>
+      callAs(db,'service_role',SEED_FAILURE,[org,id,creator]);
+    const jobAudit=async(org,id)=>(await root.query(
+      "select action,initiator,actor_id,session_id,job_created_by,"+
+      "previous_status,final_status from kb09h_fixture.job_finalization_audit "+
+      "where organization_id=$1 and job_id=$2",[org,id]
+    )).rows;
+    const enqueueUnseeded=async(org=ORG_A)=>{
+      await root.query(
+        "update public.knowledge_discovery_jobs set "+
+        "created_at=now()-interval '26 hours' "+
+        "where organization_id=$1 and status not in ('queued','running')",[org]
+      );
+      return (await root.query(
+        "insert into public.knowledge_discovery_jobs "+
+        "(organization_id,created_by,seed_url,max_pages,status) "+
+        "values($1,$2,$3,3,'queued') returning id",
+        [org,org===ORG_A?ADMIN_A:ADMIN_B,SITE_URL]
+      )).rows[0].id;
+    };
+
+    // Tenant/session cannot be inferred from a caller's job ID or forged
+    // actor argument. The KB-06B session-aware owner helper is mandatory.
+    const runningCancel=await prepareJob(ORG_A);
+    await assert.rejects(
+      callAs(b,'service_role',CANCEL_JOB,[ORG_A,runningCancel.id]),
+      isCode('42501'),'Service token must not impersonate human cancellation'
+    );
+    await assert.rejects(
+      callAs(b,'authenticated',SEED_FAILURE,
+        [ORG_A,runningCancel.id,ADMIN_A]),
+      isCode('42501'),'Authenticated user must never use seed repair'
+    );
+    await assert.rejects(
+      cancelJob(b,ORG_B,runningCancel.id),isCode('42501'),
+      'Foreign tenant session cannot cancel another organization'
+    );
+    await assert.rejects(
+      cancelJob(b,ORG_A,runningCancel.id,ADMIN_B,SID_B),isCode('42501'),
+      'Authenticated user from another tenant cannot cancel'
+    );
+    await assert.rejects(
+      cancelJob(b,ORG_A,runningCancel.id,ADMIN_A,randomUUID()),isCode('42501'),
+      'Unbound JWT session must be refused'
+    );
+    await root.query(
+      "update public.organization_members set active=false "+
+      "where organization_id=$1 and user_id=$2",[ORG_A,ADMIN_A]
+    );
+    await assert.rejects(
+      cancelJob(b,ORG_A,runningCancel.id),isCode('42501'),
+      'Revoked organization membership must be refused'
+    );
+    await root.query(
+      "update public.organization_members set active=true "+
+      "where organization_id=$1 and user_id=$2",[ORG_A,ADMIN_A]
+    );
+    assert.equal((await state(runningCancel)).status,'running');
+    assert.deepEqual(await jobAudit(ORG_A,runningCancel.id),[]);
+    assert.deepEqual((await cancelJob(b,ORG_A,runningCancel.id)).rows[0].result,{
+      ok:true,status:'cancelled',audit_recorded:true,
+    });
+    assert.equal((await state(runningCancel)).status,'cancelled');
+    assert.equal((await state(runningCancel)).lease_token,null);
+    assert.deepEqual((await cancelJob(b,ORG_A,runningCancel.id)).rows[0].result,{
+      ok:false,reason:'not_active_or_not_found',
+    },'Duplicate cancellation must not make another audit');
+    assert.deepEqual((await safe(b,ORG_A,runningCancel)).rows[0].result,{
+      ok:false,reason:'inactive_or_stale_lease',
+    });
+    assert.deepEqual(await jobAudit(ORG_A,runningCancel.id),[{
+      action:'tenant_cancel',initiator:'tenant_admin',actor_id:ADMIN_A,
+      session_id:SID_A,job_created_by:ADMIN_A,
+      previous_status:'running',final_status:'cancelled',
+    }]);
+
+    // Audit collision rolls back the job mutation, not just its audit.
+    const auditCollision=await prepareJob(ORG_A);
+    await root.query(
+      "insert into kb09h_fixture.job_finalization_audit "+
+      "(organization_id,job_id,action,previous_status,final_status,"+
+      "initiator,actor_id,session_id,job_created_by) "+
+      "values($1,$2,'tenant_cancel','running','cancelled',"+
+      "'tenant_admin',$3,$4,$3)",[ORG_A,auditCollision.id,ADMIN_A,SID_A]
+    );
+    await assert.rejects(
+      cancelJob(b,ORG_A,auditCollision.id),isCode('23505'),
+      'Audit uniqueness failure must rollback the cancellation'
+    );
+    assert.equal((await state(auditCollision)).status,'running');
+    assert.equal((await state(auditCollision)).lease_token,auditCollision.lease);
+    await retire(auditCollision);
+
+    // Service can mark only its own exact UNCLAIMED, unseeded queued job
+    // as seed_insert_failed. It cannot override a job with a real page.
+    const noSeedId=await enqueueUnseeded(ORG_A);
+    await assert.rejects(
+      callAs(b,'authenticated',SEED_FAILURE,[ORG_A,noSeedId,ADMIN_A]),
+      isCode('42501')
+    );
+    assert.deepEqual((await seedFailed(b,ORG_A,noSeedId,ADMIN_B)).rows[0].result,{
+      ok:false,reason:'not_eligible',
+    },'Creator mismatch must not modify queued job');
+    assert.deepEqual((await seedFailed(b,ORG_B,noSeedId,ADMIN_A)).rows[0].result,{
+      ok:false,reason:'not_eligible',
+    },'Service failure repair must target exact tenant and job');
+    assert.deepEqual((await seedFailed(b,ORG_A,noSeedId,ADMIN_A)).rows[0].result,{
+      ok:true,status:'failed',audit_recorded:true,
+    });
+    assert.deepEqual((await seedFailed(b,ORG_A,noSeedId,ADMIN_A)).rows[0].result,{
+      ok:false,reason:'not_eligible',
+    });
+    assert.deepEqual(await jobAudit(ORG_A,noSeedId),[{
+      action:'seed_failure',initiator:'service_seed_handler',
+      actor_id:null,session_id:null,job_created_by:ADMIN_A,
+      previous_status:'queued',final_status:'failed',
+    }]);
+    const failureState=(await root.query(
+      "select status,last_error_code,lease_token from public.knowledge_discovery_jobs "+
+      "where id=$1",[noSeedId]
+    )).rows[0];
+    assert.deepEqual(failureState,{
+      status:'failed',last_error_code:'seed_insert_failed',lease_token:null,
+    });
+
+    const withPageId=await enqueueUnseeded(ORG_A);
+    await root.query(
+      "insert into public.knowledge_discovery_pages "+
+      "(organization_id,job_id,url,depth,status) "+
+      "values($1,$2,$3,0,'discovered')",
+      [ORG_A,withPageId,SITE_URL]
+    );
+    assert.deepEqual((await seedFailed(b,ORG_A,withPageId,ADMIN_A)).rows[0].result,{
+      ok:false,reason:'not_eligible',
+    },'Seed failure cannot erase a job that already has a page');
+    assert.deepEqual(await jobAudit(ORG_A,withPageId),[]);
+    await cancelJob(b,ORG_A,withPageId);
+
+    // Independent transactions: admin cancel wins the job row lock, and
+    // a worker page commit must wait then return a STALE lease.
+    const cancelFirst=await prepareJob(ORG_A);
+    await beginAs(b,'authenticated');
+    assert.equal((await b.query(CANCEL_JOB,[ORG_A,cancelFirst.id]))
+      .rows[0].result.ok,true);
+    await beginAs(c,'service_role');
+    let commitDone=false;
+    const pendingCommit=c.query(SAFE_COMMIT,
+      safeArgs(ORG_A,cancelFirst,cancelFirst.lease,'skipped'))
+      .then(value=>({ok:true,value}),error=>({ok:false,error}))
+      .finally(()=>{commitDone=true;});
+    await pauseForLock();
+    assert.equal(commitDone,false,'Page commit must wait for cancellation lock');
+    await b.query('commit');
+    const deniedCommit=await pendingCommit;
+    assert.equal(deniedCommit.ok,true);
+    assert.deepEqual(deniedCommit.value.rows[0].result,{
+      ok:false,reason:'inactive_or_stale_lease',
+    });
+    await c.query('commit');
+    assert.equal((await page(cancelFirst)).status,'discovered');
+    assert.equal((await jobAudit(ORG_A,cancelFirst.id)).length,1);
+
+    // Worker commit wins first: a later cancellation is a no-op and
+    // MUST NOT forge an audit or reverse an already committed page.
+    const finishFirst=await prepareJob(ORG_A);
+    await beginAs(c,'service_role');
+    assert.equal((await c.query(SAFE_COMMIT,
+      safeArgs(ORG_A,finishFirst,finishFirst.lease,'skipped')))
+      .rows[0].result.ok,true);
+    await beginAs(b,'authenticated');
+    let cancelDone=false;
+    const lateCancel=b.query(CANCEL_JOB,[ORG_A,finishFirst.id])
+      .then(value=>({ok:true,value}),error=>({ok:false,error}))
+      .finally(()=>{cancelDone=true;});
+    await pauseForLock();
+    assert.equal(cancelDone,false,'Cancellation must wait while worker holds job row');
+    await c.query('commit');
+    const lateResponse=await lateCancel;
+    assert.equal(lateResponse.ok,true);
+    assert.deepEqual(lateResponse.value.rows[0].result,{
+      ok:false,reason:'not_active_or_not_found',
+    });
+    await b.query('commit');
+    assert.equal((await page(finishFirst)).status,'skipped');
+    assert.deepEqual(await jobAudit(ORG_A,finishFirst.id),[]);
+
+    // Seed repair cannot preempt a lease that already became running.
+    // The existing claim SQL and the repair CAS agree on the job state.
+    const raceSeed=await enqueueUnseeded(ORG_A);
+    await beginAs(b,'service_role');
+    const leaseClaim=(await b.query(CLAIM)).rows;
+    assert.equal(leaseClaim.length,1);
+    assert.equal(leaseClaim[0].job_id,raceSeed);
+    await beginAs(c,'service_role');
+    let seedResolved=false;
+    const lateSeed=c.query(SEED_FAILURE,[ORG_A,raceSeed,ADMIN_A])
+      .then(value=>({ok:true,value}),error=>({ok:false,error}))
+      .finally(()=>{seedResolved=true;});
+    await pauseForLock();
+    assert.equal(seedResolved,false,'Seed failure CAS must wait for job lease claim');
+    await b.query('commit');
+    const seedLoser=await lateSeed;
+    assert.equal(seedLoser.ok,true);
+    assert.deepEqual(seedLoser.value.rows[0].result,{
+      ok:false,reason:'not_eligible',
+    });
+    await c.query('commit');
+    assert.deepEqual(await jobAudit(ORG_A,raceSeed),[]);
+    await cancelJob(b,ORG_A,raceSeed);
 
     // Actual KB-06B withdrawal AFTER an approved page commit: the audited
     // withdrawal waits for the job row, then revokes consent. Earlier
