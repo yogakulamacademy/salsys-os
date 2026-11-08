@@ -23,7 +23,8 @@ function rejectDraft(reason: string): never {
  */
 export async function createManualDraftFromDiscoveredPageAction(formData: FormData) {
   if (useMockData || process.env.KNOWLEDGE_DISCOVERY_PILOT_ENABLED !== 'true' ||
-      process.env.KNOWLEDGE_DISCOVERY_PAUSED === 'true') {
+      process.env.KNOWLEDGE_DISCOVERY_PAUSED === 'true' ||
+      process.env.KNOWLEDGE_DISCOVERY_ATOMIC_DRAFT_APPROVED !== 'true') {
     rejectDraft('Discovery review is unavailable. No draft was created.');
   }
 
@@ -61,31 +62,34 @@ export async function createManualDraftFromDiscoveredPageAction(formData: FormDa
     rejectDraft('Owner or admin permission could not be verified.');
   }
 
-  // Repeat the eligibility checks at mutation time. A link/hidden field
-  // is never proof of a source or of current site consent.
-  const page = await eligibleDiscoveredPageForManualDraft(supabase, organizationId, pageId);
-  if (!page) rejectDraft('This discovered page is no longer eligible for draft review.');
+  // UI eligibility is NOT permission to create a discovered-page document:
+  // consent and ownership may be revoked between that read and this write.
+  // Require a NEW, independently reviewed SQL RPC that locks/current-checks
+  // the session, tenant, stored website, page/job, ownership and purpose-
+  // limited consent IN THE SAME TRANSACTION as draft creation. It is NOT
+  // installed by this draft; missing RPC/permission must fail closed.
+  // The original generic v2 source-backed RPC is deliberately NOT a
+  // fallback because it does not recheck current discovery consent.
+  const { data: creation, error } = await supabase.rpc(
+    'create_discovery_review_draft_with_current_consent_v1', {
+      p_organization_id: organizationId,
+      p_page_id: pageId,
+      p_title: title.trim(),
+      p_category: category,
+      p_content: content.trim(),
+    },
+  );
 
-  const { data: creation, error } = await supabase.rpc('create_source_backed_knowledge_document_v2', {
-    p_organization_id: organizationId,
-    p_title: title.trim(),
-    p_category: category,
-    p_content: content.trim(),
-    p_source_name: page.sourceName,
-    p_source_type: 'website',
-    p_source_uri: page.sourceUri,
-    p_valid_from: null,
-    p_valid_until: null,
-    p_approve: false,
-  });
-  // The existing source-backed v2 RPC returns an explicit draft receipt.
-  // A successful HTTP/SQL response without that receipt is NOT a saved draft.
+  // The new atomic function contract must return explicit, tenant-bound,
+  // draft-only IDs. A transport success is not a saved-draft receipt.
   if (error || creation?.ok !== true || creation?.status !== 'draft' ||
+      creation?.organization_id !== organizationId ||
+      creation?.page_id !== pageId ||
       typeof creation.document_id !== 'string' ||
       !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(creation.document_id) ||
       typeof creation.source_id !== 'string' ||
       !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(creation.source_id)) {
-    rejectDraft('Knowledge draft could not be verified as saved. No approval was assumed.');
+    rejectDraft('A current owner-authorized, consent-checked draft write could not be verified. No approval was assumed.');
   }
 
   revalidatePath(destination);
