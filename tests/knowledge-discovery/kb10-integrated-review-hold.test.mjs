@@ -98,6 +98,12 @@ test('KB-14A release preflight rejects removal of unverified discovery publicati
     'KB14A_LOCAL_DISPOSABLE_FIXTURE_REQUIRED','unguarded');
   },/KB14A_LOCAL_DISPOSABLE_FIXTURE_REQUIRED/);
   rejects(x=>{x.code.approvalGuardSql=x.code.approvalGuardSql.replace(
+    'kb_discovery_linked_source_unreadable','no_fk_source_check');
+  },/kb_discovery_linked_source_unreadable/);
+  rejects(x=>{x.code.approvalGuardSql=x.code.approvalGuardSql.replace(
+    'kb_discovery_previous_source_unreadable','no_old_source_check');
+  },/kb_discovery_previous_source_unreadable/);
+  rejects(x=>{x.code.approvalGuardSql=x.code.approvalGuardSql.replace(
     'create trigger kb14a_hold_unverified_discovery_document','-- omitted trigger');
   },/kb14a_hold_unverified_discovery_document/);
   rejects(x=>{x.code.approvalGuardSql=x.code.approvalGuardSql.replace(
