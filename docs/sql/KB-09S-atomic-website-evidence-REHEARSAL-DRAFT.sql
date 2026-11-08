@@ -161,7 +161,7 @@ begin
     p_failure_code,p_links,p_delay_seconds
   ) into v_result;
   if v_result->>'ok' is distinct from 'true' then
-    return pg_catalog.coalesce(v_result,
+    return coalesce(v_result,
       pg_catalog.jsonb_build_object('ok',false,'reason','checked_commit_denied'));
   end if;
 
