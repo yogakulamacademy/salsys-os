@@ -13,8 +13,9 @@ const sqlFiles=[
   '../../docs/sql/KB-09F-commit-side-ownership-guard-REHEARSAL-DRAFT.sql',
   '../../docs/sql/KB-09G-direct-write-boundary-REHEARSAL-DRAFT.sql',
   '../../docs/sql/KB-09H-tenant-cancel-and-seed-failure-CAS-REHEARSAL-DRAFT.sql',
+  '../../docs/sql/KB-09I-discovery-public-rpc-bridge-REHEARSAL-DRAFT.sql',
 ].map(path=>readFileSync(new URL(path,import.meta.url),'utf8'));
-const [foundation,discovery,consentA,consentB,guard,writeGuard,jobFinalization]=sqlFiles;
+const [foundation,discovery,consentA,consentB,guard,writeGuard,jobFinalization,rpcBridge]=sqlFiles;
 
 const ORG_A='10000000-0000-4000-8000-000000000001';
 const ORG_B='10000000-0000-4000-8000-000000000002';
@@ -30,10 +31,13 @@ const CLAIM='select * from public.claim_knowledge_discovery_job_v1()';
 const OLD_COMMIT='select public.commit_knowledge_discovery_page_v1($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) as result';
 const SAFE_COMMIT='select kb09f_fixture.commit_page_with_current_proof_v1($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) as result';
 const WITHDRAW='select public.withdraw_knowledge_discovery_consent_v1($1,$2,$3) as result';
-const CANCEL_JOB='select kb09h_fixture.cancel_job_for_current_admin_v1($1,$2) as result';
-const SEED_FAILURE='select kb09h_fixture.fail_unseeded_queued_job_v1($1,$2,$3) as result';
+// Exercise the exact PUBLIC RPC names used by app/api/knowledge/discovery/route.ts.
+const CANCEL_JOB='select public.cancel_knowledge_discovery_job_v1($1,$2) as result';
+const SEED_FAILURE='select public.fail_knowledge_discovery_seed_v1($1,$2,$3) as result';
 const CANCEL_SIG='kb09h_fixture.cancel_job_for_current_admin_v1(uuid,uuid)';
 const FAILURE_SIG='kb09h_fixture.fail_unseeded_queued_job_v1(uuid,uuid,uuid)';
+const PUBLIC_CANCEL_SIG='public.cancel_knowledge_discovery_job_v1(uuid,uuid)';
+const PUBLIC_FAILURE_SIG='public.fail_knowledge_discovery_seed_v1(uuid,uuid,uuid)';
 const SAFE_SIG='kb09f_fixture.commit_page_with_current_proof_v1(uuid,uuid,uuid,uuid,text,integer,text,text,text,jsonb,integer)';
 const OLD_SIG='public.commit_knowledge_discovery_page_v1(uuid,uuid,uuid,uuid,text,integer,text,text,text,jsonb,integer)';
 
@@ -302,6 +306,23 @@ test('KB-09F/G/H proof, BYPASSRLS, tenant-finalization, consent and commit races
     // insert-state triggers in this already-guarded random local DB.
     await root.query(writeGuard);
     await root.query(jobFinalization);
+    await root.query(rpcBridge);
+    assert.match(rpcBridge,/KB09I_DISPOSABLE_PARENT_FIXTURE_REQUIRED/);
+    assert.doesNotMatch(rpcBridge,/create or replace function public\./i);
+    assert.doesNotMatch(rpcBridge,/cron\.schedule|net\.http|http_get/i);
+    const exposedRpcPrivileges=(await root.query(
+      "select has_function_privilege('anon',$1,'execute') as anon_cancel,"+
+      "has_function_privilege('authenticated',$1,'execute') as admin_cancel,"+
+      "has_function_privilege('service_role',$1,'execute') as service_cancel,"+
+      "has_function_privilege('anon',$2,'execute') as anon_failure,"+
+      "has_function_privilege('authenticated',$2,'execute') as user_failure,"+
+      "has_function_privilege('service_role',$2,'execute') as service_failure",
+      [PUBLIC_CANCEL_SIG,PUBLIC_FAILURE_SIG]
+    )).rows[0];
+    assert.deepEqual(exposedRpcPrivileges,{
+      anon_cancel:false,admin_cancel:true,service_cancel:false,
+      anon_failure:false,user_failure:false,service_failure:true,
+    },'PUBLIC RPC bridge must not add extra privileged callers');
     assert.match(jobFinalization,/KB09H_DISPOSABLE_PARENT_FIXTURE_REQUIRED/);
     assert.doesNotMatch(jobFinalization,/create or replace function public\./i);
     assert.doesNotMatch(jobFinalization,/cron\.schedule|net\.http|http_get/i);
