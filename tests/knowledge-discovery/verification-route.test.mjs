@@ -79,11 +79,13 @@ const client = {
 const proofAdmin={
   async rpc(name,args) {
     serviceRpcCalls.push({name,args});
-    assert.equal(name,'confirm_checked_knowledge_discovery_proof_v1');
+    assert.equal(name,'confirm_checked_knowledge_discovery_proof_v2');
     if(finishRpcError)return {data:null,error:finishRpcError};
     if(finishRpcResponse)return {data:finishRpcResponse,error:null};
     const now=new Date();
-    if(!stored || stored.challenge_hash!==args.p_challenge_hash ||
+    if(!stored || typeof args.p_proof_token!=='string' ||
+      !/^salsysos-domain-verification=[0-9a-f]{64}$/.test(args.p_proof_token) ||
+      stored.challenge_hash!==proofHelpers.digestDomainChallenge(args.p_proof_token) ||
       stored.hostname!==args.p_hostname ||
       stored.organization_id!==args.p_organization_id ||
       Date.parse(stored.challenge_expires_at)<=now.getTime() ||
@@ -220,11 +222,13 @@ test('KB-09K server never uses the service role to issue or claim a challenge',a
   const claim=userRpcCalls.find(x=>x.name==='claim_knowledge_discovery_proof_check_for_admin_v1');
   assert.ok(claim);
   assert.equal(serviceRpcCalls.length,1);
-  assert.equal(serviceRpcCalls[0].name,'confirm_checked_knowledge_discovery_proof_v1');
+  assert.equal(serviceRpcCalls[0].name,'confirm_checked_knowledge_discovery_proof_v2');
   assert.deepEqual(serviceRpcCalls[0].args,{
     p_organization_id:orgId,p_hostname:'fixture.example.com',
-    p_challenge_hash:proofHelpers.digestDomainChallenge(issued.body.token),
+    p_proof_token:issued.body.token,
   });
+  assert.equal('p_challenge_hash' in serviceRpcCalls[0].args,false,
+    'The stored digest is not acceptable proof for service confirmation');
 });
 
 test('KB-09K missing or rejected proof RPCs fail closed without direct UPDATE',async()=>{
@@ -248,4 +252,36 @@ test('KB-09K missing or rejected proof RPCs fail closed without direct UPDATE',a
   finishRpcResponse={ok:false,reason:'challenge_changed_or_expired'};
   assert.equal((await api.PUT(req())).status,409);
   assert.equal(adminWrites,1);
+});
+
+test('KB-09L secret preimage is never replaced by a stored hash at the final service RPC',async()=>{
+  reset();
+  const issued=await api.POST(req());
+  fileBody=issued.body.token+'\n';
+  assert.equal((await api.PUT(req())).status,200);
+  const service=serviceRpcCalls.filter(x=>
+    x.name==='confirm_checked_knowledge_discovery_proof_v2');
+  assert.equal(service.length,1);
+  assert.equal(service[0].args.p_proof_token,issued.body.token);
+  assert.notEqual(service[0].args.p_proof_token,stored.challenge_hash);
+});
+
+test('KB-09L a missing or incorrect website proof never reaches the privileged verifier',async()=>{
+  for(const raw of ['','salsysos-domain-verification='+'0'.repeat(64),'not-a-proof']){
+    reset();
+    await api.POST(req());
+    fileBody=raw;
+    assert.equal((await api.PUT(req())).status,422);
+    assert.deepEqual(serviceRpcCalls,[],'Do not invoke service without matching fetched preimage');
+  }
+});
+
+test('KB-09L final verifier refusal never leaks proof token in an error response',async()=>{
+  reset();
+  const issued=await api.POST(req());
+  fileBody=issued.body.token;
+  finishRpcResponse={ok:false,reason:'invalid_proof_preimage'};
+  const answer=await api.PUT(req());
+  assert.equal(answer.status,409);
+  assert.equal(JSON.stringify(answer.body).includes(issued.body.token),false);
 });
