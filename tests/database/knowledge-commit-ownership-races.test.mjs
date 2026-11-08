@@ -17,8 +17,9 @@ const sqlFiles=[
   '../../docs/sql/KB-09J-atomic-session-authorized-enqueue-REHEARSAL-DRAFT.sql',
   '../../docs/sql/KB-09K-proof-consent-direct-DML-boundary-REHEARSAL-DRAFT.sql',
   '../../docs/sql/KB-09L-proof-preimage-operator-hold-REHEARSAL-DRAFT.sql',
+  '../../docs/sql/KB-09M-proof-checked-worker-commit-bridge-REHEARSAL-DRAFT.sql',
 ].map(path=>readFileSync(new URL(path,import.meta.url),'utf8'));
-const [foundation,discovery,consentA,consentB,guard,writeGuard,jobFinalization,rpcBridge,atomicEnqueue,proofBoundary,preimageAndPolicyHold]=sqlFiles;
+const [foundation,discovery,consentA,consentB,guard,writeGuard,jobFinalization,rpcBridge,atomicEnqueue,proofBoundary,preimageAndPolicyHold,checkedCommitBridge]=sqlFiles;
 
 const ORG_A='10000000-0000-4000-8000-000000000001';
 const ORG_B='10000000-0000-4000-8000-000000000002';
@@ -52,6 +53,8 @@ const PROOF_ISSUE="select public.issue_knowledge_discovery_challenge_for_admin_v
 const PROOF_CLAIM="select public.claim_knowledge_discovery_proof_check_for_admin_v1($1,$2,$3) as allowed";
 const PROOF_FINISH="select public.confirm_checked_knowledge_discovery_proof_v1($1,$2,$3) as result";
 const PROOF_PREIMAGE="select public.confirm_checked_knowledge_discovery_proof_v2($1,$2,$3) as result";
+const PUBLIC_SAFE_COMMIT='select public.commit_knowledge_discovery_page_with_proof_v1($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) as result';
+const PUBLIC_SAFE_COMMIT_SIG='public.commit_knowledge_discovery_page_with_proof_v1(uuid,uuid,uuid,uuid,text,integer,text,text,text,jsonb,integer)';
 const CANCEL_SIG='kb09h_fixture.cancel_job_for_current_admin_v1(uuid,uuid)';
 const FAILURE_SIG='kb09h_fixture.fail_unseeded_queued_job_v1(uuid,uuid,uuid)';
 const PUBLIC_CANCEL_SIG='public.cancel_knowledge_discovery_job_v1(uuid,uuid)';
@@ -1469,6 +1472,95 @@ test('KB-09F/G/H proof, BYPASSRLS, tenant-finalization, consent and commit races
       "select grants_enabled from public.knowledge_discovery_consent_control "+
       "where singleton=true"
     )).rows[0].grants_enabled,false);
+
+    // KB-09M verifies the REAL public RPC name used by the application
+    // runner, not merely the private KB-09F helper. No hosted DB touched.
+    await root.query(checkedCommitBridge);
+    assert.match(checkedCommitBridge,/KB09M_DISPOSABLE_PARENT_FIXTURE_REQUIRED/);
+    const workerACL=(await root.query(
+      "select has_function_privilege('anon',$1,'execute') as anon,"+
+      "has_function_privilege('authenticated',$1,'execute') as authenticated,"+
+      "has_function_privilege('service_role',$1,'execute') as service",
+      [PUBLIC_SAFE_COMMIT_SIG]
+    )).rows[0];
+    assert.deepEqual(workerACL,{anon:false,authenticated:false,service:true});
+    assert.equal((await root.query(
+      "select has_function_privilege('service_role',$1,'execute') as legacy",
+      [OLD_SIG]
+    )).rows[0].legacy,false,'Legacy unchecked page commit remains unavailable');
+    await assert.rejects(
+      callAs(b,'service_role',OLD_COMMIT,
+        [ORG_D,acceptedD.job_id,randomUUID(),randomUUID(),
+         'fetched',200,'text/html','bad',null,'[]',2]),
+      isCode('42501'),'Worker must never silently fall back to revoked RPC'
+    );
+
+    // Resume a purely synthetic queued-job snapshot with a fresh valid lease.
+    // D still has its first discovered seed page, active consent, and a
+    // verified 30-day ownership proof from KB-09L's rehearsal.
+    const workerLease=randomUUID();
+    const seedD=(await root.query(
+      "select id,status from public.knowledge_discovery_pages "+
+      "where job_id=$1 and organization_id=$2 order by discovered_at limit 1",
+      [acceptedD.job_id,ORG_D]
+    )).rows[0];
+    assert.equal(seedD?.status,'discovered');
+    await root.query(
+      "update public.knowledge_discovery_jobs "+
+      "set status='running',lease_token=$2,"+
+      "lease_until=clock_timestamp()+interval '1 minute',"+
+      "finished_at=null where id=$1",[acceptedD.job_id,workerLease]
+    );
+    const workerArgs=[
+      ORG_D,acceptedD.job_id,seedD.id,workerLease,'fetched',200,
+      'text/html','Synthetic worker page',null,'[]',2,
+    ];
+    await assert.rejects(
+      callAs(b,'authenticated',PUBLIC_SAFE_COMMIT,workerArgs,ADMIN_D,SID_D),
+      isCode('42501'),'No authenticated client gets privileged worker page commit'
+    );
+    const foreign=(await callAs(b,'service_role',PUBLIC_SAFE_COMMIT,
+      [ORG_E,...workerArgs.slice(1)])).rows[0].result;
+    assert.deepEqual(foreign,{ok:false,reason:'inactive_or_stale_lease'});
+    const staleLease=(await callAs(b,'service_role',PUBLIC_SAFE_COMMIT,
+      [...workerArgs.slice(0,3),randomUUID(),...workerArgs.slice(4)]))
+      .rows[0].result;
+    assert.deepEqual(staleLease,{ok:false,reason:'inactive_or_stale_lease'});
+
+    // Revoke proof before worker commit. The new wrapper must preserve the
+    // private KB-09F current-proof check, and must NOT mutate the page.
+    await root.query(
+      "update public.knowledge_discovery_domain_verifications "+
+      "set verified_until=clock_timestamp()-interval '1 second' "+
+      "where organization_id=$1",[ORG_D]
+    );
+    const expired=(await callAs(b,'service_role',PUBLIC_SAFE_COMMIT,workerArgs))
+      .rows[0].result;
+    assert.deepEqual(expired,{ok:false,reason:'ownership_proof_not_current'});
+    assert.equal((await root.query(
+      "select status from public.knowledge_discovery_pages where id=$1",
+      [seedD.id]
+    )).rows[0].status,'discovered');
+    await root.query(
+      "update public.knowledge_discovery_domain_verifications "+
+      "set verified_until=clock_timestamp()+interval '1 hour' "+
+      "where organization_id=$1",[ORG_D]
+    );
+
+    const committed=(await callAs(b,'service_role',PUBLIC_SAFE_COMMIT,workerArgs))
+      .rows[0].result;
+    assert.equal(committed.ok,true,'Exact public checked worker RPC must complete');
+    assert.equal(committed.status,'completed');
+    assert.equal(committed.pages_fetched,1);
+    const pageAfter=(await root.query(
+      "select status from public.knowledge_discovery_pages where id=$1",
+      [seedD.id]
+    )).rows[0].status;
+    assert.equal(pageAfter,'fetched');
+    const repeated=(await callAs(b,'service_role',PUBLIC_SAFE_COMMIT,workerArgs))
+      .rows[0].result;
+    assert.deepEqual(repeated,{ok:false,reason:'inactive_or_stale_lease'},
+      'Completed job cannot be committed with consumed lease');
   }finally{
     await Promise.allSettled(connections.map(db=>db.end()));
     try{if(created)await admin.query('drop database "'+name+'" with (force)');}
