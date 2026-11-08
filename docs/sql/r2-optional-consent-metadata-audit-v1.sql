@@ -77,6 +77,8 @@ select jsonb_build_object(
     when v.candidate_events>50000 then 'volume_limit'
     when exists(select 1 from purpose_map where expected_purpose is distinct from actual_purpose)
       then 'purpose_mapping_review_required'
+    when t.analytics_metadata_without_grant > 0
+      then 'analytics_metadata_review_required'
     else 'aggregate_metadata_only'
   end,
   'window_days',p.days,
