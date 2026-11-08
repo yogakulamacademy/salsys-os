@@ -79,7 +79,7 @@ export async function saveKnowledgeWebsiteAction(formData: FormData) {
   }
 
   if (existing.website_url === canonical) {
-    redirect(destination + '?websiteNotice=unchanged');
+    redirect(destination);
   }
 
   // Optimistic concurrency: an admin editing a stale profile cannot silently
@@ -103,5 +103,5 @@ export async function saveKnowledgeWebsiteAction(formData: FormData) {
   // automatically authorize the new website, even if this save succeeds.
   revalidatePath('/settings/knowledge');
   revalidatePath(destination);
-  redirect(destination + '?websiteNotice=saved');
+  redirect(destination);
 }
