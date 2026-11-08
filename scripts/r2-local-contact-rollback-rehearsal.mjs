@@ -24,8 +24,8 @@ function extractFunction(sql) {
 const old = extractFunction(load('supabase/migrations/008_identity_resolution.sql'));
 const changed = extractFunction(load('supabase/migrations/20261108080000_r2_browser_lead_primary_contact_v1.sql'));
 assert.notEqual(old, changed, 'New migration has no change');
-assert.match(old, /SECURITY DEFINER\\s+SET search_path TO 'public'/);
-assert.match(changed, /SECURITY DEFINER\\s+SET search_path TO 'public'/);
+assert.match(old, /SECURITY DEFINER\s+SET search_path TO 'public'/);
+assert.match(changed, /SECURITY DEFINER\s+SET search_path TO 'public'/);
 const signature = 'public.ingest_website_lead(text,text,text,text,text,text,text,text,text,date,text,text,text,text,text,text,jsonb,jsonb,jsonb)';
 const bodyHash = "md5(btrim(replace(split_part(split_part(pg_get_functiondef(to_regprocedure('" + signature + "')), 'AS $function$', 2), '$function$', 1), E'\\r\\n', E'\\n')))";
 const checkAuthority = "exists (select 1 from pg_proc p where p.oid = to_regprocedure('" +
@@ -60,4 +60,4 @@ const after = [
   'END $r2_local_rollback_verify$;',
   "\\echo 'R2 local rollback rehearsal: old RPC restoration and transaction rollback PASSED'",
 ];
-process.stdout.write([...before, old, ...after].join('\\n') + '\\n');
+process.stdout.write([...before, old, ...after].join('\n') + '\n');
