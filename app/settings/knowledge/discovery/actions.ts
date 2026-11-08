@@ -9,8 +9,12 @@ import { parseWebsiteSeed, WebsiteScopeError } from '@/lib/knowledge-discovery/u
 
 const destination = '/settings/knowledge/discovery';
 
-function refuse(message: string): never {
-  redirect(destination + '?websiteError=' + encodeURIComponent(message));
+type WebsiteErrorCode =
+  'pilot_locked' | 'invalid_input' | 'invalid_root' | 'invalid_public_host' |
+  'not_authorized' | 'not_readable' | 'write_conflict';
+
+function refuse(code: WebsiteErrorCode): never {
+  redirect(destination + '?websiteError=' + code);
 }
 
 /**
@@ -23,24 +27,24 @@ function refuse(message: string): never {
 export async function saveKnowledgeWebsiteAction(formData: FormData) {
   if (process.env.KNOWLEDGE_DISCOVERY_PILOT_ENABLED === 'true' ||
       process.env.KNOWLEDGE_DISCOVERY_CONSENT_MANAGEMENT_ENABLED === 'true') {
-    refuse('Website changes are unavailable while discovery or consent management is configured.');
+    refuse('pilot_locked');
   }
 
   const raw = formData.get('website');
   if (typeof raw !== 'string' || raw.length === 0 || raw.length > 240) {
-    refuse('Enter a public HTTPS website domain, up to 240 characters.');
+    refuse('invalid_input');
   }
 
   let canonical: string;
   try {
     const url = parseWebsiteSeed(raw);
     if (url.protocol !== 'https:' || url.pathname !== '/') {
-      refuse('Use the HTTPS root of your public website, without a path.');
+      refuse('invalid_root');
     }
     canonical = url.origin + '/';
   } catch (error) {
     if (error instanceof WebsiteScopeError) {
-      refuse('Enter a valid public HTTPS website domain.');
+      refuse('invalid_public_host');
     }
     throw error;
   }
@@ -62,7 +66,7 @@ export async function saveKnowledgeWebsiteAction(formData: FormData) {
     'can_manage_organization', { p_organization_id: organizationId },
   );
   if (roleError || canManage !== true) {
-    refuse('Owner or admin authorization could not be verified.');
+    refuse('not_authorized');
   }
 
   const { data: existing, error: readError } = await supabase
@@ -71,11 +75,11 @@ export async function saveKnowledgeWebsiteAction(formData: FormData) {
     .eq('organization_id', organizationId)
     .maybeSingle();
   if (readError || !existing) {
-    refuse('Organization website could not be verified. No change was saved.');
+    refuse('not_readable');
   }
 
   if (existing.website_url === canonical) {
-    redirect(destination + '?websiteNotice=' + encodeURIComponent('Website is already up to date.'));
+    redirect(destination + '?websiteNotice=unchanged');
   }
 
   // Optimistic concurrency: an admin editing a stale profile cannot silently
@@ -91,7 +95,7 @@ export async function saveKnowledgeWebsiteAction(formData: FormData) {
     .maybeSingle();
   if (writeError || !saved || saved.organization_id !== organizationId ||
       saved.website_url !== canonical) {
-    refuse('The website was not saved. Your permissions or the organization website may have changed.');
+    refuse('write_conflict');
   }
 
   // No change to onboarding.status, goals, knowledge_documents or proof/
@@ -99,6 +103,5 @@ export async function saveKnowledgeWebsiteAction(formData: FormData) {
   // automatically authorize the new website, even if this save succeeds.
   revalidatePath('/settings/knowledge');
   revalidatePath(destination);
-  redirect(destination + '?websiteNotice=' +
-    encodeURIComponent('Website saved. New ownership verification and separate consent are required before any scan.'));
+  redirect(destination + '?websiteNotice=saved');
 }
