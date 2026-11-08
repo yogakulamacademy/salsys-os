@@ -1708,7 +1708,7 @@ test('KB-09F/G/H proof, BYPASSRLS, tenant-finalization, consent and commit races
     const evidenceCount=async()=>(await root.query(
       'select count(*)::int as n from kb09s_fixture.page_evidence'
     )).rows[0].n;
-    const pageAfter=async()=>(await root.query(
+    const evidencePageStatus=async()=>(await root.query(
       'select status from public.knowledge_discovery_pages where id=$1',
       [candidatePage]
     )).rows[0].status;
@@ -1725,7 +1725,7 @@ test('KB-09F/G/H proof, BYPASSRLS, tenant-finalization, consent and commit races
       [ORG_D,...evidenceArgs.slice(1)])).rows[0].result.ok,false,
       'Service cannot write another tenant or wrong claim');
     assert.equal(await evidenceCount(),0);
-    assert.equal(await pageAfter(),'discovered');
+    assert.equal(await evidencePageStatus(),'discovered');
 
     const alteredHash={...syntheticEnvelope,quotes:[{
       ...syntheticEnvelope.quotes[0],quote_sha256:'f'.repeat(64),
@@ -1748,7 +1748,7 @@ test('KB-09F/G/H proof, BYPASSRLS, tenant-finalization, consent and commit races
     });
     // The off-host claim is refused by the explicit stored-page check.
     assert.equal(await evidenceCount(),0);
-    assert.equal(await pageAfter(),'discovered');
+    assert.equal(await evidencePageStatus(),'discovered');
 
     // SQL atomicity negative: when the synthetic evidence table fails its
     // INSERT, the earlier proof-/consent-checked PAGE+JOB COMMIT must roll
@@ -1768,7 +1768,7 @@ test('KB-09F/G/H proof, BYPASSRLS, tenant-finalization, consent and commit races
       callAs(b,'service_role',evidenceCommit,evidenceArgs),
       isCode('23514'),'Evidence insert failure must roll back page commit'
     );
-    assert.equal(await pageAfter(),'discovered');
+    assert.equal(await evidencePageStatus(),'discovered');
     assert.equal(await evidenceCount(),0);
     assert.equal((await root.query(
       'select status from public.knowledge_discovery_jobs where id=$1',
@@ -1785,7 +1785,7 @@ test('KB-09F/G/H proof, BYPASSRLS, tenant-finalization, consent and commit races
       evidenceArgs)).rows[0].result;
     assert.deepEqual(expiredEvidence,{ok:false,reason:'ownership_proof_not_current'});
     assert.equal(await evidenceCount(),0);
-    assert.equal(await pageAfter(),'discovered');
+    assert.equal(await evidencePageStatus(),'discovered');
     await root.query(
       "update public.knowledge_discovery_domain_verifications "+
       "set verified_until=clock_timestamp()+interval '1 hour' "+
@@ -1798,7 +1798,7 @@ test('KB-09F/G/H proof, BYPASSRLS, tenant-finalization, consent and commit races
       ok:true,status:'fetched_with_unreviewed_evidence',
       evidence_recorded:true,snapshot_sha256:'c'.repeat(64),
     });
-    assert.equal(await pageAfter(),'fetched');
+    assert.equal(await evidencePageStatus(),'fetched');
     assert.equal(await evidenceCount(),1);
     const stored=(await root.query(
       "select organization_id,job_id,page_id,source_url,snapshot_sha256,"+
