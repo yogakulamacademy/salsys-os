@@ -230,7 +230,7 @@ test('KB-09Q forged form fields cannot approve/publish or change the source URL 
   assert.equal(rpcCalls.some(x=>/approve_knowledge_document/.test(x.name)),false);
 });
 
-test('KB-09Q page ID rechecked on write; revoked consent and stale proof deny the action',async()=>{
+test('KB-09Q SQL-bound page ID recheck denies revoked consent and stale proof without saving',async()=>{
   for(const change of [
     ()=>{rows.knowledge_discovery_site_consents.withdrawn_at=new Date().toISOString();},
     ()=>{rows.knowledge_discovery_domain_verifications.verified_until=new Date(Date.now()-1).toISOString();},
@@ -239,7 +239,10 @@ test('KB-09Q page ID rechecked on write; revoked consent and stale proof deny th
   ]){
     reset();change();
     await redirected(action.createManualDraftFromDiscoveredPageAction(submission()),'draftError=');
-    assert.equal(rpcCalls.some(x=>x.name==='create_discovery_review_draft_with_current_consent_v1'),false);
+    assert.equal(rpcCalls.filter(x=>x.name==='create_discovery_review_draft_with_current_consent_v1').length,1,
+      'New atomic guard runs and denies the stale request inside the modeled SQL boundary');
+    assert.equal(rpcCalls.some(x=>x.name==='create_source_backed_knowledge_document_v2'),false,
+      'No legacy generic document create is attempted after failed SQL guard');
     assert.deepEqual(revalidations,[]);
   }
 });
