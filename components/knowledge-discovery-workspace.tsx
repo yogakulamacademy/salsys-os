@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { saveKnowledgeWebsiteAction } from '@/app/settings/knowledge/discovery/actions';
+import { safeDiscoveryPageLink } from '@/lib/knowledge-discovery/public-page-link';
 import { useCallback, useEffect, useState } from 'react';
 import { ArrowLeft, Globe2, RefreshCcw, ShieldCheck, Square, Play, AlertCircle } from 'lucide-react';
 
@@ -299,14 +300,19 @@ export function KnowledgeDiscoveryWorkspace({
         <p className="mt-1 text-xs text-slate-500">Individual outcomes from the latest scan. This is not an AI knowledge library.</p>
         <div className="mt-4 divide-y divide-slate-100">
           {state.pages.length === 0 ? <p className="py-6 text-sm text-slate-400">No pages discovered yet.</p> :
-          state.pages.map(page=><div className="flex flex-wrap items-center justify-between gap-3 py-3" key={page.id}>
-            <div className="min-w-0 flex-1">
-              <p className="truncate text-xs font-semibold">{page.page_title || new URL(page.url).pathname || '/'}</p>
-              <a href={page.url} target="_blank" rel="noopener noreferrer" className="block truncate text-xs text-slate-500 hover:underline">{page.url}</a>
-              {page.failure_code ? <p className="mt-1 text-xs text-amber-700">{page.failure_code}</p> : null}
-            </div>
-            <span className="shrink-0 rounded-md bg-slate-100 px-2 py-1 text-xs text-slate-600">{page.status}</span>
-          </div>)}
+          state.pages.map(page => {
+            const safeLink = safeDiscoveryPageLink(page.url, state.configuredWebsite);
+            return <div className="flex flex-wrap items-center justify-between gap-3 py-3" key={page.id}>
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-xs font-semibold">{page.page_title || safeLink?.pathname || 'Unverified page'}</p>
+                {safeLink ? <a href={safeLink.href} target="_blank" rel="noopener noreferrer"
+                  className="block truncate text-xs text-slate-500 hover:underline">{safeLink.href}</a>
+                  : <span className="text-xs text-amber-700">Link unavailable or outside the configured domain</span>}
+                {page.failure_code ? <p className="mt-1 text-xs text-amber-700">{page.failure_code}</p> : null}
+              </div>
+              <span className="shrink-0 rounded-md bg-slate-100 px-2 py-1 text-xs text-slate-600">{page.status}</span>
+            </div>;
+          })}
         </div>
       </section>
       <p className="text-xs text-slate-400">Knowledge extraction, FAQ drafting, and approval are separate future checkpoints. Source pages are never instructions to SalsysOS.</p>
