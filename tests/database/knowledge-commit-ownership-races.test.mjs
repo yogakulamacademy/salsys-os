@@ -1656,6 +1656,7 @@ test('KB-09F/G/H proof, BYPASSRLS, tenant-finalization, consent and commit races
       "select grants_enabled from public.knowledge_discovery_consent_control"
     )).rows[0].grants_enabled,false);
 
+    { // KB-09S isolated lexical test scope: previous fixtures remain unchanged
     // KB-09S: The local-only evidence write is atomically attached to the
     // same checked page-commit function. Never use real website/customer
     // content; all values below belong to the auto-dropped synthetic DB.
@@ -1815,6 +1816,7 @@ test('KB-09F/G/H proof, BYPASSRLS, tenant-finalization, consent and commit races
       evidenceArgs)).rows[0].result;
     assert.equal(replay.ok,false,'Consumed/stale lease cannot duplicate evidence');
     assert.equal(await evidenceCount(),1);
+    } // end isolated KB-09S test scope
   }finally{
     await Promise.allSettled(connections.map(db=>db.end()));
     try{if(created)await admin.query('drop database "'+name+'" with (force)');}
