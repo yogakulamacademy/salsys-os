@@ -1826,6 +1826,15 @@ test('KB-09F/G/H proof, BYPASSRLS, tenant-finalization, consent and commit races
       // source-backed function from the repo's production migration. This
       // does NOT apply new schema or SQL to any hosted environment.
       await root.query(atomicDraftRehearsal);
+      // Our older V2 fixture uses test_knowledge_admins, whereas KB-06B's
+      // newer session fixture uses organization_members + auth.sessions.
+      // Add only the same two confirmed synthetic owner/admin memberships
+      // to the old helper, without altering the production V2 SQL.
+      await root.query(
+        "insert into public.test_knowledge_admins(organization_id,user_id) "+
+        "values($1,$2),($3,$4) on conflict do nothing",
+        [ORG_C,ADMIN_C,ORG_D,ADMIN_D]
+      );
       await root.query(realSourceBackedV2Sql);
       assert.match(atomicDraftRehearsal,/KB11_DISPOSABLE_PARENT_FIXTURE_REQUIRED/);
       assert.doesNotMatch(atomicDraftRehearsal,/cron\.schedule|net\.http|http_get/i);
