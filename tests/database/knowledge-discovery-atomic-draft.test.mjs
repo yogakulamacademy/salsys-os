@@ -172,6 +172,51 @@ test('KB-11A: local-only consent-atomic discovered-page draft SQL and negative i
       [ORG_A,success.source_id,'Forged','general','Unverified','draft']),
       e=>e.code==='42501','Direct tenant writes remain denied');
 
+    // KB-11B: another transaction REVOKES the Auth session before draft
+    // creation reaches the locked session read. The helper alone could
+    // observe the still-uncommitted old row; the locked recheck must wait,
+    // then fail after the DELETE commits. No draft may be created.
+    await b.query('begin');
+    await b.query('delete from auth.sessions where id=$1',[SID_A]);
+    let sessionRaceSettled=false;
+    const sessionRace=callAs(a,'authenticated',DRAFT,args(first.id))
+      .then(result=>({ok:true,result}),error=>({ok:false,error}))
+      .finally(()=>{sessionRaceSettled=true;});
+    await new Promise(resolve=>setTimeout(resolve,125));
+    assert.equal(sessionRaceSettled,false,'Draft waits for Auth session revoke');
+    await b.query('commit');
+    const sessionOutcome=await sessionRace;
+    assert.equal(sessionOutcome.ok,false,'Revoked session cannot save draft');
+    assert.equal(sessionOutcome.error.code,'42501');
+    await root.query('insert into auth.sessions(id,user_id) values($1,$2)',[SID_A,USER_A]);
+
+    // KB-11B: independent membership removal must similarly block a
+    // competing draft, even if the initial non-locking helper saw admin.
+    await b.query('begin');
+    await b.query(
+      "update public.organization_members set active=false where organization_id=$1 and user_id=$2",
+      [ORG_A,USER_A]);
+    let membershipRaceSettled=false;
+    const membershipRace=callAs(a,'authenticated',DRAFT,args(first.id))
+      .then(result=>({ok:true,result}),error=>({ok:false,error}))
+      .finally(()=>{membershipRaceSettled=true;});
+    await new Promise(resolve=>setTimeout(resolve,125));
+    assert.equal(membershipRaceSettled,false,'Draft waits for membership revoke');
+    await b.query('commit');
+    const membershipOutcome=await membershipRace;
+    assert.equal(membershipOutcome.ok,false,'Revoked membership cannot save draft');
+    assert.equal(membershipOutcome.error.code,'42501');
+    await root.query(
+      'update public.organization_members set active=true where organization_id=$1 and user_id=$2',
+      [ORG_A,USER_A]);
+
+    assert.deepEqual((await root.query(
+      "select (select count(*)::int from public.knowledge_sources) as sources,"+
+      "(select count(*)::int from public.knowledge_documents) as documents,"+
+      "(select count(*)::int from public.knowledge_chunks) as chunks")).rows[0],
+      {sources:1,documents:1,chunks:1},
+      'Concurrent session/member revocation leaves no extra source or draft');
+
     // Wrong domain, wrong status and HTTP failure are rejected at write-time.
     for(const invalid of [
       await page('https://evil.example.com/'),
