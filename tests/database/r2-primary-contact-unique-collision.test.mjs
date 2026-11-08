@@ -58,14 +58,14 @@ test('production-style contact insert raises 23505 for a second primary; seriali
     await setup.query('insert into public.fixture_leads values ($1,$2),($3,$4)',
       [orgA,leadA,orgB,leadB]);
 
-    // Exact existing INSERT's conflict target and primary flags for email.
-    const insert = (client, org, lead, value, primary) => client.query([
+    // Existing email/phone INSERT conflict target and caller-selected primary flag.
+    const insert = (client, org, lead, value, primary, type = 'email') => client.query([
       'insert into public.fixture_contacts',
       '(organization_id,lead_id,contact_type,normalized_value,is_primary)',
-      "values ($1,$2,'email',$3,$4)",
+      'values ($1,$2,$3,$4,$5)',
       'on conflict (organization_id,contact_type,normalized_value) do nothing',
       'returning id',
-    ].join('\n'), [org,lead,value,primary]);
+    ].join('\n'), [org,lead,type,value,primary]);
 
     assert.equal((await insert(setup,orgA,leadA,'a@example.invalid',true)).rowCount,1);
     await assert.rejects(
@@ -85,7 +85,26 @@ test('production-style contact insert raises 23505 for a second primary; seriali
       [{org:orgA,n:2,primaries:1},{org:orgB,n:1,primaries:1}]
         .sort((a,b)=>a.org.localeCompare(b.org)));
 
-    // Research-only candidate: serialize at the lead, then re-read primary.
+    // Production's no-email phone path also attempts primary=true.
+    // The unique index applies independently per contact type.
+    const orgPhone = randomUUID(), leadPhone = randomUUID();
+    await setup.query('insert into public.fixture_leads values ($1,$2)',[orgPhone,leadPhone]);
+    assert.equal((await insert(setup,orgPhone,leadPhone,'+910000001',true,'phone')).rowCount,1);
+    await assert.rejects(
+      insert(setup,orgPhone,leadPhone,'+910000002',true,'phone'),
+      err => err.code === '23505' && err.constraint === 'uq_lead_contacts_one_primary_per_type_v1',
+      'Second primary phone violates the partial unique index, too',
+    );
+    assert.equal((await insert(setup,orgPhone,leadPhone,'+910000002',false,'phone')).rowCount,1);
+    assert.equal((await insert(setup,orgPhone,leadPhone,'+910000002',false,'phone')).rowCount,0);
+    const phoneState = await setup.query(
+      "select count(*)::integer as contacts,count(*) filter(where is_primary)::integer as primaries from public.fixture_contacts where organization_id=$1 and lead_id=$2 and contact_type='phone'",
+      [orgPhone,leadPhone],
+    );
+    assert.deepEqual(phoneState.rows[0], { contacts: 2, primaries: 1 });
+
+    // Research-only candidate: serialize at the existing lead (as the real
+    // deployed UPDATE public.leads ... RETURNING * does), then re-read primary.
     // NOT a deployment/migration; a real fix must preserve actual other triggers.
     const orgC = randomUUID(), leadC = randomUUID();
     await setup.query('insert into public.fixture_leads values ($1,$2)',[orgC,leadC]);
@@ -94,7 +113,7 @@ test('production-style contact insert raises 23505 for a second primary; seriali
       try {
         await client.query("set local statement_timeout='10s'");
         const owned = await client.query(
-          'select id from public.fixture_leads where organization_id=$1 and id=$2 for update',
+          'update public.fixture_leads set id=id where organization_id=$1 and id=$2 returning id',
           [orgC,leadC]);
         assert.equal(owned.rowCount,1);
         await client.query([
