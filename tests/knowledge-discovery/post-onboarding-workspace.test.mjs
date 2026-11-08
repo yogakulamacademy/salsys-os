@@ -123,7 +123,7 @@ async function expectRedirect(value,url){
 test('KB-09P owner updates website AFTER onboarding without resetting completion or knowledge',async()=>{
   reset();
   await expectRedirect(run('https://new-business.com/'),
-    '/settings/knowledge/discovery?websiteNotice=saved');
+    '/settings/knowledge/discovery');
   assert.deepEqual(writes,[{
     table:'organization_onboarding',values:{website_url:'https://new-business.com/'},
   }]);
@@ -139,7 +139,7 @@ test('KB-09P same editor works DURING onboarding without advancing the current s
   reset();
   record.status='in_progress';
   await expectRedirect(run('https://different-business.com/'),
-    '/settings/knowledge/discovery?websiteNotice=saved');
+    '/settings/knowledge/discovery');
   assert.equal(record.status,'in_progress');
   assert.deepEqual(record.completed_steps,['business','goals']);
 });
@@ -211,24 +211,27 @@ test('KB-09P missing UPDATE privileges fail closed; unchanged URL does no write'
   assert.equal(record.website_url,'https://old-business.com/');
   reset();
   await expectRedirect(run('https://old-business.com/'),
-    '/settings/knowledge/discovery?websiteNotice=unchanged');
+    '/settings/knowledge/discovery');
   assert.deepEqual(writes,[]);
 });
 
 test('KB-09P first configured website uses NULL-aware compare-and-set',async()=>{
   reset();record.website_url=null;
   await expectRedirect(run('https://new-business.com/'),
-    '/settings/knowledge/discovery?websiteNotice=saved');
+    '/settings/knowledge/discovery');
   assert.equal(record.website_url,'https://new-business.com/');
 });
 
-test('KB-09P status messages are fixed codes, not forged query success text',()=>{
+test('KB-09P no GET query can forge a website-save success status',()=>{
   const page=readFileSync(resolve('app/settings/knowledge/discovery/page.tsx'),'utf8');
   assert.match(page,/requireAdminWorkspaceAccess\(\)/);
   assert.match(page,/key=\{workspace\.organizationId\}/);
-  assert.match(page,/websiteNotice=\{notices\[params\.websiteNotice \?\? ''\] \?\? ''\}/);
   assert.match(page,/websiteError=\{errors\[params\.websiteError \?\? ''\] \?\? ''\}/);
-  assert.doesNotMatch(page,/websiteNotice=\{params\.websiteNotice/);
+  assert.doesNotMatch(page,/websiteNotice=\{/);
+  assert.doesNotMatch(page,/websiteNotice\?/);
+  const action=readFileSync(resolve('app/settings/knowledge/discovery/actions.ts'),'utf8');
+  assert.doesNotMatch(action,/websiteNotice=/);
+  assert.match(action,/redirect\(destination\)/);
 });
 
 test('KB-09P uses a permanent post-onboarding route, not an onboarding-only redirect',()=>{
