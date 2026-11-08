@@ -109,6 +109,10 @@ export function verifyIntegratedHold(packet, migrationInventory, releaseLedger, 
   assert.match(approvalGuardSql,/KB14A_LOCAL_DISPOSABLE_FIXTURE_REQUIRED/);
   assert.match(approvalGuardSql,/create trigger kb14a_hold_unverified_discovery_document/);
   assert.match(approvalGuardSql,/create trigger kb14a_hold_unverified_discovery_source/);
+  // KB-15A: RLS can hide a real FK source from an invoker trigger.
+  // Hidden source must deny publication, not pass the EXISTS marker check.
+  assert.match(approvalGuardSql,/kb_discovery_linked_source_unreadable/);
+  assert.match(approvalGuardSql,/kb_discovery_previous_source_unreadable/);
   assert.match(approvalGuardSql,/new\.status not in \('draft','archived'\)/);
   // KB-09A pins the legacy manual approval action to its reviewed Git blob.
   // The KB-14A guard must be in the disposable DB/preview, not this action.
