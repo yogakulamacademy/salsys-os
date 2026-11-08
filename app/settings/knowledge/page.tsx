@@ -40,6 +40,7 @@ type KnowledgeDocument = {
 
 type KnowledgeSource = {
   id: string;
+  metadata: Record<string, unknown> | null;
   name: string;
   source_type: string;
   source_uri: string | null;
@@ -163,7 +164,7 @@ export default async function KnowledgeSettingsPage({
               .limit(201),
             supabase
               .from('knowledge_sources')
-              .select('id, name, source_type, source_uri, status')
+              .select('id, name, source_type, source_uri, status, metadata')
               .eq('organization_id', organizationId)
               .order('updated_at', { ascending: false })
               .limit(500),
@@ -202,6 +203,9 @@ export default async function KnowledgeSettingsPage({
   const currentTime = Date.now();
   const needsReview = documents.filter((doc) =>
     ['review', 'expired', 'superseded'].includes(doc.status) ||
+    (doc.status === 'approved' &&
+      (discoveryPublicationHeld(doc.metadata) ||
+       discoveryPublicationHeld(doc.source_id ? sourceById.get(doc.source_id)?.metadata : null))) ||
     (doc.status === 'approved' && (!doc.source_id || sourceById.get(doc.source_id)?.status !== 'active')) ||
     (doc.status === 'approved' && (
       (doc.valid_from !== null && Date.parse(doc.valid_from) > currentTime) ||
@@ -211,7 +215,9 @@ export default async function KnowledgeSettingsPage({
   const usableApproved = documents.filter((doc) => {
     if (doc.status !== 'approved' || !doc.source_id) return false;
     const source = sourceById.get(doc.source_id);
-    if (source?.status !== 'active') return false;
+    if (source?.status !== 'active' ||
+        discoveryPublicationHeld(doc.metadata) ||
+        discoveryPublicationHeld(source?.metadata)) return false;
     const from = doc.valid_from ? Date.parse(doc.valid_from) : null;
     const until = doc.valid_until ? Date.parse(doc.valid_until) : null;
     return (from === null || (Number.isFinite(from) && from <= currentTime)) &&
@@ -454,7 +460,8 @@ export default async function KnowledgeSettingsPage({
                   <a className="kn-secondary" href="/settings/knowledge">Clear filters</a></div>
               ) : filteredDocuments.map((document) => {
                 const source = document.source_id ? sourceById.get(document.source_id) : null;
-                const publicationHeld = discoveryPublicationHeld(document.metadata);
+                const publicationHeld = discoveryPublicationHeld(document.metadata) ||
+                  discoveryPublicationHeld(source?.metadata);
                 return <article key={document.id} className="kn-document">
                   <div className="kn-document-title"><FileText size={17}/>
                     <h3>{document.title}</h3>
