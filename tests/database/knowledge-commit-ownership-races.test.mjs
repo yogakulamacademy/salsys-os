@@ -15,8 +15,9 @@ const sqlFiles=[
   '../../docs/sql/KB-09H-tenant-cancel-and-seed-failure-CAS-REHEARSAL-DRAFT.sql',
   '../../docs/sql/KB-09I-discovery-public-rpc-bridge-REHEARSAL-DRAFT.sql',
   '../../docs/sql/KB-09J-atomic-session-authorized-enqueue-REHEARSAL-DRAFT.sql',
+  '../../docs/sql/KB-09K-proof-consent-direct-DML-boundary-REHEARSAL-DRAFT.sql',
 ].map(path=>readFileSync(new URL(path,import.meta.url),'utf8'));
-const [foundation,discovery,consentA,consentB,guard,writeGuard,jobFinalization,rpcBridge,atomicEnqueue]=sqlFiles;
+const [foundation,discovery,consentA,consentB,guard,writeGuard,jobFinalization,rpcBridge,atomicEnqueue,proofBoundary]=sqlFiles;
 
 const ORG_A='10000000-0000-4000-8000-000000000001';
 const ORG_B='10000000-0000-4000-8000-000000000002';
@@ -46,6 +47,9 @@ const CANCEL_JOB='select public.cancel_knowledge_discovery_job_v1($1,$2) as resu
 const SEED_FAILURE='select public.fail_knowledge_discovery_seed_v1($1,$2,$3) as result';
 const ENQUEUE='select public.enqueue_knowledge_discovery_job_v1($1,$2,$3) as result';
 const ENQUEUE_SIG='public.enqueue_knowledge_discovery_job_v1(uuid,text,integer)';
+const PROOF_ISSUE="select public.issue_knowledge_discovery_challenge_for_admin_v1($1,$2,$3) as expiry";
+const PROOF_CLAIM="select public.claim_knowledge_discovery_proof_check_for_admin_v1($1,$2,$3) as allowed";
+const PROOF_FINISH="select public.confirm_checked_knowledge_discovery_proof_v1($1,$2,$3) as result";
 const CANCEL_SIG='kb09h_fixture.cancel_job_for_current_admin_v1(uuid,uuid)';
 const FAILURE_SIG='kb09h_fixture.fail_unseeded_queued_job_v1(uuid,uuid,uuid)';
 const PUBLIC_CANCEL_SIG='public.cancel_knowledge_discovery_job_v1(uuid,uuid)';
@@ -1050,6 +1054,247 @@ test('KB-09F/G/H proof, BYPASSRLS, tenant-finalization, consent and commit races
     assert.equal(remainingPages,0);
     await root.query("drop trigger kb09j_force_seed_failure on public.knowledge_discovery_pages");
     await root.query("drop function kb09j_fixture.reject_synthetic_seed_page()");
+
+    // KB-09K starts only AFTER the prior job/page DML tests: all proof/
+    // consent direct DML privileges become unavailable to service_role.
+    await root.query(proofBoundary);
+    assert.match(proofBoundary,/KB09K_DISPOSABLE_PARENT_FIXTURE_REQUIRED/);
+    assert.doesNotMatch(proofBoundary,/cron\.schedule|net\.http|http_get/i);
+    for(const [fn,allowed] of [
+      ['public.issue_knowledge_discovery_challenge_for_admin_v1(uuid,text,text)',{anon:false,auth:true,service:false}],
+      ['public.claim_knowledge_discovery_proof_check_for_admin_v1(uuid,text,text)',{anon:false,auth:true,service:false}],
+      ['public.confirm_checked_knowledge_discovery_proof_v1(uuid,text,text)',{anon:false,auth:false,service:true}],
+    ]){
+      const acl=(await root.query(
+        "select has_function_privilege('anon',$1,'execute') as anon,"+
+        "has_function_privilege('authenticated',$1,'execute') as auth,"+
+        "has_function_privilege('service_role',$1,'execute') as service",
+        [fn]
+      )).rows[0];
+      assert.deepEqual(acl,allowed,'Narrow RPC execute grants for '+fn);
+    }
+    for(const sig of [
+      'public.issue_knowledge_discovery_domain_challenge_v1(uuid,text,uuid,text)',
+      'public.claim_knowledge_discovery_proof_check_v1(uuid,text,text)',
+    ]){
+      assert.equal((await root.query(
+        "select has_function_privilege('service_role',$1,'execute') as allowed",
+        [sig]
+      )).rows[0].allowed,false,'Legacy service-side proof writer revoked');
+    }
+    const sealedTables=[
+      'knowledge_discovery_domain_verifications',
+      'knowledge_discovery_site_consents',
+      'knowledge_discovery_consent_control',
+      'knowledge_discovery_consent_audit',
+    ];
+    for(const table of sealedTables){
+      const acl=(await root.query(
+        "select has_table_privilege('service_role',$1,'insert') as insert,"+
+        "has_table_privilege('service_role',$1,'update') as update,"+
+        "has_table_privilege('service_role',$1,'delete') as delete,"+
+        "has_table_privilege('service_role',$1,'truncate') as truncate,"+
+        "has_table_privilege($2,$1,'update') as bypass",
+        ['public.'+table,bypassRole]
+      )).rows[0];
+      assert.deepEqual(acl,{insert:false,update:false,delete:false,truncate:false,bypass:false},
+        'Proof or consent direct DML bypass must be closed: '+table);
+      await assert.rejects(
+        callAs(b,bypassRole,"truncate public."+table,[],
+          ADMIN_E,SID_E,'service_role'),
+        isCode('42501'),'BYPASSRLS must not retain direct consent/proof TRUNCATE'
+      );
+    }
+
+    // Existing grant/withdraw RPC owner privileges survive direct
+    // service_role consent DML revocation. E was granted synthetically.
+    const withdrawE=(await callAs(b,'authenticated',WITHDRAW,
+      [ORG_E,HOST,1],ADMIN_E,SID_E)).rows[0].result;
+    assert.deepEqual(withdrawE,{
+      ok:true,status:'withdrawn',revision:2,jobsCancelled:0,
+    });
+    const consentE=(await root.query(
+      "select status,revision from public.knowledge_discovery_site_consents "+
+      "where organization_id=$1",[ORG_E]
+    )).rows[0];
+    assert.deepEqual(consentE,{status:'withdrawn',revision:2});
+    const auditE=(await root.query(
+      "select action from public.knowledge_discovery_consent_audit "+
+      "where organization_id=$1 order by revision",[ORG_E]
+    )).rows.map(x=>x.action);
+    assert.deepEqual(auditE,['granted','withdrawn']);
+    await assert.rejects(
+      callAs(b,bypassRole,
+        "update public.knowledge_discovery_site_consents set status='granted' "+
+        "where organization_id=$1",[ORG_E],
+        ADMIN_E,SID_E,'service_role'),
+      isCode('42501'),'Direct service_role regrant must not bypass audit'
+    );
+    await assert.rejects(
+      callAs(b,bypassRole,
+        "update public.knowledge_discovery_consent_control set grants_enabled=true",
+        [],ADMIN_E,SID_E,'service_role'),
+      isCode('42501'),'Service role cannot forge policy registry approval'
+    );
+
+    // Owner/admin session cannot be forged across tenants, after logout or
+    // when membership has been revoked. No raw token or user supplied to RPC.
+    const candidateHash='c'.repeat(64);
+    await assert.rejects(
+      callAs(b,'service_role',PROOF_ISSUE,[ORG_D,HOST,candidateHash]),
+      isCode('42501')
+    );
+    await assert.rejects(
+      callAs(b,'authenticated',PROOF_FINISH,[ORG_D,HOST,candidateHash],
+        ADMIN_D,SID_D),
+      isCode('42501')
+    );
+    await assert.rejects(
+      callAs(b,'authenticated',PROOF_ISSUE,[ORG_D,HOST,candidateHash],
+        ADMIN_E,SID_E),
+      isCode('42501'),'Wrong-tenant authenticated owner must not issue proof'
+    );
+    await assert.rejects(
+      callAs(b,'authenticated',PROOF_ISSUE,[ORG_D,HOST,candidateHash],
+        ADMIN_D,randomUUID()),
+      isCode('42501'),'Unbound signed session must be refused'
+    );
+    await root.query(
+      "update public.organization_members set active=false "+
+      "where organization_id=$1",[ORG_D]
+    );
+    await assert.rejects(
+      callAs(b,'authenticated',PROOF_ISSUE,[ORG_D,HOST,candidateHash],
+        ADMIN_D,SID_D),
+      isCode('42501'),'Revoked owner/admin must not issue proof'
+    );
+    await root.query(
+      "update public.organization_members set active=true "+
+      "where organization_id=$1",[ORG_D]
+    );
+    await assert.rejects(
+      callAs(b,'authenticated',PROOF_ISSUE,[ORG_D,'attacker.example.net',candidateHash],
+        ADMIN_D,SID_D),
+      isCode('42501'),'Configured exact website must match'
+    );
+    await assert.rejects(
+      callAs(b,'authenticated',PROOF_ISSUE,[ORG_D,HOST,'bad-digest'],
+        ADMIN_D,SID_D),
+      isCode('22023'),'Hash must be an exact 64-character digest'
+    );
+    await assert.rejects(
+      callAs(b,'authenticated',PROOF_ISSUE,[ORG_D,HOST,candidateHash],
+        ADMIN_D,SID_D),
+      e=>e?.code==='P0001'&&/domain_already_verified/.test(e.message),
+      'Currently verified proof cannot be silently reissued'
+    );
+    await expire(ORG_D);
+    const issued=(await callAs(b,'authenticated',PROOF_ISSUE,
+      [ORG_D,HOST,candidateHash],ADMIN_D,SID_D)).rows[0].expiry;
+    assert.ok(new Date(issued).getTime()>Date.now());
+    const proofD=(await root.query(
+      "select challenge_hash,created_by,verified_at,verified_until "+
+      "from public.knowledge_discovery_domain_verifications where organization_id=$1",
+      [ORG_D]
+    )).rows[0];
+    assert.equal(proofD.challenge_hash,candidateHash);
+    assert.equal(proofD.created_by,ADMIN_D);
+    assert.equal(proofD.verified_at,null);
+    assert.equal(proofD.verified_until,null);
+    await assert.rejects(
+      callAs(b,'authenticated',PROOF_ISSUE,[ORG_D,HOST,'d'.repeat(64)],
+        ADMIN_D,SID_D),
+      e=>e?.code==='P0001'&&/domain_challenge_cooldown/.test(e.message)
+    );
+    const noClaim=(await callAs(b,'service_role',PROOF_FINISH,
+      [ORG_D,HOST,candidateHash])).rows[0].result;
+    assert.deepEqual(noClaim,{ok:false,reason:'challenge_changed_or_expired'},
+      'Service finalization without a recent claim must be refused');
+    const wrong=(await callAs(b,'authenticated',PROOF_CLAIM,
+      [ORG_D,HOST,'d'.repeat(64)],ADMIN_D,SID_D)).rows[0].allowed;
+    assert.equal(wrong,false);
+    const claimed=(await callAs(b,'authenticated',PROOF_CLAIM,
+      [ORG_D,HOST,candidateHash],ADMIN_D,SID_D)).rows[0].allowed;
+    assert.equal(claimed,true);
+    assert.equal((await callAs(b,'authenticated',PROOF_CLAIM,
+      [ORG_D,HOST,candidateHash],ADMIN_D,SID_D)).rows[0].allowed,false,
+      '30-second rate limit continues to apply');
+    assert.equal((await callAs(b,'authenticated',PROOF_CLAIM,
+      [ORG_D,HOST,candidateHash],ADMIN_E,SID_E)).rows[0].allowed,false,
+      'Different bound user cannot operate tenant D proof');
+    const crossTenantProofRead=(await callAs(b,'authenticated',
+      "select count(*)::int as n from public.knowledge_discovery_domain_verifications "+
+      "where organization_id=$1",[ORG_D],ADMIN_E,SID_E)).rows[0].n;
+    assert.equal(crossTenantProofRead,0);
+    const unboundProofRead=(await callAs(b,'authenticated',
+      "select count(*)::int as n from public.knowledge_discovery_domain_verifications "+
+      "where organization_id=$1",[ORG_D],ADMIN_D,randomUUID())).rows[0].n;
+    assert.equal(unboundProofRead,0);
+
+    // Held row update wins: a stale confirmation of an older hash must
+    // block on its row and then return a safe no-op.
+    await b.query('begin');
+    await b.query("set local lock_timeout='7s'");
+    await b.query(
+      "update public.knowledge_discovery_domain_verifications "+
+      "set challenge_hash=$2 where organization_id=$1",
+      [ORG_D,'d'.repeat(64)]
+    );
+    await beginAs(c,'service_role');
+    let confirmResolved=false;
+    const delayed=c.query(PROOF_FINISH,[ORG_D,HOST,candidateHash])
+      .then(value=>({ok:true,value}),error=>({ok:false,error}))
+      .finally(()=>{confirmResolved=true;});
+    await pauseForLock();
+    assert.equal(confirmResolved,false,'Confirmation waits for proof row lock');
+    await b.query('commit');
+    const stale=await delayed;
+    assert.equal(stale.ok,true);
+    assert.deepEqual(stale.value.rows[0].result,{
+      ok:false,reason:'challenge_changed_or_expired',
+    });
+    await c.query('commit');
+    await root.query(
+      "update public.knowledge_discovery_domain_verifications "+
+      "set challenge_hash=$2 where organization_id=$1",
+      [ORG_D,candidateHash]
+    );
+    const finished=(await callAs(b,'service_role',PROOF_FINISH,
+      [ORG_D,HOST,candidateHash])).rows[0].result;
+    assert.equal(finished.ok,true);
+    assert.equal(finished.status,'verified');
+    assert.ok(new Date(finished.verified_until).getTime()>Date.now());
+    const duplicate=(await callAs(b,'service_role',PROOF_FINISH,
+      [ORG_D,HOST,candidateHash])).rows[0].result;
+    assert.deepEqual(duplicate,{ok:false,reason:'challenge_changed_or_expired'},
+      'Same claim cannot extend a currently verified proof');
+
+    // IMPORTANT negative policy test: proof can still expire after the
+    // wrapper's check but before an outer caller-controlled COMMIT.
+    // This does not imply proof validity at actual external COMMIT time.
+    await root.query(
+      "update public.knowledge_discovery_domain_verifications "+
+      "set issued_at=now()-interval '2 hours',verified_at=null,"+
+      "verified_until=null,challenge_expires_at=clock_timestamp()+interval '2 seconds' "+
+      "where organization_id=$1",[ORG_D]
+    );
+    await root.query(
+      "update public.knowledge_discovery_domain_verifications "+
+      "set last_check_at=clock_timestamp() where organization_id=$1",[ORG_D]
+    );
+    await beginAs(c,'service_role');
+    const early=(await c.query(PROOF_FINISH,
+      [ORG_D,HOST,candidateHash])).rows[0].result;
+    assert.equal(early.ok,true);
+    await c.query('select pg_sleep(2.2)');
+    await c.query('commit');
+    assert.equal((await root.query(
+      "select challenge_expires_at<clock_timestamp() as expired,"+
+      "verified_at is not null as verified "+
+      "from public.knowledge_discovery_domain_verifications "+
+      "where organization_id=$1",[ORG_D]
+    )).rows[0].verified,true,
+      'External transaction can commit after challenge expiry: still unresolved');
   }finally{
     await Promise.allSettled(connections.map(db=>db.end()));
     try{if(created)await admin.query('drop database "'+name+'" with (force)');}
