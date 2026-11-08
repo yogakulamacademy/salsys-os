@@ -87,7 +87,7 @@ jobs:
         run: node --test tests/database/knowledge-source-verification-alert-gate.test.mjs
       - name: Verify KB-09E early-denial lease CAS and cancellation audit in disposable PostgreSQL
         run: node --test tests/database/knowledge-early-denial-lease-cas.test.mjs
-      - name: Verify KB-09F/G/H/I/J/K/L preimage proof, COMMIT caveat and policy hold in disposable PostgreSQL
+      - name: Verify KB-09F–M worker proof-checked public RPC, security races and policy hold in disposable PostgreSQL
         run: node --test tests/database/knowledge-commit-ownership-races.test.mjs
 
 
