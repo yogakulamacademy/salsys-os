@@ -51,6 +51,21 @@ test("Daily events use UTC and preserve independent event vs identified-session 
   assert.match(ui, /not session counts|not funnel conversions|Identified sessions/i);
 });
 
+test("Server trend loader rejects impossible source-scoped session cardinality without treating cross-day reuse as error", () => {
+  assert.match(loader, /days\.some\(\(day\) => day\.sessions > observedSessions\)/);
+  assert.match(loader, /dailySessions < observedSessions/);
+  assert.match(loader, /!Number\.isSafeInteger\(dailySessions\)/);
+  assert.doesNotMatch(loader, /dailySessions !== observedSessions/);
+  for (const state of [
+    "trends-daily-session-exceeds-window",
+    "trends-window-session-exceeds-daily",
+  ]) {
+    assert.ok(fixture.includes("'" + state + "'"), state);
+    assert.ok(browser.includes('"' + state + '"'), state);
+  }
+  assert.match(browser, /Impossible daily\/window trend session counts fail closed/);
+});
+
 test("Trends remain a parallel read-only module; missing trends cannot erase funnels", () => {
   assert.match(marketing, /Promise\.all\(\[\s*getNativeBehaviorWorkspace\(request\),\s*getNativeBehaviorTrends/);
   assert.match(explorer, /<NativeBehaviorTrendsPanel trends=\{trends\} \/>/);

@@ -101,10 +101,12 @@ test("Event Activity's UTC calendar comparison differs from rolling funnel seman
   const sql=parseSqlAggregate(JSON.stringify({tenant_aggregate_only:trendSql()}),"trends");
   assert.equal(compareAggregateReviews(ui,sql).status,"AGGREGATES_MATCHED_NOT_ACCEPTANCE");
   const wrong=trendSql();wrong.series[1].observed_sessions=8;
+  wrong.series[1].daily[0].sessions=8;
   const mismatch=compareAggregateReviews(ui,parseSqlAggregate(JSON.stringify(wrong),"trends"));
   assert.equal(mismatch.status,"REVIEW_REQUIRED_NUMERIC_DIFFERENCE");
   assert.deepEqual(mismatch.mismatched,["web.form_started"]);
-  wrong.series[1].observed_sessions=9; wrong.first_day_utc="2026-11-01";
+  wrong.series[1].observed_sessions=9; wrong.series[1].daily[0].sessions=9;
+  wrong.first_day_utc="2026-11-01";
   wrong.series.forEach((row) => { row.daily[0].date_utc="2026-11-01"; });
   // SQL snapshots with an impossible UTC period must now be rejected
   // before reaching the numeric comparison, even if headline numbers match.
@@ -167,6 +169,44 @@ test("Event Activity requires the SQL day totals and candidate event cap count t
   sessionsCrossDays.series[0].daily[1].events=1;
   sessionsCrossDays.series[0].daily[1].sessions=1;
   assert.ok(parseSqlAggregate(JSON.stringify(sessionsCrossDays),"trends"));
+});
+
+test("Event Activity rejects impossible distinct-session cardinality without summing away cross-day reuse",async()=>{
+  const {parseSqlAggregate}=await load;
+  const fewerDailySessions=structuredClone(trendSql());
+  fewerDailySessions.series[0].daily[0].sessions=19;
+  // Twenty distinct source-scoped sessions cannot appear in the overall
+  // report when the complete UTC day grid contains only nineteen in total.
+  assert.throws(()=>parseSqlAggregate(JSON.stringify(fewerDailySessions),"trends"));
+
+  const moreOnOneDay=structuredClone(trendSql());
+  moreOnOneDay.series[0].daily[0].sessions=21;
+  // Each day's distinct sessions must be a subset of the window-wide set.
+  assert.throws(()=>parseSqlAggregate(JSON.stringify(moreOnOneDay),"trends"));
+
+  const impossibleOtherEvent=structuredClone(trendSql());
+  impossibleOtherEvent.series[1].daily[0].sessions=0;
+  assert.throws(()=>parseSqlAggregate(JSON.stringify(impossibleOtherEvent),"trends"));
+
+  const legitimateCrossDayReuse=structuredClone(trendSql());
+  legitimateCrossDayReuse.series[0].daily[0].events=39;
+  legitimateCrossDayReuse.series[0].daily[1].events=1;
+  legitimateCrossDayReuse.series[0].daily[1].sessions=1;
+  // Daily sessions sum to 21 while window distinct sessions stay at 20;
+  // this remains valid because a session can span two UTC calendar days.
+  assert.ok(parseSqlAggregate(JSON.stringify(legitimateCrossDayReuse),"trends"));
+});
+
+test("Ordered funnel rejects a path-session denominator larger than all candidate events",async()=>{
+  const {parseSqlAggregate}=await load;
+  const bad=structuredClone(funnelSql());
+  bad.candidate_events=14;
+  // Fifteen distinct page-view sessions require at least fifteen events.
+  assert.throws(()=>parseSqlAggregate(JSON.stringify(bad),"funnel"));
+  const zero=structuredClone(funnelSql());
+  zero.candidate_events=0;
+  assert.throws(()=>parseSqlAggregate(JSON.stringify(zero),"funnel"));
+  assert.ok(parseSqlAggregate(JSON.stringify(funnelSql()),"funnel"));
 });
 
 test("Input rejects extra identifiers, malformed counts, wrong SQL status and wrong report classes",async()=>{

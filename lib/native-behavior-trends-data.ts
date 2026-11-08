@@ -104,6 +104,14 @@ export async function getNativeBehaviorTrends(request: BehaviorTrendRequest): Pr
         dates.add(dateUtc);
         days.push({ dateUtc, events, sessions });
       }
+      // A daily distinct-session set is always a subset of the full-window
+      // set. The UNION of all daily sets is the full-window set, so their
+      // summed cardinalities must cover the full-window distinct count.
+      // Do not require equality: one browser session may span multiple UTC days.
+      const dailySessions = days.reduce((total, day) => total + day.sessions, 0);
+      if (days.some((day) => day.sessions > observedSessions)
+        || dailySessions < observedSessions || !Number.isSafeInteger(dailySessions)) return fail();
+
       // A complete UTC domain must be consecutive and anchored to the RPC's
       // server-side UTC day, not just a sorted array of the requested length.
       if (!validBehaviorUtcDayGrid(
