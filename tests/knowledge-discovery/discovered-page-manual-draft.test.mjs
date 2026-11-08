@@ -41,7 +41,7 @@ const website='https://fixture.example.com/';
 const rawPage='https://fixture.example.com/about';
 
 let rows={},readCalls=[],rpcCalls=[],revalidations=[],authenticated=true,role='owner',
-  activeOrg=org,canManage=true,createError=null,errorTable=null;
+  activeOrg=org,canManage=true,createError=null,createResult=null,errorTable=null;
 const flags=[
   'KNOWLEDGE_DISCOVERY_PILOT_ENABLED',
   'KNOWLEDGE_DISCOVERY_PAUSED',
@@ -60,7 +60,7 @@ function reset(){
   delete process.env.KNOWLEDGE_DISCOVERY_PAUSED;
   readCalls=[];rpcCalls=[];revalidations=[];
   authenticated=true;role='owner';activeOrg=org;canManage=true;
-  createError=null;errorTable=null;
+  createError=null;createResult=null;errorTable=null;
   const now=Date.now();
   rows={
     organization_onboarding:{organization_id:org,website_url:website},
@@ -108,7 +108,11 @@ const client={
     rpcCalls.push({name,args});
     if(name==='can_manage_organization')return {data:canManage,error:null};
     if(name==='create_source_backed_knowledge_document_v2'){
-      return {data:createError?null:'synthetic-new-document',error:createError};
+      return {data:createError?null:(createResult??{
+        ok:true,status:'draft',
+        document_id:'50000000-0000-4000-8000-000000000001',
+        source_id:'60000000-0000-4000-8000-000000000001',
+      }),error:createError};
     }
     throw Error('Unexpected RPC '+name);
   },
@@ -260,6 +264,22 @@ test('KB-09Q underlying create RPC failure never reports saved or approved',asyn
   await redirected(action.createManualDraftFromDiscoveredPageAction(submission()),'draftError=');
   assert.deepEqual(revalidations,[]);
   assert.equal(rpcCalls.at(-1).args.p_approve,false);
+});
+
+test('KB-09Q a misleading successful RPC response never confirms a saved draft',async()=>{
+  for(const outcome of [
+    null,{ok:true,status:'approved',
+      document_id:'50000000-0000-4000-8000-000000000001',
+      source_id:'60000000-0000-4000-8000-000000000001'},
+    {ok:false,status:'draft'},
+    {ok:true,status:'draft',document_id:'invalid',source_id:'invalid'},
+  ]){
+    reset();
+    createResult=outcome??{ok:true,status:'draft',document_id:null,source_id:null};
+    await redirected(action.createManualDraftFromDiscoveredPageAction(submission()),'draftError=');
+    assert.deepEqual(revalidations,[]);
+    assert.equal(rpcCalls.at(-1).args.p_approve,false);
+  }
 });
 
 test('KB-09Q only fetched terminal pages present the handoff and UI has no auto-approval',()=>{
