@@ -2,9 +2,19 @@
 
 import { useActionState, useState } from 'react';
 import {
-  EMPTY_PASTED_HTML_PREVIEW,
   previewPastedHtmlForManualReviewAction,
+  type ManuallyPastedHtmlPreviewState,
 } from '@/app/settings/knowledge/discovery/preview-action';
+
+const INITIAL_PREVIEW: ManuallyPastedHtmlPreviewState = {
+  state: 'idle',
+  message: 'Paste HTML copied from the original website to inspect provisional text.',
+  sourcePageId: null,
+  sourceUrl: null,
+  pastedHtmlSha256: null,
+  excerpts: [],
+  warnings: [],
+};
 
 /**
  * Operator-supplied markup is never fetched, saved or used as a prompt.
@@ -20,7 +30,7 @@ export function KnowledgeDiscoveryPastedHtmlReview({
 }) {
   const [result, submit, pending] = useActionState(
     previewPastedHtmlForManualReviewAction,
-    EMPTY_PASTED_HTML_PREVIEW,
+    INITIAL_PREVIEW,
   );
   const [copyMessage, setCopyMessage] = useState('');
   const canDisplay = (result.state === 'preview' || result.state === 'empty') &&
