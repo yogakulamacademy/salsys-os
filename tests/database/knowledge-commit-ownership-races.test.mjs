@@ -1395,14 +1395,14 @@ test('KB-09F/G/H proof, BYPASSRLS, tenant-finalization, consent and commit races
     await root.query(
       "update public.knowledge_discovery_domain_verifications "+
       "set verified_at=null,verified_until=null,last_check_at=clock_timestamp(),"+
-      "challenge_expires_at=clock_timestamp()+interval '6 seconds' "+
+      "challenge_expires_at=clock_timestamp()+interval '8 seconds' "+
       "where organization_id=$1",[ORG_D]
     );
     await beginAs(c,'service_role');
     const earlyV2=(await c.query(PROOF_PREIMAGE,
       [ORG_D,HOST,rawToken])).rows[0].result;
     assert.equal(earlyV2.ok,true);
-    await c.query('select pg_sleep(6.2)');
+    await c.query('select pg_sleep(8.2)');
     await c.query('commit');
     const staleAtCommit=(await root.query(
       "select challenge_expires_at<clock_timestamp() as expired,verified_at is not null as verified "+
