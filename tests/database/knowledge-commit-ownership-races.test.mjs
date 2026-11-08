@@ -1959,6 +1959,17 @@ test('KB-09F/G/H proof, BYPASSRLS, tenant-finalization, consent and commit races
       // valid INSIDE the SQL call; app-side previous reads are not authority.
       await root.query(
         "update public.knowledge_discovery_domain_verifications "+
+        "set verified_until=null where organization_id=$1",[ORG_C]
+      );
+      const missingProofExpiry=(await callAs(
+        b,'authenticated',manualDraft,inputsC,ADMIN_C,SID_C
+      )).rows[0].result;
+      assert.deepEqual(missingProofExpiry,{
+        ok:false,reason:'proof_consent_or_policy_not_current',
+      },'NULL ownership expiry must never pass SQL three-valued logic');
+      assert.equal((await sourceRows()).length,0);
+      await root.query(
+        "update public.knowledge_discovery_domain_verifications "+
         "set verified_until=clock_timestamp()-interval '1 second' "+
         "where organization_id=$1",[ORG_C]
       );
