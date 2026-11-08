@@ -31,6 +31,11 @@ test('KB-14A unverified discovery marker blocks publication presentation only',(
 test('KB-14A UI lists held drafts but offers Archive rather than generic Approve',()=>{
   const ui=read('app/settings/knowledge/page.tsx');
   assert.match(ui,/discoveryPublicationHeld\(document\.metadata\)/);
+  assert.match(ui,/discoveryPublicationHeld\(source\?\.metadata\)/,
+    'The library must also hold a document when the source alone is marked unverified');
+  assert.match(ui,/select\('id, name, source_type, source_uri, status, metadata'\)/);
+  assert.match(ui,/sourceById\.get\(doc\.source_id\)\?\.metadata/,
+    'Approved-looking unverified sources must count as needing review');
   assert.match(ui,/document\.status !== 'approved' && !publicationHeld/);
   assert.match(ui,/Discovery draft held: independent evidence review required/);
   assert.match(ui,/archiveKnowledgeDocumentAction/);
@@ -55,6 +60,10 @@ test('KB-14A only disposable SQL protects the direct legacy approval RPC path',(
   assert.match(sql,/kb14a_hold_unverified_discovery_source/);
   assert.match(sql,/source_text_verified/);
   assert.match(sql,/new\.status not in \('draft','archived'\)/);
+  assert.match(sql,/kb_discovery_linked_source_unreadable/,
+    'A source invisible because of tenant RLS must fail closed');
+  assert.match(sql,/kb_discovery_previous_source_unreadable/,
+    'Prior source visibility must be preserved on document rebind');
   for(const migration of readdirSync(resolve('supabase/migrations')).filter(f=>f.endsWith('.sql'))){
     assert.doesNotMatch(read('supabase/migrations/'+migration),
       /kb14a_hold_discovery_document_publish_v1/i,migration);
