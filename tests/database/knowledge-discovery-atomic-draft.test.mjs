@@ -120,7 +120,7 @@ test('KB-11A: local-only consent-atomic discovered-page draft SQL and negative i
       [POLICY,SHA]);
     const consentId=(await root.query(
       "insert into public.knowledge_discovery_site_consents(organization_id,hostname,purpose,status,policy_version,granted_by,granted_at,valid_until,revision) "+
-      "values($1,$2,'website_discovery_review_only','granted',$3,$4,now()-interval '1 hour',now()+interval '1 hour',1) returning id",
+      "values($1,$2,'website_discovery_review_only','granted',$3,$4,now()-interval '48 hours',now()+interval '1 hour',1) returning id",
       [ORG_A,HOST,POLICY,USER_A])).rows[0].id;
     await root.query(
       "insert into public.knowledge_discovery_consent_audit(consent_id,organization_id,hostname,action,actor_id,session_id,policy_version,policy_sha256,revision,valid_until) "+
@@ -327,6 +327,28 @@ test('KB-11A: local-only consent-atomic discovered-page draft SQL and negative i
     await root.query("update public.knowledge_discovery_domain_verifications set verified_until=now()-interval '1 second'");
     await assert.rejects(callAs(a,'authenticated',DRAFT,args(first.id)),e=>e.code==='42501');
     await root.query("update public.knowledge_discovery_domain_verifications set verified_until=now()+interval '1 hour'");
+
+    // KB-13B: page/job metadata older than the original grant cannot
+    // become a new saved draft, even if consent is currently granted.
+    await root.query(
+      "update public.knowledge_discovery_jobs set created_at=now()-interval '72 hours' where id=$1",
+      [first.job]);
+    await assert.rejects(callAs(a,'authenticated',DRAFT,args(first.id)),
+      e=>e.code==='42501','A pre-consent scan cannot be used as source metadata');
+    await root.query(
+      "update public.knowledge_discovery_jobs set created_at=now()-interval '26 hours' where id=$1",
+      [first.job]);
+
+    // Future consent regrant needs an independently reviewed revision-aware
+    // proof contract; revision 2 or 3 must not reuse revision-1 scan evidence.
+    await root.query(
+      'update public.knowledge_discovery_site_consents set revision=3 where id=$1',
+      [consentId]);
+    await assert.rejects(callAs(a,'authenticated',DRAFT,args(first.id)),
+      e=>e.code==='42501','Unapproved regrant revision cannot reuse stale pages');
+    await root.query(
+      'update public.knowledge_discovery_site_consents set revision=1 where id=$1',
+      [consentId]);
 
     // Race control: withdrawal acquires the consent-row UPDATE lock first,
     // but has not yet committed. A new draft must wait and then DENY, not
