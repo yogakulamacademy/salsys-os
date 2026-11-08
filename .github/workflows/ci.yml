@@ -101,6 +101,9 @@ jobs:
       - name: Verify R2 23505 fix preserves exact privileged ingest RPC
         run: node --test tests/readiness/r2-browser-primary-contact-ingest-guard-v1.test.cjs
 
+      - name: Validate R2 local-only RPC restore and rollback SQL generator
+        run: node --test tests/readiness/r2-local-contact-rollback-generator-v1.test.cjs
+
       - name: Verify Tracking Live Closeout Contracts
         run: npm run verify:tracking-live-closeout
 
