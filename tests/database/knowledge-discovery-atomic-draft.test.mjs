@@ -236,6 +236,78 @@ test('KB-11A: local-only consent-atomic discovered-page draft SQL and negative i
         e=>['42501','22023'].includes(e.code));
     }
 
+    // KB-12A: enforce the same public-host label restrictions at write-time,
+    // not only in the optional app preview. An untrusted configured website
+    // must fail without creating a row even if its page ID was valid earlier.
+    for(const invalidWebsite of [
+      'https://fixture..example.com/',
+      'https://-fixture.example.com/',
+      'https://fixture-.example.com/',
+      'https://'+('x'.repeat(64))+'.example.com/',
+      'https://fixture.invalid/',
+      'https://fixture.local/',
+      'https://fixture.home.arpa/',
+      'https://fixture.example.com:443/',
+      'https://operator@fixture.example.com/',
+      'http://fixture.example.com/',
+      'https://fixture.example.com?token=test',
+      'https://replaced.example.net/',
+    ]){
+      await root.query(
+        'update public.organization_onboarding set website_url=$1 where organization_id=$2',
+        [invalidWebsite,ORG_A]);
+      await assert.rejects(callAs(a,'authenticated',DRAFT,args(first.id)),
+        e=>e.code==='42501',
+        'Invalid/changed configured website must deny '+invalidWebsite.slice(0,80));
+    }
+    await root.query(
+      'update public.organization_onboarding set website_url=$1 where organization_id=$2',
+      [SITE,ORG_A]);
+
+    // Save must wait if the configured website is changing, then deny
+    // against the COMMITTED new configuration (no stale read/write gap).
+    await b.query('begin');
+    await b.query(
+      'update public.organization_onboarding set website_url=$1 where organization_id=$2',
+      ['https://replaced.example.net/',ORG_A]);
+    let websiteRaceSettled=false;
+    const websiteRace=callAs(a,'authenticated',DRAFT,args(first.id))
+      .then(result=>({ok:true,result}),error=>({ok:false,error}))
+      .finally(()=>{websiteRaceSettled=true;});
+    await new Promise(resolve=>setTimeout(resolve,120));
+    assert.equal(websiteRaceSettled,false,'Draft waits for website change lock');
+    await b.query('commit');
+    const websiteOutcome=await websiteRace;
+    assert.equal(websiteOutcome.ok,false,'Configured website change wins');
+    assert.equal(websiteOutcome.error.code,'42501');
+    await root.query(
+      'update public.organization_onboarding set website_url=$1 where organization_id=$2',
+      [SITE,ORG_A]);
+
+    // Policy switch is an independent emergency brake on new drafts.
+    // The policy row is locked by the atomic draft, not trusted from UI.
+    await b.query('begin');
+    await b.query(
+      'update public.knowledge_discovery_consent_control set grants_enabled=false where singleton=true');
+    let policyRaceSettled=false;
+    const policyRace=callAs(a,'authenticated',DRAFT,args(first.id))
+      .then(result=>({ok:true,result}),error=>({ok:false,error}))
+      .finally(()=>{policyRaceSettled=true;});
+    await new Promise(resolve=>setTimeout(resolve,120));
+    assert.equal(policyRaceSettled,false,'Draft waits for policy shutdown');
+    await b.query('commit');
+    const policyOutcome=await policyRace;
+    assert.equal(policyOutcome.ok,false,'Policy shutdown wins');
+    assert.equal(policyOutcome.error.code,'42501');
+    await root.query(
+      'update public.knowledge_discovery_consent_control set grants_enabled=true where singleton=true');
+    assert.deepEqual((await root.query(
+      "select (select count(*)::int from public.knowledge_sources) as sources,"+
+      "(select count(*)::int from public.knowledge_documents) as documents,"+
+      "(select count(*)::int from public.knowledge_chunks) as chunks")).rows[0],
+      {sources:1,documents:1,chunks:1},
+      'Rejected website and policy race attempts leave no unreviewed rows');
+
     // Constraint/trigger failure MUST roll back source, document and chunk.
     await root.query("create function public.kb11a_reject_chunk() returns trigger language plpgsql as $t$ begin raise exception 'synthetic_chunk_insert_failure'; end $t$");
     await root.query('create trigger kb11a_chunk_failure before insert on public.knowledge_chunks for each row execute function public.kb11a_reject_chunk()');
