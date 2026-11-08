@@ -1,0 +1,139 @@
+{
+  "schema_version": 1,
+  "title": "KB-10 consolidated Knowledge Builder engineering integration review — staging held",
+  "classification": "DRAFT_REVIEW_ONLY_NOT_PRODUCTION_READY",
+  "reviewed_on": "2026-11-08",
+  "consolidated_from": {
+    "latest_parent_draft_pr": 664,
+    "latest_parent_sha": "ea23c8b778c67a107235003d96c57082fd0731ce",
+    "base_branch": "main",
+    "parent_relative_to_main": {
+      "ahead_commits": 161,
+      "behind_commits": 0,
+      "changed_files": 218
+    },
+    "migration_inventory": "docs/checkpoints/KB-09M-cutover-inventory-DRAFT.json",
+    "independent_release_gate_ledger": "docs/checkpoints/KB-09O-release-readiness-ledger-DRAFT.json"
+  },
+  "current_status": "BLOCKED",
+  "working_scope": "One cumulative DRAFT review branch; no independent review attested",
+  "staging": {
+    "state": "ON_HOLD",
+    "paid_staging_authorized": false,
+    "existing_production_or_recovery_usable_as_staging": false,
+    "project_provisioned": false,
+    "real_authenticated_tenants_witnessed": false,
+    "scenarios_independently_witnessed": 0,
+    "scenarios_required": 16,
+    "spending_quote_approved": false,
+    "revenue_condition_confirmed": false,
+    "owner_requested_hold": true,
+    "external_evidence_reference": null
+  },
+  "production": {
+    "worker_live_evidence_writes_enabled": false,
+    "manual_discovery_draft_writes_enabled": false,
+    "legal_retention_approved": false,
+    "reviewed_hosted_migration_exists": false,
+    "independent_security_review_complete": false,
+    "approved_commit_expiry_policy": false,
+    "protected_merge_authorized": false,
+    "deployment_authorized": false,
+    "production_or_recovery_sql_authorized": false,
+    "real_website_crawling_authorized": false,
+    "model_provider_calls_authorized": false,
+    "purpose_consent_enabled": false,
+    "approved_retention_days": null,
+    "reviewer_signature_reference": null,
+    "DBA_approval_reference": null,
+    "legal_approval_reference": null
+  },
+  "review_areas": [
+    {
+      "id": "integrated_diff",
+      "issue": 612,
+      "status": "INDEPENDENT_REVIEW_REQUIRED",
+      "description": "Qualify reviewer, inspect cumulative 218-path/161-commit parent diff, supply actual reviewer evidence and approve GitHub protections"
+    },
+    {
+      "id": "source_content",
+      "issue": 601,
+      "status": "REVIEW_ONLY",
+      "description": "Crawler parser, quote hashes and synthetic atomic storage/withdrawal/TTL tested; real source extraction/storage and candidate publication disabled"
+    },
+    {
+      "id": "consent_and_retention",
+      "issue": 613,
+      "status": "INDEPENDENT_DECISION_REQUIRED",
+      "description": "Lawful purpose/notice/version, 12 database surfaces, five processor categories, approved retention duration and withdrawal semantics"
+    },
+    {
+      "id": "security_and_migration",
+      "issue": 612,
+      "status": "INDEPENDENT_REVIEW_REQUIRED",
+      "description": "SQL function ownership/EXECUTE, exact Auth sessions, RLS/BOLA, migration order and non-destructive rollback; physical COMMIT proof policy"
+    },
+    {
+      "id": "real_staging_witnesses",
+      "issue": 614,
+      "status": "ON_HOLD_AT_OWNER_REQUEST",
+      "description": "No isolated staging provisioning, real tenant auth tests, evidence or costs until separate future permission"
+    },
+    {
+      "id": "deploy_and_monitor",
+      "issue": 601,
+      "status": "NOT_AUTHORIZED",
+      "description": "No protected main merge, activation, provider calls, live crawl or rollback execution"
+    }
+  ],
+  "atomic_discovered_draft_contract": {
+    "name": "create_discovery_review_draft_with_current_consent_v1",
+    "status": "REVIEW_REQUIRED_NOT_INSTALLED",
+    "app_path": "app/settings/knowledge/discovery/draft-action.ts",
+    "ui_path": "app/settings/knowledge/page.tsx",
+    "approval_flag": "KNOWLEDGE_DISCOVERY_ATOMIC_DRAFT_APPROVED",
+    "default_enabled": false,
+    "no_legacy_fallback": true,
+    "required_execution": "A SINGLE reviewed signed-session SQL transaction locks job before site consent; rereads tenant, configured HTTPS site, page, current proof and purpose-limited consent; writes draft via source-backed knowledge creation with p_approve=false; returns tenant and page bound receipt",
+    "required_receipt": [
+      "ok",
+      "status",
+      "organization_id",
+      "page_id",
+      "document_id",
+      "source_id"
+    ],
+    "must_not_assume": "Application-side SELECT proof/consent before generic v2 create is not atomic"
+  },
+  "provenance_review": {
+    "operator_pasted_html": "Unverified; no website fetch or storage; SHA256 identifies operator paste only",
+    "deterministic_candidates": "Exact-source quotes/FAQ pairs from KB-03A, bounded, no AI model, review only",
+    "crawler_evidence": "Only synthetic disposable PostgreSQL; production runner remains metadata-only",
+    "auto_approval": false,
+    "publication_authorized": false
+  },
+  "independent_decisions": [
+    {
+      "issue": 612,
+      "status": "PENDING",
+      "attestation_ref": null
+    },
+    {
+      "issue": 613,
+      "status": "PENDING",
+      "attestation_ref": null
+    },
+    {
+      "issue": 614,
+      "status": "ON_HOLD",
+      "attestation_ref": null
+    },
+    {
+      "issue": 601,
+      "status": "BLOCKED_0_OF_16",
+      "attestation_ref": null
+    }
+  ],
+  "release_condition": "CANNOT_CLAIM_READY_FROM_SYNTHETIC_GREEN_CI",
+  "next_external_step": "After owner lifts staging hold AND required independent reviews and revenue/cost conditions are satisfied, separately authorize dedicated staging, actual migrations, signed tenant witnesses, protected merge and deploy. No actions now."
+}
