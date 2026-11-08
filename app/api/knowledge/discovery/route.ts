@@ -171,9 +171,17 @@ export async function POST(request: NextRequest) {
       .insert({ organization_id: ctx.organizationId, job_id: created.id,
         url: source.origin + '/', depth: 0, status: 'discovered' });
     if (pageError) {
-      await admin.from('knowledge_discovery_jobs')
-        .update({ status: 'failed', last_error_code: 'seed_insert_failed', finished_at: new Date().toISOString() })
-        .eq('id', created.id).eq('organization_id', ctx.organizationId);
+      // KB-09I draft: one service-only, exact-job, unseeded CAS with atomic audit.
+      // Do not fall back to a privileged table UPDATE if the RPC is missing.
+      const { data: repair, error: repairError } = await admin
+        .rpc('fail_knowledge_discovery_seed_v1', {
+          p_organization_id: ctx.organizationId,
+          p_job_id: created.id,
+          p_expected_creator: ctx.userId,
+        });
+      if (repairError || repair?.ok !== true || repair?.audit_recorded !== true) {
+        throw new Error('seed_failure_repair_not_confirmed');
+      }
       throw pageError;
     }
     return json({ ok: true, jobId: created.id, status: 'queued' }, 202);
@@ -194,13 +202,17 @@ export async function DELETE(request: NextRequest) {
   try {
     const ctx = await adminContext();
     if (!ctx) return json({ ok: false, error: 'Unauthorized' }, 403);
-    const { data, error } = await createAdminClient().from('knowledge_discovery_jobs')
-      .update({ status: 'cancelled', lease_token: null, lease_until: null,
-        finished_at: new Date().toISOString() })
-      .eq('organization_id', ctx.organizationId).eq('id', jobId)
-      .in('status', ['queued', 'running']).select('id').maybeSingle();
+    // The signed-in user's Supabase client carries the current Auth session.
+    // The database must re-check owner/admin membership and the tenant-bound
+    // session under the exact job-row lock. Never use service_role here.
+    const { data, error } = await ctx.supabase.rpc('cancel_knowledge_discovery_job_v1', {
+      p_organization_id: ctx.organizationId,
+      p_job_id: jobId,
+    });
     if (error) throw error;
-    if (!data) return json({ ok: false, error: 'Active scan not found' }, 404);
+    if (data?.ok !== true || data?.audit_recorded !== true) {
+      return json({ ok: false, error: 'Active scan not found' }, 404);
+    }
     return json({ ok: true, status: 'cancelled' });
   } catch {
     return json({ ok: false, error: 'Unable to cancel scan' }, 503);
