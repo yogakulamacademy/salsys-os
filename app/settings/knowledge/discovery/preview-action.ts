@@ -6,7 +6,8 @@ import { useMockData } from '@/lib/config';
 import { createClient } from '@/lib/supabase/server';
 import { getCurrentWorkspaceContext } from '@/lib/workspace';
 import { eligibleDiscoveredPageForManualDraft } from '@/lib/knowledge-discovery/eligible-page-draft';
-import { extractHtml5VisibleBlocks } from '@/lib/knowledge-extraction/html5-visible-text';
+import { extractHtml5VisibleBlocks, prepareHtml5WebsiteEvidence } from '@/lib/knowledge-extraction/html5-visible-text';
+import { prepareSourceGroundedDrafts } from '@/lib/knowledge-extraction/source-grounded-drafts';
 
 /** This is USER-PASTED, UNVERIFIED HTML, not source fetched by SalsysOS. */
 export type ManuallyPastedHtmlPreviewState = {
@@ -17,12 +18,20 @@ export type ManuallyPastedHtmlPreviewState = {
   pastedHtmlSha256: string | null;
   excerpts: Array<{ index: number; kind: string; text: string }>;
   warnings: string[];
+  // These are quote-only proposals derived from ADMIN-PASTED markup.
+  // No website attestation, AI generation, storage or approval.
+  provisionalCandidates: Array<{
+    kind: 'faq_pair' | 'source_statement';
+    text: string;
+    risks: string[];
+  }>;
 };
 
 function fail(message: string): ManuallyPastedHtmlPreviewState {
   return {
     state: 'error', message, sourcePageId: null, sourceUrl: null,
     pastedHtmlSha256: null, excerpts: [], warnings: [],
+    provisionalCandidates: [],
   };
 }
 
@@ -91,6 +100,34 @@ export async function previewPastedHtmlForManualReviewAction(
       .filter(block => block.text.length >= 2 && block.text.length <= MAX_EXCERPT_TEXT)
       .slice(0, MAX_EXCERPTS);
 
+    // Reuse the existing KB-02C+KB-03A exact-source candidate algorithms.
+    // The synthetic "fetchedAt" below denotes the time an ADMIN PASTED
+    // content into this review preview, never a verified live website fetch.
+    // Do NOT persist citation identifiers from this unverified copy.
+    const source = new URL(page.sourceUri);
+    const prepared = prepareHtml5WebsiteEvidence({
+      verifiedSeedUrl: source.origin + '/',
+      fetchedAt: new Date().toISOString(),
+      response:{
+        url: page.sourceUri,
+        status: 200,
+        contentType: 'text/html',
+        body: rawHtml,
+      },
+    });
+    const derived = prepared.ok
+      ? prepareSourceGroundedDrafts(prepared.evidence, source.hostname)
+      : null;
+    const provisionalCandidates = derived?.ok
+      ? derived.bundle.drafts.slice(0, 12).map(draft => ({
+          kind: draft.kind,
+          text: draft.kind === 'faq_pair'
+            ? 'Q: ' + draft.question + '\nA: ' + draft.answer
+            : draft.statement,
+          risks: draft.risks,
+        }))
+      : [];
+
     if (!excerpts.length) {
       return {
         state:'empty',
@@ -98,6 +135,7 @@ export async function previewPastedHtmlForManualReviewAction(
         sourcePageId:pageId, sourceUrl:page.sourceUri,
         pastedHtmlSha256:createHash('sha256').update(rawHtml,'utf8').digest('hex'),
         excerpts:[], warnings:parsed.warnings,
+        provisionalCandidates: [],
       };
     }
 
@@ -107,6 +145,7 @@ export async function previewPastedHtmlForManualReviewAction(
       sourcePageId:pageId, sourceUrl:page.sourceUri,
       pastedHtmlSha256:createHash('sha256').update(rawHtml,'utf8').digest('hex'),
       excerpts, warnings:parsed.warnings,
+      provisionalCandidates,
     };
   } catch {
     // Never return source HTML, cookies, tenant identifiers, DB traces or
