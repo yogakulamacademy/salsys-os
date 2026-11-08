@@ -210,10 +210,18 @@ test("real SDK: GPC travels through actual consent action and opts out of sharin
     });
   });
   const capture = await open(page);
+  // The real tracker first records a GPC-only opt-out, before any analytics
+  // choice. That automatic protective receipt must not count as a grant.
+  await expect.poll(() => capture.receipts.some((row) =>
+    row.gpc && row.decisions.sale_sharing === "opted_out" &&
+    !Object.prototype.hasOwnProperty.call(row.decisions, "analytics"))).toBe(true);
+  expect(capture.events).toHaveLength(0);
   await page.getByRole("dialog", { name: "Privacy choices" })
     .getByRole("button", { name: "Accept all" }).click();
-  await expect.poll(() => capture.receipts.length).toBe(1);
-  expect(capture.receipts[0].gpc).toBe(true);
-  expect(capture.receipts[0].decisions.sale_sharing).toBe("opted_out");
+  await expect.poll(() => capture.receipts.some((row) =>
+    row.decisions.analytics === "granted" &&
+    row.decisions.sale_sharing === "opted_out")).toBe(true);
+  expect(capture.receipts.every((row) =>
+    row.gpc && row.decisions.sale_sharing === "opted_out")).toBe(true);
   expect(capture.remoteRequests).toBe(0);
 });
