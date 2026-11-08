@@ -213,6 +213,11 @@ jobs:
       - name: Verify KB-01 website discovery safety tests
         run: node --experimental-strip-types --test tests/knowledge-discovery/*.test.mjs
 
+      # A SUCCESS here explicitly means BLOCKED/0 of 16 staging witnesses,
+      # never that a Knowledge Builder release is authorized.
+      - name: Verify KB-09O release remains BLOCKED (not approval)
+        run: node scripts/kb09o-release-preflight.mjs
+
       - name: Verify KB-02+ website evidence and Knowledge Builder safety tests
         run: node --experimental-strip-types --test tests/knowledge-extraction/*.test.mjs
 
