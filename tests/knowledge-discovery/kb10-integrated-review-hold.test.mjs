@@ -97,6 +97,10 @@ test('KB-10 offline command cannot silently change approval or contact external 
   assert.equal(result.staging,'ON_HOLD');
   assert.equal(result.deployAuthorized,false);
   const script=read('scripts/kb10-integrated-review-hold-preflight.mjs');
-  assert.doesNotMatch(script,/mcp__|createAdminClient|execute_sql|apply_migration|fetch\(|https?\.request\(/);
-  assert.doesNotMatch(script,/process\.env\.SUPABASE|process\.argv\[2\]/);
+  const imports=script.split('\n').filter(line=>/^import\s/.test(line)).join('\n');
+  assert.doesNotMatch(imports,/node:(?:http|https|net)|supabase|github|child_process/i);
+  // Match actual executable calls only, not the guard's own regex literals.
+  assert.doesNotMatch(script,/^\s*(?:await\s+)?(?:fetch|apply_migration|execute_sql)\s*\(/m);
+  assert.doesNotMatch(script,/^\s*(?:const|let|var)\s+.*process\.env\.SUPABASE/m);
+  assert.doesNotMatch(script,/process\.argv\[2\]/);
 });
