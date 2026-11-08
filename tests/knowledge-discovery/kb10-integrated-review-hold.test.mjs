@@ -19,6 +19,8 @@ const files = {
   htmlPreview: read('app/settings/knowledge/discovery/preview-action.ts'),
   syntheticSql: read('docs/sql/KB-09T-evidence-withdrawal-expiry-REHEARSAL-DRAFT.sql'),
   atomicDraftSql: read('docs/sql/KB-11A-consent-atomic-discovered-draft-REHEARSAL-DRAFT.sql'),
+  approvalGuardSql: read('docs/sql/KB-14A-unverified-discovery-approval-guard-REHEARSAL-DRAFT.sql'),
+  legacyApprovalAction: read('app/settings/knowledge/actions.ts'),
 };
 const clone = x => structuredClone(x);
 function rejects(mutate,pattern){
@@ -89,6 +91,24 @@ test('KB-11B hold rejects removal of Auth/session lock or disposable SQL marker'
   rejects(x=>{x.code.atomicDraftSql=x.code.atomicDraftSql.replace(
     'kb_discovery_consent_actor_v1','no_session_guard');
   },/kb_discovery_consent_actor_v1/);
+});
+
+test('KB-14A release preflight rejects removal of unverified discovery publication freeze',()=>{
+  rejects(x=>{x.code.approvalGuardSql=x.code.approvalGuardSql.replace(
+    'KB14A_LOCAL_DISPOSABLE_FIXTURE_REQUIRED','unguarded');
+  },/KB14A_LOCAL_DISPOSABLE_FIXTURE_REQUIRED/);
+  rejects(x=>{x.code.approvalGuardSql=x.code.approvalGuardSql.replace(
+    'create trigger kb14a_hold_unverified_discovery_document','-- omitted trigger');
+  },/kb14a_hold_unverified_discovery_document/);
+  rejects(x=>{x.code.approvalGuardSql=x.code.approvalGuardSql.replace(
+    'create trigger kb14a_hold_unverified_discovery_source','-- omitted source trigger');
+  },/kb14a_hold_unverified_discovery_source/);
+  rejects(x=>{x.code.approvalGuardSql=x.code.approvalGuardSql.replace(
+    "new.status not in ('draft','archived')","new.status not in ('approved')");
+  },/new\\.status not in/);
+  rejects(x=>{x.code.legacyApprovalAction=x.code.legacyApprovalAction.replace(
+    'discoveryPublicationHeld(target.metadata)','false');
+  },/discoveryPublicationHeld/);
 });
 
 test('KB-10 refuses a production worker evidence rollout or simulated approvals',()=>{
