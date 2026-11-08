@@ -18,6 +18,7 @@ const files = {
   runner: read('lib/knowledge-discovery/runner.ts'),
   htmlPreview: read('app/settings/knowledge/discovery/preview-action.ts'),
   syntheticSql: read('docs/sql/KB-09T-evidence-withdrawal-expiry-REHEARSAL-DRAFT.sql'),
+  atomicDraftSql: read('docs/sql/KB-11A-consent-atomic-discovered-draft-REHEARSAL-DRAFT.sql'),
 };
 const clone = x => structuredClone(x);
 function rejects(mutate,pattern){
@@ -76,6 +77,18 @@ test('KB-10 fails closed if earlier generic create RPC or privileged write fallb
   rejects(x=>{x.code.knowledgePage=x.code.knowledgePage.replace(
     'disabled={!atomicDiscoveredDraftApproved}','');
   },/disabled=/);
+});
+
+test('KB-11B hold rejects removal of Auth/session lock or disposable SQL marker',()=>{
+  rejects(x=>{x.code.atomicDraftSql=x.code.atomicDraftSql.replace(
+    'for share of b,s,o,m','');
+  },/for share of b,s,o,m/);
+  rejects(x=>{x.code.atomicDraftSql=x.code.atomicDraftSql.replace(
+    'KB11A_LOCAL_DISPOSABLE_FIXTURE_REQUIRED','UNGUARDED');
+  },/KB11A_LOCAL_DISPOSABLE_FIXTURE_REQUIRED/);
+  rejects(x=>{x.code.atomicDraftSql=x.code.atomicDraftSql.replace(
+    'kb_discovery_consent_actor_v1','no_session_guard');
+  },/kb_discovery_consent_actor_v1/);
 });
 
 test('KB-10 refuses a production worker evidence rollout or simulated approvals',()=>{
