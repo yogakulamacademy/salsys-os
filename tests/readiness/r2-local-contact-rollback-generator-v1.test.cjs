@@ -29,6 +29,6 @@ test('generated disposable SQL rehearses old function restoration, then rolls ba
   assert.ok(sql.indexOf('CREATE OR REPLACE FUNCTION public.ingest_website_lead(') < sql.indexOf('\nROLLBACK;'));
   assert.ok(sql.indexOf('\nROLLBACK;') < sql.indexOf('R2 local: transaction rollback did not preserve repaired RPC'));
   assert.equal((sql.match(/^ROLLBACK;$/gm) || []).length, 1);
-  assert.equal((sql.match(/^CREATE OR REPLACE FUNCTION public\\.ingest_website_lead\\(/gm) || []).length, 1);
-  assert.doesNotMatch(sql, /^\\\\(?:connect|c|copy)\\b/im, 'Never connect to a remote database');
+  assert.equal((sql.match(/^CREATE OR REPLACE FUNCTION public\.ingest_website_lead\(/gm) || []).length, 1);
+  assert.doesNotMatch(sql, /^\\(?:connect|c|copy)\b/im, 'Never connect to a remote database');
 });
