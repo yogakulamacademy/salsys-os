@@ -66,7 +66,7 @@ export async function createManualDraftFromDiscoveredPageAction(formData: FormDa
   const page = await eligibleDiscoveredPageForManualDraft(supabase, organizationId, pageId);
   if (!page) rejectDraft('This discovered page is no longer eligible for draft review.');
 
-  const { error } = await supabase.rpc('create_source_backed_knowledge_document_v2', {
+  const { data: creation, error } = await supabase.rpc('create_source_backed_knowledge_document_v2', {
     p_organization_id: organizationId,
     p_title: title.trim(),
     p_category: category,
@@ -78,8 +78,14 @@ export async function createManualDraftFromDiscoveredPageAction(formData: FormDa
     p_valid_until: null,
     p_approve: false,
   });
-  if (error) {
-    rejectDraft('Knowledge draft could not be saved. No approval was granted.');
+  // The existing source-backed v2 RPC returns an explicit draft receipt.
+  // A successful HTTP/SQL response without that receipt is NOT a saved draft.
+  if (error || creation?.ok !== true || creation?.status !== 'draft' ||
+      typeof creation.document_id !== 'string' ||
+      !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(creation.document_id) ||
+      typeof creation.source_id !== 'string' ||
+      !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(creation.source_id)) {
+    rejectDraft('Knowledge draft could not be verified as saved. No approval was assumed.');
   }
 
   revalidatePath(destination);
