@@ -83,5 +83,7 @@ export async function createManualDraftFromDiscoveredPageAction(formData: FormDa
   }
 
   revalidatePath(destination);
-  redirect(destination + '?draftNotice=manual_draft_saved');
+  // The new draft appears in the existing tenant-scoped library on reload.
+  // Never trust a caller-controlled GET parameter as proof of a saved document.
+  redirect(destination);
 }
