@@ -1219,9 +1219,11 @@ test('KB-09F/G/H proof, BYPASSRLS, tenant-finalization, consent and commit races
     assert.equal((await callAs(b,'authenticated',PROOF_CLAIM,
       [ORG_D,HOST,candidateHash],ADMIN_D,SID_D)).rows[0].allowed,false,
       '30-second rate limit continues to apply');
-    assert.equal((await callAs(b,'authenticated',PROOF_CLAIM,
-      [ORG_D,HOST,candidateHash],ADMIN_E,SID_E)).rows[0].allowed,false,
-      'Different bound user cannot operate tenant D proof');
+    await assert.rejects(
+      callAs(b,'authenticated',PROOF_CLAIM,
+        [ORG_D,HOST,candidateHash],ADMIN_E,SID_E),
+      isCode('42501'),'Different bound user cannot operate tenant D proof'
+    );
     const crossTenantProofRead=(await callAs(b,'authenticated',
       "select count(*)::int as n from public.knowledge_discovery_domain_verifications "+
       "where organization_id=$1",[ORG_D],ADMIN_E,SID_E)).rows[0].n;
