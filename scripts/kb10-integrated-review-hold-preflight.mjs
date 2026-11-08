@@ -103,6 +103,11 @@ export function verifyIntegratedHold(packet, migrationInventory, releaseLedger, 
   const runner=files.runner;
   const preview=files.htmlPreview;
   const syntheticSql=files.syntheticSql;
+  const atomicDraftSql=files.atomicDraftSql;
+  assert.match(atomicDraftSql,/KB11A_LOCAL_DISPOSABLE_FIXTURE_REQUIRED/);
+  assert.match(atomicDraftSql,/create_discovery_review_draft_with_current_consent_v1/);
+  assert.match(atomicDraftSql,/for share of b,s,o,m/);
+  assert.match(atomicDraftSql,/kb_discovery_consent_actor_v1/);
   assert.match(action,/create_discovery_review_draft_with_current_consent_v1/);
   assert.match(action,/KNOWLEDGE_DISCOVERY_ATOMIC_DRAFT_APPROVED !== 'true'/);
   assert.match(action,/creation\?\.organization_id !== organizationId/);
@@ -146,6 +151,7 @@ function readCurrentFiles(){
     runner:readText('lib/knowledge-discovery/runner.ts'),
     htmlPreview:readText('app/settings/knowledge/discovery/preview-action.ts'),
     syntheticSql:readText('docs/sql/KB-09T-evidence-withdrawal-expiry-REHEARSAL-DRAFT.sql'),
+    atomicDraftSql:readText('docs/sql/KB-11A-consent-atomic-discovered-draft-REHEARSAL-DRAFT.sql'),
   };
 }
 
@@ -156,6 +162,16 @@ export function loadAndVerify(){
   // Never accidentally publish fixture DDL as a production migration.
   const migrations=readdirSync(resolve('supabase/migrations'));
   assert.equal(migrations.some(name=>/^KB-09[ST]-/i.test(name)),false);
+  // KB-11A/B are guarded disposable SQL rehearsals, not Supabase migrations.
+  // A rename must not silently turn the unapproved RPC into a deployable DDL.
+  assert.equal(migrations.some(name=>/^KB-11[AB]-/i.test(name)),false);
+  for(const migration of migrations.filter(name=>name.endsWith('.sql'))){
+    assert.doesNotMatch(
+      readText(resolve('supabase/migrations',migration)),
+      /create\s+(?:or\s+replace\s+)?function\s+public\.create_discovery_review_draft_with_current_consent_v1\s*\(/i,
+      'KB-11 draft discovered-page RPC cannot appear in an installable migration: '+migration,
+    );
+  }
   return verifyIntegratedHold(packet,inventory,ledger,readCurrentFiles());
 }
 
