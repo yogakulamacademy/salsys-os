@@ -12,6 +12,7 @@ import {
 } from '@/app/settings/knowledge/actions';
 import { createManualDraftFromDiscoveredPageAction } from '@/app/settings/knowledge/discovery/draft-action';
 import { eligibleDiscoveredPageForManualDraft, type EligiblePageDraft } from '@/lib/knowledge-discovery/eligible-page-draft';
+import { discoveryPublicationHeld } from '@/lib/knowledge-discovery/discovery-publication-hold';
 import { KnowledgeDiscoveryPastedHtmlReview } from '@/components/knowledge-discovery-pasted-html-review';
 import { PageHeader } from '@/components/ui';
 import type { ReactNode } from 'react';
@@ -24,6 +25,7 @@ import { getCurrentWorkspaceContext } from '@/lib/workspace';
 type KnowledgeDocument = {
   id: string;
   source_id: string | null;
+  metadata: Record<string, unknown> | null;
   title: string;
   category: string;
   status: 'draft' | 'review' | 'approved' | 'expired' | 'superseded' | 'archived';
@@ -154,7 +156,7 @@ export default async function KnowledgeSettingsPage({
             supabase
               .from('knowledge_documents')
               .select(
-                'id, source_id, title, category, status, content, version, valid_from, valid_until, approved_at, created_at, updated_at',
+                'id, source_id, title, category, status, content, version, valid_from, valid_until, approved_at, created_at, updated_at, metadata',
               )
               .eq('organization_id', organizationId)
               .order('updated_at', { ascending: false })
@@ -452,6 +454,7 @@ export default async function KnowledgeSettingsPage({
                   <a className="kn-secondary" href="/settings/knowledge">Clear filters</a></div>
               ) : filteredDocuments.map((document) => {
                 const source = document.source_id ? sourceById.get(document.source_id) : null;
+                const publicationHeld = discoveryPublicationHeld(document.metadata);
                 return <article key={document.id} className="kn-document">
                   <div className="kn-document-title"><FileText size={17}/>
                     <h3>{document.title}</h3>
@@ -468,10 +471,13 @@ export default async function KnowledgeSettingsPage({
                   {source?.source_uri ? <p className="kn-reference">Reference: {source.source_uri}</p> : null}
                   <p className="kn-updated">Updated {new Date(document.updated_at).toLocaleString('en-IN')}</p>
                   {canManage && document.status !== 'archived' ? <div className="kn-document-actions">
-                    {document.status !== 'approved' ? <form action={approveKnowledgeDocumentAction}>
+                    {document.status !== 'approved' && !publicationHeld ? <form action={approveKnowledgeDocumentAction}>
                       <input type="hidden" name="document_id" value={document.id}/>
                       <button type="submit" className="kn-primary kn-small"><CheckCircle2 size={14}/> Approve</button>
                     </form> : null}
+                    {publicationHeld ? <span className="kn-scope-note" role="status">
+                      Discovery draft held: independent evidence review required before AI publication.
+                    </span> : null}
                     <form action={archiveKnowledgeDocumentAction}>
                       <input type="hidden" name="document_id" value={document.id}/>
                       <button type="submit" className="kn-secondary kn-small"><Archive size={14}/> Archive</button>
