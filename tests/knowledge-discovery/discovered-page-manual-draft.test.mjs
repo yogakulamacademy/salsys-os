@@ -112,10 +112,14 @@ const client={
     rpcCalls.push({name,args});
     if(name==='can_manage_organization')return {data:canManage,error:null};
     if(name==='create_discovery_review_draft_with_current_consent_v1'){
-      // Model the NEW DB-side atomic guard, which can reject withdrawal
-      // AFTER the UI/page eligibility read and BEFORE mutation commits.
-      if(withdrawBetweenReadsAndCommit || rows.knowledge_discovery_site_consents?.status !== 'granted'){
-        return {data:{ok:false,reason:'consent_withdrawn'},error:null};
+      // Model the required future DB atomic guard rather than old app SELECT:
+      // this test mock rechecks page/job/site/proof/consent at the RPC boundary.
+      // It does NOT substitute for real SQL/locking or staging verification.
+      const checked=await helper.eligibleDiscoveredPageForManualDraft(
+        client,args.p_organization_id,args.p_page_id);
+      if(withdrawBetweenReadsAndCommit || !checked ||
+          rows.knowledge_discovery_site_consents?.status !== 'granted'){
+        return {data:{ok:false,reason:'authorization_not_current'},error:null};
       }
       return {data:createError?null:(createResult??{
         ok:true,status:'draft',
