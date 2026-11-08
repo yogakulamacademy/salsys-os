@@ -34,13 +34,19 @@ async function context() {
   const { data: canManage, error: permissionError } =
     await client.rpc('can_manage_organization', { p_organization_id: org });
   if (permissionError || canManage !== true) return null;
+  // KB-09K: a generic admin check alone does not establish a live,
+  // tenant-bound auth.sessions entry for a privileged proof workflow.
+  const { data: boundActor, error: actorError } = await client.rpc(
+    'kb_discovery_consent_actor_v1', { p_org: org },
+  );
+  if (actorError || boundActor !== user.id) return null;
   const { data: onboarding, error: websiteError } = await client
     .from('organization_onboarding').select('website_url').eq('organization_id', org).maybeSingle();
   if (websiteError || !onboarding?.website_url) return null;
   const seed = parseWebsiteSeed(onboarding.website_url);
   // A proof must be hosted directly at the configured HTTPS hostname.
   if (seed.protocol !== 'https:' || !discoveryPilotEnabled() || !discoveryHostAllowed(seed.hostname)) return null;
-  return { org, userId: user.id, seed, hostname: discoveryVerificationHost(seed.hostname) };
+  return { client, org, userId: user.id, seed, hostname: discoveryVerificationHost(seed.hostname) };
 }
 
 type VerificationRow = {
@@ -82,12 +88,11 @@ export async function POST(request: NextRequest) {
     // The database owns the cooldown check and the upsert in one transaction.
     // Two simultaneous admin requests cannot issue conflicting valid tokens.
     const challenge = newDomainChallenge();
-    const { data: expiry, error } = await createAdminClient().rpc(
-      'issue_knowledge_discovery_domain_challenge_v1',
+    const { data: expiry, error } = await ctx.client.rpc(
+      'issue_knowledge_discovery_challenge_for_admin_v1',
       {
         p_organization_id: ctx.org,
         p_hostname: ctx.hostname,
-        p_created_by: ctx.userId,
         p_challenge_hash: challenge.tokenHash,
       },
     );
@@ -115,8 +120,8 @@ export async function PUT(request: NextRequest) {
     if (!existing || Date.parse(existing.challenge_expires_at) <= Date.now()) {
       return json({ ok: false, error: 'Ownership challenge missing or expired.' }, 409);
     }
-    const { data: canCheck, error: checkError } = await createAdminClient().rpc(
-      'claim_knowledge_discovery_proof_check_v1',
+    const { data: canCheck, error: checkError } = await ctx.client.rpc(
+      'claim_knowledge_discovery_proof_check_for_admin_v1',
       {
         p_organization_id: ctx.org,
         p_hostname: ctx.hostname,
@@ -138,16 +143,35 @@ export async function PUT(request: NextRequest) {
     if (proof.status !== 200 || !domainProofMatches(proof.body, existing.challenge_hash)) {
       return json({ ok: false, error: 'The verification file does not match the issued challenge.' }, 422);
     }
-    const now = new Date();
-    const verifiedUntil = new Date(now.getTime() + 30 * 24 * 60 * 60_000).toISOString();
-    const { data, error } = await createAdminClient().from('knowledge_discovery_domain_verifications')
-      .update({ verified_at: now.toISOString(), verified_until: verifiedUntil })
-      .eq('organization_id', ctx.org).eq('hostname', ctx.hostname)
-      .eq('challenge_hash', existing.challenge_hash)
-      .gt('challenge_expires_at', now.toISOString())
-      .select('id').maybeSingle();
+    // Reaffirm the exact signed-in owner/admin session after network I/O.
+    // This is not a substitute for independently staged Auth races.
+    const session = await ctx.client.rpc('kb_discovery_consent_actor_v1', {
+      p_org: ctx.org,
+    });
+    if (session.error || session.data !== ctx.userId) {
+      return json({ ok: false, error: 'Not authorized or pilot not enabled' }, 403);
+    }
+    // Only the server, after a real matching website proof, may request this
+    // narrow service-only CAS. Never perform a privileged table UPDATE.
+    const { data, error } = await createAdminClient().rpc(
+      'confirm_checked_knowledge_discovery_proof_v1',
+      {
+        p_organization_id: ctx.org,
+        p_hostname: ctx.hostname,
+        p_challenge_hash: existing.challenge_hash,
+      },
+    );
     if (error) throw error;
-    if (!data) return json({ ok: false, error: 'Ownership challenge changed or expired.' }, 409);
+    if (data?.ok !== true || data?.status !== 'verified') {
+      return json({ ok: false, error: 'Ownership challenge changed or expired.' }, 409);
+    }
+    const verifiedUntil = data.verified_until;
+    if (typeof verifiedUntil !== 'string' ||
+        !Number.isFinite(Date.parse(verifiedUntil)) ||
+        Date.parse(verifiedUntil) <= Date.now() ||
+        Date.parse(verifiedUntil) > Date.now() + 31 * 24 * 60 * 60_000) {
+      throw new Error('proof_completion_not_confirmed');
+    }
     return json({ ok: true, status: 'verified', verifiedUntil });
   } catch {
     return json({ ok: false, error: 'Could not verify website ownership.' }, 503);
