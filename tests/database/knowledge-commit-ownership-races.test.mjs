@@ -18,8 +18,9 @@ const sqlFiles=[
   '../../docs/sql/KB-09K-proof-consent-direct-DML-boundary-REHEARSAL-DRAFT.sql',
   '../../docs/sql/KB-09L-proof-preimage-operator-hold-REHEARSAL-DRAFT.sql',
   '../../docs/sql/KB-09M-proof-checked-worker-commit-bridge-REHEARSAL-DRAFT.sql',
+  '../../docs/sql/KB-09N-retired-seed-rpc-and-acl-preflight-REHEARSAL-DRAFT.sql',
 ].map(path=>readFileSync(new URL(path,import.meta.url),'utf8'));
-const [foundation,discovery,consentA,consentB,guard,writeGuard,jobFinalization,rpcBridge,atomicEnqueue,proofBoundary,preimageAndPolicyHold,checkedCommitBridge]=sqlFiles;
+const [foundation,discovery,consentA,consentB,guard,writeGuard,jobFinalization,rpcBridge,atomicEnqueue,proofBoundary,preimageAndPolicyHold,checkedCommitBridge,retiredSeedAudit]=sqlFiles;
 
 const ORG_A='10000000-0000-4000-8000-000000000001';
 const ORG_B='10000000-0000-4000-8000-000000000002';
@@ -1561,6 +1562,112 @@ test('KB-09F/G/H proof, BYPASSRLS, tenant-finalization, consent and commit races
       .rows[0].result;
     assert.deepEqual(repeated,{ok:false,reason:'inactive_or_stale_lease'},
       'Completed job cannot be committed with consumed lease');
+
+
+    // KB-09N closes a privileged orphaned service-only seed-repair path
+    // that no longer has a runtime caller after KB-09J atomic job enqueue.
+    // All assertions operate only on this random auto-dropped local DB.
+    const kb09nBefore=(await root.query(
+      "select status,coalesce(last_error_code,'') as code "+
+      "from public.knowledge_discovery_jobs where id=$1",
+      [acceptedD.job_id]
+    )).rows[0];
+    await root.query(retiredSeedAudit);
+    assert.match(retiredSeedAudit,/KB09N_DISPOSABLE_PARENT_FIXTURE_REQUIRED/);
+    const kb09nPriv=(await root.query(
+      "select has_function_privilege('service_role',$1,'execute') as public_repair,"+
+      "has_function_privilege('service_role',$2,'execute') as private_repair",
+      [PUBLIC_FAILURE_SIG,FAILURE_SIG]
+    )).rows[0];
+    assert.deepEqual(kb09nPriv,{public_repair:false,private_repair:false});
+    await assert.rejects(
+      callAs(b,'service_role',SEED_FAILURE,[ORG_D,acceptedD.job_id,ADMIN_D]),
+      isCode('42501'),'Retired public seed-repair must not be service-callable'
+    );
+    await assert.rejects(
+      callAs(b,'service_role',
+        'select kb09h_fixture.fail_unseeded_queued_job_v1($1,$2,$3)',
+        [ORG_D,acceptedD.job_id,ADMIN_D]),
+      isCode('42501'),'Retired private seed-repair must not be service-callable'
+    );
+    assert.deepEqual((await root.query(
+      "select status,coalesce(last_error_code,'') as code "+
+      "from public.knowledge_discovery_jobs where id=$1",
+      [acceptedD.job_id]
+    )).rows[0],kb09nBefore,'Refused repair cannot alter the job');
+
+    // The read-only catalog contract must fail if a future GRANT makes
+    // any retired RPC callable again, even when regular tests pass.
+    const kb09nAuditStart=retiredSeedAudit.indexOf('do $kb09n_audit  }finally{
+    await Promise.allSettled(connections.map(db=>db.end()));
+    try{if(created)await admin.query('drop database "'+name+'" with (force)');}
+    finally{
+      try{
+        if(bypassRole){
+          await admin.query('revoke service_role from "'+bypassRole+'"');
+          await admin.query('drop role "'+bypassRole+'"');
+        }
+    
+  }finally{await admin.end();}
+    }
+  }
+});
+);
+    const kb09nAuditEnd=retiredSeedAudit.indexOf('$kb09n_audit$;',kb09nAuditStart);
+    assert.ok(kb09nAuditStart>=0 && kb09nAuditEnd>kb09nAuditStart);
+    const kb09nAuditSql=retiredSeedAudit.slice(
+      kb09nAuditStart,kb09nAuditEnd+'$kb09n_audit$;'.length
+    );
+    await root.query(
+      'grant execute on function public.fail_knowledge_discovery_seed_v1(uuid,uuid,uuid) to service_role'
+    );
+    await assert.rejects(root.query(kb09nAuditSql),
+      e=>e?.code==='42501'&&/KB09N_retired_rpc_still_executable/.test(e.message),
+      'Catalog guard detects a regressed obsolete RPC grant');
+    await root.query(
+      'revoke execute on function public.fail_knowledge_discovery_seed_v1(uuid,uuid,uuid) from service_role'
+    );
+
+    // KB-01B inherited REFERENCES across job/page rows: deny all
+    // service-role DML and schema-manipulation grants, not only UPDATE.
+    for(const table of [
+      'knowledge_discovery_jobs','knowledge_discovery_pages',
+      'knowledge_discovery_domain_verifications',
+      'knowledge_discovery_site_consents',
+      'knowledge_discovery_consent_control',
+      'knowledge_discovery_consent_audit',
+    ]){
+      for(const privilege of [
+        'insert','update','delete','truncate','trigger','references',
+      ]){
+        assert.equal((await root.query(
+          "select has_table_privilege('service_role',$1,$2) as allowed",
+          ['public.'+table,privilege]
+        )).rows[0].allowed,false,'Denied service DML/DDL: '+table+'.'+privilege);
+      }
+    }
+    await root.query(
+      'grant references on public.knowledge_discovery_jobs to service_role'
+    );
+    await assert.rejects(root.query(kb09nAuditSql),
+      e=>e?.code==='42501'&&/KB09N_service_role_direct_write_or_ddl/.test(e.message),
+      'Catalog guard must detect a regressed REFERENCES privilege');
+    await root.query(
+      'revoke references on public.knowledge_discovery_jobs from service_role'
+    );
+    await root.query(kb09nAuditSql);
+
+    // Legitimate authorized workload remains reachable after closing the
+    // obsolete seed-repair RPC and inherited table DDL rights.
+    const kb09nWorkerACL=(await root.query(
+      "select has_function_privilege('service_role',$1,'execute') as checked_worker,"+
+      "has_function_privilege('authenticated',$2,'execute') as tenant_cancel",
+      [PUBLIC_SAFE_COMMIT_SIG,PUBLIC_CANCEL_SIG]
+    )).rows[0];
+    assert.deepEqual(kb09nWorkerACL,{checked_worker:true,tenant_cancel:true});
+    assert.equal((await root.query(
+      "select grants_enabled from public.knowledge_discovery_consent_control"
+    )).rows[0].grants_enabled,false);
   }finally{
     await Promise.allSettled(connections.map(db=>db.end()));
     try{if(created)await admin.query('drop database "'+name+'" with (force)');}
