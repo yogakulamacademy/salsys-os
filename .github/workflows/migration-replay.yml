@@ -36,9 +36,15 @@ jobs:
           node scripts/build-migration-recovery-manifest.mjs | tee migration-recovery-manifest-summary.json
 
       - name: Setup Supabase CLI
-        uses: supabase/setup-cli@1dedf2c611547ede7232d26866dd3c56ab903bbb # v1
+        uses: supabase/setup-cli@689adcfb80d947100a1eab127289b97d1fb07b13 # v3.2.0 (npm-backed)
         with:
           version: 3.0.0
+
+      - name: Verify exact Supabase CLI version
+        shell: bash
+        run: |
+          set -euo pipefail
+          supabase --version | grep -Fx '3.0.0'
 
       - name: Stage historical recovery prerequisites
         shell: bash
@@ -296,6 +302,32 @@ jobs:
           docker exec -i "$db_containers" psql -X -v ON_ERROR_STOP=1 \
             -U postgres -d postgres \
             < tests/database/r2-behavior-rpc-positive-tenant-local.sql
+
+      - name: Verify R2 #643 full browser lead RPC + identity trigger path in disposable Postgres
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Must use only the already-started disposable local Supabase container.
+          # Never use production DB URLs, network services or real site data.
+          db_containers="$(docker ps --format '{{.Names}}' | grep '^supabase_db_' || true)"
+          test "$(printf '%s\n' "$db_containers" | grep -c .)" -eq 1
+          docker exec -i "$db_containers" psql -X -v ON_ERROR_STOP=1 \
+            -U postgres -d postgres \
+            < tests/database/r2-website-ingest-primary-contact-full-rpc-local.sql
+
+      - name: Verify R2 #643 privileged RPC restoration and rollback in disposable local Postgres
+        shell: bash
+        run: |
+          set -euo pipefail
+          # This NEVER connects to cloud Supabase: only a single already started
+          # local supabase_db_ Docker container with generated opt-in SQL.
+          db_containers="$(docker ps --format '{{.Names}}' | grep '^supabase_db_' || true)"
+          test "$(printf '%s\n' "$db_containers" | grep -c .)" -eq 1
+          sqlfile="$(mktemp)"
+          trap 'rm -f "$sqlfile"' EXIT
+          node scripts/r2-local-contact-rollback-rehearsal.mjs --disposable-local-only > "$sqlfile"
+          docker exec -i "$db_containers" psql -X -v ON_ERROR_STOP=1 \
+            -U postgres -d postgres < "$sqlfile"
 
       - name: Show local migration state
         if: always()
