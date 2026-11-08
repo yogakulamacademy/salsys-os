@@ -36,9 +36,15 @@ jobs:
           node scripts/build-migration-recovery-manifest.mjs | tee migration-recovery-manifest-summary.json
 
       - name: Setup Supabase CLI
-        uses: supabase/setup-cli@1dedf2c611547ede7232d26866dd3c56ab903bbb # v1
+        uses: supabase/setup-cli@689adcfb80d947100a1eab127289b97d1fb07b13 # v3.2.0 (npm-backed)
         with:
           version: 3.0.0
+
+      - name: Verify exact Supabase CLI version
+        shell: bash
+        run: |
+          set -euo pipefail
+          supabase --version | grep -Fx '3.0.0'
 
       - name: Stage historical recovery prerequisites
         shell: bash
