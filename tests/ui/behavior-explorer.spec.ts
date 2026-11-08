@@ -553,6 +553,40 @@ test("Out-of-range or stale UTC trend dates fail closed without erasing the othe
   }
 });
 
+test("Impossible daily/window trend session counts fail closed without hiding independent Behavior reports", async ({ page, request }) => {
+  const trendPanel = page.getByRole("region", { name: "Event activity trends" });
+  const pathsPanel = page.getByRole("region", { name: "Popular navigation paths" });
+  const pagePanel = page.getByRole("region", { name: "Event page breakdown" });
+  const publicPath = "/courses/200-hour-ytt.php";
+  const scenarios = [
+    "trends-daily-session-exceeds-window",
+    "trends-window-session-exceeds-daily",
+  ] as const;
+  try {
+    for (const state of scenarios) {
+      const setup = await request.get(fixtureBase + "/__behavior_scenario?state=" + state);
+      expect(setup.ok(), state).toBe(true);
+      await page.goto("/marketing?view=behavior&days=7");
+      await expect(trendPanel.getByRole("status")).toBeVisible();
+      await expect(trendPanel.getByRole("article", { name: "Page viewed event trend" })).toHaveCount(0);
+      await expect(page.getByRole("heading", { name: "Ordered funnel" })).toBeVisible();
+      await expect(pathsPanel.getByText(publicPath, { exact: true })).toBeVisible();
+      await expect(pagePanel.getByText(publicPath, { exact: true })).toBeVisible();
+      const calls = await (await request.get(fixtureBase + "/__behavior_trend_calls")).json();
+      expect(calls.length, state).toBeGreaterThan(0);
+      expect(calls.every((call: { organization_id: string }) =>
+        call.organization_id === organizationId), state).toBe(true);
+    }
+    const restore = await request.get(fixtureBase + "/__behavior_scenario?state=ready");
+    expect(restore.ok()).toBe(true);
+    await page.goto("/marketing?view=behavior&days=7");
+    await expect(trendPanel.getByRole("article", { name: "Page viewed event trend" })).toBeVisible();
+    await expect(pathsPanel.getByText(publicPath, { exact: true })).toBeVisible();
+  } finally {
+    await request.get(fixtureBase + "/__behavior_scenario?state=ready&tenant=primary");
+  }
+});
+
 test("Owner can explicitly copy aggregate Event activity review figures, never tenant or path data", async ({ page, request, context }) => {
   await context.grantPermissions(["clipboard-read", "clipboard-write"]);
   const copy = page.getByRole("button", { name: "Copy Event activity review figures" });

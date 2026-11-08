@@ -1,7 +1,7 @@
 import { expect, test, type Page } from "@playwright/test";
 import path from "node:path";
 
-// Synthetic browser-only R2 consent acceptance. All requests are intercepted
+// Cross-draft integration: PR #530 consent identity SDK + real consent UI. All requests are intercepted
 // and only the local Playwright fixture and repository JS files are served.
 // NO production website, consent API, event receiver, tenant or customer data.
 const HARNESS = "/__r2_consent_ui_fullstack_local";
@@ -9,7 +9,12 @@ const EVENTS = "/__r2_consent_ui_events_sink_local";
 const RECEIPTS = "/__r2_consent_ui_receipts_sink_local";
 
 type DecisionSet = Record<string, string>;
-type ObservedEvent = { name: string; consentMode: string | undefined };
+type ObservedEvent = {
+  name: string;
+  consentMode: string | undefined;
+  visitorId: string | undefined;
+  sessionKey: string | undefined;
+};
 type PersistedPurposeReceipt = { purpose: string; decision: string; receipt_id: string };
 type ObservedReceipt = {
   decisions: DecisionSet;
@@ -48,7 +53,7 @@ function html() {
   ].join("");
 }
 
-async function openFixture(page: Page) {
+async function openFixture(page: Page, options: { invalidReceiptAt?: number } = {}) {
   const captured: Capture = { events: [], receipts: [] };
   await page.route("**/*", async (route) => {
     const request = route.request();
@@ -77,11 +82,15 @@ async function openFixture(page: Page) {
     if (url.pathname === EVENTS && request.method() === "POST") {
       const body = request.postDataJSON() as {
         event_name?: string;
+        anonymous_visitor_id?: string;
+        session_key?: string;
         metadata?: { consent_mode?: string };
       };
       captured.events.push({
         name: String(body.event_name || ""),
         consentMode: body.metadata?.consent_mode,
+        visitorId: body.anonymous_visitor_id,
+        sessionKey: body.session_key,
       });
       await route.fulfill({
         status: 200,
@@ -124,6 +133,12 @@ async function openFixture(page: Page) {
         effective_decisions,
         received_at: new Date().toISOString(),
       };
+      // A malformed 200 response tests the *real consent UI's* fail-closed
+      // error handling, rather than relying solely on direct SDK unit tests.
+      // One-based receipt index lets the same fixture fail a grant or withdrawal.
+      if (options.invalidReceiptAt === captured.receipts.length + 1) {
+        response.receipts = [];
+      }
       captured.receipts.push({
         decisions: { ...body.decisions },
         requestVisitor: body.visitor_id,
@@ -272,4 +287,134 @@ test("R2 consent integration: Accept then customize Analytics off blocks future 
   await page.waitForTimeout(120);
   expect(captured.events).toHaveLength(before);
   expect(captured.receipts).toHaveLength(2);
+});
+
+test("R2 combined UI + identity SDK: withdraw then regrant creates a fresh consented epoch", async ({ page }) => {
+  const captured = await openFixture(page);
+  await page.getByRole("dialog", { name: "Privacy choices" })
+    .getByRole("button", { name: "Accept all" }).click();
+  await expect.poll(() => allowed(page)).toBe(true);
+  await expect.poll(() => captured.events.filter((event) =>
+    event.name === "web.session_started" || event.name === "web.page_viewed").length).toBe(2);
+  const initial = await page.evaluate(() => ({
+    visitor: (window as any).Salsys.visitorId() as string,
+    session: (window as any).Salsys.sessionId() as string,
+  }));
+  assertStructuredConsentReceipt(captured.receipts[0]);
+
+  await page.getByRole("button", { name: "Open privacy settings" }).click();
+  await page.getByRole("switch", { name: "Analytics" }).uncheck();
+  await page.getByRole("dialog", { name: "Privacy settings" })
+    .getByRole("button", { name: "Save choices" }).click();
+  await expect.poll(() => allowed(page)).toBe(false);
+  await expect.poll(() => captured.receipts.length).toBe(2);
+  assertStructuredConsentReceipt(captured.receipts[1]);
+
+  const withdrawn = await page.evaluate(() => ({
+    visitor: (window as any).Salsys.visitorId() as string,
+    session: (window as any).Salsys.sessionId() as string,
+    persisted: localStorage.getItem("salsys_vid"),
+  }));
+  expect(withdrawn.visitor).not.toBe(initial.visitor);
+  expect(withdrawn.session).not.toBe(initial.session);
+  expect(withdrawn.persisted).toBe(null);
+  const priorEventCount = captured.events.length;
+  await page.evaluate(() => history.pushState({}, "", "?while_denied=1"));
+  await page.waitForTimeout(150);
+  expect(captured.events).toHaveLength(priorEventCount);
+
+  await page.getByRole("button", { name: "Open privacy settings" }).click();
+  await page.getByRole("switch", { name: "Analytics" }).check();
+  await page.getByRole("dialog", { name: "Privacy settings" })
+    .getByRole("button", { name: "Save choices" }).click();
+  await expect.poll(() => allowed(page)).toBe(true);
+  await expect.poll(() => captured.receipts.length).toBe(3);
+  assertStructuredConsentReceipt(captured.receipts[2]);
+  await expect.poll(() => captured.events.filter((event) =>
+    (event.name === "web.session_started" || event.name === "web.page_viewed")
+    && event.visitorId === withdrawn.visitor
+    && event.sessionKey === withdrawn.session).length).toBe(2);
+
+  const regranted = await page.evaluate(() => ({
+    visitor: (window as any).Salsys.visitorId() as string,
+    session: (window as any).Salsys.sessionId() as string,
+    persisted: localStorage.getItem("salsys_vid"),
+  }));
+  expect(regranted.visitor).toBe(withdrawn.visitor);
+  expect(regranted.session).toBe(withdrawn.session);
+  expect(regranted.visitor).not.toBe(initial.visitor);
+  expect(regranted.persisted).toBe(regranted.visitor);
+  // No previously withdrawn browser identity may appear in fresh events.
+  expect(captured.events.slice(priorEventCount).every((event) =>
+    event.visitorId !== initial.visitor && event.sessionKey !== initial.session)).toBe(true);
+});
+
+test("R2 combined UI + identity SDK: malformed grant receipt shows an error and keeps optional tracking blocked", async ({ page }) => {
+  const captured = await openFixture(page, { invalidReceiptAt: 1 });
+  await page.getByRole("dialog", { name: "Privacy choices" })
+    .getByRole("button", { name: "Accept all" }).click();
+
+  await expect.poll(() => captured.receipts.length).toBe(1);
+  expect(captured.receipts[0].response.receipts).toEqual([]);
+  const preferences = page.getByRole("dialog", { name: "Privacy settings" });
+  await expect(preferences).toBeVisible();
+  await expect(preferences.getByText("Privacy preference server receipt was not verified.")).toBeVisible();
+  expect(await allowed(page)).toBe(false);
+  expect(captured.events).toEqual([]);
+  expect(await page.evaluate(() => localStorage.getItem("salsys_vid"))).toBe(null);
+
+  // The first failed HTTP 200 must not poison consent receipt retries.
+  await preferences.getByRole("button", { name: "Accept all" }).click();
+  await expect.poll(() => captured.receipts.length).toBe(2);
+  assertStructuredConsentReceipt(captured.receipts[1]);
+  await expect.poll(() => allowed(page)).toBe(true);
+  await expect.poll(() => captured.events.filter((event) =>
+    event.name === "web.session_started" || event.name === "web.page_viewed").length).toBe(2);
+  expect(captured.events.every((event) => event.consentMode === "required")).toBe(true);
+});
+
+test("R2 combined UI + identity SDK: malformed withdrawal receipt displays an error but stays blocked", async ({ page }) => {
+  const captured = await openFixture(page, { invalidReceiptAt: 2 });
+  await page.getByRole("dialog", { name: "Privacy choices" })
+    .getByRole("button", { name: "Accept all" }).click();
+  await expect.poll(() => allowed(page)).toBe(true);
+  await expect.poll(() => captured.events.filter((event) =>
+    event.name === "web.session_started" || event.name === "web.page_viewed").length).toBe(2);
+
+  const initial = await page.evaluate(() => ({
+    visitor: (window as any).Salsys.visitorId() as string,
+    session: (window as any).Salsys.sessionId() as string,
+  }));
+  await page.getByRole("button", { name: "Open privacy settings" }).click();
+  await page.getByRole("switch", { name: "Analytics" }).uncheck();
+  await page.getByRole("dialog", { name: "Privacy settings" })
+    .getByRole("button", { name: "Save choices" }).click();
+
+  await expect.poll(() => captured.receipts.length).toBe(2);
+  expect(captured.receipts[1].response.receipts).toEqual([]);
+  const preferences = page.getByRole("dialog", { name: "Privacy settings" });
+  await expect(preferences).toBeVisible();
+  await expect(preferences.getByText("Privacy preference server receipt was not verified.")).toBeVisible();
+  expect(await allowed(page)).toBe(false);
+
+  const withdrawn = await page.evaluate(() => ({
+    visitor: (window as any).Salsys.visitorId() as string,
+    session: (window as any).Salsys.sessionId() as string,
+    stored: localStorage.getItem("salsys_vid"),
+  }));
+  expect(withdrawn.visitor).not.toBe(initial.visitor);
+  expect(withdrawn.session).not.toBe(initial.session);
+  expect(withdrawn.stored).toBe(null);
+  const seen = captured.events.length;
+  const blocked = await page.evaluate(() => (window as any).Salsys.track("web.page_viewed", {
+    note: "synthetic-after-malformed-withdrawal",
+  }));
+  expect(blocked.privacy_blocked).toBe(true);
+  await page.waitForTimeout(120);
+  expect(captured.events).toHaveLength(seen);
+
+  await page.reload();
+  expect(await allowed(page)).toBe(false);
+  expect(await page.evaluate(() => localStorage.getItem("salsys_vid"))).toBe(null);
+  expect(captured.events).toHaveLength(seen);
 });

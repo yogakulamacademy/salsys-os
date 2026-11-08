@@ -36,7 +36,7 @@ const server=http.createServer(async(req,res)=>{
   if(url.pathname==='/__behavior_scenario'){
     const state=url.searchParams.get('state');
     const tenant=url.searchParams.get('tenant')||'primary';
-    if(!['ready','empty','small','denied','error','funnel-error','trends-error','breakdown-error','malformed-funnel-count','malformed-trends-count','malformed-breakdown-count','malformed-path-low-session','malformed-path-minimum','trends-shifted-calendar','trends-stale-window'].includes(state) ||
+    if(!['ready','empty','small','denied','error','funnel-error','trends-error','breakdown-error','malformed-funnel-count','malformed-trends-count','malformed-breakdown-count','malformed-path-low-session','malformed-path-minimum','trends-shifted-calendar','trends-stale-window','trends-daily-session-exceeds-window','trends-window-session-exceeds-daily'].includes(state) ||
        !['primary','secondary'].includes(tenant)){res.statusCode=400;res.end('{}');return;}
     behaviorScenario=state;behaviorTenant=tenant;
     behaviorCalls=[];behaviorTrendCalls=[];behaviorBreakdownCalls=[];
@@ -173,6 +173,18 @@ const server=http.createServer(async(req,res)=>{
       })
     };
     if(behaviorScenario==='malformed-trends-count') result.series[0].daily[0].sessions=null;
+    if(behaviorScenario==='trends-daily-session-exceeds-window'){
+      // Valid event counts but a day's source-scoped DISTINCT session count
+      // exceeds the whole-window DISTINCT set: impossible by construction.
+      result.series[0].observed_sessions=1;
+    }
+    if(behaviorScenario==='trends-window-session-exceeds-daily'){
+      // Valid day dates and event totals, yet the window DISTINCT cardinality
+      // exceeds the sum of all daily sets. Reject rather than report a zero.
+      const dailySessionSum=result.series[0].daily.reduce((sum,day)=>sum+day.sessions,0);
+      result.series[0].observed_sessions=dailySessionSum+1;
+    }
+
     if(behaviorScenario==='trends-shifted-calendar'){
       // Still valid and sorted, yet one date is outside the claimed calendar domain.
       result.series[0].daily[0].date_utc=
