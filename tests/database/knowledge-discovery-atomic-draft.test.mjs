@@ -20,6 +20,7 @@ const POLICY='synthetic-kb11a-nonlegal';
 const SHA='a'.repeat(64);
 const DRAFT='select public.create_discovery_review_draft_with_current_consent_v1($1,$2,$3,$4,$5) as result';
 const WITHDRAW='select public.withdraw_knowledge_discovery_consent_v1($1,$2,$3) as result';
+const APPROVE='select public.approve_knowledge_document_v1($1,$2) as result';
 const TITLE='Verified manually entered course facts';
 const CONTENT='These are synthetic handwritten review notes, not captured website evidence.';
 const SIGNATURE='public.create_discovery_review_draft_with_current_consent_v1(uuid,uuid,text,text,text)';
@@ -84,9 +85,9 @@ test('KB-11A: local-only consent-atomic discovered-page draft SQL and negative i
       "grant execute on function auth.uid() to authenticated",
       "create table public.organization_onboarding(organization_id uuid primary key,website_url text)",
       "create table public.knowledge_sources(id uuid primary key default gen_random_uuid(),organization_id uuid not null,source_type text not null,name text not null,source_uri text,status text not null,metadata jsonb not null default '{}'::jsonb,created_by uuid)",
-      "create table public.knowledge_documents(id uuid primary key default gen_random_uuid(),organization_id uuid not null,source_id uuid not null references public.knowledge_sources(id) on delete restrict,title text not null,category text not null,content text not null,status text not null check(status='draft'),created_by uuid,metadata jsonb not null default '{}'::jsonb)",
+      "create table public.knowledge_documents(id uuid primary key default gen_random_uuid(),organization_id uuid not null,source_id uuid not null references public.knowledge_sources(id) on delete restrict,title text not null,category text not null,content text not null,status text not null check(status in ('draft','review','approved','archived')),created_by uuid,approved_by uuid,approved_at timestamptz,metadata jsonb not null default '{}'::jsonb)",
       "create table public.knowledge_chunks(id uuid primary key default gen_random_uuid(),organization_id uuid not null,document_id uuid not null references public.knowledge_documents(id) on delete restrict,chunk_index integer not null,content text not null,metadata jsonb not null default '{}'::jsonb)",
-      "create table public.knowledge_approvals(id uuid primary key default gen_random_uuid(),organization_id uuid not null,document_id uuid not null)",
+      "create table public.knowledge_approvals(id uuid primary key default gen_random_uuid(),organization_id uuid not null,document_id uuid not null,action text not null,reviewer_id uuid,note text)",
       "revoke all on public.knowledge_sources,public.knowledge_documents,public.knowledge_chunks,public.knowledge_approvals from public,anon,authenticated,service_role",
     ].join(';\n')+';');
     await root.query(file('../../docs/sql/KB-06B-audited-discovery-consent-lifecycle-DRAFT.sql'));
@@ -95,6 +96,23 @@ test('KB-11A: local-only consent-atomic discovered-page draft SQL and negative i
     assert.doesNotMatch(sql,/drop\s+table|drop\s+schema|grant\s+all\s+on\s+public/ig);
     await root.query(sql);
 
+    // KB-14A loads the EXACT generic approval function from the existing
+    // production migration, but only in this throwaway synthetic database.
+    // The consent-atomic draft must never become AI retrieval eligible via
+    // that older admin RPC or via direct privileged UPDATE.
+    await root.query("create function auth.role() returns text language sql stable as $fn$ select auth.jwt()->>'role' $fn$");
+    const legacy=file('../../supabase/migrations/20261101063000_ai_knowledge_final_closeout_v1.sql');
+    const approvalStart=legacy.indexOf('create or replace function public.approve_knowledge_document_v1(');
+    const approvalEnd=legacy.indexOf('\n$function$;',approvalStart);
+    assert.ok(approvalStart>=0 && approvalEnd>approvalStart,'Exact shipped approval function found');
+    await root.query(legacy.slice(approvalStart,approvalEnd+'\n$function$;'.length));
+    await root.query('revoke all on function public.approve_knowledge_document_v1(uuid,uuid) from public,anon');
+    await root.query('grant execute on function public.approve_knowledge_document_v1(uuid,uuid) to authenticated');
+    const approvalGuard=file('../../docs/sql/KB-14A-unverified-discovery-approval-guard-REHEARSAL-DRAFT.sql');
+    assert.match(approvalGuard,/KB14A_LOCAL_DISPOSABLE_FIXTURE_REQUIRED/);
+    assert.doesNotMatch(approvalGuard,/drop\s+table|drop\s+schema|grant\s+all\s+on\s+public/ig);
+    await root.query(approvalGuard);
+
     const grants=(await root.query(
       "select has_function_privilege('authenticated',$1,'execute') as authenticated,"+
       "has_function_privilege('anon',$1,'execute') as anon,"+
@@ -102,6 +120,7 @@ test('KB-11A: local-only consent-atomic discovered-page draft SQL and negative i
       [SIGNATURE])).rows[0];
     assert.deepEqual(grants,{authenticated:true,anon:false,service:false});
     await root.query('insert into public.organizations(id) values($1),($2)',[ORG_A,ORG_B]);
+    await root.query('insert into public.test_knowledge_admins(organization_id,user_id) values($1,$2)',[ORG_A,USER_A]);
     await root.query(
       'insert into public.organization_members(organization_id,user_id,role,active) values($1,$2,$3,true),($4,$5,$6,true),($7,$8,$9,true)',
       [ORG_A,USER_A,'owner',ORG_B,USER_B,'admin',ORG_A,EMPLOYEE,'employee']);
@@ -154,6 +173,30 @@ test('KB-11A: local-only consent-atomic discovered-page draft SQL and negative i
     assert.equal(document.content,CONTENT);
     assert.equal((await root.query('select count(*)::int as n from public.knowledge_chunks')).rows[0].n,1);
     assert.equal((await root.query('select count(*)::int as n from public.knowledge_approvals')).rows[0].n,0);
+
+    // KB-14A: the EXACT shipped generic approve_knowledge_document_v1 RPC
+    // must be stopped at database trigger level. Rejecting only the UI is
+    // insufficient: an admin can call the existing public RPC directly.
+    await assert.rejects(callAs(a,'authenticated',APPROVE,[ORG_A,success.document_id]),
+      e=>e.code==='42501','Generic approval RPC cannot publish an unverified discovery draft');
+    for(const attempted of [
+      ['update public.knowledge_documents set status=\'approved\' where id=$1',[success.document_id]],
+      ['update public.knowledge_documents set status=\'review\' where id=$1',[success.document_id]],
+      ['update public.knowledge_documents set metadata=$2 where id=$1',[success.document_id,JSON.stringify({})]],
+      ['update public.knowledge_sources set metadata=$2 where id=$1',[success.source_id,JSON.stringify({})]],
+      ['update public.knowledge_sources set source_uri=$2 where id=$1',[success.source_id,'https://changed.example.com/']],
+    ]) {
+      await assert.rejects(root.query(...attempted),e=>e.code==='42501');
+    }
+    await assert.rejects(root.query(
+      "insert into public.knowledge_documents(organization_id,source_id,title,category,content,status,metadata) values($1,$2,'Forged manual approval','faq',$3,'approved','{}'::jsonb)",
+      [ORG_A,success.source_id,CONTENT]),
+      e=>e.code==='42501','Even empty document metadata cannot hide a marked source');
+    assert.equal((await root.query(
+      'select status from public.knowledge_documents where id=$1',
+      [success.document_id])).rows[0].status,'draft');
+    assert.equal((await root.query('select count(*)::int as n from public.knowledge_approvals')).rows[0].n,0,
+      'Denied approval creates no audit or eligible document');
 
     // No role can skip the exact live tenant-session proof.
     for(const [role,actor,sid] of [
@@ -382,6 +425,30 @@ test('KB-11A: local-only consent-atomic discovered-page draft SQL and negative i
     // unapproved legal/DBA flow, not implicitly claimed by this SQL.
     assert.equal((await root.query('select count(*)::int as n from public.knowledge_approvals')).rows[0].n,0);
     assert.equal((await root.query('select count(*)::int as n from public.knowledge_discovery_consent_audit')).rows[0].n,2);
+
+    // Ordinary manually entered knowledge retains the ORIGINAL approval path,
+    // so this scoped safety guard does not disrupt unrelated CRM/Knowledge.
+    const manualSource=(await root.query(
+      "insert into public.knowledge_sources(organization_id,source_type,name,status,metadata) values($1,'manual','Synthetic ordinary manual source','active','{\"entry_mode\":\"knowledge_workspace_v2\"}'::jsonb) returning id",
+      [ORG_A])).rows[0].id;
+    const manualDocument=(await root.query(
+      "insert into public.knowledge_documents(organization_id,source_id,title,category,content,status,metadata) values($1,$2,'Manual knowledge','faq',$3,'draft','{\"entry_mode\":\"knowledge_workspace_v2\"}'::jsonb) returning id",
+      [ORG_A,manualSource,CONTENT])).rows[0].id;
+    const normal=(await callAs(a,'authenticated',APPROVE,[ORG_A,manualDocument])).rows[0].result;
+    assert.equal(normal?.ok,true,'Ordinary Knowledge approval still functions');
+    assert.equal(normal.status,'approved');
+    assert.equal((await root.query('select status from public.knowledge_documents where id=$1',
+      [manualDocument])).rows[0].status,'approved');
+    assert.equal((await root.query('select count(*)::int as n from public.knowledge_approvals where document_id=$1',
+      [manualDocument])).rows[0].n,1);
+
+    // Unverified discovered material may be archived for containment, but
+    // can never be re-approved through the generic function.
+    await root.query("update public.knowledge_documents set status='archived' where id=$1",
+      [success.document_id]);
+    await assert.rejects(callAs(a,'authenticated',APPROVE,[ORG_A,success.document_id]));
+    await root.query("update public.knowledge_sources set status='disabled' where id=$1",
+      [success.source_id]);
     void service;
   } finally {
     for(const c of clients.reverse())await c.end().catch(()=>{});
