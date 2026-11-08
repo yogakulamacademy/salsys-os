@@ -70,7 +70,8 @@ function reset(){
     organization_onboarding:{organization_id:org,website_url:website},
     knowledge_discovery_pages:{
       id:pageId,organization_id:org,job_id:jobId,url:rawPage,
-      status:'fetched',http_status:200,page_title:'About our practice',
+      status:'fetched',http_status:200,content_type:'text/html; charset=utf-8',
+      page_title:'About our practice',
     },
     knowledge_discovery_jobs:{
       id:jobId,organization_id:org,seed_url:website,status:'completed',
@@ -175,15 +176,32 @@ test('KB-09Q manual draft uses a current, fetched, host-bound page with live con
   ]);
 });
 
+test('KB-13A allows both SQL-approved HTML MIME types without treating metadata as content',async()=>{
+  for (const mediaType of ['text/html','text/html; charset=utf-8',
+    'application/xhtml+xml','application/xhtml+xml; charset=utf-8']) {
+    reset();
+    rows.knowledge_discovery_pages.content_type=mediaType;
+    const result=await helper.eligibleDiscoveredPageForManualDraft(client,org,pageId);
+    assert.equal(result?.sourceUri,rawPage,mediaType);
+  }
+});
+
 test('KB-09Q a forged URL, wrong tenant, stale job or unfetched page cannot become a draft source',async()=>{
   const cases=[
     ()=>{rows.knowledge_discovery_pages.url='https://evil.example.com/page';},
     ()=>{rows.knowledge_discovery_pages.url='javascript:alert(1)';},
     ()=>{rows.knowledge_discovery_pages.status='failed';},
     ()=>{rows.knowledge_discovery_pages.http_status=404;},
+    ()=>{rows.knowledge_discovery_pages.content_type='application/pdf';},
+    ()=>{rows.knowledge_discovery_pages.content_type='text/plain';},
+    ()=>{rows.knowledge_discovery_pages.content_type='text/html-malformed';},
+    ()=>{rows.knowledge_discovery_pages.content_type=null;},
     ()=>{rows.knowledge_discovery_jobs.status='cancelled';},
     ()=>{rows.knowledge_discovery_jobs.status='running';},
     ()=>{rows.knowledge_discovery_jobs.seed_url='https://different.example.com/';},
+    ()=>{rows.knowledge_discovery_jobs.seed_url='https://fixture.example.com/off-path';},
+    ()=>{rows.knowledge_discovery_jobs.seed_url='https://fixture.example.com/?tag=untrusted';},
+    ()=>{rows.knowledge_discovery_jobs.seed_url='https://fixture.example.com:443/';},
     ()=>{rows.knowledge_discovery_domain_verifications.verified_until=new Date(Date.now()-1000).toISOString();},
     ()=>{rows.knowledge_discovery_site_consents.status='withdrawn';},
     ()=>{rows.knowledge_discovery_site_consents.purpose='analytics';},
