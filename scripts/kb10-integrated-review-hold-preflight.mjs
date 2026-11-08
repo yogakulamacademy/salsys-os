@@ -106,16 +106,15 @@ export function verifyIntegratedHold(packet, migrationInventory, releaseLedger, 
   const atomicDraftSql=files.atomicDraftSql;
   const approvalGuardSql=files.approvalGuardSql;
   const legacyApprovalAction=files.legacyApprovalAction;
-  const approvalPreflight=files.approvalPreflight;
   assert.match(approvalGuardSql,/KB14A_LOCAL_DISPOSABLE_FIXTURE_REQUIRED/);
   assert.match(approvalGuardSql,/create trigger kb14a_hold_unverified_discovery_document/);
   assert.match(approvalGuardSql,/create trigger kb14a_hold_unverified_discovery_source/);
   assert.match(approvalGuardSql,/new\.status not in \('draft','archived'\)/);
-  assert.match(approvalPreflight,/discoveryPublicationHeld\(data\.metadata\)/);
-  assert.match(approvalPreflight,/\.from\('knowledge_documents'\)/);
-  assert.match(legacyApprovalAction,/discoveryApprovalPreflight\(supabase, organizationId, documentId\)/);
-  assert.doesNotMatch(legacyApprovalAction,/\.from\('knowledge_documents'\)/);
+  // KB-09A pins the legacy manual approval action to its reviewed Git blob.
+  // The KB-14A guard must be in the disposable DB/preview, not this action.
   assert.match(legacyApprovalAction,/approve_knowledge_document_v1/);
+  assert.doesNotMatch(legacyApprovalAction,/discoveryApprovalPreflight/);
+  assert.doesNotMatch(legacyApprovalAction,/\.from\('knowledge_documents'\)/);
   assert.match(atomicDraftSql,/KB11A_LOCAL_DISPOSABLE_FIXTURE_REQUIRED/);
   assert.match(atomicDraftSql,/create_discovery_review_draft_with_current_consent_v1/);
   assert.match(atomicDraftSql,/for share of b,s,o,m/);
@@ -166,7 +165,6 @@ function readCurrentFiles(){
     atomicDraftSql:readText('docs/sql/KB-11A-consent-atomic-discovered-draft-REHEARSAL-DRAFT.sql'),
     approvalGuardSql:readText('docs/sql/KB-14A-unverified-discovery-approval-guard-REHEARSAL-DRAFT.sql'),
     legacyApprovalAction:readText('app/settings/knowledge/actions.ts'),
-    approvalPreflight:readText('lib/knowledge-discovery/discovery-approval-preflight.ts'),
   };
 }
 
