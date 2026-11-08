@@ -155,7 +155,13 @@ export function loadAndVerify(){
   const ledger=readJson('docs/checkpoints/KB-09O-release-readiness-ledger-DRAFT.json');
   // Never accidentally publish fixture DDL as a production migration.
   const migrations=readdirSync(resolve('supabase/migrations'));
-  assert.equal(migrations.some(name=>/^KB-09[ST]-/i.test(name)),false);
+  assert.equal(migrations.some(name=>/^KB-(?:09[ST]|11)-/i.test(name)),false);
+  const rehearsal=readText('docs/sql/KB-11-atomic-discovery-review-draft-REHEARSAL-DRAFT.sql');
+  assert.match(rehearsal,/KB11_DISPOSABLE_PARENT_FIXTURE_REQUIRED/);
+  assert.match(rehearsal,/create_discovery_review_draft_with_current_consent_v1/);
+  assert.match(rehearsal,/p_approve=>false/);
+  assert.match(rehearsal,/for share/);
+  assert.doesNotMatch(rehearsal,/cron\.schedule|net\.http|http_get/);
   return verifyIntegratedHold(packet,inventory,ledger,readCurrentFiles());
 }
 
