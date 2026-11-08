@@ -792,16 +792,6 @@ test('KB-09F/G/H proof, BYPASSRLS, tenant-finalization, consent and commit races
       "select count(*)::int as n from public.knowledge_discovery_pages "+
       "where organization_id=$1 and status='fetched'",[ORG_A]
     )).rows[0].n,3);
-  }finally{
-    await Promise.allSettled(connections.map(db=>db.end()));
-    try{if(created)await admin.query('drop database "'+name+'" with (force)');}
-    finally{
-      try{
-        if(bypassRole){
-          await admin.query('revoke service_role from "'+bypassRole+'"');
-          await admin.query('drop role "'+bypassRole+'"');
-        }
-    
     // KB-09J: all new operations are in an auto-dropped loopback fixture.
     // Strictly no hosted Supabase/Auth, no staging and no migration.
     await root.query(
@@ -1060,6 +1050,16 @@ test('KB-09F/G/H proof, BYPASSRLS, tenant-finalization, consent and commit races
     assert.equal(remainingPages,0);
     await root.query("drop trigger kb09j_force_seed_failure on public.knowledge_discovery_pages");
     await root.query("drop function kb09j_fixture.reject_synthetic_seed_page()");
+  }finally{
+    await Promise.allSettled(connections.map(db=>db.end()));
+    try{if(created)await admin.query('drop database "'+name+'" with (force)');}
+    finally{
+      try{
+        if(bypassRole){
+          await admin.query('revoke service_role from "'+bypassRole+'"');
+          await admin.query('drop role "'+bypassRole+'"');
+        }
+    
   }finally{await admin.end();}
     }
   }
