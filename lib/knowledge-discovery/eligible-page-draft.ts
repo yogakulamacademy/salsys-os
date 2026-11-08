@@ -49,12 +49,17 @@ export async function eligibleDiscoveredPageForManualDraft(
     const hostname = discoveryVerificationHost(configured.hostname);
     const { data: page, error: pageError } = await supabase
       .from('knowledge_discovery_pages')
-      .select('id,job_id,url,status,http_status,page_title')
+      .select('id,job_id,url,status,http_status,content_type,page_title')
       .eq('organization_id', organizationId)
       .eq('id', pageId)
       .maybeSingle();
+    // Match the atomic write RPC: only already-fetched HTTP 200 HTML is
+    // eligible. The page's title/URL are metadata, never verified content.
+    const mediaType = typeof page?.content_type === 'string'
+      ? page.content_type.split(';')[0].trim().toLowerCase() : '';
     if (pageError || !page || page.id !== pageId ||
-        page.status !== 'fetched' || page.http_status !== 200) return null;
+        page.status !== 'fetched' || page.http_status !== 200 ||
+        !['text/html', 'application/xhtml+xml'].includes(mediaType)) return null;
     const link = safeDiscoveryPageLink(page.url, config.website_url);
     if (!link) return null;
 
@@ -67,7 +72,7 @@ export async function eligibleDiscoveredPageForManualDraft(
     if (jobError || !job || job.id !== page.job_id ||
         !['completed', 'partial'].includes(job.status) ||
         typeof job.seed_url !== 'string' ||
-        new URL(job.seed_url).origin !== configured.origin) return null;
+        job.seed_url !== configured.origin + '/') return null;
 
     const { data: proof, error: proofError } = await supabase
       .from('knowledge_discovery_domain_verifications')
