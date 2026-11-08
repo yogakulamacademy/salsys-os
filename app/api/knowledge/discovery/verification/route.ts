@@ -152,13 +152,18 @@ export async function PUT(request: NextRequest) {
       return json({ ok: false, error: 'Not authorized or pilot not enabled' }, 403);
     }
     // Only the server, after a real matching website proof, may request this
-    // narrow service-only CAS. Never perform a privileged table UPDATE.
+    // narrow service-only CAS requiring the secret preimage. A service key
+    // alone cannot authenticate ownership from the stored hash. Never log
+    // this token or fall back to privileged table UPDATE.
     const { data, error } = await createAdminClient().rpc(
-      'confirm_checked_knowledge_discovery_proof_v1',
+      'confirm_checked_knowledge_discovery_proof_v2',
       {
         p_organization_id: ctx.org,
         p_hostname: ctx.hostname,
-        p_challenge_hash: existing.challenge_hash,
+        // The database must check the original secret from the fetched
+        // public proof file, not the publicly readable stored hash.
+        // Never log this value or return it in a verification response.
+        p_proof_token: proof.body.trim(),
       },
     );
     if (error) throw error;
