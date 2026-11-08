@@ -1598,21 +1598,7 @@ test('KB-09F/G/H proof, BYPASSRLS, tenant-finalization, consent and commit races
 
     // The read-only catalog contract must fail if a future GRANT makes
     // any retired RPC callable again, even when regular tests pass.
-    const kb09nAuditStart=retiredSeedAudit.indexOf('do $kb09n_audit  }finally{
-    await Promise.allSettled(connections.map(db=>db.end()));
-    try{if(created)await admin.query('drop database "'+name+'" with (force)');}
-    finally{
-      try{
-        if(bypassRole){
-          await admin.query('revoke service_role from "'+bypassRole+'"');
-          await admin.query('drop role "'+bypassRole+'"');
-        }
-    
-  }finally{await admin.end();}
-    }
-  }
-});
-);
+    const kb09nAuditStart=retiredSeedAudit.indexOf('do $kb09n_audit$');
     const kb09nAuditEnd=retiredSeedAudit.indexOf('$kb09n_audit$;',kb09nAuditStart);
     assert.ok(kb09nAuditStart>=0 && kb09nAuditEnd>kb09nAuditStart);
     const kb09nAuditSql=retiredSeedAudit.slice(
