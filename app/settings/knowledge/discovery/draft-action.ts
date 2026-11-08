@@ -6,7 +6,6 @@ import { redirect } from 'next/navigation';
 import { useMockData } from '@/lib/config';
 import { createClient } from '@/lib/supabase/server';
 import { getCurrentWorkspaceContext } from '@/lib/workspace';
-import { eligibleDiscoveredPageForManualDraft } from '@/lib/knowledge-discovery/eligible-page-draft';
 
 const destination = '/settings/knowledge';
 
