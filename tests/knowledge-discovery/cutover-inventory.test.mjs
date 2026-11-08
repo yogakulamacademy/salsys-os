@@ -16,7 +16,7 @@ const expectedFoundation=[
 ];
 const expectedRehearsal=[
   'KB-09F','KB-09G','KB-09H','KB-09I',
-  'KB-09J','KB-09K','KB-09L','KB-09M',
+  'KB-09J','KB-09K','KB-09L','KB-09M','KB-09N',
 ];
 
 test('KB-09M manifest is exact, ordered, versioned DRAFT, no migration or grant',()=>{
@@ -96,6 +96,29 @@ test('KB-09M worker DB bridge grants only service_role and retains proof/consent
     'confirm_checked_knowledge_discovery_proof_v1',
     'issue_knowledge_discovery_domain_challenge_v1',
     'claim_knowledge_discovery_proof_check_v1',
+    'fail_knowledge_discovery_seed_v1',
   ];
   assert.deepEqual(manifest.revokedUnsafeRpcNames,expectedLegacy);
+});
+
+test('KB-09N obsolete seed-repair path is absent from runtime and denied by fixture',()=>{
+  const manifest=JSON.parse(read('docs/checkpoints/KB-09M-cutover-inventory-DRAFT.json'));
+  const fail='fail_knowledge_discovery_seed_v1';
+  assert.ok(manifest.revokedUnsafeRpcNames.includes(fail));
+  assert.ok(!manifest.runtimeContracts.some(x=>x.name===fail));
+  for(const path of [
+    'app/api/knowledge/discovery/route.ts',
+    'app/api/knowledge/discovery/worker/route.ts',
+    'lib/knowledge-discovery/runner.ts',
+  ]){
+    assert.equal(read(path).includes("rpc('"+fail+"'"),false,path);
+  }
+  const sql=read('docs/sql/KB-09N-retired-seed-rpc-and-acl-preflight-REHEARSAL-DRAFT.sql');
+  assert.match(sql,/KB09N_DISPOSABLE_PARENT_FIXTURE_REQUIRED/);
+  assert.match(sql,/revoke execute on function public\.fail_knowledge_discovery_seed_v1/);
+  assert.match(sql,/revoke execute on function kb09h_fixture\.fail_unseeded_queued_job_v1/);
+  assert.match(sql,/KB09N_retired_rpc_still_executable/);
+  assert.match(sql,/KB09N_service_role_direct_write_or_ddl/);
+  assert.match(sql,/KB09N_unapproved_policy_grants_active/);
+  assert.match(sql,/revoke references on public\.knowledge_discovery_jobs/);
 });
