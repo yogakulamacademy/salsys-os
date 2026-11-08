@@ -20,8 +20,9 @@ const sqlFiles=[
   '../../docs/sql/KB-09M-proof-checked-worker-commit-bridge-REHEARSAL-DRAFT.sql',
   '../../docs/sql/KB-09N-retired-seed-rpc-and-acl-preflight-REHEARSAL-DRAFT.sql',
   '../../docs/sql/KB-09S-atomic-website-evidence-REHEARSAL-DRAFT.sql',
+  '../../docs/sql/KB-09T-evidence-withdrawal-expiry-REHEARSAL-DRAFT.sql',
 ].map(path=>readFileSync(new URL(path,import.meta.url),'utf8'));
-const [foundation,discovery,consentA,consentB,guard,writeGuard,jobFinalization,rpcBridge,atomicEnqueue,proofBoundary,preimageAndPolicyHold,checkedCommitBridge,retiredSeedAudit,atomicEvidenceRehearsal]=sqlFiles;
+const [foundation,discovery,consentA,consentB,guard,writeGuard,jobFinalization,rpcBridge,atomicEnqueue,proofBoundary,preimageAndPolicyHold,checkedCommitBridge,retiredSeedAudit,atomicEvidenceRehearsal,evidenceErasureRehearsal]=sqlFiles;
 
 const ORG_A='10000000-0000-4000-8000-000000000001';
 const ORG_B='10000000-0000-4000-8000-000000000002';
@@ -1817,6 +1818,203 @@ test('KB-09F/G/H proof, BYPASSRLS, tenant-finalization, consent and commit races
     assert.equal(replay.ok,false,'Consumed/stale lease cannot duplicate evidence');
     assert.equal(await evidenceCount(),1);
     } // end isolated KB-09S test scope
+
+    { // KB-09T: SAME auto-dropped random local DB, no hosted SQL or evidence
+    await root.query(evidenceErasureRehearsal);
+    assert.match(evidenceErasureRehearsal,/KB09T_DISPOSABLE_PARENT_FIXTURE_REQUIRED/);
+    assert.doesNotMatch(evidenceErasureRehearsal,
+      /cron\.schedule|net\.http|http_get/i,'No synthetic cleanup scheduler');
+    const sweepSignature=
+      'public.kb09t_purge_expired_synthetic_evidence_v1(integer)';
+    const erasurePrivilege=(await root.query(
+      "select has_function_privilege('anon',$1,'execute') as anonymous,"+
+      "has_function_privilege('authenticated',$1,'execute') as member,"+
+      "has_function_privilege('service_role',$1,'execute') as service,"+
+      "has_table_privilege('service_role','kb09t_fixture.erasure_receipts','select') as receipts_read",
+      [sweepSignature]
+    )).rows[0];
+    assert.deepEqual(erasurePrivilege,{
+      anonymous:false,member:false,service:true,receipts_read:false,
+    });
+    const kb09tSweep='select public.kb09t_purge_expired_synthetic_evidence_v1($1) as result';
+    const evidenceRows=async()=>(await root.query(
+      "select organization_id,page_id from kb09s_fixture.page_evidence "+
+      "order by organization_id"
+    )).rows;
+    const receipts=async()=>(await root.query(
+      "select organization_id,job_id,page_id,reason "+
+      "from kb09t_fixture.erasure_receipts order by organization_id"
+    )).rows;
+    assert.equal((await evidenceRows()).length,1,
+      'KB09S synthetic ORG_C evidence is present before erasure tests');
+
+    await assert.rejects(
+      callAs(b,'authenticated',kb09tSweep,[25],ADMIN_C,SID_C),
+      isCode('42501'),'Authenticated user cannot perform retention sweep'
+    );
+    await assert.rejects(
+      callAs(b,'anon',kb09tSweep,[25],ADMIN_C,SID_C),
+      isCode('42501'),'Anonymous users cannot perform retention sweep'
+    );
+    await assert.rejects(
+      callAs(b,'service_role',kb09tSweep,[51]),isCode('22023'),
+      'Unbounded synthetic batch is forbidden'
+    );
+    await assert.rejects(
+      callAs(b,'service_role',
+        "delete from kb09s_fixture.page_evidence where organization_id=$1",
+        [ORG_C]),isCode('42501'),'Service role cannot erase quotes directly'
+    );
+    await assert.rejects(
+      callAs(b,'service_role',
+        "update kb09s_fixture.page_evidence "+
+        "set ephemeral_expires_at=clock_timestamp()+interval '1 year' "+
+        "where organization_id=$1",[ORG_C]),isCode('42501'),
+      'Service role cannot extend unreviewed evidence TTL'
+    );
+
+    // Separate synthetic row for an expiry test. Insert as fixture DB owner
+    // only, never impersonate an actual crawler source or claim real consent.
+    const kb09tQuote='Synthetic expiry fixture text, never real website content.';
+    const kb09tQuoteHash=createHash('sha256').update(kb09tQuote).digest('hex');
+    const kb09tQuotes=[{
+      block_id:'d'.repeat(64),
+      exact_quote:kb09tQuote,
+      quote_sha256:kb09tQuoteHash,
+    }];
+    await root.query(
+      "insert into kb09s_fixture.page_evidence "+
+      "(organization_id,job_id,page_id,source_url,fetched_at,snapshot_sha256,quotes) "+
+      "values($1,$2,$3,$4,$5,$6,$7::jsonb)",
+      [ORG_D,acceptedD.job_id,seedD.id,SITE_URL,
+        new Date().toISOString(),'e'.repeat(64),JSON.stringify(kb09tQuotes)]
+    );
+    assert.equal((await evidenceRows()).length,2);
+    const notExpired=(await callAs(b,'service_role',kb09tSweep,[25]))
+      .rows[0].result;
+    assert.deepEqual(notExpired,{
+      ok:true,erased:0,scope:'disposable_synthetic_expired_evidence_only',
+    },'Fresh synthetic evidence is not erased before test TTL');
+    assert.deepEqual(await receipts(),[]);
+
+    // Test-only DB-owner time travel; it is NOT an allowed client action
+    // and intentionally does not define a production retention period.
+    await root.query(
+      "update kb09s_fixture.page_evidence set "+
+      "captured_at=clock_timestamp()-interval '3 minutes',"+
+      "ephemeral_expires_at=clock_timestamp()-interval '2 minutes' "+
+      "where organization_id=$1",[ORG_D]
+    );
+    await root.query(
+      "create function kb09t_fixture.reject_synthetic_receipt() "+
+      "returns trigger language plpgsql as $reject$ begin "+
+      "raise exception 'kb09t_forced_receipt_insert_failure' "+
+      "using errcode='23514'; end; $reject$"
+    );
+    await root.query(
+      "create trigger kb09t_reject_receipt before insert "+
+      "on kb09t_fixture.erasure_receipts for each row "+
+      "execute function kb09t_fixture.reject_synthetic_receipt()"
+    );
+    await assert.rejects(
+      callAs(b,'service_role',kb09tSweep,[25]),
+      isCode('23514'),'Receipt failure rolls back expired quote deletion'
+    );
+    assert.equal((await evidenceRows()).length,2);
+    assert.deepEqual(await receipts(),[],
+      'No partial erasure or forged receipt after rollback');
+    await root.query(
+      'drop trigger kb09t_reject_receipt on kb09t_fixture.erasure_receipts'
+    );
+    const swept=(await callAs(b,'service_role',kb09tSweep,[25]))
+      .rows[0].result;
+    assert.deepEqual(swept,{
+      ok:true,erased:1,scope:'disposable_synthetic_expired_evidence_only',
+    });
+    const afterTtl=await evidenceRows();
+    assert.equal(afterTtl.length,1);
+    assert.equal(afterTtl[0].organization_id,ORG_C,
+      'Expiry sweep does not erase unexpired other-tenant quotes');
+    assert.deepEqual(await receipts(),[{
+      organization_id:ORG_D,job_id:acceptedD.job_id,page_id:seedD.id,
+      reason:'synthetic_ttl_elapsed',
+    }]);
+
+    // Withdrawal failure must also roll back the original consent update,
+    // its append-only audit, and evidence deletion as one atomic boundary.
+    await root.query(
+      "create trigger kb09t_reject_receipt before insert "+
+      "on kb09t_fixture.erasure_receipts for each row "+
+      "execute function kb09t_fixture.reject_synthetic_receipt()"
+    );
+    await assert.rejects(
+      callAs(b,'authenticated',WITHDRAW,[ORG_C,HOST,1],ADMIN_C,SID_C),
+      isCode('23514'),'Erasure receipt failure aborts consent withdrawal'
+    );
+    assert.equal((await root.query(
+      "select status,revision from public.knowledge_discovery_site_consents "+
+      "where organization_id=$1",[ORG_C]
+    )).rows[0].status,'granted',
+      'Failed receipt cannot claim consent was withdrawn');
+    assert.equal((await evidenceRows()).length,1,
+      'Evidence still exists because entire withdrawal transaction rolled back');
+    assert.deepEqual((await root.query(
+      "select action from public.knowledge_discovery_consent_audit "+
+      "where organization_id=$1 order by revision",[ORG_C]
+    )).rows.map(r=>r.action),['granted'],
+      'No false withdrawal audit after rollback');
+    await root.query(
+      'drop trigger kb09t_reject_receipt on kb09t_fixture.erasure_receipts'
+    );
+
+    const withdrawnT=(await callAs(
+      b,'authenticated',WITHDRAW,[ORG_C,HOST,1],ADMIN_C,SID_C
+    )).rows[0].result;
+    assert.equal(withdrawnT.ok,true);
+    assert.equal(withdrawnT.status,'withdrawn');
+    assert.equal(withdrawnT.revision,2);
+    assert.equal((await evidenceRows()).length,0,
+      'Confirmed withdrawal atomically removes all synthetic quote bytes');
+    assert.deepEqual(await receipts(),[
+      {
+        organization_id:ORG_C,job_id:acceptedC.job_id,
+        page_id:(await root.query(
+          "select id from public.knowledge_discovery_pages "+
+          "where job_id=$1 order by discovered_at limit 1",[acceptedC.job_id]
+        )).rows[0].id,
+        reason:'consent_withdrawn',
+      },
+      {
+        organization_id:ORG_D,job_id:acceptedD.job_id,
+        page_id:seedD.id,reason:'synthetic_ttl_elapsed',
+      },
+    ]);
+    assert.deepEqual((await root.query(
+      "select action from public.knowledge_discovery_consent_audit "+
+      "where organization_id=$1 order by revision",[ORG_C]
+    )).rows.map(r=>r.action),['granted','withdrawn'],
+      'Original consent audit remains append-only and complete');
+    assert.equal((await root.query(
+      "select status,revision from public.knowledge_discovery_site_consents "+
+      "where organization_id=$1",[ORG_C]
+    )).rows[0].status,'withdrawn');
+
+    await assert.rejects(
+      callAs(b,'service_role',
+        "delete from kb09t_fixture.erasure_receipts where organization_id=$1",
+        [ORG_C]),isCode('42501'),'Service cannot delete receipt metadata'
+    );
+    await assert.rejects(
+      root.query("update kb09t_fixture.erasure_receipts "+
+        "set reason='synthetic_ttl_elapsed' where organization_id=$1",[ORG_C]),
+      e=>e?.code==='42501' && /append_only/.test(e.message),
+      'Test DB owner sees the synthetic append-only receipt trigger'
+    );
+    assert.deepEqual((await callAs(b,'service_role',kb09tSweep,[25]))
+      .rows[0].result,{
+        ok:true,erased:0,scope:'disposable_synthetic_expired_evidence_only',
+      },'Repeated sweep remains idempotent when nothing is due');
+    } // end KB-09T isolated fixture scope
   }finally{
     await Promise.allSettled(connections.map(db=>db.end()));
     try{if(created)await admin.query('drop database "'+name+'" with (force)');}
