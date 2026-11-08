@@ -31,6 +31,29 @@ as $kb14_document$
 declare
   v_unverified boolean;
 begin
+  -- KB-15A: With SECURITY INVOKER a source can be hidden by RLS, even
+  -- when its FK still exists. The old "EXISTS marker" check would silently
+  -- return false in that case, permitting a forged approved document with
+  -- blank metadata. Fail closed on any non-NULL linked source not visible
+  -- to the current invoker, including the old source on a rebinding UPDATE.
+  -- This is only an uninstalled local prototype, not reviewed Auth/RLS DDL.
+  if new.source_id is not null and not exists (
+    select 1 from public.knowledge_sources s
+    where s.id=new.source_id and s.organization_id=new.organization_id
+  ) then
+    raise exception 'kb_discovery_linked_source_unreadable'
+      using errcode='42501';
+  end if;
+  if tg_op='UPDATE' then
+    if old.source_id is not null and not exists (
+      select 1 from public.knowledge_sources s
+      where s.id=old.source_id and s.organization_id=old.organization_id
+    ) then
+      raise exception 'kb_discovery_previous_source_unreadable'
+        using errcode='42501';
+    end if;
+  end if;
+
   v_unverified :=
     coalesce(new.metadata->>'entry_mode','')='discovery_manual_review'
     or coalesce(new.metadata->>'manual_review_required','')='true'
