@@ -305,6 +305,15 @@ export function KnowledgeDiscoveryWorkspace({
                 {safeLink ? <a href={safeLink.href} target="_blank" rel="noopener noreferrer"
                   className="block truncate text-xs text-slate-500 hover:underline">{safeLink.href}</a>
                   : <span className="text-xs text-amber-700">Link unavailable or outside the configured domain</span>}
+                {safeLink && page.status === 'fetched' && page.http_status === 200 &&
+                    latest && (latest.status === 'completed' || latest.status === 'partial') &&
+                    state.discoveryEnabled &&
+                    /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(page.id) ? (
+                  <Link href={'/settings/knowledge?discoveryPage=' + encodeURIComponent(page.id) + '#knowledge-create'}
+                    className="mt-2 inline-flex rounded-lg border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50">
+                    Prepare manual draft
+                  </Link>
+                ) : null}
                 {page.failure_code ? <p className="mt-1 text-xs text-amber-700">{page.failure_code}</p> : null}
               </div>
               <span className="shrink-0 rounded-md bg-slate-100 px-2 py-1 text-xs text-slate-600">{page.status}</span>
