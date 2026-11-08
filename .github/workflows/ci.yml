@@ -54,6 +54,9 @@ jobs:
       - name: Verify concurrent Instagram echo idempotency across independent PostgreSQL transactions
         run: node --test tests/database/instagram-outbound-echo-concurrency.test.mjs
 
+      - name: Reproduce primary-contact unique collision in disposable PostgreSQL
+        run: node --test tests/database/r2-primary-contact-unique-collision.test.mjs
+
   validate:
     # Pin the tested runner image: ubuntu-latest resolved to resolute and
     # apt font downloads stalled the browser setup until the job was cancelled.
