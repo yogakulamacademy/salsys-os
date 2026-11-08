@@ -120,6 +120,26 @@ BEGIN
     RAISE EXCEPTION 'R2 #643: second primary phone not prevented';
   END IF;
 
+  -- Two already distinct known leads MUST NEVER be merged by a mixed
+  -- submission carrying email from one and phone from the other.
+  denied := false;
+  BEGIN
+    PERFORM public.ingest_website_lead_for_organization(
+      p_organization_id=>tenant_a,p_external_event_id=>'r2-643-a-conflicted',
+      p_site=>'r2-contact-a.invalid',p_form_name=>'synthetic',
+      p_email=>'first643@example.invalid',p_phone=>'+910000006431');
+  EXCEPTION WHEN OTHERS THEN
+    denied := SQLERRM LIKE 'Email and phone belong to different existing leads%';
+  END;
+  IF NOT denied THEN
+    RAISE EXCEPTION 'R2 #643: distinct leads were merged or failed unclearly';
+  END IF;
+  SELECT count(*)::int INTO n FROM public.lead_ingest_events
+    WHERE organization_id=tenant_a AND external_event_id='r2-643-a-conflicted';
+  IF n<>0 THEN
+    RAISE EXCEPTION 'R2 #643: conflict persisted a lead receipt';
+  END IF;
+
   -- Different tenant with exact SAME normalized email must be isolated.
   result := public.ingest_website_lead_for_organization(
     p_organization_id=>tenant_b,p_external_event_id=>'r2-643-b-initial',
@@ -145,10 +165,10 @@ BEGIN
       p_site=>'r2-contact-a.invalid',p_form_name=>'synthetic',
       p_email=>'cross-tenant643@example.invalid');
   EXCEPTION WHEN OTHERS THEN
-    denied:=true;
+    denied := SQLERRM LIKE 'Website is not registered to the authenticated organization%';
   END;
   IF NOT denied THEN
-    RAISE EXCEPTION 'R2 #643: tenant B accepted site A for lead ingestion';
+    RAISE EXCEPTION 'R2 #643: tenant B accepted site A or rejected for unrelated reasons';
   END IF;
   SELECT count(*)::int INTO n FROM public.lead_ingest_events
     WHERE organization_id=tenant_b AND external_event_id='r2-643-b-cross-site';
