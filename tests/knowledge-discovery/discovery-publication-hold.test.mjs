@@ -18,6 +18,10 @@ function load(path,imports={}){
   return exports;
 }
 const hold=load('lib/knowledge-discovery/discovery-publication-hold.ts');
+const preflight=load('lib/knowledge-discovery/discovery-approval-preflight.ts',{
+  'server-only':{},
+  '@/lib/knowledge-discovery/discovery-publication-hold':hold,
+});
 const ORG='10000000-0000-4000-8000-000000000001';
 const DOC='50000000-0000-4000-8000-000000000001';
 let metadata={},readError=null,found=true,management=true,calls=[],refreshed=[];
@@ -57,7 +61,7 @@ const actions=load('app/settings/knowledge/actions.ts',{
   '@/lib/supabase/server':{createClient:async()=>client},
   '@/lib/workspace':{requireCurrentOrganizationId:async()=>ORG},
   '@/lib/knowledge-evidence':{inspectKnowledgeMatches:()=>{throw Error('No retrieval in approval test');}},
-  '@/lib/knowledge-discovery/discovery-publication-hold':hold,
+  '@/lib/knowledge-discovery/discovery-approval-preflight':preflight,
 });
 function reset(nextMetadata={}){
   metadata=nextMetadata;readError=null;found=true;management=true;
@@ -124,8 +128,11 @@ test('KB-14A UI displays held discovery drafts without an approval action',()=>{
   assert.match(ui,/Discovery draft held: independent evidence review required/);
   assert.match(ui,/archiveKnowledgeDocumentAction/);
   const action=readFileSync(resolve('app/settings/knowledge/actions.ts'),'utf8');
-  assert.match(action,/\.from\('knowledge_documents'\)/);
-  assert.match(action,/discoveryPublicationHeld\(target\.metadata\)/);
+  const preflightText=readFileSync(resolve('lib/knowledge-discovery/discovery-approval-preflight.ts'),'utf8');
+  assert.match(preflightText,/\.from\('knowledge_documents'\)/);
+  assert.match(preflightText,/discoveryPublicationHeld\(data\.metadata\)/);
+  assert.match(action,/discoveryApprovalPreflight\(supabase, organizationId, documentId\)/);
+  assert.doesNotMatch(action,/\.from\('knowledge_documents'\)/);
   assert.match(action,/approve_knowledge_document_v1/);
 });
 
