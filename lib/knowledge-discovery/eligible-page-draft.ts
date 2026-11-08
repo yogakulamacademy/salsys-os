@@ -65,14 +65,15 @@ export async function eligibleDiscoveredPageForManualDraft(
 
     const { data: job, error: jobError } = await supabase
       .from('knowledge_discovery_jobs')
-      .select('id,status,seed_url')
+      .select('id,status,seed_url,created_at')
       .eq('organization_id', organizationId)
       .eq('id', page.job_id)
       .maybeSingle();
     if (jobError || !job || job.id !== page.job_id ||
         !['completed', 'partial'].includes(job.status) ||
         typeof job.seed_url !== 'string' ||
-        job.seed_url !== configured.origin + '/') return null;
+        job.seed_url !== configured.origin + '/' ||
+        typeof job.created_at !== 'string') return null;
 
     const { data: proof, error: proofError } = await supabase
       .from('knowledge_discovery_domain_verifications')
@@ -84,13 +85,19 @@ export async function eligibleDiscoveredPageForManualDraft(
 
     const { data: consent, error: consentError } = await supabase
       .from('knowledge_discovery_site_consents')
-      .select('organization_id,hostname,purpose,status,policy_version,granted_by,granted_at,valid_until,withdrawn_at')
+      .select('organization_id,hostname,purpose,status,policy_version,revision,granted_by,granted_at,valid_until,withdrawn_at')
       .eq('organization_id', organizationId)
       .eq('hostname', hostname)
       .maybeSingle();
-    if (consentError || !discoverySiteConsentActive(consent, organizationId, hostname)) {
-      return null;
-    }
+    // The writer refuses earlier scans and any not-yet-designed regrant
+    // revision. Mirror that here to avoid offering an impossible handoff.
+    const scanCreated = Date.parse(job.created_at);
+    const grantedAt = Date.parse(typeof consent?.granted_at === 'string'
+      ? consent.granted_at : '');
+    if (consentError || !discoverySiteConsentActive(consent, organizationId, hostname) ||
+        consent?.revision !== 1 ||
+        !Number.isFinite(scanCreated) || !Number.isFinite(grantedAt) ||
+        scanCreated < grantedAt) return null;
 
     const displayTitle = typeof page.page_title === 'string' && page.page_title.trim()
       ? page.page_title.trim().slice(0, 180)
