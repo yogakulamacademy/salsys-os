@@ -1,4 +1,5 @@
 import { parseWebsiteSeed, scopedDiscoveredUrl } from './url-policy';
+import type { CrawlerEvidenceEnvelope } from './crawler-evidence-envelope';
 import {
   WebsiteFetchError, fetchPublicWeb, evaluateRobots,
   discoverHtmlLinks, discoverSitemapLinks, readHtmlTitle,
@@ -28,7 +29,10 @@ export type DiscoveryCommit = {
 };
 export type DiscoveryStore = {
   pending(claim: DiscoveryClaim): Promise<DiscoveryPage | null>;
-  commit(args: DiscoveryCommit): Promise<DiscoveryResult>;
+  // Optional second argument is for a future independently approved
+  // atomic page+evidence RPC. The production adapter ignores it today.
+  // Never invoke a second write after commit to simulate atomicity.
+  commit(args: DiscoveryCommit, evidence?: CrawlerEvidenceEnvelope | null): Promise<DiscoveryResult>;
 };
 export type DiscoveryFetcher = (
   seed: URL, page: URL, kind: 'robots' | 'html' | 'sitemap',
@@ -53,6 +57,11 @@ export async function runDiscoveryPageCore(
   store: DiscoveryStore,
   fetchPage: DiscoveryFetcher = (seed, page, kind, authorizeRedirect) =>
     fetchPublicWeb(seed, page, kind, undefined, undefined, authorizeRedirect),
+  evidencePreparer?: (
+    seed: URL,
+    response: Awaited<ReturnType<DiscoveryFetcher>>,
+    fetchedAt: string,
+  ) => {ok:true; evidence:CrawlerEvidenceEnvelope} | {ok:false;error:string},
 ) {
   const seed = parseWebsiteSeed(claim.seed_url);
   const item = await store.pending(claim);
@@ -63,6 +72,7 @@ export async function runDiscoveryPageCore(
   let errorCode: string | null = null;
   let links: string[] = [];
   let crawlDelay = 0;
+  let preparedEvidence: CrawlerEvidenceEnvelope | null = null;
 
   if (item) {
     try {
@@ -94,6 +104,15 @@ export async function runDiscoveryPageCore(
         contentType = response.contentType;
         pageTitle = readHtmlTitle(response.body);
         pageStatus = 'fetched';
+        // KB-09S: only a synthetic test adapter supplies evidencePreparer.
+        // It receives already fetched, pinned and robots-/consent-checked
+        // HTML bytes. A rejected envelope makes the opt-in path fail closed
+        // rather than recording "fetched" without the expected evidence.
+        if (evidencePreparer) {
+          const result = evidencePreparer(seed, response, new Date().toISOString());
+          if (!result.ok) throw new WebsiteFetchError('evidence_rehearsal_rejected');
+          preparedEvidence = result.evidence;
+        }
         links = item.depth < 4 ? discoverHtmlLinks(seed, new URL(response.url), response.body) : [];
         if (item.depth === 0 && (robots.status === 404 ||
           evaluateRobots(robots.body, '/sitemap.xml', 'salsysosknowledgebot').allowed)) {
@@ -126,7 +145,7 @@ export async function runDiscoveryPageCore(
     p_failure_code: item ? errorCode : null,
     p_links: item && pageStatus === 'fetched' ? [...new Set(links)].slice(0, 80) : [],
     p_delay_seconds: Math.max(2, Math.ceil(crawlDelay)),
-  });
+  }, item && pageStatus === 'fetched' ? preparedEvidence : null);
   // A stale lease, withdrawn consent, or rejected page mutation is NOT a
   // processed job. Never turn a declined transaction into an HTTP success.
   // Keep the reason internal to the trusted worker; do not expose it in the
