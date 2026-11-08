@@ -116,6 +116,9 @@ jobs:
       - name: Verify Prediction Calibration Contracts
         run: npm run verify:intelligence-calibration
 
+      - name: Verify R13 Commercial State Foundation Source Boundary
+        run: node --test tests/readiness/r13-commercial-state-v1.test.cjs
+
       - name: Verify Commercial Intelligence Contracts
         run: npm run verify:commercial-intelligence
 
