@@ -14,8 +14,9 @@ const sqlFiles=[
   '../../docs/sql/KB-09G-direct-write-boundary-REHEARSAL-DRAFT.sql',
   '../../docs/sql/KB-09H-tenant-cancel-and-seed-failure-CAS-REHEARSAL-DRAFT.sql',
   '../../docs/sql/KB-09I-discovery-public-rpc-bridge-REHEARSAL-DRAFT.sql',
+  '../../docs/sql/KB-09J-atomic-session-authorized-enqueue-REHEARSAL-DRAFT.sql',
 ].map(path=>readFileSync(new URL(path,import.meta.url),'utf8'));
-const [foundation,discovery,consentA,consentB,guard,writeGuard,jobFinalization,rpcBridge]=sqlFiles;
+const [foundation,discovery,consentA,consentB,guard,writeGuard,jobFinalization,rpcBridge,atomicEnqueue]=sqlFiles;
 
 const ORG_A='10000000-0000-4000-8000-000000000001';
 const ORG_B='10000000-0000-4000-8000-000000000002';
@@ -23,6 +24,15 @@ const ADMIN_A='20000000-0000-4000-8000-000000000001';
 const ADMIN_B='20000000-0000-4000-8000-000000000002';
 const SID_A='30000000-0000-4000-8000-000000000001';
 const SID_B='30000000-0000-4000-8000-000000000002';
+const ORG_C='10000000-0000-4000-8000-000000000003';
+const ORG_D='10000000-0000-4000-8000-000000000004';
+const ORG_E='10000000-0000-4000-8000-000000000005';
+const ADMIN_C='20000000-0000-4000-8000-000000000003';
+const ADMIN_D='20000000-0000-4000-8000-000000000004';
+const ADMIN_E='20000000-0000-4000-8000-000000000005';
+const SID_C='30000000-0000-4000-8000-000000000003';
+const SID_D='30000000-0000-4000-8000-000000000004';
+const SID_E='30000000-0000-4000-8000-000000000005';
 const SITE_URL='https://fixture.example.com/';
 const HOST='fixture.example.com';
 const SHA='a'.repeat(64);
@@ -34,6 +44,8 @@ const WITHDRAW='select public.withdraw_knowledge_discovery_consent_v1($1,$2,$3) 
 // Exercise the exact PUBLIC RPC names used by app/api/knowledge/discovery/route.ts.
 const CANCEL_JOB='select public.cancel_knowledge_discovery_job_v1($1,$2) as result';
 const SEED_FAILURE='select public.fail_knowledge_discovery_seed_v1($1,$2,$3) as result';
+const ENQUEUE='select public.enqueue_knowledge_discovery_job_v1($1,$2,$3) as result';
+const ENQUEUE_SIG='public.enqueue_knowledge_discovery_job_v1(uuid,text,integer)';
 const CANCEL_SIG='kb09h_fixture.cancel_job_for_current_admin_v1(uuid,uuid)';
 const FAILURE_SIG='kb09h_fixture.fail_unseeded_queued_job_v1(uuid,uuid,uuid)';
 const PUBLIC_CANCEL_SIG='public.cancel_knowledge_discovery_job_v1(uuid,uuid)';
@@ -789,7 +801,266 @@ test('KB-09F/G/H proof, BYPASSRLS, tenant-finalization, consent and commit races
           await admin.query('revoke service_role from "'+bypassRole+'"');
           await admin.query('drop role "'+bypassRole+'"');
         }
-      }finally{await admin.end();}
+    
+    // KB-09J: all new operations are in an auto-dropped loopback fixture.
+    // Strictly no hosted Supabase/Auth, no staging and no migration.
+    await root.query(
+      "create table public.organization_onboarding("+
+      "organization_id uuid primary key references public.organizations(id),"+
+      "website_url text)"
+    );
+    for (const [org,actor,session] of [
+      [ORG_C,ADMIN_C,SID_C],[ORG_D,ADMIN_D,SID_D],[ORG_E,ADMIN_E,SID_E],
+    ]){
+      await root.query("insert into public.organizations(id) values($1)",[org]);
+      await root.query(
+        "insert into public.organization_onboarding(organization_id,website_url) "+
+        "values($1,$2)",[org,SITE_URL]
+      );
+      await root.query(
+        "insert into public.organization_members(organization_id,user_id,role,active) "+
+        "values($1,$2,'admin',true)",[org,actor]
+      );
+      await root.query(
+        "insert into auth.sessions(id,user_id) values($1,$2)",[session,actor]
+      );
+      await root.query(
+        "insert into public.tenant_session_bindings(session_id,user_id,organization_id) "+
+        "values($1,$2,$3)",[session,actor,org]
+      );
+      await root.query(
+        "insert into public.knowledge_discovery_domain_verifications "+
+        "(organization_id,hostname,challenge_hash,created_by,issued_at,"+
+        "challenge_expires_at,verified_at,verified_until) "+
+        "values($1,$2,$3,$4,now()-interval '1 hour',"+
+        "now()+interval '1 hour',now()-interval '3 minutes',"+
+        "now()+interval '30 minutes')",
+        [org,HOST,SHA,actor]
+      );
+      const consentId=(await root.query(
+        "insert into public.knowledge_discovery_site_consents "+
+        "(organization_id,hostname,purpose,status,policy_version,"+
+        "granted_by,granted_at,valid_until,revision) "+
+        "values($1,$2,'website_discovery_review_only','granted',"+
+        "'synthetic-policy', $3,now()-interval '20 minutes',"+
+        "now()+interval '30 minutes',1) returning id",
+        [org,HOST,actor]
+      )).rows[0].id;
+      await root.query(
+        "insert into public.knowledge_discovery_consent_audit "+
+        "(consent_id,organization_id,hostname,action,actor_id,session_id,"+
+        "policy_version,policy_sha256,revision,valid_until) "+
+        "values($1,$2,$3,'granted',$4,$5,'synthetic-policy',$6,1,"+
+        "now()+interval '30 minutes')",
+        [consentId,org,HOST,actor,session,POLICY_SHA]
+      );
+    }
+    await root.query(atomicEnqueue);
+    assert.match(atomicEnqueue,/KB09J_DISPOSABLE_PARENT_FIXTURE_REQUIRED/);
+    assert.doesNotMatch(atomicEnqueue,/cron\.schedule|net\.http|http_get/i);
+    const enqueueACL=(await root.query(
+      "select has_function_privilege('anon',$1,'execute') as anon,"+
+      "has_function_privilege('authenticated',$1,'execute') as client,"+
+      "has_function_privilege('service_role',$1,'execute') as service",
+      [ENQUEUE_SIG]
+    )).rows[0];
+    assert.deepEqual(enqueueACL,{anon:false,client:true,service:false});
+    for(const t of ['knowledge_discovery_jobs','knowledge_discovery_pages']){
+      const direct=(await root.query(
+        "select has_table_privilege('service_role',$1,'insert') as service,"+
+        "has_table_privilege($2,$1,'insert') as bypass",
+        ['public.'+t,bypassRole]
+      )).rows[0];
+      assert.deepEqual(direct,{service:false,bypass:false},
+        'No privileged direct insert bypass on '+t);
+      await assert.rejects(
+        callAs(b,bypassRole,
+          "insert into public."+t+" "+
+          (t==='knowledge_discovery_jobs'
+            ? "(organization_id,created_by,seed_url) values($1,$2,$3)"
+            : "(organization_id,job_id,url) values($1,$2,$3)"),
+          t==='knowledge_discovery_jobs'
+            ? [ORG_C,ADMIN_C,SITE_URL] : [ORG_C,randomUUID(),SITE_URL],
+          ADMIN_C,SID_C,'service_role'),
+        isCode('42501'),'BYPASSRLS must not bypass revoked INSERT privilege'
+      );
+    }
+    const enqueueAs=(org,actor,sid,seed=SITE_URL,max=3,db=b)=>
+      callAs(db,'authenticated',ENQUEUE,[org,seed,max],actor,sid);
+
+    await assert.rejects(
+      callAs(b,'anon',ENQUEUE,[ORG_C,SITE_URL,3]),isCode('42501')
+    );
+    await assert.rejects(
+      callAs(b,'service_role',ENQUEUE,[ORG_C,SITE_URL,3]),isCode('42501')
+    );
+    await assert.rejects(enqueueAs(ORG_D,ADMIN_C,SID_C),isCode('42501'),
+      'A session bound to tenant C cannot enqueue in tenant D');
+    await assert.rejects(enqueueAs(ORG_C,ADMIN_D,SID_D),isCode('42501'),
+      'Tenant D actor cannot enqueue in C');
+    await assert.rejects(enqueueAs(ORG_C,ADMIN_C,randomUUID()),isCode('42501'),
+      'Forged/unbound session denied');
+    await root.query(
+      "update public.organization_members set active=false where organization_id=$1",
+      [ORG_C]
+    );
+    await assert.rejects(enqueueAs(ORG_C,ADMIN_C,SID_C),isCode('42501'),
+      'Revoked admin cannot enqueue');
+    await root.query(
+      "update public.organization_members set active=true where organization_id=$1",
+      [ORG_C]
+    );
+    const countJobs=async(org)=>(await root.query(
+      "select count(*)::int as n from public.knowledge_discovery_jobs "+
+      "where organization_id=$1",[org]
+    )).rows[0].n;
+
+    for(const seed of [
+      'http://fixture.example.com/',
+      'https://fixture.example.com:444/',
+      'https://fixture.example.com/other',
+      'https://fixture.example.com/?query=1',
+      'https://fixture.example.com.attacker.net/',
+      'https://foo..fixture.example.com/',
+    ]){
+      const denied=(await enqueueAs(ORG_D,ADMIN_D,SID_D,seed)).rows[0].result;
+      assert.equal(denied.ok,false);
+      assert.ok(['invalid_scan_request','configured_domain_mismatch'].includes(
+        denied.reason
+      ),'Non-canonical or foreign seed must fail');
+    }
+    assert.equal(await countJobs(ORG_D),0);
+
+    await root.query(
+      "update public.organization_onboarding set website_url=$2 "+
+      "where organization_id=$1",
+      [ORG_D,'https://attacker.example.net/']
+    );
+    assert.deepEqual((await enqueueAs(ORG_D,ADMIN_D,SID_D)).rows[0].result,{
+      ok:false,reason:'configured_domain_mismatch',
+    });
+    await root.query(
+      "update public.organization_onboarding set website_url=$2 "+
+      "where organization_id=$1",
+      [ORG_D,SITE_URL]
+    );
+    await root.query(
+      "update public.knowledge_discovery_domain_verifications "+
+      "set verified_until=now()-interval '1 second' where organization_id=$1",
+      [ORG_D]
+    );
+    assert.deepEqual((await enqueueAs(ORG_D,ADMIN_D,SID_D)).rows[0].result,{
+      ok:false,reason:'ownership_proof_not_current',
+    });
+    await renew(ORG_D);
+    await root.query(
+      "update public.knowledge_discovery_site_consents "+
+      "set status='withdrawn',withdrawn_at=now() where organization_id=$1",
+      [ORG_D]
+    );
+    assert.deepEqual((await enqueueAs(ORG_D,ADMIN_D,SID_D)).rows[0].result,{
+      ok:false,reason:'consent_not_active',
+    });
+    await root.query(
+      "update public.knowledge_discovery_site_consents "+
+      "set status='granted',withdrawn_at=null where organization_id=$1",
+      [ORG_D]
+    );
+    assert.equal(await countJobs(ORG_D),0);
+
+    // With an in-flight proof change, authenticated enqueue blocks on
+    // FOR SHARE, then observes revoked proof and creates no job or page.
+    await b.query('begin');
+    await b.query("set local lock_timeout='7s'");
+    await b.query(
+      "update public.knowledge_discovery_domain_verifications "+
+      "set verified_until=now()-interval '1 second' where organization_id=$1",
+      [ORG_D]
+    );
+    let enqueueResolved=false;
+    const pendingEnqueue=enqueueAs(ORG_D,ADMIN_D,SID_D,SITE_URL,3,c)
+      .then(value=>({ok:true,value}),error=>({ok:false,error}))
+      .finally(()=>{enqueueResolved=true;});
+    await pauseForLock();
+    assert.equal(enqueueResolved,false,'Enqueue waits for proof row update');
+    await b.query('commit');
+    const rejectedAfterProof=await pendingEnqueue;
+    assert.equal(rejectedAfterProof.ok,true);
+    assert.deepEqual(rejectedAfterProof.value.rows[0].result,{
+      ok:false,reason:'ownership_proof_not_current',
+    });
+    assert.equal(await countJobs(ORG_D),0);
+    await renew(ORG_D);
+
+    // Successful atomic enqueue yields exactly one queued job plus its
+    // initial pending page, with created_by taken from authenticated JWT.
+    const acceptedC=(await enqueueAs(ORG_C,ADMIN_C,SID_C,SITE_URL,4)).rows[0].result;
+    assert.equal(acceptedC.ok,true);
+    assert.equal(acceptedC.seed_inserted,true);
+    assert.equal(acceptedC.status,'queued');
+    assert.match(acceptedC.job_id,/^[a-f0-9-]{36}$/i);
+    const savedC=(await root.query(
+      "select organization_id,created_by,seed_url,max_pages,status "+
+      "from public.knowledge_discovery_jobs where id=$1",[acceptedC.job_id]
+    )).rows[0];
+    assert.deepEqual(savedC,{
+      organization_id:ORG_C,created_by:ADMIN_C,seed_url:SITE_URL,
+      max_pages:4,status:'queued',
+    });
+    const pagesC=(await root.query(
+      "select organization_id,job_id,url,depth,status "+
+      "from public.knowledge_discovery_pages where job_id=$1",
+      [acceptedC.job_id]
+    )).rows;
+    assert.deepEqual(pagesC,[{
+      organization_id:ORG_C,job_id:acceptedC.job_id,url:SITE_URL,
+      depth:0,status:'discovered',
+    }]);
+    await assert.rejects(
+      enqueueAs(ORG_C,ADMIN_C,SID_C),isCode('23505'),
+      'Active-job unique index must still reject duplicate concurrent scans'
+    );
+    assert.equal(await countJobs(ORG_C),1);
+
+    const acceptedD=(await enqueueAs(ORG_D,ADMIN_D,SID_D)).rows[0].result;
+    assert.equal(acceptedD.ok,true);
+    await root.query(
+      "update public.knowledge_discovery_jobs set status='completed',"+
+      "finished_at=now() where id=$1",[acceptedD.job_id]
+    );
+    await assert.rejects(
+      enqueueAs(ORG_D,ADMIN_D,SID_D),
+      e=>e?.code==='P0001' && /discovery_scan_cooldown/.test(e?.message||''),
+      'Original 15-minute SQL cooldown must remain enforced'
+    );
+    assert.equal(await countJobs(ORG_D),1);
+
+    // Inject the seed-page INSERT failure inside the SAME SQL statement:
+    // it must abort the job INSERT, leaving no orphan even on SQL error.
+    await root.query([
+      "create function kb09j_fixture.reject_synthetic_seed_page()",
+      "returns trigger language plpgsql as $fail$",
+      "begin raise exception 'kb09j_forced_seed_insert_failure'",
+      "using errcode='23514'; end; $fail$",
+    ].join(' ')+';');
+    await root.query(
+      "create trigger kb09j_force_seed_failure before insert "+
+      "on public.knowledge_discovery_pages for each row "+
+      "execute function kb09j_fixture.reject_synthetic_seed_page()"
+    );
+    await assert.rejects(
+      enqueueAs(ORG_E,ADMIN_E,SID_E),isCode('23514'),
+      'Seed failure aborts the entire job/page creation statement'
+    );
+    assert.equal(await countJobs(ORG_E),0,'No orphan job after page insert error');
+    const remainingPages=(await root.query(
+      "select count(*)::int as n from public.knowledge_discovery_pages "+
+      "where organization_id=$1",[ORG_E]
+    )).rows[0].n;
+    assert.equal(remainingPages,0);
+    await root.query("drop trigger kb09j_force_seed_failure on public.knowledge_discovery_pages");
+    await root.query("drop function kb09j_fixture.reject_synthetic_seed_page()");
+  }finally{await admin.end();}
     }
   }
 });
