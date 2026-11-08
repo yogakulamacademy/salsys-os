@@ -1959,7 +1959,7 @@ test('KB-09F/G/H proof, BYPASSRLS, tenant-finalization, consent and commit races
       // valid INSIDE the SQL call; app-side previous reads are not authority.
       await root.query(
         "update public.knowledge_discovery_domain_verifications "+
-        "set verified_until=null where organization_id=$1",[ORG_C]
+        "set verified_at=null,verified_until=null where organization_id=$1",[ORG_C]
       );
       const missingProofExpiry=(await callAs(
         b,'authenticated',manualDraft,inputsC,ADMIN_C,SID_C
@@ -1970,7 +1970,8 @@ test('KB-09F/G/H proof, BYPASSRLS, tenant-finalization, consent and commit races
       assert.equal((await sourceRows()).length,0);
       await root.query(
         "update public.knowledge_discovery_domain_verifications "+
-        "set verified_until=clock_timestamp()-interval '1 second' "+
+        "set verified_at=clock_timestamp()-interval '1 hour',"+
+        "verified_until=clock_timestamp()-interval '1 second' "+
         "where organization_id=$1",[ORG_C]
       );
       const staleProof=(await callAs(
