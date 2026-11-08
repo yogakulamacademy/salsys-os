@@ -20,7 +20,7 @@ const ADMIN_A='20000000-0000-4000-8000-000000000001';
 const ADMIN_B='20000000-0000-4000-8000-000000000002';
 const SID_A='30000000-0000-4000-8000-000000000001';
 const SID_B='30000000-0000-4000-8000-000000000002';
-const URL='https://fixture.example.com/';
+const SITE_URL='https://fixture.example.com/';
 const HOST='fixture.example.com';
 const SHA='a'.repeat(64);
 const POLICY_SHA='b'.repeat(64);
@@ -177,12 +177,12 @@ test('KB-09F checks current domain ownership at commit under job/proof/consent l
         "insert into public.knowledge_discovery_jobs "+
         "(organization_id,created_by,seed_url,max_pages) "+
         "values($1,$2,$3,3) returning id",
-        [org,org===ORG_A?ADMIN_A:ADMIN_B,URL]
+        [org,org===ORG_A?ADMIN_A:ADMIN_B,SITE_URL]
       )).rows[0].id;
       const page=(await root.query(
         "insert into public.knowledge_discovery_pages "+
         "(organization_id,job_id,url,depth,status) "+
-        "values($1,$2,$3,0,'discovered') returning id",[org,id,URL]
+        "values($1,$2,$3,0,'discovered') returning id",[org,id,SITE_URL]
       )).rows[0].id;
       const claims=(await callAs(a,'service_role',CLAIM)).rows;
       assert.equal(claims.length,1);
