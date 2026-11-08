@@ -1,0 +1,437 @@
+{
+  "schema_version": 1,
+  "packet_id": "KB-09O",
+  "classification": "DRAFT_ONLY_SYNTHETIC_ENGINEERING_NOT_RELEASE",
+  "as_of": "2026-11-08",
+  "source_of_truth": {
+    "release_gate_issue": 601,
+    "approval_issues": [
+      612,
+      613,
+      614
+    ],
+    "parent_unmerged_draft_pr": 655,
+    "parent_sha": "2c15dc0ddfeed37ff1b10320a51a515b0fea66c8",
+    "audit_file": "docs/checkpoints/KB-09M-cutover-inventory-DRAFT.json"
+  },
+  "verdict": "BLOCKED",
+  "actual_staging": {
+    "provisioned": false,
+    "approved": false,
+    "project_reference": null,
+    "reviewer_protection_verified": false,
+    "synthetic_tenants_accepted": false,
+    "spending_approved": false,
+    "fresh_quote_approved": false,
+    "revenue_condition_confirmed": false
+  },
+  "real_acceptance": {
+    "independently_witnessed": 0,
+    "required": 16,
+    "scenarios": [
+      {
+        "id": "ownership_expiry_denies",
+        "description": "Expiry/revocation prevents source reads",
+        "category": "domain_proof",
+        "status": "UNWITNESSED",
+        "staging_evidence_reference": null,
+        "separate_witness_attestation_reference": null,
+        "exact_verified_commit": null,
+        "recorded_at": null
+      },
+      {
+        "id": "consent_missing_denies",
+        "description": "Missing or wrong-purpose consent prevents collection",
+        "category": "consent",
+        "status": "UNWITNESSED",
+        "staging_evidence_reference": null,
+        "separate_witness_attestation_reference": null,
+        "exact_verified_commit": null,
+        "recorded_at": null
+      },
+      {
+        "id": "consent_withdrawal_stops_queued",
+        "description": "Withdrawal stops queued and in-flight discovery",
+        "category": "consent",
+        "status": "UNWITNESSED",
+        "staging_evidence_reference": null,
+        "separate_witness_attestation_reference": null,
+        "exact_verified_commit": null,
+        "recorded_at": null
+      },
+      {
+        "id": "tenant_a_cannot_read_b",
+        "description": "Signed tenant A cannot read B evidence",
+        "category": "auth",
+        "status": "UNWITNESSED",
+        "staging_evidence_reference": null,
+        "separate_witness_attestation_reference": null,
+        "exact_verified_commit": null,
+        "recorded_at": null
+      },
+      {
+        "id": "tenant_a_cannot_write_b",
+        "description": "Signed tenant A cannot mutate B evidence or approval",
+        "category": "auth",
+        "status": "UNWITNESSED",
+        "staging_evidence_reference": null,
+        "separate_witness_attestation_reference": null,
+        "exact_verified_commit": null,
+        "recorded_at": null
+      },
+      {
+        "id": "retention_expiry_erases",
+        "description": "Independently approved retention removes quotes and derived data",
+        "category": "retention",
+        "status": "UNWITNESSED",
+        "staging_evidence_reference": null,
+        "separate_witness_attestation_reference": null,
+        "exact_verified_commit": null,
+        "recorded_at": null
+      },
+      {
+        "id": "deletion_rehearsal_audited",
+        "description": "Deletion and withdrawal reconcile with immutable audit",
+        "category": "retention",
+        "status": "UNWITNESSED",
+        "staging_evidence_reference": null,
+        "separate_witness_attestation_reference": null,
+        "exact_verified_commit": null,
+        "recorded_at": null
+      },
+      {
+        "id": "unauthenticated_reviewer_denied",
+        "description": "Unauthenticated/non-admin reviewer cannot approve",
+        "category": "approval",
+        "status": "UNWITNESSED",
+        "staging_evidence_reference": null,
+        "separate_witness_attestation_reference": null,
+        "exact_verified_commit": null,
+        "recorded_at": null
+      },
+      {
+        "id": "stale_document_version_denied",
+        "description": "Stale version writes are rejected",
+        "category": "approval",
+        "status": "UNWITNESSED",
+        "staging_evidence_reference": null,
+        "separate_witness_attestation_reference": null,
+        "exact_verified_commit": null,
+        "recorded_at": null
+      },
+      {
+        "id": "existing_workflow_only",
+        "description": "Existing reviewed approval workflow is reused",
+        "category": "approval",
+        "status": "UNWITNESSED",
+        "staging_evidence_reference": null,
+        "separate_witness_attestation_reference": null,
+        "exact_verified_commit": null,
+        "recorded_at": null
+      },
+      {
+        "id": "ssrf_dns_redirect_robots_denied",
+        "description": "SSRF, DNS, redirect, robots and off-host controls",
+        "category": "network",
+        "status": "UNWITNESSED",
+        "staging_evidence_reference": null,
+        "separate_witness_attestation_reference": null,
+        "exact_verified_commit": null,
+        "recorded_at": null
+      },
+      {
+        "id": "quota_and_emergency_stop",
+        "description": "Quota, concurrency and emergency stop enforced",
+        "category": "operations",
+        "status": "UNWITNESSED",
+        "staging_evidence_reference": null,
+        "separate_witness_attestation_reference": null,
+        "exact_verified_commit": null,
+        "recorded_at": null
+      },
+      {
+        "id": "browser_visible_text_reconciled",
+        "description": "Source excerpts match browser-visible text",
+        "category": "evidence",
+        "status": "UNWITNESSED",
+        "staging_evidence_reference": null,
+        "separate_witness_attestation_reference": null,
+        "exact_verified_commit": null,
+        "recorded_at": null
+      },
+      {
+        "id": "model_ungrounded_answer_denied",
+        "description": "Actual authorized provider rejects ungrounded claims",
+        "category": "model",
+        "status": "UNWITNESSED",
+        "staging_evidence_reference": null,
+        "separate_witness_attestation_reference": null,
+        "exact_verified_commit": null,
+        "recorded_at": null
+      },
+      {
+        "id": "historical_citation_coverage",
+        "description": "Historical/changed citations reconciled or held",
+        "category": "evidence",
+        "status": "UNWITNESSED",
+        "staging_evidence_reference": null,
+        "separate_witness_attestation_reference": null,
+        "exact_verified_commit": null,
+        "recorded_at": null
+      },
+      {
+        "id": "isolated_staging_rollback",
+        "description": "Isolation, rollback and independent monitoring witnessed",
+        "category": "operations",
+        "status": "UNWITNESSED",
+        "staging_evidence_reference": null,
+        "separate_witness_attestation_reference": null,
+        "exact_verified_commit": null,
+        "recorded_at": null
+      }
+    ]
+  },
+  "governance_gates": [
+    {
+      "id": "security_review",
+      "issue": 612,
+      "required_decision": "Independent qualified security review, ownership and ruleset/last-push approval",
+      "status": "BLOCKED",
+      "external_attestation_reference": null,
+      "independently_verified_at": null
+    },
+    {
+      "id": "protected_environment",
+      "issue": 612,
+      "required_decision": "Independent required-reviewer protection, no self-approval, branch limits verified",
+      "status": "BLOCKED",
+      "external_attestation_reference": null,
+      "independently_verified_at": null
+    },
+    {
+      "id": "privacy_legal",
+      "issue": 613,
+      "required_decision": "Lawful basis, exact notice/version/digest and withdrawal purpose independently approved",
+      "status": "BLOCKED",
+      "external_attestation_reference": null,
+      "independently_verified_at": null
+    },
+    {
+      "id": "dba_retention",
+      "issue": 613,
+      "required_decision": "All twelve schema-surface decisions, audit and erasure/restore reviewed",
+      "status": "BLOCKED",
+      "external_attestation_reference": null,
+      "independently_verified_at": null
+    },
+    {
+      "id": "external_processor_inventory",
+      "issue": 613,
+      "required_decision": "Five external copy/processor categories scoped and signed off",
+      "status": "BLOCKED",
+      "external_attestation_reference": null,
+      "independently_verified_at": null
+    },
+    {
+      "id": "staging_budget",
+      "issue": 614,
+      "required_decision": "Revenue condition satisfied, fresh currency/usage quote and explicit spend approval",
+      "status": "BLOCKED",
+      "external_attestation_reference": null,
+      "independently_verified_at": null
+    },
+    {
+      "id": "isolated_staging",
+      "issue": 614,
+      "required_decision": "Dedicated separately verified environment with synthetic tenants only",
+      "status": "BLOCKED",
+      "external_attestation_reference": null,
+      "independently_verified_at": null
+    },
+    {
+      "id": "reviewed_migrations",
+      "issue": 601,
+      "required_decision": "Versioned independently approved migration/rollback and exact ACL audit",
+      "status": "BLOCKED",
+      "external_attestation_reference": null,
+      "independently_verified_at": null
+    },
+    {
+      "id": "physical_commit_policy",
+      "issue": 601,
+      "required_decision": "Independent security/DBA/product choice for SQL-time vs physical COMMIT expiry",
+      "status": "BLOCKED",
+      "external_attestation_reference": null,
+      "independently_verified_at": null
+    },
+    {
+      "id": "service_key_and_proof",
+      "issue": 612,
+      "required_decision": "Service key confinement, preimage/logging and actual network publication controls",
+      "status": "BLOCKED",
+      "external_attestation_reference": null,
+      "independently_verified_at": null
+    },
+    {
+      "id": "witness_reviews",
+      "issue": 601,
+      "required_decision": "All 16 real staging cases independently witnessed and evidenced",
+      "status": "BLOCKED",
+      "external_attestation_reference": null,
+      "independently_verified_at": null
+    },
+    {
+      "id": "owner_release",
+      "issue": 601,
+      "required_decision": "Separate approval of protected merge, deployment and operational rollback",
+      "status": "BLOCKED",
+      "external_attestation_reference": null,
+      "independently_verified_at": null
+    }
+  ],
+  "legal_retention": {
+    "schema_surfaces": [
+      {
+        "table": "knowledge_sources",
+        "status": "UNDECIDED",
+        "policy_decision_reference": null,
+        "retention_window_approved": false,
+        "disposition_approved": false
+      },
+      {
+        "table": "knowledge_documents",
+        "status": "UNDECIDED",
+        "policy_decision_reference": null,
+        "retention_window_approved": false,
+        "disposition_approved": false
+      },
+      {
+        "table": "knowledge_chunks",
+        "status": "UNDECIDED",
+        "policy_decision_reference": null,
+        "retention_window_approved": false,
+        "disposition_approved": false
+      },
+      {
+        "table": "knowledge_approvals",
+        "status": "UNDECIDED",
+        "policy_decision_reference": null,
+        "retention_window_approved": false,
+        "disposition_approved": false
+      },
+      {
+        "table": "knowledge_discovery_domain_verifications",
+        "status": "UNDECIDED",
+        "policy_decision_reference": null,
+        "retention_window_approved": false,
+        "disposition_approved": false
+      },
+      {
+        "table": "knowledge_discovery_jobs",
+        "status": "UNDECIDED",
+        "policy_decision_reference": null,
+        "retention_window_approved": false,
+        "disposition_approved": false
+      },
+      {
+        "table": "knowledge_discovery_pages",
+        "status": "UNDECIDED",
+        "policy_decision_reference": null,
+        "retention_window_approved": false,
+        "disposition_approved": false
+      },
+      {
+        "table": "knowledge_discovery_site_consents",
+        "status": "UNDECIDED",
+        "policy_decision_reference": null,
+        "retention_window_approved": false,
+        "disposition_approved": false
+      },
+      {
+        "table": "knowledge_discovery_consent_control",
+        "status": "UNDECIDED",
+        "policy_decision_reference": null,
+        "retention_window_approved": false,
+        "disposition_approved": false
+      },
+      {
+        "table": "knowledge_discovery_consent_audit",
+        "status": "UNDECIDED",
+        "policy_decision_reference": null,
+        "retention_window_approved": false,
+        "disposition_approved": false
+      },
+      {
+        "table": "knowledge_discovery_metadata_erasure_audit",
+        "status": "UNDECIDED",
+        "policy_decision_reference": null,
+        "retention_window_approved": false,
+        "disposition_approved": false
+      },
+      {
+        "table": "knowledge_discovery_policy_documents",
+        "status": "UNDECIDED",
+        "policy_decision_reference": null,
+        "retention_window_approved": false,
+        "disposition_approved": false
+      }
+    ],
+    "external_copy_categories": [
+      {
+        "category": "backups_pitr_restores",
+        "status": "UNINVENTORIED",
+        "processor_attestation_reference": null
+      },
+      {
+        "category": "logs_traces",
+        "status": "UNINVENTORIED",
+        "processor_attestation_reference": null
+      },
+      {
+        "category": "ai_prompts_provider_records",
+        "status": "UNINVENTORIED",
+        "processor_attestation_reference": null
+      },
+      {
+        "category": "caches_indexes_exports",
+        "status": "UNINVENTORIED",
+        "processor_attestation_reference": null
+      },
+      {
+        "category": "downstream_sent_published_copies",
+        "status": "UNINVENTORIED",
+        "processor_attestation_reference": null
+      }
+    ]
+  },
+  "security": {
+    "proven_real_auth_sessions": false,
+    "real_tenant_isolation_witnessed": false,
+    "independent_security_review": false,
+    "migrations_authorized": false,
+    "exact_hosted_acl_verified": false,
+    "outer_transaction_expiry_policy_approved": false,
+    "service_key_containment_verified": false,
+    "operator_policy_registry_approved": false
+  },
+  "operations": {
+    "feature_pilot_enabled": false,
+    "consent_management_enabled": false,
+    "policy_grants_enabled": false,
+    "protected_workflow_runnable": false,
+    "external_website_crawl_authorized": false,
+    "provider_model_call_authorized": false,
+    "hosted_sql_authorized": false,
+    "deploy_authorized": false,
+    "merge_authorized": false,
+    "new_paid_resource_authorized": false
+  },
+  "evidence_policy": {
+    "synthetic_ci_counts_as_witness": false,
+    "self_reported_pass_counts_as_witness": false,
+    "populated_placeholder_counts_as_witness": false,
+    "external_signoff_required": true,
+    "secrets_in_repository_prohibited": true
+  },
+  "decision_rule": "NO_RELEASE_UNTIL_EXPLICIT_APPROVED_EXTERNAL_EVIDENCE_AND_INDEPENDENT_REVIEW"
+}
