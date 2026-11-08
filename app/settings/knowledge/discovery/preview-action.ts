@@ -19,16 +19,6 @@ export type ManuallyPastedHtmlPreviewState = {
   warnings: string[];
 };
 
-export const EMPTY_PASTED_HTML_PREVIEW: ManuallyPastedHtmlPreviewState = {
-  state: 'idle',
-  message: 'Paste HTML copied from the original website to inspect provisional text.',
-  sourcePageId: null,
-  sourceUrl: null,
-  pastedHtmlSha256: null,
-  excerpts: [],
-  warnings: [],
-};
-
 function fail(message: string): ManuallyPastedHtmlPreviewState {
   return {
     state: 'error', message, sourcePageId: null, sourceUrl: null,
