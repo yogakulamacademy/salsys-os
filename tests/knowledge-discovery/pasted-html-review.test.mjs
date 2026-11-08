@@ -33,8 +33,13 @@ for(const name of ['website-evidence.ts','html5-visible-text.ts']){
     original.replace("from './website-evidence'","from './website-evidence.ts'"),
     'utf8');
 }
-const { extractHtml5VisibleBlocks }=await import(
+const { extractHtml5VisibleBlocks,prepareHtml5WebsiteEvidence }=await import(
   pathToFileURL(join(tempDir,'html5-visible-text.ts')).href);
+const { prepareSourceGroundedDrafts }=loadCommonJs(
+  'lib/knowledge-extraction/source-grounded-drafts.ts',{
+    'node:crypto':require('node:crypto'),
+    'node:net':require('node:net'),
+  });
 test.after(async()=>rm(tempDir,{recursive:true,force:true}));
 
 const org='10000000-0000-4000-8000-000000000001';
@@ -74,7 +79,8 @@ const action=loadCommonJs('app/settings/knowledge/discovery/preview-action.ts',{
       return eligible;
     },
   },
-  '@/lib/knowledge-extraction/html5-visible-text':{extractHtml5VisibleBlocks},
+  '@/lib/knowledge-extraction/html5-visible-text':{extractHtml5VisibleBlocks,prepareHtml5WebsiteEvidence},
+  '@/lib/knowledge-extraction/source-grounded-drafts':{prepareSourceGroundedDrafts},
 });
 
 const flags=['KNOWLEDGE_DISCOVERY_PILOT_ENABLED','KNOWLEDGE_DISCOVERY_PAUSED'];
@@ -143,6 +149,15 @@ test('KB-09R existing HTML5 parser extracts safe provisional text only',async()=
     supabase:client,organizationId:org,id:pageId,
   }]);
   assert.match(result.message,/pasted HTML/);
+  assert.ok(result.provisionalCandidates.length>0);
+  assert.ok(result.provisionalCandidates.length<=12);
+  assert.ok(result.provisionalCandidates.every(candidate=>
+    ['faq_pair','source_statement'].includes(candidate.kind)));
+  assert.ok(result.provisionalCandidates.some(candidate=>
+    candidate.kind==='faq_pair' &&
+    candidate.text==='Q: Are manuals included?\\nA: Yes, a course manual is included.'.replace('\\n','\n')));
+  assert.doesNotMatch(JSON.stringify(result.provisionalCandidates),
+    /ignore previous instructions|Fake price|Forged prior-state secret/);
 });
 
 test('KB-09R silent short-circuit on paused/disallowed discovery and synthetic mock mode',async()=>{
@@ -205,6 +220,7 @@ test('KB-09R no visible text produces EMPTY, not fabricated knowledge',async()=>
   const result=await post('<html><body><nav>Private navigation</nav><script>Attack</script></body></html>');
   assert.equal(result.state,'empty');
   assert.deepEqual(result.excerpts,[]);
+  assert.deepEqual(result.provisionalCandidates,[]);
   assert.match(result.message,/does not prove/);
 });
 
@@ -238,6 +254,10 @@ test('KB-09R HTML parsing preview is separate from the unchanged draft/approval 
   assert.match(form,/Copy excerpt/);
   assert.match(form,/nothing\s+is saved/mi);
   assert.match(form,/unverified pasted-content excerpts/);
+  assert.match(form,/Suggested quote-only draft text/);
+  assert.match(form,/Copy for human review/);
+  assert.match(preview,/prepareSourceGroundedDrafts\(prepared\.evidence, source\.hostname\)/);
+  assert.match(preview,/provisionalCandidates/);
   assert.match(library,/KnowledgeDiscoveryPastedHtmlReview/);
   assert.match(library,/action=\{createManualDraftFromDiscoveredPageAction\}/);
   assert.match(library,/Only <strong>Save as Draft<\/strong>/);
