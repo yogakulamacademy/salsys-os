@@ -88,7 +88,11 @@ export function verifyIntegratedHold(packet, migrationInventory, releaseLedger, 
 
   const contract=packet.atomic_discovered_draft_contract;
   assert.equal(contract.name,'create_discovery_review_draft_with_current_consent_v1');
-  assert.equal(contract.status,'REVIEW_REQUIRED_NOT_INSTALLED');
+  assert.equal(contract.status,'LOCAL_REHEARSAL_ONLY_REVIEW_REQUIRED_NOT_INSTALLED');
+  assert.equal(contract.local_disposable_real_v2_test_only,true);
+  assert.equal(contract.hosted_rpc_installed,false);
+  assert.equal(contract.local_disposable_sql_rehearsal,
+    'docs/sql/KB-11-atomic-discovery-review-draft-REHEARSAL-DRAFT.sql');
   assert.equal(contract.approval_flag,
     'KNOWLEDGE_DISCOVERY_ATOMIC_DRAFT_APPROVED');
   assert.equal(contract.default_enabled,false);
