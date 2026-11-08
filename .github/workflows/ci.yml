@@ -87,7 +87,7 @@ jobs:
         run: node --test tests/database/knowledge-source-verification-alert-gate.test.mjs
       - name: Verify KB-09E early-denial lease CAS and cancellation audit in disposable PostgreSQL
         run: node --test tests/database/knowledge-early-denial-lease-cas.test.mjs
-      - name: Verify KB-09F–T synthetic evidence consent-withdrawal erasure, TTL rollback and tenant security in disposable PostgreSQL
+      - name: Verify KB-09F–11 atomic consent-locked draft, withdrawal and tenant security in disposable PostgreSQL
         run: node --test tests/database/knowledge-commit-ownership-races.test.mjs
 
 
