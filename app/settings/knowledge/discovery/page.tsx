@@ -11,18 +11,14 @@ export const dynamic = 'force-dynamic';
 export default async function KnowledgeDiscoveryPage({
   searchParams,
 }: {
-  searchParams: Promise<{ websiteNotice?: string; websiteError?: string }>;
+  searchParams: Promise<{ websiteError?: string }>;
 }) {
   const workspace = await requireAdminWorkspaceAccess();
   const params = await searchParams;
   const canEditWebsite = process.env.KNOWLEDGE_DISCOVERY_PILOT_ENABLED !== 'true' &&
     process.env.KNOWLEDGE_DISCOVERY_CONSENT_MANAGEMENT_ENABLED !== 'true';
-  // Never treat a caller-supplied query string as proof that a website
-  // update succeeded. Only render known, server-owned status codes.
-  const notices: Record<string, string> = {
-    saved: 'Website saved. New ownership verification and separate consent are required before any scan.',
-    unchanged: 'Website is already up to date.',
-  };
+  // Website save status is read from the database, not a forgeable GET notice.
+  // Query parameters may only select fixed, non-successful error text.
   const errors: Record<string, string> = {
     pilot_locked: 'Website changes are unavailable while discovery or consent management is configured.',
     invalid_input: 'Enter a public HTTPS website domain, up to 240 characters.',
@@ -36,7 +32,6 @@ export default async function KnowledgeDiscoveryPage({
     <KnowledgeDiscoveryWorkspace
       key={workspace.organizationId}
       canEditWebsite={canEditWebsite}
-      websiteNotice={notices[params.websiteNotice ?? ''] ?? ''}
       websiteError={errors[params.websiteError ?? ''] ?? ''}
     />
   );
