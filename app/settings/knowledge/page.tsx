@@ -121,6 +121,12 @@ export default async function KnowledgeSettingsPage({
   let partial = false;
   let discoveredDraft: EligiblePageDraft | null = null;
   const requestedDiscoveryPage = typeof query.discoveryPage === 'string' ? query.discoveryPage : '';
+  // A manual draft must not be saved by the older generic document RPC:
+  // that RPC cannot atomically validate current site ownership and consent.
+  // Enable only after the new consent-locked DB function is independently
+  // reviewed/migrated and the release gate authorizes this feature.
+  const atomicDiscoveredDraftApproved =
+    process.env.KNOWLEDGE_DISCOVERY_ATOMIC_DRAFT_APPROVED === 'true';
   if (!live) loadError = useMockData ? 'Demo mode: live knowledge has not been loaded.' : 'Configure a live workspace before loading knowledge.';
 
   if (live) {
@@ -341,9 +347,20 @@ export default async function KnowledgeSettingsPage({
               <div className="kn-authority"><ShieldAlert size={18}/>
                 <span>Only <strong>Save as Draft</strong> is available here. A separate existing organization-admin approval action is required before Co-Pilot retrieval.</span>
               </div>
+              {!atomicDiscoveredDraftApproved ? (
+                <p className="kn-template-note" role="status">
+                  Discovered-page draft saving is on hold until the consent-locked
+                  database write receives independent security/privacy review.
+                  You may inspect and copy the source, but no document is saved
+                  from this form.
+                </p>
+              ) : null}
               <div className="kn-create-actions">
                 <Link href="/settings/knowledge" className="kn-secondary">Cancel selection</Link>
-                <button type="submit" className="kn-primary">Save as Draft</button>
+                <button type="submit" className="kn-primary"
+                  disabled={!atomicDiscoveredDraftApproved}>
+                  {atomicDiscoveredDraftApproved ? 'Save as Draft' : 'Draft saving on hold'}
+                </button>
               </div>
               </form>
             </>
