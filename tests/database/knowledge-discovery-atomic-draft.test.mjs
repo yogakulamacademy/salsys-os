@@ -198,6 +198,31 @@ test('KB-11A: local-only consent-atomic discovered-page draft SQL and negative i
     assert.equal((await root.query('select count(*)::int as n from public.knowledge_approvals')).rows[0].n,0,
       'Denied approval creates no audit or eligible document');
 
+    // KB-15A: A source may exist for the FK but be invisible to the
+    // authenticated caller under RLS. An invoker trigger must deny, not
+    // interpret an empty source lookup as a verified/manual source.
+    // This grants a disposable-fixture-only direct INSERT solely to
+    // simulate the existing platform's authenticated table permissions.
+    await root.query('grant insert on public.knowledge_documents to authenticated');
+    await root.query('grant select on public.knowledge_sources to authenticated');
+    await root.query('alter table public.knowledge_sources enable row level security');
+    await root.query(
+      "create policy kb15a_hide_all_sources on public.knowledge_sources for select to authenticated using (false)");
+    await assert.rejects(callAs(a,'authenticated',
+      "insert into public.knowledge_documents(organization_id,source_id,title,category,content,status,metadata) values($1,$2,$3,'faq',$4,'approved','{}'::jsonb)",
+      [ORG_A,success.source_id,'Forged invisible provenance',CONTENT]),
+      e=>e.code==='42501',
+      'RLS-invisible linked source cannot be laundered into approved knowledge');
+    await root.query('drop policy kb15a_hide_all_sources on public.knowledge_sources');
+    await root.query('alter table public.knowledge_sources disable row level security');
+    await root.query('revoke insert on public.knowledge_documents from authenticated');
+    await root.query('revoke select on public.knowledge_sources from authenticated');
+    assert.deepEqual((await root.query(
+      "select (select count(*)::int from public.knowledge_documents) as documents,"+
+      "(select count(*)::int from public.knowledge_approvals) as approvals")).rows[0],
+      {documents:1,approvals:0},
+      'RLS-hidden source insert must leave no new document or approval');
+
     // No role can skip the exact live tenant-session proof.
     for(const [role,actor,sid] of [
       ['authenticated',USER_B,SID_B],
