@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { randomUUID } from 'node:crypto';
+import { randomUUID, createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import pg from 'pg';
 
@@ -16,8 +16,9 @@ const sqlFiles=[
   '../../docs/sql/KB-09I-discovery-public-rpc-bridge-REHEARSAL-DRAFT.sql',
   '../../docs/sql/KB-09J-atomic-session-authorized-enqueue-REHEARSAL-DRAFT.sql',
   '../../docs/sql/KB-09K-proof-consent-direct-DML-boundary-REHEARSAL-DRAFT.sql',
+  '../../docs/sql/KB-09L-proof-preimage-operator-hold-REHEARSAL-DRAFT.sql',
 ].map(path=>readFileSync(new URL(path,import.meta.url),'utf8'));
-const [foundation,discovery,consentA,consentB,guard,writeGuard,jobFinalization,rpcBridge,atomicEnqueue,proofBoundary]=sqlFiles;
+const [foundation,discovery,consentA,consentB,guard,writeGuard,jobFinalization,rpcBridge,atomicEnqueue,proofBoundary,preimageAndPolicyHold]=sqlFiles;
 
 const ORG_A='10000000-0000-4000-8000-000000000001';
 const ORG_B='10000000-0000-4000-8000-000000000002';
@@ -50,6 +51,7 @@ const ENQUEUE_SIG='public.enqueue_knowledge_discovery_job_v1(uuid,text,integer)'
 const PROOF_ISSUE="select public.issue_knowledge_discovery_challenge_for_admin_v1($1,$2,$3) as expiry";
 const PROOF_CLAIM="select public.claim_knowledge_discovery_proof_check_for_admin_v1($1,$2,$3) as allowed";
 const PROOF_FINISH="select public.confirm_checked_knowledge_discovery_proof_v1($1,$2,$3) as result";
+const PROOF_PREIMAGE="select public.confirm_checked_knowledge_discovery_proof_v2($1,$2,$3) as result";
 const CANCEL_SIG='kb09h_fixture.cancel_job_for_current_admin_v1(uuid,uuid)';
 const FAILURE_SIG='kb09h_fixture.fail_unseeded_queued_job_v1(uuid,uuid,uuid)';
 const PUBLIC_CANCEL_SIG='public.cancel_knowledge_discovery_job_v1(uuid,uuid)';
@@ -1297,6 +1299,176 @@ test('KB-09F/G/H proof, BYPASSRLS, tenant-finalization, consent and commit races
       "where organization_id=$1",[ORG_D]
     )).rows[0].verified,true,
       'External transaction can commit after challenge expiry: still unresolved');
+
+
+    // KB-09L: Retire hash-only service confirmation and demand the ORIGINAL
+    // proof-token preimage. The test runs in this auto-dropped localhost DB.
+    await root.query(preimageAndPolicyHold);
+    assert.match(preimageAndPolicyHold,/KB09L_DISPOSABLE_PARENT_FIXTURE_REQUIRED/);
+    assert.doesNotMatch(preimageAndPolicyHold,/cron\.schedule|net\.http|http_get/i);
+    assert.doesNotMatch(preimageAndPolicyHold,/grants_enabled\s*=\s*true/i);
+    const oldProofPrivilege=(await root.query(
+      "select has_function_privilege('service_role',$1,'execute') as old_public,"+
+      "has_function_privilege('service_role',$2,'execute') as old_private",
+      ['public.confirm_checked_knowledge_discovery_proof_v1(uuid,text,text)',
+       'kb09k_fixture.confirm_checked_domain_proof_v1(uuid,text,text)']
+    )).rows[0];
+    assert.deepEqual(oldProofPrivilege,{old_public:false,old_private:false});
+    const proofV2ACL=(await root.query(
+      "select has_function_privilege('anon',$1,'execute') as anon,"+
+      "has_function_privilege('authenticated',$1,'execute') as authenticated,"+
+      "has_function_privilege('service_role',$1,'execute') as service",
+      ['public.confirm_checked_knowledge_discovery_proof_v2(uuid,text,text)']
+    )).rows[0];
+    assert.deepEqual(proofV2ACL,{anon:false,authenticated:false,service:true});
+    await assert.rejects(
+      callAs(b,'service_role',PROOF_FINISH,[ORG_D,HOST,'c'.repeat(64)]),
+      isCode('42501'),'Hash-only proof RPC must remain unreachable'
+    );
+    await assert.rejects(
+      callAs(b,'authenticated',PROOF_PREIMAGE,[ORG_D,HOST,'c'.repeat(64)],
+        ADMIN_D,SID_D),
+      isCode('42501'),'Tenant-authenticated clients cannot call service proof RPC'
+    );
+
+    const rawToken='salsysos-domain-verification='+'e'.repeat(64);
+    const tokenDigest=createHash('sha256').update(rawToken,'utf8').digest('hex');
+    assert.equal(rawToken.length,93);
+    await root.query(
+      "update public.knowledge_discovery_domain_verifications "+
+      "set challenge_hash=$2,challenge_expires_at=clock_timestamp()+interval '15 minutes',"+
+      "last_check_at=clock_timestamp(),verified_at=null,verified_until=null "+
+      "where organization_id=$1",[ORG_D,tokenDigest]
+    );
+
+    const badFormat=(await callAs(b,'service_role',PROOF_PREIMAGE,
+      [ORG_D,HOST,tokenDigest])).rows[0].result;
+    assert.deepEqual(badFormat,{ok:false,reason:'invalid_proof_preimage'},
+      'A stored SHA-256 digest is not acceptable evidence');
+    const otherPreimage=(await callAs(b,'service_role',PROOF_PREIMAGE,
+      [ORG_D,HOST,'salsysos-domain-verification='+'f'.repeat(64)]))
+      .rows[0].result;
+    assert.deepEqual(otherPreimage,{ok:false,reason:'challenge_changed_or_expired'});
+    assert.equal((await root.query(
+      "select verified_at from public.knowledge_discovery_domain_verifications "+
+      "where organization_id=$1",[ORG_D]
+    )).rows[0].verified_at,null);
+
+    await root.query(
+      "update public.knowledge_discovery_domain_verifications "+
+      "set last_check_at=now()-interval '3 minutes' "+
+      "where organization_id=$1",[ORG_D]
+    );
+    const unclaimed=(await callAs(b,'service_role',PROOF_PREIMAGE,
+      [ORG_D,HOST,rawToken])).rows[0].result;
+    assert.deepEqual(unclaimed,{ok:false,reason:'challenge_changed_or_expired'},
+      'Preimage cannot bypass the bounded authenticated fetch claim');
+    await root.query(
+      "update public.knowledge_discovery_domain_verifications "+
+      "set last_check_at=clock_timestamp() "+
+      "where organization_id=$1",[ORG_D]
+    );
+    const approvedPreimage=(await callAs(b,'service_role',PROOF_PREIMAGE,
+      [ORG_D,HOST,rawToken])).rows[0].result;
+    assert.equal(approvedPreimage.ok,true);
+    assert.equal(approvedPreimage.status,'verified');
+    assert.equal(typeof approvedPreimage.verified_until,'string');
+    assert.equal(JSON.stringify(approvedPreimage).includes(rawToken),false,
+      'Success response must not expose the secret preimage');
+    const replay=(await callAs(b,'service_role',PROOF_PREIMAGE,
+      [ORG_D,HOST,rawToken])).rows[0].result;
+    assert.deepEqual(replay,{ok:false,reason:'challenge_changed_or_expired'});
+
+    // Best-effort 5-second margin denies near-expiry confirmation.
+    await root.query(
+      "update public.knowledge_discovery_domain_verifications "+
+      "set verified_at=null,verified_until=null,last_check_at=clock_timestamp(),"+
+      "challenge_expires_at=clock_timestamp()+interval '3 seconds' "+
+      "where organization_id=$1",[ORG_D]
+    );
+    const nearExpiry=(await callAs(b,'service_role',PROOF_PREIMAGE,
+      [ORG_D,HOST,rawToken])).rows[0].result;
+    assert.deepEqual(nearExpiry,{ok:false,reason:'challenge_changed_or_expired'});
+
+    // Negative decision test: a permitted standalone function can still
+    // commit AFTER expiry if an outer client explicitly holds its transaction.
+    await root.query(
+      "update public.knowledge_discovery_domain_verifications "+
+      "set verified_at=null,verified_until=null,last_check_at=clock_timestamp(),"+
+      "challenge_expires_at=clock_timestamp()+interval '6 seconds' "+
+      "where organization_id=$1",[ORG_D]
+    );
+    await beginAs(c,'service_role');
+    const earlyV2=(await c.query(PROOF_PREIMAGE,
+      [ORG_D,HOST,rawToken])).rows[0].result;
+    assert.equal(earlyV2.ok,true);
+    await c.query('select pg_sleep(6.2)');
+    await c.query('commit');
+    const staleAtCommit=(await root.query(
+      "select challenge_expires_at<clock_timestamp() as expired,verified_at is not null as verified "+
+      "from public.knowledge_discovery_domain_verifications "+
+      "where organization_id=$1",[ORG_D]
+    )).rows[0];
+    assert.deepEqual(staleAtCommit,{expired:true,verified:true},
+      'Even a 5s margin cannot provide physical external-COMMIT-time authorization');
+
+    // Operator-policy receipts are DB-owner-only evidence, never an API
+    // policy switch; this fixture cannot activate consent management.
+    assert.equal((await root.query(
+      "select grants_enabled from public.knowledge_discovery_consent_control "+
+      "where singleton=true"
+    )).rows[0].grants_enabled,false);
+    const policyText='Synthetic KB09L policy review fixture. No real consent or legal approval is granted.';
+    const policyHash=createHash('sha256').update(policyText,'utf8').digest('hex');
+    await assert.rejects(
+      root.query(
+        "insert into kb09l_fixture.policy_review_receipts "+
+        "(policy_version,exact_policy_text,policy_sha256,source_reference,"+
+        "security_reviewer,privacy_reviewer,security_evidence_ref,privacy_evidence_ref) "+
+        "values($1,$2,$3,$4,$5,$6,$7,$8)",
+        ['synthetic-v1',policyText,policyHash,'synthetic://policy',
+        'same-reviewer','same-reviewer','ticket-security','ticket-privacy']
+      ),isCode('23514'),'Independent reviewer identities required'
+    );
+    await assert.rejects(
+      root.query(
+        "insert into kb09l_fixture.policy_review_receipts "+
+        "(policy_version,exact_policy_text,policy_sha256,source_reference,"+
+        "security_reviewer,privacy_reviewer,security_evidence_ref,privacy_evidence_ref) "+
+        "values($1,$2,$3,$4,$5,$6,$7,$8)",
+        ['synthetic-v1',policyText,'0'.repeat(64),'synthetic://policy',
+        'security-reviewer','privacy-reviewer','ticket-security','ticket-privacy']
+      ),isCode('23514'),'Exact policy bytes must match their digest'
+    );
+    await root.query(
+      "insert into kb09l_fixture.policy_review_receipts "+
+      "(policy_version,exact_policy_text,policy_sha256,source_reference,"+
+      "security_reviewer,privacy_reviewer,security_evidence_ref,privacy_evidence_ref) "+
+      "values($1,$2,$3,$4,$5,$6,$7,$8)",
+      ['synthetic-v1',policyText,policyHash,'synthetic://policy',
+      'security-reviewer','privacy-reviewer','ticket-security','ticket-privacy']
+    );
+    await assert.rejects(
+      root.query("update kb09l_fixture.policy_review_receipts set policy_version='forged'"),
+      isCode('42501'),'Operator receipts are append-only'
+    );
+    await assert.rejects(
+      root.query("truncate kb09l_fixture.policy_review_receipts"),
+      isCode('42501'),'Operator receipts cannot be truncated'
+    );
+    await assert.rejects(
+      callAs(b,'service_role',"select count(*) from kb09l_fixture.policy_review_receipts"),
+      isCode('42501'),'Service role has no operator-review evidence access'
+    );
+    await assert.rejects(
+      callAs(b,'service_role',
+        "update public.knowledge_discovery_consent_control set grants_enabled=true"),
+      isCode('42501'),'Service role cannot enable policy registry'
+    );
+    assert.equal((await root.query(
+      "select grants_enabled from public.knowledge_discovery_consent_control "+
+      "where singleton=true"
+    )).rows[0].grants_enabled,false);
   }finally{
     await Promise.allSettled(connections.map(db=>db.end()));
     try{if(created)await admin.query('drop database "'+name+'" with (force)');}
