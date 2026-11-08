@@ -60,13 +60,22 @@ let website = 'https://fixture.example.com/';
 let ownershipVerified = true;
 let consentGranted = true;
 let simulatedInsertError = null;
+let simulatedPageInsertError = null;
+let seedRepairError = null;
+let seedRepairResult = {ok:true,status:'failed',audit_recorded:true};
+let cancellationError = null;
+let cancellationResult = {ok:true,status:'cancelled',audit_recorded:true};
+let cancelCalls = [];
+let seedRepairCalls = [];
 
 function appClient() {
   return {
     auth: { getUser: async () => ({data:{user: authenticated ? { id:userId } : null},error:null}) },
-    rpc: async name => {
-      assert.equal(name,'can_manage_organization');
-      return {data:admin,error:null};
+    rpc: async (name, args) => {
+      if (name === 'can_manage_organization') return {data:admin,error:null};
+      assert.equal(name,'cancel_knowledge_discovery_job_v1');
+      cancelCalls.push(args);
+      return {data:cancellationResult,error:cancellationError};
     },
     from(table) {
       reads.push(table);
@@ -105,6 +114,11 @@ function appClient() {
 function privilegedClient() {
   adminClientCalls++;
   return {
+    rpc: async (name, args) => {
+      assert.equal(name,'fail_knowledge_discovery_seed_v1');
+      seedRepairCalls.push(args);
+      return {data:seedRepairResult,error:seedRepairError};
+    },
     from(table) {
       assert.ok(['knowledge_discovery_jobs','knowledge_discovery_pages'].includes(table));
       return {
@@ -116,7 +130,11 @@ function privilegedClient() {
                 ? {data:null,error:simulatedInsertError}
                 : {data:{id:'30000000-0000-4000-8000-000000000001'},error:null},
             }),
-            then(resolve) { return Promise.resolve({error:null}).then(resolve); },
+            then(resolve) {
+              return Promise.resolve({
+                error: table === 'knowledge_discovery_pages' ? simulatedPageInsertError : null,
+              }).then(resolve);
+            },
           };
         },
       };
@@ -156,7 +174,12 @@ test.after(()=> {
 
 function reset() {
   authenticated = true;admin = true;adminClientCalls = 0;
-  writes = []; reads = []; website = 'https://fixture.example.com/'; simulatedInsertError = null; ownershipVerified = true; consentGranted = true;
+  writes = []; reads = []; website = 'https://fixture.example.com/';
+  simulatedInsertError = null; simulatedPageInsertError = null;
+  seedRepairError = null; seedRepairResult = {ok:true,status:'failed',audit_recorded:true};
+  cancellationError = null; cancellationResult = {ok:true,status:'cancelled',audit_recorded:true};
+  cancelCalls = []; seedRepairCalls = [];
+  ownershipVerified = true; consentGranted = true;
   delete process.env.KNOWLEDGE_DISCOVERY_PILOT_ENABLED;
   delete process.env.KNOWLEDGE_DISCOVERY_PAUSED;
   delete process.env.KNOWLEDGE_DISCOVERY_ALLOWED_HOSTS;
@@ -265,4 +288,72 @@ test('missing discovery consent blocks scan even after ownership verification',a
   assert.equal(status.body.websiteVerified,true);
   assert.equal(status.body.consentActive,false);
   assert.equal(status.body.discoveryEnabled,false);
+});
+
+test('KB-09I DELETE cancels via signed tenant-admin RPC and never a service-role table update',async()=>{
+  reset();enabled();
+  const jobId='30000000-0000-4000-8000-000000000001';
+  const response=await route.DELETE(request('DELETE',{jobId}));
+  assert.equal(response.status,200);
+  assert.equal(response.body.status,'cancelled');
+  assert.deepEqual(cancelCalls,[{p_organization_id:orgId,p_job_id:jobId}]);
+  assert.equal(adminClientCalls,0,'Cancellation must not instantiate a service-role client');
+  assert.deepEqual(writes,[]);
+});
+
+test('KB-09I DELETE rejects non-admin, cross-origin and malformed jobs without privileged mutation',async()=>{
+  reset();enabled();
+  const jobId='30000000-0000-4000-8000-000000000001';
+  assert.equal((await route.DELETE(request('DELETE',{jobId},{
+    origin:'https://attacker.example.net','sec-fetch-site':'cross-site',
+  }))).status,403);
+  assert.equal((await route.DELETE(request('DELETE',{jobId:'bad'}))).status,400);
+  admin=false;
+  assert.equal((await route.DELETE(request('DELETE',{jobId}))).status,403);
+  assert.deepEqual(cancelCalls,[]);
+  assert.equal(adminClientCalls,0);
+});
+
+test('KB-09I DELETE fails closed on no-op, stale job, or missing authorized RPC',async()=>{
+  reset();enabled();
+  const jobId='30000000-0000-4000-8000-000000000001';
+  cancellationResult={ok:false,reason:'not_active_or_not_found'};
+  assert.equal((await route.DELETE(request('DELETE',{jobId}))).status,404);
+  cancellationResult={ok:true,status:'cancelled',audit_recorded:false};
+  assert.equal((await route.DELETE(request('DELETE',{jobId}))).status,404);
+  cancellationError={code:'PGRST202',message:'RPC missing'};
+  assert.equal((await route.DELETE(request('DELETE',{jobId}))).status,503);
+  assert.equal(adminClientCalls,0);
+  assert.deepEqual(writes,[]);
+});
+
+test('KB-09I first-page failure invokes exact service seed-repair RPC; never privileged UPDATE',async()=>{
+  reset();enabled();
+  simulatedPageInsertError={code:'23514',message:'Synthetic seed insertion failure'};
+  const response=await route.POST(request('POST',{url:website,maxPages:10}));
+  assert.equal(response.status,503);
+  assert.deepEqual(writes.map(entry=>entry.table),[
+    'knowledge_discovery_jobs','knowledge_discovery_pages',
+  ]);
+  assert.deepEqual(seedRepairCalls,[{
+    p_organization_id:orgId,
+    p_job_id:'30000000-0000-4000-8000-000000000001',
+    p_expected_creator:userId,
+  }]);
+});
+
+test('KB-09I seed repair never falls back to privileged UPDATE if RPC or audit fails',async()=>{
+  for(const scenario of ['missing_rpc','rejected','unaudited']){
+    reset();enabled();
+    simulatedPageInsertError={code:'23514',message:'Synthetic page error'};
+    if(scenario==='missing_rpc') seedRepairError={code:'PGRST202',message:'RPC missing'};
+    if(scenario==='rejected') seedRepairResult={ok:false,reason:'not_eligible'};
+    if(scenario==='unaudited') seedRepairResult={ok:true,status:'failed',audit_recorded:false};
+    const response=await route.POST(request('POST',{url:website,maxPages:10}));
+    assert.equal(response.status,503);
+    assert.equal(seedRepairCalls.length,1);
+    assert.deepEqual(writes.map(entry=>entry.table),[
+      'knowledge_discovery_jobs','knowledge_discovery_pages',
+    ]);
+  }
 });
