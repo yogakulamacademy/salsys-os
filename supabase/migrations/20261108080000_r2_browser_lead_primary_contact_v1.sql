@@ -1561,19 +1561,14 @@ begin
   if not exists (
     select 1 from pg_proc p
     where p.oid = to_regprocedure(
-      'public.ingest_website_lead(text,text,text,text,text,text,text,text,text,date,text,text,text,text,text,text,text,jsonb,jsonb,jsonb)'
+      'public.ingest_website_lead(text,text,text,text,text,text,text,text,text,date,text,text,text,text,text,text,jsonb,jsonb,jsonb)'
     )
       and p.prosecdef = true
       and p.proowner::regrole::text = 'postgres'
       and p.proacl::text = '{postgres=X/postgres,service_role=X/postgres}'
       and array_to_string(p.proconfig, ',') = 'search_path=public'
   ) then
-    raise exception 'R2 #643: post-migration privileged RPC boundary changed; rollback (rpc_present=%, definer=%, owner=%, acl=%, search_path=%)',
-      (select exists(select 1 from pg_proc p where p.oid=to_regprocedure('public.ingest_website_lead(text,text,text,text,text,text,text,text,text,date,text,text,text,text,text,text,jsonb,jsonb,jsonb)'))),
-      (select coalesce(bool_or(p.prosecdef),false) from pg_proc p where p.oid=to_regprocedure('public.ingest_website_lead(text,text,text,text,text,text,text,text,text,date,text,text,text,text,text,text,jsonb,jsonb,jsonb)')),
-      (select coalesce(bool_or(p.proowner::regrole::text='postgres'),false) from pg_proc p where p.oid=to_regprocedure('public.ingest_website_lead(text,text,text,text,text,text,text,text,text,date,text,text,text,text,text,text,jsonb,jsonb,jsonb)')),
-      (select coalesce(bool_or(p.proacl::text='{postgres=X/postgres,service_role=X/postgres}'),false) from pg_proc p where p.oid=to_regprocedure('public.ingest_website_lead(text,text,text,text,text,text,text,text,text,date,text,text,text,text,text,text,jsonb,jsonb,jsonb)')),
-      (select coalesce(bool_or(array_to_string(p.proconfig, ',')='search_path=public'),false) from pg_proc p where p.oid=to_regprocedure('public.ingest_website_lead(text,text,text,text,text,text,text,text,text,date,text,text,text,text,text,text,jsonb,jsonb,jsonb)'));
+    raise exception 'R2 #643: post-migration privileged RPC boundary changed; rollback';
   end if;
 end;
 $r2_contact_security_postcheck$;
