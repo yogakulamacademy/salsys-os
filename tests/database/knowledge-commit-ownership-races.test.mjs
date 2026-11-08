@@ -11,8 +11,9 @@ const sqlFiles=[
   '../../docs/sql/KB-06A-discovery-consent-execution-DRAFT.sql',
   '../../docs/sql/KB-06B-audited-discovery-consent-lifecycle-DRAFT.sql',
   '../../docs/sql/KB-09F-commit-side-ownership-guard-REHEARSAL-DRAFT.sql',
+  '../../docs/sql/KB-09G-direct-write-boundary-REHEARSAL-DRAFT.sql',
 ].map(path=>readFileSync(new URL(path,import.meta.url),'utf8'));
-const [foundation,discovery,consentA,consentB,guard]=sqlFiles;
+const [foundation,discovery,consentA,consentB,guard,writeGuard]=sqlFiles;
 
 const ORG_A='10000000-0000-4000-8000-000000000001';
 const ORG_B='10000000-0000-4000-8000-000000000002';
@@ -41,17 +42,17 @@ function requireLocalPostgres(){
   assert.equal(url.search,'');
   return url;
 }
-async function beginAs(db,role,actor=ADMIN_A,session=SID_A){
+async function beginAs(db,role,actor=ADMIN_A,session=SID_A,jwtRole=role){
   await db.query('begin');
   await db.query("set local statement_timeout='9s'");
   await db.query("set local lock_timeout='7s'");
   await db.query('set local role '+role);
   await db.query("select set_config('request.jwt.claims',$1,true)",[
-    JSON.stringify({role,sub:actor,session_id:session}),
+    JSON.stringify({role:jwtRole,sub:actor,session_id:session}),
   ]);
 }
-async function callAs(db,role,query,args=[],actor=ADMIN_A,session=SID_A){
-  await beginAs(db,role,actor,session);
+async function callAs(db,role,query,args=[],actor=ADMIN_A,session=SID_A,jwtRole=role){
+  await beginAs(db,role,actor,session,jwtRole);
   try{
     const r=await db.query(query,args);
     await db.query('commit');
@@ -67,13 +68,13 @@ async function pauseForLock(){
   await new Promise(resolve=>setTimeout(resolve,100));
 }
 
-test('KB-09F checks current domain ownership at commit under job/proof/consent locks in disposable DB',async()=>{
+test('KB-09F/G commit proof, audited consent races and privileged direct-write bypass rehearsal only in disposable DB',async()=>{
   const base=requireLocalPostgres();
   const name='salsys_kb09f_'+randomUUID().replaceAll('-','').slice(0,18);
   assert.match(name,/^salsys_kb09f_[a-f0-9]{18}$/);
   const url=new URL(base);url.pathname='/'+name;
   const admin=new Client({connectionString:base.toString()});
-  const connections=[];let created=false;
+  const connections=[];let created=false;let bypassRole=null;
   await admin.connect();
   try{
     await admin.query('create database "'+name+'"');created=true;
@@ -251,6 +252,145 @@ test('KB-09F checks current domain ownership at commit under job/proof/consent l
     assert.equal((await safe(b,ORG_A,renewed)).rows[0].result.ok,true);
     assert.equal((await state(renewed)).status,'completed');
 
+    // KB-09G: reality check. Supabase's actual service_role BYPASSES RLS.
+    // The earlier synthetic "service_role" in this fixture does not have
+    // BYPASSRLS; create a unique cluster-local test role that inherits its
+    // grants and explicitly bypasses RLS, then drop it before test exit.
+    bypassRole='kb09g_writer_'+randomUUID().replaceAll('-','').slice(0,12);
+    assert.match(bypassRole,/^kb09g_writer_[a-f0-9]{12}$/);
+    await root.query('create role "'+bypassRole+'" nologin inherit bypassrls');
+    await root.query('grant service_role to "'+bypassRole+'"');
+    assert.equal((await root.query(
+      'select rolbypassrls from pg_roles where rolname=$1',[bypassRole]
+    )).rows[0].rolbypassrls,true);
+    assert.equal((await root.query(
+      "select has_table_privilege($1,'public.knowledge_discovery_pages','update') as allowed",
+      [bypassRole]
+    )).rows[0].allowed,true,'BYPASSRLS role inherits dangerous direct UPDATE');
+
+    // The old RPC is already revoked by KB-09F, but a privileged direct
+    // page mutation is still possible even when current ownership EXPIRED.
+    const unguarded=await prepareJob(ORG_A);
+    await expire(ORG_A);
+    await assert.rejects(
+      callAs(b,bypassRole,OLD_COMMIT,safeArgs(
+        ORG_A,unguarded,unguarded.lease
+      ),ADMIN_A,SID_A,'service_role'),
+      isCode('42501'),'Old RPC revocation is real but insufficient'
+    );
+    const bypass=(await callAs(b,bypassRole,
+      "update public.knowledge_discovery_pages set "+
+      "status='fetched',page_title='synthetic-direct-bypass',"+
+      "processed_at=clock_timestamp() where id=$1 returning id",
+      [unguarded.page],ADMIN_A,SID_A,'service_role')).rows;
+    assert.equal(bypass.length,1,
+      'Direct privileged DML bypasses ownership/consent-aware RPC');
+    assert.equal((await page(unguarded)).page_title,'synthetic-direct-bypass');
+    await root.query(
+      "update public.knowledge_discovery_pages set "+
+      "status='discovered',page_title=null,processed_at=null where id=$1",
+      [unguarded.page]
+    );
+    await retire(unguarded);
+
+    // KB-09G is explicitly NOT a migration: only alter grants and add
+    // insert-state triggers in this already-guarded random local DB.
+    await root.query(writeGuard);
+    assert.match(writeGuard,/KB09G_DISPOSABLE_PARENT_FIXTURE_REQUIRED/);
+    assert.doesNotMatch(writeGuard,/create or replace function public\./i);
+    for(const table of ['knowledge_discovery_pages','knowledge_discovery_jobs']){
+      const perms=(await root.query(
+        "select "+
+        "has_table_privilege($1,'public."+table+"','update') as update,"+
+        "has_table_privilege($1,'public."+table+"','delete') as delete,"+
+        "has_table_privilege($1,'public."+table+"','truncate') as truncate,"+
+        "has_table_privilege($1,'public."+table+"','trigger') as trigger,"+
+        "has_table_privilege($1,'public."+table+"','insert') as insert",
+        [bypassRole]
+      )).rows[0];
+      assert.deepEqual(perms,{
+        update:false,delete:false,truncate:false,trigger:false,insert:true,
+      },'Privileged mutations must be blocked without disrupting seed inserts');
+      await assert.rejects(
+        callAs(b,bypassRole,
+          "update public."+table+" set "+
+          (table==='knowledge_discovery_pages'
+            ? "page_title='unsafe-bypass' where id=$1"
+            : "status='completed' where id=$1"),
+          [table==='knowledge_discovery_pages'?unguarded.page:unguarded.id],
+          ADMIN_A,SID_A,'service_role'),
+        isCode('42501'),'Direct table UPDATE must be denied'
+      );
+      await assert.rejects(
+        callAs(b,bypassRole,"truncate public."+table,[],
+          ADMIN_A,SID_A,'service_role'),
+        isCode('42501'),'TRUNCATE is included in GRANT ALL and must be denied'
+      );
+    }
+    await assert.rejects(
+      callAs(b,bypassRole,
+        "insert into public.knowledge_discovery_pages "+
+        "(organization_id,job_id,url,depth,status,page_title) "+
+        "values($1,$2,$3,0,'fetched','forged')",
+        [ORG_A,unguarded.id,'https://fixture.example.com/forged-fetched'],
+        ADMIN_A,SID_A,'service_role'),
+      isCode('42501'),'Fake processed pages cannot be inserted directly'
+    );
+    await assert.rejects(
+      callAs(b,bypassRole,
+        "insert into public.knowledge_discovery_jobs "+
+        "(organization_id,created_by,seed_url,status) "+
+        "values($1,$2,$3,'completed')",
+        [ORG_A,ADMIN_A,SITE_URL],ADMIN_A,SID_A,'service_role'),
+      isCode('42501'),'Fake completed jobs cannot be inserted directly'
+    );
+
+    // These two direct INSERT paths remain intentionally permitted for the
+    // existing API. They ALSO remain risky: page discovery and job creation
+    // need future tenant-bound DB authorization, not just an app check.
+    const residual=(await callAs(b,bypassRole,
+      "insert into public.knowledge_discovery_pages "+
+      "(organization_id,job_id,url,depth,status) "+
+      "values($1,$2,$3,0,'discovered') returning id",
+      [ORG_A,unguarded.id,'https://fixture.example.com/residual-discovery'],
+      ADMIN_A,SID_A,'service_role')).rows;
+    assert.equal(residual.length,1,
+      'Seed/link INSERT remains allowed; this is a documented residual risk');
+
+    // Approved SQL SECURITY DEFINER page commits still work after direct
+    // UPDATE is revoked, so privilege closure need not break the worker RPC.
+    await renew(ORG_A);
+    const restricted=await prepareJob(ORG_A);
+    const permitted=(await callAs(b,'service_role',SAFE_COMMIT,
+      safeArgs(ORG_A,restricted,restricted.lease,'skipped'))).rows[0].result;
+    assert.equal(permitted.ok,true);
+    assert.equal((await page(restricted)).status,'skipped');
+
+    // Time-of-check vs actual COMMIT remains a separate limitation. Proof
+    // may expire *after* the SQL wrapper returned a successful result, while
+    // a caller holds the transaction open. This is a negative rehearsal,
+    // NOT a claim that expiry is enforced at external COMMIT time.
+    const held=await prepareJob(ORG_A);
+    await root.query(
+      "update public.knowledge_discovery_domain_verifications "+
+      "set verified_until=clock_timestamp()+interval '3 seconds' "+
+      "where organization_id=$1",[ORG_A]
+    );
+    await beginAs(c,'service_role');
+    const ack=(await c.query(SAFE_COMMIT,
+      safeArgs(ORG_A,held,held.lease,'skipped'))).rows[0].result;
+    assert.equal(ack.ok,true,'Proof is valid at invocation time');
+    await c.query('select pg_sleep(3.2)');
+    await c.query('commit');
+    assert.equal((await root.query(
+      "select verified_until<clock_timestamp() as expired "+
+      "from public.knowledge_discovery_domain_verifications "+
+      "where organization_id=$1",[ORG_A]
+    )).rows[0].expired,true);
+    assert.equal((await page(held)).status,'skipped',
+      'An outer transaction can commit after proof expiry: unresolved gap');
+    await renew(ORG_A);
+
     // Simulate proof revocation independently of expiry: a null verification
     // is denied even with a live lease and previously granted consent.
     const revoked=await prepareJob(ORG_A);
@@ -386,6 +526,13 @@ test('KB-09F checks current domain ownership at commit under job/proof/consent l
   }finally{
     await Promise.allSettled(connections.map(db=>db.end()));
     try{if(created)await admin.query('drop database "'+name+'" with (force)');}
-    finally{await admin.end();}
+    finally{
+      try{
+        if(bypassRole){
+          await admin.query('revoke service_role from "'+bypassRole+'"');
+          await admin.query('drop role "'+bypassRole+'"');
+        }
+      }finally{await admin.end();}
+    }
   }
 });
