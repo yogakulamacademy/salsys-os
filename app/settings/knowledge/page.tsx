@@ -12,6 +12,7 @@ import {
 } from '@/app/settings/knowledge/actions';
 import { createManualDraftFromDiscoveredPageAction } from '@/app/settings/knowledge/discovery/draft-action';
 import { eligibleDiscoveredPageForManualDraft, type EligiblePageDraft } from '@/lib/knowledge-discovery/eligible-page-draft';
+import { KnowledgeDiscoveryPastedHtmlReview } from '@/components/knowledge-discovery-pasted-html-review';
 import { PageHeader } from '@/components/ui';
 import type { ReactNode } from 'react';
 import './knowledge-workspace.css';
@@ -310,7 +311,12 @@ export default async function KnowledgeSettingsPage({
             </div>
           ) : null}
           {discoveredDraft ? (
-            <form action={createManualDraftFromDiscoveredPageAction} className="kn-create-form" aria-label="Manually review and draft from a discovered page">
+            <>
+              <KnowledgeDiscoveryPastedHtmlReview
+                pageId={discoveredDraft.pageId}
+                sourceUrl={discoveredDraft.sourceUri}
+              />
+              <form action={createManualDraftFromDiscoveredPageAction} className="kn-create-form" aria-label="Manually review and draft from a discovered page">
               <div className="kn-template-note">
                 <strong>Manual website review — draft only.</strong> Discovery stored page metadata, not verified article text. Open the original page, check the facts yourself, and enter only the content you can substantiate. Nothing is generated, approved or published automatically.
               </div>
@@ -339,7 +345,8 @@ export default async function KnowledgeSettingsPage({
                 <Link href="/settings/knowledge" className="kn-secondary">Cancel selection</Link>
                 <button type="submit" className="kn-primary">Save as Draft</button>
               </div>
-            </form>
+              </form>
+            </>
           ) : null}
           {template ? <div className="kn-template-note">
             {pretty(templateName)} template selected. Add the approved answer and a real source before saving.
