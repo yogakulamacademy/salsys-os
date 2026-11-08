@@ -40,11 +40,9 @@ const statusText: Record<Job['status'], string> = {
 
 export function KnowledgeDiscoveryWorkspace({
   canEditWebsite,
-  websiteNotice = '',
   websiteError = '',
 }: {
   canEditWebsite: boolean;
-  websiteNotice?: string;
   websiteError?: string;
 }) {
   const [state, setState] = useState<State>(initial);
@@ -160,7 +158,6 @@ export function KnowledgeDiscoveryWorkspace({
       </div>
 
       {websiteError ? <div role="alert" className="flex items-start gap-2 rounded-lg border border-rose-200 bg-rose-50 p-3 text-xs text-rose-800"><AlertCircle size={15}/>{websiteError}</div> : null}
-      {websiteNotice ? <div role="status" className="rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-xs text-emerald-800">{websiteNotice}</div> : null}
       {error ? <div role="alert" className="flex items-start gap-2 rounded-lg border border-rose-200 bg-rose-50 p-3 text-xs text-rose-800"><AlertCircle size={15}/>{error}</div> : null}
       {message ? <div role="status" className="rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-xs text-emerald-800">{message}</div> : null}
 
