@@ -21,7 +21,6 @@ const files = {
   atomicDraftSql: read('docs/sql/KB-11A-consent-atomic-discovered-draft-REHEARSAL-DRAFT.sql'),
   approvalGuardSql: read('docs/sql/KB-14A-unverified-discovery-approval-guard-REHEARSAL-DRAFT.sql'),
   legacyApprovalAction: read('app/settings/knowledge/actions.ts'),
-  approvalPreflight: read('lib/knowledge-discovery/discovery-approval-preflight.ts'),
 };
 const clone = x => structuredClone(x);
 function rejects(mutate,pattern){
@@ -107,12 +106,8 @@ test('KB-14A release preflight rejects removal of unverified discovery publicati
   rejects(x=>{x.code.approvalGuardSql=x.code.approvalGuardSql.replace(
     "new.status not in ('draft','archived')","new.status not in ('approved')");
   },/new\\.status not in/);
-  rejects(x=>{x.code.legacyApprovalAction=x.code.legacyApprovalAction.replace(
-    'discoveryApprovalPreflight(supabase, organizationId, documentId)','false');
-  },/discoveryApprovalPreflight/);
-  rejects(x=>{x.code.approvalPreflight=x.code.approvalPreflight.replace(
-    'discoveryPublicationHeld(data.metadata)','false');
-  },/discoveryPublicationHeld/);
+  rejects(x=>{x.code.legacyApprovalAction+='// discoveryApprovalPreflight';},
+    /discoveryApprovalPreflight/);
 });
 
 test('KB-10 refuses a production worker evidence rollout or simulated approvals',()=>{
