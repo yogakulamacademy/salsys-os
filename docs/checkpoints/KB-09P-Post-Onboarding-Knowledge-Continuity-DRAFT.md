@@ -17,7 +17,7 @@ The user explicitly requires Knowledge Builder to work **during onboarding and a
 
 ## Draft-only integration changes
 
-1. `app/settings/knowledge/discovery/page.tsx` requires **owner/admin workspace access** and keys the client-side component by the **active tenant organization ID** to reset previous tenant UI state upon workspace switches. It recognizes only fixed server-owned status codes for website changes (never a forged query-string success message).
+1. `app/settings/knowledge/discovery/page.tsx` requires **owner/admin workspace access** and keys the client-side component by the **active tenant organization ID** to reset previous tenant UI state upon workspace switches. It renders only fixed error codes, **never a success claim from a GET query**; a successful update is confirmed only when the signed-in database read returns the newly configured website.
 2. A new **owner/admin signed-session server action** `saveKnowledgeWebsiteAction` updates only `organization_onboarding.website_url` through the existing signed Supabase client and RLS. It checks active organization match and `can_manage_organization`, validates a public standard-port HTTPS **root** domain, limits inputs to 240 characters, and uses optimistic compare-and-set on the exact prior website value. It rejects stale admin updates and denies changes if either discovery or consent-grant pilot is configured, **even if emergency-paused**. It does not call service-role clients, create/alter proof or consent, enqueue a scan, update the knowledge library or change onboarding status/completed steps.
 3. The permanent discovery screen now includes a website editor when permitted, with an explicit notice that any changed hostname requires **new ownership verification and separately approved, purpose-limited consent**. Prior knowledge and audit records are retained; the old hostname's proof/consent records cannot authorize the new configured hostname under the existing host-bound DB checks.
 4. Completed onboarding has a direct **Manage Knowledge Builder** link; Settings has an owner/admin Knowledge Builder shortcut. The existing permanent knowledge library and retrieval/approval code are not altered.
@@ -32,7 +32,7 @@ The user explicitly requires Knowledge Builder to work **during onboarding and a
 - Reject private, non-public, non-HTTPS, credentialed, non-standard-port and subpath URLs before any DB write.
 - Reject when pilot or consent-grant features are configured.
 - Stale-page admin race and missing table UPDATE permission fail closed; null original website compare-and-set and unchanged URL remain safe.
-- Fixed status code redirect mapping so caller-supplied query cannot forge a saved site.
+- No GET success-query value exists; a caller cannot forge a saved-site banner. Only actual persisted website reads establish the current configuration.
 - Persistent navigation links during/after onboarding and safe, exact-host clickable page URL logic.
 
 **Important:** The tests use a mocked Supabase client; they do **NOT** establish real Supabase Auth/RLS, function grants, actual production onboarding row ownership, legal consent, real website verification or staging acceptance.
