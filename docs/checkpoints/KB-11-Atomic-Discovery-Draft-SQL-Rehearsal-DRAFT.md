@@ -29,7 +29,7 @@ A private SECURITY DEFINER helper and an authenticated-only SECURITY INVOKER pub
 - Newly exposed RPC's `EXECUTE` permission denied to anon and service role and allowed to authenticated with **additional per-tenant/session checks**.
 - No cross-tenant page ID borrowing, wrong signed actor, forged session, unsafe/short human inputs, or direct table insert bypass.
 - Forced knowledge-chunk INSERT exception rolls back the entire new draft's source, document, chunk and approval audit.
-- Expired ownership proof and paused/unapproved policy or SHA audit mismatch refuse a new draft.
+- NULL or expired ownership proof (including SQL three-valued NULL handling), and paused/unapproved policy or SHA audit mismatch, refuse a new draft.
 - Synthetic policy is turned on **only by fixture DB-owner SQL** to make a positive local test possible, with synthetic version/digest. It is restored OFF afterward; **this is NOT independent privacy approval**.
 - A successful signed owner/admin call persists a source linked to an **unapproved draft** and chunk with no `knowledge_approvals` row.
 - Concurrent test: hold one successful signed manual draft transaction open; start signed consent withdrawal for that tenant; it cannot complete until the first transaction commits. Once withdrawal is confirmed, further draft calls fail. A previously committed draft remains present **pending the separate legal derived-data withdrawal decision**.
