@@ -10,7 +10,9 @@ import {
 
 /**
  * Production adapter: all reads and RPC writes stay within the claim's tenant.
- * The RPC atomically revalidates the lease before mutating anything.
+ * The proof-checked RPC revalidates the current stored ownership, consent
+ * and scoped lease in the same transaction before any mutation.
+ * Never fall back to the legacy page-commit RPC when the checked RPC is absent.
  * No knowledge is created or published by discovery.
  */
 export async function processOneDiscoveryPage(claim: DiscoveryClaim) {
@@ -41,7 +43,7 @@ export async function processOneDiscoveryPage(claim: DiscoveryClaim) {
       return data?.[0] ?? null;
     },
     async commit(args: DiscoveryCommit) {
-      const { data, error } = await admin.rpc('commit_knowledge_discovery_page_v1', args);
+      const { data, error } = await admin.rpc('commit_knowledge_discovery_page_with_proof_v1', args);
       if (error) throw error;
       return data;
     },
