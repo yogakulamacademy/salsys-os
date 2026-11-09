@@ -399,6 +399,58 @@ test('simultaneous attempts each create a unique redacted audit trace',async()=>
   assert.ok(h.calls.audit.every(x=>Object.keys(x).length===8));
 });
 
+test('AI-09B pins server callback identity across awaits and rejects swapped audit writer',async()=>{
+  const h=harness({
+    auditAccepted:false,
+    onResource(){
+      // A caller-owned holder tries to replace the rejecting audit function
+      // after permissions succeed. The original, captured writer must win.
+      h.deps.appendAudit=async()=>true;
+    },
+  });
+  const result=await policy.reviewReadOnlyToolGate(request(),h.deps);
+  assert.equal(result.ok,false);
+  assert.equal(result.reason,'audit_unavailable');
+  assert.equal(result.mayExecute,false);
+  assert.equal(h.calls.resource,1);
+  assert.equal(h.calls.audit.length,1);
+
+  const denied=harness({granted:false});
+  const originalGet=denied.deps.getCurrentPrincipal;
+  denied.deps.getCurrentPrincipal=async()=>{
+    denied.deps.checkCurrentResourceAccess=async()=>true;
+    return originalGet();
+  };
+  const second=await policy.reviewReadOnlyToolGate(request(),denied.deps);
+  assert.equal(second.ok,false);
+  assert.equal(second.reason,'resource_denied');
+  assert.equal(second.mayExecute,false);
+  assert.equal(denied.calls.resource,1);
+  assert.equal(denied.calls.audit[0].decision,'denied');
+});
+
+test('AI-09B rejects accessor-hosted audit callbacks without executing getters',async()=>{
+  const h=harness();
+  let getterReads=0;
+  Object.defineProperty(h.deps,'appendAudit',{
+    configurable:true,enumerable:true,
+    get(){
+      getterReads++;
+      // A swapping getter can falsely acknowledge an audit on the second read.
+      return async()=>true;
+    },
+  });
+  const result=await policy.reviewReadOnlyToolGate(request(),h.deps);
+  assert.equal(result.ok,false);
+  assert.equal(result.reason,'verification_unavailable');
+  assert.equal(result.mayExecute,false);
+  assert.equal(getterReads,0);
+  assert.equal(h.calls.auth,0);
+  assert.equal(h.calls.resource,0);
+  // No reliable audit writer means denial, not a fabricated audit receipt.
+  assert.equal(h.calls.audit.length,0);
+});
+
 test('environment switch never enables any read tool or tool registry',async()=>{
   const prior=process.env.SALSYS_READONLY_TOOLS_ENABLED;
   try{
