@@ -12,6 +12,8 @@ const good = {
   SALSYS_STAGING_CRM_PROJECT_ID: "prj_AAAAAAAAAAAAAAAAAAAAAAAA",
   SALSYS_PRODUCTION_CRM_PROJECT_ID: "prj_BBBBBBBBBBBBBBBBBBBBBBBB",
   SALSYS_STAGING_SUPABASE_URL: "https://stageproject.supabase.co",
+  SALSYS_STAGING_EFFECTIVE_NEXT_PUBLIC_SUPABASE_URL: "https://stageproject.supabase.co",
+  SALSYS_STAGING_EFFECTIVE_SUPABASE_URL: "https://stageproject.supabase.co",
   SALSYS_PRODUCTION_SUPABASE_URL: "https://productionproject.supabase.co",
   SALSYS_RECOVERY_SUPABASE_URL: "https://recoveryproject.supabase.co",
   SALSYS_STAGING_SOURCE_HOSTNAME: "stage.academy-sandbox.net",
@@ -61,6 +63,38 @@ test("R2-P3 blocks preview deployments wired to the production Supabase project"
   });
   assert.equal(result.readyForManualTesting, false);
   assert.ok(result.errors.some((error) => error.includes("identical")));
+});
+
+test("R2-P3 rejects effective browser/admin URL drift to production and recovery", () => {
+  const variants = [
+    ["SALSYS_STAGING_EFFECTIVE_NEXT_PUBLIC_SUPABASE_URL",
+      good.SALSYS_PRODUCTION_SUPABASE_URL, "Effective browser Supabase URL differs"],
+    ["SALSYS_STAGING_EFFECTIVE_NEXT_PUBLIC_SUPABASE_URL",
+      good.SALSYS_RECOVERY_SUPABASE_URL, "Effective browser Supabase URL differs"],
+    ["SALSYS_STAGING_EFFECTIVE_SUPABASE_URL",
+      good.SALSYS_PRODUCTION_SUPABASE_URL, "Effective server fallback Supabase URL differs"],
+    ["SALSYS_STAGING_EFFECTIVE_SUPABASE_URL",
+      good.SALSYS_RECOVERY_SUPABASE_URL, "Effective server fallback Supabase URL differs"],
+  ];
+  for (const [field, value, reason] of variants) {
+    const result = verify({ ...good, [field]: value });
+    assert.equal(result.readyForManualTesting, false, field);
+    assert.ok(result.errors.some((e) => e.includes(reason)), field);
+  }
+});
+
+test("R2-P3 requires actual declared effective browser and admin URLs", () => {
+  for (const field of [
+    "SALSYS_STAGING_EFFECTIVE_NEXT_PUBLIC_SUPABASE_URL",
+    "SALSYS_STAGING_EFFECTIVE_SUPABASE_URL",
+  ]) {
+    for (const value of [undefined, "", "http://stageproject.supabase.co",
+                         "https://stageproject.supabase.co/unsafe-path"]) {
+      const result = verify({ ...good, [field]: value });
+      assert.equal(result.readyForManualTesting, false, field + ":" + value);
+      assert.ok(result.errors.some(e => e.includes("Effective ")), field);
+    }
+  }
 });
 
 test("R2-P3 refuses the recovery rehearsal database and missing recovery comparison", () => {
