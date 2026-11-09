@@ -1,14 +1,16 @@
--- R2 review-only proposal: post-install function ACL parity with proven production roles.
+-- R2 review-only proposal: staged function access hardening, with explicit human-only approval policy.
 -- No migration runner should execute this docs/sql file automatically.
 -- Source: production/staging pg_catalog READ comparison on 2026-11-09.
 -- All 22 signatures exist in both, are postgres-owned SECURITY DEFINER functions;
 -- Production anon EXECUTE=FALSE for all, authenticated TRUE only for
 -- attach_whatsapp_outbound_message_id, service_role TRUE for all.
 -- One additional service-only WhatsApp retry function loses authenticated EXECUTE;
--- one sales asset function gains the missing verified service_role EXECUTE grant.
+-- Sales Asset approval is intentionally HUMAN-ONLY per checked-in 20261103195300 guard.
+-- Production is missing that migration and its broader service_role grant is NOT copied.
 -- Three additional SECURITY INVOKER wrappers lose PUBLIC/anon EXECUTE, preserving authenticated/service access.
 -- The 4 search_path changes mirror existing production function_config.
--- Accept already-correct Production grants as well as fresh-staging grants.
+-- Stage-only proposal. Sales Asset preflight denies service_role and validates human guard.
+-- Do not run against Production or claim universal function-body parity.
 -- Preflight checks the function identity; transactional postflight checks ACL parity.
 -- Requires independent review, approved versioned migration and staging-only apply.
 BEGIN;
@@ -101,9 +103,13 @@ BEGIN
       ='p_organization_id uuid, p_asset_id uuid, p_auto_send_allowed boolean'
     AND p.prosecdef AND pg_catalog.pg_get_userbyid(p.proowner)='postgres'
     AND NOT pg_catalog.has_function_privilege('anon',p.oid,'EXECUTE')
-    AND pg_catalog.has_function_privilege('authenticated',p.oid,'EXECUTE');
+    AND pg_catalog.has_function_privilege('authenticated',p.oid,'EXECUTE')
+    AND NOT pg_catalog.has_function_privilege('service_role',p.oid,'EXECUTE')
+    AND position('auth.role() <> ''authenticated''' in pg_catalog.pg_get_functiondef(p.oid))>0
+    AND position('v_actor is null' in pg_catalog.pg_get_functiondef(p.oid))>0
+    AND position('not public.can_manage_organization(p_organization_id)' in pg_catalog.pg_get_functiondef(p.oid))>0;
   IF v_count <> 1 THEN
-    RAISE EXCEPTION 'BLOCKED_R2_MISSING_SERVICE_ROLE_FUNCTION_CONTRACT_MISMATCH';
+    RAISE EXCEPTION 'BLOCKED_R2_SALES_ASSET_HUMAN_ONLY_PREFLIGHT_FAILED';
   END IF;
 END;
 $r2_preflight$;
@@ -177,10 +183,10 @@ REVOKE EXECUTE ON FUNCTION public.update_crm_pipeline_aging_rule(p_stage text, p
 -- update_crm_stage_probability(p_stage text, p_probability numeric)
 REVOKE EXECUTE ON FUNCTION public.update_crm_stage_probability(p_stage text, p_probability numeric) FROM PUBLIC, anon, authenticated;
 
--- Two additional, exact-signature permission differences verified against Production.
--- Neither function is anonymously executable in staging or Production.
+-- Exactly one additional authenticated permission difference corrected.
+-- Sales Asset approval deliberately remains human-admin-only, NOT production role parity.
+-- Production currently lacks the committed sales_asset_human_approval_guard_v1 migration.
 REVOKE EXECUTE ON FUNCTION public.prepare_failed_whatsapp_provider_retry_v1(p_organization_id uuid, p_failed_audit_id uuid, p_now timestamp with time zone) FROM authenticated;
-GRANT EXECUTE ON FUNCTION public.approve_sales_asset_v1(p_organization_id uuid, p_asset_id uuid, p_auto_send_allowed boolean) TO service_role;
 
 
 -- Three SECURITY INVOKER compatibility wrappers: Production denies all anonymous
@@ -282,9 +288,12 @@ BEGIN
     AND p.prosecdef
     AND NOT pg_catalog.has_function_privilege('anon',p.oid,'EXECUTE')
     AND pg_catalog.has_function_privilege('authenticated',p.oid,'EXECUTE')
-    AND pg_catalog.has_function_privilege('service_role',p.oid,'EXECUTE');
+    AND NOT pg_catalog.has_function_privilege('service_role',p.oid,'EXECUTE')
+    AND position('auth.role() <> ''authenticated''' in pg_catalog.pg_get_functiondef(p.oid))>0
+    AND position('v_actor is null' in pg_catalog.pg_get_functiondef(p.oid))>0
+    AND position('not public.can_manage_organization(p_organization_id)' in pg_catalog.pg_get_functiondef(p.oid))>0;
   IF v_count <> 1 THEN
-    RAISE EXCEPTION 'BLOCKED_R2_SALES_ASSET_SERVICE_ROLE_POSTFLIGHT_FAILED';
+    RAISE EXCEPTION 'BLOCKED_R2_SALES_ASSET_HUMAN_ONLY_POSTFLIGHT_FAILED';
   END IF;
 END;
 $r2_postflight$;
