@@ -57,7 +57,7 @@ test('stage-only copy replaces all six jobs with inert commands and rewrites onl
     assert.doesNotMatch(changed,/select public\.(?:invoke_automation_runtime_scheduler_v1|archive_closed_won_leads_v1|retry_instagram_dm_events_v1|sweep_system_intelligence_recommendation_outcomes_v1|retry_instagram_outbound_echoes_v1)\(/);
    }
   }
-  assert.match(fs.readFileSync(path.join(dst,Object.keys(samples)[0]),'utf8'),/https:\/\/staging\.invalid\/api\/automation\/runtime-scheduler/);
+  assert.match(fs.readFileSync(path.join(dst,'20261017091453_automation_runtime_scheduler_foundation_v1.sql'),'utf8'),/https:\/\/staging\.invalid\/api\/automation\/runtime-scheduler/);
   assert.equal(manifest.buildManifest(dst).manifestSha256,out.stagingManifestSha256);
  });
 });
