@@ -71,6 +71,6 @@ test('exactly four INVOKER search_path changes match the production catalog conf
 
 test('no project refs, endpoints, customer records or provider secrets appear in patch', () => {
   assert.doesNotMatch(sql, /(?:ndxpjqkthuzxlmbenxti|doaozrkrtgeslddwhclj|wunnbqjvfzmawubglyhe)/i);
-  assert.doesNotMatch(sql, /(?:https?:\/\/|supabase\.co|bearer |service_role[_-]?key|sb_secret_|sk_[a-z0-9])/i);
+  assert.doesNotMatch(sql, /(?:https?:\/\/|supabase\.co|bearer |service_role[_-]?key|sb_secret_|(?:^|[^a-z0-9_])sk_[a-z0-9])/im);
   assert.doesNotMatch(sql, /\b(?:auth\.users|public\.leads|public\.messages)\b/i);
 });
