@@ -44,17 +44,20 @@ test('refuses invalid and drifting working-tree digest before CLI runs', async (
   });
 });
 
-test('with staged ref and matching SHA, invokes only db push --dry-run', async () => {
+test('with staged ref and matching SHA, invokes only explicit linked remote db push dry-run', async () => {
   await withFixture(({dir,tool,digest}) => {
     const out=path.join(dir,'observed-cli-args.txt');
+    const envOut=path.join(dir,'observed-stage-target.txt');
     const stub=path.join(dir,'safe-stub.sh');
-    fs.writeFileSync(stub, '#!/bin/sh\nprintf "%s" "$*" > "'+out+'"\nexit 0\n');
+    fs.writeFileSync(stub, '#!/bin/sh\nprintf "%s" "$*" > "'+out+'"\nprintf "%s" "$SUPABASE_PROJECT_ID" > "'+envOut+'"\nexit 0\n');
     fs.chmodSync(stub,0o755);
     const plan=tool.planDryRun({projectRoot:dir,expectedDigest:digest,cli:stub});
     assert.equal(plan.projectRef,STAGING);
-    assert.deepEqual(plan.args,['db','push','--dry-run']);
+    assert.deepEqual(plan.args,['db','push','--dry-run','--linked']);
     const result=tool.runDryRun(plan);
-    assert.equal(fs.readFileSync(out,'utf8'),'db push --dry-run');
+    assert.equal(fs.readFileSync(out,'utf8'),'db push --dry-run --linked');
+    assert.equal(fs.readFileSync(envOut,'utf8'),STAGING);
+    assert.throws(()=>tool.runDryRun({...plan,args:['db','push','--dry-run']}), /BLOCKED_INVALID_DRYRUN_PLAN/);
     assert.equal(result.schemaApplied,false);
     assert.equal(result.acceptanceVerified,false);
   });
@@ -84,6 +87,23 @@ test('inherited Supabase workdir override is rejected during planning and before
     } finally {
       if (previous === undefined) delete process.env.SUPABASE_WORKDIR;
       else process.env.SUPABASE_WORKDIR = previous;
+    }
+  });
+});
+
+test('foreign SUPABASE_PROJECT_ID override fails during planning and immediately before CLI', async () => {
+  await withFixture(({dir,tool,digest}) => {
+    const before=process.env.SUPABASE_PROJECT_ID;
+    try {
+      process.env.SUPABASE_PROJECT_ID=PROD;
+      assert.throws(()=>tool.planDryRun({projectRoot:dir,expectedDigest:digest}),/BLOCKED_CLI_PROJECT_OVERRIDE/);
+      delete process.env.SUPABASE_PROJECT_ID;
+      const plan=tool.planDryRun({projectRoot:dir,expectedDigest:digest});
+      process.env.SUPABASE_PROJECT_ID=RECOVERY;
+      assert.throws(()=>tool.runDryRun(plan),/BLOCKED_CLI_PROJECT_OVERRIDE/);
+    } finally {
+      if(before===undefined)delete process.env.SUPABASE_PROJECT_ID;
+      else process.env.SUPABASE_PROJECT_ID=before;
     }
   });
 });
