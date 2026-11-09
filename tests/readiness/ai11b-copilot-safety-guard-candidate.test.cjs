@@ -183,6 +183,43 @@ test('a denial applies to ANY mixed reply: disclaimers cannot launder unsupporte
   }
 });
 
+test('neutral verification is a whole clause, never a prefix that launders a later claim',()=>{
+  const attacks=[
+    'I cannot confirm whether your payment was received; your booking was confirmed.',
+    'I cannot confirm whether your payment was received, and your deposit was received.',
+    'I cannot confirm whether your payment was received — your refund was processed.',
+    'Please verify whether the deposit has been received; the room is available.',
+    'The team can verify whether a room is available; your seat was secured.',
+    'Could you confirm whether your seat is reserved? Your payment was received.',
+    'I cannot confirm whether your payment was received or your booking was confirmed.',
+    'We cannot confirm the refund status without checking, but the refund was processed.',
+    'Please verify whether the payment has been received: the booking was confirmed.',
+    'I cannot confirm whether your payment was received, the refund was approved.',
+  ];
+  for(const claim of attacks){
+    const result=draft(claim);
+    assert.equal(result.ok,false,claim);
+    assert.equal(result.reason,'unsupported_commitment',claim);
+    assert.equal(Object.hasOwn(result,'previewText'),false,claim);
+    assert.equal(result.manualReviewRequired,true,claim);
+    assert.equal(result.maySend,false,claim);
+  }
+  // Strict checks still allow complete neutral verification *questions*,
+  // without treating them as evidence that a payment or booking happened.
+  for(const neutral of [
+    'I cannot confirm whether your payment was received.',
+    'Please verify whether the deposit has been received.',
+    'The admissions team can verify whether a room is available.',
+    'Could you confirm whether your seat is reserved?',
+  ]){
+    const result=draft(neutral);
+    assert.equal(result.ok,true,neutral);
+    assert.equal(result.classification,'unverified_human_review_draft_only');
+    assert.equal(result.maySend,false,neutral);
+    assert.equal(result.mayExecute,false,neutral);
+  }
+});
+
 test('private contact details and echoed prompt injection are not returned in candidate previews',()=>{
   for(const input of [
     'Please reply to person@example.test.',
