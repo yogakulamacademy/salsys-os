@@ -75,7 +75,7 @@ begin
 end;
 $$;`;
       if(s.includes(inertFunction)) fail('SCHEDULER_FUNCTION_ALREADY_INERT');
-      s=s.replace(fnPattern,inertFunction);
+      s=s.replace(fnPattern,() => inertFunction);
     }
     if(changesForFile.length) changes.push({file:file.name,replacements:changesForFile.reduce((n,r)=>n+(r[3]??1),0)+(file.name===scheduler?1:0)});
     parts.set(file.name,s);
