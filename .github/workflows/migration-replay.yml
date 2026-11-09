@@ -13,6 +13,8 @@ on:
       - 'tests/readiness/r2-staging-remote-dryrun-v1.test.cjs'
       - 'scripts/r2-staging-sql-external-effects-audit.mjs'
       - 'tests/readiness/r2-staging-sql-external-effects-audit-v1.test.cjs'
+      - 'scripts/r2-staging-inert-scheduler-sql-copy.mjs'
+      - 'tests/readiness/r2-staging-inert-scheduler-sql-copy-v1.test.cjs'
       - 'tests/database/r2-behavior-rpc-negative-auth-local.sql'
       - 'tests/database/r2-behavior-rpc-positive-tenant-local.sql'
       - '.github/workflows/migration-replay.yml'
@@ -315,6 +317,45 @@ jobs:
             -U postgres -d postgres \
             < tests/database/r2-behavior-rpc-positive-tenant-local.sql
 
+      - name: Verify staging-only inert cron SQL replay in disposable local Postgres
+        shell: bash
+        run: |
+          set -euo pipefail
+          # The source migration replay and two-tenant DB assertions already ran.
+          # This is an independent second reset of the SAME disposable local DB;
+          # no Supabase remote project, service key, production URL or stage API.
+          node --test tests/readiness/r2-staging-inert-scheduler-sql-copy-v1.test.cjs
+          approved_sha="$(node -e "process.stdout.write(JSON.parse(require('node:fs').readFileSync('r2-staging-migration-worktree-manifest.json','utf8')).manifestSha256)")"
+          node scripts/r2-staging-inert-scheduler-sql-copy.mjs \
+            --source supabase/migrations \
+            --output "$RUNNER_TEMP/r2-staging-inert-migrations" \
+            --expected-source-manifest-sha256 "$approved_sha" \
+            > r2-staging-inert-sql-manifest.json
+          find supabase/migrations -maxdepth 1 -type f -name '*.sql' -delete
+          cp "$RUNNER_TEMP/r2-staging-inert-migrations/"*.sql supabase/migrations/
+          supabase db reset --local 2>&1 | tee -a migration-replay.log
+          db_containers="$(docker ps --format '{{.Names}}' | grep '^supabase_db_' || true)"
+          test "$(printf '%s\n' "$db_containers" | grep -c .)" -eq 1
+          docker exec -i "$db_containers" psql -X -v ON_ERROR_STOP=1 -U postgres -d postgres <<'SQL'
+          do $check$
+          begin
+            if exists (
+              select 1 from cron.job
+               where active is true and btrim(command) <> 'select 1;'
+            ) then
+              raise exception 'STAGING_CRON_COMMAND_NOT_INERT';
+            end if;
+            if not exists (
+              select 1 from public.automation_scheduler_settings
+               where id=1 and enabled is false
+                 and endpoint_url='https://staging.invalid/api/automation/runtime-scheduler'
+            ) then
+              raise exception 'STAGING_SCHEDULER_ENDPOINT_NOT_ISOLATED';
+            end if;
+          end;
+          $check$;
+          SQL
+
       - name: Show local migration state
         if: always()
         shell: bash
@@ -331,6 +372,7 @@ jobs:
             migration-recovery-manifest-summary.json
             r2-staging-migration-worktree-manifest.json
             r2-staging-sql-external-effects-candidates.json
+            r2-staging-inert-sql-manifest.json
             migration-replay.log
           if-no-files-found: ignore
           retention-days: 3
