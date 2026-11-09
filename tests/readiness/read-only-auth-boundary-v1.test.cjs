@@ -32,9 +32,7 @@ const harness=(options={})=>{
         calls.getUser++;
         if(options.authThrows)throw Error('private auth token 123');
         if(options.authResponse)return options.authResponse;
-        const mockResponse={data:{user:{id:options.userId??USER_A}},error:null};
-        console.log('AI09E_SYNTH_AUTH_RETURN',JSON.stringify(mockResponse));
-        return mockResponse;
+        return {data:{user:{id:options.userId??USER_A}},error:null};
       },
     },
     rpc:async(name,args)=>{
@@ -77,7 +75,6 @@ test('AI-09E stays source-only and cannot be activated with environment flags',a
 test('admin must be read from verified Auth and a dedicated direct-binding RPC',async()=>{
   const {subject,calls}=harness();
   const result=await subject.previewCurrentAuthenticatedReadBoundary(proposal());
-  console.log('AI09E_SYNTHETIC_DIAGNOSTIC',JSON.stringify({calls,result,defaultUser:USER_A}));
   assert.deepEqual(result,{
     ok:true,decision:'session_binding_review_only',toolId:'crm.course.list',
     organizationId:ORG_A,nextRequiredControl:'atomic_resource_read_and_committed_audit',
