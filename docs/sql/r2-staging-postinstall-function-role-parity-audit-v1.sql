@@ -1,6 +1,9 @@
--- R2-P3 independent post-remediation catalog verification (READ ONLY).
--- Derived from PR #682 reviewed, explicit function signatures and policy.
--- This is a narrow role-parity gate. It does NOT prove tenant isolation,
+-- R2 stage-only post-remediation catalog verification (READ ONLY).
+-- Derived from PR #682 exact signatures and checked-in human-admin-only approval policy.
+-- NOTE: Production lacks the sales_asset_human_approval_guard_v1 migration.
+-- Production is NOT expected to pass this stage-policy audit until separately remediated.
+-- This checks stage policy for 24 functions, with an intentional Production exception.
+-- It does NOT prove tenant isolation,
 -- external consent, backup/restore or authorization to deploy/merge.
 -- Safe for staging and production: catalog SELECT only, no customer data.
 WITH expected_function(name, identity_args, anon_execute, authenticated_execute, service_execute) AS (
@@ -28,13 +31,19 @@ WITH expected_function(name, identity_args, anon_execute, authenticated_execute,
     ('update_crm_pipeline_aging_rule', 'p_stage text, p_warning_hours numeric, p_stuck_hours numeric', false, false, true),
     ('update_crm_stage_probability', 'p_stage text, p_probability numeric', false, false, true),
     ('prepare_failed_whatsapp_provider_retry_v1', 'p_organization_id uuid, p_failed_audit_id uuid, p_now timestamp with time zone', false, false, true),
-    ('approve_sales_asset_v1', 'p_organization_id uuid, p_asset_id uuid, p_auto_send_allowed boolean', false, true, true)
+    ('approve_sales_asset_v1', 'p_organization_id uuid, p_asset_id uuid, p_auto_send_allowed boolean', false, true, false)
 ),
 observed AS (
   SELECT e.*, p.oid, p.prosecdef, pg_catalog.pg_get_userbyid(p.proowner) AS owner_name,
     CASE WHEN p.oid IS NULL THEN NULL ELSE pg_catalog.has_function_privilege('anon',p.oid,'EXECUTE') END AS current_anon,
     CASE WHEN p.oid IS NULL THEN NULL ELSE pg_catalog.has_function_privilege('authenticated',p.oid,'EXECUTE') END AS current_authenticated,
-    CASE WHEN p.oid IS NULL THEN NULL ELSE pg_catalog.has_function_privilege('service_role',p.oid,'EXECUTE') END AS current_service
+    CASE WHEN p.oid IS NULL THEN NULL ELSE pg_catalog.has_function_privilege('service_role',p.oid,'EXECUTE') END AS current_service,
+    CASE WHEN p.oid IS NULL THEN false
+      WHEN e.name = 'approve_sales_asset_v1' THEN
+        position('auth.role() <> ''authenticated''' in pg_catalog.pg_get_functiondef(p.oid))>0
+        AND position('v_actor is null' in pg_catalog.pg_get_functiondef(p.oid))>0
+        AND position('not public.can_manage_organization(p_organization_id)' in pg_catalog.pg_get_functiondef(p.oid))>0
+      ELSE true END AS human_guard_ok
   FROM expected_function e
   LEFT JOIN pg_catalog.pg_namespace n ON n.nspname='public'
   LEFT JOIN pg_catalog.pg_proc p ON p.pronamespace=n.oid
@@ -43,8 +52,8 @@ observed AS (
 ),
 function_totals AS (
   SELECT count(*)::integer AS expected_functions,
-    count(*) FILTER (WHERE oid IS NOT NULL AND prosecdef AND owner_name='postgres')::integer AS structurally_valid_functions,
-    count(*) FILTER (WHERE oid IS NULL OR NOT coalesce(prosecdef,false) OR owner_name IS DISTINCT FROM 'postgres')::integer AS structural_mismatches,
+    count(*) FILTER (WHERE oid IS NOT NULL AND prosecdef AND owner_name='postgres' AND human_guard_ok)::integer AS structurally_valid_functions,
+    count(*) FILTER (WHERE oid IS NULL OR NOT coalesce(prosecdef,false) OR owner_name IS DISTINCT FROM 'postgres' OR NOT human_guard_ok)::integer AS structural_mismatches,
     count(*) FILTER (WHERE oid IS NULL OR current_anon IS DISTINCT FROM anon_execute
       OR current_authenticated IS DISTINCT FROM authenticated_execute
       OR current_service IS DISTINCT FROM service_execute)::integer AS role_mismatched_functions,
@@ -76,8 +85,8 @@ SELECT jsonb_build_object(
       AND f.role_mismatched_functions=0
       AND p.expected_paths=4
       AND p.valid_paths=4
-    THEN 'FUNCTION_PARITY_CATALOG_PASS_NOT_TENANT_ACCEPTANCE'
-    ELSE 'FUNCTION_PARITY_REVIEW_REQUIRED' END,
+    THEN 'FUNCTION_STAGE_POLICY_CATALOG_PASS_NOT_TENANT_ACCEPTANCE'
+    ELSE 'FUNCTION_STAGE_POLICY_REVIEW_REQUIRED' END,
   'expected_functions',f.expected_functions,
   'structurally_valid_functions',f.structurally_valid_functions,
   'structural_mismatches',f.structural_mismatches,
@@ -88,6 +97,8 @@ SELECT jsonb_build_object(
   'expected_fixed_search_paths',p.expected_paths,
   'verified_fixed_search_paths',p.valid_paths,
   'scope','24 exact function signatures; 4 exact invoker search paths; catalog only',
+  'human_only_approval_guard_required',true,
+  'production_exception_requires_separate_security_review',true,
   'tenant_acceptance_verified',false,
   'release_authorized',false
 ) AS r2_function_permission_gate
