@@ -70,6 +70,38 @@ test('AI-09B is strictly source-only, disabled and not imported by Co-Pilot or K
     '30a6ac02c91baefaf440fb979bf6cae94dbd031b');
 });
 
+test('revoked Proxy objects and arrays fail closed without escaping the denial audit',async()=>{
+  const revokedRequest=Proxy.revocable(request(),{});
+  revokedRequest.revoke();
+  const revokedArray=Proxy.revocable([],{});
+  revokedArray.revoke();
+  for(const proposal of [revokedRequest.proxy,revokedArray.proxy]){
+    const h=harness();
+    const result=await policy.reviewReadOnlyToolGate(proposal,h.deps);
+    assert.equal(result.ok,false);
+    assert.equal(result.reason,'invalid_tool_request');
+    assert.equal(result.mayExecute,false);
+    assert.equal(h.calls.auth,0);
+    assert.equal(h.calls.resource,0);
+    assert.equal(h.calls.audit.length,1);
+    assert.equal(h.calls.audit[0].decision,'denied');
+    assert.equal(h.calls.audit[0].toolId,null);
+  }
+
+  const revokedPrincipal=Proxy.revocable(identity(),{});
+  revokedPrincipal.revoke();
+  const h=harness({principal:revokedPrincipal.proxy});
+  const result=await policy.reviewReadOnlyToolGate(request(),h.deps);
+  assert.equal(result.ok,false);
+  assert.equal(result.reason,'unauthenticated_or_unbound');
+  assert.equal(result.mayExecute,false);
+  assert.equal(h.calls.auth,1);
+  assert.equal(h.calls.resource,0);
+  assert.equal(h.calls.audit.length,1);
+  assert.equal(h.calls.audit[0].decision,'denied');
+  assert.equal(h.calls.audit[0].actorId,null);
+});
+
 test('adversarial request getters/proxies/prototypes deny before Auth but still emit a minimal audit',async()=>{
   const getter=request();
   Object.defineProperty(getter,'toolId',{enumerable:true,get(){throw Error('private accessor data');}});
