@@ -76,6 +76,13 @@ test('AI-03A locally locked review ledger: two-person decisions, tenant isolatio
     assert.doesNotMatch(sql,/create\s+or\s+replace\s+function\s+public\.|grant\s+all\s+on\s+/i);
 
     await root.query(read('./knowledge-discovery.foundation.sql'));
+    // This test sorts first in the repository-wide database glob. The shared
+    // foundation creates service_role without BYPASSRLS when the role is new,
+    // whereas the existing enrollment test fixtures initialize the real
+    // Supabase-equivalent service role WITH BYPASSRLS. Match that original
+    // ephemeral-cluster baseline to avoid corrupting later independent tests.
+    // This executes only against the localhost throwaway PostgreSQL service.
+    await root.query('alter role service_role bypassrls');
     await root.query([
       "alter table public.organizations add column status text not null default 'active'",
       "create table public.test_ai03a_fixture (id boolean primary key default true)",
