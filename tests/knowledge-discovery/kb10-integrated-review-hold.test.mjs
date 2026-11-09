@@ -20,6 +20,7 @@ const files = {
   syntheticSql: read('docs/sql/KB-09T-evidence-withdrawal-expiry-REHEARSAL-DRAFT.sql'),
   atomicDraftSql: read('docs/sql/KB-11A-consent-atomic-discovered-draft-REHEARSAL-DRAFT.sql'),
   approvalGuardSql: read('docs/sql/KB-14A-unverified-discovery-approval-guard-REHEARSAL-DRAFT.sql'),
+  retrievalQuarantineSql: read('docs/sql/KB-16A-unverified-discovery-retrieval-REHEARSAL-DRAFT.sql'),
   legacyApprovalAction: read('app/settings/knowledge/actions.ts'),
 };
 const clone = x => structuredClone(x);
@@ -114,6 +115,27 @@ test('KB-14A release preflight rejects removal of unverified discovery publicati
   },/new\\.status not in/);
   rejects(x=>{x.code.legacyApprovalAction+='// discoveryApprovalPreflight';},
     /discoveryApprovalPreflight/);
+});
+
+test('KB-16A release preflight rejects missing retrieval quarantine filters or local-only guard',()=>{
+  rejects(x=>{x.code.retrievalQuarantineSql=x.code.retrievalQuarantineSql.replace(
+    'KB16A_LOCAL_DISPOSABLE_FIXTURE_REQUIRED','unsafe');
+  },/KB16A_LOCAL_DISPOSABLE_FIXTURE_REQUIRED/);
+  rejects(x=>{x.code.retrievalQuarantineSql=x.code.retrievalQuarantineSql.replace(
+    'KB16A_UNVERIFIED_RETRIEVAL_HOLD_START','disabled');
+  },/KB16A_UNVERIFIED_RETRIEVAL_HOLD_START/);
+  rejects(x=>{x.code.retrievalQuarantineSql=x.code.retrievalQuarantineSql.replace(
+    "coalesce(kd.metadata->>'source_text_verified','') <> 'false'",
+    'true');
+  },/coalesce.*kd.*source_text_verified/);
+  rejects(x=>{x.code.retrievalQuarantineSql=x.code.retrievalQuarantineSql.replace(
+    "coalesce(ks.metadata->>'source_text_verified','') <> 'false'",
+    'true');
+  },/coalesce.*ks.*source_text_verified/);
+  rejects(x=>{x.code.retrievalQuarantineSql=x.code.retrievalQuarantineSql.replace(
+    "coalesce(kc.metadata->>'source','') <> 'manual_discovery_draft_unverified'",
+    'true');
+  },/manual_discovery_draft_unverified/);
 });
 
 test('KB-10 refuses a production worker evidence rollout or simulated approvals',()=>{
