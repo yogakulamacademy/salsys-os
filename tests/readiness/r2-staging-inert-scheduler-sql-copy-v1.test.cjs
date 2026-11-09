@@ -48,9 +48,8 @@ test('stage-only copy replaces all six jobs with inert commands and rewrites onl
    assert.equal(fs.readFileSync(path.join(src,name),'utf8'),original[name]);
    const changed=fs.readFileSync(path.join(dst,name),'utf8');
    if(name==='007_tenant_schema_foundation.sql') {
-    assert.match(changed,/\('r2-yogakulam\.invalid'::text\)/);
-    assert.match(changed,/\('www\.r2-yogakulam\.invalid'::text\)/);
-    assert.doesNotMatch(changed,/yogakulam\.com/);
+    const actualHosts=[...changed.matchAll(/\('([^']+)'::text\)/g)].map(x=>x[1]).sort();
+    assert.deepEqual(actualHosts,['r2-yogakulam.invalid','www.r2-yogakulam.invalid']);
    } else {
     assert.match(changed,/cron\.schedule/);
     assert.ok(changed.includes('select 1;'));
