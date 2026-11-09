@@ -79,7 +79,7 @@ test('target cannot overwrite an existing directory or contain the source',async
 
 test('CLI fails closed without complete arguments and never invokes provider',()=>{
  const r=spawnSync(process.execPath,[script],{encoding:'utf8'});
- assert.equal(r.status,2);assert.match(r.stderr,/BLOCKED_SCHEDULER_SOURCE_DRIFT_OR_UNSAFE_OUTPUT/);
+ assert.equal(r.status,2);assert.match(r.stderr,/BLOCKED_CLI_ARGUMENTS/);
  const code=fs.readFileSync(script,'utf8');
  assert.doesNotMatch(code,/\b(?:fetch\(|supabase db push|apply_migration\(|create_project\()/);
 });
