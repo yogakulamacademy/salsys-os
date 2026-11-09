@@ -22,6 +22,25 @@ Supabase advisors also reported four `function_search_path_mutable` warnings on 
 
 `tests/readiness/r2-staging-postinstall-function-grants-parity-v1.test.cjs` supplies **static regression checks only**. It does not execute SQL or prove signed-in tenant isolation.
 
+## Read-only post-installation parity gate
+
+`docs/sql/r2-staging-postinstall-function-role-parity-audit-v1.sql` is an independent, **SELECT-only** catalog verification for the **24 exact privileged-function signatures** and four INVOKER function `search_path` settings covered by this proposal. It reports aggregate mismatch counts, no function bodies, customer records, raw identifiers, or secrets. It does not apply or undo changes.
+
+Its first execution against both connected projects on November 9, 2026 independently established the expected baseline:
+
+| Result | Temporary R2 staging | Production |
+| --- | ---: | ---: |
+| Expected exact definer functions present | 24/24 | 24/24 |
+| Anonymous-role permission differences | 22 | 0 |
+| Authenticated-role permission differences | 22 | 0 |
+| Service-role permission differences | 1 | 0 |
+| Matching INVOKER search paths | 0/4 | 4/4 |
+| Verdict | `FUNCTION_PARITY_REVIEW_REQUIRED` | `FUNCTION_PARITY_CATALOG_PASS_NOT_TENANT_ACCEPTANCE` |
+
+`tests/readiness/r2-staging-postinstall-function-grants-parity-v1.test.cjs` now verifies that the read-only gate contains the same 24 exact function signatures, intended authenticated role permissions, four search-path targets and fail-closed status logic as the proposed SQL.
+
+After any separately approved **stage-only** versioned migration: run this **exact read-only** gate first; require `FUNCTION_PARITY_CATALOG_PASS_NOT_TENANT_ACCEPTANCE` with 24 structurally valid function signatures, zero role-mismatched functions, and 4/4 fixed paths. Then separately rerun the approved PR #675 broader anonymous-definer/role exposure audit and Supabase security advisors. Neither passing query proves live tenant authorization, consent, backups, deployability, or formal R2 release acceptance. The two staging-only definer signatures outside the matched catalog remain excluded and need separate owner-admin/tenant functional tests.
+
 ## Mandatory approval / implementation sequence
 
 1. Independent reviewer `thedetourclubind-cloud` reviews the *exact current PR head*, especially 22 anonymous-exposure fixes, two additional matched-function ACL differences, the one intentional authenticated function among the first 22, and four INVOKER function paths. Full CI and CodeQL must pass.
