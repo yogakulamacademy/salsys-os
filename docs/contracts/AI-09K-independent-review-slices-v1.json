@@ -1,0 +1,142 @@
+{
+  "schemaVersion": 1,
+  "checkpoint": "AI-09K",
+  "type": "source_only_independent_review_index",
+  "baseReviewCommit": "bfd15b934caf4ddb254e38c21c8cd9f854d7e9f6",
+  "baseBranch": "integration/kb16-r2-main-preserve-20261109",
+  "sourceDraftPrNumber": 671,
+  "releaseGateIssues": [
+    601,
+    612,
+    613,
+    614
+  ],
+  "reviewReady": true,
+  "independentApprovalRecorded": false,
+  "runtimeEnabled": false,
+  "mainMergeAllowed": false,
+  "stagingActivated": false,
+  "realSignedUserWitnessCount": 0,
+  "requiredRealSignedUserWitnessCount": 16,
+  "noLiveActions": [
+    "no_main_merge",
+    "no_production_deploy",
+    "no_hosted_supabase_sql",
+    "no_mcp_or_ai_tool_execution",
+    "no_customer_data_or_crawling",
+    "no_paid_staging",
+    "no_ruleset_or_release_settings_changes"
+  ],
+  "reviewSlices": [
+    {
+      "id": "AI09K-01",
+      "label": "Versioned prompts and dual-person review ledger",
+      "independentReviewFunction": "AI governance and database security",
+      "status": "pending_independent_review",
+      "reviewPaths": [
+        "lib/ai/agent-governance-v1.ts",
+        "tests/readiness/agent-governance-contract-v1.test.cjs",
+        "docs/sql/AI-03A-prompt-approval-ledger-REHEARSAL-DRAFT.sql",
+        "tests/database/ai-governed-prompt-ledger-rehearsal.test.mjs",
+        "docs/checkpoints/AI-03A-Isolated-Prompt-Review-Ledger-DRAFT.md"
+      ],
+      "questions": [
+        "Do prompt version digests, immutable scope and independent review prevent tenant instructions from becoming platform system prompts?",
+        "Is the reviewed ledger demonstrably disposable and NOT mistaken for production approved prompt governance?"
+      ],
+      "requiredEvidence": "Independent source review of version integrity, role separation, irreversible release hold and local-only SQL boundaries"
+    },
+    {
+      "id": "AI09K-02",
+      "label": "Server Auth, session binding and allowlisted tools",
+      "independentReviewFunction": "Security and Supabase Auth DBA",
+      "status": "pending_independent_review",
+      "reviewPaths": [
+        "lib/ai/read-only-tool-gate-v1.ts",
+        "lib/ai/read-only-auth-boundary-v1.ts",
+        "tests/readiness/read-only-tool-gate-v1.test.cjs",
+        "tests/readiness/read-only-auth-boundary-v1.test.cjs",
+        "docs/checkpoints/AI-09B-Audited-Read-Only-Tool-Gate-DRAFT.md",
+        "docs/checkpoints/AI-09E-Server-Owned-Auth-Boundary-DRAFT.md"
+      ],
+      "questions": [
+        "Is the actor always server resolved and is fallback tenant or service-role binding forbidden?",
+        "Is ai_read_current_bound_session_v1 intentionally uninstalled, and does no model/browser-controlled callback execute?"
+      ],
+      "requiredEvidence": "Independent review of signed Auth/session requirements, RPC reachability/owner/grants, logout races, direct binding and no live tool dispatch"
+    },
+    {
+      "id": "AI09K-03",
+      "label": "Real-schema minimal output and Knowledge source stop",
+      "independentReviewFunction": "Security and privacy/data governance",
+      "status": "pending_independent_review",
+      "reviewPaths": [
+        "lib/ai/read-only-tool-result-projection-v1.ts",
+        "lib/ai/real-schema-read-projection-draft-v1.ts",
+        "tests/readiness/read-only-tool-result-projection-v1.test.cjs",
+        "tests/readiness/real-schema-read-projection-draft-v1.test.cjs",
+        "docs/checkpoints/AI-09C-Read-Only-Result-Projection-DRAFT.md",
+        "docs/checkpoints/AI-09F-Real-Schema-Read-Mapping-DRAFT.md"
+      ],
+      "questions": [
+        "Do title/stage mappings match real courses/course_batches/leads and reject unprojected PII and cross-tenant rows?",
+        "Is all live Knowledge retrieval prohibited until active source metadata, verified consent and withdrawal are independently established?"
+      ],
+      "requiredEvidence": "Independent verification of actual migrations, course capability, allowlisted fields and stale/untrusted Knowledge isolation"
+    },
+    {
+      "id": "AI09K-04",
+      "label": "Disposable read transaction and RLS rehearsal",
+      "independentReviewFunction": "PostgreSQL DBA and application security",
+      "status": "pending_independent_review",
+      "reviewPaths": [
+        "docs/sql/AI-09D-transaction-scoped-read-REHEARSAL-DRAFT.sql",
+        "tests/database/ai-transaction-scoped-read-rehearsal.test.mjs",
+        "docs/sql/AI-09G-real-shape-read-REHEARSAL-DRAFT.sql",
+        "tests/database/ai-real-shape-read-policy-rehearsal.test.mjs",
+        "docs/checkpoints/AI-09D-Transaction-Scoped-Read-Rehearsal-DRAFT.md",
+        "docs/checkpoints/AI-09G-Real-Shape-Transactional-Policy-Rehearsal-DRAFT.md"
+      ],
+      "questions": [
+        "Do disposable safeguards reject real CRM databases and are current Auth, tenant, capability and resource checks inside one local transaction?",
+        "Does privileged SECURITY DEFINER bypass render local RLS tests insufficient as production evidence?"
+      ],
+      "requiredEvidence": "Independent owner/grant/definer/invoker and concurrency assessment before any real SQL design; no hosted migration"
+    },
+    {
+      "id": "AI09K-05",
+      "label": "Audit commit ordering and idempotent retry",
+      "independentReviewFunction": "Database reliability, security and privacy",
+      "status": "pending_independent_review",
+      "reviewPaths": [
+        "lib/ai/audit-commit-read-preview-v1.ts",
+        "tests/readiness/audit-commit-read-preview-v1.test.cjs",
+        "docs/sql/AI-09J-idempotent-audit-replay-REHEARSAL-DRAFT.sql",
+        "tests/database/ai-audit-idempotency-replay-rehearsal.test.mjs",
+        "docs/checkpoints/AI-09I-Synthetic-Audit-Commit-Barrier-DRAFT.md",
+        "docs/checkpoints/AI-09J-Postgres-Audit-Idempotency-DRAFT.md"
+      ],
+      "questions": [
+        "Is it explicit that mock commit receipts cannot prove durable audit or authorize model-visible data?",
+        "Are replayed request IDs scope-bound and are uncertain COMMIT, rollback, cancellation, and denied-attempt retention unresolved production decisions?"
+      ],
+      "requiredEvidence": "Independent review of commit ACK semantics, same-transaction read+audit, idempotency and privacy/legal retention"
+    },
+    {
+      "id": "AI09K-06",
+      "label": "Privacy, protected release and independent witness hold",
+      "independentReviewFunction": "Privacy/legal, infrastructure and independent release owner",
+      "status": "pending_independent_review",
+      "reviewPaths": [
+        "docs/contracts/AI-09H-production-read-authorization-release-hold-v1.json",
+        "tests/readiness/ai09h-production-read-authorization-hold.test.cjs",
+        "docs/checkpoints/AI-09H-Production-Authorization-Decision-Matrix-DRAFT.md"
+      ],
+      "questions": [
+        "Have all nine AI-09H owner decisions been independently approved? Current expected answer: NO.",
+        "Has an isolated owner-approved test project and 16 independent real signed-user witnesses been accepted? Current expected answer: NO."
+      ],
+      "requiredEvidence": "Independent protected approvals for #601 #612 #613 #614, purpose/retention/erasure, environment protection, migration/rollback and release"
+    }
+  ]
+}
