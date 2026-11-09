@@ -12,7 +12,7 @@ const samples={
  '20261022094445_multitenant_tracking_site_binding_v2.sql':
   "alter table public.organization_sites add column if not exists environment text not null default 'production', add column if not exists settings jsonb not null default '{}'::jsonb;",
  '20261017091453_automation_runtime_scheduler_foundation_v1.sql':
-  "create extension if not exists pg_net; select net.http_get('https://example.invalid'); create table public.automation_scheduler_settings (endpoint_url text not null default 'https://salsysos.com/api/automation/runtime-scheduler'); do $ begin perform cron.schedule('scheduler','* * * * *','select public.invoke_automation_runtime_scheduler_v1();'); end $;",
+  "create extension if not exists pg_net; create or replace function public.invoke_automation_runtime_scheduler_v1() returns bigint language plpgsql security definer set search_path = public, vault, net, pg_catalog as $$\\nbegin\\n  perform (select count(*) from vault.decrypted_secrets);\\n  perform net.http_get('https://example.invalid');\\n  return null;\\nend;\\n$$; create table public.automation_scheduler_settings (endpoint_url text not null default 'https://salsysos.com/api/automation/runtime-scheduler'); do $ begin perform cron.schedule('scheduler','* * * * *','select public.invoke_automation_runtime_scheduler_v1();'); end $;",
  '20261026143100_closed_won_pipeline_and_auto_archive_v1.sql':
   "do $$ begin perform cron.schedule('archive','7 * * * *','select public.archive_closed_won_leads_v1(500);'); end $$;",
  '20261027094000_schedule_instagram_dm_recovery_v1.sql':
@@ -42,6 +42,7 @@ test('stage-only copy replaces all six jobs with inert commands and rewrites onl
   const out=helper.prepareStagingOnlySql({sourceFolder:src,outputFolder:dst,expectedSourceSha256:digest});
   assert.equal(out.fileCount,8);
   assert.equal(out.isolatedSiteEnvironmentDefault,'staging');
+  assert.equal(out.schedulerFunctionInert,true);
   assert.equal(out.isolatedSiteHostnameCount,2);
   assert.equal(out.sourceManifestSha256,digest);
   assert.notEqual(out.stagingManifestSha256,digest);
@@ -63,6 +64,11 @@ test('stage-only copy replaces all six jobs with inert commands and rewrites onl
    }
   }
   assert.match(fs.readFileSync(path.join(dst,'20261017091453_automation_runtime_scheduler_foundation_v1.sql'),'utf8'),/https:\/\/staging\.invalid\/api\/automation\/runtime-scheduler/);
+  const stagedScheduler=fs.readFileSync(path.join(dst,'20261017091453_automation_runtime_scheduler_foundation_v1.sql'),'utf8');
+  assert.match(stagedScheduler,/create or replace function public\\.invoke_automation_runtime_scheduler_v1\\(\\)/);
+  assert.match(stagedScheduler,/begin\\s*-- Staging-only: no pg_net calls and no reads from Vault, regardless of settings\\.\\s*return null;\\s*end;/);
+  assert.doesNotMatch(stagedScheduler,/net\\.http_get\\s*\\(/);
+  assert.doesNotMatch(stagedScheduler,/vault\\.decrypted_secrets/);
   assert.equal(manifest.buildManifest(dst).manifestSha256,out.stagingManifestSha256);
  });
 });
@@ -83,6 +89,17 @@ test('changed source website environment definition fails closed even with updat
   fs.writeFileSync(path.join(src,file),value.replace("default 'production'","default 'development'"));
   const updatedDigest=manifest.buildManifest(src).manifestSha256;
   assert.throws(()=>helper.prepareStagingOnlySql({sourceFolder:src,outputFolder:dst,expectedSourceSha256:updatedDigest}),/BLOCKED_EXPECTED_SOURCE_LITERAL_DRIFT/);
+  assert.equal(fs.existsSync(dst),false);
+ });
+});
+
+test('network-capable scheduler source drift is blocked even when manifest is recomputed',async()=>{
+ await fixture(({src,dst,helper,manifest})=>{
+  const file='20261017091453_automation_runtime_scheduler_foundation_v1.sql';
+  const original=fs.readFileSync(path.join(src,file),'utf8');
+  fs.writeFileSync(path.join(src,file),original.replace('vault.decrypted_secrets','vault.other_secrets'));
+  const sourceDigest=manifest.buildManifest(src).manifestSha256;
+  assert.throws(()=>helper.prepareStagingOnlySql({sourceFolder:src,outputFolder:dst,expectedSourceSha256:sourceDigest}),/BLOCKED_UNEXPECTED_SCHEDULER_FUNCTION_SHAPE/);
   assert.equal(fs.existsSync(dst),false);
  });
 });
