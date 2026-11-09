@@ -70,6 +70,41 @@ test('failed CLI is fail-closed and does not expose SQL or provider output', asy
   });
 });
 
+test('inherited Supabase workdir override is rejected during planning and before CLI', async () => {
+  await withFixture(({dir,tool,digest}) => {
+    const previous = process.env.SUPABASE_WORKDIR;
+    try {
+      process.env.SUPABASE_WORKDIR = path.join(dir, 'untrusted-checkout');
+      assert.throws(() => tool.planDryRun({projectRoot:dir,expectedDigest:digest}),
+        /BLOCKED_CLI_WORKDIR_OVERRIDE/);
+      delete process.env.SUPABASE_WORKDIR;
+      const plan = tool.planDryRun({projectRoot:dir,expectedDigest:digest});
+      process.env.SUPABASE_WORKDIR = path.join(dir, 'untrusted-checkout');
+      assert.throws(() => tool.runDryRun(plan),/BLOCKED_CLI_WORKDIR_OVERRIDE/);
+    } finally {
+      if (previous === undefined) delete process.env.SUPABASE_WORKDIR;
+      else process.env.SUPABASE_WORKDIR = previous;
+    }
+  });
+});
+
+test('changes to linked project and migration bytes after planning fail before CLI invocation', async () => {
+  await withFixture(({dir,temp,migrations,tool,digest}) => {
+    const marker = path.join(dir, 'cli-was-called.txt');
+    const stub = path.join(dir, 'only-log.sh');
+    fs.writeFileSync(stub, '#!/bin/sh\\nprintf called > "' + marker + '"\\nexit 0\\n');
+    fs.chmodSync(stub,0o755);
+    const plan = tool.planDryRun({projectRoot:dir,expectedDigest:digest,cli:stub});
+    fs.writeFileSync(path.join(temp,'project-ref'),PROD);
+    assert.throws(() => tool.runDryRun(plan),/BLOCKED_STAGING_LINK_CHANGED_BEFORE_CLI/);
+    assert.equal(fs.existsSync(marker),false);
+    fs.writeFileSync(path.join(temp,'project-ref'),STAGING);
+    fs.writeFileSync(path.join(migrations,'001_initial.sql'),'select 2;');
+    assert.throws(() => tool.runDryRun(plan),/BLOCKED_STAGING_SQL_CHANGED_BEFORE_CLI/);
+    assert.equal(fs.existsSync(marker),false);
+  });
+});
+
 test('CLI without exact project and manifest arguments never invokes Supabase', () => {
   const r=spawnSync(process.execPath,[script],{encoding:'utf8'});
   assert.equal(r.status,2);
