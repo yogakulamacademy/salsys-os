@@ -23,6 +23,9 @@ const replacements = [
   [websiteEnvironment, "environment text not null default 'production'", "environment text not null default 'staging'"],
   [scheduler, "'select public.invoke_automation_runtime_scheduler_v1();'", "'select 1;'"],
   [scheduler, "'https://salsysos.com/api/automation/runtime-scheduler'", "'https://staging.invalid/api/automation/runtime-scheduler'"],
+  // Never install the optional PostgreSQL outbound HTTP extension in staging.
+  // The original source retains it; only the prepared staging copy differs.
+  [scheduler, 'create extension if not exists pg_net with schema extensions;', '-- Staging-only: omit optional database HTTP extension.'],
   ['20261026143100_closed_won_pipeline_and_auto_archive_v1.sql', "'select public.archive_closed_won_leads_v1(500);'", "'select 1;'"],
   ['20261027094000_schedule_instagram_dm_recovery_v1.sql', '$$select public.retry_instagram_dm_events_v1(10);$$', '$$select 1;$$'],
   ['20261028023743_ensure_instagram_dm_retry_schedule_v1.sql', "'select public.retry_instagram_dm_events_v1(10);'", "'select 1;'"],
@@ -90,6 +93,7 @@ $$;`;
   // The original source is preserved for the separate unmodified replay.
   const stagedSql=[...parts.values()].join('\n');
   if(/\bnet\s*\.\s*http_get\s*\(/i.test(stagedSql)) fail('STAGING_SQL_HAS_HTTP_EXECUTION');
+  if(/\bcreate\s+extension\s+(?:if\s+not\s+exists\s+)?pg_net\b/i.test(stagedSql)) fail('STAGING_SQL_INSTALLS_NETWORK_EXTENSION');
   const configuredEndpoint=parts.get(scheduler).match(/\bendpoint_url\s+text\s+not\s+null\s+default\s+'([^']+)'/i);
   if (!configuredEndpoint) fail('STAGING_SCHEDULER_ENDPOINT_MISSING');
   let url;
@@ -111,7 +115,7 @@ $$;`;
     const evidence={report:'r2_staging_inert_scheduler_sql_copy_v1',
       sourceManifestSha256:original.manifestSha256,stagingManifestSha256:next.manifestSha256,
       fileCount:next.fileCount,neutralizedJobFiles:jobFiles,isolatedSiteHostnameCount:2,
-      isolatedSiteEnvironmentDefault:'staging',schedulerFunctionInert:true,sourceChanges:changes,
+      isolatedSiteEnvironmentDefault:'staging',schedulerFunctionInert:true,networkExtensionOmitted:true,sourceChanges:changes,
       productionFilesModified:false,providerAccess:false,databaseWrites:false,
       authorizedToInstall:false,networkIsolationVerified:false};
     return evidence;
