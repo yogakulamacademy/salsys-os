@@ -365,8 +365,14 @@ jobs:
             end if;
             if not exists (
               select 1 from public.organization_sites
-               where hostname = 'r2-yogakulam.invalid' and status = 'active'
+               where hostname = 'r2-yogakulam.invalid'
+                 and status = 'active'
+                 and environment = 'staging'
             )
+              or exists (
+                select 1 from public.organization_sites
+                 where status = 'active' and environment <> 'staging'
+              )
               or exists (
                 select 1 from public.organization_sites
                  where hostname not like '%.invalid'
