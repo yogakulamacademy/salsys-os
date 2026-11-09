@@ -53,15 +53,43 @@ export function prepareStagingOnlySql({sourceFolder, outputFolder, expectedSourc
       if (s.split(from).length-1!==expectedCount || s.includes(to)) fail('EXPECTED_SOURCE_LITERAL_DRIFT');
       s=s.split(from).join(to);
     }
-    if(changesForFile.length) changes.push({file:file.name,replacements:changesForFile.reduce((n,r)=>n+(r[3]??1),0)});
+    if (file.name===scheduler) {
+      // Rewrite exactly the historical network-capable SECURITY DEFINER function.
+      // Staging must remain inert even if privileged settings/secrets drift later.
+      const fnPattern=/create or replace function public\\.invoke_automation_runtime_scheduler_v1\\(\\)\\s*returns bigint\\s*language plpgsql\\s*security definer\\s*set search_path = public, vault, net, pg_catalog\\s*as \\$\\$[\\s\\S]*?\\n\\$\\$;/gi;
+      const found=[...s.matchAll(fnPattern)];
+      if(found.length!==1
+         || !/\\bnet\\s*\\.\\s*http_get\\s*\\(/i.test(found[0][0])
+         || !/\\bvault\\.decrypted_secrets\\b/i.test(found[0][0])) {
+        fail('UNEXPECTED_SCHEDULER_FUNCTION_SHAPE');
+      }
+      const inertFunction=`create or replace function public.invoke_automation_runtime_scheduler_v1()
+returns bigint
+language plpgsql
+security definer
+set search_path = public, pg_catalog
+as $
+begin
+  -- Staging-only: no pg_net calls and no reads from Vault, regardless of settings.
+  return null;
+end;
+$;`;
+      if(s.includes(inertFunction)) fail('SCHEDULER_FUNCTION_ALREADY_INERT');
+      s=s.replace(fnPattern,inertFunction);
+    }
+    if(changesForFile.length) changes.push({file:file.name,replacements:changesForFile.reduce((n,r)=>n+(r[3]??1),0)+(file.name===scheduler?1:0)});
     parts.set(file.name,s);
   }
-  if(changes.length!==changedFiles.length || changes.reduce((n,x)=>n+x.replacements,0)!==replacements.reduce((n,r)=>n+(r[3]??1),0)) fail('REPLACEMENT_COUNT_MISMATCH');
+  if(changes.length!==changedFiles.length || changes.reduce((n,x)=>n+x.replacements,0)!==replacements.reduce((n,r)=>n+(r[3]??1),0)+1) fail('REPLACEMENT_COUNT_MISMATCH');
   const candidates=[...parts.entries()].filter(([name,sql])=>/\bcron\s*\.\s*schedule\s*\(/i.test(sql)).map(([name])=>name).sort();
   if(JSON.stringify(candidates)!==JSON.stringify(jobFiles)) fail('POST_TRANSFORM_CRON_INVENTORY_DRIFT');
   // Every literal job command used by cron.schedule() in this exact reviewed
   // historical corpus was explicitly changed to an inert SELECT 1.
   for (const [name,from] of replacements) if(parts.get(name)?.includes(from)) fail('UNREPLACED_ORIGINAL_LITERAL');
+  // Reject any remaining executable net.http_get call in the reviewed corpus.
+  // The original source is preserved for the separate unmodified replay.
+  const stagedSql=[...parts.values()].join('\\n');
+  if(/\\bnet\\s*\\.\\s*http_get\\s*\\(/i.test(stagedSql)) fail('STAGING_SQL_HAS_HTTP_EXECUTION');
   const configuredEndpoint=parts.get(scheduler).match(/\bendpoint_url\s+text\s+not\s+null\s+default\s+'([^']+)'/i);
   if (!configuredEndpoint) fail('STAGING_SCHEDULER_ENDPOINT_MISSING');
   let url;
@@ -83,7 +111,7 @@ export function prepareStagingOnlySql({sourceFolder, outputFolder, expectedSourc
     const evidence={report:'r2_staging_inert_scheduler_sql_copy_v1',
       sourceManifestSha256:original.manifestSha256,stagingManifestSha256:next.manifestSha256,
       fileCount:next.fileCount,neutralizedJobFiles:jobFiles,isolatedSiteHostnameCount:2,
-      isolatedSiteEnvironmentDefault:'staging',sourceChanges:changes,
+      isolatedSiteEnvironmentDefault:'staging',schedulerFunctionInert:true,sourceChanges:changes,
       productionFilesModified:false,providerAccess:false,databaseWrites:false,
       authorizedToInstall:false,networkIsolationVerified:false};
     return evidence;
