@@ -50,6 +50,12 @@ A **second, disposable local database replay** in GitHub CI uses this transforme
 
 The copied SQL still contains some privileged functions, `pg_net`, an inactive scheduler implementation, and additional URL literals used elsewhere in the schema. The transform is **not a guarantee of complete network isolation** and cannot substitute for independently checking whether any other operation could invoke a provider or access a secret. It does **not** perform any staging or production SQL write, install a CRM, create an authenticated user, or authorize external test sends. Real stage-only DDL and acceptance still require separate operator review of the exact transformed manifest and provider settings.
 
+## Staging-copy tenant isolation rehearsal
+
+After the second no-seed, inert-scheduler local database replay, the disposable GitHub runner reruns both existing `tests/database/r2-behavior-rpc-negative-auth-local.sql` and `tests/database/r2-behavior-rpc-positive-tenant-local.sql` against the **transformed** staging-copy schema. These are synthetic local SQL cases: positive owner/admin access, foreign-tenant report denial, anonymous/unbound-session denial and rollback of their temporary test data. The runner verifies **after** both tests that Auth users, leads, contacts, conversations, messages, web sessions and Storage objects remain at zero, and active cron commands remain inert.
+
+This **does not replace real independently signed-in browser testing** in hosted staging, and does not prove consent, portal behavior, connection isolation or restore readiness. No production and no hosted staging SQL is executed by this check.
+
 ## New fail-closed remote dry-run helper (local operator only)
 
 On a separate, trusted working tree that has reproduced **all** of the historical recovery workflow steps and has passed the clean local replay, save the exact approved manifest SHA-256 from the current GitHub `migration-recovery-evidence` artifact. Do not copy credentials into logs or GitHub issues.
