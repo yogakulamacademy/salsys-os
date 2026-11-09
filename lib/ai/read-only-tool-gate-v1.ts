@@ -90,9 +90,36 @@ type Rejection =
   | 'identity_changed'
   | 'verification_unavailable';
 
+/**
+ * Read proposed route/identity fields only from own DATA properties.
+ *
+ * Do not inspect caller-controlled getters, proxies or prototypes as trusted
+ * credentials. In particular, an accessor throw during proposal validation
+ * could previously escape before the denied-attempt audit was appended.
+ *
+ * Return a detached, frozen, null-prototype copy to prevent later reads from
+ * re-triggering a getter or observing a changed caller-owned property.
+ */
 function asRecord(value: unknown): Record<string, unknown> | null {
-  return value !== null && typeof value === 'object' && !Array.isArray(value)
-    ? value as Record<string, unknown> : null;
+  if (value === null || typeof value !== 'object' || Array.isArray(value)) return null;
+  try {
+    const prototype = Object.getPrototypeOf(value);
+    if (prototype !== Object.prototype && prototype !== null) return null;
+    const keys = Reflect.ownKeys(value);
+    if (keys.some(key => typeof key !== 'string')) return null;
+    const descriptors = Object.getOwnPropertyDescriptors(value);
+    const data: Record<string, unknown> = Object.create(null);
+    for (const key of keys as string[]) {
+      const descriptor = descriptors[key];
+      if (!descriptor || !Object.hasOwn(descriptor, 'value') ||
+        descriptor.enumerable !== true) return null;
+      data[key] = descriptor.value;
+    }
+    return Object.freeze(data);
+  } catch {
+    // Hostile proxy traps and unusual objects are invalid, never trusted.
+    return null;
+  }
 }
 
 function isUuid(value: unknown): value is string {
@@ -149,7 +176,7 @@ function inspectPrincipal(value: unknown): GatePrincipal | null {
   ]) ||
     !isUuid(row.organizationId) || !isUuid(row.actorId) ||
     !isUuid(row.sessionId) || !isUuid(row.boundOrganizationId) ||
-    ![...KNOWN_ROLES, 'member', 'viewer'].includes(String(row.role)) ||
+    (typeof row.role !== 'string' || ![...KNOWN_ROLES, 'member', 'viewer'].includes(row.role)) ||
     row.sessionActive !== true || row.membershipActive !== true ||
     row.organizationActive !== true ||
     row.organizationId !== row.boundOrganizationId) return null;
