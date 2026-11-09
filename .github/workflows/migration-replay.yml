@@ -7,6 +7,8 @@ on:
     paths:
       - 'supabase/**'
       - 'scripts/build-migration-recovery-manifest.mjs'
+      - 'scripts/r2-staging-migration-manifest.mjs'
+      - 'tests/readiness/r2-staging-migration-manifest-v1.test.cjs'
       - 'tests/database/r2-behavior-rpc-negative-auth-local.sql'
       - 'tests/database/r2-behavior-rpc-positive-tenant-local.sql'
       - '.github/workflows/migration-replay.yml'
@@ -260,6 +262,14 @@ jobs:
           cp supabase/recovery/20261101095410_dashboard_snapshot_authorization_prerequisite.sql \
              supabase/migrations/20261101095410_dashboard_snapshot_authorization_prerequisite.sql
 
+      - name: Fingerprint exact staged SQL migration working tree
+        shell: bash
+        run: |
+          set -euo pipefail
+          node scripts/r2-staging-migration-manifest.mjs supabase/migrations \
+            > r2-staging-migration-worktree-manifest.json
+          node --test tests/readiness/r2-staging-migration-manifest-v1.test.cjs
+
       - name: Start local Supabase database
         shell: bash
         run: |
@@ -311,6 +321,7 @@ jobs:
           path: |
             migration-recovery-manifest.md
             migration-recovery-manifest-summary.json
+            r2-staging-migration-worktree-manifest.json
             migration-replay.log
           if-no-files-found: ignore
           retention-days: 3
