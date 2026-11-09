@@ -6,6 +6,7 @@
 -- attach_whatsapp_outbound_message_id, service_role TRUE for all.
 -- One additional service-only WhatsApp retry function loses authenticated EXECUTE;
 -- one sales asset function gains the missing verified service_role EXECUTE grant.
+-- Three additional SECURITY INVOKER wrappers lose PUBLIC/anon EXECUTE, preserving authenticated/service access.
 -- The 4 search_path changes mirror existing production function_config.
 -- Accept already-correct Production grants as well as fresh-staging grants.
 -- Preflight checks the function identity; transactional postflight checks ACL parity.
@@ -59,6 +60,23 @@ BEGIN
     AND NOT p.prosecdef;
   IF v_count <> 4 THEN
     RAISE EXCEPTION 'BLOCKED_R2_SEARCH_PATH_FUNCTION_CONTRACT_MISMATCH';
+  END IF;
+
+  -- Three ordinary (SECURITY INVOKER) compatibility wrappers also inherited
+  -- PUBLIC EXECUTE in staging, whereas Production denies anon on all three.
+  -- Preserve the existing authenticated and service_role callable contracts.
+  SELECT count(*)::int INTO v_count
+  FROM pg_catalog.pg_proc p
+  JOIN pg_catalog.pg_namespace n ON n.oid=p.pronamespace
+  WHERE n.nspname='public'
+    AND p.proname IN ('get_pipeline_snapshot','get_reengaged_workspace_v2','get_tracking_workspace')
+    AND pg_catalog.pg_get_function_identity_arguments(p.oid)=''
+    AND NOT p.prosecdef
+    AND pg_catalog.pg_get_userbyid(p.proowner)='postgres'
+    AND pg_catalog.has_function_privilege('authenticated',p.oid,'EXECUTE')
+    AND pg_catalog.has_function_privilege('service_role',p.oid,'EXECUTE');
+  IF v_count <> 3 THEN
+    RAISE EXCEPTION 'BLOCKED_R2_PUBLIC_INVOKER_FUNCTION_CONTRACT_MISMATCH';
   END IF;
   -- Separately verified matched definer-role drift outside the 22 anon findings.
   SELECT count(*)::int INTO v_count
@@ -164,6 +182,13 @@ REVOKE EXECUTE ON FUNCTION public.update_crm_stage_probability(p_stage text, p_p
 REVOKE EXECUTE ON FUNCTION public.prepare_failed_whatsapp_provider_retry_v1(p_organization_id uuid, p_failed_audit_id uuid, p_now timestamp with time zone) FROM authenticated;
 GRANT EXECUTE ON FUNCTION public.approve_sales_asset_v1(p_organization_id uuid, p_asset_id uuid, p_auto_send_allowed boolean) TO service_role;
 
+
+-- Three SECURITY INVOKER compatibility wrappers: Production denies all anonymous
+-- function EXECUTE (including invokers). Authenticated/service_role stay allowed.
+REVOKE EXECUTE ON FUNCTION public.get_pipeline_snapshot() FROM PUBLIC, anon;
+REVOKE EXECUTE ON FUNCTION public.get_reengaged_workspace_v2() FROM PUBLIC, anon;
+REVOKE EXECUTE ON FUNCTION public.get_tracking_workspace() FROM PUBLIC, anon;
+
 -- Four INVOKER functions: mirror the pre-existing production search_path.
 ALTER FUNCTION public.log_new_lead_stage() SET search_path = public, pg_temp;
 ALTER FUNCTION public.normalize_event_intelligence_url_v1(p_value text) SET search_path = public, pg_temp;
@@ -216,6 +241,21 @@ BEGIN
     AND p.proconfig @> ARRAY['search_path=public, pg_temp']::text[];
   IF v_count <> 4 THEN
     RAISE EXCEPTION 'BLOCKED_R2_POSTINSTALL_SEARCH_PATH_PARITY_FAILED';
+  END IF;
+
+  SELECT count(*)::int INTO v_count
+  FROM pg_catalog.pg_proc p
+  JOIN pg_catalog.pg_namespace n ON n.oid=p.pronamespace
+  WHERE n.nspname='public'
+    AND p.proname IN ('get_pipeline_snapshot','get_reengaged_workspace_v2','get_tracking_workspace')
+    AND pg_catalog.pg_get_function_identity_arguments(p.oid)=''
+    AND NOT p.prosecdef
+    AND pg_catalog.pg_get_userbyid(p.proowner)='postgres'
+    AND NOT pg_catalog.has_function_privilege('anon',p.oid,'EXECUTE')
+    AND pg_catalog.has_function_privilege('authenticated',p.oid,'EXECUTE')
+    AND pg_catalog.has_function_privilege('service_role',p.oid,'EXECUTE');
+  IF v_count <> 3 THEN
+    RAISE EXCEPTION 'BLOCKED_R2_PUBLIC_INVOKER_POSTFLIGHT_FAILED';
   END IF;
   -- Exact postcondition for the extra authenticated and service-role divergence.
   SELECT count(*)::int INTO v_count
