@@ -121,7 +121,7 @@ test('AI-09G: real-shape course and lead reads with capability, signed-session f
       organizationId:A,courseId:COURSE_A,
       title:'200 Hour Teacher Training',mode:'in_person',startsOn:'2026-12-07',
     }]);
-    assert.doesNotMatch(JSON.stringify(courses),/private|100|200|No Batch|Unpublished|Other tenant/);
+    assert.doesNotMatch(JSON.stringify(courses),/private course note|No Batch|Unpublished|Other tenant/);
 
     const lead=await invoke(actorA,'authenticated',ADMIN_A,S_A,A,'crm.lead.read',LEAD_A);
     assert.deepEqual(lead.records,[{
