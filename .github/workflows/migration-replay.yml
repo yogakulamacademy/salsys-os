@@ -363,6 +363,20 @@ jobs:
             ) then
               raise exception 'STAGING_SCHEDULER_ENDPOINT_NOT_ISOLATED';
             end if;
+            if (select count(*) from public.organization_sites
+                 where status = 'active' and hostname in
+                   ('r2-yogakulam.invalid','www.r2-yogakulam.invalid')) <> 2
+              or exists (
+                select 1 from public.organization_sites
+                 where status = 'active' and hostname not like '%.invalid'
+              )
+              or exists (
+                select 1 from public.organization_sites
+                 where hostname in ('yogakulam.com','www.yogakulam.com')
+              )
+            then
+              raise exception 'STAGING_UNSAFE_LIVE_SITE_HOSTNAME';
+            end if;
             if (select count(*) from auth.users) <> 0
               or (select count(*) from storage.objects) <> 0
               or (select count(*) from public.leads) <> 0
