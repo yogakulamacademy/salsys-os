@@ -11,4 +11,30 @@ function setup(options={}) {
 test('retrieval preview binds the active tenant and uses read-only canonical search',async()=>{const f=setup();const r=await f.action(f.form);assert.equal(r.state,'empty');assert.deepEqual(f.calls.map(c=>c.name),['can_manage_organization','search_organization_knowledge_v1']);assert.equal(f.calls[1].args.p_organization_id,'active-org');assert.equal(f.calls[1].args.p_limit,6)});
 test('non-admin and signed-out preview cannot search knowledge',async()=>{for(const options of [{denied:true},{signedOut:true}]){const f=setup(options);await assert.rejects(f.action(f.form));assert.equal(f.calls.some(c=>c.name==='search_organization_knowledge_v1'),false)}});
 test('a retrieval failure is unavailable, not an empty successful preview',async()=>{const f=setup({error:true});assert.equal((await f.action(f.form)).state,'error')});
+test('knowledge preview never displays explicitly unverified discovered content',async()=>{
+  for(const metadata of [
+    {document_metadata:{entry_mode:'discovery_manual_review'}},
+    {document_metadata:{source_text_verified:false}},
+    {chunk_metadata:{source:'manual_discovery_draft_unverified'}},
+    {source_metadata:{source_text_verified:false}},
+  ]){
+    const row={
+      chunk_id:'40000000-0000-4000-8000-000000000001',
+      document_id:'50000000-0000-4000-8000-000000000001',
+      title:'Unverified synthetic source',
+      category:'faq',
+      content:'Do not display this discovery text until verified.',
+      rank:0.5,
+      valid_until:null,
+      metadata:{document_version:1,...metadata},
+    };
+    const f=setup({data:[row]});
+    const result=await f.action(f.form);
+    assert.equal(result.state,'error',JSON.stringify(metadata));
+    assert.match(result.message,/needs source verification/);
+    assert.equal(Object.hasOwn(result,'matches'),false,
+      'No unverified search excerpts may enter the manual review preview');
+    assert.deepEqual(f.calls.map(c=>c.name),['can_manage_organization','search_organization_knowledge_v1']);
+  }
+});
 test('invalid questions do not trigger auth, retrieval or model work',async()=>{const f=setup();f.form.set('query','x'.repeat(501));assert.equal((await f.action(f.form)).state,'error');assert.equal(f.calls.length,0)});
