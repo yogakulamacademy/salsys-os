@@ -205,7 +205,7 @@ begin
           and approval_status='approved'
           and source_status='active' and source_text_verified=true
           and pg_catalog.octet_length(evidence_text) between 1 and 768
-          and pg_catalog.position(v_q in pg_catalog.lower(evidence_text))>0
+          and pg_catalog.strpos(pg_catalog.lower(evidence_text),v_q)>0
         order by id limit 5
       ) q;
   end if;
