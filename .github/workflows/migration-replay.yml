@@ -415,6 +415,32 @@ jobs:
           $check$;
           SQL
 
+      - name: Verify R2 #643 full browser lead RPC + identity trigger path in disposable Postgres
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Must use only the already-started disposable local Supabase container.
+          # Never use production DB URLs, network services or real site data.
+          db_containers="$(docker ps --format '{{.Names}}' | grep '^supabase_db_' || true)"
+          test "$(printf '%s\n' "$db_containers" | grep -c .)" -eq 1
+          docker exec -i "$db_containers" psql -X -v ON_ERROR_STOP=1 \
+            -U postgres -d postgres \
+            < tests/database/r2-website-ingest-primary-contact-full-rpc-local.sql
+
+      - name: Verify R2 #643 privileged RPC restoration and rollback in disposable local Postgres
+        shell: bash
+        run: |
+          set -euo pipefail
+          # This NEVER connects to cloud Supabase: only a single already started
+          # local supabase_db_ Docker container with generated opt-in SQL.
+          db_containers="$(docker ps --format '{{.Names}}' | grep '^supabase_db_' || true)"
+          test "$(printf '%s\n' "$db_containers" | grep -c .)" -eq 1
+          sqlfile="$(mktemp)"
+          trap 'rm -f "$sqlfile"' EXIT
+          node scripts/r2-local-contact-rollback-rehearsal.mjs --disposable-local-only > "$sqlfile"
+          docker exec -i "$db_containers" psql -X -v ON_ERROR_STOP=1 \
+            -U postgres -d postgres < "$sqlfile"
+
       - name: Verify staging-copy tenant RPC isolation and post-test emptiness
         shell: bash
         run: |
@@ -463,7 +489,7 @@ jobs:
           import { buildManifest } from './scripts/r2-staging-migration-manifest.mjs';
           const verified = JSON.parse(fs.readFileSync('r2-staging-inert-sql-manifest.json', 'utf8'));
           const actual = buildManifest('supabase/migrations');
-          if (actual.fileCount !== 431 || actual.manifestSha256 !== verified.stagingManifestSha256) {
+          if (actual.fileCount !== 432 || actual.manifestSha256 !== verified.stagingManifestSha256) {
             throw Error('BLOCKED_STAGING_PACKAGE_DIGEST_MISMATCH');
           }
           const seed = fs.readFileSync('supabase/seed.sql', 'utf8');
@@ -497,7 +523,7 @@ jobs:
           const root = process.env.RUNNER_TEMP + '/r2-staging-package-check';
           const staged = JSON.parse(fs.readFileSync(path.join(root,'staging-copy-manifest.json'),'utf8'));
           const result = buildManifest(path.join(root,'supabase/migrations'));
-          if (result.manifestSha256 !== staged.stagingManifestSha256 || result.fileCount !== 431) {
+          if (result.manifestSha256 !== staged.stagingManifestSha256 || result.fileCount !== 432) {
             throw Error('BLOCKED_STAGING_PACKAGE_EXTRACTION_MISMATCH');
           }
           const seed = fs.readFileSync(path.join(root,'supabase/seed.sql'),'utf8');
