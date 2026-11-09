@@ -23,19 +23,19 @@ const replacements = [
   ['20261104171500_instagram_outbound_echo_recovery_v1.sql', "'select public.retry_instagram_outbound_echoes_v1(10);'", "'select 1;'"],
 ];
 const jobFiles = [...new Set(replacements.filter(x => x[1].includes('select public.')).map(x => x[0]).concat('20261027094000_schedule_instagram_dm_recovery_v1.sql'))].sort();
-const fail = () => {throw Error('BLOCKED_SCHEDULER_SOURCE_DRIFT_OR_UNSAFE_OUTPUT');};
+const fail = (reason) => {throw Error('BLOCKED_' + reason);};
 
 export function prepareStagingOnlySql({sourceFolder, outputFolder, expectedSourceSha256}) {
-  if (!/^[a-f0-9]{64}$/.test(expectedSourceSha256??'')) fail();
+  if (!/^[a-f0-9]{64}$/.test(expectedSourceSha256??'')) fail('EXPECTED_SHA_REQUIRED');
   const src=path.resolve(sourceFolder),dst=path.resolve(outputFolder);
-  if (src===dst || dst.startsWith(src+path.sep) || src.startsWith(dst+path.sep)) fail();
-  if (fs.existsSync(dst)) fail();
+  if (src===dst || dst.startsWith(src+path.sep) || src.startsWith(dst+path.sep)) fail('PATH_OVERLAP');
+  if (fs.existsSync(dst)) fail('OUTPUT_ALREADY_EXISTS');
   const original=buildManifest(src);
-  if(original.manifestSha256!==expectedSourceSha256) fail();
+  if(original.manifestSha256!==expectedSourceSha256) fail('SOURCE_MANIFEST_SHA_MISMATCH');
   const before=auditStagedMigrationFiles(src);
   const actualCron=before.candidates.filter(x=>x.kind==='cron_schedule').map(x=>x.file).sort();
-  if(JSON.stringify(actualCron)!==JSON.stringify(jobFiles)) fail();
-  if(before.categories.http_execution!==1 || before.categories.extension_network!==1) fail();
+  if(JSON.stringify(actualCron)!==JSON.stringify(jobFiles)) fail('UNEXPECTED_CRON_SCHEDULE_FILES');
+  if(before.categories.http_execution!==1 || before.categories.extension_network!==1) fail('UNEXPECTED_NETWORK_SQL_SHAPE');
   const changes=[];
   const parts=new Map();
   for (const file of original.files) {
@@ -43,19 +43,19 @@ export function prepareStagingOnlySql({sourceFolder, outputFolder, expectedSourc
     const changesForFile=replacements.filter(x=>x[0]===file.name);
     for (const [,from,to] of changesForFile) {
       const at=s.indexOf(from);
-      if(at<0 || s.indexOf(from,at+from.length)>=0 || s.includes(to)) fail();
+      if(at<0 || s.indexOf(from,at+from.length)>=0 || s.includes(to)) fail('EXPECTED_SOURCE_LITERAL_DRIFT');
       s=s.slice(0,at)+to+s.slice(at+from.length);
     }
     if(changesForFile.length) changes.push({file:file.name,replacements:changesForFile.length});
     parts.set(file.name,s);
   }
-  if(changes.length!==jobFiles.length || changes.reduce((n,x)=>n+x.replacements,0)!==replacements.length) fail();
+  if(changes.length!==jobFiles.length || changes.reduce((n,x)=>n+x.replacements,0)!==replacements.length) fail('REPLACEMENT_COUNT_MISMATCH');
   const candidates=[...parts.entries()].filter(([name,sql])=>/\bcron\s*\.\s*schedule\s*\(/i.test(sql)).map(([name])=>name).sort();
-  if(JSON.stringify(candidates)!==JSON.stringify(jobFiles)) fail();
+  if(JSON.stringify(candidates)!==JSON.stringify(jobFiles)) fail('POST_TRANSFORM_CRON_INVENTORY_DRIFT');
   // Every literal job command used by cron.schedule() in this exact reviewed
   // historical corpus was explicitly changed to an inert SELECT 1.
-  for (const [,from] of replacements) for (const [,sql] of parts) if(sql.includes(from)) fail();
-  if(parts.get(scheduler).includes('https://salsysos.com/api/automation/runtime-scheduler')) fail();
+  for (const [name,from] of replacements) if(parts.get(name)?.includes(from)) fail('UNREPLACED_ORIGINAL_LITERAL');
+  if(parts.get(scheduler).includes('https://salsysos.com/api/automation/runtime-scheduler')) fail('LIVE_SCHEDULER_URL_REMAINS');
   // Publish the staging-only copy only after all input checks have succeeded.
   fs.mkdirSync(dst,{recursive:false,mode:0o700});
   try {
@@ -71,11 +71,11 @@ export function prepareStagingOnlySql({sourceFolder, outputFolder, expectedSourc
 }
 
 function parseCli(args) {
-  if(args.length!==6||args[0]!=='--source'||args[2]!=='--output'||args[4]!=='--expected-source-manifest-sha256') fail();
+  if(args.length!==6||args[0]!=='--source'||args[2]!=='--output'||args[4]!=='--expected-source-manifest-sha256') fail('CLI_ARGUMENTS');
   return {sourceFolder:args[1],outputFolder:args[3],expectedSourceSha256:args[5]};
 }
 
 if(process.argv[1]&&path.resolve(process.argv[1])===fileURLToPath(import.meta.url)){
   try {console.log(JSON.stringify(prepareStagingOnlySql(parseCli(process.argv.slice(2))),null,2));}
-  catch {console.error('BLOCKED_SCHEDULER_SOURCE_DRIFT_OR_UNSAFE_OUTPUT');process.exitCode=2;}
+  catch(e) {const m=String(e.message);console.error(m.startsWith('BLOCKED_')?m:'BLOCKED_UNVERIFIED_ENVIRONMENT');process.exitCode=2;}
 }
