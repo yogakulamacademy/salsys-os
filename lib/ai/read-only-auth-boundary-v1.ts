@@ -19,7 +19,7 @@ export const READ_ONLY_AUTH_BOUNDARY_RUNTIME_WIRED = false as const;
 /** Explicit new RPC, never current_tenant_organization_id() or a fallback. */
 export const REQUIRED_BOUND_SESSION_RPC = 'ai_read_current_bound_session_v1' as const;
 
-const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{12}$/i;
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 type ReviewDenial = 'invalid_request' | 'unauthenticated' | 'binding_unavailable' | 'binding_denied';
 
