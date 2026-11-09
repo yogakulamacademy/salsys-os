@@ -41,9 +41,28 @@ Its first execution against both connected projects on November 9, 2026 independ
 
 After any separately approved **stage-only** versioned migration: run this **exact read-only** gate first; require `FUNCTION_PARITY_CATALOG_PASS_NOT_TENANT_ACCEPTANCE` with 24 structurally valid function signatures, zero role-mismatched functions, and 4/4 fixed paths. Then separately rerun the approved PR #675 broader anonymous-definer/role exposure audit and Supabase security advisors. Neither passing query proves live tenant authorization, consent, backups, deployability, or formal R2 release acceptance. The two staging-only definer signatures outside the matched catalog remain excluded and need separate owner-admin/tenant functional tests.
 
+## Follow-up full-public-function execution audit (2026-11-09)
+
+The original review covered **22 anonymously executable SECURITY DEFINER functions** and two additional matched-definer role differences (24 exact definer signatures). **A further SELECT-only read of *all* `public` routines identified three additional anonymous-callable SECURITY INVOKER compatibility wrappers**. The original post-install #675 gate counts only definers and would miss these three ordinary invokers.
+
+| Catalog readback | Temporary staging | Production |
+| --- | ---: | ---: |
+| Total `public` functions | 388 | 505 |
+| Anonymously executable SECURITY DEFINER | 22 | 0 |
+| Anonymously executable SECURITY INVOKER | 3 | 0 |
+| All anonymous-callable public routines | **25** | **0** |
+
+The invokers are `get_pipeline_snapshot()`, `get_reengaged_workspace_v2()`, and `get_tracking_workspace()`. Both databases contain the **same exact postgres-owned, SECURITY INVOKER, STABLE signatures and function bodies**, including their `search_path=public, auth, pg_temp` settings. Only staging gives their function-level ACL `PUBLIC EXECUTE`; Production denies anonymous execution and allows existing `authenticated` and `service_role` EXECUTE.
+
+The proposed SQL therefore additionally revokes `EXECUTE FROM PUBLIC, anon` on **only those three exact signatures**, preserving both intended roles. A fail-closed three-function preflight and postflight prevents unexpected overload, owner, SECURITY INVOKER or effective-role drift. **No caller, including anonymous, is executed during this metadata audit.**
+
+`docs/sql/r2-staging-postinstall-global-anon-function-audit-v1.sql` is a **SELECT-only, all-public-functions catalog gate**: Stage currently returns `PUBLIC_FUNCTION_EXECUTE_REVIEW_REQUIRED` with 25 exposed; Production returns `PUBLIC_FUNCTION_EXECUTE_CATALOG_PASS_NOT_E2E` with zero. After a separately approved staged repair, require the *global* audit to show zero anon-callable public functions **in addition to** the 24-definer role-parity audit, the approved #675 broader catalog audit, and security advisors. All passing catalog gates are still **not** authenticated tenant/browser/consent acceptance.
+
+Default `public`-schema function ACL settings for owners `postgres` and `supabase_admin` were read and found identical between staging and production. The current 25 anonymous openings are **specific function-level PUBLIC grants**, not a demonstrated divergence in default-privilege configuration. As a separate forward-looking consideration, `supabase_admin`'s default ACL allows `anon` on newly created functions in both systems; neither currently has a public function owned by that role. This should be reviewed as a future function-creation policy, not silently changed as part of the narrow R2 stage repair.
+
 ## Mandatory approval / implementation sequence
 
-1. Independent reviewer `thedetourclubind-cloud` reviews the *exact current PR head*, especially 22 anonymous-exposure fixes, two additional matched-function ACL differences, the one intentional authenticated function among the first 22, and four INVOKER function paths. Full CI and CodeQL must pass.
+1. Independent reviewer `thedetourclubind-cloud` reviews the *exact current PR head*, especially 22 privileged anonymous-exposure fixes, two additional matched-definer ACL differences, three ordinary invoker anonymous-exposure fixes, the one intentionally authenticated function among the first 22, and four function search paths. Full CI and CodeQL must pass.
 2. **After approved design**, operator generates a timestamped migration using `supabase migration new r2_postinstall_function_grant_parity` in an isolated Codespaces checkout with the reviewed schema, copies the identical SQL into the CLI-generated file, and submits the migration file for independent review on the exact new PR head. Do **not** invent migration filenames or commit to `main` prematurely.
 3. Operator checks staging project ref `ndxpjqkthuzxlmbenxti`, original 431 migration history and absence of customer data; captures an ACL and rollback baseline. No production database linkage or production Preview hosting.
 4. With explicit **staging-only installation** authorization, perform a reviewed remote dry run first and then apply **only the new approved migration** to temporary staging (not reapply the 431 migrations). Stop on mismatch: no reset, repair or auto retry.
