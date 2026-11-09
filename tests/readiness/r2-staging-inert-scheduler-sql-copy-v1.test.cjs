@@ -1,0 +1,85 @@
+const { test }=require('node:test');
+const assert=require('node:assert/strict');
+const fs=require('node:fs');
+const os=require('node:os');
+const path=require('node:path');
+const {spawnSync}=require('node:child_process');
+
+const script=path.resolve(__dirname,'../../scripts/r2-staging-inert-scheduler-sql-copy.mjs');
+const samples={
+ '20261017091453_automation_runtime_scheduler_foundation_v1.sql':
+  "create extension if not exists pg_net; select net.http_get('https://example.invalid'); select 'https://salsysos.com/api/automation/runtime-scheduler'; do $$ begin perform cron.schedule('scheduler','* * * * *','select public.invoke_automation_runtime_scheduler_v1();'); end $$;",
+ '20261026143100_closed_won_pipeline_and_auto_archive_v1.sql':
+  "do $$ begin perform cron.schedule('archive','7 * * * *','select public.archive_closed_won_leads_v1(500);'); end $$;",
+ '20261027094000_schedule_instagram_dm_recovery_v1.sql':
+  "select cron.schedule('instagram','* * * * *',$$select public.retry_instagram_dm_events_v1(10);$$);",
+ '20261028023743_ensure_instagram_dm_retry_schedule_v1.sql':
+  "do $$ begin perform cron.schedule('instagram','* * * * *','select public.retry_instagram_dm_events_v1(10);'); end $$;",
+ '20261101164458_r10_outcome_learning_runner_v1.sql':
+  "do $$ begin perform cron.schedule('outcomes','*/15 * * * *',$cron$select public.sweep_system_intelligence_recommendation_outcomes_v1(null,50,'cron');$cron$); end $$;",
+ '20261104171500_instagram_outbound_echo_recovery_v1.sql':
+  "do $$ begin perform cron.schedule('echo','*/2 * * * *','select public.retry_instagram_outbound_echoes_v1(10);'); perform cron.alter_job(job_id:=1, active:=false); end $$;"
+};
+async function fixture(cb,overrides={}){
+ const dir=fs.mkdtempSync(path.join(os.tmpdir(),'r2-stage-inert-'));
+ const src=path.join(dir,'original'),dst=path.join(dir,'isolated');
+ fs.mkdirSync(src);
+ for(const [name,sql] of Object.entries({...samples,...overrides}))fs.writeFileSync(path.join(src,name),sql);
+ const helper=await import('../../scripts/r2-staging-inert-scheduler-sql-copy.mjs');
+ const manifest=await import('../../scripts/r2-staging-migration-manifest.mjs');
+ const digest=manifest.buildManifest(src).manifestSha256;
+ try{return await cb({dir,src,dst,helper,manifest,digest});}
+ finally{fs.rmSync(dir,{recursive:true,force:true});}
+}
+
+test('stage-only copy replaces all six jobs with inert commands and rewrites only the endpoint',async()=>{
+ await fixture(({src,dst,helper,manifest,digest})=>{
+  const original=Object.fromEntries(Object.keys(samples).map(k=>[k,fs.readFileSync(path.join(src,k),'utf8')]));
+  const out=helper.prepareStagingOnlySql({sourceFolder:src,outputFolder:dst,expectedSourceSha256:digest});
+  assert.equal(out.fileCount,6);
+  assert.equal(out.sourceManifestSha256,digest);
+  assert.notEqual(out.stagingManifestSha256,digest);
+  assert.equal(out.authorizedToInstall,false);
+  assert.equal(out.providerAccess,false);
+  for(const name of Object.keys(samples)){
+   assert.equal(fs.readFileSync(path.join(src,name),'utf8'),original[name]);
+   const changed=fs.readFileSync(path.join(dst,name),'utf8');
+   assert.match(changed,/cron\.schedule/);
+   assert.ok(changed.includes('select 1;'));
+   assert.doesNotMatch(changed,/select public\.(?:invoke_automation_runtime_scheduler_v1|archive_closed_won_leads_v1|retry_instagram_dm_events_v1|sweep_system_intelligence_recommendation_outcomes_v1|retry_instagram_outbound_echoes_v1)\(/);
+  }
+  assert.match(fs.readFileSync(path.join(dst,Object.keys(samples)[0]),'utf8'),/https:\/\/staging\.invalid\/api\/automation\/runtime-scheduler/);
+  assert.equal(manifest.buildManifest(dst).manifestSha256,out.stagingManifestSha256);
+ });
+});
+
+test('unknown cron schedule fails and leaves destination absent',async()=>{
+ await fixture(({src,dst,helper,digest})=>{
+  assert.throws(()=>helper.prepareStagingOnlySql({sourceFolder:src,outputFolder:dst,expectedSourceSha256:digest}),/BLOCKED_/);
+  assert.equal(fs.existsSync(dst),false);
+ },{'20261109999999_unapproved_cron.sql':"select cron.schedule('oops','* * * * *','select another_unsafe_func();');"});
+});
+
+test('source digest mismatch and missing file fail closed',async()=>{
+ await fixture(({src,dst,helper,digest})=>{
+  assert.throws(()=>helper.prepareStagingOnlySql({sourceFolder:src,outputFolder:dst,expectedSourceSha256:'0'.repeat(64)}),/BLOCKED_/);
+  fs.rmSync(path.join(src,'20261027094000_schedule_instagram_dm_recovery_v1.sql'));
+  assert.throws(()=>helper.prepareStagingOnlySql({sourceFolder:src,outputFolder:dst,expectedSourceSha256:digest}),/BLOCKED_/);
+  assert.equal(fs.existsSync(dst),false);
+ });
+});
+
+test('target cannot overwrite an existing directory or contain the source',async()=>{
+ await fixture(({src,dst,helper,digest})=>{
+  fs.mkdirSync(dst);
+  assert.throws(()=>helper.prepareStagingOnlySql({sourceFolder:src,outputFolder:dst,expectedSourceSha256:digest}),/BLOCKED_/);
+  assert.throws(()=>helper.prepareStagingOnlySql({sourceFolder:src,outputFolder:path.join(src,'inside'),expectedSourceSha256:digest}),/BLOCKED_/);
+ });
+});
+
+test('CLI fails closed without complete arguments and never invokes provider',()=>{
+ const r=spawnSync(process.execPath,[script],{encoding:'utf8'});
+ assert.equal(r.status,2);assert.match(r.stderr,/BLOCKED_SCHEDULER_SOURCE_DRIFT_OR_UNSAFE_OUTPUT/);
+ const code=fs.readFileSync(script,'utf8');
+ assert.doesNotMatch(code,/\b(?:fetch\(|supabase db push|apply_migration\(|create_project\()/);
+});
