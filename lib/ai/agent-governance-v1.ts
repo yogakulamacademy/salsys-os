@@ -61,11 +61,11 @@ function snapshotArray(value: unknown): readonly unknown[] | null {
   try {
     if (!Array.isArray(value) || Object.getPrototypeOf(value) !== Array.prototype) return null;
     const keys = Reflect.ownKeys(value);
-    const descriptors = Object.getOwnPropertyDescriptors(value);
-    // TS models an array's own "length" as number, although
-    // getOwnPropertyDescriptors() returns its PropertyDescriptor at runtime.
-    const lengthDescriptor: PropertyDescriptor | undefined = Reflect.get(descriptors, 'length');
-    const count = lengthDescriptor?.value;
+    // TS maps Array.length to number even for getOwnPropertyDescriptors(),
+    // but at runtime this API returns a PropertyDescriptor for "length".
+    const descriptors = Object.getOwnPropertyDescriptors(value) as unknown as
+      Record<string, PropertyDescriptor>;
+    const count = descriptors.length?.value;
     if (!Number.isSafeInteger(count) || count < 0 ||
       keys.length !== count + 1 || !Object.hasOwn(descriptors, 'length')) return null;
     const copy: unknown[] = [];
