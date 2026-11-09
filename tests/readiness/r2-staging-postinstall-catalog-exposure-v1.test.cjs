@@ -32,6 +32,23 @@ test('inventory covers public table RLS, view security_invoker and SECURITY DEFI
   ]) assert.ok(sql.includes(term), term);
 });
 
+
+test('column-specific grants and materialized view exposure are classified before release', () => {
+  for (const role of ['anon', 'authenticated']) {
+    for (const privilege of ['SELECT', 'INSERT', 'UPDATE']) {
+      assert.ok(sql.includes(`has_any_column_privilege('${role}', t.oid, '${privilege}')`));
+    }
+  }
+  assert.match(sql, /c\.relkind = 'm'/);
+  for (const name of [
+    'anon_exposed_materialized_views',
+    'authenticated_exposed_materialized_views',
+    'or m.anon_exposed_materialized_views > 0',
+    'or m.authenticated_exposed_materialized_views > 0',
+  ]) assert.ok(sql.includes(name), name);
+  assert.match(sql, /cross join materialized_view_counts m/);
+});
+
 test('empty or dangerous catalogs cannot report acceptance as passed', () => {
   assert.match(sql, /when t\.public_tables = 0 or f\.security_definer_functions = 0/);
   assert.match(sql, /SCHEMA_NOT_INSTALLED_OR_INCOMPLETE/);
