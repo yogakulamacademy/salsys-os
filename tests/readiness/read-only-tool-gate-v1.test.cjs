@@ -36,7 +36,7 @@ const harness = (options={}) => {
     async getCurrentPrincipal(){
       calls.auth++;
       if(options.authThrows)throw Error('private auth failed with sensitive diagnostics');
-      return calls.auth===1 ? principal : (options.secondPrincipal??principal);
+      return calls.auth===1 ? principal : (Object.hasOwn(options,'secondPrincipal') ? options.secondPrincipal : principal);
     },
     async checkCurrentResourceAccess(context,proposal){
       calls.resource++;
