@@ -280,6 +280,20 @@ jobs:
             > r2-staging-sql-external-effects-candidates.json
           node --test tests/readiness/r2-staging-sql-external-effects-audit-v1.test.cjs
 
+      - name: Prepare stage-only inert SQL copy from exact hashed source
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Build staging copy *before* CLI startup and original local replay.
+          # Protect source manifest provenance from any later tooling side effects.
+          node --test tests/readiness/r2-staging-inert-scheduler-sql-copy-v1.test.cjs
+          approved_sha="$(node -e "process.stdout.write(JSON.parse(require('node:fs').readFileSync('r2-staging-migration-worktree-manifest.json','utf8')).manifestSha256)")"
+          node scripts/r2-staging-inert-scheduler-sql-copy.mjs \
+            --source supabase/migrations \
+            --output "$RUNNER_TEMP/r2-staging-inert-migrations" \
+            --expected-source-manifest-sha256 "$approved_sha" \
+            > r2-staging-inert-sql-manifest.json
+
       - name: Start local Supabase database
         shell: bash
         run: |
@@ -324,13 +338,6 @@ jobs:
           # The source migration replay and two-tenant DB assertions already ran.
           # This is an independent second reset of the SAME disposable local DB;
           # no Supabase remote project, service key, production URL or stage API.
-          node --test tests/readiness/r2-staging-inert-scheduler-sql-copy-v1.test.cjs
-          approved_sha="$(node -e "process.stdout.write(JSON.parse(require('node:fs').readFileSync('r2-staging-migration-worktree-manifest.json','utf8')).manifestSha256)")"
-          node scripts/r2-staging-inert-scheduler-sql-copy.mjs \
-            --source supabase/migrations \
-            --output "$RUNNER_TEMP/r2-staging-inert-migrations" \
-            --expected-source-manifest-sha256 "$approved_sha" \
-            > r2-staging-inert-sql-manifest.json
           find supabase/migrations -maxdepth 1 -type f -name '*.sql' -delete
           cp "$RUNNER_TEMP/r2-staging-inert-migrations/"*.sql supabase/migrations/
           supabase db reset --local 2>&1 | tee -a migration-replay.log
