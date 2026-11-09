@@ -13,7 +13,10 @@ import { buildManifest } from './r2-staging-migration-manifest.mjs';
 import { auditStagedMigrationFiles } from './r2-staging-sql-external-effects-audit.mjs';
 
 const scheduler = '20261017091453_automation_runtime_scheduler_foundation_v1.sql';
+const websiteFoundation = '007_tenant_schema_foundation.sql';
 const replacements = [
+  [websiteFoundation, "('yogakulam.com'::text)", "('r2-yogakulam.invalid'::text)"],
+  [websiteFoundation, "('www.yogakulam.com'::text)", "('www.r2-yogakulam.invalid'::text)"],
   [scheduler, "'select public.invoke_automation_runtime_scheduler_v1();'", "'select 1;'"],
   [scheduler, "'https://salsysos.com/api/automation/runtime-scheduler'", "'https://staging.invalid/api/automation/runtime-scheduler'"],
   ['20261026143100_closed_won_pipeline_and_auto_archive_v1.sql', "'select public.archive_closed_won_leads_v1(500);'", "'select 1;'"],
@@ -23,6 +26,7 @@ const replacements = [
   ['20261104171500_instagram_outbound_echo_recovery_v1.sql', "'select public.retry_instagram_outbound_echoes_v1(10);'", "'select 1;'", 2],
 ];
 const jobFiles = [...new Set(replacements.filter(x => x[1].includes('select public.')).map(x => x[0]).concat('20261027094000_schedule_instagram_dm_recovery_v1.sql'))].sort();
+const changedFiles = [...new Set(replacements.map(x => x[0]))].sort();
 const fail = (reason) => {throw Error('BLOCKED_' + reason);};
 
 export function prepareStagingOnlySql({sourceFolder, outputFolder, expectedSourceSha256}) {
@@ -48,7 +52,7 @@ export function prepareStagingOnlySql({sourceFolder, outputFolder, expectedSourc
     if(changesForFile.length) changes.push({file:file.name,replacements:changesForFile.reduce((n,r)=>n+(r[3]??1),0)});
     parts.set(file.name,s);
   }
-  if(changes.length!==jobFiles.length || changes.reduce((n,x)=>n+x.replacements,0)!==replacements.reduce((n,r)=>n+(r[3]??1),0)) fail('REPLACEMENT_COUNT_MISMATCH');
+  if(changes.length!==changedFiles.length || changes.reduce((n,x)=>n+x.replacements,0)!==replacements.reduce((n,r)=>n+(r[3]??1),0)) fail('REPLACEMENT_COUNT_MISMATCH');
   const candidates=[...parts.entries()].filter(([name,sql])=>/\bcron\s*\.\s*schedule\s*\(/i.test(sql)).map(([name])=>name).sort();
   if(JSON.stringify(candidates)!==JSON.stringify(jobFiles)) fail('POST_TRANSFORM_CRON_INVENTORY_DRIFT');
   // Every literal job command used by cron.schedule() in this exact reviewed
@@ -59,6 +63,9 @@ export function prepareStagingOnlySql({sourceFolder, outputFolder, expectedSourc
   let url;
   try { url=new URL(configuredEndpoint[1]); } catch { fail('STAGING_SCHEDULER_ENDPOINT_INVALID'); }
   if (url.protocol!=='https:' || url.hostname!=='staging.invalid' || url.pathname!=='/api/automation/runtime-scheduler' || url.port || url.username || url.password || url.search || url.hash) fail('STAGING_SCHEDULER_ENDPOINT_NOT_ISOLATED');
+  const siteBlock = parts.get(websiteFoundation)?.match(/insert\s+into\s+public\.organization_sites\s*\([\s\S]*?on\s+conflict\s*\(hostname\)[\s\S]*?status\s*=\s*'active';/i)?.[0];
+  if (!siteBlock || !siteBlock.includes("('r2-yogakulam.invalid'::text)") || !siteBlock.includes("('www.r2-yogakulam.invalid'::text)")) fail('STAGING_SITE_HOSTS_MISSING');
+  if (siteBlock.includes('yogakulam.com')) fail('LIVE_SITE_HOSTS_REMAIN');
   // Publish the staging-only copy only after all input checks have succeeded.
   fs.mkdirSync(dst,{recursive:false,mode:0o700});
   try {
@@ -66,7 +73,7 @@ export function prepareStagingOnlySql({sourceFolder, outputFolder, expectedSourc
     const next=buildManifest(dst);
     const evidence={report:'r2_staging_inert_scheduler_sql_copy_v1',
       sourceManifestSha256:original.manifestSha256,stagingManifestSha256:next.manifestSha256,
-      fileCount:next.fileCount,neutralizedJobFiles:jobFiles,sourceChanges:changes,
+      fileCount:next.fileCount,neutralizedJobFiles:jobFiles,isolatedSiteHostnameCount:2,sourceChanges:changes,
       productionFilesModified:false,providerAccess:false,databaseWrites:false,
       authorizedToInstall:false,networkIsolationVerified:false};
     return evidence;
