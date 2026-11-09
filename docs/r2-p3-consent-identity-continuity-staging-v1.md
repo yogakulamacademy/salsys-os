@@ -55,6 +55,11 @@ export SALSYS_STAGING_CRM_ORIGIN="https://<isolated-staging-crm>"
 export SALSYS_STAGING_CRM_PROJECT_ID="prj_<independent-vercel-staging-project-id>"
 export SALSYS_PRODUCTION_CRM_PROJECT_ID="prj_<existing-production-vercel-project-id>"
 export SALSYS_STAGING_SUPABASE_URL="https://<staging-supabase-host>"
+# Privately read these two *effective* values from the reviewed staging CRM
+# deployment: the browser bundle and the server/preview runtime respectively.
+# Do not assume project-wide generic Preview variables match the intended stage.
+export SALSYS_STAGING_EFFECTIVE_NEXT_PUBLIC_SUPABASE_URL="https://<effective-public-supabase-host>"
+export SALSYS_STAGING_EFFECTIVE_SUPABASE_URL="https://<effective-server-supabase-host>"
 export SALSYS_PRODUCTION_SUPABASE_URL="https://<production-supabase-host>"
 export SALSYS_RECOVERY_SUPABASE_URL="https://<recovery-rehearsal-supabase-host>"
 export SALSYS_STAGING_SOURCE_HOSTNAME="<exact-staging-site-hostname>"
@@ -70,6 +75,8 @@ export SALSYS_STAGING_DEPLOYED_COMMIT="<actual-preview-40-char-SHA>"
 
 node scripts/r2-consent-staging-preflight.mjs
 ```
+
+**Build/runtime Supabase binding:** The CRM browser client reads `NEXT_PUBLIC_SUPABASE_URL`; `createAdminClient()` also prioritizes that public URL over its `SUPABASE_URL` fallback. The operator must privately verify the **effective built browser URL** and **actual server runtime fallback URL** in the exact isolated staging deployment, then supply both as distinct `SALSYS_STAGING_EFFECTIVE_...` attestations. The preflight fails when either is missing, malformed, or different from the reviewed `SALSYS_STAGING_SUPABASE_URL`. It still cannot authenticate that the operator supplied true values, validate build artifacts, or verify credentials are scoped to staging. The authorized custodian must independently confirm browser publishable and server secret keys are exclusively bound to the staging project and no generic Vercel Preview variables can redirect or send production data. Do not publish key material or decrypted values. A local preflight PASS is not hosted acceptance.
 
 **Production preview isolation:** Stage the CRM on a *different Vercel project*, not a Preview deployment inside the production `salsys-os` project. The read-only preflight checks the two supplied project IDs are well-formed and different; this is an assertion based on provided metadata, not a Vercel API verification. Independently inspect the deployed project identity and browser/server Supabase target before acceptance. Staging website and CRM origins must not be any production host or its subdomain, including `*.yogakulam.com`, `*.yogakulamacademy.com` or `*.salsysos.com` (shared-domain cookies and integrations may leak between environments).
 
