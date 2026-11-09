@@ -363,15 +363,24 @@ jobs:
             ) then
               raise exception 'STAGING_SCHEDULER_ENDPOINT_NOT_ISOLATED';
             end if;
-            if (select count(*) from public.organization_sites
-                 where status = 'active' and hostname in
-                   ('r2-yogakulam.invalid','www.r2-yogakulam.invalid')) <> 2
+            if not exists (
+              select 1 from public.organization_sites
+               where hostname = 'r2-yogakulam.invalid' and status = 'active'
+            )
               or exists (
                 select 1 from public.organization_sites
-                 where status = 'active' and hostname not like '%.invalid'
+                 where hostname not like '%.invalid'
+              )
+              or exists (
+                select 1 from public.organization_site_aliases
+                 where hostname not like '%.invalid'
               )
               or exists (
                 select 1 from public.organization_sites
+                 where hostname in ('yogakulam.com','www.yogakulam.com')
+              )
+              or exists (
+                select 1 from public.organization_site_aliases
                  where hostname in ('yogakulam.com','www.yogakulam.com')
               )
             then
