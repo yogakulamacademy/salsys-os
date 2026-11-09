@@ -9,6 +9,8 @@ const script=path.resolve(__dirname,'../../scripts/r2-staging-inert-scheduler-sq
 const samples={
  '007_tenant_schema_foundation.sql':
   "insert into public.organization_sites (organization_id,hostname,status) select o.id, x.hostname, 'active' from public.organizations o cross join (values ('yogakulam.com'::text), ('www.yogakulam.com'::text)) as x(hostname) where o.slug='yogakulam-academy' on conflict (hostname) do update set organization_id=excluded.organization_id,status = 'active';",
+ '20261022094445_multitenant_tracking_site_binding_v2.sql':
+  "alter table public.organization_sites add column if not exists environment text not null default 'production', add column if not exists settings jsonb not null default '{}'::jsonb;",
  '20261017091453_automation_runtime_scheduler_foundation_v1.sql':
   "create extension if not exists pg_net; select net.http_get('https://example.invalid'); create table public.automation_scheduler_settings (endpoint_url text not null default 'https://salsysos.com/api/automation/runtime-scheduler'); do $ begin perform cron.schedule('scheduler','* * * * *','select public.invoke_automation_runtime_scheduler_v1();'); end $;",
  '20261026143100_closed_won_pipeline_and_auto_archive_v1.sql':
@@ -38,7 +40,8 @@ test('stage-only copy replaces all six jobs with inert commands and rewrites onl
  await fixture(({src,dst,helper,manifest,digest})=>{
   const original=Object.fromEntries(Object.keys(samples).map(k=>[k,fs.readFileSync(path.join(src,k),'utf8')]));
   const out=helper.prepareStagingOnlySql({sourceFolder:src,outputFolder:dst,expectedSourceSha256:digest});
-  assert.equal(out.fileCount,7);
+  assert.equal(out.fileCount,8);
+  assert.equal(out.isolatedSiteEnvironmentDefault,'staging');
   assert.equal(out.isolatedSiteHostnameCount,2);
   assert.equal(out.sourceManifestSha256,digest);
   assert.notEqual(out.stagingManifestSha256,digest);
@@ -50,6 +53,9 @@ test('stage-only copy replaces all six jobs with inert commands and rewrites onl
    if(name==='007_tenant_schema_foundation.sql') {
     const actualHosts=[...changed.matchAll(/\('([^']+)'::text\)/g)].map(x=>x[1]).sort();
     assert.deepEqual(actualHosts,['r2-yogakulam.invalid','www.r2-yogakulam.invalid']);
+   } else if(name==='20261022094445_multitenant_tracking_site_binding_v2.sql') {
+    assert.match(changed,/environment text not null default 'staging'/);
+    assert.doesNotMatch(changed,/environment text not null default 'production'/);
    } else {
     assert.match(changed,/cron\.schedule/);
     assert.ok(changed.includes('select 1;'));
@@ -66,6 +72,17 @@ test('unexpected live-site hostname source drift is rejected before output',asyn
   const srcSite=fs.readFileSync(path.join(src,'007_tenant_schema_foundation.sql'),'utf8');
   fs.writeFileSync(path.join(src,'007_tenant_schema_foundation.sql'),srcSite.replace("('www.yogakulam.com'::text)","('www.other-live-domain.com'::text)"));
   assert.throws(()=>helper.prepareStagingOnlySql({sourceFolder:src,outputFolder:dst,expectedSourceSha256:digest}),/BLOCKED_/);
+  assert.equal(fs.existsSync(dst),false);
+ });
+});
+
+test('changed source website environment definition fails closed even with updated source digest',async()=>{
+ await fixture(({src,dst,helper,manifest})=>{
+  const file='20261022094445_multitenant_tracking_site_binding_v2.sql';
+  const value=fs.readFileSync(path.join(src,file),'utf8');
+  fs.writeFileSync(path.join(src,file),value.replace("default 'production'","default 'development'"));
+  const updatedDigest=manifest.buildManifest(src).manifestSha256;
+  assert.throws(()=>helper.prepareStagingOnlySql({sourceFolder:src,outputFolder:dst,expectedSourceSha256:updatedDigest}),/BLOCKED_EXPECTED_SOURCE_LITERAL_DRIFT/);
   assert.equal(fs.existsSync(dst),false);
  });
 });
