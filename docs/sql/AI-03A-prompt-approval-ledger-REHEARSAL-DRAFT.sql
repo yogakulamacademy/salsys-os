@@ -15,7 +15,10 @@ begin
      or pg_catalog.to_regclass('public.tenant_session_bindings') is null
      or pg_catalog.to_regclass('auth.sessions') is null
      or pg_catalog.to_regclass('public.leads') is not null
-     or pg_catalog.to_regclass('public.contacts') is not null then
+     or pg_catalog.to_regclass('public.contacts') is not null
+     or not exists (
+       select 1 from public.test_ai03a_fixture where id is true
+     ) then
     raise exception 'AI03A_LOCAL_DISPOSABLE_FIXTURE_REQUIRED';
   end if;
 end;
@@ -180,7 +183,7 @@ as $ai03a_create$
 declare
   v_actor uuid;
   v_session uuid;
-  v_body text := pg_catalog.btrim(pg_catalog.coalesce(p_body,''));
+  v_body text := pg_catalog.btrim(coalesce(p_body,''));
   v_version integer;
   v_digest text;
   v_id uuid;
@@ -196,7 +199,7 @@ begin
   );
   select actor_id,session_id into v_actor,v_session
     from ai03a_rehearsal.current_reviewer_v1(p_organization_id);
-  select pg_catalog.coalesce(pg_catalog.max(version),0)+1 into v_version
+  select coalesce(pg_catalog.max(version),0)+1 into v_version
     from ai03a_rehearsal.prompt_versions
     where organization_id=p_organization_id and prompt_key=p_prompt_key;
   if v_version>1000000 then
