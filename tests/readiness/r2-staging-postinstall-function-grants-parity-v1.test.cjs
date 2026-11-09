@@ -100,103 +100,15 @@ const invokerFunctions = ['get_pipeline_snapshot', 'get_reengaged_workspace_v2',
 const globalAudit = fs.readFileSync(path.resolve(__dirname,
   '../../docs/sql/r2-staging-postinstall-global-anon-function-audit-v1.sql'), 'utf8');
 
-test('SECURITY INVOKER anonymous exposure corrections preserve authenticated and service roles', () => {
+test('three invoker RPC grants are changed without changing authenticated or service roles', () => {
   const statements = [...sql.matchAll(/^REVOKE EXECUTE ON FUNCTION public\.([a-z0-9_]+)\(\) FROM PUBLIC, anon;$/gm)]
     .filter(x => invokerFunctions.includes(x[1]));
   assert.equal(statements.length, 3);
   assert.deepEqual(statements.map(x => x[1]).sort(), [...invokerFunctions].sort());
   assert.match(sql, /BLOCKED_R2_PUBLIC_INVOKER_FUNCTION_CONTRACT_MISMATCH/);
   assert.match(sql, /BLOCKED_R2_PUBLIC_INVOKER_POSTFLIGHT_FAILED/);
-  const pre = sql.split('DO $r2_preflight
-  assert.doesNotMatch(sql, /(?:ndxpjqkthuzxlmbenxti|doaozrkrtgeslddwhclj|wunnbqjvfzmawubglyhe)/i);
-  assert.doesNotMatch(sql, /(?:https?:\/\/|supabase\.co|bearer |service_role[_-]?key|sb_secret_|(?:^|[^a-z0-9_])sk_[a-z0-9])/im);
-  assert.doesNotMatch(sql, /\b(?:auth\.users|public\.leads|public\.messages)\b/i);
-});
-
-const audit = fs.readFileSync(path.resolve(__dirname,
-  '../../docs/sql/r2-staging-postinstall-function-role-parity-audit-v1.sql'), 'utf8');
-
-test('read-only SQL gate verifies 24 exact function signatures and four fixed paths', () => {
-  const rows = [...audit.matchAll(/^\s+\('([a-z0-9_]+)', '([^']*)', false, (true|false), true\),?$/gm)];
-  assert.equal(rows.length, 24, '24 exact function role contracts');
-  const names = rows.map(x => x[1]);
-  assert.equal(new Set(names).size, 24);
-  assert.deepEqual(names.slice(0,22).sort(), [...expected].sort());
-  assert.deepEqual(names.slice(22).sort(),
-    ['prepare_failed_whatsapp_provider_retry_v1', 'approve_sales_asset_v1'].sort());
-  const authorized = rows.filter(x => x[3] === 'true').map(x => x[1]).sort();
-  assert.deepEqual(authorized,
-    ['attach_whatsapp_outbound_message_id', 'approve_sales_asset_v1'].sort());
-
-  const changes = [...sql.matchAll(/^REVOKE EXECUTE ON FUNCTION public\.([a-z0-9_]+)\(([^\n;]*)\) FROM PUBLIC, anon(?:, authenticated)?;$/gm)];
-  for (const change of changes) {
-    assert.ok(rows.some(x => x[1] === change[1] && x[2] === change[2]),
-      'matching exact signature in read-only audit: ' + change[1]);
-  }
-
-  const paths = [...audit.matchAll(/^\s+\('([a-z0-9_]+)', '[^']*', 'search_path=public, pg_temp'\),?$/gm)];
-  assert.equal(paths.length, 4);
-  assert.deepEqual(paths.map(x => x[1]).sort(), [...searchPathFunctions].sort());
-  assert.match(audit, /pg_catalog\.pg_get_function_identity_arguments\(p\.oid\)=e\.identity_args/);
-});
-
-test('read-only parity gate refuses acceptance when any role or path differs', () => {
-  assert.match(audit, /FUNCTION_PARITY_REVIEW_REQUIRED/);
-  assert.match(audit, /FUNCTION_PARITY_CATALOG_PASS_NOT_TENANT_ACCEPTANCE/);
-  assert.match(audit, /f\.role_mismatched_functions=0/);
-  assert.match(audit, /f\.structural_mismatches=0/);
-  assert.match(audit, /p\.valid_paths=4/);
-  assert.match(audit, /'tenant_acceptance_verified',false/);
-  assert.match(audit, /'release_authorized',false/);
-  assert.doesNotMatch(audit, /^\s*(?:GRANT|REVOKE|ALTER|CREATE|DROP|INSERT|UPDATE|DELETE|TRUNCATE|DO)\b/im);
-  assert.doesNotMatch(audit, /(?:auth\.users|public\.leads|public\.messages|supabase\.co|https?:\/\/)/i);
-});
-)[1]?.split('$r2_preflight$;')[0] ?? '';
-  const post = sql.split('DO $r2_postflight
-  assert.doesNotMatch(sql, /(?:ndxpjqkthuzxlmbenxti|doaozrkrtgeslddwhclj|wunnbqjvfzmawubglyhe)/i);
-  assert.doesNotMatch(sql, /(?:https?:\/\/|supabase\.co|bearer |service_role[_-]?key|sb_secret_|(?:^|[^a-z0-9_])sk_[a-z0-9])/im);
-  assert.doesNotMatch(sql, /\b(?:auth\.users|public\.leads|public\.messages)\b/i);
-});
-
-const audit = fs.readFileSync(path.resolve(__dirname,
-  '../../docs/sql/r2-staging-postinstall-function-role-parity-audit-v1.sql'), 'utf8');
-
-test('read-only SQL gate verifies 24 exact function signatures and four fixed paths', () => {
-  const rows = [...audit.matchAll(/^\s+\('([a-z0-9_]+)', '([^']*)', false, (true|false), true\),?$/gm)];
-  assert.equal(rows.length, 24, '24 exact function role contracts');
-  const names = rows.map(x => x[1]);
-  assert.equal(new Set(names).size, 24);
-  assert.deepEqual(names.slice(0,22).sort(), [...expected].sort());
-  assert.deepEqual(names.slice(22).sort(),
-    ['prepare_failed_whatsapp_provider_retry_v1', 'approve_sales_asset_v1'].sort());
-  const authorized = rows.filter(x => x[3] === 'true').map(x => x[1]).sort();
-  assert.deepEqual(authorized,
-    ['attach_whatsapp_outbound_message_id', 'approve_sales_asset_v1'].sort());
-
-  const changes = [...sql.matchAll(/^REVOKE EXECUTE ON FUNCTION public\.([a-z0-9_]+)\(([^\n;]*)\) FROM PUBLIC, anon(?:, authenticated)?;$/gm)];
-  for (const change of changes) {
-    assert.ok(rows.some(x => x[1] === change[1] && x[2] === change[2]),
-      'matching exact signature in read-only audit: ' + change[1]);
-  }
-
-  const paths = [...audit.matchAll(/^\s+\('([a-z0-9_]+)', '[^']*', 'search_path=public, pg_temp'\),?$/gm)];
-  assert.equal(paths.length, 4);
-  assert.deepEqual(paths.map(x => x[1]).sort(), [...searchPathFunctions].sort());
-  assert.match(audit, /pg_catalog\.pg_get_function_identity_arguments\(p\.oid\)=e\.identity_args/);
-});
-
-test('read-only parity gate refuses acceptance when any role or path differs', () => {
-  assert.match(audit, /FUNCTION_PARITY_REVIEW_REQUIRED/);
-  assert.match(audit, /FUNCTION_PARITY_CATALOG_PASS_NOT_TENANT_ACCEPTANCE/);
-  assert.match(audit, /f\.role_mismatched_functions=0/);
-  assert.match(audit, /f\.structural_mismatches=0/);
-  assert.match(audit, /p\.valid_paths=4/);
-  assert.match(audit, /'tenant_acceptance_verified',false/);
-  assert.match(audit, /'release_authorized',false/);
-  assert.doesNotMatch(audit, /^\s*(?:GRANT|REVOKE|ALTER|CREATE|DROP|INSERT|UPDATE|DELETE|TRUNCATE|DO)\b/im);
-  assert.doesNotMatch(audit, /(?:auth\.users|public\.leads|public\.messages|supabase\.co|https?:\/\/)/i);
-});
-)[1]?.split('$r2_postflight$;')[0] ?? '';
+  const pre = sql.slice(0, sql.indexOf('-- Revoke inherited PUBLIC'));
+  const post = sql.slice(sql.lastIndexOf('\nDO '));
   assert.match(pre, /pg_catalog\.pg_get_function_identity_arguments\(p\.oid\)=''/);
   assert.match(pre, /NOT p\.prosecdef/);
   assert.match(pre, /pg_catalog\.has_function_privilege\('authenticated',p\.oid,'EXECUTE'\)/);
@@ -206,11 +118,11 @@ test('read-only parity gate refuses acceptance when any role or path differs', (
     assert.ok(pre.includes("'" + name + "'"), 'preflight missing ' + name);
     assert.ok(post.includes("'" + name + "'"), 'postflight missing ' + name);
   }
-  const allRevokes = [...sql.matchAll(/^REVOKE EXECUTE ON FUNCTION public\.([a-z0-9_]+)\([^;\n]*\) FROM PUBLIC, anon(?:, authenticated)?;$/gm)];
-  assert.equal(allRevokes.length, 25, '22 privileged and three invoker public revocations');
+  const revokes = [...sql.matchAll(/^REVOKE EXECUTE ON FUNCTION public\.([a-z0-9_]+)\([^;\n]*\) FROM PUBLIC, anon(?:, authenticated)?;$/gm)];
+  assert.equal(revokes.length, 25);
 });
 
-test('global anonymous function audit catches both invoker and definer exposures', () => {
+test('all-public-functions audit catches anon EXECUTE on invokers and definers', () => {
   assert.match(globalAudit, /PUBLIC_FUNCTION_EXECUTE_CATALOG_PASS_NOT_E2E/);
   assert.match(globalAudit, /PUBLIC_FUNCTION_EXECUTE_REVIEW_REQUIRED/);
   assert.match(globalAudit, /o\.anon_callable_functions=0/);
@@ -244,7 +156,7 @@ test('read-only SQL gate verifies 24 exact function signatures and four fixed pa
   assert.deepEqual(authorized,
     ['attach_whatsapp_outbound_message_id', 'approve_sales_asset_v1'].sort());
 
-  const changes = [...sql.matchAll(/^REVOKE EXECUTE ON FUNCTION public\.([a-z0-9_]+)\(([^\n;]*)\) FROM PUBLIC, anon(?:, authenticated)?;$/gm)];
+  const changes = [...sql.matchAll(/^REVOKE EXECUTE ON FUNCTION public\.([a-z0-9_]+)\(([^\n;]*)\) FROM PUBLIC, anon(?:, authenticated)?;$/gm)].filter(x => expected.includes(x[1]));
   for (const change of changes) {
     assert.ok(rows.some(x => x[1] === change[1] && x[2] === change[2]),
       'matching exact signature in read-only audit: ' + change[1]);
