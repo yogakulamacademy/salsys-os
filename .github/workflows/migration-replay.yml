@@ -340,6 +340,10 @@ jobs:
           # no Supabase remote project, service key, production URL or stage API.
           find supabase/migrations -maxdepth 1 -type f -name '*.sql' -delete
           cp "$RUNNER_TEMP/r2-staging-inert-migrations/"*.sql supabase/migrations/
+          # Stage acceptance must prove empty application records, not dev seed fixtures.
+          # This alters only the disposable runner checkout, never the repository or remote project.
+          test -f supabase/seed.sql
+          printf '%s\n' '-- Intentionally no synthetic seed rows in staging-only replay.' > supabase/seed.sql
           supabase db reset --local 2>&1 | tee -a migration-replay.log
           db_containers="$(docker ps --format '{{.Names}}' | grep '^supabase_db_' || true)"
           test "$(printf '%s\n' "$db_containers" | grep -c .)" -eq 1
@@ -358,6 +362,16 @@ jobs:
                  and endpoint_url='https://staging.invalid/api/automation/runtime-scheduler'
             ) then
               raise exception 'STAGING_SCHEDULER_ENDPOINT_NOT_ISOLATED';
+            end if;
+            if (select count(*) from auth.users) <> 0
+              or (select count(*) from storage.objects) <> 0
+              or (select count(*) from public.leads) <> 0
+              or (select count(*) from public.lead_contacts) <> 0
+              or (select count(*) from public.messages) <> 0
+              or (select count(*) from public.conversations) <> 0
+              or (select count(*) from public.web_sessions) <> 0
+            then
+              raise exception 'STAGING_UNEXPECTED_IDENTITY_OR_CUSTOMER_ROWS';
             end if;
           end;
           $check$;
