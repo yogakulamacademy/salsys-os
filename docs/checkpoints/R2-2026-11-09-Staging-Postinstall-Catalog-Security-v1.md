@@ -4,10 +4,10 @@
 
 ## Audit
 
-Run the single `SELECT` in `docs/sql/r2-staging-postinstall-catalog-exposure-v1.sql` against an independently verified target. It uses PostgreSQL catalog metadata (`pg_class`, `pg_namespace`, `pg_proc`), `has_table_privilege` and `has_function_privilege`. It returns **aggregate counts only**, with fail-closed classification:
+Run the single `SELECT` in `docs/sql/r2-staging-postinstall-catalog-exposure-v1.sql` against an independently verified target. It uses PostgreSQL catalog metadata (`pg_class`, `pg_namespace`, `pg_proc`), `has_table_privilege`, `has_any_column_privilege` and `has_function_privilege`. The extended check includes column-specific `SELECT`/`INSERT`/`UPDATE` grants and read access to public materialized views (`relkind='m'`), in addition to table-level grants and ordinary views. It returns **aggregate counts only**, with fail-closed classification:
 
 - `SCHEMA_NOT_INSTALLED_OR_INCOMPLETE` — no public application tables or no public privileged functions. This is the expected result **before staging schema installation**; zero findings here is not a pass.
-- `PRIVILEGE_CATALOG_REVIEW_REQUIRED` — an RLS-disabled public table accessible by `anon` or `authenticated`; a public view accessible to either role without explicit `security_invoker=true`; or a public `SECURITY DEFINER` function callable by `anon`. A finding must be investigated and corrected or independently justified before E2E.
+- `PRIVILEGE_CATALOG_REVIEW_REQUIRED` — an RLS-disabled public table accessible by `anon` or `authenticated` via whole-table or column-specific grants; a public ordinary view accessible to either role without explicit `security_invoker=true`; an API-role-accessible public materialized view; or a public `SECURITY DEFINER` function callable by `anon`. A finding must be investigated and corrected or independently justified before E2E.
 - `CATALOG_GUARDS_PASS_NOT_ACCEPTANCE` — the *narrow* catalog invariants above hold. It explicitly returns `false` for real signed tenant testing, consent, backup restore and authorization to release.
 
 Do not hardcode absolute table/function totals as release pass thresholds. Production and historical stage-only local replay can legitimately have different schemas or version/role contracts. A passing catalog gate **does not validate** the authorization checks inside the `authenticated`-executable security-definer functions, real Auth/session claims, metadata staleness, RPC access, consent, outbound integrations or data isolation. These must be witnessed independently.
@@ -18,6 +18,9 @@ Do not hardcode absolute table/function totals as release pass thresholds. Produ
 |---|---:|---:|
 | Public-schema tables | 251 | 0 |
 | Public-schema views | 265 | 0 |
+| Public-schema materialized views | 0 | 0 |
+| Public materialized views selectable by anon/authenticated | 0 | 0 |
+| RLS-off tables accessible only by column-specific SELECT/UPDATE grants | 0 | 0 |
 | Public tables without RLS | 1 | 0 |
 | Non-RLS tables accessible to anon/authenticated | 0 | 0 |
 | Views exposed without `security_invoker=true` | 0 | 0 |
@@ -26,7 +29,7 @@ Do not hardcode absolute table/function totals as release pass thresholds. Produ
 | Such functions executable by authenticated | 114 | 0 |
 | Audit gate | `CATALOG_GUARDS_PASS_NOT_ACCEPTANCE` | `SCHEMA_NOT_INSTALLED_OR_INCOMPLETE` |
 
-The single production RLS-off table was **not accessible by either API-facing role** according to this catalog test. The 114 authenticated-executable privileged functions are informational candidates for function-body authorization review, **not 114 known vulnerabilities**. The production baseline is not an acceptance substitute for actual staging security. It provides a reference only.
+The single production RLS-off table was **not accessible by either API-facing role** according to this catalog test, including column-only SELECT/INSERT/UPDATE privileges. Production had zero public materialized views at inspection time. These supplementary checks are defensive coverage for future schema changes; no current exposure is claimed. The 114 authenticated-executable privileged functions are informational candidates for function-body authorization review, **not 114 known vulnerabilities**. The production baseline is not an acceptance substitute for actual staging security. It provides a reference only.
 
 ## Execution boundaries
 
