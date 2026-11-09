@@ -90,9 +90,57 @@ type Rejection =
   | 'identity_changed'
   | 'verification_unavailable';
 
+/**
+ * Read proposed route/identity fields only from own DATA properties.
+ *
+ * Do not inspect caller-controlled getters, proxies or prototypes as trusted
+ * credentials. In particular, an accessor throw during proposal validation
+ * could previously escape before the denied-attempt audit was appended.
+ *
+ * Return a detached, frozen, null-prototype copy to prevent later reads from
+ * re-triggering a getter or observing a changed caller-owned property.
+ */
 function asRecord(value: unknown): Record<string, unknown> | null {
-  return value !== null && typeof value === 'object' && !Array.isArray(value)
-    ? value as Record<string, unknown> : null;
+  if (value === null || typeof value !== 'object') return null;
+  try {
+    // Array.isArray() itself throws for a revoked Proxy, so it MUST be
+    // inside this catch boundary to preserve the denied-attempt audit.
+    if (Array.isArray(value)) return null;
+    const prototype = Object.getPrototypeOf(value);
+    if (prototype !== Object.prototype && prototype !== null) return null;
+    const keys = Reflect.ownKeys(value);
+    if (keys.some(key => typeof key !== 'string')) return null;
+    const descriptors = Object.getOwnPropertyDescriptors(value);
+    const data: Record<string, unknown> = Object.create(null);
+    for (const key of keys as string[]) {
+      const descriptor = descriptors[key];
+      if (!descriptor || !Object.hasOwn(descriptor, 'value') ||
+        descriptor.enumerable !== true) return null;
+      data[key] = descriptor.value;
+    }
+    return Object.freeze(data);
+  } catch {
+    // Hostile proxy traps and unusual objects are invalid, never trusted.
+    return null;
+  }
+}
+
+/**
+ * The callbacks are server-owned, never supplied by a model or browser.
+ * Snapshot their own DATA descriptors once, so a getter or mutable callback
+ * holder cannot swap an authorization or audit writer after validation.
+ * If no trustworthy audit callback is available, deny without claiming audit.
+ */
+function snapshotDependencies(value: unknown): GateDependencies | null {
+  const row = asRecord(value);
+  const names = ['getCurrentPrincipal', 'checkCurrentResourceAccess', 'appendAudit'] as const;
+  if (!row || !exactFields(row, names) ||
+      names.some(name => typeof row[name] !== 'function')) return null;
+  return Object.freeze({
+    getCurrentPrincipal: row.getCurrentPrincipal as GateDependencies['getCurrentPrincipal'],
+    checkCurrentResourceAccess: row.checkCurrentResourceAccess as GateDependencies['checkCurrentResourceAccess'],
+    appendAudit: row.appendAudit as GateDependencies['appendAudit'],
+  });
 }
 
 function isUuid(value: unknown): value is string {
@@ -149,7 +197,7 @@ function inspectPrincipal(value: unknown): GatePrincipal | null {
   ]) ||
     !isUuid(row.organizationId) || !isUuid(row.actorId) ||
     !isUuid(row.sessionId) || !isUuid(row.boundOrganizationId) ||
-    ![...KNOWN_ROLES, 'member', 'viewer'].includes(String(row.role)) ||
+    (typeof row.role !== 'string' || ![...KNOWN_ROLES, 'member', 'viewer'].includes(row.role)) ||
     row.sessionActive !== true || row.membershipActive !== true ||
     row.organizationActive !== true ||
     row.organizationId !== row.boundOrganizationId) return null;
@@ -188,6 +236,7 @@ export async function reviewReadOnlyToolGate(
 ): Promise<GateResult> {
   const traceId = randomUUID();
   const request = inspectReadOnlyGateRequest(proposal);
+  const callbacks = snapshotDependencies(dependencies);
   let principal: GatePrincipal | null = null;
 
   const finalize = async (
@@ -205,7 +254,7 @@ export async function reviewReadOnlyToolGate(
       reason,
     });
     try {
-      if (await dependencies.appendAudit(audit) !== true) {
+      if (!callbacks || await callbacks.appendAudit(audit) !== true) {
         return Object.freeze({ ok: false, reason: 'audit_unavailable', traceId, mayExecute: false });
       }
     } catch {
@@ -227,28 +276,25 @@ export async function reviewReadOnlyToolGate(
   };
 
   if (!request) return finalize('invalid_tool_request', false);
-  if (!dependencies ||
-    typeof dependencies.getCurrentPrincipal !== 'function' ||
-    typeof dependencies.checkCurrentResourceAccess !== 'function' ||
-    typeof dependencies.appendAudit !== 'function') {
+  if (!callbacks) {
     return Object.freeze({ ok: false, reason: 'verification_unavailable', traceId, mayExecute: false });
   }
 
   try {
-    principal = inspectPrincipal(await dependencies.getCurrentPrincipal());
+    principal = inspectPrincipal(await callbacks.getCurrentPrincipal());
     if (!principal) return finalize('unauthenticated_or_unbound', false);
     if (principal.organizationId !== request.organizationId) return finalize('wrong_tenant', false);
     if (!KNOWN_ROLES.includes(principal.role as GateRole)) {
       return finalize('role_not_eligible', false);
     }
 
-    const authorized = await dependencies.checkCurrentResourceAccess(principal, request);
+    const authorized = await callbacks.checkCurrentResourceAccess(principal, request);
     if (authorized !== true) return finalize('resource_denied', false);
 
     // A second server-side session/membership check catches revocation or
     // identity rotation during the resource-grant decision; a real dispatcher
     // must still enforce authorization at the actual read transaction.
-    const latest = inspectPrincipal(await dependencies.getCurrentPrincipal());
+    const latest = inspectPrincipal(await callbacks.getCurrentPrincipal());
     if (!latest || !samePrincipal(principal, latest)) {
       return finalize('identity_changed', false);
     }

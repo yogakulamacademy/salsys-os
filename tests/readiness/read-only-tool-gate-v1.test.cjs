@@ -70,6 +70,112 @@ test('AI-09B is strictly source-only, disabled and not imported by Co-Pilot or K
     '30a6ac02c91baefaf440fb979bf6cae94dbd031b');
 });
 
+test('revoked Proxy objects and arrays fail closed without escaping the denial audit',async()=>{
+  const revokedRequest=Proxy.revocable(request(),{});
+  revokedRequest.revoke();
+  const revokedArray=Proxy.revocable([],{});
+  revokedArray.revoke();
+  for(const proposal of [revokedRequest.proxy,revokedArray.proxy]){
+    const h=harness();
+    const result=await policy.reviewReadOnlyToolGate(proposal,h.deps);
+    assert.equal(result.ok,false);
+    assert.equal(result.reason,'invalid_tool_request');
+    assert.equal(result.mayExecute,false);
+    assert.equal(h.calls.auth,0);
+    assert.equal(h.calls.resource,0);
+    assert.equal(h.calls.audit.length,1);
+    assert.equal(h.calls.audit[0].decision,'denied');
+    assert.equal(h.calls.audit[0].toolId,null);
+  }
+
+  const revokedPrincipal=Proxy.revocable(identity(),{});
+  revokedPrincipal.revoke();
+  const h=harness({principal:revokedPrincipal.proxy});
+  const result=await policy.reviewReadOnlyToolGate(request(),h.deps);
+  assert.equal(result.ok,false);
+  // A revoked Auth object may be classified as an invalid principal or as a
+  // failed verification. Both must deny, audit, and never permit execution.
+  assert.ok(['unauthenticated_or_unbound','verification_unavailable'].includes(result.reason));
+  assert.equal(result.mayExecute,false);
+  assert.equal(h.calls.auth,1);
+  assert.equal(h.calls.resource,0);
+  assert.equal(h.calls.audit.length,1);
+  assert.equal(h.calls.audit[0].decision,'denied');
+  assert.equal(h.calls.audit[0].actorId,null);
+});
+
+test('adversarial request getters/proxies/prototypes deny before Auth but still emit a minimal audit',async()=>{
+  const getter=request();
+  Object.defineProperty(getter,'toolId',{enumerable:true,get(){throw Error('private accessor data');}});
+  const throwingProxy=new Proxy(request(),{ownKeys(){throw Error('private proxy error');}});
+  const badPrototype=Object.assign(Object.create({admin:true}),request());
+  const symbolProperty=request();
+  symbolProperty[Symbol('privileged')]=true;
+  const nonEnumerable=request();
+  Object.defineProperty(nonEnumerable,'hidden',{value:'actor override',enumerable:false});
+
+  for(const proposal of [getter,throwingProxy,badPrototype,symbolProperty,nonEnumerable]){
+    const h=harness();
+    const result=await policy.reviewReadOnlyToolGate(proposal,h.deps);
+    assert.equal(result.ok,false);
+    assert.equal(result.reason,'invalid_tool_request');
+    assert.equal(result.mayExecute,false);
+    assert.equal(h.calls.auth,0);
+    assert.equal(h.calls.resource,0);
+    assert.equal(h.calls.audit.length,1);
+    assert.equal(h.calls.audit[0].decision,'denied');
+    assert.equal(h.calls.audit[0].toolId,null);
+    assert.equal(h.calls.audit[0].actorId,null);
+    assert.doesNotMatch(JSON.stringify(result),/private accessor data|private proxy error/);
+    assert.doesNotMatch(JSON.stringify(h.calls.audit),/private accessor data|private proxy error/);
+  }
+});
+
+test('untrusted principal getters, hostile proxy and custom role coercion cannot bypass denial audit',async()=>{
+  const accessor=identity();
+  Object.defineProperty(accessor,'sessionActive',{enumerable:true,get(){throw Error('sensitive session detail');}});
+  const proxy=new Proxy(identity(),{getPrototypeOf(){throw Error('private trap detail');}});
+  let coercions=0;
+  const maliciousRole=identity({role:{toString(){coercions++;throw Error('role coercion called');}}});
+  const prototypePrincipal=Object.assign(Object.create({tenantGrant:true}),identity());
+
+  for(const principal of [accessor,proxy,maliciousRole,prototypePrincipal]){
+    const h=harness({principal});
+    const result=await policy.reviewReadOnlyToolGate(request(),h.deps);
+    assert.equal(result.ok,false);
+    assert.equal(result.reason,'unauthenticated_or_unbound');
+    assert.equal(result.mayExecute,false);
+    assert.equal(h.calls.auth,1);
+    assert.equal(h.calls.resource,0);
+    assert.equal(h.calls.audit.length,1);
+    assert.equal(h.calls.audit[0].decision,'denied');
+    assert.equal(h.calls.audit[0].actorId,null);
+    assert.doesNotMatch(JSON.stringify(result),/sensitive session detail|role coercion called/);
+  }
+  assert.equal(coercions,0,'untrusted role objects must not execute coercion methods');
+});
+
+test('request and principal snapshots are detached from mutable caller-owned inputs',async()=>{
+  const original=request();
+  const principal=identity();
+  const h=harness({principal,onResource(_context,proposal){
+    original.organizationId=ORG_B;
+    original.toolId='crm.lead.read';
+    principal.organizationId=ORG_B;
+    principal.role='viewer';
+    assert.equal(proposal.organizationId,ORG_A);
+    assert.equal(proposal.toolId,'crm.course.list');
+    assert.equal(Object.isFrozen(proposal),true);
+  }});
+  const result=await policy.reviewReadOnlyToolGate(original,h.deps);
+  assert.equal(result.ok,false,'changed current principal must trigger identity recheck denial');
+  assert.equal(result.reason,'identity_changed');
+  assert.equal(result.mayExecute,false);
+  assert.equal(h.calls.audit.length,1);
+  assert.equal(h.calls.audit[0].decision,'denied');
+  assert.equal(h.calls.audit[0].organizationId,ORG_A);
+});
+
 test('audited course read is a review proposal, never a tool execution or data response',async()=>{
   const h=harness();
   const result=await policy.reviewReadOnlyToolGate(request(),h.deps);
@@ -291,6 +397,58 @@ test('simultaneous attempts each create a unique redacted audit trace',async()=>
   assert.notEqual(a.traceId,b.traceId);
   assert.equal(h.calls.audit.length,2);
   assert.ok(h.calls.audit.every(x=>Object.keys(x).length===8));
+});
+
+test('AI-09B pins server callback identity across awaits and rejects swapped audit writer',async()=>{
+  const h=harness({
+    auditAccepted:false,
+    onResource(){
+      // A caller-owned holder tries to replace the rejecting audit function
+      // after permissions succeed. The original, captured writer must win.
+      h.deps.appendAudit=async()=>true;
+    },
+  });
+  const result=await policy.reviewReadOnlyToolGate(request(),h.deps);
+  assert.equal(result.ok,false);
+  assert.equal(result.reason,'audit_unavailable');
+  assert.equal(result.mayExecute,false);
+  assert.equal(h.calls.resource,1);
+  assert.equal(h.calls.audit.length,1);
+
+  const denied=harness({granted:false});
+  const originalGet=denied.deps.getCurrentPrincipal;
+  denied.deps.getCurrentPrincipal=async()=>{
+    denied.deps.checkCurrentResourceAccess=async()=>true;
+    return originalGet();
+  };
+  const second=await policy.reviewReadOnlyToolGate(request(),denied.deps);
+  assert.equal(second.ok,false);
+  assert.equal(second.reason,'resource_denied');
+  assert.equal(second.mayExecute,false);
+  assert.equal(denied.calls.resource,1);
+  assert.equal(denied.calls.audit[0].decision,'denied');
+});
+
+test('AI-09B rejects accessor-hosted audit callbacks without executing getters',async()=>{
+  const h=harness();
+  let getterReads=0;
+  Object.defineProperty(h.deps,'appendAudit',{
+    configurable:true,enumerable:true,
+    get(){
+      getterReads++;
+      // A swapping getter can falsely acknowledge an audit on the second read.
+      return async()=>true;
+    },
+  });
+  const result=await policy.reviewReadOnlyToolGate(request(),h.deps);
+  assert.equal(result.ok,false);
+  assert.equal(result.reason,'verification_unavailable');
+  assert.equal(result.mayExecute,false);
+  assert.equal(getterReads,0);
+  assert.equal(h.calls.auth,0);
+  assert.equal(h.calls.resource,0);
+  // No reliable audit writer means denial, not a fabricated audit receipt.
+  assert.equal(h.calls.audit.length,0);
 });
 
 test('environment switch never enables any read tool or tool registry',async()=>{
