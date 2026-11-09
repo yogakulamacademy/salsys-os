@@ -31,7 +31,7 @@ Labels: **MAIN** = code exists on main; **DRAFT** = candidate is only in PR #671
 | AI-08 | P2 | Scoped per-tenant guidance that cannot override system security, RBAC or legal safety policy | DRAFT structured tenant-scoped choices only; authorization, approval and runtime binding NOT BUILT |
 | AI-09 | P2 | Narrow server-owned tool permission registry (read/list before any mutating commands) with tenant/user/role/action approval and audit | DRAFT read-only proposal allowlist + AI-09B in-memory audit-gated eligibility; real authenticated executor, durable audit and grants NOT BUILT |
 | AI-10 | P3 | Basic model selection and measured AI insight usage/quota accounting | MAIN (router and usage have separate scopes) |
-| AI-11 | P3 | Versioned evaluation suite assessing hallucinations, prompt injection, tenant leakage, cost, router quality and regressions before autonomy | PARTIAL unit tests; governance/human evaluation pending |
+| AI-11 | P3 | Versioned evaluation suite for routing, grounding, prompt injection, tenant leakage and unsupported commercial claims | DRAFT AI-11A: 26 synthetic fixtures + offline CI; two observed risks and real model/human benchmarking still BLOCKED |
 | AI-12 | P3 | Optional tenant-scoped cache and/or hybrid vector retrieval if measured usage or quality justifies complexity | OPTIONAL, no shared cache or vector stack required now |
 | AI-13 | P4 | Optional MCP bridge only if external agents/interoperability become an explicit product requirement | OPTIONAL / DEFERRED |
 
@@ -77,3 +77,12 @@ The PR #671 `lib/knowledge-evidence.ts` guard checks explicit unverified discove
 - [#613](https://github.com/yogakulamacademy/salsys-os/issues/613): separate legal/privacy data purpose, consent, deletion/retention decisions for 12 surfaces and five copy/processor categories.
 - [#614](https://github.com/yogakulamacademy/salsys-os/issues/614): no funded independent staging until owner separately approves after revenue; Production/Recovery are forbidden as substitute staging.
 - The linked Vercel `main` branch has automatic production deployment evidence. Treat merging `main` as a **potential immediate production release**, never as a harmless Git sync. Preserve Co-Pilot/manual approval and R2 mainline history.
+
+
+## AI-11A — versioned offline evaluation (new synthetic engineering checkpoint, not release closure)
+
+- [AI-11A reviewer packet](AI-11A-Offline-Evaluation-and-AI10-AI12-Decisions-DRAFT.md) covers a 26-case versioned corpus and real action-under-mock regression: 16 router/fallback contract cases, 8 permission/Knowledge preflight and revocation scenarios, and two explicitly tracked safety gaps.
+- The current Co-Pilot server action and manual Knowledge approval implementation remain unchanged. Provider calls, CRM data, hosted Supabase, paid staging and production traffic are not used by this suite.
+- **AI-11 is NOT formally production-closed.** The mock router cases measure agreement with controlled outputs, not actual Claude route accuracy, hallucination rates or real-world cost. A successful low-risk router misclassification for a refund dispute and unsupported payment-confirmation draft prose are currently observable and block any autonomous send or no-review release.
+- AI-10's basic router and insight usage-accounting foundation on main is not duplicated; AI-12's optional vector/cache work remains deferred pending measured quality/cost evidence, privacy and tenant-safe deletion plans. AI-13 MCP remains optional.
+- The independent AI-09K review intake at [draft PR #676](https://github.com/yogakulamacademy/salsys-os/pull/676) is pinned to the older AI-09J baseline and must not be treated as source approval of AI-11A. The parent [draft PR #671](https://github.com/yogakulamacademy/salsys-os/pull/671) remains unmerged and staged acceptance is still ON HOLD at 0/16.
