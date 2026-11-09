@@ -32,7 +32,9 @@ const harness=(options={})=>{
         calls.getUser++;
         if(options.authThrows)throw Error('private auth token 123');
         if(options.authResponse)return options.authResponse;
-        return {data:{user:{id:options.userId??USER_A}},error:null};
+        const mockResponse={data:{user:{id:options.userId??USER_A}},error:null};
+        console.log('AI09E_SYNTH_AUTH_RETURN',JSON.stringify(mockResponse));
+        return mockResponse;
       },
     },
     rpc:async(name,args)=>{
