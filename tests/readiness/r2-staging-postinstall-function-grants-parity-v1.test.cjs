@@ -74,6 +74,31 @@ test('additional authenticated and service-role drift is corrected only for two 
   assert.equal(extra.length, 1);
 });
 
+test('preflight accepts already-correct production grants while postflight demands parity', () => {
+  const preflight = sql.split('DO $r2_preflight
+  const cmds = [...sql.matchAll(/^ALTER FUNCTION public\.([a-z0-9_]+)\(([^\n;]*)\) SET search_path = public, pg_temp;$/gm)];
+  assert.equal(cmds.length, 4);
+  assert.deepEqual(cmds.map(x => x[1]).sort(), [...searchPathFunctions].sort());
+  assert.match(sql, /p\.proconfig @> ARRAY\['search_path=public, pg_temp'\]::text\[\]/);
+  assert.doesNotMatch(sql, /\bALTER FUNCTION[^;]*SECURITY DEFINER\b/i);
+});
+
+test('no project refs, endpoints, customer records or provider secrets appear in patch', () => {
+  assert.doesNotMatch(sql, /(?:ndxpjqkthuzxlmbenxti|doaozrkrtgeslddwhclj|wunnbqjvfzmawubglyhe)/i);
+  assert.doesNotMatch(sql, /(?:https?:\/\/|supabase\.co|bearer |service_role[_-]?key|sb_secret_|(?:^|[^a-z0-9_])sk_[a-z0-9])/im);
+  assert.doesNotMatch(sql, /\b(?:auth\.users|public\.leads|public\.messages)\b/i);
+});
+)[1]?.split('$r2_preflight$;')[0] ?? '';
+  const retry = preflight.split("p.proname='prepare_failed_whatsapp_provider_retry_v1'")[1]?.split('IF v_count')[0] ?? '';
+  const sales = preflight.split("p.proname='approve_sales_asset_v1'")[1]?.split('IF v_count')[0] ?? '';
+  assert.ok(retry.includes('BLOCKED') === false && retry.includes("has_function_privilege('service_role'"));
+  assert.doesNotMatch(retry, /has_function_privilege\('authenticated',p\.oid,'EXECUTE'\)/);
+  assert.match(sales, /has_function_privilege\('authenticated',p\.oid,'EXECUTE'\)/);
+  assert.doesNotMatch(sales, /NOT pg_catalog\.has_function_privilege\('service_role',p\.oid,'EXECUTE'\)/);
+  assert.match(sql, /BLOCKED_R2_EXTRA_AUTHENTICATED_POSTFLIGHT_FAILED/);
+  assert.match(sql, /BLOCKED_R2_SALES_ASSET_SERVICE_ROLE_POSTFLIGHT_FAILED/);
+});
+
 test('exactly four INVOKER search_path changes match the production catalog configuration', () => {
   const cmds = [...sql.matchAll(/^ALTER FUNCTION public\.([a-z0-9_]+)\(([^\n;]*)\) SET search_path = public, pg_temp;$/gm)];
   assert.equal(cmds.length, 4);
