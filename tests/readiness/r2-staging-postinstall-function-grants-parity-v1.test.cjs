@@ -57,33 +57,50 @@ test('only the catalog-verified 22 definer functions have EXECUTE revoked', () =
       ? 'PUBLIC, anon' : 'PUBLIC, anon, authenticated');
   }
   const serviceGrants = [...sql.matchAll(/^GRANT EXECUTE ON FUNCTION public\.([a-z0-9_]+)\(([^\n;]*)\) TO (service_role);$/gm)];
-  assert.equal(serviceGrants.length, 1);
-  assert.equal(serviceGrants[0][1], 'approve_sales_asset_v1');
+  assert.equal(serviceGrants.length, 0, 'no service-role grants in the stage-only proposal');
   assert.doesNotMatch(sql, /\bREVOKE\s+(?:ALL|USAGE|SELECT|INSERT|UPDATE|DELETE)\b/i);
   assert.doesNotMatch(sql, /\b(?:DROP|TRUNCATE|CREATE\s+TABLE|CREATE\s+POLICY|ALTER\s+TABLE|DELETE\s+FROM|INSERT\s+INTO|UPDATE\s+public\.)\b/i);
 });
 
-test('additional authenticated and service-role drift is corrected only for two exact signatures', () => {
+test('only WhatsApp retry access is corrected; Sales Asset approval stays service-denied', () => {
   assert.match(sql, /^REVOKE EXECUTE ON FUNCTION public\.prepare_failed_whatsapp_provider_retry_v1\(p_organization_id uuid, p_failed_audit_id uuid, p_now timestamp with time zone\) FROM authenticated;$/m);
-  assert.match(sql, /^GRANT EXECUTE ON FUNCTION public\.approve_sales_asset_v1\(p_organization_id uuid, p_asset_id uuid, p_auto_send_allowed boolean\) TO service_role;$/m);
+  assert.doesNotMatch(sql, /^GRANT EXECUTE ON FUNCTION public\.approve_sales_asset_v1\(/m);
   assert.match(sql, /BLOCKED_R2_EXTRA_AUTHENTICATED_FUNCTION_CONTRACT_MISMATCH/);
-  assert.match(sql, /BLOCKED_R2_MISSING_SERVICE_ROLE_FUNCTION_CONTRACT_MISMATCH/);
+  assert.match(sql, /BLOCKED_R2_SALES_ASSET_HUMAN_ONLY_PREFLIGHT_FAILED/);
   assert.match(sql, /BLOCKED_R2_EXTRA_AUTHENTICATED_POSTFLIGHT_FAILED/);
-  assert.match(sql, /BLOCKED_R2_SALES_ASSET_SERVICE_ROLE_POSTFLIGHT_FAILED/);
+  assert.match(sql, /BLOCKED_R2_SALES_ASSET_HUMAN_ONLY_POSTFLIGHT_FAILED/);
   const extra = [...sql.matchAll(/^REVOKE EXECUTE ON FUNCTION public\.prepare_failed_whatsapp_provider_retry_v1\(/gm)];
   assert.equal(extra.length, 1);
 });
 
-test('preflight accepts already-correct production grants while postflight demands parity', () => {
+test('stage preflight refuses broader production Sales Asset approval permissions', () => {
   const preflight = sql.split('DO $r2_preflight$')[1]?.split('$r2_preflight$;')[0] ?? '';
   const retry = preflight.split("p.proname='prepare_failed_whatsapp_provider_retry_v1'")[1]?.split('IF v_count')[0] ?? '';
   const sales = preflight.split("p.proname='approve_sales_asset_v1'")[1]?.split('IF v_count')[0] ?? '';
   assert.ok(retry.includes('BLOCKED') === false && retry.includes("has_function_privilege('service_role'"));
   assert.doesNotMatch(retry, /has_function_privilege\('authenticated',p\.oid,'EXECUTE'\)/);
   assert.match(sales, /has_function_privilege\('authenticated',p\.oid,'EXECUTE'\)/);
-  assert.doesNotMatch(sales, /NOT pg_catalog\.has_function_privilege\('service_role',p\.oid,'EXECUTE'\)/);
+  assert.match(sales, /NOT pg_catalog\.has_function_privilege\('service_role',p\.oid,'EXECUTE'\)/);
+  assert.match(sales, /auth\.role\(\) <> ''authenticated''/);
+  assert.match(sales, /v_actor is null/);
   assert.match(sql, /BLOCKED_R2_EXTRA_AUTHENTICATED_POSTFLIGHT_FAILED/);
-  assert.match(sql, /BLOCKED_R2_SALES_ASSET_SERVICE_ROLE_POSTFLIGHT_FAILED/);
+  assert.match(sql, /BLOCKED_R2_SALES_ASSET_HUMAN_ONLY_POSTFLIGHT_FAILED/);
+});
+
+
+test('checked-in human-admin-only migration cannot be weakened by the staging proposal', () => {
+  const humanGuard = fs.readFileSync(path.resolve(__dirname,
+    '../../supabase/migrations/20261103195300_sales_asset_human_approval_guard_v1.sql'), 'utf8');
+  assert.match(humanGuard, /auth\.role\(\) <> 'authenticated'/);
+  assert.match(humanGuard, /v_actor is null/);
+  assert.match(humanGuard, /revoke execute on function public\.approve_sales_asset_v1\(uuid, uuid, boolean\) from public, anon, service_role/);
+  assert.doesNotMatch(sql, /GRANT EXECUTE ON FUNCTION public\.approve_sales_asset_v1\(/);
+  const pre = sql.slice(0, sql.indexOf('-- Revoke inherited PUBLIC'));
+  const post = sql.slice(sql.lastIndexOf('\nDO '));
+  assert.match(pre, /BLOCKED_R2_SALES_ASSET_HUMAN_ONLY_PREFLIGHT_FAILED/);
+  assert.match(pre, /NOT pg_catalog\.has_function_privilege\('service_role',p\.oid,'EXECUTE'\)/);
+  assert.match(post, /BLOCKED_R2_SALES_ASSET_HUMAN_ONLY_POSTFLIGHT_FAILED/);
+  assert.match(post, /NOT pg_catalog\.has_function_privilege\('service_role',p\.oid,'EXECUTE'\)/);
 });
 
 test('exactly four INVOKER search_path changes match the production catalog configuration', () => {
@@ -145,10 +162,14 @@ const audit = fs.readFileSync(path.resolve(__dirname,
   '../../docs/sql/r2-staging-postinstall-function-role-parity-audit-v1.sql'), 'utf8');
 
 test('read-only SQL gate verifies 24 exact function signatures and four fixed paths', () => {
-  const rows = [...audit.matchAll(/^\s+\('([a-z0-9_]+)', '([^']*)', false, (true|false), true\),?$/gm)];
+  const rows = [...audit.matchAll(/^\s+\('([a-z0-9_]+)', '([^']*)', false, (true|false), (true|false)\),?$/gm)];
   assert.equal(rows.length, 24, '24 exact function role contracts');
   const names = rows.map(x => x[1]);
   assert.equal(new Set(names).size, 24);
+  assert.deepEqual(rows.filter(x => x[4] === 'false').map(x => x[1]),
+    ['approve_sales_asset_v1']);
+  assert.match(audit, /human_guard_ok/);
+  assert.match(audit, /'human_only_approval_guard_required',true/);
   assert.deepEqual(names.slice(0,22).sort(), [...expected].sort());
   assert.deepEqual(names.slice(22).sort(),
     ['prepare_failed_whatsapp_provider_retry_v1', 'approve_sales_asset_v1'].sort());
@@ -169,8 +190,8 @@ test('read-only SQL gate verifies 24 exact function signatures and four fixed pa
 });
 
 test('read-only parity gate refuses acceptance when any role or path differs', () => {
-  assert.match(audit, /FUNCTION_PARITY_REVIEW_REQUIRED/);
-  assert.match(audit, /FUNCTION_PARITY_CATALOG_PASS_NOT_TENANT_ACCEPTANCE/);
+  assert.match(audit, /FUNCTION_STAGE_POLICY_REVIEW_REQUIRED/);
+  assert.match(audit, /FUNCTION_STAGE_POLICY_CATALOG_PASS_NOT_TENANT_ACCEPTANCE/);
   assert.match(audit, /f\.role_mismatched_functions=0/);
   assert.match(audit, /f\.structural_mismatches=0/);
   assert.match(audit, /p\.valid_paths=4/);
