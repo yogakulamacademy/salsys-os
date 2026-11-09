@@ -219,7 +219,13 @@ export async function previewAuditCommittedReadOrdering(
       // Deny output and require external reconciliation, never infer success.
       return denied('audit_commit_unconfirmed');
     }
-    if (!confirmedCommit(receipt, pending)) {
+    // A malformed receipt (including getters or proxy traps) means
+    // COMMIT was not safely confirmed, never a prepared-read success.
+    try {
+      if (!confirmedCommit(receipt, pending)) {
+        return denied('audit_commit_unconfirmed');
+      }
+    } catch {
       return denied('audit_commit_unconfirmed');
     }
 
