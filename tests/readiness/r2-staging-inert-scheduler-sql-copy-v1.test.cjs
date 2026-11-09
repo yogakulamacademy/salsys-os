@@ -8,7 +8,7 @@ const {spawnSync}=require('node:child_process');
 const script=path.resolve(__dirname,'../../scripts/r2-staging-inert-scheduler-sql-copy.mjs');
 const samples={
  '20261017091453_automation_runtime_scheduler_foundation_v1.sql':
-  "create extension if not exists pg_net; select net.http_get('https://example.invalid'); select 'https://salsysos.com/api/automation/runtime-scheduler'; do $$ begin perform cron.schedule('scheduler','* * * * *','select public.invoke_automation_runtime_scheduler_v1();'); end $$;",
+  "create extension if not exists pg_net; select net.http_get('https://example.invalid'); create table public.automation_scheduler_settings (endpoint_url text not null default 'https://salsysos.com/api/automation/runtime-scheduler'); do $ begin perform cron.schedule('scheduler','* * * * *','select public.invoke_automation_runtime_scheduler_v1();'); end $;",
  '20261026143100_closed_won_pipeline_and_auto_archive_v1.sql':
   "do $$ begin perform cron.schedule('archive','7 * * * *','select public.archive_closed_won_leads_v1(500);'); end $$;",
  '20261027094000_schedule_instagram_dm_recovery_v1.sql':
@@ -18,7 +18,7 @@ const samples={
  '20261101164458_r10_outcome_learning_runner_v1.sql':
   "do $$ begin perform cron.schedule('outcomes','*/15 * * * *',$cron$select public.sweep_system_intelligence_recommendation_outcomes_v1(null,50,'cron');$cron$); end $$;",
  '20261104171500_instagram_outbound_echo_recovery_v1.sql':
-  "do $$ begin perform cron.schedule('echo','*/2 * * * *','select public.retry_instagram_outbound_echoes_v1(10);'); perform cron.alter_job(job_id:=1, active:=false); end $$;"
+  "do $ begin perform cron.schedule('echo','*/2 * * * *','select public.retry_instagram_outbound_echoes_v1(10);'); perform cron.alter_job(job_id:=1, active:=false); if exists(select 1 from cron.job where command = 'select public.retry_instagram_outbound_echoes_v1(10);') then null; end if; end $;"
 };
 async function fixture(cb,overrides={}){
  const dir=fs.mkdtempSync(path.join(os.tmpdir(),'r2-stage-inert-'));
