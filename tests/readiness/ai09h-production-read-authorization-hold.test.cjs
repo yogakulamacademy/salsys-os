@@ -142,8 +142,11 @@ test('legacy tenant fallback and service-role shortcuts cannot be used as AI rev
   assert.ok(gate.mustDeny.includes('sole_membership_fallback'));
   assert.ok(dba.mustDeny.includes('role_bypass'));
   const boundary=read('lib/ai/read-only-auth-boundary-v1.ts');
-  assert.doesNotMatch(boundary,/\bcurrent_tenant_organization_id\s*\(/);
-  assert.doesNotMatch(boundary,/\bgetCurrentWorkspaceContext\s*\(/);
+  // Test executable code only: the review comment intentionally names
+  // the forbidden legacy fallback helper and is NOT an invocation.
+  const codeOnly=boundary.replace(/\/\*[\s\S]*?\*\//g,'').replace(/^\s*\/\/.*$/gm,'');
+  assert.doesNotMatch(codeOnly,/\bcurrent_tenant_organization_id\s*\(/);
+  assert.doesNotMatch(codeOnly,/\bgetCurrentWorkspaceContext\s*\(/);
 });
 
 test('course and lead sources preserve real schema and capability boundaries',()=>{
