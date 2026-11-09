@@ -16,11 +16,17 @@ with
       (pg_catalog.has_table_privilege('anon', t.oid, 'SELECT')
         or pg_catalog.has_table_privilege('anon', t.oid, 'INSERT')
         or pg_catalog.has_table_privilege('anon', t.oid, 'UPDATE')
-        or pg_catalog.has_table_privilege('anon', t.oid, 'DELETE')) as anon_any,
+        or pg_catalog.has_table_privilege('anon', t.oid, 'DELETE')
+        or pg_catalog.has_any_column_privilege('anon', t.oid, 'SELECT')
+        or pg_catalog.has_any_column_privilege('anon', t.oid, 'INSERT')
+        or pg_catalog.has_any_column_privilege('anon', t.oid, 'UPDATE')) as anon_any,
       (pg_catalog.has_table_privilege('authenticated', t.oid, 'SELECT')
         or pg_catalog.has_table_privilege('authenticated', t.oid, 'INSERT')
         or pg_catalog.has_table_privilege('authenticated', t.oid, 'UPDATE')
-        or pg_catalog.has_table_privilege('authenticated', t.oid, 'DELETE')) as authenticated_any
+        or pg_catalog.has_table_privilege('authenticated', t.oid, 'DELETE')
+        or pg_catalog.has_any_column_privilege('authenticated', t.oid, 'SELECT')
+        or pg_catalog.has_any_column_privilege('authenticated', t.oid, 'INSERT')
+        or pg_catalog.has_any_column_privilege('authenticated', t.oid, 'UPDATE')) as authenticated_any
     from public_tables t
   ),
   table_counts as (
@@ -45,6 +51,20 @@ with
       count(*) filter (where authenticated_select and not security_invoker)::integer as authenticated_exposed_non_invoker_views
     from public_views
   ),
+  public_materialized_views as (
+    select c.oid,
+      pg_catalog.has_table_privilege('anon', c.oid, 'SELECT') as anon_select,
+      pg_catalog.has_table_privilege('authenticated', c.oid, 'SELECT') as authenticated_select
+    from pg_catalog.pg_class c
+    join pg_catalog.pg_namespace n on n.oid = c.relnamespace
+    where n.nspname = 'public' and c.relkind = 'm'
+  ),
+  materialized_view_counts as (
+    select count(*)::integer as public_materialized_views,
+      count(*) filter (where anon_select)::integer as anon_exposed_materialized_views,
+      count(*) filter (where authenticated_select)::integer as authenticated_exposed_materialized_views
+    from public_materialized_views
+  ),
   definer_functions as (
     select p.oid
     from pg_catalog.pg_proc p
@@ -65,6 +85,8 @@ select
       or t.authenticated_reachable_rls_off > 0
       or v.anon_exposed_non_invoker_views > 0
       or v.authenticated_exposed_non_invoker_views > 0
+      or m.anon_exposed_materialized_views > 0
+      or m.authenticated_exposed_materialized_views > 0
       or f.anon_executable_definer_functions > 0
       then 'PRIVILEGE_CATALOG_REVIEW_REQUIRED'
     else 'CATALOG_GUARDS_PASS_NOT_ACCEPTANCE'
@@ -72,10 +94,12 @@ select
   t.public_tables, t.tables_rls_off, t.anon_reachable_rls_off,
   t.authenticated_reachable_rls_off, v.public_views,
   v.anon_exposed_non_invoker_views, v.authenticated_exposed_non_invoker_views,
+  m.public_materialized_views, m.anon_exposed_materialized_views,
+  m.authenticated_exposed_materialized_views,
   f.security_definer_functions, f.anon_executable_definer_functions,
   f.authenticated_executable_definer_functions,
   false as authenticated_tenant_e2e_verified,
   false as privacy_consent_verified,
   false as backup_restore_verified,
   false as authorized_to_release
-from table_counts t cross join view_counts v cross join function_counts f;
+from table_counts t cross join view_counts v cross join materialized_view_counts m cross join function_counts f;
