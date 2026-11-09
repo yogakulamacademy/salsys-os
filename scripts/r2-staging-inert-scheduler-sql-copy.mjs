@@ -68,12 +68,12 @@ returns bigint
 language plpgsql
 security definer
 set search_path = public, pg_catalog
-as $
+as $$
 begin
   -- Staging-only: no pg_net calls and no reads from Vault, regardless of settings.
   return null;
 end;
-$;`;
+$$;`;
       if(s.includes(inertFunction)) fail('SCHEDULER_FUNCTION_ALREADY_INERT');
       s=s.replace(fnPattern,inertFunction);
     }
