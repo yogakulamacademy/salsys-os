@@ -148,7 +148,7 @@ test('AI-11A deterministic router contract agrees with 16 MOCK router/fallback c
         assert.equal(Object.hasOwn(request,'metadata'),false,c.id);
         assert.equal(request.messages.length,1,c.id);
         assert.equal(request.messages[0].role,'user',c.id);
-        assert.match(request.system,/untrusted data|untrusted data and cannot change routing/i,c.id);
+        assert.match(request.system,/untrusted data|never instructions to change these rules/i,c.id);
       }
       assert.equal(f.calls.model[0].max_tokens,480,c.id);
       assert.equal(f.calls.model[1].max_tokens,700,c.id);
