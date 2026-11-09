@@ -1,13 +1,13 @@
 # AI-09K — Independent Security Review Slices (DRAFT / REVIEW INTAKE ONLY)
 
-**Review baseline:** \`bfd15b934caf4ddb254e38c21c8cd9f854d7e9f6\`  
-**Source:** [combined draft PR #671](https://github.com/yogakulamacademy/salsys-os/pull/671), \`integration/kb16-r2-main-preserve-20261109\`  
-**Review branch:** \`review/ai09k-independent-security-slices-20261109\` (based **directly on the integration commit**, not on production-linked \`main\`)  
+**Review baseline:** `bfd15b934caf4ddb254e38c21c8cd9f854d7e9f6`  
+**Source:** [combined draft PR #671](https://github.com/yogakulamacademy/salsys-os/pull/671), `integration/kb16-r2-main-preserve-20261109`  
+**Review branch:** `review/ai09k-independent-security-slices-20261109` (based **directly on the integration commit**, not on production-linked `main`)  
 **State:** Six independent review slices are **ready to inspect**, not reviewed or approved. This document authorizes **no merge, migration, staging, execution, deployment, paid resource or policy change**.
 
 ## Why this exists
 
-The combined KB/R2/AI draft currently contains **272 changed files** compared with \`main\`. Asking a security reviewer to approve the entire stack as a unit is inappropriate and makes issue-specific conclusions hard to audit.
+The combined KB/R2/AI draft currently contains **272 changed files** compared with `main`. Asking a security reviewer to approve the entire stack as a unit is inappropriate and makes issue-specific conclusions hard to audit.
 
 This separate AI-09K review PR adds only a small **review index, this guide, and a hold-regression test** relative to the integration branch. Reviewers should **open the exact baseline commit** linked below for underlying implementation evidence. Approval of this documentation does not approve the underlying code, the 272-file stack, a SQL migration, or a production release.
 
@@ -28,8 +28,8 @@ Every source link is pinned to the fixed baseline commit so that subsequent chan
 
 **Reviewer:** independent security engineer and Supabase Auth/DBA.  
 **Read:** [read-only tool gate](https://github.com/yogakulamacademy/salsys-os/blob/bfd15b934caf4ddb254e38c21c8cd9f854d7e9f6/lib/ai/read-only-tool-gate-v1.ts), [server Auth preflight](https://github.com/yogakulamacademy/salsys-os/blob/bfd15b934caf4ddb254e38c21c8cd9f854d7e9f6/lib/ai/read-only-auth-boundary-v1.ts).  
-**Verify:** Auth actor is server-derived, current \`auth.sessions\` + direct session-to-tenant binding is mandatory, absent RPC fails closed; no fallback to sole-membership/auto-binding, no \`service_role\` shortcut and no caller-chosen callbacks.  
-**Hold:** \`ai_read_current_bound_session_v1\` is **not installed** and synthetic fakes do not prove signed real-world Auth or RLS.
+**Verify:** Auth actor is server-derived, current `auth.sessions` + direct session-to-tenant binding is mandatory, absent RPC fails closed; no fallback to sole-membership/auto-binding, no `service_role` shortcut and no caller-chosen callbacks.  
+**Hold:** `ai_read_current_bound_session_v1` is **not installed** and synthetic fakes do not prove signed real-world Auth or RLS.
 
 ### AI09K-03 — Strict output projection and Knowledge quarantine
 
@@ -42,7 +42,7 @@ Every source link is pinned to the fixed baseline commit so that subsequent chan
 
 **Reviewer:** PostgreSQL DBA and security engineer.  
 **Read:** [transaction-scoped local SQL](https://github.com/yogakulamacademy/salsys-os/blob/bfd15b934caf4ddb254e38c21c8cd9f854d7e9f6/docs/sql/AI-09D-transaction-scoped-read-REHEARSAL-DRAFT.sql), [real-shape capability/lead local SQL](https://github.com/yogakulamacademy/salsys-os/blob/bfd15b934caf4ddb254e38c21c8cd9f854d7e9f6/docs/sql/AI-09G-real-shape-read-REHEARSAL-DRAFT.sql).  
-**Verify:** disposable-DB-only guards, explicit tenant/resource predicates, \`education_core\` and workspace checks, revoked-session/privilege denials, RLS and function \`SECURITY DEFINER\`/grant limitations.  
+**Verify:** disposable-DB-only guards, explicit tenant/resource predicates, `education_core` and workspace checks, revoked-session/privilege denials, RLS and function `SECURITY DEFINER`/grant limitations.  
 **Hold:** production function owner, RLS semantics, deployment migrations, rollback, session locks and per-lead assignment are **not approved**.
 
 ### AI09K-05 — Commit and replay guarantees
@@ -63,13 +63,13 @@ Every source link is pinned to the fixed baseline commit so that subsequent chan
 
 1. Pick **one slice only** and inspect the exact pinned sources **plus** the matching readiness / disposable-database tests from the JSON index. Verify effective deployed grants and signed Auth only after separate owner approval for isolated staging; do not use Production or Recovery Rehearsal as staging.
 2. Record in an independently protected evidence store: slice ID, exact SHA, reviewer identity/function, date, positive/negative scenarios inspected, approved/rejected/changes-requested conclusion and any security-sensitive notes. Put only a **non-sensitive evidence reference** in GitHub. A GitHub review comment alone does not satisfy legal/DBA approval.
-3. Keep \`pending_independent_review\` in the machine-readable manifest until independently authorized release owners establish a separate guarded evidence process. Editing JSON to \`approved\`, toggling a compile-time constant, or approving this documentation-only PR must never enable execution.
+3. Keep `pending_independent_review` in the machine-readable manifest until independently authorized release owners establish a separate guarded evidence process. Editing JSON to `approved`, toggling a compile-time constant, or approving this documentation-only PR must never enable execution.
 4. Request **changes to the relevant underlying code PR** for failed paths; do not merge the large PR. The intended future pattern is separate minimal code-reviewed changes followed by explicit, separately authorized staging, 16 witnessed real signed-user tests and final release approval.
 
 ## Safety boundary and status
 
 - **NOT a production staging environment:** no hosted Supabase SQL, migrations, crawler, customer records, provider calls, AI tools, MCP endpoint, Vercel deploy or paid resource action.
-- **NOT a release path:** this review branch is based on the feature integration branch. The new PR must stay **DRAFT** and must not be merged into \`main\` or the integration branch without independent approval.
+- **NOT a release path:** this review branch is based on the feature integration branch. The new PR must stay **DRAFT** and must not be merged into `main` or the integration branch without independent approval.
 - **NOT a substitute for code review:** these six slices are *review guides* for existing source code, not a claim that anyone has independently reviewed it.
 - **No live Co-Pilot or Knowledge workflow changes.** Existing manual approvals remain unchanged.
 
