@@ -56,11 +56,11 @@ export function prepareStagingOnlySql({sourceFolder, outputFolder, expectedSourc
     if (file.name===scheduler) {
       // Rewrite exactly the historical network-capable SECURITY DEFINER function.
       // Staging must remain inert even if privileged settings/secrets drift later.
-      const fnPattern=/create or replace function public\\.invoke_automation_runtime_scheduler_v1\\(\\)\\s*returns bigint\\s*language plpgsql\\s*security definer\\s*set search_path = public, vault, net, pg_catalog\\s*as \\$\\$[\\s\\S]*?\\n\\$\\$;/gi;
+      const fnPattern=/create or replace function public\.invoke_automation_runtime_scheduler_v1\(\)\s*returns bigint\s*language plpgsql\s*security definer\s*set search_path = public, vault, net, pg_catalog\s*as \$\$[\s\S]*?\n\$\$;/gi;
       const found=[...s.matchAll(fnPattern)];
       if(found.length!==1
-         || !/\\bnet\\s*\\.\\s*http_get\\s*\\(/i.test(found[0][0])
-         || !/\\bvault\\.decrypted_secrets\\b/i.test(found[0][0])) {
+         || !/\bnet\s*\.\s*http_get\s*\(/i.test(found[0][0])
+         || !/\bvault\.decrypted_secrets\b/i.test(found[0][0])) {
         fail('UNEXPECTED_SCHEDULER_FUNCTION_SHAPE');
       }
       const inertFunction=`create or replace function public.invoke_automation_runtime_scheduler_v1()
@@ -88,8 +88,8 @@ $;`;
   for (const [name,from] of replacements) if(parts.get(name)?.includes(from)) fail('UNREPLACED_ORIGINAL_LITERAL');
   // Reject any remaining executable net.http_get call in the reviewed corpus.
   // The original source is preserved for the separate unmodified replay.
-  const stagedSql=[...parts.values()].join('\\n');
-  if(/\\bnet\\s*\\.\\s*http_get\\s*\\(/i.test(stagedSql)) fail('STAGING_SQL_HAS_HTTP_EXECUTION');
+  const stagedSql=[...parts.values()].join('\n');
+  if(/\bnet\s*\.\s*http_get\s*\(/i.test(stagedSql)) fail('STAGING_SQL_HAS_HTTP_EXECUTION');
   const configuredEndpoint=parts.get(scheduler).match(/\bendpoint_url\s+text\s+not\s+null\s+default\s+'([^']+)'/i);
   if (!configuredEndpoint) fail('STAGING_SCHEDULER_ENDPOINT_MISSING');
   let url;
