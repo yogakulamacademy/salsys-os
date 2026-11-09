@@ -13,7 +13,7 @@ Supabase advisors also reported four `function_search_path_mutable` warnings on 
 ## Review-only SQL proposal
 
 `docs/sql/r2-staging-postinstall-function-grants-parity-v1.sql` is an **explicit, transactional, fail-closed security patch**:
-- Precondition: all 22 expected distinct `public` signatures exist, are postgres-owned SECURITY DEFINER functions, and `service_role` has EXECUTE; all four expected INVOKER search-path functions exist.
+- Precondition: all 22 expected distinct `public` signatures exist, are postgres-owned SECURITY DEFINER functions, and `service_role` has EXECUTE; all four expected INVOKER search-path functions exist. The two additional exact-role checks allow either already-correct production grants or the identified fresh-staging grants so a later versioned migration can be idempotent; postconditions enforce the desired end state.
 - Revoke only `EXECUTE` on exactly 22 named functions from `PUBLIC` and `anon`, additionally revoking `authenticated` on the exact 21 functions where Production denies it. Preserve `authenticated` on `attach_whatsapp_outbound_message_id`. Never revoke `service_role`.
 - Revoke only the staging-only `authenticated` EXECUTE grant on the exact `prepare_failed_whatsapp_provider_retry_v1` signature; grant only the missing `service_role` EXECUTE on exact `approve_sales_asset_v1` signature. Both match production and keep their existing anonymous restrictions.
 - Pin only the four documented INVOKER-function search paths to `public, pg_temp`, matching live production settings.
