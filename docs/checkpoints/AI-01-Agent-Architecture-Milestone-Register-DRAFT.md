@@ -29,7 +29,7 @@ Labels: **MAIN** = code exists on main; **DRAFT** = candidate is only in PR #671
 | AI-06 | P1 | Independent privacy decisions and 16 real isolated signed-user staging witnesses | BLOCKED: privacy #613, staging #614, release #601, 0/16 witnessed |
 | AI-07 | P2 | Versioned, audited, server-owned prompt registry with immutability and explicit human approval | DRAFT contract + AI-03A disposable SQL review ledger; hosted storage, independently approved activation and runtime registry NOT BUILT |
 | AI-08 | P2 | Scoped per-tenant guidance that cannot override system security, RBAC or legal safety policy | DRAFT structured tenant-scoped choices only; authorization, approval and runtime binding NOT BUILT |
-| AI-09 | P2 | Narrow server-owned tool permission registry (read/list before any mutating commands) with tenant/user/role/action approval and audit | DRAFT read-only proposal allowlist only; actual authorized executor, audit and grants NOT BUILT |
+| AI-09 | P2 | Narrow server-owned tool permission registry (read/list before any mutating commands) with tenant/user/role/action approval and audit | DRAFT read-only proposal allowlist + AI-09B in-memory audit-gated eligibility; real authenticated executor, durable audit and grants NOT BUILT |
 | AI-10 | P3 | Basic model selection and measured AI insight usage/quota accounting | MAIN (router and usage have separate scopes) |
 | AI-11 | P3 | Versioned evaluation suite assessing hallucinations, prompt injection, tenant leakage, cost, router quality and regressions before autonomy | PARTIAL unit tests; governance/human evaluation pending |
 | AI-12 | P3 | Optional tenant-scoped cache and/or hybrid vector retrieval if measured usage or quality justifies complexity | OPTIONAL, no shared cache or vector stack required now |
@@ -55,6 +55,12 @@ The PR #671 `lib/knowledge-evidence.ts` guard checks explicit unverified discove
 - New [AI-03A isolated review packet](AI-03A-Isolated-Prompt-Review-Ledger-DRAFT.md) documents a disposable PostgreSQL `ai03a_rehearsal` schema with write-once prompt versions, per-tenant/version unique allocation, independent author/reviewer gates, append-only audit records and strictly `may_execute=false` results.
 - Only `docs/sql/AI-03A-prompt-approval-ledger-REHEARSAL-DRAFT.sql` may be installed **in auto-dropped local test databases**. `tests/database/ai-governed-prompt-ledger-rehearsal.test.mjs` is attached to the disposable Postgres CI job. This is not a production migration, does not enable an effective prompt and does not alter the existing AI Co-Pilot.
 - The AI-07 milestone is **still incomplete**: no independently approved production data model, signed approval/quorum policy, real session verification, runtime prompt selector, legal retention/rollback or isolated real staging acceptance. AI-08/AI-09 remain isolated review contracts, not deployed agent functionality.
+
+## AI-09B — inert audited read-only tool eligibility (DRAFT)
+
+- [AI-09B review packet](AI-09B-Audited-Read-Only-Tool-Gate-DRAFT.md) documents new `lib/ai/read-only-tool-gate-v1.ts`, which strictly validates model-proposed tool plans, requires independently resolved server-principal and per-resource checks, rechecks identity for rotation/revocation, and fail-closes if a minimal audit acknowledgement fails.
+- `tests/readiness/read-only-tool-gate-v1.test.cjs` covers only in-memory, synthetic server dependencies and verifies no execution, query results, mutated lead access, arbitrary MCP tools, sensitive query leakage or live runtime imports. **There is no production Auth integration, no durable audit write, no call to CRM, and no live model use.**
+- AI-09 **remains an unfinished milestone**, not an enabled feature. Do not interpret an inert `review_eligible` decision as an actual grant or a production security validation.
 
 ## Prioritized work from here
 
