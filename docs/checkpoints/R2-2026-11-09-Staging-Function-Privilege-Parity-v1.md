@@ -6,6 +6,8 @@
 
 Temporary staging `ndxpjqkthuzxlmbenxti` has exactly 431 migrations, no Auth users or storage objects, and 5 inert cron jobs with no `pg_net` extension. Independently approved catalog query from PR #675 returned **`PRIVILEGE_CATALOG_REVIEW_REQUIRED`**. 22 postgres-owned public `SECURITY DEFINER` functions are executable by `anon` through inherited **PUBLIC EXECUTE** grants (13 trigger-returning, 9 ordinary functions). Fresh production read-only comparison on the same day confirms all 22 same signatures deny anonymous EXECUTE; 21 deny authenticated as well; only `attach_whatsapp_outbound_message_id` permits authenticated EXECUTE. All 22 explicitly allow `service_role` in both systems.
 
+A complete read-only comparison of all 314 staging SECURITY DEFINER functions against production found **312 identical signatures** and precisely two more matched-grant differences outside these 22: `prepare_failed_whatsapp_provider_retry_v1` permits `authenticated` EXECUTE on staging but not production, while `approve_sales_asset_v1` lacks production's explicit `service_role` EXECUTE. Both deny `anon` on staging and production. Two staging-only function signatures (different from production) are explicitly outside this grant-parity claim and require separate application-contract testing.
+
 Supabase advisors also reported four `function_search_path_mutable` warnings on staging. Those four are **SECURITY INVOKER** functions, not SECURITY DEFINER, and production fixes each to `search_path=public, pg_temp`. The 40 `rls_enabled_no_policy` INFO notices and 134 authenticated callable SECURITY DEFINER functions need separate review; this patch does not assert those are safe.
 
 ## Review-only SQL proposal
@@ -13,15 +15,16 @@ Supabase advisors also reported four `function_search_path_mutable` warnings on 
 `docs/sql/r2-staging-postinstall-function-grants-parity-v1.sql` is an **explicit, transactional, fail-closed security patch**:
 - Precondition: all 22 expected distinct `public` signatures exist, are postgres-owned SECURITY DEFINER functions, and `service_role` has EXECUTE; all four expected INVOKER search-path functions exist.
 - Revoke only `EXECUTE` on exactly 22 named functions from `PUBLIC` and `anon`, additionally revoking `authenticated` on the exact 21 functions where Production denies it. Preserve `authenticated` on `attach_whatsapp_outbound_message_id`. Never revoke `service_role`.
+- Revoke only the staging-only `authenticated` EXECUTE grant on the exact `prepare_failed_whatsapp_provider_retry_v1` signature; grant only the missing `service_role` EXECUTE on exact `approve_sales_asset_v1` signature. Both match production and keep their existing anonymous restrictions.
 - Pin only the four documented INVOKER-function search paths to `public, pg_temp`, matching live production settings.
-- Postcondition: all 22 have `anon=false`, exactly one retains `authenticated=true`, and all retain `service_role=true`; all four paths match production. Any mismatch triggers an exception and transactional rollback.
+- Postcondition: all 22 have `anon=false`, exactly one retains `authenticated=true`, and all retain `service_role=true`; the WhatsApp retry function denies `authenticated` and retains service-only access; the sales asset function allows `authenticated` and `service_role` while denying `anon`; all four paths match production. Any mismatch triggers an exception and transactional rollback.
 - No table changes, inserts, deletes, copied records, egress, cron, API keys, domains or production identifiers; SQL uses bounded lock and statement timeouts.
 
 `tests/readiness/r2-staging-postinstall-function-grants-parity-v1.test.cjs` supplies **static regression checks only**. It does not execute SQL or prove signed-in tenant isolation.
 
 ## Mandatory approval / implementation sequence
 
-1. Independent reviewer `thedetourclubind-cloud` reviews the *exact current PR head*, especially all 22 effective grants, the one intentional authenticated grant, and four INVOKER function paths. Full CI and CodeQL must pass.
+1. Independent reviewer `thedetourclubind-cloud` reviews the *exact current PR head*, especially 22 anonymous-exposure fixes, two additional matched-function ACL differences, the one intentional authenticated function among the first 22, and four INVOKER function paths. Full CI and CodeQL must pass.
 2. **After approved design**, operator generates a timestamped migration using `supabase migration new r2_postinstall_function_grant_parity` in an isolated Codespaces checkout with the reviewed schema, copies the identical SQL into the CLI-generated file, and submits the migration file for independent review on the exact new PR head. Do **not** invent migration filenames or commit to `main` prematurely.
 3. Operator checks staging project ref `ndxpjqkthuzxlmbenxti`, original 431 migration history and absence of customer data; captures an ACL and rollback baseline. No production database linkage or production Preview hosting.
 4. With explicit **staging-only installation** authorization, perform a reviewed remote dry run first and then apply **only the new approved migration** to temporary staging (not reapply the 431 migrations). Stop on mismatch: no reset, repair or auto retry.
