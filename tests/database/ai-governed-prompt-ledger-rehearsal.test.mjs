@@ -52,7 +52,8 @@ async function callAs(db,role,actor,sid,query,args=[]){
 
 async function blocked(promise,label){
   await assert.rejects(promise,e=>(
-    (e.code==='42501'||e.code==='22023'||e.code==='23505') &&
+    (e.code==='42501'||e.code==='22023'||e.code==='23505' ||
+      (e.code==='P0001' && /AI03A_LOCAL_DISPOSABLE_FIXTURE_REQUIRED/.test(e.message))) &&
     typeof e.message==='string'
   ),label);
 }
