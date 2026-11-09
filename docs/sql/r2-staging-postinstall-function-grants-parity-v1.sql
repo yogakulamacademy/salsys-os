@@ -4,6 +4,8 @@
 -- All 22 signatures exist in both, are postgres-owned SECURITY DEFINER functions;
 -- Production anon EXECUTE=FALSE for all, authenticated TRUE only for
 -- attach_whatsapp_outbound_message_id, service_role TRUE for all.
+-- One additional service-only WhatsApp retry function loses authenticated EXECUTE;
+-- one sales asset function gains the missing verified service_role EXECUTE grant.
 -- The 4 search_path changes mirror existing production function_config.
 -- Requires independent review, approved versioned migration and staging-only apply.
 BEGIN;
@@ -55,6 +57,35 @@ BEGIN
     AND NOT p.prosecdef;
   IF v_count <> 4 THEN
     RAISE EXCEPTION 'BLOCKED_R2_SEARCH_PATH_FUNCTION_CONTRACT_MISMATCH';
+  END IF;
+  -- Separately verified matched definer-role drift outside the 22 anon findings.
+  SELECT count(*)::int INTO v_count
+  FROM pg_catalog.pg_proc p
+  JOIN pg_catalog.pg_namespace n ON n.oid=p.pronamespace
+  WHERE n.nspname='public'
+    AND p.proname='prepare_failed_whatsapp_provider_retry_v1'
+    AND pg_catalog.pg_get_function_identity_arguments(p.oid)
+      ='p_organization_id uuid, p_failed_audit_id uuid, p_now timestamp with time zone'
+    AND p.prosecdef AND pg_catalog.pg_get_userbyid(p.proowner)='postgres'
+    AND NOT pg_catalog.has_function_privilege('anon',p.oid,'EXECUTE')
+    AND pg_catalog.has_function_privilege('authenticated',p.oid,'EXECUTE')
+    AND pg_catalog.has_function_privilege('service_role',p.oid,'EXECUTE');
+  IF v_count <> 1 THEN
+    RAISE EXCEPTION 'BLOCKED_R2_EXTRA_AUTHENTICATED_FUNCTION_CONTRACT_MISMATCH';
+  END IF;
+  SELECT count(*)::int INTO v_count
+  FROM pg_catalog.pg_proc p
+  JOIN pg_catalog.pg_namespace n ON n.oid=p.pronamespace
+  WHERE n.nspname='public'
+    AND p.proname='approve_sales_asset_v1'
+    AND pg_catalog.pg_get_function_identity_arguments(p.oid)
+      ='p_organization_id uuid, p_asset_id uuid, p_auto_send_allowed boolean'
+    AND p.prosecdef AND pg_catalog.pg_get_userbyid(p.proowner)='postgres'
+    AND NOT pg_catalog.has_function_privilege('anon',p.oid,'EXECUTE')
+    AND pg_catalog.has_function_privilege('authenticated',p.oid,'EXECUTE')
+    AND NOT pg_catalog.has_function_privilege('service_role',p.oid,'EXECUTE');
+  IF v_count <> 1 THEN
+    RAISE EXCEPTION 'BLOCKED_R2_MISSING_SERVICE_ROLE_FUNCTION_CONTRACT_MISMATCH';
   END IF;
 END;
 $r2_preflight$;
@@ -128,6 +159,11 @@ REVOKE EXECUTE ON FUNCTION public.update_crm_pipeline_aging_rule(p_stage text, p
 -- update_crm_stage_probability(p_stage text, p_probability numeric)
 REVOKE EXECUTE ON FUNCTION public.update_crm_stage_probability(p_stage text, p_probability numeric) FROM PUBLIC, anon, authenticated;
 
+-- Two additional, exact-signature permission differences verified against Production.
+-- Neither function is anonymously executable in staging or Production.
+REVOKE EXECUTE ON FUNCTION public.prepare_failed_whatsapp_provider_retry_v1(p_organization_id uuid, p_failed_audit_id uuid, p_now timestamp with time zone) FROM authenticated;
+GRANT EXECUTE ON FUNCTION public.approve_sales_asset_v1(p_organization_id uuid, p_asset_id uuid, p_auto_send_allowed boolean) TO service_role;
+
 -- Four INVOKER functions: mirror the pre-existing production search_path.
 ALTER FUNCTION public.log_new_lead_stage() SET search_path = public, pg_temp;
 ALTER FUNCTION public.normalize_event_intelligence_url_v1(p_value text) SET search_path = public, pg_temp;
@@ -180,6 +216,35 @@ BEGIN
     AND p.proconfig @> ARRAY['search_path=public, pg_temp']::text[];
   IF v_count <> 4 THEN
     RAISE EXCEPTION 'BLOCKED_R2_POSTINSTALL_SEARCH_PATH_PARITY_FAILED';
+  END IF;
+  -- Exact postcondition for the extra authenticated and service-role divergence.
+  SELECT count(*)::int INTO v_count
+  FROM pg_catalog.pg_proc p
+  JOIN pg_catalog.pg_namespace n ON n.oid=p.pronamespace
+  WHERE n.nspname='public'
+    AND p.proname='prepare_failed_whatsapp_provider_retry_v1'
+    AND pg_catalog.pg_get_function_identity_arguments(p.oid)
+      ='p_organization_id uuid, p_failed_audit_id uuid, p_now timestamp with time zone'
+    AND p.prosecdef
+    AND NOT pg_catalog.has_function_privilege('anon',p.oid,'EXECUTE')
+    AND NOT pg_catalog.has_function_privilege('authenticated',p.oid,'EXECUTE')
+    AND pg_catalog.has_function_privilege('service_role',p.oid,'EXECUTE');
+  IF v_count <> 1 THEN
+    RAISE EXCEPTION 'BLOCKED_R2_EXTRA_AUTHENTICATED_POSTFLIGHT_FAILED';
+  END IF;
+  SELECT count(*)::int INTO v_count
+  FROM pg_catalog.pg_proc p
+  JOIN pg_catalog.pg_namespace n ON n.oid=p.pronamespace
+  WHERE n.nspname='public'
+    AND p.proname='approve_sales_asset_v1'
+    AND pg_catalog.pg_get_function_identity_arguments(p.oid)
+      ='p_organization_id uuid, p_asset_id uuid, p_auto_send_allowed boolean'
+    AND p.prosecdef
+    AND NOT pg_catalog.has_function_privilege('anon',p.oid,'EXECUTE')
+    AND pg_catalog.has_function_privilege('authenticated',p.oid,'EXECUTE')
+    AND pg_catalog.has_function_privilege('service_role',p.oid,'EXECUTE');
+  IF v_count <> 1 THEN
+    RAISE EXCEPTION 'BLOCKED_R2_SALES_ASSET_SERVICE_ROLE_POSTFLIGHT_FAILED';
   END IF;
 END;
 $r2_postflight$;
