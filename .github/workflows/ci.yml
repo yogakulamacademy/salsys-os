@@ -129,6 +129,9 @@ jobs:
       - name: Verify Universal Tracking Intelligence SDK
         run: npm run verify:tracking-sdk
 
+      - name: Verify R2 optional-consent audit is read-only and privacy-safe
+        run: node --test tests/readiness/r2-optional-consent-metadata-audit-v1.test.cjs
+
       - name: Verify Tracking Live Closeout Contracts
         run: npm run verify:tracking-live-closeout
 
