@@ -8,7 +8,7 @@
   "stagingWitnesses": 0,
   "independentApprovalRecorded": false,
   "productionReady": false,
-  "requiredTotalCases": 24,
+  "requiredTotalCases": 26,
   "evaluatedAt": "2026-11-09",
   "categories": [
     "router",
