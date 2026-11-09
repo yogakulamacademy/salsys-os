@@ -18,7 +18,13 @@ export const PRODUCTION_REF = 'doaozrkrtgeslddwhclj';
 export const RECOVERY_REF = 'wunnbqjvfzmawubglyhe';
 
 function fail(reason) { throw new Error('BLOCKED_' + reason); }
+function assertNoWorkdirOverride() {
+  // Supabase CLI accepts SUPABASE_WORKDIR, which overrides the linked checkout.
+  // Never allow an inherited shell setting to redirect even a dry run.
+  if (process.env.SUPABASE_WORKDIR?.trim()) fail('CLI_WORKDIR_OVERRIDE');
+}
 export function planDryRun({ projectRoot, expectedDigest, cli = 'supabase' }) {
+  assertNoWorkdirOverride();
   if (!/^[a-f0-9]{64}$/.test(expectedDigest ?? '')) fail('INVALID_MANIFEST_DIGEST');
   const project = path.resolve(projectRoot);
   const refPath = path.join(project, 'supabase', '.temp', 'project-ref');
@@ -30,12 +36,30 @@ export function planDryRun({ projectRoot, expectedDigest, cli = 'supabase' }) {
   if (manifest.manifestSha256 !== expectedDigest) fail('MIGRATION_DIGEST_MISMATCH');
   // Never use --db-url, --linked-to-another-project, --yes, or arbitrary SQL.
   return { command: cli, args: ['db', 'push', '--dry-run'], cwd: project,
-    projectRef: actualRef, fileCount: manifest.fileCount };
+    projectRef: actualRef, fileCount: manifest.fileCount, expectedDigest };
 }
 
 export function runDryRun(plan) {
+  // Recheck the actual project-ref and bytes immediately before the CLI call:
+  // the link or migrations may have changed since planDryRun() was invoked.
+  assertNoWorkdirOverride();
+  if (plan.projectRef !== STAGING_REF || !plan.cwd ||
+      JSON.stringify(plan.args) !== JSON.stringify(['db', 'push', '--dry-run'])) {
+    fail('INVALID_DRYRUN_PLAN');
+  }
+  const refPath = path.join(plan.cwd, 'supabase', '.temp', 'project-ref');
+  if (!fs.existsSync(refPath) || fs.readFileSync(refPath, 'utf8').trim() !== STAGING_REF) {
+    fail('STAGING_LINK_CHANGED_BEFORE_CLI');
+  }
+  const current = buildManifest(path.join(plan.cwd, 'supabase', 'migrations'));
+  if (current.manifestSha256 !== plan.expectedDigest || current.fileCount !== plan.fileCount) {
+    fail('STAGING_SQL_CHANGED_BEFORE_CLI');
+  }
+  const env = { ...process.env };
+  delete env.SUPABASE_WORKDIR;
   const r = spawnSync(plan.command, plan.args, {
     cwd: plan.cwd,
+    env,
     shell: false,
     encoding: 'utf8',
     timeout: 120000,
