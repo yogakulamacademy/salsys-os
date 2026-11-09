@@ -14,9 +14,13 @@ import { auditStagedMigrationFiles } from './r2-staging-sql-external-effects-aud
 
 const scheduler = '20261017091453_automation_runtime_scheduler_foundation_v1.sql';
 const websiteFoundation = '007_tenant_schema_foundation.sql';
+const websiteEnvironment = '20261022094445_multitenant_tracking_site_binding_v2.sql';
 const replacements = [
   [websiteFoundation, "('yogakulam.com'::text)", "('r2-yogakulam.invalid'::text)"],
   [websiteFoundation, "('www.yogakulam.com'::text)", "('www.r2-yogakulam.invalid'::text)"],
+  // The original later migration classifies existing websites as production.
+  // Only the isolated staging-copy migration must default them to staging.
+  [websiteEnvironment, "environment text not null default 'production'", "environment text not null default 'staging'"],
   [scheduler, "'select public.invoke_automation_runtime_scheduler_v1();'", "'select 1;'"],
   [scheduler, "'https://salsysos.com/api/automation/runtime-scheduler'", "'https://staging.invalid/api/automation/runtime-scheduler'"],
   ['20261026143100_closed_won_pipeline_and_auto_archive_v1.sql', "'select public.archive_closed_won_leads_v1(500);'", "'select 1;'"],
@@ -70,6 +74,7 @@ export function prepareStagingOnlySql({sourceFolder, outputFolder, expectedSourc
   if (JSON.stringify(siteNames) !== JSON.stringify(['r2-yogakulam.invalid','www.r2-yogakulam.invalid'])) {
     fail('STAGING_SITE_HOSTS_MISMATCH');
   }
+  if (!/\benvironment\s+text\s+not\s+null\s+default\s+'staging'/i.test(parts.get(websiteEnvironment)??'')) fail('STAGING_SITE_ENVIRONMENT_NOT_ISOLATED');
   // Publish the staging-only copy only after all input checks have succeeded.
   fs.mkdirSync(dst,{recursive:false,mode:0o700});
   try {
@@ -77,7 +82,8 @@ export function prepareStagingOnlySql({sourceFolder, outputFolder, expectedSourc
     const next=buildManifest(dst);
     const evidence={report:'r2_staging_inert_scheduler_sql_copy_v1',
       sourceManifestSha256:original.manifestSha256,stagingManifestSha256:next.manifestSha256,
-      fileCount:next.fileCount,neutralizedJobFiles:jobFiles,isolatedSiteHostnameCount:2,sourceChanges:changes,
+      fileCount:next.fileCount,neutralizedJobFiles:jobFiles,isolatedSiteHostnameCount:2,
+      isolatedSiteEnvironmentDefault:'staging',sourceChanges:changes,
       productionFilesModified:false,providerAccess:false,databaseWrites:false,
       authorizedToInstall:false,networkIsolationVerified:false};
     return evidence;
