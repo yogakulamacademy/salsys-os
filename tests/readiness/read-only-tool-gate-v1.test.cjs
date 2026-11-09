@@ -92,8 +92,8 @@ test('adversarial request getters/proxies/prototypes deny before Auth but still 
     assert.equal(h.calls.audit[0].decision,'denied');
     assert.equal(h.calls.audit[0].toolId,null);
     assert.equal(h.calls.audit[0].actorId,null);
-    assert.doesNotMatch(JSON.stringify(result),'private accessor data|private proxy error');
-    assert.doesNotMatch(JSON.stringify(h.calls.audit),'private accessor data|private proxy error');
+    assert.doesNotMatch(JSON.stringify(result),/private accessor data|private proxy error/);
+    assert.doesNotMatch(JSON.stringify(h.calls.audit),/private accessor data|private proxy error/);
   }
 });
 
@@ -116,7 +116,7 @@ test('untrusted principal getters, hostile proxy and custom role coercion cannot
     assert.equal(h.calls.audit.length,1);
     assert.equal(h.calls.audit[0].decision,'denied');
     assert.equal(h.calls.audit[0].actorId,null);
-    assert.doesNotMatch(JSON.stringify(result),'sensitive session detail|role coercion called');
+    assert.doesNotMatch(JSON.stringify(result),/sensitive session detail|role coercion called/);
   }
   assert.equal(coercions,0,'untrusted role objects must not execute coercion methods');
 });
