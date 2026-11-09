@@ -486,12 +486,12 @@ test('KB-11A: local-only consent-atomic discovered-page draft SQL and negative i
     const canonicalBody=canonicalSearch.slice(canonicalSearch.indexOf(functionHead));
     const candidateBody=candidateSearch.slice(candidateSearch.indexOf(functionHead));
     assert.ok(canonicalBody.startsWith(functionHead) && candidateBody.startsWith(functionHead));
-    const holdBlock=/      -- KB16A_UNVERIFIED_RETRIEVAL_HOLD_START\\n[\\s\\S]*?      -- KB16A_UNVERIFIED_RETRIEVAL_HOLD_END\\n/;
+    const holdBlock=/      -- KB16A_UNVERIFIED_RETRIEVAL_HOLD_START\n[\s\S]*?      -- KB16A_UNVERIFIED_RETRIEVAL_HOLD_END\n/;
     assert.match(candidateBody,holdBlock);
     assert.equal(candidateBody.replace(holdBlock,''),canonicalBody,
       'KB-16A must preserve every canonical search expression, rank, output, privilege and tenant guard except its new quarantine WHERE predicates');
     assert.match(candidateSearch,/KB16A_LOCAL_DISPOSABLE_FIXTURE_REQUIRED/);
-    assert.doesNotMatch(candidateSearch,/drop\\s+table|drop\\s+schema|grant\\s+all\\s+on\\s+public/ig);
+    assert.doesNotMatch(candidateSearch,/drop\s+table|drop\s+schema|grant\s+all\s+on\s+public/ig);
     await root.query(canonicalSearch);
 
     const quarantinedToken='quartzprovenance';
