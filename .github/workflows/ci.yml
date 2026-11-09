@@ -91,6 +91,9 @@ jobs:
         run: node --test tests/database/knowledge-commit-ownership-races.test.mjs
 
 
+      - name: Verify AI-03A independent prompt-review ledger only in disposable PostgreSQL
+        run: node --test tests/database/ai-governed-prompt-ledger-rehearsal.test.mjs
+
       - name: Verify exact Instagram outbound projector SQL in isolated PostgreSQL
         run: node --test tests/database/instagram-outbound-echo-projector.test.mjs
 
