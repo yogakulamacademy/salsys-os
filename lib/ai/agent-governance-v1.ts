@@ -62,7 +62,10 @@ function snapshotArray(value: unknown): readonly unknown[] | null {
     if (!Array.isArray(value) || Object.getPrototypeOf(value) !== Array.prototype) return null;
     const keys = Reflect.ownKeys(value);
     const descriptors = Object.getOwnPropertyDescriptors(value);
-    const count = descriptors.length?.value;
+    // TS models an array's own "length" as number, although
+    // getOwnPropertyDescriptors() returns its PropertyDescriptor at runtime.
+    const lengthDescriptor: PropertyDescriptor | undefined = Reflect.get(descriptors, 'length');
+    const count = lengthDescriptor?.value;
     if (!Number.isSafeInteger(count) || count < 0 ||
       keys.length !== count + 1 || !Object.hasOwn(descriptors, 'length')) return null;
     const copy: unknown[] = [];
