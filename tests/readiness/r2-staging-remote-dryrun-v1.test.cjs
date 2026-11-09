@@ -92,7 +92,7 @@ test('changes to linked project and migration bytes after planning fail before C
   await withFixture(({dir,temp,migrations,tool,digest}) => {
     const marker = path.join(dir, 'cli-was-called.txt');
     const stub = path.join(dir, 'only-log.sh');
-    fs.writeFileSync(stub, '#!/bin/sh\\nprintf called > "' + marker + '"\\nexit 0\\n');
+    fs.writeFileSync(stub, '#!/bin/sh\nprintf called > "' + marker + '"\nexit 0\n');
     fs.chmodSync(stub,0o755);
     const plan = tool.planDryRun({projectRoot:dir,expectedDigest:digest,cli:stub});
     fs.writeFileSync(path.join(temp,'project-ref'),PROD);
