@@ -477,6 +477,93 @@ test('KB-11A: local-only consent-atomic discovered-page draft SQL and negative i
     await assert.rejects(callAs(a,'authenticated',APPROVE,[ORG_A,success.document_id]));
     await root.query("update public.knowledge_sources set status='disabled' where id=$1",
       [success.source_id]);
+    // KB-16A: the EXACT original production search function is deliberately
+    // installed FIRST into this auto-dropped test DB to reproduce the
+    // historical "approved but now unverified source" retrieval problem.
+    const canonicalSearch=file('../../supabase/migrations/20261016182500_fix_organization_knowledge_search_v1.sql');
+    const candidateSearch=file('../../docs/sql/KB-16A-unverified-discovery-retrieval-REHEARSAL-DRAFT.sql');
+    const functionHead='create or replace function public.search_organization_knowledge_v1(';
+    const canonicalBody=canonicalSearch.slice(canonicalSearch.indexOf(functionHead));
+    const candidateBody=candidateSearch.slice(candidateSearch.indexOf(functionHead));
+    assert.ok(canonicalBody.startsWith(functionHead) && candidateBody.startsWith(functionHead));
+    const holdBlock=/      -- KB16A_UNVERIFIED_RETRIEVAL_HOLD_START\\n[\\s\\S]*?      -- KB16A_UNVERIFIED_RETRIEVAL_HOLD_END\\n/;
+    assert.match(candidateBody,holdBlock);
+    assert.equal(candidateBody.replace(holdBlock,''),canonicalBody,
+      'KB-16A must preserve every canonical search expression, rank, output, privilege and tenant guard except its new quarantine WHERE predicates');
+    assert.match(candidateSearch,/KB16A_LOCAL_DISPOSABLE_FIXTURE_REQUIRED/);
+    assert.doesNotMatch(candidateSearch,/drop\\s+table|drop\\s+schema|grant\\s+all\\s+on\\s+public/ig);
+    await root.query(canonicalSearch);
+
+    const quarantinedToken='quartzprovenance';
+    const oldSource=(await root.query(
+      "insert into public.knowledge_sources(organization_id,source_type,name,status,metadata) values($1,'website','Historical source previously trusted','active','{}'::jsonb) returning id",
+      [ORG_A])).rows[0].id;
+    const oldDoc=(await root.query(
+      "insert into public.knowledge_documents(organization_id,source_id,title,category,content,status,metadata,updated_at) values($1,$2,'quartzprovenance handwritten','faq',$3,'approved','{}'::jsonb,now()+interval '60 seconds') returning id",
+      [ORG_A,oldSource,quarantinedToken+' handwritten content for historical source leak test'])).rows[0].id;
+    await root.query(
+      "insert into public.knowledge_chunks(organization_id,document_id,chunk_index,content,metadata) values($1,$2,0,$3,'{}'::jsonb)",
+      [ORG_A,oldDoc,quarantinedToken+' handwritten content for historical source leak test']);
+    // A source becomes explicitly unverified AFTER approval without
+    // touching the document row. The KB-14 document trigger cannot fire.
+    await root.query(
+      "update public.knowledge_sources set metadata=$2 where id=$1",
+      [oldSource,JSON.stringify({entry_mode:'discovery_manual_review',source_text_verified:false})]);
+    const beforeQuarantine=(await callAs(a,'authenticated',SEARCH,
+      [ORG_A,quarantinedToken,8])).rows;
+    assert.equal(beforeQuarantine.some(row=>row.document_id===oldDoc),true,
+      'The canonical current retrieval RPC returns approved-looking unverified historical content in the disposable fixture');
+    const cleanBefore=(await callAs(a,'authenticated',SEARCH,
+      [ORG_A,'handwritten',8])).rows;
+    assert.equal(cleanBefore.some(row=>row.document_id===manualDocument),true,
+      'Ordinary manual approved Knowledge is retrieved by the original function');
+
+    // Install KB-16A ONLY in the disposable fixture and compare same exact
+    // signed-in caller/tenant, query and existing approved-looking data.
+    await root.query(candidateSearch);
+    const afterQuarantine=(await callAs(a,'authenticated',SEARCH,
+      [ORG_A,quarantinedToken,8])).rows;
+    assert.deepEqual(afterQuarantine,[],
+      'Discovered unverified linked source is excluded before Co-Pilot can retrieve its chunk');
+    const safeTopOne=(await callAs(a,'authenticated',SEARCH,
+      [ORG_A,'handwritten',1])).rows;
+    assert.deepEqual(safeTopOne.map(row=>row.document_id),[manualDocument],
+      'Unverified high-ranking chunk must be filtered BEFORE top-K so safe manual result is returned');
+    assert.deepEqual((await callAs(b,'authenticated',SEARCH,
+      [ORG_A,'handwritten',8],USER_B,SID_B)).rows,[],
+      'The search RPC still denies another tenant member access to tenant A');
+    await assert.rejects(callAs(b,'anon',SEARCH,[ORG_A,'handwritten',8],USER_B,SID_B),
+      e=>e.code==='42501',
+      'The search RPC still denies anonymous EXECUTE');
+
+    // Chunk-only unverified marker must also quarantine an otherwise clean
+    // manually approved document. No published Co-Pilot source text can be
+    // considered verified merely because the parent is approved.
+    await root.query(
+      "update public.knowledge_chunks set metadata=$2 where document_id=$1",
+      [manualDocument,JSON.stringify({source:'manual_discovery_draft_unverified'})]);
+    assert.deepEqual((await callAs(a,'authenticated',SEARCH,
+      [ORG_A,'handwritten',8])).rows,[]);
+    await root.query(
+      "update public.knowledge_chunks set metadata='{}'::jsonb where document_id=$1",
+      [manualDocument]);
+
+    // Preserve original legacy approved NULL-source behavior; its absence
+    // of verified source remains a separate release-policy decision.
+    const legacyDoc=(await root.query(
+      "insert into public.knowledge_documents(organization_id,source_id,title,category,content,status,metadata) values($1,null,'legacyquartz','faq','legacyquartz retained existing approved record','approved','{}'::jsonb) returning id",
+      [ORG_A])).rows[0].id;
+    await root.query(
+      "insert into public.knowledge_chunks(organization_id,document_id,chunk_index,content,metadata) values($1,$2,0,'legacyquartz retained existing approved record','{}'::jsonb)",
+      [ORG_A,legacyDoc]);
+    assert.deepEqual((await callAs(a,'authenticated',SEARCH,
+      [ORG_A,'legacyquartz',8])).rows.map(row=>row.document_id),[legacyDoc],
+      'The prototype must not silently change the existing NULL-source legacy approval contract');
+    assert.equal((await root.query(
+      "select status from public.knowledge_documents where id=$1",
+      [oldDoc])).rows[0].status,'approved',
+      'Guarded retrieval does not silently mutate, erase or reapprove old records');
+
     void service;
   } finally {
     for(const c of clients.reverse())await c.end().catch(()=>{});
