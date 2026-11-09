@@ -9,6 +9,8 @@ on:
       - 'scripts/build-migration-recovery-manifest.mjs'
       - 'scripts/r2-staging-migration-manifest.mjs'
       - 'tests/readiness/r2-staging-migration-manifest-v1.test.cjs'
+      - 'scripts/r2-staging-remote-dryrun.mjs'
+      - 'tests/readiness/r2-staging-remote-dryrun-v1.test.cjs'
       - 'tests/database/r2-behavior-rpc-negative-auth-local.sql'
       - 'tests/database/r2-behavior-rpc-positive-tenant-local.sql'
       - '.github/workflows/migration-replay.yml'
@@ -269,6 +271,7 @@ jobs:
           node scripts/r2-staging-migration-manifest.mjs supabase/migrations \
             > r2-staging-migration-worktree-manifest.json
           node --test tests/readiness/r2-staging-migration-manifest-v1.test.cjs
+          node --test tests/readiness/r2-staging-remote-dryrun-v1.test.cjs
 
       - name: Start local Supabase database
         shell: bash
