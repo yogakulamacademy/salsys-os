@@ -27,7 +27,7 @@ Labels: **MAIN** = code exists on main; **DRAFT** = candidate is only in PR #671
 | AI-04 | P1 | Fail Co-Pilot and Knowledge preview **closed before any LLM call** when the canonical RPC returns explicit unverified discovery markers in document/chunk or optional source metadata; preserve manual clean rows | DRAFT / exact-head tests required |
 | AI-05 | P1 | Independent security/DBA decision on uninstalled KB-14A publication guard and KB-16A **source-metadata-aware database** retrieval quarantine with tested migration/rollback | DRAFT design, BLOCKED release |
 | AI-06 | P1 | Independent privacy decisions and 16 real isolated signed-user staging witnesses | BLOCKED: privacy #613, staging #614, release #601, 0/16 witnessed |
-| AI-07 | P2 | Versioned, audited, server-owned prompt registry with immutability and explicit human approval | DRAFT integrity/version contract only; immutable storage, independent approval and runtime registry NOT BUILT |
+| AI-07 | P2 | Versioned, audited, server-owned prompt registry with immutability and explicit human approval | DRAFT contract + AI-03A disposable SQL review ledger; hosted storage, independently approved activation and runtime registry NOT BUILT |
 | AI-08 | P2 | Scoped per-tenant guidance that cannot override system security, RBAC or legal safety policy | DRAFT structured tenant-scoped choices only; authorization, approval and runtime binding NOT BUILT |
 | AI-09 | P2 | Narrow server-owned tool permission registry (read/list before any mutating commands) with tenant/user/role/action approval and audit | DRAFT read-only proposal allowlist only; actual authorized executor, audit and grants NOT BUILT |
 | AI-10 | P3 | Basic model selection and measured AI insight usage/quota accounting | MAIN (router and usage have separate scopes) |
@@ -49,6 +49,12 @@ The PR #671 `lib/knowledge-evidence.ts` guard checks explicit unverified discove
 - `tests/readiness/agent-governance-contract-v1.test.cjs` adds synthetic positive/negative tests for prompt tampering, forged approvals, tenant boundary mismatches, extra-field/prompt override rejection, read-only scopes, suspicious endpoints, denied lead access and the default-off contract.
 - See [AI-02 Governed Agent Configuration Contract DRAFT](AI-02-Governed-Agent-Configuration-Contract-DRAFT.md) for remaining independent review, append-only approval registry, tenant RBAC/consent, audited dispatcher and deployment decisions.
 - This is **not** an actual prompt registry, an MCP server, a live agent runner or proof of real signed-in isolated staging tests. It is intentionally not imported by existing Co-Pilot or the pinned Knowledge approval action.
+
+## AI-03A — local-only prompt review ledger checkpoint (DRAFT, no activation)
+
+- New [AI-03A isolated review packet](AI-03A-Isolated-Prompt-Review-Ledger-DRAFT.md) documents a disposable PostgreSQL `ai03a_rehearsal` schema with write-once prompt versions, per-tenant/version unique allocation, independent author/reviewer gates, append-only audit records and strictly `may_execute=false` results.
+- Only `docs/sql/AI-03A-prompt-approval-ledger-REHEARSAL-DRAFT.sql` may be installed **in auto-dropped local test databases**. `tests/database/ai-governed-prompt-ledger-rehearsal.test.mjs` is attached to the disposable Postgres CI job. This is not a production migration, does not enable an effective prompt and does not alter the existing AI Co-Pilot.
+- The AI-07 milestone is **still incomplete**: no independently approved production data model, signed approval/quorum policy, real session verification, runtime prompt selector, legal retention/rollback or isolated real staging acceptance. AI-08/AI-09 remain isolated review contracts, not deployed agent functionality.
 
 ## Prioritized work from here
 
