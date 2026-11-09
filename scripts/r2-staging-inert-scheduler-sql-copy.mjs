@@ -1,0 +1,81 @@
+#!/usr/bin/env node
+/**
+ * Prepare a LOCAL, staging-only SQL working copy with inert scheduled jobs.
+ * Never modifies source migration files or executes SQL/network/provider calls.
+ * Exact allowlisted source literals are replaced once each; drift fails closed.
+ * A safe transform is NOT permission to deploy or proof of complete isolation.
+ */
+import fs from 'node:fs';
+import path from 'node:path';
+import crypto from 'node:crypto';
+import { fileURLToPath } from 'node:url';
+import { buildManifest } from './r2-staging-migration-manifest.mjs';
+import { auditStagedMigrationFiles } from './r2-staging-sql-external-effects-audit.mjs';
+
+const scheduler = '20261017091453_automation_runtime_scheduler_foundation_v1.sql';
+const replacements = [
+  [scheduler, "'select public.invoke_automation_runtime_scheduler_v1();'", "'select 1;'"],
+  [scheduler, "'https://salsysos.com/api/automation/runtime-scheduler'", "'https://staging.invalid/api/automation/runtime-scheduler'"],
+  ['20261026143100_closed_won_pipeline_and_auto_archive_v1.sql', "'select public.archive_closed_won_leads_v1(500);'", "'select 1;'"],
+  ['20261027094000_schedule_instagram_dm_recovery_v1.sql', '$$select public.retry_instagram_dm_events_v1(10);$$', '$$select 1;$$'],
+  ['20261028023743_ensure_instagram_dm_retry_schedule_v1.sql', "'select public.retry_instagram_dm_events_v1(10);'", "'select 1;'"],
+  ['20261101164458_r10_outcome_learning_runner_v1.sql', "$cron$select public.sweep_system_intelligence_recommendation_outcomes_v1(null,50,'cron');$cron$", '$cron$select 1;$cron$'],
+  ['20261104171500_instagram_outbound_echo_recovery_v1.sql', "'select public.retry_instagram_outbound_echoes_v1(10);'", "'select 1;'"],
+];
+const jobFiles = [...new Set(replacements.filter(x => x[1].includes('select public.')).map(x => x[0]).concat('20261027094000_schedule_instagram_dm_recovery_v1.sql'))].sort();
+const fail = () => {throw Error('BLOCKED_SCHEDULER_SOURCE_DRIFT_OR_UNSAFE_OUTPUT');};
+
+export function prepareStagingOnlySql({sourceFolder, outputFolder, expectedSourceSha256}) {
+  if (!/^[a-f0-9]{64}$/.test(expectedSourceSha256??'')) fail();
+  const src=path.resolve(sourceFolder),dst=path.resolve(outputFolder);
+  if (src===dst || dst.startsWith(src+path.sep) || src.startsWith(dst+path.sep)) fail();
+  if (fs.existsSync(dst)) fail();
+  const original=buildManifest(src);
+  if(original.manifestSha256!==expectedSourceSha256) fail();
+  const before=auditStagedMigrationFiles(src);
+  const actualCron=before.candidates.filter(x=>x.kind==='cron_schedule').map(x=>x.file).sort();
+  if(JSON.stringify(actualCron)!==JSON.stringify(jobFiles)) fail();
+  if(before.categories.http_execution!==1 || before.categories.extension_network!==1) fail();
+  const changes=[];
+  const parts=new Map();
+  for (const file of original.files) {
+    let s=fs.readFileSync(path.join(src,file.name),'utf8');
+    const changesForFile=replacements.filter(x=>x[0]===file.name);
+    for (const [,from,to] of changesForFile) {
+      const at=s.indexOf(from);
+      if(at<0 || s.indexOf(from,at+from.length)>=0 || s.includes(to)) fail();
+      s=s.slice(0,at)+to+s.slice(at+from.length);
+    }
+    if(changesForFile.length) changes.push({file:file.name,replacements:changesForFile.length});
+    parts.set(file.name,s);
+  }
+  if(changes.length!==jobFiles.length || changes.reduce((n,x)=>n+x.replacements,0)!==replacements.length) fail();
+  const candidates=[...parts.entries()].filter(([name,sql])=>/\bcron\s*\.\s*schedule\s*\(/i.test(sql)).map(([name])=>name).sort();
+  if(JSON.stringify(candidates)!==JSON.stringify(jobFiles)) fail();
+  // Every literal job command used by cron.schedule() in this exact reviewed
+  // historical corpus was explicitly changed to an inert SELECT 1.
+  for (const [,from] of replacements) for (const [,sql] of parts) if(sql.includes(from)) fail();
+  if(parts.get(scheduler).includes('https://salsysos.com/api/automation/runtime-scheduler')) fail();
+  // Publish the staging-only copy only after all input checks have succeeded.
+  fs.mkdirSync(dst,{recursive:false,mode:0o700});
+  try {
+    for(const [name,sql] of parts) fs.writeFileSync(path.join(dst,name),sql,{flag:'wx',mode:0o600});
+    const next=buildManifest(dst);
+    const evidence={report:'r2_staging_inert_scheduler_sql_copy_v1',
+      sourceManifestSha256:original.manifestSha256,stagingManifestSha256:next.manifestSha256,
+      fileCount:next.fileCount,neutralizedJobFiles:jobFiles,sourceChanges:changes,
+      productionFilesModified:false,providerAccess:false,databaseWrites:false,
+      authorizedToInstall:false,networkIsolationVerified:false};
+    return evidence;
+  } catch(e) {fs.rmSync(dst,{recursive:true,force:true}); throw e;}
+}
+
+function parseCli(args) {
+  if(args.length!==6||args[0]!=='--source'||args[2]!=='--output'||args[4]!=='--expected-source-manifest-sha256') fail();
+  return {sourceFolder:args[1],outputFolder:args[3],expectedSourceSha256:args[5]};
+}
+
+if(process.argv[1]&&path.resolve(process.argv[1])===fileURLToPath(import.meta.url)){
+  try {console.log(JSON.stringify(prepareStagingOnlySql(parseCli(process.argv.slice(2))),null,2));}
+  catch {console.error('BLOCKED_SCHEDULER_SOURCE_DRIFT_OR_UNSAFE_OUTPUT');process.exitCode=2;}
+}
