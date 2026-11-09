@@ -161,6 +161,104 @@ test('AI-09J: disposable PostgreSQL independently verifies global audit dedup, c
       req(randomUUID(),ORG_A,'crm.course.list',LEAD_A,1),
     ])await denied(once(actorA,'authenticated',ADMIN_A,SESSION_A,scope),
       'unknown tool or malformed read scope denied');
+
+    // A committed audit ID cannot be reused by a *different* staff actor,
+    // even within the same organization, during synthetic role promotion.
+    await root.query("update public.organization_members set role='admin' where user_id=$1",[MEMBER]);
+    await denied(once(member,'authenticated',MEMBER,SESSION_M,req(firstId)),
+      'same tenant, wrong session/actor replay collision');
+    await root.query("update public.organization_members set role='member' where user_id=$1",[MEMBER]);
+
+    // A failed (rolled-back) prepared insert does not leave durable evidence.
+    // A retry may then insert once, but it still cannot release CRM records.
+    const rolledId=randomUUID();
+    await beginAs(actorA,'authenticated',ADMIN_A,SESSION_A);
+    assert.equal((await invoke(actorA,req(rolledId))).replay_state,'inserted_pending_commit');
+    await actorA.query('rollback');
+    assert.equal(await count(root,rolledId),0);
+    const again=await once(retryA,'authenticated',ADMIN_A,SESSION_A,req(rolledId));
+    assert.equal(again.replay_state,'inserted_pending_commit');
+    assert.deepEqual(again.records,[]);
+    assert.equal(await count(root,rolledId),1);
+
+    // A parallel same-ID retry blocks on the first transaction's unique row.
+    // Once the first commits, the second sees a replay and cannot insert twice.
+    const concurrentId=randomUUID();
+    await beginAs(actorA,'authenticated',ADMIN_A,SESSION_A);
+    assert.equal((await invoke(actorA,req(concurrentId))).replay_state,'inserted_pending_commit');
+    await beginAs(retryA,'authenticated',ADMIN_A,SESSION_A);
+    let secondDone=false;
+    const pending=invoke(retryA,req(concurrentId)).then(
+      out=>{secondDone=true;return out;},
+      err=>{secondDone=true;throw err;},
+    );
+    await new Promise(resolve=>setTimeout(resolve,100));
+    assert.equal(secondDone,false,'concurrent duplicate must await first transaction outcome');
+    await actorA.query('commit');
+    const settled=await pending;
+    assert.equal(settled.replay_state,'already_present_no_result');
+    assert.deepEqual(settled.records,[]);
+    await retryA.query('commit');
+    assert.equal(await count(root,concurrentId),1);
+
+    // If the competing first transaction rolls back instead, the waiting
+    // request becomes the sole insert; it still reports PENDING until COMMIT.
+    const rollbackRace=randomUUID();
+    await beginAs(actorA,'authenticated',ADMIN_A,SESSION_A);
+    assert.equal((await invoke(actorA,req(rollbackRace))).replay_state,'inserted_pending_commit');
+    await beginAs(retryA,'authenticated',ADMIN_A,SESSION_A);
+    const pendingAfterRollback=invoke(retryA,req(rollbackRace));
+    await new Promise(resolve=>setTimeout(resolve,60));
+    await actorA.query('rollback');
+    const insertedAfterRollback=await pendingAfterRollback;
+    assert.equal(insertedAfterRollback.replay_state,'inserted_pending_commit');
+    await retryA.query('commit');
+    assert.equal(await count(root,rollbackRace),1);
+
+    // Zero-result course audit is allowed, but remains a ledger-only signal.
+    const emptyId=randomUUID();
+    const empty=await once(actorA,'authenticated',ADMIN_A,SESSION_A,
+      req(emptyId,ORG_A,'crm.course.list',null,0));
+    assert.equal(empty.replay_state,'inserted_pending_commit');
+    assert.deepEqual(empty.records,[]);
+    assert.equal(await count(root,emptyId),1);
+
+    // Ordinary callers cannot bypass the RPC and read tenant audit entries.
+    await beginAs(actorA,'authenticated',ADMIN_A,SESSION_A);
+    await denied(actorA.query('select * from ai09j_rehearsal.read_request_audit'),
+      'direct ledger read not granted');
+    await actorA.query('rollback');
+
+    // Privileged DDL/owner can change a local trigger: this is not a
+    // tamper-proof production retention or integrity guarantee.
+    const firstRows=(await root.query('select * from ai09j_rehearsal.read_request_audit order by created_at')).rows;
+    assert.ok(firstRows.length>=5);
+    assert.equal(firstRows.filter(row=>row.request_id===concurrentId).length,1);
+    assert.equal(firstRows.filter(row=>row.request_id===rollbackRace).length,1);
+    assert.doesNotMatch(JSON.stringify(firstRows),/@example|private_notes|200 Hour/);
+    await denied(root.query('delete from ai09j_rehearsal.read_request_audit where request_id=$1',[firstId]),
+      'audit row deletion refused');
+    await denied(root.query('truncate ai09j_rehearsal.read_request_audit'),
+      'audit truncate refused');
+
+    // A refused audit insert aborts the request. It does not leave a durable
+    // record of the denial; an approved separate denied-attempt policy is needed.
+    await root.query("create function ai09j_rehearsal.fail_audit_insert_v1() returns trigger language plpgsql as $t$ begin raise exception 'synthetic audit unavailable' using errcode='42501'; end; $t$");
+    await root.query('create trigger ai09j_fail_audit before insert on ai09j_rehearsal.read_request_audit for each row execute function ai09j_rehearsal.fail_audit_insert_v1()');
+    const failingId=randomUUID();
+    await denied(once(actorA,'authenticated',ADMIN_A,SESSION_A,req(failingId)),
+      'audit insertion failure');
+    await root.query('drop trigger ai09j_fail_audit on ai09j_rehearsal.read_request_audit');
+    assert.equal(await count(root,failingId),0);
+
+    // Current synthetic session lookup is rechecked before *all* calls,
+    // including benign-looking replay requests with prior ledger entries.
+    await root.query('delete from auth.sessions where id=$1',[SESSION_A]);
+    await denied(once(actorA,'authenticated',ADMIN_A,SESSION_A,req(firstId)),
+      'revoked session replay denied');
+    await denied(once(actorA,'authenticated',ADMIN_A,SESSION_A,req(randomUUID())),
+      'revoked session new request denied');
+    assert.equal(await count(root,firstId),1);
   }finally{
     for(const client of clients.reverse())await client.end().catch(()=>{});
     if(created)await admin.query('drop database "'+database+'" with (force)').catch(()=>{});
