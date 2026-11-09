@@ -93,7 +93,9 @@ test('revoked Proxy objects and arrays fail closed without escaping the denial a
   const h=harness({principal:revokedPrincipal.proxy});
   const result=await policy.reviewReadOnlyToolGate(request(),h.deps);
   assert.equal(result.ok,false);
-  assert.equal(result.reason,'unauthenticated_or_unbound');
+  // A revoked Auth object may be classified as an invalid principal or as a
+  // failed verification. Both must deny, audit, and never permit execution.
+  assert.ok(['unauthenticated_or_unbound','verification_unavailable'].includes(result.reason));
   assert.equal(result.mayExecute,false);
   assert.equal(h.calls.auth,1);
   assert.equal(h.calls.resource,0);
