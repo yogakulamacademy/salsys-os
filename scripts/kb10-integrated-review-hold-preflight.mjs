@@ -105,7 +105,14 @@ export function verifyIntegratedHold(packet, migrationInventory, releaseLedger, 
   const syntheticSql=files.syntheticSql;
   const atomicDraftSql=files.atomicDraftSql;
   const approvalGuardSql=files.approvalGuardSql;
+  const retrievalQuarantineSql=files.retrievalQuarantineSql;
   const legacyApprovalAction=files.legacyApprovalAction;
+  assert.match(retrievalQuarantineSql,/KB16A_LOCAL_DISPOSABLE_FIXTURE_REQUIRED/);
+  assert.match(retrievalQuarantineSql,/KB16A_UNVERIFIED_RETRIEVAL_HOLD_START/);
+  assert.match(retrievalQuarantineSql,/KB16A_UNVERIFIED_RETRIEVAL_HOLD_END/);
+  assert.match(retrievalQuarantineSql,/coalesce\(kd\.metadata->>'source_text_verified',''\) <> 'false'/);
+  assert.match(retrievalQuarantineSql,/coalesce\(ks\.metadata->>'source_text_verified',''\) <> 'false'/);
+  assert.match(retrievalQuarantineSql,/coalesce\(kc\.metadata->>'source',''\) <> 'manual_discovery_draft_unverified'/);
   assert.match(approvalGuardSql,/KB14A_LOCAL_DISPOSABLE_FIXTURE_REQUIRED/);
   assert.match(approvalGuardSql,/create trigger kb14a_hold_unverified_discovery_document/);
   assert.match(approvalGuardSql,/create trigger kb14a_hold_unverified_discovery_source/);
@@ -168,6 +175,7 @@ function readCurrentFiles(){
     syntheticSql:readText('docs/sql/KB-09T-evidence-withdrawal-expiry-REHEARSAL-DRAFT.sql'),
     atomicDraftSql:readText('docs/sql/KB-11A-consent-atomic-discovered-draft-REHEARSAL-DRAFT.sql'),
     approvalGuardSql:readText('docs/sql/KB-14A-unverified-discovery-approval-guard-REHEARSAL-DRAFT.sql'),
+    retrievalQuarantineSql:readText('docs/sql/KB-16A-unverified-discovery-retrieval-REHEARSAL-DRAFT.sql'),
     legacyApprovalAction:readText('app/settings/knowledge/actions.ts'),
   };
 }
@@ -183,6 +191,7 @@ export function loadAndVerify(){
   // A rename must not silently turn the unapproved RPC into a deployable DDL.
   assert.equal(migrations.some(name=>/^KB-11[AB]-/i.test(name)),false);
   assert.equal(migrations.some(name=>/^KB-14A-/i.test(name)),false);
+  assert.equal(migrations.some(name=>/^KB-16A-/i.test(name)),false);
   for(const migration of migrations.filter(name=>name.endsWith('.sql'))){
     const sql=readText(resolve('supabase/migrations',migration));
     assert.doesNotMatch(
@@ -199,6 +208,11 @@ export function loadAndVerify(){
       sql,
       /create\s+trigger\s+kb14a_hold_unverified_discovery_(?:document|source)/i,
       'KB-14A review-only trigger cannot become a migration: '+migration,
+    );
+    assert.doesNotMatch(
+      sql,
+      /KB16A_UNVERIFIED_RETRIEVAL_HOLD_START|KB16A_LOCAL_DISPOSABLE_FIXTURE_REQUIRED/i,
+      'KB-16A unapproved retrieval quarantine cannot become an installable migration: '+migration,
     );
   }
   return verifyIntegratedHold(packet,inventory,ledger,readCurrentFiles());
