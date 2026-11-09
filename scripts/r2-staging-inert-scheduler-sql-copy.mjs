@@ -20,7 +20,7 @@ const replacements = [
   ['20261027094000_schedule_instagram_dm_recovery_v1.sql', '$$select public.retry_instagram_dm_events_v1(10);$$', '$$select 1;$$'],
   ['20261028023743_ensure_instagram_dm_retry_schedule_v1.sql', "'select public.retry_instagram_dm_events_v1(10);'", "'select 1;'"],
   ['20261101164458_r10_outcome_learning_runner_v1.sql', "$cron$select public.sweep_system_intelligence_recommendation_outcomes_v1(null,50,'cron');$cron$", '$cron$select 1;$cron$'],
-  ['20261104171500_instagram_outbound_echo_recovery_v1.sql', "'select public.retry_instagram_outbound_echoes_v1(10);'", "'select 1;'"],
+  ['20261104171500_instagram_outbound_echo_recovery_v1.sql', "'select public.retry_instagram_outbound_echoes_v1(10);'", "'select 1;'", 2],
 ];
 const jobFiles = [...new Set(replacements.filter(x => x[1].includes('select public.')).map(x => x[0]).concat('20261027094000_schedule_instagram_dm_recovery_v1.sql'))].sort();
 const fail = (reason) => {throw Error('BLOCKED_' + reason);};
@@ -41,21 +41,24 @@ export function prepareStagingOnlySql({sourceFolder, outputFolder, expectedSourc
   for (const file of original.files) {
     let s=fs.readFileSync(path.join(src,file.name),'utf8');
     const changesForFile=replacements.filter(x=>x[0]===file.name);
-    for (const [,from,to] of changesForFile) {
-      const at=s.indexOf(from);
-      if(at<0 || s.indexOf(from,at+from.length)>=0 || s.includes(to)) fail('EXPECTED_SOURCE_LITERAL_DRIFT');
-      s=s.slice(0,at)+to+s.slice(at+from.length);
+    for (const [,from,to,expectedCount=1] of changesForFile) {
+      if (s.split(from).length-1!==expectedCount || s.includes(to)) fail('EXPECTED_SOURCE_LITERAL_DRIFT');
+      s=s.split(from).join(to);
     }
-    if(changesForFile.length) changes.push({file:file.name,replacements:changesForFile.length});
+    if(changesForFile.length) changes.push({file:file.name,replacements:changesForFile.reduce((n,r)=>n+(r[3]??1),0)});
     parts.set(file.name,s);
   }
-  if(changes.length!==jobFiles.length || changes.reduce((n,x)=>n+x.replacements,0)!==replacements.length) fail('REPLACEMENT_COUNT_MISMATCH');
+  if(changes.length!==jobFiles.length || changes.reduce((n,x)=>n+x.replacements,0)!==replacements.reduce((n,r)=>n+(r[3]??1),0)) fail('REPLACEMENT_COUNT_MISMATCH');
   const candidates=[...parts.entries()].filter(([name,sql])=>/\bcron\s*\.\s*schedule\s*\(/i.test(sql)).map(([name])=>name).sort();
   if(JSON.stringify(candidates)!==JSON.stringify(jobFiles)) fail('POST_TRANSFORM_CRON_INVENTORY_DRIFT');
   // Every literal job command used by cron.schedule() in this exact reviewed
   // historical corpus was explicitly changed to an inert SELECT 1.
   for (const [name,from] of replacements) if(parts.get(name)?.includes(from)) fail('UNREPLACED_ORIGINAL_LITERAL');
-  if(parts.get(scheduler).includes('https://salsysos.com/api/automation/runtime-scheduler')) fail('LIVE_SCHEDULER_URL_REMAINS');
+  const configuredEndpoint=parts.get(scheduler).match(/\bendpoint_url\s+text\s+not\s+null\s+default\s+'([^']+)'/i);
+  if (!configuredEndpoint) fail('STAGING_SCHEDULER_ENDPOINT_MISSING');
+  let url;
+  try { url=new URL(configuredEndpoint[1]); } catch { fail('STAGING_SCHEDULER_ENDPOINT_INVALID'); }
+  if (url.protocol!=='https:' || url.hostname!=='staging.invalid' || url.pathname!=='/api/automation/runtime-scheduler' || url.port || url.username || url.password || url.search || url.hash) fail('STAGING_SCHEDULER_ENDPOINT_NOT_ISOLATED');
   // Publish the staging-only copy only after all input checks have succeeded.
   fs.mkdirSync(dst,{recursive:false,mode:0o700});
   try {
