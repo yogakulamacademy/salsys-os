@@ -21,6 +21,7 @@ const SHA='a'.repeat(64);
 const DRAFT='select public.create_discovery_review_draft_with_current_consent_v1($1,$2,$3,$4,$5) as result';
 const WITHDRAW='select public.withdraw_knowledge_discovery_consent_v1($1,$2,$3) as result';
 const APPROVE='select public.approve_knowledge_document_v1($1,$2) as result';
+const SEARCH='select document_id,title,content from public.search_organization_knowledge_v1($1,$2,$3)';
 const TITLE='Verified manually entered course facts';
 const CONTENT='These are synthetic handwritten review notes, not captured website evidence.';
 const SIGNATURE='public.create_discovery_review_draft_with_current_consent_v1(uuid,uuid,text,text,text)';
@@ -85,9 +86,11 @@ test('KB-11A: local-only consent-atomic discovered-page draft SQL and negative i
       "grant execute on function auth.uid() to authenticated",
       "create table public.organization_onboarding(organization_id uuid primary key,website_url text)",
       "create table public.knowledge_sources(id uuid primary key default gen_random_uuid(),organization_id uuid not null,source_type text not null,name text not null,source_uri text,status text not null,metadata jsonb not null default '{}'::jsonb,created_by uuid)",
-      "create table public.knowledge_documents(id uuid primary key default gen_random_uuid(),organization_id uuid not null,source_id uuid not null references public.knowledge_sources(id) on delete restrict,title text not null,category text not null,content text not null,status text not null check(status in ('draft','review','approved','archived')),created_by uuid,approved_by uuid,approved_at timestamptz,metadata jsonb not null default '{}'::jsonb)",
-      "create table public.knowledge_chunks(id uuid primary key default gen_random_uuid(),organization_id uuid not null,document_id uuid not null references public.knowledge_documents(id) on delete restrict,chunk_index integer not null,content text not null,metadata jsonb not null default '{}'::jsonb)",
+      "create table public.knowledge_documents(id uuid primary key default gen_random_uuid(),organization_id uuid not null,source_id uuid references public.knowledge_sources(id) on delete restrict,title text not null,category text not null,content text not null,status text not null check(status in ('draft','review','approved','archived')),created_by uuid,approved_by uuid,approved_at timestamptz,version integer not null default 1,valid_from timestamptz,valid_until timestamptz,updated_at timestamptz not null default now(),metadata jsonb not null default '{}'::jsonb)",
+      "create table public.knowledge_chunks(id uuid primary key default gen_random_uuid(),organization_id uuid not null,document_id uuid not null references public.knowledge_documents(id) on delete restrict,chunk_index integer not null,content text not null,metadata jsonb not null default '{}'::jsonb,search_vector tsvector generated always as (to_tsvector('simple',coalesce(content,''))) stored)",
       "create table public.knowledge_approvals(id uuid primary key default gen_random_uuid(),organization_id uuid not null,document_id uuid not null,action text not null,reviewer_id uuid,note text)",
+      "create function public.is_organization_member(p_organization_id uuid) returns boolean language sql stable security definer set search_path=public,auth,pg_temp as $member$ select exists (select 1 from public.organization_members m where m.organization_id=p_organization_id and m.user_id=auth.uid() and m.active=true and auth.jwt()->>'role'='authenticated') $member$",
+      "grant execute on function public.is_organization_member(uuid) to authenticated,service_role",
       "revoke all on public.knowledge_sources,public.knowledge_documents,public.knowledge_chunks,public.knowledge_approvals from public,anon,authenticated,service_role",
     ].join(';\n')+';');
     await root.query(file('../../docs/sql/KB-06B-audited-discovery-consent-lifecycle-DRAFT.sql'));
