@@ -7,7 +7,7 @@
 
 ## Scope and non-actions
 
-This checkpoint responds to two **observed synthetic weaknesses** in the existing, **human-reviewed** SalsysOS Co-Pilot. It adds a **standalone, server-only, non-wired candidate** and 13 tests. **It does not import the candidate into \`app/conversations/copilot-actions.ts\`, change current routing, touch \`app/settings/knowledge/actions.ts\`, call a provider, send a WhatsApp message, modify a lead, deploy SQL, or enable autonomous actions.**
+This checkpoint responds to two **observed synthetic weaknesses** in the existing, **human-reviewed** SalsysOS Co-Pilot. It adds a **standalone, server-only, non-wired candidate** and 14 tests. **It does not import the candidate into \`app/conversations/copilot-actions.ts\`, change current routing, touch \`app/settings/knowledge/actions.ts\`, call a provider, send a WhatsApp message, modify a lead, deploy SQL, or enable autonomous actions.**
 
 Artifacts:
 - \`lib/ai/copilot-safety-guard-candidate-v1.ts\`
@@ -22,6 +22,12 @@ Artifacts:
 
 **Important limitations:** These are narrowly scoped **English-language lexical patterns**, not a universal legal/safety-intent classifier. Oblique wording, other languages, sarcasm, negations, international spelling and sophisticated prompt injection can defeat or over-trigger them. A human must decide expansion, false-positive tolerance, translation, crisis treatment and whether a high-risk classification should suppress drafting completely. The existing Co-Pilot's router is **not modified** by this candidate.
 
+### Source-review regression: descriptor/get-trap mismatch (2026-11-09)
+
+The first candidate version verified own DATA property descriptors but then returned and read the **original caller-owned route object**. A hostile JavaScript `Proxy` with a `get` trap could expose a `human_only/handoff` value through the descriptors but return `low/reply` to later policy reads. An offline Node reproduction confirmed the mismatch. The candidate now copies only own enumerable DATA descriptors into a **frozen, null-prototype detached snapshot** before both route validation and the final classification. Revoked proxies, throwing traps, accessors, Symbols, non-enumerable and inherited fields deny rather than being treated as trusted router data. The fourteenth synthetic test asserts that a descriptor-backed `human_only` route **cannot be downgraded**, no caller-owned `get` trap is invoked, and every outcome remains `maySend=false`, `mayExecute=false`.
+
+This closes a concrete **source-only candidate trust-boundary defect**; it does not prove immunity from arbitrary model semantic misclassification or authorize a live Co-Pilot rollout. Independent reviewer verdict and signed-user acceptance remain required.
+
 ## G02 — model returned unsupported payment confirmation
 
 \`previewCopilotDraftSafety(text)\` rejects modeled affirmative payment/refund/booking/enrollment/room/certificate assertions before a hypothetical staff preview when the text lacks a separately trusted claim-validation pathway. It denies direct email/telephone echoes using the **pure direct-contact detector** from the staff-insight module, but does **not** reuse the staff-insight assertion policy or claim that those staff and customer audiences share a sufficient model. It also rejects common prompt-injection echoes, invalid/oversized content and control characters.
@@ -30,7 +36,7 @@ Only tightly bounded **neutral verification** sentences can mention an unconfirm
 
 **Important limitations:** A lexical filter cannot establish factual truth, guarantee absent PII, verify financial settlement, evaluate all variants and languages, or replace independent evidence validation. Conditional statements, negation and adversarial paraphrase require human adversarial testing. Screened staff drafts are **not** approved messages.
 
-## Local test coverage (13 synthetic tests)
+## Local test coverage (14 synthetic tests)
 
 - Model says \`simple|low\` on multiple refund/legal/emergency/complaint scenarios → candidate high-risk override.
 - Discount, special exceptions and refund-policy queries → candidate staff review.
@@ -43,7 +49,7 @@ Only tightly bounded **neutral verification** sentences can mention an unconfirm
 - Contact details and echoed system-prompt instructions → denied.
 - No live Co-Pilot/Knowledge imports and no model/database/network function in the candidate.
 
-These are **13 test definitions**, not real model test cases or 16 signed-user witnesses. They are run by the existing \`npm run test:readiness\` glob and do not change any executable route.
+These are **14 test definitions**, not real model test cases or 16 signed-user witnesses. They are run by the existing \`npm run test:readiness\` glob and do not change any executable route.
 
 ## Independent decisions required before wiring
 
