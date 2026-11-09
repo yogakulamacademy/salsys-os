@@ -7,7 +7,7 @@
 
 ## Scope and non-actions
 
-This checkpoint responds to two **observed synthetic weaknesses** in the existing, **human-reviewed** SalsysOS Co-Pilot. It adds a **standalone, server-only, non-wired candidate** and 12 tests. **It does not import the candidate into \`app/conversations/copilot-actions.ts\`, change current routing, touch \`app/settings/knowledge/actions.ts\`, call a provider, send a WhatsApp message, modify a lead, deploy SQL, or enable autonomous actions.**
+This checkpoint responds to two **observed synthetic weaknesses** in the existing, **human-reviewed** SalsysOS Co-Pilot. It adds a **standalone, server-only, non-wired candidate** and 13 tests. **It does not import the candidate into \`app/conversations/copilot-actions.ts\`, change current routing, touch \`app/settings/knowledge/actions.ts\`, call a provider, send a WhatsApp message, modify a lead, deploy SQL, or enable autonomous actions.**
 
 Artifacts:
 - \`lib/ai/copilot-safety-guard-candidate-v1.ts\`
@@ -26,11 +26,11 @@ Artifacts:
 
 \`previewCopilotDraftSafety(text)\` rejects modeled affirmative payment/refund/booking/enrollment/room/certificate assertions before a hypothetical staff preview when the text lacks a separately trusted claim-validation pathway. It denies direct email/telephone echoes using the **pure direct-contact detector** from the staff-insight module, but does **not** reuse the staff-insight assertion policy or claim that those staff and customer audiences share a sufficient model. It also rejects common prompt-injection echoes, invalid/oversized content and control characters.
 
-Only tightly bounded **neutral verification** sentences can mention an unconfirmed financial/booking event (e.g. “I cannot confirm whether your payment was received”). Sentence-by-sentence evaluation prevents a disclaimer in one sentence from laundering a positive claim in another. The candidate **returns no model text on denial**; even accepted text is labeled \`unverified_human_review_draft_only\`, \`maySend=false\`.
+Only tightly bounded **neutral verification** sentences can mention an unconfirmed financial/booking event (e.g. “I cannot confirm whether your payment was received”). Sentence-by-sentence evaluation prevents a disclaimer in one sentence from laundering a positive claim in another. In review, the earlier neutral-prefix exception proved too permissive for **same-sentence clauses** separated by semicolons, commas or dashes (for example, “I cannot confirm whether your payment was received; your booking was confirmed”). It now requires a **whole-clause, tightly scoped verification grammar** rather than accepting any sentence that merely begins with “I cannot confirm” or “Please verify”. Ten adversarial mixed-clause cases and four permitted neutral questions were added to a thirteenth regression test. This is still a lexical filter, not a semantic safety certificate. The candidate **returns no model text on denial**; even accepted text is labeled \`unverified_human_review_draft_only\`, \`maySend=false\`.
 
 **Important limitations:** A lexical filter cannot establish factual truth, guarantee absent PII, verify financial settlement, evaluate all variants and languages, or replace independent evidence validation. Conditional statements, negation and adversarial paraphrase require human adversarial testing. Screened staff drafts are **not** approved messages.
 
-## Local test coverage (12 synthetic cases)
+## Local test coverage (13 synthetic tests)
 
 - Model says \`simple|low\` on multiple refund/legal/emergency/complaint scenarios → candidate high-risk override.
 - Discount, special exceptions and refund-policy queries → candidate staff review.
@@ -43,7 +43,7 @@ Only tightly bounded **neutral verification** sentences can mention an unconfirm
 - Contact details and echoed system-prompt instructions → denied.
 - No live Co-Pilot/Knowledge imports and no model/database/network function in the candidate.
 
-These are **12 test definitions**, not real model test cases or 16 signed-user witnesses. They are run by the existing \`npm run test:readiness\` glob and do not change any executable route.
+These are **13 test definitions**, not real model test cases or 16 signed-user witnesses. They are run by the existing \`npm run test:readiness\` glob and do not change any executable route.
 
 ## Independent decisions required before wiring
 
