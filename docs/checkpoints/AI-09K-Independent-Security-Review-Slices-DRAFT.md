@@ -3,13 +3,14 @@
 **Review baseline:** `bfd15b934caf4ddb254e38c21c8cd9f854d7e9f6`  
 **Source:** [combined draft PR #671](https://github.com/yogakulamacademy/salsys-os/pull/671), `integration/kb16-r2-main-preserve-20261109`  
 **Review branch:** `review/ai09k-independent-security-slices-20261109` (based **directly on the integration commit**, not on production-linked `main`)  
+**PR #676 review-only base branch:** `review/ai09k-base-20261109` at exact commit `bfd15b934caf4ddb254e38c21c8cd9f854d7e9f6`. This prevents the PR's comparison base from drifting as the integration branch changes. A branch pointer is not immutable governance evidence: source links and approvals MUST still bind to the exact SHA.  
 **State:** Six independent review slices are **ready to inspect**, not reviewed or approved. This document authorizes **no merge, migration, staging, execution, deployment, paid resource or policy change**.
 
 ## Why this exists
 
-The combined KB/R2/AI draft currently contains **272 changed files** compared with `main`. Asking a security reviewer to approve the entire stack as a unit is inappropriate and makes issue-specific conclusions hard to audit.
+The combined KB/R2/AI draft contained **272 changed files** compared with `main` when this review packet was created; it may contain more changes now. Asking a security reviewer to approve the entire stack as a unit is inappropriate and makes issue-specific conclusions hard to audit.
 
-This separate AI-09K review PR adds only a small **review index, this guide, and a hold-regression test** relative to the integration branch. Reviewers should **open the exact baseline commit** linked below for underlying implementation evidence. Approval of this documentation does not approve the underlying code, the 272-file stack, a SQL migration, or a production release.
+This separate AI-09K review PR adds only a small **review index, this guide, and a hold-regression test** relative to its **dedicated, SHA-pinned review-only base branch**, not the live integration branch. Reviewers should **open the exact baseline commit** linked below for underlying implementation evidence. Approval of this documentation does not approve the underlying code, the 272-file stack, a SQL migration, or a production release.
 
 The source-only AI modules, disposable PostgreSQL tests and nine AI-09H production decisions remain unchanged by this PR. The combined PR #671 stays draft and unmerged.
 
