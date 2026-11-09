@@ -1,0 +1,31 @@
+# R2 staged schema: function-privilege parity review — 2026-11-09
+
+**State: proposal only, awaiting independent approval. No SQL applied to staging or production.**
+
+## Evidence and release blocker
+
+Temporary staging `ndxpjqkthuzxlmbenxti` has exactly 431 migrations, no Auth users or storage objects, and 5 inert cron jobs with no `pg_net` extension. Independently approved catalog query from PR #675 returned **`PRIVILEGE_CATALOG_REVIEW_REQUIRED`**. 22 postgres-owned public `SECURITY DEFINER` functions are executable by `anon` through inherited **PUBLIC EXECUTE** grants (13 trigger-returning, 9 ordinary functions). Fresh production read-only comparison on the same day confirms all 22 same signatures deny anonymous EXECUTE; 21 deny authenticated as well; only `attach_whatsapp_outbound_message_id` permits authenticated EXECUTE. All 22 explicitly allow `service_role` in both systems.
+
+Supabase advisors also reported four `function_search_path_mutable` warnings on staging. Those four are **SECURITY INVOKER** functions, not SECURITY DEFINER, and production fixes each to `search_path=public, pg_temp`. The 40 `rls_enabled_no_policy` INFO notices and 134 authenticated callable SECURITY DEFINER functions need separate review; this patch does not assert those are safe.
+
+## Review-only SQL proposal
+
+`docs/sql/r2-staging-postinstall-function-grants-parity-v1.sql` is an **explicit, transactional, fail-closed security patch**:
+- Precondition: all 22 expected distinct `public` signatures exist, are postgres-owned SECURITY DEFINER functions, and `service_role` has EXECUTE; all four expected INVOKER search-path functions exist.
+- Revoke only `EXECUTE` on exactly 22 named functions from `PUBLIC` and `anon`, additionally revoking `authenticated` on the exact 21 functions where Production denies it. Preserve `authenticated` on `attach_whatsapp_outbound_message_id`. Never revoke `service_role`.
+- Pin only the four documented INVOKER-function search paths to `public, pg_temp`, matching live production settings.
+- Postcondition: all 22 have `anon=false`, exactly one retains `authenticated=true`, and all retain `service_role=true`; all four paths match production. Any mismatch triggers an exception and transactional rollback.
+- No table changes, inserts, deletes, copied records, egress, cron, API keys, domains or production identifiers; SQL uses bounded lock and statement timeouts.
+
+`tests/readiness/r2-staging-postinstall-function-grants-parity-v1.test.cjs` supplies **static regression checks only**. It does not execute SQL or prove signed-in tenant isolation.
+
+## Mandatory approval / implementation sequence
+
+1. Independent reviewer `thedetourclubind-cloud` reviews the *exact current PR head*, especially all 22 effective grants, the one intentional authenticated grant, and four INVOKER function paths. Full CI and CodeQL must pass.
+2. **After approved design**, operator generates a timestamped migration using `supabase migration new r2_postinstall_function_grant_parity` in an isolated Codespaces checkout with the reviewed schema, copies the identical SQL into the CLI-generated file, and submits the migration file for independent review on the exact new PR head. Do **not** invent migration filenames or commit to `main` prematurely.
+3. Operator checks staging project ref `ndxpjqkthuzxlmbenxti`, original 431 migration history and absence of customer data; captures an ACL and rollback baseline. No production database linkage or production Preview hosting.
+4. With explicit **staging-only installation** authorization, perform a reviewed remote dry run first and then apply **only the new approved migration** to temporary staging (not reapply the 431 migrations). Stop on mismatch: no reset, repair or auto retry.
+5. Independently rerun PR #675 SELECT-only catalog gate. Require `CATALOG_GUARDS_PASS_NOT_ACCEPTANCE` and no `anon_security_definer_function_executable` or mutable-search-path advisor warnings; compare selected effective grants with live production via separate read-only inspection. Investigate any further differences.
+6. Only after privilege pass, proceed to separately reviewed #667 reliability staging integration, isolated HTTPS CRM and CMP, real tenant A/B/lead/consent/no-send testing, rollback, and final production owner release approval.
+
+**This proposal does NOT authorize a hosted change, staging E2E, production merge, database reset, or collector activation.** See tracking issue [#531](https://github.com/yogakulamacademy/salsys-os/issues/531).
