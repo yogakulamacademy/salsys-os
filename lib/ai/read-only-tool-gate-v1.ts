@@ -101,8 +101,11 @@ type Rejection =
  * re-triggering a getter or observing a changed caller-owned property.
  */
 function asRecord(value: unknown): Record<string, unknown> | null {
-  if (value === null || typeof value !== 'object' || Array.isArray(value)) return null;
+  if (value === null || typeof value !== 'object') return null;
   try {
+    // Array.isArray() itself throws for a revoked Proxy, so it MUST be
+    // inside this catch boundary to preserve the denied-attempt audit.
+    if (Array.isArray(value)) return null;
     const prototype = Object.getPrototypeOf(value);
     if (prototype !== Object.prototype && prototype !== null) return null;
     const keys = Reflect.ownKeys(value);
