@@ -56,9 +56,22 @@ test('only the catalog-verified 22 definer functions have EXECUTE revoked', () =
     assert.equal(item[3], item[1] === 'attach_whatsapp_outbound_message_id'
       ? 'PUBLIC, anon' : 'PUBLIC, anon, authenticated');
   }
-  assert.doesNotMatch(sql, /\bGRANT\s+EXECUTE\b/i);
+  const serviceGrants = [...sql.matchAll(/^GRANT EXECUTE ON FUNCTION public\.([a-z0-9_]+)\(([^\n;]*)\) TO (service_role);$/gm)];
+  assert.equal(serviceGrants.length, 1);
+  assert.equal(serviceGrants[0][1], 'approve_sales_asset_v1');
   assert.doesNotMatch(sql, /\bREVOKE\s+(?:ALL|USAGE|SELECT|INSERT|UPDATE|DELETE)\b/i);
   assert.doesNotMatch(sql, /\b(?:DROP|TRUNCATE|CREATE\s+TABLE|CREATE\s+POLICY|ALTER\s+TABLE|DELETE\s+FROM|INSERT\s+INTO|UPDATE\s+public\.)\b/i);
+});
+
+test('additional authenticated and service-role drift is corrected only for two exact signatures', () => {
+  assert.match(sql, /^REVOKE EXECUTE ON FUNCTION public\.prepare_failed_whatsapp_provider_retry_v1\(p_organization_id uuid, p_failed_audit_id uuid, p_now timestamp with time zone\) FROM authenticated;$/m);
+  assert.match(sql, /^GRANT EXECUTE ON FUNCTION public\.approve_sales_asset_v1\(p_organization_id uuid, p_asset_id uuid, p_auto_send_allowed boolean\) TO service_role;$/m);
+  assert.match(sql, /BLOCKED_R2_EXTRA_AUTHENTICATED_FUNCTION_CONTRACT_MISMATCH/);
+  assert.match(sql, /BLOCKED_R2_MISSING_SERVICE_ROLE_FUNCTION_CONTRACT_MISMATCH/);
+  assert.match(sql, /BLOCKED_R2_EXTRA_AUTHENTICATED_POSTFLIGHT_FAILED/);
+  assert.match(sql, /BLOCKED_R2_SALES_ASSET_SERVICE_ROLE_POSTFLIGHT_FAILED/);
+  const extra = [...sql.matchAll(/^REVOKE EXECUTE ON FUNCTION public\.prepare_failed_whatsapp_provider_retry_v1\(/gm)];
+  assert.equal(extra.length, 1);
 });
 
 test('exactly four INVOKER search_path changes match the production catalog configuration', () => {
