@@ -64,8 +64,12 @@ export function prepareStagingOnlySql({sourceFolder, outputFolder, expectedSourc
   try { url=new URL(configuredEndpoint[1]); } catch { fail('STAGING_SCHEDULER_ENDPOINT_INVALID'); }
   if (url.protocol!=='https:' || url.hostname!=='staging.invalid' || url.pathname!=='/api/automation/runtime-scheduler' || url.port || url.username || url.password || url.search || url.hash) fail('STAGING_SCHEDULER_ENDPOINT_NOT_ISOLATED');
   const siteBlock = parts.get(websiteFoundation)?.match(/insert\s+into\s+public\.organization_sites\s*\([\s\S]*?on\s+conflict\s*\(hostname\)[\s\S]*?status\s*=\s*'active';/i)?.[0];
-  if (!siteBlock || !siteBlock.includes("('r2-yogakulam.invalid'::text)") || !siteBlock.includes("('www.r2-yogakulam.invalid'::text)")) fail('STAGING_SITE_HOSTS_MISSING');
-  if (siteBlock.includes('yogakulam.com')) fail('LIVE_SITE_HOSTS_REMAIN');
+  if (!siteBlock) fail('STAGING_SITE_HOSTS_MISSING');
+  // Compare complete SQL hostname values; never use substring URL/domain checks.
+  const siteNames = [...siteBlock.matchAll(/\('([^']+)'::text\)/g)].map(match => match[1]).sort();
+  if (JSON.stringify(siteNames) !== JSON.stringify(['r2-yogakulam.invalid','www.r2-yogakulam.invalid'])) {
+    fail('STAGING_SITE_HOSTS_MISMATCH');
+  }
   // Publish the staging-only copy only after all input checks have succeeded.
   fs.mkdirSync(dst,{recursive:false,mode:0o700});
   try {
