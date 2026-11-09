@@ -56,6 +56,16 @@ After the second no-seed, inert-scheduler local database replay, the disposable 
 
 This **does not replace real independently signed-in browser testing** in hosted staging, and does not prove consent, portal behavior, connection isolation or restore readiness. No production and no hosted staging SQL is executed by this check.
 
+## Offline operator package — tested staging-only schema (not deployed)
+
+After **both** clean local replay passes, the same `.github/workflows/migration-replay.yml` job packages the exact stage-safe, no-development-seed SQL into `r2-staging-reviewed-sql.tar.gz`, uploads it in its 3-day `migration-recovery-evidence` artifact, and emits `r2-staging-reviewed-sql.tar.gz.sha256`. The job rejects unexpected files, SQL digest drift or a nonempty development seed; it then extracts the archive to a separate directory and recomputes the complete SQL manifest hash to prevent handoff of untested bytes. The package includes **only** the 431 transformed SQL files, a comment-only `supabase/seed.sql`, and two JSON manifest inventories. It includes no `.env`, Supabase `.temp/project-ref`, credentials, database dumps, auth users or customer rows.
+
+**Operator verification before any remote action:** fetch the artifact **from the successful exact-head run** and verify both the archive SHA-256 and extracted `supabase/migrations` manifest against `staging-copy-manifest.json`. Do not combine its transformed SQL with raw `main` migrations. Work in a new disposable **local checkout**, replace only its `supabase/migrations` and `supabase/seed.sql` from the archive, and verify that the resulting SQL manifest matches the reviewed SHA-256. The package alone is **not** a full runnable app or an authorized database deployment.
+
+Only an authorized staging operator may authenticate and link that disposable checkout to **exactly** `ndxpjqkthuzxlmbenxti`, review the remote migration inventory, and execute the existing **stage-ref-locked, hash-locked `supabase db push --dry-run` helper**. Because host and CLI behavior, role permissions, extensions, webhook/e-mail credentials, RLS and network access may differ from local CI, the dry run and every stage-only migration require independent technical sign-off. Do not modify production, change the migration ledger through `migration repair`, start paid infrastructure, copy production users/leads, or enable cron/outbound providers.
+
+**Do not promote the package as production migration SQL.** Its scheduling commands and endpoint defaults were intentionally altered for *isolated* staging; real customer deployment must always use separately reviewed production-safe migrations and its own authorized release process. The package is for witnessed acceptance only and expires with the GitHub Actions retention policy.
+
 ## New fail-closed remote dry-run helper (local operator only)
 
 On a separate, trusted working tree that has reproduced **all** of the historical recovery workflow steps and has passed the clean local replay, save the exact approved manifest SHA-256 from the current GitHub `migration-recovery-evidence` artifact. Do not copy credentials into logs or GitHub issues.
