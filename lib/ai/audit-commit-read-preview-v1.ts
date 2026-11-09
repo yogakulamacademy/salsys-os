@@ -121,11 +121,11 @@ function parsePrepared(value: unknown, scope: ReadScope): PreparedRead | null {
     !scopedFieldsMatch(row, scope) ||
     !uuid(row.transactionId) || !uuid(row.auditEventId) ||
     row.auditState !== 'pending' ||
-    !Number.isSafeInteger(row.rowCount) ||
     typeof row.rowCount !== 'number' ||
+    !Number.isSafeInteger(row.rowCount) ||
     row.rowCount < 0 || row.rowCount > (scope.toolId === 'crm.course.list' ? 20 : 1) ||
     !Array.isArray(row.rows) || row.rows.length !== row.rowCount) return null;
-  return row as PreparedRead;
+  return row as unknown as PreparedRead;
 }
 
 function confirmedCommit(value: unknown, expected: CommitInput): boolean {
