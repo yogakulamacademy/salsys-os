@@ -81,12 +81,16 @@ const UNSUPPORTED_COMMITMENTS = [
  * A sentence like "I cannot confirm, but payment was received" is denied.
  * These patterns never claim a payment/booking/certificate actually happened.
  */
+// The neutral exception is a WHOLE-CLAUSE allowlist, not a safe-looking
+// prefix. Otherwise "I cannot confirm ...; your booking was confirmed"
+// could slip through when both assertions appear in one sentence.
 const NEUTRAL_VERIFICATION = [
-  /^(?:i|we|our team|the team|admissions|the admissions team)\s+(?:cannot|can't|are unable to|is unable to)\s+(?:currently\s+)?confirm\b/i,
-  /^(?:please|kindly)\s+(?:ask|check|verify|confirm)\b/i,
-  /^(?:the admissions team|our team|the team|staff)\s+(?:can|will)\s+(?:check|verify|confirm)\b/i,
-  /^(?:could|can|would)\s+you\s+(?:please\s+)?(?:confirm|verify|check)\b/i,
-  /^(?:your|the)\s+(?:payment|deposit|refund)\s+(?:needs|requires)\s+(?:verification|review)\b/i,
+  /^(?:i|we|our team|the team|admissions|the admissions team)\s+(?:cannot|can't|are unable to|is unable to)\s+(?:currently\s+)?confirm\s+(?:whether|if)\s+(?:(?:your|the|a)\s+)?(?:payment|deposit|refund|booking|room|seat)\s+(?:was|has been|is|will be)\s+(?:received|confirmed|processed|reserved|secured|available)$/i,
+  /^(?:i|we|our team|the team|admissions|the admissions team)\s+(?:cannot|can't|are unable to|is unable to)\s+(?:currently\s+)?confirm\s+(?:the|your)\s+(?:refund|payment|deposit)\s+status\s+(?:without\s+checking|until\s+we\s+verify)$/i,
+  /^(?:please|kindly)\s+(?:ask|check|verify|confirm)\s+(?:whether|if)\s+(?:(?:your|the|a)\s+)?(?:payment|deposit|refund|booking|room|seat)\s+(?:was|has been|is|will be)\s+(?:received|confirmed|processed|reserved|secured|available)$/i,
+  /^(?:the admissions team|our team|the team|staff)\s+(?:can|will)\s+(?:check|verify|confirm)\s+(?:whether|if)\s+(?:(?:your|the|a)\s+)?(?:payment|deposit|refund|booking|room|seat)\s+(?:was|has been|is|will be)\s+(?:received|confirmed|processed|reserved|secured|available)$/i,
+  /^(?:could|can|would)\s+you\s+(?:please\s+)?(?:confirm|verify|check)\s+(?:whether|if)\s+(?:(?:your|the|a)\s+)?(?:payment|deposit|refund|booking|room|seat)\s+(?:was|has been|is|will be)\s+(?:received|confirmed|processed|reserved|secured|available)$/i,
+  /^(?:your|the)\s+(?:payment|deposit|refund)\s+(?:needs|requires)\s+(?:verification|review)$/i,
 ] as const;
 
 function plain(value: unknown): Record<string, unknown> | null {
