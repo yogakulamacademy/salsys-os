@@ -1,4 +1,4 @@
-# R2 staged schema: function-privilege parity review — 2026-11-09
+# R2 stage-only function hardening and approved-human-gate review — 2026-11-09
 
 **State: proposal only, awaiting independent approval. No SQL applied to staging or production.**
 
@@ -6,44 +6,44 @@
 
 Temporary staging `ndxpjqkthuzxlmbenxti` has exactly 431 migrations, no Auth users or storage objects, and 5 inert cron jobs with no `pg_net` extension. Independently approved catalog query from PR #675 returned **`PRIVILEGE_CATALOG_REVIEW_REQUIRED`**. 22 postgres-owned public `SECURITY DEFINER` functions are executable by `anon` through inherited **PUBLIC EXECUTE** grants (13 trigger-returning, 9 ordinary functions). Fresh production read-only comparison on the same day confirms all 22 same signatures deny anonymous EXECUTE; 21 deny authenticated as well; only `attach_whatsapp_outbound_message_id` permits authenticated EXECUTE. All 22 explicitly allow `service_role` in both systems.
 
-A complete read-only comparison of all 314 staging SECURITY DEFINER functions against production found **312 identical signatures** and precisely two more matched-grant differences outside these 22: `prepare_failed_whatsapp_provider_retry_v1` permits `authenticated` EXECUTE on staging but not production, while `approve_sales_asset_v1` lacks production's explicit `service_role` EXECUTE. Both deny `anon` on staging and production. Two staging-only function signatures (different from production) are explicitly outside this grant-parity claim and require separate application-contract testing.
+A complete read-only comparison of all 314 staging SECURITY DEFINER functions against production found 312 matching signatures and two additional role-EXECUTE differences beyond the 22 anonymous exposures. The WhatsApp retry authenticated permission is corrected; the Sales Asset service_role grant mismatch is **intentionally NOT copied** because staging installed the repository's human-only approval guard (`20261103195300_sales_asset_human_approval_guard_v1`) and Production lacks that migration. Production's broader role grant is a separate security/DBA review item, not an authorized stage-hardening target. Three stage-only public function signatures are excluded from full role-parity comparisons.
 
 Supabase advisors also reported four `function_search_path_mutable` warnings on staging. Those four are **SECURITY INVOKER** functions, not SECURITY DEFINER, and production fixes each to `search_path=public, pg_temp`. The 40 `rls_enabled_no_policy` INFO notices and 134 authenticated callable SECURITY DEFINER functions need separate review; this patch does not assert those are safe.
 
 ## Review-only SQL proposal
 
 `docs/sql/r2-staging-postinstall-function-grants-parity-v1.sql` is an **explicit, transactional, fail-closed security patch**:
-- Precondition: all 22 expected distinct `public` signatures exist, are postgres-owned SECURITY DEFINER functions, and `service_role` has EXECUTE; all four expected INVOKER search-path functions exist. The two additional exact-role checks allow either already-correct production grants or the identified fresh-staging grants so a later versioned migration can be idempotent; postconditions enforce the desired end state.
+- Precondition: the 22 distinct definer signatures and four search-path signatures exist with verified ownership and expected roles; the three anonymous-callable invoker compatibility wrappers preserve authenticated/service_role access. Sales Asset approval must be the checked-in human-admin-only implementation with `service_role` EXECUTE denied and its body explicitly requiring an authenticated actor and organization admin. It intentionally does **not** accept Production's broader Sales Asset grant.
 - Revoke only `EXECUTE` on exactly 22 named functions from `PUBLIC` and `anon`, additionally revoking `authenticated` on the exact 21 functions where Production denies it. Preserve `authenticated` on `attach_whatsapp_outbound_message_id`. Never revoke `service_role`.
-- Revoke only the staging-only `authenticated` EXECUTE grant on the exact `prepare_failed_whatsapp_provider_retry_v1` signature; grant only the missing `service_role` EXECUTE on exact `approve_sales_asset_v1` signature. Both match production and keep their existing anonymous restrictions.
+- Revoke only the staged authenticated EXECUTE excess on `prepare_failed_whatsapp_provider_retry_v1`. **Do not GRANT `service_role` on `approve_sales_asset_v1`**. That function must remain authenticated human-admin-only, per migration `20261103195300` and its readiness regression test.
 - Pin only the four documented INVOKER-function search paths to `public, pg_temp`, matching live production settings.
-- Postcondition: all 22 have `anon=false`, exactly one retains `authenticated=true`, and all retain `service_role=true`; the WhatsApp retry function denies `authenticated` and retains service-only access; the sales asset function allows `authenticated` and `service_role` while denying `anon`; all four paths match production. Any mismatch triggers an exception and transactional rollback.
+- Postcondition: all 22 anonymous-exposed definers deny anonymous calls; exactly one among those retains authenticated access, and all 22 retain service_role; the retry function is service-role-only. Sales Asset approval retains authenticated access while denying both anonymous and service_role EXECUTE, with human actor/admin body guards verified. Three INVOKER wrappers deny anonymous execution while retaining authenticated/service_role; four search paths match reviewed settings. Transactional failure must roll back all changes.
 - No table changes, inserts, deletes, copied records, egress, cron, API keys, domains or production identifiers; SQL uses bounded lock and statement timeouts.
 
 `tests/readiness/r2-staging-postinstall-function-grants-parity-v1.test.cjs` supplies **static regression checks only**. It does not execute SQL or prove signed-in tenant isolation.
 
-## Read-only post-installation parity gate
+## Read-only stage-policy post-installation gate
 
-`docs/sql/r2-staging-postinstall-function-role-parity-audit-v1.sql` is an independent, **SELECT-only** catalog verification for the **24 exact privileged-function signatures** and four INVOKER function `search_path` settings covered by this proposal. It reports aggregate mismatch counts, no function bodies, customer records, raw identifiers, or secrets. It does not apply or undo changes.
+`docs/sql/r2-staging-postinstall-function-role-parity-audit-v1.sql` is an independent, **SELECT-only stage-policy** verification for 24 privileged-function signatures (including the intentionally stricter Sales Asset human-only rule) and four INVOKER search paths. It produces aggregate counts and human-guard checks, not customer data. It is not general Production parity and does not apply any changes.
 
-Its first execution against both connected projects on November 9, 2026 independently established the expected baseline:
+The revised stage-policy audit was run read-only on both projects. It is expected to **FAIL** on both pre-fix staging and the existing Production Sales Asset grant; Production is not the stage-policy authority for that function:
 
 | Result | Temporary R2 staging | Production |
 | --- | ---: | ---: |
 | Expected exact definer functions present | 24/24 | 24/24 |
-| Anonymous-role permission differences | 22 | 0 |
+| Anonymous-role differences against stage policy | 22 | 0 |
 | Authenticated-role permission differences | 22 | 0 |
-| Service-role permission differences | 1 | 0 |
+| Service-role differences against **stage policy** | 0 | 1 |
 | Matching INVOKER search paths | 0/4 | 4/4 |
-| Verdict | `FUNCTION_PARITY_REVIEW_REQUIRED` | `FUNCTION_PARITY_CATALOG_PASS_NOT_TENANT_ACCEPTANCE` |
+| Verdict | `FUNCTION_STAGE_POLICY_REVIEW_REQUIRED` | `FUNCTION_STAGE_POLICY_REVIEW_REQUIRED` |
 
-`tests/readiness/r2-staging-postinstall-function-grants-parity-v1.test.cjs` now verifies that the read-only gate contains the same 24 exact function signatures, intended authenticated role permissions, four search-path targets and fail-closed status logic as the proposed SQL.
+`tests/readiness/r2-staging-postinstall-function-grants-parity-v1.test.cjs` verifies 24 exact signature contracts, the one human-only service-role denial, source-guard checks, three extra invoker wrappers, four paths and the two independent read-only audit fail-closed states.
 
-After any separately approved **stage-only** versioned migration: run this **exact read-only** gate first; require `FUNCTION_PARITY_CATALOG_PASS_NOT_TENANT_ACCEPTANCE` with 24 structurally valid function signatures, zero role-mismatched functions, and 4/4 fixed paths. Then separately rerun the approved PR #675 broader anonymous-definer/role exposure audit and Supabase security advisors. Neither passing query proves live tenant authorization, consent, backups, deployability, or formal R2 release acceptance. The two staging-only definer signatures outside the matched catalog remain excluded and need separate owner-admin/tenant functional tests.
+After any separately approved **stage-only** versioned migration, demand `FUNCTION_STAGE_POLICY_CATALOG_PASS_NOT_TENANT_ACCEPTANCE` on staging with 24 structurally valid function signatures, **zero stage-policy** role mismatches, and 4/4 fixed paths. Also rerun global anonymous-function audit, PR #675 broader catalog gate and security advisors. Existing Production intentionally fails this stage-policy audit until the separate human-only production security question is decided; do not run this proposed patch on Production. Catalog checks do not prove tenant or privacy acceptance.
 
 ## Follow-up full-public-function execution audit (2026-11-09)
 
-The original review covered **22 anonymously executable SECURITY DEFINER functions** and two additional matched-definer role differences (24 exact definer signatures). **A further SELECT-only read of *all* `public` routines identified three additional anonymous-callable SECURITY INVOKER compatibility wrappers**. The original post-install #675 gate counts only definers and would miss these three ordinary invokers.
+The original review covered 22 anonymous-callable SECURITY DEFINER routines, one matched extra authenticated retry grant and **one intentionally preserved** Sales Asset service-role discrepancy, for 24 exact definer signatures. A broader public-function audit additionally found three anonymous-callable SECURITY INVOKER compatibility wrappers omitted from the definer-only #675 audit.
 
 | Catalog readback | Temporary staging | Production |
 | --- | ---: | ---: |
@@ -60,9 +60,13 @@ The proposed SQL therefore additionally revokes `EXECUTE FROM PUBLIC, anon` on *
 
 Default `public`-schema function ACL settings for owners `postgres` and `supabase_admin` were read and found identical between staging and production. The current 25 anonymous openings are **specific function-level PUBLIC grants**, not a demonstrated divergence in default-privilege configuration. As a separate forward-looking consideration, `supabase_admin`'s default ACL allows `anon` on newly created functions in both systems; neither currently has a public function owned by that role. This should be reviewed as a future function-creation policy, not silently changed as part of the narrow R2 stage repair.
 
+## Security-source provenance override — important
+
+Production migration ledger has `sales_asset_library_foundation_v1` (20261103195200), but not the immediately following `sales_asset_human_approval_guard_v1` (20261103195300) that is installed in staging. The checked-in guard explicitly revokes `service_role` execution and prevents background workers from minting human approval. Production presently has the broader grant and permissive service-role authorization path; **this is a reviewable governance drift, not proof of unauthorized execution**. Production remediation is a distinct approved security release, outside this staging proposal. It would be unsafe to treat production roles as the sole authority for this approval workflow.
+
 ## Mandatory approval / implementation sequence
 
-1. Independent reviewer `thedetourclubind-cloud` reviews the *exact current PR head*, especially 22 privileged anonymous-exposure fixes, two additional matched-definer ACL differences, three ordinary invoker anonymous-exposure fixes, the one intentionally authenticated function among the first 22, and four function search paths. Full CI and CodeQL must pass.
+1. Independent reviewer `thedetourclubind-cloud` checks the *exact current PR head*, including 22 definer anonymous-exposure fixes, one retry authenticated-role correction, three invoker anonymous-exposure fixes, four paths and the **explicit human-only Sales Asset exception**. Full CI and CodeQL must pass. Independently verify why the human guard migration `20261103195300` is absent in Production; no service-role grant should be added to staging.
 2. **After approved design**, operator generates a timestamped migration using `supabase migration new r2_postinstall_function_grant_parity` in an isolated Codespaces checkout with the reviewed schema, copies the identical SQL into the CLI-generated file, and submits the migration file for independent review on the exact new PR head. Do **not** invent migration filenames or commit to `main` prematurely.
 3. Operator checks staging project ref `ndxpjqkthuzxlmbenxti`, original 431 migration history and absence of customer data; captures an ACL and rollback baseline. No production database linkage or production Preview hosting.
 4. With explicit **staging-only installation** authorization, perform a reviewed remote dry run first and then apply **only the new approved migration** to temporary staging (not reapply the 431 migrations). Stop on mismatch: no reset, repair or auto retry.
