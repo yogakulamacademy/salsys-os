@@ -64,6 +64,14 @@ export function verifyR2StagingConfig(values = {}) {
   const site = origin(values.SALSYS_STAGING_SITE_ORIGIN, "Staging website", errors);
   const crm = origin(values.SALSYS_STAGING_CRM_ORIGIN, "Staging CRM API", errors);
   const db = origin(values.SALSYS_STAGING_SUPABASE_URL, "Staging Supabase", errors);
+  // These must be read back from the deployment's effective build/runtime
+  // environment by its authorized custodian, not guessed from desired config.
+  // Browser and server admin clients prioritize NEXT_PUBLIC_SUPABASE_URL; the
+  // server's SUPABASE_URL fallback must also remain bound to staging.
+  const browserDb = origin(values.SALSYS_STAGING_EFFECTIVE_NEXT_PUBLIC_SUPABASE_URL,
+    "Effective NEXT_PUBLIC_SUPABASE_URL", errors);
+  const serverDb = origin(values.SALSYS_STAGING_EFFECTIVE_SUPABASE_URL,
+    "Effective SUPABASE_URL", errors);
   const prodDb = origin(values.SALSYS_PRODUCTION_SUPABASE_URL, "Production Supabase comparison", errors);
   const recoveryDb = origin(values.SALSYS_RECOVERY_SUPABASE_URL, "Recovery rehearsal Supabase comparison", errors);
 
@@ -82,6 +90,12 @@ export function verifyR2StagingConfig(values = {}) {
       !/^prj_[A-Za-z0-9]{16,}$/.test(productionProject) ||
       stagingProject === productionProject) {
     errors.push("Staging CRM must use a different, explicitly identified Vercel project than production");
+  }
+  if (db && browserDb && db !== browserDb) {
+    errors.push("Effective browser Supabase URL differs from the approved staging Supabase URL");
+  }
+  if (db && serverDb && db !== serverDb) {
+    errors.push("Effective server fallback Supabase URL differs from the approved staging Supabase URL");
   }
   if (db && prodDb && db === prodDb) {
     errors.push("Staging and production Supabase URLs are identical");
