@@ -27,21 +27,28 @@ Labels: **MAIN** = code exists on main; **DRAFT** = candidate is only in PR #671
 | AI-04 | P1 | Fail Co-Pilot and Knowledge preview **closed before any LLM call** when the canonical RPC returns explicit unverified discovery markers in document/chunk or optional source metadata; preserve manual clean rows | DRAFT / exact-head tests required |
 | AI-05 | P1 | Independent security/DBA decision on uninstalled KB-14A publication guard and KB-16A **source-metadata-aware database** retrieval quarantine with tested migration/rollback | DRAFT design, BLOCKED release |
 | AI-06 | P1 | Independent privacy decisions and 16 real isolated signed-user staging witnesses | BLOCKED: privacy #613, staging #614, release #601, 0/16 witnessed |
-| AI-07 | P2 | Versioned, audited, server-owned prompt registry with immutability and explicit human approval | BLOCKED/NOT BUILT |
-| AI-08 | P2 | Scoped per-tenant guidance that cannot override system security, RBAC or legal safety policy | BLOCKED/NOT BUILT |
-| AI-09 | P2 | Narrow server-owned tool permission registry (read/list before any mutating commands) with tenant/user/role/action approval and audit | BLOCKED/NOT BUILT |
+| AI-07 | P2 | Versioned, audited, server-owned prompt registry with immutability and explicit human approval | DRAFT integrity/version contract only; immutable storage, independent approval and runtime registry NOT BUILT |
+| AI-08 | P2 | Scoped per-tenant guidance that cannot override system security, RBAC or legal safety policy | DRAFT structured tenant-scoped choices only; authorization, approval and runtime binding NOT BUILT |
+| AI-09 | P2 | Narrow server-owned tool permission registry (read/list before any mutating commands) with tenant/user/role/action approval and audit | DRAFT read-only proposal allowlist only; actual authorized executor, audit and grants NOT BUILT |
 | AI-10 | P3 | Basic model selection and measured AI insight usage/quota accounting | MAIN (router and usage have separate scopes) |
 | AI-11 | P3 | Versioned evaluation suite assessing hallucinations, prompt injection, tenant leakage, cost, router quality and regressions before autonomy | PARTIAL unit tests; governance/human evaluation pending |
 | AI-12 | P3 | Optional tenant-scoped cache and/or hybrid vector retrieval if measured usage or quality justifies complexity | OPTIONAL, no shared cache or vector stack required now |
 | AI-13 | P4 | Optional MCP bridge only if external agents/interoperability become an explicit product requirement | OPTIONAL / DEFERRED |
 
-**Count at this checkpoint:** four foundational milestones MAIN (AI-01/02/03/10); three partially developed or test/design stage (AI-04/05/11); four required release/product milestones not finished (AI-06/07/08/09); two optional milestones deferred (AI-12/13). These categories describe specific deliverables, not an industry-standard completion percentage and do not imply that any AI feature has passed live independent release acceptance.
+**Count at this checkpoint:** four foundational milestones on MAIN (AI-01/02/03/10); six partially developed, review-stage or design-only (AI-04/05/07/08/09/11); one release prerequisite entirely BLOCKED (AI-06); two OPTIONAL deferred milestones (AI-12/13). **All four AI-06/07/08/09 remain required and unfinished for full governed-agent launch**, regardless of their isolated contract drafts. These categories are distinct and total 13, not an industry-standard completion percentage and not evidence of live independent release acceptance.
 
 ## Current KB-17A scoped work — response-level fail-closed evidence hold
 
 The PR #671 `lib/knowledge-evidence.ts` guard checks explicit unverified discovery markers in `metadata.document_metadata`, `metadata.chunk_metadata`, optional `metadata.source_metadata`, and flattened top-level metadata; it also rejects `chunk_metadata.source='manual_discovery_draft_unverified'`. Detection denies **the entire result** to avoid giving a model partially untrusted facts. `tests/readiness/copilot-grounding.test.cjs` tests refusal **before router or drafting provider calls**. `tests/readiness/knowledge-preview.test.cjs` proves the original Knowledge preview cannot display marked excerpts, while leaving the original protected `app/settings/knowledge/actions.ts` unchanged.
 
 **Hard limit:** the canonical currently deployed retrieval RPC does NOT return `knowledge_sources.metadata`. Consequently this response-level guard cannot see a historical source-only marker and cannot replace the reviewed DB-level KB-16A exclusion. Even with this guard green, historical provenance, existing generic approval bypass, consent withdrawal/erasure, RLS and caches still require authoritative DB/DBA/legal decisions. Ordinary unmarked legacy knowledge remains eligible by design until independent policy approves a change.
+
+## New AI-02 P2 governance-contract checkpoint (DRAFT ONLY)
+
+- `lib/ai/agent-governance-v1.ts` now provides a **server-only, standalone, non-wired** integrity/version preflight for platform prompt drafts; strictly structured tenant-specific guidance drafts; and a read-only tool proposal allowlist. All successful previews explicitly return `mayExecute:false`. It cannot send messages, run tools, authenticate a user, change a prompt or authorize a transaction.
+- `tests/readiness/agent-governance-contract-v1.test.cjs` adds synthetic positive/negative tests for prompt tampering, forged approvals, tenant boundary mismatches, extra-field/prompt override rejection, read-only scopes, suspicious endpoints, denied lead access and the default-off contract.
+- See [AI-02 Governed Agent Configuration Contract DRAFT](AI-02-Governed-Agent-Configuration-Contract-DRAFT.md) for remaining independent review, append-only approval registry, tenant RBAC/consent, audited dispatcher and deployment decisions.
+- This is **not** an actual prompt registry, an MCP server, a live agent runner or proof of real signed-in isolated staging tests. It is intentionally not imported by existing Co-Pilot or the pinned Knowledge approval action.
 
 ## Prioritized work from here
 
