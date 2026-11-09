@@ -364,6 +364,15 @@ jobs:
               raise exception 'STAGING_SCHEDULER_ENDPOINT_NOT_ISOLATED';
             end if;
             if not exists (
+              select 1 from pg_catalog.pg_proc
+               where oid=to_regprocedure('public.invoke_automation_runtime_scheduler_v1()')
+                 and position('return null;' in pg_get_functiondef(oid)) > 0
+                 and position('net.http_get' in pg_get_functiondef(oid)) = 0
+                 and position('vault.decrypted_secrets' in pg_get_functiondef(oid)) = 0
+            ) then
+              raise exception 'STAGING_PRIVILEGED_SCHEDULER_NOT_INERT';
+            end if;
+            if not exists (
               select 1 from public.organization_sites
                where hostname = 'r2-yogakulam.invalid'
                  and status = 'active'
