@@ -7,6 +7,8 @@
 -- One additional service-only WhatsApp retry function loses authenticated EXECUTE;
 -- one sales asset function gains the missing verified service_role EXECUTE grant.
 -- The 4 search_path changes mirror existing production function_config.
+-- Accept already-correct Production grants as well as fresh-staging grants.
+-- Preflight checks the function identity; transactional postflight checks ACL parity.
 -- Requires independent review, approved versioned migration and staging-only apply.
 BEGIN;
 SET LOCAL lock_timeout = '5s';
@@ -68,7 +70,6 @@ BEGIN
       ='p_organization_id uuid, p_failed_audit_id uuid, p_now timestamp with time zone'
     AND p.prosecdef AND pg_catalog.pg_get_userbyid(p.proowner)='postgres'
     AND NOT pg_catalog.has_function_privilege('anon',p.oid,'EXECUTE')
-    AND pg_catalog.has_function_privilege('authenticated',p.oid,'EXECUTE')
     AND pg_catalog.has_function_privilege('service_role',p.oid,'EXECUTE');
   IF v_count <> 1 THEN
     RAISE EXCEPTION 'BLOCKED_R2_EXTRA_AUTHENTICATED_FUNCTION_CONTRACT_MISMATCH';
@@ -82,8 +83,7 @@ BEGIN
       ='p_organization_id uuid, p_asset_id uuid, p_auto_send_allowed boolean'
     AND p.prosecdef AND pg_catalog.pg_get_userbyid(p.proowner)='postgres'
     AND NOT pg_catalog.has_function_privilege('anon',p.oid,'EXECUTE')
-    AND pg_catalog.has_function_privilege('authenticated',p.oid,'EXECUTE')
-    AND NOT pg_catalog.has_function_privilege('service_role',p.oid,'EXECUTE');
+    AND pg_catalog.has_function_privilege('authenticated',p.oid,'EXECUTE');
   IF v_count <> 1 THEN
     RAISE EXCEPTION 'BLOCKED_R2_MISSING_SERVICE_ROLE_FUNCTION_CONTRACT_MISMATCH';
   END IF;
