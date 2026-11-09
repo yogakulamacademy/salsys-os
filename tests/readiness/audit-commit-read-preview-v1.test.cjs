@@ -329,7 +329,7 @@ test('hostile prepared and receipt objects fail closed without leaking raw value
     getPrototypeOf(){throw Error('raw private proxy');},
   });
   assert.deepEqual(await run(proposal(),next),{
-    ok:false,reason:'prepared_read_untrusted',mayExecute:false,
+    ok:false,reason:'audit_commit_unconfirmed',mayExecute:false,
   });
 });
 
