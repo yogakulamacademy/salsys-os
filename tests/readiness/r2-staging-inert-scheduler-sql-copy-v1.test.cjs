@@ -7,6 +7,8 @@ const {spawnSync}=require('node:child_process');
 
 const script=path.resolve(__dirname,'../../scripts/r2-staging-inert-scheduler-sql-copy.mjs');
 const samples={
+ '007_tenant_schema_foundation.sql':
+  "insert into public.organization_sites (organization_id,hostname,status) select o.id, x.hostname, 'active' from public.organizations o cross join (values ('yogakulam.com'::text), ('www.yogakulam.com'::text)) as x(hostname) where o.slug='yogakulam-academy' on conflict (hostname) do update set organization_id=excluded.organization_id,status = 'active';",
  '20261017091453_automation_runtime_scheduler_foundation_v1.sql':
   "create extension if not exists pg_net; select net.http_get('https://example.invalid'); create table public.automation_scheduler_settings (endpoint_url text not null default 'https://salsysos.com/api/automation/runtime-scheduler'); do $ begin perform cron.schedule('scheduler','* * * * *','select public.invoke_automation_runtime_scheduler_v1();'); end $;",
  '20261026143100_closed_won_pipeline_and_auto_archive_v1.sql':
@@ -36,7 +38,8 @@ test('stage-only copy replaces all six jobs with inert commands and rewrites onl
  await fixture(({src,dst,helper,manifest,digest})=>{
   const original=Object.fromEntries(Object.keys(samples).map(k=>[k,fs.readFileSync(path.join(src,k),'utf8')]));
   const out=helper.prepareStagingOnlySql({sourceFolder:src,outputFolder:dst,expectedSourceSha256:digest});
-  assert.equal(out.fileCount,6);
+  assert.equal(out.fileCount,7);
+  assert.equal(out.isolatedSiteHostnameCount,2);
   assert.equal(out.sourceManifestSha256,digest);
   assert.notEqual(out.stagingManifestSha256,digest);
   assert.equal(out.authorizedToInstall,false);
@@ -44,12 +47,27 @@ test('stage-only copy replaces all six jobs with inert commands and rewrites onl
   for(const name of Object.keys(samples)){
    assert.equal(fs.readFileSync(path.join(src,name),'utf8'),original[name]);
    const changed=fs.readFileSync(path.join(dst,name),'utf8');
-   assert.match(changed,/cron\.schedule/);
-   assert.ok(changed.includes('select 1;'));
-   assert.doesNotMatch(changed,/select public\.(?:invoke_automation_runtime_scheduler_v1|archive_closed_won_leads_v1|retry_instagram_dm_events_v1|sweep_system_intelligence_recommendation_outcomes_v1|retry_instagram_outbound_echoes_v1)\(/);
+   if(name==='007_tenant_schema_foundation.sql') {
+    assert.match(changed,/\('r2-yogakulam\.invalid'::text\)/);
+    assert.match(changed,/\('www\.r2-yogakulam\.invalid'::text\)/);
+    assert.doesNotMatch(changed,/yogakulam\.com/);
+   } else {
+    assert.match(changed,/cron\.schedule/);
+    assert.ok(changed.includes('select 1;'));
+    assert.doesNotMatch(changed,/select public\.(?:invoke_automation_runtime_scheduler_v1|archive_closed_won_leads_v1|retry_instagram_dm_events_v1|sweep_system_intelligence_recommendation_outcomes_v1|retry_instagram_outbound_echoes_v1)\(/);
+   }
   }
   assert.match(fs.readFileSync(path.join(dst,Object.keys(samples)[0]),'utf8'),/https:\/\/staging\.invalid\/api\/automation\/runtime-scheduler/);
   assert.equal(manifest.buildManifest(dst).manifestSha256,out.stagingManifestSha256);
+ });
+});
+
+test('unexpected live-site hostname source drift is rejected before output',async()=>{
+ await fixture(({dst,src,helper,digest})=>{
+  const srcSite=fs.readFileSync(path.join(src,'007_tenant_schema_foundation.sql'),'utf8');
+  fs.writeFileSync(path.join(src,'007_tenant_schema_foundation.sql'),srcSite.replace("('www.yogakulam.com'::text)","('www.other-live-domain.com'::text)"));
+  assert.throws(()=>helper.prepareStagingOnlySql({sourceFolder:src,outputFolder:dst,expectedSourceSha256:digest}),/BLOCKED_/);
+  assert.equal(fs.existsSync(dst),false);
  });
 });
 
