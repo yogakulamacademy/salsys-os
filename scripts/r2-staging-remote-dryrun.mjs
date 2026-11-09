@@ -18,13 +18,17 @@ export const PRODUCTION_REF = 'doaozrkrtgeslddwhclj';
 export const RECOVERY_REF = 'wunnbqjvfzmawubglyhe';
 
 function fail(reason) { throw new Error('BLOCKED_' + reason); }
-function assertNoWorkdirOverride() {
+function assertStageTargetEnvironment() {
   // Supabase CLI accepts SUPABASE_WORKDIR, which overrides the linked checkout.
   // Never allow an inherited shell setting to redirect even a dry run.
   if (process.env.SUPABASE_WORKDIR?.trim()) fail('CLI_WORKDIR_OVERRIDE');
+  // Supabase CLI v3 resolves a bare remote target from SUPABASE_PROJECT_ID first.
+  // Reject inherited non-staging refs; the child process is pinned to STAGING_REF.
+  if (process.env.SUPABASE_PROJECT_ID?.trim() &&
+      process.env.SUPABASE_PROJECT_ID.trim() !== STAGING_REF) fail('CLI_PROJECT_OVERRIDE');
 }
 export function planDryRun({ projectRoot, expectedDigest, cli = 'supabase' }) {
-  assertNoWorkdirOverride();
+  assertStageTargetEnvironment();
   if (!/^[a-f0-9]{64}$/.test(expectedDigest ?? '')) fail('INVALID_MANIFEST_DIGEST');
   const project = path.resolve(projectRoot);
   const refPath = path.join(project, 'supabase', '.temp', 'project-ref');
@@ -34,17 +38,21 @@ export function planDryRun({ projectRoot, expectedDigest, cli = 'supabase' }) {
   const migrations = path.join(project, 'supabase', 'migrations');
   const manifest = buildManifest(migrations);
   if (manifest.manifestSha256 !== expectedDigest) fail('MIGRATION_DIGEST_MISMATCH');
-  // Never use --db-url, --linked-to-another-project, --yes, or arbitrary SQL.
-  return { command: cli, args: ['db', 'push', '--dry-run'], cwd: project,
+  // Supabase CLI v3 defaults db push to LOCAL; v2 uses linked by default.
+  // --linked explicitly selects the reviewed linked staging ref on BOTH v2 and v3.
+  // v3 deprecates --linked, but continues to support it; a future unsupported
+  // version must fail, never silently fall back to a local dry run.
+  // Never use --db-url, --yes, --include-seed, or arbitrary SQL.
+  return { command: cli, args: ['db', 'push', '--dry-run', '--linked'], cwd: project,
     projectRef: actualRef, fileCount: manifest.fileCount, expectedDigest };
 }
 
 export function runDryRun(plan) {
   // Recheck the actual project-ref and bytes immediately before the CLI call:
   // the link or migrations may have changed since planDryRun() was invoked.
-  assertNoWorkdirOverride();
+  assertStageTargetEnvironment();
   if (plan.projectRef !== STAGING_REF || !plan.cwd ||
-      JSON.stringify(plan.args) !== JSON.stringify(['db', 'push', '--dry-run'])) {
+      JSON.stringify(plan.args) !== JSON.stringify(['db', 'push', '--dry-run', '--linked'])) {
     fail('INVALID_DRYRUN_PLAN');
   }
   const refPath = path.join(plan.cwd, 'supabase', '.temp', 'project-ref');
@@ -57,6 +65,9 @@ export function runDryRun(plan) {
   }
   const env = { ...process.env };
   delete env.SUPABASE_WORKDIR;
+  // Pin the CLI's v3 environment-based linked-project lookup to the verified
+  // stage ref, even if the checkout contains a different .env setting.
+  env.SUPABASE_PROJECT_ID = STAGING_REF;
   const r = spawnSync(plan.command, plan.args, {
     cwd: plan.cwd,
     env,
