@@ -26,9 +26,59 @@ const TONES = ['warm', 'professional', 'concise'] as const;
 const LENGTHS = ['brief', 'balanced'] as const;
 const LANGUAGES = ['en', 'hi', 'es', 'fr'] as const;
 
+/**
+ * Use a detached DATA-property snapshot for every untrusted draft/context.
+ * Validation and decisions must not re-read a caller-owned getter or Proxy.
+ * This is structural checking only, never server authentication.
+ */
 function record(value: unknown): Record<string, unknown> | null {
-  return value !== null && typeof value === 'object' && !Array.isArray(value)
-    ? value as Record<string, unknown> : null;
+  if (value === null || typeof value !== 'object') return null;
+  try {
+    if (Array.isArray(value)) return null;
+    const proto = Object.getPrototypeOf(value);
+    if (proto !== Object.prototype && proto !== null) return null;
+    const keys = Reflect.ownKeys(value);
+    if (keys.some(key => typeof key !== 'string')) return null;
+    const descriptors = Object.getOwnPropertyDescriptors(value);
+    const data: Record<string, unknown> = Object.create(null);
+    for (const key of keys as string[]) {
+      const descriptor = descriptors[key];
+      if (!descriptor || !Object.hasOwn(descriptor, 'value') ||
+        descriptor.enumerable !== true) return null;
+      data[key] = descriptor.value;
+    }
+    return Object.freeze(data);
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Array.isArray alone is insufficient: nested arrays can have accessor
+ * elements or Proxy traps. Copy exact dense own DATA entries only.
+ */
+function snapshotArray(value: unknown): readonly unknown[] | null {
+  try {
+    if (!Array.isArray(value) || Object.getPrototypeOf(value) !== Array.prototype) return null;
+    const keys = Reflect.ownKeys(value);
+    // TS maps Array.length to number even for getOwnPropertyDescriptors(),
+    // but at runtime this API returns a PropertyDescriptor for "length".
+    const descriptors = Object.getOwnPropertyDescriptors(value) as unknown as
+      Record<string, PropertyDescriptor>;
+    const count = descriptors.length?.value;
+    if (!Number.isSafeInteger(count) || count < 0 ||
+      keys.length !== count + 1 || !Object.hasOwn(descriptors, 'length')) return null;
+    const copy: unknown[] = [];
+    for (let i = 0; i < count; i++) {
+      const descriptor = descriptors[String(i)];
+      if (!descriptor || !Object.hasOwn(descriptor, 'value') ||
+        descriptor.enumerable !== true) return null;
+      copy.push(descriptor.value);
+    }
+    return Object.freeze(copy);
+  } catch {
+    return null;
+  }
 }
 
 function exactKeys(value: Record<string, unknown>, required: readonly string[]): boolean {
@@ -123,19 +173,20 @@ export function inspectTenantGuidanceDraft(
   activeOrganizationId: string,
 ): PreviewCheck<TenantGuidancePreview> {
   const row = record(value);
+  const languages = snapshotArray(row?.languages);
+  const knowledgeIds = snapshotArray(row?.approvedKnowledgeDocumentIds);
   if (!uuid(activeOrganizationId) || !row || !exactKeys(row, guidanceFields) ||
     row.schemaVersion !== 1 || row.scope !== 'tenant_guidance' ||
     row.organizationId !== activeOrganizationId ||
     !uuid(row.authorId) || !validVersion(row.version) || row.status !== 'draft' ||
     !TONES.includes(row.tone as typeof TONES[number]) ||
     !LENGTHS.includes(row.responseLength as typeof LENGTHS[number]) ||
-    !Array.isArray(row.languages) || row.languages.length < 1 || row.languages.length > 3 ||
-    !row.languages.every(language => LANGUAGES.includes(language)) ||
-    new Set(row.languages).size !== row.languages.length ||
-    !Array.isArray(row.approvedKnowledgeDocumentIds) ||
-    row.approvedKnowledgeDocumentIds.length > 12 ||
-    !row.approvedKnowledgeDocumentIds.every(uuid) ||
-    new Set(row.approvedKnowledgeDocumentIds).size !== row.approvedKnowledgeDocumentIds.length) {
+    !languages || languages.length < 1 || languages.length > 3 ||
+    !languages.every(language => LANGUAGES.includes(language as typeof LANGUAGES[number])) ||
+    new Set(languages).size !== languages.length ||
+    !knowledgeIds || knowledgeIds.length > 12 ||
+    !knowledgeIds.every(uuid) ||
+    new Set(knowledgeIds).size !== knowledgeIds.length) {
     return { ok: false, reason: 'invalid_tenant_guidance_draft' };
   }
 
@@ -146,8 +197,8 @@ export function inspectTenantGuidanceDraft(
       version: row.version,
       tone: row.tone as TenantGuidancePreview['tone'],
       responseLength: row.responseLength as TenantGuidancePreview['responseLength'],
-      languages: Object.freeze([...row.languages] as string[]),
-      approvedKnowledgeDocumentIds: Object.freeze([...row.approvedKnowledgeDocumentIds] as string[]),
+      languages: languages as readonly string[],
+      approvedKnowledgeDocumentIds: knowledgeIds as readonly string[],
       status: 'draft' as const,
     }),
     mayExecute: false,
@@ -199,9 +250,10 @@ export function inspectReadOnlyToolProposal(
     !uuid(ctx.organizationId) || !uuid(ctx.actorId) ||
     row.organizationId !== ctx.organizationId || row.actorId !== ctx.actorId ||
     ctx.sessionVerified !== true || ctx.membershipVerified !== true ||
-    !['owner', 'admin', 'member'].includes(String(ctx.role)) ||
+    // Never invoke untrusted toString(), valueOf(), or Symbol.toPrimitive.
+    typeof ctx.role !== 'string' ||
     // For v1, only owner/admin proposals are even eligible for independent review.
-    !['owner', 'admin'].includes(String(ctx.role))) {
+    !['owner', 'admin'].includes(ctx.role)) {
     return { ok: false, reason: 'tool_proposal_not_eligible' };
   }
 

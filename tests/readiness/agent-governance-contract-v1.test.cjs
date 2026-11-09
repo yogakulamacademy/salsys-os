@@ -212,6 +212,94 @@ test('an environment toggle cannot activate this isolated design or perform side
   }
 });
 
+test('AI-02 rejects getters, revoked proxies and hidden caller fields without reading secrets',()=>{
+  let getters=0;
+  const badPrompt=prompt();
+  Object.defineProperty(badPrompt,'promptText',{enumerable:true,get(){getters++;throw Error('private prompt text');}});
+  assert.equal(policy.inspectPlatformPromptDraft(badPrompt).ok,false);
+  assert.equal(getters,0);
+  const badGuidance=guidance();
+  Object.defineProperty(badGuidance,'tone',{enumerable:true,get(){getters++;return 'warm';}});
+  assert.equal(policy.inspectTenantGuidanceDraft(badGuidance,TENANT_A).ok,false);
+  assert.equal(getters,0);
+  const revoked=Proxy.revocable(prompt(),{});
+  revoked.revoke();
+  assert.equal(policy.inspectPlatformPromptDraft(revoked.proxy).ok,false);
+  const symbol=prompt();
+  symbol[Symbol('role')]='owner';
+  assert.equal(policy.inspectPlatformPromptDraft(symbol).ok,false);
+  const nonEnumerable=guidance();
+  Object.defineProperty(nonEnumerable,'bypass',{value:true,enumerable:false});
+  assert.equal(policy.inspectTenantGuidanceDraft(nonEnumerable,TENANT_A).ok,false);
+  const badProto=Object.assign(Object.create({approved:true}),proposal());
+  assert.equal(policy.inspectReadOnlyToolProposal(badProto,context()).ok,false);
+});
+
+test('AI-02 only trusts descriptor snapshots and never role object coercion',()=>{
+  let routeGets=0;
+  const safeDraft=prompt();
+  const promptProxy=new Proxy(safeDraft,{
+    get(target,key,receiver){routeGets++;if(key==='status')return 'approved';return Reflect.get(target,key,receiver);},
+  });
+  const verified=policy.inspectPlatformPromptDraft(promptProxy);
+  assert.equal(verified.ok,true);
+  assert.equal(verified.preview.status,'draft');
+  assert.equal(routeGets,0,'do not re-read hostile Proxy after validation');
+
+  let coercions=0;
+  const forgedRole={
+    toString(){coercions++;return 'owner';},
+    valueOf(){coercions++;return 'owner';},
+    [Symbol.toPrimitive](){coercions++;return 'owner';},
+  };
+  assert.equal(policy.inspectReadOnlyToolProposal(proposal(),context({role:forgedRole})).ok,false);
+  assert.equal(coercions,0,'untrusted role objects must never be coerced');
+
+  const trueViewer=context({role:'viewer'});
+  let contextGets=0;
+  const spoofed=new Proxy(trueViewer,{
+    get(target,key,receiver){
+      contextGets++;
+      if(key==='role')return 'owner';
+      return Reflect.get(target,key,receiver);
+    },
+  });
+  assert.equal(policy.inspectReadOnlyToolProposal(proposal(),spoofed).ok,false);
+  assert.equal(contextGets,0);
+});
+
+test('AI-02 tenant guidance snapshots nested array descriptors, not getter or Proxy results',()=>{
+  let elementGets=0;
+  const languages=new Proxy(['en'],{
+    get(target,key,receiver){
+      elementGets++;
+      if(key==='0')return 'xx';
+      return Reflect.get(target,key,receiver);
+    },
+  });
+  const g=guidance({languages});
+  const approved=policy.inspectTenantGuidanceDraft(g,TENANT_A);
+  assert.equal(approved.ok,true);
+  assert.deepEqual(approved.preview.languages,['en']);
+  assert.equal(elementGets,0);
+  assert.equal(Object.isFrozen(approved.preview.languages),true);
+
+  const accessorLang=['en'];
+  Object.defineProperty(accessorLang,'0',{
+    configurable:true,enumerable:true,get(){elementGets++;return 'en';},
+  });
+  assert.equal(policy.inspectTenantGuidanceDraft(guidance({languages:accessorLang}),TENANT_A).ok,false);
+  assert.equal(elementGets,0);
+  const revokedArray=Proxy.revocable([DOCUMENT],{});
+  revokedArray.revoke();
+  assert.equal(policy.inspectTenantGuidanceDraft(guidance({
+    approvedKnowledgeDocumentIds:revokedArray.proxy,
+  }),TENANT_A).ok,false);
+  const hiddenArray=['en'];
+  Object.defineProperty(hiddenArray,'actorId',{value:ADMIN,enumerable:false});
+  assert.equal(policy.inspectTenantGuidanceDraft(guidance({languages:hiddenArray}),TENANT_A).ok,false);
+});
+
 test('existing original manual Knowledge approval source is still byte-identical',()=>{
   const body=fs.readFileSync(path.resolve('app/settings/knowledge/actions.ts'));
   const gitSha=crypto.createHash('sha1').update('blob '+body.length+'\0').update(body).digest('hex');
