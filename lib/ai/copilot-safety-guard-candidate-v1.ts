@@ -93,13 +93,35 @@ const NEUTRAL_VERIFICATION = [
   /^(?:your|the)\s+(?:payment|deposit|refund)\s+(?:needs|requires)\s+(?:verification|review)$/i,
 ] as const;
 
+/**
+ * Snapshot the model-authored route using only own enumerable DATA descriptors.
+ * Never validate descriptors and then read the original object: an untrusted
+ * Proxy can report a high-risk property in its descriptor while serving "low"
+ * through get(), laundering a requested human handoff into a low-risk route.
+ *
+ * The frozen detached snapshot is used for both validation and decisions.
+ * Proxy traps, revoked proxies, accessors and non-plain objects fail closed.
+ */
 function plain(value: unknown): Record<string, unknown> | null {
-  if (value === null || typeof value !== 'object' || Array.isArray(value)) return null;
-  const proto = Object.getPrototypeOf(value);
-  if (proto !== Object.prototype && proto !== null) return null;
-  const descriptors = Object.getOwnPropertyDescriptors(value);
-  if (Reflect.ownKeys(value).some(k => typeof k !== 'string' || !Object.hasOwn(descriptors[k], 'value'))) return null;
-  return value as Record<string, unknown>;
+  if (value === null || typeof value !== 'object') return null;
+  try {
+    if (Array.isArray(value)) return null;
+    const proto = Object.getPrototypeOf(value);
+    if (proto !== Object.prototype && proto !== null) return null;
+    const keys = Reflect.ownKeys(value);
+    if (keys.some(k => typeof k !== 'string')) return null;
+    const descriptors = Object.getOwnPropertyDescriptors(value);
+    const snapshot: Record<string, unknown> = Object.create(null);
+    for (const key of keys as string[]) {
+      const descriptor = descriptors[key];
+      if (!descriptor || !Object.hasOwn(descriptor, 'value') ||
+        descriptor.enumerable !== true) return null;
+      snapshot[key] = descriptor.value;
+    }
+    return Object.freeze(snapshot);
+  } catch {
+    return null;
+  }
 }
 
 function denyRoute(): CandidateRouteResult {
