@@ -15,6 +15,22 @@ A read-only version-only parity audit of `main` at `33320481438af68eb4ec2584369e
 
 These differences can be **intentional historical recovery handling**, not a count of broken migrations. The existing local `.github/workflows/migration-replay.yml` performs special `mv`/`cp`/assembly steps in its disposable CI working tree; an ordinary, unprepared `supabase db push` of the source folder is *not* an accepted staging bootstrap.
 
+## Independent SQL external-effect candidate inventory (CI evidence)
+
+The same disposable `Migration Replay` job now runs:
+
+```bash
+node scripts/r2-staging-sql-external-effects-audit.mjs supabase/migrations \
+  > r2-staging-sql-external-effects-candidates.json
+node --test tests/readiness/r2-staging-sql-external-effects-audit-v1.test.cjs
+```
+
+It hashes the *same* prepared migration SQL inputs and lists only filenames, categories and match counts, **not** raw SQL, URLs, secrets or customer data. It detects possible `cron.schedule`, cron mutation, HTTP/pg_net, remote URL defaults, vault and cross-database/provider effects. It deliberately scans strings and comments as well as executable text, so entries can be false positives; dynamically constructed SQL may also escape detection. **Even if the report has zero candidates, it is not proof that external effects are absent.**
+
+This audit is **report-only** and does not rewrite SQL, disable schedules, prevent network egress or authorize the remote schema apply. Before bootstrapping staging, independently review all candidate SQL and the prepared migration manifest, demonstrate a disposable CI replay of the *actual staging-specific* no-external-effects strategy, and provide operator signoff. Known source risks include every-minute Instagram retry jobs and a default URL targeting the live SalsysOS scheduler, even though that scheduler setting defaults disabled. No actual outbound send is demonstrated by a static match.
+
+The `migration-recovery-evidence` artifact includes `r2-staging-sql-external-effects-candidates.json` next to the source manifest, enabling a file-by-file no-secrets review. **Do not run a raw `supabase db push` on staging based solely on any of these diagnostics.**
+
 ## New fail-closed remote dry-run helper (local operator only)
 
 On a separate, trusted working tree that has reproduced **all** of the historical recovery workflow steps and has passed the clean local replay, save the exact approved manifest SHA-256 from the current GitHub `migration-recovery-evidence` artifact. Do not copy credentials into logs or GitHub issues.
