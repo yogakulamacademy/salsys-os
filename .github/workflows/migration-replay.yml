@@ -377,6 +377,43 @@ jobs:
           $check$;
           SQL
 
+      - name: Verify staging-copy tenant RPC isolation and post-test emptiness
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Run only against the same disposable local PostgreSQL container.
+          # The positive fixture creates synthetic tenant/auth/event rows inside
+          # a transaction and performs a full ROLLBACK before returning.
+          db_containers="$(docker ps --format '{{.Names}}' | grep '^supabase_db_' || true)"
+          test "$(printf '%s\n' "$db_containers" | grep -c .)" -eq 1
+          docker exec -i "$db_containers" psql -X -v ON_ERROR_STOP=1 \
+            -U postgres -d postgres \
+            < tests/database/r2-behavior-rpc-negative-auth-local.sql
+          docker exec -i "$db_containers" psql -X -v ON_ERROR_STOP=1 \
+            -U postgres -d postgres \
+            < tests/database/r2-behavior-rpc-positive-tenant-local.sql
+          docker exec -i "$db_containers" psql -X -v ON_ERROR_STOP=1 \
+            -U postgres -d postgres <<'SQL'
+          do $stage$
+          begin
+            if (select count(*) from auth.users) <> 0
+               or (select count(*) from public.leads) <> 0
+               or (select count(*) from public.lead_contacts) <> 0
+               or (select count(*) from public.messages) <> 0
+               or (select count(*) from public.conversations) <> 0
+               or (select count(*) from public.web_sessions) <> 0
+               or (select count(*) from storage.objects) <> 0
+            then
+              raise exception 'STAGING_POST_TEST_DATA_NOT_EMPTY';
+            end if;
+            if exists (select 1 from cron.job where active and btrim(command) <> 'select 1;')
+            then
+              raise exception 'STAGING_POST_TEST_ACTIVE_CRON_NOT_INERT';
+            end if;
+          end;
+          $stage$;
+          SQL
+
       - name: Show local migration state
         if: always()
         shell: bash
