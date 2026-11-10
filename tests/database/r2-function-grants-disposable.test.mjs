@@ -39,8 +39,14 @@ function sqlStub({name,args},securityDefiner=false) {
     (securityDefiner?'SECURITY DEFINER ':'')+"AS $$ SELECT 'synthetic-only'::text $$";
 }
 async function expectPrivilege(db,role,func,expected) {
-  const r=await db.query('SELECT pg_catalog.has_function_privilege($1,$2::regprocedure,$3) AS result',
-    [role,'public.'+func.name+'('+func.args+')','EXECUTE']);
+  const r=await db.query(
+    "SELECT pg_catalog.has_function_privilege($1,p.oid,$4) AS result "+
+    "FROM pg_catalog.pg_proc p "+
+    "JOIN pg_catalog.pg_namespace n ON n.oid=p.pronamespace "+
+    "WHERE n.nspname='public' AND p.proname=$2 "+
+    "AND pg_catalog.pg_get_function_identity_arguments(p.oid)=$3",
+    [role,func.name,func.args,'EXECUTE']);
+  assert.equal(r.rowCount,1,'Exact synthetic signature required: '+func.name);
   assert.equal(r.rows[0].result,expected,
     role+' EXECUTE '+func.name+'('+func.args+')');
 }
@@ -130,8 +136,12 @@ test('exact R2 function-privilege proposal closes anonymous EXECUTE while retain
 
     for(const item of revocations){
       assert.equal((await db.query(
-        'SELECT pg_catalog.has_function_privilege($1,$2::regprocedure,$3) AS can',
-        ['anon','public.'+item.name+'('+item.args+')','EXECUTE']
+        "SELECT pg_catalog.has_function_privilege($1,p.oid,$4) AS can "+
+        "FROM pg_catalog.pg_proc p "+
+        "JOIN pg_catalog.pg_namespace n ON n.oid=p.pronamespace "+
+        "WHERE n.nspname='public' AND p.proname=$2 "+
+        "AND pg_catalog.pg_get_function_identity_arguments(p.oid)=$3",
+        ['anon',item.name,item.args,'EXECUTE']
       )).rows[0].can,item.name!=='prepare_failed_whatsapp_provider_retry_v1',
       'Fixture should start with exactly the expected anonymous exposed group');
     }
@@ -164,7 +174,10 @@ test('exact R2 function-privilege proposal closes anonymous EXECUTE while retain
     for(const item of paths){
       const r=await db.query(
         "SELECT p.proconfig FROM pg_catalog.pg_proc p "+
-        "WHERE p.oid=$1::regprocedure",['public.'+item.name+'('+item.args+')']);
+        "JOIN pg_catalog.pg_namespace n ON n.oid=p.pronamespace "+
+        "WHERE n.nspname='public' AND p.proname=$1 "+
+        "AND pg_catalog.pg_get_function_identity_arguments(p.oid)=$2",
+        [item.name,item.args]);
       assert.ok(r.rows[0].proconfig?.includes('search_path=public, pg_temp'),
         'Fixed search path required for '+item.name);
     }
