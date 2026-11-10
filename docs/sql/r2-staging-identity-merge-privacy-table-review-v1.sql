@@ -43,6 +43,12 @@ BEGIN
   WHERE c.relkind IN ('r','p')
     AND c.relrowsecurity
     AND pg_catalog.pg_get_userbyid(c.relowner)='postgres'
+    AND (e.name NOT IN ('persons','privacy_data_subject_requests') OR EXISTS (
+      SELECT 1 FROM pg_catalog.pg_attribute a
+      WHERE a.attrelid=c.oid AND a.attname='organization_id'
+        AND a.atttypid='uuid'::regtype AND a.attnotnull
+        AND a.attnum>0 AND NOT a.attisdropped
+    ))
     AND EXISTS (
       SELECT 1 FROM pg_catalog.pg_constraint k
       WHERE k.conrelid=c.oid AND k.contype='p'
@@ -71,11 +77,20 @@ BEGIN
 END;
 $r2_privacy_preflight$;
 
+-- R2 staging-only paired keys required for trusted cross-tenant references.
+-- These add redundant uniqueness over existing UUID primary keys; this is
+-- necessary for PostgreSQL composite foreign keys to reference both fields.
+-- Independent DBA must review parent-table locks, live row count and rollback.
+ALTER TABLE public.persons
+  ADD CONSTRAINT r2_privacy_person_org_id_key UNIQUE (organization_id,id);
+ALTER TABLE public.privacy_data_subject_requests
+  ADD CONSTRAINT r2_privacy_request_org_id_key UNIQUE (organization_id,id);
+
 CREATE TABLE public.privacy_erasure_jobs (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   organization_id uuid NOT NULL REFERENCES public.organizations(id) ON DELETE CASCADE,
-  request_id uuid NOT NULL REFERENCES public.privacy_data_subject_requests(id) ON DELETE CASCADE,
-  person_id uuid REFERENCES public.persons(id) ON DELETE SET NULL,
+  request_id uuid NOT NULL,
+  person_id uuid,
   status text NOT NULL DEFAULT 'planned'
     CONSTRAINT privacy_erasure_jobs_status_check
     CHECK (status IN ('planned','held','ready','completed','cancelled')),
@@ -85,6 +100,14 @@ CREATE TABLE public.privacy_erasure_jobs (
   planned_at timestamptz NOT NULL DEFAULT now(),
   completed_at timestamptz,
   updated_at timestamptz NOT NULL DEFAULT now(),
+  CONSTRAINT privacy_erasure_jobs_request_id_fkey
+    FOREIGN KEY (organization_id,request_id)
+    REFERENCES public.privacy_data_subject_requests(organization_id,id)
+    ON DELETE CASCADE,
+  CONSTRAINT privacy_erasure_jobs_person_id_fkey
+    FOREIGN KEY (organization_id,person_id)
+    REFERENCES public.persons(organization_id,id)
+    ON DELETE SET NULL (person_id),
   CONSTRAINT privacy_erasure_jobs_organization_id_request_id_key
     UNIQUE (organization_id,request_id)
 );
@@ -95,12 +118,20 @@ CREATE INDEX idx_privacy_erasure_jobs_pending
 CREATE TABLE public.privacy_export_runs (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   organization_id uuid NOT NULL REFERENCES public.organizations(id) ON DELETE CASCADE,
-  request_id uuid NOT NULL REFERENCES public.privacy_data_subject_requests(id) ON DELETE CASCADE,
-  person_id uuid REFERENCES public.persons(id) ON DELETE SET NULL,
+  request_id uuid NOT NULL,
+  person_id uuid,
   generated_at timestamptz NOT NULL DEFAULT now(),
   package_hash text NOT NULL,
   manifest jsonb NOT NULL DEFAULT '{}'::jsonb,
-  metadata jsonb NOT NULL DEFAULT '{}'::jsonb
+  metadata jsonb NOT NULL DEFAULT '{}'::jsonb,
+  CONSTRAINT privacy_export_runs_request_id_fkey
+    FOREIGN KEY (organization_id,request_id)
+    REFERENCES public.privacy_data_subject_requests(organization_id,id)
+    ON DELETE CASCADE,
+  CONSTRAINT privacy_export_runs_person_id_fkey
+    FOREIGN KEY (organization_id,person_id)
+    REFERENCES public.persons(organization_id,id)
+    ON DELETE SET NULL (person_id)
 );
 
 -- Preserve tenant-only visibility. There is deliberately NO browser-user
@@ -181,6 +212,42 @@ BEGIN
     );
   IF v_count <> 10 THEN
     RAISE EXCEPTION 'BLOCKED_R2_PRIVACY_TABLE_CONSTRAINT_POSTFLIGHT_FAILED: %',v_count;
+  END IF;
+
+  -- Parent composite keys and all four same-tenant child FKs must be present
+  -- before this DDL can COMMIT, not merely have their names declared.
+  SELECT count(*)::integer INTO v_count
+  FROM pg_catalog.pg_constraint k
+  JOIN pg_catalog.pg_class c ON c.oid=k.conrelid
+  JOIN pg_catalog.pg_namespace n ON n.oid=c.relnamespace
+  WHERE n.nspname='public' AND k.contype='u'
+    AND (
+      (c.relname='persons' AND k.conname='r2_privacy_person_org_id_key') OR
+      (c.relname='privacy_data_subject_requests' AND k.conname='r2_privacy_request_org_id_key')
+    )
+    AND pg_catalog.pg_get_constraintdef(k.oid)='UNIQUE (organization_id, id)';
+  IF v_count <> 2 THEN
+    RAISE EXCEPTION 'BLOCKED_R2_PRIVACY_COMPOSITE_PARENT_KEYS: %',v_count;
+  END IF;
+
+  SELECT count(*)::integer INTO v_count
+  FROM pg_catalog.pg_constraint k
+  JOIN pg_catalog.pg_class child ON child.oid=k.conrelid
+  JOIN pg_catalog.pg_namespace n ON n.oid=child.relnamespace
+  JOIN pg_catalog.pg_class parent ON parent.oid=k.confrelid
+  WHERE n.nspname='public' AND k.contype='f' AND k.convalidated
+    AND child.relname IN ('privacy_erasure_jobs','privacy_export_runs')
+    AND (
+      (parent.relname='persons' AND
+       pg_catalog.pg_get_constraintdef(k.oid) LIKE
+        'FOREIGN KEY (organization_id, person_id) REFERENCES persons(organization_id, id) ON DELETE SET NULL (person_id)%')
+      OR
+      (parent.relname='privacy_data_subject_requests' AND
+       pg_catalog.pg_get_constraintdef(k.oid) LIKE
+        'FOREIGN KEY (organization_id, request_id) REFERENCES privacy_data_subject_requests(organization_id, id) ON DELETE CASCADE%')
+    );
+  IF v_count <> 4 THEN
+    RAISE EXCEPTION 'BLOCKED_R2_PRIVACY_SAME_TENANT_FOREIGN_KEYS: %',v_count;
   END IF;
 
   IF to_regclass('public.idx_privacy_erasure_jobs_pending') IS NULL THEN
