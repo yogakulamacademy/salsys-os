@@ -297,6 +297,54 @@ jobs:
             -U postgres -d postgres \
             < tests/database/r2-behavior-rpc-positive-tenant-local.sql
 
+      # REVIEW-ONLY R2 dry run: after the normal clean migration replay and
+      # synthetic R2-P2 tests, exercise approved *staging-only* SQL in exact
+      # dependency order against this SAME disposable local container.
+      # This step is intentionally NOT an apply-migration or hosted SQL job.
+      - name: Rehearse four exact R2 stage-only SQL packages in disposable local PostgreSQL
+        if: ${{ hashFiles('supabase/staging-only/migrations/20261110045151_r2_stage_only_lead_reliability_rehearsal_v1.sql') != '' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Fetch the immutable, separately reviewed first package and
+          # its SELECT-only audits without merging another branch.
+          acl_head="1243ea8e5940210542b8a05385cac4d4b27692e7"
+          design_head="572baa10344998c40a9ba76ccd8f45958c352f9d"
+          git fetch --no-tags --depth=1 origin "$acl_head"
+          git fetch --no-tags --depth=1 origin "$design_head"
+          acl_sql="${RUNNER_TEMP}/r2-approved-stage-acl.sql"
+          anon_audit="${RUNNER_TEMP}/r2-anon-audit.sql"
+          role_audit="${RUNNER_TEMP}/r2-role-audit.sql"
+          git show "$acl_head:supabase/staging-only/migrations/20261110041634_r2_staging_privileged_function_grants_v1.sql" > "$acl_sql"
+          git show "$design_head:docs/sql/r2-staging-postinstall-global-anon-function-audit-v1.sql" > "$anon_audit"
+          git show "$design_head:docs/sql/r2-staging-postinstall-function-role-parity-audit-v1.sql" > "$role_audit"
+          stage_dir="supabase/staging-only/migrations"
+          tenant_sql="$stage_dir/20261110043007_r2_staging_automation_tenant_guard_v1.sql"
+          privacy_sql="$stage_dir/20261110043010_r2_staging_privacy_identity_dependencies_v1.sql"
+          lead_sql="$stage_dir/20261110045151_r2_stage_only_lead_reliability_rehearsal_v1.sql"
+          # Immutable reviewed source checks are mandatory.
+          test "$(git hash-object "$acl_sql")" = "4dce41ad8f75d486c33e1364646ca24d44bf5c31"
+          test "$(git hash-object "$tenant_sql")" = "e621500b5264aab86cbbcd1b91b718631254a9ed"
+          test "$(git hash-object "$privacy_sql")" = "2a7af019efb727a2e5036ab1611b1d084edbd142"
+          test "$(git hash-object "$lead_sql")" = "7a5ded898443f626e4452e5c4cae32157350f4a5"
+          # Never pass a project ref, password, external DSN, or service key.
+          mapfile -t containers < <(docker ps --format '{{.Names}}' | grep '^supabase_db_' || true)
+          test "${#containers[@]}" -eq 1
+          db_container="${containers[0]}"
+          echo "Synthetic local PostgreSQL only: source hashes verified."
+          for file in "$acl_sql" "$tenant_sql" "$privacy_sql" "$lead_sql"; do
+            echo "Executing disposable local SQL: $(basename "$file")"
+            docker exec -i "$db_container" psql -X -v ON_ERROR_STOP=1 \
+              -U postgres -d postgres < "$file"
+          done
+          # Real reviewed postflight SELECT-only function audits; no IDs,
+          # customer data, hosted database or outbound providers.
+          docker exec -i "$db_container" psql -X -v ON_ERROR_STOP=1 \
+            -U postgres -d postgres < "$anon_audit"
+          docker exec -i "$db_container" psql -X -v ON_ERROR_STOP=1 \
+            -U postgres -d postgres < "$role_audit"
+          echo "Disposable local SQL replay completed; hosted acceptance still 0/16."
+
       - name: Show local migration state
         if: always()
         shell: bash
