@@ -80,7 +80,7 @@ WITH expected(name) AS (
  -- Four expected tenant-paired links: each child table's request and person.
  -- Separate organization_id, request_id and person_id FKs DO NOT prove
  -- same-organization references. Never infer tenant safety from RLS alone.
- SELECT count(*)::int AS composite_guards
+ SELECT count(DISTINCT child.relname::text||':'||parent.relname::text)::int AS composite_guards
  FROM pg_catalog.pg_constraint k
  JOIN pg_catalog.pg_class child ON child.oid=k.conrelid
  JOIN pg_catalog.pg_namespace n ON n.oid=child.relnamespace
@@ -100,13 +100,14 @@ WITH expected(name) AS (
  ) cols
  WHERE n.nspname='public'
    AND child.relname IN ('privacy_erasure_jobs','privacy_export_runs')
-   AND k.contype='f'
+   AND k.contype='f' AND k.convalidated
    AND (
-     (parent.relname='persons' AND
+     (parent.relname='persons' AND k.confdeltype='n'
+       AND pg_catalog.pg_get_constraintdef(k.oid) LIKE '%ON DELETE SET NULL (person_id)%' AND
        ((cols.child_keys=ARRAY['organization_id','person_id'] AND cols.parent_keys=ARRAY['organization_id','id'])
         OR (cols.child_keys=ARRAY['person_id','organization_id'] AND cols.parent_keys=ARRAY['id','organization_id'])))
      OR
-     (parent.relname='privacy_data_subject_requests' AND
+     (parent.relname='privacy_data_subject_requests' AND k.confdeltype='c' AND
        ((cols.child_keys=ARRAY['organization_id','request_id'] AND cols.parent_keys=ARRAY['organization_id','id'])
         OR (cols.child_keys=ARRAY['request_id','organization_id'] AND cols.parent_keys=ARRAY['id','organization_id'])))
    )
