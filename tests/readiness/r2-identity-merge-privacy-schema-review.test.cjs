@@ -32,7 +32,7 @@ test('review-only privacy schema proposal is transactional and fail-closed', () 
   assert.doesNotMatch(proposal, /(?:pg_net|http_post|supabase\.co|https?:\/\/|create extension|cron\.schedule)/i);
 });
 
-test('exact two-table schema preserves production structural safety contracts', () => {
+test('review-only two-table schema adds explicit same-tenant reference constraints', () => {
   for (const table of tables) {
     assert.ok(proposal.includes('CREATE TABLE public.'+table+' ('), table+' creation');
     assert.ok(proposal.includes('ALTER TABLE public.'+table+' ENABLE ROW LEVEL SECURITY;'));
@@ -48,9 +48,19 @@ test('exact two-table schema preserves production structural safety contracts', 
   assert.match(proposal, /CONSTRAINT privacy_erasure_jobs_organization_id_request_id_key/);
   assert.match(proposal, /CREATE INDEX idx_privacy_erasure_jobs_pending/);
   assert.match(proposal, /package_hash text NOT NULL/);
-  assert.match(proposal, /REFERENCES public\.persons\(id\) ON DELETE SET NULL/);
-  assert.match(proposal, /REFERENCES public\.privacy_data_subject_requests\(id\) ON DELETE CASCADE/);
+  assert.match(proposal, /REFERENCES public\.persons\(organization_id,id\)\s+ON DELETE SET NULL \(person_id\)/);
+  assert.match(proposal, /REFERENCES public\.privacy_data_subject_requests\(organization_id,id\)\s+ON DELETE CASCADE/);
   assert.match(proposal, /m\.user_id=\(SELECT auth\.uid\(\)\) AND m\.active/);
+  assert.match(proposal, /ALTER TABLE public\.persons\s+ADD CONSTRAINT r2_privacy_person_org_id_key UNIQUE \(organization_id,id\)/);
+  assert.match(proposal, /ALTER TABLE public\.privacy_data_subject_requests\s+ADD CONSTRAINT r2_privacy_request_org_id_key UNIQUE \(organization_id,id\)/);
+  assert.match(proposal, /CONSTRAINT privacy_erasure_jobs_request_id_fkey\s+FOREIGN KEY \(organization_id,request_id\)/);
+  assert.match(proposal, /CONSTRAINT privacy_erasure_jobs_person_id_fkey\s+FOREIGN KEY \(organization_id,person_id\)/);
+  assert.match(proposal, /CONSTRAINT privacy_export_runs_request_id_fkey\s+FOREIGN KEY \(organization_id,request_id\)/);
+  assert.match(proposal, /CONSTRAINT privacy_export_runs_person_id_fkey\s+FOREIGN KEY \(organization_id,person_id\)/);
+  assert.match(proposal, /BLOCKED_R2_PRIVACY_COMPOSITE_PARENT_KEYS/);
+  assert.match(proposal, /BLOCKED_R2_PRIVACY_SAME_TENANT_FOREIGN_KEYS/);
+  assert.match(audit, /AND u\.present_keys=2/);
+  assert.match(audit, /'parent_tenant_composite_keys',u\.present_keys/);
 });
 
 test('anonymous and browser writes are denied by explicit least-privilege ACL policy', () => {
@@ -89,7 +99,7 @@ test('tenant-paired privacy references remain a fail-closed independent acceptan
   assert.match(audit, /'expected_tenant_paired_fks',4/);
   assert.match(audit, /'tenant_reference_review_required',t\.composite_guards<>4/);
   assert.match(dossier, /Additional tenant-reference integrity gate/);
-  assert.match(dossier, /current proposal will fail this additional gate/);
+  assert.match(dossier, /revised staging-only proposal adds parent composite unique keys/);
   assert.match(dossier, /mismatched \`request_id\` and mismatched \`person_id\`/);
   assert.match(dossier, /No customer rows were inspected/);
 });
