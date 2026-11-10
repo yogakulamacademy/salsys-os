@@ -67,6 +67,15 @@ WITH expected(name) AS (
  FROM expected_constraints e
  LEFT JOIN details d ON d.name=e.tab
  LEFT JOIN pg_catalog.pg_constraint k ON k.conrelid=d.oid AND k.conname=e.cname
+), parent_tenant_keys AS (
+ SELECT count(*)::int AS present_keys
+ FROM pg_catalog.pg_constraint k
+ JOIN pg_catalog.pg_class c ON c.oid=k.conrelid
+ JOIN pg_catalog.pg_namespace n ON n.oid=c.relnamespace
+ WHERE n.nspname='public' AND k.contype='u'
+   AND ((c.relname='persons' AND k.conname='r2_privacy_person_org_id_key')
+     OR (c.relname='privacy_data_subject_requests' AND k.conname='r2_privacy_request_org_id_key'))
+   AND pg_catalog.pg_get_constraintdef(k.oid)='UNIQUE (organization_id, id)'
 ), tenant_fk_integrity AS (
  -- Four expected tenant-paired links: each child table's request and person.
  -- Separate organization_id, request_id and person_id FKs DO NOT prove
@@ -115,6 +124,7 @@ SELECT jsonb_build_object(
    AND s.strict_role_tables=2 AND p.valid_parents=4
    AND c.verified_constraints=10 AND f.present=1
    AND t.composite_guards=4
+   AND u.present_keys=2
    AND to_regclass('public.idx_privacy_erasure_jobs_pending') IS NOT NULL
   THEN 'PRIVACY_IDENTITY_MERGE_METADATA_READY_NOT_E2E'
   ELSE 'PRIVACY_IDENTITY_MERGE_SCHEMA_OR_ROLE_REVIEW_REQUIRED' END,
@@ -131,6 +141,8 @@ SELECT jsonb_build_object(
  'partial_index_present',to_regclass('public.idx_privacy_erasure_jobs_pending') IS NOT NULL,
  'tenant_paired_composite_fks',t.composite_guards,
  'expected_tenant_paired_fks',4,
+ 'parent_tenant_composite_keys',u.present_keys,
+ 'expected_parent_tenant_keys',2,
  'tenant_reference_review_required',t.composite_guards<>4,
  'note','A reviewed equivalent trigger/other guard requires a separately revised audit; separate ID FKs alone do not enforce same-tenant references',
  'privacy_legal_approval',false,
@@ -140,4 +152,5 @@ SELECT jsonb_build_object(
  'release_authorized',false
 ) AS r2_privacy_identity_schema_gate
 FROM structural s CROSS JOIN parent_status p CROSS JOIN constraint_status c
-CROSS JOIN merge_function f CROSS JOIN tenant_fk_integrity t;
+CROSS JOIN merge_function f CROSS JOIN tenant_fk_integrity t
+CROSS JOIN parent_tenant_keys u;
