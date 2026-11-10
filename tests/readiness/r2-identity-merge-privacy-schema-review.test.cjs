@@ -61,6 +61,12 @@ test('review-only two-table schema adds explicit same-tenant reference constrain
   assert.match(proposal, /BLOCKED_R2_PRIVACY_SAME_TENANT_FOREIGN_KEYS/);
   assert.match(audit, /AND u\.present_keys=2/);
   assert.match(audit, /'parent_tenant_composite_keys',u\.present_keys/);
+  assert.match(audit, /count\(DISTINCT child\.relname::text\|\|':'\|\|parent\.relname::text\)/);
+  assert.match(audit, /k\.contype='f' AND k\.convalidated/);
+  assert.match(audit, /k\.confdeltype='n'/);
+  assert.match(audit, /k\.confdeltype='c'/);
+  assert.match(audit, /ON DELETE SET NULL \(person_id\)/);
+  assert.match(proposal, /count\(DISTINCT child\.relname::text\|\|':'\|\|parent\.relname::text\)/);
 });
 
 test('anonymous and browser writes are denied by explicit least-privilege ACL policy', () => {
