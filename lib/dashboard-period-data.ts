@@ -1,5 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import { requireCurrentOrganizationId } from "@/lib/workspace";
+import { fetchCompleteDashboardPeriodRows } from "@/lib/dashboard-period-pagination";
 
 export type DashboardPeriodPreset = "7d" | "30d" | "90d" | "ytd" | "custom";
 
@@ -169,28 +170,50 @@ export async function getDashboardPeriodAnalytics(
 
   const organizationId = await requireCurrentOrganizationId(supabase, auth.data.user.id);
 
+  // The PostgREST max_rows setting caps each response; the selected-period
+  // counts, qualification, source mix and chart must not stop at 1,000 records.
+  // Keep all queries actor-authenticated, tenant-filtered and deterministically
+  // ordered, then fetch every page without silently publishing partial data.
   const [leadResult, paymentResult, stageResult] = await Promise.all([
-    supabase
-      .from("leads")
-      .select("created_at,current_stage,first_touch_source")
-      .eq("organization_id", organizationId)
-      .neq("status", "archived")
-      .gte("created_at", period.previousStartIso)
-      .lt("created_at", period.endExclusiveIso),
-    supabase
-      .from("payments")
-      .select("amount,currency,payment_kind,status,paid_at")
-      .eq("organization_id", organizationId)
-      .gte("paid_at", period.previousStartIso)
-      .lt("paid_at", period.endExclusiveIso)
-      .in("status", ["paid", "refunded"]),
-    supabase
-      .from("lead_stage_history")
-      .select("lead_id,changed_at,to_stage,lead:leads!inner(organization_id)")
-      .eq("lead.organization_id", organizationId)
-      .eq("to_stage", "enrolled")
-      .gte("changed_at", period.previousStartIso)
-      .lt("changed_at", period.endExclusiveIso),
+    fetchCompleteDashboardPeriodRows<LeadRow>(async (from, to) => {
+      const { data, error } = await supabase
+        .from("leads")
+        .select("created_at,current_stage,first_touch_source")
+        .eq("organization_id", organizationId)
+        .neq("status", "archived")
+        .gte("created_at", period.previousStartIso)
+        .lt("created_at", period.endExclusiveIso)
+        .order("created_at", { ascending: true })
+        .order("id", { ascending: true })
+        .range(from, to);
+      return { data: data as LeadRow[] | null, error };
+    }),
+    fetchCompleteDashboardPeriodRows<PaymentRow>(async (from, to) => {
+      const { data, error } = await supabase
+        .from("payments")
+        .select("amount,currency,payment_kind,status,paid_at")
+        .eq("organization_id", organizationId)
+        .gte("paid_at", period.previousStartIso)
+        .lt("paid_at", period.endExclusiveIso)
+        .in("status", ["paid", "refunded"])
+        .order("paid_at", { ascending: true })
+        .order("id", { ascending: true })
+        .range(from, to);
+      return { data: data as PaymentRow[] | null, error };
+    }),
+    fetchCompleteDashboardPeriodRows<StageHistoryRow>(async (from, to) => {
+      const { data, error } = await supabase
+        .from("lead_stage_history")
+        .select("lead_id,changed_at,to_stage,lead:leads!inner(organization_id)")
+        .eq("lead.organization_id", organizationId)
+        .eq("to_stage", "enrolled")
+        .gte("changed_at", period.previousStartIso)
+        .lt("changed_at", period.endExclusiveIso)
+        .order("changed_at", { ascending: true })
+        .order("id", { ascending: true })
+        .range(from, to);
+      return { data: data as unknown as StageHistoryRow[] | null, error };
+    }),
   ]);
 
   const leads = (leadResult.data ?? []) as LeadRow[];
