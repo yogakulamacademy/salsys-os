@@ -91,7 +91,8 @@ test('exact R2 function-privilege proposal closes anonymous EXECUTE while retain
     // Set up the exact function identities with the preflight's owner and
     // SECURITY DEFINER/INVOKER properties; no function is ever invoked.
     for(const item of revocations) {
-      await db.query(sqlStub(item,definer.some(x=>x.name===item.name)));
+      await db.query(sqlStub(item,definer.some(x=>x.name===item.name) ||
+        item.name==='prepare_failed_whatsapp_provider_retry_v1'));
       if(definer.some(x=>x.name===item.name)){
         await db.query('GRANT EXECUTE ON FUNCTION public.'+item.name+
           '('+item.args+') TO service_role');
