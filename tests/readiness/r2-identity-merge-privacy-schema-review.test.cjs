@@ -98,7 +98,7 @@ test('tenant-paired privacy references remain a fail-closed independent acceptan
   assert.match(audit, /'tenant_paired_composite_fks',t\.composite_guards/);
   assert.match(audit, /'expected_tenant_paired_fks',4/);
   assert.match(audit, /'tenant_reference_review_required',t\.composite_guards<>4/);
-  assert.match(dossier, /Additional tenant-reference integrity gate/);
+  assert.match(dossier, /Tenant-reference integrity — stage proposal advanced/);
   assert.match(dossier, /revised staging-only proposal adds parent composite unique keys/);
   assert.match(dossier, /mismatched \`request_id\` and mismatched \`person_id\`/);
   assert.match(dossier, /No customer rows were inspected/);
