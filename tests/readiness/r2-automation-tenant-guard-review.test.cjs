@@ -25,6 +25,9 @@ test('R2 automation guard is REVIEW-ONLY, transactional, stage-first and fail-cl
   assert.match(proposal, /BLOCKED_R2_AUTOMATION_GUARD_SOURCE_OR_ACL_MISMATCH/);
   assert.match(proposal, /BLOCKED_R2_AUTOMATION_TRIGGER_TABLE_CONTRACT_MISMATCH/);
   assert.match(proposal, /BLOCKED_R2_AUTOMATION_GUARD_POSTFLIGHT_FAILED/);
+  assert.match(proposal, /position\('IF V_LEAD_ID IS NOT NULL THEN' in upper\(p\.prosrc\)\)>0/);
+  assert.match(proposal, /position\('IF V_CONVERSATION_ID IS NOT NULL THEN' in upper\(p\.prosrc\)\)>0/);
+  assert.match(proposal, /position\('IF V_MESSAGE_ID IS NOT NULL THEN' in upper\(p\.prosrc\)\)>0/);
   assert.doesNotMatch(proposal, /^(?:GRANT|REVOKE|INSERT|UPDATE|DELETE|DROP|TRUNCATE|CREATE TRIGGER)\b/im);
   assert.doesNotMatch(proposal, /(?:pg_net|net\.http|http_post|invoke_function|send_message|customer_message_sent|call provider)/i);
 });
@@ -83,6 +86,10 @@ test('independent metadata audit denies E2E and release claims', () => {
   assert.match(audit, /AUTOMATION_TENANT_GUARD_METADATA_PASS_NOT_E2E/);
   assert.match(audit, /s\.attached_triggers=7/);
   assert.match(audit, /s\.structural_tables=7/);
+  assert.match(audit, /f\.lead_coverage/);
+  assert.match(audit, /f\.conversation_coverage/);
+  assert.match(audit, /f\.message_coverage/);
+  assert.match(audit, /f\.three_tenant_mismatch_guards/);
   assert.match(audit, /'two_tenant_negative_test_witnessed',false/);
   assert.match(audit, /'staging_migration_approved',false/);
   assert.match(audit, /'release_authorized',false/);
