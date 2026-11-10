@@ -230,7 +230,7 @@ BEGIN
     RAISE EXCEPTION 'BLOCKED_R2_PRIVACY_COMPOSITE_PARENT_KEYS: %',v_count;
   END IF;
 
-  SELECT count(*)::integer INTO v_count
+  SELECT count(DISTINCT child.relname::text||':'||parent.relname::text)::integer INTO v_count
   FROM pg_catalog.pg_constraint k
   JOIN pg_catalog.pg_class child ON child.oid=k.conrelid
   JOIN pg_catalog.pg_namespace n ON n.oid=child.relnamespace
