@@ -38,7 +38,7 @@ function_details AS (
     pg_catalog.has_function_privilege('service_role',p.oid,'EXECUTE') AS service_allowed,
     position('v_new jsonb := to_jsonb(new)' in p.prosrc)>0 AS generic_row,
     position('v_lead_id := nullif(v_new->>''lead_id''' in p.prosrc)>0 AS lead_extraction,
-    position('IF v_lead_id IS NOT NULL THEN' in upper(p.prosrc))>0 AS lead_coverage,
+    position('IF V_LEAD_ID IS NOT NULL THEN' in upper(p.prosrc))>0 AS lead_coverage,
     position('v_conversation_id := nullif(v_new->>''conversation_id''' in p.prosrc)>0 AS conversation_extraction,
     position('v_message_id := nullif(v_new->>''message_id''' in p.prosrc)>0 AS message_extraction
   FROM pg_catalog.pg_proc p
