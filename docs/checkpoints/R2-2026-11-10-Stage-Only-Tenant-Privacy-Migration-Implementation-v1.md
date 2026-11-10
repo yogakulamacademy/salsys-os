@@ -30,7 +30,8 @@ Tests in `tests/readiness/r2-stage-only-tenant-privacy-migration-package.test.cj
 
 ## Failure containment and rollback
 
-- Both SQL sources use bounded `BEGIN`/`COMMIT` transactions, preflight and postflight, `lock_timeout=5s`, `statement_timeout=30s`. A failed preflight/postflight must ROLLBACK; stop rather than retry loops or weakening access rules.
+- **The tenant and privacy SQL sources** use `BEGIN`/`COMMIT`, preflight/postflight and bounded `SET LOCAL lock_timeout='5s'` / `statement_timeout='30s'`. A failed preflight/postflight must ROLLBACK; stop rather than retry loops or weakening access rules.
+- **The approved #667 reliability SQL does NOT set `lock_timeout` or `statement_timeout`.** This is a separate operational risk for the stage-only replay. Do not edit its approved exact-source bytes or infer the first two migrations' time limits apply to it. The DBA must independently review statement/locking duration, specify a verified external session/operator timeout and cancellation strategy compatible with the migration tooling, and approve the exact rollback and no-send condition before hosted stage execution. A functional reversioning of the filename does **not** reapprove its lock safety.
 - If the **automation guard** fails after commit, disable staged automation and use a separately reviewed captured original function-body definition to restore; do not enable anonymous EXECUTE or impersonate customers.
 - If the **privacy schema** fails after commit, preserve its tables and any captured data, account for both newly created composite parent constraints and dependent child FKs, and use an independently reviewed repair/recreate plan. **Do not drop existing child rows or parent keys blindly.**
 - A SQL filename or passing disposable PostgreSQL unit test does not prove hosted rollback; restore must be witnessed separately.
