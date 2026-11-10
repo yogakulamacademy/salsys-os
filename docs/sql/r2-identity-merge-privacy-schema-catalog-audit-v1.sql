@@ -67,6 +67,40 @@ WITH expected(name) AS (
  FROM expected_constraints e
  LEFT JOIN details d ON d.name=e.tab
  LEFT JOIN pg_catalog.pg_constraint k ON k.conrelid=d.oid AND k.conname=e.cname
+), tenant_fk_integrity AS (
+ -- Four expected tenant-paired links: each child table's request and person.
+ -- Separate organization_id, request_id and person_id FKs DO NOT prove
+ -- same-organization references. Never infer tenant safety from RLS alone.
+ SELECT count(*)::int AS composite_guards
+ FROM pg_catalog.pg_constraint k
+ JOIN pg_catalog.pg_class child ON child.oid=k.conrelid
+ JOIN pg_catalog.pg_namespace n ON n.oid=child.relnamespace
+ JOIN pg_catalog.pg_class parent ON parent.oid=k.confrelid
+ CROSS JOIN LATERAL (
+   SELECT
+    ARRAY(SELECT a.attname::text
+          FROM unnest(k.conkey) WITH ORDINALITY AS p(attnum,ord)
+          JOIN pg_catalog.pg_attribute a
+            ON a.attrelid=k.conrelid AND a.attnum=p.attnum
+          ORDER BY p.ord) AS child_keys,
+    ARRAY(SELECT a.attname::text
+          FROM unnest(k.confkey) WITH ORDINALITY AS p(attnum,ord)
+          JOIN pg_catalog.pg_attribute a
+            ON a.attrelid=k.confrelid AND a.attnum=p.attnum
+          ORDER BY p.ord) AS parent_keys
+ ) cols
+ WHERE n.nspname='public'
+   AND child.relname IN ('privacy_erasure_jobs','privacy_export_runs')
+   AND k.contype='f'
+   AND (
+     (parent.relname='persons' AND
+       ((cols.child_keys=ARRAY['organization_id','person_id'] AND cols.parent_keys=ARRAY['organization_id','id'])
+        OR (cols.child_keys=ARRAY['person_id','organization_id'] AND cols.parent_keys=ARRAY['id','organization_id'])))
+     OR
+     (parent.relname='privacy_data_subject_requests' AND
+       ((cols.child_keys=ARRAY['organization_id','request_id'] AND cols.parent_keys=ARRAY['organization_id','id'])
+        OR (cols.child_keys=ARRAY['request_id','organization_id'] AND cols.parent_keys=ARRAY['id','organization_id'])))
+   )
 ), merge_function AS (
  SELECT count(*)::int AS present
  FROM pg_catalog.pg_proc p
@@ -80,6 +114,7 @@ SELECT jsonb_build_object(
   WHEN s.present_tables=2 AND s.rls_postgres_owned=2 AND s.member_read_policies=2
    AND s.strict_role_tables=2 AND p.valid_parents=4
    AND c.verified_constraints=10 AND f.present=1
+   AND t.composite_guards=4
    AND to_regclass('public.idx_privacy_erasure_jobs_pending') IS NOT NULL
   THEN 'PRIVACY_IDENTITY_MERGE_METADATA_READY_NOT_E2E'
   ELSE 'PRIVACY_IDENTITY_MERGE_SCHEMA_OR_ROLE_REVIEW_REQUIRED' END,
@@ -94,6 +129,10 @@ SELECT jsonb_build_object(
  'expected_constraints',10,
  'identity_merge_privacy_preflight_function_present',f.present=1,
  'partial_index_present',to_regclass('public.idx_privacy_erasure_jobs_pending') IS NOT NULL,
+ 'tenant_paired_composite_fks',t.composite_guards,
+ 'expected_tenant_paired_fks',4,
+ 'tenant_reference_review_required',t.composite_guards<>4,
+ 'note','A reviewed equivalent trigger/other guard requires a separately revised audit; separate ID FKs alone do not enforce same-tenant references',
  'privacy_legal_approval',false,
  'signed_two_tenant_acceptance',false,
  'retention_executor_enabled',false,
@@ -101,4 +140,4 @@ SELECT jsonb_build_object(
  'release_authorized',false
 ) AS r2_privacy_identity_schema_gate
 FROM structural s CROSS JOIN parent_status p CROSS JOIN constraint_status c
-CROSS JOIN merge_function f;
+CROSS JOIN merge_function f CROSS JOIN tenant_fk_integrity t;
