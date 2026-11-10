@@ -22,6 +22,7 @@ const actorB = randomUUID();
 const personA = randomUUID();
 const personB = randomUUID();
 const reqA = randomUUID();
+const reqA2 = randomUUID();
 const reqB = randomUUID();
 
 function disposableUrl() {
@@ -135,6 +136,9 @@ test('exact stage privacy proposal enforces composite tenant FKs, RLS, and perso
       [personA,personB,A,B]);
     await db.query('INSERT INTO public.privacy_data_subject_requests(id,organization_id,person_id) '+
       'VALUES($1,$3,$5),($2,$4,$6)',[reqA,reqB,A,B,personA,personB]);
+    // A distinct valid request isolates person-FK failure from erasure uniqueness.
+    await db.query('INSERT INTO public.privacy_data_subject_requests(id,organization_id,person_id) '+
+      'VALUES($1,$2,$3)',[reqA2,A,personA]);
     await db.query('INSERT INTO public.organization_members(id,organization_id,user_id,active) '+
       'VALUES($1,$3,$5,true),($2,$4,$6,true)',
       [randomUUID(),randomUUID(),A,B,actorA,actorB]);
@@ -155,7 +159,7 @@ test('exact stage privacy proposal enforces composite tenant FKs, RLS, and perso
       await db.query(insert,paramsA);
       await db.query(insert,paramsB);
       const badA=[randomUUID(),A,reqB,personA];
-      const badB=[randomUUID(),A,reqA,personB];
+      const badB=[randomUUID(),A,reqA2,personB];
       if(tab==='privacy_export_runs'){badA.push('synthetic');badB.push('synthetic');}
       await mustReject(db,insert,badA,'23503');
       await mustReject(db,insert,badB,'23503');
