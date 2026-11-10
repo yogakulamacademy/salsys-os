@@ -140,8 +140,14 @@ BEGIN
     AND p.proconfig @> ARRAY['search_path=public, auth, pg_temp']::text[]
     AND position('v_new jsonb := to_jsonb(new)' in p.prosrc)>0
     AND position('v_lead_id := nullif(v_new->>''lead_id''' in p.prosrc)>0
+    AND position('IF V_LEAD_ID IS NOT NULL THEN' in upper(p.prosrc))>0
     AND position('v_conversation_id := nullif(v_new->>''conversation_id''' in p.prosrc)>0
+    AND position('IF V_CONVERSATION_ID IS NOT NULL THEN' in upper(p.prosrc))>0
     AND position('v_message_id := nullif(v_new->>''message_id''' in p.prosrc)>0
+    AND position('IF V_MESSAGE_ID IS NOT NULL THEN' in upper(p.prosrc))>0
+    AND (length(lower(p.prosrc))
+      - length(replace(lower(p.prosrc), 'v_org is null or v_org <> new.organization_id', '')))
+        / length('v_org is null or v_org <> new.organization_id') >= 3
     AND position('TG_TABLE_SCHEMA' in p.prosrc)>0
     AND NOT pg_catalog.has_function_privilege('anon',p.oid,'EXECUTE')
     AND NOT pg_catalog.has_function_privilege('authenticated',p.oid,'EXECUTE')
