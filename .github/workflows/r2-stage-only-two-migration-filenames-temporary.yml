@@ -1,0 +1,35 @@
+# Temporary, no-credential filename generator; must be deleted before review.
+name: R2 two staged migration filenames (temporary no DB)
+on:
+  pull_request:
+    branches: [main]
+    paths: ['.github/workflows/r2-stage-only-two-migration-filenames-temporary.yml']
+permissions:
+  contents: read
+jobs:
+  generate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 6
+    steps:
+      - uses: supabase/setup-cli@1dedf2c611547ede7232d26866dd3c56ab903bbb
+        with:
+          version: 3.0.0
+      - name: Generate two names without credentials or database connections
+        shell: bash
+        run: |
+          set -euo pipefail
+          work="${RUNNER_TEMP}/r2-migration-name"
+          mkdir -p "$work"
+          cd "$work"
+          supabase --version
+          supabase init --yes
+          supabase migration new r2_staging_automation_tenant_guard_v1
+          sleep 2
+          supabase migration new r2_staging_privacy_identity_dependencies_v1
+          files=(supabase/migrations/*_r2_staging_*.sql)
+          test "${#files[@]}" -eq 2
+          test ! -s "${files[0]}"
+          test ! -s "${files[1]}"
+          echo "R2_STAGING_NAME_1=$(basename "${files[0]}")"
+          echo "R2_STAGING_NAME_2=$(basename "${files[1]}")"
+          echo "Filename creation only: no DB URL, no migration application, no repository write."
