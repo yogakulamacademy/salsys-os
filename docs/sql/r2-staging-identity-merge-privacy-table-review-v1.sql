@@ -20,6 +20,18 @@ BEGIN
     RAISE EXCEPTION 'BLOCKED_R2_PRIVACY_TARGET_TABLE_ALREADY_EXISTS';
   END IF;
 
+  -- Security repair and global anonymous-EXECUTE catalog acceptance must
+  -- precede any privacy dependency staging installation. Do not treat a
+  -- privacy table migration as a workaround for 25 exposed function ACLs.
+  SELECT count(*)::integer INTO v_count
+  FROM pg_catalog.pg_proc p
+  JOIN pg_catalog.pg_namespace n ON n.oid=p.pronamespace
+  WHERE n.nspname='public'
+    AND pg_catalog.has_function_privilege('anon',p.oid,'EXECUTE');
+  IF v_count <> 0 THEN
+    RAISE EXCEPTION 'BLOCKED_R2_PRIVACY_STAGE_FUNCTION_SECURITY_GATE: %',v_count;
+  END IF;
+
   WITH required(name) AS (
     VALUES ('organizations'),('persons'),('privacy_data_subject_requests'),
            ('organization_members')
