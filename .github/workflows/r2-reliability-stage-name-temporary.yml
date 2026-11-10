@@ -1,0 +1,33 @@
+# Temporary no-credential filename generator. Delete before implementation review.
+name: R2 lead reliability stage-only filename (temporary)
+on:
+  pull_request:
+    branches: [main]
+    paths: ['.github/workflows/r2-reliability-stage-name-temporary.yml']
+permissions:
+  contents: read
+jobs:
+  generated:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 6
+    steps:
+      - uses: supabase/setup-cli@1dedf2c611547ede7232d26866dd3c56ab903bbb
+        with:
+          version: 3.0.0
+      - name: Create stage-only lead reliability migration filename without database access
+        shell: bash
+        run: |
+          set -euo pipefail
+          work="${RUNNER_TEMP}/r2-reliability-filename"
+          mkdir -p "$work"
+          cd "$work"
+          supabase --version
+          supabase init --yes
+          supabase migration new r2_stage_only_lead_reliability_rehearsal_v1
+          mapfile -t names < <(find supabase/migrations -maxdepth 1 -type f -name '*_r2_stage_only_lead_reliability_rehearsal_v1.sql')
+          test "${#names[@]}" -eq 1
+          test ! -s "${names[0]}"
+          v="$(basename "${names[0]}")"
+          test "${v:0:14}" -gt 20261110043010
+          echo "R2_RELIABILITY_CLI_STAGE_FILENAME=$v"
+          echo "No database URL, provider credentials, database connection, repository write or deployment."
