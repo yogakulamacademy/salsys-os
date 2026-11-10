@@ -18,6 +18,11 @@ const specs = [
     filename: '20261110043010_r2_staging_privacy_identity_dependencies_v1.sql',
     reviewedBlob: '2a7af019efb727a2e5036ab1611b1d084edbd142',
   },
+  {
+    name: 'reliability',
+    filename: '20261110045151_r2_stage_only_lead_reliability_rehearsal_v1.sql',
+    reviewedBlob: '7a5ded898443f626e4452e5c4cae32157350f4a5',
+  },
 ];
 function gitBlob(text) {
   return crypto.createHash('sha1')
@@ -28,15 +33,17 @@ const sqlByName = Object.fromEntries(specs.map(spec => [
   spec.name, fs.readFileSync(path.join(stageDir,spec.filename),'utf8'),
 ]));
 
-test('two ordered CLI-generated stage-only migrations avoid normal production replay path', () => {
+test('three ordered CLI-generated stage-only migrations avoid normal production replay path', () => {
   for (const s of specs) {
-    assert.match(s.filename, /^\d{14}_r2_staging_[a-z_]+_v1\.sql$/);
+    assert.match(s.filename, /^\d{14}_r2_(?:staging|stage_only)_[a-z_]+_v1\.sql$/);
     assert.ok(fs.existsSync(path.join(stageDir,s.filename)));
     assert.equal(fs.existsSync(path.join(autoDir,s.filename)),false);
     assert.equal(gitBlob(sqlByName[s.name]),s.reviewedBlob,'Any SQL byte drift requires new independent review: '+s.name);
   }
   assert.ok(specs[0].filename < specs[1].filename,'Tenant guard must precede privacy dependency');
-  assert.equal(new Set(specs.map(x=>x.filename)).size,2);
+  assert.ok(specs[1].filename < specs[2].filename,'Reliability stage replay must run after privacy');
+  assert.ok(specs[0].filename > '20261110041634','External #685 ACL prerequisite must be earlier');
+  assert.equal(new Set(specs.map(x=>x.filename)).size,3);
 });
 
 test('tenant function contract cannot expand privileges, background actions or table scope', () => {
@@ -76,9 +83,28 @@ test('privacy tables require RLS, two parent composite keys and four tenant-pair
   assert.doesNotMatch(sql,/^\s*(?:DELETE FROM|TRUNCATE|DROP TABLE|UPDATE public\.)\b/im);
 });
 
+test('approved #667 reliability SQL is exact, fail-closed, stage-reversioned and keeps privileged ACL', () => {
+  const sql=sqlByName.reliability;
+  assert.equal(specs.find(x=>x.name==='reliability').reviewedBlob,'7a5ded898443f626e4452e5c4cae32157350f4a5');
+  assert.match(sql,/^begin;$/m);
+  assert.match(sql,/^commit;$/m);
+  assert.match(sql,/309f9d3ea4929e26f6c44f77099559ed/);
+  assert.match(sql,/source_guard/);
+  assert.match(sql,/post-migration privileged RPC boundary changed/);
+  assert.match(sql,/public\.ingest_website_lead\(/);
+  assert.equal((sql.match(/create or replace function/gi)||[]).length,1);
+  assert.doesNotMatch(sql,/^\s*(?:GRANT|REVOKE|DROP TABLE|TRUNCATE)\b/im);
+  // Original version 20261108080000 lives only on the separately approved
+  // production candidate #667, not in the stage package's migration path.
+  assert.equal(fs.existsSync(path.join(autoDir,specs[2].filename)),false);
+});
+
 test('stage package has no active migration hook or hosting credentials', () => {
-  for (const sql of Object.values(sqlByName)) {
+  for (const [name,sql] of Object.entries(sqlByName)) {
     assert.doesNotMatch(sql,/ndxpjqkthuzxlmbenxti|doaozrkrtgeslddwhclj/);
-    assert.doesNotMatch(sql,/https?:\/\/|supabase\.co|sb_secret_|bearer\s/i);
+    // The approved website ingest SQL legitimately includes public example
+    // website URLs as comments; do not confuse those with database credentials.
+    assert.doesNotMatch(sql,/sb_secret_|db\.[a-z0-9]+\.supabase\.co|bearer\s+eyJ/i);
+    if(name!=='reliability') assert.doesNotMatch(sql,/https?:\/\/|supabase\.co|bearer\s/i);
   }
 });
