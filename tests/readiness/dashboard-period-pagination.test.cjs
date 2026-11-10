@@ -78,7 +78,7 @@ test('missing, oversized and over-limit pages fail closed', async () => {
 });
 
 test('all three analytics queries remain scoped to tenant and date before pagination', () => {
-  assert.equal((dashboard.match(/fetchCompleteDashboardPeriodRows</g) || []).length, 4); // import + 3 query calls
+  assert.equal((dashboard.match(/fetchCompleteDashboardPeriodRows</g) || []).length, 3); // exactly 3 paginated queries
   assert.equal((dashboard.match(/\.range\(from, to\)/g) || []).length, 3);
   assert.equal((dashboard.match(/\.order\("id", \{ ascending: true \}\)/g) || []).length, 3);
   for (const table of ['leads', 'payments', 'lead_stage_history']) {
