@@ -78,3 +78,18 @@ test('privacy schema audit is read-only and does not confer false acceptance', (
   assert.match(audit, /'release_authorized',false/);
   assert.doesNotMatch(audit, /^\s*(?:CREATE|ALTER|DROP|GRANT|REVOKE|INSERT|UPDATE|DELETE|TRUNCATE|DO|EXECUTE)\b/im);
 });
+
+
+test('tenant-paired privacy references remain a fail-closed independent acceptance gate', () => {
+  const dossier = fs.readFileSync(path.resolve(__dirname,
+    '../../docs/checkpoints/R2-2026-11-10-Privacy-Identity-Merge-Schema-Review-v1.md'), 'utf8');
+  assert.match(audit, /tenant_fk_integrity AS/);
+  assert.match(audit, /AND t\.composite_guards=4/);
+  assert.match(audit, /'tenant_paired_composite_fks',t\.composite_guards/);
+  assert.match(audit, /'expected_tenant_paired_fks',4/);
+  assert.match(audit, /'tenant_reference_review_required',t\.composite_guards<>4/);
+  assert.match(dossier, /Additional tenant-reference integrity gate/);
+  assert.match(dossier, /current proposal will fail this additional gate/);
+  assert.match(dossier, /mismatched \`request_id\` and mismatched \`person_id\`/);
+  assert.match(dossier, /No customer rows were inspected/);
+});
