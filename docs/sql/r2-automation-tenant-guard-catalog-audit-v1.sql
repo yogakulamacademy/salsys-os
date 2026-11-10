@@ -40,7 +40,11 @@ function_details AS (
     position('v_lead_id := nullif(v_new->>''lead_id''' in p.prosrc)>0 AS lead_extraction,
     position('IF V_LEAD_ID IS NOT NULL THEN' in upper(p.prosrc))>0 AS lead_coverage,
     position('v_conversation_id := nullif(v_new->>''conversation_id''' in p.prosrc)>0 AS conversation_extraction,
-    position('v_message_id := nullif(v_new->>''message_id''' in p.prosrc)>0 AS message_extraction
+    position('IF V_CONVERSATION_ID IS NOT NULL THEN' in upper(p.prosrc))>0 AS conversation_coverage,
+    position('v_message_id := nullif(v_new->>''message_id''' in p.prosrc)>0 AS message_extraction,
+    position('IF V_MESSAGE_ID IS NOT NULL THEN' in upper(p.prosrc))>0 AS message_coverage,
+    (length(lower(p.prosrc))-length(replace(lower(p.prosrc), 'v_org is null or v_org <> new.organization_id', '')))
+       / length('v_org is null or v_org <> new.organization_id') >= 3 AS three_tenant_mismatch_guards
   FROM pg_catalog.pg_proc p
   WHERE p.oid=pg_catalog.to_regprocedure('public.enforce_automation_tenant_alignment_v1()')
 ),
@@ -58,8 +62,9 @@ SELECT jsonb_build_object(
        AND EXISTS (SELECT 1 FROM function_details f
          WHERE f.prosecdef AND f.correct_owner AND f.correct_path
            AND NOT f.anon_allowed AND NOT f.authenticated_allowed AND f.service_allowed
-           AND f.generic_row AND f.lead_extraction
-           AND f.conversation_extraction AND f.message_extraction)
+           AND f.generic_row AND f.lead_extraction AND f.lead_coverage
+           AND f.conversation_extraction AND f.conversation_coverage
+           AND f.message_extraction AND f.message_coverage AND f.three_tenant_mismatch_guards)
       THEN 'AUTOMATION_TENANT_GUARD_METADATA_PASS_NOT_E2E'
       ELSE 'AUTOMATION_TENANT_GUARD_REVIEW_REQUIRED' END,
   'expected_tables',s.expected_tables,
@@ -72,8 +77,9 @@ SELECT jsonb_build_object(
         AND NOT f.anon_allowed AND NOT f.authenticated_allowed AND f.service_allowed),
   'generic_lead_conversation_message_guards_present',
     EXISTS (SELECT 1 FROM function_details f
-      WHERE f.generic_row AND f.lead_extraction AND f.conversation_extraction
-        AND f.message_extraction),
+      WHERE f.generic_row AND f.lead_extraction AND f.lead_coverage
+        AND f.conversation_extraction AND f.conversation_coverage
+        AND f.message_extraction AND f.message_coverage AND f.three_tenant_mismatch_guards),
   'two_tenant_negative_test_witnessed',false,
   'staging_migration_approved',false,
   'release_authorized',false
