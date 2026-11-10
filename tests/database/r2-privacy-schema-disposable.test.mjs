@@ -75,14 +75,16 @@ test('exact stage privacy proposal enforces composite tenant FKs, RLS, and perso
     const checkRoles=await db.query(
       "SELECT rolname FROM pg_catalog.pg_roles " +
       "WHERE rolname IN ('anon','authenticated','service_role')");
-    assert.equal(checkRoles.rowCount,0,'Refuse modifying pre-existing Supabase roles');
+    // Other isolated CI fixtures may have created these cluster-level roles.
+    // Reuse them without altering attributes; create only absent local roles.
+    const presentRoles=new Set(checkRoles.rows.map(row=>row.rolname));
+    for(const role of ['anon','authenticated','service_role']){
+      if(!presentRoles.has(role)) await db.query('CREATE ROLE '+role+' NOLOGIN');
+    }
     const existingMerge=await db.query(
       "SELECT pg_catalog.to_regprocedure('public.merge_identity_resolution_conflict_v1(uuid)') AS fn");
     assert.equal(existingMerge.rows[0].fn,null,'Refuse existing identity function');
 
-    await db.query('CREATE ROLE anon NOLOGIN');
-    await db.query('CREATE ROLE authenticated NOLOGIN');
-    await db.query('CREATE ROLE service_role NOLOGIN');
     await db.query('CREATE SCHEMA auth');
     await db.query("CREATE FUNCTION auth.uid() RETURNS uuid LANGUAGE sql STABLE AS "+
       "$uid$ SELECT nullif(current_setting('request.jwt.claim.sub',true),'')::uuid $uid$");
