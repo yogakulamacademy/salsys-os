@@ -3,6 +3,7 @@
 import { createAdminClient } from '@/lib/supabase/admin';
 import { createClient } from '@/lib/supabase/server';
 import { inspectKnowledgeMatches, knowledgeFingerprint, type KnowledgeEvidence } from '@/lib/knowledge-evidence';
+import { enforceLatestInboundSafety, inspectCopilotDraftCommitments } from '@/lib/copilot-draft-safety';
 
 type SupportedChannel = 'instagram' | 'whatsapp';
 type CopilotRisk = 'low' | 'review' | 'human_only';
@@ -553,6 +554,11 @@ export async function generateCopilotReplyAction(
       );
     }
 
+    // A successful model route can still misclassify a consequential request.
+    // Only the latest inbound text can raise this minimum risk; retrieved facts
+    // and older conversation messages do not gain routing authority.
+    decision = enforceLatestInboundSafety(decision, latestInbound.body);
+
     const replyModel =
       decision.complexity === 'simple' && decision.risk === 'low'
         ? models.haiku
@@ -576,6 +582,11 @@ export async function generateCopilotReplyAction(
       const current = inspectKnowledgeMatches(currentRows);
       if (!current.ok || knowledgeFingerprint(current.matches) !== knowledgeFingerprint(approvedKnowledge)) return { ok: false, error: 'Approved knowledge changed or expired while drafting. Generate a new draft from the current facts.' };
     }
+
+    // The generated text is not trusted financial/booking evidence. Withhold
+    // unsupported assertions even when the LLM ignored its system prompt.
+    const commitmentCheck = inspectCopilotDraftCommitments(draft);
+    if (!commitmentCheck.ok) return { ok: false, error: commitmentCheck.error };
 
     return {
       ok: true,
