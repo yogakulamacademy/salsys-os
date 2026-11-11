@@ -83,3 +83,16 @@ No live endpoint exists today. R13-P1 proof-of-concept `readTenant` uses strictl
 - Latest CI and CodeQL must pass on the precise head commit; a green previous head is not transferable.
 - Synthetic tests validate the prototype's logic, **not** real auth, tenant safety, subscriptions, billing, or operational readiness.
 - Do not claim first paying customer from prospects, pricing drafts, revenue estimates, or synthetic data.
+
+
+## 2026-11-11 — Real server-auth compatibility adapter (still non-runtime)
+
+The R13-P1 draft now contains:
+- `lib/commercial/plan-review-auth-preview.ts` — a **server-only, inert** adapter using the existing `createClient()`, fresh `auth.getUser()` and `getCurrentWorkspaceContext()`.
+- It rechecks `profiles.active`, `organization_members.active`/role for the authenticated user and current organization, `organizations.status='active'`, and exact workspace role/organization consistency.
+- `requireCommercialPlatformReviewPreview()` is restricted to verified owner/admin membership of the `salsysos` platform tenant. `requireCurrentTenantPlanReadPreview()` provides only current authenticated tenant identity/scope; neither accepts a caller-selected tenant ID.
+- Both outputs explicitly prohibit billing, subscription changes and runtime capability activation. No `saas_*` query, service-role client, public endpoint, or activity/tenant write is present.
+- The TypeScript adapter is not imported by any application route/service yet; a future reviewed server route must enforce the same checks and never expose direct service-role writes.
+- `tests/readiness/r13-p1-server-auth-preview-v1.test.cjs` protects the source boundary; `tests/readiness/r13-p1-server-auth-execution-v1.test.cjs` **executes that exact TypeScript adapter under mocked session, membership, profile and organization fixtures** to test forged tenant switches, stale role changes, inactive profiles and suspended organization denial.
+
+**Non-negotiable limits:** Mocked sessions are not witnessed real identities. Fresh `auth.getUser()` and membership recheck are not a claim that current revocation, credential rotation, session binding, user impersonation and second-tenant acceptance have passed. No independent P0 security sign-off is recorded. Before a real P1 endpoint is enabled, use authenticated real operator/tenant fixtures in an approved isolated environment, review the complete privilege chain and document explicit release/rollback authorization. No live billing or subscriptions are enabled by the adapter.
