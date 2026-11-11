@@ -36,9 +36,15 @@ jobs:
           node scripts/build-migration-recovery-manifest.mjs | tee migration-recovery-manifest-summary.json
 
       - name: Setup Supabase CLI
-        uses: supabase/setup-cli@1dedf2c611547ede7232d26866dd3c56ab903bbb # v1
+        uses: supabase/setup-cli@689adcfb80d947100a1eab127289b97d1fb07b13 # v3.2.0 (npm-backed)
         with:
           version: 3.0.0
+
+      - name: Verify exact Supabase CLI version
+        shell: bash
+        run: |
+          set -euo pipefail
+          supabase --version | grep -Fx '3.0.0'
 
       - name: Stage historical recovery prerequisites
         shell: bash
@@ -296,6 +302,18 @@ jobs:
           docker exec -i "$db_containers" psql -X -v ON_ERROR_STOP=1 \
             -U postgres -d postgres \
             < tests/database/r2-behavior-rpc-positive-tenant-local.sql
+
+      - name: Verify R13-P0 commercial state, permissions and audit in disposable Postgres
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Only the disposable Supabase Postgres from this workflow.
+          # No remote credentials, provider billing or real tenant writes.
+          db_containers="$(docker ps --format '{{.Names}}' | grep '^supabase_db_' || true)"
+          test "$(printf '%s\n' "$db_containers" | grep -c .)" -eq 1
+          docker exec -i "$db_containers" psql -X -v ON_ERROR_STOP=1 \
+            -U postgres -d postgres \
+            < tests/database/r13-commercial-state-full-local.sql
 
       - name: Show local migration state
         if: always()
