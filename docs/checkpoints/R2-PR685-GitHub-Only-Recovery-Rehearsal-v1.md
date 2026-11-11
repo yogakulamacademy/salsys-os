@@ -31,6 +31,14 @@ Compared with repository files:
 
 The current hosted metadata **agrees with the intended resulting table, policy, constraints, trigger, defaults and access-control structure** of these source migrations. This improves confidence in the two timestamp aliases; it does **not** prove the hosted migration SQL bodies were byte-for-byte identical, establish causation or history, test runtime tenant access, or change the missing PR #685 ledger entry. No rows or application data were read or modified.
 
+## Offline 433-to-434 migration-history reconciliation simulation
+
+The separately added `scripts/r2-pr685-history-reconciliation-preflight.mjs` and `tests/readiness/r2-pr685-history-reconciliation-preflight.test.cjs` are **not** a repair mechanism. They read the pinned **433-row version/name manifest only**, fail closed on a changed source/project, duplicate or missing migration, incorrect PR #685 blob, altered source/replay digest, or either expected WhatsApp alias changing, and create a **hypothetical 434-row result** showing **one candidate version** `20261110041634_r2_staging_privileged_function_grants_v1`.
+
+All original 433 records are preserved in memory and the input fixture remains unchanged; no SQL statements are constructed, no migrations run, no database accessed, and no ledger written. The JSON output is an operator/DBA decision aid only, with the separate approval and recovery gates stated explicitly. The *real* hosted ledger remains 433 records with version `20261110041634` absent.
+
+**Do not interpret 434 as the desired automatic fix.** The independent DBA must first determine whether a provider-supported metadata-only reconciliation is technically appropriate and safe given historical execution, downstream CLI order checks, production-source version mismatches, and the unverified physical backup. A pass is not authorization for any `migration repair`, ledger INSERT or hosted execution.
+
 ## Critical evidence limits and blockers
 
 - **Offline version reconciliation and synthetic SQL transaction rehearsal only.** This does NOT replay all 433 hosted migration bodies, prove hosted data/schema parity, prove live signed-in/tenant app behavior, or reconstruct exact WhatsApp SQL objects.
