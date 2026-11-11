@@ -71,9 +71,16 @@ export default async function WhatsAppTemplatesPage() {
 
       senderReadiness = senderResult;
       templates = (templateResult.data ?? []) as TemplateWorkspaceRow[];
-      drafts = ((draftResult.data ?? []) as TemplateDraftRow[]).filter(
-        (draft) => draft.whatsapp_account_id === senderResult.accountId,
-      );
+      drafts = ((draftResult.data ?? []) as TemplateDraftRow[])
+        .filter((draft) => draft.whatsapp_account_id === senderResult.accountId)
+        .map((draft) => {
+          const provider = templates.find((template) =>
+            template.whatsapp_account_id === draft.whatsapp_account_id &&
+            template.template_name === draft.template_name &&
+            template.language_code === draft.language_code
+          );
+          return { ...draft, provider_status: provider?.provider_status_raw || draft.provider_status };
+        });
       latestSync = (syncResult.data ?? null) as TemplateSyncRunRow | null;
     }
   } catch (error) {
