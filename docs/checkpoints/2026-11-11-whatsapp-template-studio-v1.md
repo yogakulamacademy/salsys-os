@@ -23,9 +23,16 @@ SalsysOS Automation → Templates workspace. This is a review-only PR.
 - No WhatsApp customer message is sent by any new action.
 - Template submission is not a customer message and does not open a 24-hour window.
 
+## Deployment-compatible default-off flag
+- Main is linked to automatic Vercel production deployments.
+- New UI, server page, draft GET/POST endpoints and the optional draft-table query are hard-gated behind `WA_TEMPLATE_STUDIO_ENABLED=true` (unset/OFF by default).
+- Do NOT turn this on until the draft migration has been independently reviewed and applied in the target environment.
+- `WA_TEMPLATE_AUTHORING_ENABLED=true` is a **separate** explicit grant for submitting a draft to Meta, and cannot bypass the studio gate.
+- A merged but disabled version does not require the draft table to exist in production. Existing Meta template sync remains available.
+
 ## Production safety
 - The submit route hard-blocks requests unless
-  WA_TEMPLATE_AUTHORING_ENABLED=true is explicitly configured.
+  WA_TEMPLATE_AUTHORING_ENABLED=true is explicitly configured **and** the studio gate is enabled.
 - This new flag is independent from the existing WhatsApp sender and
   automation gates, which must remain in their prior fail-closed states.
 - Submitting one template to Meta requires two deliberate UI clicks.
