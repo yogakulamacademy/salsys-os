@@ -124,7 +124,9 @@ export function parseSqlAggregate(text, kind) {
       return step.sessions;
     });
     assert(steps.every((n,i) => i===0 || n<=steps[i-1]));
-    assert(data.path_sessions>=steps[0]);
+    // The path-session denominator is drawn from candidate page-view
+    // events. It cannot exceed the number of bounded candidate event rows.
+    assert(data.path_sessions>=steps[0] && data.path_sessions<=data.candidate_events);
     return { kind, days:data.window_days, sampledAt:timestamp(data.sampled_at_utc), counts:steps, pathSessions:data.path_sessions };
   }
   assert(data.report === "r2_p2_behavior_default_trends_reconcile_v1"
@@ -146,17 +148,26 @@ export function parseSqlAggregate(text, kind) {
       && row.observed_sessions <= row.total_events
       && Array.isArray(row.daily) && row.daily.length === data.window_days);
     let dailyTotal = 0;
+    let dailySessionSum = 0;
     row.daily.forEach((day, dayIndex) => {
       noExtraKeys(day,["date_utc","events","sessions"]);
       assert(day.date_utc === dates[dayIndex]
         && safeCount(day.events) && safeCount(day.sessions)
         && day.sessions <= day.events);
+      // Daily distinct sessions form subsets of the window-wide distinct
+      // session set. Their sum may exceed the window count when the same
+      // source-scoped session has events on more than one UTC day, but
+      // it can never be smaller than the window count.
+      assert(day.sessions <= row.observed_sessions);
       dailyTotal += day.events;
-      assert(safeCount(dailyTotal) && dailyTotal <= row.total_events);
+      dailySessionSum += day.sessions;
+      assert(safeCount(dailyTotal) && dailyTotal <= row.total_events
+        && safeCount(dailySessionSum));
     });
     // SQL's overall event count must be the sum of its complete UTC-day grid.
     // Distinct observed sessions may recur across days, so do NOT add them.
-    assert(dailyTotal === row.total_events);
+    assert(dailyTotal === row.total_events
+      && dailySessionSum >= row.observed_sessions);
     return { event_name:row.event_name,total_events:row.total_events,observed_sessions:row.observed_sessions };
   });
   assert(series.reduce((sum, row) => sum + row.total_events, 0) === data.candidate_events);

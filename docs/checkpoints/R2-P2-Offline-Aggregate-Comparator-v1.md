@@ -58,6 +58,14 @@ The test covers **7, 14 and 30 days** for the default, ordered `web.page_viewed 
 
 This is **not** an authorized admin session, SQL readback, real tenant isolation, verified complete event history, production web consent, or reconciliation sign-off. It deliberately performs **no network/database operations** and cannot close Issue #523. Non-default event combinations are not supported by the default SQL comparator; the operator must select the three exact default events before copying.
 
+## Distinct-session integrity guard (2026-11-07)
+
+The offline comparator now verifies the **set-cardinality constraints** implied by the trusted SQL's source-scoped distinct-session calculations for all three default Event Activity event types. Each UTC day's distinct sessions must be **no greater than the report's full-window distinct sessions**, and the sum of daily distinct sessions must be **at least the full-window distinct sessions**. The daily sum may be greater because one source-scoped session can contribute events on multiple UTC days; it must **not** be forced equal to the full-window count. Daily event counts still must sum exactly to the event total.
+
+For the rolling ordered funnel, the SQL's `path_sessions` denominator must also be no greater than `candidate_events`, because each identified page-view session requires at least one candidate page-view event. These checks run **only against the operator's supplied aggregate-only JSON**, reject impossible records as `INPUT_REJECTED`, and do not infer identity, authenticate the reviewer, or alter any live query/RPC.
+
+The synthetic readiness regression `tests/readiness/r2-p2-offline-aggregate-compare-v1.test.cjs` covers daily deficits, a single day exceeding the full-window distinct-session set, a separate event series with impossible sessions, valid cross-day reuse, and a funnel denominator exceeding the candidate event count. Real 7/14/30 owner/admin UI and SQL observations remain **BLOCKED** until reviewed by an authorized operator; metadata, a matching numeric snapshot, and synthetic tests are **not** sign-off or tenant isolation.
+
 ## Privacy and completion boundary
 
 - SQL aggregate snapshots are produced by the trusted operator's own DB role. The CLI does **not** exercise actual PostgreSQL authenticated/anonymous role guards or prove tenant isolation.
