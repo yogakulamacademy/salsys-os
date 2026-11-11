@@ -78,8 +78,9 @@ assert.ok(submitRoute.includes("process.env.WA_TEMPLATE_AUTHORING_ENABLED !== 't
 // A real Postgres write preflight found that {1,512} is an invalid regex bound.
 assert.ok(nameGuardCorrection.includes('length(template_name) between 1 and 512'),
   'Draft name constraint requires a separate explicit character bound');
-assert.ok(nameGuardCorrection.includes("template_name ~ '^[a-z0-9_]+
-"),
+assert.ok(
+  nameGuardCorrection.includes("template_name ~ '^[a-z0-9_]+") &&
+  nameGuardCorrection.includes(String.fromCharCode(36)),
   'Draft name characters must remain limited to a lowercase identifier');
 assert.ok(!nameGuardCorrection.includes('{1,512}'),
   'Do not reintroduce the invalid PostgreSQL regex repetition bound');
