@@ -2,6 +2,7 @@ import {
   TemplateWorkspace,
   type TemplateSyncRunRow,
   type TemplateWorkspaceRow,
+  type TemplateDraftRow,
 } from '@/app/automation/templates/template-workspace';
 import { getWhatsAppSenderReadiness, type WhatsAppSenderReadiness } from '@/lib/integrations/whatsapp-sender-readiness';
 import { createAdminClient } from '@/lib/supabase/admin';
@@ -25,6 +26,7 @@ export default async function WhatsAppTemplatesPage() {
   let role: string | null = null;
   let senderReadiness: WhatsAppSenderReadiness | null = null;
   let templates: TemplateWorkspaceRow[] = [];
+  let drafts: TemplateDraftRow[] = [];
   let latestSync: TemplateSyncRunRow | null = null;
   let loadError: string | null = null;
 
@@ -35,12 +37,12 @@ export default async function WhatsAppTemplatesPage() {
 
     if (organizationId) {
       const admin = createAdminClient();
-      const [senderResult, templateResult, syncResult] = await Promise.all([
+      const [senderResult, templateResult, syncResult, draftResult] = await Promise.all([
         getWhatsAppSenderReadiness(organizationId),
         admin
           .from('automation_whatsapp_templates')
           .select(
-            'id,whatsapp_account_id,template_name,language_code,category,approval_status,provider_status_raw,parameter_schema,active,last_synced_at',
+            'id,whatsapp_account_id,template_name,language_code,category,approval_status,provider_status_raw,parameter_schema,components,active,last_synced_at',
           )
           .eq('organization_id', organizationId)
           .order('active', { ascending: false })
@@ -56,13 +58,22 @@ export default async function WhatsAppTemplatesPage() {
           .order('started_at', { ascending: false })
           .limit(1)
           .maybeSingle(),
+        admin
+          .from('whatsapp_template_drafts')
+          .select('id,whatsapp_account_id,template_name,language_code,category,status,provider_status,updated_at')
+          .eq('organization_id', organizationId)
+          .order('updated_at', { ascending: false })
+          .limit(100),
       ]);
 
-      const error = templateResult.error || syncResult.error;
+      const error = templateResult.error || syncResult.error || draftResult.error;
       if (error) throw error;
 
       senderReadiness = senderResult;
       templates = (templateResult.data ?? []) as TemplateWorkspaceRow[];
+      drafts = ((draftResult.data ?? []) as TemplateDraftRow[]).filter(
+        (draft) => draft.whatsapp_account_id === senderResult.accountId,
+      );
       latestSync = (syncResult.data ?? null) as TemplateSyncRunRow | null;
     }
   } catch (error) {
@@ -87,6 +98,7 @@ export default async function WhatsAppTemplatesPage() {
 
       <TemplateWorkspace
         templates={templates}
+        drafts={drafts}
         latestSync={latestSync}
         accountPhone={senderReadiness?.displayPhoneNumber ?? null}
         accountConnected={senderReadiness?.connected === true}
