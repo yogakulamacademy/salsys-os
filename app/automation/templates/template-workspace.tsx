@@ -63,6 +63,7 @@ type Props = {
   accountPhone: string | null;
   accountConnected: boolean;
   canSync: boolean;
+  canCreate: boolean;
 };
 
 type DrawerTab = 'details' | 'variables' | 'sync';
@@ -284,7 +285,7 @@ function TemplateDrawer({ template, latestSync, onClose }: { template: TemplateW
   );
 }
 
-export function TemplateWorkspace({ templates, drafts, latestSync, accountPhone, accountConnected, canSync }: Props) {
+export function TemplateWorkspace({ templates, drafts, latestSync, accountPhone, accountConnected, canSync, canCreate }: Props) {
   const [search, setSearch] = useState('');
   const [status, setStatus] = useState('all');
   const [category, setCategory] = useState('all');
@@ -340,7 +341,7 @@ export function TemplateWorkspace({ templates, drafts, latestSync, accountPhone,
           </div>
         </div>
         <div className="flex items-start gap-2">
-          {canSync ? (
+          {canCreate ? (
             <Link href="/automation/templates/new" className="btn-primary inline-flex items-center gap-2 whitespace-nowrap">
               <span aria-hidden="true">＋</span> New template
             </Link>
