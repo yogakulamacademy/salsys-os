@@ -11,7 +11,7 @@ The live manual **Add Knowledge** form invokes:
 
 An authenticated user received a missing PostgREST schema-cache function error. A **read-only production `pg_proc` query** confirmed the function has not been created. This is not a schema-cache-only issue.
 
-- Canonical repository migration: `supabase/migrations/20261103190000_ai_knowledge_provenance_readiness_v2.sql`; verified file blob at investigation: `f467795b0590223a43fd1ef0f367631b48658257`.
+- Canonical migration path: `supabase/migrations/20261103190000_ai_knowledge_provenance_readiness_v2.sql`. The **original deployed-main file** was inspected at blob `f467795b0590223a43fd1ef0f367631b48658257`, but PR #695 now proposes a **fail-closed NULL-safe authorization guard**. The operator must use the independently reviewed **post-merge** SQL blob, not the original blob.
 - The canonical migration is **already committed to `main`**, but its name/version is **absent** from Production `supabase_migrations.schema_migrations`.
 - Existing V1 create, approve, archive and retrieval RPCs are present. All four relevant Knowledge tables exist, with RLS enabled and status/source check constraints.
 - Read-only inventory found zero knowledge sources, documents, chunks or approvals. This is a snapshot, not a live acceptance proof.
@@ -20,16 +20,16 @@ An authenticated user received a missing PostgREST schema-cache function error. 
 
 ## Precise scope
 
-The **existing canonical migration alone** adds a tenant-admin-gated, source-backed creation RPC and restricted function execute grants. The function stores passive source URL metadata; it does **not** fetch a website, invoke an LLM, enable new AI agents, send WhatsApp messages, change table RLS, or apply any other Knowledge Builder draft integration.
+The **narrowly amended canonical migration, after PR #695 is independently reviewed and merged,** adds a tenant-admin-gated, source-backed creation RPC and restricted function execute grants. The function rejects absent/NULL tenant-admin authorization results. It stores passive source URL metadata; it does **not** fetch a website, invoke an LLM, enable new AI agents, send WhatsApp messages, change table RLS, or apply any other Knowledge Builder draft integration.
 
 Do **not** deploy PR #671 or any other open AI migration stack as part of this repair. Existing Co-Pilot and user permissions must be unchanged except for the exact reviewed function EXECUTE right.
 
 ## Mandatory approval before production changes
 
 1. **Owner:** Authorize this **specific production DDL change**, identifying production project, canonical migration path/version and reviewed checksum/commit. Generic "continue working" is not a substitute for the recorded deployment approval.
-2. **Independent security/DBA reviewer:** Review the full 196-line canonical SQL: `SECURITY DEFINER`, fixed `search_path`, JWT-based actor check through `public.can_manage_organization`, accepted source types/URLs, empty/oversized content handling, cross-tenant rejection and anonymous-denied EXECUTE grants. Record an independent dated review and release disposition in a controlled evidence store.
+2. **Independent security/DBA reviewer:** Review the full canonical SQL **including PR #695's NULL-safe authorization change**: `SECURITY DEFINER`, fixed `search_path`, JWT-based actor check through `public.can_manage_organization`, accepted source types/URLs, empty/oversized content handling, cross-tenant rejection and anonymous-denied EXECUTE grants. Record an independent dated review and release disposition in a controlled evidence store.
 3. **Migration operator:** Obtain a fresh migration inventory and inspect all local-versus-remote differences. `supabase migration list --remote` and `supabase db push --dry-run --remote` are suitable **read-only** diagnostics through an appropriately authenticated local CLI. Do not invoke `db push` if it would apply **any other pending migration**, or run ad hoc remote SQL in place of migration history. Choose a version-preserving, reviewed, **single-migration** deployment procedure; reconcile canonical version `20261103190000` in the history. Do not silently add a second timestamp for the same SQL.
-4. **Operator:** Confirm backup/recovery readiness and a reviewed reversal plan; record the exact function body checksum and migration outcome.
+4. **Operator:** Verify that the latest reviewed PR #695 migration content is merged to `main` and record its exact Git commit/blob. Confirm backup/recovery readiness and a reviewed reversal plan; record the exact function body checksum and migration outcome. Approval of the original SQL does not cover this amendment.
 5. **Independent reviewer:** Read back the function's existence, signature and privileges, and verify that PostgREST sees the RPC. Only after function exists, if the REST schema is still stale, request a cache reload through the approved process.
 
 **Read-back queries** (read-only; examples for the authorized operator):
