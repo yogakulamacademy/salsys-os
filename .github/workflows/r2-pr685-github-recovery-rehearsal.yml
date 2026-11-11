@@ -1,0 +1,160 @@
+name: R2 PR685 GitHub-only Recovery Rehearsal
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - '.github/workflows/r2-pr685-github-recovery-rehearsal.yml'
+      - 'scripts/r2-pr685-recovery-rehearsal.mjs'
+      - 'scripts/r2-pr685-history-reconciliation-preflight.mjs'
+      - 'tests/readiness/r2-pr685-history-reconciliation-preflight.test.cjs'
+      - 'tests/fixtures/r2-pr685-staging-ledger-20261111.json'
+      - 'docs/checkpoints/R2-PR685-GitHub-Only-Recovery-Rehearsal-v1.md'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pr685-rehearsal-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  pr685-disposable-rehearsal:
+    name: Pinned ledger + exact SQL + transaction rollback
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      PGHOST: 127.0.0.1
+      PGPORT: '55432'
+      PGUSER: postgres
+      PGPASSWORD: local-fixture-only
+      PGDATABASE: postgres
+      PR685_REVIEWED_SHA: 1243ea8e5940210542b8a05385cac4d4b27692e7
+      PR685_SQL_BLOB: 4dce41ad8f75d486c33e1364646ca24d44bf5c31
+    services:
+      postgres:
+        image: postgres:17.11
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: local-fixture-only
+          POSTGRES_DB: postgres
+        ports:
+          - 55432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - name: Checkout draft PR
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+
+      - name: Checkout exact reviewed PR #685 commit (fixture source only)
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          ref: 1243ea8e5940210542b8a05385cac4d4b27692e7
+          path: pr685-reviewed
+          persist-credentials: false
+
+      - name: Ensure isolated local targets, never hosted Supabase
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$PGHOST" = '127.0.0.1'
+          test "$PGPORT" = '55432'
+          test -z "${SUPABASE_DB_URL:-}"
+          test -z "${DATABASE_URL:-}"
+          test -z "${SUPABASE_ACCESS_TOKEN:-}"
+          command -v node >/dev/null
+          mkdir -p "$RUNNER_TEMP/pr685-evidence" "$RUNNER_TEMP/pr685-fixtures"
+
+      - name: Reconcile exact 433-version staging snapshot and archived replay #404
+        shell: bash
+        run: |
+          set -euo pipefail
+          node scripts/r2-pr685-recovery-rehearsal.mjs ledger \
+            --snapshot tests/fixtures/r2-pr685-staging-ledger-20261111.json \
+            --out "$RUNNER_TEMP/pr685-evidence"
+
+      - name: Test fail-closed 433-to-434 history simulation (offline, no SQL execution)
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --test tests/readiness/r2-pr685-history-reconciliation-preflight.test.cjs
+          node scripts/r2-pr685-history-reconciliation-preflight.mjs \
+            --out "$RUNNER_TEMP/pr685-evidence/history-reconciliation-proposal-only.json" \
+            > "$RUNNER_TEMP/pr685-evidence/history-reconciliation-summary.json"
+
+      - name: Verify reviewed SQL git blob and generate synthetic disposable fixtures
+        shell: bash
+        run: |
+          set -euo pipefail
+          node scripts/r2-pr685-recovery-rehearsal.mjs fixture \
+            --reviewed-sql pr685-reviewed/supabase/staging-only/migrations/20261110041634_r2_staging_privileged_function_grants_v1.sql \
+            --out "$RUNNER_TEMP/pr685-fixtures"
+          cp "$RUNNER_TEMP/pr685-fixtures/fixture-summary.json" "$RUNNER_TEMP/pr685-evidence/"
+
+      - name: Select GitHub's single disposable PostgreSQL service container
+        shell: bash
+        run: |
+          set -euo pipefail
+          db_container="$(docker ps --filter ancestor=postgres:17.11 --format '{{.ID}}')"
+          test "$(printf '%s\n' "$db_container" | grep -c .)" -eq 1
+          echo "$db_container" > "$RUNNER_TEMP/pr685-ci-container"
+          docker exec -i "$db_container" pg_isready -U postgres -d postgres
+
+      - name: Rehearse exact PR685 against synthetic disposable database
+        shell: bash
+        run: |
+          set -euo pipefail
+          db_container="$(cat "$RUNNER_TEMP/pr685-ci-container")"
+          docker exec -i "$db_container" psql -X -v ON_ERROR_STOP=1 -U postgres -d postgres <<'SQL'
+          CREATE ROLE anon NOLOGIN;
+          CREATE ROLE authenticated NOLOGIN;
+          CREATE ROLE service_role NOLOGIN;
+          SQL
+          docker exec -i "$db_container" createdb -U postgres pr685_success
+          docker exec -i "$db_container" psql -X -v ON_ERROR_STOP=1 -U postgres -d pr685_success \
+            < "$RUNNER_TEMP/pr685-fixtures/setup.sql" > "$RUNNER_TEMP/pr685-evidence/setup.log" 2>&1
+          docker exec -i "$db_container" psql -X -v ON_ERROR_STOP=1 -U postgres -d pr685_success \
+            < "$RUNNER_TEMP/pr685-fixtures/before.sql" > "$RUNNER_TEMP/pr685-evidence/preflight-fixture.log" 2>&1
+          docker exec -i "$db_container" psql -X -v ON_ERROR_STOP=1 -U postgres -d pr685_success \
+            < pr685-reviewed/supabase/staging-only/migrations/20261110041634_r2_staging_privileged_function_grants_v1.sql \
+            > "$RUNNER_TEMP/pr685-evidence/exact-pr685-success.log" 2>&1
+          docker exec -i "$db_container" psql -X -v ON_ERROR_STOP=1 -U postgres -d pr685_success \
+            < "$RUNNER_TEMP/pr685-fixtures/after.sql" > "$RUNNER_TEMP/pr685-evidence/postflight.log" 2>&1
+          echo 'PASS_EXACT_PR685_SQL_AND_POSTFLIGHT_SYNTHETIC' | tee "$RUNNER_TEMP/pr685-evidence/success-verdict.txt"
+
+      - name: Inject failure after DDL in second disposable database; prove rollback
+        shell: bash
+        run: |
+          set -euo pipefail
+          db_container="$(cat "$RUNNER_TEMP/pr685-ci-container")"
+          docker exec -i "$db_container" createdb -U postgres pr685_abort
+          docker exec -i "$db_container" psql -X -v ON_ERROR_STOP=1 -U postgres -d pr685_abort \
+            < "$RUNNER_TEMP/pr685-fixtures/setup.sql" > /dev/null
+          docker exec -i "$db_container" psql -X -v ON_ERROR_STOP=1 -U postgres -d pr685_abort \
+            < "$RUNNER_TEMP/pr685-fixtures/before.sql" > /dev/null
+          set +e
+          docker exec -i "$db_container" psql -X -v ON_ERROR_STOP=1 -U postgres -d pr685_abort \
+            < "$RUNNER_TEMP/pr685-fixtures/fault-injected-local-only.sql" \
+            > "$RUNNER_TEMP/pr685-evidence/expected-fault.log" 2>&1
+          status=$?
+          set -e
+          test "$status" -ne 0
+          grep -q 'EXPECTED_LOCAL_TEST_ABORT' "$RUNNER_TEMP/pr685-evidence/expected-fault.log"
+          docker exec -i "$db_container" psql -X -v ON_ERROR_STOP=1 -U postgres -d pr685_abort \
+            < "$RUNNER_TEMP/pr685-fixtures/before.sql" > "$RUNNER_TEMP/pr685-evidence/rollback-state.log" 2>&1
+          echo 'PASS_TRANSACTION_ROLLBACK_SYNTHETIC' | tee "$RUNNER_TEMP/pr685-evidence/rollback-verdict.txt"
+
+      - name: Publish sanitized offline evidence only
+        if: always()
+        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
+        with:
+          name: r2-pr685-github-only-rehearsal-evidence
+          path: ${{ runner.temp }}/pr685-evidence/
+          if-no-files-found: warn
+          retention-days: 7
