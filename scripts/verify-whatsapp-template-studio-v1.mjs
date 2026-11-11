@@ -5,6 +5,7 @@ import path from 'node:path';
 const read = (file) => fs.readFileSync(path.join(process.cwd(), file), 'utf8');
 
 const migration = read('supabase/migrations/20261111103500_whatsapp_template_drafts_v1.sql');
+const nameGuardCorrection = read('supabase/migrations/20261111141500_whatsapp_template_draft_name_guard_v1.sql');
 const authoring = read('lib/integrations/whatsapp-template-authoring.ts');
 const draftsRoute = read('app/api/integrations/whatsapp/templates/drafts/route.ts');
 const submitRoute = read('app/api/integrations/whatsapp/templates/submit/route.ts');
@@ -73,5 +74,15 @@ assert.ok(studio.includes('disabled={!canSubmit}'), 'Preview must disable Submit
 assert.ok(workspace.includes('/automation/templates/new?preview=1'), 'Template library must expose preview entry');
 assert.ok(draftsRoute.includes("process.env.WA_TEMPLATE_STUDIO_ENABLED !== 'true'"), 'Draft API remains default-off');
 assert.ok(submitRoute.includes("process.env.WA_TEMPLATE_AUTHORING_ENABLED !== 'true'"), 'Meta API remains default-off');
+
+// A real Postgres write preflight found that {1,512} is an invalid regex bound.
+assert.ok(nameGuardCorrection.includes('length(template_name) between 1 and 512'),
+  'Draft name constraint requires a separate explicit character bound');
+assert.ok(
+  nameGuardCorrection.includes("template_name ~ '^[a-z0-9_]+") &&
+  nameGuardCorrection.includes(String.fromCharCode(36)),
+  'Draft name characters must remain limited to a lowercase identifier');
+assert.ok(!nameGuardCorrection.split('begin;')[1].includes('{1,512}'),
+  'Do not reintroduce the invalid PostgreSQL regex repetition bound');
 
 console.log('WhatsApp Template Studio V1 contracts passed (read only).');
