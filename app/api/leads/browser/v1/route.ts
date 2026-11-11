@@ -7,6 +7,7 @@ import {
   resolveBrowserTrackingSource,
 } from '@/lib/tracking/runtime';
 import { sanitizeWebsiteLeadPayload } from '@/lib/website-leads/server';
+import { retryWebsiteLeadIngestDeadlock } from '@/lib/website-leads/deadlock-retry';
 
 export const dynamic = 'force-dynamic';
 
@@ -386,7 +387,7 @@ export async function POST(request: NextRequest) {
       payload.courseCode,
     );
 
-    const { data, error } = await admin.rpc(
+    const { data, error } = await retryWebsiteLeadIngestDeadlock(() => admin.rpc(
       'ingest_website_lead_for_organization',
       {
         p_organization_id: source.organizationId,
@@ -425,7 +426,7 @@ export async function POST(request: NextRequest) {
           course_resolution: courseResolution.matchedBy,
         },
       },
-    );
+    ));
 
     if (error) throw new Error(error.message);
 
