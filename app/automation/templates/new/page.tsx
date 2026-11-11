@@ -9,10 +9,13 @@ export const dynamic = 'force-dynamic';
 export default async function NewWhatsAppTemplatePage({
   searchParams,
 }: {
-  searchParams: Promise<{ draft?: string }>;
+  searchParams: Promise<{ draft?: string; preview?: string }>;
 }) {
-  // Do not expose the editor until the separate draft schema has been deployed.
-  if (process.env.WA_TEMPLATE_STUDIO_ENABLED !== 'true') notFound();
+  // An authenticated admin can inspect the frontend with no database or provider writes.
+  const params = await searchParams;
+  const studioEnabled = process.env.WA_TEMPLATE_STUDIO_ENABLED === 'true';
+  const previewMode = !studioEnabled && params.preview === '1';
+  if (!studioEnabled && !previewMode) notFound();
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) {
@@ -27,13 +30,13 @@ export default async function NewWhatsAppTemplatePage({
     );
   }
 
-  const params = await searchParams;
-  const draftId = typeof params.draft === 'string' && /^[0-9a-f-]{36}$/i.test(params.draft)
+  const draftId = !previewMode && typeof params.draft === 'string' && /^[0-9a-f-]{36}$/i.test(params.draft)
     ? params.draft : null;
   return (
     <TemplateAuthoringStudio
       initialDraftId={draftId}
-      submissionEnabled={process.env.WA_TEMPLATE_AUTHORING_ENABLED === 'true'}
+      previewMode={previewMode}
+      submissionEnabled={!previewMode && process.env.WA_TEMPLATE_AUTHORING_ENABLED === 'true'}
     />
   );
 }
