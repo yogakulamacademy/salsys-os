@@ -128,6 +128,9 @@ jobs:
       - name: Verify independent plan review and no-activation proof
         run: node --test tests/readiness/r13-p1-governance-preview.test.cjs
 
+      - name: Verify scoped plan-review history and cross-tenant negative tests
+        run: node --test tests/readiness/r13-p1-plan-review-ledger-preview.test.cjs
+
       - name: Verify Cross-Workspace Investigation Scope Contracts
         run: npm run verify:investigation-scope
 
