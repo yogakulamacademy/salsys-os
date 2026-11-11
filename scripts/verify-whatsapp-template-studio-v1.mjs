@@ -41,7 +41,11 @@ assert.ok(draftsRoute.includes("process.env.WA_TEMPLATE_STUDIO_ENABLED !== 'true
 assert.ok(submitRoute.includes("process.env.WA_TEMPLATE_STUDIO_ENABLED !== 'true'"), 'Submission needs the separate studio gate');
 assert.ok(workspace.includes('canCreate'), 'Template Studio creation control must be gated');
 const newPage = read('app/automation/templates/new/page.tsx');
-assert.ok(newPage.includes("process.env.WA_TEMPLATE_STUDIO_ENABLED !== 'true'"), 'Editor must be unavailable until enabled');
+assert.ok(
+  newPage.includes("const studioEnabled = process.env.WA_TEMPLATE_STUDIO_ENABLED === 'true'") &&
+  newPage.includes('if (!studioEnabled && !previewMode) notFound()'),
+  'Editor must remain unavailable without enablement or an explicit safe preview',
+);
 
 assert.ok(draftsRoute.includes("request.headers.get('origin') !== request.nextUrl.origin"), 'Draft write needs CSRF origin check');
 assert.ok(submitRoute.includes("request.headers.get('origin') !== request.nextUrl.origin"), 'Provider request needs CSRF origin check');
@@ -55,5 +59,19 @@ assert.ok(studio.includes('Live WhatsApp preview') && studio.includes('Save draf
 assert.ok(studio.includes('Confirm submission') && studio.includes('reviewOpen'), 'Explicit review confirmation missing');
 assert.ok(page.includes('whatsapp_template_drafts'), 'Drafts must be loaded for workspace');
 assert.ok(workspace.includes('previewContent(template.components)'), 'Meta-approved preview must use provider content');
+
+// Preview mode must permit UI inspection only, never access the draft API or Meta.
+const previewPage = read('app/automation/templates/new/page.tsx');
+assert.ok(previewPage.includes("params.preview === '1'"), 'Admin UI preview needs explicit preview marker');
+assert.ok(previewPage.includes("['owner', 'admin'].includes("), 'Editor preview must enforce tenant admin role');
+assert.ok(previewPage.includes("!previewMode && typeof params.draft"), 'Preview must never fetch an existing draft');
+assert.ok(previewPage.includes("submissionEnabled={!previewMode"), 'Preview must never open provider submission');
+assert.ok(studio.includes('if (previewMode) return null'), 'Preview save must short-circuit before network');
+assert.ok(studio.includes('previewMode || !canSubmit'), 'Preview submit must short-circuit before provider');
+assert.ok(studio.includes('disabled={previewMode || locked}'), 'Preview must disable Save draft');
+assert.ok(studio.includes('disabled={!canSubmit}'), 'Preview must disable Submit');
+assert.ok(workspace.includes('/automation/templates/new?preview=1'), 'Template library must expose preview entry');
+assert.ok(draftsRoute.includes("process.env.WA_TEMPLATE_STUDIO_ENABLED !== 'true'"), 'Draft API remains default-off');
+assert.ok(submitRoute.includes("process.env.WA_TEMPLATE_AUTHORING_ENABLED !== 'true'"), 'Meta API remains default-off');
 
 console.log('WhatsApp Template Studio V1 contracts passed (read only).');
