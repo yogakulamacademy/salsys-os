@@ -85,7 +85,7 @@ export function validateTemplateAuthoringInput(raw: unknown, forSubmission: bool
     throw new TemplateAuthoringError('Use consecutive positional variables {{1}}, {{2}}, up to {{10}}.');
   }
   for (const index of indexes) {
-    const value = text(examples[String(index)]);
+    const value = text(examplesRaw[String(index)]);
     if (forSubmission && !value) {
       throw new TemplateAuthoringError('Provide a nonempty example for every variable before Meta review.');
     }
@@ -200,12 +200,11 @@ export async function postMetaTemplate(
   if (!response.ok) {
     // Do not reflect provider error text containing arbitrary external data to the client.
     const code = Number(payload.error?.code ?? response.status);
-    const error = new TemplateAuthoringError(
-      'Meta declined the template request (code ' + code + '). Review content and provider logs.', 422,
+    // A clear 4xx response is definitive; rate limits and 5xx may be ambiguous.
+    throw new TemplateAuthoringError(
+      'Meta declined the template request (code ' + code + '). Review content and provider logs.',
+      response.status === 429 || response.status >= 500 ? 502 : 422,
     );
-    // A clear 4xx response is a definitive rejection. 429/5xx may be ambiguous.
-    if (response.status === 429 || response.status >= 500) error.status = 502;
-    throw error;
   }
   return { id: typeof payload.id === 'string' ? payload.id : null, status: typeof payload.status === 'string' ? payload.status : null };
 }
