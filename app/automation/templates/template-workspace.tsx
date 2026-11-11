@@ -28,6 +28,7 @@ export type TemplateWorkspaceRow = {
   approval_status: string;
   provider_status_raw: string | null;
   parameter_schema: Record<string, unknown> | null;
+  components: Array<Record<string, unknown>> | null;
   active: boolean;
   last_synced_at: string;
 };
@@ -44,12 +45,25 @@ export type TemplateSyncRunRow = {
   finished_at: string | null;
 };
 
+export type TemplateDraftRow = {
+  id: string;
+  whatsapp_account_id: string;
+  template_name: string;
+  language_code: string;
+  category: string;
+  status: string;
+  provider_status: string | null;
+  updated_at: string;
+};
+
 type Props = {
   templates: TemplateWorkspaceRow[];
+  drafts: TemplateDraftRow[];
   latestSync: TemplateSyncRunRow | null;
   accountPhone: string | null;
   accountConnected: boolean;
   canSync: boolean;
+  canCreate: boolean;
 };
 
 type DrawerTab = 'details' | 'variables' | 'sync';
@@ -67,6 +81,21 @@ function variableCount(schema: Record<string, unknown> | null) {
   const body = Number(schema.body_variable_count ?? 0);
   const header = Number(schema.header_variable_count ?? 0);
   return (Number.isFinite(body) ? body : 0) + (Number.isFinite(header) ? header : 0);
+}
+
+function previewContent(components: Array<Record<string, unknown>> | null) {
+  const parts = Array.isArray(components) ? components : [];
+  const header = parts.find(component => component.type === 'HEADER');
+  const body = parts.find(component => component.type === 'BODY');
+  const footer = parts.find(component => component.type === 'FOOTER');
+  const text = (part: Record<string, unknown> | undefined) => typeof part?.text === 'string' ? part.text : '';
+  const examples = body?.example && typeof body.example === 'object'
+    ? (body.example as { body_text?: string[][] }).body_text?.[0] ?? []
+    : [];
+  const fill = (source: string) => source.replace(/\{\{(\d+)\}\}/g, (match, index: string) =>
+    examples[Number(index) - 1] || match,
+  );
+  return { header: text(header), body: fill(text(body)), footer: text(footer) };
 }
 
 function relativeTime(value: string | null) {
@@ -100,6 +129,7 @@ function MetricCard({ label, value, note }: { label: string; value: number; note
 function TemplateDrawer({ template, latestSync, onClose }: { template: TemplateWorkspaceRow; latestSync: TemplateSyncRunRow | null; onClose: () => void }) {
   const [tab, setTab] = useState<DrawerTab>('details');
   const totalVariables = variableCount(template.parameter_schema);
+  const preview = previewContent(template.components);
 
   useEffect(() => {
     function onKeyDown(event: KeyboardEvent) {
@@ -168,9 +198,11 @@ function TemplateDrawer({ template, latestSync, onClose }: { template: TemplateW
                     <MessageSquareText size={14} className="text-emerald-600" /> WhatsApp template
                   </div>
                   <div className="mt-3 text-sm leading-6 text-slate-700">
-                    Message content preview is not stored in the current SalsysOS template record.
+                    {preview.header ? <div className="mb-2 font-semibold">{preview.header}</div> : null}
+                    {preview.body ? <div className="whitespace-pre-wrap">{preview.body}</div> : <span>Provider preview unavailable for this template.</span>}
+                    {preview.footer ? <div className="mt-2 text-xs text-slate-400">{preview.footer}</div> : null}
                   </div>
-                  <div className="mt-3 text-[11px] text-slate-400">Metadata verified from Meta sync</div>
+                  <div className="mt-3 text-[11px] text-slate-400">Content verified from Meta sync · examples only</div>
                 </div>
               </div>
 
@@ -253,7 +285,7 @@ function TemplateDrawer({ template, latestSync, onClose }: { template: TemplateW
   );
 }
 
-export function TemplateWorkspace({ templates, latestSync, accountPhone, accountConnected, canSync }: Props) {
+export function TemplateWorkspace({ templates, drafts, latestSync, accountPhone, accountConnected, canSync, canCreate }: Props) {
   const [search, setSearch] = useState('');
   const [status, setStatus] = useState('all');
   const [category, setCategory] = useState('all');
@@ -301,7 +333,7 @@ export function TemplateWorkspace({ templates, latestSync, accountPhone, account
         <div>
           <p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-400">WhatsApp</p>
           <h1 className="mt-1 text-2xl font-bold tracking-tight text-slate-950">WhatsApp Templates</h1>
-          <p className="mt-1.5 text-sm text-slate-500">Manage approved templates used in WhatsApp conversations and automations.</p>
+          <p className="mt-1.5 text-sm text-slate-500">Create drafts, submit for Meta review, and manage approved messages used in conversations and automations.</p>
           <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-slate-400">
             <span className="inline-flex items-center gap-1.5"><Smartphone size={13} /> {accountPhone || 'Connected account'}</span>
             <span>·</span>
@@ -309,6 +341,11 @@ export function TemplateWorkspace({ templates, latestSync, accountPhone, account
           </div>
         </div>
         <div className="flex items-start gap-2">
+          {canCreate ? (
+            <Link href="/automation/templates/new" className="btn-primary inline-flex items-center gap-2 whitespace-nowrap">
+              <span aria-hidden="true">＋</span> New template
+            </Link>
+          ) : null}
           <TemplateSyncButton disabled={!canSync} />
           <details className="relative">
             <summary className="grid h-10 w-10 cursor-pointer list-none place-items-center rounded-xl border border-slate-200 bg-white text-slate-500 hover:bg-slate-50 [&::-webkit-details-marker]:hidden"><MoreHorizontal size={18} /></summary>
@@ -325,8 +362,30 @@ export function TemplateWorkspace({ templates, latestSync, accountPhone, account
         <MetricCard label="Approved" value={approved} note="Available for eligible sends" />
         <MetricCard label="Pending" value={pending} note="Awaiting Meta review" />
         <MetricCard label="Rejected" value={rejected} note="Needs provider-side revision" />
-        <MetricCard label="Inactive" value={inactive} note="No longer locally active" />
+        <MetricCard label="Drafts" value={drafts.filter(row => row.status === 'draft').length} note="Saved locally · not sent to Meta" />
       </section>
+
+      {drafts.length > 0 ? (
+        <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white">
+          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 px-4 py-3">
+            <div><div className="text-sm font-bold text-slate-900">Local drafts & submissions</div><div className="mt-1 text-xs text-slate-500">Separate from the Meta-approved template registry</div></div>
+            <span className="rounded-full bg-slate-100 px-2 py-1 text-xs font-bold text-slate-600">{drafts.length}</span>
+          </div>
+          <div className="divide-y divide-slate-100">
+            {drafts.slice(0, 20).map(draft => (
+              <div key={draft.id} className="flex flex-wrap items-center justify-between gap-3 px-4 py-3">
+                <div className="min-w-0"><div className="break-all text-sm font-semibold text-slate-900">{draft.template_name}</div>
+                  <div className="mt-1 text-xs text-slate-500">{draft.category} · {draft.language_code} · {relativeTime(draft.updated_at)}</div>
+                </div>
+                <div className="flex items-center gap-3">
+                  <span className={`rounded-full px-2.5 py-1 text-[11px] font-semibold ring-1 ring-inset ${statusClass(draft.status)}`}>{prettify(draft.status === 'submitted' ? (draft.provider_status || 'pending') : draft.status)}</span>
+                  <Link href={`/automation/templates/new?draft=${encodeURIComponent(draft.id)}`} className="text-xs font-semibold text-violet-700 hover:underline">{draft.status === 'draft' ? 'Edit draft' : 'View'}</Link>
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
+      ) : null}
 
       <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white">
         <div className="flex flex-col gap-3 border-b border-slate-200 p-3 sm:flex-row sm:items-center">
