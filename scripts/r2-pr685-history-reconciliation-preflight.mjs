@@ -17,6 +17,18 @@ const VERSION_ALIAS_ROWS = [
 ];
 
 export function simulateReconciliation(snapshot) {
+  // Pin the ENTIRE reviewed fixture bytes: version+name records and aliases.
+  // A version-only digest cannot detect a migration name silently changing.
+  const fixturePath = path.resolve('tests/fixtures/r2-pr685-staging-ledger-20261111.json');
+  const reviewedBytes = fs.readFileSync(fixturePath);
+  const checkedGitBlob = crypto.createHash('sha1')
+    .update('blob ' + reviewedBytes.byteLength + '\0')
+    .update(reviewedBytes)
+    .digest('hex');
+  assert.equal(checkedGitBlob, '250d76174f6b7388cc61fcff1310884fb6d16d7c',
+    'reviewed staging snapshot bytes changed; independent recheck required');
+  assert.deepEqual(snapshot, JSON.parse(reviewedBytes.toString('utf8')),
+    'incoming snapshot differs from reviewed original');
   assert.equal(snapshot.source_project, STAGING_PROJECT, 'wrong project');
   assert.equal(snapshot.expected_ledger_count, 433, 'unexpected count contract');
   assert.equal(snapshot.source_reviewed_blob, EXPECTED_SOURCE_BLOB, 'reviewed SQL blob changed');
