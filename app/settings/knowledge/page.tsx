@@ -1,3 +1,4 @@
+import Link from 'next/link';
 import {
   Archive, BookOpen, BrainCircuit, CheckCircle2, Clock3, Database,
   FileText, Layers3, Link2, Plus, Search, ShieldAlert, ShieldCheck,
@@ -9,6 +10,9 @@ import {
   archiveKnowledgeDocumentAction,
   createKnowledgeDocumentAction,
 } from '@/app/settings/knowledge/actions';
+import { createManualDraftFromDiscoveredPageAction } from '@/app/settings/knowledge/discovery/draft-action';
+import { eligibleDiscoveredPageForManualDraft, type EligiblePageDraft } from '@/lib/knowledge-discovery/eligible-page-draft';
+import { KnowledgeDiscoveryPastedHtmlReview } from '@/components/knowledge-discovery-pasted-html-review';
 import { PageHeader } from '@/components/ui';
 import type { ReactNode } from 'react';
 import './knowledge-workspace.css';
@@ -102,7 +106,7 @@ function validityLabel(document: KnowledgeDocument) {
 export default async function KnowledgeSettingsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ notice?: string; error?: string; q?: string; category?: string; status?: string; template?: string }>;
+  searchParams: Promise<{ notice?: string; error?: string; q?: string; category?: string; status?: string; template?: string; discoveryPage?: string; draftError?: string }>;
 }) {
   const query = await searchParams;
   const { configured } = getSupabasePublicConfig();
@@ -115,6 +119,8 @@ export default async function KnowledgeSettingsPage({
   let loadError: string | null = null;
   let activeOrganizationId: string | null = null;
   let partial = false;
+  let discoveredDraft: EligiblePageDraft | null = null;
+  const requestedDiscoveryPage = typeof query.discoveryPage === 'string' ? query.discoveryPage : '';
   if (!live) loadError = useMockData ? 'Demo mode: live knowledge has not been loaded.' : 'Configure a live workspace before loading knowledge.';
 
   if (live) {
@@ -156,6 +162,13 @@ export default async function KnowledgeSettingsPage({
           ]);
 
           canManage = manageData === true;
+          if (canManage && requestedDiscoveryPage && !documentError && !sourceError) {
+            // A page ID is only a hint. The signed tenant must re-read the
+            // currently eligible fetched page, job, proof and consent.
+            discoveredDraft = await eligibleDiscoveredPageForManualDraft(
+              supabase, organizationId, requestedDiscoveryPage,
+            );
+          }
 
           if (documentError || sourceError) {
             loadError = documentError?.message || sourceError?.message || 'Unable to load AI knowledge.';
@@ -235,8 +248,34 @@ export default async function KnowledgeSettingsPage({
         description={'Create and manage approved policies, FAQs, processes and sales guidance for ' + organizationName + '. The Co-Pilot can use only approved, currently valid knowledge with eligible retrieval evidence.'}
       />
 
+      <div className="rounded-xl border border-slate-200 bg-white px-4 py-3">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div><div className="text-sm font-semibold">Website discovery</div>
+            <p className="mt-1 text-xs text-slate-500">Discover public site pages before reviewing or creating AI knowledge.</p></div>
+          <Link href="/settings/knowledge/discovery" className="rounded-lg border border-slate-200 px-3 py-2 text-xs font-semibold hover:bg-slate-50">Open discovery →</Link>
+        </div>
+      </div>
+      
+      {canManage ? (
+        <div className="rounded-xl border border-slate-200 bg-white px-4 py-3">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <div className="text-sm font-semibold">Evidence review preview</div>
+              <p className="mt-1 text-xs text-slate-500">
+                Explore source quotations and review controls using synthetic data. No decisions are saved or published.
+              </p>
+            </div>
+            <Link href="/settings/knowledge/evidence-preview"
+              className="rounded-lg border border-slate-200 px-3 py-2 text-xs font-semibold hover:bg-slate-50">
+              Open preview
+            </Link>
+          </div>
+        </div>
+      ) : null}
+
       {query.notice ? <div className="kn-flash kn-success" role="status">{query.notice}</div> : null}
       {query.error || loadError ? <div className="kn-flash kn-error" role="alert">{query.error || loadError}</div> : null}
+      {query.draftError ? <div className="kn-flash kn-error" role="alert">Discovery draft was not saved. Verify the source and retry.</div> : null}
 
       <section className="kn-overview" aria-label="Knowledge overview">
         <div className="kn-stats">
@@ -265,10 +304,54 @@ export default async function KnowledgeSettingsPage({
             <div><h2 id="kn-create-heading">Add Knowledge</h2>
               <p>Add organization-approved information with a documented source.</p></div>
           </div>
+          {requestedDiscoveryPage && !discoveredDraft ? (
+            <div className="kn-template-note" role="status">
+              This discovered page is unavailable for draft review. The website, ownership proof, consent, or page status may have changed. You can still create a separately verified manual draft below.
+              <Link href="/settings/knowledge" className="ml-2 font-semibold underline">Clear selection</Link>
+            </div>
+          ) : null}
+          {discoveredDraft ? (
+            <>
+              <KnowledgeDiscoveryPastedHtmlReview
+                pageId={discoveredDraft.pageId}
+                sourceUrl={discoveredDraft.sourceUri}
+              />
+              <form action={createManualDraftFromDiscoveredPageAction} className="kn-create-form" aria-label="Manually review and draft from a discovered page">
+              <div className="kn-template-note">
+                <strong>Manual website review — draft only.</strong> Discovery stored page metadata, not verified article text. Open the original page, check the facts yourself, and enter only the content you can substantiate. Nothing is generated, approved or published automatically.
+              </div>
+              <input type="hidden" name="page_id" value={discoveredDraft.pageId}/>
+              <label className="kn-field"><span>Source page</span>
+                <a href={discoveredDraft.sourceUri} target="_blank" rel="noopener noreferrer"
+                  className="break-all text-xs underline">{discoveredDraft.sourceUri}</a>
+              </label>
+              <label className="kn-field"><span>Draft title</span>
+                <input name="title" maxLength={180} minLength={2} required
+                  defaultValue={discoveredDraft.title}/>
+              </label>
+              <label className="kn-field"><span>Category</span>
+                <select name="category" defaultValue="general">
+                  {categories.map(category=><option key={category} value={category}>{pretty(category)}</option>)}
+                </select>
+              </label>
+              <label className="kn-field"><span>Manually reviewed knowledge (required)</span>
+                <textarea name="content" required minLength={10} maxLength={20000} rows={7}
+                  placeholder="Enter the facts you personally verified on this source page. No text is imported automatically."/>
+              </label>
+              <div className="kn-authority"><ShieldAlert size={18}/>
+                <span>Only <strong>Save as Draft</strong> is available here. A separate existing organization-admin approval action is required before Co-Pilot retrieval.</span>
+              </div>
+              <div className="kn-create-actions">
+                <Link href="/settings/knowledge" className="kn-secondary">Cancel selection</Link>
+                <button type="submit" className="kn-primary">Save as Draft</button>
+              </div>
+              </form>
+            </>
+          ) : null}
           {template ? <div className="kn-template-note">
             {pretty(templateName)} template selected. Add the approved answer and a real source before saving.
           </div> : null}
-          {canManage ? <form action={createKnowledgeDocumentAction} className="kn-create-form">
+          {canManage && !discoveredDraft ? <form action={createKnowledgeDocumentAction} className="kn-create-form">
             <label className="kn-field"><span>Title</span>
               <input name="title" required maxLength={180}
                 defaultValue={template?.title || ''}
@@ -315,7 +398,7 @@ export default async function KnowledgeSettingsPage({
               <button type="submit" name="intent" value="draft" className="kn-secondary">Save as Draft</button>
               <button type="submit" name="intent" value="approve" className="kn-primary"><CheckCircle2 size={16}/> Save & Approve</button>
             </div>
-          </form> : <div className="kn-readonly">Organization admin access is required to create or approve knowledge.</div>}
+          </form> : !canManage ? <div className="kn-readonly">Organization admin access is required to create or approve knowledge.</div> : null}
         </section>
 
         <section className="kn-panel kn-library" aria-labelledby="kn-library-heading">
