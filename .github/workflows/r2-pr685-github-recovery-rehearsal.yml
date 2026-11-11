@@ -6,6 +6,8 @@ on:
     paths:
       - '.github/workflows/r2-pr685-github-recovery-rehearsal.yml'
       - 'scripts/r2-pr685-recovery-rehearsal.mjs'
+      - 'scripts/r2-pr685-history-reconciliation-preflight.mjs'
+      - 'tests/readiness/r2-pr685-history-reconciliation-preflight.test.cjs'
       - 'tests/fixtures/r2-pr685-staging-ledger-20261111.json'
       - 'docs/checkpoints/R2-PR685-GitHub-Only-Recovery-Rehearsal-v1.md'
   workflow_dispatch:
@@ -76,6 +78,15 @@ jobs:
           node scripts/r2-pr685-recovery-rehearsal.mjs ledger \
             --snapshot tests/fixtures/r2-pr685-staging-ledger-20261111.json \
             --out "$RUNNER_TEMP/pr685-evidence"
+
+      - name: Test fail-closed 433-to-434 history simulation (offline, no SQL execution)
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --test tests/readiness/r2-pr685-history-reconciliation-preflight.test.cjs
+          node scripts/r2-pr685-history-reconciliation-preflight.mjs \
+            --out "$RUNNER_TEMP/pr685-evidence/history-reconciliation-proposal-only.json" \
+            > "$RUNNER_TEMP/pr685-evidence/history-reconciliation-summary.json"
 
       - name: Verify reviewed SQL git blob and generate synthetic disposable fixtures
         shell: bash
