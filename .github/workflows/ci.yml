@@ -54,6 +54,9 @@ jobs:
       - name: Verify concurrent Instagram echo idempotency across independent PostgreSQL transactions
         run: node --test tests/database/instagram-outbound-echo-concurrency.test.mjs
 
+      - name: Verify draft R13-P1 plan prices, roles, audit and concurrent reviews in disposable PostgreSQL
+        run: node --test tests/database/r13-p1-plan-review-postgres.test.mjs
+
   validate:
     # Pin the tested runner image: ubuntu-latest resolved to resolute and
     # apt font downloads stalled the browser setup until the job was cancelled.
@@ -121,6 +124,24 @@ jobs:
 
       - name: Verify Commercial Intelligence Contracts
         run: npm run verify:commercial-intelligence
+
+      - name: Verify draft R13-P1 plan catalog proposal cannot imply activation
+        run: node --test tests/readiness/r13-p1-pricing-proposal-v1.test.cjs
+
+      - name: Verify independent plan review and no-activation proof
+        run: node --test tests/readiness/r13-p1-governance-preview.test.cjs
+
+      - name: Verify scoped plan-review history and cross-tenant negative tests
+        run: node --test tests/readiness/r13-p1-plan-review-ledger-preview.test.cjs
+
+      - name: Verify R13-P1 real-session auth preview has no runtime activation path
+        run: node --test tests/readiness/r13-p1-server-auth-preview-v1.test.cjs
+
+      - name: Verify actual server auth adapter with synthetic session and tenant negatives
+        run: node --test tests/readiness/r13-p1-server-auth-execution-v1.test.cjs
+
+      - name: Verify restricted commercial plans admin preview is inert and accurate
+        run: node --test tests/readiness/r13-p1-admin-preview-route-v1.test.cjs
 
       - name: Verify Cross-Workspace Investigation Scope Contracts
         run: npm run verify:investigation-scope

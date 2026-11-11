@@ -1,0 +1,187 @@
+{
+  "schema_version": "r13_p1_pricing_proposal_v1",
+  "as_of": "2026-11-11",
+  "status": "PROPOSED_NOT_COMMERCIALLY_APPROVED",
+  "policy": "NON_RUNTIME_DOCUMENTATION_ONLY_DO_NOT_SEED_OR_ENFORCE",
+  "currency": "INR",
+  "pricing_unit": "per_organization_workspace_per_month",
+  "applicable_taxes": "additional_where_legally_due",
+  "auto_billing": false,
+  "public_self_serve_enabled": false,
+  "account_creation_enabled_by_this_file": false,
+  "approval_gates": [
+    "product_owner_commercial_signoff",
+    "legal_privacy_and_terms_review",
+    "r13_p0_independent_approval_and_release",
+    "r13_p1_plan_governance",
+    "r13_p2_identity_and_signup",
+    "r13_p3_verified_billing",
+    "r13_p4_quota_downgrade_and_offboarding"
+  ],
+  "rules": {
+    "free_setup_optional": true,
+    "setup_is_separate_from_monthly_subscription": true,
+    "integrations_are_eligibility_only_not_auto_enabled": true,
+    "external_provider_usage_charged_separately": true,
+    "all_limits_provisional_not_enforced": true,
+    "existing_tenant_data_never_deleted_on_downgrade": true,
+    "never_change_org_status_from_payment_event": true,
+    "no_trial_or_subscription_rows_are_created": true,
+    "no_ai_automatic_messages_without_independent_approval": true,
+    "manual_pilot_is_separate_non_renewing_agreement": true
+  },
+  "tiers": [
+    {
+      "code": "free",
+      "name": "Starter Workspace",
+      "positioning": "Organize your first leads.",
+      "monthly_inr": 0,
+      "setup_fee_inr": {
+        "minimum": 2999,
+        "maximum": 4999,
+        "optional": true,
+        "description": "Optional managed assistance; self-service access is intended to be free once enabled."
+      },
+      "provisional_limits": {
+        "named_users": 1,
+        "lead_records": 250
+      },
+      "included": [
+        "leads_contacts_pipeline",
+        "manual_lead_entry",
+        "csv_import_after_authorized_review",
+        "basic_dashboard",
+        "follow_up_tasks"
+      ],
+      "gated_integrations": [],
+      "exclude": [
+        "live_third_party_integrations",
+        "automated_customer_messaging",
+        "advanced_analytics"
+      ]
+    },
+    {
+      "code": "basic",
+      "name": "Lead Management",
+      "positioning": "Never miss an important follow-up.",
+      "monthly_inr": 1499,
+      "setup_fee_inr": {
+        "minimum": 4999,
+        "maximum": 7999,
+        "optional": false,
+        "description": "One-time integration and guided onboarding quote."
+      },
+      "provisional_limits": {
+        "named_users": 2,
+        "lead_records": 2000
+      },
+      "included": [
+        "leads_contacts_pipeline",
+        "manual_lead_entry",
+        "csv_import_after_authorized_review",
+        "basic_dashboard",
+        "follow_up_tasks",
+        "admissions_workflow",
+        "lead_assignments",
+        "basic_reporting",
+        "lead_source_tracking"
+      ],
+      "gated_integrations": [
+        "one_website_lead_form_after_consent_and_release",
+        "one_whatsapp_business_connection_after_provider_permission_and_acceptance"
+      ],
+      "exclude": [
+        "automated_customer_messaging",
+        "ads_marketing_intelligence"
+      ]
+    },
+    {
+      "code": "growth",
+      "name": "Marketing Intelligence",
+      "positioning": "Understand where your best leads come from.",
+      "monthly_inr": 3499,
+      "featured": true,
+      "setup_fee_inr": {
+        "minimum": 9999,
+        "maximum": 14999,
+        "optional": false,
+        "description": "One-time configuration and integration quote."
+      },
+      "provisional_limits": {
+        "named_users": 5,
+        "lead_records": 10000
+      },
+      "inherits": "basic",
+      "included": [
+        "paid_media_leads",
+        "reengaged_lead_tracking",
+        "team_performance",
+        "conversion_reporting",
+        "campaign_source_attribution_when_validated"
+      ],
+      "gated_integrations": [
+        "instagram_conversation_connection_after_provider_permission",
+        "google_ads_reporting_after_provider_permission",
+        "meta_ads_reporting_after_provider_permission"
+      ],
+      "exclude": [
+        "autonomous_customer_messaging",
+        "guaranteed_revenue_outcomes"
+      ]
+    },
+    {
+      "code": "pro",
+      "name": "Business Intelligence Suite",
+      "positioning": "Connect your sales, marketing and business performance.",
+      "monthly_inr": 6999,
+      "setup_fee_inr": {
+        "minimum": 19999,
+        "maximum": 34999,
+        "optional": false,
+        "description": "One-time advanced setup and reporting configuration quote."
+      },
+      "provisional_limits": {
+        "named_users": 10,
+        "lead_records": 50000
+      },
+      "inherits": "growth",
+      "included": [
+        "advanced_reports",
+        "advanced_role_controls_after_acceptance",
+        "funnel_touchpoint_analysis_when_evidenced",
+        "verified_revenue_attribution_only"
+      ],
+      "gated_integrations": [
+        "optional_website_behavior_after_r2_consent_acceptance",
+        "gsc_seo_reporting_after_source_authorization",
+        "conversion_tracking_setup_after_permission",
+        "forecasting_only_after_sufficient_verified_outcomes"
+      ],
+      "exclude": [
+        "automated_customer_messaging",
+        "guaranteed_attribution_accuracy"
+      ]
+    }
+  ],
+  "managed_pilot": {
+    "commercial_status": "SEPARATE_PROPOSAL_NOT_APPROVED",
+    "duration_days_after_secure_activation": 60,
+    "one_time_inr": 14999,
+    "named_users": 3,
+    "guided_setup_hours": 2,
+    "team_training_hours": 1,
+    "review_calls": {
+      "count": 2,
+      "minutes_each": 30
+    },
+    "automatic_renewal": false,
+    "post_pilot": "Customer explicitly selects a then-approved public tier or separately negotiated managed service. Previous proposed automatic/standard ₹7,999 per month continuation is withdrawn to avoid conflict with the four-tier schedule.",
+    "activation_gates": [
+      "signed_offer",
+      "real_tenant_isolation_verified",
+      "privacy_and_retention_approved",
+      "written_activation_authorization"
+    ],
+    "payment": "manual_separate_saas_invoice_never_crm_customer_payments"
+  }
+}
