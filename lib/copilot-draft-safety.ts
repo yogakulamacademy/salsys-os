@@ -44,7 +44,7 @@ function latestRisk(text: string): 'low' | 'review' | 'human_only' {
   // into a complaint, refund or cancellation escalation.
   const neutralized = message
     .replace(/\b(?:no|not any|without any|don't have any|do not have any)\s+complaints?\b/gi, '')
-    .replace(/\b(?:not (?:asking|requesting) for|don't (?:want|need)|do not (?:want|need))\s+(?:a|any)?\s*refund\b/gi, '');
+    .replace(/\b(?:not (?:asking|requesting)(?: for)?|don't (?:want|need)|do not (?:want|need))\s+(?:a|any)?\s*refund\b/gi, '');
   return REVIEW_PATTERNS.some(pattern => pattern.test(neutralized))
     ? 'review'
     : 'low';
