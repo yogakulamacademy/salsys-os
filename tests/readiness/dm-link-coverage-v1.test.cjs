@@ -85,3 +85,14 @@ test('known + unknown browser countries do not silently assign a definitive obse
  const r=summarize([wrap(),wrap('event_33333333',{networkCountry:null,observedAt:'2026-11-11T13:00:00Z'})]);
  assert.equal(r.state,'observed_country_unknown');assert.equal(r.observedVisitCountry,null);assert.equal(r.qualifyingVisitCount,2);
 });
+
+
+test('duplicate event id with conflicting observations fails closed rather than silently trusting first value',()=>{
+ const r=summarize([wrap(),wrap('event_11111111',{networkCountry:'IN'})]);
+ assert.equal(r.state,'restricted');assert.equal(r.observedVisitCountry,null);
+});
+test('no observed click after due interval creates staff-review suggestion but never authorizes a DM',()=>{
+ const observed=summarize([]);
+ const attention=intel.evaluateDmLinkStaffAttention({organizationId:'org-1',linkOrganizationId:'org-1',conversationOrganizationId:'org-1',linkId:'opaque_link_11',channel:'instagram',purposePermitted:true,linkRevoked:false,outboundState:'delivered',linkSentAt:'2026-11-11T10:00:00Z',linkExpiresAt:'2026-11-12T12:00:00Z',now:'2026-11-12T10:30:00Z',waitingHours:24,clickCoverage:'supported',clickStatus:observed.clickStatus,repliedSinceSend:false,optedOut:false,humanHandled:false,leadClosedOrEnrolled:false,existingTask:false});
+ assert.equal(attention.action,'staff_review_due');assert.equal(attention.reason,'no_verified_visit');assert.equal(attention.automaticSendAllowed,false);
+});
