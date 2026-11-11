@@ -50,5 +50,5 @@ test('offline program contains no database client dependency or SQL execution', 
   const src=fs.readFileSync(path.resolve('scripts/r2-pr685-history-reconciliation-preflight.mjs'),'utf8');
   assert.doesNotMatch(src, /from ['"](?:pg|@supabase\/supabase-js|postgres)['"]/);
   assert.doesNotMatch(src, /(?:child_process|execSync|spawnSync|fetch\s*\(|https?\.request)/);
-  assert.doesNotMatch(src, /(?:supabase\\s+(?:migration\\s+repair|db\\s+push)|execute_sql\\s*\\(|apply_migration\\s*\\(|INSERT\\s+INTO\\s+supabase_migrations)/i);
+  assert.doesNotMatch(src, /(?:supabase\s+(?:migration\s+repair|db\s+push)|execute_sql\s*\(|apply_migration\s*\(|INSERT\s+INTO\s+supabase_migrations)/i);
 });
