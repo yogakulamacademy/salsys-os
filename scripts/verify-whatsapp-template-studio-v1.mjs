@@ -41,7 +41,11 @@ assert.ok(draftsRoute.includes("process.env.WA_TEMPLATE_STUDIO_ENABLED !== 'true
 assert.ok(submitRoute.includes("process.env.WA_TEMPLATE_STUDIO_ENABLED !== 'true'"), 'Submission needs the separate studio gate');
 assert.ok(workspace.includes('canCreate'), 'Template Studio creation control must be gated');
 const newPage = read('app/automation/templates/new/page.tsx');
-assert.ok(newPage.includes("process.env.WA_TEMPLATE_STUDIO_ENABLED !== 'true'"), 'Editor must be unavailable until enabled');
+assert.ok(
+  newPage.includes("const studioEnabled = process.env.WA_TEMPLATE_STUDIO_ENABLED === 'true'") &&
+  newPage.includes('if (!studioEnabled && !previewMode) notFound()'),
+  'Editor must remain unavailable without enablement or an explicit safe preview',
+);
 
 assert.ok(draftsRoute.includes("request.headers.get('origin') !== request.nextUrl.origin"), 'Draft write needs CSRF origin check');
 assert.ok(submitRoute.includes("request.headers.get('origin') !== request.nextUrl.origin"), 'Provider request needs CSRF origin check');
