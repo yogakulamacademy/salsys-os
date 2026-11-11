@@ -22,6 +22,46 @@ function setup(options={}) {
 }
 test('denied lead stops before privileged context, retrieval or model calls',async()=>{const f=setup({deny:true});try{assert.equal((await f.action('lead-a')).ok,false);assert.equal(f.calls.admin,0);assert.equal(f.calls.model.length,0);}finally{f.restore()}});
 test('knowledge outage and malformed response fail before either model runs',async()=>{for(const options of [{retrievalError:true},{matches:null},{matches:[hit({valid_until:'2020-01-01T00:00:00Z'})]}]){const f=setup(options);try{assert.equal((await f.action('lead-a')).ok,false);assert.equal(f.calls.model.length,0);}finally{f.restore()}}});
+test('explicit unverified discovery provenance fails before model routing or drafting',async()=>{
+  const held=[
+    {document_metadata:{entry_mode:'discovery_manual_review'}},
+    {document_metadata:{manual_review_required:true}},
+    {document_metadata:{manual_review_required:'true'}},
+    {document_metadata:{source_text_verified:false}},
+    {document_metadata:{source_text_verified:'false'}},
+    {source_metadata:{entry_mode:'discovery_manual_review'}},
+    {source_metadata:{source_text_verified:false}},
+    {chunk_metadata:{source:'manual_discovery_draft_unverified'}},
+    {chunk_metadata:{manual_review_required:true}},
+    {entry_mode:'discovery_manual_review'},
+  ];
+  for(const metadata of held){
+    const f=setup({matches:[hit({metadata:{document_version:2,...metadata}})]});
+    try{
+      const reply=await f.action('lead-a');
+      assert.equal(reply.ok,false,JSON.stringify(metadata));
+      assert.match(reply.error,/needs source verification/,JSON.stringify(metadata));
+      assert.equal(f.calls.model.length,0,'Unverified evidence must not be sent to ANY provider');
+      assert.equal(f.calls.search.length,1,'Unsafe result must be rejected before the second retrieval');
+      assert.equal(f.calls.admin,1,'Lead permission still verified before reading');
+    }finally{f.restore()}
+  }
+});
+test('ordinary approved knowledge remains usable when markers are absent or explicitly verified',async()=>{
+  for(const metadata of [
+    {document_version:2},
+    {document_version:2,document_metadata:{entry_mode:'knowledge_workspace_v2',source_text_verified:true}},
+    {document_version:2,chunk_metadata:{source:'manual'}},
+  ]){
+    const f=setup({matches:[hit({metadata})]});
+    try{
+      const reply=await f.action('lead-a');
+      assert.equal(reply.ok,true,JSON.stringify(metadata));
+      assert.equal(reply.knowledgeUsed,1);
+      assert.equal(f.calls.model.length,2);
+    }finally{f.restore()}
+  }
+});
 test('catalog failure is not silently turned into missing facts',async()=>{for(const selectedCourse of [false,true]){const f=setup({catalogError:true,selectedCourse});try{assert.equal((await f.action('lead-a')).ok,false);assert.equal(f.calls.model.length,0);}finally{f.restore()}}});
 test('latest non-text inbound does not fall back to an older unrelated text request',async()=>{const f=setup({messages:[{direction:'inbound',body:null,created_at:'2026-11-02T10:01:00Z'},{direction:'inbound',body:'Old policy question',created_at:'2026-11-02T10:00:00Z'}]});try{const r=await f.action('lead-a');assert.equal(r.ok,false);assert.equal(f.calls.search.length,0);assert.equal(f.calls.model.length,0);}finally{f.restore()}});
 test('successful draft has minimized retrieved-document lineage and rechecks current knowledge',async()=>{const f=setup();try{const r=await f.action('lead-a');assert.equal(r.ok,true);assert.equal(r.knowledgeEvidence[0].version,2);assert.equal(f.calls.search.length,2);assert.equal(f.calls.model.length,2);assert.doesNotMatch(JSON.stringify(f.calls.model),/secret_debug|do-not-forward/);assert.match(f.calls.model[1].system,/never send messages yourself/);}finally{f.restore()}});

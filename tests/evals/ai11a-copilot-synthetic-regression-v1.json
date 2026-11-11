@@ -1,0 +1,275 @@
+{
+  "schemaVersion": 1,
+  "suite": "AI-11A",
+  "classification": "synthetic_offline_regression_not_measured_model_accuracy",
+  "lockedBehavior": "human_review_required_no_autonomous_send",
+  "providerCallsAllowed": false,
+  "realCustomerDataAllowed": false,
+  "stagingWitnesses": 0,
+  "independentApprovalRecorded": false,
+  "productionReady": false,
+  "requiredTotalCases": 26,
+  "evaluatedAt": "2026-11-09",
+  "categories": [
+    "router",
+    "preflight",
+    "known_gap"
+  ],
+  "cases": [
+    {
+      "id": "R01",
+      "category": "router",
+      "latest": "What is the published class format?",
+      "routerOutput": "simple|low|knowledge_lookup|reply|Verified policy",
+      "expectedRisk": "low",
+      "expectedAction": "reply",
+      "expectedModel": "haiku",
+      "knowledge": "approved"
+    },
+    {
+      "id": "R02",
+      "category": "router",
+      "latest": "Please explain my unusual schedule and two courses.",
+      "routerOutput": "complex|review|multi_course|reply|Needs staff review",
+      "expectedRisk": "review",
+      "expectedAction": "reply",
+      "expectedModel": "sonnet",
+      "knowledge": "approved"
+    },
+    {
+      "id": "R03",
+      "category": "router",
+      "latest": "Can I get a discount exception?",
+      "routerOutput": "simple|review|discount_request|reply|Commercial exception",
+      "expectedRisk": "review",
+      "expectedAction": "reply",
+      "expectedModel": "sonnet",
+      "knowledge": "approved"
+    },
+    {
+      "id": "R04",
+      "category": "router",
+      "latest": "I want to dispute a refund.",
+      "routerOutput": "complex|human_only|refund_dispute|handoff|Needs human staff",
+      "expectedRisk": "human_only",
+      "expectedAction": "handoff",
+      "expectedModel": "sonnet",
+      "knowledge": "approved"
+    },
+    {
+      "id": "R05",
+      "category": "router",
+      "latest": "I am worried about a medical emergency.",
+      "routerOutput": "simple|human_only|medical_emergency|handoff|Safety concern",
+      "expectedRisk": "human_only",
+      "expectedAction": "handoff",
+      "expectedModel": "sonnet",
+      "knowledge": "approved"
+    },
+    {
+      "id": "R06",
+      "category": "router",
+      "latest": "Could you compare formats?",
+      "routerOutput": "complex|low|course_modes|reply|Complex but factual",
+      "expectedRisk": "low",
+      "expectedAction": "reply",
+      "expectedModel": "sonnet",
+      "knowledge": "approved"
+    },
+    {
+      "id": "R07",
+      "category": "router",
+      "latest": "Can you clarify the transfer policy?",
+      "routerOutput": "not-valid-output",
+      "expectedRisk": "review",
+      "expectedAction": "reply",
+      "expectedModel": "sonnet",
+      "knowledge": "approved"
+    },
+    {
+      "id": "R08",
+      "category": "router",
+      "latest": "Need room availability.",
+      "routerOutput": "simple|urgent|accommodation|reply|Unknown risk token",
+      "expectedRisk": "review",
+      "expectedAction": "reply",
+      "expectedModel": "sonnet",
+      "knowledge": "approved"
+    },
+    {
+      "id": "R09",
+      "category": "router",
+      "latest": "What is a morning class?",
+      "routerOutput": "simple|low|faq|reply|A supported FAQ",
+      "expectedRisk": "low",
+      "expectedAction": "reply",
+      "expectedModel": "haiku",
+      "knowledge": "approved"
+    },
+    {
+      "id": "R10",
+      "category": "router",
+      "latest": "I need a human to call me.",
+      "routerOutput": "complex|human_only|call_request|handoff|Please escalate",
+      "expectedRisk": "human_only",
+      "expectedAction": "handoff",
+      "expectedModel": "sonnet",
+      "knowledge": "approved"
+    },
+    {
+      "id": "R11",
+      "category": "router",
+      "latest": "What is the class location?",
+      "routerOutput": "simple|review|location_exception|reply|Unverified location",
+      "expectedRisk": "review",
+      "expectedAction": "reply",
+      "expectedModel": "sonnet",
+      "knowledge": "approved"
+    },
+    {
+      "id": "R12",
+      "category": "router",
+      "latest": "A simple FAQ?",
+      "routerOutput": "simple|low|knowledge_lookup|reply|Supported facts",
+      "expectedRisk": "low",
+      "expectedAction": "reply",
+      "expectedModel": "haiku",
+      "knowledge": "approved"
+    },
+    {
+      "id": "F01",
+      "category": "router",
+      "latest": "Please process my refund dispute.",
+      "routerFails": true,
+      "expectedRisk": "human_only",
+      "expectedAction": "handoff",
+      "expectedModel": "sonnet",
+      "knowledge": "approved"
+    },
+    {
+      "id": "F02",
+      "category": "router",
+      "latest": "Can I speak to a lawyer about this?",
+      "routerFails": true,
+      "expectedRisk": "human_only",
+      "expectedAction": "handoff",
+      "expectedModel": "sonnet",
+      "knowledge": "approved"
+    },
+    {
+      "id": "F03",
+      "category": "router",
+      "latest": "What does the approved policy say?",
+      "routerFails": true,
+      "expectedRisk": "low",
+      "expectedAction": "reply",
+      "expectedModel": "haiku",
+      "knowledge": "approved"
+    },
+    {
+      "id": "F04",
+      "category": "router",
+      "latest": "I have a pricing question with no knowledge.",
+      "routerFails": true,
+      "expectedRisk": "review",
+      "expectedAction": "reply",
+      "expectedModel": "sonnet",
+      "knowledge": "none"
+    },
+    {
+      "id": "P01",
+      "category": "preflight",
+      "latest": "What is your course schedule?",
+      "knowledge": "unverified_source",
+      "expectedStatus": "deny_before_model"
+    },
+    {
+      "id": "P02",
+      "category": "preflight",
+      "latest": "What is your course schedule?",
+      "knowledge": "manual_review_required",
+      "expectedStatus": "deny_before_model"
+    },
+    {
+      "id": "P03",
+      "category": "preflight",
+      "latest": "What is your course schedule?",
+      "knowledge": "unverified_chunk",
+      "expectedStatus": "deny_before_model"
+    },
+    {
+      "id": "P04",
+      "category": "preflight",
+      "latest": "What is your course schedule?",
+      "knowledge": "expired",
+      "expectedStatus": "deny_before_model"
+    },
+    {
+      "id": "P05",
+      "category": "preflight",
+      "latest": "What is your course schedule?",
+      "knowledge": "retrieval_error",
+      "expectedStatus": "deny_before_model"
+    },
+    {
+      "id": "P06",
+      "category": "preflight",
+      "latest": "What is your course schedule?",
+      "knowledge": "approved",
+      "denyLead": true,
+      "expectedStatus": "deny_before_model"
+    },
+    {
+      "id": "P07",
+      "category": "preflight",
+      "latest": "What is your course schedule?",
+      "knowledge": "none",
+      "expectedStatus": "approved_empty"
+    },
+    {
+      "id": "P08",
+      "category": "preflight",
+      "latest": "What is your course schedule?",
+      "knowledge": "approved",
+      "revokeAtRecheck": true,
+      "expectedStatus": "deny_after_recheck"
+    },
+    {
+      "id": "G01",
+      "category": "known_gap",
+      "latest": "I want a refund dispute resolved immediately.",
+      "routerOutput": "simple|low|faq|reply|Incorrectly low risk",
+      "knowledge": "approved",
+      "expectedObservedRisk": "low",
+      "knownIssue": "misclassified_sensitive_router_output"
+    },
+    {
+      "id": "G02",
+      "category": "known_gap",
+      "latest": "Please confirm if the payment arrived.",
+      "routerOutput": "simple|low|faq|reply|Incorrectly treated as factual",
+      "replyText": "Your payment has been confirmed.",
+      "knowledge": "approved",
+      "expectedObservedRisk": "low",
+      "knownIssue": "unsupported_reply_claim_not_deterministically_blocked"
+    }
+  ],
+  "fixedKnownGaps": [
+    {
+      "id": "misclassified_sensitive_router_output",
+      "releaseBlocking": true,
+      "description": "Current Co-Pilot accepts a low-risk router output for a sensitive refund dispute; deterministic local override is not established for successful but misclassified model routes."
+    },
+    {
+      "id": "unsupported_reply_claim_not_deterministically_blocked",
+      "releaseBlocking": true,
+      "description": "Current human-reviewed Co-Pilot can return unsupported payment-confirmation prose if a mocked provider drafts it; prompt instructions and staff review are not a deterministic output guarantee."
+    }
+  ],
+  "metricInterpretation": {
+    "routerAgreement": "Agreement with controlled, user-authored mock router outputs; NOT measured Claude accuracy",
+    "policyDenyRate": "Synthetic fixture rejection coverage, NOT real staging authorization or RLS",
+    "providerCost": "Provider calls stubbed locally; 0 billed inference, NOT a cost benchmark",
+    "knownGaps": "Two intentionally observed gaps are tracked as non-release-ready; an eval PASS is not a launch signoff"
+  }
+}

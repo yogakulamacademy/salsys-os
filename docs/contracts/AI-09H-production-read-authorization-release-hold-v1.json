@@ -1,0 +1,222 @@
+{
+  "schemaVersion": 1,
+  "checkpoint": "AI-09H",
+  "classification": "review_only_not_an_authorization_token",
+  "productionReady": false,
+  "runtimeWired": false,
+  "mayExecute": false,
+  "releaseState": "BLOCKED",
+  "stagingState": "ON_HOLD_BY_OWNER",
+  "signedUserWitnesses": 0,
+  "requiredSignedUserWitnesses": 16,
+  "independentReviews": 0,
+  "blockedIssues": [
+    601,
+    612,
+    613,
+    614
+  ],
+  "allowedReadToolIds": [
+    "crm.course.list",
+    "crm.lead.read",
+    "knowledge.approved.search"
+  ],
+  "decisions": [
+    {
+      "id": "AUTH-01",
+      "category": "auth",
+      "owner": "security_dba",
+      "state": "pending_independent_review",
+      "requiredEvidence": "Signed JWT and current auth.sessions validation, actor derived from Auth, logout/refresh/rotation and explicit bound tenant, no membership fallback; reviewer attests effective runtime grants",
+      "codeEvidence": [
+        "lib/ai/read-only-auth-boundary-v1.ts",
+        "supabase/migrations/20261014060357_tenant_session_binding_foundation.sql"
+      ],
+      "mustDeny": [
+        "anonymous_or_service_role",
+        "deleted_auth_session",
+        "missing_direct_tenant_binding",
+        "sole_membership_fallback",
+        "cross_tenant_actor"
+      ]
+    },
+    {
+      "id": "DB-02",
+      "category": "database_security",
+      "owner": "security_dba",
+      "state": "pending_independent_review",
+      "requiredEvidence": "Private or separately approved RPC exposure, SECURITY INVOKER/DEFINER owner analysis, explicit grants and RLS, transaction isolation, locks and revocation races; no service-role bypass",
+      "codeEvidence": [
+        "supabase/migrations/20261014061001_session_bound_tenant_authorization.sql",
+        "docs/checkpoints/AI-09G-Real-Shape-Transactional-Policy-Rehearsal-DRAFT.md"
+      ],
+      "mustDeny": [
+        "direct_table_privilege",
+        "untrusted_function_owner",
+        "role_bypass",
+        "session_revocation_race"
+      ]
+    },
+    {
+      "id": "RBAC-03",
+      "category": "resource_authorization",
+      "owner": "security_product",
+      "state": "pending_independent_review",
+      "requiredEvidence": "Per-lead assignment permission and active Sales workspace, exact tenant/lead predicates inside same read transaction, role matrix including whether admissions and managers ever qualify",
+      "codeEvidence": [
+        "supabase/migrations/20261027090000_db_incident_hardening_v2.sql",
+        "lib/ai/real-schema-read-projection-draft-v1.ts"
+      ],
+      "mustDeny": [
+        "foreign_lead_id",
+        "member_without_assignment",
+        "disabled_sales_workspace",
+        "unauthorized_role"
+      ]
+    },
+    {
+      "id": "COURSE-04",
+      "category": "resource_authorization",
+      "owner": "security_product",
+      "state": "pending_independent_review",
+      "requiredEvidence": "Tenant-scoped Education Core capability and enabled Admin workspace, course/batch publication policy, multi-batch selection semantics and tenant-matched course-batch foreign keys",
+      "codeEvidence": [
+        "supabase/migrations/20261101173500_r11_capability_security_foundation_v1.sql",
+        "docs/checkpoints/AI-09F-Real-Schema-Read-Mapping-DRAFT.md"
+      ],
+      "mustDeny": [
+        "disabled_education_core",
+        "foreign_course_batch",
+        "inactive_course",
+        "inactive_batch",
+        "disabled_admin_workspace"
+      ]
+    },
+    {
+      "id": "KNOWLEDGE-05",
+      "category": "source_provenance",
+      "owner": "legal_privacy_dba",
+      "state": "pending_independent_review",
+      "requiredEvidence": "KB-16A source-metadata-aware retrieval, real active and approved source/current revision, verified collection permission and owner consent, withdrawal/expiry and historical-index invalidation at read time",
+      "codeEvidence": [
+        "supabase/migrations/20261016171500_organization_knowledge_v1.sql",
+        "supabase/migrations/20261016182500_fix_organization_knowledge_search_v1.sql"
+      ],
+      "mustDeny": [
+        "unverified_source",
+        "withdrawn_source_consent",
+        "stale_document_revision",
+        "cross_tenant_knowledge",
+        "prompt_injection_as_instruction"
+      ]
+    },
+    {
+      "id": "AUDIT-06",
+      "category": "audit",
+      "owner": "security_dba_privacy",
+      "state": "pending_independent_review",
+      "requiredEvidence": "Same database transaction read + minimal audit with commit-observed receipt before any AI/model response, cancellation/retry/idempotency and denied-attempt handling, privileged tamper resistance and retention approval",
+      "codeEvidence": [
+        "docs/sql/AI-09G-real-shape-read-REHEARSAL-DRAFT.sql",
+        "docs/checkpoints/AI-09G-Real-Shape-Transactional-Policy-Rehearsal-DRAFT.md"
+      ],
+      "mustDeny": [
+        "audit_insert_failed",
+        "audit_commit_unknown",
+        "audit_commit_failed",
+        "stream_before_commit",
+        "replayed_request"
+      ]
+    },
+    {
+      "id": "PRIVACY-07",
+      "category": "privacy",
+      "owner": "legal_privacy_dba",
+      "state": "pending_independent_review",
+      "requiredEvidence": "Approved notice, processing purpose, source and derived data retention/erasure matrix covering all 12 Knowledge stores, privacy/DBA signed decisions and external processors without invented retention days",
+      "codeEvidence": [
+        "docs/checkpoints/AI-09F-Real-Schema-Read-Mapping-DRAFT.md"
+      ],
+      "mustDeny": [
+        "missing_collection_permission",
+        "retention_not_approved",
+        "erasure_unverified",
+        "downstream_copy_unresolved"
+      ]
+    },
+    {
+      "id": "PROVIDER-08",
+      "category": "output_security",
+      "owner": "security_ai",
+      "state": "pending_independent_review",
+      "requiredEvidence": "Trusted and untrusted boundary for source content, PII projection verification, no arbitrary tools, no model input until committed authorization/audit, prompt injection cases and tenant-separated output evaluation",
+      "codeEvidence": [
+        "lib/ai/read-only-tool-result-projection-v1.ts",
+        "lib/ai/real-schema-read-projection-draft-v1.ts"
+      ],
+      "mustDeny": [
+        "unexpected_phone_email_notes",
+        "unreviewed_tool_id",
+        "model_prompt_injection",
+        "cross_tenant_output"
+      ]
+    },
+    {
+      "id": "RELEASE-09",
+      "category": "release",
+      "owner": "release_security_owner",
+      "state": "pending_independent_review",
+      "requiredEvidence": "Independent qualified reviewer approval, protected main and staging environment, approved migration/rollback, isolated synthetic signed-user staging with 16/16 independently witnessed scenarios and release freeze/cutover",
+      "codeEvidence": [
+        "docs/checkpoints/AI-09G-Real-Shape-Transactional-Policy-Rehearsal-DRAFT.md"
+      ],
+      "mustDeny": [
+        "unapproved_merge",
+        "unprotected_deployment",
+        "real_staging_unwitnessed",
+        "rollback_unverified"
+      ]
+    }
+  ],
+  "nonActions": [
+    "No hosted Supabase SQL",
+    "No production main merge",
+    "No live AI tool activation",
+    "No paid staging or real customer-data tests",
+    "No MCP exposure",
+    "No outbound WhatsApp or CRM mutations",
+    "No autonomous Knowledge retrieval"
+  ],
+  "reviewSequence": [
+    {
+      "order": 1,
+      "phase": "security_and_dba_design_review",
+      "state": "blocked"
+    },
+    {
+      "order": 2,
+      "phase": "privacy_purpose_retention_and_erasure_signoff",
+      "state": "blocked"
+    },
+    {
+      "order": 3,
+      "phase": "separate_minimal_sql_and_rollback_review",
+      "state": "blocked"
+    },
+    {
+      "order": 4,
+      "phase": "owner_approved_isolated_staging",
+      "state": "blocked"
+    },
+    {
+      "order": 5,
+      "phase": "16_real_signed_user_staging_witnesses",
+      "state": "blocked"
+    },
+    {
+      "order": 6,
+      "phase": "independent_merge_and_release_approval",
+      "state": "blocked"
+    }
+  ]
+}

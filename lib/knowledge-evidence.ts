@@ -43,6 +43,24 @@ function safeSourceUri(value: unknown) {
   }
 }
 
+/**
+ * Defense in depth for explicitly unverified discovery content.
+ * The production search RPC must still enforce tenant/source authorization,
+ * approval and provenance itself. This only refuses evidence that actually
+ * carries the unverified markers in the returned metadata. In particular,
+ * the existing canonical RPC does NOT return linked-source metadata, so a
+ * source-only marker remains a database-release blocker (KB-16A).
+ * Missing markers preserve pre-existing ordinary/manual knowledge semantics;
+ * this is not proof of consent, provenance, or approval.
+ */
+function explicitlyUnverifiedDiscovery(value: Record<string, unknown> | null): boolean {
+  return value?.entry_mode === 'discovery_manual_review'
+    || value?.manual_review_required === true
+    || value?.manual_review_required === 'true'
+    || value?.source_text_verified === false
+    || value?.source_text_verified === 'false';
+}
+
 /** Canonical RPC owns tenant/approval/source/valid-from rules; validate and minimize its response here. */
 export function inspectKnowledgeMatches(rows: unknown, now = Date.now()): KnowledgeMatches {
   if (!Array.isArray(rows) || rows.length > 20) {
@@ -83,6 +101,19 @@ export function inspectKnowledgeMatches(rows: unknown, now = Date.now()): Knowle
 
     const metadata = record(row.metadata);
     const documentMetadata = record(metadata?.document_metadata);
+    const chunkMetadata = record(metadata?.chunk_metadata);
+    const sourceMetadata = record(metadata?.source_metadata);
+    if (
+      explicitlyUnverifiedDiscovery(metadata) ||
+      explicitlyUnverifiedDiscovery(documentMetadata) ||
+      explicitlyUnverifiedDiscovery(sourceMetadata) ||
+      explicitlyUnverifiedDiscovery(chunkMetadata) ||
+      chunkMetadata?.source === 'manual_discovery_draft_unverified'
+    ) {
+      // Fail the entire result, not merely a tainted chunk: an LLM must not
+      // receive a partially trusted set after a provenance inconsistency.
+      return { ok: false, error: 'Retrieved knowledge needs source verification. Ask an admin to review it.' };
+    }
     const version =
       typeof metadata?.document_version === 'number' &&
       Number.isSafeInteger(metadata.document_version) &&

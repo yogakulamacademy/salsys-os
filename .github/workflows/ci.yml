@@ -4,9 +4,21 @@ on:
   pull_request:
     branches:
       - main
+      # Temporary Knowledge Builder stacked draft validation only.
+      - feature/kb06a-discovery-explicit-consent-gate
+      - feature/kb06b-audited-consent-lifecycle
+      - feature/kb06c-revoked-metadata-erasure
+      - feature/kb06d-owner-consent-review-ui
+      - feature/kb06e-verified-policy-document-preview
+      - feature/kb06f-staging-consent-actor-readonly
+      - feature/kb06g-retention-deletion-dependency-inventory
+      - feature/kb06h-isolated-staging-session-bind-handshake
+      - feature/kb07c-approval-audit-delete-guard-draft
+      - feature/kb07d-consent-audit-truncate-guard-draft
   push:
     branches:
       - main
+      - feature/kb06a-discovery-explicit-consent-gate
 
 permissions:
   contents: read
@@ -47,6 +59,40 @@ jobs:
         run: npm ci --ignore-scripts
       - name: Verify independent-session refund races and rollback fixture
         run: npm run test:financial:db
+
+      - name: Verify KB-01C discovery schema and leases in disposable PostgreSQL
+        run: node --test tests/database/knowledge-discovery-ledger.test.mjs
+
+      - name: Verify KB-01D synthetic website end-to-end against disposable PostgreSQL
+        run: node --experimental-strip-types --test tests/database/knowledge-discovery-e2e.test.mjs
+
+      - name: Verify consent withdrawal rejects discovery leases and late commits in disposable PostgreSQL
+        run: node --test tests/database/knowledge-discovery-consent.test.mjs
+
+      - name: Verify signed-session consent, withdrawal and metadata erasure on disposable PostgreSQL
+        run: node --test tests/database/knowledge-discovery-consent-lifecycle.test.mjs
+
+      - name: Verify KB-07C approval audit deletion guard on disposable PostgreSQL
+        run: node --test tests/database/knowledge-approval-audit-delete-guard.test.mjs
+
+      - name: Verify KB-07D consent and erasure audit TRUNCATE protection in disposable PostgreSQL
+        run: node --test tests/database/knowledge-consent-audit-truncate-guard.test.mjs
+
+      - name: Verify KB-08E version-aware knowledge approval CAS only in disposable PostgreSQL
+        run: node --test tests/database/knowledge-approval-version-cas.test.mjs
+
+      - name: Verify KB-08F postapproval source invalidation and synthetic retrieval guard in disposable PostgreSQL
+        run: node --test tests/database/knowledge-postapproval-source-invalidation.test.mjs
+      - name: Verify KB-08G synthetic dual-observer source alerts and stale-retrieval gating in disposable PostgreSQL
+        run: node --test tests/database/knowledge-source-verification-alert-gate.test.mjs
+      - name: Verify KB-09E early-denial lease CAS and cancellation audit in disposable PostgreSQL
+        run: node --test tests/database/knowledge-early-denial-lease-cas.test.mjs
+      - name: Verify KB-09F–T synthetic evidence consent-withdrawal erasure, TTL rollback and tenant security in disposable PostgreSQL
+        run: node --test tests/database/knowledge-commit-ownership-races.test.mjs
+
+
+      - name: Verify AI-03A independent prompt-review ledger only in disposable PostgreSQL
+        run: node --test tests/database/ai-governed-prompt-ledger-rehearsal.test.mjs
 
       - name: Verify exact Instagram outbound projector SQL in isolated PostgreSQL
         run: node --test tests/database/instagram-outbound-echo-projector.test.mjs
@@ -169,6 +215,21 @@ jobs:
 
       - name: Verify AI Knowledge Final Closeout Contracts
         run: npm run verify:ai-knowledge-final-closeout
+
+      - name: Verify KB-01 website discovery safety tests
+        run: node --experimental-strip-types --test tests/knowledge-discovery/*.test.mjs
+
+      # A SUCCESS here explicitly means BLOCKED/0 of 16 staging witnesses,
+      # never that a Knowledge Builder release is authorized.
+      - name: Verify KB-09O release remains BLOCKED (not approval)
+        run: node scripts/kb09o-release-preflight.mjs
+
+      # No production, no staging, no independent signoff: green means HOLD.
+      - name: Verify KB-10 integrated release and staging remain ON HOLD
+        run: node scripts/kb10-integrated-review-hold-preflight.mjs
+
+      - name: Verify KB-02+ website evidence and Knowledge Builder safety tests
+        run: node --experimental-strip-types --test tests/knowledge-extraction/*.test.mjs
 
       - name: Verify Home Command Center Final Closeout Contracts
         run: npm run verify:home-command-center-final-closeout
