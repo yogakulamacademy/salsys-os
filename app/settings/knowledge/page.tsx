@@ -1,3 +1,4 @@
+import Link from 'next/link';
 import {
   Archive, BookOpen, BrainCircuit, CheckCircle2, Clock3, Database,
   FileText, Layers3, Link2, Plus, Search, ShieldAlert, ShieldCheck,
@@ -9,6 +10,10 @@ import {
   archiveKnowledgeDocumentAction,
   createKnowledgeDocumentAction,
 } from '@/app/settings/knowledge/actions';
+import { createManualDraftFromDiscoveredPageAction } from '@/app/settings/knowledge/discovery/draft-action';
+import { eligibleDiscoveredPageForManualDraft, type EligiblePageDraft } from '@/lib/knowledge-discovery/eligible-page-draft';
+import { discoveryPublicationHeld } from '@/lib/knowledge-discovery/discovery-publication-hold';
+import { KnowledgeDiscoveryPastedHtmlReview } from '@/components/knowledge-discovery-pasted-html-review';
 import { PageHeader } from '@/components/ui';
 import type { ReactNode } from 'react';
 import './knowledge-workspace.css';
@@ -20,6 +25,7 @@ import { getCurrentWorkspaceContext } from '@/lib/workspace';
 type KnowledgeDocument = {
   id: string;
   source_id: string | null;
+  metadata: Record<string, unknown> | null;
   title: string;
   category: string;
   status: 'draft' | 'review' | 'approved' | 'expired' | 'superseded' | 'archived';
@@ -34,6 +40,7 @@ type KnowledgeDocument = {
 
 type KnowledgeSource = {
   id: string;
+  metadata: Record<string, unknown> | null;
   name: string;
   source_type: string;
   source_uri: string | null;
@@ -102,7 +109,7 @@ function validityLabel(document: KnowledgeDocument) {
 export default async function KnowledgeSettingsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ notice?: string; error?: string; q?: string; category?: string; status?: string; template?: string }>;
+  searchParams: Promise<{ notice?: string; error?: string; q?: string; category?: string; status?: string; template?: string; discoveryPage?: string; draftError?: string }>;
 }) {
   const query = await searchParams;
   const { configured } = getSupabasePublicConfig();
@@ -115,6 +122,14 @@ export default async function KnowledgeSettingsPage({
   let loadError: string | null = null;
   let activeOrganizationId: string | null = null;
   let partial = false;
+  let discoveredDraft: EligiblePageDraft | null = null;
+  const requestedDiscoveryPage = typeof query.discoveryPage === 'string' ? query.discoveryPage : '';
+  // A manual draft must not be saved by the older generic document RPC:
+  // that RPC cannot atomically validate current site ownership and consent.
+  // Enable only after the new consent-locked DB function is independently
+  // reviewed/migrated and the release gate authorizes this feature.
+  const atomicDiscoveredDraftApproved =
+    process.env.KNOWLEDGE_DISCOVERY_ATOMIC_DRAFT_APPROVED === 'true';
   if (!live) loadError = useMockData ? 'Demo mode: live knowledge has not been loaded.' : 'Configure a live workspace before loading knowledge.';
 
   if (live) {
@@ -142,20 +157,27 @@ export default async function KnowledgeSettingsPage({
             supabase
               .from('knowledge_documents')
               .select(
-                'id, source_id, title, category, status, content, version, valid_from, valid_until, approved_at, created_at, updated_at',
+                'id, source_id, title, category, status, content, version, valid_from, valid_until, approved_at, created_at, updated_at, metadata',
               )
               .eq('organization_id', organizationId)
               .order('updated_at', { ascending: false })
               .limit(201),
             supabase
               .from('knowledge_sources')
-              .select('id, name, source_type, source_uri, status')
+              .select('id, name, source_type, source_uri, status, metadata')
               .eq('organization_id', organizationId)
               .order('updated_at', { ascending: false })
               .limit(500),
           ]);
 
           canManage = manageData === true;
+          if (canManage && requestedDiscoveryPage && !documentError && !sourceError) {
+            // A page ID is only a hint. The signed tenant must re-read the
+            // currently eligible fetched page, job, proof and consent.
+            discoveredDraft = await eligibleDiscoveredPageForManualDraft(
+              supabase, organizationId, requestedDiscoveryPage,
+            );
+          }
 
           if (documentError || sourceError) {
             loadError = documentError?.message || sourceError?.message || 'Unable to load AI knowledge.';
@@ -181,6 +203,9 @@ export default async function KnowledgeSettingsPage({
   const currentTime = Date.now();
   const needsReview = documents.filter((doc) =>
     ['review', 'expired', 'superseded'].includes(doc.status) ||
+    (doc.status === 'approved' &&
+      (discoveryPublicationHeld(doc.metadata) ||
+       discoveryPublicationHeld(doc.source_id ? sourceById.get(doc.source_id)?.metadata : null))) ||
     (doc.status === 'approved' && (!doc.source_id || sourceById.get(doc.source_id)?.status !== 'active')) ||
     (doc.status === 'approved' && (
       (doc.valid_from !== null && Date.parse(doc.valid_from) > currentTime) ||
@@ -190,7 +215,9 @@ export default async function KnowledgeSettingsPage({
   const usableApproved = documents.filter((doc) => {
     if (doc.status !== 'approved' || !doc.source_id) return false;
     const source = sourceById.get(doc.source_id);
-    if (source?.status !== 'active') return false;
+    if (source?.status !== 'active' ||
+        discoveryPublicationHeld(doc.metadata) ||
+        discoveryPublicationHeld(source?.metadata)) return false;
     const from = doc.valid_from ? Date.parse(doc.valid_from) : null;
     const until = doc.valid_until ? Date.parse(doc.valid_until) : null;
     return (from === null || (Number.isFinite(from) && from <= currentTime)) &&
@@ -235,8 +262,34 @@ export default async function KnowledgeSettingsPage({
         description={'Create and manage approved policies, FAQs, processes and sales guidance for ' + organizationName + '. The Co-Pilot can use only approved, currently valid knowledge with eligible retrieval evidence.'}
       />
 
+      <div className="rounded-xl border border-slate-200 bg-white px-4 py-3">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div><div className="text-sm font-semibold">Website discovery</div>
+            <p className="mt-1 text-xs text-slate-500">Discover public site pages before reviewing or creating AI knowledge.</p></div>
+          <Link href="/settings/knowledge/discovery" className="rounded-lg border border-slate-200 px-3 py-2 text-xs font-semibold hover:bg-slate-50">Open discovery →</Link>
+        </div>
+      </div>
+      
+      {canManage ? (
+        <div className="rounded-xl border border-slate-200 bg-white px-4 py-3">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <div className="text-sm font-semibold">Evidence review preview</div>
+              <p className="mt-1 text-xs text-slate-500">
+                Explore source quotations and review controls using synthetic data. No decisions are saved or published.
+              </p>
+            </div>
+            <Link href="/settings/knowledge/evidence-preview"
+              className="rounded-lg border border-slate-200 px-3 py-2 text-xs font-semibold hover:bg-slate-50">
+              Open preview
+            </Link>
+          </div>
+        </div>
+      ) : null}
+
       {query.notice ? <div className="kn-flash kn-success" role="status">{query.notice}</div> : null}
       {query.error || loadError ? <div className="kn-flash kn-error" role="alert">{query.error || loadError}</div> : null}
+      {query.draftError ? <div className="kn-flash kn-error" role="alert">Discovery draft was not saved. Verify the source and retry.</div> : null}
 
       <section className="kn-overview" aria-label="Knowledge overview">
         <div className="kn-stats">
@@ -265,10 +318,65 @@ export default async function KnowledgeSettingsPage({
             <div><h2 id="kn-create-heading">Add Knowledge</h2>
               <p>Add organization-approved information with a documented source.</p></div>
           </div>
+          {requestedDiscoveryPage && !discoveredDraft ? (
+            <div className="kn-template-note" role="status">
+              This discovered page is unavailable for draft review. The website, ownership proof, consent, or page status may have changed. You can still create a separately verified manual draft below.
+              <Link href="/settings/knowledge" className="ml-2 font-semibold underline">Clear selection</Link>
+            </div>
+          ) : null}
+          {discoveredDraft ? (
+            <>
+              <KnowledgeDiscoveryPastedHtmlReview
+                pageId={discoveredDraft.pageId}
+                sourceUrl={discoveredDraft.sourceUri}
+              />
+              <form action={createManualDraftFromDiscoveredPageAction} className="kn-create-form" aria-label="Manually review and draft from a discovered page">
+              <div className="kn-template-note">
+                <strong>Manual website review — draft only.</strong> Discovery stored page metadata, not verified article text. Open the original page, check the facts yourself, and enter only the content you can substantiate. Nothing is generated, approved or published automatically.
+              </div>
+              <input type="hidden" name="page_id" value={discoveredDraft.pageId}/>
+              <label className="kn-field"><span>Source page</span>
+                <a href={discoveredDraft.sourceUri} target="_blank" rel="noopener noreferrer"
+                  className="break-all text-xs underline">{discoveredDraft.sourceUri}</a>
+              </label>
+              <label className="kn-field"><span>Draft title</span>
+                <input name="title" maxLength={180} minLength={2} required
+                  defaultValue={discoveredDraft.title}/>
+              </label>
+              <label className="kn-field"><span>Category</span>
+                <select name="category" defaultValue="general">
+                  {categories.map(category=><option key={category} value={category}>{pretty(category)}</option>)}
+                </select>
+              </label>
+              <label className="kn-field"><span>Manually reviewed knowledge (required)</span>
+                <textarea name="content" required minLength={10} maxLength={20000} rows={7}
+                  placeholder="Enter the facts you personally verified on this source page. No text is imported automatically."/>
+              </label>
+              <div className="kn-authority"><ShieldAlert size={18}/>
+                <span>Only <strong>Save as Draft</strong> is available here. A separate existing organization-admin approval action is required before Co-Pilot retrieval.</span>
+              </div>
+              {!atomicDiscoveredDraftApproved ? (
+                <p className="kn-template-note" role="status">
+                  Discovered-page draft saving is on hold until the consent-locked
+                  database write receives independent security/privacy review.
+                  You may inspect and copy the source, but no document is saved
+                  from this form.
+                </p>
+              ) : null}
+              <div className="kn-create-actions">
+                <Link href="/settings/knowledge" className="kn-secondary">Cancel selection</Link>
+                <button type="submit" className="kn-primary"
+                  disabled={!atomicDiscoveredDraftApproved}>
+                  {atomicDiscoveredDraftApproved ? 'Save as Draft' : 'Draft saving on hold'}
+                </button>
+              </div>
+              </form>
+            </>
+          ) : null}
           {template ? <div className="kn-template-note">
             {pretty(templateName)} template selected. Add the approved answer and a real source before saving.
           </div> : null}
-          {canManage ? <form action={createKnowledgeDocumentAction} className="kn-create-form">
+          {canManage && !discoveredDraft ? <form action={createKnowledgeDocumentAction} className="kn-create-form">
             <label className="kn-field"><span>Title</span>
               <input name="title" required maxLength={180}
                 defaultValue={template?.title || ''}
@@ -315,7 +423,7 @@ export default async function KnowledgeSettingsPage({
               <button type="submit" name="intent" value="draft" className="kn-secondary">Save as Draft</button>
               <button type="submit" name="intent" value="approve" className="kn-primary"><CheckCircle2 size={16}/> Save & Approve</button>
             </div>
-          </form> : <div className="kn-readonly">Organization admin access is required to create or approve knowledge.</div>}
+          </form> : !canManage ? <div className="kn-readonly">Organization admin access is required to create or approve knowledge.</div> : null}
         </section>
 
         <section className="kn-panel kn-library" aria-labelledby="kn-library-heading">
@@ -352,6 +460,8 @@ export default async function KnowledgeSettingsPage({
                   <a className="kn-secondary" href="/settings/knowledge">Clear filters</a></div>
               ) : filteredDocuments.map((document) => {
                 const source = document.source_id ? sourceById.get(document.source_id) : null;
+                const publicationHeld = discoveryPublicationHeld(document.metadata) ||
+                  discoveryPublicationHeld(source?.metadata);
                 return <article key={document.id} className="kn-document">
                   <div className="kn-document-title"><FileText size={17}/>
                     <h3>{document.title}</h3>
@@ -368,10 +478,13 @@ export default async function KnowledgeSettingsPage({
                   {source?.source_uri ? <p className="kn-reference">Reference: {source.source_uri}</p> : null}
                   <p className="kn-updated">Updated {new Date(document.updated_at).toLocaleString('en-IN')}</p>
                   {canManage && document.status !== 'archived' ? <div className="kn-document-actions">
-                    {document.status !== 'approved' ? <form action={approveKnowledgeDocumentAction}>
+                    {document.status !== 'approved' && !publicationHeld ? <form action={approveKnowledgeDocumentAction}>
                       <input type="hidden" name="document_id" value={document.id}/>
                       <button type="submit" className="kn-primary kn-small"><CheckCircle2 size={14}/> Approve</button>
                     </form> : null}
+                    {publicationHeld ? <span className="kn-scope-note" role="status">
+                      Discovery draft held: independent evidence review required before AI publication.
+                    </span> : null}
                     <form action={archiveKnowledgeDocumentAction}>
                       <input type="hidden" name="document_id" value={document.id}/>
                       <button type="submit" className="kn-secondary kn-small"><Archive size={14}/> Archive</button>

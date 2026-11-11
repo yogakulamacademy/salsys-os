@@ -180,6 +180,16 @@ export default async function SettingsPage({
       <PageHeader eyebrow="Configuration" title="CRM Rules"
         description="Manage your pipeline, forecast weights, aging thresholds and operational configuration."
       />
+      {admin ? <section className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-line bg-surface px-4 py-3" aria-label="Knowledge Builder shortcut">
+        <div>
+          <h2 className="text-sm font-semibold text-copy-strong">Knowledge Builder</h2>
+          <p className="mt-1 text-xs text-copy-muted">Maintain website sources, discovery reviews and approved knowledge anytime, including after onboarding.</p>
+        </div>
+        <Link href="/settings/knowledge" className="inline-flex items-center gap-2 rounded-lg border border-line px-3 py-2 text-xs font-semibold text-copy-strong hover:border-line-strong">
+          Open Knowledge Builder <ArrowRight size={14} />
+        </Link>
+      </section> : null}
+
 
       {query.notice ? <Notice tone="success" text={query.notice}/> : null}
       {query.error ? <Notice tone="error" text={query.error}/> : null}
