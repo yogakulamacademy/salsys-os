@@ -119,6 +119,9 @@ jobs:
       - name: Verify Commercial Intelligence Contracts
         run: npm run verify:commercial-intelligence
 
+      - name: Verify R14 review-only pricing page cannot collect data or charge
+        run: node --test tests/readiness/r14-pricing-preview-route-v1.test.cjs
+
       - name: Verify Cross-Workspace Investigation Scope Contracts
         run: npm run verify:investigation-scope
 
