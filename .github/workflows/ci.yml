@@ -137,6 +137,9 @@ jobs:
       - name: Verify R13-P1 real-session auth preview has no runtime activation path
         run: node --test tests/readiness/r13-p1-server-auth-preview-v1.test.cjs
 
+      - name: Verify actual server auth adapter with synthetic session and tenant negatives
+        run: node --test tests/readiness/r13-p1-server-auth-execution-v1.test.cjs
+
       - name: Verify Cross-Workspace Investigation Scope Contracts
         run: npm run verify:investigation-scope
 
