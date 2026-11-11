@@ -43,3 +43,12 @@ The function `get_native_behavior_event_trends_v1` returns only aggregated count
 ## Deferred
 
 Event-property filters, person-level drill-down, retrospective segmentation, saved reports, cohorts, retention, session replay, experiments and surveys remain separate checkpoints.
+
+## Server-side distinct-session set integrity — 2026-11-07
+
+The existing Event Activity server data loader now checks the same **source-scoped distinct-session set cardinality** required by the R2-P2 offline comparator's draft #636. For each default or selected event, every UTC day's identified sessions must be no greater than that event's whole-window identified sessions; the sum of daily identified sessions must be **at least** the whole-window count. This is a necessary condition for a valid union of the UTC-day distinct-session sets. A session may appear on two different UTC days, so requiring the daily sum to **equal** the window count would incorrectly reject valid reports.
+
+If either inequality fails or the sum exceeds JavaScript's safe integer precision, the Event Activity module fails closed with the existing unavailable state. The other two independently scoped Behavior panels (ordered funnel and Events by Page) must remain visible. This changes only the server response validator, not RPC queries, event collection, raw rows, permissions, enrollment, or privacy defaults.
+
+The disposable loopback Chromium fixture now supplies two individually malformed reports: one day's session cardinality larger than the window's, and a window cardinality larger than all daily session counts combined. Both are rejected with no retained trend rows, while the same synthetic tenant's funnel and page breakdown still render; the normal valid scenario remains available. Structural tests guard these bounds. This is synthetic validation, **not** real owner/admin authenticated acceptance, tenant isolation or a live UI-to-SQL match. Issue #523 remains OPEN until the authorized reviewer witnesses it.
+
