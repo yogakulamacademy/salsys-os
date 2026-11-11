@@ -34,6 +34,15 @@ for (const check of [
   "automation_whatsapp_templates",
 ]) assert.ok(authoring.includes(check) || draftsRoute.includes(check), 'Server auth contract missing: ' + check);
 
+// The existing Templates page must work before the optional authoring migration exists.
+assert.ok(page.includes("process.env.WA_TEMPLATE_STUDIO_ENABLED === 'true'"), 'Studio must be default-off on the provider list');
+assert.ok(page.includes('if (studioEnabled && senderResult.accountId)'), 'No draft table reads until explicitly enabled');
+assert.ok(draftsRoute.includes("process.env.WA_TEMPLATE_STUDIO_ENABLED !== 'true'"), 'Draft routes must fail closed');
+assert.ok(submitRoute.includes("process.env.WA_TEMPLATE_STUDIO_ENABLED !== 'true'"), 'Submission needs the separate studio gate');
+assert.ok(workspace.includes('canCreate'), 'Template Studio creation control must be gated');
+const newPage = read('app/automation/templates/new/page.tsx');
+assert.ok(newPage.includes("process.env.WA_TEMPLATE_STUDIO_ENABLED !== 'true'"), 'Editor must be unavailable until enabled');
+
 assert.ok(draftsRoute.includes("request.headers.get('origin') !== request.nextUrl.origin"), 'Draft write needs CSRF origin check');
 assert.ok(submitRoute.includes("request.headers.get('origin') !== request.nextUrl.origin"), 'Provider request needs CSRF origin check');
 assert.ok(submitRoute.includes("process.env.WA_TEMPLATE_AUTHORING_ENABLED !== 'true'"), 'Authoring must default OFF');
