@@ -125,6 +125,9 @@ jobs:
       - name: Verify draft R13-P1 plan catalog proposal cannot imply activation
         run: node --test tests/readiness/r13-p1-pricing-proposal-v1.test.cjs
 
+      - name: Verify independent plan review and no-activation proof
+        run: node --test tests/readiness/r13-p1-governance-preview.test.cjs
+
       - name: Verify Cross-Workspace Investigation Scope Contracts
         run: npm run verify:investigation-scope
 
