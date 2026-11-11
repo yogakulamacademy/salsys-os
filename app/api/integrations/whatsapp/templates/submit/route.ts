@@ -11,6 +11,9 @@ const json = (data: Record<string, unknown>, status = 200) =>
   NextResponse.json(data, { status, headers: { 'Cache-Control': 'no-store' } });
 
 export async function POST(request: NextRequest) {
+  if (process.env.WA_TEMPLATE_STUDIO_ENABLED !== 'true') {
+    return json({ ok: false, error: 'Template studio is disabled.' }, 404);
+  }
   if (request.headers.get('origin') !== request.nextUrl.origin) {
     return json({ ok: false, error: 'Invalid request origin.' }, 403);
   }
