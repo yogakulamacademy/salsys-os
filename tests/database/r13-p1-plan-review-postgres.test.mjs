@@ -59,7 +59,7 @@ test('R13-P1 price review survives real Postgres roles, revisions, races and rol
     await db.connect();
     await db.query(ddl);
 
-    const matrix=await db.query(String.raw\`
+    const matrix=await db.query(String.raw`
       select
         (select count(*) from pg_class where oid in (
           'r13_review_preview.requests'::regclass,
@@ -76,7 +76,7 @@ test('R13-P1 price review survives real Postgres roles, revisions, races and rol
           'r13_review_preview.review_request(uuid,uuid,integer,text)','EXECUTE') as member_can_review,
         has_function_privilege('anon',
           'r13_review_preview.submit_request(uuid,uuid,integer)','EXECUTE') as anon_can_submit
-    \`);
+    `);
     const m=matrix.rows[0];
     assert.equal(Number(m.rls_count),3);
     for(const key of ['anon_schema','member_schema','member_select','anon_events',
@@ -98,11 +98,11 @@ test('R13-P1 price review survives real Postgres roles, revisions, races and rol
 
     await db.query('BEGIN');
     await db.query('SET LOCAL ROLE service_role');
-    const create=await db.query(String.raw\`
+    const create=await db.query(String.raw`
       insert into r13_review_preview.requests
         (author_user_id,last_actor_user_id,snapshot,snapshot_sha256,rationale)
       values ($1,$1,$2::jsonb,$3,$4) returning id,revision,status
-    \`,[author,JSON.stringify(sample),digest,'SalsysOS four-tier design-only price review']);
+    `,[author,JSON.stringify(sample),digest,'SalsysOS four-tier design-only price review']);
     const requestId=create.rows[0].id;
     assert.equal(create.rows[0].status,'draft');
     assert.equal(create.rows[0].revision,1);
@@ -122,12 +122,12 @@ test('R13-P1 price review survives real Postgres roles, revisions, races and rol
 
     // Insert the approved-for-review prices only into disposable proposal tables.
     for(const tier of proposal.tiers){
-      await db.query(String.raw\`
+      await db.query(String.raw`
         insert into r13_review_preview.price_versions
         (request_id,tier_code,currency,billing_period,amount_minor,
          setup_min_minor,setup_max_minor,setup_optional)
         values ($1,$2,'INR','month',$3,$4,$5,$6)
-      \`,[requestId,tier.code,tier.monthly_inr*100,
+      `,[requestId,tier.code,tier.monthly_inr*100,
         tier.setup_fee_inr.minimum*100,tier.setup_fee_inr.maximum*100,
         tier.setup_fee_inr.optional]);
     }
@@ -154,12 +154,12 @@ test('R13-P1 price review survives real Postgres roles, revisions, races and rol
       [requestId,author,'approve'])).rows[0].ok,false,'author self-review denied');
 
     // No additional prices after submitting for review.
-    await expectBlocked(db,String.raw\`
+    await expectBlocked(db,String.raw`
       insert into r13_review_preview.price_versions
       (request_id,tier_code,currency,billing_period,amount_minor,
        setup_min_minor,setup_max_minor,setup_optional)
       values ($1,'free','INR','month',0,0,0,true)
-    \`,[requestId],/prices can only be proposed for a draft/);
+    `,[requestId],/prices can only be proposed for a draft/);
 
     const prepared=await db.query(
       'select status,revision,reviewer_user_id from r13_review_preview.requests where id=$1',
