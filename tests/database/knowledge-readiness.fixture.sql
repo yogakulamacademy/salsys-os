@@ -169,12 +169,37 @@ begin
 end;
 $employee$;
 
+-- An authenticated SQL role with absent JWT claims must never be able to
+-- invoke the SECURITY DEFINER source-backed creation path. A nullable IF
+-- predicate silently skips its deny branch in PL/pgSQL; enforce fail-closed.
+select set_config('request.jwt.claims','{}',true);
+select set_config('request.jwt.claim.role','',true);
+do $missing_claims$
+declare rejected boolean := false;
+begin
+  begin
+    perform public.create_source_backed_knowledge_document_v2(
+      '10000000-0000-4000-8000-000000000001',
+      'Missing claims negative test',
+      'faq',
+      'This synthetic content must never be created without verified role and session claims.',
+      'Synthetic missing-claims source',
+      'manual',
+      null, null, null, false
+    );
+  exception when others then
+    rejected := sqlerrm like '%Only organization admins%';
+  end;
+  perform pg_temp.assert_true(rejected,'missing JWT role and session deny source-backed creation');
+end;
+$missing_claims$;
+
 reset role;
 select pg_temp.assert_true(not has_function_privilege('anon','public.search_organization_knowledge_v1(uuid,text,integer)','execute'),'anonymous retrieval execute denied');
 select pg_temp.assert_true(not has_function_privilege('anon','public.create_knowledge_document_v1(uuid,text,text,text,boolean)','execute'),'anonymous lifecycle execute denied');
 select pg_temp.assert_true(not has_function_privilege('anon','public.create_source_backed_knowledge_document_v2(uuid,text,text,text,text,text,text,timestamptz,timestamptz,boolean)','execute'),'anonymous source-backed lifecycle execute denied');
 rollback;
-select 'knowledge_readiness_v2' as suite, 27 as assertions_completed,
+select 'knowledge_readiness_v2' as suite, 28 as assertions_completed,
   to_regclass('public.organizations') is null
   and to_regclass('public.knowledge_documents') is null
   and to_regprocedure('public.create_knowledge_document_v1(uuid,text,text,text,boolean)') is null
