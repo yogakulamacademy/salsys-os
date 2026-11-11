@@ -16,6 +16,7 @@ function handle(error: unknown) {
 }
 
 export async function GET(request: NextRequest) {
+  if (process.env.WA_TEMPLATE_STUDIO_ENABLED !== 'true') return json({ ok: false, error: 'Template studio is disabled.' }, 404);
   try {
     const actor = await authorizeTemplateManager();
     const id = request.nextUrl.searchParams.get('id');
@@ -38,6 +39,7 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
+  if (process.env.WA_TEMPLATE_STUDIO_ENABLED !== 'true') return json({ ok: false, error: 'Template studio is disabled.' }, 404);
   if (request.headers.get('origin') !== request.nextUrl.origin) {
     return json({ ok: false, error: 'Invalid request origin.' }, 403);
   }
