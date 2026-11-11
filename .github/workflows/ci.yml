@@ -134,6 +134,9 @@ jobs:
       - name: Verify scoped plan-review history and cross-tenant negative tests
         run: node --test tests/readiness/r13-p1-plan-review-ledger-preview.test.cjs
 
+      - name: Verify R13-P1 real-session auth preview has no runtime activation path
+        run: node --test tests/readiness/r13-p1-server-auth-preview-v1.test.cjs
+
       - name: Verify Cross-Workspace Investigation Scope Contracts
         run: npm run verify:investigation-scope
 
