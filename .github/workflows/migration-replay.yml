@@ -297,6 +297,91 @@ jobs:
             -U postgres -d postgres \
             < tests/database/r2-behavior-rpc-positive-tenant-local.sql
 
+      # REVIEW-ONLY R2 dry run: after the normal clean migration replay and
+      # synthetic R2-P2 tests, exercise approved *staging-only* SQL in exact
+      # dependency order against this SAME disposable local container.
+      # This step is intentionally NOT an apply-migration or hosted SQL job.
+      - name: Rehearse four exact R2 stage-only SQL packages in disposable local PostgreSQL
+        if: ${{ hashFiles('supabase/staging-only/migrations/20261110045151_r2_stage_only_lead_reliability_rehearsal_v1.sql') != '' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Fetch the immutable, separately reviewed first package and
+          # its SELECT-only audits without merging another branch.
+          acl_head="1243ea8e5940210542b8a05385cac4d4b27692e7"
+          design_head="572baa10344998c40a9ba76ccd8f45958c352f9d"
+          tenant_head="7671e47e688d8c75cf8ad33c0ae2c2af8431011e"
+          privacy_head="4775f192683c2b9611d4322ffa02dcd34bad0f98"
+          git fetch --no-tags --depth=1 origin "$acl_head"
+          git fetch --no-tags --depth=1 origin "$design_head"
+          git fetch --no-tags --depth=1 origin "$tenant_head"
+          git fetch --no-tags --depth=1 origin "$privacy_head"
+          acl_sql="${RUNNER_TEMP}/r2-approved-stage-acl.sql"
+          anon_audit="${RUNNER_TEMP}/r2-anon-audit.sql"
+          role_audit="${RUNNER_TEMP}/r2-role-audit.sql"
+          tenant_audit="${RUNNER_TEMP}/r2-tenant-audit.sql"
+          privacy_audit="${RUNNER_TEMP}/r2-privacy-audit.sql"
+          git show "$acl_head:supabase/staging-only/migrations/20261110041634_r2_staging_privileged_function_grants_v1.sql" > "$acl_sql"
+          git show "$design_head:docs/sql/r2-staging-postinstall-global-anon-function-audit-v1.sql" > "$anon_audit"
+          git show "$design_head:docs/sql/r2-staging-postinstall-function-role-parity-audit-v1.sql" > "$role_audit"
+          git show "$tenant_head:docs/sql/r2-automation-tenant-guard-catalog-audit-v1.sql" > "$tenant_audit"
+          git show "$privacy_head:docs/sql/r2-identity-merge-privacy-schema-catalog-audit-v1.sql" > "$privacy_audit"
+          stage_dir="supabase/staging-only/migrations"
+          tenant_sql="$stage_dir/20261110043007_r2_staging_automation_tenant_guard_v1.sql"
+          privacy_sql="$stage_dir/20261110043010_r2_staging_privacy_identity_dependencies_v1.sql"
+          lead_sql="$stage_dir/20261110045151_r2_stage_only_lead_reliability_rehearsal_v1.sql"
+          # Immutable reviewed source checks are mandatory.
+          test "$(git hash-object "$acl_sql")" = "4dce41ad8f75d486c33e1364646ca24d44bf5c31"
+          test "$(git hash-object "$tenant_sql")" = "e621500b5264aab86cbbcd1b91b718631254a9ed"
+          test "$(git hash-object "$privacy_sql")" = "2a7af019efb727a2e5036ab1611b1d084edbd142"
+          test "$(git hash-object "$lead_sql")" = "7a5ded898443f626e4452e5c4cae32157350f4a5"
+          # Never pass a project ref, password, external DSN, or service key.
+          mapfile -t containers < <(docker ps --format '{{.Names}}' | grep '^supabase_db_' || true)
+          test "${#containers[@]}" -eq 1
+          db_container="${containers[0]}"
+          echo "Synthetic local PostgreSQL only: source hashes verified."
+          for file in "$acl_sql" "$tenant_sql" "$privacy_sql" "$lead_sql"; do
+            echo "Executing disposable local SQL: $(basename "$file")"
+            docker exec -i "$db_container" psql -X -v ON_ERROR_STOP=1 \
+              -U postgres -d postgres < "$file"
+          done
+          # Parse the four reviewed SELECT-only metadata audits and FAIL
+          # CLOSED on unexpected results. A merely printed gate is not a test.
+          command -v jq >/dev/null
+          anon_json="$(docker exec -i "$db_container" psql -X -A -t \
+            -v ON_ERROR_STOP=1 -U postgres -d postgres < "$anon_audit")"
+          role_json="$(docker exec -i "$db_container" psql -X -A -t \
+            -v ON_ERROR_STOP=1 -U postgres -d postgres < "$role_audit")"
+          tenant_json="$(docker exec -i "$db_container" psql -X -A -t \
+            -v ON_ERROR_STOP=1 -U postgres -d postgres < "$tenant_audit")"
+          privacy_json="$(docker exec -i "$db_container" psql -X -A -t \
+            -v ON_ERROR_STOP=1 -U postgres -d postgres < "$privacy_audit")"
+          printf '%s\n' "$anon_json" | jq -e '
+            .status == "PUBLIC_FUNCTION_EXECUTE_CATALOG_PASS_NOT_E2E"
+            and .anon_callable_functions == 0
+            and .anon_executable_expected_invokers == 0' >/dev/null
+          printf '%s\n' "$role_json" | jq -e '
+            .status == "FUNCTION_STAGE_POLICY_CATALOG_PASS_NOT_TENANT_ACCEPTANCE"
+            and .role_mismatched_functions == 0
+            and .structural_mismatches == 0
+            and .verified_fixed_search_paths == 4' >/dev/null
+          printf '%s\n' "$tenant_json" | jq -e '
+            .status == "AUTOMATION_TENANT_GUARD_METADATA_PASS_NOT_E2E"
+            and .present_tables == 7
+            and .attached_triggers == 7
+            and .function_metadata_and_acl_valid == true
+            and .generic_lead_conversation_message_guards_present == true' >/dev/null
+          printf '%s\n' "$privacy_json" | jq -e '
+            .status == "PRIVACY_IDENTITY_MERGE_METADATA_READY_NOT_E2E"
+            and .present_tables == 2
+            and .parent_tenant_composite_keys == 2
+            and .tenant_paired_composite_fks == 4
+            and .validated_constraints == 10
+            and .strict_acl_tables == 2
+            and .member_read_policies == 2' >/dev/null
+          echo "PASS: local anon-function catalog, role/path parity, tenant guard, privacy FKs/RLS."
+          echo "These are disposable local metadata gates, NOT 16 real witnessed stage cases."
+
       - name: Show local migration state
         if: always()
         shell: bash
