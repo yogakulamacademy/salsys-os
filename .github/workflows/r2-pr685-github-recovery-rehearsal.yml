@@ -86,49 +86,57 @@ jobs:
             --out "$RUNNER_TEMP/pr685-fixtures"
           cp "$RUNNER_TEMP/pr685-fixtures/fixture-summary.json" "$RUNNER_TEMP/pr685-evidence/"
 
-      - name: Install PostgreSQL client
+      - name: Select GitHub's single disposable PostgreSQL service container
         shell: bash
         run: |
           set -euo pipefail
-          sudo apt-get update -qq
-          sudo apt-get install -y -qq postgresql-client
+          db_container="$(docker ps --filter ancestor=postgres:17.11 --format '{{.ID}}')"
+          test "$(printf '%s\n' "$db_container" | grep -c .)" -eq 1
+          echo "$db_container" > "$RUNNER_TEMP/pr685-ci-container"
+          docker exec -i "$db_container" pg_isready -U postgres -d postgres
 
-      - name: Rehearse exact PR685 against synthetic local database
+      - name: Rehearse exact PR685 against synthetic disposable database
         shell: bash
         run: |
           set -euo pipefail
-          psql -X -v ON_ERROR_STOP=1 -d postgres <<'SQL'
+          db_container="$(cat "$RUNNER_TEMP/pr685-ci-container")"
+          docker exec -i "$db_container" psql -X -v ON_ERROR_STOP=1 -U postgres -d postgres <<'SQL'
           CREATE ROLE anon NOLOGIN;
           CREATE ROLE authenticated NOLOGIN;
           CREATE ROLE service_role NOLOGIN;
           SQL
-          createdb pr685_success
-          psql -X -v ON_ERROR_STOP=1 -d pr685_success -f "$RUNNER_TEMP/pr685-fixtures/setup.sql" > "$RUNNER_TEMP/pr685-evidence/setup.log" 2>&1
-          psql -X -v ON_ERROR_STOP=1 -d pr685_success -f "$RUNNER_TEMP/pr685-fixtures/before.sql" > "$RUNNER_TEMP/pr685-evidence/preflight-fixture.log" 2>&1
-          psql -X -v ON_ERROR_STOP=1 -d pr685_success -f \
-            pr685-reviewed/supabase/staging-only/migrations/20261110041634_r2_staging_privileged_function_grants_v1.sql \
+          docker exec -i "$db_container" createdb -U postgres pr685_success
+          docker exec -i "$db_container" psql -X -v ON_ERROR_STOP=1 -U postgres -d pr685_success \
+            < "$RUNNER_TEMP/pr685-fixtures/setup.sql" > "$RUNNER_TEMP/pr685-evidence/setup.log" 2>&1
+          docker exec -i "$db_container" psql -X -v ON_ERROR_STOP=1 -U postgres -d pr685_success \
+            < "$RUNNER_TEMP/pr685-fixtures/before.sql" > "$RUNNER_TEMP/pr685-evidence/preflight-fixture.log" 2>&1
+          docker exec -i "$db_container" psql -X -v ON_ERROR_STOP=1 -U postgres -d pr685_success \
+            < pr685-reviewed/supabase/staging-only/migrations/20261110041634_r2_staging_privileged_function_grants_v1.sql \
             > "$RUNNER_TEMP/pr685-evidence/exact-pr685-success.log" 2>&1
-          psql -X -v ON_ERROR_STOP=1 -d pr685_success -f "$RUNNER_TEMP/pr685-fixtures/after.sql" \
-            > "$RUNNER_TEMP/pr685-evidence/postflight.log" 2>&1
+          docker exec -i "$db_container" psql -X -v ON_ERROR_STOP=1 -U postgres -d pr685_success \
+            < "$RUNNER_TEMP/pr685-fixtures/after.sql" > "$RUNNER_TEMP/pr685-evidence/postflight.log" 2>&1
           echo 'PASS_EXACT_PR685_SQL_AND_POSTFLIGHT_SYNTHETIC' | tee "$RUNNER_TEMP/pr685-evidence/success-verdict.txt"
 
-      - name: Deliberately abort after DDL in second disposable database; prove rollback
+      - name: Inject failure after DDL in second disposable database; prove rollback
         shell: bash
         run: |
           set -euo pipefail
-          createdb pr685_abort
-          psql -X -v ON_ERROR_STOP=1 -d pr685_abort -f "$RUNNER_TEMP/pr685-fixtures/setup.sql" > /dev/null
-          psql -X -v ON_ERROR_STOP=1 -d pr685_abort -f "$RUNNER_TEMP/pr685-fixtures/before.sql" > /dev/null
+          db_container="$(cat "$RUNNER_TEMP/pr685-ci-container")"
+          docker exec -i "$db_container" createdb -U postgres pr685_abort
+          docker exec -i "$db_container" psql -X -v ON_ERROR_STOP=1 -U postgres -d pr685_abort \
+            < "$RUNNER_TEMP/pr685-fixtures/setup.sql" > /dev/null
+          docker exec -i "$db_container" psql -X -v ON_ERROR_STOP=1 -U postgres -d pr685_abort \
+            < "$RUNNER_TEMP/pr685-fixtures/before.sql" > /dev/null
           set +e
-          psql -X -v ON_ERROR_STOP=1 -d pr685_abort \
-            -f "$RUNNER_TEMP/pr685-fixtures/fault-injected-local-only.sql" \
+          docker exec -i "$db_container" psql -X -v ON_ERROR_STOP=1 -U postgres -d pr685_abort \
+            < "$RUNNER_TEMP/pr685-fixtures/fault-injected-local-only.sql" \
             > "$RUNNER_TEMP/pr685-evidence/expected-fault.log" 2>&1
           status=$?
           set -e
           test "$status" -ne 0
           grep -q 'EXPECTED_LOCAL_TEST_ABORT' "$RUNNER_TEMP/pr685-evidence/expected-fault.log"
-          psql -X -v ON_ERROR_STOP=1 -d pr685_abort -f "$RUNNER_TEMP/pr685-fixtures/before.sql" \
-            > "$RUNNER_TEMP/pr685-evidence/rollback-state.log" 2>&1
+          docker exec -i "$db_container" psql -X -v ON_ERROR_STOP=1 -U postgres -d pr685_abort \
+            < "$RUNNER_TEMP/pr685-fixtures/before.sql" > "$RUNNER_TEMP/pr685-evidence/rollback-state.log" 2>&1
           echo 'PASS_TRANSACTION_ROLLBACK_SYNTHETIC' | tee "$RUNNER_TEMP/pr685-evidence/rollback-verdict.txt"
 
       - name: Publish sanitized offline evidence only
