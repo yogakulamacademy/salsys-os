@@ -29,6 +29,7 @@ const REVIEW_PATTERNS = [
   /\b(?:discount|price reduction|negotiate|waiv(?:e|er)|fee exception|policy exception|special exception)\b/i,
   /\b(?:payment proof|payment screenshot|payment confirmation|paid already|transfer receipt|bank transfer|payment failed|charge|deposit issue)\b/i,
   /\b(?:guarantee(?:d)? (?:a|my|the)?\s*(?:room|seat|place)|accommodation exception|room exception)\b/i,
+  /\b(?:accommodation|room)\b.{0,45}\b(?:exception|special request|override|guarantee)\b/i,
   /\b(?:complaint|dissatisfied|unhappy with|medical advice|safety issue)\b/i,
 ];
 
