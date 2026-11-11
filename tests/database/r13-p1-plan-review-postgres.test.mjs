@@ -136,9 +136,10 @@ test('R13-P1 price review survives real Postgres roles, revisions, races and rol
       [requestId]);
     assert.deepEqual(priceSum.rows.map(r=>[r.tier_code,Number(r.amount_minor)]),[
       ['free',0],['basic',149900],['growth',349900],['pro',699900]]);
+    // Service role has no UPDATE grant. Fail at ACL before reaching trigger.
     await expectBlocked(db,
       'update r13_review_preview.price_versions set amount_minor=1 where request_id=$1',
-      [requestId],/price versions are immutable/);
+      [requestId],/permission denied/);
     await expectBlocked(db,
       'update r13_review_preview.requests set snapshot=$2 where id=$1',
       [requestId,JSON.stringify({corrupted:true})],/proposal snapshot and authorship are immutable/);
