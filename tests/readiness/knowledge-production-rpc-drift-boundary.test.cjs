@@ -44,7 +44,7 @@ test('Repair contract remains a single privileged tenant-scoped creation functio
 test('Production repair runbook preserves explicit release and staging gates', () => {
   assert.match(release, /#694/);
   assert.match(release, /20261103190000_ai_knowledge_provenance_readiness_v2\.sql/);
-  assert.match(release, /Owner:.*Authorize this.*specific production DDL/i);
+  assert.match(release, /Owner:\*\* Authorize this \\*\\*specific production DDL/i);
   assert.match(release, /Independent security\/DBA reviewer/i);
   assert.match(release, /do not invoke `db push` if it would apply/i);
   assert.match(release, /ON HOLD/);
