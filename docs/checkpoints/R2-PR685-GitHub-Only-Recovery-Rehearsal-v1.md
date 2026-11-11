@@ -19,6 +19,18 @@
 6. In a second throwaway CI database, inject a controlled exception after reviewed DDL but before COMMIT. Require expected failure and verify original preflight catalog remains intact on a fresh connection.
 7. Upload sanitized logs and version/fixture scope reports.
 
+## November 11 read-only hosted WhatsApp catalog verification
+
+After the draft's initial green CI, the operator performed an independent **SELECT-only** PostgreSQL catalog readback against staging project **ndxpjqkthuzxlmbenxti**. The SQL is preserved for repeatability at **docs/sql/r2-pr685-whatsapp-template-drafts-readonly-parity-v1.sql** and returns exactly 15 Boolean assertions, **all true**.
+
+The 15 checks cover the expected 17 WhatsApp draft columns, enabled RLS, fail-closed client policy, corrected 1–512-character template-name constraint, tenant guard trigger, SECURITY DEFINER function body/search-path settings, service-role-only guard EXECUTE permission, table SELECT permissions, organization/status index, unique template-name constraint, category/status/payload checks, and payload/status defaults.
+
+Compared with repository files:
+- **supabase/migrations/20261111103500_whatsapp_template_drafts_v1.sql** (Git blob **d50e5faa263ee82d3b486b1b69cb139ba5b7619c**)
+- **supabase/migrations/20261111141500_whatsapp_template_draft_name_guard_v1.sql** (Git blob **0f8d0597f519a85d84131a7e7b5963d7d35463a5**)
+
+The current hosted metadata **agrees with the intended resulting table, policy, constraints, trigger, defaults and access-control structure** of these source migrations. This improves confidence in the two timestamp aliases; it does **not** prove the hosted migration SQL bodies were byte-for-byte identical, establish causation or history, test runtime tenant access, or change the missing PR #685 ledger entry. No rows or application data were read or modified.
+
 ## Critical evidence limits and blockers
 
 - **Offline version reconciliation and synthetic SQL transaction rehearsal only.** This does NOT replay all 433 hosted migration bodies, prove hosted data/schema parity, prove live signed-in/tenant app behavior, or reconstruct exact WhatsApp SQL objects.
