@@ -39,6 +39,46 @@ BEGIN
   IF public_access THEN
     RAISE EXCEPTION 'R13-P0: commercial state unexpectedly client-readable/writable';
   END IF;
+
+  -- Exhaustive relation/role/command matrix: checks all four tables, not only
+  -- a sampled SELECT or INSERT. TRUNCATE and REFERENCES are outside RLS.
+  SELECT EXISTS (
+    SELECT 1
+    FROM (
+      VALUES
+        ('public.saas_plans'::regclass),
+        ('public.saas_plan_entitlements'::regclass),
+        ('public.saas_organization_subscriptions'::regclass),
+        ('public.saas_subscription_events'::regclass)
+    ) AS commercial_tables(relation_oid)
+    CROSS JOIN (
+      VALUES ('anon'::text), ('authenticated'::text)
+    ) AS client_roles(role_name)
+    CROSS JOIN (
+      VALUES ('SELECT'::text), ('INSERT'::text), ('UPDATE'::text),
+             ('DELETE'::text), ('TRUNCATE'::text), ('REFERENCES'::text),
+             ('TRIGGER'::text)
+    ) AS operations(privilege_name)
+    WHERE has_table_privilege(
+      client_roles.role_name,
+      commercial_tables.relation_oid,
+      operations.privilege_name
+    )
+  ) INTO public_access;
+  IF public_access THEN
+    RAISE EXCEPTION 'R13-P0: a client role can access at least one commercial table';
+  END IF;
+
+  -- No client-facing readiness view or direct EXECUTE on internal functions.
+  IF has_table_privilege('anon','public.saas_commercial_readiness_v1','SELECT')
+     OR has_table_privilege('authenticated','public.saas_commercial_readiness_v1','SELECT')
+     OR has_function_privilege('anon','public.saas_subscription_audit_v1()','EXECUTE')
+     OR has_function_privilege('authenticated','public.saas_subscription_audit_v1()','EXECUTE')
+     OR has_function_privilege('anon','public.saas_subscription_event_immutable_v1()','EXECUTE')
+     OR has_function_privilege('authenticated','public.saas_subscription_event_immutable_v1()','EXECUTE')
+  THEN
+    RAISE EXCEPTION 'R13-P0: readiness view or internal trigger function exposed';
+  END IF;
   IF NOT has_table_privilege('service_role','public.saas_plans','SELECT')
      OR NOT has_table_privilege('service_role','public.saas_commercial_readiness_v1','SELECT') THEN
     RAISE EXCEPTION 'R13-P0: service-role operator diagnostic privileges missing';
