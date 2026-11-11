@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import { notFound } from 'next/navigation';
 import { TemplateAuthoringStudio } from '@/app/automation/templates/new/template-authoring-studio';
 import { createClient } from '@/lib/supabase/server';
 import { getWorkspaceContextForUser } from '@/lib/workspace';
@@ -10,6 +11,8 @@ export default async function NewWhatsAppTemplatePage({
 }: {
   searchParams: Promise<{ draft?: string }>;
 }) {
+  // Do not expose the editor until the separate draft schema has been deployed.
+  if (process.env.WA_TEMPLATE_STUDIO_ENABLED !== 'true') notFound();
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) {
