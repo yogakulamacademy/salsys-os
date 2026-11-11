@@ -1,6 +1,6 @@
 # SalsysOS — Eligibility-Based Pricing & AI Quote Safety
 
-**Version:** 0.1 · Proposed enhancement · 2026-11-11  
+**Version:** 0.2 · Owner-refined, passive evidence-first enhancement · 2026-11-11  
 **Status:** Planning-only; not a deployed or approved pricing policy  
 **Related roadmap:** [#696](https://github.com/yogakulamacademy/salsys-os/issues/696) (Kraya-inspired sales AI), [#518](https://github.com/yogakulamacademy/salsys-os/issues/518) (canonical R0–R14). Maps to SX-01 qualification, SX-02 follow-ups, SX-03 staff Co-Pilot, R3/R6/R7/R11 and trusted commerce/R5. No new phase.
 
@@ -12,14 +12,16 @@ Some education/wellness businesses (initial proving case: Yogakulam Academy) mai
 
 ## 2. Customer-facing rule
 
+**Owner preference, 2026-11-11: never ask a customer about their nationality or citizenship for initial fee selection. Default to evidence-assisted, low-friction price presentation without intrusive questions.**
+
 When a lead requests price:
 1. Read selected course, batch/date, mode and package preference.
-2. Resolve tenant-approved pricing eligibility independently of country/currency. States: unknown, customer_claimed, staff_verified, policy_verified, disputed, exception_requested.
-3. A verified/current eligible category selects one approved rate. If unknown, ask one minimal neutral question that matches the approved policy (e.g. for an **India-resident** policy: “May I know your country of residence so I can share the applicable fees?”). Do not assume residency from phone or IP.
-4. If the customer asks for both rates, provide both eligible published options only if the business's disclosure policy permits, with factual criteria and no misleading restrictions. If uncertain, show a neutral response and offer staff review.
-5. Separate chosen **pricing category** from **currency preference** and **payment method**. Paying in INR does not imply Indian eligibility, or USD imply foreign eligibility.
-6. Verify rate, policy, quote expiry, taxes/fees and discounts again before issuing payment link or sending any contractual quote.
-7. Lock a versioned quote snapshot to tenant, lead/authorized opportunity, course/batch, package, eligibility determination, amount, currency, tax/fee policy, expiration and approver. Existing human approval rules apply to deposits, discounts and commercial commitments.
+2. Before asking anything, evaluate permitted, already-collected evidence: the matching form's expressly defined country-of-residence or application-country field, current customer-authored CRM message, verified previously linked customer information, website session country as an approximate supporting observation, and phone country code as a weaker hint. Keep each piece's source and date.
+3. Resolve **location evidence** separately from **eligibility**. States: no location evidence / approximate location / customer-declared country / verified eligibility / disputed / exception requested. Strong contextual signals may allow a tentative *region-oriented preview*, but no phone/IP/name combination proves residency, citizenship or payment eligibility.
+4. If the declared country is sufficiently current and business policy explicitly permits provisional rate presentation, prepare the corresponding published rate **clearly labelled as an applicable-category quote subject to verification**. If not, show transparent published category options or route to staff instead of a hidden automatic price decision.
+5. **Do not ask about nationality.** If a real booking/payment decision cannot be made without a missing objective detail, use a respectful minimum clarification about booking/applicant location only if necessary and only when no reliable pre-existing evidence exists; never silently assume the cheaper or more expensive tier.
+6. Keep **pricing eligibility**, **country of a specific website visit**, **currency preference** and **payment method** separate. INR/USD preference or country code never determines category.
+7. Recheck rate, criteria, quote expiry, taxes/fees and discounts before sending a precise commercial quote or payment link. Lock a versioned snapshot including the evidence and staff approval when needed.
 
 Never learn price policy from old conversations; old chat examples can teach the *question sequence*, not provide current prices or eligibility rules.
 
@@ -28,7 +30,7 @@ Never learn price policy from old conversations; old chat examples can teach the
 1. **Canonical structured catalog/approved pricing rules:** source of current amount, currency, course, batch/date scope, package, valid_from/to, taxes, offer rules and approved applicability.
 2. **Human-verified eligibility and exceptions:** signed-in authorized staff decision with evidence/reason, expiry and audit.
 3. **CRM lead fields / conversation:** customer-provided qualification signal only; never upgrade inferred data into verified eligibility.
-4. **Website geolocation, phone country code, UTM, browser locale:** optional *unverified* hints for asking a question; never automatic nationality/citizenship classification, price discrimination, or determining contractual price.
+4. **Website session geolocation, phone country code and browser locale:** optional context for a tentative region preview only; never authoritative identity or price eligibility. Location from a visit is not proof of residence. Do not use advertising UTM as a geography or residency identity signal.
 5. **Historical RAG examples:** approved language patterns, not authority for rate or eligibility.
 
 ## 4. Canonical model (conceptual; review existing structures before any migrations)
@@ -84,7 +86,7 @@ A correct design must preserve R11's **exclusion of physical accommodation/room/
 
 1. +91 foreign resident is not automatically assigned Indian fee; Indian resident using +44 is not automatically assigned international fee.
 2. Currency preference never changes eligibility code; changing payment channel never changes the approved rate.
-3. No price is sent when eligibility unknown and policy requires verified selection; correct minimal clarification instead.
+3. No definitive category-specific quote/payment link is sent when eligibility unknown and policy requires verification; show transparent published alternatives or refer to staff rather than routinely asking personal questions.
 4. Stale/expired/withdrawn discounts, scholarships and batch offers cannot be applied; old chat prices cannot override live policy.
 5. Duplicate or conflicting active price records fail closed with a staff-visible alert.
 6. Cross-tenant rate isolation and employee-role restrictions pass; RAG cannot leak another organization's rate/eligibility.
@@ -99,8 +101,57 @@ A correct design must preserve R11's **exclusion of physical accommodation/room/
 
 1. **PR-00 — Policy decision & read-only source audit:** owner decides exact eligibility criterion and acceptable proof, price category names, visibility and exceptions. Legal/privacy review. Trace existing website and CRM price feeds; detect single-currency read-model limitations; do not run migrations.
 2. **PR-01 — Approved catalog pricing + safe quote resolver proposal:** reuse existing tenant-safe catalog adapter, no duplicate source; propose minimal schema/contract, deterministic policy and conflict checks.
-3. **PR-02 — Lead qualification + staff interface:** eligibility source/status with minimal customer questions, manual verification and audited exception controls; staff-reviewed drafts only.
+3. **PR-02 — Passive evidence + staff interface:** link permitted form and website observations by exact consent-compatible identifiers; keep nationality questions out of the AI script; provide auditable exceptions and staff-reviewed drafts.
 4. **PR-03 — Quote and payment consistency:** versioned quote snapshot; revalidate at approved send, payment-link creation and payment verification.
 5. **PR-04 — Controlled test/rollout:** negative cases, authorized signed-in acceptance, provider eligibility and privacy sign-off; only then consider low-risk AI automated pricing replies within owner-approved scope.
 
 **Explicit hold:** This is a planning file and future scope linked to #696. Do not start code, SQL, data migration, price changes, model training, auto-replies, customer sends, staging/prod deployment, or user classification due to this document. Existing independent AI/R2/Knowledge Builder reviews and holds remain in force.
+
+## 9. Passive location evidence, website-to-WhatsApp matching and Instagram limits — 2026-11-11 refinement
+
+**Scope of this section:** implementation guidance only. The user wants low-friction country context without making prospects disclose nationality and without silently profiling them into legally consequential prices.
+
+### What the signals actually support
+
+| Signal | Legitimate interpretation | Cannot establish |
+|---|---|---|
+| Form country field explicitly labelled current residence or application country | Self-declared country at the form timestamp, if data can be linked to this lead | Identity documents, permanent residence, nationality, continuing eligibility |
+| Form generic “country” | Country chosen on form, semantics unspecified | Whether it means nationality, booking residence or travel destination |
+| Server-observed website IP-country | Approximate location of network endpoint for this visit, subject to CDN, VPN and mobile routing | Actual residence, identity or WhatsApp sender network |
+| WhatsApp `wa_id` / sender number where available | Account identifier, often phone number; telephone numbering region where meaningful | Current geographic location or residency |
+| WhatsApp profile display name | Supporting label for UX/review | Unique identity match or pricing category |
+| Prior CRM / trusted authorized onboarding facts | Potentially useful, versioned customer-declared context | Permanent accuracy if stale or contradictory |
+| Instagram scoped sender ID/profile name/username | Instagram message-thread identity and permitted profile metadata | Home country, residence or the person's website session by itself |
+| Public Instagram “About this account” country | May be shown for certain accounts in the Instagram app | Current user's residence; standard Meta messaging API access |
+
+**Instagram:** Meta's official business messaging profile API provides sender ID and supported name/username/profile fields but **does not document another customer's “About this account” location as a standard accessible field**. Third-party profile services claim public about-country retrieval but are not a dependable official API contract; do not scrape nonpublic or hidden account data or adopt unsupported services for customer pricing. Instagram “account based in” may reflect platform activity, and can be absent or hidden.
+
+**WhatsApp:** official inbound message webhooks expose sender/account identity and profile-name fields when available but not end-user handset IP. The webhook's HTTP source IP is Meta/provider infrastructure, not the customer. WhatsApp username/business-scoped identifiers can reduce availability of phone numbers; when no phone exists, linking requires separately verified evidence.
+
+### Exact-match-first lead linkage
+
+1. Website form submit captures permitted server-side `session_id`, `form_event_id`, tenant, normalized submitted contact number, country-field semantics/value, timestamp, and derived coarse network-country (not an unbounded tracking archive).
+2. Associate the same `session_id`/form event to its browser journey **only through the legitimate first-party event chain**; do not derive a person from the IP alone.
+3. If an inbound WhatsApp sender identifier includes a normalized valid number matching an authorized submitted number **within the same tenant**, create a candidate link. Recheck duplicates, reused phone numbers, consent, event timing and existing confirmed associations. Only make a deterministic merge after the existing approved identity policy passes; otherwise human review.
+4. Display name and close timing merely support review and which enquiry is relevant. A name + same country + nearby time is never sufficient to claim a single person. Do not associate an Instagram sender with a website form by similar name or IP/time; require customer-supplied and verified contact information, explicit authenticated link, or another provider-authorized exact linkage.
+5. Keep account identity, enquiry identity, session-country observation, customer-declared country, actual residency evidence and fee eligibility in **separate fields**. Every inference has evidence, source, observation time, expiry/conflict status and correction path.
+6. On conflict (e.g., +91 number, UAE form country, UAE network) prefer *declared UAE for the location context*; phone prefix is not decisive. Do **not** infer that this individual must receive international prices unless the owner's published, compliant rule actually uses the declared location in this way.
+7. When a website visitor clicks a tracked WhatsApp link, event/session/referral provenance may help correlate the interaction, but do not treat timestamps alone or a generic click-to-chat URL as proof that a particular WhatsApp account initiated the click.
+
+### Decision and UX examples
+
+- **Form: UAE residence; IP UAE; WhatsApp +91** → Lead country context “UAE (self-declared; website corroboration)”; pricing tier is **provisional only** under approved residence-based rules; staff verifies the final quote.
+- **Form: India residence; IP UAE while travelling; +91** → Keep India as declared country; do not override it with the visit's network country; if relevant, flag conflict for polite review.
+- **No form; WhatsApp +91 only** → Phone region observed, country of residence unknown. Do not assign Indian tier. Offer transparent rate categories or a neutral reply, with staff assistance if required.
+- **Instagram DM, no linked form** → No documented verified account-country signal. Do not infer from username, language, followers, geotags or profile aesthetic. Share suitable general pricing information and permit a correction or optional clarification only if necessary.
+- **Cross-channel matching** → Exact verified phone/email or explicitly linked account gives the identity association. Do not merge solely by name, country, IP or timing.
+
+### Privacy/security requirements and acceptance
+
+- Before using geo-country for a pricing-related profile, approve and disclose purposes in the relevant privacy notice, retention schedule, processing permissions and applicable local laws. Do not collect precise GPS or new persistent raw IP histories for this project. Existing optional behavior collector remains OFF until R2 consent acceptance.
+- Ensure trusted-edge IP derivation; a reverse proxy/CDN IP or untrusted `X-Forwarded-For` must not be mistaken for the client's address. Retain only the minimal authorized country observation, provenance, time and allowed retention.
+- Customer has a visible way to correct a region or pricing-category error, with no surprise check-out changes. Published rate eligibility criteria should be transparent and non-discriminatory.
+- Negative tests: +91 living UAE; +44 living India; VPN; mobile carrier exits abroad; travelling; stale country declaration; shared family phone; reused phone number; same-name contacts; Instagram handle change; missing WhatsApp phone/BSUID; multi-tenant collision; deleted form; simultaneous form+WhatsApp events; unauthorized cross-channel join.
+- No country inference may override a direct current customer correction or verified record. Separate three labels in the UI: **Identity linkage**, **Location evidence**, **Pricing eligibility**.
+
+**Source verification used for planning:** Meta Instagram documentation and current integration discussions; the public account-country display is not a reliable official CRM API. Meta WhatsApp sender webhook schema; MaxMind IP accuracy and proxy/VPN limitations. Reverify current provider APIs before implementation. No runtime feature has been enabled.
