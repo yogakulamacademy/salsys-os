@@ -147,10 +147,11 @@ test('R13-P1 tenant evidence loader is independently scoped and mismatch rejecte
 
 test('R13-P1 rejects stale proposal changes after review submit and records rejection', () => {
   const store=newLedger();
+  const mutableDraftCopy = JSON.parse(JSON.stringify(proposal));
   const draft=store.createDraft({
-    session:'author',proposal,rationale:'Review all published tiers and external fees',
+    session:'author',proposal:mutableDraftCopy,rationale:'Review all published tiers and external fees',
   });
-  proposal.tiers[0].description=''; // Fixture mutability must not affect stored copy.
+  mutableDraftCopy.tiers[0].description='Caller edits must not rewrite stored proposal';
   const submitted=store.submit({
     session:'author',requestId:draft.requestId,expectedRevision:1,
   });
