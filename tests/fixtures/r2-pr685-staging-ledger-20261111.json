@@ -1,0 +1,1758 @@
+{
+  "description": "Read-only hosted staging migration ledger snapshot; migration identities only, no rows or credentials.",
+  "source_project": "ndxpjqkthuzxlmbenxti",
+  "observed_date_utc": "2026-11-11",
+  "expected_ledger_count": 433,
+  "manual_sql_version_absent": "20261110041634",
+  "source_reviewed_blob": "4dce41ad8f75d486c33e1364646ca24d44bf5c31",
+  "local_replay_404_sha256_sorted_versions_newline_join": "9b83197df43d64401e6444f0af5458ddae5b8e4be7573736f7a4ff979d1f4d90",
+  "local_replay_404_commit": "01a83d5190b25d2b0c77f18d3b90be59fded6499",
+  "whatsapp_aliases": [
+    {
+      "staging": "20261111082713",
+      "source_replay": "20261111103500",
+      "name": "whatsapp_template_drafts_v1",
+      "source_file": "supabase/migrations/20261111103500_whatsapp_template_drafts_v1.sql"
+    },
+    {
+      "staging": "20261111082927",
+      "source_replay": "20261111141500",
+      "name": "whatsapp_template_draft_name_length_guard_v1",
+      "source_file": "supabase/migrations/20261111141500_whatsapp_template_draft_name_guard_v1.sql"
+    }
+  ],
+  "migrations": [
+    {
+      "version": "001",
+      "name": "initial_crm"
+    },
+    {
+      "version": "002",
+      "name": "live_crm_auth_and_mutations"
+    },
+    {
+      "version": "003",
+      "name": "first_party_tracking"
+    },
+    {
+      "version": "004",
+      "name": "course_catalog_and_batches"
+    },
+    {
+      "version": "005",
+      "name": "realtime_operations"
+    },
+    {
+      "version": "006",
+      "name": "website_lead_capture"
+    },
+    {
+      "version": "0065",
+      "name": "catalog_integration_prerequisites"
+    },
+    {
+      "version": "007",
+      "name": "tenant_schema_foundation"
+    },
+    {
+      "version": "008",
+      "name": "identity_resolution"
+    },
+    {
+      "version": "009",
+      "name": "raw_event_platform"
+    },
+    {
+      "version": "010",
+      "name": "raw_event_processing_lifecycle"
+    },
+    {
+      "version": "011",
+      "name": "raw_event_claim_and_retry"
+    },
+    {
+      "version": "012",
+      "name": "raw_event_replay_controls"
+    },
+    {
+      "version": "013",
+      "name": "whatsapp_raw_event_historical_backfill"
+    },
+    {
+      "version": "014",
+      "name": "raw_event_immutability"
+    },
+    {
+      "version": "015",
+      "name": "website_raw_event_processor"
+    },
+    {
+      "version": "0155",
+      "name": "commerce_tenant_prerequisites"
+    },
+    {
+      "version": "0156",
+      "name": "lead_contact_logs_prerequisite"
+    },
+    {
+      "version": "0157",
+      "name": "recovery_journey_views"
+    },
+    {
+      "version": "016",
+      "name": "journey_workspace_hardening"
+    },
+    {
+      "version": "017",
+      "name": "person_360"
+    },
+    {
+      "version": "0175",
+      "name": "recovery_person_journey_source"
+    },
+    {
+      "version": "018",
+      "name": "person_journey"
+    },
+    {
+      "version": "0185",
+      "name": "recovery_leads_workspace"
+    },
+    {
+      "version": "019",
+      "name": "leads_workspace_tenant_scope"
+    },
+    {
+      "version": "0195",
+      "name": "recovery_attribution_views"
+    },
+    {
+      "version": "020",
+      "name": "attribution_workspace_tenant_scope"
+    },
+    {
+      "version": "021",
+      "name": "canonical_attribution_facts"
+    },
+    {
+      "version": "022",
+      "name": "normalize_attribution_enrollment_boolean"
+    },
+    {
+      "version": "0225",
+      "name": "recovery_integration_connections"
+    },
+    {
+      "version": "023",
+      "name": "integration_api_credentials"
+    },
+    {
+      "version": "024",
+      "name": "integration_credential_management"
+    },
+    {
+      "version": "025",
+      "name": "integration_credential_lifecycle"
+    },
+    {
+      "version": "026",
+      "name": "credential_bound_website_lead_ingestion"
+    },
+    {
+      "version": "027",
+      "name": "course_tracking_alias_resolver"
+    },
+    {
+      "version": "028",
+      "name": "course_capture_value_aliases"
+    },
+    {
+      "version": "029",
+      "name": "person_course_affinity"
+    },
+    {
+      "version": "0295",
+      "name": "recovery_followups_tenant"
+    },
+    {
+      "version": "0296",
+      "name": "recovery_lead_geo"
+    },
+    {
+      "version": "0297",
+      "name": "recovery_sales_read_models"
+    },
+    {
+      "version": "030",
+      "name": "lead_sales_intelligence"
+    },
+    {
+      "version": "031",
+      "name": "lead_conversion_facts"
+    },
+    {
+      "version": "0315",
+      "name": "recovery_integration_assets"
+    },
+    {
+      "version": "032",
+      "name": "conversion_feedback_foundation"
+    },
+    {
+      "version": "033",
+      "name": "conversion_feedback_queue_lifecycle"
+    },
+    {
+      "version": "034",
+      "name": "tracking_consent_ledger"
+    },
+    {
+      "version": "035",
+      "name": "conversion_feedback_match_context"
+    },
+    {
+      "version": "036",
+      "name": "integration_connection_subject_uniqueness"
+    },
+    {
+      "version": "037",
+      "name": "lead_ingest_events_tenant_hardening"
+    },
+    {
+      "version": "038",
+      "name": "whatsapp_message_status_tenant_hardening"
+    },
+    {
+      "version": "0385",
+      "name": "recovery_analytics_seo_warehouse"
+    },
+    {
+      "version": "0386",
+      "name": "recovery_leads_landing_page"
+    },
+    {
+      "version": "039",
+      "name": "analytics_seo_tenant_hardening"
+    },
+    {
+      "version": "0395",
+      "name": "recovery_paid_media_warehouse"
+    },
+    {
+      "version": "0396",
+      "name": "recovery_campaigns_read_models"
+    },
+    {
+      "version": "040",
+      "name": "campaigns_google_ads_tenant_hardening"
+    },
+    {
+      "version": "041",
+      "name": "followups_workspace_tenant_hardening"
+    },
+    {
+      "version": "0415",
+      "name": "recovery_paid_media_overview"
+    },
+    {
+      "version": "042",
+      "name": "paid_media_leads_tenant_hardening"
+    },
+    {
+      "version": "043",
+      "name": "paid_media_workspace_query_optimization"
+    },
+    {
+      "version": "044",
+      "name": "public_function_default_privilege_hardening"
+    },
+    {
+      "version": "045",
+      "name": "whatsapp_connection_binding"
+    },
+    {
+      "version": "046",
+      "name": "instagram_integration_provider"
+    },
+    {
+      "version": "0465",
+      "name": "recovery_integration_oauth_states"
+    },
+    {
+      "version": "047",
+      "name": "instagram_oauth_state_provider"
+    },
+    {
+      "version": "048",
+      "name": "instagram_dm_ingestion"
+    },
+    {
+      "version": "049",
+      "name": "instagram_raw_event_processing_state"
+    },
+    {
+      "version": "050",
+      "name": "cross_channel_canonical_normalization"
+    },
+    {
+      "version": "051",
+      "name": "cross_channel_normalization_regex_fix"
+    },
+    {
+      "version": "052",
+      "name": "messaging_lineage_hardening"
+    },
+    {
+      "version": "20261013093912",
+      "name": "conversion_feedback_route_provenance"
+    },
+    {
+      "version": "20261013104212",
+      "name": "workspace_rbac_foundation"
+    },
+    {
+      "version": "20261013124206",
+      "name": "contact_intelligence_workspace_scope"
+    },
+    {
+      "version": "20261013125000",
+      "name": "reports_rpc_prerequisite"
+    },
+    {
+      "version": "20261013125924",
+      "name": "reports_workspace_authorization"
+    },
+    {
+      "version": "20261013154712",
+      "name": "contact_intelligence_security_invoker_hardening"
+    },
+    {
+      "version": "20261013161733",
+      "name": "sales_workspace_manager_authorization"
+    },
+    {
+      "version": "20261013165139",
+      "name": "sales_lead_access_authorization"
+    },
+    {
+      "version": "20261013174706",
+      "name": "sales_commercial_payment_authorization"
+    },
+    {
+      "version": "20261013183000",
+      "name": "lead_inbox_reads_prerequisite"
+    },
+    {
+      "version": "20261013183130",
+      "name": "sales_conversation_contact_capability"
+    },
+    {
+      "version": "20261014044555",
+      "name": "sales_workflow_mutation_surface_hardening"
+    },
+    {
+      "version": "20261014050034",
+      "name": "single_active_tenant_membership_guard"
+    },
+    {
+      "version": "20261014051818",
+      "name": "integration_oauth_active_tenant_guard"
+    },
+    {
+      "version": "20261014052718",
+      "name": "function_search_path_hardening"
+    },
+    {
+      "version": "20261014053500",
+      "name": "trigger_functions_prerequisite"
+    },
+    {
+      "version": "20261014053539",
+      "name": "trigger_function_execute_hardening"
+    },
+    {
+      "version": "20261014053800",
+      "name": "crm_settings_audit_prerequisite"
+    },
+    {
+      "version": "20261014053906",
+      "name": "service_only_table_grant_hardening"
+    },
+    {
+      "version": "20261014054200",
+      "name": "deprecated_course_batch_rpcs_prerequisite"
+    },
+    {
+      "version": "20261014054340",
+      "name": "deprecated_course_batch_rpc_hardening"
+    },
+    {
+      "version": "20261014054500",
+      "name": "course_catalog_finalize_prerequisite"
+    },
+    {
+      "version": "20261014054613",
+      "name": "course_catalog_finalize_rpc_hardening"
+    },
+    {
+      "version": "20261014055400",
+      "name": "legacy_crm_settings_defaults_prerequisite"
+    },
+    {
+      "version": "20261014055555",
+      "name": "tenant_scoped_crm_settings_foundation"
+    },
+    {
+      "version": "20261014055627",
+      "name": "tenant_scoped_crm_settings_rpcs"
+    },
+    {
+      "version": "20261014055700",
+      "name": "lead_expected_close_date_prerequisite"
+    },
+    {
+      "version": "20261014055750",
+      "name": "pipeline_aging_view_alignment"
+    },
+    {
+      "version": "20261014055802",
+      "name": "tenant_scoped_crm_settings_views"
+    },
+    {
+      "version": "20261014060357",
+      "name": "tenant_session_binding_foundation"
+    },
+    {
+      "version": "20261014060514",
+      "name": "tenant_session_slug_binding"
+    },
+    {
+      "version": "20261014060700",
+      "name": "legacy_crm_settings_helpers_prerequisite"
+    },
+    {
+      "version": "20261014060716",
+      "name": "tenant_aware_settings_compatibility_reads"
+    },
+    {
+      "version": "20261014061001",
+      "name": "session_bound_tenant_authorization"
+    },
+    {
+      "version": "20261014065212",
+      "name": "tenant_identity_anon_grant_hardening"
+    },
+    {
+      "version": "20261014065437",
+      "name": "tenant_identity_mutation_grant_hardening"
+    },
+    {
+      "version": "20261014065500",
+      "name": "legacy_global_crm_mutators_prerequisite"
+    },
+    {
+      "version": "20261014065535",
+      "name": "legacy_global_crm_settings_mutator_hardening"
+    },
+    {
+      "version": "20261014074859",
+      "name": "tenant_team_membership_consistency"
+    },
+    {
+      "version": "20261014084439",
+      "name": "session_bound_crm_admin_authorization"
+    },
+    {
+      "version": "20261014084720",
+      "name": "session_bound_organization_management"
+    },
+    {
+      "version": "20261014091300",
+      "name": "course_batch_admin_events_prerequisite"
+    },
+    {
+      "version": "20261014091441",
+      "name": "session_bound_tenant_mutation_policies"
+    },
+    {
+      "version": "20261014091745",
+      "name": "session_bound_organization_admin_authorization"
+    },
+    {
+      "version": "20261014092250",
+      "name": "latent_accommodation_rpcs_prerequisite"
+    },
+    {
+      "version": "20261014092325",
+      "name": "latent_accommodation_rpc_execute_hardening"
+    },
+    {
+      "version": "20261014092400",
+      "name": "latent_course_v2_rpcs_prerequisite"
+    },
+    {
+      "version": "20261014092425",
+      "name": "latent_course_rpc_execute_hardening"
+    },
+    {
+      "version": "20261014093616",
+      "name": "legacy_settings_and_internal_tenant_helper_hardening"
+    },
+    {
+      "version": "20261014100100",
+      "name": "can_manage_lead_assignments_prerequisite"
+    },
+    {
+      "version": "20261014100145",
+      "name": "unused_authorization_rpc_execute_hardening"
+    },
+    {
+      "version": "20261014105133",
+      "name": "internal_authorization_helper_execute_hardening"
+    },
+    {
+      "version": "20261014105425",
+      "name": "internal_authorization_helper_execute_hardening"
+    },
+    {
+      "version": "20261014110215",
+      "name": "session_bound_crm_settings_reads"
+    },
+    {
+      "version": "20261014110702",
+      "name": "internal_workspace_access_helper_execute_hardening"
+    },
+    {
+      "version": "20261014113720",
+      "name": "oauth_state_current_tenant_guard"
+    },
+    {
+      "version": "20261014114745",
+      "name": "session_bound_whatsapp_outbound_attach"
+    },
+    {
+      "version": "20261014115501",
+      "name": "session_bound_organization_membership_reads"
+    },
+    {
+      "version": "20261014115900",
+      "name": "remaining_organization_read_tables_prerequisite"
+    },
+    {
+      "version": "20261014115949",
+      "name": "tenant_scope_remaining_organization_read_policies"
+    },
+    {
+      "version": "20261014120314",
+      "name": "session_bound_workspace_access"
+    },
+    {
+      "version": "20261014120616",
+      "name": "tenant_scope_accommodation_mutation_policies"
+    },
+    {
+      "version": "20261014133200",
+      "name": "derived_accommodation_foundation_prerequisite"
+    },
+    {
+      "version": "20261014133212",
+      "name": "tenant_scope_derived_accommodation_policies"
+    },
+    {
+      "version": "20261014135430",
+      "name": "w6_website_intelligence_foundation"
+    },
+    {
+      "version": "20261014135518",
+      "name": "w6_semantic_seo_foundation"
+    },
+    {
+      "version": "20261014140126",
+      "name": "w6_crawl_frontier_and_performance_bridge"
+    },
+    {
+      "version": "20261014140326",
+      "name": "w6_technical_and_semantic_opportunity_views"
+    },
+    {
+      "version": "20261014140808",
+      "name": "w6_semantic_processing_and_page_query_grain"
+    },
+    {
+      "version": "20261014141153",
+      "name": "w6_semantic_opportunity_engine_v1"
+    },
+    {
+      "version": "20261015065001",
+      "name": "seo_keyword_serp_intelligence_v1"
+    },
+    {
+      "version": "20261015065414",
+      "name": "seo_keyword_brand_variant_classification_v1"
+    },
+    {
+      "version": "20261015071747",
+      "name": "safe_provider_visibility_rpc"
+    },
+    {
+      "version": "20261015081306",
+      "name": "seo_workspace_v2_rls_performance_hardening"
+    },
+    {
+      "version": "20261015082957",
+      "name": "seo_workspace_security_definer_performance"
+    },
+    {
+      "version": "20261015084434",
+      "name": "seo_keyword_intelligence_materialize_payload"
+    },
+    {
+      "version": "20261015084530",
+      "name": "seo_brand_helper_normalize_www"
+    },
+    {
+      "version": "20261015084623",
+      "name": "seo_keyword_intelligence_host_brand_fix"
+    },
+    {
+      "version": "20261015091632",
+      "name": "seo_content_intelligence_v1"
+    },
+    {
+      "version": "20261015095205",
+      "name": "seo_revenue_aware_organic_intelligence_v1"
+    },
+    {
+      "version": "20261015103110",
+      "name": "seo_aeo_intelligence_v1"
+    },
+    {
+      "version": "20261015104759",
+      "name": "seo_aeo_intelligence_performance_v2"
+    },
+    {
+      "version": "20261015110534",
+      "name": "seo_geo_ai_visibility_v1"
+    },
+    {
+      "version": "20261015114700",
+      "name": "seo_experimentation_learning_v1"
+    },
+    {
+      "version": "20261015130906",
+      "name": "seo_human_approved_optimization_v1"
+    },
+    {
+      "version": "20261015131529",
+      "name": "seo_human_approved_optimization_execution_guard_v2"
+    },
+    {
+      "version": "20261015131805",
+      "name": "seo_human_approved_optimization_audit_payload_v3"
+    },
+    {
+      "version": "20261015131941",
+      "name": "seo_human_approved_optimization_active_action_guard_v4"
+    },
+    {
+      "version": "20261015132145",
+      "name": "seo_human_approved_optimization_function_grants_v5"
+    },
+    {
+      "version": "20261016131221",
+      "name": "smart_triggers_v1_foundation"
+    },
+    {
+      "version": "20261016144625",
+      "name": "smart_triggers_scheduler_wait_foundation_v1"
+    },
+    {
+      "version": "20261016171500",
+      "name": "organization_knowledge_v1"
+    },
+    {
+      "version": "20261016173500",
+      "name": "organization_knowledge_search_v1"
+    },
+    {
+      "version": "20261016182500",
+      "name": "fix_organization_knowledge_search_v1"
+    },
+    {
+      "version": "20261017033628",
+      "name": "smart_triggers_flow_graph_foundation_v1"
+    },
+    {
+      "version": "20261017044549",
+      "name": "smart_triggers_flow_versions_v1"
+    },
+    {
+      "version": "20261017091453",
+      "name": "automation_runtime_scheduler_foundation_v1"
+    },
+    {
+      "version": "20261017125342",
+      "name": "automation_whatsapp_template_registry_v1"
+    },
+    {
+      "version": "20261017130525",
+      "name": "automation_whatsapp_template_sync_v1"
+    },
+    {
+      "version": "20261017155803",
+      "name": "tracking_sources_and_event_contracts_v1"
+    },
+    {
+      "version": "20261017161509",
+      "name": "crm_lead_attribution_upsert_fix_v1"
+    },
+    {
+      "version": "20261017162257",
+      "name": "attribution_state_machine_v1"
+    },
+    {
+      "version": "20261017163029",
+      "name": "smart_identity_confidence_engine_v1"
+    },
+    {
+      "version": "20261017175500",
+      "name": "privacy_request_tombstone_prerequisite"
+    },
+    {
+      "version": "20261017180156",
+      "name": "opensearch_outbox_foundation_v1"
+    },
+    {
+      "version": "20261018111825",
+      "name": "system_intelligence_recommendation_learning_v1"
+    },
+    {
+      "version": "20261018114501",
+      "name": "system_intelligence_outcome_observation_v1"
+    },
+    {
+      "version": "20261018115609",
+      "name": "system_intelligence_business_learning_v1"
+    },
+    {
+      "version": "20261018153024",
+      "name": "system_intelligence_outcome_observer_v1"
+    },
+    {
+      "version": "20261018153555",
+      "name": "system_intelligence_effectiveness_v1"
+    },
+    {
+      "version": "20261018154443",
+      "name": "system_intelligence_calibration_readiness_v1"
+    },
+    {
+      "version": "20261018155528",
+      "name": "system_intelligence_action_completion_v1"
+    },
+    {
+      "version": "20261018155811",
+      "name": "system_intelligence_action_completion_effectiveness_v1"
+    },
+    {
+      "version": "20261018164546",
+      "name": "customer360_operational_completeness_v1"
+    },
+    {
+      "version": "20261018172343",
+      "name": "r7_integration_feedback_health_v1"
+    },
+    {
+      "version": "20261018181345",
+      "name": "r9_ai_visibility_probe_evidence_v1"
+    },
+    {
+      "version": "20261018182256",
+      "name": "r9_visibility_health_v1"
+    },
+    {
+      "version": "20261019012850",
+      "name": "r9_ai_visibility_probe_history_v1"
+    },
+    {
+      "version": "20261019013639",
+      "name": "r9_closeout_readiness_v1"
+    },
+    {
+      "version": "20261019023002",
+      "name": "r10_predictive_lead_scoring_foundation_v1"
+    },
+    {
+      "version": "20261019095500",
+      "name": "whatsapp_provider_retry_recovery"
+    },
+    {
+      "version": "20261019101500",
+      "name": "whatsapp_quiet_hours_enforcement"
+    },
+    {
+      "version": "20261019112000",
+      "name": "whatsapp_lineage_tables_prerequisite"
+    },
+    {
+      "version": "20261019113000",
+      "name": "whatsapp_canonical_approval_lineage"
+    },
+    {
+      "version": "20261019114000",
+      "name": "whatsapp_pilot_auto_disarm"
+    },
+    {
+      "version": "20261019140500",
+      "name": "event_semantic_touchpoint_compat_v1"
+    },
+    {
+      "version": "20261019141500",
+      "name": "event_intelligence_feature_foundation_v1"
+    },
+    {
+      "version": "20261019142000",
+      "name": "event_intelligence_feature_builders_v1"
+    },
+    {
+      "version": "20261019143000",
+      "name": "event_intelligence_deterministic_predictions_v1"
+    },
+    {
+      "version": "20261019150400",
+      "name": "build_search_document_v1_prerequisite"
+    },
+    {
+      "version": "20261019150500",
+      "name": "event_intelligence_opensearch_projection_v1"
+    },
+    {
+      "version": "20261019151500",
+      "name": "event_intelligence_search_stage_fix_v1"
+    },
+    {
+      "version": "20261019152000",
+      "name": "search_outbox_event_intelligence_types_v1"
+    },
+    {
+      "version": "20261019154130",
+      "name": "event_lifecycle_projection_v1"
+    },
+    {
+      "version": "20261019181500",
+      "name": "intelligence_signal_quality_v1"
+    },
+    {
+      "version": "20261019181600",
+      "name": "intelligence_signal_quality_identity_rollup_fix_v1"
+    },
+    {
+      "version": "20261020014744",
+      "name": "event_intelligence_outcome_calibration_v1"
+    },
+    {
+      "version": "20261020015455",
+      "name": "event_intelligence_prediction_freshness_v1"
+    },
+    {
+      "version": "20261020084500",
+      "name": "whatsapp_operations_suite_v1"
+    },
+    {
+      "version": "20261020093000",
+      "name": "whatsapp_broadcast_runner_v1"
+    },
+    {
+      "version": "20261020093200",
+      "name": "whatsapp_broadcast_runner_runtime_completion_v1"
+    },
+    {
+      "version": "20261020093500",
+      "name": "whatsapp_broadcast_runner_hardening_v1"
+    },
+    {
+      "version": "20261020094000",
+      "name": "whatsapp_broadcast_message_lineage_v1"
+    },
+    {
+      "version": "20261020100100",
+      "name": "event_intelligence_prediction_expiry_sweep_v1"
+    },
+    {
+      "version": "20261020100200",
+      "name": "event_intelligence_actionable_freshness_v1"
+    },
+    {
+      "version": "20261020100300",
+      "name": "event_intelligence_current_freshness_guard_v1"
+    },
+    {
+      "version": "20261020101500",
+      "name": "whatsapp_growth_operations_v1"
+    },
+    {
+      "version": "20261020101600",
+      "name": "event_intelligence_calibration_privacy_guard_v1"
+    },
+    {
+      "version": "20261020102000",
+      "name": "whatsapp_growth_approval_freeze_v1"
+    },
+    {
+      "version": "20261020103000",
+      "name": "whatsapp_rpc_execution_hardening_v1"
+    },
+    {
+      "version": "20261020111000",
+      "name": "crm_core_closeout_v1"
+    },
+    {
+      "version": "20261020111100",
+      "name": "crm_core_member_cleanup_trigger_fix_v1"
+    },
+    {
+      "version": "20261020113000",
+      "name": "instagram_operations_v1"
+    },
+    {
+      "version": "20261020113500",
+      "name": "instagram_operations_hardening_v1"
+    },
+    {
+      "version": "20261020114000",
+      "name": "customer360_identity_closeout_v1"
+    },
+    {
+      "version": "20261020121000",
+      "name": "tracking_live_closeout_health_v1"
+    },
+    {
+      "version": "20261020123000",
+      "name": "universal_publishable_client_v1"
+    },
+    {
+      "version": "20261020124500",
+      "name": "tracking_client_source_health_v1"
+    },
+    {
+      "version": "20261020161300",
+      "name": "conversations_workspace_whatsapp_phone_v1"
+    },
+    {
+      "version": "20261020170600",
+      "name": "funnel_intelligence_workspace_v2"
+    },
+    {
+      "version": "20261020171400",
+      "name": "funnel_engaged_stage_semantics_v2"
+    },
+    {
+      "version": "20261020182500",
+      "name": "seo_page_inspector_read_model_v1"
+    },
+    {
+      "version": "20261021225807",
+      "name": "add_current_workspace_context_rpc"
+    },
+    {
+      "version": "20261021234227",
+      "name": "enforce_single_active_integration_per_provider"
+    },
+    {
+      "version": "20261021234500",
+      "name": "whatsapp_coexistence_echo_ingestion"
+    },
+    {
+      "version": "20261021235000",
+      "name": "whatsapp_coexistence_echo_bridge"
+    },
+    {
+      "version": "20261022094445",
+      "name": "multitenant_tracking_site_binding_v2"
+    },
+    {
+      "version": "20261022094709",
+      "name": "multitenant_tracking_site_sync_trigger_v1"
+    },
+    {
+      "version": "20261022095130",
+      "name": "multitenant_tracking_security_perf_hardening_v1"
+    },
+    {
+      "version": "20261022100500",
+      "name": "public_site_id_tracking_v1"
+    },
+    {
+      "version": "20261022101200",
+      "name": "backfill_tracking_source_public_site_id_metadata_v1"
+    },
+    {
+      "version": "20261022105000",
+      "name": "canonical_site_aliases_v1"
+    },
+    {
+      "version": "20261022172000",
+      "name": "optimize_rls_auth_initplans"
+    },
+    {
+      "version": "20261023125000",
+      "name": "conversation_team_ops_v1"
+    },
+    {
+      "version": "20261023175500",
+      "name": "organization_onboarding_foundation_v1"
+    },
+    {
+      "version": "20261023181500",
+      "name": "conversation_collaboration_v1"
+    },
+    {
+      "version": "20261023182938",
+      "name": "add_onboarding_enforcement_flag"
+    },
+    {
+      "version": "20261023184246",
+      "name": "customer_organization_provisioning_v1"
+    },
+    {
+      "version": "20261025130118",
+      "name": "029_course_capture_value_variants"
+    },
+    {
+      "version": "20261025131249",
+      "name": "trusted_business_event_contact_resolution"
+    },
+    {
+      "version": "20261025150000",
+      "name": "tracking_detected_forms_v1"
+    },
+    {
+      "version": "20261025151500",
+      "name": "tracking_detected_forms_backend_only_policies_v1"
+    },
+    {
+      "version": "20261026143000",
+      "name": "add_closed_won_lead_stage"
+    },
+    {
+      "version": "20261026143100",
+      "name": "closed_won_pipeline_and_auto_archive_v1"
+    },
+    {
+      "version": "20261027090000",
+      "name": "db_incident_hardening_v2"
+    },
+    {
+      "version": "20261027091000",
+      "name": "instagram_ignore_non_message_envelopes_v1"
+    },
+    {
+      "version": "20261027092000",
+      "name": "instagram_durable_ack_and_internal_retry_v1"
+    },
+    {
+      "version": "20261027093000",
+      "name": "lead_stage_history_consistency_fix_v1"
+    },
+    {
+      "version": "20261027094000",
+      "name": "schedule_instagram_dm_recovery_v1"
+    },
+    {
+      "version": "20261027143000",
+      "name": "create_crm_lead_explicit_attribution_tenant_v1"
+    },
+    {
+      "version": "20261027153521",
+      "name": "password_recovery_one_time_grants_v1"
+    },
+    {
+      "version": "20261027164000",
+      "name": "optimize_lead_inbox_snooze_rls_auth_initplan"
+    },
+    {
+      "version": "20261027164423",
+      "name": "harden_instagram_whatsapp_rls_roles"
+    },
+    {
+      "version": "20261027164500",
+      "name": "add_privacy_subject_restrictions_primary_key"
+    },
+    {
+      "version": "20261027165000",
+      "name": "remove_verified_duplicate_indexes"
+    },
+    {
+      "version": "20261027165001",
+      "name": "consolidate_automation_rls_select_policies"
+    },
+    {
+      "version": "20261027190000",
+      "name": "funnel_workspace_v2_secure_aggregates"
+    },
+    {
+      "version": "20261027193000",
+      "name": "revoke_direct_trigger_execute"
+    },
+    {
+      "version": "20261027195500",
+      "name": "harden_conversations_workspace_role_isolation"
+    },
+    {
+      "version": "20261027200500",
+      "name": "extend_current_workspace_context_with_access"
+    },
+    {
+      "version": "20261027202000",
+      "name": "person_journey_workspace_v2"
+    },
+    {
+      "version": "20261027203900",
+      "name": "revenue_workspace_base_prerequisite"
+    },
+    {
+      "version": "20261027204000",
+      "name": "revenue_workspace_v2_authorized"
+    },
+    {
+      "version": "20261027220000",
+      "name": "seo_content_revenue_v2_reuse"
+    },
+    {
+      "version": "20261027220100",
+      "name": "seo_content_v2_contract_fix"
+    },
+    {
+      "version": "20261027220200",
+      "name": "seo_content_revenue_v2_promote"
+    },
+    {
+      "version": "20261027220300",
+      "name": "seo_v2_internal_execution_hardening"
+    },
+    {
+      "version": "20261027220400",
+      "name": "seo_experiment_intelligence_v2"
+    },
+    {
+      "version": "20261027220500",
+      "name": "seo_workspace_v3"
+    },
+    {
+      "version": "20261027220700",
+      "name": "enforce_missing_organization_foreign_keys"
+    },
+    {
+      "version": "20261027221500",
+      "name": "course_catalog_sync_health_tenant_generic"
+    },
+    {
+      "version": "20261028001957",
+      "name": "add_person_journey_workspace_v3_scoped"
+    },
+    {
+      "version": "20261028023743",
+      "name": "ensure_instagram_dm_retry_schedule_v1"
+    },
+    {
+      "version": "20261028030036",
+      "name": "add_campaigns_workspace_v2"
+    },
+    {
+      "version": "20261028030320",
+      "name": "promote_campaigns_workspace_security_boundary"
+    },
+    {
+      "version": "20261028030358",
+      "name": "remove_campaigns_workspace_v2_probe"
+    },
+    {
+      "version": "20261028031201",
+      "name": "add_attribution_workspace_v2"
+    },
+    {
+      "version": "20261028031347",
+      "name": "promote_attribution_workspace_security_boundary"
+    },
+    {
+      "version": "20261028032401",
+      "name": "promote_revenue_workspace_security_boundary"
+    },
+    {
+      "version": "20261028033543",
+      "name": "optimize_lead_session_journey_lookup"
+    },
+    {
+      "version": "20261028034231",
+      "name": "add_pipeline_snapshot_v2_authorized"
+    },
+    {
+      "version": "20261028034324",
+      "name": "promote_pipeline_snapshot_v2_compatibility_wrapper"
+    },
+    {
+      "version": "20261028034934",
+      "name": "add_tracking_workspace_v2_authorized"
+    },
+    {
+      "version": "20261028034940",
+      "name": "promote_tracking_workspace_v2_compatibility_wrapper"
+    },
+    {
+      "version": "20261028035907",
+      "name": "promote_analytics_workspace_v2_authorized"
+    },
+    {
+      "version": "20261028040400",
+      "name": "course_management_workspace_v2_prerequisite"
+    },
+    {
+      "version": "20261028040448",
+      "name": "promote_course_management_workspace_v2_security_boundary"
+    },
+    {
+      "version": "20261028042957",
+      "name": "optimize_seo_keyword_intelligence_cte_planning"
+    },
+    {
+      "version": "20261028043628",
+      "name": "optimize_seo_page_performance_keyed_url_matching"
+    },
+    {
+      "version": "20261028044137",
+      "name": "optimize_seo_aeo_query_demand_cte_planning"
+    },
+    {
+      "version": "20261028045011",
+      "name": "add_funnel_intelligence_workspace_v3_authorized"
+    },
+    {
+      "version": "20261028045114",
+      "name": "promote_funnel_intelligence_v3_compatibility_wrapper"
+    },
+    {
+      "version": "20261028045742",
+      "name": "add_leads_workspace_page_v2_authorized"
+    },
+    {
+      "version": "20261028045806",
+      "name": "promote_leads_workspace_page_v2_compatibility_wrapper"
+    },
+    {
+      "version": "20261028050611",
+      "name": "add_reengaged_workspace_v3_authorized"
+    },
+    {
+      "version": "20261028050642",
+      "name": "promote_reengaged_workspace_v3_compatibility_wrapper"
+    },
+    {
+      "version": "20261028051123",
+      "name": "add_seo_experiment_intelligence_v3_capped_candidates"
+    },
+    {
+      "version": "20261028051714",
+      "name": "harden_seo_experiment_candidates_v2_view"
+    },
+    {
+      "version": "20261028051911",
+      "name": "harden_lead_session_journey_view"
+    },
+    {
+      "version": "20261028052721",
+      "name": "restore_seo_security_invoker_views"
+    },
+    {
+      "version": "20261028153500",
+      "name": "ph1_revoke_anon_funnel_v2_execute"
+    },
+    {
+      "version": "20261028154800",
+      "name": "ph1_remove_remaining_anon_function_execute"
+    },
+    {
+      "version": "20261029074500",
+      "name": "current_provider_visibility_v1"
+    },
+    {
+      "version": "20261029080500",
+      "name": "scope_pipeline_snapshot_to_authorized_leads"
+    },
+    {
+      "version": "20261029093000",
+      "name": "current_conversations_workspace_v1"
+    },
+    {
+      "version": "20261029101500",
+      "name": "current_person_journey_workspace_v1"
+    },
+    {
+      "version": "20261029103000",
+      "name": "whatsapp_health_canonical_state_sync_v1"
+    },
+    {
+      "version": "20261029104500",
+      "name": "crm_core_integrity_health_v2"
+    },
+    {
+      "version": "20261029110500",
+      "name": "customer360_identity_integrity_health_v2"
+    },
+    {
+      "version": "20261029112500",
+      "name": "system_integrity_health_v1"
+    },
+    {
+      "version": "20261029112830",
+      "name": "instagram_phone_handoff_v1"
+    },
+    {
+      "version": "20261029113000",
+      "name": "instagram_whatsapp_handoff_capability_v1"
+    },
+    {
+      "version": "20261029113500",
+      "name": "instagram_phone_detection_trigger_v1"
+    },
+    {
+      "version": "20261029113950",
+      "name": "fix_instagram_phone_detection_v1"
+    },
+    {
+      "version": "20261029114500",
+      "name": "meta_ads_operational_health_v1"
+    },
+    {
+      "version": "20261029115000",
+      "name": "prioritize_international_instagram_phone_v1"
+    },
+    {
+      "version": "20261029115200",
+      "name": "bound_double_zero_instagram_phone_v1"
+    },
+    {
+      "version": "20261029115339",
+      "name": "instagram_whatsapp_existing_lead_handoff_v2"
+    },
+    {
+      "version": "20261029115400",
+      "name": "system_health_base_prerequisite"
+    },
+    {
+      "version": "20261029115500",
+      "name": "ph3_operational_readiness_closeout"
+    },
+    {
+      "version": "20261029121000",
+      "name": "fix_admissions_rule_key_ambiguity"
+    },
+    {
+      "version": "20261029122500",
+      "name": "instagram_rich_inbound_bodies_v1"
+    },
+    {
+      "version": "20261029170000",
+      "name": "admissions_scheduler_truth_v1"
+    },
+    {
+      "version": "20261030113000",
+      "name": "payment_claim_and_verification_v1"
+    },
+    {
+      "version": "20261030120500",
+      "name": "followups_expose_task_type_v1"
+    },
+    {
+      "version": "20261030141148",
+      "name": "extend_system_recent_failures_with_raw_events"
+    },
+    {
+      "version": "20261030141233",
+      "name": "surface_orphaned_trusted_event_projections"
+    },
+    {
+      "version": "20261030141930",
+      "name": "add_commerce_event_readiness_v1"
+    },
+    {
+      "version": "20261030155000",
+      "name": "admissions_batch_capacity_prerequisite"
+    },
+    {
+      "version": "20261030155113",
+      "name": "harden_course_management_permissions"
+    },
+    {
+      "version": "20261030160208",
+      "name": "include_owner_in_crm_admin_authority"
+    },
+    {
+      "version": "20261031064230",
+      "name": "ad_activation_audience_tables"
+    },
+    {
+      "version": "20261031064236",
+      "name": "ad_activation_memberships"
+    },
+    {
+      "version": "20261031064244",
+      "name": "ad_activation_delivery_queue"
+    },
+    {
+      "version": "20261031064249",
+      "name": "ad_activation_indexes_triggers"
+    },
+    {
+      "version": "20261031064256",
+      "name": "ad_activation_tenant_guards"
+    },
+    {
+      "version": "20261031064303",
+      "name": "ad_activation_privacy_gate"
+    },
+    {
+      "version": "20261031064315",
+      "name": "ad_activation_rls_grants"
+    },
+    {
+      "version": "20261031064327",
+      "name": "ad_activation_health_view"
+    },
+    {
+      "version": "20261031064406",
+      "name": "ad_activation_membership_outbox_writer"
+    },
+    {
+      "version": "20261031064418",
+      "name": "ad_activation_delivery_claim_validation"
+    },
+    {
+      "version": "20261031064429",
+      "name": "ad_activation_delivery_finalize"
+    },
+    {
+      "version": "20261031064442",
+      "name": "ad_activation_provider_filtered_claim_v2"
+    },
+    {
+      "version": "20261031064454",
+      "name": "ad_activation_runner_controls"
+    },
+    {
+      "version": "20261031064502",
+      "name": "ad_activation_canary_claim"
+    },
+    {
+      "version": "20261101024921",
+      "name": "leads_workspace_attribution_scope_v3"
+    },
+    {
+      "version": "20261101030732",
+      "name": "attribution_admissions_revenue_scope_v1"
+    },
+    {
+      "version": "20261101041000",
+      "name": "marketing_campaign_evidence_health_gate_v1"
+    },
+    {
+      "version": "20261101042000",
+      "name": "crm_customer360_final_closeout_v1"
+    },
+    {
+      "version": "20261101043000",
+      "name": "revenue_final_closeout_v1"
+    },
+    {
+      "version": "20261101045049",
+      "name": "performance_final_closeout_v1"
+    },
+    {
+      "version": "20261101050000",
+      "name": "admissions_final_closeout_v1"
+    },
+    {
+      "version": "20261101051000",
+      "name": "admissions_upcoming_capacity_start_boundary_v2"
+    },
+    {
+      "version": "20261101053000",
+      "name": "operations_final_closeout_v1"
+    },
+    {
+      "version": "20261101060000",
+      "name": "settings_final_closeout_v1"
+    },
+    {
+      "version": "20261101063000",
+      "name": "ai_knowledge_final_closeout_v1"
+    },
+    {
+      "version": "20261101064500",
+      "name": "whatsapp_final_closeout_v1"
+    },
+    {
+      "version": "20261101095350",
+      "name": "dashboard_tenant_read_models_prerequisite"
+    },
+    {
+      "version": "20261101095400",
+      "name": "dashboard_snapshot_internal_v1_prerequisite"
+    },
+    {
+      "version": "20261101095410",
+      "name": "dashboard_snapshot_authorization_prerequisite"
+    },
+    {
+      "version": "20261101095500",
+      "name": "home_command_center_final_closeout_v1"
+    },
+    {
+      "version": "20261101102000",
+      "name": "tracking_data_final_closeout_v1"
+    },
+    {
+      "version": "20261101130000",
+      "name": "human_approved_identity_merge_v1"
+    },
+    {
+      "version": "20261101131500",
+      "name": "person_merge_audit_fk_indexes_v1"
+    },
+    {
+      "version": "20261101141500",
+      "name": "google_ads_operational_readiness_v1"
+    },
+    {
+      "version": "20261101151403",
+      "name": "r10_recommendation_security_hardening_v1"
+    },
+    {
+      "version": "20261101153414",
+      "name": "r10_command_center_recommendation_episodes_v1"
+    },
+    {
+      "version": "20261101155326",
+      "name": "r10_command_center_recommendation_acceptance_hardening_v1"
+    },
+    {
+      "version": "20261101164458",
+      "name": "r10_outcome_learning_runner_v1"
+    },
+    {
+      "version": "20261101173500",
+      "name": "r11_capability_security_foundation_v1"
+    },
+    {
+      "version": "20261101180500",
+      "name": "r11_p1_education_surface_authorization_v1"
+    },
+    {
+      "version": "20261101180600",
+      "name": "r11_p1_lead_capability_trigger_context_v1"
+    },
+    {
+      "version": "20261101183500",
+      "name": "r11_p2_catalog_adapter_config_v1"
+    },
+    {
+      "version": "20261101193000",
+      "name": "r11_p3_residential_capability_boundary_v1"
+    },
+    {
+      "version": "20261101193100",
+      "name": "r11_p3_residential_trigger_context_v1"
+    },
+    {
+      "version": "20261101195631",
+      "name": "r11_p3_anon_residential_grant_hardening_v1"
+    },
+    {
+      "version": "20261102052954",
+      "name": "internal_diagnostic_view_acl_hardening"
+    },
+    {
+      "version": "20261102053201",
+      "name": "knowledge_retrieval_anon_execute_hardening"
+    },
+    {
+      "version": "20261102063943",
+      "name": "atomic_refund_command_v1"
+    },
+    {
+      "version": "20261102095354",
+      "name": "refund_request_replay_binding_v1"
+    },
+    {
+      "version": "20261102115513",
+      "name": "payment_enrollment_association_v1"
+    },
+    {
+      "version": "20261102115600",
+      "name": "enrollment_processor_payment_association_v1"
+    },
+    {
+      "version": "20261102154500",
+      "name": "enrollment_batch_capacity_guard_v1"
+    },
+    {
+      "version": "20261102161000",
+      "name": "enrollment_verified_payment_evidence_v1"
+    },
+    {
+      "version": "20261102164500",
+      "name": "enrollment_contract_adjustments_v1"
+    },
+    {
+      "version": "20261102164600",
+      "name": "enrollment_contract_value_precedence_v1"
+    },
+    {
+      "version": "20261102164700",
+      "name": "enrollment_contract_replay_preservation_v1"
+    },
+    {
+      "version": "20261103190000",
+      "name": "ai_knowledge_provenance_readiness_v2"
+    },
+    {
+      "version": "20261103195200",
+      "name": "sales_asset_library_foundation_v1"
+    },
+    {
+      "version": "20261103195300",
+      "name": "sales_asset_human_approval_guard_v1"
+    },
+    {
+      "version": "20261103204500",
+      "name": "sales_asset_copilot_discovery_v1"
+    },
+    {
+      "version": "20261103210500",
+      "name": "sales_asset_human_dispatch_preflight_v1"
+    },
+    {
+      "version": "20261103213500",
+      "name": "whatsapp_sales_asset_human_media_send_v1"
+    },
+    {
+      "version": "20261103215230",
+      "name": "sales_asset_course_scope_normalization_v1"
+    },
+    {
+      "version": "20261103215330",
+      "name": "sales_asset_course_scope_shorthand_v1"
+    },
+    {
+      "version": "20261104035000",
+      "name": "leads_workspace_created_desc_sort_v1"
+    },
+    {
+      "version": "20261104131500",
+      "name": "crm_settings_bulk_v1"
+    },
+    {
+      "version": "20261104143500",
+      "name": "inbox_resolution_v1"
+    },
+    {
+      "version": "20261104160000",
+      "name": "inbox_full_dataset_page_v1"
+    },
+    {
+      "version": "20261104170000",
+      "name": "instagram_outbound_echo_v1"
+    },
+    {
+      "version": "20261104171500",
+      "name": "instagram_outbound_echo_recovery_v1"
+    },
+    {
+      "version": "20261104185000",
+      "name": "inbox_paged_read_performance_v2"
+    },
+    {
+      "version": "20261104193000",
+      "name": "ai_lead_insight_feedback_v1"
+    },
+    {
+      "version": "20261104203000",
+      "name": "instagram_history_reconciliation_v1"
+    },
+    {
+      "version": "20261104214500",
+      "name": "ai_lead_insight_usage_gate_v1"
+    },
+    {
+      "version": "20261104233000",
+      "name": "ai_lead_insight_provider_usage_v1"
+    },
+    {
+      "version": "20261104235900",
+      "name": "ai_lead_insight_pilot_approval_gate_v1"
+    },
+    {
+      "version": "20261105001000",
+      "name": "ai_lead_insight_review_packet_drafts_v1"
+    },
+    {
+      "version": "20261105002000",
+      "name": "ai_lead_insight_review_packet_append_only_grants_v1"
+    },
+    {
+      "version": "20261105080000",
+      "name": "message_sync_audit_v1"
+    },
+    {
+      "version": "20261105090000",
+      "name": "instagram_receipt_reconciliation_v1"
+    },
+    {
+      "version": "20261105120000",
+      "name": "whatsapp_receipt_reconciliation_v1"
+    },
+    {
+      "version": "20261105133000",
+      "name": "whatsapp_receipt_account_identity_v2"
+    },
+    {
+      "version": "20261105140000",
+      "name": "r2_behavioral_event_contracts_v1"
+    },
+    {
+      "version": "20261105150000",
+      "name": "whatsapp_receipt_identity_timeline_v3"
+    },
+    {
+      "version": "20261105170000",
+      "name": "r2_p2_native_behavior_explorer_v1"
+    },
+    {
+      "version": "20261105171000",
+      "name": "r2_p2_public_page_paths_v2"
+    },
+    {
+      "version": "20261105220000",
+      "name": "r2_p2_event_trends_v1"
+    },
+    {
+      "version": "20261105230000",
+      "name": "r2_p2_page_event_breakdowns_v1"
+    },
+    {
+      "version": "20261106092000",
+      "name": "r11_course_admin_helper_acl_hardening_v1"
+    },
+    {
+      "version": "20261106094500",
+      "name": "r2_p2_strict_public_path_privacy_v3"
+    },
+    {
+      "version": "20261111082713",
+      "name": "whatsapp_template_drafts_v1"
+    },
+    {
+      "version": "20261111082927",
+      "name": "whatsapp_template_draft_name_length_guard_v1"
+    }
+  ]
+}
