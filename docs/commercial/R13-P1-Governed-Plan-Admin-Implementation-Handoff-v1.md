@@ -96,3 +96,14 @@ The R13-P1 draft now contains:
 - `tests/readiness/r13-p1-server-auth-preview-v1.test.cjs` protects the source boundary; `tests/readiness/r13-p1-server-auth-execution-v1.test.cjs` **executes that exact TypeScript adapter under mocked session, membership, profile and organization fixtures** to test forged tenant switches, stale role changes, inactive profiles and suspended organization denial.
 
 **Non-negotiable limits:** Mocked sessions are not witnessed real identities. Fresh `auth.getUser()` and membership recheck are not a claim that current revocation, credential rotation, session binding, user impersonation and second-tenant acceptance have passed. No independent P0 security sign-off is recorded. Before a real P1 endpoint is enabled, use authenticated real operator/tenant fixtures in an approved isolated environment, review the complete privilege chain and document explicit release/rollback authorization. No live billing or subscriptions are enabled by the adapter.
+
+
+## 2026-11-11 — Protected plan-management UI preview
+
+- Added `app/settings/commercial-preview/page.tsx` on the R13-P1 draft branch. It is a Next.js **server-only, `force-dynamic` operator preview** guarded by `await requireCommercialPlatformReviewPreview()`; the guard validates authenticated SalsysOS-platform owner/admin membership with fresh profile and organization checks.
+- Explicit `noindex,nofollow,nocache` metadata; page is **not in navigation**, and it has **no live plan or tenant query**, service-role client, source-of-truth price activation, form, upgrade button or checkout.
+- The 4 proposed commercial prices/setup ranges/usage limits are static, clearly labeled unapproved; do not mistake this for live `saas_plans`, subscription counts, approval statuses or actual enforcement. A future real admin UI must only render approved catalog versions from the database after P0/P1 acceptance.
+- All review gates are shown as open; no fabricated approvals. Dynamic HTML is not an entitlement or publishing authorization.
+- `tests/readiness/r13-p1-admin-preview-route-v1.test.cjs` checks guard use, noindex, immutable preview-only boundary and pricing/limit parity with the proposal document. CI also validates the Next.js build and TypeScript types.
+
+**Caution:** The draft page is a platform-admin-only route once code is deployed; it is intentionally not merged or deployed. This is not independent acceptance of real session rotation or tenant isolation; those are separate witnessed release gates. No R13-P0 migration or customer records are used.
