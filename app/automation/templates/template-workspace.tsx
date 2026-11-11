@@ -346,6 +346,15 @@ export function TemplateWorkspace({ templates, drafts, latestSync, accountPhone,
               <span aria-hidden="true">＋</span> New template
             </Link>
           ) : null}
+          {!canCreate && canSync ? (
+            <Link
+              href="/automation/templates/new?preview=1"
+              className="inline-flex h-10 items-center gap-2 whitespace-nowrap rounded-xl border border-indigo-200 bg-indigo-50 px-3 text-sm font-semibold text-indigo-700 hover:bg-indigo-100"
+              title="Try the new editor without creating a template or contacting Meta"
+            >
+              <span aria-hidden="true">◉</span> Preview creator
+            </Link>
+          ) : null}
           <TemplateSyncButton disabled={!canSync} />
           <details className="relative">
             <summary className="grid h-10 w-10 cursor-pointer list-none place-items-center rounded-xl border border-slate-200 bg-white text-slate-500 hover:bg-slate-50 [&::-webkit-details-marker]:hidden"><MoreHorizontal size={18} /></summary>
