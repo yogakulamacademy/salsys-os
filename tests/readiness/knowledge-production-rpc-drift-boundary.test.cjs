@@ -30,6 +30,13 @@ test('Repair contract remains a single privileged tenant-scoped creation functio
   assert.match(migration, /security definer/i);
   assert.match(migration, /set search_path = public, auth, pg_temp/i);
   assert.match(migration, /public\.can_manage_organization\(p_organization_id\)/);
+  // NULL JWT claims and nullable helper results must deny a SECURITY DEFINER
+  // write. PostgreSQL PL/pgSQL IF treats NULL as false, so ordinary <> and
+  // NOT checks on nullable values are insufficient.
+  assert.match(migration, /auth\.role\(\) is distinct from 'service_role'/i);
+  assert.match(migration, /public\.can_manage_organization\(p_organization_id\) is distinct from true/i);
+  assert.doesNotMatch(migration, /auth\.role\(\)\s*<>\s*'service_role'/i);
+  assert.doesNotMatch(migration, /and not public\.can_manage_organization\(p_organization_id\)/i);
   assert.match(migration, /raise exception 'Only organization admins can manage AI knowledge'/);
   assert.match(migration, /revoke all on function public\.create_source_backed_knowledge_document_v2\([\s\S]*?\) from public, anon;/i);
   assert.match(migration, /grant execute on function public\.create_source_backed_knowledge_document_v2\([\s\S]*?\) to authenticated, service_role;/i);
