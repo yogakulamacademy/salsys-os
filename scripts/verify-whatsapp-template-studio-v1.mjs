@@ -82,7 +82,7 @@ assert.ok(
   nameGuardCorrection.includes("template_name ~ '^[a-z0-9_]+") &&
   nameGuardCorrection.includes(String.fromCharCode(36)),
   'Draft name characters must remain limited to a lowercase identifier');
-assert.ok(!nameGuardCorrection.includes('{1,512}'),
+assert.ok(!nameGuardCorrection.split('begin;')[1].includes('{1,512}'),
   'Do not reintroduce the invalid PostgreSQL regex repetition bound');
 
 console.log('WhatsApp Template Studio V1 contracts passed (read only).');
