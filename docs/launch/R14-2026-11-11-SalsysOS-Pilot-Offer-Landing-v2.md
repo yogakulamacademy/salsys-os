@@ -1,5 +1,6 @@
 # SalsysOS R14 — Founding Managed CRM Pilot & Landing Page v2
 
+> **SUPERSEDED PRICING RECOMMENDATION — 2026-11-11.** This document preserves the earlier single-offer planning history. The current four-tier pricing/landing-page proposal is [R14 Four-Tier Pricing Page Review v1](R14-2026-11-11-Four-Tier-Pricing-Page-Review-v1.md): Free ₹0, Basic ₹1,499, Growth ₹3,499 and Pro ₹6,999 per month, with separate managed setup. The earlier proposed **₹7,999/month managed-pilot continuation is withdrawn**; after the 60-day pilot the customer selects a separately approved tier or separately quoted managed arrangement. This is still draft, not a published offer or approved recurring billing.\n\n
 **Prepared:** 2026-11-11
 **Status:** **SIGN-OFF CANDIDATE / NOT A PUBLISHED OR APPROVED PRICE**
 **Related:** [R14 issue #651](https://github.com/yogakulamacademy/salsys-os/issues/651), [R14 draft PR #652](https://github.com/yogakulamacademy/salsys-os/pull/652), [R13 draft PR #654](https://github.com/yogakulamacademy/salsys-os/pull/654).
