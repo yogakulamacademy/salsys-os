@@ -1,4 +1,4 @@
-/* Salsys Event Intelligence Browser SDK v1.1.0 */
+/* Salsys Event Intelligence Browser SDK v1.1.1 */
 (function () {
   'use strict';
 
@@ -121,9 +121,22 @@
     return navigator.globalPrivacyControl === true;
   }
 
+  var analyticsOptOutRequested = false;
+
+  function analyticsDenied(decision) {
+    return decision === 'denied' ||
+      decision === 'withdrawn' ||
+      decision === 'opted_out' ||
+      decision === 'limited';
+  }
+
   function analyticsGranted() {
+    if (analyticsOptOutRequested) return false;
+    var decision = privacyState().analytics;
+    // An explicit visitor decision takes precedence over a default site mode.
+    if (analyticsDenied(decision)) return false;
     if (CONSENT_MODE === 'granted') return true;
-    return privacyState().analytics === 'granted';
+    return decision === 'granted';
   }
 
   function advertisingGranted() {
@@ -132,10 +145,19 @@
 
   function sessionVisitorCandidate() {
     var value = safeGet(window.sessionStorage, KEYS.sessionVisitor);
-    if (value) return value;
-
     if (analyticsGranted()) {
-      value = safeGet(window.localStorage, KEYS.persistentVisitor);
+      var shared = safeGet(window.localStorage, KEYS.persistentVisitor);
+      if (shared && value && shared !== value) {
+        // A restored or duplicated tab can retain an old per-tab ID after
+        // another tab withdrew and regranted consent. The acknowledged
+        // shared ID takes precedence; never overwrite it with stale data.
+        value = shared;
+        [KEYS.session, KEYS.sessionStarted, KEYS.pendingFirstTouch,
+          KEYS.sessionTouch].forEach(function (key) {
+          safeRemove(window.sessionStorage, key);
+        });
+      }
+      if (!value) value = shared;
     }
 
     if (!value) value = randomId('v');
@@ -143,6 +165,18 @@
 
     if (analyticsGranted()) safeSet(window.localStorage, KEYS.persistentVisitor, value);
     return value;
+  }
+
+  // A tab restored after an explicit refusal must not reuse session-scoped
+  // identifiers from a previous analytics-consent epoch.
+  if (analyticsDenied(privacyState().analytics)) {
+    safeRemove(window.localStorage, KEYS.persistentVisitor);
+    safeRemove(window.localStorage, KEYS.firstTouch);
+    safeRemove(window.localStorage, KEYS.queue);
+    [KEYS.sessionVisitor, KEYS.session, KEYS.sessionStarted,
+      KEYS.pendingFirstTouch, KEYS.sessionTouch].forEach(function (key) {
+      safeRemove(window.sessionStorage, key);
+    });
   }
 
   var visitorId = sessionVisitorCandidate();
@@ -159,6 +193,7 @@
   }
 
   var sessionId = getSessionId();
+  var analyticsIdentityEpoch = 0;
 
   function safeText(value, max) {
     if (typeof value !== 'string') return null;
@@ -340,7 +375,7 @@
       properties.metadata && typeof properties.metadata === 'object' ? properties.metadata : {},
       {
         sdk: 'salsys-browser-v1',
-        sdk_version: '1.1.0'
+        sdk_version: '1.1.1'
       }
     );
 
@@ -367,7 +402,7 @@
       context: pageContext(),
       metadata: {
         sdk: 'salsys-browser-v1',
-        sdk_version: '1.1.0',
+        sdk_version: '1.1.1',
         consent_mode: CONSENT_MODE,
         consent_snapshot: privacyState(),
         local_permission: localPermission(eventName)
@@ -418,20 +453,24 @@
     if (flushingQueue || !analyticsGranted()) return Promise.resolve();
     var queue = readQueue();
     if (!queue.length) return Promise.resolve();
+    var epoch = analyticsIdentityEpoch;
     flushingQueue = true;
 
     var remaining = [];
     var chain = Promise.resolve();
     queue.forEach(function (item) {
       chain = chain.then(function () {
+        // Do not replay a previously queued analytics event after opt-out.
+        if (epoch !== analyticsIdentityEpoch || !analyticsGranted() ||
+            !item || item.anonymous_visitor_id !== visitorId) return;
         return postJson(EVENT_ENDPOINT, item, true).catch(function () {
-          remaining.push(item);
+          if (epoch === analyticsIdentityEpoch && analyticsGranted()) remaining.push(item);
         });
       });
     });
 
     return chain.then(function () {
-      saveQueue(remaining);
+      if (epoch === analyticsIdentityEpoch && analyticsGranted()) saveQueue(remaining);
       flushingQueue = false;
     }).catch(function () {
       flushingQueue = false;
@@ -439,6 +478,9 @@
   }
 
   function track(eventName, properties, options) {
+    // Revalidate the shared consent epoch on every event, even if this tab
+    // missed a cross-tab storage notification while suspended.
+    reconcileExternalConsent();
     options = options || {};
     eventName = String(eventName || '').trim().toLowerCase();
     if (!/^web\.[a-z][a-z0-9_]*$/.test(eventName)) {
@@ -456,19 +498,207 @@
 
     var body = envelope(eventName, properties, options);
     return postJson(EVENT_ENDPOINT, body, options.keepalive !== false).catch(function (error) {
-      if (options.queue !== false && analyticsGranted()) queueEnvelope(body);
+      if (options.queue !== false && analyticsGranted() &&
+          body.anonymous_visitor_id === visitorId) queueEnvelope(body);
       throw error;
     });
   }
 
+  function rotateAnalyticsIdentity(localOnly) {
+    // A withdrawal severs the old browser identifier and attribution chain.
+    analyticsIdentityEpoch += 1;
+    if (localOnly !== true) {
+      safeRemove(window.localStorage, KEYS.persistentVisitor);
+      safeRemove(window.localStorage, KEYS.firstTouch);
+      safeRemove(window.localStorage, KEYS.queue);
+    }
+    [KEYS.sessionVisitor, KEYS.session, KEYS.sessionStarted,
+      KEYS.pendingFirstTouch, KEYS.sessionTouch].forEach(function (key) {
+      safeRemove(window.sessionStorage, key);
+    });
+
+    visitorId = randomId('v');
+    sessionId = randomId('s');
+    sessionTouch = currentTouch();
+    firstTouch = sessionTouch;
+    window.__salsysInitialPageSent = false;
+    // Existing forms must not keep stale hidden visitor/session identifiers.
+    decorateForms();
+  }
+
   function persistAnalyticsIdentity() {
+    // Restore session continuity only after an acknowledged analytics grant.
+    safeSet(window.sessionStorage, KEYS.sessionVisitor, visitorId);
+    safeSet(window.sessionStorage, KEYS.session, sessionId);
+    safeSet(window.sessionStorage, KEYS.sessionTouch, JSON.stringify(sessionTouch));
+    safeSet(window.sessionStorage, KEYS.pendingFirstTouch, JSON.stringify(firstTouch));
     safeSet(window.localStorage, KEYS.persistentVisitor, visitorId);
     if (meaningfulObject(firstTouch)) {
       safeSet(window.localStorage, KEYS.firstTouch, JSON.stringify(firstTouch));
     }
   }
 
+  // A second tab must not resume from a saved consent grant until it has
+  // observed a fresh post-grant shared visitor ID. This storage handler runs
+  // only for changes made in OTHER tabs on the same website origin.
+  var externalGrantAwaitingIdentity = false;
+
+  function onExternalStorage(event) {
+    if (!event || event.storageArea !== window.localStorage) return;
+
+    if (event.key === KEYS.privacy || event.key === null) {
+      var incoming = parseJson(event.newValue, {});
+      var previous = parseJson(event.oldValue, {});
+      var decision = incoming && incoming.analytics;
+      var priorDecision = previous && previous.analytics;
+
+      if (decision !== priorDecision || event.newValue === null) {
+        // Invalidate any older in-flight consent reply from this tab.
+        // It may not undo another tab's later privacy decision.
+        analyticsConsentRevision += 1;
+      }
+
+      if (event.newValue === null || analyticsDenied(decision)) {
+        if (!analyticsOptOutRequested || externalGrantAwaitingIdentity) {
+          analyticsOptOutRequested = true;
+          rotateAnalyticsIdentity(true);
+        }
+        analyticsOptOutRequested = true;
+        externalGrantAwaitingIdentity = false;
+        return;
+      }
+
+      if (decision === 'granted' && priorDecision !== 'granted') {
+        // A privacy-state event precedes the visitor-ID storage update on
+        // a successful grant. Never send events using an obsolete ID here.
+        analyticsOptOutRequested = true;
+        externalGrantAwaitingIdentity = true;
+      }
+      return;
+    }
+
+    if (event.key !== KEYS.persistentVisitor ||
+        !externalGrantAwaitingIdentity ||
+        privacyState().analytics !== 'granted') return;
+
+    var newVisitor = event.newValue;
+    if (!newVisitor || newVisitor !== safeGet(window.localStorage, KEYS.persistentVisitor) ||
+        !/^v_[A-Za-z0-9_-]{8,100}$/.test(newVisitor)) return;
+
+    analyticsIdentityEpoch += 1;
+    visitorId = newVisitor;
+    sessionId = randomId('s');
+    sessionTouch = currentTouch();
+    firstTouch = sessionTouch;
+    safeRemove(window.sessionStorage, KEYS.sessionStarted);
+    safeRemove(window.sessionStorage, KEYS.pendingFirstTouch);
+    window.__salsysInitialPageSent = false;
+    analyticsOptOutRequested = false;
+    externalGrantAwaitingIdentity = false;
+    safeSet(window.sessionStorage, KEYS.sessionVisitor, visitorId);
+    safeSet(window.sessionStorage, KEYS.session, sessionId);
+    safeSet(window.sessionStorage, KEYS.sessionTouch, JSON.stringify(sessionTouch));
+    firstTouch = getFirstTouch();
+    decorateForms();
+    sendSessionStarted();
+    if (AUTO_PAGE && !window.__salsysInitialPageSent) {
+      window.__salsysInitialPageSent = true;
+      track('web.page_viewed', {}, { keepalive: true }).catch(function () {});
+    }
+  }
+
+  function reconcileExternalConsent() {
+    var decision = privacyState().analytics;
+    if (analyticsDenied(decision)) {
+      if (!analyticsOptOutRequested) {
+        analyticsOptOutRequested = true;
+        rotateAnalyticsIdentity(true);
+      }
+      externalGrantAwaitingIdentity = false;
+      return;
+    }
+    if (decision !== 'granted') return;
+    var candidate = safeGet(window.localStorage, KEYS.persistentVisitor);
+    if (candidate && candidate !== visitorId) {
+      // A suspended tab may miss both storage events; its next interaction
+      // must join only the new, acknowledged visitor epoch.
+      analyticsOptOutRequested = true;
+      externalGrantAwaitingIdentity = true;
+      onExternalStorage({
+        key: KEYS.persistentVisitor,
+        newValue: candidate,
+        storageArea: window.localStorage
+      });
+    }
+  }
+
+  if (typeof window.addEventListener === 'function') {
+    window.addEventListener('storage', onExternalStorage);
+    window.addEventListener('pageshow', reconcileExternalConsent);
+    window.addEventListener('focus', reconcileExternalConsent);
+  }
+
+  // A 2xx transport status is NOT consent persistence proof. Both public
+  // consent endpoints return this structured receipt contract after writing.
+  // Fail closed if a proxy or unexpected response omits that evidence.
+  function verifiedConsentDecisions(result, request) {
+    var invalid = function () {
+      throw new Error('Privacy preference server receipt was not verified.');
+    };
+    if (!result || result.ok !== true ||
+        result.visitor_id !== request.visitor_id ||
+        !result.effective_decisions ||
+        typeof result.effective_decisions !== 'object' ||
+        Array.isArray(result.effective_decisions) ||
+        !Array.isArray(result.receipts)) invalid();
+
+    var effective = result.effective_decisions;
+    var allowedPurposes = ['analytics', 'marketing', 'advertising',
+      'sale_sharing', 'personalization'];
+    var allowedDecisions = ['granted', 'denied', 'withdrawn', 'opted_out', 'limited'];
+    // The browser can rely on a consent receipt only when it accounts for
+    // every persisted decision and there are no extra/unrequested receipts.
+    // Public consent endpoints emit exactly one receipt per effective purpose.
+    var effectivePurposes = Object.keys(effective);
+    if (result.receipts.length !== effectivePurposes.length) invalid();
+    result.receipts.forEach(function (receipt) {
+      if (!receipt || !Object.prototype.hasOwnProperty.call(effective, receipt.purpose) ||
+          receipt.decision !== effective[receipt.purpose] ||
+          typeof receipt.receipt_id !== 'string' ||
+          receipt.receipt_id.trim().length === 0 ||
+          receipt.receipt_id === 'null') invalid();
+    });
+    effectivePurposes.forEach(function (purpose) {
+      if (allowedPurposes.indexOf(purpose) === -1 ||
+          allowedDecisions.indexOf(effective[purpose]) === -1) invalid();
+      // The only server-added purpose allowed by the public consent API is
+      // GPC sale-sharing opt-out. Never grant an unrequested optional purpose.
+      if (!Object.prototype.hasOwnProperty.call(request.decisions, purpose) &&
+          !(purpose === 'sale_sharing' && effective[purpose] === 'opted_out')) invalid();
+      var matches = result.receipts.filter(function (receipt) {
+        return receipt && receipt.purpose === purpose &&
+          receipt.decision === effective[purpose] &&
+          typeof receipt.receipt_id === 'string' &&
+          receipt.receipt_id.trim().length > 0 &&
+          receipt.receipt_id !== 'null';
+      });
+      if (matches.length !== 1) invalid();
+    });
+    Object.keys(request.decisions).forEach(function (purpose) {
+      if (effective[purpose] !== request.decisions[purpose]) invalid();
+    });
+    return effective;
+  }
+
+  // Queue network consent receipts in invocation order; never claim a later
+  // grant is confirmed before an earlier withdrawal request completes.
+  var consentReceiptQueue = Promise.resolve();
+  var analyticsConsentRevision = 0;
+
   function consent(decisions) {
+    // Also catches a tab that missed a remote withdrawal while suspended.
+    // This must run before the receipt captures its visitor ID.
+    reconcileExternalConsent();
     var normalized = {};
     Object.keys(decisions || {}).forEach(function (purpose) {
       var decision = String(decisions[purpose] || '').trim().toLowerCase();
@@ -482,42 +712,68 @@
       return Promise.reject(new Error('At least one supported privacy decision is required.'));
     }
 
+    var changesAnalytics = Object.prototype.hasOwnProperty.call(normalized, 'analytics');
+    var revision = changesAnalytics ? ++analyticsConsentRevision : analyticsConsentRevision;
+    var optingOut = changesAnalytics && analyticsDenied(normalized.analytics);
     var body = {
       event_id: randomId('consent'),
+      // The receipt refers to the original browser identity, before rotation.
       visitor_id: visitorId,
       occurred_at: new Date().toISOString(),
       gpc: gpcEnabled(),
       decisions: normalized
     };
 
-    return postJson(CONSENT_ENDPOINT, body, true).then(function (result) {
-      var effective =
-        result && result.effective_decisions && typeof result.effective_decisions === 'object'
-          ? result.effective_decisions
-          : normalized;
+    if (optingOut) {
+      // The local choice is authoritative for stopping optional tracking:
+      // even if the network is offline, opt-out must never be rolled back.
+      analyticsOptOutRequested = true;
+      var immediate = privacyState();
+      immediate.analytics = normalized.analytics;
+      immediate.updated_at = new Date().toISOString();
+      immediate.gpc = gpcEnabled();
+      safeSet(window.localStorage, KEYS.privacy, JSON.stringify(immediate));
+      rotateAnalyticsIdentity();
+    }
+
+    var receipt = consentReceiptQueue.then(function () {
+      return postJson(CONSENT_ENDPOINT, body, true);
+    });
+    consentReceiptQueue = receipt.catch(function () {});
+
+    return receipt.then(function (result) {
+      if (changesAnalytics && revision !== analyticsConsentRevision) {
+        throw new Error('Consent request superseded by a newer browser privacy decision.');
+      }
+      var effective = verifiedConsentDecisions(result, body);
+      if (optingOut && !analyticsDenied(effective.analytics)) {
+        throw new Error('Analytics opt-out was not confirmed. Local tracking remains disabled.');
+      }
+
       var state = privacyState();
-      Object.keys(effective).forEach(function (key) { state[key] = effective[key]; });
+      Object.keys(effective).forEach(function (key) {
+        if (key === 'analytics' &&
+            (!changesAnalytics || revision !== analyticsConsentRevision)) return;
+        state[key] = effective[key];
+      });
       state.updated_at = new Date().toISOString();
       state.gpc = gpcEnabled();
       safeSet(window.localStorage, KEYS.privacy, JSON.stringify(state));
 
-      if (state.analytics === 'granted') {
+      if (changesAnalytics && revision === analyticsConsentRevision) {
+        analyticsOptOutRequested = analyticsDenied(state.analytics);
+      }
+
+      if (analyticsGranted()) {
         persistAnalyticsIdentity();
         firstTouch = getFirstTouch();
+        decorateForms();
         flushQueue();
         sendSessionStarted();
         if (AUTO_PAGE && !window.__salsysInitialPageSent) {
           window.__salsysInitialPageSent = true;
           track('web.page_viewed', {}, { keepalive: true }).catch(function () {});
         }
-      } else if (
-        state.analytics === 'denied' ||
-        state.analytics === 'withdrawn' ||
-        state.analytics === 'opted_out'
-      ) {
-        safeRemove(window.localStorage, KEYS.persistentVisitor);
-        safeRemove(window.localStorage, KEYS.firstTouch);
-        safeRemove(window.localStorage, KEYS.queue);
       }
 
       return result;
@@ -631,12 +887,40 @@
     }, { capture: true });
   }
 
+  function queuedSessionStartFor(sessionKey, browserVisitor) {
+    // A failed original envelope retains the event ID for idempotent retry.
+    // Both identity parts must match the current consent/browser epoch.
+    var queued = readQueue();
+    for (var i = 0; i < queued.length; i++) {
+      var item = queued[i];
+      if (item && item.event_name === 'web.session_started' &&
+          item.session_key === sessionKey &&
+          item.anonymous_visitor_id === browserVisitor &&
+          typeof item.event_id === 'string' && item.event_id.length > 0) {
+        return true;
+      }
+    }
+    return false;
+  }
+
   function sendSessionStarted() {
     if (!analyticsGranted()) return;
-    if (safeGet(window.sessionStorage, KEYS.sessionStarted) === sessionId) return;
-    safeSet(window.sessionStorage, KEYS.sessionStarted, sessionId);
+    var emittedSession = sessionId;
+    var emittedVisitor = visitorId;
+    if (safeGet(window.sessionStorage, KEYS.sessionStarted) === emittedSession) return;
+    if (queuedSessionStartFor(emittedSession, emittedVisitor)) {
+      // The consent-epoch-aware flushQueue() handles the original envelope.
+      safeSet(window.sessionStorage, KEYS.sessionStarted, emittedSession);
+      return;
+    }
+    safeSet(window.sessionStorage, KEYS.sessionStarted, emittedSession);
     track('web.session_started', {}, { keepalive: true }).catch(function () {
-      safeRemove(window.sessionStorage, KEYS.sessionStarted);
+      // Withdrawal clears the old queue and rotates session and visitor IDs.
+      // A late POST failure must never touch a newer session's marker.
+      if (queuedSessionStartFor(emittedSession, emittedVisitor)) return;
+      if (safeGet(window.sessionStorage, KEYS.sessionStarted) === emittedSession) {
+        safeRemove(window.sessionStorage, KEYS.sessionStarted);
+      }
     });
   }
 
@@ -667,7 +951,7 @@
 
   var api = {
     __eventIntelligenceV1: true,
-    version: '1.1.0',
+    version: '1.1.1',
     track: track,
     page: function (properties) {
       return track('web.page_viewed', properties || {}, { keepalive: true });
@@ -715,7 +999,7 @@
     consent({ sale_sharing: 'opted_out' }).catch(function () {});
   }
 
-  if (CONSENT_MODE === 'granted' && privacyState().analytics !== 'granted') {
+  if (CONSENT_MODE === 'granted' && !Object.prototype.hasOwnProperty.call(privacyState(), 'analytics')) {
     consent({ analytics: 'granted' }).catch(function () {});
   } else if (analyticsGranted()) {
     persistAnalyticsIdentity();
