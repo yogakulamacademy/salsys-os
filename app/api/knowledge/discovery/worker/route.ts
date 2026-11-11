@@ -1,0 +1,86 @@
+import { NextRequest, NextResponse } from 'next/server';
+import { createAdminClient } from '@/lib/supabase/admin';
+import { bearerMatchesAnySecret } from '@/lib/security/machine-bearer-auth';
+import { processOneDiscoveryPage } from '@/lib/knowledge-discovery/runner';
+import { parseWebsiteSeed } from '@/lib/knowledge-discovery/url-policy';
+import { discoveryPilotEnabled, discoveryHostAllowed } from '@/lib/knowledge-discovery/pilot-gate';
+import { discoveryDomainVerified, discoveryVerificationHost } from '@/lib/knowledge-discovery/domain-verification';
+import { discoverySiteConsentActive } from '@/lib/knowledge-discovery/site-consent';
+
+export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
+export const maxDuration = 60;
+
+const noStore = { 'Cache-Control': 'no-store' };
+
+/** Service-only runner. Configure a scheduler separately after deployment review. */
+export async function POST(request: NextRequest) {
+  // Emergency stop: refuse to claim any job before touching the database.
+  if (!discoveryPilotEnabled()) return NextResponse.json(
+    { ok: false, error: 'Discovery pilot disabled' }, { status: 503, headers: noStore },
+  );
+  // Isolate this privileged crawler from the shared CRON_SECRET used by
+  // unrelated jobs. A future scheduler MUST supply the dedicated runner
+  // credential after an independent operational review, not a generic token.
+  const runnerSecret = process.env.KNOWLEDGE_DISCOVERY_RUNNER_SECRET?.trim();
+  if (!runnerSecret) return NextResponse.json(
+    { ok: false, error: 'Runner not configured' }, { status: 503, headers: noStore },
+  );
+  if (!bearerMatchesAnySecret(request.headers.get('authorization'), [runnerSecret])) {
+    return NextResponse.json({ ok: false, error: 'Unauthorized' }, { status: 401, headers: noStore });
+  }
+  try {
+    const admin = createAdminClient();
+    const { data, error } = await admin.rpc('claim_knowledge_discovery_job_v1');
+    if (error) throw error;
+    const claim = Array.isArray(data) ? data[0] : null;
+    if (!claim) return NextResponse.json({ ok: true, state: 'idle' }, { headers: noStore });
+    try {
+      // Jobs queued under older pilot configuration must still be rechecked
+      // against the currently approved host list before any outbound request.
+      const site = parseWebsiteSeed(claim.seed_url);
+      if (site.protocol !== 'https:' || !discoveryHostAllowed(site.hostname)) {
+        return NextResponse.json({ ok: false, error: 'Discovery job site is not approved' },
+          { status: 403, headers: noStore });
+      }
+      // Proof can expire or be replaced after a job was queued. Check it
+      // before the first outbound request of every worker tick.
+      const { data: proof, error: proofError } = await admin
+        .from('knowledge_discovery_domain_verifications')
+        .select('verified_at,verified_until')
+        .eq('organization_id', claim.organization_id)
+        .eq('hostname', discoveryVerificationHost(site.hostname)).maybeSingle();
+      if (proofError) throw proofError;
+      if (!discoveryDomainVerified(proof)) {
+        return NextResponse.json({ ok: false, error: 'Website ownership proof is missing or expired' },
+          { status: 403, headers: noStore });
+      }
+      const consent = await admin.from('knowledge_discovery_site_consents')
+        .select('organization_id,hostname,purpose,status,policy_version,granted_by,granted_at,valid_until,withdrawn_at')
+        .eq('organization_id',claim.organization_id)
+        .eq('hostname',discoveryVerificationHost(site.hostname)).maybeSingle();
+      if (consent.error) throw consent.error;
+      if (!discoverySiteConsentActive(
+        consent.data,claim.organization_id,discoveryVerificationHost(site.hostname),
+      )) {
+        return NextResponse.json({ok:false,error:'Website discovery consent missing or inactive'},
+          {status:403,headers:noStore});
+      }
+      // The processing adapter repeats consent validation before each new
+      // network request. SQL commit rechecks it atomically with page writes.
+      const outcome = await processOneDiscoveryPage(claim);
+      return NextResponse.json({ ok: true, state: 'processed', result: outcome }, { headers: noStore });
+    } catch {
+      // A lease expiry makes the job retryable. Do not set completed on error.
+      // Repeated stale leases become failed after five unsuccessful claims.
+      return NextResponse.json({ ok: false, error: 'Discovery worker failed; lease will expire' },
+        { status: 500, headers: noStore });
+    }
+  } catch {
+    return NextResponse.json({ ok: false, error: 'Discovery service unavailable' },
+      { status: 503, headers: noStore });
+  }
+}
+
+// Vercel Cron performs GET; the same bearer-secret boundary applies.
+export const GET = POST;
