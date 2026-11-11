@@ -23,12 +23,12 @@ Verified from current GitHub `main`:
   - `bindDmLinkToCrmMessage`: pure association of proposed server-side link registry record to authorized `organization_id`, `lead_id`, exact Instagram `conversations.id`, `messages.id`, `external_account_id`, `instagram_user_id`, `messages.external_message_id` and link issue/send/expiry timeline. Missing, denied, cross-org, misbound or revoked inputs fail closed.
   - `projectDmLinkStaffEvidence`: pure staff-facing allowlisted projection that reuses the DM-LINK-02 coverage classifier and DM-LINK-01 human attention evaluator. Exposes link-visit status, *approximate observed network country*, source message reference, bounded visit count, and proposed staff attention reason. It strips recipient/account/token IDs and all raw chat body/metadata; preserves `countryOfResidenceVerified=false`, `pricingEligibility='undetermined'`, `canAutoSend=false`.
   - The `link` input is an **intended future server-only registry schema**, not an existing deployed Supabase table. All inputs must originate from an independently verified authorized, tenant-filtered server loader; client-supplied `staffCanWorkLead`, purpose permission or provider send state are not security authority.
-- `tests/readiness/dm-link-crm-evidence-v1.test.cjs`: 15 tests for exact associations, revoked/mismatched links, missing provider MID, old/foreign tenant/lead, request/record policy, safely redacted staff preview, ambiguous/no click, forbidden auto-sends and country-vs-pricing independence.
+- `tests/readiness/dm-link-crm-evidence-v1.test.cjs`: 16 tests for exact associations, revoked/mismatched links, missing provider MID, old/foreign tenant/lead, PostgreSQL microsecond timestamp compatibility, request/record policy, safely redacted staff preview, ambiguous/no click, forbidden auto-sends and country-vs-pricing independence.
 
 ## Executed verification
 
 Executed in local temporary checkout using source-matching copies:
-- `NODE_PATH=$(npm root -g) node --test tests/readiness/dm-link-*.test.cjs` — **44 tests passed, 0 failed** (existing DM-LINK-01/02 + new DM-LINK-03).
+- `NODE_PATH=$(npm root -g) node --test tests/readiness/dm-link-*.test.cjs` — **46 tests passed, 0 failed** (existing DM-LINK-01/02 + new DM-LINK-03).
 - `tsc --noEmit --strict --target es2022 --module commonjs --moduleResolution node --lib es2022,dom --skipLibCheck lib/ai/dm-link-crm-evidence.ts lib/ai/dm-link-coverage.ts lib/ai/dm-link-intelligence.ts` — **passed**.
 - New source/test contents were saved in GitHub and read-back compared by file size and key text. GitHub branch comparison shows only additive files. **Do not describe these synthetic tests as a real user/Meta flow.**
 
@@ -51,3 +51,5 @@ Not run: repo-wide `npm run test:readiness`, full Next build, GitHub Actions/Cod
 **Complete now:** Offline association + staff evidence model and synthetic tests committed to isolated feature branch.  
 **Incomplete:** Actual Supabase link record, redirect, country lookup, live website analytics, task insertion, Instagram sends, autonomous AI model, pricing selection, consent approval, independent review, staging, production deployment.  
 **No merge/PR needed or authorized at this checkpoint.** This doc records what to resume next after review gates.
+
+**Post-checkpoint hardening:** The existing DM-LINK-01 visit parser and the new CRM binding parser now accept ISO 8601 fractional seconds up to six digits, matching common PostgreSQL/Supabase timestamp representations. Two additional local regression cases passed (46 total across the three offline test files). This was not a live database test.
