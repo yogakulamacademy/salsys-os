@@ -36,8 +36,10 @@ begin
     raise exception 'Organization ID is required';
   end if;
 
-  if auth.role() <> 'service_role'
-     and not public.can_manage_organization(p_organization_id) then
+  -- Privileged function authorization must fail closed when the JWT role or
+  -- the tenant-management result is NULL (or otherwise not explicitly true).
+  if auth.role() is distinct from 'service_role'
+     and public.can_manage_organization(p_organization_id) is distinct from true then
     raise exception 'Only organization admins can manage AI knowledge';
   end if;
 
