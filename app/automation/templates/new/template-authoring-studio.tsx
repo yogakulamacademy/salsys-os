@@ -62,8 +62,8 @@ function InlineMessage({ text, tone }: { text: string; tone: 'error' | 'info' | 
 }
 
 export function TemplateAuthoringStudio({
-  initialDraftId, submissionEnabled,
-}: { initialDraftId: string | null; submissionEnabled: boolean }) {
+  initialDraftId, submissionEnabled, previewMode = false,
+}: { initialDraftId: string | null; submissionEnabled: boolean; previewMode?: boolean }) {
   const [form, setForm] = useState<AuthoringForm>(initial);
   const [draftId, setDraftId] = useState<string | null>(initialDraftId);
   const [status, setStatus] = useState('draft');
@@ -106,9 +106,10 @@ export function TemplateAuthoringStudio({
     [form.body, form.examples],
   );
   const locked = loading || busy || status !== 'draft';
-  const canSubmit = submissionEnabled && !locked;
+  const canSubmit = !previewMode && submissionEnabled && !locked;
 
   async function saveDraft(): Promise<string | null> {
+    if (previewMode) return null; // No persistence in the safely gated preview.
     setBusy(true);
     setNotice(null);
     try {
@@ -135,7 +136,7 @@ export function TemplateAuthoringStudio({
   }
 
   async function submitForReview() {
-    if (!canSubmit || !reviewOpen) return;
+    if (previewMode || !canSubmit || !reviewOpen) return;
     setReviewOpen(false);
     const id = await saveDraft();
     if (!id) return;
@@ -173,10 +174,13 @@ export function TemplateAuthoringStudio({
       </div>
 
       <div>
-        <h1 className="text-2xl font-bold tracking-tight text-slate-950 dark:text-white">Create WhatsApp template</h1>
-        <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">Compose a reusable message, preview variables, then request Meta approval.</p>
+        <h1 className="text-2xl font-bold tracking-tight text-slate-950 dark:text-white">{previewMode ? 'Preview WhatsApp Template Studio' : 'Create WhatsApp template'}</h1>
+        <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">{previewMode ? 'Try the editor and live message preview. This preview never saves or sends anything.' : 'Compose a reusable message, preview variables, then request Meta approval.'}</p>
       </div>
 
+      {previewMode ? (
+        <InlineMessage tone="info" text="Preview only — template creation is not activated. You can edit the fields and see the live preview; saving drafts and submitting to Meta are disabled."/>
+      ) : null}
       <div className="grid gap-4 xl:grid-cols-[minmax(0,1.15fr)_minmax(290px,.85fr)]">
         <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900/50">
           <div className="mb-5 flex items-center gap-2 border-b border-slate-100 pb-4 text-sm font-bold text-slate-900 dark:border-slate-800 dark:text-slate-100"><FileText size={16} className="text-indigo-500"/> Message details</div>
@@ -243,7 +247,7 @@ export function TemplateAuthoringStudio({
               <div className="flex gap-2"><Clock3 size={14} className="shrink-0 text-amber-600"/> Meta reviews submitted templates independently.</div>
               <div className="flex gap-2"><ShieldCheck size={14} className="shrink-0 text-indigo-600"/> Customer sends still require existing approval, consent and provider gates.</div>
             </div>
-            {!submissionEnabled ? <div className="mt-4"><InlineMessage tone="info" text="Provider submission is currently disabled for the controlled rollout. Draft creation remains available after the new schema is installed."/></div> : null}
+            {!submissionEnabled ? <div className="mt-4"><InlineMessage tone="info" text={previewMode ? "Preview only. No database writes or Meta API calls are possible." : "Provider submission is currently disabled for the controlled rollout. Draft creation remains available after the new schema is installed."}/></div> : null}
           </div>
         </aside>
       </div>
@@ -256,7 +260,7 @@ export function TemplateAuthoringStudio({
       <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900/50">
         <div className="text-xs text-slate-500">Drafts are workspace-specific. Authentication templates and media headers require a separate validated authoring flow.</div>
         <div className="flex flex-wrap gap-2">
-          <button type="button" className="inline-flex items-center gap-2 rounded-lg border border-slate-200 px-4 py-2.5 text-xs font-bold text-slate-700 disabled:opacity-40 dark:border-slate-700 dark:text-slate-200" disabled={locked} onClick={() => { void saveDraft(); }}>{busy ? <Loader2 size={14} className="animate-spin"/> : <Save size={14}/>} Save draft</button>
+          <button type="button" className="inline-flex items-center gap-2 rounded-lg border border-slate-200 px-4 py-2.5 text-xs font-bold text-slate-700 disabled:opacity-40 dark:border-slate-700 dark:text-slate-200" disabled={previewMode || locked} onClick={() => { void saveDraft(); }}>{busy ? <Loader2 size={14} className="animate-spin"/> : <Save size={14}/>} Save draft</button>
           <button type="button" className="inline-flex items-center gap-2 rounded-lg bg-indigo-600 px-4 py-2.5 text-xs font-bold text-white disabled:opacity-40" disabled={!canSubmit} onClick={() => setReviewOpen(true)}><Send size={14}/> Submit to Meta <ChevronRight size={13}/></button>
         </div>
       </div>
