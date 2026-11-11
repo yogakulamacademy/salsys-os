@@ -7,6 +7,14 @@ on:
     paths:
       - 'supabase/**'
       - 'scripts/build-migration-recovery-manifest.mjs'
+      - 'scripts/r2-staging-migration-manifest.mjs'
+      - 'tests/readiness/r2-staging-migration-manifest-v1.test.cjs'
+      - 'scripts/r2-staging-remote-dryrun.mjs'
+      - 'tests/readiness/r2-staging-remote-dryrun-v1.test.cjs'
+      - 'scripts/r2-staging-sql-external-effects-audit.mjs'
+      - 'tests/readiness/r2-staging-sql-external-effects-audit-v1.test.cjs'
+      - 'scripts/r2-staging-inert-scheduler-sql-copy.mjs'
+      - 'tests/readiness/r2-staging-inert-scheduler-sql-copy-v1.test.cjs'
       - 'tests/database/r2-behavior-rpc-negative-auth-local.sql'
       - 'tests/database/r2-behavior-rpc-positive-tenant-local.sql'
       - '.github/workflows/migration-replay.yml'
@@ -260,6 +268,32 @@ jobs:
           cp supabase/recovery/20261101095410_dashboard_snapshot_authorization_prerequisite.sql \
              supabase/migrations/20261101095410_dashboard_snapshot_authorization_prerequisite.sql
 
+      - name: Fingerprint exact staged SQL migration working tree
+        shell: bash
+        run: |
+          set -euo pipefail
+          node scripts/r2-staging-migration-manifest.mjs supabase/migrations \
+            > r2-staging-migration-worktree-manifest.json
+          node --test tests/readiness/r2-staging-migration-manifest-v1.test.cjs
+          node --test tests/readiness/r2-staging-remote-dryrun-v1.test.cjs
+          node scripts/r2-staging-sql-external-effects-audit.mjs supabase/migrations \
+            > r2-staging-sql-external-effects-candidates.json
+          node --test tests/readiness/r2-staging-sql-external-effects-audit-v1.test.cjs
+
+      - name: Prepare stage-only inert SQL copy from exact hashed source
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Build staging copy *before* CLI startup and original local replay.
+          # Protect source manifest provenance from any later tooling side effects.
+          node --test tests/readiness/r2-staging-inert-scheduler-sql-copy-v1.test.cjs
+          approved_sha="$(node -e "process.stdout.write(JSON.parse(require('node:fs').readFileSync('r2-staging-migration-worktree-manifest.json','utf8')).manifestSha256)")"
+          node scripts/r2-staging-inert-scheduler-sql-copy.mjs \
+            --source supabase/migrations \
+            --output "$RUNNER_TEMP/r2-staging-inert-migrations" \
+            --expected-source-manifest-sha256 "$approved_sha" \
+            > r2-staging-inert-sql-manifest.json
+
       - name: Start local Supabase database
         shell: bash
         run: |
@@ -297,6 +331,207 @@ jobs:
             -U postgres -d postgres \
             < tests/database/r2-behavior-rpc-positive-tenant-local.sql
 
+      - name: Verify staging-only inert cron SQL replay in disposable local Postgres
+        shell: bash
+        run: |
+          set -euo pipefail
+          # The source migration replay and two-tenant DB assertions already ran.
+          # This is an independent second reset of the SAME disposable local DB;
+          # no Supabase remote project, service key, production URL or stage API.
+          find supabase/migrations -maxdepth 1 -type f -name '*.sql' -delete
+          cp "$RUNNER_TEMP/r2-staging-inert-migrations/"*.sql supabase/migrations/
+          # Stage acceptance must prove empty application records, not dev seed fixtures.
+          # This alters only the disposable runner checkout, never the repository or remote project.
+          test -f supabase/seed.sql
+          printf '%s\n' '-- Intentionally no synthetic seed rows in staging-only replay.' > supabase/seed.sql
+          supabase db reset --local 2>&1 | tee -a migration-replay.log
+          db_containers="$(docker ps --format '{{.Names}}' | grep '^supabase_db_' || true)"
+          test "$(printf '%s\n' "$db_containers" | grep -c .)" -eq 1
+          docker exec -i "$db_containers" psql -X -v ON_ERROR_STOP=1 -U postgres -d postgres <<'SQL'
+          do $check$
+          begin
+            if exists (
+              select 1 from cron.job
+               where active is true and btrim(command) <> 'select 1;'
+            ) then
+              raise exception 'STAGING_CRON_COMMAND_NOT_INERT';
+            end if;
+            if not exists (
+              select 1 from public.automation_scheduler_settings
+               where id=1 and enabled is false
+                 and endpoint_url='https://staging.invalid/api/automation/runtime-scheduler'
+            ) then
+              raise exception 'STAGING_SCHEDULER_ENDPOINT_NOT_ISOLATED';
+            end if;
+            if not exists (
+              select 1 from pg_catalog.pg_proc
+               where oid=to_regprocedure('public.invoke_automation_runtime_scheduler_v1()')
+                 and position('return null;' in pg_get_functiondef(oid)) > 0
+                 and position('net.http_get' in pg_get_functiondef(oid)) = 0
+                 and position('vault.decrypted_secrets' in pg_get_functiondef(oid)) = 0
+            ) then
+              raise exception 'STAGING_PRIVILEGED_SCHEDULER_NOT_INERT';
+            end if;
+            if not exists (
+              select 1 from public.organization_sites
+               where hostname = 'r2-yogakulam.invalid'
+                 and status = 'active'
+                 and environment = 'staging'
+            )
+              or exists (
+                select 1 from public.organization_sites
+                 where status = 'active' and environment <> 'staging'
+              )
+              or exists (
+                select 1 from public.organization_sites
+                 where hostname not like '%.invalid'
+              )
+              or exists (
+                select 1 from public.organization_site_aliases
+                 where hostname not like '%.invalid'
+              )
+              or exists (
+                select 1 from public.organization_sites
+                 where hostname in ('yogakulam.com','www.yogakulam.com')
+              )
+              or exists (
+                select 1 from public.organization_site_aliases
+                 where hostname in ('yogakulam.com','www.yogakulam.com')
+              )
+            then
+              raise exception 'STAGING_UNSAFE_LIVE_SITE_HOSTNAME';
+            end if;
+            if (select count(*) from auth.users) <> 0
+              or (select count(*) from storage.objects) <> 0
+              or (select count(*) from public.leads) <> 0
+              or (select count(*) from public.lead_contacts) <> 0
+              or (select count(*) from public.messages) <> 0
+              or (select count(*) from public.conversations) <> 0
+              or (select count(*) from public.web_sessions) <> 0
+            then
+              raise exception 'STAGING_UNEXPECTED_IDENTITY_OR_CUSTOMER_ROWS';
+            end if;
+          end;
+          $check$;
+          SQL
+
+      - name: Verify R2 #643 full browser lead RPC + identity trigger path in disposable Postgres
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Must use only the already-started disposable local Supabase container.
+          # Never use production DB URLs, network services or real site data.
+          db_containers="$(docker ps --format '{{.Names}}' | grep '^supabase_db_' || true)"
+          test "$(printf '%s\n' "$db_containers" | grep -c .)" -eq 1
+          docker exec -i "$db_containers" psql -X -v ON_ERROR_STOP=1 \
+            -U postgres -d postgres \
+            < tests/database/r2-website-ingest-primary-contact-full-rpc-local.sql
+
+      - name: Verify R2 #643 privileged RPC restoration and rollback in disposable local Postgres
+        shell: bash
+        run: |
+          set -euo pipefail
+          # This NEVER connects to cloud Supabase: only a single already started
+          # local supabase_db_ Docker container with generated opt-in SQL.
+          db_containers="$(docker ps --format '{{.Names}}' | grep '^supabase_db_' || true)"
+          test "$(printf '%s\n' "$db_containers" | grep -c .)" -eq 1
+          sqlfile="$(mktemp)"
+          trap 'rm -f "$sqlfile"' EXIT
+          node scripts/r2-local-contact-rollback-rehearsal.mjs --disposable-local-only > "$sqlfile"
+          docker exec -i "$db_containers" psql -X -v ON_ERROR_STOP=1 \
+            -U postgres -d postgres < "$sqlfile"
+
+      - name: Verify staging-copy tenant RPC isolation and post-test emptiness
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Run only against the same disposable local PostgreSQL container.
+          # The positive fixture creates synthetic tenant/auth/event rows inside
+          # a transaction and performs a full ROLLBACK before returning.
+          db_containers="$(docker ps --format '{{.Names}}' | grep '^supabase_db_' || true)"
+          test "$(printf '%s\n' "$db_containers" | grep -c .)" -eq 1
+          docker exec -i "$db_containers" psql -X -v ON_ERROR_STOP=1 \
+            -U postgres -d postgres \
+            < tests/database/r2-behavior-rpc-negative-auth-local.sql
+          docker exec -i "$db_containers" psql -X -v ON_ERROR_STOP=1 \
+            -U postgres -d postgres \
+            < tests/database/r2-behavior-rpc-positive-tenant-local.sql
+          docker exec -i "$db_containers" psql -X -v ON_ERROR_STOP=1 \
+            -U postgres -d postgres <<'SQL'
+          do $stage$
+          begin
+            if (select count(*) from auth.users) <> 0
+               or (select count(*) from public.leads) <> 0
+               or (select count(*) from public.lead_contacts) <> 0
+               or (select count(*) from public.messages) <> 0
+               or (select count(*) from public.conversations) <> 0
+               or (select count(*) from public.web_sessions) <> 0
+               or (select count(*) from storage.objects) <> 0
+            then
+              raise exception 'STAGING_POST_TEST_DATA_NOT_EMPTY';
+            end if;
+            if exists (select 1 from cron.job where active and btrim(command) <> 'select 1;')
+            then
+              raise exception 'STAGING_POST_TEST_ACTIVE_CRON_NOT_INERT';
+            end if;
+          end;
+          $stage$;
+          SQL
+
+      - name: Package verified staging-only SQL without development seed
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Only the passed second disposable replay can reach this step.
+          # This is an offline artifact, never an auth or remote database action.
+          node --input-type=module <<'JS'
+          import fs from 'node:fs';
+          import { buildManifest } from './scripts/r2-staging-migration-manifest.mjs';
+          const verified = JSON.parse(fs.readFileSync('r2-staging-inert-sql-manifest.json', 'utf8'));
+          const actual = buildManifest('supabase/migrations');
+          if (actual.fileCount !== 432 || actual.manifestSha256 !== verified.stagingManifestSha256) {
+            throw Error('BLOCKED_STAGING_PACKAGE_DIGEST_MISMATCH');
+          }
+          const seed = fs.readFileSync('supabase/seed.sql', 'utf8');
+          if (seed.trim() !== '-- Intentionally no synthetic seed rows in staging-only replay.') {
+            throw Error('BLOCKED_STAGING_PACKAGE_HAS_DEVELOPMENT_SEED');
+          }
+          const entries = fs.readdirSync('supabase/migrations', {withFileTypes:true});
+          if (entries.length !== actual.fileCount || !entries.every(e=>e.isFile()&&e.name.endsWith('.sql'))) {
+            throw Error('BLOCKED_STAGING_PACKAGE_UNEXPECTED_FILES');
+          }
+          JS
+          package_root="$RUNNER_TEMP/r2-staging-reviewed-sql"
+          mkdir -p "$package_root/supabase/migrations"
+          cp -a supabase/migrations/. "$package_root/supabase/migrations/"
+          cp supabase/seed.sql "$package_root/supabase/seed.sql"
+          cp r2-staging-inert-sql-manifest.json "$package_root/staging-copy-manifest.json"
+          cp r2-staging-migration-worktree-manifest.json "$package_root/source-manifest.json"
+          tar -C "$package_root" -czf r2-staging-reviewed-sql.tar.gz \
+            supabase/migrations supabase/seed.sql \
+            staging-copy-manifest.json source-manifest.json
+          sha256sum r2-staging-reviewed-sql.tar.gz \
+            > r2-staging-reviewed-sql.tar.gz.sha256
+          # Independently recompute the SQL digest from the extracted archive.
+          check_dir="$RUNNER_TEMP/r2-staging-package-check"
+          mkdir -p "$check_dir"
+          tar -xzf r2-staging-reviewed-sql.tar.gz -C "$check_dir"
+          node --input-type=module <<'JS'
+          import fs from 'node:fs';
+          import path from 'node:path';
+          import { buildManifest } from './scripts/r2-staging-migration-manifest.mjs';
+          const root = process.env.RUNNER_TEMP + '/r2-staging-package-check';
+          const staged = JSON.parse(fs.readFileSync(path.join(root,'staging-copy-manifest.json'),'utf8'));
+          const result = buildManifest(path.join(root,'supabase/migrations'));
+          if (result.manifestSha256 !== staged.stagingManifestSha256 || result.fileCount !== 432) {
+            throw Error('BLOCKED_STAGING_PACKAGE_EXTRACTION_MISMATCH');
+          }
+          const seed = fs.readFileSync(path.join(root,'supabase/seed.sql'),'utf8');
+          if (seed.trim() !== '-- Intentionally no synthetic seed rows in staging-only replay.') {
+            throw Error('BLOCKED_STAGING_PACKAGE_EXTRACTED_SEED_MISMATCH');
+          }
+          JS
+
       - name: Show local migration state
         if: always()
         shell: bash
@@ -311,6 +546,11 @@ jobs:
           path: |
             migration-recovery-manifest.md
             migration-recovery-manifest-summary.json
+            r2-staging-migration-worktree-manifest.json
+            r2-staging-sql-external-effects-candidates.json
+            r2-staging-inert-sql-manifest.json
+            r2-staging-reviewed-sql.tar.gz
+            r2-staging-reviewed-sql.tar.gz.sha256
             migration-replay.log
           if-no-files-found: ignore
           retention-days: 3
