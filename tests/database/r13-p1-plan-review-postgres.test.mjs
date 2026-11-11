@@ -213,6 +213,11 @@ test('R13-P1 price review survives real Postgres roles, revisions, races and rol
 
     await db.query('RESET ROLE'); // Restore disposable database owner.
     await db.query('BEGIN');
+    // Even a privileged owner cannot bypass the price immutability trigger
+    // through ordinary DML; owners retain DDL authority outside this model.
+    await expectBlocked(db,
+      'update r13_review_preview.price_versions set amount_minor=1 where request_id=$1',
+      [requestId],/price versions are immutable/);
     await expectBlocked(db,
       'delete from r13_review_preview.events where request_id=$1',
       [requestId],/review evidence is append-only/);
