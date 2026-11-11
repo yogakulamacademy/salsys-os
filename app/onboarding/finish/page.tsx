@@ -320,9 +320,14 @@ export default async function OnboardingFinishPage({
                     <p className="mt-1 text-[11px] leading-5 text-emerald-800">
                       Business context and priorities are saved. Any unfinished website, channel, team or automation setup will remain visible on Home as recommendations until real system evidence confirms it is ready.
                     </p>
-                    <Link href="/home" className="mt-3 inline-flex h-9 items-center gap-2 rounded-lg bg-[#1f654e] px-3 text-[11px] font-bold text-white">
-                      Open SalsysOS <ArrowRight size={13} />
-                    </Link>
+                    <div className="mt-3 flex flex-wrap items-center gap-2">
+                      <Link href="/home" className="inline-flex h-9 items-center gap-2 rounded-lg bg-[#1f654e] px-3 text-[11px] font-bold text-white">
+                        Open SalsysOS <ArrowRight size={13} />
+                      </Link>
+                      <Link href="/settings/knowledge" className="inline-flex h-9 items-center gap-2 rounded-lg border border-emerald-300 bg-white px-3 text-[11px] font-bold text-emerald-900">
+                        Manage Knowledge Builder <ArrowRight size={13} />
+                      </Link>
+                    </div>
                   </div>
                 </div>
               </div>
