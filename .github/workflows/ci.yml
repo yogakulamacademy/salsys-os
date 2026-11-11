@@ -140,6 +140,9 @@ jobs:
       - name: Verify actual server auth adapter with synthetic session and tenant negatives
         run: node --test tests/readiness/r13-p1-server-auth-execution-v1.test.cjs
 
+      - name: Verify restricted commercial plans admin preview is inert and accurate
+        run: node --test tests/readiness/r13-p1-admin-preview-route-v1.test.cjs
+
       - name: Verify Cross-Workspace Investigation Scope Contracts
         run: npm run verify:investigation-scope
 
