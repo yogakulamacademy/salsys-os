@@ -37,5 +37,5 @@ test('R14 preview treats provider-dependent features as conditional and quotas a
   assert.match(source, /Proposed limits are not enforced/);
   assert.match(source, /No autonomous customer messaging/);
   assert.match(source, /has no\s+signup, billing, booking/);
-  assert.match(notes, /No.*public purchase or signup yet/i);
+  assert.match(notes, /public checkout and self-service activation are not yet live/i);
 });
