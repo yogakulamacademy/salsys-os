@@ -13,6 +13,7 @@ on:
       - feature/kb06f-staging-consent-actor-readonly
       - feature/kb06g-retention-deletion-dependency-inventory
       - feature/kb06h-isolated-staging-session-bind-handshake
+      - feature/kb07c-approval-audit-delete-guard-draft
   push:
     branches:
       - main
@@ -69,6 +70,9 @@ jobs:
 
       - name: Verify signed-session consent, withdrawal and metadata erasure on disposable PostgreSQL
         run: node --test tests/database/knowledge-discovery-consent-lifecycle.test.mjs
+
+      - name: Verify KB-07C approval audit deletion guard on disposable PostgreSQL
+        run: node --test tests/database/knowledge-approval-audit-delete-guard.test.mjs
 
       - name: Verify exact Instagram outbound projector SQL in isolated PostgreSQL
         run: node --test tests/database/instagram-outbound-echo-projector.test.mjs
