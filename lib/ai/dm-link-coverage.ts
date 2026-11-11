@@ -62,7 +62,7 @@ export function summarizeDmLinkCoverage(input: {
   if (!input.organizationId || !/^[A-Za-z0-9_-]{8,128}$/.test(input.linkId) ||
       input.processingPurposePermitted !== true || !Array.isArray(input.events) ||
       input.events.length > 100) return empty('restricted');
-  const seen = new Set<string>();
+  const seen = new Map<string, string>();
   let qualifying = 0;
   let ambiguous = 0;
   let unknownCountryVisits = 0;
@@ -74,8 +74,13 @@ export function summarizeDmLinkCoverage(input: {
         !/^[A-Za-z0-9_-]{8,128}$/.test(item.eventId) ||
         item.linkId !== input.linkId || !item.evidence ||
         item.evidence.organizationId !== input.organizationId) return empty('restricted');
-    if (seen.has(item.eventId)) continue;
-    seen.add(item.eventId);
+    const eventFingerprint = JSON.stringify(item);
+    const previousFingerprint = seen.get(item.eventId);
+    if (previousFingerprint !== undefined) {
+      if (previousFingerprint !== eventFingerprint) return empty('restricted');
+      continue;
+    }
+    seen.set(item.eventId, eventFingerprint);
     const result = evaluateDmLinkVisit(item.evidence);
     if (result.status === 'restricted') return empty('restricted');
     if (result.status === 'ambiguous_request') {
