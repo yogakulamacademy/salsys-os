@@ -1,0 +1,108 @@
+{
+  "name": "KB-09M strict draft-only cutover inventory",
+  "status": "blocked_unapproved_no_migration",
+  "parentDraftPr": 650,
+  "foundationSqlReviewOrder": [
+    "docs/sql/KB-01B-discovery-schema-DRAFT.sql",
+    "docs/sql/KB-06A-discovery-consent-execution-DRAFT.sql",
+    "docs/sql/KB-06B-audited-discovery-consent-lifecycle-DRAFT.sql",
+    "docs/sql/KB-06C-revoked-discovery-metadata-erasure-DRAFT.sql",
+    "docs/sql/KB-06E-reviewed-policy-document-preview-DRAFT.sql",
+    "docs/sql/KB-07D-consent-erasure-audit-truncate-guard-DRAFT.sql"
+  ],
+  "disposableRehearsalSqlOrder": [
+    "docs/sql/KB-09F-commit-side-ownership-guard-REHEARSAL-DRAFT.sql",
+    "docs/sql/KB-09G-direct-write-boundary-REHEARSAL-DRAFT.sql",
+    "docs/sql/KB-09H-tenant-cancel-and-seed-failure-CAS-REHEARSAL-DRAFT.sql",
+    "docs/sql/KB-09I-discovery-public-rpc-bridge-REHEARSAL-DRAFT.sql",
+    "docs/sql/KB-09J-atomic-session-authorized-enqueue-REHEARSAL-DRAFT.sql",
+    "docs/sql/KB-09K-proof-consent-direct-DML-boundary-REHEARSAL-DRAFT.sql",
+    "docs/sql/KB-09L-proof-preimage-operator-hold-REHEARSAL-DRAFT.sql",
+    "docs/sql/KB-09M-proof-checked-worker-commit-bridge-REHEARSAL-DRAFT.sql"
+  ],
+  "runtimeContracts": [
+    {
+      "path": "app/api/knowledge/discovery/route.ts",
+      "name": "enqueue_knowledge_discovery_job_v1",
+      "role": "authenticated",
+      "method": "POST"
+    },
+    {
+      "path": "app/api/knowledge/discovery/route.ts",
+      "name": "cancel_knowledge_discovery_job_v1",
+      "role": "authenticated",
+      "method": "DELETE"
+    },
+    {
+      "path": "app/api/knowledge/discovery/verification/route.ts",
+      "name": "issue_knowledge_discovery_challenge_for_admin_v1",
+      "role": "authenticated",
+      "method": "POST"
+    },
+    {
+      "path": "app/api/knowledge/discovery/verification/route.ts",
+      "name": "claim_knowledge_discovery_proof_check_for_admin_v1",
+      "role": "authenticated",
+      "method": "PUT"
+    },
+    {
+      "path": "app/api/knowledge/discovery/verification/route.ts",
+      "name": "confirm_checked_knowledge_discovery_proof_v2",
+      "role": "service_role",
+      "method": "PUT"
+    },
+    {
+      "path": "app/api/knowledge/discovery/consent/route.ts",
+      "name": "grant_knowledge_discovery_consent_v1",
+      "role": "authenticated",
+      "method": "POST"
+    },
+    {
+      "path": "app/api/knowledge/discovery/consent/route.ts",
+      "name": "withdraw_knowledge_discovery_consent_v1",
+      "role": "authenticated",
+      "method": "DELETE"
+    },
+    {
+      "path": "app/api/knowledge/discovery/worker/route.ts",
+      "name": "claim_knowledge_discovery_job_v1",
+      "role": "service_role",
+      "method": "POST"
+    },
+    {
+      "path": "lib/knowledge-discovery/runner.ts",
+      "name": "commit_knowledge_discovery_page_with_proof_v1",
+      "role": "service_role",
+      "method": "commit"
+    }
+  ],
+  "revokedUnsafeRpcNames": [
+    "commit_knowledge_discovery_page_v1",
+    "confirm_checked_knowledge_discovery_proof_v1",
+    "issue_knowledge_discovery_domain_challenge_v1",
+    "claim_knowledge_discovery_proof_check_v1"
+  ],
+  "lockedFlags": [
+    "KNOWLEDGE_DISCOVERY_PILOT_ENABLED",
+    "KNOWLEDGE_DISCOVERY_CONSENT_MANAGEMENT_ENABLED"
+  ],
+  "conditions": {
+    "hostedSqlAllowed": false,
+    "deployAllowed": false,
+    "approvedMigrationExists": false,
+    "legalPolicyApproved": false,
+    "independentSecurityApproval": false,
+    "independentlyWitnessedStagingCases": 0,
+    "mandatoryStagingCases": 16,
+    "deploymentOrMergeAllowed": false,
+    "newPaidStagingUntilRevenueAndFreshApproval": false
+  },
+  "rollbackMode": "non_destructive_pause_and_isolate_requires_separate_review",
+  "neverRollbackBy": [
+    "regrant_service_role_direct_DML",
+    "drop_cascade_on_consents_or_audit",
+    "delete_customer_records_or_unapproved_backups",
+    "reuse_production_or_recovery_as_staging",
+    "deploy_draft_only_SQL_rehearsal_to_hosted"
+  ]
+}
