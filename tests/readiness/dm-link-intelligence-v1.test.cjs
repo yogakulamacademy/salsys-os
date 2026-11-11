@@ -186,3 +186,14 @@ test('opaque links are random, fixed-size, HMAC-bound and invalid digests fail c
   assert.throws(()=>tokens.digestDmLinkToken(token,'short'),/Invalid/);
   assert.throws(()=>tokens.digestDmLinkToken('lead-id-123',secret),/Invalid/);
 });
+
+
+test('allows real Supabase microsecond timestamp precision without elevating identity', () => {
+ const r = intel.evaluateDmLinkVisit({
+  ...visit, issuedAt:'2026-11-11T10:00:00.000001+00:00',
+  observedAt:'2026-11-11T10:10:00.123456+00:00',
+  expiresAt:'2026-11-13T10:00:00.999999+00:00',
+ });
+ assert.equal(r.status, 'country_observed');
+ assert.equal(r.customerResidenceVerified,false);
+});
