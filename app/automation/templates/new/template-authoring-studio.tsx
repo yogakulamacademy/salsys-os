@@ -28,6 +28,7 @@ type ApiResult = {
   error?: string;
   draftId?: string;
   providerStatus?: string;
+  outcomeUncertain?: boolean;
   drafts?: Draft[];
 };
 
@@ -149,7 +150,7 @@ export function TemplateAuthoringStudio({
       const result = await response.json() as ApiResult;
       if (!response.ok || result.ok !== true) {
         // An uncertain provider result cannot safely be retried; reload authoritative state.
-        setStatus('uncertain');
+        if (result.outcomeUncertain === true) setStatus('uncertain');
         throw new Error(result.error || 'Template approval request was not completed. Reconcile before retry.');
       }
       setStatus('submitted');
