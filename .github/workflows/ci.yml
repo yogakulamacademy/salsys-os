@@ -48,6 +48,12 @@ jobs:
       - name: Verify independent-session refund races and rollback fixture
         run: npm run test:financial:db
 
+      - name: Verify KB-01C discovery schema and leases in disposable PostgreSQL
+        run: node --test tests/database/knowledge-discovery-ledger.test.mjs
+
+      - name: Verify KB-01D synthetic website end-to-end against disposable PostgreSQL
+        run: node --experimental-strip-types --test tests/database/knowledge-discovery-e2e.test.mjs
+
       - name: Verify exact Instagram outbound projector SQL in isolated PostgreSQL
         run: node --test tests/database/instagram-outbound-echo-projector.test.mjs
 
@@ -169,6 +175,12 @@ jobs:
 
       - name: Verify AI Knowledge Final Closeout Contracts
         run: npm run verify:ai-knowledge-final-closeout
+
+      - name: Verify KB-01 website discovery safety tests
+        run: node --experimental-strip-types --test tests/knowledge-discovery/*.test.mjs
+
+      - name: Verify KB-02+ website evidence and Knowledge Builder safety tests
+        run: node --experimental-strip-types --test tests/knowledge-extraction/*.test.mjs
 
       - name: Verify Home Command Center Final Closeout Contracts
         run: npm run verify:home-command-center-final-closeout

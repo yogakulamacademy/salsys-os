@@ -1,0 +1,93 @@
+name: KB Isolated Staging Knowledge Read-Only Acceptance
+
+# Manual-only. Requires a dedicated protected GitHub environment configured
+# with disposable test actors and a DIFFERENT Supabase project from production
+# and recovery. No automatic PR/push schedule, writes, crawls, or AI calls.
+on:
+  workflow_dispatch:
+    inputs:
+      staging_project_ref:
+        description: "Exact dedicated isolated staging project ref (20 chars)"
+        required: true
+        type: string
+      approval_phrase:
+        description: "Type I_APPROVE_READ_ONLY_KB_STAGING"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: kb-isolated-staging-knowledge-acceptance
+  cancel-in-progress: false
+
+jobs:
+  knowledge-negative-tests:
+    name: Read-only staging two-tenant knowledge checks
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    # Configure this environment with reviewers and restricted branches
+    # BEFORE the workflow is first run.
+    environment: kb-isolated-staging-acceptance
+    env:
+      SALSYS_KB_STAGING_RUN_APPROVAL: ${{ inputs.approval_phrase }}
+      # Mandatory environment-scoped owner claims: missing env fails closed.
+      SALSYS_KB_STAGING_ENVIRONMENT_READY: ${{ vars.SALSYS_KB_STAGING_ENVIRONMENT_READY }}
+      SALSYS_KB_STAGING_APPROVED_COMMIT: ${{ vars.SALSYS_KB_STAGING_APPROVED_COMMIT }}
+      SALSYS_KB_STAGING_REVIEWED_REF: ${{ vars.SALSYS_KB_STAGING_REVIEWED_REF }}
+      SALSYS_KB_STAGING_GITHUB_SHA: ${{ github.sha }}
+      SALSYS_KB_STAGING_GITHUB_REF: ${{ github.ref }}
+      OPERATOR_STAGING_PROJECT_REF: ${{ inputs.staging_project_ref }}
+      SALSYS_KB_STAGING_PROJECT_REF: ${{ vars.SALSYS_KB_STAGING_PROJECT_REF }}
+      SALSYS_KB_STAGING_API_URL: ${{ vars.SALSYS_KB_STAGING_API_URL }}
+      SALSYS_KB_STAGING_ANON_KEY: ${{ secrets.SALSYS_KB_STAGING_ANON_KEY }}
+      SALSYS_KB_STAGING_A_EMAIL: ${{ secrets.SALSYS_KB_STAGING_A_EMAIL }}
+      SALSYS_KB_STAGING_A_PASSWORD: ${{ secrets.SALSYS_KB_STAGING_A_PASSWORD }}
+      SALSYS_KB_STAGING_A_USER_ID: ${{ vars.SALSYS_KB_STAGING_A_USER_ID }}
+      SALSYS_KB_STAGING_A_ORG_ID: ${{ vars.SALSYS_KB_STAGING_A_ORG_ID }}
+      SALSYS_KB_STAGING_A_DOCUMENT_ID: ${{ vars.SALSYS_KB_STAGING_A_DOCUMENT_ID }}
+      SALSYS_KB_STAGING_A_MARKER: ${{ vars.SALSYS_KB_STAGING_A_MARKER }}
+      SALSYS_KB_STAGING_B_EMAIL: ${{ secrets.SALSYS_KB_STAGING_B_EMAIL }}
+      SALSYS_KB_STAGING_B_PASSWORD: ${{ secrets.SALSYS_KB_STAGING_B_PASSWORD }}
+      SALSYS_KB_STAGING_B_USER_ID: ${{ vars.SALSYS_KB_STAGING_B_USER_ID }}
+      SALSYS_KB_STAGING_B_ORG_ID: ${{ vars.SALSYS_KB_STAGING_B_ORG_ID }}
+      SALSYS_KB_STAGING_B_DOCUMENT_ID: ${{ vars.SALSYS_KB_STAGING_B_DOCUMENT_ID }}
+      SALSYS_KB_STAGING_B_MARKER: ${{ vars.SALSYS_KB_STAGING_B_MARKER }}
+
+    steps:
+      - name: Checkout exact reviewed code
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+
+      - name: Setup Node.js
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: 22
+
+      - name: Fail closed unless human confirmation matches configured staging
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$SALSYS_KB_STAGING_RUN_APPROVAL" = "I_APPROVE_READ_ONLY_KB_STAGING" \
+            || { echo "Manual run approval was not provided."; exit 1; }
+          test -n "$SALSYS_KB_STAGING_PROJECT_REF" \
+            || { echo "Protected staging project ref is not configured."; exit 1; }
+          test "$OPERATOR_STAGING_PROJECT_REF" = "$SALSYS_KB_STAGING_PROJECT_REF" \
+            || { echo "Operator's staging project ref does not match protected environment."; exit 1; }
+
+      - name: Verify reviewed commit, branch and project BEFORE login
+        shell: bash
+        run: |
+          set -euo pipefail
+          export SALSYS_KB_STAGING_CHECKOUT_SHA="$(git rev-parse HEAD)"
+          node scripts/verify-kb-staging-workflow-attestation.mjs --check
+
+      - name: Run offline tamper and target-preflight regression tests
+        run: node --test tests/knowledge-extraction/kb-isolated-staging-readonly.test.mjs
+
+      - name: Validate two real staging Auth sessions and knowledge isolation
+        shell: bash
+        run: |
+          set -euo pipefail
+          export SALSYS_KB_STAGING_CHECKOUT_SHA="$(git rev-parse HEAD)"
+          node scripts/verify-kb-isolated-staging-readonly.mjs --run-readonly
