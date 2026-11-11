@@ -108,3 +108,12 @@ test('foreign link evidence and malformed event histories suppress staff project
 test('unavailable tracking must not be misreported as no click',()=>{
  const r=project(snap(),[],{coverage:'ambiguous'});assert.equal(r.status,'restricted');assert.equal(r.attention,'none');
 });
+
+
+test('PostgreSQL microsecond timestamps from Supabase do not falsely reject exact binding',()=>{
+ const a=snap();
+ a.message.sent_at='2026-11-11T11:00:00.123456+00:00';
+ a.link.issued_at='2026-11-11T10:50:00.000001+00:00';
+ a.link.expires_at='2026-11-13T11:00:00.999999+00:00';
+ assert.equal(crm.bindDmLinkToCrmMessage(a).status,'linked');
+});
