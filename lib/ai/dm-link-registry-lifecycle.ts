@@ -83,6 +83,10 @@ export type DmLinkCommittedActivation = {
   revoked: boolean;
   tokenDigestMatched: boolean;
   linkIssuedAt: string;
+  /** Verified provider acceptance time from the exact outbound message. */
+  providerAcceptedAt: string;
+  /** Actual committed activation timestamp, never the planning timestamp. */
+  linkActivatedAt: string;
   linkExpiresAt: string;
   observedAt: string;
 };
@@ -174,8 +178,10 @@ export function planDmLinkReservationTransition(input: DmLinkTransitionInput): D
 
 /**
  * Only an actual committed, non-revoked, purpose-permitted registry row can
- * support an observation. Even then: a visit belongs to the URL token, not
- * provably to the person who originally received or forwarded that URL.
+ * support an observation recorded ON OR AFTER activation. Never retroactively
+ * attribute a visitor who opened the link while it was reserved or before
+ * Meta acknowledged the actual outbound message. Even then, a visit belongs
+ * to the URL token, not provably to its intended Instagram recipient.
  */
 export function evaluateDmLinkCommittedAttribution(input: DmLinkCommittedActivation): DmLinkAttributionDecision {
   const fail: DmLinkAttributionDecision = {
@@ -187,9 +193,16 @@ export function evaluateDmLinkCommittedAttribution(input: DmLinkCommittedActivat
       input.state !== 'active' || input.sourceBindingCommitted !== true ||
       input.provenanceVerified !== true || input.purposePermitted !== true ||
       input.revoked !== false || input.tokenDigestMatched !== true) return fail;
-  const issued=parseTime(input.linkIssuedAt),expiry=parseTime(input.linkExpiresAt),at=parseTime(input.observedAt);
-  if (issued===null || expiry===null || at===null || expiry<=issued ||
-      at<issued || at>=expiry) return fail;
+  const issued=parseTime(input.linkIssuedAt);
+  const accepted=parseTime(input.providerAcceptedAt);
+  const activated=parseTime(input.linkActivatedAt);
+  const expiry=parseTime(input.linkExpiresAt);
+  const at=parseTime(input.observedAt);
+  if (issued===null || accepted===null || activated===null ||
+      expiry===null || at===null || expiry<=issued ||
+      accepted<issued || accepted>=expiry ||
+      activated<accepted || activated>=expiry ||
+      at<activated || at>=expiry) return fail;
   return {associationPermitted:true,identityClaim:'token_link_only',
     residenceVerified:false,pricingEligibility:'undetermined'};
 }
