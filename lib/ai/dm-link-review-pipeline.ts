@@ -14,6 +14,7 @@ import {
   type DmLinkStaffPreview,
 } from './dm-link-crm-evidence';
 import type { DmLinkObservation } from './dm-link-coverage';
+import { gateDmLinkObservationHistory, type DmLinkVerifiedRegistry } from './dm-link-attribution-gate';
 import { classifyInstagramAcceptedSend } from './dm-link-instagram-send-evidence';
 import type { DmLinkOutboundState, DmLinkClickCoverage } from './dm-link-intelligence';
 import {
@@ -23,6 +24,8 @@ import {
 
 export type DmLinkReviewPipelineInput = {
   snapshot: DmLinkCrmSnapshot;
+  /** Independently loaded, committed, consent-permitted registry row. */
+  verifiedRegistry: DmLinkVerifiedRegistry | null;
   observations: readonly DmLinkObservation[];
   clickCoverage: DmLinkClickCoverage;
   outboundState: DmLinkOutboundState;
@@ -83,6 +86,25 @@ export function evaluateDmLinkReviewPipeline(input: DmLinkReviewPipelineInput): 
   if (binding.status !== 'linked' || !binding.linkId || !binding.leadId ||
       !binding.organizationId || !binding.conversationId || !binding.messageEvidenceRef) {
     return deny('unverified_link_binding');
+  }
+
+  // A reserved/unbound/expired link must NEVER be turned into lead-linked
+  // visitor/country evidence, even if a preview arrived before activation.
+  const attributionGate = gateDmLinkObservationHistory({
+    reference: {
+      organizationId: binding.organizationId,
+      leadId: binding.leadId,
+      conversationId: binding.conversationId,
+      crmMessageId: input.snapshot.message.id,
+      linkId: binding.linkId,
+    },
+    registry: input.verifiedRegistry,
+    observations: input.observations,
+    now: input.now,
+  });
+  if (attributionGate.status !== 'permitted' ||
+      attributionGate.eligibleForStaffProjection !== true) {
+    return deny('unverified_activation_or_visit_evidence');
   }
 
   // Do not accept API "sent" acknowledgements as independent delivery.
