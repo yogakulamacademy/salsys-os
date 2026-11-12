@@ -1,5 +1,5 @@
 /*
- * SalsysOS R2 website consent installation diagnostic v3.0 — READ ONLY.
+ * SalsysOS R2 website consent installation diagnostic v3.2 — READ ONLY.
  * Paste this whole file into DevTools > Console on a website you administer.
  *
  * Checks current top-document script attributes. It DOES NOT fetch, mutate,
@@ -11,7 +11,7 @@
  */
 (() => {
   'use strict';
-  const version = '3.0';
+  const version = '3.2';
   const allowed = new Set([
     'salsys-intelligence.js', 'salsys-tracker.js',
     'yogakulam-tracker.js', 'salsys-consent.js',
@@ -24,11 +24,24 @@
       const parsed = new URL(raw, document.baseURI || 'https://example.invalid/');
       const file = (parsed.pathname.split('/').pop() || '').toLowerCase();
       const trusted = parsed.protocol === 'https:' && parsed.hostname.toLowerCase() === 'salsysos.com' &&
-        !parsed.username && !parsed.password && (!parsed.port || parsed.port === '443');
+        !parsed.username && !parsed.password && (!parsed.port || parsed.port === '443') &&
+        parsed.pathname === '/' + file;
       return { file, trusted, tagManager: parsed.hostname.toLowerCase() === 'www.googletagmanager.com' &&
         /^\/(gtm|gtag)\.js$/i.test(parsed.pathname) };
     } catch {
       return { file: '', trusted: false, tagManager: false };
+    }
+  };
+  const endpointMatches = (raw, path, siteId) => {
+    if (!raw || !siteId) return false;
+    try {
+      const url = new URL(raw);
+      const ids = url.searchParams.getAll('site_id');
+      return url.protocol === 'https:' && url.hostname.toLowerCase() === 'salsysos.com' &&
+        !url.username && !url.password && (!url.port || url.port === '443') &&
+        url.pathname === path && ids.length === 1 && ids[0] === siteId;
+    } catch {
+      return false;
     }
   };
   const enumerateMode = (mode) => mode === 'required' || mode === 'granted'
@@ -49,6 +62,13 @@
       siteAttribute: has(script, 'data-salsys-site'),
       eventEndpointAttribute: has(script, 'data-endpoint'),
       consentEndpointAttribute: has(script, 'data-consent-endpoint'),
+      endpointsMatchSite: endpointMatches(
+        script.getAttribute('data-endpoint'), '/api/events/browser/v1',
+        String(script.getAttribute('data-salsys-site') || '').trim()
+      ) && endpointMatches(
+        script.getAttribute('data-consent-endpoint'), '/api/privacy/consent/v1',
+        String(script.getAttribute('data-salsys-site') || '').trim()
+      ),
       behaviorOn: get(script, 'data-salsys-behavior-tracking') === 'true',
       leadCaptureOn: get(script, 'data-salsys-lead-capture') === 'auto',
     });
@@ -73,9 +93,13 @@
   if (installed && (!installed.siteAttribute || !installed.eventEndpointAttribute || !installed.consentEndpointAttribute)) {
     warnings.push('BOOTSTRAP_MISSING_EXPECTED_ATTRIBUTES');
   }
+  if (installed && !installed.endpointsMatchSite) {
+    warnings.push('BOOTSTRAP_ENDPOINT_OR_SITE_BINDING_REQUIRES_REVIEW');
+  }
   const staticMismatch = warnings.some(w => [
     'SALSYS_NAMED_SCRIPT_FROM_UNTRUSTED_ORIGIN',
     'BOOTSTRAP_MISSING_EXPECTED_ATTRIBUTES',
+    'BOOTSTRAP_ENDPOINT_OR_SITE_BINDING_REQUIRES_REVIEW',
     'BEHAVIOR_TRACKING_ATTRIBUTE_ENABLED_REQUIRES_AUTHORIZATION',
     'MULTIPLE_CORE_RUNTIME_SCRIPTS',
   ].includes(w));
@@ -107,6 +131,7 @@
       bootstrapHasSiteIdAttribute: Boolean(installed?.siteAttribute),
       bootstrapHasEventEndpointAttribute: Boolean(installed?.eventEndpointAttribute),
       bootstrapHasConsentEndpointAttribute: Boolean(installed?.consentEndpointAttribute),
+      bootstrapEndpointsUseTrustedPathsAndSameSite: Boolean(installed?.endpointsMatchSite),
       behaviorTrackingAttributeEnabled: entries.some(x => x.behaviorOn),
       automaticLeadCaptureConfigured: entries.some(x => x.leadCaptureOn),
       tagManagerPresent: tagManager,
