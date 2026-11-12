@@ -112,7 +112,7 @@ function parseTime(input: unknown): bigint | null {
   const fraction = (parts[2] ?? '').padEnd(6, '0');
   const millis = Date.parse(`${parts[1]}.${fraction.slice(0, 3)}${parts[3]}`);
   if (!Number.isFinite(millis)) return null;
-  return BigInt(millis) * 1000n + BigInt(fraction.slice(3));
+  return BigInt(millis) * BigInt(1000) + BigInt(fraction.slice(3));
 }
 const result = (action: DmLinkTransition['action'], reason: string, state: DmLinkTransition['projectedState'] = null, version: number | null = null): DmLinkTransition =>
   ({action,reason,projectedState:state,expectedRowVersion:version,attributionAuthorized:false,automaticSendAllowed:false});
@@ -137,7 +137,7 @@ export function planDmLinkReservationTransition(input: DmLinkTransitionInput): D
   }
   const issued=parseTime(r.issuedAt), expiry=parseTime(r.expiresAt), now=parseTime(input.now);
   if (issued === null || expiry === null || now === null || expiry <= issued ||
-      expiry - issued > BigInt(input.policyMaxLifetimeHours) * 3_600_000_000n ||
+      expiry - issued > BigInt(input.policyMaxLifetimeHours) * BigInt(3600000000) ||
       now < issued) return result('hold','invalid_or_overlong_lifetime');
   if (r.state !== 'reserved') return result('hold','already_finalized');
   if (now >= expiry) return result('retire','expired_without_activation','retired',r.rowVersion);
