@@ -15,7 +15,7 @@
 | Independent DBA physical-test procedure GO | NOT GIVEN | TBD |
 | Recovery operator and witness acceptance | NOT GIVEN | TBD |
 | Pre-start outbound isolation mechanism | NOT PROVEN | TBD |
-| Current cron catalog / historical run evidence | READ-ONLY: 5 configured, 4 active; all current commands simple `SELECT 1`; Nov 10 19:00–21:00 UTC: **250/250 persisted run commands `SELECT 1`, 0 failures** | DBA to corroborate |\n| Confirmed cron / trigger / extension safety before start | NOT PROVEN for the entire restored snapshot; no provider pre-start isolation guarantee | TBD |
+| Current cron catalog / historical run evidence | READ-ONLY: 5 configured, 4 active; all current commands simple `SELECT 1`; Nov 10 19:00–21:00 UTC: **250/250 persisted run commands `SELECT 1`, 0 failures** | DBA to corroborate |\n| Current trigger/extension screening (not backup proof) | READ-ONLY: 190 user-defined triggers; 0 direct outbound keywords in their function sources; matching installed extension inventory only `pg_cron` | DBA to corroborate |\n| Supabase provider pre-start containment confirmation | NOT REQUESTED / NOT RECEIVED; open a support case first | Supabase + DBA |\n| Confirmed cron / trigger / extension safety before start | NOT PROVEN for the entire restored snapshot; no provider pre-start isolation guarantee | TBD |
 | External integrations and auth exposure containment | NOT PROVEN | TBD |
 | Data protection / Vault encryption / Auth user handling | NOT APPROVED | TBD |
 | Restore initiated | NO | — |
