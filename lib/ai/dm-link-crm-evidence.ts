@@ -30,6 +30,8 @@ export type DmLinkCrmSnapshot = {
     id: string; organization_id: string; lead_id: string;
     conversation_id: string; direction: string;
     external_message_id: string | null; sent_at: string | null;
+    /** Server-loaded CRM status/provenance; optional for older read-only consumers. */
+    status?: string | null; metadata?: unknown;
   } | null;
   /** Proposed server-side link registry row, NOT an existing deployed table. */
   link: {
