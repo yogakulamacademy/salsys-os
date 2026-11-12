@@ -44,7 +44,70 @@ const transitions=[
  ['invalid provider message ID cannot bind',x=>{x.proof.providerMessageId='';},'manual_review'],
  ['HTTP timeout or unknown send must hold',x=>{x.dispatchState='unknown';},'hold'],
  ['unsent reservation must hold',x=>{x.dispatchState='not_sent';},'hold'],
- ['trusted definitive send failure plans retire',x=>{x.dispatchState='definitive_failure';},'retire'],
+ ['trusted definitive send failure plans retire',x=>{
+   x.dispatchState='definitive_failure';x.proof=null;
+   x.failureProof={dispatchAttemptId:attempt,organizationId:org,leadId:lead,
+     conversationId:conversation,instagramAccountId:'account123',
+     instagramRecipientId:'customer123',rejectedAt:'2026-11-12T10:04:00Z',
+     outcome:'explicit_provider_rejection',sourceVerified:true};
+ },'retire'],
+ ['a status flag alone cannot retire a link',x=>{x.dispatchState='definitive_failure';x.proof=null;},'hold'],
+ ['an accepted message plus a claimed rejection requires review',x=>{
+   x.dispatchState='definitive_failure';
+   x.failureProof={dispatchAttemptId:attempt,organizationId:org,leadId:lead,
+     conversationId:conversation,instagramAccountId:'account123',
+     instagramRecipientId:'customer123',rejectedAt:'2026-11-12T10:04:00Z',
+     outcome:'explicit_provider_rejection',sourceVerified:true};
+ },'manual_review'],
+ ['a rejection with unverified lineage cannot retire a link',x=>{
+   x.dispatchState='definitive_failure';x.proof=null;
+   x.failureProof={dispatchAttemptId:attempt,organizationId:org,leadId:lead,
+     conversationId:conversation,instagramAccountId:'account123',
+     instagramRecipientId:'customer123',rejectedAt:'2026-11-12T10:04:00Z',
+     outcome:'explicit_provider_rejection',sourceVerified:false};
+ },'manual_review'],
+ ['a rejection for another dispatch attempt cannot retire a link',x=>{
+   x.dispatchState='definitive_failure';x.proof=null;
+   x.failureProof={dispatchAttemptId:message,organizationId:org,leadId:lead,
+     conversationId:conversation,instagramAccountId:'account123',
+     instagramRecipientId:'customer123',rejectedAt:'2026-11-12T10:04:00Z',
+     outcome:'explicit_provider_rejection',sourceVerified:true};
+ },'manual_review'],
+ ['a rejection for another recipient cannot retire a link',x=>{
+   x.dispatchState='definitive_failure';x.proof=null;
+   x.failureProof={dispatchAttemptId:attempt,organizationId:org,leadId:lead,
+     conversationId:conversation,instagramAccountId:'account123',
+     instagramRecipientId:'different_customer',rejectedAt:'2026-11-12T10:04:00Z',
+     outcome:'explicit_provider_rejection',sourceVerified:true};
+ },'manual_review'],
+ ['a rejection for another tenant cannot retire a link',x=>{
+   x.dispatchState='definitive_failure';x.proof=null;
+   x.failureProof={dispatchAttemptId:attempt,organizationId:lead,leadId:lead,
+     conversationId:conversation,instagramAccountId:'account123',
+     instagramRecipientId:'customer123',rejectedAt:'2026-11-12T10:04:00Z',
+     outcome:'explicit_provider_rejection',sourceVerified:true};
+ },'manual_review'],
+ ['a rejection before reservation issue requires review',x=>{
+   x.dispatchState='definitive_failure';x.proof=null;
+   x.failureProof={dispatchAttemptId:attempt,organizationId:org,leadId:lead,
+     conversationId:conversation,instagramAccountId:'account123',
+     instagramRecipientId:'customer123',rejectedAt:'2026-11-12T09:00:00Z',
+     outcome:'explicit_provider_rejection',sourceVerified:true};
+ },'manual_review'],
+ ['a rejection timestamp in the future requires review',x=>{
+   x.dispatchState='definitive_failure';x.proof=null;
+   x.failureProof={dispatchAttemptId:attempt,organizationId:org,leadId:lead,
+     conversationId:conversation,instagramAccountId:'account123',
+     instagramRecipientId:'customer123',rejectedAt:'2026-11-12T11:00:00Z',
+     outcome:'explicit_provider_rejection',sourceVerified:true};
+ },'manual_review'],
+ ['a retry timeout is never definitive failure',x=>{
+   x.dispatchState='unknown';x.proof=null;
+   x.failureProof={dispatchAttemptId:attempt,organizationId:org,leadId:lead,
+     conversationId:conversation,instagramAccountId:'account123',
+     instagramRecipientId:'customer123',rejectedAt:'2026-11-12T10:04:00Z',
+     outcome:'explicit_provider_rejection',sourceVerified:true};
+ },'hold'],
  ['cross tenant request must hold',x=>{x.activeOrganizationId=lead;},'hold'],
  ['digest format must be HMAC-like',x=>{x.reservation.tokenDigest='secret';},'hold'],
  ['expired reservation plans retirement',x=>{x.now='2026-11-16T10:00:00Z';},'retire'],
