@@ -133,6 +133,12 @@ export function evaluateDmLinkReviewPipeline(input: DmLinkReviewPipelineInput): 
     linkRevoked: input.snapshot.link.revoked_at !== null,
     linkExpiresAt: input.snapshot.link.expires_at,
     deliveredAt: input.deliveredAt,
+    // The exact CRM provider MID was already validated by bindDmLinkToCrmMessage.
+    // An accepted Instagram send is NOT a delivery receipt.
+    providerAcceptedAt: input.outboundState === 'provider_accepted'
+      ? input.snapshot.message.sent_at : null,
+    sourceSendEvidence: input.outboundState === 'provider_accepted'
+      ? 'exact_provider_message_id' : 'unverified',
     sourceReadAt: input.sourceReadAt,
     now: input.now,
     inboundCoverage: input.inboundCoverage,
