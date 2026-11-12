@@ -8,23 +8,34 @@ const load = (relative, deps={}) => {
  const code = ts.transpileModule(fs.readFileSync(path.join(root, relative),'utf8'), {compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText;
  const exports={}; new Function('require','exports',code)(n => {if(Object.hasOwn(deps,n))return deps[n];throw Error(`Unexpected dependency ${n}`)},exports);return exports;
 };
-const intel=load('lib/ai/dm-link-intelligence.ts');
-const coverage=load('lib/ai/dm-link-coverage.ts',{'./dm-link-intelligence':intel});
-const crm=load('lib/ai/dm-link-crm-evidence.ts',{'./dm-link-intelligence':intel,'./dm-link-coverage':coverage});
+const clock=load('lib/ai/dm-link-time.ts');
+const intel=load('lib/ai/dm-link-intelligence.ts',{'./dm-link-time':clock});
+const coverage=load('lib/ai/dm-link-coverage.ts',{'./dm-link-intelligence':intel,'./dm-link-time':clock});
+const lifecycle=load('lib/ai/dm-link-registry-lifecycle.ts',{'./dm-link-time':clock});
+const gate=load('lib/ai/dm-link-attribution-gate.ts',{'./dm-link-time':clock,'./dm-link-registry-lifecycle':lifecycle});
+const crm=load('lib/ai/dm-link-crm-evidence.ts',{'./dm-link-time':clock,'./dm-link-intelligence':intel,'./dm-link-coverage':coverage,'./dm-link-attribution-gate':gate});
 const ids={org:'11111111-1111-4111-8111-111111111111',lead:'22222222-2222-4222-8222-222222222222',conv:'33333333-3333-4333-8333-333333333333',msg:'44444444-4444-4444-8444-444444444444'};
 const snap=()=>({
  activeOrganizationId:ids.org, selectedLeadId:ids.lead,staffCanWorkLead:true,linkPurposePermitted:true,
  lead:{id:ids.lead,organization_id:ids.org},
  conversation:{id:ids.conv,organization_id:ids.org,lead_id:ids.lead,channel:'instagram',external_account_id:'igbusiness_123',metadata:{instagram_user_id:'iguser_999',irrelevantName:'Same Name'}},
  message:{id:ids.msg,organization_id:ids.org,lead_id:ids.lead,conversation_id:ids.conv,direction:'outbound',external_message_id:'igmid_121212',sent_at:'2026-11-11T11:00:00Z'},
- link:{id:'opaqueLink_123456',organization_id:ids.org,lead_id:ids.lead,conversation_id:ids.conv,crm_message_id:ids.msg,instagram_account_id:'igbusiness_123',instagram_recipient_id:'iguser_999',provider_message_id:'igmid_121212',issued_at:'2026-11-11T10:50:00Z',expires_at:'2026-11-13T11:00:00Z',revoked_at:null,purpose:'course_info_link'},
+ link:{id:'opaqueLink_123456',organization_id:ids.org,lead_id:ids.lead,conversation_id:ids.conv,crm_message_id:ids.msg,instagram_account_id:'igbusiness_123',instagram_recipient_id:'iguser_999',provider_message_id:'igmid_121212',issued_at:'2026-11-11T10:50:00Z',expires_at:'2026-11-13T11:00:00Z',revoked_at:null,state:'active',activated_at:'2026-11-11T11:01:00Z',purpose:'course_info_link'},
 });
 const observation=(patch={})=>({eventId:'event_222222222',linkId:'opaqueLink_123456',evidence:{
  organizationId:ids.org,linkOrganizationId:ids.org,conversationOrganizationId:ids.org,visitOrganizationId:ids.org,
  processingPurposePermitted:true,tokenRevoked:false,issuedAt:'2026-11-11T10:50:00Z',expiresAt:'2026-11-13T11:00:00Z',
  observedAt:'2026-11-11T13:00:00Z',signal:'browser_observation',suspectedPreviewOrBot:false,knownForwardedLink:false,networkCountry:'AE',networkCountrySource:'trusted_server',...patch}});
+const registry=(snapshot=snap())=>({
+ organizationId:ids.org,leadId:ids.lead,conversationId:ids.conv,crmMessageId:ids.msg,
+ linkId:'opaqueLink_123456',state:'active',sourceBindingCommitted:true,provenanceVerified:true,
+ purposePermitted:true,revoked:false,tokenDigestMatched:true,
+ linkIssuedAt:snapshot.link.issued_at,providerAcceptedAt:snapshot.message.sent_at,
+ linkActivatedAt:snapshot.link.activated_at,linkExpiresAt:snapshot.link.expires_at,
+});
 const project=(snapshot=snap(),obs=[],options={})=>crm.projectDmLinkStaffEvidence({
- snapshot, observations:obs, coverage:'supported',outboundState:'delivered',now:'2026-11-12T12:00:00Z',waitingHours:24,
+ snapshot,verifiedRegistry:registry(snapshot),observations:obs,
+ coverage:'supported',outboundState:'delivered',now:'2026-11-12T12:00:00Z',waitingHours:24,
  repliedSinceSend:false,optedOut:false,humanHandled:false,leadClosedOrEnrolled:false,existingTask:false,...options,
 });
 
@@ -116,4 +127,35 @@ test('PostgreSQL microsecond timestamps from Supabase do not falsely reject exac
  a.link.issued_at='2026-11-11T10:50:00.000001+00:00';
  a.link.expires_at='2026-11-13T11:00:00.999999+00:00';
  assert.equal(crm.bindDmLinkToCrmMessage(a).status,'linked');
+});
+
+test('exported staff projector cannot bypass missing or inactive committed activation',()=>{
+ const snapshot=snap();
+ for(const verifiedRegistry of [null,{...registry(snapshot),state:'reserved'},{...registry(snapshot),revoked:true}]){
+  const r=project(snapshot,[observation()],{verifiedRegistry});
+  assert.equal(r.status,'restricted');
+  assert.equal(r.observedNetworkCountry,null);
+  assert.equal(r.attention,'none');
+ }
+});
+test('exported projector blocks lifecycle mismatch without projecting country or no-click task',()=>{
+ const source=snap();
+ const bad=[
+  {...registry(source),linkIssuedAt:'2026-11-11T10:49:59.999999Z'},
+  {...registry(source),linkExpiresAt:'2026-11-13T11:00:00.000001Z'},
+  {...registry(source),linkActivatedAt:'2026-11-11T11:01:00.000001Z'},
+ ];
+ for(const verifiedRegistry of bad){
+  for(const observations of [[],[observation()]]){
+   const r=project(source,observations,{verifiedRegistry});
+   assert.equal(r.status,'restricted');assert.equal(r.attention,'none');
+   assert.equal(r.observedNetworkCountry,null);assert.equal(r.messageEvidenceRef,null);
+  }
+ }
+});
+test('CRM binding detects send-before-issue at one microsecond',()=>{
+ const source=snap();
+ source.message.sent_at='2026-11-11T11:00:00.000001Z';
+ source.link.issued_at='2026-11-11T11:00:00.000002Z';
+ assert.notEqual(crm.bindDmLinkToCrmMessage(source).status,'linked');
 });
