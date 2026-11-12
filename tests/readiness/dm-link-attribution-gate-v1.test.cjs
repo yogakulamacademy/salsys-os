@@ -19,8 +19,9 @@ function load(relative, dependencies = {}) {
  },exports);
  return exports;
 }
-const lifecycle=load('lib/ai/dm-link-registry-lifecycle.ts');
-const gate=load('lib/ai/dm-link-attribution-gate.ts', {'./dm-link-registry-lifecycle':lifecycle});
+const clock=load('lib/ai/dm-link-time.ts');
+const lifecycle=load('lib/ai/dm-link-registry-lifecycle.ts',{'./dm-link-time':clock});
+const gate=load('lib/ai/dm-link-attribution-gate.ts', {'./dm-link-registry-lifecycle':lifecycle,'./dm-link-time':clock});
 const org='11111111-1111-4111-8111-111111111111';
 const lead='22222222-2222-4222-8222-222222222222';
 const conv='33333333-3333-4333-8333-333333333333';
@@ -36,6 +37,13 @@ const registry=()=>({
  linkExpiresAt:'2026-11-15T10:00:00Z',
 });
 const ref=()=>({organizationId:org,leadId:lead,conversationId:conv,crmMessageId:msg,linkId:link});
+const sourceLink=()=>({
+ id:link,organization_id:org,lead_id:lead,conversation_id:conv,crm_message_id:msg,
+ instagram_account_id:'account_1',instagram_recipient_id:'ig_sender_9',
+ provider_message_id:'provider_mid_1',issued_at:'2026-11-11T10:00:00Z',
+ expires_at:'2026-11-15T10:00:00Z',revoked_at:null,purpose:'course_info_link',
+ state:'active',activated_at:'2026-11-11T10:03:00Z',
+});
 const event=(date='2026-11-11T10:05:00Z')=>({
  eventId:'evidence_111111',linkId:link,evidence:{
   organizationId:org,linkOrganizationId:org,
@@ -49,7 +57,9 @@ const event=(date='2026-11-11T10:05:00Z')=>({
  }
 });
 const run=(changes={})=>gate.gateDmLinkObservationHistory({
- reference:ref(),registry:registry(),observations:[],
+ reference:ref(),sourceLink:sourceLink(),
+ sourceMessageSentAt:'2026-11-11T10:02:00Z',
+ registry:registry(),observations:[],
  now:'2026-11-12T12:02:00Z',...changes,
 });
 test('active committed source-matched registry permits empty click history for staff policy only',()=>{
@@ -120,4 +130,25 @@ test('a mixed valid + preactivation history cannot be reduced to a false no-clic
  const r=run({observations:[event(),{...event('2026-11-11T10:01:00Z'),eventId:'evidence_22222'}]});
  assert.equal(r.status,'restricted');
  assert.equal(r.eligibleForStaffProjection,false);
+});
+
+test('source lifecycle mismatch blocks all staff evidence including empty history',()=>{
+ const mismatch=[
+  {sourceLink:{...sourceLink(),issued_at:'2026-11-11T09:59:59.999999Z'}},
+  {sourceLink:{...sourceLink(),expires_at:'2026-11-15T10:00:00.000001Z'}},
+  {sourceLink:{...sourceLink(),state:'reserved'}},
+  {sourceLink:{...sourceLink(),activated_at:'2026-11-11T10:03:00.000001Z'}},
+  {sourceLink:{...sourceLink(),revoked_at:'2026-11-11T10:04:00Z'}},
+  {sourceMessageSentAt:'2026-11-11T10:01:59.999999Z'},
+  {sourceLink:null}
+ ];
+ for(const delta of mismatch){
+  const r=run(delta);assert.equal(r.status,'restricted');
+  assert.equal(r.eligibleForStaffProjection,false);
+  assert.equal(r.pricingEligibility,'undetermined');
+ }
+});
+test('equivalent offset-aware timestamp is valid without trusting different lifecycle records',()=>{
+ const r=run({sourceLink:{...sourceLink(),activated_at:'2026-11-11T15:33:00+05:30'}});
+ assert.equal(r.status,'permitted');
 });
