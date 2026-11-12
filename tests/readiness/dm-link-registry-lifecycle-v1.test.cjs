@@ -137,6 +137,8 @@ const committed=()=>({
   sourceBindingCommitted:true,provenanceVerified:true,purposePermitted:true,
   revoked:false,tokenDigestMatched:true,
   linkIssuedAt:'2026-11-12T10:00:00Z',
+  providerAcceptedAt:'2026-11-12T10:04:00Z',
+  linkActivatedAt:'2026-11-12T10:06:00Z',
   linkExpiresAt:'2026-11-15T10:00:00Z',observedAt:'2026-11-12T11:00:00Z',
 });
 const observations=[
@@ -150,6 +152,20 @@ const observations=[
  ['mismatching token digest denies association',{tokenDigestMatched:false},false],
  ['visit after expiry denies association',{observedAt:'2026-11-16T11:00:00Z'},false],
  ['visit before issuance denies association',{observedAt:'2026-11-12T09:00:00Z'},false],
+ ['visit during reservation after issuance is not retrospectively attributed',{observedAt:'2026-11-12T10:02:00Z'},false],
+ ['visit after Meta acceptance but before committed activation remains unattributed',{observedAt:'2026-11-12T10:05:00Z'},false],
+ ['visit at exact committed activation time is eligible',{observedAt:'2026-11-12T10:06:00Z'},true],
+ ['missing activation timestamp denies association',{linkActivatedAt:null},false],
+ ['missing accepted-send timestamp denies association',{providerAcceptedAt:null},false],
+ ['activation earlier than accepted-send evidence denies association',{linkActivatedAt:'2026-11-12T10:03:00Z'},false],
+ ['activation at link expiry denies association',{linkActivatedAt:'2026-11-15T10:00:00Z'},false],
+ ['accepted-send timestamp before issue denies association',{providerAcceptedAt:'2026-11-12T09:59:00Z'},false],
+ ['accepted-send timestamp after expiry denies association',{providerAcceptedAt:'2026-11-16T10:00:00Z'},false],
+ ['microsecond timestamp ordering is supported',{
+   providerAcceptedAt:'2026-11-12T10:04:00.123456+00:00',
+   linkActivatedAt:'2026-11-12T10:06:00.999999+00:00',
+   observedAt:'2026-11-12T10:07:00.654321+00:00'
+ },true],
 ];
 for(const [name,changes,expected] of observations){
   test(name,()=>{
