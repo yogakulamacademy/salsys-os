@@ -155,6 +155,45 @@ The following **source-level cross-reference** was extracted from the exact revi
 
 **DBA design choice still open:** Should option A restrict itself to the existing synthetic PR #685 SQL/ACL fixture, explicitly excluding **uninstalled** PR #686 sources? Or is a broader current-hosted schema reconstruction (option B, requiring separate schema-export consent) necessary for the revised narrow staging gate? Replaying new migration candidates out of order cannot establish faithful current-hosted staging recovery. No SQL execution, source export or stage install is authorized here.
 
+### 6.2b Source-exact #685 function grant/search-path manifest (read from immutable Git blob; not replay authorization)
+
+The **26 revoke and 4 search-path statements below have been extracted directly**, in source order, from [PR #685's reviewed stage-only SQL](https://github.com/yogakulamacademy/salsys-os/blob/1243ea8e5940210542b8a05385cac4d4b27692e7/supabase/staging-only/migrations/20261110041634_r2_staging_privileged_function_grants_v1.sql), Git blob `4dce41ad8f75d486c33e1364646ca24d44bf5c31`. This list is an **exact referenced SQL signature/delta subset**, *not* the 389-function hosted catalog; it does **not** prove that every function body, owner or ACL equals the hosted target. Unshown dependent objects are **not presumed covered**.
+
+| # | Exact SQL function signature in reviewed source | Proposed grant/config delta |
+| ---: | --- | --- |
+| 1 | `public.attach_whatsapp_outbound_message_id(p_lead_id uuid, p_conversation_id uuid, p_body text, p_external_message_id text)` | Revoke PUBLIC, anon |
+| 2 | `public.auto_disarm_whatsapp_provider_pilot_v1()` | Revoke PUBLIC, anon, authenticated |
+| 3 | `public.can_manage_lead_assignments()` | Revoke PUBLIC, anon, authenticated |
+| 4 | `public.enforce_admissions_auto_task_event_org()` | Revoke PUBLIC, anon, authenticated |
+| 5 | `public.enforce_automation_tenant_alignment_v1()` | Revoke PUBLIC, anon, authenticated |
+| 6 | `public.enforce_task_organization()` | Revoke PUBLIC, anon, authenticated |
+| 7 | `public.evaluate_identity_for_lead_v1(p_lead_id uuid, p_source_system text)` | Revoke PUBLIC, anon, authenticated |
+| 8 | `public.finalize_course_catalog_sync(p_run_id uuid, p_source_system text, p_organization_id uuid)` | Revoke PUBLIC, anon, authenticated |
+| 9 | `public.guard_organization_site_alias_claim_v1()` | Revoke PUBLIC, anon, authenticated |
+| 10 | `public.guard_organization_site_primary_claim_v1()` | Revoke PUBLIC, anon, authenticated |
+| 11 | `public.ingest_tracking_event_v1(p_organization_id uuid, p_tracking_source_id uuid, p_source_event_id text, p_event_name text, p_ingestion_method text, p_occurred_at timestamp with time zone, p_anonymous_visitor_id text, p_session_key text, p_external_message_id text, p_site text, p_payload jsonb, p_context jsonb, p_metadata jsonb, p_schema_version integer, p_is_browser boolean)` | Revoke PUBLIC, anon, authenticated |
+| 12 | `public.reconcile_whatsapp_canonical_message_approval_v1()` | Revoke PUBLIC, anon, authenticated |
+| 13 | `public.release_physical_room_with_accommodation()` | Revoke PUBLIC, anon, authenticated |
+| 14 | `public.resolve_whatsapp_channel_policy_v3(p_organization_id uuid, p_lead_id uuid, p_workflow_id uuid, p_template_name text, p_template_language text, p_whatsapp_account_id uuid, p_approval_request_id uuid, p_now timestamp with time zone)` | Revoke PUBLIC, anon, authenticated |
+| 15 | `public.run_admissions_auto_tasks(p_organization_id uuid, p_dry_run boolean)` | Revoke PUBLIC, anon, authenticated |
+| 16 | `public.search_enqueue_row_trigger_v1()` | Revoke PUBLIC, anon, authenticated |
+| 17 | `public.search_privacy_tombstone_trigger_v1()` | Revoke PUBLIC, anon, authenticated |
+| 18 | `public.set_course_batch_admin_event_organization()` | Revoke PUBLIC, anon, authenticated |
+| 19 | `public.sync_batch_changes_to_leads()` | Revoke PUBLIC, anon, authenticated |
+| 20 | `public.sync_lead_from_preferred_batch()` | Revoke PUBLIC, anon, authenticated |
+| 21 | `public.update_crm_pipeline_aging_rule(p_stage text, p_warning_hours numeric, p_stuck_hours numeric)` | Revoke PUBLIC, anon, authenticated |
+| 22 | `public.update_crm_stage_probability(p_stage text, p_probability numeric)` | Revoke PUBLIC, anon, authenticated |
+| 23 | `public.prepare_failed_whatsapp_provider_retry_v1(p_organization_id uuid, p_failed_audit_id uuid, p_now timestamp with time zone)` | Revoke authenticated |
+| 24 | `public.get_pipeline_snapshot()` | Revoke PUBLIC, anon |
+| 25 | `public.get_reengaged_workspace_v2()` | Revoke PUBLIC, anon |
+| 26 | `public.get_tracking_workspace()` | Revoke PUBLIC, anon |
+| 27 | `public.log_new_lead_stage()` | Set search_path to public, pg_temp |
+| 28 | `public.normalize_event_intelligence_url_v1(p_value text)` | Set search_path to public, pg_temp |
+| 29 | `public.privacy_purpose_for_event_v1(p_event_name text)` | Set search_path to public, pg_temp |
+| 30 | `public.set_updated_at()` | Set search_path to public, pg_temp |
+
+**Count integrity:** **26** function EXECUTE revocations, **4** search-path alterations, **30** source statements total. The source changes **no table DDL**; it must **never be rerun on hosted staging**, where earlier read-only postconditions were already present but the migration version `20261110041634` remains absent. The reviewer's remaining obligations are: independent authoritative per-signature owner/SECURITY DEFINER/EXECUTE/search_path catalog comparison, function body/dependency assessment, the complete in-scope database object manifest, and an explicit replacement-vs-supplementary evidence decision. Any differences require **CHANGES REQUIRED**, not source-based assumptions. **No SQL executed in producing this manifest.**
+
 ### 6.3 Proposed pre-execution no-egress architecture and witness procedure
 
 **Design intent (not yet built or witnessed):**
