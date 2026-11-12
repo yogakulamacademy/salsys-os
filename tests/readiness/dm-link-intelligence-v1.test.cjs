@@ -15,7 +15,8 @@ function load(relative, imports = {}) {
   }, exports);
   return exports;
 }
-const intel = load('lib/ai/dm-link-intelligence.ts');
+const clock = load('lib/ai/dm-link-time.ts');
+const intel = load('lib/ai/dm-link-intelligence.ts', {'./dm-link-time':clock});
 const tokens = load('lib/ai/dm-link-token.ts', { 'node:crypto': require('node:crypto') });
 const visit = {
   organizationId:'tenant-a', linkOrganizationId:'tenant-a',
