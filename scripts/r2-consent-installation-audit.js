@@ -1,0 +1,125 @@
+/*
+ * SalsysOS R2 website consent installation diagnostic v3.0 — READ ONLY.
+ * Paste this whole file into DevTools > Console on a website you administer.
+ *
+ * Checks current top-document script attributes. It DOES NOT fetch, mutate,
+ * inspect network traffic, read cookies/storage/PII, start tracking, or test CMP.
+ * Reports booleans and approved enumerations; never prints URLs, Site IDs,
+ * tokens, query parameters, form values, arbitrary attribute values or hosts.
+ *
+ * A configuration match is NOT E2E consent acceptance or a release GO.
+ */
+(() => {
+  'use strict';
+  const version = '3.0';
+  const allowed = new Set([
+    'salsys-intelligence.js', 'salsys-tracker.js',
+    'yogakulam-tracker.js', 'salsys-consent.js',
+  ]);
+  const get = (s, a) => String(s.getAttribute(a) || '').trim().toLowerCase();
+  const has = (s, a) => Boolean(s.hasAttribute(a));
+  const kind = (s) => {
+    const raw = String(s.getAttribute('src') || '');
+    try {
+      const parsed = new URL(raw, document.baseURI || 'https://example.invalid/');
+      const file = (parsed.pathname.split('/').pop() || '').toLowerCase();
+      const trusted = parsed.protocol === 'https:' && parsed.hostname.toLowerCase() === 'salsysos.com' &&
+        !parsed.username && !parsed.password && (!parsed.port || parsed.port === '443');
+      return { file, trusted, tagManager: parsed.hostname.toLowerCase() === 'www.googletagmanager.com' &&
+        /^\/(gtm|gtag)\.js$/i.test(parsed.pathname) };
+    } catch {
+      return { file: '', trusted: false, tagManager: false };
+    }
+  };
+  const enumerateMode = (mode) => mode === 'required' || mode === 'granted'
+    ? mode : mode === '' ? '(unset)' : '(unrecognized-value-not-printed)';
+
+  const scripts = Array.from(document.querySelectorAll('script'));
+  const entries = [];
+  let tagManager = false;
+  for (const script of scripts) {
+    const k = kind(script);
+    if (k.tagManager) tagManager = true;
+    if (!allowed.has(k.file) && !/^salsys-intelligence-core(?:[.-]|$)/.test(k.file)) continue;
+    entries.push({
+      file: k.file,
+      trusted: k.trusted,
+      mode: enumerateMode(get(script, 'data-consent-mode')),
+      autoBanner: get(script, 'data-consent-banner') === 'auto',
+      siteAttribute: has(script, 'data-salsys-site'),
+      eventEndpointAttribute: has(script, 'data-endpoint'),
+      consentEndpointAttribute: has(script, 'data-consent-endpoint'),
+      behaviorOn: get(script, 'data-salsys-behavior-tracking') === 'true',
+      leadCaptureOn: get(script, 'data-salsys-lead-capture') === 'auto',
+    });
+  }
+  const of = (n) => entries.filter((x) => x.file === n);
+  const boot = of('salsys-intelligence.js');
+  const old = of('salsys-tracker.js');
+  const ui = of('salsys-consent.js');
+  const wrapper = of('yogakulam-tracker.js');
+  const cores = entries.filter(x => /^salsys-intelligence-core(?:[.-]|$)/.test(x.file));
+  const installed = boot[0] || null;
+  const warnings = [];
+  if (boot.length + old.length > 1) warnings.push('DUPLICATE_TRACKER_LOADER');
+  if (old.length) warnings.push('LEGACY_TRACKER_PRESENT');
+  if (wrapper.length) warnings.push('SITE_WRAPPER_REQUIRES_MANUAL_SOURCE_REVIEW');
+  if (tagManager) warnings.push('TAG_MANAGER_MAY_INSERT_MORE_SCRIPTS');
+  if (cores.length > 1) warnings.push('MULTIPLE_CORE_RUNTIME_SCRIPTS');
+  if (entries.some(x => !x.trusted && x.file !== 'yogakulam-tracker.js')) {
+    warnings.push('SALSYS_NAMED_SCRIPT_FROM_UNTRUSTED_ORIGIN');
+  }
+  if (entries.some(x => x.behaviorOn)) warnings.push('BEHAVIOR_TRACKING_ATTRIBUTE_ENABLED_REQUIRES_AUTHORIZATION');
+  if (installed && (!installed.siteAttribute || !installed.eventEndpointAttribute || !installed.consentEndpointAttribute)) {
+    warnings.push('BOOTSTRAP_MISSING_EXPECTED_ATTRIBUTES');
+  }
+  const staticMismatch = warnings.some(w => [
+    'SALSYS_NAMED_SCRIPT_FROM_UNTRUSTED_ORIGIN',
+    'BOOTSTRAP_MISSING_EXPECTED_ATTRIBUTES',
+    'BEHAVIOR_TRACKING_ATTRIBUTE_ENABLED_REQUIRES_AUTHORIZATION',
+    'MULTIPLE_CORE_RUNTIME_SCRIPTS',
+  ].includes(w));
+  let status;
+  if (boot.length + old.length === 0) status = 'INCONCLUSIVE_NO_VISIBLE_TOP_DOCUMENT_LOADER';
+  else if (boot.length + old.length > 1) status = 'REVIEW_DUPLICATE_SALSYS_TRACKERS';
+  else if (old.length) status = 'REVIEW_LEGACY_TRACKER';
+  else if (installed.mode === 'granted') status = 'REVIEW_EXPLICIT_GRANTED_MODE';
+  else if (installed.mode !== 'required') status = 'REVIEW_MISSING_OR_UNEXPECTED_CONSENT_MODE';
+  else if (ui.length !== 1 || !ui[0].autoBanner) status = 'REVIEW_MISSING_OR_DUPLICATE_CONSENT_UI';
+  else if (staticMismatch) status = 'REVIEW_STATIC_CONFIGURATION_WARNINGS';
+  else if (wrapper.length || tagManager) status = 'STATIC_ATTRIBUTES_MATCH_BUT_DYNAMIC_LOADERS_REQUIRE_REVIEW';
+  else status = 'STATIC_ATTRIBUTES_MATCH_REQUIRED_NOT_E2E_VERIFIED';
+
+  const report = {
+    audit: 'SalsysOS R2 website consent installation',
+    version,
+    status,
+    counts: {
+      intelligenceBootstrap: boot.length,
+      legacyTracker: old.length,
+      consentUi: ui.length,
+      coreRuntime: cores.length,
+      siteSpecificWrapper: wrapper.length,
+    },
+    configuration: {
+      bootstrapConsentMode: installed?.mode || '(no-bootstrap)',
+      consentUiAutoBanner: ui.length === 1 && ui[0].autoBanner,
+      bootstrapHasSiteIdAttribute: Boolean(installed?.siteAttribute),
+      bootstrapHasEventEndpointAttribute: Boolean(installed?.eventEndpointAttribute),
+      bootstrapHasConsentEndpointAttribute: Boolean(installed?.consentEndpointAttribute),
+      behaviorTrackingAttributeEnabled: entries.some(x => x.behaviorOn),
+      automaticLeadCaptureConfigured: entries.some(x => x.leadCaptureOn),
+      tagManagerPresent: tagManager,
+    },
+    warnings,
+    nextChecks: [
+      'Manually verify the website and tag manager have only one active loader.',
+      'Witness Reject All, Accept, withdraw, regrant, and GPC in an authorized environment.',
+      'Verify optional events cannot be sent before consent; static attributes alone are insufficient.',
+    ],
+    limitations: 'Only script attributes in the current top document. No iframe/GTM internals, runtime callbacks, network requests, CMP decisions, visitor data, or historical installation evidence. NOT an R2 acceptance or release approval.',
+  };
+  console.log('SalsysOS R2 consent diagnostic (read-only):');
+  console.log(JSON.stringify(report, null, 2));
+  return report;
+})();
