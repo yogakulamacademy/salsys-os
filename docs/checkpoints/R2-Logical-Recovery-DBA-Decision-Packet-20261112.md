@@ -2,6 +2,25 @@
 
 **Prepared:** 2026-11-12 · **Source:** staging `ndxpjqkthuzxlmbenxti` · **Supabase Support:** `SU-549418` · **Status:** REVIEW ONLY / R2 NO-GO.
 
+## 0. Owner-authorized proposal — separate approval still required
+
+**Decision-request update: November 12, 2026.** The R2 owner has **authorized formally proposing**, for the **R2 isolated staging recovery gate only**, a revised acceptance criterion based on an **offline, verified-no-egress logical reconstruction** **instead of** the blocked Supabase managed physical-backup rehearsal. The owner **acknowledges physical-backup restore integrity and physical RPO/RTO remain unverified**. This is only authorization to *seek a revised standard*; **not adoption, risk waiver or execution consent**. Exact change request: [PR #698 proposal](https://github.com/yogakulamacademy/salsys-os/pull/698#issuecomment-6816895009).
+
+**Proposed bounded acceptance (not an approved PASS standard):**
+
+| Testable acceptance dimension | Proposed positive evidence | Mandatory failure / stop |
+| --- | --- | --- |
+| Pre-execution isolation | Independent security/DBA witness that the operator-controlled, non-public destination denies **all outbound network traffic before import and for the entire rehearsal**, with deny evidence and time stamps | Any uncontrolled egress, unresolved firewall/network path, credential presence or a copied job/provider hook that could fire |
+| Content minimization | Reviewed inclusion/exclusion manifest; **schema + synthetic data first**; documented Auth/Storage/Vault/extension/platform omissions | Unexpected personal data, secret, provider credential or unapproved schema/data copy |
+| Reconstructability | Independently reproduced intended logical schema, functions, role grants, policies, triggers and representative **synthetic** test states on a compatible isolated PostgreSQL build | Unreviewed SQL/extension execution, unexplained missing objects, privileged drift or incomplete tenant policy setup |
+| Authorization boundaries | Approved synthetic tenant A/B negative reads, roles and RPC/SECURITY DEFINER guard checks; no anonymous path broadening | Cross-tenant leakage, privilege escalation, unexpected public callable functions, RLS bypass |
+| History/provenance | Documented 433 current installed migration-version rows, absent `20261110041634`, known WhatsApp version aliases and reconciled scope without hosted history writes | Reporting a synthetic 434 count as a hosted repair or rerunning manually applied PR #685 SQL |
+| Failure, rollback and disposal | Witnessed stop/cleanup path; redacted evidence of artifact expiration, secure deletion and no external actions; measure only **logical reconstruction elapsed time** | Side effects, unreconciled artifacts, unapproved retained dumps or claims of managed physical RTO/RPO |
+
+**Required approval order:** (1) qualified **independent DBA/recovery** written decision; (2) independent **privacy/security** written decision by a *designated, qualified reviewer* (**no name verified yet**); (3) **new explicit owner adoption and residual physical-risk acceptance**; (4) **separate named-operator execution authorization** for any actual rehearsal. None is currently received for the *revised* criterion. A previous empty-body GitHub APPROVED review covers the documentation, not this operational change.
+
+**Disallowed under this authorization:** no export/dump, backup clone, import/restore, SQL modification, migration/ledger repair, merge, deployment, paid infrastructure, real customer fixtures, production change, collector enablement or stage-hold release. **R2: NO-GO; witnessed staging: 0/16 ON HOLD.**
+
 ## 1. Why a decision is required
 
 The user supplied Supabase's written ticket reply from **Sam, Supabase's AI support agent** on November 12, 2026. The stated provider capabilities are:
@@ -47,7 +66,7 @@ No commands below authorize an export or restore. An approved operator must **fi
 
 ## 4. Separate decision gates
 
-**Gate A — scope/acceptance:** Qualified DBA and R2 owner decide whether logical recovery is (i) supplementary evidence only, or (ii) an explicitly accepted **change** to the physical-recovery requirement. If changed, document the physical-backup residual risk, limited disaster-recovery guarantees and updated acceptance criteria. **Default is (i), not an automatic waiver.**
+**Gate A — scope/acceptance:** The owner has **authorized requesting option (ii)**: a formally revised R2 *staging* criterion using no-egress, synthetic-first offline logical recovery instead of a Supabase managed physical clone. The **qualified independent DBA and independent privacy/security reviewer must approve the proposal in writing**, and the owner must then **separately adopt** it with an explicit physical-backup residual-risk decision. Until those decisions, the existing physical-backup gate remains OPEN and logical work is only a proposal; no automatic waiver or acceptance.
 
 **Gate B — privacy/security:** Independent privacy/security reviewer approves schema/data coverage, data minimization, storage, outbound containment, audit handling, Auth/Vault restrictions, and final deletion.
 
@@ -57,9 +76,28 @@ No commands below authorize an export or restore. An approved operator must **fi
 
 **Gate E — migration provenance:** Missing stage ledger `20261110041634` is a **different** reconciliation decision. The security ACLs have been independently read back, but neither a logical restore nor an offline 433→434 simulation authorizes re-running SQL or modifying the hosted migration ledger.
 
-## 5. Independent DBA review request
+## 5. Independent recovery and privacy decision request
 
-Please return a written **APPROVE FOR DOCUMENT REFINEMENT / CHANGES REQUESTED / NOT VIABLE** decision on the logical rehearsal design, explicitly answering:
+**DBA / recovery reviewer:** Provide **ACCEPT PROPOSED REVISED STAGING STANDARD / CHANGES REQUIRED / REJECT** with precise test scope, required no-egress proof, PostgreSQL/extension compatibility, pass/fail criteria, rollback, logical-measurement limits, continuing physical RPO/RTO recovery debt, and the evidence needed before owner adoption. The prior GitHub documentation review is not a decision on this amended acceptance proposal.
+
+**Independent privacy/security reviewer:** A qualified reviewer **must first be identified**. Provide **ACCEPT / CHANGES REQUIRED / REJECT** explicitly on synthetic-only default, whether a real data export is forbidden or would need an additional authorization, PII and secrets minimization, Auth/Storage/Vault limitations, provider integration isolation, safe artifact location/access/retention/deletion, incidental sensitive content, and third-party egress assurance. No presumed approval from the DBA's role.
+
+**Owner (after both independent approvals):** Explicitly **ADOPT / DO NOT ADOPT** the changed R2 staging recovery standard and separately record acknowledgement of unverified physical backup integrity and physical RPO/RTO. This owner adoption is **not granted** by permission to propose.
+
+**Operator (only after adoption):** Seek a separate scope-specific execution GO. This packet supplies **no** dump/restore commands and authorizes no operation.
+
+| Required decision | Approval reference/signature | Current status |
+| --- | --- | --- |
+| Independent DBA revised criterion | Pending | **AWAITING** |
+| Qualified independent privacy reviewer identified | Pending | **NOT DESIGNATED** |
+| Independent privacy/security acceptance | Pending | **AWAITING** |
+| Owner adoption and explicit physical residual-risk acceptance | Pending | **NOT AUTHORIZED** |
+| Operator actual export/import/rehearsal | Pending | **NOT AUTHORIZED** |
+
+### Independent DBA technical questions (must answer in written decision)
+
+
+In addition to the above sign-off, explicitly answer:
 
 1. Is an **offline, no-egress, synthetic/schema-first** logical recovery rehearsal acceptable as **supplementary** R2 evidence? What exact schemas and checks are mandatory?
 2. If the previous requirement was a Nov 10 **physical-backup** rehearsal, which required recovery guarantees remain unproven, and may any requirement be changed with an explicit residual-risk sign-off?
