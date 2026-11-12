@@ -1,6 +1,6 @@
 # SalsysOS R2 — Website Consent Integration Update
 
-**Version 3.1 — Versioned review-only operator tools, NOT deployed**  
+**Version 3.2 diagnostic / 3.1 patcher — Review-only operator tools, NOT deployed**  
 **Release state: R2 NO-GO / staged acceptance 0 of 16 remains ON HOLD.**
 
 This package makes a narrowly scoped local website-template change **only after an authorized operator explicitly runs `--apply`**. It does not access Supabase, Vercel, SalsysOS CRM databases, the live website, cookies, visitors or external APIs.
@@ -22,6 +22,8 @@ The CRM-generated production snippet in `components/tracker-snippet.tsx` was pre
 1. Open the site in Chrome, press **F12**, then choose **Console**.
 2. Paste the complete contents of `scripts/r2-consent-installation-audit.js` and press Enter.
 3. Save/share the redacted JSON report (do not add cookies, session tokens, network dumps or contact data).
+
+Diagnostic v3.2 also verifies that both configured endpoints use exact trusted HTTPS origins and paths, bind to the same single `site_id` value as the bootstrap, and that the bootstrap and CMP script origins use expected paths. Results are boolean flags; site IDs and endpoint values are never printed.
 
 The reported status `STATIC_ATTRIBUTES_MATCH_REQUIRED_NOT_E2E_VERIFIED` means **only visible attributes look correct**. It is not confirmation that Reject All, withdrawal, GPC, tenant isolation or event suppression works.
 
