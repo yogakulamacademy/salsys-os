@@ -1,5 +1,33 @@
 # R2 staging — physical-backup restore preflight and isolation gates
 
+## SUPABASE SUPPORT DECISION — 2026-11-12 / SU-549418
+
+**This section supersedes earlier "await Supabase confirmation" language below.**
+The owner supplied a written email reply from **Sam, Supabase's AI support agent** under support ticket **SU-549418**. It is provider-channel guidance, **not** a human DBA/engineer sign-off, approval of a recovery run, or evidence that any restore was performed.
+
+### Provider answers (as supplied by the owner)
+1. **No supported pre-start safety guarantee:** Supabase says its Restore to a New Project binary physical clone has no startup hold, safe mode, or pre-boot egress block. Copied `pg_cron`, `pg_net`, wrappers, and database webhooks may act when the restored database becomes writable, including before the UI reports completion. Supabase Network Restrictions protect **inbound**, not outbound, connections; Support cannot run a physical restore with jobs disabled before start.
+2. **No provider-supported offline physical recovery:** Supabase says physical backups cannot be downloaded/exported or inspected offline, and snapshot contents cannot be examined without restore. The November 10 snapshot has **not** been inventoried or restored.
+3. **Backup availability not individually established:** November 10 is within the Pro Plan's stated seven-day retention on November 12, but the exact `2026-11-10 20:08:55 UTC` candidate must still be confirmed in the source project's restore list. Do **not** click Restore.
+4. **Cost:** a new restored project is billed separately for compute/disk/storage; exact costs and lifetime are not quoted or approved.
+5. **Existing projects:** a new-project restore is independent of source staging and production *as a database operation*, but copied workloads could still act on **production external endpoints**. Thus project independence is **not** sufficient isolation.
+
+### Decision: physical-restore rehearsal is blocked under current acceptance criteria
+
+**NO-GO** for the built-in Supabase physical clone; the mandatory zero-outbound-before-start control is **not supported** by the described procedure. The 250/250 no-op historical cron runs reduce one narrow risk but do not override the provider's no-guarantee answer. Do not treat the reviewer shorthand "RECOVERY TEST GO" elsewhere as overriding these exact negative provider findings. Physical-backup restore integrity, RPO and RTO are **unverified**.
+
+### Alternative offered by Supabase — proposed ONLY, not authorized
+
+Supabase suggested a **logical dump of the current staging database**, a carefully reviewed/sanitized export that excludes or neutralizes scheduled jobs, outbound extensions/HTTP hooks, FDW server/user mappings, webhooks and external credentials, then an offline/local PostgreSQL reconstruction (or a separately approved new-project import). The review must also cover Auth/Vault/PII/tenant data, side effects, database roles, ownership, RLS, and export security. A logical dump **does not contain the physical backup snapshot**, does **not** prove the Nov 10 physical backup is restorable, and does **not** transfer Supabase's encryption root key. Vault and encrypted-column validation will therefore have different limits.
+
+**Authorization boundaries:** No logical dump, sensitive-data export, new project, paid resource, DDL replay, cleaning/in-place mutation, network connection, or secret migration is approved by this documentation. First obtain an independent DBA/privacy/security decision on whether logical recovery is a **supplementary rehearsal** or whether the original physical-backup test requirement can be formally replaced/waived with documented residual risk. A separately scoped owner authorization is then required for any actual export or test. Prefer a no-secret, synthetic-only plan while preparing the proposed procedure.
+
+**Existing blockers persist:** Missing stage migration ledger version `20261110041634` remains unreconciled despite successful ACL postconditions; PRs #685/#697/#698 remain separately gated; 0/16 staging acceptance is on hold and production stays unchanged.
+
+**Provider documents referenced:** [Restore to a new project](https://supabase.com/docs/guides/platform/clone-project), [CLI backup/restore](https://supabase.com/docs/guides/platform/migrating-within-supabase/backup-restore), and [Vault portability](https://supabase.com/docs/guides/database/vault#key-portability-and-migration).
+
+---
+
 **Prepared:** 2026-11-12. **Status:** DRAFT, review-only, **NO-GO for any restore**.
 **Owner issue:** [#531](https://github.com/yogakulamacademy/salsys-os/issues/531).
 **Limited rehearsal:** [PR #697](https://github.com/yogakulamacademy/salsys-os/pull/697) independently **APPROVED** for GitHub-only synthetic scope at `3fa074a9e72930b12cd96805b04834b5d44ea7df`, but explicitly **NOT** for physical recovery, history repair, merge or staging release.
