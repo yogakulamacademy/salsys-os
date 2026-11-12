@@ -37,7 +37,7 @@ python3 scripts/salsysos-website-consent-fix.py header.php footer.php
 
 The default is **DRY RUN**. It does not edit anything, print your site ID, show full endpoints or write backups.
 
-The tool intentionally refuses to patch if it finds duplicate SalsysOS loaders, legacy tracker wrappers, dynamically generated script tags, unexpected remote origins/endpoints, mismatched site IDs, no SalsysOS consent interface, or enabled behavioral tracking. Resolve those manually with the site owner; do not bypass the checks.
+The tool intentionally refuses to patch if it finds duplicate SalsysOS loaders, legacy tracker wrappers, dynamically generated script tags, unexpected remote origins/endpoints, mismatched or duplicate endpoint `site_id` parameters, unquoted or malformed critical consent/behavior attributes, no SalsysOS consent interface, or enabled behavioral tracking. Resolve those manually with the site owner; do not bypass the checks.
 
 ### Step C — Modify a local copy only after owner approval
 
