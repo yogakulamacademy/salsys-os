@@ -1,3 +1,4 @@
+import { parseDmLinkInstant } from './dm-link-time';
 /**
  * DM-LINK-05: offline composition of the existing DM-link evidence safeguards.
  * No Supabase client, API route, identity merge, browser collector, scheduler,
@@ -70,13 +71,6 @@ function deny(reason: string): DmLinkReviewPipelineOutput {
   };
 }
 
-function parseTimestamp(value: unknown): number | null {
-  if (typeof value !== 'string' ||
-    !/^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d(?:\.\d{1,6})?(?:Z|[+-]\d\d:\d\d)$/.test(value)) return null;
-  const time = Date.parse(value);
-  return Number.isFinite(time) ? time : null;
-}
-
 /** Uses the SAME bound message/link for every stage. Never writes or sends. */
 export function evaluateDmLinkReviewPipeline(input: DmLinkReviewPipelineInput): DmLinkReviewPipelineOutput {
   if (!input || !input.snapshot || !input.snapshot.message || !input.snapshot.link) {
@@ -127,9 +121,9 @@ export function evaluateDmLinkReviewPipeline(input: DmLinkReviewPipelineInput): 
       (accepted?.state !== 'provider_accepted' || accepted.recipientDeliveryVerified !== false)) {
     return deny('unverified_send_provenance');
   }
-  const sentAt = parseTimestamp(input.snapshot.message.sent_at);
-  const deliveryAt = parseTimestamp(input.deliveredAt);
-  const now = parseTimestamp(input.now);
+  const sentAt = parseDmLinkInstant(input.snapshot.message.sent_at);
+  const deliveryAt = parseDmLinkInstant(input.deliveredAt);
+  const now = parseDmLinkInstant(input.now);
   if (input.outboundState === 'delivered' &&
       (sentAt === null || deliveryAt === null || now === null ||
        deliveryAt < sentAt || deliveryAt > now)) {
