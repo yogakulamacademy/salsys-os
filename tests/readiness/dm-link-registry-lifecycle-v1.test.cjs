@@ -116,6 +116,31 @@ const transitions=[
  ['unpermitted processing prevents activation',x=>{x.purposePermitted=false;},'hold'],
  ['acceptance before reservation is inconsistent',x=>{x.proof.acceptedAt='2026-11-12T09:00:00Z';},'manual_review'],
  ['acceptance after evaluation time is inconsistent',x=>{x.proof.acceptedAt='2026-11-12T11:00:00Z';},'manual_review'],
+ ['rejection supplied along with accepted send prevents activation',x=>{
+   x.failureProof={dispatchAttemptId:attempt,organizationId:org,leadId:lead,
+     conversationId:conversation,instagramAccountId:'account123',
+     instagramRecipientId:'customer123',rejectedAt:'2026-11-12T10:05:00Z',
+     outcome:'explicit_provider_rejection',sourceVerified:true};
+ },'manual_review'],
+ ['acceptance one microsecond before issuance requires review',x=>{
+   x.reservation.issuedAt='2026-11-12T10:00:00.000003Z';
+   x.proof.acceptedAt='2026-11-12T10:00:00.000002Z';
+ },'manual_review'],
+ ['rejection one microsecond before issuance requires review',x=>{
+   x.dispatchState='definitive_failure';x.proof=null;
+   x.reservation.issuedAt='2026-11-12T10:00:00.000003Z';
+   x.failureProof={dispatchAttemptId:attempt,organizationId:org,leadId:lead,
+     conversationId:conversation,instagramAccountId:'account123',
+     instagramRecipientId:'customer123',rejectedAt:'2026-11-12T10:00:00.000002Z',
+     outcome:'explicit_provider_rejection',sourceVerified:true};
+ },'manual_review'],
+ ['TTL exceeded by a single microsecond fails closed',x=>{
+   x.reservation.expiresAt='2026-11-15T10:00:00.000001Z';
+ },'hold'],
+ ['exact seventy-two hour TTL remains valid',x=>{
+   x.reservation.issuedAt='2026-11-12T10:00:00.000001Z';
+   x.reservation.expiresAt='2026-11-15T10:00:00.000001Z';
+ },'activate'],
 ];
 for(const [name,change,expected] of transitions){
   test(name,()=>{
@@ -165,6 +190,38 @@ const observations=[
    providerAcceptedAt:'2026-11-12T10:04:00.123456+00:00',
    linkActivatedAt:'2026-11-12T10:06:00.999999+00:00',
    observedAt:'2026-11-12T10:07:00.654321+00:00'
+ },true],
+ ['visit a microsecond before activation cannot be retroactively attributed',{
+   linkActivatedAt:'2026-11-12T10:06:00.000002Z',
+   observedAt:'2026-11-12T10:06:00.000001Z'
+ },false],
+ ['visit exactly at activation microsecond is eligible',{
+   linkActivatedAt:'2026-11-12T10:06:00.000002Z',
+   observedAt:'2026-11-12T10:06:00.000002Z'
+ },true],
+ ['activation microsecond before provider acceptance is rejected',{
+   providerAcceptedAt:'2026-11-12T10:06:00.000002Z',
+   linkActivatedAt:'2026-11-12T10:06:00.000001Z'
+ },false],
+ ['activation exactly at provider acceptance microsecond is eligible',{
+   providerAcceptedAt:'2026-11-12T10:06:00.000002Z',
+   linkActivatedAt:'2026-11-12T10:06:00.000002Z',
+   observedAt:'2026-11-12T10:06:00.000003Z'
+ },true],
+ ['observation a microsecond before expiry is eligible',{
+   observedAt:'2026-11-15T09:59:59.999999Z'
+ },true],
+ ['observation exactly at expiry microsecond is rejected',{
+   observedAt:'2026-11-15T10:00:00.000000Z'
+ },false],
+ ['acceptance a microsecond earlier than issuance is rejected',{
+   linkIssuedAt:'2026-11-12T10:04:00.000002Z',
+   providerAcceptedAt:'2026-11-12T10:04:00.000001Z'
+ },false],
+ ['timezone-offset microseconds compare as actual instants',{
+   providerAcceptedAt:'2026-11-12T15:34:00.000002+05:30',
+   linkActivatedAt:'2026-11-12T10:04:00.000003Z',
+   observedAt:'2026-11-12T10:04:00.000004Z'
  },true],
 ];
 for(const [name,changes,expected] of observations){
