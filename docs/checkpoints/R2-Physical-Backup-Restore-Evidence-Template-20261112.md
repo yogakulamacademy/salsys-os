@@ -1,5 +1,7 @@
 # R2 — physical backup restore witness record (UNFILLED template)
 
+> **Provider decision received — November 12, 2026:** Supabase ticket `SU-549418` states that the supported physical-clone process does **not** offer pre-start isolation and offline physical restore is unavailable. **PHYSICAL RESTORE NO-GO** under existing controls. The form below remains deliberately UNFILLED for restore witness evidence; the provider's negative decision is not a failed execution or a completed restore. The alternative **logical** rehearsal is a *separate*, unapproved proposal; see [R2 Logical Recovery DBA Decision Packet](./R2-Logical-Recovery-DBA-Decision-Packet-20261112.md). No owner/DBA approval, data export, paid project, RTO/RPO verification, staging acceptance or ledger repair has occurred.
+
 **DO NOT interpret this form as a GO.** This file is documentation to be completed with redacted provider evidence **only after** a separately approved physical restore test. Blank fields are **NOT VERIFIED**. No commands, tokens, credentials, customer details or personal data should be recorded in this file.
 
 | Approval / evidence | Recorded value | Reviewed by |
@@ -14,8 +16,8 @@
 | Explicit owner cost approval, limit and date | NOT GIVEN | TBD |
 | Independent DBA physical-test procedure GO | NOT GIVEN | TBD |
 | Recovery operator and witness acceptance | NOT GIVEN | TBD |
-| Pre-start outbound isolation mechanism | NOT PROVEN | TBD |
-| Current cron catalog / historical run evidence | READ-ONLY: 5 configured, 4 active; all current commands simple `SELECT 1`; Nov 10 19:00–21:00 UTC: **250/250 persisted run commands `SELECT 1`, 0 failures** | DBA to corroborate |\n| Current trigger/extension screening (not backup proof) | READ-ONLY: 190 user-defined triggers; 0 direct outbound keywords in their function sources; matching installed extension inventory only `pg_cron` | DBA to corroborate |\n| Supabase provider pre-start containment confirmation | NOT REQUESTED / NOT RECEIVED; open a support case first | Supabase + DBA |\n| Confirmed cron / trigger / extension safety before start | NOT PROVEN for the entire restored snapshot; no provider pre-start isolation guarantee | TBD |
+| Pre-start outbound isolation mechanism | **Provider states unavailable in supported self-service physical clone; NO-GO** | DBA to review |
+| Current cron catalog / historical run evidence | READ-ONLY: 5 configured, 4 active; all current commands simple `SELECT 1`; Nov 10 19:00–21:00 UTC: **250/250 persisted run commands `SELECT 1`, 0 failures** | DBA to corroborate |\n| Current trigger/extension screening (not backup proof) | READ-ONLY: 190 user-defined triggers; 0 direct outbound keywords in their function sources; matching installed extension inventory only `pg_cron` | DBA to corroborate |\n| Supabase provider pre-start containment confirmation | **RECEIVED: SU-549418 — no supported pre-start egress hold/safe mode; physical clone is NO-GO** | Supabase AI support reply; independent DBA review pending |\n| Confirmed cron / trigger / extension safety before start | NOT PROVEN for the entire restored snapshot; no provider pre-start isolation guarantee | TBD |
 | External integrations and auth exposure containment | NOT PROVEN | TBD |
 | Data protection / Vault encryption / Auth user handling | NOT APPROVED | TBD |
 | Restore initiated | NO | — |
