@@ -43,6 +43,59 @@ test('required mode is static-only, never E2E PASS', () => {
   assert.equal(report.status, 'STATIC_ATTRIBUTES_MATCH_REQUIRED_NOT_E2E_VERIFIED');
   assert.equal(report.counts.intelligenceBootstrap, 1);
 });
+const inheritedCore = { ...boot, src: 'https://salsysos.com/salsys-intelligence-core-v1.6.0.js' };
+const inheritedTracker = { ...boot, src: 'https://salsysos.com/salsys-tracker.js', 'data-legacy-aliases': 'false' };
+
+test('expected intelligence core and inherited tracker are not an independent duplicate', () => {
+  const r = run([boot, cmp, inheritedCore, inheritedTracker]);
+  assert.equal(r.status, 'STATIC_ATTRIBUTES_MATCH_REQUIRED_NOT_E2E_VERIFIED');
+  assert.equal(r.counts.legacyTracker, 1);
+  assert.equal(r.configuration.expectedInternalTrackerChainConsistent, true);
+  assert.ok(!r.warnings.includes('DUPLICATE_TRACKER_LOADER'));
+  assert.ok(!r.warnings.includes('LEGACY_TRACKER_PRESENT'));
+});
+test('expected internal chain with GTM still needs separate tag review', () => {
+  const r = run([boot, cmp, inheritedCore, inheritedTracker,
+    { src: 'https://www.googletagmanager.com/gtm.js?id=TOP_SECRET' }]);
+  assert.equal(r.status, 'STATIC_ATTRIBUTES_MATCH_BUT_DYNAMIC_LOADERS_REQUIRE_REVIEW');
+  assert.ok(r.warnings.includes('TAG_MANAGER_MAY_INSERT_MORE_SCRIPTS'));
+});
+test('additional tracker without matching intelligence core needs review', () => {
+  const r = run([boot, cmp, inheritedTracker]);
+  assert.equal(r.status, 'REVIEW_UNVERIFIED_ADDITIONAL_TRACKER');
+  assert.equal(r.configuration.expectedInternalTrackerChainConsistent, false);
+});
+test('tracker without internal alias marker needs review', () => {
+  const r = run([boot, cmp, inheritedCore, { ...boot, src: 'https://salsysos.com/salsys-tracker.js' }]);
+  assert.equal(r.status, 'REVIEW_UNVERIFIED_ADDITIONAL_TRACKER');
+});
+test('inherited tracker with granted mode needs review', () => {
+  assert.equal(run([boot, cmp, inheritedCore, { ...inheritedTracker,
+    'data-consent-mode': 'granted' }]).status, 'REVIEW_UNVERIFIED_ADDITIONAL_TRACKER');
+});
+test('inherited tracker with mismatched endpoint binding needs review', () => {
+  assert.equal(run([boot, cmp, inheritedCore, { ...inheritedTracker,
+    'data-endpoint': 'https://salsysos.com/api/events/browser/v1?site_id=DIFFERENT' }]).status,
+    'REVIEW_UNVERIFIED_ADDITIONAL_TRACKER');
+});
+test('inherited tracker with a different consistent site ID is still unexpected', () => {
+  const other = { ...inheritedTracker,
+    'data-salsys-site': 'DIFFERENT',
+    'data-endpoint': 'https://salsysos.com/api/events/browser/v1?site_id=DIFFERENT',
+    'data-consent-endpoint': 'https://salsysos.com/api/privacy/consent/v1?site_id=DIFFERENT' };
+  assert.equal(run([boot, cmp, inheritedCore, other]).status, 'REVIEW_UNVERIFIED_ADDITIONAL_TRACKER');
+});
+test('two tracker tags remain duplicates', () => {
+  assert.equal(run([boot, cmp, inheritedCore, inheritedTracker, inheritedTracker]).status,
+    'REVIEW_DUPLICATE_SALSYS_TRACKERS');
+});
+test('untrusted intelligence core cannot justify expected internal chain', () => {
+  const r = run([boot, cmp, { ...inheritedCore,
+    src: 'https://evil.invalid/salsys-intelligence-core-v1.6.0.js' }, inheritedTracker]);
+  assert.equal(r.status, 'REVIEW_UNVERIFIED_ADDITIONAL_TRACKER');
+  assert.ok(r.warnings.includes('SALSYS_NAMED_SCRIPT_FROM_UNTRUSTED_ORIGIN'));
+});
+
 test('explicit granted is flagged', () => {
   assert.equal(run([{ ...boot, 'data-consent-mode': 'granted' }, cmp]).status, 'REVIEW_EXPLICIT_GRANTED_MODE');
 });

@@ -1,5 +1,5 @@
 /*
- * SalsysOS R2 website consent installation diagnostic v3.2 — READ ONLY.
+ * SalsysOS R2 website consent installation diagnostic v3.3 — READ ONLY.
  * Paste this whole file into DevTools > Console on a website you administer.
  *
  * Checks current top-document script attributes. It DOES NOT fetch, mutate,
@@ -11,7 +11,7 @@
  */
 (() => {
   'use strict';
-  const version = '3.2';
+  const version = '3.3';
   const allowed = new Set([
     'salsys-intelligence.js', 'salsys-tracker.js',
     'yogakulam-tracker.js', 'salsys-consent.js',
@@ -57,6 +57,9 @@
     entries.push({
       file: k.file,
       trusted: k.trusted,
+      // Private comparisons only: site IDs never appear in the returned report.
+      siteId: String(script.getAttribute('data-salsys-site') || '').trim(),
+      legacyAliasesDisabled: get(script, 'data-legacy-aliases') === 'false',
       mode: enumerateMode(get(script, 'data-consent-mode')),
       autoBanner: get(script, 'data-consent-banner') === 'auto',
       siteAttribute: has(script, 'data-salsys-site'),
@@ -80,9 +83,22 @@
   const wrapper = of('yogakulam-tracker.js');
   const cores = entries.filter(x => /^salsys-intelligence-core(?:[.-]|$)/.test(x.file));
   const installed = boot[0] || null;
+  // The current first-party bootstrap loads one intelligence core, which
+  // loads one inherited salsys-tracker.js with data-legacy-aliases="false".
+  // This is static consistency, NOT proof of who inserted each script.
+  const internalChainConsistent = boot.length === 1 && cores.length === 1 && old.length === 1 &&
+    [installed, cores[0], old[0]].every((x) =>
+      x.trusted && x.siteId && x.mode === 'required' && x.endpointsMatchSite
+    ) &&
+    cores[0].siteId === installed.siteId &&
+    old[0].siteId === installed.siteId &&
+    old[0].legacyAliasesDisabled;
   const warnings = [];
-  if (boot.length + old.length > 1) warnings.push('DUPLICATE_TRACKER_LOADER');
-  if (old.length) warnings.push('LEGACY_TRACKER_PRESENT');
+  if (boot.length > 1 || old.length > 1) warnings.push('DUPLICATE_TRACKER_LOADER');
+  if (old.length && !internalChainConsistent) warnings.push('LEGACY_TRACKER_PRESENT');
+  if (boot.length && old.length && !internalChainConsistent) {
+    warnings.push('UNVERIFIED_ADDITIONAL_TRACKER');
+  }
   if (wrapper.length) warnings.push('SITE_WRAPPER_REQUIRES_MANUAL_SOURCE_REVIEW');
   if (tagManager) warnings.push('TAG_MANAGER_MAY_INSERT_MORE_SCRIPTS');
   if (cores.length > 1) warnings.push('MULTIPLE_CORE_RUNTIME_SCRIPTS');
@@ -105,8 +121,9 @@
   ].includes(w));
   let status;
   if (boot.length + old.length === 0) status = 'INCONCLUSIVE_NO_VISIBLE_TOP_DOCUMENT_LOADER';
-  else if (boot.length + old.length > 1) status = 'REVIEW_DUPLICATE_SALSYS_TRACKERS';
-  else if (old.length) status = 'REVIEW_LEGACY_TRACKER';
+  else if (boot.length > 1 || old.length > 1) status = 'REVIEW_DUPLICATE_SALSYS_TRACKERS';
+  else if (!boot.length && old.length) status = 'REVIEW_LEGACY_TRACKER';
+  else if (boot.length && old.length && !internalChainConsistent) status = 'REVIEW_UNVERIFIED_ADDITIONAL_TRACKER';
   else if (installed.mode === 'granted') status = 'REVIEW_EXPLICIT_GRANTED_MODE';
   else if (installed.mode !== 'required') status = 'REVIEW_MISSING_OR_UNEXPECTED_CONSENT_MODE';
   else if (ui.length !== 1 || !ui[0].autoBanner) status = 'REVIEW_MISSING_OR_DUPLICATE_CONSENT_UI';
@@ -127,6 +144,7 @@
     },
     configuration: {
       bootstrapConsentMode: installed?.mode || '(no-bootstrap)',
+      expectedInternalTrackerChainConsistent: Boolean(internalChainConsistent),
       consentUiAutoBanner: ui.length === 1 && ui[0].autoBanner,
       bootstrapHasSiteIdAttribute: Boolean(installed?.siteAttribute),
       bootstrapHasEventEndpointAttribute: Boolean(installed?.eventEndpointAttribute),
@@ -138,11 +156,11 @@
     },
     warnings,
     nextChecks: [
-      'Manually verify the website and tag manager have only one active loader.',
+      'Check actual script initiators and GTM: a consistent internal chain does not prove execution provenance.',
       'Witness Reject All, Accept, withdraw, regrant, and GPC in an authorized environment.',
       'Verify optional events cannot be sent before consent; static attributes alone are insufficient.',
     ],
-    limitations: 'Only script attributes in the current top document. No iframe/GTM internals, runtime callbacks, network requests, CMP decisions, visitor data, or historical installation evidence. NOT an R2 acceptance or release approval.',
+    limitations: 'Only script attributes in the current top document. Internal tracker-chain classification is inferred from attributes, NOT verified injection provenance. No iframe/GTM internals, runtime callbacks, network requests, CMP decisions, visitor data, or historical installation evidence. NOT an R2 acceptance or release approval.',
   };
   console.log('SalsysOS R2 consent diagnostic (read-only):');
   console.log(JSON.stringify(report, null, 2));

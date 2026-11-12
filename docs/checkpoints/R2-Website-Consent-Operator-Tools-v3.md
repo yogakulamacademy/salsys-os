@@ -1,6 +1,6 @@
 # SalsysOS R2 — Website Consent Integration Update
 
-**Version 3.2 diagnostic / 3.1 patcher — Review-only operator tools, NOT deployed**  
+**Version 3.3 diagnostic / 3.1 patcher — Review-only operator tools, NOT deployed**  
 **Release state: R2 NO-GO / staged acceptance 0 of 16 remains ON HOLD.**
 
 This package makes a narrowly scoped local website-template change **only after an authorized operator explicitly runs `--apply`**. It does not access Supabase, Vercel, SalsysOS CRM databases, the live website, cookies, visitors or external APIs.
@@ -11,7 +11,7 @@ The CRM-generated production snippet in `components/tracker-snippet.tsx` was pre
 
 ## Included files
 
-- `scripts/r2-consent-installation-audit.js` — browser-console diagnostic. **Read-only**; it reports enumerated flags, not script URLs, site IDs or visitor data.
+- `scripts/r2-consent-installation-audit.js` — browser-console diagnostic v3.3. **Read-only**; it reports enumerated flags, not script URLs, site IDs or visitor data.
 - `scripts/salsysos-website-consent-fix.py` — local PHP/HTML patcher. **Dry-run by default**, and refuses unexpected configurations.
 - `tests/readiness/r2-consent-installation-audit-v3.test.cjs` — JavaScript regression tests.
 - `tests/readiness/r2-website-consent-fix-v3.test.py` — Python regression tests.
@@ -23,7 +23,9 @@ The CRM-generated production snippet in `components/tracker-snippet.tsx` was pre
 2. Paste the complete contents of `scripts/r2-consent-installation-audit.js` and press Enter.
 3. Save/share the redacted JSON report (do not add cookies, session tokens, network dumps or contact data).
 
-Diagnostic v3.2 also verifies that both configured endpoints use exact trusted HTTPS origins and paths, bind to the same single `site_id` value as the bootstrap, and that the bootstrap and CMP script origins use expected paths. Results are boolean flags; site IDs and endpoint values are never printed.
+Diagnostic v3.3 also verifies that both configured endpoints use exact trusted HTTPS origins and paths, bind to the same single `site_id` value as the bootstrap, and that the bootstrap and CMP script origins use expected paths. Results are boolean flags; site IDs and endpoint values are never printed.
+
+**v3.3 observed runtime-chain refinement:** The website operator's Nov 12 Chrome Network view showed `salsys-intelligence.js` initiating `salsys-intelligence-core-v1.6.0.js`, which initiated `salsys-tracker.js`. The `main` source confirms this nested tracker is created by the core, inherits `data-*` attributes and receives `data-legacy-aliases="false"`. A single trusted core and a single trusted inherited tracker with matching site/endpoint/required-consent attributes is now **consistent with the expected internal chain**; it does not count as two independent SDK loaders. The diagnostic exposes `expectedInternalTrackerChainConsistent` as a boolean only. It retains fail-closed flags for extra bootstraps/trackers, missing internal-chain markers, mismatched site/mode/endpoint, and untrusted sources. Network initiator provenance and GTM configurations still require independent inspection; static attributes do not prove execution provenance or consent compliance. No website runtime is changed.
 
 The reported status `STATIC_ATTRIBUTES_MATCH_REQUIRED_NOT_E2E_VERIFIED` means **only visible attributes look correct**. It is not confirmation that Reject All, withdrawal, GPC, tenant isolation or event suppression works.
 
