@@ -1,3 +1,4 @@
+import { parseDmLinkInstant } from './dm-link-time';
 /**
  * DM-LINK-02: pure, offline reconciliation of observed link events.
  * No database writes, network requests, cookies, IP lookup or outgoing messages.
@@ -66,7 +67,7 @@ export function summarizeDmLinkCoverage(input: {
   let qualifying = 0;
   let ambiguous = 0;
   let unknownCountryVisits = 0;
-  let mostRecent = -Infinity;
+  let mostRecent: bigint | null = null;
   let lastObservedAt: string | null = null;
   const countries = new Set<string>();
   for (const item of input.events) {
@@ -91,8 +92,8 @@ export function summarizeDmLinkCoverage(input: {
       qualifying++;
       if (result.observedVisitCountry) countries.add(result.observedVisitCountry);
       else unknownCountryVisits++;
-      const when = Date.parse(item.evidence.observedAt ?? '');
-      if (Number.isFinite(when) && when > mostRecent) {
+      const when = parseDmLinkInstant(item.evidence.observedAt);
+      if (when !== null && (mostRecent === null || when > mostRecent)) {
         mostRecent = when;
         lastObservedAt = item.evidence.observedAt;
       }
