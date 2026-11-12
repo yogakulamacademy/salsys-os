@@ -209,6 +209,21 @@ The **26 revoke and 4 search-path statements below have been extracted directly*
 
 **Review question requiring an explicit response:** Can option A be accepted as **SUPPLEMENTARY ONLY** and, if the narrowed R2 staging contract still demands current schema recovery, must option B be reviewed or must the owner redefine the narrow criterion (without claiming physical recovery)? Answer with **ACCEPT / CHANGES REQUIRED / REJECT**, supported by exact scope and residual-risk boundaries. No default signoff is implied.
 
+### 6.2d Indirect outbound capability in repository recovery source (important no-egress threat)
+
+**Additional static dependency research on committed source:** The main-branch [automation runtime scheduler foundation SQL](https://github.com/yogakulamacademy/salsys-os/blob/main/supabase/recovery/20261017091453_automation_runtime_scheduler_foundation_v1.sql), exact Git blob `f97f24b9252e242268d29adb74a54fb500f5357d`, defines a potential outbound execution chain **outside the four stage-only SQL files**:
+
+1. Lines 499–501 propose installation of **pg_cron**, **pg_net**, and **supabase_vault**.
+2. Lines 503–518 define `public.automation_scheduler_settings` with an external HTTPS endpoint and a Vault secret name; the proposed `enabled` default and initial inserted state are **false**.
+3. Lines 537–631 define SECURITY DEFINER `public.invoke_automation_runtime_scheduler_v1()`. The function checks `enabled`, loads a secret from `vault.decrypted_secrets`, and (when enabled and secret present) invokes `net.http_get(...)` with an Authorization header.
+4. Lines 636–648 create a **once-per-minute cron schedule** for the function if the named job is not already present.
+
+**Why this matters:** Our preceding four-file scan had no *direct* network-token matches; it **does not** cover this separate historical/recovery migration or any existing indirect call path. A disabled-by-default scheduler is a **risk reduction**, not proof that a historical backup, a different environment, a live database or a reconstructed runtime has no outbound capability. Copying this DDL into a network-connected destination is **prohibited** under the proposed no-egress rehearsal until reviewed and independently contained.
+
+**Evidentiary boundary:** This is a **repository-source finding, not a live hosted observation**. The separate November 12 staging SELECT-only installed-extension screening found **pg_cron only** among its targeted matching extensions, with five configured/four active jobs and no observed active non-`SELECT 1` commands. It did **not** prove that the above `pg_net`/Vault scheduler source was installed or active on staging, and it cannot describe all contents of an un-restored November 10 physical image. Source-only statements and live installed-state assertions must remain explicitly separated.
+
+**Mandatory DBA/privacy pre-import review additions:** Fully enumerate and classify this scheduler, the named job, settings, `net.http_get` and Vault access, extensions, any dependent jobs or hooks, and other code invoking external services. Record the reviewed disposition for each as **EXCLUDED / REPLACED WITH SYNTHETIC NO-OP / REVIEWED LOCAL-ONLY AND INERT**. A static keyword scan must not substitute for an independently witnessed **network-denial boundary active before any DDL or SQL runs**. Any unreviewed outbound-capable function, credential, job or extension startup path is a **HARD STOP**. No production/staging SQL is to be executed to inspect or disable it without separate authorization.
+
 ### 6.3 Proposed pre-execution no-egress architecture and witness procedure
 
 **Design intent (not yet built or witnessed):**
