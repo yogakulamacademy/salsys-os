@@ -43,6 +43,41 @@ class SafePatching(unittest.TestCase):
         with self.assertRaises(fix.SafePatchError):
             fix.transform(BOOT.replace('granted', 'custom') + CMP)
 
+    def test_unquoted_granted_mode_refused(self):
+        src = BOOT.replace('data-consent-mode="granted"', 'data-consent-mode=granted') + CMP
+        with self.assertRaises(fix.SafePatchError):
+            fix.transform(src)
+
+    def test_duplicate_mixed_quoted_unquoted_mode_refused(self):
+        src = BOOT.replace(
+            'data-consent-mode="granted"',
+            'data-consent-mode="required" data-consent-mode=granted'
+        ) + CMP
+        with self.assertRaises(fix.SafePatchError):
+            fix.transform(src)
+
+    def test_unquoted_behavior_tracking_refused(self):
+        src = BOOT.replace('defer>', 'data-salsys-behavior-tracking=true defer>') + CMP
+        with self.assertRaises(fix.SafePatchError):
+            fix.transform(src)
+
+    def test_unquoted_bootstrap_src_refused(self):
+        src = BOOT.replace(
+            'src="https://salsysos.com/salsys-intelligence.js"',
+            'src=https://salsysos.com/salsys-intelligence.js'
+        ) + CMP
+        with self.assertRaises(fix.SafePatchError):
+            fix.transform(src)
+
+    def test_duplicate_site_id_query_refused(self):
+        src = BOOT.replace(
+            'v1?site_id=' + SITE,
+            'v1?site_id=' + SITE + '&site_id=OTHER',
+            1
+        ) + CMP
+        with self.assertRaises(fix.SafePatchError):
+            fix.transform(src)
+
     def test_duplicate_bootstrap_refused(self):
         with self.assertRaises(fix.SafePatchError):
             fix.transform(BOOT + BOOT + CMP)
