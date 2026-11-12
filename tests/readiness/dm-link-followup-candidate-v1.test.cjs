@@ -124,3 +124,18 @@ test('accepted-only review still blocks replies, opt-outs, incomplete coverage, 
   assert.notEqual(run({...input,...patch}).status,'ready');
  }
 });
+
+
+test('human review wait threshold preserves microseconds and rejects premature suggestions',()=>{
+ const initial=baseline();
+ initial.deliveredAt='2026-11-11T10:00:00.000002Z';
+ initial.now='2026-11-12T10:00:00.000001Z';
+ initial.sourceReadAt=initial.now;
+ const before=api.buildDmLinkHumanReviewCandidate(initial);
+ assert.equal(before.status,'not_due');assert.equal(before.task,null);
+ initial.now='2026-11-12T10:00:00.000002Z';
+ initial.sourceReadAt=initial.now;
+ const onTime=api.buildDmLinkHumanReviewCandidate(initial);
+ assert.equal(onTime.status,'ready');
+ assert.equal(onTime.automaticSendAllowed,false);
+});
