@@ -110,7 +110,7 @@ class SafePatching(unittest.TestCase):
             self.assertIn('granted', header.read_text())
             self.assertNotIn(SITE, messages.getvalue())
             with contextlib.redirect_stdout(messages):
-                self.assertEqual(fix.run([str(header), str(footer), '--apply', '--backup-dir', str(priv)]), 0)
+                self.assertEqual(fix.run([str(header), str(footer), '--apply', '--webroot', str(root), '--backup-dir', str(priv)]), 0)
             self.assertIn('required', header.read_text())
             self.assertEqual(footer.read_text(), CMP)
             copies = list(priv.glob('header.php.salsys-backup-*'))
@@ -123,7 +123,7 @@ class SafePatching(unittest.TestCase):
             header = Path(d) / 'header.php'
             header.write_text(BOOT + CMP)
             with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
-                self.assertEqual(fix.run([str(header), '--apply', '--backup-dir', str(Path(d) / 'bad')]), 2)
+                self.assertEqual(fix.run([str(header), '--apply', '--webroot', str(Path(d)), '--backup-dir', str(Path(d) / 'bad')]), 2)
             self.assertIn('granted', header.read_text())
 
     def test_symlink_refused(self):
@@ -141,6 +141,38 @@ class SafePatching(unittest.TestCase):
             target.write_text(BOOT + CMP)
             with contextlib.redirect_stderr(io.StringIO()):
                 self.assertEqual(fix.run([str(target)]), 2)
+
+    def test_apply_requires_document_root(self):
+        with tempfile.TemporaryDirectory() as d:
+            target = Path(d) / 'header.php'
+            target.write_text(BOOT + CMP)
+            with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
+                self.assertEqual(fix.run([str(target), '--apply', '--backup-dir', str(Path(d).parent / 'safe_private')]), 2)
+            self.assertIn('granted', target.read_text())
+
+    def test_refuses_sibling_backups_under_webroot(self):
+        with tempfile.TemporaryDirectory() as d:
+            root = Path(d) / 'public'
+            includes = root / 'includes'
+            includes.mkdir(parents=True)
+            target = includes / 'header.php'
+            target.write_text(BOOT + CMP)
+            sibling_backup = root / 'backups'
+            with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
+                self.assertEqual(fix.run([str(target), '--apply', '--webroot', str(root),
+                                          '--backup-dir', str(sibling_backup)]), 2)
+            self.assertIn('granted', target.read_text())
+
+    def test_refuses_target_outside_webroot(self):
+        with tempfile.TemporaryDirectory() as d:
+            root = Path(d) / 'public'
+            root.mkdir()
+            target = Path(d) / 'private_include.php'
+            target.write_text(BOOT + CMP)
+            with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
+                self.assertEqual(fix.run([str(target), '--apply', '--webroot', str(root),
+                                          '--backup-dir', str(Path(d) / 'private_backup')]), 2)
+            self.assertIn('granted', target.read_text())
 
     def test_preserves_crlf(self):
         src = '\r\n'.join((BOOT, CMP)) + '\r\n'
