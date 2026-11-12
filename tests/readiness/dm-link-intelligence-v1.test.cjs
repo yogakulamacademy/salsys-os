@@ -197,3 +197,44 @@ test('allows real Supabase microsecond timestamp precision without elevating ide
  assert.equal(r.status, 'country_observed');
  assert.equal(r.customerResidenceVerified,false);
 });
+
+
+test('visit temporal policy matches committed activation: exact expiry rejected, prior microsecond allowed', () => {
+ const changes={
+  issuedAt:'2026-11-11T10:00:00.000002Z',
+  expiresAt:'2026-11-11T10:10:00.000002Z',
+ };
+ assert.equal(intel.evaluateDmLinkVisit({
+  ...visit,...changes,observedAt:'2026-11-11T10:00:00.000001Z',
+ }).status,'restricted');
+ assert.equal(intel.evaluateDmLinkVisit({
+  ...visit,...changes,observedAt:'2026-11-11T10:10:00.000001Z',
+ }).status,'country_observed');
+ assert.equal(intel.evaluateDmLinkVisit({
+  ...visit,...changes,observedAt:'2026-11-11T10:10:00.000002Z',
+ }).status,'restricted');
+});
+
+test('offset-aware microsecond ordering never treats an earlier visit as valid', () => {
+ const res=intel.evaluateDmLinkVisit({
+  ...visit,
+  issuedAt:'2026-11-11T15:30:00.000002+05:30',
+  observedAt:'2026-11-11T10:00:00.000001Z',
+ });
+ assert.equal(res.status,'restricted');
+ assert.equal(res.observedVisitCountry,null);
+});
+
+test('staff follow-up cannot become due a microsecond before the configured wait', () => {
+ const initial={
+  ...attention,
+  linkSentAt:'2026-11-11T10:00:00.000002Z',
+  now:'2026-11-12T10:00:00.000001Z',
+ };
+ const before=intel.evaluateDmLinkStaffAttention(initial);
+ assert.equal(before.action,'none');
+ assert.equal(before.reason,'not_due');
+ const due=intel.evaluateDmLinkStaffAttention({...initial,now:'2026-11-12T10:00:00.000002Z'});
+ assert.equal(due.action,'staff_review_due');
+ assert.equal(due.automaticSendAllowed,false);
+});
