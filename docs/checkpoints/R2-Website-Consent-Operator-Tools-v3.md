@@ -1,6 +1,6 @@
 # SalsysOS R2 — Website Consent Integration Update
 
-**Version 3.0 — Local update package, NOT deployed**  
+**Version 3.1 — Versioned review-only operator tools, NOT deployed**  
 **Release state: R2 NO-GO / staged acceptance 0 of 16 remains ON HOLD.**
 
 This package makes a narrowly scoped local website-template change **only after an authorized operator explicitly runs `--apply`**. It does not access Supabase, Vercel, SalsysOS CRM databases, the live website, cookies, visitors or external APIs.
@@ -11,16 +11,16 @@ The CRM-generated production snippet in `components/tracker-snippet.tsx` was pre
 
 ## Included files
 
-- `r2-consent-installation-audit.js` — browser-console diagnostic. **Read-only**; it reports enumerated flags, not script URLs, site IDs or visitor data.
-- `salsysos-website-consent-fix.py` — local PHP/HTML patcher. **Dry-run by default**, and refuses unexpected configurations.
-- `test-r2-consent-audit.cjs` — 18 automated JavaScript tests.
-- `test-salsysos-website-consent-fix.py` — 25 automated Python tests.
-- Two `.txt` files — most recent local test output.
+- `scripts/r2-consent-installation-audit.js` — browser-console diagnostic. **Read-only**; it reports enumerated flags, not script URLs, site IDs or visitor data.
+- `scripts/salsysos-website-consent-fix.py` — local PHP/HTML patcher. **Dry-run by default**, and refuses unexpected configurations.
+- `tests/readiness/r2-consent-installation-audit-v3.test.cjs` — JavaScript regression tests.
+- `tests/readiness/r2-website-consent-fix-v3.test.py` — Python regression tests.
+- `.github/workflows/r2-consent-operator-tools.yml` — isolated offline CI checks. No .txt test-output files are committed.
 
 ## Step A — Inspect actual website installation (read-only)
 
 1. Open the site in Chrome, press **F12**, then choose **Console**.
-2. Paste the complete contents of `r2-consent-installation-audit.js` and press Enter.
+2. Paste the complete contents of `scripts/r2-consent-installation-audit.js` and press Enter.
 3. Save/share the redacted JSON report (do not add cookies, session tokens, network dumps or contact data).
 
 The reported status `STATIC_ATTRIBUTES_MATCH_REQUIRED_NOT_E2E_VERIFIED` means **only visible attributes look correct**. It is not confirmation that Reject All, withdrawal, GPC, tenant isolation or event suppression works.
@@ -32,7 +32,7 @@ If there is **Google Tag Manager**, a website-specific wrapper, or a dynamically
 Collect the actual PHP/HTML **files containing the installed SalsysOS `<script>` tags**. If the bootstrap is in `header.php` and consent UI is in `footer.php`, supply both:
 
 ```bash
-python3 salsysos-website-consent-fix.py header.php footer.php
+python3 scripts/salsysos-website-consent-fix.py header.php footer.php
 ```
 
 The default is **DRY RUN**. It does not edit anything, print your site ID, show full endpoints or write backups.
@@ -42,13 +42,16 @@ The tool intentionally refuses to patch if it finds duplicate SalsysOS loaders, 
 ### Step C — Modify a local copy only after owner approval
 
 ```bash
-python3 salsysos-website-consent-fix.py header.php footer.php \
-    --apply --backup-dir /path/outside/website-document-root/private-backups
+python3 scripts/salsysos-website-consent-fix.py header.php footer.php \
+    --apply \
+    --webroot /absolute/path/to/website-document-root \
+    --backup-dir /path/outside/website-document-root/private-backups
 ```
 
 - The tool modifies **only one trusted bootstrap** and only `data-consent-mode` (`granted` or missing → `required`).
 - Existing endpoint URLs, site IDs and unrelated markup are preserved.
-- The original file is backed up in a private directory **outside the website's template directory**, not beside a public HTML/PHP file; file permission is set to owner-only where supported.
+- **`--webroot` is mandatory for `--apply`** and must point to an existing, non-symlink website document root; the target template must be beneath it. The tool refuses backup locations **anywhere inside that root**, even in a sibling folder outside the template's directory. The operator is responsible for confirming the correct document root; the tool cannot discover the hosting setup.
+- The original file is backed up in a private directory outside the stated document root, with owner-only permissions where supported.
 - `--apply` updates the operator's **local file only**. It does not upload it or deploy the website.
 
 ## Required release tests (not performed by this package)
@@ -58,8 +61,8 @@ With a site-operator-authorized test environment and a separately lifted test ho
 ## Run included automated tests
 
 ```bash
-python3 test-salsysos-website-consent-fix.py
-node --test test-r2-consent-audit.cjs
+python3 tests/readiness/r2-website-consent-fix-v3.test.py
+node --test tests/readiness/r2-consent-installation-audit-v3.test.cjs
 ```
 
 These tests only cover **local patch logic** and **static diagnostic behavior**; they do not establish real website consent compliance or R2 release approval.
