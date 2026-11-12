@@ -92,6 +92,8 @@ export function evaluateDmLinkReviewPipeline(input: DmLinkReviewPipelineInput): 
       crmMessageId: input.snapshot.message.id,
       linkId: binding.linkId,
     },
+    sourceLink: input.snapshot.link,
+    sourceMessageSentAt: input.snapshot.message.sent_at,
     registry: input.verifiedRegistry,
     observations: input.observations,
     now: input.now,
@@ -135,6 +137,7 @@ export function evaluateDmLinkReviewPipeline(input: DmLinkReviewPipelineInput): 
 
   const preview = projectDmLinkStaffEvidence({
     snapshot: input.snapshot,
+    verifiedRegistry: input.verifiedRegistry,
     observations: input.observations,
     coverage: input.clickCoverage,
     outboundState: input.outboundState,
