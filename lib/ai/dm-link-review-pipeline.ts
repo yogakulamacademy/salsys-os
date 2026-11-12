@@ -14,6 +14,7 @@ import {
   type DmLinkStaffPreview,
 } from './dm-link-crm-evidence';
 import type { DmLinkObservation } from './dm-link-coverage';
+import { classifyInstagramAcceptedSend } from './dm-link-instagram-send-evidence';
 import type { DmLinkOutboundState, DmLinkClickCoverage } from './dm-link-intelligence';
 import {
   buildDmLinkHumanReviewCandidate,
@@ -86,6 +87,24 @@ export function evaluateDmLinkReviewPipeline(input: DmLinkReviewPipelineInput): 
 
   // Do not accept API "sent" acknowledgements as independent delivery.
   // The user-facing task must never be created on contradictory timestamps.
+  const accepted = input.outboundState === 'provider_accepted'
+    ? classifyInstagramAcceptedSend({
+        organizationId: binding.organizationId,
+        leadId: binding.leadId,
+        conversationId: binding.conversationId,
+        messageId: input.snapshot.message.id,
+        message: {
+          ...input.snapshot.message,
+          status: input.snapshot.message.status ?? null,
+          metadata: input.snapshot.message.metadata ?? null,
+        },
+        expectedProviderMessageId: input.snapshot.link.provider_message_id,
+      })
+    : null;
+  if (input.outboundState === 'provider_accepted' &&
+      (accepted?.state !== 'provider_accepted' || accepted.recipientDeliveryVerified !== false)) {
+    return deny('unverified_send_provenance');
+  }
   const sentAt = parseTimestamp(input.snapshot.message.sent_at);
   const deliveryAt = parseTimestamp(input.deliveredAt);
   const now = parseTimestamp(input.now);
@@ -135,9 +154,8 @@ export function evaluateDmLinkReviewPipeline(input: DmLinkReviewPipelineInput): 
     deliveredAt: input.deliveredAt,
     // The exact CRM provider MID was already validated by bindDmLinkToCrmMessage.
     // An accepted Instagram send is NOT a delivery receipt.
-    providerAcceptedAt: input.outboundState === 'provider_accepted'
-      ? input.snapshot.message.sent_at : null,
-    sourceSendEvidence: input.outboundState === 'provider_accepted'
+    providerAcceptedAt: accepted?.acceptedAt ?? null,
+    sourceSendEvidence: accepted?.state === 'provider_accepted'
       ? 'exact_provider_message_id' : 'unverified',
     sourceReadAt: input.sourceReadAt,
     now: input.now,
