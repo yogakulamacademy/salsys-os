@@ -15,8 +15,9 @@ function load(relative, dependencies = {}) {
   }, exports);
   return exports;
 }
-const intel = load('lib/ai/dm-link-intelligence.ts');
-const coverage = load('lib/ai/dm-link-coverage.ts', { './dm-link-intelligence': intel });
+const clock = load('lib/ai/dm-link-time.ts');
+const intel = load('lib/ai/dm-link-intelligence.ts', {'./dm-link-time':clock});
+const coverage = load('lib/ai/dm-link-coverage.ts', { './dm-link-intelligence': intel, './dm-link-time':clock });
 const destination = load('lib/ai/dm-link-destination.ts');
 const baseVisit = {
   organizationId:'org-1', linkOrganizationId:'org-1',
