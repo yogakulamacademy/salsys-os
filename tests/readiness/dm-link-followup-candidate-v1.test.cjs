@@ -5,7 +5,10 @@ const path = require('node:path');
 const ts = require('typescript');
 const source=fs.readFileSync(path.resolve(__dirname,'../../lib/ai/dm-link-followup-candidate.ts'),'utf8');
 const code=ts.transpileModule(source,{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText;
-const api={};new Function('require','exports',code)(()=>{throw Error('No imports expected')},api);
+const clockSource=fs.readFileSync(path.resolve(__dirname,'../../lib/ai/dm-link-time.ts'),'utf8');
+const clockCode=ts.transpileModule(clockSource,{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText;
+const clock={};new Function('require','exports',clockCode)(()=>{throw Error('Unexpected clock import')},clock);
+const api={};new Function('require','exports',code)(n=>{if(n==='./dm-link-time')return clock;throw Error('Unexpected import '+n)},api);
 const ID={o:'11111111-1111-4111-8111-111111111111',lead:'22222222-2222-4222-8222-222222222222',conv:'33333333-3333-4333-8333-333333333333',msg:'44444444-4444-4444-8444-444444444444',owner:'55555555-5555-4555-8555-555555555555'};
 const baseline=()=>({
  activeOrganizationId:ID.o,organizationId:ID.o,leadId:ID.lead,conversationId:ID.conv,messageId:ID.msg,linkId:'opaqueLink_123456',channel:'instagram',staffCanWorkLead:true,
