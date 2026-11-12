@@ -34,6 +34,23 @@ Read-only metadata sampled from **current staging** on 2026-11-12:
 
 **Default: NO-GO** for built-in Restore to a New Project until a pre-start containment control is proven. Source-project configuration changes to suppress outbound jobs are **not** authorized and may alter active staging.
 
+## 2A. Additional read-only trigger/extension review and provider decision request
+
+Read-only PostgreSQL catalog check on **2026-11-12**, current staging `ndxpjqkthuzxlmbenxti`:
+- **190 user-defined triggers** in the sampled catalog; **0** trigger function sources matched the direct outbound keywords `net.http`, `http_post`, `http_get`, `http(s)://`, `dblink`, `curl` or `supabase_functions.http_request`. Two trigger *definitions* matched broad HTTP/webhook name patterns, which is not itself evidence of an external request.
+- Among installed extensions matching the outbound/cron screening categories, **only `pg_cron`** was present. `pg_net`, `http`, `dblink`, `postgres_fdw`, and `wrappers` were not shown as installed.
+- Combined with **250/250 no-op historical cron executions** in the sampled window surrounding Nov 10 20:08:55 UTC, this **narrows but does not eliminate** the risk of an external side effect. It does not prove what all jobs, triggers, auth hooks, or endpoint credentials were in the selected physical backup itself.
+
+**Official Supabase support decision required before restore** (no support ticket has been opened by this draft):
+
+1. With a source physical backup from `ndxpjqkthuzxlmbenxti` near Nov 10 20:08:55 UTC, can the provider confirm that a **new project** is isolated **before** the Postgres scheduler, trigger-capable clients, network and Auth endpoints could have external effects? Specify the mechanism, pre-start timing, and testable evidence.
+2. If not, does Supabase offer a managed/offline **physical backup restore** for independent validation with outward traffic prevented from the very start, without making changes to the staging or production source? A logical dump/replay is **not accepted** as equivalent.
+3. The official [copied cron-job safety knowledge base](https://supabase.com/kb/troubleshooting/how-to-stop-pg_cron-jobs-from-running-on-a-restored-project-or-branch) recommends receiver-verified secret rotation for selected endpoints, but documents that triggers, third-party APIs and wrapper effects remain outside that mechanism. Are there **provider-supported controls** covering those paths without modifying live endpoints?
+4. Confirm whether the Nov 10 physical backup is **still available**, the exact restore-time and retained data scope, **new-project billing quote** (including mirrored compute/storage), estimated charge and deletion policy, and any supported alternative not requiring a new billable project. This document **does not approve charges**.
+5. Confirm whether there are database-driven effects not visible in `cron.job` or `pg_extension` that an operator must account for before a physical restore.
+
+**Hold:** no self-service restore, source cron rewrite, production-endpoint secret rotation, customer-data export, paid project creation, SQL replay, or recovery-history edit until the qualified DBA reviews the provider response and the owner grants separate scoped/cost authorization.
+
 ## 3. Privacy, authorization and scope
 
 Supabase binary restore copies **Auth user records and hashed passwords, database roles/permissions, application data and the encryption root key**, so cloned Vault secrets and encrypted database columns may be readable. Supabase Storage *objects* and certain application configuration are not carried over (see vendor docs). Treat the destination as **sensitive production-like personal data**, irrespective of its display name.
