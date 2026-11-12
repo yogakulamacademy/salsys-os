@@ -1,3 +1,4 @@
+import { parseDmLinkInstant } from './dm-link-time';
 /**
  * DM-LINK-06: offline classification of CRM-recorded Meta Instagram sends.
  * This does NOT prove handset delivery, a message view, a website click,
@@ -35,11 +36,6 @@ export type InstagramSendEvidence = {
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const MID = /^[^\s\u0000-\u001f]{4,256}$/;
-function parseInstant(value: unknown): number | null {
-  if(typeof value !== 'string' || !/^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d(?:\.\d{1,6})?(?:Z|[+-]\d\d:\d\d)$/.test(value)) return null;
-  const result=Date.parse(value);
-  return Number.isFinite(result)?result:null;
-}
 const unknown = (): InstagramSendEvidence => ({
   state:'unverified',acceptedAt:null,provenance:'unverified',
   recipientDeliveryVerified:false,canAutoSend:false,
@@ -55,7 +51,7 @@ export function classifyInstagramAcceptedSend(input: InstagramSendEvidenceInput)
      m.direction!=='outbound' ||m.status!=='sent' ||
      !m.external_message_id || !MID.test(m.external_message_id) ||
      m.external_message_id!==input.expectedProviderMessageId ||
-     parseInstant(m.sent_at)===null) return unknown();
+     parseDmLinkInstant(m.sent_at)===null) return unknown();
   const info=m.metadata && typeof m.metadata==='object' && !Array.isArray(m.metadata)
     ? m.metadata as Record<string,unknown> : {};
   const manual=info.provider==='instagram' &&
