@@ -30,6 +30,9 @@ export type LinkReviewInput = {
   linkRevoked: boolean;
   linkExpiresAt: string;
   deliveredAt: string | null;
+  /** Verified Meta Send API acceptance + exact provider MID; not delivery. */
+  providerAcceptedAt?: string | null;
+  sourceSendEvidence?: 'exact_provider_message_id' | 'unverified';
   sourceReadAt: string;
   now: string;
   /** A fresh, authoritative inbound read covering the message-to-now window. */
@@ -58,7 +61,7 @@ export type LinkReviewCandidate = {
     leadId: string;
     conversationId: string;
     taskType: 'human_review';
-    title: 'Review Instagram course-link follow-up';
+    title: 'Review Instagram course-link follow-up' | 'Review Instagram course-link status';
     /** Staff-only display text, no raw visitor/client identifiers. */
     description: string;
     dueAt: string;
@@ -102,43 +105,58 @@ export function buildDmLinkHumanReviewCandidate(input: LinkReviewInput): LinkRev
   const sourceRead = parseTime(input.sourceReadAt);
   const expiry = parseTime(input.linkExpiresAt);
   const delivered = parseTime(input.deliveredAt);
-  if (now === null || sourceRead === null || expiry === null || delivered === null ||
-      expiry <= delivered || now >= expiry || delivered > now ||
+  const accepted = parseTime(input.providerAcceptedAt ?? null);
+  const independentlyDelivered = input.providerDelivery === 'delivered' && delivered !== null;
+  const providerAcceptedOnly =
+    input.providerDelivery === 'provider_accepted' &&
+    input.sourceSendEvidence === 'exact_provider_message_id' &&
+    input.deliveredAt === null && accepted !== null;
+  const sentBasis = independentlyDelivered ? delivered :
+    providerAcceptedOnly ? accepted : null;
+  if (now === null || sourceRead === null || expiry === null || sentBasis === null ||
+      expiry <= sentBasis || now >= expiry || sentBasis > now ||
       !Number.isInteger(input.allowedWaitHours) || input.allowedWaitHours < 1 ||
       input.allowedWaitHours > 168) {
     return deny('insufficient_evidence', 'invalid_or_expired_timeline');
   }
-  if (sourceRead > now + 60_000 || now - sourceRead > 5 * 60_000 || sourceRead < delivered ||
+  if (sourceRead > now + 60_000 || now - sourceRead > 5 * 60_000 || sourceRead < sentBasis ||
       input.inboundCoverage !== 'verified_since_send' || input.inboundAfterSend === null ||
-      input.taskCoverage !== 'complete' || input.providerDelivery !== 'delivered') {
+      input.taskCoverage !== 'complete') {
     return deny('insufficient_evidence', 'stale_or_incomplete_recheck');
   }
   if (input.inboundAfterSend === true) {
     return deny('already_handled', 'customer_replied');
   }
-  if (now - delivered < input.allowedWaitHours * 3_600_000) {
+  if (now - sentBasis < input.allowedWaitHours * 3_600_000) {
     return deny('not_due', 'waiting_period');
   }
   const ev = input.evidence;
+  const expectedReason = independentlyDelivered ? 'no_verified_visit' : 'delivery_unconfirmed';
   if (!ev || ev.status !== 'available' || ev.canAutoSend !== false ||
       ev.messageEvidenceRef !== `message:${input.messageId}` ||
       ev.linkVisitEvidence !== 'not_observed' || ev.attention !== 'staff_review_due' ||
-      ev.attentionReason !== 'no_verified_visit') {
+      ev.attentionReason !== expectedReason) {
     return deny('insufficient_evidence', 'no_verified_open_not_established');
   }
   if (input.assignedUserId !== null && !UUID_RE.test(input.assignedUserId)) {
     return deny('insufficient_evidence', 'invalid_assignment');
   }
   return {
-    status:'ready', reason:'staff_attention_due', automaticSendAllowed:false,
+    status:'ready',
+    reason: independentlyDelivered ? 'staff_attention_due' : 'delivery_unconfirmed_staff_review',
+    automaticSendAllowed:false,
     task:{
       // The future writer must add an atomic unique constraint and recheck all
       // source state in the same transaction; this key alone does not dedupe.
       idempotencyKey:`dm-link-review-v1:${input.organizationId}:${input.linkId}:${input.allowedWaitHours}`,
       organizationId:input.organizationId, leadId:input.leadId,
       conversationId:input.conversationId, taskType:'human_review',
-      title:'Review Instagram course-link follow-up',
-      description:'No verified link visit was observed in the permitted coverage window. Check the conversation and Instagram reply eligibility before choosing any response. A missing visit does not prove the customer did not click.',
+      title: independentlyDelivered
+        ? 'Review Instagram course-link follow-up'
+        : 'Review Instagram course-link status',
+      description: independentlyDelivered
+        ? 'No verified link visit was observed in the permitted coverage window. Check the conversation and Instagram reply eligibility before choosing any response. A missing visit does not prove the customer did not click.'
+        : 'Meta accepted this Instagram message, but recipient delivery is not verified. No website link visit was observed in the permitted coverage window. Review the conversation and messaging eligibility before choosing any action; the customer may have received or opened the link.',
       dueAt:input.now, sourceMessageRef:ev.messageEvidenceRef,
       assignedUserId:input.assignedUserId,
       source:'dm_link_staff_review_v1',
