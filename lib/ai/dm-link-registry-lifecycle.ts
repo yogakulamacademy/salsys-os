@@ -39,6 +39,20 @@ export type DmLinkSendProof = {
   /** Exact-MID provider acceptance independently reconciled by trusted server. */
   sourceVerified: boolean;
 };
+/** Explicit, independently verified provider rejection for this exact attempt.
+ * A client flag, generic HTTP timeout, or unrelated failed message is NOT proof.
+ */
+export type DmLinkRejectionProof = {
+  dispatchAttemptId: string;
+  organizationId: string;
+  leadId: string;
+  conversationId: string;
+  instagramAccountId: string;
+  instagramRecipientId: string;
+  rejectedAt: string;
+  outcome: 'explicit_provider_rejection';
+  sourceVerified: boolean;
+};
 export type DmLinkTransitionInput = {
   reservation: DmLinkReservation;
   activeOrganizationId: string;
@@ -47,6 +61,8 @@ export type DmLinkTransitionInput = {
   purposePermitted: boolean;
   dispatchState: 'not_sent' | 'provider_accepted' | 'definitive_failure' | 'unknown';
   proof: DmLinkSendProof | null;
+  /** Required for definitive_failure. Never infer from a timeout. */
+  failureProof?: DmLinkRejectionProof | null;
 };
 export type DmLinkTransition = {
   action: 'hold' | 'activate' | 'retire' | 'manual_review';
@@ -114,9 +130,25 @@ export function planDmLinkReservationTransition(input: DmLinkTransitionInput): D
   if (r.state !== 'reserved') return result('hold','already_finalized');
   if (now >= expiry) return result('retire','expired_without_activation','retired',r.rowVersion);
   if (input.dispatchState === 'definitive_failure') {
-    // Only a trusted, definitive provider rejection may cause this transition;
-    // an ambiguous HTTP timeout must be classified "unknown" instead.
-    return result('retire','authoritative_send_failure','retired',r.rowVersion);
+    // An accepted MID and a failure are contradictory: never retire blindly.
+    if (input.proof !== null) return result('manual_review','conflicting_send_outcomes');
+    const failure = input.failureProof;
+    if (!failure) return result('hold','missing_verified_failure');
+    if (failure.sourceVerified !== true ||
+        failure.outcome !== 'explicit_provider_rejection' ||
+        failure.dispatchAttemptId !== r.dispatchAttemptId ||
+        failure.organizationId !== r.organizationId ||
+        failure.leadId !== r.leadId ||
+        failure.conversationId !== r.conversationId ||
+        failure.instagramAccountId !== r.instagramAccountId ||
+        failure.instagramRecipientId !== r.instagramRecipientId) {
+      return result('manual_review','rejection_not_safely_bound');
+    }
+    const rejected = parseTime(failure.rejectedAt);
+    if (rejected === null || rejected < issued || rejected > now || rejected >= expiry) {
+      return result('manual_review','rejection_time_conflict');
+    }
+    return result('retire','verified_provider_rejection','retired',r.rowVersion);
   }
   if (input.dispatchState === 'unknown' || input.dispatchState === 'not_sent') {
     return result('hold','unconfirmed_or_not_dispatched');
