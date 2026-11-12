@@ -4,7 +4,8 @@
 DRY RUN is the default. Supply all directly relevant PHP/HTML include files, e.g.
     python salsysos-website-consent-fix.py header.php footer.php
 After review/authorization, to patch the *local* bootstrap file only:
-    python salsysos-website-consent-fix.py header.php footer.php --apply
+    python salsysos-website-consent-fix.py header.php footer.php \
+        --apply --webroot /absolute/path/to/site/document-root
 
 Only adjusts the consent mode of one static, trusted SalsysOS bootstrap.
 Refuses unknown/dynamic configurations, duplicate loaders, missing CMP, active
@@ -168,6 +169,7 @@ def run(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument('files', nargs='+', type=Path, help='All directly relevant PHP/HTML files (header, footer, includes).')
     ap.add_argument('--apply',action='store_true',help='Apply local edit after backup; never deploys.')
+    ap.add_argument('--webroot',type=Path,help='Required for --apply: canonical website document root. Backup must be outside it.')
     ap.add_argument('--backup-dir',type=Path,default=Path.home()/'.salsysos-r2-backups',
       help='Private backup directory OUTSIDE website document root (default: ~/.salsysos-r2-backups).')
     args=ap.parse_args(argv)
@@ -193,11 +195,20 @@ def run(argv: list[str] | None = None) -> int:
             return 0
         if target.read_bytes() != old_bytes[target] or target.is_symlink():
             raise SafePatchError('Source file changed since inspection; rerun review.')
+        # Explicit document-root boundary is required before ANY local write.
+        if args.webroot is None:
+            raise SafePatchError('Supply --webroot on --apply to prevent backups inside the published site.')
+        webroot=args.webroot.expanduser().absolute()
+        if webroot.is_symlink() or not webroot.is_dir():
+            raise SafePatchError('--webroot must be an existing non-symlink directory.')
+        canonical_webroot=webroot.resolve(strict=True)
+        if not target.resolve(strict=True).is_relative_to(canonical_webroot):
+            raise SafePatchError('Target template must be located inside the stated --webroot; manual review required.')
         # Keep original permissions and preserve original bytes in an exclusive backup.
         stamp=datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%S%fZ')
         backup_dir=args.backup_dir.expanduser().absolute()
-        if backup_dir == target.parent or backup_dir.is_relative_to(target.parent):
-            raise SafePatchError('Backup directory must not be inside the website template directory.')
+        if backup_dir.resolve().is_relative_to(canonical_webroot):
+            raise SafePatchError('Backup directory must be outside the entire website document root.')
         if backup_dir.exists() and backup_dir.is_symlink():
             raise SafePatchError('Backup directory must not be a symlink.')
         backup_dir.mkdir(mode=0o700,parents=True,exist_ok=True)
