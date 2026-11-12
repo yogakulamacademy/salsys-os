@@ -1,4 +1,5 @@
 import { parseDmLinkInstant } from './dm-link-time';
+import { gateDmLinkObservationHistory, type DmLinkVerifiedRegistry } from './dm-link-attribution-gate';
 /**
  * DM-LINK-03: read-only, fail-closed association from an authorized CRM
  * Instagram outbound message to a proposed opaque-link record.
@@ -40,6 +41,8 @@ export type DmLinkCrmSnapshot = {
     instagram_account_id: string; instagram_recipient_id: string;
     provider_message_id: string; issued_at: string;
     expires_at: string; revoked_at: string | null;
+    /** Server-authoritative registry projection; do not synthesize from client fields. */
+    state: 'reserved' | 'active' | 'retired'; activated_at: string | null;
     purpose: 'course_info_link';
   } | null;
 };
@@ -124,6 +127,8 @@ const restrictedPreview = (): DmLinkStaffPreview => ({
 export function projectDmLinkStaffEvidence(input: {
   snapshot: DmLinkCrmSnapshot;
   observations: readonly DmLinkObservation[];
+  /** Mandatory: direct projector callers cannot bypass committed activation. */
+  verifiedRegistry: DmLinkVerifiedRegistry | null;
   coverage: DmLinkClickCoverage;
   outboundState: DmLinkOutboundState;
   now: string;
@@ -135,9 +140,24 @@ export function projectDmLinkStaffEvidence(input: {
   existingTask: boolean;
 }): DmLinkStaffPreview {
   const binding = bindDmLinkToCrmMessage(input.snapshot);
-  if (binding.status !== 'linked' || !input.snapshot.link ||
+  if (binding.status !== 'linked' || !input.snapshot.link || !input.snapshot.message ||
       input.coverage !== 'supported') return restrictedPreview();
   const link = input.snapshot.link;
+  const gate = gateDmLinkObservationHistory({
+    reference: {
+      organizationId: binding.organizationId!, leadId: binding.leadId!,
+      conversationId: binding.conversationId!,
+      crmMessageId: input.snapshot.message.id, linkId: binding.linkId!,
+    },
+    sourceLink: link,
+    sourceMessageSentAt: input.snapshot.message.sent_at,
+    registry: input.verifiedRegistry,
+    observations: input.observations,
+    now: input.now,
+  });
+  if (gate.status !== 'permitted' || gate.eligibleForStaffProjection !== true) {
+    return restrictedPreview();
+  }
   const summary = summarizeDmLinkCoverage({
     organizationId: binding.organizationId!, linkId: binding.linkId!,
     processingPurposePermitted: input.snapshot.linkPurposePermitted,
