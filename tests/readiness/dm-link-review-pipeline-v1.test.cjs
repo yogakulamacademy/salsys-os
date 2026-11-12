@@ -39,6 +39,17 @@ const sendSource=fs.readFileSync(path.resolve(__dirname,'../../lib/ai/dm-link-in
 const compiledSend=ts.transpileModule(sendSource,{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText;
 const realSend={};
 new Function('require','exports',compiledSend)(name=>{throw Error('Unexpected import '+name)},realSend);
+const lifecycleSource=fs.readFileSync(path.resolve(__dirname,'../../lib/ai/dm-link-registry-lifecycle.ts'),'utf8');
+const compiledLifecycle=ts.transpileModule(lifecycleSource,{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText;
+const realLifecycle={};
+new Function('require','exports',compiledLifecycle)(name=>{throw Error('Unexpected import '+name)},realLifecycle);
+const gateSource=fs.readFileSync(path.resolve(__dirname,'../../lib/ai/dm-link-attribution-gate.ts'),'utf8');
+const compiledGate=ts.transpileModule(gateSource,{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText;
+const realGate={};
+new Function('require','exports',compiledGate)(name=>{
+ if(name==='./dm-link-registry-lifecycle')return realLifecycle;
+ throw Error('Unexpected import '+name);
+},realGate);
 const source=fs.readFileSync(path.resolve(__dirname,'../../lib/ai/dm-link-review-pipeline.ts'),'utf8');
 const compiled=ts.transpileModule(source,{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText;
 const api={};
@@ -46,6 +57,7 @@ new Function('require','exports',compiled)(name=>{
  if(name==='./dm-link-crm-evidence')return fakeCrm;
  if(name==='./dm-link-followup-candidate')return fakeCandidate;
  if(name==='./dm-link-instagram-send-evidence')return realSend;
+ if(name==='./dm-link-attribution-gate')return realGate;
  throw Error('Unexpected dependency '+name);
 },api);
 function example(){return {
@@ -54,9 +66,27 @@ function example(){return {
   conversation:{id:conv,organization_id:org,lead_id:lead,channel:'instagram',external_account_id:'account_1',metadata:{instagram_user_id:'ig_sender_9'}},
   message:{id:message,organization_id:org,lead_id:lead,conversation_id:conv,direction:'outbound',external_message_id:'provider_mid_1',sent_at:'2026-11-11T10:02:00Z',status:'sent',metadata:{provider:'instagram',send_mode:'human_manual',policy_checked:true}},
   link:{id:'internal_link_9999',organization_id:org,lead_id:lead,conversation_id:conv,crm_message_id:message,instagram_account_id:'account_1',instagram_recipient_id:'ig_sender_9',provider_message_id:'provider_mid_1',issued_at:'2026-11-11T10:00:00Z',expires_at:'2026-11-14T10:00:00Z',revoked_at:null,purpose:'course_info_link'}},
+ verifiedRegistry:{
+  organizationId:org,leadId:lead,conversationId:conv,crmMessageId:message,
+  linkId:'internal_link_9999',state:'active',sourceBindingCommitted:true,
+  provenanceVerified:true,purposePermitted:true,revoked:false,
+  tokenDigestMatched:true,linkIssuedAt:'2026-11-11T10:00:00Z',
+  providerAcceptedAt:'2026-11-11T10:02:00Z',
+  linkActivatedAt:'2026-11-11T10:03:00Z',
+  linkExpiresAt:'2026-11-14T10:00:00Z'
+ },
  observations:[],clickCoverage:'supported',outboundState:'delivered',deliveredAt:'2026-11-11T10:05:00Z',sourceReadAt:'2026-11-12T10:06:00Z',now:'2026-11-12T10:07:00Z',waitingHours:24,
  inboundCoverage:'verified_since_send',inboundAfterSend:false,taskCoverage:'complete',anyOpenFollowup:false,existingIdempotentTask:false,optedOut:false,humanAlreadyHandled:false,leadStage:'engaged',assignedUserId:owner
 };}
+function observed(id='browser_event',at='2026-11-11T10:05:00Z'){
+ return {eventId:id,linkId:'internal_link_9999',evidence:{
+  organizationId:org,linkOrganizationId:org,conversationOrganizationId:org,
+  visitOrganizationId:org,processingPurposePermitted:true,tokenRevoked:false,
+  issuedAt:'2026-11-11T10:00:00Z',expiresAt:'2026-11-14T10:00:00Z',
+  observedAt:at,signal:'browser_observation',suspectedPreviewOrBot:false,
+  knownForwardedLink:false,networkCountry:'AE',networkCountrySource:'trusted_server'
+ }};
+}
 function reset(){bindCalls=0;projectionCalls=0;candidateCalls=0;lastProjection=null;lastCandidate=null;}
 function evalWith(changes={}){reset();return api.evaluateDmLinkReviewPipeline({...example(),...changes});}
 
@@ -96,7 +126,7 @@ test('provider delivery timestamp contradicting unconfirmed state is restricted'
  const r=evalWith({outboundState:'unknown'});assert.equal(r.status,'restricted');assert.equal(candidateCalls,0);
 });
 test('observed link suppresses no-click task without making a pricing determination',()=>{
- const r=evalWith({observations:[{eventId:'browser_event'}]});assert.equal(r.status,'available');assert.equal(r.observedNetworkCountry,'AE');assert.equal(r.humanReview,'none');assert.equal(r.pricingEligibility,'undetermined');assert.equal(r.countryOfResidenceVerified,false);
+ const r=evalWith({observations:[observed()]});assert.equal(r.status,'available');assert.equal(r.observedNetworkCountry,'AE');assert.equal(r.humanReview,'none');assert.equal(r.pricingEligibility,'undetermined');assert.equal(r.countryOfResidenceVerified,false);
 });
 test('partial inbound coverage is passed as reply unknown, never no-click',()=>{
  const r=evalWith({inboundCoverage:'partial'});assert.equal(lastProjection.repliedSinceSend,true);assert.equal(r.humanReview,'none');
@@ -140,7 +170,7 @@ test('unknown outbound state cannot create accepted-send status review',()=>{
  assert.equal(r.taskCandidate,null);
 });
 test('Meta accepted with observed link visit is not a no-visit task',()=>{
- const r=evalWith({outboundState:'provider_accepted',deliveredAt:null,observations:[{eventId:'observed_visit'}]});
+ const r=evalWith({outboundState:'provider_accepted',deliveredAt:null,observations:[observed('observed_visit')]});
  assert.equal(r.status,'available');
  assert.equal(r.humanReview,'none');
  assert.equal(r.pricingEligibility,'undetermined');
@@ -170,4 +200,34 @@ test('signed outbound echo source can support accepted-only status review withou
  assert.equal(r.humanReview,'candidate');
  assert.equal(r.reason,'delivery_unconfirmed_staff_review');
  assert.equal(r.automaticSendAllowed,false);
+});
+
+test('no committed registry prevents all customer-linked visit projections and task candidates',()=>{
+ const r=evalWith({verifiedRegistry:null});
+ assert.equal(r.status,'restricted');assert.equal(r.reason,'unverified_activation_or_visit_evidence');
+ assert.equal(projectionCalls,0);assert.equal(candidateCalls,0);assert.equal(r.taskCandidate,null);
+});
+test('reserved registry cannot generate a no-click staff review',()=>{
+ const a=example();
+ const r=evalWith({...a,verifiedRegistry:{...a.verifiedRegistry,state:'reserved'}});
+ assert.equal(r.status,'restricted');assert.equal(candidateCalls,0);
+});
+test('premature visitor observation is never retrospectively linked to Instagram recipient',()=>{
+ const r=evalWith({observations:[observed('early_visit','2026-11-11T10:02:59.999999Z')]});
+ assert.equal(r.status,'restricted');assert.equal(projectionCalls,0);
+ assert.equal(r.observedNetworkCountry,null);assert.equal(r.humanReview,'none');
+});
+test('withdrawn processing purpose or revoked token blocks both visit and no-click review',()=>{
+ for(const patch of [{purposePermitted:false},{revoked:true},{tokenDigestMatched:false}]){
+  const a=example();
+  const r=evalWith({...a,verifiedRegistry:{...a.verifiedRegistry,...patch}});
+  assert.equal(r.status,'restricted');assert.equal(candidateCalls,0);
+ }
+});
+test('wrong CRM message or lead in committed registry is blocked before any projection',()=>{
+ for(const patch of [{crmMessageId:owner},{leadId:owner},{linkId:'other_link_99'}]){
+  const a=example();
+  const r=evalWith({...a,verifiedRegistry:{...a.verifiedRegistry,...patch}});
+  assert.equal(r.status,'restricted');assert.equal(projectionCalls,0);
+ }
 });
