@@ -1,3 +1,4 @@
+import { parseDmLinkInstant } from './dm-link-time';
 /**
  * DM-LINK-07 — two-phase, offline-only tracked-link registry lifecycle.
  *
@@ -105,15 +106,6 @@ const PROVIDER = /^[^\s\u0000-\u001f]{4,256}$/;
  * alone, which truncates microseconds to milliseconds. Return Unix microseconds
  * for exact, offset-aware ordering in this offline policy.
  */
-function parseTime(input: unknown): bigint | null {
-  if (typeof input !== 'string') return null;
-  const parts = /^(\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d)(?:\.(\d{1,6}))?(Z|[+-]\d\d:\d\d)$/.exec(input);
-  if (!parts) return null;
-  const fraction = (parts[2] ?? '').padEnd(6, '0');
-  const millis = Date.parse(`${parts[1]}.${fraction.slice(0, 3)}${parts[3]}`);
-  if (!Number.isFinite(millis)) return null;
-  return BigInt(millis) * BigInt(1000) + BigInt(fraction.slice(3));
-}
 const result = (action: DmLinkTransition['action'], reason: string, state: DmLinkTransition['projectedState'] = null, version: number | null = null): DmLinkTransition =>
   ({action,reason,projectedState:state,expectedRowVersion:version,attributionAuthorized:false,automaticSendAllowed:false});
 
@@ -135,7 +127,7 @@ export function planDmLinkReservationTransition(input: DmLinkTransitionInput): D
       input.purposePermitted !== true) {
     return result('hold','invalid_scope_or_purpose');
   }
-  const issued=parseTime(r.issuedAt), expiry=parseTime(r.expiresAt), now=parseTime(input.now);
+  const issued=parseDmLinkInstant(r.issuedAt), expiry=parseDmLinkInstant(r.expiresAt), now=parseDmLinkInstant(input.now);
   if (issued === null || expiry === null || now === null || expiry <= issued ||
       expiry - issued > BigInt(input.policyMaxLifetimeHours) * BigInt(3600000000) ||
       now < issued) return result('hold','invalid_or_overlong_lifetime');
@@ -156,7 +148,7 @@ export function planDmLinkReservationTransition(input: DmLinkTransitionInput): D
         failure.instagramRecipientId !== r.instagramRecipientId) {
       return result('manual_review','rejection_not_safely_bound');
     }
-    const rejected = parseTime(failure.rejectedAt);
+    const rejected = parseDmLinkInstant(failure.rejectedAt);
     if (rejected === null || rejected < issued || rejected > now || rejected >= expiry) {
       return result('manual_review','rejection_time_conflict');
     }
@@ -180,7 +172,7 @@ export function planDmLinkReservationTransition(input: DmLinkTransitionInput): D
       p.instagramRecipientId !== r.instagramRecipientId) {
     return result('manual_review','accepted_but_not_safely_bound');
   }
-  const accepted=parseTime(p.acceptedAt);
+  const accepted=parseDmLinkInstant(p.acceptedAt);
   if (accepted === null || accepted < issued || accepted > now || accepted >= expiry) {
     return result('manual_review','accepted_time_conflict');
   }
@@ -204,11 +196,11 @@ export function evaluateDmLinkCommittedAttribution(input: DmLinkCommittedActivat
       input.state !== 'active' || input.sourceBindingCommitted !== true ||
       input.provenanceVerified !== true || input.purposePermitted !== true ||
       input.revoked !== false || input.tokenDigestMatched !== true) return fail;
-  const issued=parseTime(input.linkIssuedAt);
-  const accepted=parseTime(input.providerAcceptedAt);
-  const activated=parseTime(input.linkActivatedAt);
-  const expiry=parseTime(input.linkExpiresAt);
-  const at=parseTime(input.observedAt);
+  const issued=parseDmLinkInstant(input.linkIssuedAt);
+  const accepted=parseDmLinkInstant(input.providerAcceptedAt);
+  const activated=parseDmLinkInstant(input.linkActivatedAt);
+  const expiry=parseDmLinkInstant(input.linkExpiresAt);
+  const at=parseDmLinkInstant(input.observedAt);
   if (issued===null || accepted===null || activated===null ||
       expiry===null || at===null || expiry<=issued ||
       accepted<issued || accepted>=expiry ||
