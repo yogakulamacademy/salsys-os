@@ -35,19 +35,24 @@ const fakeCandidate={buildDmLinkHumanReviewCandidate(arg){
  candidateCalls++;lastCandidate=arg;
  return realCandidate.buildDmLinkHumanReviewCandidate(arg);
 }};
+const sendSource=fs.readFileSync(path.resolve(__dirname,'../../lib/ai/dm-link-instagram-send-evidence.ts'),'utf8');
+const compiledSend=ts.transpileModule(sendSource,{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText;
+const realSend={};
+new Function('require','exports',compiledSend)(name=>{throw Error('Unexpected import '+name)},realSend);
 const source=fs.readFileSync(path.resolve(__dirname,'../../lib/ai/dm-link-review-pipeline.ts'),'utf8');
 const compiled=ts.transpileModule(source,{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText;
 const api={};
 new Function('require','exports',compiled)(name=>{
  if(name==='./dm-link-crm-evidence')return fakeCrm;
  if(name==='./dm-link-followup-candidate')return fakeCandidate;
+ if(name==='./dm-link-instagram-send-evidence')return realSend;
  throw Error('Unexpected dependency '+name);
 },api);
 function example(){return {
  snapshot:{activeOrganizationId:org,selectedLeadId:lead,staffCanWorkLead:true,linkPurposePermitted:true,
   lead:{id:lead,organization_id:org},
   conversation:{id:conv,organization_id:org,lead_id:lead,channel:'instagram',external_account_id:'account_1',metadata:{instagram_user_id:'ig_sender_9'}},
-  message:{id:message,organization_id:org,lead_id:lead,conversation_id:conv,direction:'outbound',external_message_id:'provider_mid_1',sent_at:'2026-11-11T10:02:00Z'},
+  message:{id:message,organization_id:org,lead_id:lead,conversation_id:conv,direction:'outbound',external_message_id:'provider_mid_1',sent_at:'2026-11-11T10:02:00Z',status:'sent',metadata:{provider:'instagram',send_mode:'human_manual',policy_checked:true}},
   link:{id:'internal_link_9999',organization_id:org,lead_id:lead,conversation_id:conv,crm_message_id:message,instagram_account_id:'account_1',instagram_recipient_id:'ig_sender_9',provider_message_id:'provider_mid_1',issued_at:'2026-11-11T10:00:00Z',expires_at:'2026-11-14T10:00:00Z',revoked_at:null,purpose:'course_info_link'}},
  observations:[],clickCoverage:'supported',outboundState:'delivered',deliveredAt:'2026-11-11T10:05:00Z',sourceReadAt:'2026-11-12T10:06:00Z',now:'2026-11-12T10:07:00Z',waitingHours:24,
  inboundCoverage:'verified_since_send',inboundAfterSend:false,taskCoverage:'complete',anyOpenFollowup:false,existingIdempotentTask:false,optedOut:false,humanAlreadyHandled:false,leadStage:'engaged',assignedUserId:owner
@@ -143,4 +148,26 @@ test('Meta accepted with observed link visit is not a no-visit task',()=>{
 test('Meta accepted with incomplete inbound coverage must not trigger review',()=>{
  const r=evalWith({outboundState:'provider_accepted',deliveredAt:null,inboundCoverage:'partial'});
  assert.equal(r.humanReview,'none');
+});
+
+test('provider accepted requires a verifiable CRM send source, not a fabricated status',()=>{
+ for(const patch of [
+  {status:'queued'},{metadata:{}},{metadata:{provider:'instagram',send_mode:'human_manual',policy_checked:false}},
+  {metadata:{provider:'whatsapp',send_mode:'human_manual',policy_checked:true}},
+  {status:'read'}
+ ]) {
+  const s=example();Object.assign(s.snapshot.message,patch);
+  const r=evalWith({...s,outboundState:'provider_accepted',deliveredAt:null});
+  assert.equal(r.status,'restricted');
+  assert.equal(r.reason,'unverified_send_provenance');
+  assert.equal(r.taskCandidate,null);
+ }
+});
+test('signed outbound echo source can support accepted-only status review without a delivery claim',()=>{
+ const s=example();
+ s.snapshot.message.metadata={provider:'instagram',source:'signed_outbound_echo',raw_event_id:'55555555-5555-4555-8555-555555555555'};
+ const r=evalWith({...s,outboundState:'provider_accepted',deliveredAt:null});
+ assert.equal(r.humanReview,'candidate');
+ assert.equal(r.reason,'delivery_unconfirmed_staff_review');
+ assert.equal(r.automaticSendAllowed,false);
 });
