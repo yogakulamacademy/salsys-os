@@ -58,9 +58,24 @@ test('invalid or missing sent timestamp rejects source',()=>{
   assert.equal(run({},{sent_at}).state,'unverified');
  }
 });
-test('no raw client IP, country, phone, message body or raw token is returned',()=>{
- const json=JSON.stringify(run());
- for(const s of ['country','phone','ip','raw_token','recipient','provider_mid'])assert.equal(json.includes(s),false);
+test('provider acceptance projection exposes only its approved fields, never raw contact data',()=>{
+ const input=baseline();
+ input.message.body='PRIVATE_MESSAGE_BODY';
+ input.message.metadata.customerPhone='+919876543210';
+ input.message.metadata.clientIP='192.0.2.45';
+ input.message.metadata.rawToken='PRIVATE_BEARER_TOKEN';
+ input.message.metadata.country='AE';
+ const result=api.classifyInstagramAcceptedSend(input);
+ assert.deepEqual(Object.keys(result).sort(),[
+  'acceptedAt','canAutoSend','provenance','recipientDeliveryVerified','state'
+ ].sort());
+ assert.equal(result.recipientDeliveryVerified,false);
+ assert.equal(result.canAutoSend,false);
+ const json=JSON.stringify(result);
+ for(const secret of [
+  'PRIVATE_MESSAGE_BODY','+919876543210','192.0.2.45',
+  'PRIVATE_BEARER_TOKEN','customerPhone','clientIP','rawToken','provider_mid'
+ ]) assert.equal(json.includes(secret),false,secret);
 });
 test('metadata must be a plain object to be considered',()=>{
  assert.equal(run({},{metadata:[]}).state,'unverified');
