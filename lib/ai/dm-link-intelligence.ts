@@ -48,13 +48,17 @@ const invalidVisitResult = (status: VisitEvidenceStatus): DmLinkVisitResult => (
   priceEligibility: 'undetermined',
 });
 
-function parseIsoInstant(value: string | null): number | null {
-  if (!value || typeof value !== 'string' ||
-      !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,6})?(?:Z|[+-]\d{2}:\d{2})$/.test(value)) {
-    return null;
-  }
-  const parsed = Date.parse(value);
-  return Number.isFinite(parsed) ? parsed : null;
+/** Offset-aware Unix microseconds, matching the committed registry gate.
+ * Date.parse alone truncates PostgreSQL's last three fractional digits.
+ */
+function parseIsoInstant(value: string | null): bigint | null {
+  if (typeof value !== 'string') return null;
+  const parts = /^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2})(?:\.(\d{1,6}))?(Z|[+-]\d{2}:\d{2})$/.exec(value);
+  if (!parts) return null;
+  const fraction = (parts[2] ?? '').padEnd(6, '0');
+  const millis = Date.parse(`${parts[1]}.${fraction.slice(0, 3)}${parts[3]}`);
+  if (!Number.isFinite(millis)) return null;
+  return BigInt(millis) * BigInt(1000) + BigInt(fraction.slice(3));
 }
 
 /** Country is deliberately NEVER used to decide a price category here. */
@@ -72,7 +76,7 @@ export function evaluateDmLinkVisit(input: DmLinkVisitInput): DmLinkVisitResult 
   if (issued === null || expiry === null || expiry <= issued) return invalidVisitResult('restricted');
   if (input.signal === 'none') return invalidVisitResult('none');
   const observed = parseIsoInstant(input.observedAt);
-  if (observed === null || observed < issued || observed > expiry) {
+  if (observed === null || observed < issued || observed >= expiry) {
     return invalidVisitResult('restricted');
   }
   if (input.signal !== 'browser_observation' ||
@@ -174,7 +178,7 @@ export function evaluateDmLinkStaffAttention(
     return noTask('invalid_input');
   }
   if (now >= expiry) return noTask('suppressed');
-  if (now - sent < input.waitingHours * 60 * 60 * 1000) return noTask('not_due');
+  if (now - sent < BigInt(input.waitingHours) * BigInt(3600000000)) return noTask('not_due');
   if (input.outboundState === 'draft' || input.outboundState === 'queued' ||
       input.outboundState === 'failed' || input.outboundState === 'revoked') {
     return noTask('not_delivered');
