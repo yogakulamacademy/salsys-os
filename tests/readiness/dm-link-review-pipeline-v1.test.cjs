@@ -3,6 +3,12 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 const ts = require('typescript');
+const {createHmac}=require('node:crypto');
+const PROOF_KEY='TEST_ONLY_pipeline_verified_provenance_secret_00001';
+const clockSource=fs.readFileSync(path.resolve(__dirname,'../../lib/ai/dm-link-time.ts'),'utf8');
+const clockCode=ts.transpileModule(clockSource,{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText;
+const realClock={};
+new Function('require','exports',clockCode)(()=>{throw Error('Unexpected clock import')},realClock);
 const org='11111111-1111-4111-8111-111111111111', lead='22222222-2222-4222-8222-222222222222';
 const conv='33333333-3333-4333-8333-333333333333', message='44444444-4444-4444-8444-444444444444';
 const owner='55555555-5555-4555-8555-555555555555';
@@ -30,7 +36,7 @@ const fakeCrm={
 const candidateSource=fs.readFileSync(path.resolve(__dirname,'../../lib/ai/dm-link-followup-candidate.ts'),'utf8');
 const compiledCandidate=ts.transpileModule(candidateSource,{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText;
 const realCandidate={};
-new Function('require','exports',compiledCandidate)(name=>{throw Error('Unexpected import '+name)},realCandidate);
+new Function('require','exports',compiledCandidate)(name=>{if(name==='./dm-link-time')return realClock;throw Error('Unexpected import '+name)},realCandidate);
 const fakeCandidate={buildDmLinkHumanReviewCandidate(arg){
  candidateCalls++;lastCandidate=arg;
  return realCandidate.buildDmLinkHumanReviewCandidate(arg);
@@ -38,16 +44,17 @@ const fakeCandidate={buildDmLinkHumanReviewCandidate(arg){
 const sendSource=fs.readFileSync(path.resolve(__dirname,'../../lib/ai/dm-link-instagram-send-evidence.ts'),'utf8');
 const compiledSend=ts.transpileModule(sendSource,{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText;
 const realSend={};
-new Function('require','exports',compiledSend)(name=>{throw Error('Unexpected import '+name)},realSend);
+new Function('require','exports',compiledSend)(name=>{if(name==='./dm-link-time')return realClock;if(name==='node:crypto')return require('node:crypto');throw Error('Unexpected import '+name)},realSend);
 const lifecycleSource=fs.readFileSync(path.resolve(__dirname,'../../lib/ai/dm-link-registry-lifecycle.ts'),'utf8');
 const compiledLifecycle=ts.transpileModule(lifecycleSource,{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText;
 const realLifecycle={};
-new Function('require','exports',compiledLifecycle)(name=>{throw Error('Unexpected import '+name)},realLifecycle);
+new Function('require','exports',compiledLifecycle)(name=>{if(name==='./dm-link-time')return realClock;throw Error('Unexpected import '+name)},realLifecycle);
 const gateSource=fs.readFileSync(path.resolve(__dirname,'../../lib/ai/dm-link-attribution-gate.ts'),'utf8');
 const compiledGate=ts.transpileModule(gateSource,{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText;
 const realGate={};
 new Function('require','exports',compiledGate)(name=>{
  if(name==='./dm-link-registry-lifecycle')return realLifecycle;
+ if(name==='./dm-link-time')return realClock;
  throw Error('Unexpected import '+name);
 },realGate);
 const source=fs.readFileSync(path.resolve(__dirname,'../../lib/ai/dm-link-review-pipeline.ts'),'utf8');
@@ -58,14 +65,25 @@ new Function('require','exports',compiled)(name=>{
  if(name==='./dm-link-followup-candidate')return fakeCandidate;
  if(name==='./dm-link-instagram-send-evidence')return realSend;
  if(name==='./dm-link-attribution-gate')return realGate;
+ if(name==='./dm-link-time')return realClock;
  throw Error('Unexpected dependency '+name);
 },api);
-function example(){return {
+function sign(e,source='verified_send_api_response'){
+ const p={source,organizationId:org,leadId:lead,conversationId:conv,messageId:message,
+  providerMessageId:e.snapshot.message.external_message_id,
+  acceptedAt:e.snapshot.message.sent_at,
+  evidenceRef:(source==='verified_signed_webhook'?'webhook:':'send:')+'66666666-6666-4666-8666-666666666666'};
+ const fields=['dm-link-instagram-evidence-v1',p.source,p.organizationId,
+  p.leadId,p.conversationId,p.messageId,p.providerMessageId,p.acceptedAt,p.evidenceRef];
+ p.signature=createHmac('sha256',PROOF_KEY).update(fields.join('\\n'),'utf8').digest('hex');
+ return p;
+}
+function example(){const e={
  snapshot:{activeOrganizationId:org,selectedLeadId:lead,staffCanWorkLead:true,linkPurposePermitted:true,
   lead:{id:lead,organization_id:org},
   conversation:{id:conv,organization_id:org,lead_id:lead,channel:'instagram',external_account_id:'account_1',metadata:{instagram_user_id:'ig_sender_9'}},
   message:{id:message,organization_id:org,lead_id:lead,conversation_id:conv,direction:'outbound',external_message_id:'provider_mid_1',sent_at:'2026-11-11T10:02:00Z',status:'sent',metadata:{provider:'instagram',send_mode:'human_manual',policy_checked:true}},
-  link:{id:'internal_link_9999',organization_id:org,lead_id:lead,conversation_id:conv,crm_message_id:message,instagram_account_id:'account_1',instagram_recipient_id:'ig_sender_9',provider_message_id:'provider_mid_1',issued_at:'2026-11-11T10:00:00Z',expires_at:'2026-11-14T10:00:00Z',revoked_at:null,purpose:'course_info_link'}},
+  link:{id:'internal_link_9999',organization_id:org,lead_id:lead,conversation_id:conv,crm_message_id:message,instagram_account_id:'account_1',instagram_recipient_id:'ig_sender_9',provider_message_id:'provider_mid_1',issued_at:'2026-11-11T10:00:00Z',expires_at:'2026-11-14T10:00:00Z',revoked_at:null,state:'active',activated_at:'2026-11-11T10:03:00Z',purpose:'course_info_link'}},
  verifiedRegistry:{
   organizationId:org,leadId:lead,conversationId:conv,crmMessageId:message,
   linkId:'internal_link_9999',state:'active',sourceBindingCommitted:true,
@@ -77,7 +95,7 @@ function example(){return {
  },
  observations:[],clickCoverage:'supported',outboundState:'delivered',deliveredAt:'2026-11-11T10:05:00Z',sourceReadAt:'2026-11-12T10:06:00Z',now:'2026-11-12T10:07:00Z',waitingHours:24,
  inboundCoverage:'verified_since_send',inboundAfterSend:false,taskCoverage:'complete',anyOpenFollowup:false,existingIdempotentTask:false,optedOut:false,humanAlreadyHandled:false,leadStage:'engaged',assignedUserId:owner
-};}
+};e.provenanceVerificationKey=PROOF_KEY;e.verifiedInstagramProvenance=sign(e);return e;}
 function observed(id='browser_event',at='2026-11-11T10:05:00Z'){
  return {eventId:id,linkId:'internal_link_9999',evidence:{
   organizationId:org,linkOrganizationId:org,conversationOrganizationId:org,
@@ -180,22 +198,26 @@ test('Meta accepted with incomplete inbound coverage must not trigger review',()
  assert.equal(r.humanReview,'none');
 });
 
-test('provider accepted requires a verifiable CRM send source, not a fabricated status',()=>{
- for(const patch of [
-  {status:'queued'},{metadata:{}},{metadata:{provider:'instagram',send_mode:'human_manual',policy_checked:false}},
-  {metadata:{provider:'whatsapp',send_mode:'human_manual',policy_checked:true}},
-  {status:'read'}
+test('provider-accepted staff review requires exact independently authenticated Meta provenance',()=>{
+ for(const delta of [
+  s=>s.snapshot.message.status='queued',
+  s=>s.verifiedInstagramProvenance=null,
+  s=>s.verifiedInstagramProvenance.signature='0'.repeat(64),
+  s=>s.verifiedInstagramProvenance.providerMessageId='wrong_mid',
+  s=>s.provenanceVerificationKey='invalid_client_key',
+  s=>{s.verifiedInstagramProvenance=null;s.snapshot.message.metadata={
+   provider:'instagram',source:'signed_outbound_echo',raw_event_id:'55555555-5555-4555-8555-555555555555'};}
  ]) {
-  const s=example();Object.assign(s.snapshot.message,patch);
+  const s=example();delta(s);
   const r=evalWith({...s,outboundState:'provider_accepted',deliveredAt:null});
-  assert.equal(r.status,'restricted');
-  assert.equal(r.reason,'unverified_send_provenance');
+  assert.equal(r.status,'restricted');assert.equal(r.reason,'unverified_send_provenance');
   assert.equal(r.taskCandidate,null);
  }
 });
 test('signed outbound echo source can support accepted-only status review without a delivery claim',()=>{
  const s=example();
  s.snapshot.message.metadata={provider:'instagram',source:'signed_outbound_echo',raw_event_id:'55555555-5555-4555-8555-555555555555'};
+ s.verifiedInstagramProvenance=sign(s,'verified_signed_webhook');
  const r=evalWith({...s,outboundState:'provider_accepted',deliveredAt:null});
  assert.equal(r.humanReview,'candidate');
  assert.equal(r.reason,'delivery_unconfirmed_staff_review');
@@ -230,4 +252,34 @@ test('wrong CRM message or lead in committed registry is blocked before any proj
   const r=evalWith({...a,verifiedRegistry:{...a.verifiedRegistry,...patch}});
   assert.equal(r.status,'restricted');assert.equal(projectionCalls,0);
  }
+});
+
+test('source lifecycle disagreement always suppresses country evidence and task proposals',()=>{
+ const patches=[
+  {issued_at:'2026-11-11T10:00:00.000001Z'},
+  {expires_at:'2026-11-14T10:00:00.000001Z'},
+  {state:'reserved'},
+  {activated_at:'2026-11-11T10:03:00.000001Z'},
+  {revoked_at:'2026-11-11T10:04:00Z'}
+ ];
+ for(const patch of patches){
+  const s=example();Object.assign(s.snapshot.link,patch);
+  const r=evalWith({...s,observations:[observed()]});
+  assert.equal(r.status,'restricted');assert.equal(r.observedNetworkCountry,null);
+  assert.equal(r.taskCandidate,null);assert.equal(projectionCalls,0);
+ }
+});
+test('delivery one microsecond before sent timestamp is rejected even within same millisecond',()=>{
+ const s=example();s.snapshot.message.sent_at='2026-11-11T10:02:00.000002Z';
+ s.verifiedRegistry.providerAcceptedAt=s.snapshot.message.sent_at;
+ s.verifiedInstagramProvenance=sign(s);
+ const r=evalWith({...s,deliveredAt:'2026-11-11T10:02:00.000001Z'});
+ assert.equal(r.status,'restricted');assert.equal(r.taskCandidate,null);
+});
+test('delivered status also requires source attestation; forged metadata cannot supply it',()=>{
+ const s=example();s.verifiedInstagramProvenance=null;
+ s.snapshot.message.metadata={provider:'instagram',policy_checked:true,send_mode:'human_manual'};
+ const r=evalWith(s);
+ assert.equal(r.status,'restricted');assert.equal(r.reason,'unverified_send_provenance');
+ assert.equal(r.taskCandidate,null);assert.equal(r.observedNetworkCountry,null);
 });
