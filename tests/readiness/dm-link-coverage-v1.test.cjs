@@ -97,3 +97,12 @@ test('no observed click after due interval creates staff-review suggestion but n
  const attention=intel.evaluateDmLinkStaffAttention({organizationId:'org-1',linkOrganizationId:'org-1',conversationOrganizationId:'org-1',linkId:'opaque_link_11',channel:'instagram',purposePermitted:true,linkRevoked:false,outboundState:'delivered',linkSentAt:'2026-11-11T10:00:00Z',linkExpiresAt:'2026-11-12T12:00:00Z',now:'2026-11-12T10:30:00Z',waitingHours:24,clickCoverage:'supported',clickStatus:observed.clickStatus,repliedSinceSend:false,optedOut:false,humanHandled:false,leadClosedOrEnrolled:false,existingTask:false});
  assert.equal(attention.action,'staff_review_due');assert.equal(attention.reason,'no_verified_visit');assert.equal(attention.automaticSendAllowed,false);
 });
+
+
+test('microsecond-ordered coverage preserves the latest actual network observation',()=>{
+ const first=wrap('event_micro_111111',{observedAt:'2026-11-11T12:00:00.000001Z'});
+ const second=wrap('event_micro_222222',{observedAt:'2026-11-11T12:00:00.000002Z'});
+ const r=summarize([second,first]);
+ assert.equal(r.state,'country_observed');
+ assert.equal(r.observedVisitAt,'2026-11-11T12:00:00.000002Z');
+});
