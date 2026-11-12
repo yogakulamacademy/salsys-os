@@ -16,7 +16,7 @@ import {
 } from './dm-link-crm-evidence';
 import type { DmLinkObservation } from './dm-link-coverage';
 import { gateDmLinkObservationHistory, type DmLinkVerifiedRegistry } from './dm-link-attribution-gate';
-import { classifyInstagramAcceptedSend } from './dm-link-instagram-send-evidence';
+import { classifyInstagramAcceptedSend, type InstagramVerifiedProvenance } from './dm-link-instagram-send-evidence';
 import type { DmLinkOutboundState, DmLinkClickCoverage } from './dm-link-intelligence';
 import {
   buildDmLinkHumanReviewCandidate,
@@ -30,6 +30,10 @@ export type DmLinkReviewPipelineInput = {
   observations: readonly DmLinkObservation[];
   clickCoverage: DmLinkClickCoverage;
   outboundState: DmLinkOutboundState;
+  /** Trusted server attestation of the verified Meta source; no client input. */
+  verifiedInstagramProvenance: InstagramVerifiedProvenance | null;
+  /** Secret from a privileged server process only; never browser/CRM metadata. */
+  provenanceVerificationKey: string;
   /** Separately verified delivery timestamp, not the CRM sent_at timestamp. */
   deliveredAt: string | null;
   sourceReadAt: string;
@@ -105,22 +109,24 @@ export function evaluateDmLinkReviewPipeline(input: DmLinkReviewPipelineInput): 
 
   // Do not accept API "sent" acknowledgements as independent delivery.
   // The user-facing task must never be created on contradictory timestamps.
-  const accepted = input.outboundState === 'provider_accepted'
-    ? classifyInstagramAcceptedSend({
-        organizationId: binding.organizationId,
-        leadId: binding.leadId,
-        conversationId: binding.conversationId,
-        messageId: input.snapshot.message.id,
-        message: {
-          ...input.snapshot.message,
-          status: input.snapshot.message.status ?? null,
-          metadata: input.snapshot.message.metadata ?? null,
-        },
-        expectedProviderMessageId: input.snapshot.link.provider_message_id,
-      })
-    : null;
-  if (input.outboundState === 'provider_accepted' &&
-      (accepted?.state !== 'provider_accepted' || accepted.recipientDeliveryVerified !== false)) {
+  const accepted = classifyInstagramAcceptedSend({
+    organizationId: binding.organizationId,
+    leadId: binding.leadId,
+    conversationId: binding.conversationId,
+    messageId: input.snapshot.message.id,
+    message: {
+      ...input.snapshot.message,
+      status: input.snapshot.message.status ?? null,
+      metadata: input.snapshot.message.metadata ?? null,
+    },
+    expectedProviderMessageId: input.snapshot.link.provider_message_id,
+    verifiedProvenance: input.verifiedInstagramProvenance,
+    provenanceVerificationKey: input.provenanceVerificationKey,
+  });
+  // This gate applies to BOTH Meta-accepted and delivered evidence.
+  // Neither the CRM status nor a client-provided verification flag is proof.
+  if (accepted.state !== 'provider_accepted' ||
+      accepted.recipientDeliveryVerified !== false) {
     return deny('unverified_send_provenance');
   }
   const sentAt = parseDmLinkInstant(input.snapshot.message.sent_at);
