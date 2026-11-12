@@ -1,3 +1,4 @@
+import { parseDmLinkInstant } from './dm-link-time';
 /**
  * DM-LINK-04: a read-only, deterministic candidate for the EXISTING CRM
  * Tasks & Follow-ups queue. It DOES NOT insert tasks, schedule sends, inspect
@@ -75,12 +76,6 @@ export type LinkReviewCandidate = {
 const UUID_RE = /^[a-f0-9]{8}-[a-f0-9]{4}-[1-8][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/i;
 const LINK_RE = /^[A-Za-z0-9_-]{8,128}$/;
 const ACTIVE_STAGES = new Set(['new','contacted','engaged','qualified','high_intent','payment_pending']);
-function parseTime(value: unknown): number | null {
-  if (typeof value !== 'string' ||
-    !/^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d(?:\.\d{1,6})?(?:Z|[+-]\d\d:\d\d)$/.test(value)) return null;
-  const t = Date.parse(value);
-  return Number.isFinite(t) ? t : null;
-}
 function deny(status: LinkReviewCandidate['status'], reason: string): LinkReviewCandidate {
   return {status, reason, task:null, automaticSendAllowed:false};
 }
@@ -101,11 +96,11 @@ export function buildDmLinkHumanReviewCandidate(input: LinkReviewInput): LinkRev
   if (input.anyOpenFollowup || input.existingIdempotentTask) {
     return deny('already_handled', 'existing_followup');
   }
-  const now = parseTime(input.now);
-  const sourceRead = parseTime(input.sourceReadAt);
-  const expiry = parseTime(input.linkExpiresAt);
-  const delivered = parseTime(input.deliveredAt);
-  const accepted = parseTime(input.providerAcceptedAt ?? null);
+  const now = parseDmLinkInstant(input.now);
+  const sourceRead = parseDmLinkInstant(input.sourceReadAt);
+  const expiry = parseDmLinkInstant(input.linkExpiresAt);
+  const delivered = parseDmLinkInstant(input.deliveredAt);
+  const accepted = parseDmLinkInstant(input.providerAcceptedAt ?? null);
   const independentlyDelivered = input.providerDelivery === 'delivered' && delivered !== null;
   const providerAcceptedOnly =
     input.providerDelivery === 'provider_accepted' &&
@@ -119,7 +114,7 @@ export function buildDmLinkHumanReviewCandidate(input: LinkReviewInput): LinkRev
       input.allowedWaitHours > 168) {
     return deny('insufficient_evidence', 'invalid_or_expired_timeline');
   }
-  if (sourceRead > now + 60_000 || now - sourceRead > 5 * 60_000 || sourceRead < sentBasis ||
+  if (sourceRead > now + BigInt(60000000) || now - sourceRead > BigInt(300000000) || sourceRead < sentBasis ||
       input.inboundCoverage !== 'verified_since_send' || input.inboundAfterSend === null ||
       input.taskCoverage !== 'complete') {
     return deny('insufficient_evidence', 'stale_or_incomplete_recheck');
@@ -127,7 +122,7 @@ export function buildDmLinkHumanReviewCandidate(input: LinkReviewInput): LinkRev
   if (input.inboundAfterSend === true) {
     return deny('already_handled', 'customer_replied');
   }
-  if (now - sentBasis < input.allowedWaitHours * 3_600_000) {
+  if (now - sentBasis < BigInt(input.allowedWaitHours) * BigInt(3600000000)) {
     return deny('not_due', 'waiting_period');
   }
   const ev = input.evidence;
