@@ -22,18 +22,19 @@ const fakeCrm={
   const observation=arg.observations[0];
   return {status:'available',messageEvidenceRef:'message:'+arg.snapshot.message.id,canAutoSend:false,pricingEligibility:'undetermined',
    linkVisitEvidence:observation?'country_observed':'not_observed', observedNetworkCountry:observation?'AE':null,
-   attention:!observation&&arg.outboundState==='delivered'&&!arg.repliedSinceSend&&!arg.optedOut&&!arg.humanHandled&&!arg.existingTask&&!arg.leadClosedOrEnrolled?'staff_review_due':'none',attentionReason:!observation?'no_verified_visit':'visit_recorded'};
+   attention:!observation&&['delivered','provider_accepted'].includes(arg.outboundState)&&!arg.repliedSinceSend&&!arg.optedOut&&!arg.humanHandled&&!arg.existingTask&&!arg.leadClosedOrEnrolled?'staff_review_due':'none',attentionReason:observation?'visit_recorded':arg.outboundState==='provider_accepted'?'delivery_unconfirmed':'no_verified_visit'};
  }
 };
-const fakeCandidate={buildDmLinkHumanReviewCandidate(arg){candidateCalls++;lastCandidate=arg;
- if(arg.evidence.status!=='available'||arg.evidence.attention!=='staff_review_due'||arg.providerDelivery!=='delivered'||
-   !arg.deliveredAt||arg.inboundCoverage!=='verified_since_send'||arg.inboundAfterSend!==false||arg.taskCoverage!=='complete'||
-   arg.optedOut||arg.humanAlreadyHandled||arg.anyOpenFollowup||arg.existingIdempotentTask)return {status:'insufficient_evidence',reason:'not_eligible',task:null};
- const due=Date.parse(arg.now)-Date.parse(arg.deliveredAt)>=arg.allowedWaitHours*3600000;
- const fresh=Date.parse(arg.now)-Date.parse(arg.sourceReadAt)<=300000;
- if(!due||!fresh)return {status:'not_due',reason:'not_due',task:null};
- return {status:'ready',reason:'staff_attention_due',task:{taskType:'human_review',idempotencyKey:'dm-link-review-v1:'+arg.organizationId+':'+arg.linkId+':'+arg.allowedWaitHours, leadId:arg.leadId,sourceMessageRef:arg.evidence.messageEvidenceRef}};
- }};
+// Unlike the CRM fixture, the candidate builder here is the actual production
+// policy module, not a mock. This exercises the 04→05 integration boundary.
+const candidateSource=fs.readFileSync(path.resolve(__dirname,'../../lib/ai/dm-link-followup-candidate.ts'),'utf8');
+const compiledCandidate=ts.transpileModule(candidateSource,{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText;
+const realCandidate={};
+new Function('require','exports',compiledCandidate)(name=>{throw Error('Unexpected import '+name)},realCandidate);
+const fakeCandidate={buildDmLinkHumanReviewCandidate(arg){
+ candidateCalls++;lastCandidate=arg;
+ return realCandidate.buildDmLinkHumanReviewCandidate(arg);
+}};
 const source=fs.readFileSync(path.resolve(__dirname,'../../lib/ai/dm-link-review-pipeline.ts'),'utf8');
 const compiled=ts.transpileModule(source,{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText;
 const api={};
@@ -76,8 +77,15 @@ test('future delivery and missing independent delivery fail closed',()=>{
   const r=evalWith({deliveredAt});assert.equal(r.status,'restricted');assert.equal(candidateCalls,0);
  }
 });
-test('provider accepted without independent delivery cannot create task',()=>{
- const r=evalWith({outboundState:'provider_accepted',deliveredAt:null});assert.equal(r.humanReview,'none');assert.equal(r.taskCandidate,null);
+test('provider accepted without independent delivery produces a truthful status-review candidate only',()=>{
+ const r=evalWith({outboundState:'provider_accepted',deliveredAt:null});
+ assert.equal(r.humanReview,'candidate');
+ assert.equal(r.reason,'delivery_unconfirmed_staff_review');
+ assert.equal(r.taskCandidate.title,'Review Instagram course-link status');
+ assert.ok(r.taskCandidate.description.includes('delivery is not verified'));
+ assert.equal(r.automaticSendAllowed,false);
+ assert.equal(lastCandidate.sourceSendEvidence,'exact_provider_message_id');
+ assert.equal(lastCandidate.providerAcceptedAt,'2026-11-11T10:02:00Z');
 });
 test('provider delivery timestamp contradicting unconfirmed state is restricted',()=>{
  const r=evalWith({outboundState:'unknown'});assert.equal(r.status,'restricted');assert.equal(candidateCalls,0);
@@ -119,4 +127,20 @@ test('bounded staff projection never reflects recipient, link token, IP or prici
 test('ISO timestamps with six-digit fractions remain accepted as delivered evidence',()=>{
  const r=evalWith({deliveredAt:'2026-11-11T10:05:00.123456+00:00',now:'2026-11-12T10:07:00.123456+00:00'});
  assert.equal(r.status,'available');
+});
+
+test('unknown outbound state cannot create accepted-send status review',()=>{
+ const r=evalWith({outboundState:'unknown',deliveredAt:null});
+ assert.equal(r.humanReview,'none');
+ assert.equal(r.taskCandidate,null);
+});
+test('Meta accepted with observed link visit is not a no-visit task',()=>{
+ const r=evalWith({outboundState:'provider_accepted',deliveredAt:null,observations:[{eventId:'observed_visit'}]});
+ assert.equal(r.status,'available');
+ assert.equal(r.humanReview,'none');
+ assert.equal(r.pricingEligibility,'undetermined');
+});
+test('Meta accepted with incomplete inbound coverage must not trigger review',()=>{
+ const r=evalWith({outboundState:'provider_accepted',deliveredAt:null,inboundCoverage:'partial'});
+ assert.equal(r.humanReview,'none');
 });
