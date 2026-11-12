@@ -17,7 +17,7 @@
 | History/provenance | Documented 433 current installed migration-version rows, absent `20261110041634`, known WhatsApp version aliases and reconciled scope without hosted history writes | Reporting a synthetic 434 count as a hosted repair or rerunning manually applied PR #685 SQL |
 | Failure, rollback and disposal | Witnessed stop/cleanup path; redacted evidence of artifact expiration, secure deletion and no external actions; measure only **logical reconstruction elapsed time** | Side effects, unreconciled artifacts, unapproved retained dumps or claims of managed physical RTO/RPO |
 
-**Required approval order:** (1) qualified **independent DBA/recovery** written decision; (2) independent **privacy/security** written decision by a *designated, qualified reviewer* (**no name verified yet**); (3) **new explicit owner adoption and residual physical-risk acceptance**; (4) **separate named-operator execution authorization** for any actual rehearsal. None is currently received for the *revised* criterion. A previous empty-body GitHub APPROVED review covers the documentation, not this operational change.
+**Required approval order:** (1) qualified **independent DBA/recovery** written decision; (2) independent **privacy/security** written decision by a *designated, qualified reviewer* (**owner has nominated `thedetourclubind-cloud` as a candidate in #700; qualifications and independence remain unverified**); (3) **new explicit owner adoption and residual physical-risk acceptance**; (4) **separate named-operator execution authorization** for any actual rehearsal. None is currently received for the *revised* criterion. Existing current-head GitHub APPROVED reviews have empty bodies and do not constitute operational DBA acceptance; the reviewer has documented **CHANGES REQUIRED** separately.
 
 **Disallowed under this authorization:** no export/dump, backup clone, import/restore, SQL modification, migration/ledger repair, merge, deployment, paid infrastructure, real customer fixtures, production change, collector enablement or stage-hold release. **R2: NO-GO; witnessed staging: 0/16 ON HOLD.**
 
@@ -80,7 +80,7 @@ No commands below authorize an export or restore. An approved operator must **fi
 
 **DBA / recovery reviewer:** Provide **ACCEPT PROPOSED REVISED STAGING STANDARD / CHANGES REQUIRED / REJECT** with precise test scope, required no-egress proof, PostgreSQL/extension compatibility, pass/fail criteria, rollback, logical-measurement limits, continuing physical RPO/RTO recovery debt, and the evidence needed before owner adoption. The prior GitHub documentation review is not a decision on this amended acceptance proposal.
 
-**Independent privacy/security reviewer:** A qualified reviewer **must first be identified**. Provide **ACCEPT / CHANGES REQUIRED / REJECT** explicitly on synthetic-only default, whether a real data export is forbidden or would need an additional authorization, PII and secrets minimization, Auth/Storage/Vault limitations, provider integration isolation, safe artifact location/access/retention/deletion, incidental sensitive content, and third-party egress assurance. No presumed approval from the DBA's role.
+**Independent privacy/security reviewer:** The owner has nominated `thedetourclubind-cloud` as a **candidate**, but their privacy/security qualifications, authority and independence must be independently established in #700 before their decision can count. Provide **ACCEPT / CHANGES REQUIRED / REJECT** explicitly on synthetic-only default, whether a real data export is forbidden or would need an additional authorization, PII and secrets minimization, Auth/Storage/Vault limitations, provider integration isolation, safe artifact location/access/retention/deletion, incidental sensitive content, and third-party egress assurance. No presumed approval from the DBA's role.
 
 **Owner (after both independent approvals):** Explicitly **ADOPT / DO NOT ADOPT** the changed R2 staging recovery standard and separately record acknowledgement of unverified physical backup integrity and physical RPO/RTO. This owner adoption is **not granted** by permission to propose.
 
@@ -88,8 +88,8 @@ No commands below authorize an export or restore. An approved operator must **fi
 
 | Required decision | Approval reference/signature | Current status |
 | --- | --- | --- |
-| Independent DBA revised criterion | Pending | **AWAITING** |
-| Qualified independent privacy reviewer identified | Pending | **NOT DESIGNATED** |
+| Independent DBA revised criterion | [PR #698 changes-required review](https://github.com/yogakulamacademy/salsys-os/pull/698#issuecomment-6818757836) | **CHANGES REQUIRED — NOT ACCEPTED** |
+| Qualified independent privacy reviewer identified | [Owner candidate nomination #700](https://github.com/yogakulamacademy/salsys-os/issues/700#issuecomment-6817615540) | **NOMINATED; QUALIFICATIONS / INDEPENDENCE UNVERIFIED** |
 | Independent privacy/security acceptance | Pending | **AWAITING** |
 | Owner adoption and explicit physical residual-risk acceptance | Pending | **NOT AUTHORIZED** |
 | Operator actual export/import/rehearsal | Pending | **NOT AUTHORIZED** |
