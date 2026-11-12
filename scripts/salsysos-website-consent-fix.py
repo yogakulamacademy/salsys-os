@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""SalsysOS R2 safe website snippet repair (v3.0, local files only).
+"""SalsysOS R2 safe website snippet repair (v3.1, local files only).
 
 DRY RUN is the default. Supply all directly relevant PHP/HTML include files, e.g.
     python salsysos-website-consent-fix.py header.php footer.php
@@ -25,7 +25,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from urllib.parse import parse_qs, urlsplit
 
-VERSION = '3.0'
+VERSION = '3.1'
 SCRIPT = re.compile(r'<script\b[^>]*>', re.IGNORECASE | re.DOTALL)
 ATTR_NAME = re.compile(r'(?<![\w:-])([a-z][\w:-]*)\s*=\s*(["\'])(.*?)\2', re.IGNORECASE | re.DOTALL)
 HTML_COMMENT = re.compile(r'<!--.*?-->', re.DOTALL)
