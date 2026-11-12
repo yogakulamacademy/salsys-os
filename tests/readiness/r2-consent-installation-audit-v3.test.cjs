@@ -102,3 +102,50 @@ test('website wrapper is review-only', () => {
   assert.equal(run([boot, cmp, { src: 'https://www.yogakulam.com/yogakulam-tracker.js' }]).status,
     'STATIC_ATTRIBUTES_MATCH_BUT_DYNAMIC_LOADERS_REQUIRE_REVIEW');
 });
+
+test('untrusted event endpoint is not a static match', () => {
+  const report = run([{ ...boot, 'data-endpoint': 'https://third-party.invalid/api/events/browser/v1?site_id=TOP_SECRET' }, cmp]);
+  assert.equal(report.status, 'REVIEW_STATIC_CONFIGURATION_WARNINGS');
+  assert.equal(report.configuration.bootstrapEndpointsUseTrustedPathsAndSameSite, false);
+});
+test('relative event endpoint is not a static match', () => {
+  assert.equal(run([{ ...boot, 'data-endpoint': '/api/events/browser/v1?site_id=TOP_SECRET' }, cmp]).status,
+    'REVIEW_STATIC_CONFIGURATION_WARNINGS');
+});
+test('wrong event endpoint path is not a static match', () => {
+  assert.equal(run([{ ...boot, 'data-endpoint': 'https://salsysos.com/api/events/other?site_id=TOP_SECRET' }, cmp]).status,
+    'REVIEW_STATIC_CONFIGURATION_WARNINGS');
+});
+test('wrong consent endpoint origin is not a static match', () => {
+  assert.equal(run([{ ...boot, 'data-consent-endpoint': 'https://third-party.invalid/api/privacy/consent/v1?site_id=TOP_SECRET' }, cmp]).status,
+    'REVIEW_STATIC_CONFIGURATION_WARNINGS');
+});
+test('site ID mismatch between loader and endpoint is not a static match', () => {
+  assert.equal(run([{ ...boot, 'data-endpoint': 'https://salsysos.com/api/events/browser/v1?site_id=DIFFERENT' }, cmp]).status,
+    'REVIEW_STATIC_CONFIGURATION_WARNINGS');
+});
+test('duplicate site_id parameters are not a static match', () => {
+  assert.equal(run([{ ...boot, 'data-endpoint': 'https://salsysos.com/api/events/browser/v1?site_id=TOP_SECRET&site_id=DIFFERENT' }, cmp]).status,
+    'REVIEW_STATIC_CONFIGURATION_WARNINGS');
+});
+test('missing value for present bootstrap attribute is flagged', () => {
+  assert.equal(run([{ ...boot, 'data-salsys-site': '' }, cmp]).status,
+    'REVIEW_STATIC_CONFIGURATION_WARNINGS');
+});
+test('nested bootstrap path is not a static match', () => {
+  assert.equal(run([{ ...boot, src: 'https://salsysos.com/different/salsys-intelligence.js' }, cmp]).status,
+    'REVIEW_STATIC_CONFIGURATION_WARNINGS');
+});
+test('nested consent UI script path is not a static match', () => {
+  assert.equal(run([boot, { ...cmp, src: 'https://salsysos.com/different/salsys-consent.js' }]).status,
+    'REVIEW_STATIC_CONFIGURATION_WARNINGS');
+});
+test('endpoint embedded credentials are not a static match', () => {
+  assert.equal(run([{ ...boot, 'data-endpoint': 'https://user:pass@salsysos.com/api/events/browser/v1?site_id=TOP_SECRET' }, cmp]).status,
+    'REVIEW_STATIC_CONFIGURATION_WARNINGS');
+});
+test('trusted and correctly bound endpoints are reported only as boolean', () => {
+  const report = run([boot, cmp]);
+  assert.equal(report.configuration.bootstrapEndpointsUseTrustedPathsAndSameSite, true);
+  assert.equal(report.status, 'STATIC_ATTRIBUTES_MATCH_REQUIRED_NOT_E2E_VERIFIED');
+});
