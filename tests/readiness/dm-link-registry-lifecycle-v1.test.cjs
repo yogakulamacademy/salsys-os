@@ -10,7 +10,9 @@ const compiled = ts.transpileModule(source, {
 });
 assert.equal((compiled.diagnostics || []).filter(d => d.category === ts.DiagnosticCategory.Error).length, 0);
 const api = {};
-new Function('require', 'exports', compiled.outputText)((name) => {throw Error('Unexpected dependency '+name);}, api);
+const clockCode=ts.transpileModule(fs.readFileSync(path.resolve(__dirname,'../../lib/ai/dm-link-time.ts'),'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText;
+const clock={};new Function('require','exports',clockCode)(()=>{throw Error('Unexpected clock import')},clock);
+new Function('require', 'exports', compiled.outputText)((name) => {if(name==='./dm-link-time')return clock;throw Error('Unexpected dependency '+name);}, api);
 
 const org='11111111-1111-4111-8111-111111111111';
 const lead='22222222-2222-4222-8222-222222222222';
