@@ -53,11 +53,26 @@ class Tag:
 
 def _attrs(tag: str) -> dict[str, str]:
     attrs: dict[str, str] = {}
+    stripped = list(tag)
     for m in ATTR_NAME.finditer(tag):
         name = m.group(1).lower()
         if name in attrs:
             raise SafePatchError('Duplicate script attribute; manual review required.')
         attrs[name] = m.group(3)
+        stripped[m.start():m.end()] = ' ' * (m.end() - m.start())
+    # HTML accepts unquoted values. Refuse unparsed sensitive assignments in
+    # a SalsysOS script instead of adding a duplicate, ineffective mode value.
+    unquoted = re.search(
+        r'(?<![\w:-])(?:src|data-consent-mode|data-salsys-site|'
+        r'data-endpoint|data-consent-endpoint|data-consent-banner|'
+        r'data-salsys-behavior-tracking)\s*=',
+        ''.join(stripped), re.IGNORECASE
+    )
+    if unquoted and any(token in tag.lower() for token in (
+        'salsys', 'yogakulam-tracker.js', 'data-consent-mode',
+        'data-salsys-behavior-tracking'
+    )):
+        raise SafePatchError('Unquoted or malformed critical script attribute; manual review required.')
     return attrs
 
 
@@ -83,10 +98,12 @@ def _safe_url(raw: str, expected_path: str) -> bool:
     if DYNAMIC.search(raw):
         return False
     u = urlsplit(raw.strip())
-    # Query is allowed, but never echoed in output. Site ID must be present.
+    # Query is allowed, but never echoed in output. Multiple site_id values
+    # are ambiguous between clients/proxies and must be rejected.
+    site_ids = parse_qs(u.query, keep_blank_values=True).get('site_id', [])
     return (u.scheme == 'https' and u.hostname == 'salsysos.com'
         and u.username is None and u.password is None and u.port in (None, 443)
-        and u.path == expected_path and bool(parse_qs(u.query).get('site_id', [''])[0]))
+        and u.path == expected_path and len(site_ids) == 1 and bool(site_ids[0]))
 
 
 def _scan(path: Path, content: str) -> list[Tag]:
