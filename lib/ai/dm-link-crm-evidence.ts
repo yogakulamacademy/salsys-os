@@ -1,3 +1,4 @@
+import { parseDmLinkInstant } from './dm-link-time';
 /**
  * DM-LINK-03: read-only, fail-closed association from an authorized CRM
  * Instagram outbound message to a proposed opaque-link record.
@@ -13,7 +14,6 @@ import { evaluateDmLinkStaffAttention, type DmLinkOutboundState,
 const UUID = /^[a-f\d]{8}-[a-f\d]{4}-[1-8][a-f\d]{3}-[89ab][a-f\d]{3}-[a-f\d]{12}$/i;
 const LINK_ID = /^[A-Za-z0-9_-]{8,128}$/;
 const providerId = (id: unknown) => typeof id === 'string' && id.length >= 4 && id.length <= 256 && id.trim() === id && !/[\s\u0000-\u001f]/.test(id);
-const timestamp = (value: unknown) => typeof value === 'string' && /^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d(?:\.\d{1,6})?(?:Z|[+-]\d\d:\d\d)$/.test(value) && Number.isFinite(Date.parse(value)) ? Date.parse(value) : null;
 
 export type DmLinkCrmSnapshot = {
   activeOrganizationId: string;
@@ -88,9 +88,9 @@ export function bindDmLinkToCrmMessage(snapshot: DmLinkCrmSnapshot): DmLinkBindi
       conversation.external_account_id !== link.instagram_account_id ||
       meta.instagram_user_id !== link.instagram_recipient_id ||
       message.external_message_id !== link.provider_message_id) return rejected('mismatch');
-  const sent = timestamp(message.sent_at);
-  const issued = timestamp(link.issued_at);
-  const expires = timestamp(link.expires_at);
+  const sent = parseDmLinkInstant(message.sent_at);
+  const issued = parseDmLinkInstant(link.issued_at);
+  const expires = parseDmLinkInstant(link.expires_at);
   if (link.revoked_at !== null || sent === null || issued === null || expires === null ||
       expires <= issued || sent < issued || sent > expires) return rejected('restricted');
   return {
