@@ -100,11 +100,19 @@ export type DmLinkAttributionDecision = {
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const DIGEST = /^[a-f0-9]{64}$/;
 const PROVIDER = /^[^\s\u0000-\u001f]{4,256}$/;
-function parseTime(input: unknown): number | null {
-  if (typeof input !== 'string' ||
-    !/^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d(?:\.\d{1,6})?(?:Z|[+-]\d\d:\d\d)$/.test(input)) return null;
-  const result = Date.parse(input);
-  return Number.isFinite(result) ? result : null;
+/**
+ * Preserve PostgreSQL's six fractional digits instead of using Date.parse()
+ * alone, which truncates microseconds to milliseconds. Return Unix microseconds
+ * for exact, offset-aware ordering in this offline policy.
+ */
+function parseTime(input: unknown): bigint | null {
+  if (typeof input !== 'string') return null;
+  const parts = /^(\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d)(?:\.(\d{1,6}))?(Z|[+-]\d\d:\d\d)$/.exec(input);
+  if (!parts) return null;
+  const fraction = (parts[2] ?? '').padEnd(6, '0');
+  const millis = Date.parse(`${parts[1]}.${fraction.slice(0, 3)}${parts[3]}`);
+  if (!Number.isFinite(millis)) return null;
+  return BigInt(millis) * 1000n + BigInt(fraction.slice(3));
 }
 const result = (action: DmLinkTransition['action'], reason: string, state: DmLinkTransition['projectedState'] = null, version: number | null = null): DmLinkTransition =>
   ({action,reason,projectedState:state,expectedRowVersion:version,attributionAuthorized:false,automaticSendAllowed:false});
@@ -129,7 +137,7 @@ export function planDmLinkReservationTransition(input: DmLinkTransitionInput): D
   }
   const issued=parseTime(r.issuedAt), expiry=parseTime(r.expiresAt), now=parseTime(input.now);
   if (issued === null || expiry === null || now === null || expiry <= issued ||
-      expiry - issued > input.policyMaxLifetimeHours * 3_600_000 ||
+      expiry - issued > BigInt(input.policyMaxLifetimeHours) * 3_600_000_000n ||
       now < issued) return result('hold','invalid_or_overlong_lifetime');
   if (r.state !== 'reserved') return result('hold','already_finalized');
   if (now >= expiry) return result('retire','expired_without_activation','retired',r.rowVersion);
@@ -158,6 +166,9 @@ export function planDmLinkReservationTransition(input: DmLinkTransitionInput): D
     return result('hold','unconfirmed_or_not_dispatched');
   }
   if (input.dispatchState !== 'provider_accepted') return result('hold','unknown_send_state');
+  // Competing accepted/rejected outcomes must be independently reconciled;
+  // never activate a reserved link while negative send evidence is present.
+  if (input.failureProof != null) return result('manual_review','conflicting_send_outcomes');
   const p=input.proof;
   if (!p || p.sourceVerified !== true || !UUID.test(p.crmMessageId) ||
       !PROVIDER.test(p.providerMessageId) ||
