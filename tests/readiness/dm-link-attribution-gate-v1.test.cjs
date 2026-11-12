@@ -99,10 +99,12 @@ test('even plausible visit before activation rejects entire history',()=>{
  const r=run({observations:[event('2026-11-11T10:02:59.999999Z')]});
  assert.equal(r.status,'restricted');assert.equal(r.reason,'preactivation_or_expired_event');
 });
-test('visit at activation microsecond is eligible but earlier microsecond is not',()=>{
+test('visit at activation microsecond is eligible only with matching authoritative source',()=>{
  const r=registry();r.linkActivatedAt='2026-11-11T10:03:00.000002Z';
- assert.equal(run({registry:r,observations:[event('2026-11-11T10:03:00.000001Z')]}).status,'restricted');
- assert.equal(run({registry:r,observations:[event('2026-11-11T10:03:00.000002Z')]}).status,'permitted');
+ const authoritative={...sourceLink(),activated_at:r.linkActivatedAt};
+ assert.equal(run({registry:r,sourceLink:authoritative,observations:[event('2026-11-11T10:03:00.000001Z')]}).status,'restricted');
+ assert.equal(run({registry:r,sourceLink:authoritative,observations:[event('2026-11-11T10:03:00.000002Z')]}).status,'permitted');
+ assert.equal(run({registry:r,observations:[event('2026-11-11T10:03:00.000002Z')]}).status,'restricted');
 });
 test('historical observations outside expiry are not retroactively attributed',()=>{
  assert.equal(run({observations:[event('2026-11-15T10:00:00Z')]}).status,'restricted');
