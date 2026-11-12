@@ -69,3 +69,55 @@ test('PostgreSQL microsecond timestamps are accepted',()=>{
  const r=run({deliveredAt:'2026-11-11T10:00:00.123456+00:00',sourceReadAt:'2026-11-12T12:01:00.123456+00:00',now:'2026-11-12T12:02:00.654321+00:00'});
  assert.equal(r.status,'ready');
 });
+
+
+test('provider-accepted outbound with no verified click produces truthful staff status review, not a delivery claim',()=>{
+ const r=run({
+  providerDelivery:'provider_accepted',
+  deliveredAt:null,
+  providerAcceptedAt:'2026-11-11T10:00:00Z',
+  sourceSendEvidence:'exact_provider_message_id',
+  evidence:{...baseline().evidence,attentionReason:'delivery_unconfirmed'},
+ });
+ assert.equal(r.status,'ready');
+ assert.equal(r.reason,'delivery_unconfirmed_staff_review');
+ assert.equal(r.task.title,'Review Instagram course-link status');
+ assert.ok(r.task.description.includes('delivery is not verified'));
+ assert.ok(r.task.description.includes('No website link visit was observed'));
+ assert.equal(r.automaticSendAllowed,false);
+});
+test('Meta accepted is never silently promoted to delivered; wrong reason or provenance is rejected',()=>{
+ const input={
+  providerDelivery:'provider_accepted',deliveredAt:null,
+  providerAcceptedAt:'2026-11-11T10:00:00Z',
+  sourceSendEvidence:'exact_provider_message_id',
+  evidence:{...baseline().evidence,attentionReason:'delivery_unconfirmed'},
+ };
+ for(const patch of [
+  {sourceSendEvidence:'unverified'},
+  {sourceSendEvidence:undefined},
+  {providerAcceptedAt:null},
+  {providerAcceptedAt:'invalid'},
+  {deliveredAt:'2026-11-11T10:10:00Z'},
+  {evidence:{...input.evidence,attentionReason:'no_verified_visit'}},
+ ]) {
+  const r=run({...input,...patch});
+  assert.notEqual(r.status,'ready');
+  assert.equal(r.task,null);
+ }
+});
+test('accepted-only review still blocks replies, opt-outs, incomplete coverage, and observed visits',()=>{
+ const input={
+  providerDelivery:'provider_accepted',deliveredAt:null,
+  providerAcceptedAt:'2026-11-11T10:00:00Z',
+  sourceSendEvidence:'exact_provider_message_id',
+  evidence:{...baseline().evidence,attentionReason:'delivery_unconfirmed'},
+ };
+ for(const patch of [
+  {inboundAfterSend:true},{optedOut:true},{existingIdempotentTask:true},
+  {taskCoverage:'partial'},{inboundCoverage:'partial'},
+  {evidence:{...input.evidence,linkVisitEvidence:'country_observed'}},
+ ]) {
+  assert.notEqual(run({...input,...patch}).status,'ready');
+ }
+});
