@@ -7,6 +7,8 @@
  * tenant-scoped server read; booleans and timestamps supplied by clients
  * are never sufficient to establish provenance.
  */
+import { sameDmLinkInstant } from './dm-link-time';
+import type { DmLinkCrmSnapshot } from './dm-link-crm-evidence';
 import {
   evaluateDmLinkCommittedAttribution,
   type DmLinkCommittedActivation,
@@ -55,6 +57,9 @@ export type DmLinkAttributionGateResult = {
  */
 export function gateDmLinkObservationHistory(input: {
   reference: DmLinkEvidenceReference;
+  /** The same server-loaded lifecycle record used for CRM message binding. */
+  sourceLink: DmLinkCrmSnapshot['link'];
+  sourceMessageSentAt: string | null;
   registry: DmLinkVerifiedRegistry | null;
   observations: readonly DmLinkObservation[];
   now: string;
@@ -68,7 +73,23 @@ export function gateDmLinkObservationHistory(input: {
     pricingEligibility: 'undetermined',
   });
   if (!input || !input.registry || !input.reference) return refuse('no_registry');
-  const {reference, registry, observations} = input;
+  const {reference, registry, observations, sourceLink} = input;
+  // No parallel lifecycle interpretation: both views must refer to the same
+  // authoritative active record and exact committed activation instant.
+  if (!sourceLink || sourceLink.id !== reference.linkId ||
+      sourceLink.organization_id !== reference.organizationId ||
+      sourceLink.lead_id !== reference.leadId ||
+      sourceLink.conversation_id !== reference.conversationId ||
+      sourceLink.crm_message_id !== reference.crmMessageId ||
+      sourceLink.purpose !== 'course_info_link' ||
+      sourceLink.state !== registry.state || sourceLink.state !== 'active' ||
+      sourceLink.revoked_at !== null || registry.revoked !== false ||
+      !sameDmLinkInstant(sourceLink.issued_at, registry.linkIssuedAt) ||
+      !sameDmLinkInstant(sourceLink.expires_at, registry.linkExpiresAt) ||
+      !sameDmLinkInstant(sourceLink.activated_at, registry.linkActivatedAt) ||
+      !sameDmLinkInstant(input.sourceMessageSentAt, registry.providerAcceptedAt)) {
+    return refuse('source_mismatch');
+  }
   if (!reference.organizationId || !reference.leadId ||
       !reference.conversationId || !reference.crmMessageId ||
       !reference.linkId ||
