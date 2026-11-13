@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import { createAdminClient } from '@/lib/supabase/admin';
+import { instagramReplyVariantsEnabledForOrganization } from '@/lib/instagram/reply-feature-gate-v1';
 import { createClient } from '@/lib/supabase/server';
 import { requireCurrentOrganizationId } from '@/lib/workspace';
 import {
@@ -61,14 +62,14 @@ function experimentTag(row: TaggedSend) {
 
 /** Read-only, sample-bounded and explicitly non-causal performance. */
 export default async function InstagramExperimentsPage() {
-  if (process.env.IG_REPLY_VARIANTS_ENABLED !== 'true') {
-    return <p className="p-6 text-sm text-slate-600">Instagram reply experiments are not enabled.</p>;
-  }
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return <p className="p-6 text-sm text-slate-600">Sign in to review Instagram experiments.</p>;
 
   const organizationId = await requireCurrentOrganizationId(supabase, user.id);
+  if (!instagramReplyVariantsEnabledForOrganization(organizationId)) {
+    return <p className="p-6 text-sm text-slate-600">Instagram reply experiments are not enabled for this workspace.</p>;
+  }
   const { data: canManage, error: permissionError } = await supabase.rpc(
     'can_manage_organization', { p_organization_id: organizationId },
   );
