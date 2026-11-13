@@ -134,6 +134,14 @@ export default async function InstagramExperimentsPage() {
   }
 
   const latestTaggedSendByLead = new Map<string, Array<{ send: TaggedSend; ts: number }>>();
+  const taggedSendTimesByConversation = new Map<string, number[]>();
+  for (const send of sends) {
+    const time = millis(send.sent_at || send.created_at);
+    const times = taggedSendTimesByConversation.get(send.conversation_id) ?? [];
+    times.push(time);
+    taggedSendTimesByConversation.set(send.conversation_id, times);
+  }
+  for (const times of taggedSendTimesByConversation.values()) times.sort((a, b) => a - b);
   for (const send of sends) {
     const tag = experimentTag(send);
     const experiment = typeof tag.experiment_id === 'string' ? tag.experiment_id : '';
@@ -143,10 +151,12 @@ export default async function InstagramExperimentsPage() {
     const bucket = metrics.get(key) ?? emptyMetrics();
     bucket.sent += 1;
     const sentTime = millis(send.sent_at || send.created_at);
+    const nextTaggedSend = (taggedSendTimesByConversation.get(send.conversation_id) ?? [])
+      .find(time => time > sentTime) ?? Number.POSITIVE_INFINITY;
     const responses = inboundByConversation.get(send.conversation_id) ?? [];
     const firstReply = responses.find(inbound => {
       const time = millis(inbound.received_at || inbound.created_at);
-      return time > sentTime && time <= sentTime + 72 * 60 * 60 * 1000;
+      return time > sentTime && time < nextTaggedSend && time <= sentTime + 72 * 60 * 60 * 1000;
     });
 
     if (firstReply) {
