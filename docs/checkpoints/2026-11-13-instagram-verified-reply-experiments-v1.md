@@ -21,7 +21,11 @@ Instagram Marketing Messages (where available and permitted) are a separate opt-
 - Enforces 1000 UTF-8 byte limit on Instagram send text
 
 ## Explicit safety and release limits
-Feature is OFF by default: IG_REPLY_VARIANTS_ENABLED must equal true on server.
+Feature is OFF by default: IG_REPLY_VARIANTS_ENABLED must equal true on server
+**AND** IG_REPLY_VARIANTS_ALLOWED_ORGANIZATIONS must explicitly include the
+current workspace UUID (comma-separated list). A global switch alone is
+insufficient; first-customer training copy must never appear in unrelated
+SalsysOS organizations.
 No schema migration, retroactive customer data mutation, Meta/Instagram outbound campaign, new automation, new notification tokens, policy enablement or live send was performed.
 No Meta-approved WhatsApp template is used for Instagram standard DM replies.
 Do not enable for cold or expired-window follow-ups. No 'HUMAN_AGENT' override is added.
