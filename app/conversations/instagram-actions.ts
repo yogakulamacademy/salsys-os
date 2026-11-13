@@ -6,6 +6,7 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { resolveVerifiedInstagramExperiment } from "@/lib/instagram/reply-resolution-server-v1";
+import { instagramReplyVariantsEnabledForOrganization } from "@/lib/instagram/reply-feature-gate-v1";
 import {
   getInstagramRuntimeForOrganization,
   type InstagramRuntimeConnection,
@@ -185,7 +186,7 @@ export async function sendInstagramMessageAction(
   // assigned version and exact CRM-based message BEFORE the Meta send call.
   let verifiedInstagramExperiment: { experimentId: string; variantId: "A" | "B" } | null = null;
   if (experimentId || variantId) {
-    if (process.env.IG_REPLY_VARIANTS_ENABLED !== "true" || !experimentId || !variantId) {
+    if (!instagramReplyVariantsEnabledForOrganization(organizationId) || !experimentId || !variantId) {
       redirect(conversationUrl(leadId, {
         error: "Instagram A/B tracking is disabled or incomplete.",
       }));
