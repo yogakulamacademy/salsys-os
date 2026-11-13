@@ -128,7 +128,7 @@ export function detectExplicitInstagramIntent(message: string): InstagramIntentS
   if (typeof message !== 'string' || message.length > 3000) return [];
   const normalized = message.trim().toLowerCase();
   if (!normalized) return [];
-  if (/\b(stop|unsubscribe|opt\s*out|do not message|don't message)\b/i.test(normalized)) {
+  if (/^(?:stop|unsubscribe|opt\s*out|do not message(?: me)?|don['’]t message(?: me)?|please stop messaging(?: me)?)[.!\s]*$/i.test(normalized)) {
     return ['opt_out'];
   }
   const matches: Array<[InstagramIntentSignal, RegExp]> = [
