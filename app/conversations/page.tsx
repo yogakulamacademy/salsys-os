@@ -338,6 +338,7 @@ export default async function ConversationsPage({
           />
         ) : (
           <ConversationSafeComposer
+            instagramVariantsEnabled={process.env.IG_REPLY_VARIANTS_ENABLED === "true"}
             leadId={selected.id}
             channel={selected.currentContactChannel}
             interactionAction={interactionAction}
