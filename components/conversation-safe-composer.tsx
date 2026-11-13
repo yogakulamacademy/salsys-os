@@ -6,6 +6,7 @@ import { useCallback, useEffect, useRef, useState, useTransition } from "react";
 
 import { markCopilotAssistedMessageAction } from "@/app/conversations/copilot-audit-actions";
 import { sendInstagramMessageAction } from "@/app/conversations/instagram-actions";
+import { InstagramVariantChooser, type InstagramSelectedVariant } from "@/components/instagram-variant-chooser";
 import type { MessagingEligibility } from "@/lib/messaging-eligibility";
 import type { Channel } from "@/types/crm";
 
@@ -40,17 +41,20 @@ export function ConversationSafeComposer({
   channel,
   interactionAction,
   eligibility,
+  instagramVariantsEnabled = false,
 }: {
   leadId: string;
   channel: Channel;
   interactionAction?: ServerAction;
   eligibility?: MessagingEligibility | null;
+  instagramVariantsEnabled?: boolean;
 }) {
   const router = useRouter();
   const [mode, setMode] = useState<ComposeMode>("reply");
   const [replyDraft, setReplyDraft] = useState("");
   const [draftState, setDraftState] = useState<DraftState>("idle");
   const [copilotAssisted, setCopilotAssisted] = useState(false);
+  const [instagramVariant, setInstagramVariant] = useState<InstagramSelectedVariant | null>(null);
   const [sendError, setSendError] = useState<string | null>(null);
   const [note, setNote] = useState("");
   const [noteSaving, setNoteSaving] = useState(false);
@@ -69,6 +73,7 @@ export function ConversationSafeComposer({
     setReplyDraft("");
     setDraftState("idle");
     setCopilotAssisted(false);
+    setInstagramVariant(null);
     setSendError(null);
     setNote("");
     setNoteError(null);
@@ -125,6 +130,7 @@ export function ConversationSafeComposer({
 
       setMode("reply");
       updateReplyDraft(detail.body);
+      setInstagramVariant(null);
       setCopilotAssisted(true);
       requestAnimationFrame(() => replyTextareaRef.current?.focus());
     };
@@ -176,6 +182,10 @@ export function ConversationSafeComposer({
     const formData = new FormData();
     formData.set("body", text);
     if (wasCopilotAssisted) formData.set("ai_generated", "true");
+    if (instagramVariant && instagramVariant.body === text) {
+      formData.set("ig_experiment_id", instagramVariant.experimentId);
+      formData.set("ig_variant_id", instagramVariant.variantId);
+    }
 
     startTransition(async () => {
       try {
@@ -196,6 +206,7 @@ export function ConversationSafeComposer({
 
         setReplyDraft("");
         setCopilotAssisted(false);
+        setInstagramVariant(null);
         setDraftState("idle");
         persistDraft("");
         window.dispatchEvent(
@@ -273,6 +284,19 @@ export function ConversationSafeComposer({
               </div>
             ) : null}
 
+            {isInstagram && instagramVariantsEnabled ? (
+              <InstagramVariantChooser
+                leadId={leadId}
+                onUse={value => {
+                  setMode("reply");
+                  updateReplyDraft(value.body);
+                  setInstagramVariant(value);
+                  setCopilotAssisted(false);
+                  requestAnimationFrame(() => replyTextareaRef.current?.focus());
+                }}
+              />
+            ) : null}
+
             <label className="sr-only" htmlFor={`reply-draft-${leadId}`}>
               {isInstagram ? "Write an Instagram reply" : "Write a reply draft"}
             </label>
@@ -280,7 +304,10 @@ export function ConversationSafeComposer({
               ref={replyTextareaRef}
               id={`reply-draft-${leadId}`}
               value={replyDraft}
-              onChange={(event) => updateReplyDraft(event.target.value)}
+              onChange={(event) => {
+                updateReplyDraft(event.target.value);
+                setInstagramVariant(null);
+              }}
               onKeyDown={(event) => {
                 if ((event.ctrlKey || event.metaKey) && event.key === "Enter") {
                   event.preventDefault();
@@ -309,6 +336,7 @@ export function ConversationSafeComposer({
               <div className="text-[9px] text-[#71847A]">
                 {draftStatus(draftState)} · {replyDraft.length}/{replyLimit} · Ctrl/⌘ + Enter {isInstagram && instagramSendAllowed ? "sends" : "saves"}
                 {copilotAssisted && isInstagram ? " · AI-assisted draft reviewed by human" : ""}
+                {instagramVariant && isInstagram ? " · Instagram A/B " + instagramVariant.experimentId + "/" + instagramVariant.variantId : ""}
               </div>
               <div className="ibx-v3-composer-actions">
                 <button type="button" onClick={() => persistDraft(replyDraft)}
