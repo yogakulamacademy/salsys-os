@@ -37,6 +37,7 @@ import { getCourses, getLead, isMockMode } from "@/lib/data";
 import { formatDateTime } from "@/lib/format";
 import { getMessagingEligibility } from "@/lib/messaging-eligibility";
 import { createClient } from "@/lib/supabase/server";
+import { instagramReplyVariantsEnabledForOrganization } from "@/lib/instagram/reply-feature-gate-v1";
 import { getCurrentWorkspaceContext } from "@/lib/workspace";
 import { getApprovedWhatsAppTemplates } from "@/lib/whatsapp-templates";
 import "./inbox-v2.css";
@@ -338,6 +339,7 @@ export default async function ConversationsPage({
           />
         ) : (
           <ConversationSafeComposer
+            instagramVariantsEnabled={instagramReplyVariantsEnabledForOrganization(workspaceContext?.activeOrganizationId)}
             leadId={selected.id}
             channel={selected.currentContactChannel}
             interactionAction={interactionAction}
