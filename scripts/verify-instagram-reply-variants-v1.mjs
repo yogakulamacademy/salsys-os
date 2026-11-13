@@ -68,6 +68,11 @@ assert.ok(detectExplicitInstagramIntent('What are the fees and January dates?').
 assert.ok(detectExplicitInstagramIntent('Any shared rooms?').includes('accommodation'));
 assert.deepEqual(detectExplicitInstagramIntent('Hi'), ['general_question']);
 
+const featureGate = readFileSync('lib/instagram/reply-feature-gate-v1.ts','utf8');
+assert.ok(featureGate.includes("IG_REPLY_VARIANTS_ENABLED !== 'true'"));
+assert.ok(featureGate.includes('IG_REPLY_VARIANTS_ALLOWED_ORGANIZATIONS'));
+assert.ok(featureGate.includes('approvedTenants.includes(organizationId.toLowerCase())'));
+
 const preview = readFileSync('app/api/conversations/[leadId]/instagram-variants/route.ts','utf8');
 const serverResolution = readFileSync('lib/instagram/reply-resolution-server-v1.ts','utf8');
 const send = readFileSync('app/conversations/instagram-actions.ts','utf8');
@@ -76,7 +81,7 @@ const chooser = readFileSync('components/instagram-variant-chooser.tsx','utf8');
 const inbox = readFileSync('app/conversations/page.tsx','utf8');
 const analytics = readFileSync('app/automation/instagram/experiments/page.tsx','utf8');
 for(const entry of [preview,send,inbox,analytics]) {
-  assert.ok(entry.includes('IG_REPLY_VARIANTS_ENABLED'), 'all surfaces and sending must be server-gated');
+  assert.ok(entry.includes('instagramReplyVariantsEnabledForOrganization'), 'all surfaces and sending must be organization-gated');
 }
 assert.ok(preview.includes("'can_work_lead'"));
 assert.ok(preview.includes('requireCurrentOrganizationId'));
