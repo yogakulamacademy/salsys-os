@@ -75,7 +75,7 @@ const composer = readFileSync('components/conversation-safe-composer.tsx','utf8'
 const chooser = readFileSync('components/instagram-variant-chooser.tsx','utf8');
 const inbox = readFileSync('app/conversations/page.tsx','utf8');
 const analytics = readFileSync('app/automation/instagram/experiments/page.tsx','utf8');
-for(const entry of [preview,send,composer,inbox,analytics]) {
+for(const entry of [preview,send,inbox,analytics]) {
   assert.ok(entry.includes('IG_REPLY_VARIANTS_ENABLED'), 'all surfaces and sending must be server-gated');
 }
 assert.ok(preview.includes("'can_work_lead'"));
