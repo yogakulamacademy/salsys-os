@@ -129,10 +129,10 @@ export async function sendInstagramMessageAction(
     );
   }
 
-  if (body.length > MAX_INSTAGRAM_TEXT_LENGTH) {
+  if (new TextEncoder().encode(body).length > MAX_INSTAGRAM_TEXT_LENGTH) {
     redirect(
       conversationUrl(leadId, {
-        error: `Instagram text messages are limited to ${MAX_INSTAGRAM_TEXT_LENGTH} characters.`,
+        error: `Instagram text messages are limited to ${MAX_INSTAGRAM_TEXT_LENGTH} UTF-8 bytes.`,
       }),
     );
   }
@@ -462,6 +462,12 @@ export async function sendInstagramMessageAction(
   // Store only attribution identifiers, never personal values or message text.
   // Provider send is already complete here, so a tracking failure must not
   // tempt the operator to resend the customer message.
+  if (verifiedInstagramExperiment && !crmMessageId) {
+    redirect(conversationUrl(leadId, {
+      error: "Instagram message sent, but its CRM message ID is unavailable. Do not resend.",
+    }));
+  }
+
   if (verifiedInstagramExperiment && crmMessageId) {
     const { data: existing, error: existingError } = await admin
       .from("messages")
