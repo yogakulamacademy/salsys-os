@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 
 import { PageHeader } from '@/components/ui';
+import { auditWhatsAppTemplateVariables } from '@/lib/integrations/whatsapp-template-parameter-audit';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { createClient } from '@/lib/supabase/server';
 import { getCurrentWorkspaceContext } from '@/lib/workspace';
@@ -33,6 +34,7 @@ type TemplateRow = {
   template_name: string;
   language_code: string;
   parameter_schema: Record<string, unknown> | null;
+  components: unknown;
 };
 
 type TeamMember = {
@@ -132,6 +134,7 @@ export default async function WhatsAppGrowthPage({
 
   let segments: SegmentRow[] = [];
   let templates: TemplateRow[] = [];
+  let unrecognizedTemplateCount = 0;
   let team: TeamMember[] = [];
   let campaigns: CampaignRow[] = [];
   let variants: VariantRow[] = [];
@@ -149,7 +152,7 @@ export default async function WhatsAppGrowthPage({
           .order('name'),
         admin
           .from('automation_whatsapp_templates')
-          .select('id,template_name,language_code,parameter_schema')
+          .select('id,template_name,language_code,parameter_schema,components')
           .eq('organization_id', organizationId)
           .eq('approval_status', 'approved')
           .eq('active', true)
@@ -181,7 +184,9 @@ export default async function WhatsAppGrowthPage({
       if (firstError) throw firstError;
 
       segments = (segmentResult.data ?? []) as SegmentRow[];
-      templates = (templateResult.data ?? []) as TemplateRow[];
+      const synchronizedTemplates = (templateResult.data ?? []) as TemplateRow[];
+      templates = synchronizedTemplates.filter((template) => auditWhatsAppTemplateVariables(template.components).supported);
+      unrecognizedTemplateCount = synchronizedTemplates.length - templates.length;
       campaigns = (campaignResult.data ?? []) as CampaignRow[];
       variants = (variantResult.data ?? []) as VariantRow[];
 
@@ -232,6 +237,13 @@ export default async function WhatsAppGrowthPage({
       {query.error ? <div className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-medium text-rose-800">{query.error}</div> : null}
       {query.notice ? <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-800">{query.notice}</div> : null}
       {loadError ? <div className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-medium text-rose-800">{loadError}</div> : null}
+      {unrecognizedTemplateCount > 0 ? (
+        <div role="alert" className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+          <strong>{unrecognizedTemplateCount} approved template(s) hidden from campaign selection.</strong>{' '}
+          Their Meta body contains unsupported or malformed placeholders. Correct the templates in WhatsApp Manager
+          and synchronize again; approval alone is not sufficient for safe CRM personalization.
+        </div>
+      ) : null}
 
       <section className="grid gap-4 md:grid-cols-4">
         <MetricCard icon={<Send size={18} />} label="Messages sent" value={totalSent} note="Campaign provider sends" />
