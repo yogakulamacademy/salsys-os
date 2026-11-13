@@ -307,6 +307,7 @@ export default async function ConversationsPage({
           ) : normalizedWhatsAppMode === "template" && whatsappTemplateAction ? (
             <WhatsAppTemplateComposer
               action={whatsappTemplateAction}
+              autoFillEnabled={process.env.WA_TEMPLATE_VARIABLE_RESOLVER_ENABLED === "true"}
               templates={whatsappTemplateCatalog.templates}
               loadError={whatsappTemplateCatalog.error}
               windowLabel={
@@ -326,6 +327,7 @@ export default async function ConversationsPage({
         ) : canStartWhatsApp && whatsappTemplateAction ? (
           <WhatsAppTemplateComposer
             action={whatsappTemplateAction}
+              autoFillEnabled={process.env.WA_TEMPLATE_VARIABLE_RESOLVER_ENABLED === "true"}
             leadId={selected.id}
             templates={whatsappTemplateCatalog.templates}
             loadError={whatsappTemplateCatalog.error}
