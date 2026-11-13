@@ -1,5 +1,7 @@
 import 'server-only';
 
+import { auditWhatsAppTemplateVariables, validateWhatsAppTemplateSendParameters } from '@/lib/integrations/whatsapp-template-parameter-audit';
+
 import { createAdminClient } from '@/lib/supabase/admin';
 import { getWhatsAppRuntimeForOrganization } from '@/lib/integrations/whatsapp-connection';
 
@@ -277,7 +279,7 @@ async function buildProviderPayload(params: {
     const admin = createAdminClient();
     const { data: template, error } = await admin
       .from('automation_whatsapp_templates')
-      .select('id,organization_id,whatsapp_account_id,template_name,language_code,approval_status,active')
+      .select('id,organization_id,whatsapp_account_id,template_name,language_code,approval_status,active,components')
       .eq('id', params.templateId)
       .eq('organization_id', params.organizationId)
       .eq('whatsapp_account_id', params.accountId)
@@ -289,8 +291,16 @@ async function buildProviderPayload(params: {
       throw new Error(error?.message || 'The synchronized WhatsApp template is not approved and active.');
     }
 
+    const audit = auditWhatsAppTemplateVariables(template.components);
+    if (!audit.supported) {
+      throw new Error('The approved WhatsApp template has unsupported or unresolved placeholders. Update it in Meta before sending.');
+    }
+
     const dynamic = asRecord(params.requestPayload.template);
-    const components = Array.isArray(dynamic.components) ? dynamic.components : undefined;
+    const components = dynamic.components;
+    if (!validateWhatsAppTemplateSendParameters(audit, components)) {
+      throw new Error('WhatsApp template parameters do not match the currently synchronized approved body.');
+    }
 
     return {
       messaging_product: 'whatsapp',

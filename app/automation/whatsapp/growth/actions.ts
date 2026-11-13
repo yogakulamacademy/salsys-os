@@ -4,6 +4,7 @@ import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 
 import { useMockData } from '@/lib/config';
+import { auditWhatsAppTemplateVariables } from '@/lib/integrations/whatsapp-template-parameter-audit';
 import {
   normalizeReplyRoutingMode,
   normalizeRoutingUserIds,
@@ -143,7 +144,7 @@ export async function createWhatsAppGrowthCampaignAction(formData: FormData) {
         .maybeSingle(),
       admin
         .from('automation_whatsapp_templates')
-        .select('id,approval_status,active')
+        .select('id,approval_status,active,components')
         .eq('organization_id', organizationId)
         .in('id', experimentEnabled ? [baseTemplateId, challengerTemplateId] : [baseTemplateId]),
     ]);
@@ -154,11 +155,11 @@ export async function createWhatsAppGrowthCampaignAction(formData: FormData) {
   if (templateError) growthRedirect('error', templateError.message);
   const approvedIds = new Set(
     (templates ?? [])
-      .filter((template) => template.active === true && template.approval_status === 'approved')
+      .filter((template) => template.active === true && template.approval_status === 'approved' && auditWhatsAppTemplateVariables(template.components).supported)
       .map((template) => String(template.id)),
   );
   if (!approvedIds.has(baseTemplateId) || (experimentEnabled && !approvedIds.has(challengerTemplateId))) {
-    growthRedirect('error', 'Every campaign template must be active and Meta-approved.');
+    growthRedirect('error', 'Each campaign template must be Meta-approved and use supported, validated placeholders. Repair unsupported {{...}} variables in WhatsApp Manager first.');
   }
 
   await validateTemplateBindings({

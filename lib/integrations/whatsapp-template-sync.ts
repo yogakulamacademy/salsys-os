@@ -1,5 +1,7 @@
 import 'server-only';
 
+import { auditWhatsAppTemplateVariables } from '@/lib/integrations/whatsapp-template-parameter-audit';
+
 import { createAdminClient } from '@/lib/supabase/admin';
 import { getWhatsAppRuntimeForOrganization } from '@/lib/integrations/whatsapp-connection';
 
@@ -62,21 +64,15 @@ function normalizeStatus(status: string | undefined) {
   }
 }
 
-function countPositionalVariables(text: string) {
-  const matches = [...text.matchAll(/\{\{(\d+)\}\}/g)];
-  return matches.length ? Math.max(...matches.map((match) => Number(match[1] ?? 0))) : 0;
-}
-
 function buildParameterSchema(components: RawTemplateComponent[]) {
-  const header = components.find((component) => String(component.type ?? '').toUpperCase() === 'HEADER');
-  const body = components.find((component) => String(component.type ?? '').toUpperCase() === 'BODY');
-  const headerText = typeof header?.text === 'string' ? header.text : '';
-  const bodyText = typeof body?.text === 'string' ? body.text : '';
-
+  const result = auditWhatsAppTemplateVariables(components);
   return {
-    header_variable_count: countPositionalVariables(headerText),
-    body_variable_count: countPositionalVariables(bodyText),
-    header_format: String(header?.format ?? 'TEXT').toUpperCase(),
+    header_variable_count: result.headerVariableCount,
+    body_variable_count: result.bodyVariableCount,
+    header_format: result.headerFormat,
+    parameter_binding_supported: result.supported,
+    variable_syntax: result.syntax,
+    validation_reason: result.reason,
   };
 }
 

@@ -5,6 +5,7 @@ import {
   type TemplateDraftRow,
 } from '@/app/automation/templates/template-workspace';
 import { getWhatsAppSenderReadiness, type WhatsAppSenderReadiness } from '@/lib/integrations/whatsapp-sender-readiness';
+import { auditWhatsAppTemplateVariables } from '@/lib/integrations/whatsapp-template-parameter-audit';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { createClient } from '@/lib/supabase/server';
 import { getCurrentWorkspaceContext } from '@/lib/workspace';
@@ -91,6 +92,10 @@ export default async function WhatsAppTemplatesPage() {
     loadError = error instanceof Error ? error.message : 'Unable to load WhatsApp template workspace.';
   }
 
+  const unsafeApprovedTemplateCount = templates.filter(
+    (template) => template.active && template.approval_status === 'approved'
+      && !auditWhatsAppTemplateVariables(template.components).supported,
+  ).length;
   const canSync = role ? ['owner', 'admin'].includes(role) : false;
 
   return (
@@ -104,6 +109,15 @@ export default async function WhatsAppTemplatesPage() {
       {senderReadiness && senderReadiness.unboundActiveAccountCount > 0 ? (
         <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs leading-5 text-amber-800">
           {senderReadiness.unboundActiveAccountCount} unbound historical active WhatsApp account record{senderReadiness.unboundActiveAccountCount === 1 ? '' : 's'} are excluded from template readiness. Only the connected default sender is eligible for sync.
+        </div>
+      ) : null}
+
+      {unsafeApprovedTemplateCount > 0 ? (
+        <div role="alert" className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs leading-5 text-amber-900">
+          <strong>{unsafeApprovedTemplateCount} approved template(s) need placeholder repair.</strong>{' '}
+          Meta approval is not the same as CRM send readiness. Named, dotted, or malformed tokens cannot
+          be resolved by the current positional-variable workflow. Correct them in WhatsApp Manager,
+          then Sync again before adding them to campaigns.
         </div>
       ) : null}
 
