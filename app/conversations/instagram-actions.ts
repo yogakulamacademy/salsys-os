@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { resolveVerifiedInstagramExperiment } from "@/lib/instagram/reply-resolution-server-v1";
 import {
   getInstagramRuntimeForOrganization,
   type InstagramRuntimeConnection,
@@ -117,6 +118,8 @@ export async function sendInstagramMessageAction(
   formData: FormData,
 ) {
   const body = textValue(formData, "body");
+  const experimentId = textValue(formData, "ig_experiment_id");
+  const variantId = textValue(formData, "ig_variant_id");
 
   if (!body) {
     redirect(
@@ -177,6 +180,29 @@ export async function sendInstagramMessageAction(
   }
 
   const organizationId = String(lead.organization_id);
+
+  // Optional A/B attribution is never trusted from the browser. Re-resolve
+  // assigned version and exact CRM-based message BEFORE the Meta send call.
+  let verifiedInstagramExperiment: { experimentId: string; variantId: "A" | "B" } | null = null;
+  if (experimentId || variantId) {
+    if (process.env.IG_REPLY_VARIANTS_ENABLED !== "true" || !experimentId || !variantId) {
+      redirect(conversationUrl(leadId, {
+        error: "Instagram A/B tracking is disabled or incomplete.",
+      }));
+    }
+    const resolved = await resolveVerifiedInstagramExperiment({
+      organizationId, leadId, experimentId,
+    });
+    if (!resolved.ok || resolved.variantId !== variantId || resolved.body !== body) {
+      redirect(conversationUrl(leadId, {
+        error: "The Instagram variant or CRM data changed. Preview it again before sending.",
+      }));
+    }
+    verifiedInstagramExperiment = {
+      experimentId: resolved.experimentId,
+      variantId: resolved.variantId,
+    };
+  }
 
   const { data: conversation, error: conversationError } = await admin
     .from("conversations")
@@ -430,6 +456,50 @@ export async function sendInstagramMessageAction(
           error: `Instagram was sent and logged, but its provider message ID could not be attached: ${attachError.message}. Do not resend this message.`,
         }));
       }
+    }
+  }
+
+  // Store only attribution identifiers, never personal values or message text.
+  // Provider send is already complete here, so a tracking failure must not
+  // tempt the operator to resend the customer message.
+  if (verifiedInstagramExperiment && crmMessageId) {
+    const { data: existing, error: existingError } = await admin
+      .from("messages")
+      .select("id,metadata")
+      .eq("id", crmMessageId)
+      .eq("organization_id", organizationId)
+      .eq("conversation_id", conversation.id)
+      .eq("lead_id", leadId)
+      .maybeSingle();
+
+    if (existingError || !existing) {
+      redirect(conversationUrl(leadId, {
+        error: "Instagram message sent, but A/B attribution could not be verified. Do not resend.",
+      }));
+    }
+    const existingMetadata = objectValue(existing.metadata);
+    const { error: attributionError } = await admin
+      .from("messages")
+      .update({
+        metadata: {
+          ...existingMetadata,
+          instagram_ab_v1: {
+            experiment_id: verifiedInstagramExperiment.experimentId,
+            variant_id: verifiedInstagramExperiment.variantId,
+            assignment: "sha256_by_tenant_lead_experiment",
+            source: "verified_crm_human_reply",
+          },
+        },
+      })
+      .eq("id", crmMessageId)
+      .eq("organization_id", organizationId)
+      .eq("conversation_id", conversation.id)
+      .eq("lead_id", leadId);
+
+    if (attributionError) {
+      redirect(conversationUrl(leadId, {
+        error: "Instagram message sent, but variant attribution failed. Do not resend.",
+      }));
     }
   }
 
