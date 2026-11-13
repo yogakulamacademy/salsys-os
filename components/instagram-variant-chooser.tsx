@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { Beaker, CheckCircle2, ShieldAlert } from 'lucide-react';
 
 export type InstagramSelectedVariant = {
@@ -37,6 +37,7 @@ export function InstagramVariantChooser({
   onUse: (value: InstagramSelectedVariant) => void;
 }) {
   const [selected, setSelected] = useState('');
+  const selectionRevision = useRef(0);
   const [preview, setPreview] = useState<PreviewResult | null>(null);
   const [pending, setPending] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
@@ -44,6 +45,7 @@ export function InstagramVariantChooser({
   async function loadPreview() {
     if (!selected || pending) return;
     const requested = selected;
+    const revision = selectionRevision.current;
     setPending(true);
     setMessage(null);
     setPreview(null);
@@ -66,10 +68,12 @@ export function InstagramVariantChooser({
           || !['A', 'B'].includes(String(payload.variantId))) {
         throw new Error(payload.error || payload.reason || 'Preview is unavailable.');
       }
-      if (requested !== selected) return;
+      if (revision !== selectionRevision.current) return;
       setPreview(payload as PreviewResult);
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : 'Cannot load verified CRM details.');
+      if (revision === selectionRevision.current) {
+        setMessage(error instanceof Error ? error.message : 'Cannot load verified CRM details.');
+      }
     } finally {
       setPending(false);
     }
@@ -89,6 +93,7 @@ export function InstagramVariantChooser({
           aria-label="Instagram reply experiment"
           value={selected}
           onChange={event => {
+            selectionRevision.current += 1;
             setSelected(event.target.value);
             setPreview(null);
             setMessage(null);
