@@ -38,6 +38,7 @@ type WhatsAppTemplateComposerProps = {
   windowLabel?: string;
   mode?: "followup" | "start";
   phone?: string;
+  autoFillEnabled?: boolean;
 };
 
 type NoteResponse =
@@ -60,6 +61,7 @@ export function WhatsAppTemplateComposer({
   windowLabel,
   mode = "followup",
   phone,
+  autoFillEnabled = false,
 }: WhatsAppTemplateComposerProps) {
   const usableTemplates = useMemo(
     () => templates.filter((template) => template.supported),
@@ -72,6 +74,10 @@ export function WhatsAppTemplateComposer({
       ? `${usableTemplates[0].name}::${usableTemplates[0].language}`
       : "",
   );
+  const [filled, setFilled] = useState<{ key: string; values: string[] } | null>(null);
+  const [fillBusy, setFillBusy] = useState(false);
+  const [fillNotice, setFillNotice] = useState<string | null>(null);
+  const [fillError, setFillError] = useState<string | null>(null);
   const [note, setNote] = useState("");
   const [noteSaving, setNoteSaving] = useState(false);
   const [noteError, setNoteError] = useState<string | null>(null);
@@ -84,6 +90,49 @@ export function WhatsAppTemplateComposer({
       ) ?? null,
     [usableTemplates, selectedKey],
   );
+
+  const currentBodyValues = filled?.key === selectedKey ? filled.values : [];
+
+  async function populateFromCrm() {
+    if (!autoFillEnabled || !resolvedLeadId || !selected || fillBusy) return;
+    const requestedKey = selectedKey;
+    setFillBusy(true);
+    setFillError(null);
+    setFillNotice(null);
+    try {
+      const response = await fetch(
+        '/api/conversations/' + encodeURIComponent(resolvedLeadId) + '/template-variables',
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ templateName: selected.name, language: selected.language }),
+        },
+      );
+      const result = await response.json() as {
+        ok?: boolean;
+        error?: string;
+        reason?: string;
+        missing?: string[];
+        bodyValues?: string[];
+      };
+      if (!response.ok || result.ok !== true || !Array.isArray(result.bodyValues)) {
+        const missing = result.missing?.length ? ' Missing: ' + result.missing.join(', ') + '.' : '';
+        throw new Error((result.reason || result.error || 'Could not fill this template.') + missing);
+      }
+      setFilled({ key: requestedKey, values: result.bodyValues });
+      setFillNotice('Filled from verified CRM data. Review before sending.');
+    } catch (error) {
+      setFillError(error instanceof Error ? error.message : 'Verified CRM fill failed.');
+    } finally {
+      setFillBusy(false);
+    }
+  }
+
+  function renderPreview(text: string, values: string[]) {
+    return text.replace(/\{\{(\d+)\}\}/g, (placeholder, position: string) =>
+      values[Number(position) - 1] || placeholder,
+    );
+  }
 
   const startingWhatsApp = mode === "start";
   const { state: connectionState } = useWhatsAppConnectionStatus();
@@ -340,7 +389,11 @@ export function WhatsAppTemplateComposer({
                   <select
                     className="input"
                     value={selectedKey}
-                    onChange={(event) => setSelectedKey(event.target.value)}
+                    onChange={(event) => {
+                        setSelectedKey(event.target.value);
+                        setFillNotice(null);
+                        setFillError(null);
+                      }}
                     aria-describedby="whatsapp-template-connection-state"
                   >
                     {usableTemplates.map((template) => {
@@ -373,6 +426,25 @@ export function WhatsAppTemplateComposer({
                       </span>
                     </div>
 
+                    {autoFillEnabled && selected.bodyVariableCount > 0 ? (
+                      <div className="mt-3">
+                        <button
+                          type="button"
+                          onClick={() => void populateFromCrm()}
+                          disabled={!connectionReady || !resolvedLeadId || fillBusy}
+                          className="rounded-md border border-[#D6E6DB] bg-white px-3 py-2 text-[10px] font-semibold text-[#216551] hover:bg-[#F2F8F4] disabled:opacity-50"
+                        >
+                          {fillBusy ? 'Checking CRM…' : 'Fill verified CRM fields'}
+                        </button>
+                        {fillNotice && filled?.key === selectedKey ? (
+                          <p className="mt-1 text-[10px] text-[#216551]" role="status">{fillNotice}</p>
+                        ) : null}
+                        {fillError ? (
+                          <p className="mt-1 text-[10px] text-red-700" role="alert">{fillError}</p>
+                        ) : null}
+                      </div>
+                    ) : null}
+
                     {selected.headerVariableCount > 0 ? (
                       <div className="mt-4 space-y-2">
                         <div className="text-[9px] font-semibold uppercase tracking-[.12em] text-[#596E64]">
@@ -400,6 +472,13 @@ export function WhatsAppTemplateComposer({
                             key={index}
                             className="input"
                             name={`body_param_${index + 1}`}
+                            value={currentBodyValues[index] || ''}
+                            onChange={(event) => {
+                              const next = [...currentBodyValues];
+                              next[index] = event.target.value;
+                              setFilled({ key: selectedKey, values: next });
+                              setFillNotice(null);
+                            }}
                             required
                             placeholder={`Template value ${index + 1}`}
                           />
@@ -418,7 +497,7 @@ export function WhatsAppTemplateComposer({
                       ) : null}
                       {selected.bodyText ? (
                         <div className="mt-2 whitespace-pre-wrap text-[11px] leading-5 text-[#40564C]">
-                          {selected.bodyText}
+                          {renderPreview(selected.bodyText, currentBodyValues)}
                         </div>
                       ) : null}
                       {selected.footerText ? (
