@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 
 import { createClient } from '@/lib/supabase/server';
+import { instagramReplyVariantsEnabledForOrganization } from '@/lib/instagram/reply-feature-gate-v1';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { requireCurrentOrganizationId } from '@/lib/workspace';
 import {
@@ -24,9 +25,6 @@ export async function POST(
   request: NextRequest,
   context: { params: Promise<{ leadId: string }> },
 ) {
-  if (process.env.IG_REPLY_VARIANTS_ENABLED !== 'true') {
-    return reply({ ok: false, error: 'Instagram reply experiments are disabled.' }, 404);
-  }
   if (request.headers.get('origin') !== request.nextUrl.origin) {
     return reply({ ok: false, error: 'Invalid request origin.' }, 403);
   }
@@ -57,6 +55,9 @@ export async function POST(
     if (authError || !user) return reply({ ok: false, error: 'Sign in required.' }, 401);
 
     const organizationId = await requireCurrentOrganizationId(supabase, user.id);
+    if (!instagramReplyVariantsEnabledForOrganization(organizationId)) {
+      return reply({ ok: false, error: 'Instagram reply experiments are disabled for this workspace.' }, 404);
+    }
     const { data: canWork, error: accessError } = await supabase.rpc(
       'can_work_lead', { p_lead_id: leadId },
     );
