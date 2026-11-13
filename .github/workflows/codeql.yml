@@ -4,9 +4,11 @@ on:
   push:
     branches:
       - main
+      - integration/fast-mainline
   pull_request:
     branches:
       - main
+      - integration/fast-mainline
   schedule:
     - cron: '17 3 * * 3'
 
