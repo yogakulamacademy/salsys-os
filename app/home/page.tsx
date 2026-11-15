@@ -348,8 +348,7 @@ export default async function HomePage({ searchParams }: HomePageProps) {
                 <SnapshotMetric label="High intent · now" value={metrics.highIntent.toLocaleString("en-IN")} />
               </div>
               <p className="mt-2 text-[11px] text-copy-subtle">Enrolled leads reflect CRM stage-history entries in the period, not the authoritative operational Enrollment-record count.</p>
-              <details className="mt-3">
-              <summary className="cursor-pointer text-xs font-medium text-brand-700 dark:text-brand-300">Ledger and pipeline details</summary>
+              <div className="mt-3">
               <div className="mt-3 grid gap-4 rounded-xl bg-surface-muted p-3 sm:grid-cols-2">
                 <SnapshotMetric label="Recorded collections · period" value={collectedValue} change={periodPrimaryRevenue?.changePercent ?? null} />
                 <SnapshotMetric label="Eligible open value · now" value={openPipelineValue} />
@@ -359,7 +358,7 @@ export default async function HomePage({ searchParams }: HomePageProps) {
                 Recorded collections are CRM ledger entries pending external settlement reconciliation.
                 Open pipeline values are current commercial estimates, not recognized revenue.
               </p>
-              </details>
+              </div>
             </details>
           </div>
         </section>
@@ -377,7 +376,8 @@ export default async function HomePage({ searchParams }: HomePageProps) {
         </section>
       </section>
 
-      <section id="home-conversion" aria-label="Conversion and collections" className="grid min-w-0 scroll-mt-24 gap-3 lg:grid-cols-2">
+      <section id="home-conversion" aria-label="Conversion and collections" className="min-w-0 scroll-mt-24 space-y-3">
+        <div className="grid min-w-0 gap-3 lg:grid-cols-2">
         <section className="min-w-0 overflow-hidden rounded-2xl border border-line bg-surface">
           <SectionHeader eyebrow="Acquisition cohort · period" title="Qualification milestones" actionHref={sourceDetailHref} actionLabel="Inspect cohort" />
           <QualificationCohortPanel
@@ -405,9 +405,9 @@ export default async function HomePage({ searchParams }: HomePageProps) {
             ) : null}
           </div>
         </section>
-      </section>
+        </div>
 
-      <section id="home-business-breakdown" aria-label="Business breakdown" className="grid min-w-0 scroll-mt-24 gap-3 lg:grid-cols-3">
+      <div id="home-business-breakdown" aria-label="Business breakdown" className="grid min-w-0 scroll-mt-24 gap-3 lg:grid-cols-3">
         <section className="min-w-0 overflow-hidden rounded-2xl border border-line bg-surface">
           <SectionHeader eyebrow="Acquisition · period" title="Lead sources" actionHref={sourceDetailHref} actionLabel="Analyze sources" />
           <div className="space-y-1 p-3 sm:p-4">
@@ -459,6 +459,7 @@ export default async function HomePage({ searchParams }: HomePageProps) {
             <PipelineSnapshot active={metrics.activePipeline} highIntent={metrics.highIntent} payment={metrics.paymentPending} enrolled={counts.enrolled ?? 0} counts={counts} />
           </div>
         </section>
+      </div>
       </section>
 
       <HomeGeographyReadiness coverage={periodAnalytics.geography} periodLabel={periodAnalytics.period.label} />
