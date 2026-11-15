@@ -240,7 +240,7 @@
    secondary metadata; retain the actual evidence and accessible details. */
 .command-center-v2 > header > div:first-child { flex: 0 0 auto; min-width: 235px; }
 .command-center-v2 > header > div:last-child { gap: 7px; justify-content: flex-end; }
-.command-center-v2 > header > div:last-child > span[title] { display: none; }
+.command-center-v2 > header > div:last-child > span[title] { display: inline; font-size: 9px; color: #8882a0; }
 .command-center-v2 > header > div:last-child > a[href="/marketing"] {
   white-space: nowrap;
   padding-inline: 10px;
@@ -299,25 +299,25 @@
 }
 .command-center-v2 [data-testid="home-world-map-disabled"] > div > span { height: 24px; width: 24px; }
 .command-center-v2 [data-testid="home-world-map-disabled"] > div > p { margin-top: 2px; }
-.command-center-v2.home-recommendations > section {
+.home-recommendations > section {
   border-radius: 15px;
   border-color: #e2d9f7;
   background: linear-gradient(155deg,#fff,#fcfaff);
   box-shadow: 0 2px 9px rgba(75,34,156,.055);
 }
-.command-center-v2.home-recommendations > section > div:first-child {
+.home-recommendations > section > div:first-child {
   padding: 11px 14px;
 }
-.command-center-v2.home-recommendations > section > div:first-child p {
+.home-recommendations > section > div:first-child p {
   font-size: 10px;
   line-height: 15px;
 }
-.command-center-v2.home-recommendations > section > div:nth-child(2) {
+.home-recommendations > section > div:nth-child(2) {
   margin: 9px 12px;
   padding: 10px 12px;
   font-size: 11px;
 }
-.command-center-v2.home-recommendations > section > div:nth-child(2) p {
+.home-recommendations > section > div:nth-child(2) p {
   margin-top: 1px;
   line-height: 15px;
   font-size: 10px;
