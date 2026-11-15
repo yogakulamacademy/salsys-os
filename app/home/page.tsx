@@ -341,7 +341,7 @@ export default async function HomePage({ searchParams }: HomePageProps) {
               periodLabel={periodAnalytics.period.label}
             />
             <details className="mt-2 border-t border-line pt-2">
-              <summary className="cursor-pointer text-[11px] font-medium text-brand-700">Operational and financial context</summary>
+              <summary className="cursor-pointer text-[11px] font-medium text-brand-700">Financial context</summary>
               <div className="mt-3 grid gap-3 sm:grid-cols-3">
                 <SnapshotMetric label="Enrolled leads" value={enrolledLeads == null ? "—" : enrolledLeads.toLocaleString("en-IN")} />
                 <SnapshotMetric label="Active pipeline · now" value={metrics.activePipeline.toLocaleString("en-IN")} />
@@ -349,7 +349,7 @@ export default async function HomePage({ searchParams }: HomePageProps) {
               </div>
               <p className="mt-2 text-[11px] text-copy-subtle">Enrolled leads reflect CRM stage-history entries in the period, not the authoritative operational Enrollment-record count.</p>
               <details className="mt-3">
-              <summary className="cursor-pointer text-xs font-medium text-brand-700 dark:text-brand-300">Financial context</summary>
+              <summary className="cursor-pointer text-xs font-medium text-brand-700 dark:text-brand-300">Ledger and pipeline details</summary>
               <div className="mt-3 grid gap-4 rounded-xl bg-surface-muted p-3 sm:grid-cols-2">
                 <SnapshotMetric label="Recorded collections · period" value={collectedValue} change={periodPrimaryRevenue?.changePercent ?? null} />
                 <SnapshotMetric label="Eligible open value · now" value={openPipelineValue} />
