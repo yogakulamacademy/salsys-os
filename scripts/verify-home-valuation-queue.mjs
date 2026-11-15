@@ -32,6 +32,14 @@ check(
   "Valuation queue must include missing potential values and missing currencies.",
 );
 check(
+  reader.includes('supabase.rpc("get_home_v1_pipeline_snapshot"') &&
+    reader.includes("parseHomePipelineSnapshot(pipelineResult.data)") &&
+    reader.includes("eligibleResult.count !== pipelineTruth.eligibleCount") &&
+    reader.includes("missingResult.count !== canonicalMissing") &&
+    reader.includes("pipelineTruth.missingValueCount + pipelineTruth.missingCurrencyCount"),
+  "The valuation queue must reconcile its coverage and unknown counts against the authorized Home pipeline contract.",
+);
+check(
   page.includes("getOpportunityValuationQueue()") &&
   page.includes("getCourseBatches()") &&
   page.includes("isEducationCoreEnabledForCurrentSession()"),
