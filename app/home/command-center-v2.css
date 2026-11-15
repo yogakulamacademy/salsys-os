@@ -235,3 +235,97 @@
 @media (max-width:639px) {
   .command-center-v2 section[aria-label="Business pulse"] > .command-kpi > * { height: 123px; }
 }
+
+/* Remove the extra height introduced by generic CRM empty states and
+   secondary metadata; retain the actual evidence and accessible details. */
+.command-center-v2 > header > div:first-child { flex: 0 0 auto; min-width: 235px; }
+.command-center-v2 > header > div:last-child { gap: 7px; justify-content: flex-end; }
+.command-center-v2 > header > div:last-child > span[title] { display: none; }
+.command-center-v2 > header > div:last-child > a[href="/marketing"] {
+  white-space: nowrap;
+  padding-inline: 10px;
+}
+.command-center-v2 section[aria-label="Performance and work queue"] > section {
+  min-height: 224px;
+}
+.command-center-v2 section[aria-label="Performance and work queue"] > section > div:first-child,
+.command-center-v2 section[aria-label="Conversion and collections"] section > div:first-child {
+  padding-top: 9px;
+  padding-bottom: 4px;
+}
+.command-center-v2 section[aria-label="Performance and work queue"] > section > div:first-child p,
+.command-center-v2 section[aria-label="Conversion and collections"] section > div:first-child p {
+  margin-top: 0;
+}
+.command-center-v2 section[aria-label="Performance and work queue"] .home-action-list a {
+  min-height: 38px;
+}
+.command-center-v2 [data-testid="home-empty-state"] {
+  min-height: 95px !important;
+  padding: 4px 8px !important;
+  gap: 0;
+}
+.command-center-v2 [data-testid="home-empty-state"] svg {
+  width: 75px;
+  height: 42px;
+}
+.command-center-v2 [data-testid="home-empty-state"] > p {
+  margin-top: 2px;
+  font-size: 11px;
+  line-height: 15px;
+}
+.command-center-v2 [data-testid="home-empty-state"] > p:nth-of-type(2) {
+  max-width: 350px;
+  font-size: 10px;
+  line-height: 14px;
+}
+.command-center-v2 [data-testid="home-empty-state"] > a { min-height: 24px; margin-top: 3px; }
+.command-center-v2 [data-testid="home-qualification-cohort"] {
+  padding-bottom: 7px;
+}
+.command-center-v2 section[aria-label="Geographic data readiness"] {
+  padding: 10px 13px;
+}
+.command-center-v2 section[aria-label="Geographic data readiness"] > div:first-child p {
+  margin-top: 0;
+}
+.command-center-v2 section[aria-label="Geographic data readiness"] details {
+  margin-top: 7px;
+  padding-top: 7px;
+}
+.command-center-v2 [data-testid="home-world-map-disabled"] { min-height: 92px; }
+.command-center-v2 [data-testid="home-world-map-disabled"] > div {
+  padding: 6px 11px;
+}
+.command-center-v2 [data-testid="home-world-map-disabled"] > div > span { height: 24px; width: 24px; }
+.command-center-v2 [data-testid="home-world-map-disabled"] > div > p { margin-top: 2px; }
+.command-center-v2 .home-recommendations > section {
+  border-radius: 15px;
+  border-color: #e2d9f7;
+  background: linear-gradient(155deg,#fff,#fcfaff);
+  box-shadow: 0 2px 9px rgba(75,34,156,.055);
+}
+.command-center-v2 .home-recommendations > section > div:first-child {
+  padding: 11px 14px;
+}
+.command-center-v2 .home-recommendations > section > div:first-child p {
+  font-size: 10px;
+  line-height: 15px;
+}
+.command-center-v2 .home-recommendations > section > div:nth-child(2) {
+  margin: 9px 12px;
+  padding: 10px 12px;
+  font-size: 11px;
+}
+.command-center-v2 .home-recommendations > section > div:nth-child(2) p {
+  margin-top: 1px;
+  line-height: 15px;
+  font-size: 10px;
+}
+@media (min-width:900px) and (max-width:1199px) {
+  .command-center-v2 > header h1 { white-space: nowrap; }
+  .command-center-v2 > header > div:first-child { min-width: 245px; }
+  .command-center-v2 section[aria-label="Conversion and collections"] .home-stage-strip > div {
+    padding-block: 6px;
+  }
+}
