@@ -15,6 +15,7 @@ import {
 import { DecisionMetricCard } from "@/components/intelligence/decision-metric-card";
 import { LeadActivityChart } from "@/components/home/lead-activity-chart";
 import { QualificationCohortPanel } from "@/components/home/qualification-cohort-panel";
+import { HomeGeographyReadiness } from "@/components/home/home-geography-readiness";
 import { HomeReportingCoverage, type HomeReportingEvidence } from "@/components/home/home-reporting-coverage";
 import { HomeEmptyState } from "@/components/home/home-empty-state";
 import { isMockMode } from "@/lib/data";
@@ -83,6 +84,7 @@ export default async function HomePage({ searchParams }: HomePageProps) {
           },
           enrollments: { current: 0, previous: 0, changePercent: null },
           sources: [],
+          geography: null,
         })
       : getDashboardPeriodAnalytics(query),
     mock
@@ -430,6 +432,8 @@ export default async function HomePage({ searchParams }: HomePageProps) {
           </div>
         </section>
       </section>
+
+      <HomeGeographyReadiness coverage={periodAnalytics.geography} periodLabel={periodAnalytics.period.label} />
 
       <section aria-label="Daily workspace" className="grid min-w-0 gap-4 lg:grid-cols-3">
         <section className="min-w-0 rounded-2xl border border-line bg-surface p-4 sm:p-5">
