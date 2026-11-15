@@ -3,6 +3,7 @@ import "server-only";
 import { createClient } from "@/lib/supabase/server";
 import { requirePrivilegedWorkspaceAccess } from "@/lib/route-access";
 import { isMockMode } from "@/lib/data";
+import { parseHomePipelineSnapshot } from "@/lib/home-v1-metric-truth";
 
 export type UnvaluedOpportunity = {
   id: string;
@@ -49,8 +50,11 @@ export async function getOpportunityValuationQueue(): Promise<OpportunityValuati
   const leadColumns =
     "id, lead_code, display_name, first_name, last_name, current_stage, created_at, interested_course_id, preferred_batch_id";
 
-  const [eligibleResult, missingResult, priorityResult, recentResult] =
+  const [pipelineResult, eligibleResult, missingResult, priorityResult, recentResult] =
     await Promise.all([
+      supabase.rpc("get_home_v1_pipeline_snapshot", {
+        p_organization_id: workspace.organizationId,
+      }),
       supabase.from("leads").select("id", { count: "exact", head: true })
         .eq("organization_id", workspace.organizationId)
         .eq("status", "open")
@@ -77,10 +81,20 @@ export async function getOpportunityValuationQueue(): Promise<OpportunityValuati
     ]);
 
   const firstError = [
-    eligibleResult.error, missingResult.error,
+    pipelineResult.error, eligibleResult.error, missingResult.error,
     priorityResult.error, recentResult.error,
   ].find(Boolean);
-  if (firstError || eligibleResult.count == null || missingResult.count == null) {
+  const pipelineTruth = pipelineResult.error
+    ? null
+    : parseHomePipelineSnapshot(pipelineResult.data);
+  const canonicalMissing = pipelineTruth
+    ? pipelineTruth.missingValueCount + pipelineTruth.missingCurrencyCount
+    : null;
+  // Missing-value list uses a PostgREST predicate for triage; the RPC is
+  // authoritative. Never publish a contradictory coverage number.
+  if (firstError || !pipelineTruth ||
+      eligibleResult.count !== pipelineTruth.eligibleCount ||
+      missingResult.count !== canonicalMissing) {
     return {
       available: false,
       eligibleCount: null,
@@ -106,8 +120,8 @@ export async function getOpportunityValuationQueue(): Promise<OpportunityValuati
 
   return {
     available: true,
-    eligibleCount: eligibleResult.count,
-    needsValuationCount: missingResult.count,
+    eligibleCount: pipelineTruth.eligibleCount,
+    needsValuationCount: canonicalMissing,
     priority: (priorityResult.data ?? []).map(mapLead),
     recent: (recentResult.data ?? []).map(mapLead),
   };
