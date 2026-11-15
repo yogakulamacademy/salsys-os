@@ -15,6 +15,7 @@ import {
 
 import { DecisionMetricCard } from "@/components/intelligence/decision-metric-card";
 import { LeadActivityChart } from "@/components/home/lead-activity-chart";
+import { QualificationCohortPanel } from "@/components/home/qualification-cohort-panel";
 import { HomeEmptyState } from "@/components/home/home-empty-state";
 import { isMockMode } from "@/lib/data";
 import { getHomeV1MetricTruth, type HomeV1MetricTruth } from "@/lib/home-v1-metric-truth";
@@ -383,12 +384,15 @@ export default async function HomePage({ searchParams }: HomePageProps) {
             </p>
             <details className="mt-3 border-t border-line pt-3">
               <summary className="cursor-pointer text-xs font-medium text-brand-700 dark:text-brand-300">Financial context</summary>
-              <div className="mt-3 grid gap-4 rounded-xl bg-surface-muted p-3 sm:grid-cols-3">
-                <SnapshotMetric label="Collected in period" value={collectedValue} change={periodPrimaryRevenue?.changePercent ?? null} />
-                <SnapshotMetric label="Current pipeline value" value={primaryRevenue ? formatMoney(primaryRevenue.pipeline, primaryRevenue.currency) : "—"} />
-                <SnapshotMetric label="Current weighted value" value={primaryRevenue ? formatMoney(primaryRevenue.weighted, primaryRevenue.currency) : "—"} />
+              <div className="mt-3 grid gap-4 rounded-xl bg-surface-muted p-3 sm:grid-cols-2">
+                <SnapshotMetric label="Recorded collections · period" value={collectedValue} change={periodPrimaryRevenue?.changePercent ?? null} />
+                <SnapshotMetric label="Eligible open value · now" value={openPipelineValue} />
               </div>
-              <RevenueTrend points={periodAnalytics.revenueSeries} currency={periodAnalytics.primaryCurrency} available={periodAnalytics.available.revenue} />
+              <p className="mt-2 text-[11px] leading-5 text-copy-subtle">
+                Current snapshot revenue has not been substituted into the selected reporting period.
+                Recorded collections are CRM ledger entries pending external settlement reconciliation.
+                Open pipeline values are current commercial estimates, not recognized revenue.
+              </p>
             </details>
           </div>
         </section>
@@ -405,6 +409,28 @@ export default async function HomePage({ searchParams }: HomePageProps) {
               <CircleDollarSign size={15} /> <span className="flex-1">{unvaluedCurrentOpen} eligible open leads need an explicit value or currency</span><ArrowRight size={13} />
             </Link>
           ) : null}
+        </section>
+      </section>
+
+      <section aria-label="Conversion and collections" className="grid min-w-0 gap-4 lg:grid-cols-2">
+        <section className="min-w-0 overflow-hidden rounded-2xl border border-line bg-surface">
+          <SectionHeader eyebrow="Acquisition cohort · period" title="Qualification milestones" actionHref={sourceDetailHref} actionLabel="Inspect cohort" />
+          <QualificationCohortPanel
+            total={totalLeads}
+            qualified={qualifiedLeads}
+            periodLabel={periodAnalytics.period.label}
+            href={sourceDetailHref}
+          />
+        </section>
+        <section className="min-w-0 overflow-hidden rounded-2xl border border-line bg-surface">
+          <SectionHeader eyebrow="CRM ledger · period" title="Recorded collections trend" actionHref="/revenue" actionLabel="Review ledger" />
+          <div className="p-4 sm:p-5">
+            <RevenueTrend
+              points={periodAnalytics.revenueSeries}
+              currency={periodAnalytics.primaryCurrency}
+              available={periodAnalytics.available.revenue}
+            />
+          </div>
         </section>
       </section>
 
@@ -753,8 +779,8 @@ function RevenueTrend({
         <HomeEmptyState
           variant="revenue"
           compact
-          title="No collected revenue yet"
-          description="Revenue trend will appear once verified paid transactions are recorded in the selected period."
+          title="No paid ledger activity yet"
+          description="The recorded trend will appear when paid-status transactions exist in the selected period. Independent settlement evidence is not yet available."
           action={{ href: "/revenue", label: "Open revenue" }}
         />
       </div>
@@ -778,13 +804,13 @@ function RevenueTrend({
     <div className="mt-3">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <p className="text-[11px] text-copy-muted">Cumulative collected · {currency}</p>
+          <p className="text-[11px] text-copy-muted">Cumulative recorded net payments · {currency}</p>
           <p className="mt-1 text-[22px] font-semibold tracking-[-0.03em] text-copy-strong">{formatMoney(running, currency)}</p>
         </div>
-        <span className="text-[11px] text-copy-subtle">Verified payments · refunds netted</span>
+        <span className="text-[11px] text-copy-subtle">CRM ledger · refunds netted where recorded</span>
       </div>
-      <svg className="mt-4 block h-[150px] w-full overflow-visible text-brand-700 dark:text-brand-300" viewBox="0 0 560 140" preserveAspectRatio="none" role="img" aria-label={"Cumulative verified net collected " + currency + " for the selected period"}>
-        <title>Cumulative verified net collected {currency} for the selected period</title>
+      <svg className="mt-4 block h-[150px] w-full overflow-visible text-brand-700 dark:text-brand-300" viewBox="0 0 560 140" preserveAspectRatio="none" role="img" aria-label={"Cumulative recorded net payments " + currency + " for the selected period; settlement unverified"}>
+        <title>Cumulative recorded net payments {currency} for the selected period, settlement unverified</title>
         {[0, 0.5, 1].map((p, index) => (
           <line key={index} x1="7" x2="553" y1={12 + p * 116} y2={12 + p * 116} stroke="currentColor" strokeOpacity="0.09" strokeWidth="1" />
         ))}
