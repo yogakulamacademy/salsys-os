@@ -20,7 +20,7 @@ security definer
 set search_path = public, auth, pg_temp
 as $function$
 begin
-  if not (
+  if (
     auth.role() = 'service_role'
     or (
       auth.role() = 'authenticated'
@@ -30,7 +30,7 @@ begin
       )
       and public.session_is_bound_to_organization(p_organization_id)
     )
-  ) then
+  ) is distinct from true then
     raise exception 'not authorized for dashboard snapshot'
       using errcode = '42501';
   end if;
