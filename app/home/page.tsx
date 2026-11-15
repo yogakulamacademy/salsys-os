@@ -369,7 +369,7 @@ export default async function HomePage({ searchParams }: HomePageProps) {
         </section>
       </section>
 
-      <section id="home-conversion" aria-label="Conversion and collections" className="grid min-w-0 scroll-mt-24 gap-4 lg:grid-cols-2">
+      <section id="home-conversion" aria-label="Conversion and collections" className="grid min-w-0 scroll-mt-24 gap-4 lg:grid-cols-3">
         <section className="min-w-0 overflow-hidden rounded-2xl border border-line bg-surface">
           <SectionHeader eyebrow="Acquisition cohort · period" title="Qualification milestones" actionHref={sourceDetailHref} actionLabel="Inspect cohort" />
           <QualificationCohortPanel
@@ -397,21 +397,47 @@ export default async function HomePage({ searchParams }: HomePageProps) {
             ) : null}
           </div>
         </section>
+        <section className="min-w-0 overflow-hidden rounded-2xl border border-line bg-surface">
+          <SectionHeader eyebrow="Sales · current" title="Pipeline health" actionHref="/admissions?view=pipeline" actionLabel="Open pipeline" />
+          <div className="p-4">
+            <PipelineSnapshot active={metrics.activePipeline} highIntent={metrics.highIntent} payment={metrics.paymentPending} enrolled={counts.enrolled ?? 0} counts={counts} />
+          </div>
+        </section>
       </section>
 
-      <section id="home-business-breakdown" aria-label="Business breakdown" className="grid min-w-0 scroll-mt-24 gap-4 lg:grid-cols-3">
+      <section id="home-business-breakdown" aria-label="Business breakdown" className="grid min-w-0 scroll-mt-24 gap-4 lg:grid-cols-2">
         <section className="min-w-0 overflow-hidden rounded-2xl border border-line bg-surface">
           <SectionHeader eyebrow="Acquisition · period" title="Lead sources" actionHref={sourceDetailHref} actionLabel="Analyze sources" />
           <div className="space-y-1 p-3 sm:p-4">
-            {acquisitionSources.length ? acquisitionSources.slice(0, 4).map((source) => <SourceRow key={source.source} source={validatedSourceQuality?.find((item) => item.source === source.source) ?? source} qualificationAvailable={validatedSourceQuality != null} periodTotal={totalLeads} href={sourceDetailHref} />) : <HomeEmptyState variant="sources" compact unavailable={!periodAnalytics.available.leads} title={periodAnalytics.available.leads ? "No source activity yet" : "Source data unavailable"} description={periodAnalytics.available.leads ? "No acquisition data is recorded for this period yet." : "Selected-period acquisition evidence is unavailable. Current all-time source totals have not been substituted."} />}
-            {acquisitionSources.length && !validatedSourceQuality ? <p className="px-2 pt-2 text-[11px] leading-5 text-copy-subtle">Source-level qualification is unavailable until the acquisition cohort reconciles with recorded stage history.</p> : null}
-            {sourceSignals.map((signal) => (
-              <div key={signal.title} className="mt-3 rounded-xl border border-line bg-surface-muted px-3 py-3">
-                <p className="text-xs font-semibold text-copy-strong">{signal.title}</p>
-                <p className="mt-1 text-[11px] leading-5 text-copy-muted">{signal.detail}</p>
-                <Link href={signal.href} className="mt-2 inline-flex items-center gap-1 text-[11px] font-semibold text-brand-700">{signal.actionLabel} <ArrowRight size={12} /></Link>
+            {acquisitionSources.length ? (
+              <div className="grid items-center gap-2 sm:grid-cols-[128px_minmax(0,1fr)]">
+                <SourceMixRing sources={acquisitionSources} total={totalLeads} />
+                <div className="min-w-0">
+                  {acquisitionSources.slice(0, 4).map((source) => (
+                    <SourceRow key={source.source} source={validatedSourceQuality?.find((item) => item.source === source.source) ?? source} qualificationAvailable={validatedSourceQuality != null} periodTotal={totalLeads} href={sourceDetailHref} />
+                  ))}
+                </div>
               </div>
-            ))}
+            ) : (
+              <HomeEmptyState variant="sources" compact unavailable={!periodAnalytics.available.leads} title={periodAnalytics.available.leads ? "No source activity yet" : "Source data unavailable"} description={periodAnalytics.available.leads ? "No acquisition data is recorded for this period yet." : "Selected-period acquisition evidence is unavailable. Current all-time source totals have not been substituted."} />
+            )}
+            {acquisitionSources.length && !validatedSourceQuality ? <p className="px-2 pt-2 text-[11px] leading-5 text-copy-subtle">Source-level qualification is unavailable until the acquisition cohort reconciles with recorded stage history.</p> : null}
+            {sourceSignals.length > 0 ? (
+              <details className="mt-3 rounded-xl bg-surface-muted px-3 py-2.5">
+                <summary className="cursor-pointer text-[11px] font-semibold text-brand-700 focus-visible:outline-2 focus-visible:outline-brand-700">
+                  {sourceSignals.length} source insight{sourceSignals.length === 1 ? "" : "s"} · Inspect
+                </summary>
+                <div className="mt-3 space-y-3">
+                  {sourceSignals.map((signal) => (
+                    <div key={signal.title} className="border-t border-line pt-2.5">
+                      <p className="text-xs font-semibold text-copy-strong">{signal.title}</p>
+                      <p className="mt-1 text-[11px] leading-5 text-copy-muted">{signal.detail}</p>
+                      <Link href={signal.href} className="mt-2 inline-flex items-center gap-1 text-[11px] font-semibold text-brand-700">{signal.actionLabel} <ArrowRight size={12} /></Link>
+                    </div>
+                  ))}
+                </div>
+              </details>
+            ) : null}
           </div>
         </section>
         <section className="min-w-0 overflow-hidden rounded-2xl border border-line bg-surface">
@@ -423,12 +449,6 @@ export default async function HomePage({ searchParams }: HomePageProps) {
                 Lead demand reflects current CRM associations, not course sales. Higher-intent and payment-stage indicators may overlap and are never summed. Course-level collections require a verified payment-to-enrollment link.
               </p>
             ) : null}
-          </div>
-        </section>
-        <section className="min-w-0 overflow-hidden rounded-2xl border border-line bg-surface">
-          <SectionHeader eyebrow="Sales · current" title="Pipeline health" actionHref="/admissions?view=pipeline" actionLabel="Open pipeline" />
-          <div className="p-4">
-            <PipelineSnapshot active={metrics.activePipeline} highIntent={metrics.highIntent} payment={metrics.paymentPending} enrolled={counts.enrolled ?? 0} counts={counts} />
           </div>
         </section>
       </section>
@@ -805,6 +825,33 @@ function RevenueTrend({
       </svg>
       <div className="mt-1 flex justify-between gap-3 text-[11px] text-copy-subtle">
         <span>{formatShortDate(points[0]?.date)}</span><span>{formatShortDate(points[points.length - 1]?.date)}</span>
+      </div>
+    </div>
+  );
+}
+
+/** Visual emphasis for the dominant source, without hiding the other sources. */
+function SourceMixRing({ sources, total }: { sources: DashboardPeriodSource[]; total: number | null }) {
+  if (total === null || total <= 0 || sources.length === 0) return null;
+  const leading = sources[0];
+  if (!leading || !Number.isSafeInteger(leading.leads) || leading.leads < 0 || leading.leads > total) return null;
+  const share = (leading.leads / total) * 100;
+  const circumference = 2 * Math.PI * 44;
+  return (
+    <div
+      data-testid="home-source-mix-ring"
+      role="img"
+      aria-label={sourceLabel(leading.source) + " accounts for " + share.toFixed(1) + "% of " + total + " acquired leads"}
+      className="relative mx-auto grid h-32 w-32 shrink-0 place-items-center"
+      title={leading.leads.toLocaleString("en-IN") + " of " + total.toLocaleString("en-IN") + " leads from " + sourceLabel(leading.source)}
+    >
+      <svg viewBox="0 0 120 120" className="absolute inset-0 h-full w-full" aria-hidden="true" focusable="false">
+        <circle cx="60" cy="60" r="44" fill="none" stroke="currentColor" strokeWidth="12" className="text-violet-100 dark:text-violet-900/50" />
+        <circle cx="60" cy="60" r="44" fill="none" stroke="currentColor" strokeWidth="12" className="text-brand-700" strokeDasharray={String(circumference * share / 100) + " " + String(circumference)} transform="rotate(-90 60 60)" />
+      </svg>
+      <div className="relative z-10 text-center">
+        <p className="text-[22px] font-semibold tabular-nums tracking-tight text-copy-strong">{share.toFixed(1)}%</p>
+        <p className="max-w-24 truncate text-[10px] text-copy-muted" title={sourceLabel(leading.source)}>{sourceLabel(leading.source)}</p>
       </div>
     </div>
   );
