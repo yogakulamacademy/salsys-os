@@ -6,6 +6,7 @@ import {
   Clock3,
   CreditCard,
   Inbox,
+  MessageSquareText,
   Sparkles,
   GitBranch,
   Zap,
