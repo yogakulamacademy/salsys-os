@@ -1,47 +1,71 @@
-/* Home-only presentation layer. Keep shared metric access/evidence controls intact. */
+/* Home-specific density contract. These rules deliberately override the
+   obsolete 166px KPI minimum that made the live page unlike the reference. */
 .command-center-v2 .command-kpi > * {
-  min-height: 166px;
-  padding: 18px;
-  border-radius: 16px;
-  box-shadow: none;
+  min-height: 116px;
+  padding: 14px 16px;
+  border-radius: 14px;
+  box-shadow: 0 1px 2px rgba(13, 75, 29, .035);
   transform: none;
 }
-
 .command-center-v2 .command-kpi > *:hover {
-  box-shadow: none;
   transform: none;
+  box-shadow: 0 5px 18px rgba(13, 75, 29, .065);
+  border-color: #c9e8d3;
 }
-
-/* The metric investigator still contains its evidence and clickable details.
-   Remove only its decorative 2px top accent inside Home. */
 .command-center-v2 .command-kpi > * > span:first-child[aria-hidden="true"] {
   display: none;
 }
-
-.command-center-v2 a,
-.command-center-v2 button,
-.command-center-v2 summary {
-  -webkit-tap-highlight-color: transparent;
+.command-center-v2 {
+  --app-brand-rgb: 10 133 42;
+  --app-accent-rgb: 13 134 47;
+  --app-brand-50: #e9f9ee;
+  --app-brand-100: #d7f4df;
+  --app-brand-600: #13953a;
+  --app-brand-700: #07812b;
+  --app-brand-800: #086623;
+  --app-brand-900: #07521e;
+  --app-brand-950: #073b19;
+  --app-focus: #138d38;
 }
-
+.command-center-v2 .command-kpi [role="button"],
+.command-center-v2 .command-kpi a {
+  width: 100%;
+}
+.command-center-v2 .command-kpi .text-copy-strong {
+  font-variant-numeric: tabular-nums;
+}
+.command-center-v2 .command-kpi svg {
+  color: var(--app-brand-700);
+}
+.command-center-v2 .command-kpi .text-copy-muted {
+  color: #4c6053;
+}
 .command-center-v2 :is(a, button, summary):focus-visible {
-  outline: 2px solid var(--color-brand-600, #6b59d6);
+  outline: 2px solid var(--app-brand-700);
   outline-offset: 2px;
 }
-
+.command-center-v2 .command-kpi > *:hover,
+.command-center-v2 .command-kpi > *:focus-within {
+  transition: border-color .18s ease, box-shadow .18s ease;
+}
+.command-center-v2 :is(a, button, summary) {
+  -webkit-tap-highlight-color: transparent;
+}
+/* Retain the current shared typeface but remove excess vertical room. */
+.command-center-v2 .command-kpi .text-copy-strong {
+  letter-spacing: -.025em;
+}
 @media (max-width: 639px) {
   .command-center-v2 .command-kpi > * {
-    min-height: 150px;
-    padding: 14px;
+    min-height: 118px;
+    padding: 13px;
   }
 }
-
 @media (prefers-reduced-motion: reduce) {
-  .command-center-v2 .command-kpi > * {
-    transition: none;
-  }
+  .command-center-v2 .command-kpi > * { transition: none; }
 }
-
 @media (max-width: 359px) {
-  .command-center-v2 [aria-label="Business pulse"] { grid-template-columns: minmax(0, 1fr); }
+  .command-center-v2 [aria-label="Business pulse"] {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }
