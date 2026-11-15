@@ -68,10 +68,13 @@ expect(
   "Acquisition quality must not silently replace unavailable period data with all-time sources.",
 );
 expect(
-  homePage.includes('label="Collected in period"') &&
-    homePage.includes('label="Current pipeline value"') &&
-    homePage.includes('label="Current weighted value"'),
-  "Home must distinguish period collected revenue from current pipeline snapshot values.",
+  homePage.includes('label="Recorded collections"') &&
+    homePage.includes('label="Open pipeline value"') &&
+    homePage.includes('label="Recorded collections · period"') &&
+    homePage.includes('label="Eligible open value · now"') &&
+    homePage.includes("Recorded collections are CRM ledger entries pending external settlement reconciliation.") &&
+    !homePage.includes('label="Current weighted value"'),
+  "Home must distinguish unverified period ledger activity from current, explicitly valued open opportunities.",
 );
 expect(
   homePage.includes("batch.capacity != null && batch.capacity > 0") &&
