@@ -14,9 +14,9 @@ const assert = (condition, message) => {
   if (!condition) failures.push(message);
 };
 
-const pulse = home.match(
-  /<section aria-label="Business pulse"[\\s\\S]*?<\\/section>/,
-)?.[0] ?? "";
+const pulseStart = home.indexOf('<section aria-label="Business pulse"');
+const pulseEnd = pulseStart >= 0 ? home.indexOf("</section>", pulseStart) : -1;
+const pulse = pulseEnd > pulseStart ? home.slice(pulseStart, pulseEnd) : "";
 const labels = [...pulse.matchAll(/\slabel="([^"]+)"/g)].map((match) => match[1]);
 assert(
   labels.join("|") === "Leads|Qualified leads|Open pipeline value|Recorded collections",
