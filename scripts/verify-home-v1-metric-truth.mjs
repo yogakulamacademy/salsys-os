@@ -63,6 +63,13 @@ expect(
     migration.includes("revoke all on function public.get_home_v1_qualification_snapshot(uuid,timestamptz,timestamptz)"),
   "New metrics RPCs must enforce privileged organization access with explicit grants.",
 );
+expect(
+  home.includes("pipelineTruth.missingValueCount + pipelineTruth.missingCurrencyCount") &&
+    !home.includes("unvaluedOpenLeads") &&
+    home.includes("unvaluedCurrentOpen != null && unvaluedCurrentOpen > 0"),
+  "Home valuation attention must use the eligible pipeline snapshot, not legacy counts.",
+);
+
 if (failures.length) {
   console.error("Home V1 Phase 2 contracts failed:");
   for (const failure of failures) console.error("- " + failure);
