@@ -62,6 +62,15 @@ test('Home has exactly four metric headlines, and opens source detail in the sel
   await page.setViewportSize({ width: 390, height: 844 });
   await expect(coverage.getByText('Reporting days use UTC.', { exact: false })).toBeVisible();
   await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
+  const shortcuts = page.getByRole('navigation', { name: 'Home section shortcuts' });
+  await expect(shortcuts).toBeVisible();
+  await expect(shortcuts.getByRole('link', { name: 'Work queue' })).toHaveAttribute('href', '#home-action-queue');
+  await expect(shortcuts.getByRole('link', { name: 'Conversion' })).toHaveAttribute('href', '#home-conversion');
+  await expect(shortcuts.getByRole('link', { name: 'Business breakdown' })).toHaveAttribute('href', '#home-business-breakdown');
+  await shortcuts.getByRole('link', { name: 'Work queue' }).click();
+  await expect(page).toHaveURL(/#home-action-queue$/);
+  await expect(page.locator('#home-action-queue')).toBeVisible();
+
 
 
   const detail = page.getByRole('link', { name: 'Analyze sources', exact: true });
