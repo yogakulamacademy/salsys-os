@@ -51,6 +51,18 @@ test('Home has exactly four metric headlines, and opens source detail in the sel
   await expect(performance.locator('[data-empty-variant="revenue"]')).toHaveAttribute('data-evidence-state', 'unavailable');
 
   await expect(page.getByText('UTC reporting days', { exact: true })).toBeVisible();
+  const coverage = page.getByTestId('home-reporting-coverage');
+  await expect(coverage).toBeVisible();
+  await expect(coverage.getByText('0 of 5 reporting indicators available')).toBeVisible();
+  await expect(coverage.getByText('Selected-period evidence is incomplete.')).toBeVisible();
+  await coverage.locator('summary').click();
+  await expect(coverage.getByText('Qualification milestones', { exact: true })).toBeVisible();
+  await expect(coverage.getByText('Recorded payment ledger', { exact: true })).toBeVisible();
+  await expect(coverage.getByText('data freshness and live synchronization are unverified.', { exact: false })).toBeVisible();
+  await page.setViewportSize({ width: 390, height: 844 });
+  await expect(coverage.getByText('Reporting days use UTC.', { exact: false })).toBeVisible();
+  await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
+
 
   const detail = page.getByRole('link', { name: 'Analyze sources', exact: true });
   await expect(detail).toHaveAttribute('href', /\/home\/sources\?period=30d/);
