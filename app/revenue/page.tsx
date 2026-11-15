@@ -196,8 +196,8 @@ export default async function RevenuePage({ searchParams }: RevenuePageProps) {
           tone="warning"
           title={`${unvaluedLeads} open ${unvaluedLeads === 1 ? "lead is" : "leads are"} missing potential value`}
           action={
-            <Link href="/admissions?view=pipeline" className="btn-secondary">
-              Review pipeline <ArrowRight size={13} />
+            <Link href="/revenue/valuation" className="btn-secondary">
+              Review unvalued opportunities <ArrowRight size={13} />
             </Link>
           }
         >
