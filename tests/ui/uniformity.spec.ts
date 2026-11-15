@@ -287,7 +287,7 @@ test('Home keeps icon-only violet sidebar with hover expansion and the reference
   await page.screenshot({ animations: 'disabled', fullPage: true, path: 'test-results/home-purple-reference-desktop.png' });
   await nav.hover();
   await expect.poll(() => nav.evaluate(node => Math.round(node.getBoundingClientRect().width))).toBe(232);
-  await expect(nav.getByRole('link', { name: 'Home' })).toBeVisible();
+  await expect(nav.getByRole('link', { name: 'Home', exact: true })).toBeVisible();
   await page.mouse.move(820, 400);
   await expect.poll(() => nav.evaluate(node => Math.round(node.getBoundingClientRect().width))).toBe(64);
   for (const width of [390, 768, 1440]) {
