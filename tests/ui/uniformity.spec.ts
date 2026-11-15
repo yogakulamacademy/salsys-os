@@ -295,3 +295,28 @@ test('Home keeps icon-only violet sidebar with hover expansion and the reference
     expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
   }
 });
+
+
+test('Reference geometry at 1024px retains compact violet rail and dashboard rows', async ({ page }) => {
+  await page.setViewportSize({width: 1024, height: 900});
+  await page.goto('/home');
+  await page.mouse.move(700, 250);
+  const nav = page.locator('aside[aria-label="Primary navigation"]');
+  await expect.poll(() => nav.evaluate(node => Math.round(node.getBoundingClientRect().width))).toBe(64);
+  const pulse = page.locator('section[aria-label="Business pulse"]');
+  const metrics = pulse.locator('.command-kpi');
+  await expect(metrics).toHaveCount(4);
+  const kpiColumns = await pulse.evaluate(node => getComputedStyle(node).gridTemplateColumns.trim().split(/\s+/).length);
+  expect(kpiColumns).toBe(4);
+  const hero = page.locator('section[aria-label="Performance and work queue"]');
+  const heroColumns = await hero.evaluate(node => getComputedStyle(node).gridTemplateColumns.trim().split(/\s+/).length);
+  expect(heroColumns).toBe(2);
+  const conversion = page.getByRole('region', { name: 'Conversion and collections' });
+  const trio = conversion.locator(':scope > div').first();
+  const trioColumns = await trio.evaluate(node => getComputedStyle(node).gridTemplateColumns.trim().split(/\s+/).length);
+  expect(trioColumns).toBe(3);
+  await expect(conversion.getByRole('heading', {name: 'Qualification milestones'})).toBeVisible();
+  await expect(page.getByTestId('home-world-map-disabled')).toHaveAttribute('data-map-state', 'locked');
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(1024);
+  await page.screenshot({animations: 'disabled', fullPage: true, path: 'test-results/home-reference-1024.png'});
+});
