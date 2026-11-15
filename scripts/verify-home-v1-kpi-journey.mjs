@@ -28,7 +28,7 @@ assert(
 );
 assert(
   pulse.includes('value={openPipelineValue}') &&
-    home.includes("valuedPipelineCurrencies.length === 1"),
+    home.includes("pipelineTruth.currencies.length === 1"),
   "The open pipeline KPI must use a single identifiable currency; mixed currencies must not be summed.",
 );
 assert(
@@ -37,10 +37,10 @@ assert(
   "Pipeline must be clearly marked as an as-of-now snapshot.",
 );
 assert(
-  pulse.includes('evidenceState="partial"') &&
-    home.includes("current stage is qualified or later") === false &&
-    home.includes("whose CURRENT stage is qualified or later"),
-  "Historical qualification must not be advertised as a verified as-of-period conversion.",
+  home.includes("historicalQualification?.qualifiedLeads") &&
+    home.includes("reached a recorded milestone by period end") &&
+    !home.includes("qualified leads use current stages for that lead cohort"),
+  "Qualification must use historical milestone results and avoid a current-stage narrative.",
 );
 assert(
   home.includes("reconciliation pending") &&
