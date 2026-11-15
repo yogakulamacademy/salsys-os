@@ -19,7 +19,6 @@ import { DecisionMetricCard } from "@/components/intelligence/decision-metric-ca
 import { LeadActivityChart } from "@/components/home/lead-activity-chart";
 import { QualificationCohortPanel } from "@/components/home/qualification-cohort-panel";
 import { HomeGeographyReadiness } from "@/components/home/home-geography-readiness";
-import { RecommendedActions } from "@/components/home/recommended-actions";
 import { HomeReportingCoverage, type HomeReportingEvidence } from "@/components/home/home-reporting-coverage";
 import { HomeEmptyState } from "@/components/home/home-empty-state";
 import { isMockMode } from "@/lib/data";
@@ -505,10 +504,6 @@ export default async function HomePage({ searchParams }: HomePageProps) {
           </div>
         </section>
       </section>
-
-      <div className="home-recommendations">
-        <RecommendedActions />
-      </div>
 
       <HomeReportingCoverage items={reportingEvidence} />
     </div>
