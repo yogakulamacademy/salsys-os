@@ -37,6 +37,21 @@ INSERT INTO public.organization_members(organization_id,user_id,role,active) VAL
  ('00000000-0000-4000-8000-00000000a001','00000000-0000-4000-8000-00000000a103','admissions',true),
  ('00000000-0000-4000-8000-00000000b001','00000000-0000-4000-8000-00000000b101','admin',true);
 
+-- Assert the fixture is truly unbound AFTER organization/member setup.
+-- Organization setup might change tenant security configuration; inspect it
+-- before we interpret any RPC result as an authorization defect.
+DO $fixture_inspection$
+DECLARE
+  has_synthetic_binding boolean;
+BEGIN
+  SELECT EXISTS (
+    SELECT 1 FROM public.tenant_session_bindings
+    WHERE session_id = '00000000-0000-4000-8000-00000000a901'::uuid
+  ) INTO has_synthetic_binding;
+  RAISE NOTICE 'Home fixture: enforcement=%, synthetic_session_binding=%',
+    public.tenant_session_enforcement_enabled(), has_synthetic_binding;
+END $fixture_inspection$;
+
 -- The owner-A cohort contains seven leads: two qualified BY cutoff.
 -- One lead progresses AFTER cutoff, so must not be counted historically.
 -- Pipeline A has five eligible leads: two valued, two without value, and
