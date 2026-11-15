@@ -79,3 +79,131 @@
 @media (prefers-reduced-motion: reduce) {
   .command-center-v2 .command-kpi > * { transition: none; }
 }
+
+
+/* 1024px reference geometry: all four metrics, two hero panels, three
+   pipeline panels, then 2-column compact evidence panels. */
+.command-center-v2 {
+  --app-brand-50: #f3efff;
+  --app-brand-100: #e9e0fb;
+  --app-brand-600: #651ce6;
+  --app-brand-700: #5719d4;
+  --app-brand-800: #4613b6;
+  --app-brand-900: #361089;
+  --app-border: #e5ddf5;
+  --app-surface-muted: #f7f4ff;
+  --app-text-strong: #15102c;
+  --app-text-muted: #655a7e;
+  --app-text-subtle: #837b9b;
+}
+.command-center-v2 section[aria-label="Business pulse"] .command-kpi > * {
+  min-height: 114px;
+  height: 115px;
+  padding: 10px 12px;
+  border: 1px solid #e4def6;
+  box-shadow: 0 3px 10px rgba(77, 30, 165, .04);
+}
+.command-center-v2 section[aria-label="Business pulse"] .command-kpi > * .text-copy-strong {
+  font-size: 24px;
+  line-height: 1.12;
+  font-weight: 750;
+}
+.command-center-v2 section[aria-label="Business pulse"] .command-kpi svg[aria-label="Metric trend"] {
+  width: 80px;
+  height: 40px;
+}
+.command-center-v2 section[aria-label="Business pulse"] .command-kpi > * > div:last-child {
+  margin-top: 6px;
+}
+.command-center-v2 section[aria-label="Business pulse"] .command-kpi > * span[class*="rounded-full"][class*="border"] {
+  padding: 2px 5px;
+  font-size: 9px;
+}
+.command-center-v2 section[aria-label="Performance and work queue"] > section,
+.command-center-v2 section[aria-label="Conversion and collections"] section,
+.command-center-v2 section[aria-label="Daily workspace"] > section,
+.command-center-v2 section[aria-label="Recommended actions"] {
+  border-color: #e2daf4;
+  border-radius: 15px;
+  box-shadow: 0 2px 10px rgba(79, 39, 149, .05);
+}
+.command-center-v2 section[aria-label="Performance and work queue"] > section {
+  min-height: 212px;
+}
+.command-center-v2 section[aria-label="Conversion and collections"] > .grid:first-child > section {
+  min-height: 190px;
+}
+.command-center-v2 :is(section[aria-label="Performance and work queue"],section[aria-label="Conversion and collections"]) :is(h2) {
+  font-weight: 700;
+  letter-spacing: -.015em;
+}
+.command-center-v2 section[aria-label="Performance and work queue"] section > div:first-child,
+.command-center-v2 section[aria-label="Conversion and collections"] section > div:first-child {
+  padding-top: 11px;
+}
+.command-center-v2 [data-empty-variant] {
+  min-height: 112px;
+  padding: 6px 10px;
+  background: transparent;
+}
+.command-center-v2 [data-empty-variant] > svg {
+  width: 88px;
+  height: 57px;
+}
+.command-center-v2 [data-empty-variant] p {
+  line-height: 1.3;
+}
+.command-center-v2 [data-empty-variant="status"] {
+  min-height: 122px;
+}
+.command-center-v2 [data-testid="home-qualification-cohort"] {
+  padding-bottom: 9px;
+}
+.command-center-v2 [data-testid="home-source-mix-ring"] {
+  min-width: 112px;
+}
+.command-center-v2 section[aria-label="Daily workspace"] > section {
+  min-height: 166px;
+  padding: 13px 14px;
+}
+.command-center-v2 section[aria-label="Daily workspace"] h2 {
+  font-weight: 700;
+}
+.command-center-v2 .command-priority-evidence {
+  background: transparent;
+}
+.command-center-v2 section[aria-label="Geographic data readiness"] {
+  min-height: 164px;
+}
+.command-center-v2 section[aria-label="Recommended actions"] {
+  padding: 12px 15px;
+}
+.command-center-v2 section[aria-label="Reporting coverage"] {
+  border-color: #e4def6;
+}
+@media (min-width: 1024px) and (max-width: 1199px) {
+  .command-center-v2 > header {
+    gap: 6px;
+  }
+  .command-center-v2 > header h1 {
+    font-size: 26px;
+  }
+  .command-center-v2 > header > div:last-child {
+    gap: 6px;
+  }
+  .command-center-v2 section[aria-label="Business pulse"] {
+    gap: 10px;
+  }
+  .command-center-v2 section[aria-label="Business pulse"] .command-kpi > * {
+    padding: 10px;
+  }
+}
+@media (max-width: 767px) {
+  .command-center-v2 section[aria-label="Business pulse"] .command-kpi > * {
+    min-height: 114px;
+    height: auto;
+  }
+  .command-center-v2 section[aria-label="Performance and work queue"] > section {
+    min-height: 0;
+  }
+}
