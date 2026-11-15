@@ -17,7 +17,7 @@ const assert = (condition, message) => {
 const pulse = home.match(
   /<section aria-label="Business pulse"[\\s\\S]*?<\\/section>/,
 )?.[0] ?? "";
-const labels = [...pulse.matchAll(/\\slabel="([^"]+)"/g)].map((match) => match[1]);
+const labels = [...pulse.matchAll(/\slabel="([^"]+)"/g)].map((match) => match[1]);
 assert(
   labels.join("|") === "Leads|Qualified leads|Open pipeline value|Recorded collections",
   "The executive KPI order must be Leads, Qualified, Open Pipeline, Recorded Collections.",
