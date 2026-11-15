@@ -10,7 +10,7 @@ import type { HomeGeographyCoverage } from "@/lib/home-geography-coverage";
  */
 function LockedWorldMap() {
   return (
-    <div data-testid="home-world-map-disabled" data-map-state="locked" className="relative flex min-h-48 items-center justify-center overflow-hidden rounded-xl bg-violet-50/70 p-3 dark:bg-violet-950/20">
+    <div data-testid="home-world-map-disabled" data-map-state="locked" className="relative flex min-h-36 items-center justify-center overflow-hidden rounded-xl bg-violet-50/50 p-2 dark:bg-violet-950/20">
       <svg aria-hidden="true" focusable="false" viewBox="0 0 800 350" className="absolute inset-0 h-full w-full fill-violet-200/75 dark:fill-violet-700/35" preserveAspectRatio="xMidYMid meet">
         <path d="M60 89 95 62 142 54 167 65 200 61 221 76 241 85 228 110 205 117 199 139 178 151 169 174 145 183 133 205 116 203 111 179 91 162 74 155 63 132 41 124 44 103Z" />
         <path d="M133 49 151 27 174 20 206 29 226 44 214 58 178 64Z" />
@@ -72,7 +72,7 @@ export function HomeGeographyReadiness({
         </Link>
       </div>
 
-      <div className="mt-3 grid min-w-0 gap-4 lg:grid-cols-[minmax(220px,0.85fr)_minmax(0,1.15fr)] lg:items-center">
+      <div className="mt-3 grid min-w-0 gap-3 min-[900px]:grid-cols-[minmax(125px,0.78fr)_minmax(0,1.22fr)] min-[900px]:items-center">
         <div className="min-w-0">
           {cohort === null ? (
             <div data-evidence-state="unavailable">
@@ -93,7 +93,7 @@ export function HomeGeographyReadiness({
                 </div>
                 <span className="text-xs font-semibold tabular-nums text-copy-strong">{populated!.toLocaleString("en-IN")} / {cohort.toLocaleString("en-IN")}</span>
               </div>
-              <div role="img" aria-label={populated + " of " + cohort + " acquired leads have a nonblank country field"} className="mt-3 h-2 overflow-hidden rounded-full bg-surface-muted">
+              <div role="img" aria-label={populated + " of " + cohort + " acquired leads have a nonblank country field"} className="mt-2 h-2 overflow-hidden rounded-full bg-surface-muted">
                 <div className="h-full rounded-full bg-brand-700" style={{ width: completion + "%" }} />
               </div>
               <p className="mt-2 text-[11px] text-copy-subtle">{missing!.toLocaleString("en-IN")} leads missing country</p>
