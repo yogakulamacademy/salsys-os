@@ -44,31 +44,30 @@ export function QualificationCohortPanel({
           </p>
         </div>
       ) : (
-        <div className="mt-4" data-evidence-state="available">
-          <div className="grid items-center gap-4 sm:grid-cols-[minmax(0,145px)_minmax(0,1fr)]">
-            <div
-              role="img"
-              aria-label={milestoneCount + " out of " + cohortTotal + " acquired leads reached a qualifying milestone before the period ended"}
-              className="relative mx-auto grid aspect-square w-[140px] place-items-center"
-            >
-              <svg viewBox="0 0 120 120" aria-hidden="true" focusable="false" className="absolute inset-0 h-full w-full">
-                <circle cx="60" cy="60" r="46" fill="none" strokeWidth="10" stroke="currentColor" className="text-violet-100 dark:text-violet-900/50" />
-                <circle cx="60" cy="60" r="46" fill="none" strokeWidth="10" stroke="currentColor" className="text-brand-700" strokeDasharray={String(2 * Math.PI * 46 * rate! / 100) + " " + String(2 * Math.PI * 46)} transform="rotate(-90 60 60)" />
-              </svg>
-              <div className="relative z-10 text-center">
-                <p className="text-[30px] font-semibold tracking-[-0.04em] text-copy-strong">{rate!.toFixed(1)}%</p>
-                <p className="text-[11px] text-copy-muted">Qualified</p>
+        <div className="mt-3" data-evidence-state="available">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-5">
+            <div className="min-w-0 flex-1">
+              <div
+                role="img"
+                aria-label={milestoneCount + " out of " + cohortTotal + " acquired leads reached a qualifying milestone before the period ended"}
+                className="relative h-3 w-full overflow-hidden rounded-full bg-violet-100 dark:bg-violet-900/50"
+              >
+                <div className="h-full rounded-full bg-brand-700" style={{ width: Math.max(0, Math.min(100, rate!)) + "%" }} />
+              </div>
+              <div className="mt-3 flex items-center justify-between gap-3 text-xs">
+                <div>
+                  <p className="text-xl font-bold tabular-nums text-copy-strong">{milestoneCount.toLocaleString("en-IN")}</p>
+                  <p className="text-[11px] text-copy-muted">Recorded</p>
+                </div>
+                <div className="text-right">
+                  <p className="text-xl font-bold tabular-nums text-copy-strong">{withoutMilestone.toLocaleString("en-IN")}</p>
+                  <p className="text-[11px] text-copy-muted">Remaining</p>
+                </div>
               </div>
             </div>
-            <div className="grid gap-3 text-xs">
-              <div>
-                <p className="text-[21px] font-semibold tabular-nums text-copy-strong">{milestoneCount.toLocaleString("en-IN")}</p>
-                <p className="text-[11px] text-copy-muted">Milestone reached</p>
-              </div>
-              <div className="border-t border-line pt-3">
-                <p className="text-[21px] font-semibold tabular-nums text-copy-strong">{withoutMilestone.toLocaleString("en-IN")}</p>
-                <p className="text-[11px] text-copy-muted">No milestone by cutoff</p>
-              </div>
+            <div className="flex w-full shrink-0 flex-col items-center justify-center rounded-xl bg-violet-100/70 p-3 text-center sm:w-[105px] dark:bg-violet-900/30">
+              <p className="text-[24px] font-bold text-copy-strong">{rate!.toFixed(1)}%</p>
+              <p className="text-xs text-copy-muted">Qualified</p>
             </div>
           </div>
         </div>
