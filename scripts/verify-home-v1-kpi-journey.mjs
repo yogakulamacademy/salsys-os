@@ -71,6 +71,14 @@ assert(
   "RPC execute grants must be explicit.",
 );
 
+expect(
+  home.includes("{activeAttention[0].reason}") &&
+    home.includes("{activeAttention[0].evidence} · {activeAttention[0].timing}") &&
+    home.includes("{item.reason}</span>") &&
+    home.includes("{item.priority} · {item.evidence}</span>"),
+  "Home operational next actions must display their reason and source evidence without requiring hover.",
+);
+
 if (failures.length) {
   console.error("Home V1 KPI journey checks failed:");
   for (const failure of failures) console.error("- " + failure);
