@@ -70,6 +70,15 @@ expect(
   "Home valuation attention must use the eligible pipeline snapshot, not legacy counts.",
 );
 
+const homeGuard = read("supabase/migrations/20261115091500_home_dashboard_privileged_rpc_guard_v1.sql");
+expect(
+  homeGuard.includes(") is distinct from true then") &&
+    !homeGuard.includes("if not (") &&
+    migration.split(") is distinct from true then").length - 1 === 2 &&
+    !migration.includes("if not ("),
+  "All three Home privileged RPC guards must reject SQL NULL as unauthorized.",
+);
+
 if (failures.length) {
   console.error("Home V1 Phase 2 contracts failed:");
   for (const failure of failures) console.error("- " + failure);
