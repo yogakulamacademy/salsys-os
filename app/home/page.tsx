@@ -17,6 +17,7 @@ import { DecisionMetricCard } from "@/components/intelligence/decision-metric-ca
 import { LeadActivityChart } from "@/components/home/lead-activity-chart";
 import { HomeEmptyState } from "@/components/home/home-empty-state";
 import { isMockMode } from "@/lib/data";
+import { getHomeV1MetricTruth, type HomeV1MetricTruth } from "@/lib/home-v1-metric-truth";
 import { percentageWidth, sourceLabel } from "@/lib/ui-format";
 import {
   getDashboardSnapshot,
@@ -63,7 +64,7 @@ export default async function HomePage({ searchParams }: HomePageProps) {
   const mock = isMockMode();
   const periodFallback = resolveDashboardPeriod(query);
 
-  const [snapshot, periodAnalytics] = await Promise.all([
+  const [snapshot, periodAnalytics, metricTruth] = await Promise.all([
     getDashboardSnapshot(),
     mock
       ? Promise.resolve<DashboardPeriodAnalytics>({
@@ -84,6 +85,9 @@ export default async function HomePage({ searchParams }: HomePageProps) {
           sources: [],
         })
       : getDashboardPeriodAnalytics(query),
+    mock
+      ? Promise.resolve<HomeV1MetricTruth>({ qualification: null, pipeline: null })
+      : getHomeV1MetricTruth(periodFallback),
   ]);
 
   const {
@@ -97,37 +101,53 @@ export default async function HomePage({ searchParams }: HomePageProps) {
   const primaryRevenue =
     revenueSummary.find((row) => row.collected > 0) ?? revenueSummary[0] ?? null;
 
-  // Pipeline value is an as-of-now estimate, not a selected-period cash metric.
-  // Do not select its currency based on which currency has collections.
-  const valuedPipelineCurrencies = revenueSummary.filter((row) => row.pipeline > 0);
-  const singlePipelineCurrency = valuedPipelineCurrencies.length === 1
-    ? valuedPipelineCurrencies[0]
+  const pipelineTruth = metricTruth.pipeline;
+  const valuationCoverage = pipelineTruth && pipelineTruth.eligibleCount > 0
+    ? Math.round((pipelineTruth.valuedCount / pipelineTruth.eligibleCount) * 1000) / 10
     : null;
-  const openPipelineValue = singlePipelineCurrency
-    ? formatMoney(singlePipelineCurrency.pipeline, singlePipelineCurrency.currency)
-    : "—";
-  const openPipelineDetail =
-    valuedPipelineCurrencies.length > 1
+  const openPipelineValue = !pipelineTruth || pipelineTruth.valuedCount === 0
+    ? "—"
+    : pipelineTruth.currencies.length === 1
+      ? formatMoney(pipelineTruth.currencies[0].amount, pipelineTruth.currencies[0].currency)
+      : "—";
+  const openPipelineDetail = !pipelineTruth
+    ? "Verified opportunity snapshot unavailable"
+    : pipelineTruth.currencies.length > 1
       ? "Multiple currencies · inspect each separately"
-      : singlePipelineCurrency
-        ? `Current snapshot · ${singlePipelineCurrency.opportunities} valued opportunities`
-        : "No valued opportunities in the current snapshot";
+      : `${pipelineTruth.valuedCount} of ${pipelineTruth.eligibleCount} open leads valued · ${valuationCoverage == null ? "No coverage baseline" : valuationCoverage + "% value coverage"}`;
+  const historicalQualification =
+    periodAnalytics.available.leads &&
+    metricTruth.qualification &&
+    metricTruth.qualification.cohortLeads === periodAnalytics.leads.current &&
+    metricTruth.qualification.historyCovered === metricTruth.qualification.cohortLeads
+      ? metricTruth.qualification
+      : null;
   const periodPrimaryRevenue = periodAnalytics.available.revenue
     ? pickPeriodRevenue(periodAnalytics, primaryRevenue?.currency ?? null)
     : null;
 
+  const qualificationBySource = new Map(
+    historicalQualification?.sources.map((item) => [item.source, item] as const) ?? [],
+  );
   const acquisitionSources: DashboardPeriodSource[] = periodAnalytics.available.leads
-    ? periodAnalytics.sources
+    ? periodAnalytics.sources.map((source) => {
+        const historical = qualificationBySource.get(source.source);
+        return {
+          ...source,
+          qualified: historical?.qualified ?? 0,
+          conversionRate: historical && historical.leads === source.leads && source.leads > 0
+            ? Math.round((historical.qualified / source.leads) * 1000) / 10
+            : null,
+        };
+      })
     : [];
 
   const totalLeads = periodAnalytics.available.leads
     ? periodAnalytics.leads.current
     : null;
-  const qualifiedLeads = periodAnalytics.available.leads
-    ? periodAnalytics.leads.qualified
-    : null;
-  const qualifiedRate = periodAnalytics.available.leads
-    ? periodAnalytics.leads.conversionRate
+  const qualifiedLeads = historicalQualification?.qualifiedLeads ?? null;
+  const qualifiedRate = historicalQualification && historicalQualification.cohortLeads > 0
+    ? Math.round((historicalQualification.qualifiedLeads / historicalQualification.cohortLeads) * 1000) / 10
     : null;
   const enrolledLeads = periodAnalytics.available.enrollments
     ? periodAnalytics.enrollments.current
@@ -197,7 +217,7 @@ export default async function HomePage({ searchParams }: HomePageProps) {
   const changeSignals = buildChangeSignals(periodAnalytics, metrics.waitingOverHour);
   const executiveBrief = buildExecutiveBrief({
     analytics: periodAnalytics,
-    sources: acquisitionSources,
+    sources: historicalQualification ? acquisitionSources : [],
     attention: activeAttention,
     qualifiedRate,
   });
@@ -205,6 +225,8 @@ export default async function HomePage({ searchParams }: HomePageProps) {
     !periodAnalytics.available.leads ? "lead acquisition" : null,
     !periodAnalytics.available.revenue ? "collected revenue" : null,
     !periodAnalytics.available.enrollments ? "enrolled-lead history" : null,
+    !historicalQualification ? "historical qualification" : null,
+    !pipelineTruth ? "open opportunity valuation" : null,
   ].filter((value): value is string => Boolean(value));
 
   return (
@@ -270,11 +292,11 @@ export default async function HomePage({ searchParams }: HomePageProps) {
             icon={<UserRoundCheck size={17} />}
             label="Qualified leads"
             value={qualifiedLeads == null ? "—" : qualifiedLeads.toLocaleString("en-IN")}
-            detail={qualifiedRate == null ? "Stage evidence unavailable" : String(qualifiedRate) + "% currently qualified in this lead cohort"}
+            detail={qualifiedLeads == null ? "Period-end qualification evidence unavailable" : qualifiedRate == null ? "No qualifying leads in the cohort" : qualifiedRate + "% reached a qualification milestone by period end"}
             href="/leads"
-            evidenceLabel={periodAnalytics.available.leads ? "Current-stage evidence" : "Evidence unavailable"}
-            evidenceState="partial"
-            definition="Leads created during the selected period whose CURRENT stage is qualified or later. Past period totals are not historical as-of-stage counts; they can change when leads progress later."
+            evidenceLabel={historicalQualification ? "Qualification-stage history" : "Evidence unavailable"}
+            evidenceState={historicalQualification ? "derived" : "unknown"}
+            definition="New leads in the selected acquisition cohort that reached qualified, high intent, payment pending, or enrolled by the selected period-end cutoff. Counts qualifying milestones, not their present-day stage. Requires complete recorded stage history."
           />
         </div>
         <div className="command-kpi min-w-0">
@@ -282,14 +304,12 @@ export default async function HomePage({ searchParams }: HomePageProps) {
             icon={<CircleDollarSign size={17} />}
             label="Open pipeline value"
             value={openPipelineValue}
-            detail={unvaluedOpenLeads > 0
-              ? `${openPipelineDetail} · ${unvaluedOpenLeads} open leads lack value`
-              : openPipelineDetail}
+            detail={openPipelineDetail}
             statusLabel="As of now"
             href="/revenue"
-            evidenceLabel="CRM planning values · preliminary"
-            evidenceState="partial"
-            definition="Recorded potential value of open leads in the current dashboard snapshot, separated by currency. This is not cash or a probability forecast. Existing stage eligibility and source valuation need reconciliation; period filters do not apply to this current-state number."
+            evidenceLabel={pipelineTruth ? "Open-lead valuation evidence" : "Evidence unavailable"}
+            evidenceState={pipelineTruth ? (pipelineTruth.eligibleCount === pipelineTruth.valuedCount ? "derived" : "partial") : "unknown"}
+            definition="Sum of positive explicit potential values for currently open, nonarchived sales leads in new, contacted, engaged, qualified, high-intent, or payment-pending stages. Values require an explicit currency; multi-currency amounts are never merged. Missing values are excluded, disclosed in coverage, and must not be interpreted as zero potential. As-of-now, not period-based."
           />
         </div>
         <div className="command-kpi min-w-0">
@@ -310,7 +330,7 @@ export default async function HomePage({ searchParams }: HomePageProps) {
       </section>
 
       <p className="text-[11px] leading-5 text-copy-subtle">
-        Leads and recorded collections refer to the selected UTC period; qualified leads use current stages for that lead cohort.
+        Leads and recorded collections refer to the selected UTC period. Qualified leads reached a recorded milestone by period end.
         Open pipeline is a current-state estimate and does not change with the period filter.
       </p>
 
@@ -378,7 +398,7 @@ export default async function HomePage({ searchParams }: HomePageProps) {
         <section className="min-w-0 overflow-hidden rounded-2xl border border-line bg-surface">
           <SectionHeader eyebrow="Acquisition · period" title="Lead sources" actionHref="/marketing" actionLabel="See sources" />
           <div className="space-y-1 p-3 sm:p-4">
-            {acquisitionSources.length ? acquisitionSources.slice(0, 4).map((source) => <SourceRow key={source.source} source={source} periodTotal={totalLeads} disambiguate={acquisitionSources.slice(0, 4).filter((row) => sourceLabel(row.source) === sourceLabel(source.source)).length > 1} />) : <HomeEmptyState variant="sources" compact unavailable={!periodAnalytics.available.leads} title={periodAnalytics.available.leads ? "No source activity yet" : "Source data unavailable"} description={periodAnalytics.available.leads ? "No acquisition data is recorded for this period yet." : "Selected-period acquisition evidence is unavailable. Current all-time source totals have not been substituted."} />}
+            {acquisitionSources.length ? acquisitionSources.slice(0, 4).map((source) => <SourceRow key={source.source} source={source} qualificationAvailable={historicalQualification != null} periodTotal={totalLeads} disambiguate={acquisitionSources.slice(0, 4).filter((row) => sourceLabel(row.source) === sourceLabel(source.source)).length > 1} />) : <HomeEmptyState variant="sources" compact unavailable={!periodAnalytics.available.leads} title={periodAnalytics.available.leads ? "No source activity yet" : "Source data unavailable"} description={periodAnalytics.available.leads ? "No acquisition data is recorded for this period yet." : "Selected-period acquisition evidence is unavailable. Current all-time source totals have not been substituted."} />}
           </div>
         </section>
         <section className="min-w-0 overflow-hidden rounded-2xl border border-line bg-surface">
@@ -757,7 +777,7 @@ function RevenueTrend({
   );
 }
 
-function SourceRow({ source, periodTotal, disambiguate = false }: { source: DashboardPeriodSource; periodTotal: number | null; disambiguate?: boolean }) {
+function SourceRow({ source, periodTotal, disambiguate = false, qualificationAvailable = false }: { source: DashboardPeriodSource; periodTotal: number | null; disambiguate?: boolean; qualificationAvailable?: boolean }) {
   const share = periodTotal != null && periodTotal > 0 ? (source.leads / periodTotal) * 100 : null;
   const displaySource = sourceLabel(source.source);
   const alias = disambiguate || displaySource.trim().toLowerCase() !== source.source.trim().toLowerCase();
@@ -766,7 +786,7 @@ function SourceRow({ source, periodTotal, disambiguate = false }: { source: Dash
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <span className="block truncate text-xs font-medium text-copy-strong" title={"CRM source: " + source.source}>{displaySource}{alias ? <span className="ml-1 font-normal text-copy-subtle">· {source.source}</span> : null}</span>
-          <span className="mt-0.5 block text-[11px] text-copy-subtle">{source.qualified.toLocaleString("en-IN")} qualified</span>
+          <span className="mt-0.5 block text-[11px] text-copy-subtle">{qualificationAvailable ? source.qualified.toLocaleString("en-IN") + " qualified by period end" : "Qualification evidence unavailable"}</span>
         </div>
         <span className="shrink-0 text-right text-xs font-semibold tabular-nums text-copy-strong">
           {source.leads.toLocaleString("en-IN")}
