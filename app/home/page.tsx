@@ -22,6 +22,7 @@ import { getHomeV1MetricTruth, type HomeV1MetricTruth } from "@/lib/home-v1-metr
 import { percentageWidth, sourceLabel } from "@/lib/ui-format";
 import { buildHomeSourceSignals, reconcileHomeSourceQualification } from "@/lib/home-source-intelligence";
 import { buildHomeNextActions, type HomeNextAction, type HomeActionId } from "@/lib/home-next-actions";
+import { calculateHomeReplyWaitingBreakdown } from "@/lib/home-reply-waiting";
 import {
   getDashboardSnapshot,
   type DashboardBatchDemand,
@@ -515,12 +516,24 @@ function AttentionRow({ item }: { item: AttentionItem }) {
 }
 
 function ReplyPressure({ total, overHour }: { total: number; overHour: number }) {
-  const older = Math.min(Math.max(0, overHour), Math.max(0, total));
-  const recent = Math.max(0, total - older);
-  const share = total > 0 ? (older / total) * 100 : 0;
+  const breakdown = calculateHomeReplyWaitingBreakdown(total, overHour);
+  if (!breakdown) {
+    return (
+      <div data-testid="home-reply-pressure" data-evidence-state="unavailable" className="mx-4 mt-2 rounded-xl border border-line bg-surface-muted px-3 py-3 sm:mx-5">
+        <p className="text-xs font-semibold text-copy-strong">Reply waiting-time breakdown unavailable</p>
+        <p className="mt-1 text-[11px] leading-5 text-copy-muted">
+          The recorded waiting-time count is missing or inconsistent with the reply queue. No waiting percentage can be verified.
+        </p>
+        <Link href="/conversations" className="mt-3 inline-flex items-center gap-1 text-[11px] font-semibold text-brand-700 dark:text-brand-300">
+          Work reply queue <ArrowRight size={12} />
+        </Link>
+      </div>
+    );
+  }
+  const { older, recent, percentOverHour: share } = breakdown;
 
   return (
-    <div data-testid="home-reply-pressure" className="mx-4 mt-2 rounded-xl border border-line bg-surface-muted px-3 py-3 sm:mx-5">
+    <div data-testid="home-reply-pressure" data-evidence-state="available" className="mx-4 mt-2 rounded-xl border border-line bg-surface-muted px-3 py-3 sm:mx-5">
       <div className="flex items-center justify-between gap-3 text-xs">
         <span className="font-medium text-copy-strong">Reply waiting time</span>
         <span className="font-semibold tabular-nums text-copy-strong">{share.toFixed(0)}% over 1h</span>
