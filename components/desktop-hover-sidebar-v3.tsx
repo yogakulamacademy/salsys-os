@@ -332,6 +332,7 @@ export function DesktopHoverSidebarV3() {
       <aside
         ref={primaryRef}
         onMouseEnter={() => setOpen(true)}
+        onMouseLeave={() => setOpen(false)}
         onFocusCapture={() => setOpen(true)}
         className={`fixed inset-y-0 left-0 z-[70] hidden flex-col border-r border-line bg-surface transition-[width,box-shadow] duration-200 lg:flex ${open ? "w-[232px] shadow-panel" : "w-16"}`}
         aria-label="Primary navigation"
