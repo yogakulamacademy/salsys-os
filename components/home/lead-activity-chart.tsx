@@ -16,6 +16,7 @@ type LeadActivityChartProps = {
   currentTotal: number | null;
   previousTotal: number | null;
   periodLabel: string;
+  compact?: boolean;
 };
 
 function ChartTooltip({
@@ -45,7 +46,7 @@ function ChartTooltip({
 
 /** Read-only visualization. Uses pre-aggregated and already-authorized CRM lead data. */
 export function LeadActivityChart({
-  points, available, currentTotal, previousTotal, periodLabel,
+  points, available, currentTotal, previousTotal, periodLabel, compact = false,
 }: LeadActivityChartProps) {
   if (!available) {
     return (
@@ -76,10 +77,10 @@ export function LeadActivityChart({
 
   return (
     <div data-testid="home-lead-activity" className="min-w-0">
-      <div className="flex flex-wrap items-start justify-between gap-3">
+      <div className={compact ? "flex flex-wrap items-start justify-between gap-2" : "flex flex-wrap items-start justify-between gap-3"}>
         <div>
           <p className="text-[11px] text-copy-muted">Lead activity · {periodLabel}</p>
-          <div className="mt-1 flex items-baseline gap-2">
+          <div className={compact ? "sr-only" : "mt-1 flex items-baseline gap-2"}>
             <span className="text-[23px] font-semibold tracking-[-0.035em] tabular-nums text-copy-strong">
               {currentTotal == null ? "—" : currentTotal.toLocaleString("en-IN")}
             </span>
@@ -93,7 +94,7 @@ export function LeadActivityChart({
       </div>
       {hasActivity ? (
         <div
-          className="mt-3 h-[188px] min-w-0 text-brand-700"
+          className={compact ? "mt-1 h-[153px] min-w-0 text-brand-700" : "mt-3 h-[188px] min-w-0 text-brand-700"}
           role="img"
           aria-label={"New lead volume compared with the previous equal-length period. Current " + (currentTotal ?? 0) + ", previous " + (previousTotal ?? 0) + "."}
         >
@@ -153,7 +154,7 @@ export function LeadActivityChart({
           />
         </div>
       )}
-      <div className="mt-2 flex flex-wrap items-center justify-between gap-3 border-t border-line pt-2">
+      <div className={compact ? "sr-only" : "mt-2 flex flex-wrap items-center justify-between gap-3 border-t border-line pt-2"}>
         <span className="text-[11px] leading-4 text-copy-subtle">
           {previousTotal == null ? "Comparison unavailable" : previousTotal.toLocaleString("en-IN") + " leads in the previous equal-length period"}
         </span>
