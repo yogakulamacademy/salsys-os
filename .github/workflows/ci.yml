@@ -308,6 +308,17 @@ jobs:
       - name: Verify UI with synthetic loopback services
         run: npm run test:ui
 
+      - name: Upload Home reference screenshots
+        if: always()
+        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
+        with:
+          name: home-reference-visual-review
+          path: |
+            test-results/home-reference-1024.png
+            test-results/home-purple-reference-desktop.png
+          if-no-files-found: warn
+          retention-days: 3
+
       - name: Verify knowledge preview with synthetic live-mode services
         run: npm run test:knowledge:ui
 
