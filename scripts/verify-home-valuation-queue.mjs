@@ -6,6 +6,7 @@ const reader = read("lib/home-opportunity-valuation.ts");
 const page = read("app/revenue/valuation/page.tsx");
 const revenue = read("app/revenue/page.tsx");
 const home = read("app/home/page.tsx");
+const nextActions = read("lib/home-next-actions.ts");
 const guard = read("app/revenue/layout.tsx");
 const failures = [];
 const check = (ok, reason) => { if (!ok) failures.push(reason); };
@@ -59,7 +60,10 @@ check(
   "Valuation queue must be read-only and link to the existing audited Lead Edit workflow.",
 );
 check(
-  home.includes('<Link href="/revenue/valuation"') &&
+  home.includes("missingOpportunityValue: unvaluedCurrentOpen") &&
+  home.includes("buildHomeNextActions({") &&
+  nextActions.includes('id: "missing-valuation"') &&
+  nextActions.includes('href: "/revenue/valuation"') &&
   revenue.includes('<Link href="/revenue/valuation"'),
   "Home and Revenue readiness prompts must route to the new queue.",
 );
