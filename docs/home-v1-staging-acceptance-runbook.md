@@ -8,7 +8,7 @@ This checklist covers the stacked work in draft PRs #705–#708. It is not autho
 - Latest previously completed clean-local migration replay for commit `fc10b8fed4e6a63c4be01f011f85c91c0472362a` **PASS**, including `tests/database/home-v1-rpc-auth-and-metrics-local.sql`.
 - CodeQL Security Scan **PASS** for that commit.
 - Financial-database CI job **PASS**.
-- Application typecheck and build **PASS**; synthetic UI tests were still running when last checked. The overall CI workflow was **not** certified complete at that check.
+- Application typecheck and build **PASS**; the overall CI workflow was subsequently **CANCELLED** when newer branch commits superseded its run. It must not be recorded as a full CI pass.
 - The above results apply to the recorded commit only; any later changes must be tested again.
 - Local fixture exercises anonymous, unbound, owner, manager, admissions, admin of another tenant, revoked member and cross-tenant checks using synthetic identities with `ROLLBACK`. It also verifies history cutoff, source grouping, open-opportunity stage rules and distinct INR/USD amounts.
 
