@@ -1,6 +1,5 @@
 import Link from "next/link";
 import {
-  AlertTriangle,
   ArrowRight,
   CalendarDays,
   CircleDollarSign,
@@ -16,6 +15,7 @@ import {
 import { DecisionMetricCard } from "@/components/intelligence/decision-metric-card";
 import { LeadActivityChart } from "@/components/home/lead-activity-chart";
 import { QualificationCohortPanel } from "@/components/home/qualification-cohort-panel";
+import { HomeReportingCoverage, type HomeReportingEvidence } from "@/components/home/home-reporting-coverage";
 import { HomeEmptyState } from "@/components/home/home-empty-state";
 import { isMockMode } from "@/lib/data";
 import { getHomeV1MetricTruth, type HomeV1MetricTruth } from "@/lib/home-v1-metric-truth";
@@ -185,13 +185,13 @@ export default async function HomePage({ searchParams }: HomePageProps) {
   const sourceDetailHref = "/home/sources?" + sourceDetailParams.toString();
   const visibleUpcomingBatches = upcomingBatches.slice(0, 3);
   const maxUpcomingDemand = Math.max(1, ...visibleUpcomingBatches.map((batch) => batch.activeDemand));
-  const missingPeriodEvidence = [
-    !periodAnalytics.available.leads ? "lead acquisition" : null,
-    !periodAnalytics.available.revenue ? "collected revenue" : null,
-    !periodAnalytics.available.enrollments ? "enrolled-lead history" : null,
-    !historicalQualification ? "historical qualification" : null,
-    !pipelineTruth ? "open opportunity valuation" : null,
-  ].filter((value): value is string => Boolean(value));
+  const reportingEvidence: HomeReportingEvidence[] = [
+    { id: "lead-acquisition", label: "Lead acquisition", available: periodAnalytics.available.leads, basis: "Period event" },
+    { id: "qualification-cohort", label: "Qualification milestones", available: historicalQualification != null, basis: "Period cohort" },
+    { id: "recorded-payments", label: "Recorded payment ledger", available: periodAnalytics.available.revenue, basis: "Period event" },
+    { id: "enrolled-stage", label: "Enrolled-stage history", available: periodAnalytics.available.enrollments, basis: "Period event" },
+    { id: "open-valuation", label: "Open opportunity values", available: pipelineTruth != null, basis: "Current snapshot" },
+  ];
 
   return (
     <div className="command-center-v2 w-full min-w-0 space-y-4 pb-8 sm:space-y-5">
@@ -226,15 +226,7 @@ export default async function HomePage({ searchParams }: HomePageProps) {
         </div>
       </header>
 
-      {missingPeriodEvidence.length ? (
-        <section aria-label="Reporting coverage" className="flex items-start gap-2.5 rounded-xl border border-amber-200 bg-amber-50/70 px-4 py-3 text-xs leading-5 text-amber-800 dark:border-amber-900/60 dark:bg-amber-950/20 dark:text-amber-200">
-          <AlertTriangle size={16} className="mt-0.5 shrink-0" />
-          <p>
-            <strong>Selected-period evidence is incomplete.</strong> Unavailable: {missingPeriodEvidence.join(", ")}.
-            Period KPIs stay unknown rather than falling back to all-time snapshot totals. Current attention and pipeline panels use current-state evidence.
-          </p>
-        </section>
-      ) : null}
+      <HomeReportingCoverage items={reportingEvidence} />
 
       <section aria-label="Business pulse" className="grid grid-cols-2 gap-2 sm:gap-3 xl:grid-cols-4">
         <div className="command-kpi min-w-0">
