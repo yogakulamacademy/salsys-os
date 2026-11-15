@@ -158,7 +158,10 @@ test('Home evidence-first charts preserve empty-data and action semantics', asyn
 
   await expect(page.getByText('Financial context', { exact: true })).toBeVisible();
   await page.getByText('Financial context', { exact: true }).click();
-  await expect(page.getByText('Current snapshot revenue has not been substituted', { exact: false })).toBeVisible();
+  await expect(
+    page.locator('details').filter({ has: page.getByText('Financial context', { exact: true }) })
+      .getByText('Current snapshot revenue has not been substituted', { exact: false }),
+  ).toBeVisible();
   await expect(page.locator('[data-empty-variant="revenue"]')).toHaveAttribute('data-evidence-state', 'unavailable');
   await expect(page.getByRole('link', { name: /View system health/ })).toBeVisible();
 
