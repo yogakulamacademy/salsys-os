@@ -20,8 +20,10 @@ export function QualificationCohortPanel({
     Number.isSafeInteger(total) && Number.isSafeInteger(qualified) &&
     total >= 0 && qualified >= 0 && qualified <= total;
 
-  const rate = available && total > 0 ? (qualified / total) * 100 : null;
-  const withoutMilestone = available ? total - qualified : null;
+  const cohortTotal = available ? Number(total) : 0;
+  const milestoneCount = available ? Number(qualified) : 0;
+  const rate = available && cohortTotal > 0 ? (milestoneCount / cohortTotal) * 100 : null;
+  const withoutMilestone = cohortTotal - milestoneCount;
 
   return (
     <div className="p-4 sm:p-5" data-testid="home-qualification-cohort">
@@ -36,7 +38,7 @@ export function QualificationCohortPanel({
             Acquisition and stage-history records must reconcile before a milestone rate can be shown.
           </p>
         </div>
-      ) : total === 0 ? (
+      ) : cohortTotal === 0 ? (
         <div className="mt-4 rounded-xl border border-line bg-surface-muted p-4" data-evidence-state="empty">
           <p className="text-sm font-semibold text-copy-strong">No acquired leads in this period</p>
           <p className="mt-1 text-xs leading-5 text-copy-muted">
@@ -51,7 +53,7 @@ export function QualificationCohortPanel({
           <p className="mt-1 text-[11px] text-copy-subtle">Reached a qualifying milestone by the cutoff</p>
           <div
             role="img"
-            aria-label={qualified + " out of " + total + " acquired leads reached a qualifying milestone before the period ended"}
+            aria-label={milestoneCount + " out of " + cohortTotal + " acquired leads reached a qualifying milestone before the period ended"}
             className="mt-4 flex h-3 w-full overflow-hidden rounded-full bg-surface-muted"
           >
             <div className="h-full bg-brand-700" style={{ width: rate + "%" }} />
@@ -59,11 +61,11 @@ export function QualificationCohortPanel({
           </div>
           <div className="mt-3 grid grid-cols-2 gap-3 text-xs">
             <div>
-              <p className="font-semibold tabular-nums text-copy-strong">{qualified.toLocaleString("en-IN")}</p>
+              <p className="font-semibold tabular-nums text-copy-strong">{milestoneCount.toLocaleString("en-IN")}</p>
               <p className="text-[11px] text-copy-muted">Milestone recorded</p>
             </div>
             <div>
-              <p className="font-semibold tabular-nums text-copy-strong">{withoutMilestone!.toLocaleString("en-IN")}</p>
+              <p className="font-semibold tabular-nums text-copy-strong">{withoutMilestone.toLocaleString("en-IN")}</p>
               <p className="text-[11px] text-copy-muted">No milestone by cutoff</p>
             </div>
           </div>
