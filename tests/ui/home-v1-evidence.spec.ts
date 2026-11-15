@@ -73,16 +73,17 @@ test('Home has exactly four metric headlines, and opens source detail in the sel
 
 
 
+  const geography = page.getByRole('region', { name: 'Geographic data readiness' });
+  await expect(geography).toBeVisible();
+  await expect(geography.getByText('Geographic coverage unavailable', { exact: true })).toBeVisible();
+  await expect(geography.getByText('No world-map distribution or location-based demand claims', { exact: false })).toBeVisible();
+
   const detail = page.getByRole('link', { name: 'Analyze sources', exact: true });
   await expect(detail).toHaveAttribute('href', /\/home\/sources\?period=30d/);
   await detail.click();
   await expect(page).toHaveURL(/\/home\/sources\?period=30d/);
   await expect(page.getByRole('heading', { name: 'Acquisition sources', exact: true })).toBeVisible();
   await expect(page.getByText('Acquisition evidence is unavailable', { exact: false })).toBeVisible();
-  const geography = page.getByRole('region', { name: 'Geographic data readiness' });
-  await expect(geography).toBeVisible();
-  await expect(geography.getByText('Geographic coverage unavailable', { exact: true })).toBeVisible();
-  await expect(geography.getByText('No world-map distribution or location-based demand claims', { exact: false })).toBeVisible();
 
   await expect(page.getByRole('link', { name: 'Back to Home' })).toHaveAttribute('href', /\/home\?period=30d/);
   await expect(page.getByRole('link', { name: 'Review ledger context' })).toBeVisible();
