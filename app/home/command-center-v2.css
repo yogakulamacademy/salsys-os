@@ -79,3 +79,253 @@
 @media (prefers-reduced-motion: reduce) {
   .command-center-v2 .command-kpi > * { transition: none; }
 }
+
+/* Reference geometry: 1024px viewport contains 960px of dashboard content
+   beside the preserved 64px violet icon rail. */
+.command-center-v2 {
+  --app-brand-50: #f4efff;
+  --app-brand-100: #eae1ff;
+  --app-brand-600: #6225eb;
+  --app-brand-700: #5219d8;
+  --app-brand-800: #4311b9;
+  --app-brand-900: #29105b;
+  --app-border: #e4def5;
+  --app-surface-muted: #f7f4ff;
+  --app-text-strong: #10102b;
+  --app-text-muted: #555275;
+  --app-text-subtle: #797596;
+  letter-spacing: -0.008em;
+}
+.command-center-v2 > header { min-height: 56px; }
+.command-center-v2 section[aria-label="Business pulse"] > .command-kpi > * {
+  min-height: 114px;
+  height: 116px;
+  padding: 12px 13px;
+  border-radius: 14px;
+  background: linear-gradient(155deg,#fff 0%,#fff 42%,#f9f5ff 100%);
+  box-shadow: 0 1px 5px rgba(69,31,145,.07);
+}
+.command-center-v2 section[aria-label="Business pulse"] .command-kpi .text-copy-strong {
+  font-size: 24px;
+  font-weight: 750;
+  letter-spacing: -.045em;
+}
+.command-center-v2 section[aria-label="Business pulse"] .command-kpi svg[aria-label="Metric trend"] {
+  width: 76px;
+  height: 39px;
+  color: #6020eb;
+}
+.command-center-v2 section[aria-label="Business pulse"] .command-kpi .bg-brand-50 {
+  background: #f2ebff;
+}
+.command-center-v2 section[aria-label="Performance and work queue"] > section,
+.command-center-v2 section[aria-label="Conversion and collections"] section,
+.command-center-v2 section[aria-label="Daily workspace"] > section,
+.command-center-v2 section[aria-label="Recommended actions"] {
+  border-radius: 15px;
+  border-color: #e2d9f7;
+  background: linear-gradient(155deg,#fff 0%,#fdfbff 100%);
+  box-shadow: 0 2px 9px rgba(75,34,156,.055);
+}
+.command-center-v2 section[aria-label="Performance and work queue"] > section {
+  min-height: 230px;
+}
+.command-center-v2 section[aria-label="Performance and work queue"] > section > div:first-child,
+.command-center-v2 section[aria-label="Conversion and collections"] section > div:first-child {
+  padding-top: 11px;
+}
+.command-center-v2 section[aria-label="Performance and work queue"] .home-queue-evidence {
+  padding: 5px 9px;
+  margin-top: 0;
+  background: #f7f3ff;
+  font-size: 10px;
+}
+.command-center-v2 .home-action-list a {
+  padding: 7px 6px;
+  gap: 8px;
+  border-radius: 9px;
+  border-bottom: 1px solid #efecf6;
+}
+.command-center-v2 .home-action-list a:last-child { border-bottom: none; }
+.command-center-v2 .home-action-list a > span:nth-child(2) > span:first-child {
+  font-size: 11px;
+}
+.command-center-v2 .home-action-list a > span:nth-child(2) > span:nth-child(2),
+.command-center-v2 .home-action-list a > span:nth-child(2) > span:nth-child(3) {
+  font-size: 9px;
+  line-height: 13px;
+}
+.command-center-v2 .home-action-list a > span:first-child { width: 30px; height: 30px; }
+.command-center-v2 .home-action-list a > span:nth-last-child(2) {
+  color: #321b70;
+  background: #eee9ff;
+}
+.command-center-v2 section[aria-label="Conversion and collections"] .home-stage-strip > div {
+  background: #f3efff;
+  border: 1px solid #eee7fd;
+  border-radius: 9px;
+}
+.command-center-v2 section[aria-label="Conversion and collections"] .home-stage-strip > div:last-child {
+  background: linear-gradient(135deg,#7739fa,#4c10cd);
+  color: #fff;
+  border-color: #5b21d7;
+}
+.command-center-v2 section[aria-label="Conversion and collections"] .home-stage-strip > div:last-child p {
+  color: #fff;
+}
+.command-center-v2 .home-quick-actions a {
+  min-height: 85px;
+  gap: 8px;
+  border-color: #e5ddfb;
+  background: linear-gradient(160deg,#faf8ff,#f1ecff);
+}
+.command-center-v2 .home-quick-actions a:hover {
+  background: #e8dcff;
+}
+.command-center-v2 section[aria-label="Daily workspace"] > section {
+  padding: 13px 14px;
+}
+.command-center-v2 section[aria-label="Daily workspace"] h2 {
+  font-weight: 750;
+}
+.command-center-v2 [data-testid="home-empty-state"] {
+  min-height: 120px;
+  padding: 7px 9px;
+  background: transparent;
+}
+.command-center-v2 [data-testid="home-empty-state"] svg {
+  width: 95px;
+  height: 60px;
+}
+.command-center-v2 [data-testid="home-empty-state"] p {
+  max-width: 300px;
+}
+.command-center-v2 [data-testid="home-qualification-cohort"] > p:first-child {
+  display: none;
+}
+.command-center-v2 [data-testid="home-world-map-disabled"] {
+  min-height: 120px;
+  background: transparent;
+}
+.command-center-v2 section[aria-label="Geographic data readiness"] {
+  padding: 13px 14px;
+}
+.command-center-v2 section[aria-label="Geographic data readiness"] > div:nth-child(2) {
+  margin-top: 5px;
+  gap: 8px;
+}
+.command-center-v2 section[aria-label="Recommended actions"] { padding: 13px 14px; }
+.command-center-v2 :is(a,button,summary):focus-visible { outline-offset: 2px; }
+@media (min-width:900px) and (max-width:1199px) {
+  .command-center-v2 { font-size: 12px; }
+  .command-center-v2 > header h1 { font-size: 25px; }
+  .command-center-v2 section[aria-label="Business pulse"] { gap: 10px; }
+  .command-center-v2 section[aria-label="Business pulse"] > .command-kpi > * { padding: 10px; }
+  .command-center-v2 section[aria-label="Business pulse"] .command-kpi .text-copy-strong { font-size: 22px; }
+  .command-center-v2 section[aria-label="Conversion and collections"] .home-qualification-card { gap: 8px; }
+  .command-center-v2 section[aria-label="Conversion and collections"] .home-qualification-card > div:first-child { width: 94px; height: 94px; }
+  .command-center-v2 section[aria-label="Conversion and collections"] .home-qualification-card > div:first-child > div { width: 69px; height: 69px; }
+  .command-center-v2 section[aria-label="Conversion and collections"] .home-stage-strip p:first-child { font-size: 9px; }
+  .command-center-v2 section[aria-label="Geographic data readiness"] > div:nth-child(2) { grid-template-columns: minmax(125px,.7fr) minmax(0,1.3fr); }
+}
+@media (max-width:899px) {
+  .command-center-v2 { padding-bottom: 28px; }
+  .command-center-v2 section[aria-label="Geographic data readiness"] > div:nth-child(2) { grid-template-columns: minmax(0,1fr); }
+}
+@media (max-width:639px) {
+  .command-center-v2 section[aria-label="Business pulse"] > .command-kpi > * { height: 123px; }
+}
+
+/* Remove the extra height introduced by generic CRM empty states and
+   secondary metadata; retain the actual evidence and accessible details. */
+.command-center-v2 > header > div:first-child { flex: 0 0 auto; min-width: 235px; }
+.command-center-v2 > header > div:last-child { gap: 7px; justify-content: flex-end; }
+.command-center-v2 > header > div:last-child > span[title] { display: inline; font-size: 9px; color: #8882a0; }
+.command-center-v2 > header > div:last-child > a[href="/marketing"] {
+  white-space: nowrap;
+  padding-inline: 10px;
+}
+.command-center-v2 section[aria-label="Performance and work queue"] > section {
+  min-height: 224px;
+}
+.command-center-v2 section[aria-label="Performance and work queue"] > section > div:first-child,
+.command-center-v2 section[aria-label="Conversion and collections"] section > div:first-child {
+  padding-top: 9px;
+  padding-bottom: 4px;
+}
+.command-center-v2 section[aria-label="Performance and work queue"] > section > div:first-child p,
+.command-center-v2 section[aria-label="Conversion and collections"] section > div:first-child p {
+  margin-top: 0;
+}
+.command-center-v2 section[aria-label="Performance and work queue"] .home-action-list a {
+  min-height: 38px;
+}
+.command-center-v2 [data-testid="home-empty-state"] {
+  min-height: 95px !important;
+  padding: 4px 8px !important;
+  gap: 0;
+}
+.command-center-v2 [data-testid="home-empty-state"] svg {
+  width: 75px;
+  height: 42px;
+}
+.command-center-v2 [data-testid="home-empty-state"] > p {
+  margin-top: 2px;
+  font-size: 11px;
+  line-height: 15px;
+}
+.command-center-v2 [data-testid="home-empty-state"] > p:nth-of-type(2) {
+  max-width: 350px;
+  font-size: 10px;
+  line-height: 14px;
+}
+.command-center-v2 [data-testid="home-empty-state"] > a { min-height: 24px; margin-top: 3px; }
+.command-center-v2 [data-testid="home-qualification-cohort"] {
+  padding-bottom: 7px;
+}
+.command-center-v2 section[aria-label="Geographic data readiness"] {
+  padding: 10px 13px;
+}
+.command-center-v2 section[aria-label="Geographic data readiness"] > div:first-child p {
+  margin-top: 0;
+}
+.command-center-v2 section[aria-label="Geographic data readiness"] details {
+  margin-top: 7px;
+  padding-top: 7px;
+}
+.command-center-v2 [data-testid="home-world-map-disabled"] { min-height: 92px; }
+.command-center-v2 [data-testid="home-world-map-disabled"] > div {
+  padding: 6px 11px;
+}
+.command-center-v2 [data-testid="home-world-map-disabled"] > div > span { height: 24px; width: 24px; }
+.command-center-v2 [data-testid="home-world-map-disabled"] > div > p { margin-top: 2px; }
+.home-recommendations > section {
+  border-radius: 15px;
+  border-color: #e2d9f7;
+  background: linear-gradient(155deg,#fff,#fcfaff);
+  box-shadow: 0 2px 9px rgba(75,34,156,.055);
+}
+.home-recommendations > section > div:first-child {
+  padding: 11px 14px;
+}
+.home-recommendations > section > div:first-child p {
+  font-size: 10px;
+  line-height: 15px;
+}
+.home-recommendations > section > div:nth-child(2) {
+  margin: 9px 12px;
+  padding: 10px 12px;
+  font-size: 11px;
+}
+.home-recommendations > section > div:nth-child(2) p {
+  margin-top: 1px;
+  line-height: 15px;
+  font-size: 10px;
+}
+@media (min-width:900px) and (max-width:1199px) {
+  .command-center-v2 > header h1 { white-space: nowrap; }
+  .command-center-v2 > header > div:first-child { min-width: 245px; }
+  .command-center-v2 section[aria-label="Conversion and collections"] .home-stage-strip > div {
+    padding-block: 6px;
+  }
+}

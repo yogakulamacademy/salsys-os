@@ -2,7 +2,6 @@ import './source-icons.css';
 import './command-center-v2.css';
 
 import { RecommendedActions } from '@/components/home/recommended-actions';
-import { HomeSetupRecommendations } from '@/components/home-setup-recommendations';
 import { requirePrivilegedWorkspaceAccess } from '@/lib/route-access';
 
 export default async function HomeLayout({ children }: { children: React.ReactNode }) {
@@ -10,9 +9,8 @@ export default async function HomeLayout({ children }: { children: React.ReactNo
 
   return (
     <>
-      <HomeSetupRecommendations />
       {children}
-      <div className="mt-5 pb-8">
+      <div className="home-recommendations mt-3 pb-7">
         <RecommendedActions />
       </div>
     </>
