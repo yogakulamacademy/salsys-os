@@ -254,3 +254,49 @@ test('Home supports the shared dark theme', async ({ page }) => {
   await page.locator('details.topbar-profile-menu > summary').click();
   await page.screenshot({ animations: 'disabled', path: 'test-results/home-dark.png' });
 });
+
+
+test('Home uses the expanded green reference shell and genuinely compact KPI cards', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await page.goto('/home');
+
+  const shell = page.locator('.salsys-home-shell');
+  await expect(shell).toBeVisible();
+
+  const navigation = shell.locator('aside[aria-label="Primary navigation"]');
+  await expect(navigation).toBeVisible();
+  const navWidth = await navigation.evaluate((node) => node.getBoundingClientRect().width);
+  expect(navWidth).toBeGreaterThanOrEqual(220);
+
+  const active = navigation.locator('a[aria-current="page"]');
+  await expect(active).toContainText('Home');
+  const currentStyle = await active.evaluate((node) => ({
+    color: getComputedStyle(node).color,
+    background: getComputedStyle(node).backgroundImage,
+  }));
+  expect(currentStyle.color).toMatch(/rgb\(\s*8,\s*108,\s*39\s*\)/);
+  expect(currentStyle.background).toContain('linear-gradient');
+
+  const brand = navigation.locator('.salsys-brand-mark').first();
+  await expect(brand).toHaveText('S');
+  const brandGradient = await brand.evaluate((node) => getComputedStyle(node).backgroundImage);
+  expect(brandGradient).toContain('linear-gradient');
+
+  const pulse = page.locator('section[aria-label="Business pulse"]');
+  const cardHeights = await pulse.locator('.command-kpi').evaluateAll((nodes) =>
+    nodes.map((node) => node.firstElementChild?.getBoundingClientRect().height ?? 0),
+  );
+  expect(cardHeights).toHaveLength(4);
+  for (const height of cardHeights) {
+    expect(height).toBeGreaterThan(95);
+    expect(height).toBeLessThanOrEqual(160);
+  }
+
+  const destinations = ['Home', 'Leads', 'Conversations', 'Funnel', 'Campaigns', 'Attribution', 'Payments', 'Automation', 'SEO', 'Reports', 'Settings'];
+  for (const label of destinations) {
+    await expect(navigation.getByRole('link', { name: label, exact: true })).toBeVisible();
+  }
+
+  await page.screenshot({ animations: 'disabled', fullPage: true, path: 'test-results/home-approved-reference-desktop.png' });
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(1440);
+});
