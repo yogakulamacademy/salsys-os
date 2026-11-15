@@ -19,6 +19,7 @@ import { DecisionMetricCard } from "@/components/intelligence/decision-metric-ca
 import { LeadActivityChart } from "@/components/home/lead-activity-chart";
 import { QualificationCohortPanel } from "@/components/home/qualification-cohort-panel";
 import { HomeGeographyReadiness } from "@/components/home/home-geography-readiness";
+import { RecommendedActions } from "@/components/home/recommended-actions";
 import { HomeReportingCoverage, type HomeReportingEvidence } from "@/components/home/home-reporting-coverage";
 import { HomeEmptyState } from "@/components/home/home-empty-state";
 import { isMockMode } from "@/lib/data";
@@ -505,28 +506,9 @@ export default async function HomePage({ searchParams }: HomePageProps) {
         </section>
       </section>
 
-      <section aria-label="Recommended actions" className="min-w-0 overflow-hidden rounded-2xl border border-line bg-surface p-4 sm:p-5">
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <div>
-            <p className="text-[10px] font-bold uppercase tracking-[0.1em] text-copy-subtle">Recommended actions</p>
-            <h2 className="mt-1 text-sm font-semibold text-copy-strong">Deterministic CRM guidance</h2>
-            <p className="mt-1 text-[11px] text-copy-muted">Prioritized from recorded conversations, follow-ups, and opportunity state.</p>
-          </div>
-          <span className="rounded-full border border-line bg-surface-muted px-3 py-1 text-[11px] font-semibold text-copy-strong">Observed evidence</span>
-        </div>
-        {activeAttention.length ? (
-          <div className="mt-3 grid gap-2 md:grid-cols-3">
-            {activeAttention.slice(0, 3).map((item) => (
-              <Link key={item.id} href={item.href} title={item.evidence + " · " + item.reason} className="flex min-w-0 items-center justify-between gap-2 rounded-xl border border-brand-100 bg-brand-50 px-3 py-3 text-xs text-copy-strong transition hover:border-brand-600 hover:bg-brand-100">
-                <span className="min-w-0"><span className="block font-semibold">{recommendedActionTitle(item)}</span><span className="mt-1 block text-[11px] text-copy-muted">{item.value.toLocaleString("en-IN")} to review</span></span>
-                <ArrowRight size={15} className="shrink-0 text-brand-700" />
-              </Link>
-            ))}
-          </div>
-        ) : (
-          <p className="mt-3 rounded-xl border border-line bg-surface-muted px-3 py-4 text-xs text-copy-muted">No evidence-backed recommendation is available from the current action snapshot.</p>
-        )}
-      </section>
+      <div className="home-recommendations">
+        <RecommendedActions />
+      </div>
 
       <HomeReportingCoverage items={reportingEvidence} />
     </div>
