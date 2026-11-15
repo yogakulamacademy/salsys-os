@@ -9,14 +9,10 @@ import {
   BookOpen,
   ChevronRight,
   CircleDollarSign,
-  CreditCard,
-  Filter,
-  GitBranch,
   Home,
   Megaphone,
   Menu,
   MessageSquareText,
-  Search,
   Settings,
   Sparkles,
   UsersRound,
@@ -73,7 +69,6 @@ function askSalsys() {
 
 export function DesktopHoverSidebarV3() {
   const pathname = usePathname();
-  const homeView = pathname === "/home" || pathname.startsWith("/home/");
   const primaryRef = useRef<HTMLElement | null>(null);
   const [open, setOpen] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -191,22 +186,6 @@ export function DesktopHoverSidebarV3() {
     }
 
     if (!privileged) return [];
-
-    // On Home, expose the direct destinations in the approved reference.
-    // The same privileged role guard still applies to these links.
-    if (homeView) return [
-      { id: "home", label: "Home", icon: Home, href: "/home" },
-      { id: "leads", label: "Leads", icon: UsersRound, href: "/leads" },
-      { id: "conversations", label: "Conversations", icon: MessageSquareText, href: "/conversations" },
-      { id: "funnel", label: "Funnel", icon: Filter, href: "/funnel" },
-      { id: "campaigns", label: "Campaigns", icon: Megaphone, href: "/campaigns" },
-      { id: "attribution", label: "Attribution", icon: GitBranch, href: "/attribution" },
-      { id: "payments", label: "Payments", icon: CreditCard, href: "/revenue" },
-      { id: "automation", label: "Automation", icon: Workflow, href: "/automation" },
-      { id: "seo", label: "SEO", icon: Search, href: "/seo" },
-      { id: "reports", label: "Reports", icon: BarChart3, href: "/performance" },
-      { id: "settings", label: "Settings", icon: Settings, href: "/settings/overview" },
-    ];
 
     return [
       {
@@ -328,7 +307,7 @@ export function DesktopHoverSidebarV3() {
         ],
       },
     ];
-  }, [admin, employee, privileged, homeView]);
+  }, [admin, employee, privileged]);
 
   function isCurrent(section: SectionLink) {
     if (activePath(pathname, section.href)) return true;
@@ -338,8 +317,6 @@ export function DesktopHoverSidebarV3() {
   function closeNav() {
     setOpen(false);
   }
-
-  const expanded = homeView || open;
 
   return (
     <>
@@ -355,14 +332,15 @@ export function DesktopHoverSidebarV3() {
       <aside
         ref={primaryRef}
         onMouseEnter={() => setOpen(true)}
+        onMouseLeave={() => setOpen(false)}
         onFocusCapture={() => setOpen(true)}
-        className={`fixed inset-y-0 left-0 z-[70] hidden flex-col border-r border-line bg-surface transition-[width,box-shadow] duration-200 lg:flex ${expanded ? "w-[232px] shadow-panel" : "w-16"}`}
+        className={`fixed inset-y-0 left-0 z-[70] hidden flex-col border-r border-line bg-surface transition-[width,box-shadow] duration-200 lg:flex ${open ? "w-[232px] shadow-panel" : "w-16"}`}
         aria-label="Primary navigation"
       >
         <div className="flex h-16 shrink-0 items-center border-b border-line px-3">
           <Link href={employee ? "/dashboard" : "/home"} aria-label="SalsysOS home" onClick={closeNav} className="flex min-w-0 items-center gap-3">
             <BrandMark />
-            {expanded ? (
+            {open ? (
               <span className="min-w-0">
                 <span className="block truncate text-[14px] font-semibold text-copy-strong">SalsysOS</span>
                 <span className="block max-w-[150px] truncate text-[12px] text-copy-subtle">{organizationName}</span>
@@ -381,12 +359,12 @@ export function DesktopHoverSidebarV3() {
                   key={section.id}
                   href={section.href}
                   onClick={closeNav}
-                  title={expanded ? undefined : section.label}
+                  title={open ? undefined : section.label}
                   aria-current={current ? "page" : undefined}
-                  className={`flex h-11 items-center rounded-ui transition ${expanded ? "gap-3 px-3" : "justify-center"} ${current ? "bg-brand-700 text-white shadow-sm" : "text-copy-muted hover:bg-surface-muted hover:text-copy-strong"}`}
+                  className={`flex h-11 items-center rounded-ui transition ${open ? "gap-3 px-3" : "justify-center"} ${current ? "bg-brand-700 text-white shadow-sm" : "text-copy-muted hover:bg-surface-muted hover:text-copy-strong"}`}
                 >
                   <Icon size={19} strokeWidth={1.8} />
-                  {expanded ? <span className="text-[14px] font-medium">{section.label}</span> : null}
+                  {open ? <span className="text-[14px] font-medium">{section.label}</span> : null}
                 </Link>
               );
             })}
@@ -401,15 +379,15 @@ export function DesktopHoverSidebarV3() {
               askSalsys();
               closeNav();
             }}
-            className={`flex h-10 w-full items-center rounded-ui text-copy-muted transition hover:bg-brand-50 hover:text-brand-700 ${expanded ? "gap-3 px-3" : "justify-center"}`}
+            className={`flex h-10 w-full items-center rounded-ui text-copy-muted transition hover:bg-brand-50 hover:text-brand-700 ${open ? "gap-3 px-3" : "justify-center"}`}
           >
             <Sparkles size={18} strokeWidth={1.8} />
-            {expanded ? <span className="text-[13px] font-medium">Workspace search</span> : null}
+            {open ? <span className="text-[13px] font-medium">Workspace search</span> : null}
           </button>
 
-          <div className={expanded ? "mt-2 flex items-center gap-2 px-3 py-1 text-[11px] text-copy-subtle" : "mt-2 flex justify-center py-1"}>
+          <div className={open ? "mt-2 flex items-center gap-2 px-3 py-1 text-[11px] text-copy-subtle" : "mt-2 flex justify-center py-1"}>
             <span className={`h-2 w-2 rounded-full ${mock ? "bg-amber-400" : "bg-emerald-500"}`} />
-            {expanded ? (mock ? "Development" : "Live workspace") : null}
+            {open ? (mock ? "Development" : "Live workspace") : null}
           </div>
         </div>
       </aside>
@@ -515,9 +493,6 @@ export function DesktopHoverSidebarV3() {
           }
           .salsys-meta-sidebar-shell .legacy-shell-host > div > .salsys-app-shell-content {
             padding-left: 4rem !important;
-          }
-          .salsys-home-shell .legacy-shell-host > div > .salsys-app-shell-content {
-            padding-left: 232px !important;
           }
           .salsys-meta-sidebar-shell .legacy-shell-host button[aria-label="Open section menu"] {
             display: none !important;

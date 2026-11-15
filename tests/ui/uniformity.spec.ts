@@ -256,47 +256,42 @@ test('Home supports the shared dark theme', async ({ page }) => {
 });
 
 
-test('Home uses the expanded green reference shell and genuinely compact KPI cards', async ({ page }) => {
+test('Home keeps icon-only violet sidebar with hover expansion and the reference panels', async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 1000 });
   await page.goto('/home');
-
-  const shell = page.locator('.salsys-home-shell');
-  await expect(shell).toBeVisible();
-
-  const navigation = shell.locator('aside[aria-label="Primary navigation"]');
-  await expect(navigation).toBeVisible();
-  const navWidth = await navigation.evaluate((node) => node.getBoundingClientRect().width);
-  expect(navWidth).toBeGreaterThanOrEqual(220);
-
-  const active = navigation.locator('a[aria-current="page"]');
-  await expect(active).toContainText('Home');
-  const currentStyle = await active.evaluate((node) => ({
-    color: getComputedStyle(node).color,
-    background: getComputedStyle(node).backgroundImage,
-  }));
-  expect(currentStyle.color).toMatch(/rgb\(\s*8,\s*108,\s*39\s*\)/);
-  expect(currentStyle.background).toContain('linear-gradient');
-
-  const brand = navigation.locator('.salsys-brand-mark').first();
+  await page.mouse.move(800, 400);
+  const nav = page.locator('aside[aria-label="Primary navigation"]');
+  await expect(nav).toBeVisible();
+  await expect.poll(() => nav.evaluate(node => Math.round(node.getBoundingClientRect().width))).toBe(64);
+  const active = nav.locator('a[aria-current="page"]');
+  await expect(active).toHaveAttribute('href', '/home');
+  const bg = await active.evaluate(node => getComputedStyle(node).backgroundColor);
+  expect(bg).toMatch(/rgb\(\s*87,\s*67,\s*197\s*\)/);
+  const brand = nav.locator('.salsys-brand-mark').first();
   await expect(brand).toHaveText('S');
-  const brandGradient = await brand.evaluate((node) => getComputedStyle(node).backgroundImage);
-  expect(brandGradient).toContain('linear-gradient');
+  await expect(page.getByRole('heading', { name: 'Command Center', exact: true })).toBeVisible();
 
   const pulse = page.locator('section[aria-label="Business pulse"]');
-  const cardHeights = await pulse.locator('.command-kpi').evaluateAll((nodes) =>
-    nodes.map((node) => node.firstElementChild?.getBoundingClientRect().height ?? 0),
-  );
-  expect(cardHeights).toHaveLength(4);
-  for (const height of cardHeights) {
-    expect(height).toBeGreaterThan(95);
-    expect(height).toBeLessThanOrEqual(160);
+  const heights = await pulse.locator('.command-kpi').evaluateAll(nodes =>
+    nodes.map(node => node.firstElementChild?.getBoundingClientRect().height ?? 0));
+  expect(heights).toHaveLength(4);
+  for (const height of heights) {
+    expect(height).toBeGreaterThan(90);
+    expect(height).toBeLessThanOrEqual(162);
   }
-
-  const destinations = ['Home', 'Leads', 'Conversations', 'Funnel', 'Campaigns', 'Attribution', 'Payments', 'Automation', 'SEO', 'Reports', 'Settings'];
-  for (const label of destinations) {
-    await expect(navigation.getByRole('link', { name: label, exact: true })).toBeVisible();
+  const conversion = page.getByRole('region', { name: 'Conversion and collections' });
+  for (const title of ['Pipeline health', 'Qualification', 'Opportunity pipeline', 'Lead sources', 'Qualification milestones', 'Recorded collections trend', 'Upcoming batch demand']) {
+    await expect(conversion.getByRole('heading', { name: title, exact: true })).toBeVisible();
   }
-
-  await page.screenshot({ animations: 'disabled', fullPage: true, path: 'test-results/home-approved-reference-desktop.png' });
-  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(1440);
+  await expect(page.getByRole('heading', { name: 'Trends & momentum' })).toBeVisible();
+  await page.screenshot({ animations: 'disabled', fullPage: true, path: 'test-results/home-purple-reference-desktop.png' });
+  await nav.hover();
+  await expect.poll(() => nav.evaluate(node => Math.round(node.getBoundingClientRect().width))).toBe(232);
+  await expect(nav.getByRole('link', { name: 'Home', exact: true })).toBeVisible();
+  await page.mouse.move(820, 400);
+  await expect.poll(() => nav.evaluate(node => Math.round(node.getBoundingClientRect().width))).toBe(64);
+  for (const width of [390, 768, 1440]) {
+    await page.setViewportSize({width, height: 900});
+    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
+  }
 });
