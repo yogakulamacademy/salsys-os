@@ -10,7 +10,7 @@ export default async function HomeLayout({ children }: { children: React.ReactNo
   return (
     <>
       {children}
-      <div className="command-center-v2 home-recommendations mt-3 pb-7">
+      <div className="home-recommendations mt-3 pb-7">
         <RecommendedActions />
       </div>
     </>
