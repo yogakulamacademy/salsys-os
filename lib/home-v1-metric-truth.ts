@@ -68,7 +68,7 @@ export async function getHomeV1MetricTruth(
       : parseQualification(qualificationResponse.data),
     pipeline: pipelineResponse.error
       ? null
-      : parsePipeline(pipelineResponse.data),
+      : parseHomePipelineSnapshot(pipelineResponse.data),
   };
 }
 
@@ -118,7 +118,7 @@ function parseQualification(value: unknown): QualificationSnapshot | null {
   return { cohortLeads, qualifiedLeads, historyCovered, sources, evidence: "historical-milestone" };
 }
 
-function parsePipeline(value: unknown): PipelineSnapshot | null {
+export function parseHomePipelineSnapshot(value: unknown): PipelineSnapshot | null {
   const row = object(value);
   if (!row || row.basis !== "open_eligible_leads_snapshot") return null;
   const eligibleCount = nonNegativeInteger(row.eligible_count);
