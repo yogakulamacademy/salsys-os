@@ -6,7 +6,7 @@ import {
   Clock3,
   CreditCard,
   Inbox,
-  Sparkles,
+  Zap,
   UserRoundCheck,
   Users,
   type LucideIcon,
@@ -200,10 +200,8 @@ export default async function HomePage({ searchParams }: HomePageProps) {
     <div className="command-center-v2 w-full min-w-0 space-y-4 pb-8 sm:space-y-5">
       <header className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
         <div className="min-w-0">
-          <h1 className="text-[28px] font-semibold tracking-[-0.04em] text-copy-strong">Command Center</h1>
-          <p className="mt-1 text-[13px] leading-5 text-copy-muted">
-            Track performance, see what needs attention, and keep work moving.
-          </p>
+          <h1 className="text-[28px] font-semibold tracking-[-0.04em] text-copy-strong">Home</h1>
+          <p className="mt-1 text-[13px] leading-5 text-copy-muted">Executive command center</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <PeriodPresets selected={periodAnalytics.period.preset} />
@@ -223,23 +221,20 @@ export default async function HomePage({ searchParams }: HomePageProps) {
               </form>
             </div>
           </details>
-          <Link href="/marketing" className="inline-flex h-10 items-center gap-2 rounded-ui border border-line bg-surface px-3 text-xs font-semibold text-copy-strong hover:border-brand-300 hover:text-brand-700">
-            <Sparkles size={14} /> Explore intelligence
-          </Link>
         </div>
       </header>
-
-      <HomeReportingCoverage items={reportingEvidence} />
 
       <section aria-label="Business pulse" className="grid grid-cols-2 gap-2 sm:gap-3 xl:grid-cols-4">
         <div className="command-kpi min-w-0">
           <DecisionMetricCard
+            compact
             icon={<Users size={17} />}
             label="Leads"
             value={totalLeads == null ? "—" : totalLeads.toLocaleString("en-IN")}
             detail="Created in the selected period"
             delta={periodAnalytics.available.leads ? periodAnalytics.leads.changePercent : undefined}
             deltaDirection="neutral"
+            trend={periodAnalytics.leadSeries.map((point) => point.current)}
             comparisonLabel="vs previous comparable period"
             href="/leads"
             evidenceLabel={periodAnalytics.available.leads ? "CRM lead evidence" : "Evidence unavailable"}
@@ -248,6 +243,7 @@ export default async function HomePage({ searchParams }: HomePageProps) {
         </div>
         <div className="command-kpi min-w-0">
           <DecisionMetricCard
+            compact
             icon={<UserRoundCheck size={17} />}
             label="Qualified leads"
             value={qualifiedLeads == null ? "—" : qualifiedLeads.toLocaleString("en-IN")}
@@ -260,6 +256,7 @@ export default async function HomePage({ searchParams }: HomePageProps) {
         </div>
         <div className="command-kpi min-w-0">
           <DecisionMetricCard
+            compact
             icon={<CircleDollarSign size={17} />}
             label="Open pipeline value"
             value={openPipelineValue}
@@ -273,6 +270,7 @@ export default async function HomePage({ searchParams }: HomePageProps) {
         </div>
         <div className="command-kpi min-w-0">
           <DecisionMetricCard
+            compact
             icon={<CircleDollarSign size={17} />}
             label="Recorded collections"
             value={collectedValue}
@@ -288,10 +286,13 @@ export default async function HomePage({ searchParams }: HomePageProps) {
         </div>
       </section>
 
-      <p className="text-[11px] leading-5 text-copy-subtle">
-        Leads and recorded collections refer to the selected UTC period. Qualified leads reached a recorded milestone by period end.
-        Open pipeline is a current-state estimate and does not change with the period filter.
-      </p>
+      <details className="rounded-lg px-1 text-[11px] text-copy-subtle">
+        <summary className="w-fit cursor-pointer text-brand-700">Metric definitions and reporting scope</summary>
+        <p className="mt-2 max-w-4xl leading-5">
+          Leads and recorded collections refer to the selected UTC period. Qualified leads reached a recorded milestone by period end.
+          Open pipeline is a current-state estimate and does not change with the period filter.
+        </p>
+      </details>
 
       <nav aria-label="Home section shortcuts" className="flex flex-wrap gap-2 xl:hidden">
         {[
@@ -310,14 +311,15 @@ export default async function HomePage({ searchParams }: HomePageProps) {
       </nav>
 
       {activeAttention.length > 0 ? (
-        <section aria-label="Top priority" className="flex flex-col gap-3 rounded-2xl border border-line bg-surface-soft px-4 py-3.5 sm:flex-row sm:items-center sm:justify-between sm:px-5">
-          <div className="min-w-0">
-            <h2 className="text-sm font-semibold text-copy-strong">
-              <span className="mr-2 text-[11px] font-medium text-copy-muted">{activeAttention[0].priority}</span>
+        <section aria-label="Top priority" className="flex flex-col gap-3 rounded-2xl border border-emerald-200 bg-gradient-to-r from-emerald-50 via-green-50 to-white px-4 py-3.5 sm:flex-row sm:items-center sm:justify-between sm:px-5 dark:border-emerald-900 dark:from-emerald-950/30 dark:to-surface">
+          <div className="flex min-w-0 items-center gap-3">
+            <Zap size={22} className="shrink-0 text-brand-700" aria-hidden="true" />
+            <div className="min-w-0">
+              <h2 className="text-sm font-semibold text-copy-strong">Immediate priority</h2>
+              <p className="mt-0.5 text-xs text-copy-muted" title={activeAttention[0].reason + " · " + activeAttention[0].evidence}>
                 {activeAttention[0].value.toLocaleString("en-IN")} · {recommendedActionTitle(activeAttention[0])}
-            </h2>
-            <p className="mt-1 text-xs leading-5 text-copy-muted">{activeAttention[0].reason}</p>
-            <p className="mt-1 text-[11px] leading-5 text-copy-subtle">{activeAttention[0].evidence} · {activeAttention[0].timing}</p>
+              </p>
+            </div>
           </div>
           <Link href={activeAttention[0].href} className="inline-flex h-9 shrink-0 items-center gap-2 self-start rounded-ui bg-brand-700 px-3 text-xs font-semibold text-white hover:bg-brand-800 sm:self-auto">
             {activeAttention[0].actionLabel} <ArrowRight size={13} />
@@ -325,10 +327,10 @@ export default async function HomePage({ searchParams }: HomePageProps) {
         </section>
       ) : null}
 
-      <section aria-label="Performance and work queue" className="grid min-w-0 gap-4 xl:grid-cols-[minmax(0,1.65fr)_minmax(300px,.85fr)]">
+      <section aria-label="Performance and work queue" className="grid min-w-0 gap-3 xl:grid-cols-[minmax(0,1.55fr)_minmax(300px,.85fr)]">
         <section className="min-w-0 overflow-hidden rounded-2xl border border-line bg-surface">
           <SectionHeader eyebrow="Performance · period" title="Lead activity" actionHref="/leads" actionLabel="Open leads" />
-          <div className="p-4 sm:p-5">
+          <div className="px-4 pb-3 pt-1 sm:px-5">
             <LeadActivityChart
               points={periodAnalytics.leadSeries}
               available={periodAnalytics.available.leads}
@@ -336,15 +338,15 @@ export default async function HomePage({ searchParams }: HomePageProps) {
               previousTotal={periodAnalytics.available.leads ? periodAnalytics.leads.previous : null}
               periodLabel={periodAnalytics.period.label}
             />
-            <div className="mt-5 grid gap-3 border-t border-line pt-4 sm:grid-cols-3">
-              <SnapshotMetric label="Enrolled leads" value={enrolledLeads == null ? "—" : enrolledLeads.toLocaleString("en-IN")} />
-              <SnapshotMetric label="Active pipeline · now" value={metrics.activePipeline.toLocaleString("en-IN")} />
-              <SnapshotMetric label="High intent · now" value={metrics.highIntent.toLocaleString("en-IN")} />
-            </div>
-            <p className="mt-3 text-[11px] leading-5 text-copy-subtle">
-              Enrolled leads reflect CRM stage-history entries in the period, not the authoritative operational Enrollment-record count. Pipeline and intent are current-state counts.
-            </p>
-            <details className="mt-3 border-t border-line pt-3">
+            <details className="mt-2 border-t border-line pt-2">
+              <summary className="cursor-pointer text-[11px] font-medium text-brand-700">Operational and financial context</summary>
+              <div className="mt-3 grid gap-3 sm:grid-cols-3">
+                <SnapshotMetric label="Enrolled leads · period" value={enrolledLeads == null ? "—" : enrolledLeads.toLocaleString("en-IN")} />
+                <SnapshotMetric label="Active pipeline · now" value={metrics.activePipeline.toLocaleString("en-IN")} />
+                <SnapshotMetric label="High intent · now" value={metrics.highIntent.toLocaleString("en-IN")} />
+              </div>
+              <p className="mt-2 text-[11px] text-copy-subtle">Stage-history counts are distinct from authoritative enrollment records.</p>
+              <details className="mt-3">
               <summary className="cursor-pointer text-xs font-medium text-brand-700 dark:text-brand-300">Financial context</summary>
               <div className="mt-3 grid gap-4 rounded-xl bg-surface-muted p-3 sm:grid-cols-2">
                 <SnapshotMetric label="Recorded collections · period" value={collectedValue} change={periodPrimaryRevenue?.changePercent ?? null} />
@@ -355,13 +357,17 @@ export default async function HomePage({ searchParams }: HomePageProps) {
                 Recorded collections are CRM ledger entries pending external settlement reconciliation.
                 Open pipeline values are current commercial estimates, not recognized revenue.
               </p>
+              </details>
             </details>
           </div>
         </section>
         <section id="home-action-queue" className="min-w-0 scroll-mt-24 overflow-hidden rounded-2xl border border-line bg-surface">
           <SectionHeader eyebrow="Needs attention · current" title="Action queue" actionHref="/admissions" actionLabel="View all" />
           {metrics.needsReply > 0 ? (
-            <ReplyPressure total={metrics.needsReply} overHour={metrics.waitingOverHour} />
+            <details className="mx-4 mt-1 text-xs">
+              <summary className="cursor-pointer font-medium text-brand-700">Reply waiting-time breakdown</summary>
+              <ReplyPressure total={metrics.needsReply} overHour={metrics.waitingOverHour} />
+            </details>
           ) : null}
           <div className="space-y-1 p-3 sm:p-4">
             {activeAttention.length ? activeAttention.map((item) => <AttentionRow key={item.id} item={item} />) : <HomeEmptyState variant="queue" compact title={mock ? "Queue evidence unavailable" : "No recorded action backlog"} description={mock ? "Current conversation and follow-up evidence cannot be verified in this environment." : "No current reply, overdue follow-up, first-touch, payment-stage, or valuation actions were returned by the CRM snapshot."} unavailable={mock} />}
@@ -369,7 +375,7 @@ export default async function HomePage({ searchParams }: HomePageProps) {
         </section>
       </section>
 
-      <section id="home-conversion" aria-label="Conversion and collections" className="grid min-w-0 scroll-mt-24 gap-4 lg:grid-cols-3">
+      <section id="home-conversion" aria-label="Conversion and collections" className="grid min-w-0 scroll-mt-24 gap-3 lg:grid-cols-2">
         <section className="min-w-0 overflow-hidden rounded-2xl border border-line bg-surface">
           <SectionHeader eyebrow="Acquisition cohort · period" title="Qualification milestones" actionHref={sourceDetailHref} actionLabel="Inspect cohort" />
           <QualificationCohortPanel
@@ -397,21 +403,15 @@ export default async function HomePage({ searchParams }: HomePageProps) {
             ) : null}
           </div>
         </section>
-        <section className="min-w-0 overflow-hidden rounded-2xl border border-line bg-surface">
-          <SectionHeader eyebrow="Sales · current" title="Pipeline health" actionHref="/admissions?view=pipeline" actionLabel="Open pipeline" />
-          <div className="p-4">
-            <PipelineSnapshot active={metrics.activePipeline} highIntent={metrics.highIntent} payment={metrics.paymentPending} enrolled={counts.enrolled ?? 0} counts={counts} />
-          </div>
-        </section>
       </section>
 
-      <section id="home-business-breakdown" aria-label="Business breakdown" className="grid min-w-0 scroll-mt-24 gap-4 lg:grid-cols-2">
+      <section id="home-business-breakdown" aria-label="Business breakdown" className="grid min-w-0 scroll-mt-24 gap-3 lg:grid-cols-3">
         <section className="min-w-0 overflow-hidden rounded-2xl border border-line bg-surface">
           <SectionHeader eyebrow="Acquisition · period" title="Lead sources" actionHref={sourceDetailHref} actionLabel="Analyze sources" />
           <div className="space-y-1 p-3 sm:p-4">
             {acquisitionSources.length ? (
-              <div className="grid items-center gap-2 sm:grid-cols-[128px_minmax(0,1fr)]">
-                <SourceMixRing sources={acquisitionSources} total={totalLeads} />
+              <div className="grid items-center gap-2 2xl:grid-cols-[116px_minmax(0,1fr)]">
+                <div className="hidden 2xl:block"><SourceMixRing sources={acquisitionSources} total={totalLeads} /></div>
                 <div className="min-w-0">
                   {acquisitionSources.slice(0, 4).map((source) => (
                     <SourceRow key={source.source} source={validatedSourceQuality?.find((item) => item.source === source.source) ?? source} qualificationAvailable={validatedSourceQuality != null} periodTotal={totalLeads} href={sourceDetailHref} />
@@ -449,6 +449,12 @@ export default async function HomePage({ searchParams }: HomePageProps) {
                 Lead demand reflects current CRM associations, not course sales. Higher-intent and payment-stage indicators may overlap and are never summed. Course-level collections require a verified payment-to-enrollment link.
               </p>
             ) : null}
+          </div>
+        </section>
+        <section className="min-w-0 overflow-hidden rounded-2xl border border-line bg-surface">
+          <SectionHeader eyebrow="Sales · current" title="Pipeline health" actionHref="/admissions?view=pipeline" actionLabel="Open pipeline" />
+          <div className="p-4">
+            <PipelineSnapshot active={metrics.activePipeline} highIntent={metrics.highIntent} payment={metrics.paymentPending} enrolled={counts.enrolled ?? 0} counts={counts} />
           </div>
         </section>
       </section>
@@ -491,6 +497,31 @@ export default async function HomePage({ searchParams }: HomePageProps) {
           </Link>
         </section>
       </section>
+
+      <section aria-label="Recommended actions" className="min-w-0 overflow-hidden rounded-2xl border border-line bg-surface p-4 sm:p-5">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div>
+            <p className="text-[10px] font-bold uppercase tracking-[0.1em] text-copy-subtle">Recommended actions</p>
+            <h2 className="mt-1 text-sm font-semibold text-copy-strong">Deterministic CRM guidance</h2>
+            <p className="mt-1 text-[11px] text-copy-muted">Prioritized from recorded conversations, follow-ups, and opportunity state.</p>
+          </div>
+          <span className="rounded-full border border-line bg-surface-muted px-3 py-1 text-[11px] font-semibold text-copy-strong">Observed evidence</span>
+        </div>
+        {activeAttention.length ? (
+          <div className="mt-3 grid gap-2 md:grid-cols-3">
+            {activeAttention.slice(0, 3).map((item) => (
+              <Link key={item.id} href={item.href} title={item.evidence + " · " + item.reason} className="flex min-w-0 items-center justify-between gap-2 rounded-xl border border-emerald-100 bg-emerald-50/50 px-3 py-3 text-xs text-copy-strong transition hover:border-brand-600 hover:bg-brand-50 dark:border-emerald-900 dark:bg-emerald-950/20">
+                <span className="min-w-0"><span className="block font-semibold">{recommendedActionTitle(item)}</span><span className="mt-1 block text-[11px] text-copy-muted">{item.value.toLocaleString("en-IN")} to review</span></span>
+                <ArrowRight size={15} className="shrink-0 text-brand-700" />
+              </Link>
+            ))}
+          </div>
+        ) : (
+          <p className="mt-3 rounded-xl border border-line bg-surface-muted px-3 py-4 text-xs text-copy-muted">No evidence-backed recommendation is available from the current action snapshot.</p>
+        )}
+      </section>
+
+      <HomeReportingCoverage items={reportingEvidence} />
     </div>
   );
 }
@@ -528,8 +559,7 @@ function AttentionRow({ item }: { item: AttentionItem }) {
       </span>
       <span className="min-w-0 flex-1">
         <span className="block text-xs font-semibold text-copy-strong">{recommendedActionTitle(item)}</span>
-        <span className="mt-1 block text-[11px] leading-4 text-copy-muted">{item.reason}</span>
-        <span className="mt-1 block text-[10px] leading-4 text-copy-subtle">{item.priority} · {item.evidence}</span>
+        <span className="sr-only">{item.reason} · {item.priority} · {item.evidence}</span>
       </span>
       <span className="shrink-0 rounded-lg bg-surface-muted px-2 py-1 text-xs font-semibold tabular-nums text-copy-strong">
         {item.value.toLocaleString("en-IN")}
@@ -634,7 +664,10 @@ function PipelineSnapshot({
           </div>
         </div>
       ) : null}
-      {rows.map(([label, value]) => (
+      <details className="border-t border-line pt-2 text-xs">
+        <summary className="cursor-pointer font-medium text-brand-700">Detailed stage counts</summary>
+        <div className="mt-3 space-y-3">
+        {rows.map(([label, value]) => (
         <div key={label}>
           <div className="flex items-center justify-between gap-3 text-xs">
             <span className="text-copy-muted">{label}</span>
@@ -645,6 +678,8 @@ function PipelineSnapshot({
           </div>
         </div>
       ))}
+        </div>
+      </details>
       <p className="text-[10px] leading-4 text-copy-subtle">Current CRM stage indicators; not a sequential conversion funnel.</p>
     </div>
   );
@@ -846,7 +881,7 @@ function SourceMixRing({ sources, total }: { sources: DashboardPeriodSource[]; t
       title={leading.leads.toLocaleString("en-IN") + " of " + total.toLocaleString("en-IN") + " leads from " + sourceLabel(leading.source)}
     >
       <svg viewBox="0 0 120 120" className="absolute inset-0 h-full w-full" aria-hidden="true" focusable="false">
-        <circle cx="60" cy="60" r="44" fill="none" stroke="currentColor" strokeWidth="12" className="text-violet-100 dark:text-violet-900/50" />
+        <circle cx="60" cy="60" r="44" fill="none" stroke="currentColor" strokeWidth="12" className="text-emerald-100 dark:text-emerald-900/50" />
         <circle cx="60" cy="60" r="44" fill="none" stroke="currentColor" strokeWidth="12" className="text-brand-700" strokeDasharray={String(circumference * share / 100) + " " + String(circumference)} transform="rotate(-90 60 60)" />
       </svg>
       <div className="relative z-10 text-center">
