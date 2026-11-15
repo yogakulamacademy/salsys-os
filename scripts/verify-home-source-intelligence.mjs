@@ -38,7 +38,7 @@ expect(page.includes("getDashboardPeriodAnalytics(query)") &&
 expect(page.includes("This is not a source-to-cash conversion report") &&
   page.includes("Source-attributed collections will remain unavailable"),
   "No unsupported source-to-cash attribution claims.");
-expect(source.includes("this is not proof") || source.includes("this is not proof") || source.includes("not proof the leads were low quality"),
+expect(source.includes("not proof the leads were low quality"),
   "Keep the low-milestone diagnostic distinct from causal claims.");
 if (failures.length) {
   console.error("Home source intelligence contracts failed:");
