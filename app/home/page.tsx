@@ -199,8 +199,8 @@ export default async function HomePage({ searchParams }: HomePageProps) {
   ];
 
   return (
-    <div className="command-center-v2 w-full min-w-0 space-y-4 pb-8 sm:space-y-5">
-      <header className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
+    <div className="command-center-v2 w-full min-w-0 space-y-3 pb-6">
+      <header className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
         <div className="min-w-0">
           <h1 className="text-[28px] font-bold tracking-[-0.045em] text-copy-strong">Command Center</h1>
           <p className="mt-1 text-[13px] leading-5 text-copy-muted">Real-time performance and growth</p>
@@ -227,7 +227,7 @@ export default async function HomePage({ searchParams }: HomePageProps) {
         </div>
       </header>
 
-      <section aria-label="Business pulse" className="grid grid-cols-2 gap-2 sm:gap-3 xl:grid-cols-4">
+      <section aria-label="Business pulse" className="grid grid-cols-2 gap-2.5 lg:grid-cols-4">
         <div className="command-kpi min-w-0">
           <DecisionMetricCard
             compact
@@ -313,11 +313,12 @@ export default async function HomePage({ searchParams }: HomePageProps) {
         ))}
       </nav>
 
-      <section aria-label="Performance and work queue" className="grid min-w-0 gap-3 xl:grid-cols-[minmax(0,1.55fr)_minmax(300px,.85fr)]">
+      <section aria-label="Performance and work queue" className="grid min-w-0 gap-3 lg:grid-cols-[minmax(0,1.28fr)_minmax(0,1fr)]">
         <section className="min-w-0 overflow-hidden rounded-2xl border border-line bg-surface">
           <SectionHeader eyebrow="Performance · period" title="Lead activity" actionHref="/leads" actionLabel="Open leads" />
           <div className="px-4 pb-3 pt-1 sm:px-5">
             <LeadActivityChart
+              compact
               points={periodAnalytics.leadSeries}
               available={periodAnalytics.available.leads}
               currentTotal={totalLeads}
@@ -349,26 +350,26 @@ export default async function HomePage({ searchParams }: HomePageProps) {
         <section id="home-action-queue" className="min-w-0 scroll-mt-24 overflow-hidden rounded-2xl border border-line bg-surface">
           <SectionHeader eyebrow="Needs attention · current" title="Action queue" actionHref="/admissions" actionLabel="View all" />
           {activeAttention.length ? (
-            <div className="mx-4 mt-1 rounded-lg border border-brand-100 bg-brand-50 px-3 py-2 text-[11px] leading-4">
+            <div className="command-priority-evidence mx-4 mt-1 border-t border-line pt-1 text-[10px] leading-3">
               <p className="font-semibold text-brand-700">{activeAttention[0].value.toLocaleString("en-IN")} · {recommendedActionTitle(activeAttention[0])}</p>
               <p className="mt-1 text-copy-muted">{activeAttention[0].reason}</p>
               <p className="mt-0.5 text-copy-subtle">{activeAttention[0].evidence} · {activeAttention[0].timing}</p>
             </div>
           ) : null}
           {metrics.needsReply > 0 ? (
-            <details className="mx-4 mt-1 text-xs">
+            <details className="mx-4 mt-1 text-[10px]">
               <summary className="cursor-pointer font-medium text-brand-700">Reply waiting-time breakdown</summary>
               <ReplyPressure total={metrics.needsReply} overHour={metrics.waitingOverHour} />
             </details>
           ) : null}
-          <div className="space-y-1 p-3 sm:p-4">
-            {activeAttention.length ? activeAttention.map((item) => <AttentionRow key={item.id} item={item} />) : <HomeEmptyState variant="queue" compact title={mock ? "Queue evidence unavailable" : "No recorded action backlog"} description={mock ? "Current conversation and follow-up evidence cannot be verified in this environment." : "No current reply, overdue follow-up, first-touch, payment-stage, or valuation actions were returned by the CRM snapshot."} unavailable={mock} />}
+          <div className="space-y-0.5 px-3 pb-3 pt-1 sm:px-4">
+            {activeAttention.length ? activeAttention.slice(0, 4).map((item) => <AttentionRow key={item.id} item={item} />) : <HomeEmptyState variant="queue" compact title={mock ? "Queue evidence unavailable" : "No recorded action backlog"} description={mock ? "Current conversation and follow-up evidence cannot be verified in this environment." : "No current reply, overdue follow-up, first-touch, payment-stage, or valuation actions were returned by the CRM snapshot."} unavailable={mock} />}
           </div>
         </section>
       </section>
 
       <section id="home-conversion" aria-label="Conversion and collections" className="min-w-0 scroll-mt-24 space-y-3">
-        <div className="grid min-w-0 gap-3 lg:grid-cols-3">
+        <div className="grid min-w-0 gap-3 lg:grid-cols-[1.08fr_1fr_1.12fr]">
           <section className="min-w-0 overflow-hidden rounded-2xl border border-line bg-surface">
             <SectionHeader eyebrow="Current CRM stage distribution" title="Pipeline health" actionHref="/admissions?view=pipeline" actionLabel="Open pipeline" />
             <div className="px-4 pb-4 pt-1">
@@ -377,9 +378,9 @@ export default async function HomePage({ searchParams }: HomePageProps) {
           </section>
           <section className="min-w-0 overflow-hidden rounded-2xl border border-line bg-surface">
             <SectionHeader eyebrow="Selected acquisition cohort" title="Qualification" actionHref={sourceDetailHref} actionLabel="Inspect" />
-            <div className="flex min-h-[170px] items-center justify-center gap-5 px-4 pb-4 pt-1">
-              <div className="relative grid h-28 w-28 shrink-0 place-items-center rounded-full" style={{background: qualifiedRate == null ? "conic-gradient(#e9e3fb 0 100%)" : `conic-gradient(#5a19d8 0 ${qualifiedRate}%, #e9e3fb ${qualifiedRate}% 100%)`}}>
-                <div className="grid h-20 w-20 place-content-center rounded-full bg-surface text-center">
+            <div className="flex min-h-[142px] items-center justify-center gap-3 px-3 pb-3 pt-1">
+              <div className="relative grid h-[108px] w-[108px] shrink-0 place-items-center rounded-full" style={{background: qualifiedRate == null ? "conic-gradient(#e9e3fb 0 100%)" : `conic-gradient(#5a19d8 0 ${qualifiedRate}%, #e9e3fb ${qualifiedRate}% 100%)`}}>
+                <div className="grid h-[78px] w-[78px] place-content-center rounded-full bg-surface text-center">
                   <span className="text-[23px] font-bold text-copy-strong">{qualifiedRate == null ? "—" : qualifiedRate.toFixed(1) + "%"}</span>
                   <span className="text-[10px] text-copy-muted">Qualified</span>
                 </div>
@@ -556,16 +557,16 @@ function AttentionRow({ item }: { item: AttentionItem }) {
   return (
     <Link
       href={item.href}
-      className="group flex items-center gap-3 rounded-xl px-2.5 py-3 transition hover:bg-surface-muted focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-700"
+      className="group flex items-center gap-2 rounded-xl px-2 py-1.5 transition hover:bg-surface-muted focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-700"
       title={item.reason + " · " + item.evidence}
     >
-      <span className={"grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-surface-muted " + tone}>
+      <span className={"grid h-7 w-7 shrink-0 place-items-center rounded-lg bg-surface-muted " + tone}>
         <Icon size={16} />
       </span>
       <span className="min-w-0 flex-1">
-        <span className="block text-xs font-semibold text-copy-strong">{recommendedActionTitle(item)}</span>
-        <span className="mt-1 block text-[11px] leading-4 text-copy-muted">{item.reason}</span>
-        <span className="mt-0.5 block text-[10px] leading-4 text-copy-subtle">{item.priority} · {item.evidence}</span>
+        <span className="block truncate text-[11px] font-semibold leading-4 text-copy-strong">{recommendedActionTitle(item)}</span>
+        <span className="mt-0.5 block truncate text-[10px] leading-3 text-copy-muted">{item.reason}</span>
+        <span className="mt-0.5 block truncate text-[9px] leading-3 text-copy-subtle">{item.priority} · {item.evidence}</span>
       </span>
       <span className="shrink-0 rounded-lg bg-surface-muted px-2 py-1 text-xs font-semibold tabular-nums text-copy-strong">
         {item.value.toLocaleString("en-IN")}
