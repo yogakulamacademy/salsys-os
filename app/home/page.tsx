@@ -290,6 +290,22 @@ export default async function HomePage({ searchParams }: HomePageProps) {
         Open pipeline is a current-state estimate and does not change with the period filter.
       </p>
 
+      <nav aria-label="Home section shortcuts" className="flex flex-wrap gap-2 xl:hidden">
+        {[
+          { href: "#home-action-queue", label: "Work queue" },
+          { href: "#home-conversion", label: "Conversion" },
+          { href: "#home-business-breakdown", label: "Business breakdown" },
+        ].map((shortcut) => (
+          <Link
+            key={shortcut.href}
+            href={shortcut.href}
+            className="inline-flex min-h-10 items-center rounded-ui border border-line bg-surface px-3 py-2 text-xs font-semibold text-copy-strong transition hover:border-brand-300 hover:text-brand-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-700"
+          >
+            {shortcut.label}
+          </Link>
+        ))}
+      </nav>
+
       {activeAttention.length > 0 ? (
         <section aria-label="Top priority" className="flex flex-col gap-3 rounded-2xl border border-line bg-surface-soft px-4 py-3.5 sm:flex-row sm:items-center sm:justify-between sm:px-5">
           <div className="min-w-0">
@@ -338,7 +354,7 @@ export default async function HomePage({ searchParams }: HomePageProps) {
             </details>
           </div>
         </section>
-        <section className="min-w-0 overflow-hidden rounded-2xl border border-line bg-surface">
+        <section id="home-action-queue" className="min-w-0 scroll-mt-24 overflow-hidden rounded-2xl border border-line bg-surface">
           <SectionHeader eyebrow="Needs attention · current" title="Action queue" actionHref="/admissions" actionLabel="View all" />
           {metrics.needsReply > 0 ? (
             <ReplyPressure total={metrics.needsReply} overHour={metrics.waitingOverHour} />
@@ -349,7 +365,7 @@ export default async function HomePage({ searchParams }: HomePageProps) {
         </section>
       </section>
 
-      <section aria-label="Conversion and collections" className="grid min-w-0 gap-4 lg:grid-cols-2">
+      <section id="home-conversion" aria-label="Conversion and collections" className="grid min-w-0 scroll-mt-24 gap-4 lg:grid-cols-2">
         <section className="min-w-0 overflow-hidden rounded-2xl border border-line bg-surface">
           <SectionHeader eyebrow="Acquisition cohort · period" title="Qualification milestones" actionHref={sourceDetailHref} actionLabel="Inspect cohort" />
           <QualificationCohortPanel
@@ -379,7 +395,7 @@ export default async function HomePage({ searchParams }: HomePageProps) {
         </section>
       </section>
 
-      <section aria-label="Business breakdown" className="grid min-w-0 gap-4 lg:grid-cols-3">
+      <section id="home-business-breakdown" aria-label="Business breakdown" className="grid min-w-0 scroll-mt-24 gap-4 lg:grid-cols-3">
         <section className="min-w-0 overflow-hidden rounded-2xl border border-line bg-surface">
           <SectionHeader eyebrow="Acquisition · period" title="Lead sources" actionHref={sourceDetailHref} actionLabel="Analyze sources" />
           <div className="space-y-1 p-3 sm:p-4">
